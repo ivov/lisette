@@ -9,7 +9,8 @@ use passes::analyze;
 use semantics::cache::EmitStamp;
 use semantics::inference::{AnalyzeInput, EntryFile, SemanticConfig};
 
-pub use semantics::inference::{CompilePhase, ProjectKind};
+use semantics::inference::CompilePhase;
+pub use semantics::inference::ProjectKind;
 use semantics::loader::Loader;
 pub use syntax::program::TestIndex;
 
@@ -26,22 +27,87 @@ pub type Sources = HashMap<u32, SourceInfo>;
 
 #[derive(Debug, Clone)]
 pub struct CompileConfig {
-    pub target_phase: CompilePhase,
-    pub project_kind: ProjectKind,
+    pub mode: CompileMode,
     pub go_module: String,
     pub entry_package_name: String,
-    pub standalone_mode: bool,
-    pub load_siblings: bool,
-    pub sourcemap: bool,
-    pub emit_tests: bool,
-    pub project_root: Option<PathBuf>,
+    pub scope: CompileScope,
     pub locator: TypedefLocator,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompileMode {
+    Check,
+    Emit { sourcemap: bool },
+    Test,
+}
+
+impl CompileMode {
+    fn phase(self) -> CompilePhase {
+        match self {
+            Self::Check => CompilePhase::Check,
+            Self::Emit { .. } | Self::Test => CompilePhase::Emit,
+        }
+    }
+
+    fn emit_options(self) -> Option<EmitOptions> {
+        match self {
+            Self::Check => None,
+            Self::Emit { sourcemap } => Some(EmitOptions {
+                sourcemap,
+                emit_tests: false,
+            }),
+            Self::Test => Some(EmitOptions {
+                sourcemap: false,
+                emit_tests: true,
+            }),
+        }
+    }
+
+    fn disables_cache(self) -> bool {
+        matches!(self, Self::Emit { sourcemap: true } | Self::Test)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CompileScope {
+    Standalone,
+    Directory,
+    Project(PathBuf),
+}
+
+impl CompileScope {
+    fn semantic_config(&self) -> SemanticConfig {
+        match self {
+            Self::Standalone => SemanticConfig {
+                run_lints: true,
+                standalone_mode: true,
+                load_siblings: false,
+            },
+            Self::Directory | Self::Project(_) => SemanticConfig {
+                run_lints: true,
+                standalone_mode: false,
+                load_siblings: true,
+            },
+        }
+    }
+
+    fn project_root(&self) -> Option<PathBuf> {
+        match self {
+            Self::Project(root) => Some(root.clone()),
+            Self::Standalone | Self::Directory => None,
+        }
+    }
 }
 
 pub struct CompileEntry<'a> {
     pub source: &'a str,
     pub filename: &'a str,
     pub display_path: &'a str,
+}
+
+pub enum CompileInput<'a> {
+    Binary(CompileEntry<'a>),
+    Library,
 }
 
 #[derive(Debug)]
@@ -56,13 +122,9 @@ pub struct CompileResult {
     pub test_index: TestIndex,
 }
 
-pub fn compile(
-    entry: Option<CompileEntry<'_>>,
-    config: &CompileConfig,
-    fs: &dyn Loader,
-) -> CompileResult {
-    let entry_file = match entry {
-        Some(entry) => {
+pub fn compile(input: CompileInput<'_>, config: &CompileConfig, fs: &dyn Loader) -> CompileResult {
+    let (entry_file, project_kind) = match input {
+        CompileInput::Binary(entry) => {
             let syntax_result = syntax::build_ast(entry.source, ENTRY_FILE_ID);
             if syntax_result.failed() {
                 let errors = syntax_result.errors.into_iter().map(Into::into).collect();
@@ -85,32 +147,34 @@ pub fn compile(
                     test_index: TestIndex::default(),
                 };
             }
-            Some(EntryFile {
-                source: entry.source.to_string(),
-                filename: entry.filename.to_string(),
-                display_path: entry.display_path.to_string(),
-                ast: syntax_result.ast,
-                file_comment: syntax_result.file_comment,
-            })
+            (
+                Some(EntryFile {
+                    source: entry.source.to_string(),
+                    filename: entry.filename.to_string(),
+                    display_path: entry.display_path.to_string(),
+                    ast: syntax_result.ast,
+                    file_comment: syntax_result.file_comment,
+                }),
+                ProjectKind::Binary,
+            )
         }
-        None => None,
+        CompileInput::Library => (None, ProjectKind::Library),
     };
 
-    let disable_cache =
-        config.emit_tests || (config.sourcemap && config.target_phase == CompilePhase::Emit);
+    let disable_cache = config.mode.disables_cache();
+    let emit_tests = config
+        .mode
+        .emit_options()
+        .is_some_and(|options| options.emit_tests);
 
     let analyze_output = analyze(AnalyzeInput {
-        config: SemanticConfig {
-            run_lints: true,
-            standalone_mode: config.standalone_mode,
-            load_siblings: config.load_siblings,
-        },
+        config: config.scope.semantic_config(),
         loader: fs,
         entry: entry_file,
-        project_root: config.project_root.clone(),
-        compile_phase: config.target_phase,
-        project_kind: config.project_kind,
-        emit_tests: config.emit_tests,
+        project_root: config.scope.project_root(),
+        compile_phase: config.mode.phase(),
+        project_kind,
+        emit_tests,
         locator: config.locator.clone(),
         go_module: config.go_module.clone(),
         disable_cache,
@@ -155,50 +219,27 @@ pub fn compile(
     live_modules.dedup();
     let test_index = semantic_result.emit_input.test_index.clone();
 
-    if !unreachable_modules.is_empty() && !config.emit_tests {
+    if !unreachable_modules.is_empty() && !emit_tests {
         lints.push(diagnostics::module_graph::unreachable_modules(
             &unreachable_modules,
         ));
     }
 
-    if failed || config.target_phase == CompilePhase::Check {
-        return CompileResult {
-            output: vec![],
-            errors,
-            lints,
-            sources,
-            user_file_count,
-            live_modules,
-            emit_stamps,
-            test_index,
-        };
-    }
-
-    let mut output = Planner::emit(
-        &semantic_result.into_emit_input(),
-        &config.go_module,
-        &config.entry_package_name,
-        EmitOptions {
-            sourcemap: config.sourcemap,
-            emit_tests: config.emit_tests,
-        },
-    );
+    let mut output = match config.mode.emit_options() {
+        Some(options) if !failed => Planner::emit(
+            &semantic_result.into_emit_input(),
+            &config.go_module,
+            &config.entry_package_name,
+            options,
+        ),
+        _ => Vec::new(),
+    };
 
     for file in &mut output {
         errors.append(&mut file.diagnostics);
     }
-
-    if errors.iter().any(|d| d.is_error()) {
-        return CompileResult {
-            output: vec![],
-            errors,
-            lints,
-            sources,
-            user_file_count,
-            live_modules,
-            emit_stamps,
-            test_index,
-        };
+    if errors.iter().any(|diagnostic| diagnostic.is_error()) {
+        output.clear();
     }
 
     CompileResult {
@@ -226,15 +267,10 @@ mod tests {
         let src_main = project_dir.join("src").join("main.lis");
         let source = stdfs::read_to_string(&src_main).unwrap();
         let config = CompileConfig {
-            target_phase: CompilePhase::Check,
-            project_kind: ProjectKind::Binary,
+            mode: CompileMode::Check,
             go_module: "test".to_string(),
             entry_package_name: "main".to_string(),
-            standalone_mode: false,
-            load_siblings: true,
-            sourcemap: false,
-            emit_tests: false,
-            project_root: Some(project_dir.to_path_buf()),
+            scope: CompileScope::Project(project_dir.to_path_buf()),
             locator,
         };
         let working_dir = src_main
@@ -243,7 +279,7 @@ mod tests {
             .expect("temp project path is valid utf-8");
         let fs_loader = LocalFileSystem::new(working_dir);
         let result = compile(
-            Some(CompileEntry {
+            CompileInput::Binary(CompileEntry {
                 source: &source,
                 filename: "main.lis",
                 display_path: "src/main.lis",
@@ -276,32 +312,34 @@ mod tests {
             "[project]\nname = \"test\"\nversion = \"0.1.0\"\n",
         )
         .unwrap();
-        stdfs::write(root.join("src").join("main.lis"), source).unwrap();
+        let filename = match project_kind {
+            ProjectKind::Binary => "main.lis",
+            ProjectKind::Library => "lib.lis",
+        };
+        stdfs::write(root.join("src").join(filename), source).unwrap();
 
         let (_, locator) = TypedefLocator::from_project_with_manifest(root).unwrap();
-        let src_main = root.join("src").join("main.lis");
+        let source_path = root.join("src").join(filename);
         let config = CompileConfig {
-            target_phase,
-            project_kind,
+            mode: match target_phase {
+                CompilePhase::Check => CompileMode::Check,
+                CompilePhase::Emit => CompileMode::Emit { sourcemap: false },
+            },
             go_module: "test".to_string(),
             entry_package_name: entry_package_name.to_string(),
-            standalone_mode: false,
-            load_siblings: true,
-            sourcemap: false,
-            emit_tests: false,
-            project_root: Some(root.to_path_buf()),
+            scope: CompileScope::Project(root.to_path_buf()),
             locator,
         };
-        let fs_loader = LocalFileSystem::new(src_main.parent().unwrap().to_str().unwrap());
-        compile(
-            Some(CompileEntry {
+        let fs_loader = LocalFileSystem::new(source_path.parent().unwrap().to_str().unwrap());
+        let input = match project_kind {
+            ProjectKind::Binary => CompileInput::Binary(CompileEntry {
                 source,
-                filename: "main.lis",
+                filename,
                 display_path: "src/main.lis",
             }),
-            &config,
-            &fs_loader,
-        )
+            ProjectKind::Library => CompileInput::Library,
+        };
+        compile(input, &config, &fs_loader)
     }
 
     #[test]

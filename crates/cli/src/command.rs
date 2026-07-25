@@ -1,4 +1,29 @@
-use diagnostics::render::OutputFormat;
+use diagnostics::render::{Filter, OutputFormat};
+
+#[derive(Debug, Default, PartialEq, Eq)]
+pub enum TestSelection {
+    #[default]
+    All,
+    Filter(String),
+    Failed,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum CheckAction {
+    Inspect { deny_warnings: bool },
+    Fix,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum BindgenTarget {
+    Package {
+        name: String,
+        output: Option<String>,
+    },
+    Stdlib {
+        version: Option<String>,
+    },
+}
 
 #[derive(Debug)]
 pub enum Command {
@@ -26,17 +51,14 @@ pub enum Command {
     },
     Check {
         path: Option<String>,
-        errors_only: bool,
-        warnings_only: bool,
-        deny_warnings: bool,
+        filter: Filter,
+        action: CheckAction,
         format: OutputFormat,
-        fix: bool,
     },
     Test {
         path: Option<String>,
         go_flags: Vec<String>,
-        filter: Option<String>,
-        failed: bool,
+        selection: TestSelection,
     },
     Overview,
     Help {
@@ -50,9 +72,7 @@ pub enum Command {
     Sync,
     Lsp,
     Bindgen {
-        package: String,
-        output: Option<String>,
-        version: Option<String>,
+        target: BindgenTarget,
         verbose: bool,
     },
     Doc {
@@ -155,6 +175,45 @@ fn parse_deny(value: &str) -> Result<bool, ParseError> {
             reason: "`--deny` accepts `warnings`".to_string(),
             hint: "Use `lis check --deny warnings`".to_string(),
         }),
+    }
+}
+
+fn check_filter_conflict() -> ParseError {
+    ParseError::UnexpectedArgument {
+        message: "`--errors-only` and `--warnings-only` cannot be used together".to_string(),
+        reason: "they select mutually exclusive sets of diagnostics".to_string(),
+        hint: "Use only one of `--errors-only` or `--warnings-only`".to_string(),
+    }
+}
+
+fn set_test_filter(selection: &mut TestSelection, pattern: String) -> Result<(), ParseError> {
+    if pattern.is_empty() {
+        return Err(ParseError::UnexpectedArgument {
+            message: "`--filter` requires a non-empty pattern".to_string(),
+            reason: "an empty pattern matches every test, the same as no filter".to_string(),
+            hint: "Pass a pattern, e.g. `lis test --filter parse`".to_string(),
+        });
+    }
+    if matches!(selection, TestSelection::Failed) {
+        return Err(test_selection_conflict());
+    }
+    *selection = TestSelection::Filter(pattern);
+    Ok(())
+}
+
+fn set_failed_selection(selection: &mut TestSelection) -> Result<(), ParseError> {
+    if matches!(selection, TestSelection::Filter(_)) {
+        return Err(test_selection_conflict());
+    }
+    *selection = TestSelection::Failed;
+    Ok(())
+}
+
+fn test_selection_conflict() -> ParseError {
+    ParseError::UnexpectedArgument {
+        message: "`--failed` and `--filter` cannot be combined".to_string(),
+        reason: "`--failed` reruns the previous run's failures, a fixed set".to_string(),
+        hint: "Use one or the other".to_string(),
     }
 }
 
@@ -281,16 +340,21 @@ impl Command {
 
             "check" | "c" => {
                 let mut path = None;
-                let mut errors_only = false;
-                let mut warnings_only = false;
+                let mut filter = None;
                 let mut deny_warnings = false;
                 let mut format = OutputFormat::Graphical;
                 let mut fix = false;
 
                 while let Some(arg) = arguments.next() {
                     match arg.as_str() {
-                        "--errors-only" => errors_only = true,
-                        "--warnings-only" => warnings_only = true,
+                        "--errors-only" => match filter {
+                            Some(Filter::Warnings) => return Err(check_filter_conflict()),
+                            _ => filter = Some(Filter::Errors),
+                        },
+                        "--warnings-only" => match filter {
+                            Some(Filter::Errors) => return Err(check_filter_conflict()),
+                            _ => filter = Some(Filter::Warnings),
+                        },
                         "--fix" => fix = true,
                         "--output" => {
                             let Some(value) = arguments.next() else {
@@ -323,16 +387,8 @@ impl Command {
                     }
                 }
 
-                if errors_only && warnings_only {
-                    return Err(ParseError::UnexpectedArgument {
-                        message: "`--errors-only` and `--warnings-only` cannot be used together"
-                            .to_string(),
-                        reason: "they select mutually exclusive sets of diagnostics".to_string(),
-                        hint: "Use only one of `--errors-only` or `--warnings-only`".to_string(),
-                    });
-                }
-
-                if errors_only && deny_warnings {
+                let filter = filter.unwrap_or_default();
+                if filter == Filter::Errors && deny_warnings {
                     return Err(ParseError::UnexpectedArgument {
                         message: "`--errors-only` and `--deny warnings` cannot be used together"
                             .to_string(),
@@ -354,19 +410,20 @@ impl Command {
 
                 Ok(Command::Check {
                     path,
-                    errors_only,
-                    warnings_only,
-                    deny_warnings,
+                    filter,
+                    action: if fix {
+                        CheckAction::Fix
+                    } else {
+                        CheckAction::Inspect { deny_warnings }
+                    },
                     format,
-                    fix,
                 })
             }
 
             "test" | "t" => {
                 let mut path = None;
                 let mut go_flags = Vec::new();
-                let mut filter = None;
-                let mut failed = false;
+                let mut selection = TestSelection::All;
 
                 while let Some(arg) = arguments.next() {
                     if arg == "-f" || arg == "--filter" {
@@ -376,13 +433,13 @@ impl Command {
                                 argument: "--filter <pattern>",
                             });
                         };
-                        filter = Some(value);
+                        set_test_filter(&mut selection, value)?;
                     } else if let Some(value) = arg.strip_prefix("--filter=") {
-                        filter = Some(value.to_string());
+                        set_test_filter(&mut selection, value.to_string())?;
                     } else if let Some(value) = arg.strip_prefix("-f=") {
-                        filter = Some(value.to_string());
+                        set_test_filter(&mut selection, value.to_string())?;
                     } else if arg == "--failed" {
-                        failed = true;
+                        set_failed_selection(&mut selection)?;
                     } else if arg.starts_with('-') {
                         if !try_parse_go_flags(&arg, &mut arguments, &mut go_flags, "test")? {
                             return Err(ParseError::UnknownFlag(arg));
@@ -419,29 +476,10 @@ impl Command {
                     });
                 }
 
-                if filter.as_deref() == Some("") {
-                    return Err(ParseError::UnexpectedArgument {
-                        message: "`--filter` requires a non-empty pattern".to_string(),
-                        reason: "an empty pattern matches every test, the same as no filter"
-                            .to_string(),
-                        hint: "Pass a pattern, e.g. `lis test --filter parse`".to_string(),
-                    });
-                }
-
-                if failed && filter.is_some() {
-                    return Err(ParseError::UnexpectedArgument {
-                        message: "`--failed` and `--filter` cannot be combined".to_string(),
-                        reason: "`--failed` reruns the previous run's failures, a fixed set"
-                            .to_string(),
-                        hint: "Use one or the other".to_string(),
-                    });
-                }
-
                 Ok(Command::Test {
                     path,
                     go_flags,
-                    filter,
-                    failed,
+                    selection,
                 })
             }
 
@@ -548,41 +586,85 @@ impl Command {
             }
 
             "bindgen" => {
-                let mut package = None;
+                let mut positional = Vec::new();
                 let mut output = None;
-                let mut version = None;
                 let mut verbose = false;
 
                 while let Some(arg) = arguments.next() {
                     match arg.as_str() {
                         "-v" | "--verbose" => verbose = true,
                         "-o" | "--output" => {
-                            output = arguments.next();
+                            let Some(value) = arguments.next() else {
+                                return Err(ParseError::MissingArgument {
+                                    command: "bindgen",
+                                    argument: "--output <path>",
+                                });
+                            };
+                            output = Some(value);
                         }
                         s if s.starts_with("-o=") || s.starts_with("--output=") => {
-                            output = Some(s.split('=').nth(1).unwrap_or("").to_string());
+                            let value = s.split_once('=').map(|(_, value)| value).unwrap_or("");
+                            if value.is_empty() {
+                                return Err(ParseError::MissingArgument {
+                                    command: "bindgen",
+                                    argument: "--output <path>",
+                                });
+                            }
+                            output = Some(value.to_string());
                         }
                         s if s.starts_with('-') => {
                             return Err(ParseError::UnknownFlag(s.to_string()));
                         }
-                        s if package.is_none() => package = Some(s.to_string()),
-                        s if version.is_none() => version = Some(s.to_string()),
-                        _ => {}
+                        s => positional.push(s.to_string()),
                     }
                 }
 
-                match package {
-                    Some(package) => Ok(Command::Bindgen {
-                        package,
-                        output,
-                        version,
-                        verbose,
-                    }),
-                    None => Err(ParseError::MissingArgument {
+                let Some(package) = positional.first() else {
+                    return Err(ParseError::MissingArgument {
                         command: "bindgen",
                         argument: "package",
-                    }),
+                    });
+                };
+                let extra = positional.get(1);
+                let trailing = positional.get(2);
+                if let Some(trailing) = trailing {
+                    return Err(ParseError::UnexpectedArgument {
+                        message: format!("unexpected argument `{trailing}`"),
+                        reason: "`lis bindgen` accepts at most a target and stdlib version"
+                            .to_string(),
+                        hint: "Remove the extra argument".to_string(),
+                    });
                 }
+
+                let target = if package == "stdlib" {
+                    if output.is_some() {
+                        return Err(ParseError::UnexpectedArgument {
+                            message: "`--output` cannot be used when generating stdlib bindings"
+                                .to_string(),
+                            reason:
+                                "stdlib bindings are written to the repository typedef directory"
+                                    .to_string(),
+                            hint: "Remove `--output`".to_string(),
+                        });
+                    }
+                    BindgenTarget::Stdlib {
+                        version: extra.cloned(),
+                    }
+                } else {
+                    if let Some(extra) = extra {
+                        return Err(ParseError::UnexpectedArgument {
+                            message: format!("unexpected argument `{extra}`"),
+                            reason: "package bindgen accepts a single package target".to_string(),
+                            hint: "Remove the extra argument".to_string(),
+                        });
+                    }
+                    BindgenTarget::Package {
+                        name: package.clone(),
+                        output,
+                    }
+                };
+
+                Ok(Command::Bindgen { target, verbose })
             }
 
             _ => Err(ParseError::UnknownCommand(command)),
@@ -609,11 +691,10 @@ mod tests {
 
     #[test]
     fn test_failed_flag_parses() {
-        let Ok(Command::Test { failed, filter, .. }) = parse(&["lis", "test", "--failed"]) else {
+        let Ok(Command::Test { selection, .. }) = parse(&["lis", "test", "--failed"]) else {
             panic!("expected Test command");
         };
-        assert!(failed);
-        assert!(filter.is_none());
+        assert_eq!(selection, TestSelection::Failed);
     }
 
     #[test]
@@ -729,29 +810,42 @@ mod tests {
 
     #[test]
     fn check_deny_defaults_off() {
-        let Ok(Command::Check { deny_warnings, .. }) = parse(&["lis", "check"]) else {
+        let Ok(Command::Check { action, .. }) = parse(&["lis", "check"]) else {
             panic!("expected Check command");
         };
-        assert!(!deny_warnings);
+        assert_eq!(
+            action,
+            CheckAction::Inspect {
+                deny_warnings: false
+            }
+        );
     }
 
     #[test]
     fn check_deny_warnings_space_form() {
-        let Ok(Command::Check { deny_warnings, .. }) =
-            parse(&["lis", "check", "--deny", "warnings"])
+        let Ok(Command::Check { action, .. }) = parse(&["lis", "check", "--deny", "warnings"])
         else {
             panic!("expected Check command");
         };
-        assert!(deny_warnings);
+        assert_eq!(
+            action,
+            CheckAction::Inspect {
+                deny_warnings: true
+            }
+        );
     }
 
     #[test]
     fn check_deny_warnings_equals_form() {
-        let Ok(Command::Check { deny_warnings, .. }) = parse(&["lis", "check", "--deny=warnings"])
-        else {
+        let Ok(Command::Check { action, .. }) = parse(&["lis", "check", "--deny=warnings"]) else {
             panic!("expected Check command");
         };
-        assert!(deny_warnings);
+        assert_eq!(
+            action,
+            CheckAction::Inspect {
+                deny_warnings: true
+            }
+        );
     }
 
     #[test]
@@ -775,16 +869,18 @@ mod tests {
 
     #[test]
     fn check_deny_warnings_composes_with_warnings_only() {
-        let Ok(Command::Check {
-            deny_warnings,
-            warnings_only,
-            ..
-        }) = parse(&["lis", "check", "--deny", "warnings", "--warnings-only"])
+        let Ok(Command::Check { action, filter, .. }) =
+            parse(&["lis", "check", "--deny", "warnings", "--warnings-only"])
         else {
             panic!("expected Check command");
         };
-        assert!(deny_warnings);
-        assert!(warnings_only);
+        assert_eq!(
+            action,
+            CheckAction::Inspect {
+                deny_warnings: true
+            }
+        );
+        assert_eq!(filter, Filter::Warnings);
     }
 
     #[test]
@@ -801,6 +897,15 @@ mod tests {
             parse(&["lis", "check", "--fix", "--deny", "warnings"]),
             Err(ParseError::UnexpectedArgument { .. })
         ));
+    }
+
+    #[test]
+    fn check_fix_parses_as_a_distinct_action() {
+        let Ok(Command::Check { action, .. }) = parse(&["lis", "check", "--fix"]) else {
+            panic!("expected Check command");
+        };
+
+        assert_eq!(action, CheckAction::Fix);
     }
 
     fn run_parts(parts: &[&str]) -> (Option<String>, Vec<String>, Vec<String>) {
@@ -1042,17 +1147,58 @@ mod tests {
 
     #[test]
     fn check_output_composes_with_errors_only() {
-        let Ok(Command::Check {
-            format,
-            errors_only,
-            warnings_only,
-            ..
-        }) = parse(&["lis", "check", "--output", "unix", "--errors-only"])
+        let Ok(Command::Check { format, filter, .. }) =
+            parse(&["lis", "check", "--output", "unix", "--errors-only"])
         else {
             panic!("expected Check command");
         };
         assert_eq!(format, OutputFormat::Unix);
-        assert!(errors_only);
-        assert!(!warnings_only);
+        assert_eq!(filter, Filter::Errors);
+    }
+
+    #[test]
+    fn bindgen_package_carries_only_package_options() {
+        let Ok(Command::Bindgen { target, verbose }) = parse(&[
+            "lis",
+            "bindgen",
+            "github.com/acme/pkg",
+            "-o",
+            "pkg.d.lis",
+            "-v",
+        ]) else {
+            panic!("expected Bindgen command");
+        };
+
+        assert_eq!(
+            (target, verbose),
+            (
+                BindgenTarget::Package {
+                    name: "github.com/acme/pkg".to_string(),
+                    output: Some("pkg.d.lis".to_string()),
+                },
+                true,
+            )
+        );
+    }
+
+    #[test]
+    fn bindgen_package_rejects_ignored_version_argument() {
+        let result = parse(&["lis", "bindgen", "github.com/acme/pkg", "v1.2.3"]);
+
+        assert!(matches!(result, Err(ParseError::UnexpectedArgument { .. })));
+    }
+
+    #[test]
+    fn bindgen_stdlib_rejects_ignored_output_argument() {
+        let result = parse(&["lis", "bindgen", "stdlib", "--output", "ignored"]);
+
+        assert!(matches!(result, Err(ParseError::UnexpectedArgument { .. })));
+    }
+
+    #[test]
+    fn bindgen_output_requires_a_path() {
+        let result = parse(&["lis", "bindgen", "github.com/acme/pkg", "--output"]);
+
+        assert!(matches!(result, Err(ParseError::MissingArgument { .. })));
     }
 }

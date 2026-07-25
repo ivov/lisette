@@ -10,27 +10,49 @@ use diagnostics::render::{self, Filter, OutputFormat};
 use diagnostics::{Fix, apply_fixes};
 use lisette::fs::LocalFileSystem;
 use lisette::pipeline::{
-    CompileConfig, CompileEntry, CompilePhase, CompileResult, ProjectKind, compile,
+    CompileConfig, CompileEntry, CompileInput, CompileMode, CompileResult, CompileScope,
+    ProjectKind, compile,
 };
 
 use crate::cli_error;
+use crate::command::CheckAction;
 use crate::lock::acquire_target_lock;
 use crate::workspace::{GoWorkspace, WorkspaceBindgen, warm_typedefs};
 
 struct CheckOptions {
     filter: Filter,
     format: OutputFormat,
-    fix: bool,
-    deny_warnings: bool,
+    action: CheckAction,
+}
+
+struct CompiledFile {
+    result: CompileResult,
+    source: String,
+    display_path: String,
+}
+
+struct ReadFailure;
+
+impl CheckOptions {
+    fn fixes(&self) -> bool {
+        matches!(self.action, CheckAction::Fix)
+    }
+
+    fn deny_warnings(&self) -> bool {
+        matches!(
+            self.action,
+            CheckAction::Inspect {
+                deny_warnings: true
+            }
+        )
+    }
 }
 
 pub fn check(
     path: Option<String>,
-    errors_only: bool,
-    warnings_only: bool,
-    deny_warnings: bool,
+    filter: Filter,
+    action: CheckAction,
     format: OutputFormat,
-    fix: bool,
 ) -> i32 {
     let target = path.unwrap_or_else(|| ".".to_string());
     let target_path = Path::new(&target);
@@ -44,26 +66,18 @@ pub fn check(
         return 1;
     }
 
-    let filter = match (errors_only, warnings_only) {
-        (true, false) => Filter::Errors,
-        (false, true) => Filter::Warnings,
-        (false, false) => Filter::All,
-        (true, true) => unreachable!("mutually exclusive flags are rejected by argument parsing"),
-    };
     let options = CheckOptions {
         filter,
         format,
-        fix,
-        deny_warnings,
+        action,
     };
 
     if !target_path.is_dir() {
         return check_single_file(
             target_path,
             &options,
-            false,
+            CompileScope::Standalone,
             TypedefLocator::default(),
-            ProjectKind::Binary,
             "main",
         );
     }
@@ -132,12 +146,24 @@ fn check_project(project_path: &Path, options: &CheckOptions) -> i32 {
     let result = match kind {
         ProjectKind::Binary => {
             let src_main = project_path.join("src").join("main.lis");
-            check_single_file(&src_main, options, true, locator, kind, &go_module)
+            check_single_file(
+                &src_main,
+                options,
+                CompileScope::Project(project_path.to_path_buf()),
+                locator,
+                &go_module,
+            )
         }
         ProjectKind::Library => {
             let start = Instant::now();
             let src_dir = project_path.join("src");
-            let result = compile_project_entry(&src_dir, None, true, locator, kind, &go_module);
+            let result = compile_project_entry(
+                &src_dir,
+                CompileInput::Library,
+                CompileScope::Project(project_path.to_path_buf()),
+                locator,
+                &go_module,
+            );
             report_check(&result, "", "", options, start)
         }
     };
@@ -148,18 +174,22 @@ fn check_project(project_path: &Path, options: &CheckOptions) -> i32 {
 fn check_single_file(
     file_path: &Path,
     options: &CheckOptions,
-    load_siblings: bool,
+    scope: CompileScope,
     locator: TypedefLocator,
-    project_kind: ProjectKind,
     go_module: &str,
 ) -> i32 {
     let start = Instant::now();
-    let Some((result, source, filename)) =
-        compile_single_file(file_path, load_siblings, locator, project_kind, go_module)
-    else {
-        return 1; // Read error already reported by compile_single_file
+    let compiled = match compile_single_file(file_path, scope, locator, go_module) {
+        Ok(compiled) => compiled,
+        Err(ReadFailure) => return 1,
     };
-    report_check(&result, &source, &filename, options, start)
+    report_check(
+        &compiled.result,
+        &compiled.source,
+        &compiled.display_path,
+        options,
+        start,
+    )
 }
 
 fn report_check(
@@ -170,7 +200,7 @@ fn report_check(
     start: Instant,
 ) -> i32 {
     let unix = matches!(options.format, OutputFormat::Unix);
-    if options.fix {
+    if options.fixes() {
         let mut summary = FixSummary::default();
         apply_result_fixes(result, &mut summary);
         print_fix_summary(&summary, start.elapsed());
@@ -218,16 +248,15 @@ fn report_check(
             counts.info,
         );
     }
-    exit_code(counts.errors, counts.warnings, options.deny_warnings)
+    exit_code(counts.errors, counts.warnings, options.deny_warnings())
 }
 
 fn compile_single_file(
     file_path: &Path,
-    load_siblings: bool,
+    scope: CompileScope,
     locator: TypedefLocator,
-    project_kind: ProjectKind,
     go_module: &str,
-) -> Option<(CompileResult, String, String)> {
+) -> Result<CompiledFile, ReadFailure> {
     let source = match fs::read_to_string(file_path) {
         Ok(s) => s,
         Err(e) => {
@@ -236,7 +265,7 @@ fn compile_single_file(
                 format!("Failed to read `{}`: {}", file_path.display(), e),
                 "Check file permissions"
             );
-            return None;
+            return Err(ReadFailure);
         }
     };
 
@@ -251,43 +280,40 @@ fn compile_single_file(
 
     let result = compile_project_entry(
         working_dir,
-        Some(CompileEntry {
+        CompileInput::Binary(CompileEntry {
             source: &source,
             filename: &entry_name,
             display_path: &entry_display,
         }),
-        load_siblings,
+        scope,
         locator,
-        project_kind,
         go_module,
     );
 
-    Some((result, source, entry_display))
+    Ok(CompiledFile {
+        result,
+        source,
+        display_path: entry_display,
+    })
 }
 
 fn compile_project_entry(
     dir: &Path,
-    entry: Option<CompileEntry<'_>>,
-    load_siblings: bool,
+    input: CompileInput<'_>,
+    scope: CompileScope,
     locator: TypedefLocator,
-    project_kind: ProjectKind,
     go_module: &str,
 ) -> CompileResult {
     let config = CompileConfig {
-        target_phase: CompilePhase::Check,
-        project_kind,
+        mode: CompileMode::Check,
         go_module: go_module.to_string(),
         entry_package_name: "main".to_string(),
-        standalone_mode: !load_siblings,
-        load_siblings,
-        sourcemap: false,
-        emit_tests: false,
-        project_root: locator.project_root().map(|p| p.to_path_buf()),
+        scope,
         locator,
     };
 
     let fs = LocalFileSystem::new(dir.to_str().unwrap_or("."));
-    compile(entry, &config, &fs)
+    compile(input, &config, &fs)
 }
 
 fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
@@ -327,11 +353,10 @@ fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
         let mut compiled = None;
         let mut dir_read_failures = 0;
         for file in dir_files {
-            if let Some(result) = compile_single_file(
+            if let Ok(result) = compile_single_file(
                 file,
-                true,
+                CompileScope::Directory,
                 TypedefLocator::default(),
-                ProjectKind::Binary,
                 "main",
             ) {
                 compiled = Some(result);
@@ -340,54 +365,55 @@ fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
             dir_read_failures += 1;
         }
 
-        let Some((result, source, filename)) = compiled else {
+        let Some(compiled) = compiled else {
             read_failures += dir_read_failures;
             continue;
         };
 
-        if options.fix {
-            apply_result_fixes(&result, &mut fix_summary);
+        if options.fixes() {
+            apply_result_fixes(&compiled.result, &mut fix_summary);
             continue;
         }
 
         let get_source = |file_id: u32| {
-            result
+            compiled
+                .result
                 .sources
                 .get(&file_id)
                 .map(|info| (info.source.clone(), info.filename.clone()))
         };
         let counts = if unix {
             let (output, counts) = render::render_unix(
-                &result.errors,
-                &result.lints,
+                &compiled.result.errors,
+                &compiled.result.lints,
                 get_source,
-                result.user_file_count,
+                compiled.result.user_file_count,
                 &options.filter,
-                &source,
-                &filename,
+                &compiled.source,
+                &compiled.display_path,
             );
             print!("{}", output);
             counts
         } else {
             render::render_all(
-                &result.errors,
-                &result.lints,
+                &compiled.result.errors,
+                &compiled.result.lints,
                 get_source,
-                result.user_file_count,
+                compiled.result.user_file_count,
                 &options.filter,
-                &source,
-                &filename,
+                &compiled.source,
+                &compiled.display_path,
             )
         };
         total_errors += counts.errors;
         total_warnings += counts.warnings;
         total_info += counts.info;
-        total_files += result.user_file_count;
+        total_files += compiled.result.user_file_count;
     }
 
     let elapsed = start.elapsed();
 
-    if options.fix {
+    if options.fixes() {
         print_fix_summary(&fix_summary, elapsed);
         return i32::from(fix_summary.write_failures > 0);
     }
@@ -400,7 +426,7 @@ fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
         render::print_summary(total_files, elapsed, all_errors, total_warnings, total_info);
     }
 
-    exit_code(all_errors, total_warnings, options.deny_warnings)
+    exit_code(all_errors, total_warnings, options.deny_warnings())
 }
 
 fn exit_code(errors: usize, warnings: usize, deny_warnings: bool) -> i32 {

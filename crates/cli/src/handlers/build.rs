@@ -11,22 +11,17 @@ use crate::workspace::{GoWorkspace, WorkspaceBindgen, warm_typedefs};
 use diagnostics::render::{self, Filter};
 use lisette::fs::{LocalFileSystem, prune_orphan_go_files, prune_stale_root_go, relative_to_cwd};
 use lisette::pipeline::{
-    CompileConfig, CompileEntry, CompilePhase, ProjectKind, Sources, TestIndex, compile,
+    CompileConfig, CompileEntry, CompileInput, CompileMode, CompileScope, ProjectKind, Sources,
+    TestIndex, compile,
 };
 use semantics::loader::is_production_module_file;
 
 pub fn emit(path: Option<String>, sourcemap: bool) -> i32 {
     with_locked_project(path, |prep| {
-        build_locked(
-            prep,
-            BuildOptions {
-                sourcemap,
-                quiet: false,
-                emit_tests: false,
-                label: "Emit completed",
-            },
-        )
-        .code
+        match build_locked(prep, BuildPurpose::Emit { sourcemap }) {
+            Ok(_) => 0,
+            Err(code) => code,
+        }
     })
 }
 
@@ -44,17 +39,8 @@ pub fn build(path: Option<String>, sourcemap: bool, go_flags: Vec<String>) -> i3
             crate::output::print_preview_notice("Library projects", true);
         }
 
-        let outcome = build_locked(
-            prep,
-            BuildOptions {
-                sourcemap,
-                quiet: false,
-                emit_tests: false,
-                label: "Emit completed",
-            },
-        );
-        if outcome.code != 0 {
-            return outcome.code;
+        if let Err(code) = build_locked(prep, BuildPurpose::Emit { sourcemap }) {
+            return code;
         }
 
         let target = stdlib::Target::host();
@@ -87,7 +73,8 @@ pub fn build(path: Option<String>, sourcemap: bool, go_flags: Vec<String>) -> i3
     })
 }
 
-fn build_library(prep: &BuildPrep, go_flags: &[String], target: stdlib::Target) -> i32 {
+fn build_library(project: &LockedProject, go_flags: &[String], target: stdlib::Target) -> i32 {
+    let prep = &project.prep;
     if let Err(e) = go_cli::verify_go_packages(&prep.target_dir, target, go_flags) {
         cli_error!("Failed to build library", e.message, e.hint);
         return 1;
@@ -114,29 +101,28 @@ fn build_library(prep: &BuildPrep, go_flags: &[String], target: stdlib::Target) 
     0
 }
 
-pub(super) fn with_locked_project(path: Option<String>, f: impl FnOnce(&BuildPrep) -> i32) -> i32 {
+pub(super) fn with_locked_project(
+    path: Option<String>,
+    f: impl FnOnce(&LockedProject) -> i32,
+) -> i32 {
     let project_root = path.unwrap_or_else(|| ".".to_string());
     let project_path = Path::new(&project_root);
 
-    let prep = match prepare_project_build(project_path) {
-        Ok(p) => p,
+    let project = match LockedProject::acquire(project_path) {
+        Ok(project) => project,
         Err(code) => return code,
     };
 
-    let _target_lock = match acquire_target_lock(&prep.target_dir) {
-        Ok(f) => f,
-        Err(code) => return code,
-    };
-
-    f(&prep)
+    f(&project)
 }
 
 pub(super) fn link_project_binary(
-    prep: &BuildPrep,
+    project: &LockedProject,
     go_flags: &[String],
     target: stdlib::Target,
     heading: &str,
 ) -> Result<PathBuf, i32> {
+    let prep = &project.prep;
     let build_dir = match prep.target_dir.canonicalize() {
         Ok(p) => p,
         Err(e) => {
@@ -160,7 +146,7 @@ pub(super) fn link_project_binary(
     Ok(output_path)
 }
 
-pub(super) fn prepare_project_build(project_path: &Path) -> Result<BuildPrep, i32> {
+fn prepare_project_build(project_path: &Path) -> Result<BuildPrep, i32> {
     crate::go_cli::require_go()?;
 
     let kind = match validate_project(project_path) {
@@ -207,27 +193,58 @@ pub(super) struct BuildPrep {
     pub kind: ProjectKind,
 }
 
-pub(super) struct BuildOptions {
-    pub sourcemap: bool,
-    pub quiet: bool,
-    pub emit_tests: bool,
-    pub label: &'static str,
+pub(super) struct LockedProject {
+    prep: BuildPrep,
+    _target_lock: fs::File,
 }
 
-pub(super) struct BuildOutcome {
-    pub code: i32,
-    pub test_index: TestIndex,
-    pub sources: Sources,
+impl LockedProject {
+    pub(super) fn acquire(project_path: &Path) -> Result<Self, i32> {
+        let prep = prepare_project_build(project_path)?;
+        let target_lock = acquire_target_lock(&prep.target_dir)?;
+        Ok(Self {
+            prep,
+            _target_lock: target_lock,
+        })
+    }
 }
 
-impl BuildOutcome {
-    fn failed(code: i32) -> Self {
-        Self {
-            code,
-            test_index: TestIndex::default(),
-            sources: Sources::default(),
+impl std::ops::Deref for LockedProject {
+    type Target = BuildPrep;
+
+    fn deref(&self) -> &Self::Target {
+        &self.prep
+    }
+}
+
+pub(super) enum BuildPurpose {
+    Emit { sourcemap: bool },
+    Run { sourcemap: bool },
+    Test,
+}
+
+impl BuildPurpose {
+    fn compile_mode(&self) -> CompileMode {
+        match self {
+            Self::Emit { sourcemap } | Self::Run { sourcemap } => CompileMode::Emit {
+                sourcemap: *sourcemap,
+            },
+            Self::Test => CompileMode::Test,
         }
     }
+
+    fn completion_label(&self) -> Option<&'static str> {
+        match self {
+            Self::Emit { .. } => Some("Emit completed"),
+            Self::Run { .. } => None,
+            Self::Test => Some("Compiled"),
+        }
+    }
+}
+
+pub(super) struct BuildArtifacts {
+    pub test_index: TestIndex,
+    pub sources: Sources,
 }
 
 fn remove_stale_test_outputs(
@@ -247,13 +264,14 @@ fn remove_stale_test_outputs(
     Ok(())
 }
 
-pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> BuildOutcome {
-    let BuildOptions {
-        sourcemap,
-        quiet,
-        emit_tests,
-        label,
-    } = options;
+pub(super) fn build_locked(
+    project: &LockedProject,
+    purpose: BuildPurpose,
+) -> Result<BuildArtifacts, i32> {
+    let prep = &project.prep;
+    let mode = purpose.compile_mode();
+    let sourcemap = matches!(mode, CompileMode::Emit { sourcemap: true });
+    let emit_tests = mode == CompileMode::Test;
     let start = Instant::now();
 
     if prep.kind == ProjectKind::Library
@@ -273,7 +291,7 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> BuildOutc
             ),
             "Depend on a published version, or keep this project a binary"
         );
-        return BuildOutcome::failed(1);
+        return Err(1);
     }
 
     if let Err(e) =
@@ -284,7 +302,7 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> BuildOutc
             e,
             "Check file permissions on `target/go.mod`"
         );
-        return BuildOutcome::failed(1);
+        return Err(1);
     }
 
     let typedef_cache_dir = deps::typedef_cache_dir(&prep.project_path);
@@ -318,7 +336,7 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> BuildOutc
                         format!("Failed to read `{}`: {}", main_lis.display(), e),
                         "Check file permissions"
                     );
-                    return BuildOutcome::failed(1);
+                    return Err(1);
                 }
             };
             let display = relative_to_cwd(&main_lis).unwrap_or_else(|| "main.lis".to_string());
@@ -335,27 +353,25 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> BuildOutc
     let project_name = go_module_name.rsplit('/').next().unwrap_or(go_module_name);
 
     let compile_config = CompileConfig {
-        target_phase: CompilePhase::Emit,
-        project_kind: prep.kind,
+        mode,
         go_module: go_module_name.to_string(),
         entry_package_name,
-        standalone_mode: false,
-        load_siblings: true,
-        sourcemap,
-        emit_tests,
-        project_root: Some(prep.project_path.clone()),
+        scope: CompileScope::Project(prep.project_path.clone()),
         locator: locator.clone(),
     };
 
     let source_dir = src_dir.to_str().unwrap_or(".");
     let local_fs = LocalFileSystem::new(source_dir);
 
-    let entry = entry_bits.as_ref().map(|(source, display)| CompileEntry {
-        source,
-        filename: "main.lis",
-        display_path: display,
-    });
-    let result = compile(entry, &compile_config, &local_fs);
+    let input = match entry_bits.as_ref() {
+        Some((source, display)) => CompileInput::Binary(CompileEntry {
+            source,
+            filename: "main.lis",
+            display_path: display,
+        }),
+        None => CompileInput::Library,
+    };
+    let result = compile(input, &compile_config, &local_fs);
 
     let filter = Filter::All;
 
@@ -375,7 +391,7 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> BuildOutc
     );
 
     if counts.errors > 0 {
-        return BuildOutcome::failed(1);
+        return Err(1);
     }
 
     let heading = "Failed to compile Lisette project to Go";
@@ -396,14 +412,14 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> BuildOutc
             format!("Failed to invalidate emit stamps before sourcemap write: {e}"),
             "Check file permissions on `target/.lisette/cache/`, or delete the directory and retry"
         );
-        return BuildOutcome::failed(1);
+        return Err(1);
     }
 
     let mut emit = match go_cli::write_go_outputs(&prep.target_dir, &result.output) {
         Ok(emit) => emit,
         Err(e) => {
             cli_error!(heading, e.message, e.hint);
-            return BuildOutcome::failed(1);
+            return Err(1);
         }
     };
 
@@ -420,7 +436,7 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> BuildOutc
             format!("Failed to prune stale Go files: {}", e),
             "Check file permissions"
         );
-        return BuildOutcome::failed(1);
+        return Err(1);
     }
 
     if prep.kind == ProjectKind::Library
@@ -431,7 +447,7 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> BuildOutc
             format!("Failed to prune stale Go files: {}", e),
             "Check file permissions"
         );
-        return BuildOutcome::failed(1);
+        return Err(1);
     }
 
     if !emit_tests
@@ -442,7 +458,7 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> BuildOutc
             format!("Failed to remove stale test file: {}", e),
             "Check file permissions"
         );
-        return BuildOutcome::failed(1);
+        return Err(1);
     }
 
     // Drop manifest entries whose files pruning removed, so the import-set hash
@@ -462,7 +478,7 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> BuildOutc
             go_cli::write_go_mod(&prep.target_dir, &prep.manifest.project.name, &locator)
         {
             cli_error!(heading, e, "Check file permissions on `target/go.mod`");
-            return BuildOutcome::failed(1);
+            return Err(1);
         }
     }
 
@@ -473,7 +489,7 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> BuildOutc
         import_set_hash,
     ) {
         cli_error!(heading, e.message, e.hint);
-        return BuildOutcome::failed(1);
+        return Err(1);
     }
 
     if !sourcemap
@@ -492,7 +508,7 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> BuildOutc
     // Committed only after gofmt + tidy succeed.
     go_cli::write_emit_manifest(&prep.target_dir, &emit.new_manifest);
 
-    if !quiet {
+    if let Some(label) = purpose.completion_label() {
         if counts.errors + counts.warnings + counts.info == 0 {
             eprintln!();
         }
@@ -516,11 +532,10 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> BuildOutc
         }
     }
 
-    BuildOutcome {
-        code: 0,
+    Ok(BuildArtifacts {
         test_index: result.test_index,
         sources: result.sources,
-    }
+    })
 }
 
 pub(super) fn resolve_project_kind(project_path: &Path) -> Option<ProjectKind> {

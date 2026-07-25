@@ -7,7 +7,9 @@ use std::process::Command;
 use crate::cli_error;
 use crate::go_cli;
 use diagnostics::render::{self, Filter};
-use lisette::pipeline::{CompileConfig, CompileEntry, CompilePhase, ProjectKind, compile};
+use lisette::pipeline::{
+    CompileConfig, CompileEntry, CompileInput, CompileMode, CompileScope, ProjectKind, compile,
+};
 use semantics::loader::MemoryLoader;
 
 fn exec_binary(output_path: &Path, args: &[String], heading: &str) -> i32 {
@@ -46,48 +48,33 @@ pub fn run(
 fn run_project(path: &str, args: Vec<String>, sourcemap: bool, go_flags: &[String]) -> i32 {
     let project_path = Path::new(path);
 
-    let prep = match super::build::prepare_project_build(project_path) {
-        Ok(p) => p,
+    let project = match super::build::LockedProject::acquire(project_path) {
+        Ok(project) => project,
         Err(code) => return code,
     };
 
-    if prep.kind == ProjectKind::Library {
+    if project.kind == ProjectKind::Library {
         cli_error!(
             "Nothing to run",
             format!(
                 "`{}` is a library, as it has no `src/main.lis` entrypoint",
-                prep.manifest.project.name
+                project.manifest.project.name
             ),
             "If not meant to be a library, convert it to a binary by adding `src/main.lis`"
         );
         return 1;
     }
 
-    // Held through the child's execution too: releasing sooner would let a concurrent
-    // `lis build`/`sync`/LSP relink `target/` under the running program.
-    let _target_lock = match crate::lock::acquire_target_lock(&prep.target_dir) {
-        Ok(f) => f,
-        Err(code) => return code,
-    };
-
     let heading = "Failed to run project";
     let target = stdlib::Target::host();
 
-    let build_result = super::build::build_locked(
-        &prep,
-        super::build::BuildOptions {
-            sourcemap,
-            quiet: true,
-            emit_tests: false,
-            label: "Build completed",
-        },
-    )
-    .code;
-    if build_result != 0 {
-        return build_result;
+    if let Err(code) =
+        super::build::build_locked(&project, super::build::BuildPurpose::Run { sourcemap })
+    {
+        return code;
     }
 
-    let output_path = match super::build::link_project_binary(&prep, go_flags, target, heading) {
+    let output_path = match super::build::link_project_binary(&project, go_flags, target, heading) {
         Ok(p) => p,
         Err(code) => return code,
     };
@@ -150,15 +137,10 @@ fn run_standalone(file: &str, args: Vec<String>, sourcemap: bool, go_flags: &[St
     };
 
     let compile_config = CompileConfig {
-        target_phase: CompilePhase::Emit,
-        project_kind: ProjectKind::Binary,
+        mode: CompileMode::Emit { sourcemap },
         go_module: "lis-standalone".to_string(),
         entry_package_name: "main".to_string(),
-        standalone_mode: true,
-        load_siblings: false,
-        sourcemap,
-        emit_tests: false,
-        project_root: None,
+        scope: CompileScope::Standalone,
         locator: deps::TypedefLocator::default(),
     };
 
@@ -171,7 +153,7 @@ fn run_standalone(file: &str, args: Vec<String>, sourcemap: bool, go_flags: &[St
 
     let no_loader = MemoryLoader::new();
     let result = compile(
-        Some(CompileEntry {
+        CompileInput::Binary(CompileEntry {
             source: &source,
             filename: &entry_name,
             display_path: &entry_display,

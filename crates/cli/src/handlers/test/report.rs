@@ -11,17 +11,100 @@ use crate::output::{format_backticks, format_elapsed};
 use diagnostics::LisetteDiagnostic;
 use lisette::pipeline::{Sources, TestIndex};
 
-/// Per (package, test): expected chunk count `n` and the gathered `(index, hex)` chunks.
-type FailChunks = HashMap<(String, String), (usize, Vec<(usize, String)>)>;
+type TestKey = (String, String);
 
-struct EventTables {
-    terminal: HashMap<(String, String), (Status, Option<f64>)>,
-    started: HashSet<(String, String)>,
-    outputs: HashMap<(String, String), String>,
-    failures: HashMap<(String, String), FailureRecord>,
-    skip_reasons: HashMap<(String, String), String>,
-    subtest_names: HashMap<(String, String), String>,
-    logs: HashMap<(String, String), Vec<LogRecord>>,
+#[derive(Default)]
+enum Execution {
+    #[default]
+    Unreached,
+    Started,
+    Finished {
+        status: TerminalStatus,
+        elapsed: Option<f64>,
+    },
+}
+
+enum TerminalStatus {
+    Passed,
+    Failed,
+    Skipped,
+}
+
+impl Execution {
+    fn was_observed(&self) -> bool {
+        !matches!(self, Self::Unreached)
+    }
+
+    fn start(&mut self) {
+        if matches!(self, Self::Unreached) {
+            *self = Self::Started;
+        }
+    }
+
+    fn finish(&mut self, status: TerminalStatus, elapsed: Option<f64>) {
+        *self = Self::Finished { status, elapsed };
+    }
+}
+
+#[derive(Default)]
+struct TestEvents {
+    execution: Execution,
+    output: String,
+    failure_chunks: Option<(usize, Vec<(usize, String)>)>,
+    skip_reason: Option<String>,
+    subtest_name: Option<String>,
+    logs: Vec<LogRecord>,
+}
+
+impl TestEvents {
+    fn failure(&self) -> Option<FailureRecord> {
+        let (count, parts) = self.failure_chunks.as_ref()?;
+        reassemble_one(*count, parts)
+    }
+
+    fn outcome(&self) -> TestOutcome {
+        match &self.execution {
+            Execution::Unreached => TestOutcome::Unreached,
+            Execution::Started => TestOutcome::Crashed,
+            Execution::Finished { status, elapsed } => match status {
+                TerminalStatus::Passed => TestOutcome::Passed { elapsed: *elapsed },
+                TerminalStatus::Failed => TestOutcome::Failed {
+                    elapsed: *elapsed,
+                    failure: self.failure(),
+                },
+                TerminalStatus::Skipped => TestOutcome::Skipped {
+                    elapsed: *elapsed,
+                    reason: self.skip_reason.clone(),
+                },
+            },
+        }
+    }
+}
+
+#[derive(Default)]
+struct PackageEvents {
+    output: String,
+    failure: PackageFailure,
+}
+
+#[derive(Default, PartialEq, Eq)]
+enum PackageFailure {
+    #[default]
+    None,
+    Test,
+    Build,
+}
+
+impl PackageEvents {
+    fn record_test_failure(&mut self) {
+        if self.failure == PackageFailure::None {
+            self.failure = PackageFailure::Test;
+        }
+    }
+
+    fn record_build_failure(&mut self) {
+        self.failure = PackageFailure::Build;
+    }
 }
 
 const FAIL_ATTR_KEY: &str = "lisette-fail";
@@ -43,6 +126,57 @@ pub enum Status {
     Crashed,
     Skipped,
     Unreached,
+}
+
+enum TestOutcome {
+    Passed {
+        elapsed: Option<f64>,
+    },
+    Failed {
+        elapsed: Option<f64>,
+        failure: Option<FailureRecord>,
+    },
+    Crashed,
+    Skipped {
+        elapsed: Option<f64>,
+        reason: Option<String>,
+    },
+    Unreached,
+}
+
+impl TestOutcome {
+    fn status(&self) -> Status {
+        match self {
+            Self::Passed { .. } => Status::Passed,
+            Self::Failed { .. } => Status::Failed,
+            Self::Crashed => Status::Crashed,
+            Self::Skipped { .. } => Status::Skipped,
+            Self::Unreached => Status::Unreached,
+        }
+    }
+
+    fn elapsed(&self) -> Option<f64> {
+        match self {
+            Self::Passed { elapsed }
+            | Self::Failed { elapsed, .. }
+            | Self::Skipped { elapsed, .. } => *elapsed,
+            Self::Crashed | Self::Unreached => None,
+        }
+    }
+
+    fn failure(&self) -> Option<&FailureRecord> {
+        match self {
+            Self::Failed { failure, .. } => failure.as_ref(),
+            _ => None,
+        }
+    }
+
+    fn skip_reason(&self) -> Option<&str> {
+        match self {
+            Self::Skipped { reason, .. } => reason.as_deref(),
+            _ => None,
+        }
+    }
 }
 
 /// One framed chunk of a failure record: `d` concatenated over `i in 0..n`.
@@ -84,22 +218,63 @@ pub struct TestRow {
     pub go_name: String,
     pub name: String,
     pub description: Option<String>,
-    pub status: Status,
-    pub elapsed: Option<f64>,
+    outcome: TestOutcome,
     pub output: String,
-    pub failure: Option<FailureRecord>,
-    pub skip_reason: Option<String>,
     pub logs: Vec<LogRecord>,
     pub children: Vec<TestRow>,
     pub span: Span,
 }
 
+impl TestRow {
+    pub(super) fn status(&self) -> Status {
+        self.outcome.status()
+    }
+
+    fn elapsed(&self) -> Option<f64> {
+        self.outcome.elapsed()
+    }
+
+    fn failure(&self) -> Option<&FailureRecord> {
+        self.outcome.failure()
+    }
+
+    fn skip_reason(&self) -> Option<&str> {
+        self.outcome.skip_reason()
+    }
+
+    #[cfg(test)]
+    pub(super) fn with_status(package: &str, go_name: &str, status: Status) -> Self {
+        let outcome = match status {
+            Status::Passed => TestOutcome::Passed { elapsed: None },
+            Status::Failed => TestOutcome::Failed {
+                elapsed: None,
+                failure: None,
+            },
+            Status::Crashed => TestOutcome::Crashed,
+            Status::Skipped => TestOutcome::Skipped {
+                elapsed: None,
+                reason: None,
+            },
+            Status::Unreached => TestOutcome::Unreached,
+        };
+        Self {
+            package: package.into(),
+            go_name: go_name.into(),
+            name: go_name.into(),
+            description: None,
+            outcome,
+            output: String::new(),
+            logs: vec![],
+            children: vec![],
+            span: Span::new(0, 0, 0),
+        }
+    }
+}
+
 pub struct Report {
     pub rows: Vec<TestRow>,
     pub build_output: String,
-    package_output: HashMap<String, String>,
-    failed_packages: HashSet<String>,
-    build_failed_packages: HashSet<String>,
+    packages: HashMap<String, PackageEvents>,
     go_module: String,
     pub test_elapsed: f64,
 }
@@ -162,17 +337,9 @@ pub fn build_report_filtered(
     go_module: &str,
     selected: Option<&HashSet<(String, String)>>,
 ) -> Report {
-    let mut terminal: HashMap<(String, String), (Status, Option<f64>)> = HashMap::new();
-    let mut started: HashSet<(String, String)> = HashSet::new();
-    let mut outputs: HashMap<(String, String), String> = HashMap::new();
+    let mut tests: HashMap<TestKey, TestEvents> = HashMap::new();
     let mut build_output = String::new();
-    let mut package_output: HashMap<String, String> = HashMap::new();
-    let mut failed_packages: HashSet<String> = HashSet::new();
-    let mut build_failed_packages: HashSet<String> = HashSet::new();
-    let mut fail_chunks: FailChunks = HashMap::new();
-    let mut skip_reasons: HashMap<(String, String), String> = HashMap::new();
-    let mut subtest_names: HashMap<(String, String), String> = HashMap::new();
-    let mut logs: HashMap<(String, String), Vec<LogRecord>> = HashMap::new();
+    let mut packages: HashMap<String, PackageEvents> = HashMap::new();
     let mut test_elapsed: f64 = 0.0;
 
     for event in events {
@@ -181,9 +348,11 @@ pub fn build_report_filtered(
             && let (Some(test), Some(value)) = (&event.test, &event.value)
             && let Ok(envelope) = serde_json::from_str::<FailEnvelope>(value)
         {
-            let entry = fail_chunks
+            let entry = tests
                 .entry((event.package.clone(), test.clone()))
-                .or_insert((envelope.n, Vec::new()));
+                .or_default()
+                .failure_chunks
+                .get_or_insert_with(|| (envelope.n, Vec::new()));
             entry.0 = envelope.n;
             entry.1.push((envelope.i, envelope.d));
             continue;
@@ -193,7 +362,10 @@ pub fn build_report_filtered(
             && let (Some(test), Some(value)) = (&event.test, &event.value)
             && let Some(reason) = decode_hex(value).and_then(|b| String::from_utf8(b).ok())
         {
-            skip_reasons.insert((event.package.clone(), test.clone()), reason);
+            tests
+                .entry((event.package.clone(), test.clone()))
+                .or_default()
+                .skip_reason = Some(reason);
             continue;
         }
         if event.action == "attr"
@@ -201,7 +373,10 @@ pub fn build_report_filtered(
             && let (Some(test), Some(value)) = (&event.test, &event.value)
             && let Some(name) = decode_hex(value).and_then(|b| String::from_utf8(b).ok())
         {
-            subtest_names.insert((event.package.clone(), test.clone()), name);
+            tests
+                .entry((event.package.clone(), test.clone()))
+                .or_default()
+                .subtest_name = Some(name);
             continue;
         }
         if event.action == "attr"
@@ -210,8 +385,10 @@ pub fn build_report_filtered(
             && let Some(record) =
                 decode_hex(value).and_then(|b| serde_json::from_slice::<LogRecord>(&b).ok())
         {
-            logs.entry((event.package.clone(), test.clone()))
+            tests
+                .entry((event.package.clone(), test.clone()))
                 .or_default()
+                .logs
                 .push(record);
             continue;
         }
@@ -222,19 +399,26 @@ pub fn build_report_filtered(
                         build_output.push_str(text);
                     }
                     if let Some(path) = &event.import_path {
-                        build_failed_packages.insert(package_of_import_path(path).to_string());
+                        packages
+                            .entry(package_of_import_path(path).to_string())
+                            .or_default()
+                            .record_build_failure();
                     }
                 }
                 "build-fail" => {
                     if let Some(path) = &event.import_path {
-                        build_failed_packages.insert(package_of_import_path(path).to_string());
+                        packages
+                            .entry(package_of_import_path(path).to_string())
+                            .or_default()
+                            .record_build_failure();
                     }
                 }
                 "output" => {
                     if let Some(text) = &event.output {
-                        package_output
+                        packages
                             .entry(event.package.clone())
                             .or_default()
+                            .output
                             .push_str(text);
                     }
                 }
@@ -242,45 +426,46 @@ pub fn build_report_filtered(
                     test_elapsed = test_elapsed.max(event.elapsed.unwrap_or(0.0));
                 }
                 "fail" => {
-                    failed_packages.insert(event.package.clone());
+                    packages
+                        .entry(event.package.clone())
+                        .or_default()
+                        .record_test_failure();
                     test_elapsed = test_elapsed.max(event.elapsed.unwrap_or(0.0));
                 }
                 _ => {}
             }
             continue;
         };
-        let key = (event.package.clone(), test.clone());
+        let state = tests
+            .entry((event.package.clone(), test.clone()))
+            .or_default();
         match event.action.as_str() {
             "run" => {
-                started.insert(key);
+                state.execution.start();
             }
             "pass" => {
-                terminal.insert(key, (Status::Passed, event.elapsed));
+                state
+                    .execution
+                    .finish(TerminalStatus::Passed, event.elapsed);
             }
             "fail" => {
-                terminal.insert(key, (Status::Failed, event.elapsed));
+                state
+                    .execution
+                    .finish(TerminalStatus::Failed, event.elapsed);
             }
             "skip" => {
-                terminal.insert(key, (Status::Skipped, event.elapsed));
+                state
+                    .execution
+                    .finish(TerminalStatus::Skipped, event.elapsed);
             }
             "output" => {
                 if let Some(text) = &event.output {
-                    outputs.entry(key).or_default().push_str(text);
+                    state.output.push_str(text);
                 }
             }
             _ => {}
         }
     }
-
-    let tables = EventTables {
-        terminal,
-        started,
-        outputs,
-        failures: reassemble_failures(fail_chunks),
-        skip_reasons,
-        subtest_names,
-        logs,
-    };
 
     let mut rows = Vec::new();
     for test in index.tests() {
@@ -301,23 +486,19 @@ pub fn build_report_filtered(
         {
             continue;
         }
-        let (status, elapsed) = match tables.terminal.get(&key).copied() {
-            Some(found) => found,
-            None if tables.started.contains(&key) => (Status::Crashed, None),
-            None => (Status::Unreached, None),
-        };
-        let children = collect_children(&package, &go_name, &tables);
+        let state = tests.get(&key);
+        let outcome = state
+            .map(TestEvents::outcome)
+            .unwrap_or(TestOutcome::Unreached);
+        let children = collect_children(&package, &go_name, &tests);
         rows.push(TestRow {
             package,
             go_name: go_name.clone(),
             name: test.title.clone().unwrap_or_else(|| fn_name.to_string()),
             description: test.doc.clone(),
-            status,
-            elapsed,
-            output: tables.outputs.get(&key).cloned().unwrap_or_default(),
-            failure: tables.failures.get(&key).cloned(),
-            skip_reason: tables.skip_reasons.get(&key).cloned(),
-            logs: tables.logs.get(&key).cloned().unwrap_or_default(),
+            outcome,
+            output: state.map(|state| state.output.clone()).unwrap_or_default(),
+            logs: state.map(|state| state.logs.clone()).unwrap_or_default(),
             children,
             span: test.span,
         });
@@ -325,9 +506,7 @@ pub fn build_report_filtered(
     Report {
         rows,
         build_output,
-        package_output,
-        failed_packages,
-        build_failed_packages,
+        packages,
         go_module: go_module.to_string(),
         test_elapsed,
     }
@@ -338,24 +517,17 @@ fn go_test_name(fn_name: &str) -> String {
 }
 
 /// Requires every index `0..n`; a missing chunk drops to raw output, not a truncated diagnostic.
-fn reassemble_failures(chunks: FailChunks) -> HashMap<(String, String), FailureRecord> {
-    chunks
-        .into_iter()
-        .filter_map(|(key, (n, parts))| reassemble_one(n, parts).map(|record| (key, record)))
-        .collect()
-}
-
-fn reassemble_one(n: usize, parts: Vec<(usize, String)>) -> Option<FailureRecord> {
+fn reassemble_one(n: usize, parts: &[(usize, String)]) -> Option<FailureRecord> {
     if n == 0 {
         return None;
     }
-    let mut slots: Vec<Option<String>> = vec![None; n];
+    let mut slots: Vec<Option<&str>> = vec![None; n];
     for (i, d) in parts {
-        *slots.get_mut(i)? = Some(d);
+        *slots.get_mut(*i)? = Some(d.as_str());
     }
     let mut joined = String::new();
     for slot in slots {
-        joined.push_str(&slot?);
+        joined.push_str(slot?);
     }
     let bytes = decode_hex(&joined)?;
     serde_json::from_slice::<FailureRecord>(&bytes).ok()
@@ -377,31 +549,35 @@ fn decode_hex(hex: &str) -> Option<Vec<u8>> {
         .collect()
 }
 
-fn collect_children(package: &str, parent: &str, tables: &EventTables) -> Vec<TestRow> {
+fn collect_children(
+    package: &str,
+    parent: &str,
+    tests: &HashMap<TestKey, TestEvents>,
+) -> Vec<TestRow> {
     let prefix = format!("{parent}/");
-    let real: HashSet<&str> = tables
-        .terminal
-        .keys()
-        .chain(tables.started.iter())
-        .filter(|(pkg, name)| pkg == package && name.starts_with(&prefix))
-        .map(|(_, name)| name.as_str())
+    let real: HashSet<&str> = tests
+        .iter()
+        .filter(|((pkg, name), state)| {
+            pkg == package && name.starts_with(&prefix) && state.execution.was_observed()
+        })
+        .map(|((_, name), _)| name.as_str())
         .chain(std::iter::once(parent))
         .collect();
 
     let mut children_of: HashMap<&str, Vec<&str>> = HashMap::new();
     for full in real.iter().copied().filter(|&full| full != parent) {
-        if let Some(mother) = subtest_parent(package, full, &real, tables) {
+        if let Some(mother) = subtest_parent(package, full, &real, tests) {
             children_of.entry(mother).or_default().push(full);
         }
     }
-    subtest_rows(package, parent, &children_of, tables)
+    subtest_rows(package, parent, &children_of, tests)
 }
 
 fn subtest_rows(
     package: &str,
     parent: &str,
     children_of: &HashMap<&str, Vec<&str>>,
-    tables: &EventTables,
+    tests: &HashMap<TestKey, TestEvents>,
 ) -> Vec<TestRow> {
     let mut children = children_of.get(parent).cloned().unwrap_or_default();
     children.sort_unstable();
@@ -410,14 +586,10 @@ fn subtest_rows(
         .into_iter()
         .map(|full| {
             let key = (package.to_string(), full.to_string());
-            let (status, elapsed) = match tables.terminal.get(&key).copied() {
-                Some(found) => found,
-                None if tables.started.contains(&key) => (Status::Crashed, None),
-                None => (Status::Unreached, None),
-            };
-            let name = tables
-                .subtest_names
-                .get(&key)
+            let state = &tests[&key];
+            let name = state
+                .subtest_name
+                .as_ref()
                 .filter(|original| !original.is_empty())
                 .cloned()
                 .unwrap_or_else(|| full[parent.len() + 1..].to_string());
@@ -426,13 +598,10 @@ fn subtest_rows(
                 go_name: full.to_string(),
                 name,
                 description: None,
-                status,
-                elapsed,
-                output: tables.outputs.get(&key).cloned().unwrap_or_default(),
-                failure: tables.failures.get(&key).cloned(),
-                skip_reason: tables.skip_reasons.get(&key).cloned(),
-                logs: tables.logs.get(&key).cloned().unwrap_or_default(),
-                children: subtest_rows(package, full, children_of, tables),
+                outcome: state.outcome(),
+                output: state.output.clone(),
+                logs: state.logs.clone(),
+                children: subtest_rows(package, full, children_of, tests),
                 span: Span::new(0, 0, 0),
             }
         })
@@ -443,10 +612,13 @@ fn subtest_parent<'a>(
     package: &str,
     full: &'a str,
     real: &HashSet<&'a str>,
-    tables: &EventTables,
+    tests: &HashMap<TestKey, TestEvents>,
 ) -> Option<&'a str> {
     let key = (package.to_string(), full.to_string());
-    if let Some(original) = tables.subtest_names.get(&key) {
+    if let Some(original) = tests
+        .get(&key)
+        .and_then(|state| state.subtest_name.as_ref())
+    {
         let own_segments = original.matches('/').count() + 1;
         if let Some(parent) = strip_trailing_segments(full, own_segments)
             && real.contains(parent)
@@ -532,10 +704,12 @@ pub fn render(
         render_package_rows(&mut out, &group, sources, color, term_width);
 
         // Crash before any test ran (init/`TestMain` panic): cause is package-level only.
-        if !report.build_failed_packages.contains(package)
-            && report.failed_packages.contains(package)
-            && group.iter().all(|r| r.status == Status::Unreached)
-            && let Some(text) = report.package_output.get(package)
+        if report
+            .packages
+            .get(package)
+            .is_some_and(|events| events.failure == PackageFailure::Test)
+            && group.iter().all(|r| r.status() == Status::Unreached)
+            && let Some(text) = report.packages.get(package).map(|events| &events.output)
         {
             for line in text.lines() {
                 let line = line.trim_end();
@@ -605,7 +779,7 @@ fn render_rows(out: &mut String, rows: &[&TestRow], prefix: &str, color: bool, t
     for (i, row) in rows.iter().enumerate() {
         let last = i + 1 == rows.len();
         let branch = if last { "└── " } else { "├── " };
-        let timing = match row.elapsed {
+        let timing = match row.elapsed() {
             Some(seconds) if seconds > 0.0 => {
                 format!(" {}", format_elapsed(Duration::from_secs_f64(seconds)))
             }
@@ -614,10 +788,10 @@ fn render_rows(out: &mut String, rows: &[&TestRow], prefix: &str, color: bool, t
         let child_prefix = format!("{prefix}{}", if last { "    " } else { "│   " });
 
         // A skip is the grouping's own act and is not carried by its children, so it still shows `#`.
-        if row.children.is_empty() || row.status == Status::Skipped {
-            let glyph = mark(row.status, color);
-            let annotation = match row.status {
-                Status::Skipped => row.skip_reason.clone(),
+        if row.children.is_empty() || row.status() == Status::Skipped {
+            let glyph = mark(row.status(), color);
+            let annotation = match row.status() {
+                Status::Skipped => row.skip_reason().map(str::to_string),
                 Status::Crashed => crash_summary(&row.output),
                 _ => None,
             };
@@ -846,14 +1020,13 @@ fn collect_failures(
         format!("{prefix} › {}", row.name)
     };
 
-    if matches!(row.status, Status::Failed | Status::Crashed) {
+    if matches!(row.status(), Status::Failed | Status::Crashed) {
         if let Some((suffix, body)) = row
-            .failure
-            .as_ref()
+            .failure()
             .and_then(|record| render_failure(record, sources, color, term_width))
         {
             blocks.push(FailureBlock {
-                status: row.status,
+                status: row.status(),
                 path: path.clone(),
                 description: row.description.clone(),
                 kind: suffix,
@@ -870,7 +1043,7 @@ fn collect_failures(
                 .join("\n");
             if !text.is_empty() {
                 blocks.push(FailureBlock {
-                    status: row.status,
+                    status: row.status(),
                     path: path.clone(),
                     description: row.description.clone(),
                     kind: None,
@@ -887,7 +1060,7 @@ fn collect_failures(
 
 fn has_failing_descendant(row: &TestRow) -> bool {
     row.children.iter().any(|child| {
-        matches!(child.status, Status::Failed | Status::Crashed) || has_failing_descendant(child)
+        matches!(child.status(), Status::Failed | Status::Crashed) || has_failing_descendant(child)
     })
 }
 
@@ -989,7 +1162,7 @@ fn stacked_operand_label(operands: &[Operand], values: &[String]) -> String {
 fn count_status(rows: &[TestRow], status: Status) -> usize {
     rows.iter()
         .map(|r| {
-            let own = (counts_in_own_right(r) && r.status == status) as usize;
+            let own = (counts_in_own_right(r) && r.status() == status) as usize;
             own + count_status(&r.children, status)
         })
         .sum()
@@ -997,9 +1170,9 @@ fn count_status(rows: &[TestRow], status: Status) -> usize {
 
 fn counts_in_own_right(row: &TestRow) -> bool {
     row.children.is_empty()
-        || row.status == Status::Skipped
-        || (matches!(row.status, Status::Failed | Status::Crashed)
-            && (row.failure.is_some() || !has_failing_descendant(row)))
+        || row.status() == Status::Skipped
+        || (matches!(row.status(), Status::Failed | Status::Crashed)
+            && (row.failure().is_some() || !has_failing_descendant(row)))
 }
 
 fn summary(rows: &[TestRow], total: Duration, color: bool) -> String {
@@ -1187,7 +1360,7 @@ fn wrap_description(text: &str, width: usize, max_lines: usize) -> Vec<String> {
 pub fn exit_code(rows: &[TestRow], run_success: bool) -> i32 {
     let any_failure = rows
         .iter()
-        .any(|r| matches!(r.status, Status::Failed | Status::Crashed));
+        .any(|r| matches!(r.status(), Status::Failed | Status::Crashed));
     if !run_success || any_failure || nothing_executed(rows) {
         1
     } else {
@@ -1205,7 +1378,7 @@ pub fn nothing_executed(rows: &[TestRow]) -> bool {
 
 pub fn failed_keys(rows: &[TestRow]) -> Vec<(String, String)> {
     rows.iter()
-        .filter(|r| matches!(r.status, Status::Failed | Status::Crashed))
+        .filter(|r| matches!(r.status(), Status::Failed | Status::Crashed))
         .map(|r| (r.package.clone(), r.go_name.clone()))
         .collect()
 }
@@ -1729,6 +1902,20 @@ mod tests {
     }
 
     #[test]
+    fn subtest_metadata_without_execution_does_not_create_a_row() {
+        let index = index(&[(ENTRY_MODULE_ID, "parent")]);
+        let events = vec![
+            event("run", "demo", Some("TestParent"), None),
+            subtest_attr_event("demo", "TestParent/ghost", "ghost"),
+            event("pass", "demo", Some("TestParent"), None),
+        ];
+
+        let report = build_report(&index, &events, "demo");
+
+        assert!(report.rows[0].children.is_empty());
+    }
+
+    #[test]
     fn summary_counts_subtests_not_their_parent() {
         let index = index(&[(ENTRY_MODULE_ID, "parent")]);
         let events = vec![
@@ -1762,8 +1949,8 @@ mod tests {
             event("skip", "demo", Some("TestWip"), None),
         ];
         let report = build_report(&index, &events, "demo");
-        assert_eq!(report.rows[0].status, Status::Skipped);
-        assert_eq!(report.rows[0].skip_reason.as_deref(), Some("not ready"));
+        assert_eq!(report.rows[0].status(), Status::Skipped);
+        assert_eq!(report.rows[0].skip_reason(), Some("not ready"));
 
         let text = render(
             &report,
@@ -1862,8 +2049,8 @@ mod tests {
         ];
         let report = build_report(&index, &events, "demo");
         let child = &report.rows[0].children[0];
-        assert_eq!(child.status, Status::Skipped);
-        assert_eq!(child.skip_reason.as_deref(), Some("needs net"));
+        assert_eq!(child.status(), Status::Skipped);
+        assert_eq!(child.skip_reason(), Some("needs net"));
 
         let text = render(
             &report,
@@ -1890,7 +2077,7 @@ mod tests {
             event("skip", "demo", Some("TestParent"), None),
         ];
         let report = build_report(&index, &events, "demo");
-        assert_eq!(report.rows[0].status, Status::Skipped);
+        assert_eq!(report.rows[0].status(), Status::Skipped);
         assert!(!report.rows[0].children.is_empty());
 
         let text = render(
@@ -1974,7 +2161,7 @@ mod tests {
         let report = build_report(&index, &events, "demo");
         let inner = &report.rows[0].children[0].children[0];
         assert_eq!(inner.name, "inner");
-        assert_eq!(inner.status, Status::Failed);
+        assert_eq!(inner.status(), Status::Failed);
 
         let text = render(
             &report,
@@ -2151,7 +2338,7 @@ mod tests {
 
         assert!(report.build_output.contains("undefined: foo"));
         assert!(!report.build_output.contains("[build failed]"));
-        assert!(report.rows.iter().all(|r| r.status == Status::Unreached));
+        assert!(report.rows.iter().all(|r| r.status() == Status::Unreached));
         assert_eq!(exit_code(&report.rows, false), 1);
     }
 
@@ -2224,6 +2411,19 @@ mod tests {
     }
 
     #[test]
+    fn late_run_event_does_not_erase_a_terminal_result() {
+        let index = index(&[(ENTRY_MODULE_ID, "done")]);
+        let events = vec![
+            event("pass", "demo", Some("TestDone"), None),
+            event("run", "demo", Some("TestDone"), None),
+        ];
+
+        let report = build_report(&index, &events, "demo");
+
+        assert_eq!(report.rows[0].status(), Status::Passed);
+    }
+
+    #[test]
     fn package_panic_before_any_test_shows_cause() {
         let index = index(&[(ENTRY_MODULE_ID, "one"), (ENTRY_MODULE_ID, "two")]);
         let events = vec![
@@ -2240,7 +2440,7 @@ mod tests {
             TEST_WIDTH,
         );
 
-        assert!(report.rows.iter().all(|r| r.status == Status::Unreached));
+        assert!(report.rows.iter().all(|r| r.status() == Status::Unreached));
         assert!(text.contains("panic: init blew up"));
         assert!(text.contains("goroutine 1"));
         assert_eq!(exit_code(&report.rows, false), 1);
@@ -2299,8 +2499,7 @@ mod tests {
         ];
         let report = build_report(&index, &events, "demo");
         let record = report.rows[0]
-            .failure
-            .as_ref()
+            .failure()
             .expect("a lisette-fail record must attach to the failing test");
         assert_eq!(record.file, 7);
         assert_eq!((record.lo, record.hi), (3, 9));
@@ -2329,8 +2528,7 @@ mod tests {
         ];
         let report = build_report(&index, &events, "demo");
         let record = report.rows[0]
-            .failure
-            .as_ref()
+            .failure()
             .expect("two chunks must reassemble into one record");
         assert_eq!(record.operands[0].value, "日本語");
     }
@@ -2345,7 +2543,7 @@ mod tests {
         ];
         let report = build_report(&index, &events, "demo");
         assert!(
-            report.rows[0].failure.is_none(),
+            report.rows[0].failure().is_none(),
             "an incomplete record must not produce a (truncated) diagnostic"
         );
     }

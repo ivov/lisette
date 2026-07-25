@@ -17,41 +17,59 @@ pub(crate) enum SourceScanError {
 }
 
 pub(crate) struct ScannedImports {
-    /// All third-party `go:` imports (blank-imports keep modules referenced).
-    pub(crate) all: Vec<String>,
-    /// Third-party `go:` imports excluding `_`-aliased blank ones.
-    pub(crate) non_blank: Vec<String>,
+    imports: Vec<ScannedImport>,
+}
+
+struct ScannedImport {
+    package: String,
+    usage: ImportUsage,
+}
+
+enum ImportUsage {
+    Named,
+    Blank,
+}
+
+impl ScannedImports {
+    /// All third-party `go:` imports (blank imports keep modules referenced).
+    pub(crate) fn all(&self) -> impl Iterator<Item = &str> {
+        self.imports.iter().map(|import| import.package.as_str())
+    }
+
+    /// Third-party `go:` imports that require typedefs.
+    pub(crate) fn non_blank(&self) -> impl Iterator<Item = &str> {
+        self.imports
+            .iter()
+            .filter(|import| matches!(import.usage, ImportUsage::Named))
+            .map(|import| import.package.as_str())
+    }
 }
 
 /// Collect every third-party `go:` import across `src/**/*.lis`.
 pub(crate) fn scan_source_imports(src_dir: &Path) -> Result<ScannedImports, SourceScanError> {
     use rayon::prelude::*;
 
-    let mut all = Vec::new();
-    let mut non_blank = Vec::new();
     if !src_dir.is_dir() {
-        return Ok(ScannedImports { all, non_blank });
+        return Ok(ScannedImports {
+            imports: Vec::new(),
+        });
     }
 
-    let scanned: Vec<Result<Vec<(String, bool)>, SourceScanError>> =
+    let scanned: Vec<Result<Vec<ScannedImport>, SourceScanError>> =
         collect_lis_filepaths_recursive(src_dir)
             .into_par_iter()
             .map(scan_file_imports)
             .collect();
 
-    for imports in scanned {
-        for (pkg, blank) in imports? {
-            if !blank {
-                non_blank.push(pkg.clone());
-            }
-            all.push(pkg);
-        }
+    let mut imports = Vec::new();
+    for file_imports in scanned {
+        imports.extend(file_imports?);
     }
 
-    Ok(ScannedImports { all, non_blank })
+    Ok(ScannedImports { imports })
 }
 
-fn scan_file_imports(path: PathBuf) -> Result<Vec<(String, bool)>, SourceScanError> {
+fn scan_file_imports(path: PathBuf) -> Result<Vec<ScannedImport>, SourceScanError> {
     let source = match std::fs::read_to_string(&path) {
         Ok(s) => s,
         Err(e) => return Err(SourceScanError::Read { path, error: e }),
@@ -70,10 +88,14 @@ fn scan_file_imports(path: PathBuf) -> Result<Vec<(String, bool)>, SourceScanErr
             && let Some(pkg) = name.strip_prefix("go:")
             && deps::is_third_party(pkg)
         {
-            imports.push((
-                pkg.to_string(),
-                matches!(alias, Some(ImportAlias::Blank(_))),
-            ));
+            imports.push(ScannedImport {
+                package: pkg.to_string(),
+                usage: if matches!(alias, Some(ImportAlias::Blank(_))) {
+                    ImportUsage::Blank
+                } else {
+                    ImportUsage::Named
+                },
+            });
         }
     }
     Ok(imports)
@@ -123,8 +145,11 @@ fn main() {}
             panic!("scan must succeed on valid sources");
         };
 
-        assert_eq!(scanned.non_blank, vec!["github.com/gorilla/mux"]);
-        let mut all = scanned.all;
+        assert_eq!(
+            scanned.non_blank().collect::<Vec<_>>(),
+            ["github.com/gorilla/mux"]
+        );
+        let mut all: Vec<_> = scanned.all().collect();
         all.sort();
         assert_eq!(
             all,
