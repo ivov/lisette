@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785003054471,
+  "lastUpdate": 1785005639413,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -11770,6 +11770,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "cli",
             "value": 10535,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6555,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4452,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2764,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1039,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6084,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "2479b51205bd9a9a3fa228cdc06c321a56e42a65",
+          "message": "refactor: enforce build sequencing in CLI (#1127)",
+          "timestamp": "2026-07-25T20:53:39+02:00",
+          "tree_id": "8c8e15f361e403ba25654349e4b7a9f8c1400550",
+          "url": "https://github.com/ivov/lisette/commit/2479b51205bd9a9a3fa228cdc06c321a56e42a65"
+        },
+        "date": 1785005638437,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 118223,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30170,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 24139,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 17068,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13557,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10810,
             "unit": "lines"
           },
           {
