@@ -70,6 +70,15 @@ pub(crate) fn go_package_name(module: &str) -> &str {
     module.rsplit('/').next().unwrap_or(module)
 }
 
+pub(crate) fn is_plain_identifier(value: &str) -> bool {
+    let mut chars = value.chars();
+    match chars.next() {
+        Some(c) if c.is_ascii_alphabetic() || c == '_' => {}
+        _ => return false,
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
 pub(crate) fn sanitize_package_name(name: &str) -> Cow<'_, str> {
     let has_bad_chars = name.chars().any(|c| !c.is_ascii_alphanumeric() && c != '_');
     let starts_with_digit = name.starts_with(|c: char| c.is_ascii_digit());

@@ -1,0 +1,47 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: |
+  
+  struct Boom {}
+  
+  impl Boom {
+    fn Error(self) -> string {
+      "boom"
+    }
+  }
+  
+  fn first(errs: Array<error, 2>) -> string {
+    errs[0].Error()
+  }
+  
+  fn test() {
+    let concrete: Array<Boom, 2> = [Boom {}, Boom {}]
+    let widened: Array<error, 2> = concrete
+    if first(widened) != "boom" {
+      panic("annotated array binding lost its interface elements")
+    }
+  }
+---
+package main
+
+type Boom struct{}
+
+func (b Boom) Error() string {
+	return "boom"
+}
+
+func first(errs [2]error) string {
+	return errs[0].Error()
+}
+
+func test() {
+	concrete := [2]Boom{Boom{}, Boom{}}
+	var boxed_1 [2]error
+	for i_2 := range concrete {
+		boxed_1[i_2] = concrete[i_2]
+	}
+	widened := boxed_1
+	if first(widened) != "boom" {
+		panic("annotated array binding lost its interface elements")
+	}
+}

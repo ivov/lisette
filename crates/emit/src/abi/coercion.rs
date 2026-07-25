@@ -1,11 +1,12 @@
 use syntax::ast::Expression;
+use syntax::parse::TUPLE_FIELDS;
 use syntax::types::Type;
 
 use crate::Planner;
 use crate::Renderer;
 use crate::definitions::interface_adapter::AdapterPlan;
 use crate::names::go_name;
-use crate::plan::bodies::LoweredStatement;
+use crate::plan::bodies::{LoopKind, LoopPlan, LoweredBlock, LoweredStatement};
 
 use super::callable::AbiTransition;
 use super::layout::{FunctionLayout, ValueLayout};
@@ -13,8 +14,18 @@ use super::layout::{FunctionLayout, ValueLayout};
 pub(crate) enum CoercionPlan {
     Identity,
     WrapAsInterface(AdapterPlan),
-    WrapNewtype { ty: Type },
+    WrapNewtype {
+        ty: Type,
+    },
     Layout(LayoutBridge),
+    RebuildArray {
+        array_type: Type,
+        element: Box<CoercionPlan>,
+    },
+    RebuildTuple {
+        slot_types: Vec<Type>,
+        elements: Vec<CoercionPlan>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,10 +99,14 @@ impl LayoutBridge {
 
 impl CoercionPlan {
     pub(crate) fn internal(planner: &Planner<'_>, from: &Type, to: &Type) -> Self {
-        if let Some(plan) = planner.needs_adapter(from, to) {
+        if from == to {
+            Self::Identity
+        } else if let Some(plan) = planner.needs_adapter(from, to) {
             Self::WrapAsInterface(plan)
         } else if needs_newtype_wrap(planner, from, to) {
             Self::WrapNewtype { ty: to.clone() }
+        } else if let Some(rebuild) = aggregate_rebuild(planner, from, to) {
+            rebuild
         } else {
             Self::Identity
         }
@@ -131,6 +146,14 @@ impl CoercionPlan {
                 format!("{}({})", type_name, value)
             }
             Self::Layout(bridge) => planner.plan_layout_bridge(&mut statements, &value, &bridge),
+            Self::RebuildArray {
+                array_type,
+                element,
+            } => planner.plan_array_rebuild(&mut statements, &value, &array_type, *element),
+            Self::RebuildTuple {
+                slot_types,
+                elements,
+            } => planner.plan_tuple_rebuild(&mut statements, &value, &slot_types, elements),
         };
         (statements, value)
     }
@@ -151,6 +174,74 @@ impl Planner<'_> {
         let (setup, value) = coercion.lower(self, emitted);
         output.push_str(&Renderer.render_setup(&setup));
         value
+    }
+
+    /// Bind `value` to a name that can be read more than once.
+    fn stable_source(
+        &mut self,
+        statements: &mut Vec<LoweredStatement>,
+        hint: &str,
+        value: &str,
+    ) -> String {
+        if go_name::is_plain_identifier(value) {
+            return value.to_string();
+        }
+        self.hoist_tmp_value_statement(statements, hint, value)
+    }
+
+    fn plan_array_rebuild(
+        &mut self,
+        statements: &mut Vec<LoweredStatement>,
+        value: &str,
+        array_type: &Type,
+        element: CoercionPlan,
+    ) -> String {
+        let source = self.stable_source(statements, "src", value);
+        let go_type = self.go_type_string(array_type);
+        let output = self.fresh_var(Some("boxed"));
+        self.declare(&output);
+        statements.push(LoweredStatement::VarDecl {
+            name: output.clone(),
+            go_type,
+            value: None,
+        });
+
+        let index = self.fresh_var(Some("i"));
+        self.declare(&index);
+        let (mut body, coerced) = element.lower(self, format!("{source}[{index}]"));
+        body.push(LoweredStatement::RawGo(format!(
+            "{output}[{index}] = {coerced}\n"
+        )));
+        statements.push(LoweredStatement::Loop(LoopPlan {
+            prologue: Vec::new(),
+            kind: LoopKind::Generated { label: None },
+            header: format!("for {index} := range {source} {{\n"),
+            body: LoweredBlock { statements: body },
+        }));
+        output
+    }
+
+    fn plan_tuple_rebuild(
+        &mut self,
+        statements: &mut Vec<LoweredStatement>,
+        value: &str,
+        slot_types: &[Type],
+        elements: Vec<CoercionPlan>,
+    ) -> String {
+        let source = self.stable_source(statements, "tup", value);
+
+        let mut arguments = Vec::with_capacity(elements.len());
+        for (index, element) in elements.into_iter().enumerate() {
+            let field = TUPLE_FIELDS.get(index).expect("oversize tuple arity");
+            let (element_setup, coerced) = element.lower(self, format!("{source}.{field}"));
+            statements.extend(element_setup);
+            arguments.push(coerced);
+        }
+        format!(
+            "{}({})",
+            self.make_tuple_callee(slot_types, slot_types.len()),
+            arguments.join(", ")
+        )
     }
 }
 
@@ -412,6 +503,52 @@ fn is_go_interface_slot(planner: &Planner<'_>, ty: &Type) -> bool {
         .facts
         .as_interface(ty)
         .is_some_and(|id| go_name::is_go_import(&id))
+}
+
+fn aggregate_rebuild(planner: &Planner<'_>, from: &Type, to: &Type) -> Option<CoercionPlan> {
+    match (from, to) {
+        (
+            Type::Array {
+                length: from_length,
+                element: from_element,
+            },
+            Type::Array {
+                length: to_length,
+                element: to_element,
+            },
+        ) if from_length == to_length => {
+            let element = widening_element_plan(planner, from_element, to_element)?;
+            Some(CoercionPlan::RebuildArray {
+                array_type: to.clone(),
+                element: Box::new(element),
+            })
+        }
+        (Type::Tuple(from_elements), Type::Tuple(to_elements))
+            if from_elements.len() == to_elements.len() =>
+        {
+            let elements: Vec<Option<CoercionPlan>> = from_elements
+                .iter()
+                .zip(to_elements)
+                .map(|(from, to)| widening_element_plan(planner, from, to))
+                .collect();
+            if elements.iter().all(Option::is_none) {
+                return None;
+            }
+            Some(CoercionPlan::RebuildTuple {
+                slot_types: to_elements.clone(),
+                elements: elements
+                    .into_iter()
+                    .map(|element| element.unwrap_or(CoercionPlan::Identity))
+                    .collect(),
+            })
+        }
+        _ => None,
+    }
+}
+
+fn widening_element_plan(planner: &Planner<'_>, from: &Type, to: &Type) -> Option<CoercionPlan> {
+    let plan = CoercionPlan::internal(planner, from, to);
+    (from != to && (planner.facts.is_interface(to) || !plan.is_identity())).then_some(plan)
 }
 
 fn needs_newtype_wrap(planner: &Planner<'_>, from: &Type, to: &Type) -> bool {

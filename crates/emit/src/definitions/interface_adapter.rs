@@ -468,44 +468,6 @@ impl Planner<'_> {
         }
         (go_ret, body)
     }
-
-    pub(crate) fn resolve_tuple_slot_types(
-        &mut self,
-        inferred: Vec<Type>,
-        in_tail: bool,
-    ) -> Vec<Type> {
-        let resolved = self.return_ctx();
-        let return_slots = resolved.ty().and_then(|ty| {
-            let Type::Tuple(slots) = ty else {
-                return None;
-            };
-            (slots.len() == inferred.len()).then(|| slots.clone())
-        });
-
-        let Some(return_slots) = return_slots else {
-            return inferred;
-        };
-
-        if in_tail {
-            return return_slots;
-        }
-
-        return_slots
-            .iter()
-            .zip(inferred.iter())
-            .map(|(declared, inferred_slot)| {
-                let needs_widening = self.needs_adapter(inferred_slot, declared).is_some()
-                    || self.facts.is_interface(declared)
-                    || (declared.get_qualified_id().is_some()
-                        && declared.get_qualified_id() == inferred_slot.get_qualified_id());
-                if needs_widening {
-                    declared.clone()
-                } else {
-                    inferred_slot.clone()
-                }
-            })
-            .collect()
-    }
 }
 
 fn write_method_header(

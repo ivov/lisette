@@ -2,6 +2,7 @@ use crate::Planner;
 use crate::abi::callable::CallableReturnAbi;
 use crate::calls::go_interop::NilGuard;
 use crate::context::expression::ExpressionContext;
+use crate::names::go_name::is_plain_identifier;
 use crate::patterns::binding_decls::pattern_binds_name;
 use crate::patterns::tree_emitter::TreePlanner;
 use crate::plan::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan};
@@ -407,7 +408,7 @@ impl Planner<'_> {
         let staged = self.stage_composite(subject, ExpressionContext::value());
         let (subject_setup, value) = staged.into_parts();
         setup.extend(subject_setup);
-        if !any_guard && is_plain_go_identifier(&value) {
+        if !any_guard && is_plain_identifier(&value) {
             return (value, SubjectDeclaration::None);
         }
         let declaration = SubjectDeclaration::Deferred {
@@ -416,15 +417,6 @@ impl Planner<'_> {
         };
         (var, declaration)
     }
-}
-
-fn is_plain_go_identifier(value: &str) -> bool {
-    let mut chars = value.chars();
-    match chars.next() {
-        Some(c) if c.is_ascii_alphabetic() || c == '_' => {}
-        _ => return false,
-    }
-    chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
 /// Recognize `[Ok(<...>), Err(<...>)]` (in either order, no guards).

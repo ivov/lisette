@@ -1,0 +1,53 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: |
+  
+  struct Boom {}
+  
+  impl Boom {
+    fn Error(self) -> string {
+      "boom"
+    }
+  }
+  
+  fn describe(pair: (error, int)) -> string {
+    pair.0.Error()
+  }
+  
+  fn test() {
+    let pair: (error, int) = match 1 {
+      1 => (Boom {}, 1),
+      _ => (Boom {}, 2),
+    }
+    if describe(pair) != "boom" {
+      panic("match arm lost its interface elements")
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Boom struct{}
+
+func (b Boom) Error() string {
+	return "boom"
+}
+
+func describe(pair lisette.Tuple2[error, int]) string {
+	return pair.First.Error()
+}
+
+func test() {
+	var pair lisette.Tuple2[error, int]
+	if 1 == 1 {
+		tup_1 := lisette.MakeTuple2(Boom{}, 1)
+		pair = lisette.MakeTuple2[error, int](tup_1.First, tup_1.Second)
+	} else {
+		tup_2 := lisette.MakeTuple2(Boom{}, 2)
+		pair = lisette.MakeTuple2[error, int](tup_2.First, tup_2.Second)
+	}
+	if describe(pair) != "boom" {
+		panic("match arm lost its interface elements")
+	}
+}

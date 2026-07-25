@@ -1,0 +1,43 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: |
+  
+  struct Boom {}
+  
+  impl Boom {
+    fn Error(self) -> string {
+      "boom"
+    }
+  }
+  
+  fn describe(pair: (error, int)) -> string {
+    pair.0.Error()
+  }
+  
+  fn test() {
+    let concrete = (Boom {}, 1)
+    if describe(concrete) != "boom" {
+      panic("tuple argument lost its interface elements")
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Boom struct{}
+
+func (b Boom) Error() string {
+	return "boom"
+}
+
+func describe(pair lisette.Tuple2[error, int]) string {
+	return pair.First.Error()
+}
+
+func test() {
+	concrete := lisette.MakeTuple2(Boom{}, 1)
+	if describe(lisette.MakeTuple2[error, int](concrete.First, concrete.Second)) != "boom" {
+		panic("tuple argument lost its interface elements")
+	}
+}

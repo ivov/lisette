@@ -62,40 +62,23 @@ fn unwrap_unary_negation(expression: &Expression) -> &Expression {
 }
 
 /// Pick the Go type for a `let` binding's `var X T` temp. Diverging values
-/// use the binding type so dead `return x` paths still typecheck; branching
-/// values that produce tuples widen slots to match the assignment site.
+/// use the binding type so dead `return x` paths still typecheck.
 fn resolve_let_temp_declaration_ty(
-    planner: &mut Planner,
+    planner: &Planner,
     value: &Expression,
     binding_ty: &Type,
 ) -> Type {
     let value_ty = value.get_type();
-    let widens_to_interface =
-        planner.facts.as_interface(binding_ty).is_some() && *binding_ty != value_ty;
-    if !value_ty.is_unit() && !value_ty.is_never() && widens_to_interface {
+    if value_ty.is_unit() || value_ty.is_never() {
+        if binding_ty.is_unit() || binding_ty.is_variable() || binding_ty.is_placeholder() {
+            return value_ty;
+        }
         return binding_ty.clone();
     }
-    let base = if value_ty.is_unit() || value_ty.is_never() {
-        if !binding_ty.is_unit() && !binding_ty.is_variable() && !binding_ty.is_placeholder() {
-            binding_ty.clone()
-        } else {
-            value_ty
-        }
-    } else {
-        value_ty
-    };
-    let is_branching = matches!(
-        value,
-        Expression::If { .. }
-            | Expression::IfLet { .. }
-            | Expression::Match { .. }
-            | Expression::Select { .. }
-    );
-    if is_branching && let Type::Tuple(slots) = &base {
-        Type::Tuple(planner.resolve_tuple_slot_types(slots.clone(), false))
-    } else {
-        base
+    if planner.facts.is_interface(binding_ty) && *binding_ty != value_ty {
+        return binding_ty.clone();
     }
+    value_ty
 }
 
 impl Planner<'_> {
