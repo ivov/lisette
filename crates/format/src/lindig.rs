@@ -69,11 +69,14 @@ fn fits(
                 }
             }
 
-            Document::NextBreakFits(doc, enabled) => match (*enabled, mode) {
-                (true, Mode::ForcedUnbroken) => docs.push((indent, mode, doc)),
-                (true, _) => docs.push((indent, Mode::ForcedBroken, doc)),
-                (false, Mode::ForcedBroken) => docs.push((indent, mode, doc)),
-                (false, _) => docs.push((indent, Mode::ForcedUnbroken, doc)),
+            Document::NextBreakFits(doc) => match mode {
+                Mode::ForcedUnbroken => docs.push((indent, mode, doc)),
+                _ => docs.push((indent, Mode::ForcedBroken, doc)),
+            },
+
+            Document::NextBreakDoesNotFit(doc) => match mode {
+                Mode::ForcedBroken => docs.push((indent, mode, doc)),
+                _ => docs.push((indent, Mode::ForcedUnbroken, doc)),
             },
 
             Document::Sequence(vec) => {
@@ -91,76 +94,66 @@ fn write_indent(output: &mut String, indent: isize) {
     }
 }
 
+fn write_pending_indent(output: &mut String, pending_indent: &mut Option<isize>) {
+    if let Some(indent) = pending_indent.take() {
+        write_indent(output, indent);
+    }
+}
+
 fn format(
     output: &mut String,
     limit: isize,
     mut width: isize,
     mut docs: Vec<(isize, Mode, &Document<'_>)>,
 ) {
-    let mut pending_indent: isize = -1;
+    let mut pending_indent = None;
 
     while let Some((indent, mode, document)) = docs.pop() {
         match document {
             Document::Newline => {
                 output.push('\n');
-                pending_indent = indent;
+                pending_indent = Some(indent);
                 width = indent;
             }
 
             Document::FlexBreak { broken, unbroken } => {
                 let unbroken_width = width + unbroken.len() as isize;
                 if mode == Mode::Unbroken || fits(limit, unbroken_width, docs.clone()) {
-                    if pending_indent >= 0 {
-                        write_indent(output, pending_indent);
-                        pending_indent = -1;
-                    }
+                    write_pending_indent(output, &mut pending_indent);
                     output.push_str(unbroken);
                     width = unbroken_width;
                 } else {
-                    if pending_indent >= 0 {
-                        write_indent(output, pending_indent);
-                    }
+                    write_pending_indent(output, &mut pending_indent);
                     output.push_str(broken);
                     output.push('\n');
-                    pending_indent = indent;
+                    pending_indent = Some(indent);
                     width = indent;
                 }
             }
 
             Document::StrictBreak { broken, unbroken } => match mode {
                 Mode::Broken | Mode::ForcedBroken => {
-                    if pending_indent >= 0 {
-                        write_indent(output, pending_indent);
-                    }
+                    write_pending_indent(output, &mut pending_indent);
                     output.push_str(broken);
                     output.push('\n');
-                    pending_indent = indent;
+                    pending_indent = Some(indent);
                     width = indent;
                 }
                 Mode::Unbroken | Mode::ForcedUnbroken => {
-                    if pending_indent >= 0 {
-                        write_indent(output, pending_indent);
-                        pending_indent = -1;
-                    }
+                    write_pending_indent(output, &mut pending_indent);
                     output.push_str(unbroken);
                     width += unbroken.len() as isize;
                 }
             },
 
             Document::Text(s) => {
-                if pending_indent >= 0 {
-                    write_indent(output, pending_indent);
-                    pending_indent = -1;
-                }
+                write_pending_indent(output, &mut pending_indent);
                 width += s.graphemes(true).count() as isize;
                 output.push_str(s);
             }
 
             Document::VerbatimText(s) => {
-                if pending_indent >= 0 {
-                    write_indent(output, pending_indent);
-                    pending_indent = -1;
-                }
+                write_pending_indent(output, &mut pending_indent);
                 let mut segments = s.split('\n');
                 if let Some(first) = segments.next() {
                     output.push_str(first);
@@ -201,7 +194,8 @@ fn format(
             }
 
             Document::ForceBroken(document)
-            | Document::NextBreakFits(document, _)
+            | Document::NextBreakFits(document)
+            | Document::NextBreakDoesNotFit(document)
             | Document::MeasureFlat(document) => {
                 docs.push((indent, mode, document));
             }
@@ -213,7 +207,8 @@ fn format(
 pub enum Document<'a> {
     Newline,
     ForceBroken(Box<Self>),
-    NextBreakFits(Box<Self>, bool),
+    NextBreakFits(Box<Self>),
+    NextBreakDoesNotFit(Box<Self>),
     MeasureFlat(Box<Self>),
     StrictBreak { broken: &'a str, unbroken: &'a str },
     FlexBreak { broken: &'a str, unbroken: &'a str },
@@ -254,8 +249,12 @@ impl<'a> Document<'a> {
         Self::ForceBroken(Box::new(self))
     }
 
-    pub fn next_break_fits(self, enabled: bool) -> Self {
-        Self::NextBreakFits(Box::new(self), enabled)
+    pub fn next_break_fits(self) -> Self {
+        Self::NextBreakFits(Box::new(self))
+    }
+
+    pub fn next_break_does_not_fit(self) -> Self {
+        Self::NextBreakDoesNotFit(Box::new(self))
     }
 
     pub fn measure_flat(self) -> Self {

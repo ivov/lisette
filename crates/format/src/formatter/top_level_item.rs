@@ -1,12 +1,28 @@
 use super::Formatter;
 use super::sequence::SiblingEntry;
 use crate::INDENT_WIDTH;
+use crate::comments::{SplitComments, TakenComments};
 use crate::lindig::{Document, join, strict_break};
 use syntax::ast::{
     Annotation, Attribute, AttributeArg, Binding, ConstInitializer, EnumVariant, Expression,
     FunctionBody, Generic, ParentInterface, Span, StructFieldDefinition, StructFields,
     VariantFields,
 };
+
+struct StructFieldEntries<'a> {
+    entries: Vec<SiblingEntry<'a>>,
+    trailing: TakenComments<'a>,
+}
+
+impl StructFieldEntries<'_> {
+    fn has_comments(&self) -> bool {
+        self.trailing.document.is_some()
+            || self
+                .entries
+                .iter()
+                .any(|entry| entry.leading.is_some() || entry.trailing.is_some())
+    }
+}
 
 impl<'a> Formatter<'a> {
     pub(super) fn function(
@@ -87,16 +103,17 @@ impl<'a> Formatter<'a> {
             return self.empty_struct_body(header, struct_end);
         }
 
-        let with_field_attrs = fields.iter().any(|f| !f.attributes().is_empty());
-        let with_pub_fields = fields.iter().any(|f| f.visibility.is_public());
-        let with_embeds = fields.iter().any(|f| f.is_embedded());
+        let field_entries = self.struct_fields_with_comments(fields, struct_end);
+        let requires_multiline = field_entries.has_comments()
+            || fields.iter().any(|field| {
+                !field.attributes().is_empty()
+                    || field.visibility.is_public()
+                    || field.is_embedded()
+            });
 
-        let (field_entries, trailing, with_comments) =
-            self.struct_fields_with_comments(fields, struct_end);
-
-        if with_comments || with_field_attrs || with_pub_fields || with_embeds {
+        if requires_multiline {
             let mut body = Document::Sequence(vec![]);
-            for (i, entry) in field_entries.into_iter().enumerate() {
+            for (i, entry) in field_entries.entries.into_iter().enumerate() {
                 if i > 0 {
                     body = body.append(Document::Newline);
                     if entry.has_blank_above {
@@ -113,9 +130,9 @@ impl<'a> Formatter<'a> {
                 }
                 body = body.append(doc);
             }
-            if let Some((t, has_blank)) = trailing {
+            if let Some(t) = field_entries.trailing.document {
                 body = body.append(Document::Newline);
-                if has_blank {
+                if field_entries.trailing.has_blank_line {
                     body = body.append(Document::Newline);
                 }
                 body = body.append(t);
@@ -123,7 +140,11 @@ impl<'a> Formatter<'a> {
             return Self::braced_body(header, body);
         }
 
-        let fields_docs: Vec<_> = field_entries.into_iter().map(|entry| entry.doc).collect();
+        let fields_docs: Vec<_> = field_entries
+            .entries
+            .into_iter()
+            .map(|entry| entry.doc)
+            .collect();
         Self::flexible_struct_body(header, fields_docs)
     }
 
@@ -143,9 +164,8 @@ impl<'a> Formatter<'a> {
         &mut self,
         fields: &'a [StructFieldDefinition],
         struct_end: u32,
-    ) -> (Vec<SiblingEntry<'a>>, Option<(Document<'a>, bool)>, bool) {
+    ) -> StructFieldEntries<'a> {
         let mut entries: Vec<SiblingEntry<'a>> = Vec::new();
-        let mut with_comments = false;
         let mut prev_anchor: Option<u32> = None;
 
         for field in fields {
@@ -154,20 +174,14 @@ impl<'a> Formatter<'a> {
                 .first()
                 .map(|a| a.span.byte_offset)
                 .unwrap_or(field.name_span.byte_offset);
-            let (trailing_for_prev, leading, has_blank) = match prev_anchor {
+            let split = match prev_anchor {
                 Some(anchor) => self
                     .comments
                     .take_split_by_newline_after(anchor, leading_edge),
-                None => (
-                    None,
-                    self.comments.take_comments_before(leading_edge),
-                    false,
-                ),
+                None => SplitComments::leading(self.comments.take_comments_before(leading_edge)),
             };
 
-            with_comments = with_comments || trailing_for_prev.is_some() || leading.is_some();
-
-            if let Some(t) = trailing_for_prev
+            if let Some(t) = split.trailing
                 && let Some(last) = entries.last_mut()
             {
                 last.trailing = Some(t);
@@ -199,32 +213,35 @@ impl<'a> Formatter<'a> {
                 None => field_attrs.append(field_definition),
             };
             entries.push(SiblingEntry {
-                leading,
+                leading: split.leading,
                 doc: attrs_with_field,
                 trailing: None,
-                has_blank_above: has_blank,
+                has_blank_above: split.has_blank_before_leading,
             });
 
             let ann_span = field.annotation.get_span();
             prev_anchor = Some(ann_span.byte_offset + ann_span.byte_length);
         }
 
-        let (last_trailing, struct_trailing, trailing_has_blank) = match prev_anchor {
+        let split = match prev_anchor {
             Some(anchor) => self
                 .comments
                 .take_split_by_newline_after(anchor, struct_end),
-            None => (None, self.comments.take_comments_before(struct_end), false),
+            None => SplitComments::leading(self.comments.take_comments_before(struct_end)),
         };
-        if let Some(t) = last_trailing
+        if let Some(t) = split.trailing
             && let Some(last) = entries.last_mut()
         {
             last.trailing = Some(t);
-            with_comments = true;
         }
-        with_comments = with_comments || struct_trailing.is_some();
 
-        let struct_trailing = struct_trailing.map(|t| (t, trailing_has_blank));
-        (entries, struct_trailing, with_comments)
+        StructFieldEntries {
+            entries,
+            trailing: TakenComments {
+                document: split.leading,
+                has_blank_line: split.has_blank_before_leading,
+            },
+        }
     }
 
     fn field_attributes(&mut self, attrs: &'a [Attribute]) -> Document<'a> {

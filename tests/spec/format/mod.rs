@@ -198,6 +198,18 @@ fn comment_between_statements() {
 }
 
 #[test]
+fn comment_and_blank_line_before_statement_remain_idempotent() {
+    assert_format_snapshot!(
+        r#"fn foo() {
+  let x = 1;
+  // explanation
+
+  let y = 2;
+}"#
+    );
+}
+
+#[test]
 fn comment_leading() {
     assert_format_snapshot!("// leading comment\nfn foo() {}");
 }
@@ -1467,6 +1479,13 @@ fn method_chain_comment_inside_receiver_slice() {
 }
 
 #[test]
+fn method_chain_comment_inside_parenthesized_receiver() {
+    assert_format_snapshot!(
+        "fn test() { (first_value + // receiver detail\nsecond_value).combine() }"
+    );
+}
+
+#[test]
 fn unit_return_type_annotation() {
     assert_format_snapshot!("fn do_nothing() -> () { () }");
 }
@@ -1651,6 +1670,11 @@ fn comment_between_field_attributes() {
 #[test]
 fn comment_between_attr_and_struct_definition() {
     assert_format_snapshot!("struct A {}\n\n#[attr]\n// between attr and struct decl\nstruct B {}");
+}
+
+#[test]
+fn comment_between_attribute_and_type_alias_definition() {
+    assert_format_snapshot!("#[go(alias)]\n// alias detail\ntype UserId = int");
 }
 
 #[test]

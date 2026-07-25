@@ -31,23 +31,20 @@ impl<'a> Formatter<'a> {
                             s.pattern(f)
                         });
                     }
-                    let rest_info = if *rest {
+                    if *rest {
                         let rest_pos = self
                             .comments
                             .next_pair_at(b'.', span.byte_offset, span.end())
                             .unwrap_or(span.end());
-                        let leading = self.split_for_rest(&mut entries, rest_pos);
-                        Some((leading, Document::str("..")))
-                    } else {
-                        None
-                    };
-                    let (body, close_sep) = Self::join_pattern_entries(entries, rest_info, "");
+                        self.push_pattern_entry(&mut entries, rest_pos, |_| Document::str(".."));
+                    }
+                    let joined = Self::join_pattern_entries(entries, "");
                     Document::string(identifier.to_string())
                         .append("(")
                         .append(strict_break("", ""))
-                        .append(body)
+                        .append(joined.body)
                         .nest(INDENT_WIDTH)
-                        .append(close_sep)
+                        .append(joined.close_separator)
                         .append(")")
                         .group()
                 }
@@ -71,23 +68,20 @@ impl<'a> Formatter<'a> {
                             |s| s.struct_field_pattern(f),
                         );
                     }
-                    let rest_info = if *rest {
+                    if *rest {
                         let rest_pos = self
                             .comments
                             .next_pair_at(b'.', span.byte_offset, span.end())
                             .unwrap_or(span.end());
-                        let leading = self.split_for_rest(&mut entries, rest_pos);
-                        Some((leading, Document::str("..")))
-                    } else {
-                        None
-                    };
-                    let (body, close_sep) = Self::join_pattern_entries(entries, rest_info, " ");
+                        self.push_pattern_entry(&mut entries, rest_pos, |_| Document::str(".."));
+                    }
+                    let joined = Self::join_pattern_entries(entries, " ");
                     Document::string(identifier.to_string())
                         .append(" {")
                         .append(strict_break("", " "))
-                        .append(body)
+                        .append(joined.body)
                         .nest(INDENT_WIDTH)
-                        .append(close_sep)
+                        .append(joined.close_separator)
                         .append("}")
                         .group()
                 }
@@ -100,12 +94,12 @@ impl<'a> Formatter<'a> {
                         s.pattern(element)
                     });
                 }
-                let (body, close_sep) = Self::join_pattern_entries(entries, None, "");
+                let joined = Self::join_pattern_entries(entries, "");
                 Document::str("(")
                     .append(strict_break("", ""))
-                    .append(body)
+                    .append(joined.body)
                     .nest(INDENT_WIDTH)
-                    .append(close_sep)
+                    .append(joined.close_separator)
                     .append(")")
                     .group()
             }
@@ -117,29 +111,28 @@ impl<'a> Formatter<'a> {
                         s.pattern(pattern)
                     });
                 }
-                let rest_info = match rest {
-                    RestPattern::Absent => None,
+                match rest {
+                    RestPattern::Absent => {}
                     RestPattern::Discard(rest_span) => {
-                        let leading = self.split_for_rest(&mut entries, rest_span.byte_offset);
-                        Some((leading, Document::str("..")))
+                        self.push_pattern_entry(&mut entries, rest_span.byte_offset, |_| {
+                            Document::str("..")
+                        });
                     }
                     RestPattern::Bind {
                         name,
                         span: rest_span,
                     } => {
-                        let leading = self.split_for_rest(&mut entries, rest_span.byte_offset);
-                        Some((
-                            leading,
-                            Document::str("..").append(Document::string(name.to_string())),
-                        ))
+                        self.push_pattern_entry(&mut entries, rest_span.byte_offset, |_| {
+                            Document::str("..").append(Document::string(name.to_string()))
+                        });
                     }
-                };
-                let (body, close_sep) = Self::join_pattern_entries(entries, rest_info, "");
+                }
+                let joined = Self::join_pattern_entries(entries, "");
                 Document::str("[")
                     .append(strict_break("", ""))
-                    .append(body)
+                    .append(joined.body)
                     .nest(INDENT_WIDTH)
-                    .append(close_sep)
+                    .append(joined.close_separator)
                     .append("]")
                     .group()
             }
