@@ -23,8 +23,10 @@ impl InferCtx<'_> {
         self.check_undeclared_impl_type_params(&annotation, &generics);
         let impl_ty = self.convert_receiver_to_type(store, &annotation, &span);
 
-        if self.impl_has_simple_type_params(&impl_ty, &generics) {
-            let receiver_qualified = impl_ty.get_qualified_name();
+        if let Type::Nominal { id, .. } = &impl_ty
+            && self.impl_has_simple_type_params(&impl_ty, &generics)
+        {
+            let receiver_qualified = id.clone();
             self.register_receiver_type_bounds(store, &receiver_qualified, &generics);
         }
 
@@ -118,7 +120,10 @@ impl InferCtx<'_> {
         let new_parents = parents
             .into_iter()
             .map(|parent| {
+                let before = self.sink.len();
                 let parent_ty = self.convert_to_type(store, &parent.annotation, &parent.span);
+                self.sink.truncate(before);
+                self.check_interface_parent(&parent_ty, parent.span);
                 ParentInterface {
                     annotation: parent.annotation,
                     span: parent.span,
@@ -139,5 +144,19 @@ impl InferCtx<'_> {
             span,
             visibility,
         }
+    }
+
+    fn check_interface_parent(&mut self, parent_ty: &Type, span: Span) {
+        if parent_ty.is_error() {
+            return;
+        }
+        let (core, _) = self.store.peel_refs_and_aliases(parent_ty);
+        if self.store.is_interface(&core) {
+            return;
+        }
+        self.sink.push(diagnostics::embed::non_interface_parent(
+            &parent_ty.to_string(),
+            span,
+        ));
     }
 }

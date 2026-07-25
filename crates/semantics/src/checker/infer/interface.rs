@@ -36,10 +36,11 @@ fn method_comma_ok(store: &Store, type_id: &str, method: &str) -> bool {
             return false;
         }
         store.get_interface(type_id).is_some_and(|iface| {
-            iface
-                .parents
-                .iter()
-                .any(|parent| walk(store, parent.get_qualified_name().as_str(), method, seen))
+            iface.parents.iter().any(|parent| {
+                parent
+                    .get_qualified_name()
+                    .is_some_and(|id| walk(store, id.as_str(), method, seen))
+            })
         })
     }
     walk(
@@ -285,7 +286,9 @@ impl InferCtx<'_> {
             }
         }
         for parent in &interface.parents {
-            let parent_name = parent.get_qualified_name();
+            let Some(parent_name) = parent.get_qualified_name() else {
+                continue;
+            };
             if let Some(parent_interface) = store.get_interface(&parent_name) {
                 self.collect_pointer_receiver_methods(
                     check,
@@ -468,7 +471,9 @@ impl InferCtx<'_> {
         });
         covered
             && interface.parents.iter().all(|parent| {
-                let parent_name = parent.get_qualified_name();
+                let Some(parent_name) = parent.get_qualified_name() else {
+                    return true;
+                };
                 match store.get_interface(&parent_name) {
                     Some(parent_interface) => self.own_methods_cover_interface(
                         own,
@@ -632,7 +637,9 @@ impl InferCtx<'_> {
         }
 
         for parent in &interface.parents {
-            let parent_name = parent.get_qualified_name();
+            let Some(parent_name) = parent.get_qualified_name() else {
+                continue;
+            };
             if let Some(parent_interface) = store.get_interface(&parent_name).cloned() {
                 let parent_type_args = parent.get_type_params().unwrap_or_default();
                 let substituted_parent_args: Vec<Type> = parent_type_args
@@ -870,7 +877,7 @@ fn method_definition_public(
     }
     let interface = store.get_interface(owner)?;
     interface.parents.iter().find_map(|parent| {
-        method_definition_public(store, parent.get_qualified_name().as_str(), method, seen)
+        method_definition_public(store, parent.get_qualified_name()?.as_str(), method, seen)
     })
 }
 
@@ -889,13 +896,14 @@ fn interface_declares_methods(
         return true;
     }
     interface.parents.iter().any(|parent| {
-        let parent_name = parent.get_qualified_name();
-        seen.insert(parent_name.to_string())
-            && store
-                .get_interface(&parent_name)
-                .is_some_and(|parent_interface| {
-                    interface_declares_methods(store, parent_interface, seen)
-                })
+        parent.get_qualified_name().is_some_and(|parent_name| {
+            seen.insert(parent_name.to_string())
+                && store
+                    .get_interface(&parent_name)
+                    .is_some_and(|parent_interface| {
+                        interface_declares_methods(store, parent_interface, seen)
+                    })
+        })
     })
 }
 

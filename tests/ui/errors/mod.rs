@@ -9358,6 +9358,25 @@ fn main() {}
 }
 
 #[test]
+fn infer_impl_on_ref_to_builtin_array() {
+    let mut fs = MockFileSystem::new();
+
+    let source = r#"
+impl Ref<Array<int, 3>> {
+  fn first(self) -> int {
+    0
+  }
+}
+
+fn main() {}
+"#;
+    fs.add_file("main", "main.lis", source);
+
+    let result = infer_module("main", fs);
+    assert_multimodule_infer_error_snapshot!(result, source);
+}
+
+#[test]
 fn infer_non_pub_interface_with_pub_implementations() {
     let mut fs = MockFileSystem::new();
 

@@ -364,11 +364,10 @@ impl InferCtx<'_> {
         let deref_ty = ty.strip_refs();
         let mut names = Vec::new();
 
-        if let Type::Nominal { .. } = deref_ty {
-            let qualified_name = deref_ty.get_qualified_name();
-            if let Some(fields) = store.fields_of(&qualified_name) {
-                names.extend(fields.iter().map(|f| f.name.to_string()));
-            }
+        if let Type::Nominal { id, .. } = &deref_ty
+            && let Some(fields) = store.fields_of(id)
+        {
+            names.extend(fields.iter().map(|f| f.name.to_string()));
         }
 
         let methods = self.get_all_methods(store, &deref_ty);
@@ -405,8 +404,8 @@ impl InferCtx<'_> {
         let store = self.store;
         let deref_ty = ty.strip_refs();
 
-        if let Type::Nominal { .. } = deref_ty
-            && let Some(fields) = store.fields_of(&deref_ty.get_qualified_name())
+        if let Type::Nominal { id, .. } = &deref_ty
+            && let Some(fields) = store.fields_of(id)
             && fields.iter().any(|f| f.name == member)
         {
             return true;
@@ -417,11 +416,12 @@ impl InferCtx<'_> {
 
     fn as_struct_field(&mut self, args: &DotAccessResolutionArgs) -> Option<Expression> {
         let store = self.store;
-        let Type::Nominal { .. } = &args.deref_ty else {
+        let Type::Nominal {
+            id: qualified_name, ..
+        } = &args.deref_ty
+        else {
             return None;
         };
-
-        let qualified_name = args.deref_ty.get_qualified_name();
         let resolved_struct_ty = store.peel_alias(&args.deref_ty);
         let Type::Nominal {
             id: struct_name, ..
@@ -476,7 +476,7 @@ impl InferCtx<'_> {
         if is_cross_module && !field_is_pub {
             self.sink.push(diagnostics::infer::private_field_access(
                 args.member_name,
-                &qualified_name,
+                qualified_name,
                 *args.span,
             ));
         }
@@ -499,9 +499,13 @@ impl InferCtx<'_> {
 
     fn as_promoted_field(&mut self, args: &DotAccessResolutionArgs) -> Option<Expression> {
         let store = self.store;
-        if !matches!(args.deref_ty, Type::Nominal { .. })
-            || !promotion::has_direct_embed(store, &args.deref_ty)
-        {
+        let Type::Nominal {
+            id: qualified_name, ..
+        } = &args.deref_ty
+        else {
+            return None;
+        };
+        if !promotion::has_direct_embed(store, &args.deref_ty) {
             return None;
         }
 
@@ -532,7 +536,7 @@ impl InferCtx<'_> {
         if is_cross_module && !visibility.is_public() {
             self.sink.push(diagnostics::infer::private_field_access(
                 args.member_name,
-                args.deref_ty.get_qualified_name().as_str(),
+                qualified_name.as_str(),
                 *args.span,
             ));
         }

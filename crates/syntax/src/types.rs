@@ -1315,12 +1315,16 @@ impl Type {
         }
     }
 
-    pub fn get_qualified_name(&self) -> Symbol {
-        match self.strip_refs() {
-            Type::Nominal { id, .. } => id,
-            Type::Simple(kind) => Symbol::from_parts("prelude", kind.leaf_name()),
-            Type::Compound { kind, .. } => Symbol::from_parts("prelude", kind.leaf_name()),
-            _ => panic!("called get_qualified_name on {:#?}", self),
+    pub fn get_qualified_name(&self) -> Option<Symbol> {
+        let mut current = self;
+        while current.is_ref() {
+            current = current.get_type_params()?.first()?;
+        }
+        match current {
+            Type::Nominal { id, .. } => Some(id.clone()),
+            Type::Simple(kind) => Some(Symbol::from_parts("prelude", kind.leaf_name())),
+            Type::Compound { kind, .. } => Some(Symbol::from_parts("prelude", kind.leaf_name())),
+            _ => None,
         }
     }
 

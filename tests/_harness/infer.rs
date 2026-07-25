@@ -351,6 +351,10 @@ impl InferResult {
         self
     }
 
+    pub fn assert_resolve_code_once(self, code: &str) -> Self {
+        self.assert_code_count(&format!("resolve.{}", code), 1)
+    }
+
     pub fn assert_infer_code_once(self, code: &str) -> Self {
         self.assert_code_count(&format!("infer.{}", code), 1)
     }
