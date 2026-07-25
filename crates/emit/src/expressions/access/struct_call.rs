@@ -275,7 +275,10 @@ impl Planner<'_> {
                 Some(DefinitionBody::Struct { .. })
             ) || matches!(
                 self.facts.definition(id).map(|d| &d.body),
-                Some(DefinitionBody::TypeAlias { annotation, .. }) if annotation.is_opaque()
+                Some(DefinitionBody::TypeAlias {
+                    alias: syntax::program::AliasKind::Opaque(_),
+                    ..
+                })
             ));
         if is_struct_like {
             format!("{}{{}}", go_ty)
@@ -373,8 +376,8 @@ impl Planner<'_> {
                 .collect();
             return emit_struct_literal(&go_ty, &pairs, ExpressionContext::value());
         }
-        if let Some(underlying) = ty.get_underlying() {
-            return self.lisette_zero(underlying);
+        if let Some(underlying) = self.facts.underlying_type(ty) {
+            return self.lisette_zero(&underlying);
         }
         format!("{}{{}}", self.go_type_string(ty))
     }

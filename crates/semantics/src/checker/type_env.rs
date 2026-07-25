@@ -9,12 +9,11 @@
 //! innermost log; a successful nested region joins its parent, while a failed
 //! region restores its entries in reverse order.
 
-use ecow::EcoString;
 use syntax::types::{Bound, Type, TypeVarId};
 
 #[derive(Debug, Clone)]
 pub enum VarState {
-    Unbound { hint: Option<EcoString> },
+    Unbound,
     Bound(Type),
 }
 
@@ -38,30 +37,21 @@ impl TypeEnv {
     }
 
     /// Allocate a fresh unbound variable and return its handle.
-    pub(crate) fn fresh(&mut self, hint: Option<EcoString>) -> TypeVarId {
-        let id = TypeVarId(self.entries.len() as u32);
-        self.entries.push(VarState::Unbound { hint });
+    pub(crate) fn fresh(&mut self) -> TypeVarId {
+        let id = TypeVarId::new(self.entries.len() as u32);
+        self.entries.push(VarState::Unbound);
         id
     }
 
     fn slot(id: TypeVarId) -> usize {
-        debug_assert!(
-            !id.is_reserved(),
-            "TypeEnv should not be queried for reserved ids"
-        );
-        id.0 as usize
+        id.index() as usize
     }
 
     pub(crate) fn state(&self, id: TypeVarId) -> &VarState {
         &self.entries[Self::slot(id)]
     }
 
-    /// Bind `id` to `ty`. Reserved sentinel ids (ignored/uninferred) are
-    /// silently accepted: they unify with anything without storing anything.
     pub(crate) fn bind(&mut self, id: TypeVarId, ty: Type) {
-        if id.is_reserved() {
-            return;
-        }
         let slot = Self::slot(id);
         let old = std::mem::replace(&mut self.entries[slot], VarState::Bound(ty));
         if let Some(log) = self.undo_logs.last_mut() {
@@ -75,8 +65,8 @@ impl TypeEnv {
         let mut current = ty.clone();
         loop {
             match &current {
-                Type::Var { id, .. } if !id.is_reserved() => match &self.entries[Self::slot(*id)] {
-                    VarState::Unbound { .. } => return current,
+                Type::Var { id, .. } => match &self.entries[Self::slot(*id)] {
+                    VarState::Unbound => return current,
                     VarState::Bound(bound) => current = bound.clone(),
                 },
                 _ => return current,
@@ -85,8 +75,7 @@ impl TypeEnv {
     }
 
     /// Deep resolve: chase `Type::Var` chains, substitute every bound var with
-    /// its chased value, and recurse into composites. Unbound vars (including
-    /// reserved sentinel ids like `IGNORED`/`UNINFERRED`) are preserved as-is.
+    /// its chased value, and recurse into composites. Unbound vars are preserved as-is.
     /// Used both during inference and as the post-inference freeze pass.
     pub(crate) fn resolve(&self, ty: &Type) -> Type {
         self.resolve_changed(ty).unwrap_or_else(|| ty.clone())
@@ -107,41 +96,25 @@ impl TypeEnv {
     /// is reachable), allocating just the changed spine. `None` means unchanged.
     fn resolve_changed(&self, ty: &Type) -> Option<Type> {
         match ty {
-            Type::Var { id, .. } if !id.is_reserved() => match &self.entries[Self::slot(*id)] {
-                VarState::Unbound { .. } => None,
+            Type::Var { id, .. } => match &self.entries[Self::slot(*id)] {
+                VarState::Unbound => None,
                 VarState::Bound(first) => {
                     let mut cursor = first;
                     loop {
                         match cursor {
-                            Type::Var { id, .. } if !id.is_reserved() => {
-                                match &self.entries[Self::slot(*id)] {
-                                    VarState::Unbound { .. } => return Some(cursor.clone()),
-                                    VarState::Bound(next) => cursor = next,
-                                }
-                            }
+                            Type::Var { id, .. } => match &self.entries[Self::slot(*id)] {
+                                VarState::Unbound => return Some(cursor.clone()),
+                                VarState::Bound(next) => cursor = next,
+                            },
                             _ => return Some(self.resolve(cursor)),
                         }
                     }
                 }
             },
-            Type::Nominal {
-                id,
-                params,
-                underlying_ty,
-            } => {
-                let new_params = self.resolve_slice(params);
-                let new_underlying = underlying_ty
-                    .as_ref()
-                    .and_then(|u| self.resolve_changed(u).map(Box::new));
-                if new_params.is_none() && new_underlying.is_none() {
-                    return None;
-                }
-                Some(Type::Nominal {
+            Type::Nominal { id, params } => {
+                self.resolve_slice(params).map(|params| Type::Nominal {
                     id: id.clone(),
-                    params: new_params.unwrap_or_else(|| params.clone()),
-                    underlying_ty: new_underlying
-                        .map(Some)
-                        .unwrap_or_else(|| underlying_ty.clone()),
+                    params,
                 })
             }
             Type::Compound { kind, args } => self
@@ -244,11 +217,8 @@ impl TypeEnv {
                 if *other == id {
                     return true;
                 }
-                if other.is_reserved() {
-                    return false;
-                }
                 match &self.entries[Self::slot(*other)] {
-                    VarState::Unbound { .. } => false,
+                    VarState::Unbound => false,
                     VarState::Bound(bound) => self.occurs(id, bound),
                 }
             }
@@ -313,7 +283,7 @@ mod tests {
         let mut env = TypeEnv::new();
         const DEPTH: usize = 100_000;
 
-        let ids: Vec<TypeVarId> = (0..DEPTH).map(|_| env.fresh(None)).collect();
+        let ids: Vec<TypeVarId> = (0..DEPTH).map(|_| env.fresh()).collect();
         for pair in ids.windows(2) {
             env.bind(pair[0], var(pair[1]));
         }
@@ -325,8 +295,8 @@ mod tests {
     #[test]
     fn outer_rollback_includes_committed_nested_bindings() {
         let mut env = TypeEnv::new();
-        let outer = env.fresh(None);
-        let inner = env.fresh(None);
+        let outer = env.fresh();
+        let inner = env.fresh();
 
         env.begin_speculation();
         env.bind(outer, Type::Simple(SimpleKind::Int));
@@ -335,7 +305,7 @@ mod tests {
         env.end_speculation(false);
         env.end_speculation(true);
 
-        assert!(matches!(env.state(outer), VarState::Unbound { .. }));
-        assert!(matches!(env.state(inner), VarState::Unbound { .. }));
+        assert!(matches!(env.state(outer), VarState::Unbound));
+        assert!(matches!(env.state(inner), VarState::Unbound));
     }
 }

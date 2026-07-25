@@ -81,6 +81,17 @@ pub fn pointer_backed_newtype(target: &str, span: Span) -> LisetteDiagnostic {
         ))
 }
 
+pub fn non_interface_parent(target: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot embed this type in an interface")
+        .with_infer_code("embed_non_interface")
+        .with_span_label(&span, "not an interface")
+        .with_help(format!(
+            "An interface can only embed another interface, but `{}` is not one. \
+             Embed an interface, or declare the methods you need directly.",
+            target
+        ))
+}
+
 pub fn option_target(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Cannot embed `Option<T>`")
         .with_infer_code("embed_option_target")

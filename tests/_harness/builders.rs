@@ -69,7 +69,6 @@ pub fn con_type(name: &str, args: Vec<Type>) -> Type {
     Type::Nominal {
         id: format!("_entry_.{}", name).into(),
         params: args,
-        underlying_ty: None,
     }
 }
 

@@ -221,7 +221,7 @@ impl InferCtx<'_> {
             }
         }
 
-        let (new_binding, typed_pattern) = self.infer_pattern(
+        let new_binding = self.infer_pattern(
             *binding,
             element_ty.clone(),
             syntax::ast::BindingKind::Let { mutable: false },
@@ -231,7 +231,6 @@ impl InferCtx<'_> {
 
         SelectArmPattern::Receive {
             binding: Box::new(new_binding),
-            typed_pattern: Some(typed_pattern),
             receive_expression: Box::new(new_receive_expression),
             body: Box::new(new_body),
         }
@@ -306,7 +305,7 @@ impl InferCtx<'_> {
             .map(|match_arm| {
                 self.scopes.push();
 
-                let (new_pattern, typed_pattern) = self.infer_pattern(
+                let new_pattern = self.infer_pattern(
                     match_arm.pattern,
                     pattern_ty.clone(),
                     syntax::ast::BindingKind::MatchArm,
@@ -341,7 +340,6 @@ impl InferCtx<'_> {
                 MatchArm {
                     pattern: new_pattern,
                     guard: new_guard,
-                    typed_pattern: Some(typed_pattern),
                     expression: Box::new(new_expression),
                 }
             })

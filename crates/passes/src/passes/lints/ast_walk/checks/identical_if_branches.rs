@@ -14,11 +14,14 @@ pub fn check_identical_if_branches(expression: &Expression, ctx: &NodeCtx) {
     else {
         return;
     };
+    let Some(alternative) = alternative.as_deref() else {
+        return;
+    };
 
     // `else if` chains: each arm is checked independently; comparing the
     // chain tail against the head produces noisy false positives.
     if matches!(
-        alternative.as_ref(),
+        alternative,
         Expression::If { .. } | Expression::IfLet { .. }
     ) {
         return;

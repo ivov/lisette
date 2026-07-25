@@ -16,7 +16,7 @@ pub fn check_collapsible_if(expression: &Expression, ctx: &NodeCtx) {
         return;
     };
 
-    if !is_missing_else(alternative) {
+    if !is_missing_else(alternative.as_deref()) {
         return;
     }
 
@@ -35,7 +35,7 @@ pub fn check_collapsible_if(expression: &Expression, ctx: &NodeCtx) {
     else {
         return;
     };
-    if !is_missing_else(inner_alternative) {
+    if !is_missing_else(inner_alternative.as_deref()) {
         return;
     }
 
@@ -89,6 +89,6 @@ fn binds_looser_than_and(expression: &Expression) -> bool {
     }
 }
 
-fn is_missing_else(alternative: &Expression) -> bool {
-    matches!(alternative, Expression::Unit { .. })
+fn is_missing_else(alternative: Option<&Expression>) -> bool {
+    alternative.is_none()
 }

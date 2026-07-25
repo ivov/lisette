@@ -1698,6 +1698,27 @@ fn main() {
 }
 
 #[test]
+fn interface_value_narrowed_with_assert_type_satisfies_concrete_positions() {
+    infer(
+        r#"
+struct FooError {}
+impl FooError { fn Error(self) -> string { "foo failed" } }
+struct Holder { inner: FooError }
+fn take(f: FooError) -> string { f.Error() }
+fn unwrap(e: error) -> Option<FooError> { assert_type<FooError>(e) }
+fn main() {
+  let e: error = FooError {}
+  let concrete = assert_type<FooError>(e).unwrap_or(FooError {})
+  let held = Holder { inner: concrete }
+  let _ = take(held.inner)
+  let _ = unwrap(e)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn failed_cast_to_interface_reports_single_error() {
     infer(
         r#"
@@ -5506,6 +5527,136 @@ fn interface_embedding_no_conflict() {
     }
 
     fn main() {}
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn interface_embedding_unresolved_parent_survives_conformance_check() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+interface Child {
+  embed Undefined
+}
+
+struct Foo {}
+
+fn take(_c: Child) -> int { 1 }
+
+fn main() {
+  let _ = take(Foo {})
+}
+"#,
+    );
+    infer_module("main", fs).assert_resolve_code_once("type_not_found");
+}
+
+#[test]
+fn interface_embedding_builtin_rejected() {
+    infer(
+        r#"
+    interface Child {
+      embed int
+    }
+
+    fn main() {}
+        "#,
+    )
+    .assert_infer_code_once("embed_non_interface");
+}
+
+#[test]
+fn interface_embedding_struct_rejected() {
+    infer(
+        r#"
+    struct Base {}
+
+    impl Base {
+      fn ping(self) -> int { 1 }
+    }
+
+    interface Child {
+      embed Base
+    }
+
+    fn main() {}
+        "#,
+    )
+    .assert_infer_code_once("embed_non_interface");
+}
+
+#[test]
+fn interface_embedding_type_parameter_rejected() {
+    infer(
+        r#"
+    interface Child<T> {
+      embed T
+    }
+
+    fn main() {}
+        "#,
+    )
+    .assert_infer_code_once("embed_non_interface");
+}
+
+#[test]
+fn interface_embedding_function_type_rejected() {
+    infer(
+        r#"
+    interface Child {
+      embed fn() -> int
+    }
+
+    fn main() {}
+        "#,
+    )
+    .assert_infer_code_once("embed_non_interface");
+}
+
+#[test]
+fn interface_embedding_ref_to_interface_reports_ref_only() {
+    infer(
+        r#"
+    interface Parent {
+      fn ping() -> int
+    }
+
+    interface Child {
+      embed Ref<Parent>
+    }
+
+    fn main() {}
+        "#,
+    )
+    .assert_infer_code("ref_of_interface")
+    .assert_infer_code_count("embed_non_interface", 0);
+}
+
+#[test]
+fn interface_embedding_prelude_error_accepted() {
+    infer(
+        r#"
+    interface Failure {
+      embed error
+      fn code() -> int
+    }
+
+    struct MyError {}
+
+    impl MyError {
+      fn Error(self) -> string { "boom" }
+      fn code(self) -> int { 1 }
+    }
+
+    fn describe(f: Failure) -> string { f.Error() }
+
+    fn main() {
+      let _ = describe(MyError {})
+    }
         "#,
     )
     .assert_no_errors();

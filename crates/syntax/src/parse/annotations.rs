@@ -1,19 +1,19 @@
 use super::{MAX_TUPLE_ARITY, ParamMode, Parser};
 use crate::EcoString;
-use crate::ast::{Annotation, Attribute, Expression, Generic, Literal, Span, Visibility};
+use crate::ast::{
+    Annotation, Attribute, Expression, FunctionBody, Generic, Literal, Span, Visibility,
+};
 use crate::lex::Token;
 use crate::lex::TokenKind::*;
 use crate::types::Type;
 
 impl<'source> Parser<'source> {
     pub(crate) fn parse_annotation(&mut self) -> Annotation {
-        if !self.enter_recursion() {
-            self.resync_on_error();
-            return Annotation::Unknown;
+        if let Some(result) = self.with_recursion(Parser::parse_annotation_inner) {
+            return result;
         }
-        let result = self.parse_annotation_inner();
-        self.leave_recursion();
-        result
+        self.resync_on_error();
+        Annotation::Unknown
     }
 
     fn parse_annotation_inner(&mut self) -> Annotation {
@@ -301,13 +301,9 @@ impl<'source> Parser<'source> {
 
     fn parse_generic(&mut self) -> Generic {
         let start = self.current_token();
-
-        Generic {
-            name: self.read_identifier(),
-            bounds: self.parse_generic_bounds(),
-            resolved_bounds: vec![],
-            span: self.span_from_tokens(start),
-        }
+        let name = self.read_identifier();
+        let bounds = self.parse_generic_bounds();
+        Generic::new(name, bounds, self.span_from_tokens(start))
     }
 
     fn parse_generic_bounds(&mut self) -> Vec<Annotation> {
@@ -385,7 +381,7 @@ impl<'source> Parser<'source> {
             return_annotation: self.parse_function_return_annotation(),
             return_type: Type::uninferred(),
             visibility: Visibility::Private,
-            body: Expression::NoOp.into(),
+            body: FunctionBody::Declaration,
             ty: Type::uninferred(),
             span: self.span_from_tokens(start),
         }

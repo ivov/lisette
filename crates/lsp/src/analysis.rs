@@ -19,17 +19,14 @@ use crate::snapshot::AnalysisSnapshot;
 use crate::state::{CachedSnapshot, SharedState};
 
 /// Extract the constructor type name, unwrapping `Ref<T>` and peeling aliases.
-pub(crate) fn type_name(ty: &Type) -> Option<String> {
-    match ty {
-        Type::Nominal {
-            underlying_ty: Some(u),
-            ..
-        } => type_name(u),
+pub(crate) fn type_name(ty: &Type, snapshot: &AnalysisSnapshot) -> Option<String> {
+    let resolved = syntax::types::peel_alias(ty, |id| snapshot.definitions().get(id));
+    match &resolved {
         Type::Nominal { id, .. } => Some(id.to_string()),
         Type::Compound {
             kind: CompoundKind::Ref,
             args,
-        } => args.first().and_then(type_name),
+        } => args.first().and_then(|ty| type_name(ty, snapshot)),
         Type::Compound { kind, .. } => Some(format!("prelude.{}", kind.leaf_name())),
         Type::Simple(kind) => Some(format!("prelude.{}", kind.leaf_name())),
         Type::Array { .. } => Some("prelude.Array".to_string()),

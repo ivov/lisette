@@ -5,7 +5,7 @@ use crate::expressions::top_items::emit_doc;
 use crate::names::go_name::{self, prelude_qualifier};
 use crate::utils::{synthesized_local_name, synthesized_receiver_name};
 use rustc_hash::{FxHashMap, FxHashSet};
-use syntax::ast::{Attribute, Generic, StructFieldDefinition, StructKind};
+use syntax::ast::{Attribute, Generic, StructFieldDefinition, StructFields};
 use syntax::attributes::struct_attribute_forces_field_export;
 use syntax::program::{Definition, DefinitionBody, Interface, MethodSignatures};
 use syntax::types::Type;
@@ -17,15 +17,17 @@ impl Planner<'_> {
         &mut self,
         name: &str,
         generics: &[Generic],
-        fields: &[StructFieldDefinition],
-        kind: &StructKind,
+        fields: &StructFields,
         struct_attrs: &[Attribute],
     ) -> String {
         let generics_string = self.generics_to_string(generics);
 
-        if *kind == StructKind::Tuple {
+        let StructFields::Record(fields) = fields else {
+            let StructFields::Tuple(fields) = fields else {
+                unreachable!();
+            };
             return self.emit_tuple_struct(name, &generics_string, fields, generics, struct_attrs);
-        }
+        };
 
         let mut field_strings: Vec<String> = Vec::with_capacity(fields.len());
         let mut stringer_fields: Vec<StringerField> = Vec::with_capacity(fields.len());
@@ -231,7 +233,7 @@ impl Planner<'_> {
         }
 
         let tag_configs = interpret_field_attributes(f, struct_attrs);
-        let is_option = is_option_type(&f.ty);
+        let is_option = self.facts.peel_alias(&f.ty).is_option();
         let tag_string = format_tag_string(&f.name, &tag_configs, is_option);
 
         let field_name = struct_field_go_name(f, struct_attrs);
@@ -399,11 +401,7 @@ impl Planner<'_> {
         self.facts
             .definition(qualified.as_str())
             .is_some_and(|definition| {
-                definition.is_pointer_backed_newtype(|id| {
-                    self.facts
-                        .definition(id)
-                        .is_some_and(Definition::is_type_alias)
-                })
+                definition.is_pointer_backed_newtype(|id| self.facts.definition(id))
             })
     }
 
@@ -527,15 +525,6 @@ pub(crate) fn stringer_verb(is_function: bool) -> &'static str {
 
 pub(crate) fn debug_verb(is_function: bool) -> &'static str {
     if is_function { "%p" } else { "%s" }
-}
-
-fn is_option_type(ty: &Type) -> bool {
-    match ty {
-        Type::Nominal { underlying_ty, .. } => {
-            ty.is_option() || underlying_ty.as_deref().is_some_and(is_option_type)
-        }
-        _ => false,
-    }
 }
 
 fn emit_to_string_method(name: &str, receiver_generics: &str, method_name: &str) -> String {

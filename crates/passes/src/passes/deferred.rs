@@ -116,7 +116,7 @@ mod tests {
         Type::Compound {
             kind: CompoundKind::Slice,
             args: vec![Type::Var {
-                id: TypeVarId(id),
+                id: TypeVarId::new(id),
                 hint: Some("T".into()),
             }],
         }

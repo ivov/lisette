@@ -15,7 +15,7 @@ struct Point { x: int, y: int }
 
 fn f(p: Point) -> int {
   match p {
-    Point { 
+    Point {
       x: 1, // trailing struct field
       y: 2,
     } => 0,

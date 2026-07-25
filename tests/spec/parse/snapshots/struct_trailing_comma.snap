@@ -18,57 +18,58 @@ description: |
             byte_length: 6,
         },
         generics: [],
-        fields: [
-            StructFieldDefinition {
-                doc: None,
-                attributes: [],
-                name: "timeout",
-                name_span: Span {
-                    file_id: 0,
-                    byte_offset: 19,
-                    byte_length: 7,
-                },
-                annotation: Constructor {
-                    name: "int",
-                    params: [],
-                    span: Span {
+        fields: Record(
+            [
+                StructFieldDefinition {
+                    doc: None,
+                    attributes: [],
+                    name: "timeout",
+                    name_span: Span {
                         file_id: 0,
-                        byte_offset: 28,
-                        byte_length: 3,
+                        byte_offset: 19,
+                        byte_length: 7,
                     },
+                    annotation: Constructor {
+                        name: "int",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 28,
+                            byte_length: 3,
+                        },
+                    },
+                    visibility: Private,
+                    ty: Var {
+                        id: uninferred,
+                    },
+                    embedded: false,
                 },
-                visibility: Private,
-                ty: Var {
-                    id: uninferred,
-                },
-                embedded: false,
-            },
-            StructFieldDefinition {
-                doc: None,
-                attributes: [],
-                name: "retries",
-                name_span: Span {
-                    file_id: 0,
-                    byte_offset: 35,
-                    byte_length: 7,
-                },
-                annotation: Constructor {
-                    name: "int",
-                    params: [],
-                    span: Span {
+                StructFieldDefinition {
+                    doc: None,
+                    attributes: [],
+                    name: "retries",
+                    name_span: Span {
                         file_id: 0,
-                        byte_offset: 44,
-                        byte_length: 3,
+                        byte_offset: 35,
+                        byte_length: 7,
                     },
+                    annotation: Constructor {
+                        name: "int",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 44,
+                            byte_length: 3,
+                        },
+                    },
+                    visibility: Private,
+                    ty: Var {
+                        id: uninferred,
+                    },
+                    embedded: false,
                 },
-                visibility: Private,
-                ty: Var {
-                    id: uninferred,
-                },
-                embedded: false,
-            },
-        ],
-        kind: Record,
+            ],
+        ),
         visibility: Private,
         span: Span {
             file_id: 0,

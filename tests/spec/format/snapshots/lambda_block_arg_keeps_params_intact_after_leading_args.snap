@@ -1,0 +1,15 @@
+---
+source: tests/spec/format/mod.rs
+description: |-
+  fn main() {
+    let handler = some_quite_long_method_name(items, |a_rather_long_parameter_name| { a_rather_long_parameter_name + 1 })
+  }
+---
+fn main() {
+  let handler = some_quite_long_method_name(
+    items,
+    |a_rather_long_parameter_name| {
+      a_rather_long_parameter_name + 1
+    },
+  )
+}

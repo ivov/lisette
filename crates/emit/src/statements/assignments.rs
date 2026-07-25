@@ -7,7 +7,7 @@ use crate::names::go_name;
 use crate::plan::bodies::{AssignForm, AssignPlan, CompoundKind, LoweredBlock, LoweredStatement};
 use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
 use crate::state::bindings::BindingValue;
-use syntax::ast::{BinaryOperator, Expression, UnaryOperator};
+use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, UnaryOperator};
 use syntax::parse::TUPLE_FIELDS;
 use syntax::types::Type;
 
@@ -472,11 +472,11 @@ pub(crate) fn lvalues_match(a: &Expression, b: &Expression) -> bool {
     match (a, b) {
         (
             Expression::Identifier {
-                binding_id: Some(id_a),
+                resolution: IdentifierResolution::Binding(id_a),
                 ..
             },
             Expression::Identifier {
-                binding_id: Some(id_b),
+                resolution: IdentifierResolution::Binding(id_b),
                 ..
             },
         ) => id_a == id_b,

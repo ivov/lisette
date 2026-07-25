@@ -5,6 +5,7 @@ use crate::names::go_name;
 use crate::names::packages::{PackageRequirements, PackageUse};
 use crate::types::native::NativeGoType;
 use crate::types::prelude::PreludeType;
+use syntax::ast::ResolvedCallTypeArguments;
 use syntax::program::DefinitionBody;
 use syntax::types::{CompoundKind, FunctionParameter, SimpleKind, Type};
 
@@ -70,7 +71,7 @@ impl Planner<'_> {
             }
             Type::Compound { kind, args } => self.emit_compound(*kind, args, ty),
             Type::Function(f) => self.emit_function_type(&f.params, &f.return_type),
-            Type::Var { .. } => GoType::new("any"),
+            Type::Var { .. } | Type::Uninferred | Type::Ignored => GoType::new("any"),
             Type::Forall { .. } => GoType::new("any"),
             Type::Parameter(name) => GoType::new(self.generic_go_name(name).into_owned()),
             Type::Never => GoType::new("struct{}"),
@@ -132,10 +133,24 @@ impl Planner<'_> {
     }
 
     pub(crate) fn format_type_args(&mut self, params: &[Type]) -> String {
-        if params.is_empty() {
+        self.format_type_arg_iter(params)
+    }
+
+    pub(crate) fn format_resolved_type_args(
+        &mut self,
+        params: ResolvedCallTypeArguments<'_>,
+    ) -> String {
+        self.format_type_arg_iter(params.iter())
+    }
+
+    fn format_type_arg_iter<'t>(&mut self, params: impl IntoIterator<Item = &'t Type>) -> String {
+        let args: Vec<String> = params
+            .into_iter()
+            .map(|param| self.go_type_string(param))
+            .collect();
+        if args.is_empty() {
             return String::new();
         }
-        let args: Vec<String> = params.iter().map(|p| self.go_type_string(p)).collect();
         format!("[{}]", args.join(", "))
     }
 
@@ -368,7 +383,7 @@ impl Planner<'_> {
     pub(crate) fn format_type_args_with_receiver(
         &mut self,
         receiver_ty: &Type,
-        type_args: &[Type],
+        type_args: ResolvedCallTypeArguments<'_>,
     ) -> String {
         let mut go_type_strs = Vec::new();
         if let Some(params) = receiver_ty.get_type_params() {
@@ -377,11 +392,11 @@ impl Planner<'_> {
                 go_type_strs.push(self.go_type_string(param));
             }
         }
-        for ta in type_args {
+        for ta in type_args.iter() {
             go_type_strs.push(self.go_type_string(ta));
         }
         if go_type_strs.is_empty() {
-            self.format_type_args(type_args)
+            String::new()
         } else {
             format!("[{}]", go_type_strs.join(", "))
         }

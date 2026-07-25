@@ -120,6 +120,8 @@ fn can_carry_mutation(
         Type::Forall { body, .. } => can_carry_mutation(body, env, store, visited),
         Type::Function(_)
         | Type::Var { .. }
+        | Type::Uninferred
+        | Type::Ignored
         | Type::Parameter(_)
         | Type::Simple(_)
         | Type::Never

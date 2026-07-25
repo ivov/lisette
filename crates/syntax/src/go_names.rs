@@ -4,6 +4,7 @@
 use std::borrow::Cow;
 
 use crate::EcoString;
+use crate::ast::VariantFields;
 use crate::program::MethodSignatures;
 use crate::types::{GO_IMPORT_PREFIX, Type};
 
@@ -204,11 +205,63 @@ pub fn struct_field_go_name(
 
 /// A candidate method's standing, resolved by the caller on its declaring owner.
 #[derive(Clone)]
-pub struct ConformanceCandidate {
-    pub exported: bool,
-    pub depth: usize,
-    pub owner: Option<EcoString>,
-    pub shadowed: bool,
+pub enum ConformanceCandidate {
+    /// The method exists in the available method set, but its owner metadata is unavailable.
+    Unresolved,
+    Resolved {
+        exported: bool,
+        depth: usize,
+        owner: EcoString,
+        shadowed: bool,
+    },
+}
+
+/// The three payload layouts that affect an enum field's emitted Go name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EnumFieldShape {
+    Struct,
+    TupleSingle,
+    TupleMultiple,
+}
+
+#[cfg(test)]
+mod shape_tests {
+    use super::*;
+    use crate::ast::{EnumFieldDefinition, VariantFields};
+    use crate::types::Type;
+
+    #[test]
+    fn enum_field_shape_captures_only_name_relevant_layouts() {
+        let field = EnumFieldDefinition {
+            name: "field0".into(),
+            name_span: crate::ast::Span::dummy(),
+            annotation: crate::ast::Annotation::Unknown,
+            ty: Type::uninferred(),
+        };
+
+        assert_eq!(enum_field_shape(&VariantFields::Unit), None);
+        assert_eq!(
+            enum_field_shape(&VariantFields::Tuple(vec![field.clone()])),
+            Some(EnumFieldShape::TupleSingle)
+        );
+        assert_eq!(
+            enum_field_shape(&VariantFields::Tuple(vec![field.clone(), field.clone()])),
+            Some(EnumFieldShape::TupleMultiple)
+        );
+        assert_eq!(
+            enum_field_shape(&VariantFields::Struct(vec![field])),
+            Some(EnumFieldShape::Struct)
+        );
+    }
+}
+
+pub fn enum_field_shape(fields: &VariantFields) -> Option<EnumFieldShape> {
+    match fields {
+        VariantFields::Unit => None,
+        VariantFields::Struct(_) => Some(EnumFieldShape::Struct),
+        VariantFields::Tuple(fields) if fields.len() == 1 => Some(EnumFieldShape::TupleSingle),
+        VariantFields::Tuple(_) => Some(EnumFieldShape::TupleMultiple),
+    }
 }
 
 /// Whether an interface's requirements match implementations by exact source
@@ -261,14 +314,22 @@ fn select_by_emitted_name<'a>(
     let mut matches: Vec<(usize, bool, Option<EcoString>, &EcoString, &Type)> = Vec::new();
     for (name, ty) in methods {
         let exact = name == method_name;
-        let info = candidate(name);
-        if info.shadowed {
+        let (exported, depth, owner, shadowed) = match candidate(name) {
+            ConformanceCandidate::Unresolved => (false, 0, None, false),
+            ConformanceCandidate::Resolved {
+                exported,
+                depth,
+                owner,
+                shadowed,
+            } => (exported, depth, Some(owner), shadowed),
+        };
+        if shadowed {
             continue;
         }
-        if as_if_public && (info.exported || exact) {
+        if as_if_public && (exported || exact) {
             continue;
         }
-        let emitted = if info.exported || as_if_public {
+        let emitted = if exported || as_if_public {
             Cow::Owned(snake_to_camel(name))
         } else {
             Cow::Owned(snake_to_lower_camel(name))
@@ -276,7 +337,7 @@ fn select_by_emitted_name<'a>(
         if !exact && emitted != *want {
             continue;
         }
-        matches.push((info.depth, exact, info.owner, name, ty));
+        matches.push((depth, exact, owner, name, ty));
     }
     let depth = matches.iter().map(|m| m.0).min()?;
     matches.retain(|m| m.0 == depth);
@@ -296,11 +357,10 @@ pub fn enum_field_go_name(
     variant_name: &str,
     field_name: &str,
     field_index: usize,
-    is_struct: bool,
-    single_field: bool,
+    shape: EnumFieldShape,
     enum_name: &str,
 ) -> String {
-    if is_struct {
+    if shape == EnumFieldShape::Struct {
         let base = snake_to_camel(field_name);
         if base == ENUM_TAG_FIELD || base == ENUM_STRINGER_METHOD || base == ENUM_GO_STRINGER_METHOD
         {
@@ -308,7 +368,7 @@ pub fn enum_field_go_name(
         } else {
             escape_keyword(&base).into_owned()
         }
-    } else if single_field {
+    } else if shape == EnumFieldShape::TupleSingle {
         let base = variant_name.to_string();
         if base == ENUM_TAG_FIELD || base == ENUM_STRINGER_METHOD || base == ENUM_GO_STRINGER_METHOD
         {
@@ -405,36 +465,36 @@ mod tests {
     #[test]
     fn enum_field_go_name_struct_fields() {
         assert_eq!(
-            enum_field_go_name("Click", "target_id", 0, true, true, "Event"),
+            enum_field_go_name("Click", "target_id", 0, EnumFieldShape::Struct, "Event",),
             "TargetId"
         );
         assert_eq!(
-            enum_field_go_name("Click", "tag", 0, true, true, "Event"),
+            enum_field_go_name("Click", "tag", 0, EnumFieldShape::Struct, "Event"),
             "ClickTag"
         );
         assert_eq!(
-            enum_field_go_name("Click", "string", 0, true, true, "Event"),
+            enum_field_go_name("Click", "string", 0, EnumFieldShape::Struct, "Event"),
             "ClickString"
         );
         assert_eq!(
-            enum_field_go_name("Click", "go_string", 0, true, true, "Event"),
+            enum_field_go_name("Click", "go_string", 0, EnumFieldShape::Struct, "Event"),
             "ClickGoString"
         );
     }
 
     fn exported_at(depth: usize) -> impl Fn(&str) -> ConformanceCandidate {
-        move |_| ConformanceCandidate {
+        move |_| ConformanceCandidate::Resolved {
             exported: true,
             depth,
-            owner: Some("main.T".into()),
+            owner: "main.T".into(),
             shadowed: false,
         }
     }
 
-    const UNEXPORTED: fn(&str) -> ConformanceCandidate = |_| ConformanceCandidate {
+    const UNEXPORTED: fn(&str) -> ConformanceCandidate = |_| ConformanceCandidate::Resolved {
         exported: false,
         depth: 0,
-        owner: Some("main.T".into()),
+        owner: "main.T".into(),
         shadowed: false,
     };
 
@@ -457,6 +517,18 @@ mod tests {
         methods.insert("Read".into(), Type::Error);
         let via_source = conformance_method(&methods, "go:io", true, "Read", &UNEXPORTED);
         assert_eq!(via_source.map(|(name, _)| name.as_str()), Some("Read"));
+    }
+
+    #[test]
+    fn conformance_method_accepts_unresolved_candidates() {
+        let mut methods = MethodSignatures::default();
+        methods.insert("read".into(), Type::Error);
+
+        let selected = conformance_method_if_public(&methods, "go:io", true, "Read", &|_| {
+            ConformanceCandidate::Unresolved
+        });
+
+        assert_eq!(selected.map(|(name, _)| name.as_str()), Some("read"));
     }
 
     #[test]
@@ -486,17 +558,15 @@ mod tests {
         let mut methods = MethodSignatures::default();
         methods.insert("describe".into(), Type::Error);
         methods.insert("Describe".into(), Type::Error);
-        let candidate = |name: &str| ConformanceCandidate {
+        let candidate = |name: &str| ConformanceCandidate::Resolved {
             exported: true,
             depth: if name == "Describe" { 1 } else { 0 },
-            owner: Some(
-                if name == "Describe" {
-                    "main.Base"
-                } else {
-                    "main.Outer"
-                }
-                .into(),
-            ),
+            owner: if name == "Describe" {
+                "main.Base"
+            } else {
+                "main.Outer"
+            }
+            .into(),
             shadowed: false,
         };
 
@@ -512,17 +582,15 @@ mod tests {
         let mut methods = MethodSignatures::default();
         methods.insert("get_item".into(), Type::Error);
         methods.insert("getItem".into(), Type::Error);
-        let promoted = |name: &str| ConformanceCandidate {
+        let promoted = |name: &str| ConformanceCandidate::Resolved {
             exported: true,
             depth: 1,
-            owner: Some(
-                if name == "get_item" {
-                    "main.A"
-                } else {
-                    "main.B"
-                }
-                .into(),
-            ),
+            owner: if name == "get_item" {
+                "main.A"
+            } else {
+                "main.B"
+            }
+            .into(),
             shadowed: false,
         };
 
@@ -534,10 +602,10 @@ mod tests {
     fn conformance_method_skips_field_shadowed_candidates() {
         let mut methods = MethodSignatures::default();
         methods.insert("getItem".into(), Type::Error);
-        let shadowed = |_: &str| ConformanceCandidate {
+        let shadowed = |_: &str| ConformanceCandidate::Resolved {
             exported: true,
             depth: 1,
-            owner: Some("main.Base".into()),
+            owner: "main.Base".into(),
             shadowed: true,
         };
 
@@ -565,19 +633,19 @@ mod tests {
     #[test]
     fn enum_field_go_name_tuple_fields() {
         assert_eq!(
-            enum_field_go_name("Click", "0", 0, false, true, "Event"),
+            enum_field_go_name("Click", "0", 0, EnumFieldShape::TupleSingle, "Event"),
             "Click"
         );
         assert_eq!(
-            enum_field_go_name("Tag", "0", 0, false, true, "Event"),
+            enum_field_go_name("Tag", "0", 0, EnumFieldShape::TupleSingle, "Event"),
             "EventTag_"
         );
         assert_eq!(
-            enum_field_go_name("String", "0", 0, false, true, "Event"),
+            enum_field_go_name("String", "0", 0, EnumFieldShape::TupleSingle, "Event"),
             "EventString_"
         );
         assert_eq!(
-            enum_field_go_name("Click", "1", 1, false, false, "Event"),
+            enum_field_go_name("Click", "1", 1, EnumFieldShape::TupleMultiple, "Event"),
             "Click1"
         );
     }

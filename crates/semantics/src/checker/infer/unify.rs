@@ -52,6 +52,12 @@ pub enum Dispatched {
     Fallthrough,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClosureAdapter {
+    Widens,
+    Narrows,
+}
+
 impl InferCtx<'_> {
     /// Make two types equal. Returns `false` when they do not match.
     ///
@@ -99,7 +105,9 @@ impl InferCtx<'_> {
         let r2_is_unknown = r2.is_unknown();
 
         match (&r1, &r2) {
-            _ if r1.is_ignored() || r2.is_ignored() => Ok(()),
+            _ if r1.is_ignored() || r2.is_ignored() || r1.is_uninferred() || r2.is_uninferred() => {
+                Ok(())
+            }
             _ if r1.is_receiver_placeholder() || r2.is_receiver_placeholder() => Ok(()),
             _ if self.should_unify_refs(&r1, &r2) => self.unify_refs(&r1, &r2, span),
 
@@ -110,7 +118,7 @@ impl InferCtx<'_> {
             (Type::Var { id, .. }, _) => self.unify_type_variable(*id, &r2, span, false),
             (_, Type::Var { id, .. }) => self.unify_type_variable(*id, &r1, span, true),
 
-            _ if r1_is_unknown && self.scopes.is_inside_type_param() => {
+            _ if r1_is_unknown && self.scopes.is_inside_invariant_position() => {
                 Err(UnifyError::TypeMismatch)
             }
             _ if r1_is_unknown => Ok(()),
@@ -137,37 +145,28 @@ impl InferCtx<'_> {
             // Go-level aliases for scalar types: byte <-> uint8, rune <-> int32.
             (Type::Simple(k1), Type::Simple(k2)) if simple_kinds_are_go_aliases(*k1, *k2) => Ok(()),
 
-            // Alias follow-through: `type MyFoo = Foo` stores a Nominal with
-            // `Foo` as `underlying_ty`; when unifying against a structural
-            // body, peel to the underlying type.
-            (
-                Nominal {
-                    id,
-                    underlying_ty: Some(underlying),
-                    ..
-                },
-                other,
-            ) if other.is_structural_alias_body() => {
+            (Nominal { id, .. }, other)
+                if other.is_structural_alias_body() && store.underlying_type(&r1).is_some() =>
+            {
                 if matches!(other, Type::Simple(_)) && store.is_nominal_defined_type(id.as_str()) {
                     Err(UnifyError::TypeMismatch)
                 } else {
-                    let u = underlying.as_ref().clone();
+                    let u = store
+                        .underlying_type(&r1)
+                        .expect("guard checked underlying");
                     self.try_unify(&u, &r2, span)
                 }
             }
 
-            (
-                other,
-                Nominal {
-                    id,
-                    underlying_ty: Some(underlying),
-                    ..
-                },
-            ) if other.is_structural_alias_body() => {
+            (other, Nominal { id, .. })
+                if other.is_structural_alias_body() && store.underlying_type(&r2).is_some() =>
+            {
                 if matches!(other, Type::Simple(_)) && store.is_nominal_defined_type(id.as_str()) {
                     Err(UnifyError::TypeMismatch)
                 } else {
-                    let u = underlying.as_ref().clone();
+                    let u = store
+                        .underlying_type(&r2)
+                        .expect("guard checked underlying");
                     self.try_unify(&r1, &u, span)
                 }
             }
@@ -179,7 +178,6 @@ impl InferCtx<'_> {
                 let synth = Type::Nominal {
                     id: format!("prelude.{}", kind.leaf_name()).into(),
                     params: vec![],
-                    underlying_ty: None,
                 };
                 self.try_unify(&synth, &r2, span)
             }
@@ -187,7 +185,6 @@ impl InferCtx<'_> {
                 let synth = Type::Nominal {
                     id: format!("prelude.{}", kind.leaf_name()).into(),
                     params: vec![],
-                    underlying_ty: None,
                 };
                 self.try_unify(&r1, &synth, span)
             }
@@ -195,7 +192,6 @@ impl InferCtx<'_> {
                 let synth = Type::Nominal {
                     id: format!("prelude.{}", kind.leaf_name()).into(),
                     params: args.clone(),
-                    underlying_ty: None,
                 };
                 self.try_unify(&synth, &r2, span)
             }
@@ -203,7 +199,6 @@ impl InferCtx<'_> {
                 let synth = Type::Nominal {
                     id: format!("prelude.{}", kind.leaf_name()).into(),
                     params: args.clone(),
-                    underlying_ty: None,
                 };
                 self.try_unify(&r1, &synth, span)
             }
@@ -216,10 +211,7 @@ impl InferCtx<'_> {
                 // rejected inside generic positions.
                 let a1 = a1.clone();
                 let a2 = a2.clone();
-                self.scopes.increment_type_param_depth();
-                let result = self.unify_pairs(a1.iter().zip(a2.iter()), span);
-                self.scopes.decrement_type_param_depth();
-                result
+                self.in_invariant_position(|this| this.unify_pairs(a1.iter().zip(a2.iter()), span))
             }
 
             (Nominal { .. }, Nominal { .. }) => self.unify_constructors(&r1, &r2, span),
@@ -266,25 +258,17 @@ impl InferCtx<'_> {
                 }
             }
 
-            (
-                Nominal {
-                    underlying_ty: Some(underlying),
-                    ..
-                },
-                Function(_),
-            ) => {
-                let u = underlying.as_ref().clone();
+            (Nominal { .. }, Function(_)) if store.underlying_type(&r1).is_some() => {
+                let u = store
+                    .underlying_type(&r1)
+                    .expect("guard checked underlying");
                 self.try_unify(&u, &r2, span)
             }
 
-            (
-                Function(_),
-                Nominal {
-                    underlying_ty: Some(underlying),
-                    ..
-                },
-            ) => {
-                let u = underlying.as_ref().clone();
+            (Function(_), Nominal { .. }) if store.underlying_type(&r2).is_some() => {
+                let u = store
+                    .underlying_type(&r2)
+                    .expect("guard checked underlying");
                 self.try_unify(&r1, &u, span)
             }
 
@@ -295,7 +279,7 @@ impl InferCtx<'_> {
     fn should_unify_refs(&self, t1: &Type, t2: &Type) -> bool {
         let either_is_ref = t1.is_ref() || t2.is_ref();
         let both_concrete = !t1.is_variable() && !t2.is_variable();
-        let neither_is_interface = !self.is_interface(t1) && !self.is_interface(t2);
+        let neither_is_interface = !self.store.is_interface(t1) && !self.store.is_interface(t2);
         let neither_is_unknown = !t1.is_unknown() && !t2.is_unknown();
         let neither_is_error = !t1.is_error() && !t2.is_error();
         let neither_is_never = !t1.is_never() && !t2.is_never();
@@ -311,26 +295,19 @@ impl InferCtx<'_> {
     }
 
     fn is_transparent_alias(&self, ty: &Type) -> bool {
-        let Type::Nominal {
-            id,
-            underlying_ty: Some(_),
-            ..
-        } = ty
-        else {
+        let Type::Nominal { id, .. } = ty else {
             return false;
         };
         self.store
             .get_definition(id)
-            .is_some_and(|definition| definition.is_type_alias())
+            .is_some_and(|definition| definition.is_transparent_type_alias())
     }
 
-    fn is_interface(&self, ty: &Type) -> bool {
-        let store = self.store;
-        if let Type::Nominal { id, .. } = ty {
-            store.get_interface(id).is_some()
-        } else {
-            false
-        }
+    fn in_invariant_position<T>(&mut self, unify: impl FnOnce(&mut Self) -> T) -> T {
+        self.scopes.enter_invariant_position();
+        let result = unify(self);
+        self.scopes.exit_invariant_position();
+        result
     }
 
     fn unify_refs(&mut self, t1: &Type, t2: &Type, span: &Span) -> Result<(), UnifyError> {
@@ -344,7 +321,7 @@ impl InferCtx<'_> {
     fn collapse_vars_to_error(&mut self, ty: &Type, span: &Span) {
         let resolved = self.env.shallow_resolve(ty);
         match resolved {
-            Type::Var { id, .. } if !id.is_reserved() => {
+            Type::Var { id, .. } => {
                 let _ = self.unify_type_variable(id, &Type::Error, span, false);
             }
             Type::Nominal { params, .. } => {
@@ -382,11 +359,6 @@ impl InferCtx<'_> {
         span: &Span,
         var_on_right: bool,
     ) -> Result<(), UnifyError> {
-        // Reserved sentinel ids (ignored/uninferred) unify silently with
-        // anything. Their binding doesn't go into the env.
-        if id.is_reserved() {
-            return Ok(());
-        }
         match self.env.state(id).clone() {
             VarState::Bound(ty) => {
                 if var_on_right {
@@ -395,7 +367,7 @@ impl InferCtx<'_> {
                     self.try_unify(&ty, other_ty, span)
                 }
             }
-            VarState::Unbound { .. } => {
+            VarState::Unbound => {
                 if self.env.occurs(id, other_ty) {
                     return Err(UnifyError::InfiniteType);
                 }
@@ -424,23 +396,17 @@ impl InferCtx<'_> {
         };
 
         if symbol1 != symbol2 {
-            if let Nominal {
-                underlying_ty: Some(u),
-                ..
-            } = t1
-                && store.get_interface(symbol2).is_none()
+            if store.get_interface(symbol2).is_none()
                 && !store.is_nominal_defined_type(symbol1.as_str())
-                && self.try_unify(u, t2, span).is_ok()
+                && let Some(underlying) = store.underlying_type(t1)
+                && self.try_unify(&underlying, t2, span).is_ok()
             {
                 return Ok(());
             }
-            if let Nominal {
-                underlying_ty: Some(u),
-                ..
-            } = t2
-                && store.get_interface(symbol1).is_none()
+            if store.get_interface(symbol1).is_none()
                 && !store.is_nominal_defined_type(symbol2.as_str())
-                && self.try_unify(t1, u, span).is_ok()
+                && let Some(underlying) = store.underlying_type(t2)
+                && self.try_unify(t1, &underlying, span).is_ok()
             {
                 return Ok(());
             }
@@ -460,16 +426,16 @@ impl InferCtx<'_> {
         // Bail on the first error rather than collecting via `unify_pairs`:
         // continuing past a failed pair would bind subsequent type variables
         // and erase their original names from the diagnostic.
-        self.scopes.increment_type_param_depth();
-        let mut result = Ok(());
-        for (p1, p2) in params1.iter().zip(params2) {
-            if let Err(e) = self.try_unify(p1, p2, span) {
-                result = Err(e);
-                break;
+        self.in_invariant_position(|this| {
+            let mut result = Ok(());
+            for (p1, p2) in params1.iter().zip(params2) {
+                if let Err(e) = this.try_unify(p1, p2, span) {
+                    result = Err(e);
+                    break;
+                }
             }
-        }
-        self.scopes.decrement_type_param_depth();
-        result
+            result
+        })
     }
 
     fn try_coerce_or_satisfy_interface(
@@ -499,7 +465,7 @@ impl InferCtx<'_> {
             return Ok(());
         }
 
-        if self.scopes.is_inside_type_param() {
+        if self.scopes.is_inside_invariant_position() {
             return Err(UnifyError::TypeMismatch);
         }
 
@@ -517,20 +483,13 @@ impl InferCtx<'_> {
             && symbol1.starts_with("go:")
             && store.get_interface(symbol1).is_some()
         {
-            return self.try_unify(&params2[0], t1, span);
+            return self.try_unify(t1, &params2[0], span);
         }
 
         if let Some(interface) = store.get_interface(symbol1).cloned() {
             return self
                 .satisfies_interface(t2, &interface, symbol1, params1, span)
                 .and_then(|()| self.check_pointer_receivers(t2, &interface, symbol1, span))
-                .map_err(|_| UnifyError::AlreadyReported);
-        }
-
-        if let Some(interface) = store.get_interface(symbol2).cloned() {
-            return self
-                .satisfies_interface(t1, &interface, symbol2, params2, span)
-                .and_then(|()| self.check_pointer_receivers(t1, &interface, symbol2, span))
                 .map_err(|_| UnifyError::AlreadyReported);
         }
 
@@ -582,14 +541,17 @@ impl InferCtx<'_> {
             return Err(UnifyError::TypeMismatch);
         }
 
-        let params_result = self.unify_pairs(
-            f1.params
-                .iter()
-                .zip(&f2.params)
-                .map(|(left, right)| (&left.ty, &right.ty)),
-            span,
-        );
-        let return_type_result = self.try_unify(&f1.return_type, &f2.return_type, span);
+        let (params_result, return_type_result) = self.in_invariant_position(|this| {
+            let params_result = this.unify_pairs(
+                f1.params
+                    .iter()
+                    .zip(&f2.params)
+                    .map(|(left, right)| (&left.ty, &right.ty)),
+                span,
+            );
+            let return_type_result = this.try_unify(&f1.return_type, &f2.return_type, span);
+            (params_result, return_type_result)
+        });
 
         for bound in &f1.bounds {
             self.check_function_bound(bound, &f1.params, span);
@@ -821,36 +783,101 @@ impl InferCtx<'_> {
             return "Wrap the value in a slice literal".to_string();
         }
 
-        if expected.contains_unknown() && !actual.contains_unknown() {
+        if self.store.contains_unknown(expected) && !self.store.contains_unknown(actual) {
             use syntax::types::CompoundKind::{Map, Slice};
             return match expected.as_compound() {
-                Some((Map, args)) if args.get(1).is_some_and(|v| v.resolves_to_unknown()) => {
+                Some((Map, args))
+                    if args
+                        .get(1)
+                        .is_some_and(|ty| self.store.resolves_to_unknown(ty)) =>
+                {
                     format!(
                         "Build the map with `Map.new()` plus indexed assignment: `let mut m: {} = Map.new(); m[k] = v`",
                         expected
                     )
                 }
-                Some((Slice, args)) if args.first().is_some_and(|v| v.resolves_to_unknown()) => {
+                Some((Slice, args))
+                    if args
+                        .first()
+                        .is_some_and(|ty| self.store.resolves_to_unknown(ty)) =>
+                {
                     format!("Annotate the slice literal: `let xs: {} = [v1, v2, ...]`", expected)
                 }
-                _ => "The expected type contains `Unknown`. Produce the value in a context where the expected type provides the `Unknown` slot (annotation, parameter type, struct field, or return position).".to_string(),
+                _ if self.store.resolve_to_function_type(expected).is_some()
+                    && self.store.resolve_to_function_type(actual).is_some() =>
+                {
+                    "Function types must match exactly, and `Unknown` matches only `Unknown`. Declare the function with the expected signature and narrow with `assert_type` inside, or wrap it in a closure that narrows at the call site".to_string()
+                }
+                _ => format!(
+                    "`Unknown` matches only `Unknown`, never a concrete type. Build `{expected}` from a value already annotated as `Unknown`, e.g. `let value: Unknown = ...`, or change the expected type to `{actual}`"
+                ),
             };
         }
 
-        if expected.is_numeric_compatible_with(actual) {
+        if self.store.is_interface(actual) && !self.store.is_interface(expected) {
+            return format!(
+                "An interface value does not carry its concrete type. Narrow it with `assert_type`, e.g. `let value = assert_type<{}>(value)?`",
+                expected
+            );
+        }
+
+        if self.store.is_numeric_compatible_with(expected, actual) {
             return format!("Cast with `as`, e.g. `value as {}`", expected);
         }
 
-        if let Some(ret) = function_return_under_nominal(expected)
-            && ret == actual
+        if let Some(Type::Function(function)) = self.store.resolve_to_function_type(expected)
+            && function.return_type.as_ref() == actual
         {
             return "Remove the `()` so that the type matches".to_string();
+        }
+
+        match self.closure_adapter(expected, actual) {
+            Some(ClosureAdapter::Widens) => {
+                return "Function types must match exactly. Wrap the value in a closure to convert at the call site, e.g. `|value| callee(value)`".to_string();
+            }
+            Some(ClosureAdapter::Narrows) => {
+                return "Function types must match exactly. Wrap the value in a closure that narrows the interface value with `assert_type`, or change the signature to match".to_string();
+            }
+            None => {}
         }
 
         format!(
             "Change the type annotation to `{}` or convert the value to `{}`",
             actual, expected
         )
+    }
+
+    fn closure_adapter(&self, expected: &Type, actual: &Type) -> Option<ClosureAdapter> {
+        if !matches!((expected, actual), (Function(_), Function(_))) {
+            return None;
+        }
+
+        let (expected_positions, actual_positions) = (expected.children(), actual.children());
+        if expected_positions.len() != actual_positions.len() {
+            return None;
+        }
+        let return_index = expected_positions.len().checked_sub(1)?;
+
+        let mut adapter = None;
+        for (index, (left, right)) in expected_positions.iter().zip(&actual_positions).enumerate() {
+            if left == right {
+                continue;
+            }
+            if !self.store.is_interface(left) && !self.store.is_interface(right) {
+                return None;
+            }
+            let narrows = if index == return_index {
+                self.store.is_interface(right)
+            } else {
+                self.store.is_interface(left)
+            };
+            if narrows {
+                adapter = Some(ClosureAdapter::Narrows);
+            } else if adapter.is_none() {
+                adapter = Some(ClosureAdapter::Widens);
+            }
+        }
+        adapter
     }
 
     /// Whether the emitter absorbs this bounded generic into a pointer type argument
@@ -891,17 +918,6 @@ fn array_to_slice_help_applies(expected: &Type, actual: &Type) -> bool {
         return false;
     };
     expected_element == element.as_ref()
-}
-
-fn function_return_under_nominal(ty: &Type) -> Option<&Type> {
-    match ty {
-        Type::Function(f) => Some(&f.return_type),
-        Type::Nominal {
-            underlying_ty: Some(u),
-            ..
-        } => function_return_under_nominal(u),
-        _ => None,
-    }
 }
 
 fn are_go_type_aliases(a: &str, b: &str) -> bool {

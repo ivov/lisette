@@ -18,13 +18,13 @@ use crate::call_classification::compute_module_ufcs;
 use crate::diagnostics::{GoImportSite, emit_for_locator_result};
 use syntax::ast::{
     Annotation, Attribute, AttributeArg, Binding, EnumVariant, Expression, Generic, Span,
-    StructKind, VariantFields, Visibility as SyntacticVisibility,
+    StructFields, VariantFields, Visibility as SyntacticVisibility,
 };
 use syntax::attributes::struct_attribute_forces_field_export;
 use syntax::program::{
-    Attributes, Definition, DefinitionBody, File, FileImport, TypeAttribute, Visibility,
+    AliasKind, Attributes, Definition, DefinitionBody, File, FileImport, TypeAttribute, Visibility,
 };
-use syntax::types::{Bound, FunctionParameter, Symbol, Type, unqualified_name};
+use syntax::types::{Bound, FunctionParameter, Symbol, Type};
 
 use super::{FileContextKind, TaskState, resolved_generic_bounds};
 use crate::store::Store;
@@ -116,7 +116,7 @@ fn has_serialization_attribute(attributes: &[Attribute]) -> bool {
 fn collect_enum_attributes(attributes: &[Attribute]) -> Attributes {
     let mut map = Attributes::default();
     if has_display_attribute(attributes) {
-        map.insert(TypeAttribute::Display, ());
+        map.insert(TypeAttribute::Display);
     }
     map
 }
@@ -124,19 +124,19 @@ fn collect_enum_attributes(attributes: &[Attribute]) -> Attributes {
 fn collect_struct_attributes(attributes: &[Attribute]) -> Attributes {
     let mut map = Attributes::default();
     if has_display_attribute(attributes) {
-        map.insert(TypeAttribute::Display, ());
+        map.insert(TypeAttribute::Display);
     }
     if has_closed_domain_attribute(attributes) {
-        map.insert(TypeAttribute::ClosedDomain, ());
+        map.insert(TypeAttribute::ClosedDomain);
     }
     if has_anon_struct_attribute(attributes) {
-        map.insert(TypeAttribute::AnonStruct, ());
+        map.insert(TypeAttribute::AnonStruct);
     }
     if has_hidden_embed_attribute(attributes) {
-        map.insert(TypeAttribute::HiddenEmbed, ());
+        map.insert(TypeAttribute::HiddenEmbed);
     }
     if has_serialization_attribute(attributes) {
-        map.insert(TypeAttribute::Serialized, ());
+        map.insert(TypeAttribute::Serialized);
     }
     map
 }
@@ -276,8 +276,6 @@ impl TaskState {
             self.register_file_type_aliases(store, id, *file_id, imports);
         }
 
-        self.settle_module_aliases(store, id);
-
         for (file_id, imports) in &file_data {
             self.register_file_type_bodies(store, id, *file_id, imports);
         }
@@ -308,19 +306,15 @@ impl TaskState {
         let Some(module) = store.get_module_mut(module_id) else {
             return;
         };
-        for file in module
-            .files
-            .values_mut()
-            .chain(module.typedefs.values_mut())
-        {
+        for file in module.files.values_mut() {
             for item in &mut file.items {
                 populate_expression_generic_bounds(item, &self.facts.bound_types);
             }
         }
     }
 
-    /// Fill `resolved_bounds` on each item's generics, mirroring the per-module
-    /// pass. Test harnesses that emit a typed AST directly bypass that pass.
+    /// Resolve each item's generic bounds from the per-module pass results.
+    /// Test harnesses that emit a typed AST directly bypass that pass.
     pub fn populate_item_generic_bounds(&self, items: &mut [Expression]) {
         for item in items {
             populate_expression_generic_bounds(item, &self.facts.bound_types);
@@ -424,7 +418,7 @@ impl TaskState {
         if let Some(path) = cache_path {
             store.typedef_paths.insert(file_id, path);
         }
-        store.store_file(module_id, file);
+        store.store_file(file);
 
         self.with_file_context_mut(
             store,
@@ -453,14 +447,14 @@ impl TaskState {
             .get_module(module_id)
             .expect("module must exist for declaration");
         let mut entries = Vec::new();
-        for file in module.files.values() {
+        for file in module.source_files() {
             entries.extend(self.collect_type_name_entries(
                 &file.items,
                 &Visibility::Private,
                 false,
             ));
         }
-        for file in module.all_typedefs() {
+        for file in module.typedef_files() {
             entries.extend(self.collect_type_name_entries(&file.items, &Visibility::Private, true));
         }
         entries
@@ -490,7 +484,6 @@ impl TaskState {
         module
             .files
             .iter()
-            .chain(module.typedefs.iter())
             .map(|(file_id, f)| (*file_id, f.imports()))
             .collect()
     }
@@ -666,14 +659,12 @@ impl TaskState {
                     Type::Nominal {
                         id: qualified_name.clone(),
                         params: args,
-                        underlying_ty: None,
                     }
                 }
             } else {
                 Type::Nominal {
                     id: qualified_name.clone(),
                     params: args,
-                    underlying_ty: None,
                 }
             };
 
@@ -709,11 +700,11 @@ impl TaskState {
                     name_span: None,
                     doc: None,
                     body: DefinitionBody::Value {
+                        kind: syntax::program::ValueKind::Runtime,
                         allowed_lints: vec![],
                         go_hints: vec![],
                         go_name: None,
                         go_type_param_recipe: None,
-                        const_value: None,
                     },
                 },
             ));
@@ -751,8 +742,6 @@ impl TaskState {
 
     pub(crate) fn register_type_definitions(&mut self, store: &mut Store, items: &[Expression]) {
         self.register_type_aliases(store, items);
-        let module_id = self.cursor.module_id.clone();
-        self.settle_module_aliases(store, &module_id);
         self.register_type_bodies(store, items);
     }
 
@@ -850,7 +839,7 @@ impl TaskState {
                     self.register_variable_declaration(store, item, visibility)
                 }
                 Expression::Struct {
-                    kind: StructKind::Tuple,
+                    fields: StructFields::Tuple(_),
                     ..
                 } => self.register_tuple_struct_constructor(store, item),
                 _ => (),
@@ -881,7 +870,7 @@ impl TaskState {
             return;
         };
 
-        if body.is_noop() && self.is_lis(&*store) {
+        if body.definition().is_none() && self.is_lis(&*store) {
             self.sink
                 .push(diagnostics::infer::bodyless_function_outside_typedef(*span));
         }
@@ -928,11 +917,11 @@ impl TaskState {
                 name_span: Some(*name_span),
                 doc: doc.clone(),
                 body: DefinitionBody::Value {
+                    kind: syntax::program::ValueKind::Runtime,
                     allowed_lints: extract_attribute_flags(attributes, "allow"),
                     go_hints: extract_attribute_flags(attributes, "go"),
                     go_name: extract_go_name(attributes),
                     go_type_param_recipe: extract_go_type_param_recipe(attributes),
-                    const_value: None,
                 },
             },
         );
@@ -958,7 +947,7 @@ impl TaskState {
             return;
         };
 
-        let has_value = !expression.is_noop();
+        let has_value = expression.value().is_some();
 
         if !has_value && self.is_lis(&*store) {
             self.sink
@@ -978,7 +967,9 @@ impl TaskState {
         let const_ty = if let Some(annotation) = maybe_annotation {
             self.convert_to_type(store, annotation, span)
         } else {
-            self.type_from_literal_expression(expression)
+            expression
+                .value()
+                .and_then(|value| self.type_from_literal_expression(value))
                 .unwrap_or_else(|| self.new_type_var())
         };
         self.sink.truncate(before);
@@ -994,11 +985,12 @@ impl TaskState {
             ));
         }
 
-        let const_value = canonical_const_literal(expression);
+        let kind = match expression.value().and_then(canonical_const_literal) {
+            Some(value) => syntax::program::ValueKind::Constant(value),
+            None => syntax::program::ValueKind::ConstantDeclaration,
+        };
 
-        let module = self.current_module_mut(store);
-        module.const_names.insert(qualified_name.clone());
-        module.definitions.insert(
+        self.current_module_mut(store).definitions.insert(
             qualified_name,
             Definition {
                 visibility: item_visibility,
@@ -1007,11 +999,11 @@ impl TaskState {
                 name_span: Some(*identifier_span),
                 doc: doc.clone(),
                 body: DefinitionBody::Value {
+                    kind,
                     allowed_lints: vec![],
                     go_hints: vec![],
                     go_name: None,
                     go_type_param_recipe: None,
-                    const_value,
                 },
             },
         );
@@ -1059,11 +1051,11 @@ impl TaskState {
                 name_span: Some(*name_span),
                 doc: doc.clone(),
                 body: DefinitionBody::Value {
+                    kind: syntax::program::ValueKind::Runtime,
                     allowed_lints: vec![],
                     go_hints: vec![],
                     go_name: None,
                     go_type_param_recipe: None,
-                    const_value: None,
                 },
             },
         );
@@ -1072,10 +1064,7 @@ impl TaskState {
     fn register_tuple_struct_constructor(&mut self, store: &mut Store, item: &Expression) {
         let Expression::Struct {
             name,
-            generics,
-            fields,
-            kind: StructKind::Tuple,
-            span,
+            fields: StructFields::Tuple(_),
             ..
         } = item
         else {
@@ -1083,34 +1072,14 @@ impl TaskState {
         };
 
         let qualified_name = self.qualify_name(name);
-        let struct_ty = store
-            .get_type(&qualified_name)
-            .expect("struct type scheme must exist")
-            .clone();
-
-        self.scopes.push();
-        self.put_in_scope(generics);
-
-        let field_types: Vec<Type> = fields
-            .iter()
-            .map(|f| self.convert_to_type(&*store, &f.annotation, span))
-            .collect();
-
-        self.scopes.pop();
-
-        let constructor_ty =
-            tuple_struct_constructor_type_from_fields(&field_types, &struct_ty, generics);
+        let constructor_ty = store
+            .get_definition(&qualified_name)
+            .and_then(Definition::constructor_type)
+            .expect("tuple struct definition must have a constructor type");
 
         let scope = self.scopes.current_mut();
         scope.insert_value(qualified_name.to_string(), constructor_ty.clone());
         scope.insert_value(name.to_string(), constructor_ty.clone());
-
-        let module = self.current_module_mut(store);
-        if let Some(def) = module.definitions.get_mut(qualified_name.as_str())
-            && let DefinitionBody::Struct { constructor, .. } = &mut def.body
-        {
-            *constructor = Some(constructor_ty);
-        }
     }
 
     pub(crate) fn extract_signature_parts(
@@ -1151,7 +1120,7 @@ impl TaskState {
             .into_iter()
             .zip(params)
             .map(|(ty, binding)| {
-                FunctionParameter::named(ty, binding.pattern.get_identifier(), binding.mutable)
+                FunctionParameter::named(ty, binding.pattern.get_identifier(), binding.is_mutable())
             })
             .collect();
 
@@ -1178,7 +1147,7 @@ fn declaration_value_position_types(definition: &Definition) -> Vec<(Type, Span)
             .iter()
             .flat_map(|variant| variant_field_types(&variant.fields))
             .collect(),
-        DefinitionBody::TypeAlias { annotation, .. } => alias_body_types(definition, annotation),
+        DefinitionBody::TypeAlias { alias, .. } => alias_body_types(alias),
         _ => Vec::new(),
     }
 }
@@ -1216,17 +1185,13 @@ fn variant_field_types(fields: &VariantFields) -> Vec<(Type, Span)> {
     }
 }
 
-fn alias_body_types(definition: &Definition, annotation: &Annotation) -> Vec<(Type, Span)> {
-    let body = definition.ty.unwrap_forall();
-    if let Type::Nominal { id, .. } = body
-        && definition
-            .name
-            .as_ref()
-            .is_some_and(|name| unqualified_name(id) == name.as_str())
-    {
-        return Vec::new();
+fn alias_body_types(alias: &AliasKind) -> Vec<(Type, Span)> {
+    match alias {
+        AliasKind::Opaque(_) => Vec::new(),
+        AliasKind::Transparent { annotation, target } => {
+            vec![(target.clone(), annotation.get_span())]
+        }
     }
-    vec![(body.clone(), annotation.get_span())]
 }
 
 fn populate_expression_generic_bounds(
@@ -1265,16 +1230,12 @@ fn populate_generic_bounds(
     bound_types: &rustc_hash::FxHashMap<Span, Type>,
 ) {
     for generic in generics {
-        generic.resolved_bounds = generic
-            .bounds
-            .iter()
-            .map(|bound| {
-                bound_types
-                    .get(&bound.get_span())
-                    .cloned()
-                    .unwrap_or(Type::Error)
-            })
-            .collect();
+        generic.resolve_bounds_with(|bound| {
+            bound_types
+                .get(&bound.get_span())
+                .cloned()
+                .unwrap_or(Type::Error)
+        });
     }
 }
 
@@ -1297,36 +1258,6 @@ pub(super) fn enum_variant_constructor_type(
             .fields
             .iter()
             .map(|field| FunctionParameter::new(field.ty.clone(), false))
-            .collect(),
-        Default::default(),
-        return_type.into(),
-    );
-
-    if generics.is_empty() {
-        fn_ty
-    } else {
-        Type::Forall {
-            vars: generics.iter().map(|g| g.name.clone()).collect(),
-            body: Box::new(fn_ty),
-        }
-    }
-}
-
-fn tuple_struct_constructor_type_from_fields(
-    field_types: &[Type],
-    struct_ty: &Type,
-    generics: &[Generic],
-) -> Type {
-    let return_type = match struct_ty {
-        Type::Forall { body, .. } => body.as_ref().clone(),
-        _ => struct_ty.clone(),
-    };
-
-    let fn_ty = Type::function(
-        field_types
-            .iter()
-            .cloned()
-            .map(|ty| FunctionParameter::new(ty, false))
             .collect(),
         Default::default(),
         return_type.into(),

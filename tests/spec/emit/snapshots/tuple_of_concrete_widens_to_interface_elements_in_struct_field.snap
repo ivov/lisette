@@ -1,0 +1,45 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: |
+  
+  struct Boom {}
+  
+  impl Boom {
+    fn Error(self) -> string {
+      "boom"
+    }
+  }
+  
+  struct Holder {
+    pair: (error, int),
+  }
+  
+  fn test() {
+    let concrete = (Boom {}, 1)
+    let holder = Holder { pair: concrete }
+    if holder.pair.0.Error() != "boom" {
+      panic("struct field lost its interface elements")
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Boom struct{}
+
+func (b Boom) Error() string {
+	return "boom"
+}
+
+type Holder struct {
+	pair lisette.Tuple2[error, int]
+}
+
+func test() {
+	concrete := lisette.MakeTuple2(Boom{}, 1)
+	holder := Holder{pair: lisette.MakeTuple2[error, int](concrete.First, concrete.Second)}
+	if holder.pair.First.Error() != "boom" {
+		panic("struct field lost its interface elements")
+	}
+}

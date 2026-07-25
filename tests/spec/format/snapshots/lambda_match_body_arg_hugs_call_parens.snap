@@ -1,0 +1,10 @@
+---
+source: tests/spec/format/mod.rs
+description: "fn test() { items.map(|x| match x { Some(v) => v, None => 0 }) }"
+---
+fn test() {
+  items.map(|x| match x {
+    Some(v) => v,
+    None => 0,
+  })
+}

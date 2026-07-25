@@ -7,6 +7,7 @@ import "go:strconv"
 import "go:strings"
 import "go:sync"
 import "go:time"
+import "go:unicode"
 
 #[test]
 fn go_tuple_destructure() {
@@ -71,6 +72,38 @@ fn pipeline_go_stdlib_chained() {
 fn pipeline_go_stdlib_with_args() {
   let result = "hello" |> strings.Repeat(3)
   assert result == "hellohellohello"
+}
+
+#[test]
+fn go_fn_value_as_prelude_map_arg() {
+  let ys = ["a", "b"].map(strings.ToUpper)
+  assert ys.equals(["A", "B"])
+}
+
+#[test]
+fn go_fn_value_as_prelude_filter_arg() {
+  let letters = "a1b".runes().filter(unicode.IsLetter)
+  assert letters.equals(['a', 'b'])
+}
+
+#[test]
+#[allow(float_cmp)]
+fn go_fn_value_as_prelude_fold_arg() {
+  let biggest = [1.0, 5.0, 3.0].fold(0.0, math.Max)
+  assert biggest == 5.0
+}
+
+#[test]
+fn go_fn_value_as_option_map_arg() {
+  let greeting: Option<string> = Some("hi")
+  assert greeting.map(strings.ToUpper) == Some("HI")
+}
+
+#[test]
+fn go_fallible_fn_value_as_prelude_map_arg() {
+  let parsed = ["1", "2"].map(strconv.Atoi)
+  let sum = parsed.fold(0, |acc, r| acc + r.unwrap_or(0))
+  assert sum == 3
 }
 
 #[test]

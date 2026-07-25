@@ -619,6 +619,7 @@ fn emit_lowered_tuple_tail(
         let (mut statements, parts) = planner
             .sequence_values(stages, CaptureBoundary::SiblingSequence, "_ret")
             .into_rendered();
+        let parts = planner.coerce_elements_to_slots(&mut statements, elements, parts, &slot_tys);
         statements.push(multi_value_return(parts));
         return statements;
     }

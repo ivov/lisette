@@ -430,6 +430,98 @@ fn main() {
 }
 
 #[test]
+fn interop_direct_prelude_map_arg() {
+    let input = r#"
+import "go:strings"
+
+fn main() {
+  let xs: Slice<string> = ["a"]
+  let ys = xs.map(strings.ToUpper)
+  let _ = ys
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_direct_prelude_filter_arg() {
+    let input = r#"
+import "go:unicode"
+
+fn main() {
+  let cs: Slice<rune> = ['a', '1']
+  let letters = cs.filter(unicode.IsLetter)
+  let _ = letters
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_direct_prelude_fold_arg() {
+    let input = r#"
+import "go:math"
+
+fn main() {
+  let xs: Slice<float64> = [1.0, 5.0]
+  let biggest = xs.fold(0.0, math.Max)
+  let _ = biggest
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_direct_option_map_arg() {
+    let input = r#"
+import "go:strings"
+
+fn main() {
+  let s: Option<string> = Some("a")
+  let upper = s.map(strings.ToUpper)
+  let _ = upper
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_sentinel_prelude_map_arg() {
+    let input = r#"
+import "go:example.com/idx"
+
+fn main() {
+  let xs: Slice<string> = ["hello"]
+  let ys = xs.map(idx.Find)
+  let _ = ys
+}
+"#;
+    let typedef = r#"
+#[go(sentinel_minus_one)]
+pub fn Find(s: string) -> Option<int>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/idx", typedef)]);
+}
+
+#[test]
+fn interop_comma_ok_slice_option_prelude_map_arg() {
+    let input = r#"
+import "go:example.com/aws"
+
+fn main() {
+  let keys: Slice<string> = ["k"]
+  let out = keys.map(aws.Fetch)
+  let _ = out
+}
+"#;
+    let typedef = r#"
+#[go(comma_ok)]
+pub fn Fetch(key: string) -> Option<Slice<Option<string>>>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/aws", typedef)]);
+}
+
+#[test]
 fn interop_result_let_mut() {
     let input = r#"
 import "go:strconv"

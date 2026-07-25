@@ -20,7 +20,12 @@ fn visit_expression(expression: &Expression, in_loop: bool, sink: &LocalSink) {
     }
 
     match expression {
-        Expression::Function { body, .. } | Expression::Lambda { body, .. } => {
+        Expression::Function { body, .. } => {
+            if let Some(body) = body.definition() {
+                visit_expression(body, false, sink);
+            }
+        }
+        Expression::Lambda { body, .. } => {
             visit_expression(body, false, sink);
         }
         Expression::Task {

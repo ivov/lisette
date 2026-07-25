@@ -21,21 +21,23 @@ description: |
             id: uninferred,
         },
         visibility: Private,
-        body: Block {
-            items: [
-                RawGo {
-                    text: "?",
+        body: Definition(
+            Block {
+                items: [
+                    RawGo {
+                        text: "?",
+                    },
+                ],
+                ty: Var {
+                    id: uninferred,
                 },
-            ],
-            ty: Var {
-                id: uninferred,
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 11,
+                    byte_length: 16,
+                },
             },
-            span: Span {
-                file_id: 0,
-                byte_offset: 11,
-                byte_length: 16,
-            },
-        },
+        ),
         ty: Var {
             id: uninferred,
         },

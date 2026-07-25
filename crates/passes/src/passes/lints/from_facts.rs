@@ -105,7 +105,7 @@ pub(crate) fn run(
 fn source_by_file<'a>(analysis: &AnalysisContext<'a>) -> HashMap<u32, &'a str> {
     let mut sources = HashMap::default();
     for module in analysis.store.modules.values() {
-        for (file_id, file) in &module.files {
+        for (file_id, file) in module.source_file_entries() {
             sources.insert(*file_id, file.source.as_str());
         }
     }
@@ -175,7 +175,7 @@ fn collect_bindings(
     for b in facts.bindings.values() {
         let is_anon = b.name.starts_with('_');
         let written_but_not_read =
-            b.kind.is_mutable() && b.mutation.happened() && !b.used && !is_anon;
+            b.kind.is_mutable() && b.mutation.is_some() && !b.used && !is_anon;
         let is_write_only_param = written_but_not_read && b.kind.is_param();
 
         if !b.used && !is_write_only_param {
@@ -195,8 +195,7 @@ fn collect_bindings(
             unused.mark_binding_unused(b.span);
         }
 
-        if b.kind.is_mutable() && !b.mutation.happened() && !within_any(erroring_functions, b.span)
-        {
+        if b.kind.is_mutable() && b.mutation.is_none() && !within_any(erroring_functions, b.span) {
             let mut diagnostic = diagnostics::lint::unused_mut(&b.span);
             if let Some(deletion) = mut_keyword_deletion(sources, b.span) {
                 diagnostic =

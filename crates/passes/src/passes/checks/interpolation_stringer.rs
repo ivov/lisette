@@ -106,9 +106,5 @@ fn has_stringer(
 }
 
 fn is_pointer_newtype(definition: &Definition, store: &Store) -> bool {
-    definition.is_pointer_backed_newtype(|id| {
-        store
-            .get_definition(id)
-            .is_some_and(Definition::is_type_alias)
-    })
+    definition.is_pointer_backed_newtype(|id| store.get_definition(id))
 }

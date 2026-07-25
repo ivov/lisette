@@ -12,12 +12,12 @@ use crate::types::native::NativeGoType;
 use crate::utils::{group_params, receiver_name};
 use syntax::EcoString;
 use syntax::ast::{
-    Annotation, Binding, Expression, FunctionDefinitionView, Generic, Pattern, Span, TypedPattern,
+    Annotation, Binding, Expression, FunctionDefinitionView, Generic, Pattern, Span,
 };
 use syntax::types::{Type, build_substitution_map, substitute};
 
-/// Owned param-destructure record: temp var, pattern, typed pattern, param type.
-type DeferredParamDestructure = (String, Pattern, Option<TypedPattern>, Type);
+/// Owned param-destructure record: temp var, pattern, param type.
+type DeferredParamDestructure = (String, Pattern, Type);
 
 pub(crate) fn is_test_context_ty(ty: &Type) -> bool {
     let stripped = ty.strip_refs();
@@ -29,7 +29,7 @@ pub(crate) fn is_test_context_ty(ty: &Type) -> bool {
 
 /// Borrowed lambda param-destructure record. Lambdas keep references to the
 /// caller's `params` slice since they cannot outlive emission scope.
-type LambdaParamDestructure<'a> = (String, &'a Pattern, Option<&'a TypedPattern>, &'a Type);
+type LambdaParamDestructure<'a> = (String, &'a Pattern, &'a Type);
 
 struct LambdaReturnInfo {
     ty_string: String,
@@ -137,12 +137,7 @@ impl Planner<'_> {
                 } else {
                     let temp_name = self.fresh_var(Some("arg"));
                     self.declare(&temp_name);
-                    destructure_bindings.push((
-                        temp_name.clone(),
-                        &p.pattern,
-                        p.typed_pattern.as_ref(),
-                        &p.ty,
-                    ));
+                    destructure_bindings.push((temp_name.clone(), &p.pattern, &p.ty));
                     temp_name
                 };
                 (name, self.go_type_string(&p.ty))
@@ -160,6 +155,7 @@ impl Planner<'_> {
         let has_return = matches!(ty, Type::Function(f)
             if !(f.return_type.is_unit()
                 || f.return_type.is_variable()
+                || f.return_type.is_placeholder()
                 || (argument_flows_to_unknown && f.return_type.is_never())));
 
         let ctx = match ty {
@@ -203,11 +199,10 @@ impl Planner<'_> {
         should_return: bool,
     ) -> String {
         let mut body_string = String::new();
-        for (temp_name, pattern, typed, param_ty) in destructure_bindings {
+        for (temp_name, pattern, param_ty) in destructure_bindings {
             let statements = self.lower_irrefutable_pattern_site(
                 PatternSubject::for_value(temp_name.clone()),
                 pattern,
-                *typed,
                 param_ty,
             );
             Renderer.render_lowered_block(&mut body_string, &LoweredBlock { statements });
@@ -255,7 +250,7 @@ impl Planner<'_> {
         is_public: bool,
         resolved_generic_bounds: Option<&[(EcoString, Vec<Type>)]>,
     ) -> String {
-        if matches!(function_definition.body, Expression::NoOp) {
+        if function_definition.body.is_none() {
             return String::new();
         }
 
@@ -387,16 +382,22 @@ impl Planner<'_> {
         return_ctx: &ReturnContext,
     ) {
         let should_return = !function_definition.return_type.is_unit();
-        for (var_name, pattern, typed, param_ty) in deferred_patterns {
+        for (var_name, pattern, param_ty) in deferred_patterns {
             let statements = self.lower_irrefutable_pattern_site(
                 PatternSubject::for_value(var_name),
                 &pattern,
-                typed.as_ref(),
                 &param_ty,
             );
             Renderer.render_lowered_block(body, &LoweredBlock { statements });
         }
-        self.emit_function_body(body, function_definition.body, should_return, return_ctx);
+        self.emit_function_body(
+            body,
+            function_definition
+                .body
+                .expect("declarations return before function body emission"),
+            should_return,
+            return_ctx,
+        );
     }
 
     fn emit_receiver_part(
@@ -455,11 +456,14 @@ impl Planner<'_> {
         if let Some(resolved) = resolved_generic_bounds {
             context.extend_from_slice(resolved);
         } else {
-            context.extend(
-                function_generics
-                    .iter()
-                    .map(|generic| (generic.name.clone(), generic.resolved_bounds.clone())),
-            );
+            context.extend(function_generics.iter().map(|generic| {
+                let bounds = generic
+                    .resolved_bounds()
+                    .expect("generic bounds must be resolved before emission")
+                    .cloned()
+                    .collect();
+                (generic.name.clone(), bounds)
+            }));
         }
         context
     }
@@ -485,8 +489,8 @@ impl Planner<'_> {
                     return None;
                 };
                 let bounds = generic
-                    .resolved_bounds
-                    .iter()
+                    .resolved_bounds()
+                    .expect("generic bounds must be resolved before emission")
                     .map(|bound| substitute(bound, &substitution))
                     .collect();
                 Some((name.clone(), bounds))
@@ -513,7 +517,13 @@ impl Planner<'_> {
                 .collect(),
             None => signature_generics
                 .iter()
-                .filter(|generic| !generic.resolved_bounds.is_empty())
+                .filter(|generic| {
+                    generic
+                        .resolved_bounds()
+                        .expect("generic bounds must be resolved before emission")
+                        .next()
+                        .is_some()
+                })
                 .map(|generic| generic.name.as_str())
                 .collect(),
         };
@@ -561,12 +571,7 @@ impl Planner<'_> {
                 _ => {
                     let var = self.fresh_var(Some("arg"));
                     self.declare(&var);
-                    deferred_patterns.push((
-                        var.clone(),
-                        param.pattern.clone(),
-                        param.typed_pattern.clone(),
-                        param.ty.clone(),
-                    ));
+                    deferred_patterns.push((var.clone(), param.pattern.clone(), param.ty.clone()));
                     var
                 }
             };
@@ -651,9 +656,8 @@ fn change_go_builtin_methods(
             span: Span::dummy(),
         },
         annotation: Some(Annotation::Unknown),
-        typed_pattern: None,
         ty: receiver_type,
-        mutable: false,
+        mut_span: None,
     };
 
     let mut params = Vec::with_capacity(function_definition.params.len() + 1);

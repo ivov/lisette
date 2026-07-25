@@ -44,18 +44,9 @@ pub(super) fn struct_field_names(
 
 pub(super) fn is_float_operand(store: &Store, expression: &Expression) -> bool {
     let resolved = store.deep_resolve_alias(&expression.get_type());
-    if let Some(kind) = resolved.underlying_simple_kind() {
-        return kind.is_float();
-    }
-    if let Type::Nominal { id, .. } = &resolved
-        && let Some(definition) = store.get_definition(id.as_str())
-    {
-        return definition
-            .ty
-            .underlying_simple_kind()
-            .is_some_and(SimpleKind::is_float);
-    }
-    false
+    store
+        .underlying_simple_kind(&resolved)
+        .is_some_and(SimpleKind::is_float)
 }
 
 pub(super) fn is_zero_literal(expression: &Expression) -> bool {
@@ -177,7 +168,7 @@ pub(super) fn expression_is_pure(expression: &Expression, store: &Store) -> bool
             right,
             ..
         } => {
-            binary_operator_cannot_panic(*operator, left, right)
+            binary_operator_cannot_panic(*operator, left, right, store)
                 && expression_is_pure(left, store)
                 && expression_is_pure(right, store)
         }
@@ -198,6 +189,7 @@ fn binary_operator_cannot_panic(
     operator: BinaryOperator,
     left: &Expression,
     right: &Expression,
+    store: &Store,
 ) -> bool {
     match operator {
         BinaryOperator::Division
@@ -205,8 +197,8 @@ fn binary_operator_cannot_panic(
         | BinaryOperator::ShiftLeft
         | BinaryOperator::ShiftRight => false,
         BinaryOperator::Equal | BinaryOperator::NotEqual => {
-            left.get_type().underlying_simple_kind().is_some()
-                && right.get_type().underlying_simple_kind().is_some()
+            store.underlying_simple_kind(&left.get_type()).is_some()
+                && store.underlying_simple_kind(&right.get_type()).is_some()
         }
         _ => true,
     }

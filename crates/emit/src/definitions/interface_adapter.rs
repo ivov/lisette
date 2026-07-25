@@ -158,10 +158,10 @@ impl Planner<'_> {
                 .definition(id)
                 .is_some_and(|d| d.visibility.is_public())
         };
-        let own_candidate = |name: &str| syntax::go_names::ConformanceCandidate {
+        let own_candidate = |name: &str| syntax::go_names::ConformanceCandidate::Resolved {
             exported: is_public_definition(&format!("{source_id}.{name}")),
             depth: 0,
-            owner: Some(source_id.as_eco().clone()),
+            owner: source_id.as_eco().clone(),
             shadowed: self.facts.is_ufcs_method(source_id.as_str(), name),
         };
 
@@ -467,44 +467,6 @@ impl Planner<'_> {
             render_lowered_result_return(self, &mut body, &subject, &logical_ty, interface_abi);
         }
         (go_ret, body)
-    }
-
-    pub(crate) fn resolve_tuple_slot_types(
-        &mut self,
-        inferred: Vec<Type>,
-        in_tail: bool,
-    ) -> Vec<Type> {
-        let resolved = self.return_ctx();
-        let return_slots = resolved.ty().and_then(|ty| {
-            let Type::Tuple(slots) = ty else {
-                return None;
-            };
-            (slots.len() == inferred.len()).then(|| slots.clone())
-        });
-
-        let Some(return_slots) = return_slots else {
-            return inferred;
-        };
-
-        if in_tail {
-            return return_slots;
-        }
-
-        return_slots
-            .iter()
-            .zip(inferred.iter())
-            .map(|(declared, inferred_slot)| {
-                let needs_widening = self.needs_adapter(inferred_slot, declared).is_some()
-                    || self.facts.is_interface(declared)
-                    || (declared.get_qualified_id().is_some()
-                        && declared.get_qualified_id() == inferred_slot.get_qualified_id());
-                if needs_widening {
-                    declared.clone()
-                } else {
-                    inferred_slot.clone()
-                }
-            })
-            .collect()
     }
 }
 

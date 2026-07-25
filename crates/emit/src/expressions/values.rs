@@ -31,25 +31,29 @@ impl Planner<'_> {
             && matches!(callee.origin, CallableOrigin::GoInterop)
         {
             let abi = &callee.abi.result;
-            let source_layout = ValueLayout::Function {
-                function_type: expression.get_type(),
-                layout: callee.abi.function_layout(),
-            };
+            let matches_slot = self.go_fn_slot_abi(expression, ctx).as_ref() == Some(abi);
             let target_layout = self.value_layout(&expression.get_type(), SlotOrigin::Lisette);
-            let same_abi = matches!(
-                &target_layout,
-                ValueLayout::Function { layout, .. } if layout.return_abi == *abi
-            );
-            let layout_coercion = CoercionPlan::bridge(self, &source_layout, &target_layout);
-            if !ctx.is_callee() && same_abi && !layout_coercion.is_identity() {
-                let value = self.plan_operand(expression, ctx);
-                return value.map_rendered_as_computed(|setup, value, _| {
-                    let (bridge_setup, value) = layout_coercion.lower(self, value);
-                    setup.extend(bridge_setup);
-                    GoExpression::opaque_with_deferred_evaluation(value, true)
-                });
+            let same_abi = matches_slot
+                && matches!(
+                    &target_layout,
+                    ValueLayout::Function { layout, .. } if layout.return_abi == *abi
+                );
+            if !ctx.is_callee() && same_abi {
+                let source_layout = ValueLayout::Function {
+                    function_type: expression.get_type(),
+                    layout: callee.abi.function_layout(),
+                };
+                let layout_coercion = CoercionPlan::bridge(self, &source_layout, &target_layout);
+                if !layout_coercion.is_identity() {
+                    let value = self.plan_operand(expression, ctx);
+                    return value.map_rendered_as_computed(|setup, value, _| {
+                        let (bridge_setup, value) = layout_coercion.lower(self, value);
+                        setup.extend(bridge_setup);
+                        GoExpression::opaque_with_deferred_evaluation(value, true)
+                    });
+                }
             }
-            if !self.go_fn_matches_lowered_slot(expression, abi, ctx) {
+            if !matches_slot {
                 let mut setup = Vec::new();
                 let value = if self.go_fn_needs_lowered_tuple_adapter(expression, abi, ctx) {
                     self.emit_go_fn_lowered_tuple_adapter(&mut setup, expression)
@@ -58,7 +62,7 @@ impl Planner<'_> {
                 {
                     self.emit_go_fn_sentinel_adapter(&mut setup, expression, *value)
                 } else {
-                    self.emit_go_fn_wrapper(&mut setup, expression, abi)
+                    self.emit_go_fn_wrapper(&mut setup, expression, &callee.abi)
                 };
                 return ValuePlan::computed(
                     setup,
@@ -171,25 +175,21 @@ impl Planner<'_> {
         emit_lisette_callback_wrapper(self, setup, &raw, fn_ty)
     }
 
-    /// True when a Go function value's natural ABI matches the slot's
-    /// lowered shape — wrapping would be identity.
-    fn go_fn_matches_lowered_slot(
+    /// Result ABI the slot expects from a Go function value, or `None` when
+    /// the value is not a function. A forced-tagged slot calls through a
+    /// Lisette-shaped callback, so it wants the tagged ABI, not the lowered one.
+    fn go_fn_slot_abi(
         &self,
         expression: &Expression,
-        source: &CallableReturnAbi,
         ctx: ExpressionContext<'_>,
-    ) -> bool {
-        if ctx.forces_tagged_go_function() {
-            return false;
-        }
+    ) -> Option<CallableReturnAbi> {
         let fn_ty = expression.get_type();
-        let Some(f) = fn_ty.as_function_type() else {
-            return false;
-        };
-        let target = self
-            .classify_direct_emission(&f.return_type)
-            .unwrap_or_else(|| self.value_return_abi(&f.return_type));
-        source == &target
+        let f = fn_ty.as_function_type()?;
+        Some(if ctx.forces_tagged_go_function() {
+            self.value_return_abi(&f.return_type)
+        } else {
+            self.callable_return_abi(&f.return_type)
+        })
     }
 
     /// True when a tuple-ok fallible Go function value must be wrapped to match a lowered slot.
@@ -199,29 +199,21 @@ impl Planner<'_> {
         source: &CallableReturnAbi,
         ctx: ExpressionContext<'_>,
     ) -> bool {
-        if ctx.forces_tagged_go_function() {
-            return false;
-        }
-        let fn_ty = expression.get_type();
-        let Some(f) = fn_ty.as_function_type() else {
-            return false;
-        };
-        let target = self
-            .classify_direct_emission(&f.return_type)
-            .unwrap_or_else(|| self.value_return_abi(&f.return_type));
         matches!(
-            (source, target),
+            (source, self.go_fn_slot_abi(expression, ctx)),
             (
                 CallableReturnAbi::Result {
                     payload: PayloadLayout::Flattened,
                 } | CallableReturnAbi::Partial {
                     payload: PayloadLayout::Flattened,
                 },
-                CallableReturnAbi::Result {
-                    payload: PayloadLayout::Packed,
-                } | CallableReturnAbi::Partial {
-                    payload: PayloadLayout::Packed,
-                }
+                Some(
+                    CallableReturnAbi::Result {
+                        payload: PayloadLayout::Packed,
+                    } | CallableReturnAbi::Partial {
+                        payload: PayloadLayout::Packed,
+                    }
+                )
             )
         )
     }
@@ -238,10 +230,10 @@ impl Planner<'_> {
             Expression::Identifier {
                 value,
                 ty,
-                qualified,
+                resolution,
                 ..
             } => {
-                let go_expression = self.emit_identifier(value, qualified.as_deref(), ty, ctx);
+                let go_expression = self.emit_identifier(value, resolution.definition(), ty, ctx);
                 let stable_across_calls = self.identifier_immune_to_calls(expression);
                 let plan =
                     ValuePlan::from_identifier_expression(go_expression, stable_across_calls);
@@ -268,13 +260,15 @@ impl Planner<'_> {
             Expression::Call { ty, .. } => self.lower_call_value(expression, ty, ctx),
             Expression::RawGo { text } => ValuePlan::opaque(text.clone()),
             Expression::Unit { .. } => ValuePlan::opaque("struct{}{}".to_string()),
-            Expression::NoOp => ValuePlan::opaque(String::new()),
             Expression::Lambda {
                 params, body, ty, ..
-            }
-            | Expression::Function {
-                params, body, ty, ..
             } => ValuePlan::opaque(self.emit_lambda(params, body, ty, ctx)),
+            Expression::Function {
+                params, body, ty, ..
+            } => match body.definition() {
+                Some(body) => ValuePlan::opaque(self.emit_lambda(params, body, ty, ctx)),
+                None => ValuePlan::opaque(String::new()),
+            },
             Expression::IfLet { ty, .. }
             | Expression::Match { ty, .. }
             | Expression::Select { ty, .. }
@@ -310,9 +304,39 @@ impl Planner<'_> {
         }
     }
 
-    /// Emit a Go tuple literal. `in_tail` widens slot types to the declared
-    /// return slots so per-element coercion matches the return site.
-    /// Plan a tuple literal as `lisette.MakeTupleN(...)`.
+    pub(crate) fn coerce_elements_to_slots(
+        &mut self,
+        setup: &mut Vec<LoweredStatement>,
+        elements: &[Expression],
+        rendered: Vec<String>,
+        slot_types: &[Type],
+    ) -> Vec<String> {
+        let mut coerced_elements = Vec::with_capacity(rendered.len());
+        for (index, (element, rendered)) in elements.iter().zip(rendered).enumerate() {
+            let Some(slot) = slot_types.get(index) else {
+                coerced_elements.push(rendered);
+                continue;
+            };
+            let coercion = CoercionPlan::internal(self, &element.get_type(), slot);
+            let (coercion_setup, coerced) = coercion.lower(self, rendered);
+            setup.extend(coercion_setup);
+            coerced_elements.push(coerced);
+        }
+        coerced_elements
+    }
+
+    pub(crate) fn make_tuple_callee(&mut self, slot_types: &[Type], arity: usize) -> String {
+        self.require_stdlib();
+        if !slot_types.iter().any(|slot| self.facts.is_interface(slot)) {
+            return format!("lisette.MakeTuple{}", arity);
+        }
+        let rendered: Vec<String> = slot_types
+            .iter()
+            .map(|slot| self.go_type_string(slot))
+            .collect();
+        format!("lisette.MakeTuple{}[{}]", arity, rendered.join(", "))
+    }
+
     pub(crate) fn plan_tuple_value(
         &mut self,
         elements: &[Expression],
@@ -323,7 +347,10 @@ impl Planner<'_> {
             Type::Tuple(slots) => slots.clone(),
             _ => Vec::new(),
         };
-        let slot_types = self.resolve_tuple_slot_types(inferred_slot_types, in_tail);
+        let slot_types = match in_tail.then(|| tail_return_slots(self, &inferred_slot_types)) {
+            Some(Some(return_slots)) => return_slots,
+            _ => inferred_slot_types,
+        };
 
         let stages: Vec<ValuePlan> = elements
             .iter()
@@ -338,34 +365,9 @@ impl Planner<'_> {
         let effect = sequenced.effect;
         let (mut setup, element_expressions) = sequenced.into_rendered();
 
-        let mut wrapped_expressions: Vec<String> = Vec::with_capacity(element_expressions.len());
-        for (i, (expr, emitted)) in elements.iter().zip(element_expressions).enumerate() {
-            let value = match slot_types.get(i) {
-                Some(slot) => {
-                    let coercion = CoercionPlan::internal(self, &expr.get_type(), slot);
-                    let (coercion_setup, coerced) = coercion.lower(self, emitted);
-                    setup.extend(coercion_setup);
-                    coerced
-                }
-                None => emitted,
-            };
-            wrapped_expressions.push(value);
-        }
-        let element_expressions = wrapped_expressions;
-
-        self.require_stdlib();
-        let arity = element_expressions.len();
-
-        let needs_explicit_type_args =
-            !slot_types.is_empty() && slot_types.iter().any(|t| self.facts.is_interface(t));
-
-        let callee = if !needs_explicit_type_args {
-            format!("lisette.MakeTuple{}", arity)
-        } else {
-            let slot_ty_strs: Vec<String> =
-                slot_types.iter().map(|t| self.go_type_string(t)).collect();
-            format!("lisette.MakeTuple{}[{}]", arity, slot_ty_strs.join(", "))
-        };
+        let element_expressions =
+            self.coerce_elements_to_slots(&mut setup, elements, element_expressions, &slot_types);
+        let callee = self.make_tuple_callee(&slot_types, element_expressions.len());
         ValuePlan::observable_call(
             setup,
             GoExpression::call(
@@ -417,15 +419,16 @@ impl Planner<'_> {
     }
 
     fn shift_pin_go_type(&self, expression: &Expression, target_ty: &Type) -> Option<String> {
-        let target_is_float = target_ty
-            .underlying_simple_kind()
+        let target_is_float = self
+            .facts
+            .underlying_simple_kind(target_ty)
             .is_some_and(|kind| kind.is_float());
         if !target_is_float || !self.contains_untyped_constant_shift(expression) {
             return None;
         }
         let source_ty = expression.get_type();
-        source_ty
-            .underlying_simple_kind()
+        self.facts
+            .underlying_simple_kind(&source_ty)
             .is_some_and(|kind| kind.integer_range().is_some())
             .then(|| self.go_type_string(&source_ty))
     }
@@ -714,11 +717,19 @@ impl Planner<'_> {
     }
 }
 
+fn tail_return_slots(planner: &Planner<'_>, inferred: &[Type]) -> Option<Vec<Type>> {
+    let return_ctx = planner.return_ctx();
+    let Some(Type::Tuple(slots)) = return_ctx.ty() else {
+        return None;
+    };
+    (slots.len() == inferred.len()).then(|| slots.clone())
+}
+
 fn is_native_method_call(expression: &Expression) -> bool {
     matches!(
         expression.unwrap_parens(),
         Expression::Call {
-            call_kind: Some(CallKind::NativeMethod(_) | CallKind::NativeMethodIdentifier(_)),
+            call_kind: CallKind::NativeMethod(_) | CallKind::NativeMethodIdentifier(_),
             ..
         }
     )

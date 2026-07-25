@@ -248,7 +248,6 @@ impl Planner<'_> {
                 .iter()
                 .map(|g| Type::Parameter(g.name.clone()))
                 .collect(),
-            underlying_ty: None,
         };
 
         let return_type = self.go_type_string(&return_type);

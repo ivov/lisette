@@ -1,12 +1,12 @@
 use crate::checker::EnvResolve;
 use rustc_hash::{FxHashMap, FxHashSet};
 use syntax::ast::{
-    EnumFieldDefinition, EnumVariant, Expression, Generic, Span, StructFieldDefinition, StructKind,
-    VariantFields,
+    EnumFieldDefinition, EnumVariant, Expression, Generic, Span, StructFieldDefinition,
+    StructFields, VariantFields,
 };
 use syntax::containment::{EnumPayloads, definition_contains_by_value};
-use syntax::program::{Definition, DefinitionBody, MethodSignatures, Visibility};
-use syntax::types::{Symbol, Type};
+use syntax::program::{AliasKind, Definition, DefinitionBody, MethodSignatures, Visibility};
+use syntax::types::Type;
 
 use super::enum_variant_constructor_type;
 use crate::checker::TaskState;
@@ -98,11 +98,11 @@ impl TaskState {
                 name_span: Some(variant_name_span),
                 doc: variant_doc,
                 body: DefinitionBody::Value {
+                    kind: syntax::program::ValueKind::Runtime,
                     allowed_lints: vec![],
                     go_hints: vec![],
                     go_name: None,
                     go_type_param_recipe: None,
-                    const_value: None,
                 },
             };
             module
@@ -144,20 +144,23 @@ impl TaskState {
             return;
         }
 
-        // (variant_name, field_name, is_struct, type, span)
-        let mut seen: FxHashMap<String, (&str, &str, bool, &Type, Span)> = FxHashMap::default();
+        // (variant_name, field_name, field shape, type, span)
+        let mut seen: FxHashMap<
+            String,
+            (&str, &str, syntax::go_names::EnumFieldShape, &Type, Span),
+        > = FxHashMap::default();
 
         for variant in variants {
-            let is_struct = variant.fields.is_struct();
-            let single_field = variant.fields.len() == 1;
+            let Some(field_shape) = syntax::go_names::enum_field_shape(&variant.fields) else {
+                continue;
+            };
 
             for (fi, field) in variant.fields.iter().enumerate() {
                 let go_name = syntax::go_names::enum_field_go_name(
                     &variant.name,
                     &field.name,
                     fi,
-                    is_struct,
-                    single_field,
+                    field_shape,
                     name,
                 );
 
@@ -168,10 +171,10 @@ impl TaskState {
                 } else {
                     variant.name_span
                 };
-                let Some(&(v_a, f_a, is_struct_a, ty_a, _)) = seen.get(&go_name) else {
+                let Some(&(v_a, f_a, shape_a, ty_a, _)) = seen.get(&go_name) else {
                     seen.insert(
                         go_name,
-                        (&variant.name, &field.name, is_struct, &field.ty, span),
+                        (&variant.name, &field.name, field_shape, &field.ty, span),
                     );
                     continue;
                 };
@@ -184,12 +187,12 @@ impl TaskState {
                     continue;
                 }
 
-                let loc_a = if is_struct_a {
+                let loc_a = if shape_a == syntax::go_names::EnumFieldShape::Struct {
                     format!("{}.{}.{}", name, v_a, f_a)
                 } else {
                     format!("{}.{}", name, v_a)
                 };
-                let loc_b = if is_struct {
+                let loc_b = if field_shape == syntax::go_names::EnumFieldShape::Struct {
                     format!("{}.{}.{}", name, variant.name, field.name)
                 } else {
                     format!("{}.{}", name, variant.name)
@@ -275,7 +278,6 @@ impl TaskState {
             name_span,
             generics,
             fields,
-            kind,
             span,
             doc,
             attributes,
@@ -312,24 +314,12 @@ impl TaskState {
             })
             .collect();
 
-        self.scopes.pop();
+        let new_fields = match fields {
+            StructFields::Record(_) => StructFields::Record(new_fields),
+            StructFields::Tuple(_) => StructFields::Tuple(new_fields),
+        };
 
-        // Single-field non-generic tuple structs (e.g. `struct FileMode(uint32)`) are
-        // emitted as Go type aliases (`type FileMode uint32`). Set underlying_ty so the
-        // type checker allows numeric casts through them.
-        let struct_ty =
-            if *kind == StructKind::Tuple && new_fields.len() == 1 && generics.is_empty() {
-                match struct_ty {
-                    Type::Nominal { id, params, .. } => Type::Nominal {
-                        id,
-                        params,
-                        underlying_ty: Some(Box::new(new_fields[0].ty.clone())),
-                    },
-                    other => other,
-                }
-            } else {
-                struct_ty
-            };
+        self.scopes.pop();
 
         let visibility = self
             .current_module(&*store)
@@ -355,9 +345,7 @@ impl TaskState {
                 body: DefinitionBody::Struct {
                     generics,
                     fields: new_fields,
-                    kind: *kind,
                     methods: Default::default(),
-                    constructor: None,
                     attributes,
                 },
             },
@@ -371,7 +359,7 @@ impl TaskState {
         for definition in module.definitions.values() {
             if definition
                 .name_span
-                .is_some_and(|span| module.typedefs.contains_key(&span.file_id))
+                .is_some_and(|span| module.is_typedef(span.file_id))
             {
                 continue;
             }
@@ -464,7 +452,7 @@ impl TaskState {
             .filter(|(_, definition)| matches!(definition.body, DefinitionBody::Struct { .. }))
             .filter_map(|(qualified_name, definition)| {
                 let span = definition.name_span?;
-                if module.typedefs.contains_key(&span.file_id) {
+                if module.is_typedef(span.file_id) {
                     return None;
                 }
                 Some((qualified_name.as_str(), definition.name.as_deref()?, span))
@@ -484,37 +472,6 @@ impl TaskState {
                 self.sink
                     .push(diagnostics::infer::recursive_type(name, span));
                 flagged.insert(qualified_name.to_string());
-            }
-        }
-    }
-
-    pub(super) fn settle_module_aliases(&self, store: &mut Store, module_id: &str) {
-        if module_id.starts_with("go:") {
-            return;
-        }
-        let Some(module) = store.get_module(module_id) else {
-            return;
-        };
-
-        let updates: Vec<(Symbol, Type)> = module
-            .definitions
-            .iter()
-            .filter(|(_, definition)| matches!(definition.body, DefinitionBody::TypeAlias { .. }))
-            .filter_map(|(name, definition)| {
-                let mut changed = false;
-                let mut in_progress = FxHashSet::default();
-                let filled =
-                    fill_alias_underlyings(&definition.ty, store, &mut changed, &mut in_progress);
-                changed.then(|| (name.clone(), filled))
-            })
-            .collect();
-
-        let Some(module) = store.get_module_mut(module_id) else {
-            return;
-        };
-        for (name, ty) in updates {
-            if let Some(definition) = module.definitions.get_mut(&name) {
-                definition.ty = ty;
             }
         }
     }
@@ -572,14 +529,12 @@ impl TaskState {
                         Type::Nominal {
                             id: qualified_name.clone(),
                             params,
-                            underlying_ty: None,
                         }
                     }
                 } else {
                     Type::Nominal {
                         id: qualified_name.clone(),
                         params,
-                        underlying_ty: None,
                     }
                 };
 
@@ -613,7 +568,7 @@ impl TaskState {
                     doc: doc.clone(),
                     body: DefinitionBody::TypeAlias {
                         generics,
-                        annotation: annotation.clone(),
+                        alias: AliasKind::Opaque(annotation.clone()),
                         methods: Default::default(),
                         attributes: super::collect_struct_attributes(attributes),
                     },
@@ -636,26 +591,20 @@ impl TaskState {
             body_ty
         };
 
-        let body_ty = if is_function_body {
-            let params: Vec<Type> = generics
-                .iter()
-                .map(|g| Type::Parameter(g.name.clone()))
-                .collect();
-            Type::Nominal {
-                id: qualified_name.clone(),
-                params,
-                underlying_ty: Some(Box::new(body_ty)),
-            }
-        } else {
-            body_ty
+        let params: Vec<Type> = generics
+            .iter()
+            .map(|g| Type::Parameter(g.name.clone()))
+            .collect();
+        let alias_reference = Type::Nominal {
+            id: qualified_name.clone(),
+            params,
         };
-
         let alias_ty = if generics.is_empty() {
-            body_ty
+            alias_reference
         } else {
             Type::Forall {
                 vars: generics.iter().map(|g| g.name.clone()).collect(),
-                body: Box::new(body_ty),
+                body: Box::new(alias_reference),
             }
         };
 
@@ -686,7 +635,10 @@ impl TaskState {
                 doc: doc.clone(),
                 body: DefinitionBody::TypeAlias {
                     generics,
-                    annotation: annotation.clone(),
+                    alias: AliasKind::Transparent {
+                        annotation: annotation.clone(),
+                        target: body_ty,
+                    },
                     methods: Default::default(),
                     attributes: super::collect_struct_attributes(attributes),
                 },
@@ -712,14 +664,19 @@ impl TaskState {
             }
             seen.push(name.clone());
 
-            if let Some(def) = store.get_definition(&name)
-                && matches!(def.body, DefinitionBody::TypeAlias { .. })
+            if let Some(Definition {
+                body:
+                    DefinitionBody::TypeAlias {
+                        alias: AliasKind::Transparent { target, .. },
+                        ..
+                    },
+                ..
+            }) = store.get_definition(&name)
             {
-                let body = def.ty.unwrap_forall().clone();
-                if Self::type_contains_name(&body, qualified_name) {
+                if Self::type_contains_name(target, qualified_name) {
                     return true;
                 }
-                Self::collect_type_refs(&body, &mut to_visit);
+                Self::collect_type_refs(target, &mut to_visit);
             }
         }
 
@@ -783,8 +740,7 @@ fn is_faithful_imported_graph(
     }
     match &definition.body {
         DefinitionBody::Struct {
-            fields,
-            kind: StructKind::Record,
+            fields: StructFields::Record(fields),
             generics,
             ..
         } if generics.is_empty() => fields
@@ -821,7 +777,7 @@ fn is_deferred_local_target(store: &Store, ty: &Type) -> bool {
     match store.get_definition(id).map(|definition| &definition.body) {
         Some(
             DefinitionBody::Struct {
-                kind: StructKind::Record,
+                fields: StructFields::Record(_),
                 ..
             }
             | DefinitionBody::Interface { .. },
@@ -847,107 +803,9 @@ fn has_selector_surface(store: &Store, ty: &Type) -> bool {
 }
 
 fn is_pointer_backed_newtype(store: &Store, ty: &Type) -> bool {
-    let Type::Nominal { id, .. } = ty else {
-        return false;
-    };
     store
-        .get_type(id.as_str())
-        .and_then(Type::get_underlying)
-        .is_some_and(|underlying| store.deep_resolve_alias(underlying).is_ref())
-}
-
-fn fill_alias_underlyings(
-    ty: &Type,
-    store: &Store,
-    changed: &mut bool,
-    in_progress: &mut FxHashSet<Symbol>,
-) -> Type {
-    match ty {
-        Type::Nominal {
-            id,
-            params,
-            underlying_ty,
-        } => {
-            let params: Vec<Type> = params
-                .iter()
-                .map(|param| fill_alias_underlyings(param, store, changed, in_progress))
-                .collect();
-            let underlying = match underlying_ty {
-                Some(inner) => Some(Box::new(fill_alias_underlyings(
-                    inner,
-                    store,
-                    changed,
-                    in_progress,
-                ))),
-                None if in_progress.contains(id) => None,
-                None => {
-                    let probe = Type::Nominal {
-                        id: id.clone(),
-                        params: params.clone(),
-                        underlying_ty: None,
-                    };
-                    let resolved = store.deep_resolve_alias(&probe);
-                    if resolved.get_qualified_id() == Some(id.as_str()) {
-                        None
-                    } else {
-                        *changed = true;
-                        in_progress.insert(id.clone());
-                        let filled = fill_alias_underlyings(&resolved, store, changed, in_progress);
-                        in_progress.remove(id);
-                        Some(Box::new(filled))
-                    }
-                }
-            };
-            Type::Nominal {
-                id: id.clone(),
-                params,
-                underlying_ty: underlying,
-            }
-        }
-        Type::Compound { kind, args } => Type::Compound {
-            kind: *kind,
-            args: args
-                .iter()
-                .map(|arg| fill_alias_underlyings(arg, store, changed, in_progress))
-                .collect(),
-        },
-        Type::Array { length, element } => Type::Array {
-            length: *length,
-            element: Box::new(fill_alias_underlyings(element, store, changed, in_progress)),
-        },
-        Type::Tuple(elements) => Type::Tuple(
-            elements
-                .iter()
-                .map(|element| fill_alias_underlyings(element, store, changed, in_progress))
-                .collect(),
-        ),
-        Type::Forall { vars, body } => Type::Forall {
-            vars: vars.clone(),
-            body: Box::new(fill_alias_underlyings(body, store, changed, in_progress)),
-        },
-        Type::Function(function) => {
-            let params = function
-                .params
-                .iter()
-                .map(|param| {
-                    param.with_type(fill_alias_underlyings(
-                        &param.ty,
-                        store,
-                        changed,
-                        in_progress,
-                    ))
-                })
-                .collect();
-            let return_type = Box::new(fill_alias_underlyings(
-                &function.return_type,
-                store,
-                changed,
-                in_progress,
-            ));
-            function.rebuild(params, function.bounds.clone(), return_type)
-        }
-        other => other.clone(),
-    }
+        .underlying_type(ty)
+        .is_some_and(|underlying| store.deep_resolve_alias(&underlying).is_ref())
 }
 
 // Mirror the written type's own visibility: peel storage (`Option`/`Ref`), not aliases.

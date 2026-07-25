@@ -13,7 +13,7 @@ pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
         Expression::Let { binding, value, .. } => {
             if binding.annotation.is_some()
                 && let Expression::Call {
-                    call_kind: Some(CallKind::NativeConstructor(NativeTypeKind::Map)),
+                    call_kind: CallKind::NativeConstructor(NativeTypeKind::Map),
                     span,
                     ..
                 } = value.unwrap_parens()
@@ -22,7 +22,7 @@ pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
             }
         }
         Expression::Call {
-            call_kind: Some(CallKind::NativeConstructor(NativeTypeKind::Map)),
+            call_kind: CallKind::NativeConstructor(NativeTypeKind::Map),
             ty,
             span,
             ..

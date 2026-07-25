@@ -119,11 +119,11 @@ pub fn compile(
     let emit_stamps = analyze_output.emit_stamps;
     let unreachable_modules = analyze_output.unreachable_modules;
 
-    let user_file_count: usize = semantic_result
-        .modules
+    let user_file_count = semantic_result
+        .files
         .values()
-        .map(|module| module.file_ids.len())
-        .sum();
+        .filter(|file| !file.is_d_lis())
+        .count();
 
     let sources: HashMap<u32, SourceInfo> = semantic_result
         .files
@@ -142,7 +142,14 @@ pub fn compile(
     let failed = semantic_result.failed();
     let mut errors = semantic_result.errors.clone();
     let mut lints = semantic_result.lints.clone();
-    let live_modules: Vec<String> = semantic_result.modules.keys().cloned().collect();
+    let mut live_modules: Vec<String> = semantic_result
+        .files
+        .values()
+        .filter(|file| !file.is_d_lis())
+        .map(|file| file.module_id.clone())
+        .collect();
+    live_modules.sort_unstable();
+    live_modules.dedup();
     let test_index = semantic_result.test_index.clone();
 
     if !unreachable_modules.is_empty() && !config.emit_tests {

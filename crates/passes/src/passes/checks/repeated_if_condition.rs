@@ -7,10 +7,11 @@ pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
         alternative,
         ..
     } = expression
+        && let Some(alternative) = alternative.as_deref()
         && let Expression::If {
             condition: next_condition,
             ..
-        } = alternative.as_ref()
+        } = alternative
         && is_side_effect_free(condition)
         && is_side_effect_free(next_condition)
         && expressions_equivalent(condition, next_condition)

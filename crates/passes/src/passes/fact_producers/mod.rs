@@ -79,7 +79,7 @@ pub(crate) fn run_all(analysis: &AnalysisContext) -> ProducedFacts {
         .modules
         .values()
         .map(Arc::as_ref)
-        .flat_map(|m| m.files.values().map(move |f| (m, f)))
+        .flat_map(|module| module.source_files().map(move |file| (module, file)))
         .collect();
     work.sort_unstable_by(|a, b| {
         a.0.id

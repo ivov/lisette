@@ -316,7 +316,6 @@ impl Planner<'_> {
             let key_statements = this.lower_irrefutable_pattern_site(
                 PatternSubject::for_value(key_var.clone()),
                 first,
-                None,
                 first_ty,
             );
             Renderer.render_lowered_block(
@@ -332,7 +331,6 @@ impl Planner<'_> {
             let value_statements = this.lower_irrefutable_pattern_site(
                 PatternSubject::for_value(value_var.clone()),
                 second,
-                None,
                 second_ty,
             );
             Renderer.render_lowered_block(
@@ -393,7 +391,6 @@ impl Planner<'_> {
                     let binding_statements = this.lower_irrefutable_pattern_site(
                         PatternSubject::for_value(item_var.clone()),
                         &binding.pattern,
-                        binding.typed_pattern.as_ref(),
                         &binding.ty,
                     );
                     Renderer.render_lowered_block(

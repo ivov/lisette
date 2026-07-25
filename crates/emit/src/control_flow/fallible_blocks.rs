@@ -226,7 +226,7 @@ impl Planner<'_> {
             }
             return statements;
         }
-        if item_ty.is_unit() || item_ty.is_variable() {
+        if item_ty.is_unit() || item_ty.is_ignored() || item_ty.is_variable() {
             return vec![
                 self.lower_statement(last),
                 self.lower_zero_return(fallible.ok_ty()),
@@ -262,9 +262,9 @@ fn resolve_fallible_block_type(
     });
     let base = Fallible::from_type(ty);
     let needs_return_context = tail_is_never
-        || base
-            .as_ref()
-            .is_some_and(|f| f.ok_ty().is_variable() || f.ok_ty().is_never());
+        || base.as_ref().is_some_and(|f| {
+            f.ok_ty().is_variable() || f.ok_ty().is_placeholder() || f.ok_ty().is_never()
+        });
     if !needs_return_context {
         return ty.clone();
     }

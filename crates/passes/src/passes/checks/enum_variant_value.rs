@@ -1,5 +1,5 @@
 use diagnostics::LocalSink;
-use syntax::ast::{Expression, Span};
+use syntax::ast::{Expression, IdentifierResolution, Span};
 use syntax::types::{Type, unqualified_name};
 
 use crate::passes::walk::NodeCtx;
@@ -8,7 +8,7 @@ use semantics::store::Store;
 pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
     match expression {
         Expression::Identifier {
-            qualified: Some(qualified),
+            resolution: IdentifierResolution::Definition(qualified),
             value,
             span,
             ..

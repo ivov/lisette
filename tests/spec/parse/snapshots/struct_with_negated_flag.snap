@@ -33,47 +33,48 @@ description: |
             byte_length: 4,
         },
         generics: [],
-        fields: [
-            StructFieldDefinition {
-                doc: None,
-                attributes: [
-                    Attribute {
-                        name: "json",
-                        args: [
-                            NegatedFlag(
-                                "omitempty",
-                            ),
-                        ],
+        fields: Record(
+            [
+                StructFieldDefinition {
+                    doc: None,
+                    attributes: [
+                        Attribute {
+                            name: "json",
+                            args: [
+                                NegatedFlag(
+                                    "omitempty",
+                                ),
+                            ],
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 36,
+                                byte_length: 19,
+                            },
+                        },
+                    ],
+                    name: "name",
+                    name_span: Span {
+                        file_id: 0,
+                        byte_offset: 58,
+                        byte_length: 4,
+                    },
+                    annotation: Constructor {
+                        name: "string",
+                        params: [],
                         span: Span {
                             file_id: 0,
-                            byte_offset: 36,
-                            byte_length: 19,
+                            byte_offset: 64,
+                            byte_length: 6,
                         },
                     },
-                ],
-                name: "name",
-                name_span: Span {
-                    file_id: 0,
-                    byte_offset: 58,
-                    byte_length: 4,
-                },
-                annotation: Constructor {
-                    name: "string",
-                    params: [],
-                    span: Span {
-                        file_id: 0,
-                        byte_offset: 64,
-                        byte_length: 6,
+                    visibility: Private,
+                    ty: Var {
+                        id: uninferred,
                     },
+                    embedded: false,
                 },
-                visibility: Private,
-                ty: Var {
-                    id: uninferred,
-                },
-                embedded: false,
-            },
-        ],
-        kind: Record,
+            ],
+        ),
         visibility: Private,
         span: Span {
             file_id: 0,

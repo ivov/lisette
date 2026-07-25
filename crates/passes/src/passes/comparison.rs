@@ -1,4 +1,5 @@
-use syntax::ast::{BinaryOperator, Expression, UnaryOperator};
+use semantics::store::Store;
+use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, UnaryOperator};
 use syntax::types::SimpleKind;
 
 /// A value bound: `(value, inclusive)`, or `None` for an open side.
@@ -22,7 +23,7 @@ pub(crate) struct MaskComparison {
 /// Decomposes a masked integer comparison; `None` unless `m` and `c` are in-range
 /// integer literals and `m != 0` (zero masks belong to `redundant_operation`).
 /// A negative `m` is valid only for the equality reasoning.
-pub(crate) fn mask_comparison(expression: &Expression) -> Option<MaskComparison> {
+pub(crate) fn mask_comparison(expression: &Expression, store: &Store) -> Option<MaskComparison> {
     use BinaryOperator::*;
     let Expression::Binary {
         operator,
@@ -73,7 +74,7 @@ pub(crate) fn mask_comparison(expression: &Expression) -> Option<MaskComparison>
         _ => return None,
     };
 
-    let kind = mask_expr.get_type().underlying_simple_kind()?;
+    let kind = store.underlying_simple_kind(&mask_expr.get_type())?;
     if !kind.is_ordered() {
         return None;
     }
@@ -284,8 +285,7 @@ pub(crate) fn prelude_min_max(expression: &Expression) -> Option<MinMaxCall<'_>>
         return None;
     }
     let Expression::Identifier {
-        binding_id: None,
-        qualified: Some(qualified),
+        resolution: IdentifierResolution::Definition(qualified),
         ..
     } = callee.unwrap_parens()
     else {

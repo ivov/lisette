@@ -5,14 +5,15 @@ mod module;
 mod resolution;
 
 pub use definition::{
-    Attributes, Definition, DefinitionBody, Interface, MethodSignatures, TypeAttribute, Visibility,
+    AliasKind, Attributes, Definition, DefinitionBody, Interface, MethodSignatures, TypeAttribute,
+    ValueKind, Visibility,
 };
 pub use emit_input::{
     BindingMutation, EmitInput, EqualityIndex, MutationInfo, TestFunction, TestIndex, UnusedInfo,
 };
 pub use file::{File, FileImport, go_import_default_name};
-pub use module::{Module, ModuleId, ModuleInfo};
+pub use module::{Module, ModuleId};
 pub use resolution::{
-    CallKind, ChannelOperation, DotAccessKind, NativeTypeKind, ReceiverCoercion,
-    ResolvedDefinitions, channel_operation, resolved_definition,
+    CallKind, ChannelOperation, DotAccessKind, DotAccessResolution, NativeTypeKind,
+    ReceiverCoercion, channel_operation, resolved_definition,
 };

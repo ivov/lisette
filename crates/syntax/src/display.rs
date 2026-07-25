@@ -41,8 +41,12 @@ impl Type {
 
             Type::Var { id, hint } => match hint {
                 Some(name) => format!("?{}", name),
-                None => format!("?{}", id.as_u32()),
+                None => format!("?{}", id.index()),
             },
+
+            Type::Uninferred => "?uninferred".to_string(),
+
+            Type::Ignored => "?ignored".to_string(),
 
             Type::Function(f) => {
                 let args_formatted = f

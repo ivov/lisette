@@ -15,8 +15,9 @@ description: |
             byte_length: 5,
         },
         generics: [],
-        fields: [],
-        kind: Record,
+        fields: Record(
+            [],
+        ),
         visibility: Private,
         span: Span {
             file_id: 0,

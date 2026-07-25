@@ -46,7 +46,7 @@ pub fn check_float_cmp(expression: &Expression, ctx: &NodeCtx) {
     ctx.sink.push(diagnostics::lint::float_cmp(span, is_equal));
 }
 
-fn is_exact_operand(expression: &Expression, ctx: &NodeCtx) -> bool {
+fn is_exact_operand(expression: &Expression, _ctx: &NodeCtx) -> bool {
     if is_float_zero(expression) {
         return true;
     }
@@ -57,7 +57,7 @@ fn is_exact_operand(expression: &Expression, ctx: &NodeCtx) -> bool {
         return false;
     };
     matches!(
-        resolved_definition(callee, &ctx.facts.resolved_definitions),
+        resolved_definition(callee),
         Some("go:math.NaN" | "go:math.Inf")
     )
 }

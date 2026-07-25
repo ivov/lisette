@@ -1,6 +1,7 @@
 use crate::checker::EnvResolve;
+use diagnostics::infer::InvalidCastKind;
 use syntax::ast::{Expression, Span};
-use syntax::types::{SimpleKind, Type, peel_alias};
+use syntax::types::{SimpleKind, Type};
 
 use crate::checker::infer::InferCtx;
 
@@ -38,38 +39,42 @@ impl InferCtx<'_> {
             self.sink.push(diagnostics::infer::invalid_cast(
                 raw_source_ty,
                 raw_target_ty,
+                InvalidCastKind::Complex,
                 span,
             ));
             return;
         }
 
-        if source_ty.has_underlying_rune() && target_ty.has_underlying_byte() {
+        if store.has_underlying_rune(&source_ty) && store.has_underlying_byte(&target_ty) {
             self.sink.push(diagnostics::infer::invalid_cast(
                 raw_source_ty,
                 raw_target_ty,
+                InvalidCastKind::RuneToByte,
                 span,
             ));
             return;
         }
 
-        if source_ty.has_underlying_numeric_type() && target_ty.has_underlying_numeric_type() {
+        if store.has_underlying_numeric_type(&source_ty)
+            && store.has_underlying_numeric_type(&target_ty)
+        {
             return;
         }
 
-        if uintptr_scalar_conversion(&source_ty, &target_ty) {
+        if uintptr_scalar_conversion(store, &source_ty, &target_ty) {
             return;
         }
 
-        if peel_alias(&source_ty, |_| true) == peel_alias(&target_ty, |_| true) {
+        if store.peel_alias(&source_ty) == store.peel_alias(&target_ty) {
             return;
         }
 
-        if source_ty.has_underlying_rune() && target_ty.is_string() {
+        if store.has_underlying_rune(&source_ty) && target_ty.is_string() {
             return;
         }
 
-        if (source_ty.is_string() && target_ty.has_byte_or_rune_slice_underlying())
-            || (target_ty.is_string() && source_ty.has_byte_or_rune_slice_underlying())
+        if (source_ty.is_string() && store.has_byte_or_rune_slice_underlying(&target_ty))
+            || (target_ty.is_string() && store.has_byte_or_rune_slice_underlying(&source_ty))
         {
             return;
         }
@@ -78,7 +83,9 @@ impl InferCtx<'_> {
             return;
         }
 
-        if store.peel_alias_deep(&source_ty) == store.peel_alias_deep(&target_ty) {
+        if store.peel_alias_deep(&store.peel_underlying(&source_ty))
+            == store.peel_alias_deep(&store.peel_underlying(&target_ty))
+        {
             return;
         }
 
@@ -96,6 +103,11 @@ impl InferCtx<'_> {
         self.sink.push(diagnostics::infer::invalid_cast(
             raw_source_ty,
             raw_target_ty,
+            if store.has_underlying_byte(&source_ty) && target_ty.is_string() {
+                InvalidCastKind::ByteToString
+            } else {
+                InvalidCastKind::Other
+            },
             span,
         ));
     }
@@ -160,12 +172,13 @@ impl InferCtx<'_> {
     }
 }
 
-fn uintptr_scalar_conversion(source: &Type, target: &Type) -> bool {
+fn uintptr_scalar_conversion(store: &crate::store::Store, source: &Type, target: &Type) -> bool {
     let castable = |ty: &Type| {
-        ty.has_underlying_numeric_type() || ty.underlying_simple_kind() == Some(SimpleKind::Uintptr)
+        store.has_underlying_numeric_type(ty)
+            || store.underlying_simple_kind(ty) == Some(SimpleKind::Uintptr)
     };
-    let either_uintptr = source.underlying_simple_kind() == Some(SimpleKind::Uintptr)
-        || target.underlying_simple_kind() == Some(SimpleKind::Uintptr);
+    let either_uintptr = store.underlying_simple_kind(source) == Some(SimpleKind::Uintptr)
+        || store.underlying_simple_kind(target) == Some(SimpleKind::Uintptr);
     either_uintptr && castable(source) && castable(target)
 }
 

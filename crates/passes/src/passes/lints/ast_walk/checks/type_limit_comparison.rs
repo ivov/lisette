@@ -34,7 +34,9 @@ pub fn check_type_limit_comparison(expression: &Expression, ctx: &NodeCtx) {
             _ => return,
         };
 
-    let Some((floor, ceil)) = fixed_width_bounds(value.get_type().underlying_simple_kind()) else {
+    let Some((floor, ceil)) =
+        fixed_width_bounds(ctx.store.underlying_simple_kind(&value.get_type()))
+    else {
         return;
     };
 

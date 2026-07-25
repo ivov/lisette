@@ -36,10 +36,11 @@ fn method_comma_ok(store: &Store, type_id: &str, method: &str) -> bool {
             return false;
         }
         store.get_interface(type_id).is_some_and(|iface| {
-            iface
-                .parents
-                .iter()
-                .any(|parent| walk(store, parent.get_qualified_name().as_str(), method, seen))
+            iface.parents.iter().any(|parent| {
+                parent
+                    .get_qualified_name()
+                    .is_some_and(|id| walk(store, id.as_str(), method, seen))
+            })
         })
     }
     walk(
@@ -285,7 +286,9 @@ impl InferCtx<'_> {
             }
         }
         for parent in &interface.parents {
-            let parent_name = parent.get_qualified_name();
+            let Some(parent_name) = parent.get_qualified_name() else {
+                continue;
+            };
             if let Some(parent_interface) = store.get_interface(&parent_name) {
                 self.collect_pointer_receiver_methods(
                     check,
@@ -308,12 +311,7 @@ impl InferCtx<'_> {
         self.own_candidate(&resolved, method)
             .or_else(|| self.promoted_candidate(&resolved, method))
             .or_else(|| self.bound_candidate(&resolved, method))
-            .unwrap_or(syntax::go_names::ConformanceCandidate {
-                exported: false,
-                depth: 0,
-                owner: None,
-                shadowed: false,
-            })
+            .unwrap_or(syntax::go_names::ConformanceCandidate::Unresolved)
     }
 
     fn own_candidate(
@@ -329,10 +327,10 @@ impl InferCtx<'_> {
             &mut rustc_hash::FxHashSet::default(),
         )?;
         // UFCS-lowered methods emit as free functions, not selectors.
-        Some(syntax::go_names::ConformanceCandidate {
+        Some(syntax::go_names::ConformanceCandidate::Resolved {
             exported: public,
             depth: 0,
-            owner: Some(id.into()),
+            owner: id.into(),
             shadowed: self.is_ufcs_method(id, method),
         })
     }
@@ -364,10 +362,10 @@ impl InferCtx<'_> {
         };
         let shadowed = promotion::field_selector_depth(store, resolved, &selector)
             .is_some_and(|field_depth| field_depth <= member.depth);
-        Some(syntax::go_names::ConformanceCandidate {
+        Some(syntax::go_names::ConformanceCandidate::Resolved {
             exported: public,
             depth: member.depth,
-            owner: Some(member.declaring_type.as_eco().clone()),
+            owner: member.declaring_type.as_eco().clone(),
             shadowed,
         })
     }
@@ -395,10 +393,10 @@ impl InferCtx<'_> {
                 method,
                 &mut rustc_hash::FxHashSet::default(),
             )?;
-            Some(syntax::go_names::ConformanceCandidate {
+            Some(syntax::go_names::ConformanceCandidate::Resolved {
                 exported: public,
                 depth: 0,
-                owner: Some(qualified.as_eco().clone()),
+                owner: qualified.as_eco().clone(),
                 shadowed: false,
             })
         })
@@ -448,13 +446,18 @@ impl InferCtx<'_> {
         let interface_is_public = store
             .get_definition(interface_qualified_id)
             .is_some_and(|d| d.visibility.is_public());
-        let own_candidate = |name: &str| syntax::go_names::ConformanceCandidate {
-            exported: store
+        let own_candidate = |name: &str| {
+            store
                 .get_definition(&format!("{own_id}.{name}"))
-                .is_some_and(|d| d.visibility.is_public()),
-            depth: 0,
-            owner: Some(own_id.into()),
-            shadowed: self.is_ufcs_method(own_id, name),
+                .map(
+                    |definition| syntax::go_names::ConformanceCandidate::Resolved {
+                        exported: definition.visibility.is_public(),
+                        depth: 0,
+                        owner: own_id.into(),
+                        shadowed: self.is_ufcs_method(own_id, name),
+                    },
+                )
+                .unwrap_or(syntax::go_names::ConformanceCandidate::Unresolved)
         };
         let covered = interface.methods.keys().all(|method| {
             syntax::go_names::conformance_method(
@@ -468,7 +471,9 @@ impl InferCtx<'_> {
         });
         covered
             && interface.parents.iter().all(|parent| {
-                let parent_name = parent.get_qualified_name();
+                let Some(parent_name) = parent.get_qualified_name() else {
+                    return true;
+                };
                 match store.get_interface(&parent_name) {
                     Some(parent_interface) => self.own_methods_cover_interface(
                         own,
@@ -632,7 +637,9 @@ impl InferCtx<'_> {
         }
 
         for parent in &interface.parents {
-            let parent_name = parent.get_qualified_name();
+            let Some(parent_name) = parent.get_qualified_name() else {
+                continue;
+            };
             if let Some(parent_interface) = store.get_interface(&parent_name).cloned() {
                 let parent_type_args = parent.get_type_params().unwrap_or_default();
                 let substituted_parent_args: Vec<Type> = parent_type_args
@@ -761,7 +768,7 @@ impl InferCtx<'_> {
         let candidate_ty = ty.strip_refs().resolve_in(&self.env);
         let mut receiver_pinned = true;
         let mut resolved_impl_method = None;
-        self.scopes.increment_type_param_depth();
+        self.scopes.enter_invariant_position();
         let sig_match = self.speculatively(|this| {
             let mut ctx = InferCtx::new(this, store);
             if let Some(receiver) = &receiver_to_pin {
@@ -778,7 +785,7 @@ impl InferCtx<'_> {
             }
             result
         });
-        self.scopes.decrement_type_param_depth();
+        self.scopes.exit_invariant_position();
 
         SignatureCheck {
             receiver_pinned,
@@ -870,7 +877,7 @@ fn method_definition_public(
     }
     let interface = store.get_interface(owner)?;
     interface.parents.iter().find_map(|parent| {
-        method_definition_public(store, parent.get_qualified_name().as_str(), method, seen)
+        method_definition_public(store, parent.get_qualified_name()?.as_str(), method, seen)
     })
 }
 
@@ -889,13 +896,14 @@ fn interface_declares_methods(
         return true;
     }
     interface.parents.iter().any(|parent| {
-        let parent_name = parent.get_qualified_name();
-        seen.insert(parent_name.to_string())
-            && store
-                .get_interface(&parent_name)
-                .is_some_and(|parent_interface| {
-                    interface_declares_methods(store, parent_interface, seen)
-                })
+        parent.get_qualified_name().is_some_and(|parent_name| {
+            seen.insert(parent_name.to_string())
+                && store
+                    .get_interface(&parent_name)
+                    .is_some_and(|parent_interface| {
+                        interface_declares_methods(store, parent_interface, seen)
+                    })
+        })
     })
 }
 

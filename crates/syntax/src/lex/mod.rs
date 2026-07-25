@@ -9,7 +9,6 @@ mod types;
 
 pub struct Lexer<'source> {
     input: &'source str,
-    input_bytes: &'source [u8],
     current_offset: usize,
     file_id: u32,
     errors: Vec<ParseError>,
@@ -21,7 +20,6 @@ impl<'source> Lexer<'source> {
     pub fn new(input: &'source str, file_id: u32) -> Lexer<'source> {
         Lexer {
             input,
-            input_bytes: input.as_bytes(),
             current_offset: 0,
             file_id,
             errors: vec![],
@@ -197,11 +195,11 @@ impl<'source> Lexer<'source> {
 
     #[inline]
     fn current_byte(&self) -> u8 {
-        if self.current_offset < self.input_bytes.len() {
-            self.input_bytes[self.current_offset]
-        } else {
-            0
-        }
+        self.input
+            .as_bytes()
+            .get(self.current_offset)
+            .copied()
+            .unwrap_or(0)
     }
 
     #[inline]
@@ -214,21 +212,17 @@ impl<'source> Lexer<'source> {
 
     #[inline]
     fn peek_byte(&self) -> u8 {
-        if self.current_offset + 1 < self.input_bytes.len() {
-            self.input_bytes[self.current_offset + 1]
-        } else {
-            0
-        }
+        self.input
+            .as_bytes()
+            .get(self.current_offset + 1)
+            .copied()
+            .unwrap_or(0)
     }
 
     #[inline]
     fn peek_byte_at(&self, n: usize) -> u8 {
         let offset = self.current_offset + n;
-        if offset < self.input_bytes.len() {
-            self.input_bytes[offset]
-        } else {
-            0
-        }
+        self.input.as_bytes().get(offset).copied().unwrap_or(0)
     }
 
     #[inline]
@@ -420,8 +414,8 @@ impl<'source> Lexer<'source> {
         // Skip decimal part if preceded by single `.` (e.g., `tuple.0.0` — don't lex `0.0` as float).
         // Don't skip if preceded by `..` (range operator), e.g. `0..1.5` should lex `1.5` as float.
         let preceded_by_dot = start_offset > 0
-            && self.input_bytes[start_offset - 1] == b'.'
-            && !(start_offset > 1 && self.input_bytes[start_offset - 2] == b'.');
+            && self.input.as_bytes()[start_offset - 1] == b'.'
+            && !(start_offset > 1 && self.input.as_bytes()[start_offset - 2] == b'.');
 
         if !preceded_by_dot
             && self.current_byte() == b'.'
@@ -914,11 +908,11 @@ impl<'source> Lexer<'source> {
         if self.current_byte() == b'r' && self.peek_byte() == b'#' {
             let mut hash_count = 0usize;
             let mut probe = self.current_offset + 1;
-            while probe < self.input_bytes.len() && self.input_bytes[probe] == b'#' {
+            while probe < self.input.len() && self.input.as_bytes()[probe] == b'#' {
                 hash_count += 1;
                 probe += 1;
             }
-            if hash_count > 0 && probe < self.input_bytes.len() && self.input_bytes[probe] == b'"' {
+            if hash_count > 0 && probe < self.input.len() && self.input.as_bytes()[probe] == b'"' {
                 let start = self.current_offset;
                 self.skip(1 + hash_count + 1);
                 loop {
@@ -1401,7 +1395,7 @@ impl<'source> Lexer<'source> {
     fn count_consecutive(&self, byte: u8) -> usize {
         let mut count = 0;
         let mut offset = self.current_offset;
-        while offset < self.input_bytes.len() && self.input_bytes[offset] == byte {
+        while offset < self.input.len() && self.input.as_bytes()[offset] == byte {
             count += 1;
             offset += 1;
         }

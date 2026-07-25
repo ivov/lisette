@@ -1,0 +1,48 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: |
+  
+  struct Boom {}
+  
+  impl Boom {
+    fn Error(self) -> string {
+      "boom"
+    }
+  }
+  
+  fn first(rows: Array<(error, int), 2>) -> string {
+    rows[0].0.Error()
+  }
+  
+  fn test() {
+    let concrete: Array<(Boom, int), 2> = [(Boom {}, 1), (Boom {}, 2)]
+    if first(concrete) != "boom" {
+      panic("nested container lost its interface elements")
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Boom struct{}
+
+func (b Boom) Error() string {
+	return "boom"
+}
+
+func first(rows [2]lisette.Tuple2[error, int]) string {
+	return rows[0].First.Error()
+}
+
+func test() {
+	concrete := [2]lisette.Tuple2[Boom, int]{lisette.MakeTuple2(Boom{}, 1), lisette.MakeTuple2(Boom{}, 2)}
+	var boxed_1 [2]lisette.Tuple2[error, int]
+	for i_2 := range concrete {
+		tup_3 := concrete[i_2]
+		boxed_1[i_2] = lisette.MakeTuple2[error, int](tup_3.First, tup_3.Second)
+	}
+	if first(boxed_1) != "boom" {
+		panic("nested container lost its interface elements")
+	}
+}

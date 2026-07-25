@@ -24,20 +24,22 @@ description: |
                 },
             },
         ),
-        expression: Literal {
-            literal: Integer {
-                value: 100,
-                text: None,
+        expression: Value(
+            Literal {
+                literal: Integer {
+                    value: 100,
+                    text: None,
+                },
+                ty: Var {
+                    id: uninferred,
+                },
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 22,
+                    byte_length: 3,
+                },
             },
-            ty: Var {
-                id: uninferred,
-            },
-            span: Span {
-                file_id: 0,
-                byte_offset: 22,
-                byte_length: 3,
-            },
-        },
+        ),
         visibility: Public,
         ty: Var {
             id: uninferred,

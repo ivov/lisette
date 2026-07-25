@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:strings"
+  
+  fn main() {
+    let xs: Slice<string> = ["a"]
+    let ys = xs.map(strings.ToUpper)
+    let _ = ys
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"strings"
+)
+
+func main() {
+	xs := []string{"a"}
+	ys := lisette.SliceMap(xs, strings.ToUpper)
+	_ = ys
+}

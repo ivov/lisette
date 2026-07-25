@@ -288,7 +288,6 @@ impl InferCtx<'_> {
             Expression::Break { value, span } => self.infer_break(value, span, is_subexpression),
             Expression::Continue { span } => self.infer_continue(span, is_subexpression),
             Expression::RawGo { text } => Expression::RawGo { text },
-            Expression::NoOp => Expression::NoOp,
         }
     }
 

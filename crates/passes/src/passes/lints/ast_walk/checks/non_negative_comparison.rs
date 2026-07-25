@@ -58,7 +58,7 @@ fn is_native_length_call(expression: &Expression) -> bool {
 
     if !matches!(
         call_kind,
-        Some(CallKind::NativeMethod(_) | CallKind::NativeMethodIdentifier(_))
+        CallKind::NativeMethod(_) | CallKind::NativeMethodIdentifier(_)
     ) {
         return false;
     }

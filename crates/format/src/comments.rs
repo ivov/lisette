@@ -22,6 +22,13 @@ pub struct Comments<'a> {
     source: &'a str,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct CursorState {
+    comments: usize,
+    doc_comments: usize,
+    empty_lines: usize,
+}
+
 impl<'a> Comments<'a> {
     pub fn from_trivia(trivia: &'a Trivia, source: &'a str) -> Self {
         let comments = trivia
@@ -89,6 +96,20 @@ impl<'a> Comments<'a> {
             i -= 1;
         }
         true
+    }
+
+    pub(crate) fn cursor_state(&self) -> CursorState {
+        CursorState {
+            comments: self.comments_cursor,
+            doc_comments: self.doc_comments_cursor,
+            empty_lines: self.empty_cursor,
+        }
+    }
+
+    pub(crate) fn restore_cursor(&mut self, state: CursorState) {
+        self.comments_cursor = state.comments;
+        self.doc_comments_cursor = state.doc_comments;
+        self.empty_cursor = state.empty_lines;
     }
 
     /// Drains comments before `before`; returns `(same_line, new_line, has_blank_above)`.
@@ -241,20 +262,6 @@ impl<'a> Comments<'a> {
         let found = end > self.empty_cursor;
         self.empty_cursor = end;
         found
-    }
-
-    pub fn cursor_snapshot(&self) -> (usize, usize, usize) {
-        (
-            self.comments_cursor,
-            self.doc_comments_cursor,
-            self.empty_cursor,
-        )
-    }
-
-    pub fn restore_cursor(&mut self, snapshot: (usize, usize, usize)) {
-        self.comments_cursor = snapshot.0;
-        self.doc_comments_cursor = snapshot.1;
-        self.empty_cursor = snapshot.2;
     }
 
     pub fn has_comments_before(&self, position: u32) -> bool {

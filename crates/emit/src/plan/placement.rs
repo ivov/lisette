@@ -90,13 +90,13 @@ pub(crate) fn try_elide_tail_let(items: &[Expression]) -> Option<(&Expression, &
     let Expression::Let {
         binding,
         value,
-        else_block,
+        mode,
         ..
     } = penultimate
     else {
         return None;
     };
-    if else_block.is_some() || binding.mutable {
+    if mode.else_block().is_some() || binding.is_mutable() {
         return None;
     }
     let syntax::ast::Pattern::Identifier { identifier, .. } = &binding.pattern else {
@@ -157,7 +157,9 @@ pub(crate) fn expression_contains_binding(expression: &Expression, name: &str) -
         } => {
             pattern_contains_name(pattern, name)
                 || expression_contains_binding(consequence, name)
-                || expression_contains_binding(alternative, name)
+                || alternative
+                    .expression()
+                    .is_some_and(|alternative| expression_contains_binding(alternative, name))
         }
         Expression::Match { arms, .. } => arms
             .iter()
@@ -172,7 +174,9 @@ pub(crate) fn expression_contains_binding(expression: &Expression, name: &str) -
             ..
         } => {
             expression_contains_binding(consequence, name)
-                || expression_contains_binding(alternative, name)
+                || alternative
+                    .as_deref()
+                    .is_some_and(|alternative| expression_contains_binding(alternative, name))
         }
         Expression::Select { arms, .. } => arms.iter().any(|arm| match &arm.pattern {
             SelectArmPattern::Receive { binding, .. } => pattern_contains_name(binding, name),
@@ -201,7 +205,11 @@ impl Planner<'_> {
         }
 
         let value_ty = value.get_type();
-        if value_ty.is_unit() || value_ty.is_variable() || value_ty.is_never() {
+        if value_ty.is_unit()
+            || value_ty.is_variable()
+            || value_ty.is_placeholder()
+            || value_ty.is_never()
+        {
             let staged = self.stage_operand(value, ExpressionContext::value());
             let (mut statements, staged_value) = staged.into_parts();
             if !staged_value.is_empty() {
@@ -517,7 +525,7 @@ impl Planner<'_> {
             is_lvalue_chain(unwrapped) && !self.contains_newtype_access(unwrapped);
 
         let (value, mut statements) = if receiver_is_lvalue {
-            let arguments = self.lower_growth_args(func, args, (**spread).as_ref());
+            let arguments = self.lower_growth_args(func, args, spread.as_deref());
             let mut capture: Vec<LoweredStatement> = Vec::new();
             let receiver_lv =
                 self.emit_left_value_capturing(&mut capture, unwrapped, Some(&arguments));
@@ -576,7 +584,7 @@ impl Planner<'_> {
             .iter()
             .map(|a| self.stage_composite(a, ExpressionContext::value()))
             .collect();
-        let combine = plan_variadic_spread(function, spread).map(|p| p.combine(0));
+        let combine = plan_variadic_spread(&self.facts, function, spread).map(|p| p.combine(0));
         let sequenced = self.sequence_with_spread_values(
             stages,
             spread,
@@ -619,7 +627,10 @@ impl Planner<'_> {
         ty: &Type,
     ) -> ValuePlan {
         if let Expression::Block { items, .. } = expression {
-            if ty.is_never() || ty.is_unit() || matches!(ty, Type::Var { .. } | Type::Forall { .. })
+            if ty.is_never()
+                || ty.is_unit()
+                || ty.is_placeholder()
+                || matches!(ty, Type::Var { .. } | Type::Forall { .. })
             {
                 return ValuePlan::computed(
                     self.lower_block_as_body(expression).statements,

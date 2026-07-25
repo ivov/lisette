@@ -36,7 +36,6 @@ description: |
                         },
                     },
                 ),
-                typed_pattern: None,
                 ty: Var {
                     id: uninferred,
                 },
@@ -47,74 +46,71 @@ description: |
             id: uninferred,
         },
         visibility: Private,
-        body: Block {
-            items: [
-                Let {
-                    binding: Binding {
-                        pattern: Identifier {
-                            identifier: "p",
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 28,
-                                byte_length: 1,
-                            },
-                        },
-                        annotation: None,
-                        typed_pattern: None,
-                        ty: Var {
-                            id: uninferred,
-                        },
-                    },
-                    value: StructCall {
-                        name: "Point",
-                        field_assignments: [],
-                        spread: From(
-                            Identifier {
-                                value: "base",
-                                ty: Var {
-                                    id: uninferred,
-                                },
+        body: Definition(
+            Block {
+                items: [
+                    Let {
+                        binding: Binding {
+                            pattern: Identifier {
+                                identifier: "p",
                                 span: Span {
                                     file_id: 0,
-                                    byte_offset: 42,
-                                    byte_length: 4,
+                                    byte_offset: 28,
+                                    byte_length: 1,
                                 },
-                                binding_id: None,
-                                qualified: None,
                             },
-                        ),
+                            annotation: None,
+                            ty: Var {
+                                id: uninferred,
+                            },
+                        },
+                        value: StructCall {
+                            name: "Point",
+                            field_assignments: [],
+                            spread: From(
+                                Identifier {
+                                    value: "base",
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 42,
+                                        byte_length: 4,
+                                    },
+                                    resolution: Unresolved,
+                                },
+                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 32,
+                                byte_length: 17,
+                            },
+                        },
+                        mode: Plain,
                         ty: Var {
                             id: uninferred,
                         },
                         span: Span {
                             file_id: 0,
-                            byte_offset: 32,
-                            byte_length: 17,
+                            byte_offset: 24,
+                            byte_length: 25,
                         },
                     },
-                    mut_span: None,
-                    else_block: None,
-                    else_span: None,
-                    assert: false,
-                    ty: Var {
-                        id: uninferred,
-                    },
-                    span: Span {
-                        file_id: 0,
-                        byte_offset: 24,
-                        byte_length: 25,
-                    },
+                ],
+                ty: Var {
+                    id: uninferred,
                 },
-            ],
-            ty: Var {
-                id: uninferred,
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 22,
+                    byte_length: 30,
+                },
             },
-            span: Span {
-                file_id: 0,
-                byte_offset: 22,
-                byte_length: 30,
-            },
-        },
+        ),
         ty: Var {
             id: uninferred,
         },

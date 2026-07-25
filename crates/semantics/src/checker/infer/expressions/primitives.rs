@@ -1,7 +1,7 @@
 use crate::checker::EnvResolve;
 use syntax::EcoString;
 use syntax::ast::DeadCodeCause;
-use syntax::ast::{BinaryOperator, Expression, Span, UnaryOperator};
+use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, Span, UnaryOperator};
 use syntax::program::DefinitionBody;
 use syntax::types::Type;
 
@@ -68,7 +68,7 @@ fn contains_stored_reference_to(expression: &Expression, var_name: &str) -> bool
                     contains_stored_reference_to(expr, var_name)
                 }
             };
-            args.iter().any(check) || spread.as_ref().as_ref().is_some_and(check)
+            args.iter().any(check) || spread.as_deref().is_some_and(check)
         }
         // Recurse but skip immediately-dereferenced contexts
         Expression::Binary { left, right, .. } => {
@@ -210,14 +210,12 @@ impl InferCtx<'_> {
         self.unify(expected_ty, &ref_ty, &span);
 
         if !is_already_ref {
-            if let Some(kind) = check_is_non_addressable(&new_expression, &self.env) {
+            if let Some(kind) = check_is_non_addressable(&new_expression, &self.env, self.store) {
                 self.sink
                     .push(diagnostics::infer::non_addressable_expression(kind, span));
-            } else if let Expression::Identifier {
-                qualified: Some(qname),
-                ..
-            } = &new_expression
-                && self.is_const_name(store, qname.as_str())
+            } else if let Expression::Identifier { resolution, .. } = &new_expression
+                && let Some(qname) = resolution.definition()
+                && self.is_const_name(store, qname)
             {
                 self.sink
                     .push(diagnostics::infer::non_addressable_const(span));
@@ -345,12 +343,18 @@ impl InferCtx<'_> {
             }
         }
 
+        let resolution = match (binding_id, qualified) {
+            (Some(id), None) => IdentifierResolution::Binding(id),
+            (None, Some(definition)) => IdentifierResolution::Definition(definition),
+            (None, None) => IdentifierResolution::Unresolved,
+            (Some(_), Some(_)) => unreachable!("identifier cannot be local and global"),
+        };
+
         Expression::Identifier {
             value,
             ty: identifier_ty,
             span,
-            binding_id,
-            qualified,
+            resolution,
         }
     }
 
@@ -386,7 +390,9 @@ impl InferCtx<'_> {
             self.scopes.restore_use_context(ctx);
         }
 
-        if let Some(kind) = check_non_addressable_assignment_target(&new_target, &self.env) {
+        if let Some(kind) =
+            check_non_addressable_assignment_target(&new_target, &self.env, self.store)
+        {
             self.sink
                 .push(diagnostics::infer::non_addressable_assignment(kind, span));
         }

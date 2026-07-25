@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+    ╭─[test.lis:18:23]
+ 17 │   let bar = Bar { map_foo_err: |foo| foo.Error() }
+ 18 │   let _result = build(bar.map_foo_err)
+    ·                       ───────┬───────
+    ·                              ╰── expected `fn (error) -> string`, found `fn (FooError) -> string`
+ 19 │ }
+    ╰────
+  help: Function types must match exactly. Wrap the value in a closure that narrows the interface value with `assert_type`, or change the signature to match · code: [infer.type_mismatch]

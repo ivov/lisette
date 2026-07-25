@@ -65,9 +65,7 @@ impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
         visited: &mut HashSet<String>,
         wrap_checking: &HashSet<(String, usize, usize)>,
     ) -> bool {
-        let peeled = peel_alias(ty, |id| {
-            (self.lookup)(id).is_some_and(Definition::is_type_alias)
-        });
+        let peeled = peel_alias(ty, self.lookup);
         match &peeled {
             Type::Nominal { id, params, .. } => {
                 if is_indirection_type(id.as_str()) {
@@ -181,25 +179,17 @@ impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
                             )
                     })
             }
-            DefinitionBody::TypeAlias { .. } => {
-                let Type::Forall { vars, body } = &definition.ty else {
+            DefinitionBody::TypeAlias {
+                generics, alias, ..
+            } => {
+                let Some(generic) = generics.get(position) else {
                     return true;
                 };
-                let Some(name) = vars.get(position) else {
-                    return true;
-                };
-                match body.as_ref() {
-                    Type::Nominal {
-                        id: body_id,
-                        underlying_ty,
-                        ..
-                    } if body_id.as_str() == id => match underlying_ty {
-                        Some(underlying) => {
-                            self.parameter_stored_inline(underlying, name, checking, wrap_checking)
-                        }
-                        None => true,
-                    },
-                    _ => self.parameter_stored_inline(body, name, checking, wrap_checking),
+                match alias {
+                    crate::program::AliasKind::Transparent { target, .. } => {
+                        self.parameter_stored_inline(target, &generic.name, checking, wrap_checking)
+                    }
+                    crate::program::AliasKind::Opaque(_) => true,
                 }
             }
             DefinitionBody::Interface { .. } => false,

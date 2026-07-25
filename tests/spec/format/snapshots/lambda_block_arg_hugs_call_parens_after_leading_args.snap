@@ -1,0 +1,9 @@
+---
+source: tests/spec/format/mod.rs
+description: "fn test() { foo(a, b, |x| { x + 1 }) }"
+---
+fn test() {
+  foo(a, b, |x| {
+    x + 1
+  })
+}

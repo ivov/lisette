@@ -14,20 +14,22 @@ description: |
             byte_length: 11,
         },
         annotation: None,
-        expression: Literal {
-            literal: Integer {
-                value: 5,
-                text: None,
+        expression: Value(
+            Literal {
+                literal: Integer {
+                    value: 5,
+                    text: None,
+                },
+                ty: Var {
+                    id: uninferred,
+                },
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 21,
+                    byte_length: 1,
+                },
             },
-            ty: Var {
-                id: uninferred,
-            },
-            span: Span {
-                file_id: 0,
-                byte_offset: 21,
-                byte_length: 1,
-            },
-        },
+        ),
         visibility: Private,
         ty: Var {
             id: uninferred,

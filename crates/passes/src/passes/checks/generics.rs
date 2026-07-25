@@ -131,7 +131,13 @@ fn check_constrained_return_type(
         let available = generics
             .iter()
             .find(|generic| generic.name == *param_name)
-            .map(|generic| generic.resolved_bounds.clone())
+            .map(|generic| {
+                generic
+                    .resolved_bounds()
+                    .expect("generic bounds must be resolved before checks")
+                    .cloned()
+                    .collect()
+            })
             .unwrap_or_else(|| enclosing_parameter_bounds(store, enclosing, param_name));
         if !bound_implied(store, &available, &applied.required) {
             sink.push(
@@ -158,7 +164,13 @@ fn enclosing_parameter_bounds(
         .generics
         .iter()
         .find(|generic| generic.name == parameter)
-        .map_or_else(Vec::new, |generic| generic.resolved_bounds.clone());
+        .map_or_else(Vec::new, |generic| {
+            generic
+                .resolved_bounds()
+                .expect("generic bounds must be resolved before checks")
+                .cloned()
+                .collect()
+        });
     if let Some(receiver) = context.receiver {
         available.extend(
             type_obligations(store, receiver)

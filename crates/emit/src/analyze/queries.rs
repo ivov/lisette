@@ -7,7 +7,7 @@ use crate::control_flow::fallible;
 use crate::definitions::enum_layout::{EnumLayout, FieldTypeInfo, FieldTypeMap};
 use crate::definitions::structs::is_raw_function_type;
 use crate::names::go_name;
-use syntax::ast::{Pattern, RestPattern, StructKind};
+use syntax::ast::{Pattern, RestPattern, StructFields};
 use syntax::containment::enum_payload_pointer_wrapped;
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{Type, substitute};
@@ -128,7 +128,7 @@ impl Planner<'_> {
             matches!(
                 &resolved.definition.body,
                 DefinitionBody::Struct {
-                    kind: StructKind::Tuple,
+                    fields: StructFields::Tuple(_),
                     ..
                 }
             )
@@ -149,8 +149,7 @@ impl Planner<'_> {
     pub(crate) fn get_newtype_underlying(&self, ty: &Type) -> Option<Type> {
         let resolved = self.resolve_nominal(ty)?;
         if let DefinitionBody::Struct {
-            kind: StructKind::Tuple,
-            fields,
+            fields: StructFields::Tuple(fields),
             generics,
             ..
         } = &resolved.definition.body
@@ -164,16 +163,15 @@ impl Planner<'_> {
     }
 
     pub(crate) fn peel_alias_id(&self, id: &str) -> String {
-        syntax::types::peel_alias_id(id, |current| {
-            let definition = self.facts.definition(current)?;
-            if !matches!(definition.body, DefinitionBody::TypeAlias { .. }) {
-                return None;
-            }
-            let Type::Nominal { id: next, .. } = definition.ty.unwrap_forall() else {
-                return None;
-            };
-            Some(next.to_string())
-        })
+        let nominal = Type::Nominal {
+            id: id.into(),
+            params: Vec::new(),
+        };
+        self.facts
+            .peel_alias(&nominal)
+            .get_qualified_id()
+            .unwrap_or(id)
+            .to_string()
     }
 
     pub(crate) fn as_enum(&self, ty: &Type) -> Option<String> {
@@ -189,7 +187,7 @@ impl Planner<'_> {
             return false;
         }
         let inner = ty.ok_type();
-        if inner.contains_unknown() || inner.has_name("any") {
+        if self.facts.contains_unknown(&inner) || inner.has_name("any") {
             return false;
         }
         !self.facts.is_nilable_go_type(&inner)

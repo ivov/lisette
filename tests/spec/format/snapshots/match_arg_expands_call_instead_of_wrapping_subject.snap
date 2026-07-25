@@ -1,0 +1,16 @@
+---
+source: tests/spec/format/mod.rs
+description: |-
+  fn main() {
+    let z = f(first_arg, match a_scrutinee_name_one + a_scrutinee_name_two_here_long { 1 => 2, _ => 3 })
+  }
+---
+fn main() {
+  let z = f(
+    first_arg,
+    match a_scrutinee_name_one + a_scrutinee_name_two_here_long {
+      1 => 2,
+      _ => 3,
+    },
+  )
+}

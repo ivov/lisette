@@ -25,12 +25,12 @@ pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
     }
 }
 
-pub(super) fn is_math_nan_call(expression: &Expression, ctx: &NodeCtx) -> bool {
+pub(super) fn is_math_nan_call(expression: &Expression, _ctx: &NodeCtx) -> bool {
     let Expression::Call {
         expression: callee, ..
     } = expression
     else {
         return false;
     };
-    resolved_definition(callee, &ctx.facts.resolved_definitions) == Some("go:math.NaN")
+    resolved_definition(callee) == Some("go:math.NaN")
 }

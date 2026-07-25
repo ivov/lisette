@@ -39,9 +39,9 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var result lisette.Tuple2[tea.Model, lisette.Option[tea.Cmd]]
+	var result lisette.Tuple2[Model, lisette.Option[func() tea.Msg]]
 	_ = msg
-	result = lisette.MakeTuple2[tea.Model, lisette.Option[tea.Cmd]](m, lisette.MakeOptionSome[tea.Cmd](tea.Quit))
+	result = lisette.MakeTuple2(m, lisette.MakeOptionSome(tea.Quit))
 	tup_1 := result
 	opt_2 := tup_1.Second
 	var unwrap_3 tea.Cmd

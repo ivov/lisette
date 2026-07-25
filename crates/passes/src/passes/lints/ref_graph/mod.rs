@@ -112,8 +112,7 @@ fn apply_ref_lints(
     let mut diagnostics = result.diagnostics;
     if !diagnostics.is_empty() {
         let allows: Vec<_> = module
-            .files
-            .values()
+            .source_files()
             .flat_map(|file| super::suppression::collect_declaration_allows(&file.items))
             .collect();
         diagnostics = super::suppression::filter_unused_allowed(diagnostics, &allows);
@@ -144,7 +143,7 @@ fn run_ref_lints(
     );
 
     let alias_map = AliasMap::build(files, store);
-    for file in files.values() {
+    for file in files.values().filter(|file| !file.is_d_lis()) {
         for item in &file.items {
             walk_expression(module, item, &mut graph, &alias_map, None);
         }
@@ -155,6 +154,7 @@ fn run_ref_lints(
         equals_targets(
             &receiver_ty.strip_refs(),
             module,
+            store,
             equality_index,
             &mut targets,
         );
@@ -168,7 +168,7 @@ fn run_ref_lints(
             continue;
         }
         let mut targets = Vec::new();
-        equals_targets(&field_ty, module, equality_index, &mut targets);
+        equals_targets(&field_ty, module, store, equality_index, &mut targets);
         for to in targets {
             graph.mark_as_used(to);
         }
@@ -240,7 +240,7 @@ fn collect_items(
     equality_index: &EqualityIndex,
     graph: &mut ReferenceGraph,
 ) {
-    for file in files.values() {
+    for file in files.values().filter(|file| !file.is_d_lis()) {
         for item in &file.items {
             match item {
                 Expression::ModuleImport {

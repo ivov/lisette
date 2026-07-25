@@ -6,7 +6,11 @@ use crate::passes::walk::{FunctionRole, NodeCtx, PatternRole};
 
 use super::helpers::first_param_is_self;
 
-pub fn check_expression_naming(expression: &Expression, ctx: &NodeCtx) {
+pub fn check_expression_naming<'a>(
+    expression: &Expression,
+    ctx: &NodeCtx<'a>,
+    role: FunctionRole<'a>,
+) {
     let sink = ctx.sink;
     let is_d_lis = ctx.is_d_lis;
     match expression {
@@ -115,7 +119,7 @@ pub fn check_expression_naming(expression: &Expression, ctx: &NodeCtx) {
             visibility,
             ..
         } => {
-            let exempt = go_method_name_exempt(ctx, params, *visibility, name);
+            let exempt = go_method_name_exempt(ctx, role, params, *visibility, name);
             if !is_d_lis && !exempt {
                 check_snake_case(name, name_span, "non_snake_case_function", sink);
             }
@@ -135,7 +139,7 @@ pub fn check_expression_naming(expression: &Expression, ctx: &NodeCtx) {
     }
 }
 
-pub fn check_pattern_naming(pattern: &Pattern, ctx: &NodeCtx) {
+pub fn check_pattern_naming(pattern: &Pattern, ctx: &NodeCtx, role: PatternRole) {
     if ctx.is_d_lis {
         return;
     }
@@ -150,7 +154,7 @@ pub fn check_pattern_naming(pattern: &Pattern, ctx: &NodeCtx) {
         } => (name, span),
         _ => return,
     };
-    let code = match ctx.pattern_role.get() {
+    let code = match role {
         PatternRole::Parameter => "non_snake_case_parameter",
         PatternRole::Binding => "non_snake_case_variable",
     };
@@ -161,11 +165,12 @@ pub fn check_pattern_naming(pattern: &Pattern, ctx: &NodeCtx) {
 /// its exported Go name or break interface conformance (matched by source name).
 fn go_method_name_exempt(
     ctx: &NodeCtx,
+    role: FunctionRole<'_>,
     params: &[Binding],
     visibility: Visibility,
     name: &str,
 ) -> bool {
-    let (is_method, public, impl_type) = match ctx.function_role.get() {
+    let (is_method, public, impl_type) = match role {
         FunctionRole::InterfaceMethod { public } => (true, public, None),
         FunctionRole::ImplMethod { type_name } => (
             first_param_is_self(params),

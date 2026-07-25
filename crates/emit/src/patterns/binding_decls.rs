@@ -1,7 +1,8 @@
 use syntax::EcoString;
 use syntax::ast::{
-    EnumFieldDefinition, Generic, Literal, Pattern, RestPattern, StructFieldDefinition,
-    StructFieldPattern, StructKind, TypedPattern, VariantFields,
+    ConstructorPatternResolution, EnumFieldDefinition, Generic, Literal, Pattern,
+    RecordPatternResolution, RestPattern, SequencePatternResolution, StructFieldDefinition,
+    StructFieldPattern,
 };
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{Type, unqualified_name};
@@ -40,14 +41,6 @@ impl FieldDef for EnumFieldDefinition {
     }
     fn ty(&self) -> &Type {
         &self.ty
-    }
-}
-
-/// `Unit` variants yield an empty slice so callers handle all shapes uniformly.
-fn variant_fields_slice(fields: &VariantFields) -> &[EnumFieldDefinition] {
-    match fields {
-        VariantFields::Unit => &[],
-        VariantFields::Tuple(f) | VariantFields::Struct(f) => f,
     }
 }
 
@@ -161,49 +154,50 @@ impl Planner<'_> {
         statements: &mut Vec<LoweredStatement>,
         pattern: &Pattern,
         ty: &Type,
-        typed: Option<&TypedPattern>,
     ) {
         match pattern {
             Pattern::Identifier { identifier, .. } => {
                 self.declare_pattern_var(statements, pattern, identifier, ty);
             }
             Pattern::Tuple { elements, .. } => {
-                self.lower_tuple_pattern_declarations(statements, elements, ty, typed);
+                self.lower_tuple_pattern_declarations(statements, elements, ty);
             }
             Pattern::Struct {
-                fields, identifier, ..
+                fields,
+                resolution,
+                ty,
+                ..
             } => {
-                self.lower_struct_pattern_declarations(statements, fields, identifier, ty, typed);
+                self.lower_struct_pattern_declarations(statements, fields, resolution, ty);
             }
             Pattern::EnumVariant {
                 fields,
-                identifier,
-                ty: pattern_ty,
+                resolution,
+                ty,
                 ..
             } => {
-                self.lower_enum_variant_pattern_declarations(
-                    statements, fields, identifier, pattern_ty, ty, typed,
-                );
+                self.lower_enum_variant_pattern_declarations(statements, fields, resolution, ty);
             }
-            Pattern::Slice { prefix, rest, .. } => {
-                self.lower_slice_pattern_declarations(statements, prefix, rest, ty, typed);
+            Pattern::Slice {
+                prefix,
+                rest,
+                resolution,
+                ..
+            } => {
+                self.lower_slice_pattern_declarations(statements, prefix, rest, ty, resolution);
             }
             Pattern::Or { patterns, .. } => {
                 let Some(first) = patterns.first() else {
                     return;
                 };
-                let alt = match typed {
-                    Some(TypedPattern::Or { alternatives }) => alternatives.first(),
-                    _ => None,
-                };
-                self.lower_binding_declarations_with_type(statements, first, ty, alt);
+                self.lower_binding_declarations_with_type(statements, first, ty);
             }
             p @ Pattern::AsBinding {
                 pattern: inner,
                 name,
                 ..
             } => {
-                self.lower_binding_declarations_with_type(statements, inner, ty, typed);
+                self.lower_binding_declarations_with_type(statements, inner, ty);
                 self.declare_pattern_var(statements, p, name, ty);
             }
             Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => {}
@@ -254,49 +248,35 @@ impl Planner<'_> {
         statements: &mut Vec<LoweredStatement>,
         elements: &[Pattern],
         resolved: &Type,
-        typed: Option<&TypedPattern>,
     ) {
-        let typed_elements: &[TypedPattern] = match typed {
-            Some(TypedPattern::Tuple { elements: te, .. }) => te.as_slice(),
-            _ => &[],
-        };
         let types: &[Type] = match resolved {
             Type::Nominal { params, .. } => params,
             Type::Tuple(elements) => elements,
             _ => return,
         };
-        for (i, (element, element_ty)) in elements.iter().zip(types.iter()).enumerate() {
-            self.lower_binding_declarations_with_type(
-                statements,
-                element,
-                element_ty,
-                typed_elements.get(i),
-            );
+        for (element, element_ty) in elements.iter().zip(types) {
+            self.lower_binding_declarations_with_type(statements, element, element_ty);
         }
     }
 
-    /// Recurse into named struct-pattern fields (plain struct or enum's
-    /// struct variant, resolved via the typed pattern or definitions table).
+    /// Recurse into named fields using the definition selected by inference.
     fn lower_struct_pattern_declarations(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
         fields: &[StructFieldPattern],
-        identifier: &EcoString,
-        resolved: &Type,
-        typed: Option<&TypedPattern>,
+        resolution: &RecordPatternResolution,
+        ty: &Type,
     ) {
-        match typed {
-            Some(TypedPattern::Struct {
-                struct_name,
-                struct_fields,
-                pattern_fields,
-                ..
-            }) => {
-                let Type::Nominal { params, .. } = resolved else {
-                    return;
-                };
+        let params = self.pattern_type_args(ty);
+        match resolution {
+            RecordPatternResolution::Struct { struct_name } => {
                 let Some(Definition {
-                    body: DefinitionBody::Struct { generics, .. },
+                    body:
+                        DefinitionBody::Struct {
+                            generics,
+                            fields: struct_fields,
+                            ..
+                        },
                     ..
                 }) = self.facts.definition(struct_name.as_str())
                 else {
@@ -306,263 +286,153 @@ impl Planner<'_> {
                     statements,
                     fields,
                     struct_fields,
-                    GenericArgs { generics, params },
-                    Some(pattern_fields),
+                    GenericArgs {
+                        generics,
+                        params: &params,
+                    },
                 );
             }
-            Some(TypedPattern::EnumStructVariant {
+            RecordPatternResolution::EnumVariant {
                 enum_name,
-                variant_fields,
-                pattern_fields,
-                ..
-            }) => {
-                let Type::Nominal { params, .. } = resolved else {
-                    return;
-                };
+                variant_name,
+            } => {
                 let Some(Definition {
-                    body: DefinitionBody::Enum { generics, .. },
+                    body:
+                        DefinitionBody::Enum {
+                            generics, variants, ..
+                        },
                     ..
                 }) = self.facts.definition(enum_name.as_str())
+                else {
+                    return;
+                };
+                let Some(variant) = variants
+                    .iter()
+                    .find(|variant| variant.name == unqualified_name(variant_name))
                 else {
                     return;
                 };
                 self.recurse_named_fields(
                     statements,
                     fields,
-                    variant_fields,
-                    GenericArgs { generics, params },
-                    Some(pattern_fields),
+                    variant.fields.as_slice(),
+                    GenericArgs {
+                        generics,
+                        params: &params,
+                    },
                 );
             }
-            _ => self.lower_struct_pattern_fallback(statements, fields, identifier, resolved),
+            RecordPatternResolution::Unresolved => {}
         }
     }
 
-    /// Untyped struct-pattern fallback via the definitions table.
-    fn lower_struct_pattern_fallback(
+    /// Recurse into positional constructor fields using their inferred types.
+    fn lower_enum_variant_pattern_declarations(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
-        fields: &[StructFieldPattern],
-        identifier: &EcoString,
-        resolved: &Type,
+        fields: &[Pattern],
+        resolution: &ConstructorPatternResolution,
+        ty: &Type,
     ) {
-        let Type::Nominal { id, params, .. } = resolved else {
+        let ConstructorPatternResolution::EnumVariant {
+            enum_name,
+            variant_name,
+        } = resolution
+        else {
             return;
         };
-        match self.facts.definition(id.as_str()).map(|d| &d.body) {
-            Some(DefinitionBody::Struct {
-                fields: field_definitions,
+        let params = self.pattern_type_args(ty);
+        let Some(definition) = self.facts.definition(enum_name) else {
+            return;
+        };
+        match &definition.body {
+            DefinitionBody::Struct {
+                fields: definitions,
                 generics,
                 ..
-            }) => {
-                self.recurse_named_fields(
+            } => self.recurse_positional_fields(
+                statements,
+                fields,
+                definitions,
+                GenericArgs {
+                    generics,
+                    params: &params,
+                },
+            ),
+            DefinitionBody::Enum {
+                variants, generics, ..
+            } => {
+                let Some(variant) = variants
+                    .iter()
+                    .find(|variant| variant.name == unqualified_name(variant_name))
+                else {
+                    return;
+                };
+                self.recurse_positional_fields(
                     statements,
                     fields,
-                    field_definitions,
-                    GenericArgs { generics, params },
-                    None,
+                    variant.fields.as_slice(),
+                    GenericArgs {
+                        generics,
+                        params: &params,
+                    },
                 );
-            }
-            Some(DefinitionBody::Enum {
-                variants, generics, ..
-            }) => {
-                let variant_name = unqualified_name(identifier);
-                if let Some(variant) = variants.iter().find(|v| v.name == variant_name) {
-                    self.recurse_named_fields(
-                        statements,
-                        fields,
-                        variant_fields_slice(&variant.fields),
-                        GenericArgs { generics, params },
-                        None,
-                    );
-                }
             }
             _ => {}
         }
     }
 
-    /// Recurse into positional enum-variant fields (tuple-struct matches
-    /// route through the struct definition).
-    #[allow(clippy::too_many_arguments)]
-    fn lower_enum_variant_pattern_declarations(
-        &mut self,
-        statements: &mut Vec<LoweredStatement>,
-        fields: &[Pattern],
-        identifier: &EcoString,
-        pattern_ty: &Type,
-        resolved: &Type,
-        typed: Option<&TypedPattern>,
-    ) {
-        if self.is_tuple_struct_type(pattern_ty) {
-            self.lower_tuple_struct_variant_declarations(statements, fields, resolved, typed);
-            return;
+    fn pattern_type_args(&self, ty: &Type) -> Vec<Type> {
+        match self.facts.peel_alias(ty) {
+            Type::Nominal { params, .. } => params,
+            _ => vec![],
         }
-
-        let typed_fields = match typed {
-            Some(TypedPattern::EnumVariant { fields: tf, .. }) => Some(tf.as_slice()),
-            _ => None,
-        };
-
-        if let Some(TypedPattern::EnumVariant {
-            enum_name,
-            variant_fields,
-            ..
-        }) = typed
-        {
-            let Type::Nominal { params, .. } = resolved else {
-                return;
-            };
-            let Some(Definition {
-                body: DefinitionBody::Enum { generics, .. },
-                ..
-            }) = self.facts.definition(enum_name.as_str())
-            else {
-                return;
-            };
-            self.recurse_positional_fields(
-                statements,
-                fields,
-                variant_fields,
-                GenericArgs { generics, params },
-                typed_fields,
-            );
-            return;
-        }
-
-        let Type::Nominal { id, params, .. } = resolved else {
-            return;
-        };
-        let Some(Definition {
-            body: DefinitionBody::Enum {
-                variants, generics, ..
-            },
-            ..
-        }) = self.facts.definition(id.as_str())
-        else {
-            return;
-        };
-        let variant_name = unqualified_name(identifier);
-        let Some(variant) = variants.iter().find(|v| v.name == variant_name) else {
-            return;
-        };
-        self.recurse_positional_fields(
-            statements,
-            fields,
-            variant_fields_slice(&variant.fields),
-            GenericArgs { generics, params },
-            None,
-        );
     }
 
-    /// Newtype-tuple-struct match via the struct's own positional fields.
-    fn lower_tuple_struct_variant_declarations(
-        &mut self,
-        statements: &mut Vec<LoweredStatement>,
-        fields: &[Pattern],
-        resolved: &Type,
-        typed: Option<&TypedPattern>,
-    ) {
-        let Type::Nominal { id, params, .. } = resolved else {
-            return;
-        };
-        let Some(Definition {
-            body:
-                DefinitionBody::Struct {
-                    fields: field_definitions,
-                    generics,
-                    kind: StructKind::Tuple,
-                    ..
-                },
-            ..
-        }) = self.facts.definition(id.as_str())
-        else {
-            return;
-        };
-        let typed_fields = match typed {
-            Some(TypedPattern::EnumVariant { fields: tf, .. }) => Some(tf.as_slice()),
-            _ => None,
-        };
-        self.recurse_positional_fields(
-            statements,
-            fields,
-            field_definitions,
-            GenericArgs { generics, params },
-            typed_fields,
-        );
-    }
-
-    /// Recurse into a slice pattern's prefix and bind any rest variable.
+    /// Recurse into a sequence prefix and bind any rest variable.
     fn lower_slice_pattern_declarations(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
         prefix: &[Pattern],
         rest: &RestPattern,
         resolved: &Type,
-        typed: Option<&TypedPattern>,
+        resolution: &SequencePatternResolution,
     ) {
-        let (element_ty, typed_prefix): (Type, Option<&[TypedPattern]>) = match typed {
-            Some(TypedPattern::Slice {
-                prefix: tp,
+        let (element_type, array_length) = match resolution {
+            SequencePatternResolution::Slice { element_type } => (element_type, None),
+            SequencePatternResolution::Array {
                 element_type,
-                ..
-            })
-            | Some(TypedPattern::Array {
-                prefix: tp,
-                element_type,
-                ..
-            }) => (element_type.clone(), Some(tp.as_slice())),
-            _ => {
-                if let Type::Array { element, .. } = resolved {
-                    (element.as_ref().clone(), None)
-                } else {
-                    let Type::Nominal { params, .. } = resolved else {
-                        return;
-                    };
-                    let Some(element) = params.first().cloned() else {
-                        return;
-                    };
-                    (element, None)
-                }
-            }
+                length,
+            } => (element_type, Some(*length)),
+            SequencePatternResolution::Unresolved => return,
         };
 
-        for (i, element) in prefix.iter().enumerate() {
-            let typed_child = typed_prefix.and_then(|tp| tp.get(i));
-            self.lower_binding_declarations_with_type(
-                statements,
-                element,
-                &element_ty,
-                typed_child,
-            );
+        for element in prefix {
+            self.lower_binding_declarations_with_type(statements, element, element_type);
         }
 
         if let RestPattern::Bind { name, .. } = rest
             && let Some(go_name) = self.go_name_for_rest_binding(rest)
         {
-            let rest_ty = match typed {
-                Some(TypedPattern::Array {
-                    length,
-                    element_type,
-                    ..
-                }) => Type::Array {
+            let rest_ty = if let Some(length) = array_length {
+                Type::Array {
                     length: length.saturating_sub(prefix.len() as u64),
                     element: Box::new(element_type.clone()),
-                },
-                _ => resolved.clone(),
+                }
+            } else {
+                resolved.clone()
             };
             self.declare_var_declaration(statements, name, go_name, &rest_ty);
         }
     }
 
-    /// For each named field, resolve its type against the enclosing generics
-    /// and recurse with the matching typed child.
+    /// For each named field, resolve its type against the enclosing generics.
     fn recurse_named_fields<F: FieldDef>(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
         patterns: &[StructFieldPattern],
         definitions: &[F],
         generic_args: GenericArgs,
-        typed_pf: Option<&[(EcoString, TypedPattern)]>,
     ) {
         let GenericArgs { generics, params } = generic_args;
         for pattern in patterns {
@@ -570,34 +440,21 @@ impl Planner<'_> {
                 continue;
             };
             let field_ty = generics::resolve_field_type(generics, params, definition.ty());
-            let typed_child = typed_pf.and_then(|pf| {
-                pf.iter()
-                    .find(|(n, _)| n == &pattern.name)
-                    .map(|(_, tp)| tp)
-            });
-            self.lower_binding_declarations_with_type(
-                statements,
-                &pattern.value,
-                &field_ty,
-                typed_child,
-            );
+            self.lower_binding_declarations_with_type(statements, &pattern.value, &field_ty);
         }
     }
 
-    /// Zip positional pattern slots with definition slots and recurse.
     fn recurse_positional_fields<F: FieldDef>(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
         patterns: &[Pattern],
         definitions: &[F],
         generic_args: GenericArgs,
-        typed_fields: Option<&[TypedPattern]>,
     ) {
         let GenericArgs { generics, params } = generic_args;
-        for (i, (pattern, definition)) in patterns.iter().zip(definitions.iter()).enumerate() {
+        for (pattern, definition) in patterns.iter().zip(definitions) {
             let field_ty = generics::resolve_field_type(generics, params, definition.ty());
-            let typed_child = typed_fields.and_then(|tf| tf.get(i));
-            self.lower_binding_declarations_with_type(statements, pattern, &field_ty, typed_child);
+            self.lower_binding_declarations_with_type(statements, pattern, &field_ty);
         }
     }
 }

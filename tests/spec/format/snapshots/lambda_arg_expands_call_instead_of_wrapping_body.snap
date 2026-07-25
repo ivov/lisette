@@ -1,0 +1,13 @@
+---
+source: tests/spec/format/mod.rs
+description: |-
+  fn main() {
+    let z = f(first_arg, |x| a_very_long_name_one_here + a_very_long_name_two_here_x)
+  }
+---
+fn main() {
+  let z = f(
+    first_arg,
+    |x| a_very_long_name_one_here + a_very_long_name_two_here_x,
+  )
+}

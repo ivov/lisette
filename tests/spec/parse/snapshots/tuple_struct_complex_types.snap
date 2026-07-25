@@ -15,86 +15,87 @@ description: |
             byte_length: 9,
         },
         generics: [],
-        fields: [
-            StructFieldDefinition {
-                doc: None,
-                attributes: [],
-                name: "_0",
-                name_span: Span {
-                    file_id: 0,
-                    byte_offset: 18,
-                    byte_length: 10,
-                },
-                annotation: Constructor {
-                    name: "Slice",
-                    params: [
-                        Constructor {
-                            name: "int",
-                            params: [],
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 24,
-                                byte_length: 3,
-                            },
-                        },
-                    ],
-                    span: Span {
+        fields: Tuple(
+            [
+                StructFieldDefinition {
+                    doc: None,
+                    attributes: [],
+                    name: "_0",
+                    name_span: Span {
                         file_id: 0,
                         byte_offset: 18,
                         byte_length: 10,
                     },
-                },
-                visibility: Private,
-                ty: Var {
-                    id: uninferred,
-                },
-                embedded: false,
-            },
-            StructFieldDefinition {
-                doc: None,
-                attributes: [],
-                name: "_1",
-                name_span: Span {
-                    file_id: 0,
-                    byte_offset: 30,
-                    byte_length: 17,
-                },
-                annotation: Constructor {
-                    name: "Map",
-                    params: [
-                        Constructor {
-                            name: "string",
-                            params: [],
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 34,
-                                byte_length: 6,
+                    annotation: Constructor {
+                        name: "Slice",
+                        params: [
+                            Constructor {
+                                name: "int",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 24,
+                                    byte_length: 3,
+                                },
                             },
+                        ],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 18,
+                            byte_length: 10,
                         },
-                        Constructor {
-                            name: "bool",
-                            params: [],
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 42,
-                                byte_length: 4,
-                            },
-                        },
-                    ],
-                    span: Span {
+                    },
+                    visibility: Private,
+                    ty: Var {
+                        id: uninferred,
+                    },
+                    embedded: false,
+                },
+                StructFieldDefinition {
+                    doc: None,
+                    attributes: [],
+                    name: "_1",
+                    name_span: Span {
                         file_id: 0,
                         byte_offset: 30,
                         byte_length: 17,
                     },
+                    annotation: Constructor {
+                        name: "Map",
+                        params: [
+                            Constructor {
+                                name: "string",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 34,
+                                    byte_length: 6,
+                                },
+                            },
+                            Constructor {
+                                name: "bool",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 42,
+                                    byte_length: 4,
+                                },
+                            },
+                        ],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 30,
+                            byte_length: 17,
+                        },
+                    },
+                    visibility: Private,
+                    ty: Var {
+                        id: uninferred,
+                    },
+                    embedded: false,
                 },
-                visibility: Private,
-                ty: Var {
-                    id: uninferred,
-                },
-                embedded: false,
-            },
-        ],
-        kind: Tuple,
+            ],
+        ),
         visibility: Private,
         span: Span {
             file_id: 0,

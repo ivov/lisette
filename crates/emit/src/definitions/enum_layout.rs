@@ -74,15 +74,15 @@ impl EnumLayout {
     ) -> VariantLayout {
         let tag_constant = go_name::enum_tag_constant(enum_name, &variant.name);
 
-        let is_struct = variant.fields.is_struct();
-        let single_field = variant.fields.len() == 1;
+        let field_shape = syntax::go_names::enum_field_shape(&variant.fields)
+            .unwrap_or(syntax::go_names::EnumFieldShape::TupleMultiple);
 
         let fields = variant
             .fields
             .iter()
             .enumerate()
             .map(|(fi, field)| {
-                let source_name = if is_struct {
+                let source_name = if field_shape == syntax::go_names::EnumFieldShape::Struct {
                     field.name.to_string()
                 } else {
                     fi.to_string()
@@ -92,8 +92,7 @@ impl EnumLayout {
                     &variant.name,
                     &field.name,
                     fi,
-                    is_struct,
-                    single_field,
+                    field_shape,
                     enum_name,
                 );
 
@@ -117,7 +116,7 @@ impl EnumLayout {
         VariantLayout {
             name: variant.name.to_string(),
             tag_constant,
-            is_struct_variant: is_struct,
+            is_struct_variant: field_shape == syntax::go_names::EnumFieldShape::Struct,
             fields,
             doc: variant.doc.clone(),
         }

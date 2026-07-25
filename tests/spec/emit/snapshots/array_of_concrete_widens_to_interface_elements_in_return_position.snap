@@ -1,0 +1,46 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: |
+  
+  struct Boom {}
+  
+  impl Boom {
+    fn Error(self) -> string {
+      "boom"
+    }
+  }
+  
+  fn widen() -> Array<error, 2> {
+    let concrete: Array<Boom, 2> = [Boom {}, Boom {}]
+    concrete
+  }
+  
+  fn test() {
+    if widen()[1].Error() != "boom" {
+      panic("returned array lost its interface elements")
+    }
+  }
+---
+package main
+
+type Boom struct{}
+
+func (b Boom) Error() string {
+	return "boom"
+}
+
+func widen() [2]error {
+	concrete := [2]Boom{Boom{}, Boom{}}
+	var boxed_1 [2]error
+	for i_2 := range concrete {
+		boxed_1[i_2] = concrete[i_2]
+	}
+	return boxed_1
+}
+
+func test() {
+	_base_1 := widen()
+	if _base_1[1].Error() != "boom" {
+		panic("returned array lost its interface elements")
+	}
+}

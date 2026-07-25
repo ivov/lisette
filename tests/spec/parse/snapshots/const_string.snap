@@ -24,20 +24,22 @@ description: |
                 },
             },
         ),
-        expression: Literal {
-            literal: String {
-                value: "Hello",
-                raw: false,
+        expression: Value(
+            Literal {
+                literal: String {
+                    value: "Hello",
+                    raw: false,
+                },
+                ty: Var {
+                    id: uninferred,
+                },
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 26,
+                    byte_length: 7,
+                },
             },
-            ty: Var {
-                id: uninferred,
-            },
-            span: Span {
-                file_id: 0,
-                byte_offset: 26,
-                byte_length: 7,
-            },
-        },
+        ),
         visibility: Private,
         ty: Var {
             id: uninferred,

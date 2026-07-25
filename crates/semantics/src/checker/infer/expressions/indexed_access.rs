@@ -77,7 +77,10 @@ impl InferCtx<'_> {
         // Handle a stored range used as an index (e.g. `let r = 2..5; items[r]`).
         // Inline ranges are caught by `index.is_range()` above. Strings are
         // rejected; slices return a sub-slice.
-        match (peel_to_range_type(&resolved_index_ty), type_name) {
+        match (
+            peel_to_range_type(&resolved_index_ty, |id| store.get_definition(id)),
+            type_name,
+        ) {
             (Some(_), "string") => {
                 let receiver = collection_expression.root_identifier().unwrap_or("s");
                 let full_span = collection_expression.get_span().merge(span);

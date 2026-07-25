@@ -46,9 +46,9 @@ pub fn check_neg_multiply(expression: &Expression, ctx: &NodeCtx) {
     }
 
     // `-operand` is only well-typed (and only checker-accepted) for signed or float.
-    if !inner
-        .get_type()
-        .underlying_simple_kind()
+    if !ctx
+        .store
+        .underlying_simple_kind(&inner.get_type())
         .is_some_and(|kind| kind.is_signed_int() || kind.is_float())
     {
         return;

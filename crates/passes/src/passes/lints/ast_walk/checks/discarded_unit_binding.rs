@@ -1,15 +1,14 @@
 use crate::passes::lints::span_edit::statement_deletion;
 use crate::passes::walk::NodeCtx;
 use diagnostics::{Edit, Fix};
-use syntax::ast::{Expression, Pattern, Span};
+use syntax::ast::{Expression, LetMode, Pattern, Span};
 
 /// Flags `let _ = expr` where `expr` has unit type, so the discard binds nothing.
 pub fn check_discarded_unit_binding(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Let {
         binding,
         value,
-        else_block: None,
-        assert: false,
+        mode: LetMode::Plain,
         span,
         ..
     } = expression

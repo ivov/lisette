@@ -2,7 +2,10 @@ use ecow::EcoString;
 
 use super::strings::cook_string_contents;
 use super::{MAX_TUPLE_ARITY, ParamMode, ParseError, Parser};
-use crate::ast::{Annotation, Binding, Literal, Pattern, RestPattern, Span, StructFieldPattern};
+use crate::ast::{
+    Annotation, Binding, ConstructorPatternResolution, Literal, Pattern, RecordPatternResolution,
+    RestPattern, SequencePatternResolution, Span, StructFieldPattern,
+};
 use crate::lex::Token;
 use crate::lex::TokenKind::*;
 use crate::types::Type;
@@ -28,36 +31,37 @@ impl<'source> Parser<'source> {
     }
 
     pub(crate) fn parse_pattern(&mut self) -> Pattern {
-        if !self.enter_recursion() {
-            let span = self.span_from_token(self.current_token());
-            self.resync_on_error();
-            return Pattern::WildCard { span };
-        }
-        let start = self.current_token();
-        let mut result = self.parse_pattern_inner();
-        if self.advance_if(As) {
-            if !self.is(Identifier) {
-                self.track_error("expected identifier after `as`", "Use `as <name>`");
-            } else if self.current_token().text == "_" {
-                self.track_error(
-                    "`_` is not a valid `as` alias",
-                    "Use a named binding, or omit `as _`",
-                );
-                self.next();
-            } else {
-                let name: EcoString = self.current_token().text.into();
-                let name_span = self.span_from_token(self.current_token());
-                self.next();
-                result = Pattern::AsBinding {
-                    pattern: Box::new(result),
-                    name,
-                    name_span,
-                    span: self.span_from_tokens(start),
-                };
+        if let Some(result) = self.with_recursion(|parser| {
+            let start = parser.current_token();
+            let mut result = parser.parse_pattern_inner();
+            if parser.advance_if(As) {
+                if !parser.is(Identifier) {
+                    parser.track_error("expected identifier after `as`", "Use `as <name>`");
+                } else if parser.current_token().text == "_" {
+                    parser.track_error(
+                        "`_` is not a valid `as` alias",
+                        "Use a named binding, or omit `as _`",
+                    );
+                    parser.next();
+                } else {
+                    let name: EcoString = parser.current_token().text.into();
+                    let name_span = parser.span_from_token(parser.current_token());
+                    parser.next();
+                    result = Pattern::AsBinding {
+                        pattern: Box::new(result),
+                        name,
+                        name_span,
+                        span: parser.span_from_tokens(start),
+                    };
+                }
             }
+            result
+        }) {
+            return result;
         }
-        self.leave_recursion();
-        result
+        let span = self.span_from_token(self.current_token());
+        self.resync_on_error();
+        Pattern::WildCard { span }
     }
 
     fn parse_pattern_inner(&mut self) -> Pattern {
@@ -400,7 +404,7 @@ impl<'source> Parser<'source> {
         Pattern::Slice {
             prefix: elements,
             rest,
-            element_ty: Type::uninferred(),
+            resolution: SequencePatternResolution::Unresolved,
             span,
         }
     }
@@ -454,6 +458,7 @@ impl<'source> Parser<'source> {
                         identifier: full_name.into(),
                         fields: vec![],
                         rest: false,
+                        resolution: ConstructorPatternResolution::Unresolved,
                         ty: Type::uninferred(),
                         span,
                     }
@@ -548,6 +553,7 @@ impl<'source> Parser<'source> {
             identifier: name.into(),
             fields,
             rest,
+            resolution: RecordPatternResolution::Unresolved,
             ty: Type::uninferred(),
             span: self.span_from_tokens(start),
         }
@@ -579,6 +585,7 @@ impl<'source> Parser<'source> {
             identifier: name.into(),
             fields,
             rest,
+            resolution: ConstructorPatternResolution::Unresolved,
             ty: Type::uninferred(),
             span: self.span_from_tokens(start),
         }
@@ -588,9 +595,8 @@ impl<'source> Parser<'source> {
         Binding {
             pattern: self.parse_pattern(),
             annotation: self.parse_optional_type_annotation(),
-            typed_pattern: None,
             ty: Type::uninferred(),
-            mutable: false,
+            mut_span: None,
         }
     }
 
@@ -598,9 +604,8 @@ impl<'source> Parser<'source> {
         Binding {
             pattern: self.parse_pattern_allowing_or(),
             annotation: self.parse_optional_type_annotation(),
-            typed_pattern: None,
             ty: Type::uninferred(),
-            mutable: false,
+            mut_span: None,
         }
     }
 
@@ -635,9 +640,8 @@ impl<'source> Parser<'source> {
                     span,
                 },
                 annotation: self.parse_optional_type_annotation(),
-                typed_pattern: None,
                 ty: Type::uninferred(),
-                mutable: false,
+                mut_span: None,
             };
         }
 
@@ -669,7 +673,7 @@ impl<'source> Parser<'source> {
             }
         }
 
-        let is_mut = self.advance_if(Mut);
+        let mut_span = self.parse_mut_span();
 
         let pattern = self.parse_pattern();
 
@@ -681,9 +685,8 @@ impl<'source> Parser<'source> {
             return Binding {
                 pattern,
                 annotation: None,
-                typed_pattern: None,
                 ty: Type::uninferred(),
-                mutable: false,
+                mut_span: None,
             };
         }
 
@@ -691,9 +694,8 @@ impl<'source> Parser<'source> {
             return Binding {
                 pattern,
                 annotation: None,
-                typed_pattern: None,
                 ty: Type::uninferred(),
-                mutable: is_mut,
+                mut_span,
             };
         }
 
@@ -703,10 +705,22 @@ impl<'source> Parser<'source> {
         Binding {
             pattern,
             annotation: Some(annotation),
-            typed_pattern: None,
             ty: Type::uninferred(),
-            mutable: is_mut,
+            mut_span,
         }
+    }
+
+    pub(crate) fn parse_mut_span(&mut self) -> Option<Span> {
+        if self.is_not(Mut) {
+            return None;
+        }
+        let token = self.current_token();
+        self.next();
+        Some(Span::new(
+            self.file_id,
+            token.byte_offset,
+            token.byte_length,
+        ))
     }
 
     fn try_parse_rest(&mut self) -> Option<RestPattern> {

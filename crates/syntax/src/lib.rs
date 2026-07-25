@@ -16,27 +16,14 @@ pub use parse::ParseError;
 pub const ENTRY_MODULE_ID: &str = "_entry_";
 pub const ROOT_IMPORT: &str = "root";
 
-use ast::Expression;
-
-#[derive(Debug)]
-pub struct AstBuildResult {
-    pub ast: Vec<Expression>,
-    pub errors: Vec<ParseError>,
-    pub file_comment: Option<String>,
-}
-
-impl AstBuildResult {
-    pub fn failed(&self) -> bool {
-        !self.errors.is_empty()
-    }
-}
+pub type AstBuildResult = parse::ParseResult;
 
 #[cfg(target_pointer_width = "64")]
 mod size_assertions {
     use std::mem::size_of;
-    const _: () = assert!(size_of::<super::ast::Expression>() == 344);
-    const _: () = assert!(size_of::<super::types::Type>() == 48);
-    const _: () = assert!(size_of::<super::ast::Pattern>() == 120);
+    const _: () = assert!(size_of::<super::ast::Expression>() == 288);
+    const _: () = assert!(size_of::<super::ast::Pattern>() == 152);
+    const _: () = assert!(size_of::<super::types::Type>() == 40);
     const _: () = assert!(size_of::<super::ast::Span>() == 12);
 }
 
@@ -44,7 +31,7 @@ const MAX_SOURCE_BYTES: usize = 10 * 1024 * 1024; // 10 MiB
 
 pub fn build_ast(source: &str, file_id: u32) -> AstBuildResult {
     if source.len() > MAX_SOURCE_BYTES {
-        return AstBuildResult {
+        return parse::ParseResult {
             ast: vec![],
             errors: vec![
                 ParseError::new(
@@ -64,7 +51,7 @@ pub fn build_ast(source: &str, file_id: u32) -> AstBuildResult {
 
     let parse_result = parse::Parser::lex_and_parse_file(source, file_id);
     if parse_result.failed() {
-        return AstBuildResult {
+        return parse::ParseResult {
             ast: vec![],
             errors: parse_result.errors,
             file_comment: None,
@@ -72,7 +59,7 @@ pub fn build_ast(source: &str, file_id: u32) -> AstBuildResult {
     }
 
     let desugar_result = desugar::desugar(parse_result.ast);
-    AstBuildResult {
+    parse::ParseResult {
         ast: desugar_result.ast,
         errors: desugar_result.errors,
         file_comment: parse_result.file_comment,

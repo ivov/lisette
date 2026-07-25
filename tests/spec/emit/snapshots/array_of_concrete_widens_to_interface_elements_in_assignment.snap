@@ -1,0 +1,55 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: |
+  
+  struct Boom {}
+  
+  impl Boom {
+    fn Error(self) -> string {
+      "boom"
+    }
+  }
+  
+  struct Quiet {}
+  
+  impl Quiet {
+    fn Error(self) -> string {
+      "quiet"
+    }
+  }
+  
+  fn test() {
+    let mut errs: Array<error, 2> = [Quiet {}, Quiet {}]
+    let concrete: Array<Boom, 2> = [Boom {}, Boom {}]
+    errs = concrete
+    if errs[0].Error() != "boom" {
+      panic("assignment lost its interface elements")
+    }
+  }
+---
+package main
+
+type Boom struct{}
+
+func (b Boom) Error() string {
+	return "boom"
+}
+
+type Quiet struct{}
+
+func (q Quiet) Error() string {
+	return "quiet"
+}
+
+func test() {
+	errs := [2]error{Quiet{}, Quiet{}}
+	concrete := [2]Boom{Boom{}, Boom{}}
+	var boxed_1 [2]error
+	for i_2 := range concrete {
+		boxed_1[i_2] = concrete[i_2]
+	}
+	errs = boxed_1
+	if errs[0].Error() != "boom" {
+		panic("assignment lost its interface elements")
+	}
+}

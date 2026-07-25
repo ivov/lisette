@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use diagnostics::PatternIssue;
 use syntax::EcoString;
 use syntax::ast::{BindingId, BindingKind, DeadCodeCause, Span};
-use syntax::program::{BindingMutation, ResolvedDefinitions, TestFunction};
+use syntax::program::{BindingMutation, TestFunction};
 use syntax::types::Type;
 
 #[derive(Debug, Default)]
@@ -74,10 +74,6 @@ pub struct Facts {
     /// annotation's span. Lets emit render bounds from the resolved type
     /// instead of re-resolving the annotation.
     pub bound_types: HashMap<Span, Type>,
-
-    /// Canonical definition selected for resolved dot accesses, keyed by the
-    /// dot expression's span.
-    pub resolved_definitions: ResolvedDefinitions,
 }
 
 #[derive(Debug, Clone)]
@@ -186,7 +182,6 @@ impl Facts {
             equality_derivations: Vec::new(),
             test_functions: Vec::new(),
             bound_types: HashMap::default(),
-            resolved_definitions: HashMap::default(),
         }
     }
 
@@ -209,7 +204,7 @@ impl Facts {
                 span,
                 kind,
                 used: false,
-                mutation: BindingMutation::Unchanged,
+                mutation: None,
                 origin,
             },
         );
@@ -222,9 +217,17 @@ impl Facts {
         }
     }
 
+    pub fn binding_id_at(&self, span: Span) -> Option<BindingId> {
+        self.bindings
+            .iter()
+            .find_map(|(&id, binding)| (binding.span == span).then_some(id))
+    }
+
     pub(crate) fn mark_mutated(&mut self, id: BindingId) {
         if let Some(fact) = self.bindings.get_mut(&id) {
-            fact.mutation = fact.mutation.merged_with(BindingMutation::Direct);
+            fact.mutation = Some(fact.mutation.map_or(BindingMutation::Direct, |mutation| {
+                mutation.merged_with(BindingMutation::Direct)
+            }));
         }
     }
 
@@ -232,7 +235,12 @@ impl Facts {
     /// capture, mut argument or receiver), so a call can rebind it.
     pub(crate) fn mark_alias_mutated(&mut self, id: BindingId) {
         if let Some(fact) = self.bindings.get_mut(&id) {
-            fact.mutation = fact.mutation.merged_with(BindingMutation::ThroughAlias);
+            fact.mutation = Some(
+                fact.mutation
+                    .map_or(BindingMutation::ThroughAlias, |mutation| {
+                        mutation.merged_with(BindingMutation::ThroughAlias)
+                    }),
+            );
         }
     }
 
@@ -336,12 +344,10 @@ impl Facts {
             equality_derivations,
             test_functions,
             bound_types,
-            resolved_definitions,
         } = other;
         self.equality_derivations.extend(equality_derivations);
         self.test_functions.extend(test_functions);
         self.bound_types.extend(bound_types);
-        self.resolved_definitions.extend(resolved_definitions);
 
         self.bindings.extend(bindings);
         self.dead_code.extend(dead_code);
@@ -388,7 +394,7 @@ pub struct BindingFact {
     pub span: Span,
     pub kind: BindingKind,
     pub used: bool,
-    pub mutation: BindingMutation,
+    pub mutation: Option<BindingMutation>,
     pub origin: BindingOrigin,
 }
 
@@ -506,7 +512,10 @@ mod tests {
         facts.mark_alias_mutated(id);
         facts.mark_mutated(id);
 
-        assert_eq!(facts.bindings[&id].mutation, BindingMutation::ThroughAlias);
+        assert_eq!(
+            facts.bindings[&id].mutation,
+            Some(BindingMutation::ThroughAlias)
+        );
     }
 
     #[test]

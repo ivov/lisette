@@ -3,10 +3,11 @@ use rustc_hash::FxHashMap as HashMap;
 use ecow::EcoString;
 use serde::{Deserialize, Serialize};
 use syntax::ast::{
-    Annotation, AttributeArg, Generic, Span, StructKind, Visibility as FieldVisibility,
+    Annotation, AttributeArg, Generic, Span, StructFields, Visibility as FieldVisibility,
 };
 use syntax::program::{
-    Attributes, Definition, DefinitionBody, Interface, MethodSignatures, Module, Visibility,
+    AliasKind, Attributes, Definition, DefinitionBody, Interface, MethodSignatures, Module,
+    ValueKind, Visibility,
 };
 use syntax::types::{Symbol, Type};
 
@@ -49,18 +50,17 @@ impl CachedGeneric {
     fn from_generic(generic: &Generic, file_id_to_index: &HashMap<u32, u32>) -> Self {
         Self {
             name: generic.name.clone(),
-            bounds: generic.bounds.clone(),
+            bounds: generic.bounds().cloned().collect(),
             span: CachedSpan::from_span(&generic.span, file_id_to_index),
         }
     }
 
     fn to_generic(&self, file_ids: &[u32]) -> Generic {
-        Generic {
-            name: self.name.clone(),
-            bounds: self.bounds.clone(),
-            resolved_bounds: vec![],
-            span: self.span.to_span(file_ids),
-        }
+        Generic::new(
+            self.name.clone(),
+            self.bounds.clone(),
+            self.span.to_span(file_ids),
+        )
     }
 }
 
@@ -154,6 +154,12 @@ pub struct CachedStructField {
     attributes: Vec<CachedAttribute>,
     doc: Option<String>,
     embedded: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum CachedStructFields {
+    Record(Vec<CachedStructField>),
+    Tuple(Vec<CachedStructField>),
 }
 
 impl CachedStructField {
@@ -324,7 +330,13 @@ pub struct CachedDefinition {
     name_span: Option<CachedSpan>,
     doc: Option<String>,
     pub body: CachedDefinitionBody,
-    is_const: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum CachedValueKind {
+    Runtime,
+    ConstantDeclaration,
+    Constant(CachedLiteral),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -332,7 +344,7 @@ pub enum CachedDefinitionBody {
     TypeAlias {
         generics: Vec<CachedGeneric>,
         methods: MethodSignatures,
-        is_opaque: bool,
+        alias: CachedAliasKind,
         attributes: Attributes,
     },
     Enum {
@@ -343,22 +355,26 @@ pub enum CachedDefinitionBody {
     },
     Struct {
         generics: Vec<CachedGeneric>,
-        fields: Vec<CachedStructField>,
-        kind: StructKind,
+        fields: CachedStructFields,
         methods: MethodSignatures,
-        constructor: Option<Type>,
         attributes: Attributes,
     },
     Interface {
         definition: CachedInterface,
     },
     Value {
+        kind: CachedValueKind,
         allowed_lints: Vec<String>,
         go_hints: Vec<String>,
         go_name: Option<String>,
         go_type_param_recipe: Option<String>,
-        const_value: Option<CachedLiteral>,
     },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum CachedAliasKind {
+    Opaque,
+    Transparent(Type),
 }
 
 impl CachedDefinition {
@@ -366,7 +382,6 @@ impl CachedDefinition {
     /// Only call this for public definitions that should be cached.
     pub(crate) fn from_definition(
         definition: &Definition,
-        is_const: bool,
         file_id_to_index: &HashMap<u32, u32>,
     ) -> Self {
         let Definition {
@@ -380,7 +395,7 @@ impl CachedDefinition {
         let body = match body {
             DefinitionBody::TypeAlias {
                 generics,
-                annotation,
+                alias,
                 methods,
                 attributes,
             } => CachedDefinitionBody::TypeAlias {
@@ -389,7 +404,12 @@ impl CachedDefinition {
                     .map(|g| CachedGeneric::from_generic(g, file_id_to_index))
                     .collect(),
                 methods: methods.clone(),
-                is_opaque: annotation.is_opaque(),
+                alias: match alias {
+                    AliasKind::Opaque(_) => CachedAliasKind::Opaque,
+                    AliasKind::Transparent { target, .. } => {
+                        CachedAliasKind::Transparent(target.clone())
+                    }
+                },
                 attributes: attributes.clone(),
             },
             DefinitionBody::Enum {
@@ -412,39 +432,51 @@ impl CachedDefinition {
             DefinitionBody::Struct {
                 generics,
                 fields,
-                kind,
                 methods,
-                constructor,
                 attributes,
             } => CachedDefinitionBody::Struct {
                 generics: generics
                     .iter()
                     .map(|g| CachedGeneric::from_generic(g, file_id_to_index))
                     .collect(),
-                fields: fields
-                    .iter()
-                    .map(|f| CachedStructField::from_field(f, file_id_to_index))
-                    .collect(),
-                kind: *kind,
+                fields: match fields {
+                    StructFields::Record(fields) => CachedStructFields::Record(
+                        fields
+                            .iter()
+                            .map(|f| CachedStructField::from_field(f, file_id_to_index))
+                            .collect(),
+                    ),
+                    StructFields::Tuple(fields) => CachedStructFields::Tuple(
+                        fields
+                            .iter()
+                            .map(|f| CachedStructField::from_field(f, file_id_to_index))
+                            .collect(),
+                    ),
+                },
                 methods: methods.clone(),
-                constructor: constructor.clone(),
                 attributes: attributes.clone(),
             },
             DefinitionBody::Interface { definition } => CachedDefinitionBody::Interface {
                 definition: CachedInterface::from_interface(definition, file_id_to_index),
             },
             DefinitionBody::Value {
+                kind,
                 allowed_lints,
                 go_hints,
                 go_name,
                 go_type_param_recipe,
-                const_value,
             } => CachedDefinitionBody::Value {
+                kind: match kind {
+                    ValueKind::Runtime => CachedValueKind::Runtime,
+                    ValueKind::ConstantDeclaration => CachedValueKind::ConstantDeclaration,
+                    ValueKind::Constant(value) => {
+                        CachedValueKind::Constant(CachedLiteral::from_literal(value))
+                    }
+                },
                 allowed_lints: allowed_lints.clone(),
                 go_hints: go_hints.clone(),
                 go_name: go_name.clone(),
                 go_type_param_recipe: go_type_param_recipe.clone(),
-                const_value: const_value.as_ref().map(CachedLiteral::from_literal),
             },
         };
         CachedDefinition {
@@ -453,7 +485,6 @@ impl CachedDefinition {
             name_span: name_span.map(|s| CachedSpan::from_span(&s, file_id_to_index)),
             doc: doc.clone(),
             body,
-            is_const,
         }
     }
 
@@ -463,9 +494,6 @@ impl CachedDefinition {
         qualified_name: Symbol,
         file_ids: &[u32],
     ) {
-        if self.is_const {
-            module.const_names.insert(qualified_name.clone());
-        }
         let definition = self.to_definition(file_ids);
         module.definitions.insert(qualified_name, definition);
     }
@@ -475,16 +503,18 @@ impl CachedDefinition {
             CachedDefinitionBody::TypeAlias {
                 generics,
                 methods,
-                is_opaque,
+                alias,
                 attributes,
             } => DefinitionBody::TypeAlias {
                 generics: generics.iter().map(|g| g.to_generic(file_ids)).collect(),
-                annotation: if *is_opaque {
-                    Annotation::Opaque {
+                alias: match alias {
+                    CachedAliasKind::Opaque => AliasKind::Opaque(Annotation::Opaque {
                         span: Span::dummy(),
-                    }
-                } else {
-                    Annotation::Unknown
+                    }),
+                    CachedAliasKind::Transparent(target) => AliasKind::Transparent {
+                        annotation: Annotation::Unknown,
+                        target: target.clone(),
+                    },
                 },
                 methods: methods.clone(),
                 attributes: attributes.clone(),
@@ -503,33 +533,40 @@ impl CachedDefinition {
             CachedDefinitionBody::Struct {
                 generics,
                 fields,
-                kind,
                 methods,
-                constructor,
                 attributes,
             } => DefinitionBody::Struct {
                 generics: generics.iter().map(|g| g.to_generic(file_ids)).collect(),
-                fields: fields.iter().map(|f| f.to_field(file_ids)).collect(),
-                kind: *kind,
+                fields: match fields {
+                    CachedStructFields::Record(fields) => {
+                        StructFields::Record(fields.iter().map(|f| f.to_field(file_ids)).collect())
+                    }
+                    CachedStructFields::Tuple(fields) => {
+                        StructFields::Tuple(fields.iter().map(|f| f.to_field(file_ids)).collect())
+                    }
+                },
                 methods: methods.clone(),
-                constructor: constructor.clone(),
                 attributes: attributes.clone(),
             },
             CachedDefinitionBody::Interface { definition } => DefinitionBody::Interface {
                 definition: definition.to_interface(file_ids),
             },
             CachedDefinitionBody::Value {
+                kind,
                 allowed_lints,
                 go_hints,
                 go_name,
                 go_type_param_recipe,
-                const_value,
             } => DefinitionBody::Value {
+                kind: match kind {
+                    CachedValueKind::Runtime => ValueKind::Runtime,
+                    CachedValueKind::ConstantDeclaration => ValueKind::ConstantDeclaration,
+                    CachedValueKind::Constant(value) => ValueKind::Constant(value.to_literal()),
+                },
                 allowed_lints: allowed_lints.clone(),
                 go_hints: go_hints.clone(),
                 go_name: go_name.clone(),
                 go_type_param_recipe: go_type_param_recipe.clone(),
-                const_value: const_value.as_ref().map(CachedLiteral::to_literal),
             },
         };
         Definition {

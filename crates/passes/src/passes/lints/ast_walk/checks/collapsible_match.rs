@@ -12,7 +12,7 @@ struct TwoArm<'a> {
     meaningful_pattern: &'a Pattern,
     meaningful_expr: &'a Expression,
     dismissal_is_wildcard: bool,
-    dismissal_expr: &'a Expression,
+    dismissal_expr: Option<&'a Expression>,
     keyword_len: u32,
     span: Span,
 }
@@ -33,7 +33,7 @@ fn as_two_arm(expression: &Expression) -> Option<TwoArm<'_>> {
                 meaningful_pattern: &arms[0].pattern,
                 meaningful_expr: arms[0].expression.as_ref(),
                 dismissal_is_wildcard: matches!(arms[1].pattern, Pattern::WildCard { .. }),
-                dismissal_expr: arms[1].expression.as_ref(),
+                dismissal_expr: Some(arms[1].expression.as_ref()),
                 keyword_len: 5,
                 span: *span,
             })
@@ -50,7 +50,7 @@ fn as_two_arm(expression: &Expression) -> Option<TwoArm<'_>> {
             meaningful_pattern: pattern,
             meaningful_expr: consequence.as_ref(),
             dismissal_is_wildcard: true,
-            dismissal_expr: alternative.as_ref(),
+            dismissal_expr: alternative.expression(),
             keyword_len: 2,
             span: *span,
         }),
@@ -88,15 +88,17 @@ pub fn check_collapsible_match(expression: &Expression, ctx: &NodeCtx) {
     }
 
     if !dismissals_equivalent(
-        unwrap_block(outer.dismissal_expr),
-        unwrap_block(inner.dismissal_expr),
+        outer.dismissal_expr.map(unwrap_block),
+        inner.dismissal_expr.map(unwrap_block),
     ) {
         return;
     }
 
     // Merging drops the outer binding, so nothing kept may still refer to it.
     if mentions_identifier(inner.meaningful_expr, binding)
-        || mentions_identifier(inner.dismissal_expr, binding)
+        || inner
+            .dismissal_expr
+            .is_some_and(|expression| mentions_identifier(expression, binding))
     {
         return;
     }
@@ -184,20 +186,31 @@ fn is_catch_all(pattern: &Pattern) -> bool {
     )
 }
 
-fn dismissals_equivalent(a: &Expression, b: &Expression) -> bool {
+fn dismissals_equivalent(a: Option<&Expression>, b: Option<&Expression>) -> bool {
     match (a, b) {
-        (Expression::Unit { .. }, Expression::Unit { .. }) => true,
-        (Expression::Continue { .. }, Expression::Continue { .. }) => true,
-        (Expression::Break { value: a, .. }, Expression::Break { value: b, .. }) => match (a, b) {
-            (None, None) => true,
-            (Some(a), Some(b)) => dismissals_equivalent(unwrap_block(a), unwrap_block(b)),
-            _ => false,
+        (None, None) => true,
+        (Some(Expression::Unit { .. }), Some(Expression::Unit { .. })) => true,
+        (Some(a), Some(b)) => match (a, b) {
+            (Expression::Continue { .. }, Expression::Continue { .. }) => true,
+            (Expression::Break { value: a, .. }, Expression::Break { value: b, .. }) => {
+                match (a, b) {
+                    (None, None) => true,
+                    (Some(a), Some(b)) => {
+                        dismissals_equivalent(Some(unwrap_block(a)), Some(unwrap_block(b)))
+                    }
+                    _ => false,
+                }
+            }
+            (
+                Expression::Return { expression: a, .. },
+                Expression::Return { expression: b, .. },
+            )
+            | (
+                Expression::Propagate { expression: a, .. },
+                Expression::Propagate { expression: b, .. },
+            ) => dismissals_equivalent(Some(unwrap_block(a)), Some(unwrap_block(b))),
+            _ => expressions_equivalent(a, b),
         },
-        (Expression::Return { expression: a, .. }, Expression::Return { expression: b, .. })
-        | (
-            Expression::Propagate { expression: a, .. },
-            Expression::Propagate { expression: b, .. },
-        ) => dismissals_equivalent(unwrap_block(a), unwrap_block(b)),
-        _ => expressions_equivalent(a, b),
+        _ => false,
     }
 }

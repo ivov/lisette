@@ -1,5 +1,5 @@
 use super::{MAX_TUPLE_ARITY, Parser};
-use crate::ast::{Expression, MatchArm, Span};
+use crate::ast::{Expression, IfLetAlternative, MatchArm, Span};
 use crate::lex::TokenKind::*;
 use crate::types::Type;
 
@@ -9,7 +9,7 @@ impl<'source> Parser<'source> {
 
         self.ensure(Match);
 
-        let subject = self.with_control_flow_header(|p| p.parse_expression());
+        let subject = self.parse_control_flow_header();
 
         self.ensure(LeftCurlyBrace);
 
@@ -72,55 +72,47 @@ impl<'source> Parser<'source> {
         Some(MatchArm {
             pattern,
             guard,
-            typed_pattern: None,
             expression: Box::new(self.parse_assignment()),
         })
     }
 
     pub(super) fn parse_if(&mut self) -> Expression {
         let start = self.current_token();
+        if let Some(result) = self.with_recursion(|parser| {
+            parser.ensure(If);
 
-        if !self.enter_recursion() {
-            let span = self.span_from_token(self.current_token());
-            self.resync_on_error();
-            return Expression::Unit {
-                ty: Type::uninferred(),
-                span,
+            if parser.is(Let) {
+                return parser.parse_if_let_expression(start);
+            }
+
+            let condition = parser.parse_control_flow_header();
+            let consequence = parser.parse_block_expression();
+
+            let alternative = if parser.advance_if(Else) {
+                if parser.is(If) {
+                    Some(parser.parse_if().into())
+                } else {
+                    Some(parser.parse_block_expression().into())
+                }
+            } else {
+                None
             };
-        }
 
-        self.ensure(If);
-
-        if self.is(Let) {
-            let result = self.parse_if_let_expression(start);
-            self.leave_recursion();
+            Expression::If {
+                ty: Type::uninferred(),
+                condition: condition.into(),
+                consequence: consequence.into(),
+                alternative,
+                span: parser.span_from_tokens(start),
+            }
+        }) {
             return result;
         }
-
-        let condition = self.with_control_flow_header(|p| p.parse_expression());
-        let consequence = self.parse_block_expression();
-
-        let alternative = if self.advance_if(Else) {
-            if self.is(If) {
-                self.parse_if()
-            } else {
-                self.parse_block_expression()
-            }
-        } else {
-            Expression::Unit {
-                ty: Type::uninferred(),
-                span: self.span_from_tokens(start),
-            }
-        };
-
-        self.leave_recursion();
-
-        Expression::If {
+        let span = self.span_from_token(self.current_token());
+        self.resync_on_error();
+        Expression::Unit {
             ty: Type::uninferred(),
-            condition: condition.into(),
-            consequence: consequence.into(),
-            alternative: alternative.into(),
-            span: self.span_from_tokens(start),
+            span,
         }
     }
 
@@ -129,10 +121,10 @@ impl<'source> Parser<'source> {
 
         let pattern = self.parse_pattern_allowing_or();
         self.ensure(Equal);
-        let scrutinee = self.with_control_flow_header(|p| p.parse_expression());
+        let scrutinee = self.parse_control_flow_header();
         let consequence = self.parse_block_expression();
 
-        let (alternative, else_span) = if self.is(Else) {
+        let alternative = if self.is(Else) {
             let else_token = self.current_token();
             let else_span = Span::new(self.file_id, else_token.byte_offset, else_token.byte_length);
             self.next(); // consume `else`
@@ -141,24 +133,19 @@ impl<'source> Parser<'source> {
             } else {
                 self.parse_block_expression()
             };
-            (alt, Some(else_span))
+            IfLetAlternative::Present {
+                expression: alt.into(),
+                else_span,
+            }
         } else {
-            (
-                Expression::Unit {
-                    ty: Type::uninferred(),
-                    span: self.span_from_tokens(start),
-                },
-                None,
-            )
+            IfLetAlternative::Absent
         };
 
         Expression::IfLet {
             pattern,
             scrutinee: scrutinee.into(),
             consequence: consequence.into(),
-            alternative: alternative.into(),
-            typed_pattern: None,
-            else_span,
+            alternative,
             ty: Type::uninferred(),
             span: self.span_from_tokens(start),
         }
@@ -263,7 +250,7 @@ impl<'source> Parser<'source> {
 
         self.ensure(In_);
 
-        let iterable = self.with_control_flow_header(|p| p.parse_expression());
+        let iterable = self.parse_control_flow_header();
         let body = self.parse_block_expression();
 
         Expression::For {
@@ -271,7 +258,6 @@ impl<'source> Parser<'source> {
             iterable: iterable.into(),
             body: body.into(),
             span: self.span_from_tokens(start),
-            binding_id: None,
         }
     }
 
@@ -284,7 +270,7 @@ impl<'source> Parser<'source> {
             return self.parse_while_let(start);
         }
 
-        let condition = self.with_control_flow_header(|p| p.parse_expression());
+        let condition = self.parse_control_flow_header();
         let body = self.parse_block_expression();
 
         Expression::While {
@@ -299,14 +285,13 @@ impl<'source> Parser<'source> {
 
         let pattern = self.parse_pattern_allowing_or();
         self.ensure(Equal);
-        let scrutinee = self.with_control_flow_header(|p| p.parse_expression());
+        let scrutinee = self.parse_control_flow_header();
         let body = self.parse_block_expression();
 
         Expression::WhileLet {
             pattern,
             scrutinee: scrutinee.into(),
             body: body.into(),
-            typed_pattern: None,
             span: self.span_from_tokens(start),
         }
     }

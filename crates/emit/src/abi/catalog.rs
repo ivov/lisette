@@ -34,7 +34,7 @@ impl GoAbiCatalog {
                 continue;
             }
             catalog.register_callable(definitions, qualified_name, definition);
-            catalog.register_fields(qualified_name, definition);
+            catalog.register_fields(definitions, qualified_name, definition);
         }
         catalog
     }
@@ -78,12 +78,18 @@ impl GoAbiCatalog {
             .params
             .iter()
             .map(|parameter| GoSlotDescriptor {
-                origin: SlotOrigin::go_parameter(&parameter.ty),
+                origin: SlotOrigin::go_parameter(syntax::types::resolves_to_unknown(
+                    &parameter.ty,
+                    |id| definitions.get(id),
+                )),
                 declared_type: parameter.ty.clone(),
             })
             .collect();
         let return_slot = GoSlotDescriptor {
-            origin: SlotOrigin::go_return(&function.return_type),
+            origin: SlotOrigin::go_return(syntax::types::resolves_to_unknown(
+                &function.return_type,
+                |id| definitions.get(id),
+            )),
             declared_type: (*function.return_type).clone(),
         };
         let return_abi =
@@ -98,7 +104,12 @@ impl GoAbiCatalog {
         );
     }
 
-    fn register_fields(&mut self, qualified_name: &str, definition: &Definition) {
+    fn register_fields(
+        &mut self,
+        definitions: &HashMap<Symbol, Definition>,
+        qualified_name: &str,
+        definition: &Definition,
+    ) {
         let DefinitionBody::Struct { fields, .. } = &definition.body else {
             return;
         };
@@ -107,7 +118,10 @@ impl GoAbiCatalog {
             slots.insert(
                 field.name.to_string(),
                 GoSlotDescriptor {
-                    origin: SlotOrigin::go_field(&field.ty),
+                    origin: SlotOrigin::go_field(syntax::types::resolves_to_unknown(
+                        &field.ty,
+                        |id| definitions.get(id),
+                    )),
                     declared_type: field.ty.clone(),
                 },
             );

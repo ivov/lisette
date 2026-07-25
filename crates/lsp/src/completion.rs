@@ -1,7 +1,7 @@
 use rustc_hash::FxHashSet;
 use tower_lsp::lsp_types::*;
 
-use syntax::ast::Expression;
+use syntax::ast::{Expression, IdentifierResolution};
 use syntax::attributes::{AttributeInfo, AttributeTarget, attributes_for};
 use syntax::lex::{Lexer, Token, TokenKind as Tk};
 use syntax::program::DefinitionBody;
@@ -60,18 +60,18 @@ pub(crate) fn definition_to_completion_kind(
 }
 
 /// Extract the element type from an array, slice, or map.
-fn element_type_name(ty: &Type) -> Option<String> {
+fn element_type_name(ty: &Type, snapshot: &AnalysisSnapshot) -> Option<String> {
     use syntax::types::CompoundKind;
 
     if let Type::Array { element, .. } = ty {
-        return type_name(element);
+        return type_name(element, snapshot);
     }
 
     match ty.as_compound()? {
         (CompoundKind::Slice | CompoundKind::EnumeratedSlice, args) => {
-            args.first().and_then(type_name)
+            args.first().and_then(|ty| type_name(ty, snapshot))
         }
-        (CompoundKind::Map, args) => args.get(1).and_then(type_name),
+        (CompoundKind::Map, args) => args.get(1).and_then(|ty| type_name(ty, snapshot)),
         _ => None,
     }
 }
@@ -127,7 +127,8 @@ pub(crate) fn resolve_variable_type(
     let ty = if let Some(t) = borrowed_ty {
         t
     } else {
-        let (t, _) = crate::hover::get_hover_type_and_span(expression, binding.span.byte_offset);
+        let (t, _) =
+            crate::hover::get_hover_type_and_span(snapshot, expression, binding.span.byte_offset);
         owned_ty = t;
         &owned_ty
     };
@@ -136,9 +137,9 @@ pub(crate) fn resolve_variable_type(
     let ty = &resolved[0];
 
     if indexed {
-        element_type_name(ty)
+        element_type_name(ty, snapshot)
     } else {
-        type_name(ty)
+        type_name(ty, snapshot)
     }
 }
 
@@ -168,12 +169,12 @@ pub(crate) fn detect_dot_context(
         if !matches!(
             get_root_expression(expression),
             Expression::Identifier {
-                binding_id: None,
+                resolution,
                 ..
-            }
+            } if !matches!(resolution, IdentifierResolution::Binding(_))
         ) {
             let ty = expression.get_type();
-            return type_name(&ty).map(DotContext::Instance);
+            return type_name(&ty, snapshot).map(DotContext::Instance);
         }
         return None;
     }
@@ -190,7 +191,7 @@ pub(crate) fn detect_dot_context(
     }
 
     let ty = expression.get_type();
-    if let Some(type_id) = type_name(&ty) {
+    if let Some(type_id) = type_name(&ty, snapshot) {
         return Some(DotContext::Instance(type_id));
     }
 
@@ -240,7 +241,7 @@ pub(crate) fn get_instance_completions(
                 definition.body,
                 syntax::program::DefinitionBody::Value { .. }
             )
-            && is_instance_method(&definition.ty, type_id)
+            && is_instance_method(&definition.ty, type_id, snapshot)
             && (same_module || definition.visibility.is_public())
         {
             items.push(CompletionItem {
@@ -432,7 +433,7 @@ pub(crate) fn get_type_completions(
         if let Some(method_name) = qname.strip_prefix(method_prefix.as_str())
             && !method_name.contains('.')
             && matches!(definition.body, DefinitionBody::Value { .. })
-            && !is_instance_method(&definition.ty, method_id)
+            && !is_instance_method(&definition.ty, method_id, snapshot)
             && (same_module || definition.visibility.is_public())
             && !items.iter().any(|i| i.label == method_name)
         {
@@ -469,13 +470,19 @@ fn enum_variant_items(type_id: &str, snapshot: &AnalysisSnapshot) -> Option<Vec<
 /// Returns the target id of a non-generic alias.
 fn alias_target(type_id: &str, snapshot: &AnalysisSnapshot) -> Option<String> {
     let def = snapshot.definitions().get(type_id)?;
-    let DefinitionBody::TypeAlias { generics, .. } = &def.body else {
+    let DefinitionBody::TypeAlias {
+        generics,
+        alias: syntax::program::AliasKind::Transparent { .. },
+        ..
+    } = &def.body
+    else {
         return None;
     };
     if !generics.is_empty() {
         return None;
     }
-    let target = match &def.ty {
+    let target = syntax::types::peel_alias(&def.ty, |id| snapshot.definitions().get(id));
+    let target = match target {
         Type::Nominal { id, .. } => id.to_string(),
         Type::Simple(kind) => format!("prelude.{}", kind.leaf_name()),
         Type::Compound { kind, .. } => format!("prelude.{}", kind.leaf_name()),
@@ -484,14 +491,18 @@ fn alias_target(type_id: &str, snapshot: &AnalysisSnapshot) -> Option<String> {
     (target != type_id).then_some(target)
 }
 
-fn is_instance_method(ty: &syntax::types::Type, type_id: &str) -> bool {
+fn is_instance_method(
+    ty: &syntax::types::Type,
+    type_id: &str,
+    snapshot: &AnalysisSnapshot,
+) -> bool {
     let func_ty = match ty {
         syntax::types::Type::Forall { body, .. } => body,
         other => other,
     };
     match func_ty {
         syntax::types::Type::Function(f) if !f.params.is_empty() => {
-            type_name(&f.params[0].ty).is_some_and(|name| name == type_id)
+            type_name(&f.params[0].ty, snapshot).is_some_and(|name| name == type_id)
         }
         _ => false,
     }

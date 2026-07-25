@@ -45,6 +45,10 @@ fn fits(
                 _ => docs.push((indent, mode, doc)),
             },
 
+            Document::MeasureFlat(doc) => {
+                docs.push((indent, Mode::ForcedUnbroken, doc));
+            }
+
             Document::Text(s) => {
                 current_width += s.graphemes(true).count() as isize;
             }
@@ -65,16 +69,12 @@ fn fits(
                 }
             }
 
-            Document::NextBreakFits(doc, enabled) => {
-                if *enabled {
-                    match mode {
-                        Mode::ForcedUnbroken => docs.push((indent, mode, doc)),
-                        _ => docs.push((indent, Mode::ForcedBroken, doc)),
-                    }
-                } else {
-                    docs.push((indent, Mode::ForcedUnbroken, doc));
-                }
-            }
+            Document::NextBreakFits(doc, enabled) => match (*enabled, mode) {
+                (true, Mode::ForcedUnbroken) => docs.push((indent, mode, doc)),
+                (true, _) => docs.push((indent, Mode::ForcedBroken, doc)),
+                (false, Mode::ForcedBroken) => docs.push((indent, mode, doc)),
+                (false, _) => docs.push((indent, Mode::ForcedUnbroken, doc)),
+            },
 
             Document::Sequence(vec) => {
                 for doc in vec.iter().rev() {
@@ -200,7 +200,9 @@ fn format(
                 }
             }
 
-            Document::ForceBroken(document) | Document::NextBreakFits(document, _) => {
+            Document::ForceBroken(document)
+            | Document::NextBreakFits(document, _)
+            | Document::MeasureFlat(document) => {
                 docs.push((indent, mode, document));
             }
         }
@@ -212,6 +214,7 @@ pub enum Document<'a> {
     Newline,
     ForceBroken(Box<Self>),
     NextBreakFits(Box<Self>, bool),
+    MeasureFlat(Box<Self>),
     StrictBreak { broken: &'a str, unbroken: &'a str },
     FlexBreak { broken: &'a str, unbroken: &'a str },
     Sequence(Vec<Self>),
@@ -253,6 +256,10 @@ impl<'a> Document<'a> {
 
     pub fn next_break_fits(self, enabled: bool) -> Self {
         Self::NextBreakFits(Box::new(self), enabled)
+    }
+
+    pub fn measure_flat(self) -> Self {
+        Self::MeasureFlat(Box::new(self))
     }
 
     pub fn append(self, second: impl Documentable<'a>) -> Self {

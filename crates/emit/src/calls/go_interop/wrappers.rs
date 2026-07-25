@@ -1,6 +1,6 @@
 use crate::Planner;
 use crate::Renderer;
-use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
+use crate::abi::callable::{CallableAbi, CallableReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::coercion::{LayoutBridge, resolve_layout_bridge};
 use crate::abi::layout::{FunctionLayout, ValueLayout};
 use crate::control_flow::fallible::{
@@ -673,7 +673,7 @@ impl Planner<'_> {
         &mut self,
         setup: &mut Vec<LoweredStatement>,
         expression: &Expression,
-        abi: &CallableReturnAbi,
+        abi: &CallableAbi,
     ) -> String {
         self.require_stdlib();
 
@@ -684,7 +684,7 @@ impl Planner<'_> {
         let ret_ty_str = self.go_type_string(&return_type);
 
         let mut statements = Vec::new();
-        let outcome = match abi {
+        let outcome = match &abi.result {
             CallableReturnAbi::Tagged | CallableReturnAbi::Direct => {
                 unreachable!("passthrough Go function needs no wrapper")
             }
@@ -697,9 +697,15 @@ impl Planner<'_> {
                 )));
                 Some(self.plan_tuple_from_vars(&mut statements, &temp_vars, &return_type))
             }
-            _ => {
-                let (wrap, outcome) =
-                    self.lower_abi_wrapping(&call_str, abi, &return_type, WrapperTarget::Return);
+            result => {
+                let payload_bridge = self.go_return_payload_bridge(abi, &return_type);
+                let (wrap, outcome) = self.lower_abi_wrapping_with_payload_bridge(
+                    &call_str,
+                    result,
+                    &return_type,
+                    payload_bridge.as_ref(),
+                    WrapperTarget::Return,
+                );
                 statements.extend(wrap);
                 outcome
             }

@@ -1,0 +1,47 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: |
+  
+  struct Boom {}
+  
+  impl Boom {
+    fn Error(self) -> string {
+      "boom"
+    }
+  }
+  
+  struct Holder {
+    errs: Array<error, 2>,
+  }
+  
+  fn test() {
+    let concrete: Array<Boom, 2> = [Boom {}, Boom {}]
+    let holder = Holder { errs: concrete }
+    if holder.errs[0].Error() != "boom" {
+      panic("struct field lost its interface elements")
+    }
+  }
+---
+package main
+
+type Boom struct{}
+
+func (b Boom) Error() string {
+	return "boom"
+}
+
+type Holder struct {
+	errs [2]error
+}
+
+func test() {
+	concrete := [2]Boom{Boom{}, Boom{}}
+	var boxed_1 [2]error
+	for i_2 := range concrete {
+		boxed_1[i_2] = concrete[i_2]
+	}
+	holder := Holder{errs: boxed_1}
+	if holder.errs[0].Error() != "boom" {
+		panic("struct field lost its interface elements")
+	}
+}

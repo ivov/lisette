@@ -19,18 +19,15 @@ pub fn parse_and_register_prelude(store: &mut Store, sink: &LocalSink) {
     sink.extend_parse_errors(result.errors);
 
     store.mark_visited(PRELUDE_MODULE_ID);
-    store.store_file(
-        PRELUDE_MODULE_ID,
-        File {
-            id: PRELUDE_FILE_ID,
-            module_id: PRELUDE_MODULE_ID.to_string(),
-            name: "prelude.d.lis".to_string(),
-            display_path: "prelude.d.lis".to_string(),
-            source: LIS_PRELUDE_SOURCE.to_string(),
-            items: result.ast,
-            file_comment: None,
-        },
-    );
+    store.store_file(File {
+        id: PRELUDE_FILE_ID,
+        module_id: PRELUDE_MODULE_ID.to_string(),
+        name: "prelude.d.lis".to_string(),
+        display_path: "prelude.d.lis".to_string(),
+        source: LIS_PRELUDE_SOURCE.to_string(),
+        items: result.ast,
+        file_comment: None,
+    });
 
     if let Some(path) = deps::prelude_typedef_path() {
         store.typedef_paths.insert(PRELUDE_FILE_ID, path);
@@ -49,11 +46,11 @@ pub fn parse_and_register_prelude(store: &mut Store, sink: &LocalSink) {
         &[],
         FileContextKind::Prelude,
         |checker, store| {
-            for file in module.all_typedefs() {
+            for file in module.typedef_files() {
                 checker.register_type_names(store, &file.items, &Visibility::Public);
             }
 
-            for file in module.all_typedefs() {
+            for file in module.typedef_files() {
                 checker.register_type_definitions(store, &file.items);
                 checker.register_impl_blocks(store, &file.items);
                 checker.register_values(store, &file.items, &Visibility::Public);
@@ -74,18 +71,15 @@ pub fn parse_and_register_test_prelude(store: &mut Store, sink: &LocalSink) {
 
     store.mark_visited(TEST_PRELUDE_MODULE_ID);
     store.add_module(TEST_PRELUDE_MODULE_ID);
-    store.store_file(
-        TEST_PRELUDE_MODULE_ID,
-        File {
-            id: file_id,
-            module_id: TEST_PRELUDE_MODULE_ID.to_string(),
-            name: "test_prelude.d.lis".to_string(),
-            display_path: "test_prelude.d.lis".to_string(),
-            source: LIS_TEST_PRELUDE_SOURCE.to_string(),
-            items: result.ast,
-            file_comment: None,
-        },
-    );
+    store.store_file(File {
+        id: file_id,
+        module_id: TEST_PRELUDE_MODULE_ID.to_string(),
+        name: "test_prelude.d.lis".to_string(),
+        display_path: "test_prelude.d.lis".to_string(),
+        source: LIS_TEST_PRELUDE_SOURCE.to_string(),
+        items: result.ast,
+        file_comment: None,
+    });
 
     let mut checker = TaskState::with_fresh_allocator();
     let module = store
@@ -100,11 +94,11 @@ pub fn parse_and_register_test_prelude(store: &mut Store, sink: &LocalSink) {
         &[],
         FileContextKind::TestPrelude,
         |checker, store| {
-            for file in module.all_typedefs() {
+            for file in module.typedef_files() {
                 checker.register_type_names(store, &file.items, &Visibility::Public);
             }
 
-            for file in module.all_typedefs() {
+            for file in module.typedef_files() {
                 checker.register_type_definitions(store, &file.items);
                 checker.register_impl_blocks(store, &file.items);
                 checker.register_values(store, &file.items, &Visibility::Public);

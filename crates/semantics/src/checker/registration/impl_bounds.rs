@@ -64,7 +64,7 @@ impl TaskState {
         }
         let mut resolved_bounds = impl_bounds.iter();
         for (position, generic) in impl_generics.iter().enumerate() {
-            for annotation in &generic.bounds {
+            for annotation in generic.bounds() {
                 let Some(bound) = resolved_bounds.next() else {
                     return;
                 };

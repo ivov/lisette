@@ -1,7 +1,7 @@
 use crate::checker::EnvResolve;
 use crate::facts::BranchSubsumption;
 use syntax::ast::BindingKind;
-use syntax::ast::{Binding, BindingId, Expression, MatchArm, Pattern, Span};
+use syntax::ast::{Binding, Expression, IfLetAlternative, MatchArm, Pattern, Span};
 use syntax::types::{SimpleKind, Type};
 
 use crate::checker::infer::InferCtx;
@@ -96,7 +96,7 @@ impl InferCtx<'_> {
                 }
                 let before = self.sink.len();
                 if self
-                    .try_unify(arm_ty, &obligation.result_ty, arm_span)
+                    .try_unify(&obligation.result_ty, arm_ty, arm_span)
                     .is_err()
                     && self.sink.len() == before
                 {
@@ -162,7 +162,7 @@ impl InferCtx<'_> {
                 self.sink
                     .push(diagnostics::infer::cannot_match_on_functions(*span));
             }
-            Type::Var { .. } => {
+            Type::Var { .. } | Type::Uninferred | Type::Ignored => {
                 self.sink
                     .push(diagnostics::infer::cannot_match_on_unconstrained_type(
                         *span,
@@ -214,7 +214,11 @@ impl InferCtx<'_> {
     fn infer_condition(&mut self, condition: Expression, span: &Span) -> Expression {
         let cond_ty = self.new_type_var();
         let inferred = self.infer_expression(condition, &cond_ty);
-        if cond_ty.resolve_in(&self.env).underlying_simple_kind() != Some(SimpleKind::Bool) {
+        if self
+            .store
+            .underlying_simple_kind(&cond_ty.resolve_in(&self.env))
+            != Some(SimpleKind::Bool)
+        {
             let bool_ty = self.type_bool();
             self.unify(&bool_ty, &cond_ty, span);
         }
@@ -225,7 +229,7 @@ impl InferCtx<'_> {
         &mut self,
         condition: Box<Expression>,
         consequence: Box<Expression>,
-        alternative: Box<Expression>,
+        alternative: Option<Box<Expression>>,
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
@@ -233,7 +237,7 @@ impl InferCtx<'_> {
         let alternative_ty = self.new_type_var();
 
         let is_expression = !expected_ty.is_ignored();
-        let has_no_else = !alternative.has_else();
+        let has_no_else = alternative.is_none();
 
         // When expected_ty is already resolved to a concrete type (e.g. an
         // interface from a return type annotation), use a shared type variable
@@ -248,7 +252,8 @@ impl InferCtx<'_> {
 
         // Branch bodies are tail-like contexts where Never calls are valid.
         let new_consequence = self.infer_root_expression(*consequence, &consequence_ty);
-        let new_alternative = self.infer_root_expression(*alternative, &alternative_ty);
+        let new_alternative = alternative
+            .map(|alternative| self.infer_root_expression(*alternative, &alternative_ty));
 
         if has_no_else {
             // An `if` without `else` always has type () (unit), like Rust.
@@ -257,7 +262,10 @@ impl InferCtx<'_> {
                 let unit_ty = self.type_unit();
                 self.unify(expected_ty, &unit_ty, &span);
             }
-        } else if is_expression && !expected_is_concrete {
+        } else if is_expression
+            && !expected_is_concrete
+            && let Some(new_alternative) = new_alternative.as_ref()
+        {
             let consequence_span = new_consequence.get_span();
             let alternative_span = new_alternative.get_span();
             self.reconcile_and_unify(
@@ -284,7 +292,7 @@ impl InferCtx<'_> {
         Expression::If {
             condition: new_condition.into(),
             consequence: new_consequence.into(),
-            alternative: new_alternative.into(),
+            alternative: new_alternative.map(Box::new),
             ty: result_ty,
             span,
         }
@@ -324,20 +332,30 @@ impl InferCtx<'_> {
             scrutinee,
             consequence,
             alternative,
-            typed_pattern,
-            else_span,
             span,
             ..
         } = expression
         else {
             unreachable!("infer_if_let called with non-IfLet expression");
         };
+        let (alternative, else_span) = match alternative {
+            IfLetAlternative::Absent => (
+                Expression::Unit {
+                    ty: Type::uninferred(),
+                    span,
+                },
+                None,
+            ),
+            IfLetAlternative::Present {
+                expression,
+                else_span,
+            } => (*expression, Some(else_span)),
+        };
         let is_if_let_without_else = else_span.is_none();
         let arms = vec![
             MatchArm {
                 pattern,
                 guard: None,
-                typed_pattern,
                 expression: consequence,
             },
             MatchArm {
@@ -345,8 +363,7 @@ impl InferCtx<'_> {
                     span: alternative.get_span(),
                 },
                 guard: None,
-                typed_pattern: None,
-                expression: alternative,
+                expression: Box::new(alternative),
             },
         ];
 
@@ -366,9 +383,13 @@ impl InferCtx<'_> {
             pattern: pattern_arm.pattern,
             scrutinee: new_scrutinee.into(),
             consequence: pattern_arm.expression,
-            alternative: wildcard_arm.expression,
-            typed_pattern: pattern_arm.typed_pattern,
-            else_span,
+            alternative: match else_span {
+                None => IfLetAlternative::Absent,
+                Some(else_span) => IfLetAlternative::Present {
+                    expression: wildcard_arm.expression,
+                    else_span,
+                },
+            },
             ty: result_ty,
             span,
         }
@@ -415,8 +436,7 @@ impl InferCtx<'_> {
                 self.scopes.push();
 
                 let pattern_ty = subject_ty.resolve_in(&self.env);
-                let (new_pattern, typed_pattern) =
-                    self.infer_pattern(a.pattern, pattern_ty, arm_kind);
+                let new_pattern = self.infer_pattern(a.pattern, pattern_ty, arm_kind);
 
                 let new_guard = a
                     .guard
@@ -437,7 +457,6 @@ impl InferCtx<'_> {
                 MatchArm {
                     pattern: new_pattern,
                     guard: new_guard,
-                    typed_pattern: Some(typed_pattern),
                     expression: Box::new(new_expression),
                 }
             })
@@ -538,7 +557,7 @@ impl InferCtx<'_> {
         );
 
         self.scopes.push();
-        let (new_pattern, typed_pattern) = self.infer_pattern(
+        let new_pattern = self.infer_pattern(
             pattern,
             scrutinee_ty.resolve_in(&self.env),
             BindingKind::WhileLet,
@@ -553,7 +572,6 @@ impl InferCtx<'_> {
             pattern: new_pattern,
             scrutinee: new_scrutinee.into(),
             body: new_body.into(),
-            typed_pattern: Some(typed_pattern),
             span,
         }
     }
@@ -693,7 +711,7 @@ impl InferCtx<'_> {
         // Push a new scope so the loop variable doesn't shadow outer bindings
         self.scopes.push();
 
-        let (inferred_pattern, typed_pattern) = self.infer_pattern(
+        let inferred_pattern = self.infer_pattern(
             binding.pattern,
             element_ty.clone(),
             BindingKind::Let { mutable: false },
@@ -702,15 +720,9 @@ impl InferCtx<'_> {
         let new_binding = Binding {
             pattern: inferred_pattern,
             annotation: binding.annotation,
-            typed_pattern: Some(typed_pattern),
             ty: element_ty.clone(),
-            mutable: false,
+            mut_span: None,
         };
-
-        let binding_id: Option<BindingId> = new_binding
-            .pattern
-            .get_identifier()
-            .and_then(|name| self.scopes.lookup_binding_id(&name));
 
         // When iterating over types that yield multiple values (`Map`, `EnumeratedSlice`),
         // Go's `range` returns multiple values, so the binding must be a tuple literal.
@@ -738,7 +750,6 @@ impl InferCtx<'_> {
             iterable: new_iterable.into(),
             body: new_body.into(),
             span,
-            binding_id,
         }
     }
 

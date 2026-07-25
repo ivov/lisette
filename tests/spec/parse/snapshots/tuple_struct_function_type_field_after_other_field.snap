@@ -15,78 +15,79 @@ description: |
             byte_length: 7,
         },
         generics: [],
-        fields: [
-            StructFieldDefinition {
-                doc: None,
-                attributes: [],
-                name: "_0",
-                name_span: Span {
-                    file_id: 0,
-                    byte_offset: 16,
-                    byte_length: 3,
-                },
-                annotation: Constructor {
-                    name: "int",
-                    params: [],
-                    span: Span {
+        fields: Tuple(
+            [
+                StructFieldDefinition {
+                    doc: None,
+                    attributes: [],
+                    name: "_0",
+                    name_span: Span {
                         file_id: 0,
                         byte_offset: 16,
                         byte_length: 3,
                     },
-                },
-                visibility: Private,
-                ty: Var {
-                    id: uninferred,
-                },
-                embedded: false,
-            },
-            StructFieldDefinition {
-                doc: None,
-                attributes: [],
-                name: "_1",
-                name_span: Span {
-                    file_id: 0,
-                    byte_offset: 21,
-                    byte_length: 14,
-                },
-                annotation: Function {
-                    params: [
-                        FunctionAnnotationParameter {
-                            annotation: Constructor {
-                                name: "int",
-                                params: [],
-                                span: Span {
-                                    file_id: 0,
-                                    byte_offset: 24,
-                                    byte_length: 3,
-                                },
-                            },
-                            mutable: false,
-                        },
-                    ],
-                    return_type: Constructor {
+                    annotation: Constructor {
                         name: "int",
                         params: [],
                         span: Span {
                             file_id: 0,
-                            byte_offset: 32,
+                            byte_offset: 16,
                             byte_length: 3,
                         },
                     },
-                    span: Span {
+                    visibility: Private,
+                    ty: Var {
+                        id: uninferred,
+                    },
+                    embedded: false,
+                },
+                StructFieldDefinition {
+                    doc: None,
+                    attributes: [],
+                    name: "_1",
+                    name_span: Span {
                         file_id: 0,
                         byte_offset: 21,
                         byte_length: 14,
                     },
+                    annotation: Function {
+                        params: [
+                            FunctionAnnotationParameter {
+                                annotation: Constructor {
+                                    name: "int",
+                                    params: [],
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 24,
+                                        byte_length: 3,
+                                    },
+                                },
+                                mutable: false,
+                            },
+                        ],
+                        return_type: Constructor {
+                            name: "int",
+                            params: [],
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 32,
+                                byte_length: 3,
+                            },
+                        },
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 21,
+                            byte_length: 14,
+                        },
+                    },
+                    visibility: Private,
+                    ty: Var {
+                        id: uninferred,
+                    },
+                    embedded: false,
                 },
-                visibility: Private,
-                ty: Var {
-                    id: uninferred,
-                },
-                embedded: false,
-            },
-        ],
-        kind: Tuple,
+            ],
+        ),
         visibility: Private,
         span: Span {
             file_id: 0,

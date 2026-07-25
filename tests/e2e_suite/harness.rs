@@ -58,7 +58,6 @@ pub fn compile_e2e_suite_test(input: &str, package_name: &str) -> Result<Emitted
     let test_index = syntax::program::TestIndex::default();
     let config = TestEmitConfig {
         definitions: &result.definitions,
-        const_names: &result.const_names,
         module_id: &result.module_id,
         go_module: GO_MODULE,
         unused: &result.unused,
@@ -68,7 +67,6 @@ pub fn compile_e2e_suite_test(input: &str, package_name: &str) -> Result<Emitted
         test_index: &test_index,
         go_package_names: &result.go_package_names,
         go_module_ids: &result.go_module_ids,
-        resolved_definitions: &result.resolved_definitions,
     };
     let mut emitter = Planner::new_for_tests(&config, None);
     let mut emitted_files = emitter.emit_files(&[&file], &result.module_id);

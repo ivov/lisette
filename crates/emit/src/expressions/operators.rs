@@ -1,5 +1,6 @@
 use crate::Planner;
 use crate::Renderer;
+use crate::analyze::facts::EmitFacts;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
@@ -41,7 +42,7 @@ impl Planner<'_> {
             ty: right_expression.get_type(),
         };
 
-        if let Some(emit_info) = is_casting_needed(operator, &left, &right) {
+        if let Some(emit_info) = is_casting_needed(&self.facts, operator, &left, &right) {
             return self.plan_numeric_binary_with_casts(
                 operator,
                 left_expression,
@@ -233,7 +234,7 @@ impl Planner<'_> {
             ..
         } = target
             && let Some(flipped) = flip_comparison(cmp)
-            && flip_preserves_nan(cmp, left, right)
+            && flip_preserves_nan(&self.facts, cmp, left, right)
         {
             let plan = self.plan_binary(&flipped, left, right, ctx);
             return if preserve_parens {
@@ -299,15 +300,19 @@ impl Planner<'_> {
     }
 }
 
-fn flip_preserves_nan(operator: &BinaryOperator, left: &Expression, right: &Expression) -> bool {
+fn flip_preserves_nan(
+    facts: &EmitFacts<'_>,
+    operator: &BinaryOperator,
+    left: &Expression,
+    right: &Expression,
+) -> bool {
     matches!(operator, BinaryOperator::Equal | BinaryOperator::NotEqual)
-        || (is_non_float(left) && is_non_float(right))
+        || (is_non_float(facts, left) && is_non_float(facts, right))
 }
 
-fn is_non_float(expression: &Expression) -> bool {
-    expression
-        .get_type()
-        .underlying_simple_kind()
+fn is_non_float(facts: &EmitFacts<'_>, expression: &Expression) -> bool {
+    facts
+        .underlying_simple_kind(&expression.get_type())
         .is_some_and(|kind| !kind.is_float())
 }
 
@@ -472,9 +477,9 @@ fn is_numeric_binary_op(operator: &BinaryOperator) -> bool {
 /// Common underlying numeric type when both operands lower to the same
 /// numeric family; `None` if either operand is non-numeric or the two
 /// numeric families differ.
-fn matching_underlying_numeric(left: &Type, right: &Type) -> Option<Type> {
-    let left_underlying = left.underlying_numeric_type()?;
-    let right_underlying = right.underlying_numeric_type()?;
+fn matching_underlying_numeric(facts: &EmitFacts<'_>, left: &Type, right: &Type) -> Option<Type> {
+    let left_underlying = facts.underlying_numeric_type(left)?;
+    let right_underlying = facts.underlying_numeric_type(right)?;
     if left_underlying.numeric_family()? != right_underlying.numeric_family()? {
         return None;
     }
@@ -492,6 +497,7 @@ fn cast_unless_literal(is_literal: bool, target: &Type) -> Option<Type> {
 /// Go requires explicit casts when mixing aliased numeric types with
 /// their underlying types.
 fn is_casting_needed(
+    facts: &EmitFacts<'_>,
     operator: &BinaryOperator,
     left: &BinaryOperand<'_>,
     right: &BinaryOperand<'_>,
@@ -500,10 +506,10 @@ fn is_casting_needed(
         return None;
     }
 
-    matching_underlying_numeric(&left.ty, &right.ty)?;
+    matching_underlying_numeric(facts, &left.ty, &right.ty)?;
 
-    let left_is_aliased = left.ty.is_aliased_numeric_type();
-    let right_is_aliased = right.ty.is_aliased_numeric_type();
+    let left_is_aliased = facts.is_aliased_numeric_type(&left.ty);
+    let right_is_aliased = facts.is_aliased_numeric_type(&right.ty);
 
     if left.ty == right.ty {
         return None;

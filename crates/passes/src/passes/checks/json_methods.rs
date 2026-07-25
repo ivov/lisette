@@ -15,8 +15,7 @@ pub(crate) fn run_module(module_id: &str, store: &Store, sink: &LocalSink) {
     };
 
     let json_enums: HashSet<&str> = module
-        .files
-        .values()
+        .source_files()
         .flat_map(|file| file.items.iter())
         .filter_map(|item| match item {
             Expression::Enum {
@@ -30,7 +29,7 @@ pub(crate) fn run_module(module_id: &str, store: &Store, sink: &LocalSink) {
         return;
     }
 
-    for item in module.files.values().flat_map(|file| file.items.iter()) {
+    for item in module.source_files().flat_map(|file| file.items.iter()) {
         let Expression::ImplBlock { ty, methods, .. } = item else {
             continue;
         };

@@ -58,7 +58,7 @@ pub fn check_out_of_domain_value(expression: &Expression, ctx: &NodeCtx) {
         }
 
         Expression::Call {
-            call_kind: Some(CallKind::TupleStructConstructor),
+            call_kind: CallKind::TupleStructConstructor,
             args,
             ty,
             ..

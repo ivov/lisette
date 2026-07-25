@@ -1,6 +1,6 @@
 use super::helpers::{is_bare_identifier, is_zero_literal};
 use crate::passes::walk::NodeCtx;
-use syntax::ast::{BindingId, Expression, Literal, Pattern, Span};
+use syntax::ast::{BindingId, Expression, IdentifierResolution, Literal, Pattern, Span};
 use syntax::program::{CallKind, NativeTypeKind};
 
 pub fn check_append_to_zero_filled(expression: &Expression, ctx: &NodeCtx) {
@@ -46,7 +46,7 @@ struct MakeCall {
 fn zero_filled_make_call(expression: &Expression) -> Option<MakeCall> {
     let Expression::Call {
         expression: callee,
-        call_kind: Some(CallKind::NativeConstructor(NativeTypeKind::Slice)),
+        call_kind: CallKind::NativeConstructor(NativeTypeKind::Slice),
         args,
         span,
         ty,
@@ -143,13 +143,25 @@ fn branch_parts(expression: &Expression) -> Option<(Vec<&Expression>, Vec<&Expre
             consequence,
             alternative,
             ..
-        } => Some((vec![condition], vec![consequence, alternative])),
+        } => {
+            let mut branches = vec![consequence.as_ref()];
+            if let Some(alternative) = alternative {
+                branches.push(alternative);
+            }
+            Some((vec![condition], branches))
+        }
         Expression::IfLet {
             scrutinee,
             consequence,
             alternative,
             ..
-        } => Some((vec![scrutinee], vec![consequence, alternative])),
+        } => {
+            let mut branches = vec![consequence.as_ref()];
+            if let Some(alternative) = alternative.expression() {
+                branches.push(alternative);
+            }
+            Some((vec![scrutinee.as_ref()], branches))
+        }
         Expression::Match { subject, arms, .. } => Some((
             vec![subject.as_ref()],
             arms.iter().map(|arm| arm.expression.as_ref()).collect(),
@@ -186,7 +198,7 @@ fn growing_append_receiver(expression: &Expression) -> Option<&Expression> {
         return None;
     };
     match call_kind {
-        Some(CallKind::NativeMethod(NativeTypeKind::Slice)) => {
+        CallKind::NativeMethod(NativeTypeKind::Slice) => {
             let Expression::DotAccess {
                 expression: receiver,
                 member,
@@ -198,7 +210,7 @@ fn growing_append_receiver(expression: &Expression) -> Option<&Expression> {
             (member == "append" && (!args.is_empty() || spread.is_some()))
                 .then(|| receiver.as_ref())
         }
-        Some(CallKind::NativeMethodIdentifier(NativeTypeKind::Slice)) => {
+        CallKind::NativeMethodIdentifier(NativeTypeKind::Slice) => {
             if !is_bare_identifier(callee, "Slice.append") {
                 return None;
             }
@@ -213,6 +225,9 @@ fn growing_append_receiver(expression: &Expression) -> Option<&Expression> {
 fn is_binding(expression: &Expression, binding_id: BindingId) -> bool {
     matches!(
         expression.unwrap_parens(),
-        Expression::Identifier { binding_id: Some(id), .. } if *id == binding_id
+        Expression::Identifier {
+            resolution: IdentifierResolution::Binding(id),
+            ..
+        } if *id == binding_id
     )
 }

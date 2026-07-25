@@ -1,4 +1,4 @@
-use syntax::ast::{Expression, StructKind};
+use syntax::ast::{Expression, StructFields};
 use syntax::program::{
     Definition, DefinitionBody, DotAccessKind as SemanticDotKind, ReceiverCoercion,
 };
@@ -22,15 +22,14 @@ impl Planner<'_> {
             expression,
             member,
             ty: result_ty,
-            dot_access_kind,
-            receiver_coercion,
+            resolution,
             ..
         } = dot_access
         else {
             unreachable!("plan_dot_access requires a DotAccess expression");
         };
-        let dot_access_kind = *dot_access_kind;
-        let receiver_coercion = *receiver_coercion;
+        let dot_access_kind = resolution.kind();
+        let receiver_coercion = resolution.receiver_coercion();
 
         if let Some(s) =
             self.try_emit_pre_receiver_dot(expression, member, result_ty, dot_access_kind, ctx)
@@ -367,8 +366,7 @@ impl Planner<'_> {
         let Some(Definition {
             body:
                 DefinitionBody::Struct {
-                    kind,
-                    fields,
+                    fields: StructFields::Tuple(fields),
                     generics,
                     ..
                 },
@@ -377,10 +375,6 @@ impl Planner<'_> {
         else {
             return None;
         };
-
-        if *kind != StructKind::Tuple {
-            return None;
-        }
 
         if fields.len() == 1 && generics.is_empty() {
             let underlying_ty = self.go_type_string(&fields[0].ty);

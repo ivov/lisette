@@ -15123,6 +15123,70 @@ fn main() {
 }
 
 #[test]
+fn redundant_closure_coerced_param_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+enum Bar {
+  Wrap(error),
+}
+
+struct FooError {}
+
+impl FooError {
+  fn Error(self) -> string { "foo failed" }
+}
+
+fn run(make_bar: fn(FooError) -> Bar) -> Bar {
+  make_bar(FooError {})
+}
+
+fn main() {
+  let _ = run(|e| Bar.Wrap(e))
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_closure_coerced_return_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct FooError {}
+
+impl FooError {
+  fn Error(self) -> string { "foo failed" }
+}
+
+fn make_foo_err() -> FooError {
+  FooError {}
+}
+
+fn run(make: fn() -> error) -> string {
+  make().Error()
+}
+
+fn main() {
+  let _ = run(|| make_foo_err())
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_closure_generic_callee() {
+    assert_lint_snapshot!(
+        r#"
+fn identity<T>(value: T) -> T { value }
+
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = xs.map(|x| identity(x))
+}
+"#
+    );
+}
+
+#[test]
 fn redundant_closure_mut_param_callee_no_warning() {
     assert_no_lint_warnings!(
         r#"
@@ -17656,11 +17720,8 @@ fn main() {
 }
 
 #[test]
-fn float_equality_without_abs_rejected_newtype_subtraction_no_diagnostic() {
-    let mut fs = MockFileSystem::new();
-    fs.add_file(
-        ENTRY_MODULE_ID,
-        "main.lis",
+fn float_equality_without_abs_newtype_alias() {
+    let diagnostics = crate::_harness::lint::lint(
         r#"
 struct Distance(float64)
 type DA = Distance
@@ -17671,14 +17732,13 @@ fn main() {
 }
 "#,
     );
-    let result = compile_check(fs);
-    assert!(
-        !result
-            .lints
-            .iter()
-            .any(|d| d.plain_message() == "Float equality without `abs`"),
-        "must not fire when the checker rejected the subtraction: {:?}",
-        result.lints
+    let count = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code_str() == Some("lint.float_equality_without_abs"))
+        .count();
+    assert_eq!(
+        count, 1,
+        "an alias to a newtype has the same numeric identity and must fire: {diagnostics:?}"
     );
 }
 

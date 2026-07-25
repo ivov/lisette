@@ -41,7 +41,6 @@ description: |
                         },
                     },
                 ),
-                typed_pattern: None,
                 ty: Var {
                     id: uninferred,
                 },
@@ -60,98 +59,99 @@ description: |
             id: uninferred,
         },
         visibility: Private,
-        body: Block {
-            items: [
-                Match {
-                    subject: Identifier {
-                        value: "x",
+        body: Definition(
+            Block {
+                items: [
+                    Match {
+                        subject: Identifier {
+                            value: "x",
+                            ty: Var {
+                                id: uninferred,
+                            },
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 41,
+                                byte_length: 1,
+                            },
+                            resolution: Unresolved,
+                        },
+                        arms: [
+                            MatchArm {
+                                pattern: Literal {
+                                    literal: Integer {
+                                        value: 9223372036854775808,
+                                        text: Some(
+                                            "-9223372036854775808",
+                                        ),
+                                    },
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 49,
+                                        byte_length: 20,
+                                    },
+                                },
+                                expression: Literal {
+                                    literal: String {
+                                        value: "min",
+                                        raw: false,
+                                    },
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 73,
+                                        byte_length: 5,
+                                    },
+                                },
+                            },
+                            MatchArm {
+                                pattern: WildCard {
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 84,
+                                        byte_length: 1,
+                                    },
+                                },
+                                expression: Literal {
+                                    literal: String {
+                                        value: "other",
+                                        raw: false,
+                                    },
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 89,
+                                        byte_length: 7,
+                                    },
+                                },
+                            },
+                        ],
                         ty: Var {
                             id: uninferred,
                         },
                         span: Span {
                             file_id: 0,
-                            byte_offset: 41,
-                            byte_length: 1,
+                            byte_offset: 35,
+                            byte_length: 66,
                         },
-                        binding_id: None,
-                        qualified: None,
                     },
-                    arms: [
-                        MatchArm {
-                            pattern: Literal {
-                                literal: Integer {
-                                    value: 9223372036854775808,
-                                    text: Some(
-                                        "-9223372036854775808",
-                                    ),
-                                },
-                                ty: Var {
-                                    id: uninferred,
-                                },
-                                span: Span {
-                                    file_id: 0,
-                                    byte_offset: 49,
-                                    byte_length: 20,
-                                },
-                            },
-                            expression: Literal {
-                                literal: String {
-                                    value: "min",
-                                    raw: false,
-                                },
-                                ty: Var {
-                                    id: uninferred,
-                                },
-                                span: Span {
-                                    file_id: 0,
-                                    byte_offset: 73,
-                                    byte_length: 5,
-                                },
-                            },
-                        },
-                        MatchArm {
-                            pattern: WildCard {
-                                span: Span {
-                                    file_id: 0,
-                                    byte_offset: 84,
-                                    byte_length: 1,
-                                },
-                            },
-                            expression: Literal {
-                                literal: String {
-                                    value: "other",
-                                    raw: false,
-                                },
-                                ty: Var {
-                                    id: uninferred,
-                                },
-                                span: Span {
-                                    file_id: 0,
-                                    byte_offset: 89,
-                                    byte_length: 7,
-                                },
-                            },
-                        },
-                    ],
-                    ty: Var {
-                        id: uninferred,
-                    },
-                    span: Span {
-                        file_id: 0,
-                        byte_offset: 35,
-                        byte_length: 66,
-                    },
+                ],
+                ty: Var {
+                    id: uninferred,
                 },
-            ],
-            ty: Var {
-                id: uninferred,
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 31,
+                    byte_length: 72,
+                },
             },
-            span: Span {
-                file_id: 0,
-                byte_offset: 31,
-                byte_length: 72,
-            },
-        },
+        ),
         ty: Var {
             id: uninferred,
         },

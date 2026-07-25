@@ -284,6 +284,11 @@ impl InferCtx<'_> {
         }
 
         let inner_ty = last_item.get_type();
+        let inner_ty = if inner_ty.is_ignored() {
+            self.type_unit()
+        } else {
+            inner_ty
+        };
 
         let block_ty = match carrier {
             TryCarrier::Result => {
@@ -365,6 +370,11 @@ impl InferCtx<'_> {
 
         let last_item = new_items.last().expect("block must have at least one item");
         let result_inner_ty = last_item.get_type();
+        let result_inner_ty = if result_inner_ty.is_ignored() {
+            self.type_unit()
+        } else {
+            result_inner_ty
+        };
 
         let panic_value_ty = self.type_panic_value(store);
         let block_ty = self.type_result(store, result_inner_ty, panic_value_ty);

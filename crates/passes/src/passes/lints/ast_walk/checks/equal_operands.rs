@@ -38,7 +38,7 @@ pub fn check_equal_operands(expression: &Expression, ctx: &NodeCtx) {
     if signed_integer_literal(left).is_some() || !is_side_effect_free(left) {
         return;
     }
-    if !is_integer_operand(&left.get_type(), bitwise) {
+    if !is_integer_operand(&left.get_type(), bitwise, ctx) {
         return;
     }
 
@@ -48,9 +48,10 @@ pub fn check_equal_operands(expression: &Expression, ctx: &NodeCtx) {
 /// Bitwise ops also accept a direct `uintptr` (per the checker's
 /// `is_integer_type`), but not a `uintptr` alias/newtype, so that exception is
 /// gated on `as_simple` rather than the underlying kind.
-fn is_integer_operand(ty: &Type, bitwise: bool) -> bool {
-    if ty
-        .underlying_simple_kind()
+fn is_integer_operand(ty: &Type, bitwise: bool, ctx: &NodeCtx<'_>) -> bool {
+    if ctx
+        .store
+        .underlying_simple_kind(ty)
         .is_some_and(|kind| kind.is_signed_int() || kind.is_unsigned_int())
     {
         return true;

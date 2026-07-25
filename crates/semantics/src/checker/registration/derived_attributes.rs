@@ -60,7 +60,6 @@ impl TaskState {
             module
                 .files
                 .values()
-                .chain(module.typedefs.values())
                 .flat_map(|file| {
                     collect_derived_attributes(module_id, file.is_d_lis(), &file.items)
                 })

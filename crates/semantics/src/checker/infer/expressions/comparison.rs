@@ -5,7 +5,7 @@ use crate::checker::TypeEnv;
 use crate::checker::infer::InferCtx;
 use crate::checker::scopes::Scopes;
 use crate::store::Store;
-use syntax::ast::{Annotation, Expression, Span};
+use syntax::ast::{Annotation, Expression, Span, StructFields};
 use syntax::program::{DefinitionBody, Visibility};
 use syntax::types::{CompoundKind, Type, build_substitution_map, substitute};
 
@@ -101,11 +101,11 @@ fn check_not_comparable_impl(
         return (!definite_only).then_some("interface values");
     }
 
-    if let Some(underlying) = ty.get_underlying() {
+    if let Some(underlying) = store.underlying_type(ty) {
         return check_not_comparable_impl(
             env,
             store,
-            underlying,
+            &underlying,
             visiting,
             definite_only,
             comparable_parameter,
@@ -339,7 +339,7 @@ fn is_opaque_go_handle(store: &Store, ty: &Type) -> bool {
         && matches!(
             &definition.body,
             DefinitionBody::TypeAlias {
-                annotation: Annotation::Opaque { .. },
+                alias: syntax::program::AliasKind::Opaque(Annotation::Opaque { .. }),
                 ..
             }
         )
@@ -589,7 +589,7 @@ impl InferCtx<'_> {
         let type_args = resolved.get_type_params().unwrap_or_default();
         let (generics, field_types): (&[syntax::ast::Generic], Vec<Type>) = match &definition.body {
             DefinitionBody::Struct {
-                kind: syntax::ast::StructKind::Tuple,
+                fields: StructFields::Tuple(_),
                 ..
             } => return false,
             DefinitionBody::Struct {

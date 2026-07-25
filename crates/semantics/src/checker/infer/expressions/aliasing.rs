@@ -1,4 +1,4 @@
-use syntax::ast::{Expression, Literal, Span, UnaryOperator};
+use syntax::ast::{Expression, IdentifierResolution, Literal, Span, UnaryOperator};
 use syntax::program::{CallKind, DefinitionBody};
 use syntax::types::Type;
 
@@ -86,9 +86,11 @@ impl InferCtx<'_> {
                 consequence,
                 alternative,
                 ..
-            } => self
-                .find_alias(consequence, true)
-                .or_else(|| self.find_alias(alternative, true)),
+            } => self.find_alias(consequence, true).or_else(|| {
+                alternative
+                    .as_deref()
+                    .and_then(|alternative| self.find_alias(alternative, true))
+            }),
             Expression::Tuple { elements, .. } => {
                 elements.iter().find_map(|e| self.find_alias(e, true))
             }
@@ -105,7 +107,7 @@ impl InferCtx<'_> {
             } => elements.iter().find_map(|e| self.find_alias(e, true)),
             Expression::Call {
                 args,
-                call_kind: Some(CallKind::TupleStructConstructor),
+                call_kind: CallKind::TupleStructConstructor,
                 ..
             } => args.iter().find_map(|a| self.find_alias(a, true)),
             _ => None,
@@ -125,7 +127,7 @@ impl InferCtx<'_> {
     fn alias_leaf(&self, place: &Expression, via_clone: bool, span: Span) -> Option<AliasFinding> {
         let Expression::Identifier {
             value,
-            binding_id: Some(root_id),
+            resolution: IdentifierResolution::Binding(root_id),
             ..
         } = place_root(place)?
         else {
@@ -154,7 +156,7 @@ impl InferCtx<'_> {
             source: render_place(place),
             span,
             kind,
-            addressable: check_is_non_addressable(place, &self.env).is_none(),
+            addressable: check_is_non_addressable(place, &self.env, self.store).is_none(),
         })
     }
 
@@ -181,17 +183,14 @@ pub(super) fn clone_call_receiver(expression: &Expression) -> Option<&Expression
     match callee.unwrap_parens() {
         Expression::DotAccess {
             expression, member, ..
-        } if member == "clone"
-            && args.is_empty()
-            && !matches!(call_kind, Some(CallKind::UfcsMethod)) =>
-        {
+        } if member == "clone" && args.is_empty() && !matches!(call_kind, CallKind::UfcsMethod) => {
             Some(expression)
         }
         Expression::Identifier { .. }
             if args.len() == 1
                 && matches!(
                     call_kind,
-                    Some(CallKind::NativeMethodIdentifier(_) | CallKind::ReceiverMethodUfcs { .. })
+                    CallKind::NativeMethodIdentifier(_) | CallKind::ReceiverMethodUfcs { .. }
                 )
                 && callee
                     .get_var_name()

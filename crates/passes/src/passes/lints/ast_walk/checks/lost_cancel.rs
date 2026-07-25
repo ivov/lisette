@@ -35,10 +35,10 @@ fn check_slot(pattern: &Pattern, ty: &Type, ctx: &NodeCtx) {
                 }
             }
         }
-        Pattern::WildCard { span } if contains_cancel_func(ty) => {
+        Pattern::WildCard { span } if contains_cancel_func(ty, ctx) => {
             ctx.sink.push(diagnostics::lint::lost_cancel(span));
         }
-        Pattern::Identifier { span, .. } if contains_cancel_func(ty) => {
+        Pattern::Identifier { span, .. } if contains_cancel_func(ty, ctx) => {
             if ctx
                 .facts
                 .bindings
@@ -54,10 +54,13 @@ fn check_slot(pattern: &Pattern, ty: &Type, ctx: &NodeCtx) {
 
 /// Whether `ty` is, or transitively contains through tuples and type aliases, a
 /// cancel func.
-fn contains_cancel_func(ty: &Type) -> bool {
+fn contains_cancel_func(ty: &Type, ctx: &NodeCtx<'_>) -> bool {
     is_cancel_func(ty)
-        || matches!(ty, Type::Tuple(elements) if elements.iter().any(contains_cancel_func))
-        || ty.get_underlying().is_some_and(contains_cancel_func)
+        || matches!(ty, Type::Tuple(elements) if elements.iter().any(|ty| contains_cancel_func(ty, ctx)))
+        || ctx
+            .store
+            .underlying_type(ty)
+            .is_some_and(|underlying| contains_cancel_func(&underlying, ctx))
 }
 
 fn is_cancel_func(ty: &Type) -> bool {

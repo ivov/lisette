@@ -139,7 +139,7 @@ impl Planner<'_> {
         self.lower_abi_wrapping_with_payload_bridge(call_str, abi, result_ty, None, target)
     }
 
-    fn lower_abi_wrapping_with_payload_bridge(
+    pub(crate) fn lower_abi_wrapping_with_payload_bridge(
         &mut self,
         call_str: &str,
         abi: &CallableReturnAbi,

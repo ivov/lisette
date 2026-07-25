@@ -1,3 +1,4 @@
+use crate::assert_emit_snapshot;
 use crate::assert_emit_snapshot_with_go_typedefs;
 
 #[test]
@@ -843,4 +844,325 @@ pub struct Server {
 pub fn NewHandler() -> Handler
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/srv", typedef)]);
+}
+
+#[test]
+fn array_of_concrete_widens_to_interface_elements_in_argument_position() {
+    let input = r#"
+struct Boom {}
+
+impl Boom {
+  fn Error(self) -> string {
+    "boom"
+  }
+}
+
+fn first(errs: Array<error, 2>) -> string {
+  errs[0].Error()
+}
+
+fn test() {
+  let concrete: Array<Boom, 2> = [Boom {}, Boom {}]
+  if first(concrete) != "boom" {
+    panic("array argument lost its interface elements")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn array_of_concrete_widens_to_interface_elements_in_let_annotation() {
+    let input = r#"
+struct Boom {}
+
+impl Boom {
+  fn Error(self) -> string {
+    "boom"
+  }
+}
+
+fn first(errs: Array<error, 2>) -> string {
+  errs[0].Error()
+}
+
+fn test() {
+  let concrete: Array<Boom, 2> = [Boom {}, Boom {}]
+  let widened: Array<error, 2> = concrete
+  if first(widened) != "boom" {
+    panic("annotated array binding lost its interface elements")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn array_of_concrete_widens_to_interface_elements_in_return_position() {
+    let input = r#"
+struct Boom {}
+
+impl Boom {
+  fn Error(self) -> string {
+    "boom"
+  }
+}
+
+fn widen() -> Array<error, 2> {
+  let concrete: Array<Boom, 2> = [Boom {}, Boom {}]
+  concrete
+}
+
+fn test() {
+  if widen()[1].Error() != "boom" {
+    panic("returned array lost its interface elements")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn array_of_concrete_widens_to_interface_elements_in_struct_field() {
+    let input = r#"
+struct Boom {}
+
+impl Boom {
+  fn Error(self) -> string {
+    "boom"
+  }
+}
+
+struct Holder {
+  errs: Array<error, 2>,
+}
+
+fn test() {
+  let concrete: Array<Boom, 2> = [Boom {}, Boom {}]
+  let holder = Holder { errs: concrete }
+  if holder.errs[0].Error() != "boom" {
+    panic("struct field lost its interface elements")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn array_of_concrete_widens_to_interface_elements_in_assignment() {
+    let input = r#"
+struct Boom {}
+
+impl Boom {
+  fn Error(self) -> string {
+    "boom"
+  }
+}
+
+struct Quiet {}
+
+impl Quiet {
+  fn Error(self) -> string {
+    "quiet"
+  }
+}
+
+fn test() {
+  let mut errs: Array<error, 2> = [Quiet {}, Quiet {}]
+  let concrete: Array<Boom, 2> = [Boom {}, Boom {}]
+  errs = concrete
+  if errs[0].Error() != "boom" {
+    panic("assignment lost its interface elements")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn array_built_at_interface_element_type_needs_no_rebuild() {
+    let input = r#"
+struct Boom {}
+
+impl Boom {
+  fn Error(self) -> string {
+    "boom"
+  }
+}
+
+fn first(errs: Array<error, 2>) -> string {
+  errs[0].Error()
+}
+
+fn test() {
+  let errs: Array<error, 2> = [Boom {}, Boom {}]
+  if first(errs) != "boom" {
+    panic("array built at the interface element type was rebuilt wrongly")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_of_concrete_widens_to_interface_elements_in_argument_position() {
+    let input = r#"
+struct Boom {}
+
+impl Boom {
+  fn Error(self) -> string {
+    "boom"
+  }
+}
+
+fn describe(pair: (error, int)) -> string {
+  pair.0.Error()
+}
+
+fn test() {
+  let concrete = (Boom {}, 1)
+  if describe(concrete) != "boom" {
+    panic("tuple argument lost its interface elements")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_of_concrete_widens_to_interface_elements_in_let_annotation() {
+    let input = r#"
+struct Boom {}
+
+impl Boom {
+  fn Error(self) -> string {
+    "boom"
+  }
+}
+
+fn describe(pair: (error, int)) -> string {
+  pair.0.Error()
+}
+
+fn test() {
+  let widened: (error, int) = (Boom {}, 1)
+  if describe(widened) != "boom" {
+    panic("annotated tuple binding lost its interface elements")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_of_concrete_widens_to_interface_elements_in_struct_field() {
+    let input = r#"
+struct Boom {}
+
+impl Boom {
+  fn Error(self) -> string {
+    "boom"
+  }
+}
+
+struct Holder {
+  pair: (error, int),
+}
+
+fn test() {
+  let concrete = (Boom {}, 1)
+  let holder = Holder { pair: concrete }
+  if holder.pair.0.Error() != "boom" {
+    panic("struct field lost its interface elements")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_of_concrete_widens_to_interface_elements_in_match_arm() {
+    let input = r#"
+struct Boom {}
+
+impl Boom {
+  fn Error(self) -> string {
+    "boom"
+  }
+}
+
+fn describe(pair: (error, int)) -> string {
+  pair.0.Error()
+}
+
+fn test() {
+  let pair: (error, int) = match 1 {
+    1 => (Boom {}, 1),
+    _ => (Boom {}, 2),
+  }
+  if describe(pair) != "boom" {
+    panic("match arm lost its interface elements")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn nested_array_of_tuples_widens_to_interface_elements() {
+    let input = r#"
+struct Boom {}
+
+impl Boom {
+  fn Error(self) -> string {
+    "boom"
+  }
+}
+
+fn first(rows: Array<(error, int), 2>) -> string {
+  rows[0].0.Error()
+}
+
+fn test() {
+  let concrete: Array<(Boom, int), 2> = [(Boom {}, 1), (Boom {}, 2)]
+  if first(concrete) != "boom" {
+    panic("nested container lost its interface elements")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_tail_return_wraps_adapter_for_interface_slot() {
+    let input = r#"
+struct Thing {
+  v: int,
+}
+
+interface Box<T> {
+  fn get() -> T
+}
+
+struct Bar {}
+
+impl Bar {
+  fn get(self) -> Option<Ref<Thing>> {
+    None
+  }
+}
+
+fn make() -> (Box<Option<Ref<Thing>>>, int) {
+  (Bar {}, 2)
+}
+
+fn test() {
+  let pair = make()
+  match pair.0.get() {
+    Some(_) => panic("expected None"),
+    None => {},
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
 }
