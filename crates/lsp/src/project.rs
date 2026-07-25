@@ -1,9 +1,28 @@
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
-pub(crate) struct ProjectConfig {
-    pub(crate) root: PathBuf,
-    pub(crate) standalone_mode: bool,
+pub(crate) enum ProjectConfig {
+    Standalone(PathBuf),
+    Workspace(PathBuf),
+}
+
+impl ProjectConfig {
+    pub(crate) fn root(&self) -> &Path {
+        match self {
+            Self::Standalone(root) | Self::Workspace(root) => root,
+        }
+    }
+
+    pub(crate) fn source_root(&self) -> PathBuf {
+        match self {
+            Self::Standalone(root) => root.clone(),
+            Self::Workspace(root) => root.join("src"),
+        }
+    }
+
+    pub(crate) fn is_standalone(&self) -> bool {
+        matches!(self, Self::Standalone(_))
+    }
 }
 
 pub(crate) fn find_project_root(start_path: &Path) -> Option<ProjectConfig> {
@@ -16,10 +35,7 @@ pub(crate) fn find_project_root(start_path: &Path) -> Option<ProjectConfig> {
     loop {
         let manifest = current.join("lisette.toml");
         if manifest.exists() {
-            return Some(ProjectConfig {
-                root: current,
-                standalone_mode: false,
-            });
+            return Some(ProjectConfig::Workspace(current));
         }
 
         if !current.pop() {
@@ -36,8 +52,5 @@ pub(crate) fn resolve_standalone_root(file_path: &Path) -> ProjectConfig {
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| PathBuf::from("."));
 
-    ProjectConfig {
-        root,
-        standalone_mode: true,
-    }
+    ProjectConfig::Standalone(root)
 }
