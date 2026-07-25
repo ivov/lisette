@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785005639413,
+  "lastUpdate": 1785016456696,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -11869,6 +11869,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "lsp",
             "value": 4452,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2764,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1039,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6084,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "575af7eee3ce44e4294a66e0d238ede534e518d1",
+          "message": "refactor: model more semantics state with types (#1128)",
+          "timestamp": "2026-07-25T23:53:54+02:00",
+          "tree_id": "6f0f2f5c0375bb643a3335d1756040b4c97eeee4",
+          "url": "https://github.com/ivov/lisette/commit/575af7eee3ce44e4294a66e0d238ede534e518d1"
+        },
+        "date": 1785016456040,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 118489,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30170,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 24397,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 17077,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13557,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10810,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6555,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4451,
             "unit": "lines"
           },
           {
