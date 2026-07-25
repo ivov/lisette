@@ -4,7 +4,7 @@ use diagnostics::SemanticResult;
 use semantics::facts::Facts;
 use syntax::program::{Definition, File};
 use syntax::types::Symbol;
-use tower_lsp::lsp_types::Url;
+use tower_lsp::lsp_types::{Position, Url};
 
 use crate::paths::{ENTRY_MODULE_ID, module_file_to_path};
 use crate::position::LineIndex;
@@ -14,15 +14,24 @@ pub(crate) struct AnalysisSnapshot {
     pub(crate) result: SemanticResult,
     facts: Facts,
     pub(crate) has_parse_errors: bool,
-    uri_to_id: HashMap<Url, u32>,
-    id_to_uri: HashMap<u32, Url>,
-    line_indexes: HashMap<u32, LineIndex>,
+    sources: HashMap<u32, SnapshotSource>,
 }
 
-// SAFETY: AnalysisSnapshot is immutable after construction. Non-Send/Sync types
-// it transitively contains are never mutated after analyze() returns.
-unsafe impl Send for AnalysisSnapshot {}
-unsafe impl Sync for AnalysisSnapshot {}
+pub(crate) struct SnapshotSource {
+    pub(crate) uri: Url,
+    pub(crate) line_index: LineIndex,
+}
+
+pub(crate) struct SnapshotDocument<'a> {
+    pub(crate) file_id: u32,
+    pub(crate) file: &'a File,
+    pub(crate) line_index: &'a LineIndex,
+}
+
+pub(crate) struct SnapshotPosition<'a> {
+    pub(crate) document: SnapshotDocument<'a>,
+    pub(crate) offset: u32,
+}
 
 impl AnalysisSnapshot {
     pub(crate) fn new(
@@ -32,9 +41,7 @@ impl AnalysisSnapshot {
         config: &ProjectConfig,
         analyzed_uri: &Url,
     ) -> Self {
-        let mut uri_to_id = HashMap::default();
-        let mut id_to_uri = HashMap::default();
-        let mut line_indexes = HashMap::default();
+        let mut sources = HashMap::default();
 
         let analyzed_path = analyzed_uri.to_file_path().ok();
         let analyzed_filename = analyzed_path
@@ -75,36 +82,45 @@ impl AnalysisSnapshot {
                 }
             };
 
-            uri_to_id.insert(uri.clone(), *file_id);
-            id_to_uri.insert(*file_id, uri);
-            line_indexes.insert(*file_id, LineIndex::new(&file.source));
+            sources.insert(
+                *file_id,
+                SnapshotSource {
+                    uri,
+                    line_index: LineIndex::new(&file.source),
+                },
+            );
         }
 
         Self {
             result,
             facts,
             has_parse_errors,
-            uri_to_id,
-            id_to_uri,
-            line_indexes,
+            sources,
         }
     }
 
-    pub(crate) fn get_file_id(&self, uri: &Url) -> Option<u32> {
-        self.uri_to_id.get(uri).copied()
+    pub(crate) fn document(&self, uri: &Url) -> Option<SnapshotDocument<'_>> {
+        let (file_id, source) = self.sources.iter().find(|(_, source)| &source.uri == uri)?;
+        Some(SnapshotDocument {
+            file_id: *file_id,
+            file: self.result.files.get(file_id)?,
+            line_index: &source.line_index,
+        })
     }
 
-    pub(crate) fn get_uri(&self, file_id: u32) -> Option<&Url> {
-        self.id_to_uri.get(&file_id)
+    pub(crate) fn position(&self, uri: &Url, position: Position) -> Option<SnapshotPosition<'_>> {
+        let document = self.document(uri)?;
+        let offset = document.line_index.position_to_offset(position)?;
+        Some(SnapshotPosition { document, offset })
+    }
+
+    pub(crate) fn source(&self, file_id: u32) -> Option<&SnapshotSource> {
+        self.sources.get(&file_id)
     }
 
     /// On-disk path of a `go:` typedef file, if `file_id` names one.
     pub(crate) fn typedef_path(&self, file_id: u32) -> Option<&std::path::Path> {
         self.result.typedef_paths.get(&file_id).map(|p| p.as_path())
-    }
-
-    pub(crate) fn get_line_index(&self, file_id: u32) -> Option<&LineIndex> {
-        self.line_indexes.get(&file_id)
     }
 
     pub(crate) fn files(&self) -> &HashMap<u32, File> {

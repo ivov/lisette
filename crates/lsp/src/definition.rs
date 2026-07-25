@@ -513,13 +513,11 @@ fn record_pattern_field_span(
 /// Resolve the definition span at the given cursor offset.
 ///
 /// Checks binding definitions first, then falls back to expression-based resolution.
-/// `extra_match` handles caller-specific arms (e.g. DotAccess for references, rename guards).
-pub(crate) fn resolve_definition_span(
+pub(crate) fn resolve_symbol_definition_span(
     snapshot: &AnalysisSnapshot,
     file: &syntax::program::File,
     file_id: u32,
     offset: u32,
-    extra_match: impl FnOnce(&Expression) -> Option<syntax::ast::Span>,
 ) -> Option<syntax::ast::Span> {
     snapshot
         .facts()
@@ -539,6 +537,14 @@ pub(crate) fn resolve_definition_span(
                     resolution: IdentifierResolution::Binding(id),
                     ..
                 } => snapshot.facts().bindings.get(id).map(|b| b.span),
+
+                Expression::Identifier {
+                    resolution: IdentifierResolution::Definition(qname),
+                    ..
+                } => snapshot
+                    .definitions()
+                    .get(qname.as_str())
+                    .and_then(|definition| definition.name_span),
 
                 Expression::Function { name_span, .. }
                 | Expression::Interface { name_span, .. }
@@ -588,7 +594,24 @@ pub(crate) fn resolve_definition_span(
                     ..
                 } => resolve_struct_call_field(field_assignments, name, ty, offset, file, snapshot),
 
-                other => extra_match(other),
+                Expression::DotAccess {
+                    expression,
+                    member,
+                    span,
+                    ..
+                } => resolve_dot_access_definition(expression, member, *span, file, snapshot),
+
+                Expression::Match { arms, .. } => {
+                    resolve_match_pattern_definition(arms, offset, file, snapshot)
+                        .or_else(|| resolve_word_at_offset(&file.source, offset, file, snapshot))
+                }
+
+                Expression::IfLet { pattern, .. } | Expression::WhileLet { pattern, .. } => {
+                    resolve_enum_in_pattern(pattern, offset, file, snapshot)
+                        .or_else(|| resolve_word_at_offset(&file.source, offset, file, snapshot))
+                }
+
+                _ => resolve_word_at_offset(&file.source, offset, file, snapshot),
             }
         })
 }

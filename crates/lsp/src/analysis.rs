@@ -13,10 +13,14 @@ use syntax::lex::Lexer;
 use syntax::parse::Parser;
 use syntax::types::{CompoundKind, Type};
 
-use crate::paths::{module_id_to_dir, uri_to_module_file};
 use crate::position::LineIndex;
 use crate::snapshot::AnalysisSnapshot;
-use crate::state::{CachedSnapshot, SharedState};
+use crate::state::{AnalysisRequest, SharedState};
+
+enum AnalysisError {
+    Diagnostics(Vec<Diagnostic>),
+    Superseded,
+}
 
 /// Extract the constructor type name, unwrapping `Ref<T>` and peeling aliases.
 pub(crate) fn type_name(ty: &Type, snapshot: &AnalysisSnapshot) -> Option<String> {
@@ -55,23 +59,16 @@ pub(crate) fn find_module_by_alias(
 
 impl SharedState {
     async fn run_analysis(&self, uri: &Url) -> Result<AnalysisSnapshot, Vec<Diagnostic>> {
-        let config = self.ensure_config(uri).await.ok_or_else(Vec::new)?;
-        let (module_id, filename) = uri_to_module_file(&config, uri).ok_or_else(Vec::new)?;
+        let project = self.project.for_analysis(uri).await.ok_or_else(Vec::new)?;
+        let config = project.config;
+        let filename = project.filename;
+        let loader = project.loader;
 
         let source = self
             .documents
             .get(uri)
-            .map(|doc| doc.content.clone())
+            .map(|document| document.content().to_string())
             .ok_or_else(Vec::new)?;
-
-        let loader_clone = {
-            let mut loader = self.loader.write().await;
-            let module_dir = module_id_to_dir(&config, &module_id);
-            loader.set_entry_module_path(Some(module_dir));
-            let clone = loader.clone();
-            loader.set_entry_module_path(None);
-            clone
-        };
 
         let lex_result = Lexer::new(&source, 0).lex();
         if lex_result.failed() {
@@ -97,31 +94,31 @@ impl SharedState {
             .map(Into::into)
             .collect();
 
-        let (locator, manifest_error) = if config.standalone_mode {
+        let standalone = config.is_standalone();
+        let (locator, manifest_error) = if standalone {
             (TypedefLocator::default(), None)
         } else {
-            match TypedefLocator::from_project(&config.root) {
+            match TypedefLocator::from_project(config.root()) {
                 Ok(r) => (r, None),
                 Err(msg) => (TypedefLocator::default(), Some(msg)),
             }
         };
 
-        let (locator, session, bindgen_error) =
-            if config.standalone_mode || manifest_error.is_some() {
-                (locator, None, None)
-            } else if let Some(setup) = self.bindgen_setup.as_ref() {
-                match setup.for_project(&config.root, locator.target()) {
-                    Ok(session) => {
-                        let with_runner = locator.clone().with_bindgen(session.bindgen.clone());
-                        (with_runner, Some(session), None)
-                    }
-                    Err(msg) => (locator, None, Some(msg)),
+        let (locator, session, bindgen_error) = if standalone || manifest_error.is_some() {
+            (locator, None, None)
+        } else if let Some(setup) = self.bindgen_setup.as_ref() {
+            match setup.for_project(config.root(), locator.target()) {
+                Ok(session) => {
+                    let with_runner = locator.clone().with_bindgen(session.bindgen.clone());
+                    (with_runner, Some(session), None)
                 }
-            } else {
-                (locator, None, None)
-            };
+                Err(msg) => (locator, None, Some(msg)),
+            }
+        } else {
+            (locator, None, None)
+        };
 
-        let project_kind = if config.standalone_mode || config.root.join("src/main.lis").exists() {
+        let project_kind = if standalone || config.root().join("src/main.lis").exists() {
             ProjectKind::Binary
         } else {
             ProjectKind::Library
@@ -130,10 +127,10 @@ impl SharedState {
         let analyze_output = analyze(AnalyzeInput {
             config: SemanticConfig {
                 run_lints: !has_parse_errors,
-                standalone_mode: config.standalone_mode,
+                standalone_mode: standalone,
                 load_siblings: true,
             },
-            loader: &loader_clone,
+            loader: &loader,
             entry: Some(EntryFile {
                 source,
                 display_path: filename.clone(),
@@ -141,10 +138,10 @@ impl SharedState {
                 ast: desugar_result.ast,
                 file_comment: parse_result.file_comment,
             }),
-            project_root: if config.standalone_mode {
+            project_root: if standalone {
                 None
             } else {
-                Some(config.root.clone())
+                Some(config.root().to_path_buf())
             },
             compile_phase: CompilePhase::Check,
             project_kind,
@@ -190,71 +187,73 @@ impl SharedState {
         ))
     }
 
-    async fn run_analysis_cached(
-        &self,
-        uri: &Url,
-    ) -> Result<Arc<AnalysisSnapshot>, Vec<Diagnostic>> {
-        let pre_version = self.documents.get(uri).map(|d| d.version);
+    async fn run_analysis_cached(&self, uri: &Url) -> Result<Arc<AnalysisSnapshot>, AnalysisError> {
+        let document = self.documents.get(uri).ok_or(AnalysisError::Superseded)?;
+        let request = document.request_analysis();
+        drop(document);
 
-        if let Some(cached) = self.snapshots.get(uri)
-            && Some(cached.version) == pre_version
+        let revision = match request {
+            AnalysisRequest::Cached(snapshot) => return Ok(snapshot),
+            AnalysisRequest::Required(revision) => revision,
+        };
+
+        let snapshot = Arc::new(
+            self.run_analysis(uri)
+                .await
+                .map_err(AnalysisError::Diagnostics)?,
+        );
+
+        if let Some(mut document) = self.documents.get_mut(uri)
+            && document.cache_analysis(&revision, Arc::clone(&snapshot))
         {
-            return Ok(Arc::clone(&cached.snapshot));
+            return Ok(snapshot);
         }
 
-        let snapshot = Arc::new(self.run_analysis(uri).await?);
-
-        let post_version = self.documents.get(uri).map(|d| d.version);
-        if pre_version == post_version
-            && let Some(version) = pre_version
-        {
-            if !snapshot.has_parse_errors {
-                self.last_valid_snapshot
-                    .insert(uri.clone(), Arc::clone(&snapshot));
-            }
-            self.snapshots.insert(
-                uri.clone(),
-                CachedSnapshot {
-                    snapshot: Arc::clone(&snapshot),
-                    version,
-                },
-            );
-        }
-
-        Ok(snapshot)
+        Err(AnalysisError::Superseded)
     }
 
-    pub(crate) async fn analyze_and_convert(&self, uri: &Url) -> Vec<Diagnostic> {
+    pub(crate) async fn analyze_and_convert(&self, uri: &Url) -> Option<Vec<Diagnostic>> {
         let snapshot = match self.run_analysis_cached(uri).await {
             Ok(s) => s,
-            Err(syntax_diagnostics) => return syntax_diagnostics,
+            Err(AnalysisError::Diagnostics(diagnostics)) => return Some(diagnostics),
+            Err(AnalysisError::Superseded) => return None,
         };
 
-        let Some(file_id) = snapshot.get_file_id(uri) else {
-            return vec![];
-        };
-        let Some(line_index) = snapshot.get_line_index(file_id) else {
-            return vec![];
+        let Some(document) = snapshot.document(uri) else {
+            return Some(vec![]);
         };
 
-        snapshot
-            .result
-            .errors
-            .iter()
-            .chain(&snapshot.result.lints)
-            .filter(|d| {
-                let fid = d.file_id();
-                fid == Some(file_id) || fid.is_none()
-            })
-            .map(|d| convert_diagnostic(d, line_index))
-            .collect()
+        Some(
+            snapshot
+                .result
+                .errors
+                .iter()
+                .chain(&snapshot.result.lints)
+                .filter(|d| {
+                    let fid = d.file_id();
+                    fid == Some(document.file_id) || fid.is_none()
+                })
+                .map(|d| convert_diagnostic(d, document.line_index))
+                .collect(),
+        )
     }
 
     pub(crate) async fn get_snapshot(&self, uri: &Url) -> Option<Arc<AnalysisSnapshot>> {
-        self.run_analysis_cached(uri)
-            .await
-            .ok()
-            .or_else(|| self.last_valid_snapshot.get(uri).map(|s| Arc::clone(&s)))
+        self.run_analysis_cached(uri).await.ok().or_else(|| {
+            self.documents
+                .get(uri)
+                .and_then(|document| document.last_valid_analysis())
+        })
+    }
+
+    pub(crate) fn open_document_snapshots(&self) -> Vec<Arc<AnalysisSnapshot>> {
+        self.documents
+            .iter()
+            .filter_map(|document| match document.request_analysis() {
+                AnalysisRequest::Cached(snapshot) => Some(snapshot),
+                AnalysisRequest::Required(_) => None,
+            })
+            .collect()
     }
 }
 

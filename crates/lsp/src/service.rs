@@ -21,16 +21,40 @@ pub fn build_service(
     let (exit_sender, exit_receiver) = oneshot::channel();
     let adapter = ProtocolAdapter {
         inner: service,
-        saw_shutdown: false,
-        exit_sender: Some(exit_sender),
+        state: ProtocolState::Running(exit_sender),
     };
     (adapter, socket, exit_receiver)
 }
 
 pub struct ProtocolAdapter<S> {
     inner: S,
-    saw_shutdown: bool,
-    exit_sender: Option<oneshot::Sender<i32>>,
+    state: ProtocolState,
+}
+
+enum ProtocolState {
+    Running(oneshot::Sender<i32>),
+    Shutdown(oneshot::Sender<i32>),
+    Exited,
+}
+
+impl ProtocolState {
+    fn shutdown(&mut self) {
+        let current = std::mem::replace(self, Self::Exited);
+        *self = match current {
+            Self::Running(sender) | Self::Shutdown(sender) => Self::Shutdown(sender),
+            Self::Exited => Self::Exited,
+        };
+    }
+
+    fn exit(&mut self) {
+        let current = std::mem::replace(self, Self::Exited);
+        let (sender, code) = match current {
+            Self::Running(sender) => (sender, 1),
+            Self::Shutdown(sender) => (sender, 0),
+            Self::Exited => return,
+        };
+        let _ = sender.send(code);
+    }
 }
 
 impl<S: Service<Request>> Service<Request> for ProtocolAdapter<S> {
@@ -44,14 +68,8 @@ impl<S: Service<Request>> Service<Request> for ProtocolAdapter<S> {
 
     fn call(&mut self, request: Request) -> Self::Future {
         match request.method() {
-            "shutdown" => self.saw_shutdown = true,
-            "exit" => {
-                // The LSP spec requires the process to exit with 0 when
-                // shutdown preceded exit, with 1 otherwise.
-                if let Some(sender) = self.exit_sender.take() {
-                    let _ = sender.send(if self.saw_shutdown { 0 } else { 1 });
-                }
-            }
+            "shutdown" => self.state.shutdown(),
+            "exit" => self.state.exit(),
             _ => {}
         }
         let request = if request.params().is_some_and(|params| params.is_null()) {
@@ -65,5 +83,42 @@ impl<S: Service<Request>> Service<Request> for ProtocolAdapter<S> {
             request
         };
         self.inner.call(request)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exit_after_shutdown_reports_success() {
+        let (sender, mut receiver) = oneshot::channel();
+        let mut state = ProtocolState::Running(sender);
+
+        state.shutdown();
+        state.exit();
+
+        assert_eq!(receiver.try_recv(), Ok(0));
+    }
+
+    #[test]
+    fn exit_without_shutdown_reports_failure() {
+        let (sender, mut receiver) = oneshot::channel();
+        let mut state = ProtocolState::Running(sender);
+
+        state.exit();
+
+        assert_eq!(receiver.try_recv(), Ok(1));
+    }
+
+    #[test]
+    fn repeated_exit_keeps_first_result() {
+        let (sender, mut receiver) = oneshot::channel();
+        let mut state = ProtocolState::Running(sender);
+
+        state.exit();
+        state.exit();
+
+        assert_eq!(receiver.try_recv(), Ok(1));
     }
 }

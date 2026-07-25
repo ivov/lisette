@@ -29,11 +29,10 @@ use crate::completion::{
 };
 use crate::definition::{
     find_struct_field_span, is_generated_typedef_span, lookup_definition_span,
-    resolve_annotation_definition, resolve_definition_span, resolve_dot_access_definition,
-    resolve_enum_in_pattern, resolve_import_span, resolve_match_pattern_definition,
-    resolve_struct_call_field, resolve_word_at_offset, word_at_offset,
+    resolve_annotation_definition, resolve_dot_access_definition, resolve_enum_in_pattern,
+    resolve_import_span, resolve_match_pattern_definition, resolve_struct_call_field,
+    resolve_symbol_definition_span, resolve_word_at_offset, word_at_offset,
 };
-use crate::paths::uri_to_module_file;
 use crate::project::find_project_root;
 use crate::snapshot::AnalysisSnapshot;
 use crate::traversal::find_expression_at;
@@ -60,11 +59,7 @@ impl LanguageServer for Backend {
         if let Some(root) = workspace_root
             && let Some(config) = find_project_root(&root)
         {
-            {
-                let mut loader = self.loader.write().await;
-                loader.set_config(config.clone());
-            }
-            *self.project_config.write().await = Some(config);
+            self.project.initialize(config).await;
         }
 
         // Off the async executor: the first run for a version writes the full stdlib.
@@ -119,7 +114,6 @@ impl LanguageServer for Backend {
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
         let uri = params.text_document.uri;
         let content = params.text_document.text;
-        self.snapshots.remove(&uri);
         self.update_document(uri.clone(), content, params.text_document.version)
             .await;
         self.publish_diagnostics(uri).await;
@@ -140,22 +134,9 @@ impl LanguageServer for Backend {
 
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
         let uri = &params.text_document.uri;
-        if let Some((_, (_, handle))) = self.pending_diagnostics.remove(uri) {
-            handle.abort();
-        }
         self.documents.remove(uri);
-        self.snapshots.remove(uri);
-        self.last_valid_snapshot.remove(uri);
 
-        let overlay_removed = if let Some(config) = self.project_config.read().await.as_ref()
-            && let Some((module_id, filename)) = uri_to_module_file(config, uri)
-        {
-            let mut loader = self.loader.write().await;
-            loader.remove_overlay(&module_id, &filename);
-            true
-        } else {
-            false
-        };
+        let overlay_removed = self.project.remove_overlay(uri).await;
 
         self.client
             .publish_diagnostics(uri.clone(), vec![], None)
@@ -172,8 +153,10 @@ impl LanguageServer for Backend {
             let Some(doc) = self.documents.get(uri) else {
                 return Ok(None);
             };
-            let end = doc.line_index.offset_to_position(doc.content.len() as u32);
-            (doc.content.clone(), end)
+            let end = doc
+                .line_index()
+                .offset_to_position(doc.content().len() as u32);
+            (doc.content().to_string(), end)
         };
 
         let formatted = match format::format_source(&source) {
@@ -209,19 +192,12 @@ impl LanguageServer for Backend {
         let Some(snapshot) = self.get_snapshot(uri).await else {
             return Ok(None);
         };
-        let Some(file_id) = snapshot.get_file_id(uri) else {
+        let Some(cursor) = snapshot.position(uri, position) else {
             return Ok(None);
         };
-        let Some(file) = snapshot.files().get(&file_id) else {
-            return Ok(None);
-        };
-        let Some(line_index) = snapshot.get_line_index(file_id) else {
-            return Ok(None);
-        };
-
-        let Some(offset) = line_index.position_to_offset(position) else {
-            return Ok(None);
-        };
+        let file = cursor.document.file;
+        let line_index = cursor.document.line_index;
+        let offset = cursor.offset;
 
         let Some(expression) = find_expression_at(&file.items, offset) else {
             return Ok(None);
@@ -259,15 +235,11 @@ impl LanguageServer for Backend {
         let Some(snapshot) = self.get_snapshot(uri).await else {
             return Ok(None);
         };
-        let Some(file_id) = snapshot.get_file_id(uri) else {
+        let Some(document) = snapshot.document(uri) else {
             return Ok(None);
         };
-        let Some(file) = snapshot.files().get(&file_id) else {
-            return Ok(None);
-        };
-        let Some(line_index) = snapshot.get_line_index(file_id) else {
-            return Ok(None);
-        };
+        let file = document.file;
+        let line_index = document.line_index;
 
         let eof = file.source.len() as u32;
         let start = line_index
@@ -295,19 +267,12 @@ impl LanguageServer for Backend {
         let Some(snapshot) = self.get_snapshot(uri).await else {
             return Ok(None);
         };
-        let Some(file_id) = snapshot.get_file_id(uri) else {
+        let Some(cursor) = snapshot.position(uri, position) else {
             return Ok(None);
         };
-        let Some(file) = snapshot.files().get(&file_id) else {
-            return Ok(None);
-        };
-        let Some(line_index) = snapshot.get_line_index(file_id) else {
-            return Ok(None);
-        };
-
-        let Some(offset) = line_index.position_to_offset(position) else {
-            return Ok(None);
-        };
+        let file_id = cursor.document.file_id;
+        let file = cursor.document.file;
+        let offset = cursor.offset;
 
         let Some(expression) = find_expression_at(&file.items, offset) else {
             return Ok(None);
@@ -343,12 +308,11 @@ impl LanguageServer for Backend {
                             lookup_definition_span(first, file, &snapshot).or_else(|| {
                                 resolve_import_span(first, file, &snapshot.result.go_package_names)
                             })
-                            && let Some(uri) = snapshot.get_uri(span.file_id)
-                            && let Some(idx) = snapshot.get_line_index(span.file_id)
+                            && let Some(source) = snapshot.source(span.file_id)
                         {
                             return Ok(Some(GotoDefinitionResponse::Scalar(Location {
-                                uri: uri.clone(),
-                                range: idx.span_to_range(span),
+                                uri: source.uri.clone(),
+                                range: source.line_index.span_to_range(span),
                             })));
                         }
                     }
@@ -479,17 +443,14 @@ impl LanguageServer for Backend {
             return Ok(None);
         }
 
-        let Some(target_uri) = snapshot.get_uri(definition_span.file_id) else {
-            return Ok(None);
-        };
-        let Some(target_line_index) = snapshot.get_line_index(definition_span.file_id) else {
+        let Some(target) = snapshot.source(definition_span.file_id) else {
             return Ok(None);
         };
 
-        let range = target_line_index.span_to_range(definition_span);
+        let range = target.line_index.span_to_range(definition_span);
 
         Ok(Some(GotoDefinitionResponse::Scalar(Location {
-            uri: target_uri.clone(),
+            uri: target.uri.clone(),
             range,
         })))
     }
@@ -505,15 +466,11 @@ impl LanguageServer for Backend {
         let Some(snapshot) = self.get_snapshot(uri).await else {
             return Ok(None);
         };
-        let Some(file_id) = snapshot.get_file_id(uri) else {
+        let Some(document) = snapshot.document(uri) else {
             return Ok(None);
         };
-        let Some(file) = snapshot.files().get(&file_id) else {
-            return Ok(None);
-        };
-        let Some(line_index) = snapshot.get_line_index(file_id) else {
-            return Ok(None);
-        };
+        let file = document.file;
+        let line_index = document.line_index;
 
         fn expression_to_symbol(
             expression: &syntax::ast::Expression,
@@ -617,98 +574,38 @@ impl LanguageServer for Backend {
         let Some(snapshot) = self.get_snapshot(uri).await else {
             return Ok(None);
         };
-        let Some(file_id) = snapshot.get_file_id(uri) else {
+        let Some(cursor) = snapshot.position(uri, position) else {
             return Ok(None);
         };
-        let Some(file) = snapshot.files().get(&file_id) else {
-            return Ok(None);
-        };
-        let Some(line_index) = snapshot.get_line_index(file_id) else {
-            return Ok(None);
-        };
+        let file_id = cursor.document.file_id;
+        let file = cursor.document.file;
+        let offset = cursor.offset;
 
-        let Some(offset) = line_index.position_to_offset(position) else {
-            return Ok(None);
-        };
-
-        let definition_span = resolve_definition_span(
-            &snapshot,
-            file,
-            file_id,
-            offset,
-            |expression| match expression {
-                syntax::ast::Expression::Identifier {
-                    resolution: IdentifierResolution::Definition(qname),
-                    ..
-                } => snapshot
-                    .definitions()
-                    .get(qname.as_str())
-                    .and_then(|d| d.name_span),
-
-                syntax::ast::Expression::DotAccess {
-                    expression,
-                    member,
-                    span,
-                    ..
-                } => resolve_dot_access_definition(expression, member, *span, file, &snapshot),
-
-                syntax::ast::Expression::Match { arms, .. } => {
-                    resolve_match_pattern_definition(arms, offset, file, &snapshot)
-                        .or_else(|| resolve_word_at_offset(&file.source, offset, file, &snapshot))
-                }
-
-                syntax::ast::Expression::IfLet { pattern, .. }
-                | syntax::ast::Expression::WhileLet { pattern, .. } => {
-                    resolve_enum_in_pattern(pattern, offset, file, &snapshot)
-                        .or_else(|| resolve_word_at_offset(&file.source, offset, file, &snapshot))
-                }
-
-                _ => resolve_word_at_offset(&file.source, offset, file, &snapshot),
-            },
-        );
+        let definition_span = resolve_symbol_definition_span(&snapshot, file, file_id, offset);
 
         let Some(definition_span) = definition_span else {
             return Ok(None);
         };
 
-        let Some(definition_uri) = snapshot.get_uri(definition_span.file_id).cloned() else {
+        let Some(definition_source) = snapshot.source(definition_span.file_id) else {
             return Ok(None);
         };
+        let definition_uri = definition_source.uri.clone();
 
         let mut locations = Vec::new();
 
-        if params.context.include_declaration
-            && let Some(definition_line_index) = snapshot.get_line_index(definition_span.file_id)
-        {
+        if params.context.include_declaration {
             locations.push(Location {
                 uri: definition_uri.clone(),
-                range: definition_line_index.span_to_range(definition_span),
+                range: definition_source.line_index.span_to_range(definition_span),
             });
         }
 
-        for entry in self.snapshots.iter() {
-            let snap = &entry.value().snapshot;
-            let Some(target_file_id) = snap.get_file_id(&definition_uri) else {
-                continue;
-            };
-            let target_span = syntax::ast::Span::new(
-                target_file_id,
-                definition_span.byte_offset,
-                definition_span.byte_length,
-            );
-            for usage in &snap.facts().usages {
-                if usage.definition_span == target_span
-                    && let Some(usage_uri) = snap.get_uri(usage.usage_span.file_id)
-                    && let Some(usage_line_index) = snap.get_line_index(usage.usage_span.file_id)
-                {
-                    let usage_span = trailing_segment_span(usage.usage_span, snap);
-                    locations.push(Location {
-                        uri: usage_uri.clone(),
-                        range: usage_line_index.span_to_range(usage_span),
-                    });
-                }
-            }
-        }
+        locations.extend(usage_locations(
+            self.open_document_snapshots(),
+            &definition_uri,
+            definition_span,
+        ));
 
         locations.sort_by(|a, b| {
             a.uri
@@ -736,18 +633,13 @@ impl LanguageServer for Backend {
         let Some(snapshot) = self.get_snapshot(uri).await else {
             return Ok(None);
         };
-        let Some(file_id) = snapshot.get_file_id(uri) else {
+        let Some(cursor) = snapshot.position(uri, position) else {
             return Ok(None);
         };
-        let Some(file) = snapshot.files().get(&file_id) else {
-            return Ok(None);
-        };
-        let Some(line_index) = snapshot.get_line_index(file_id) else {
-            return Ok(None);
-        };
-        let Some(offset) = line_index.position_to_offset(position) else {
-            return Ok(None);
-        };
+        let file_id = cursor.document.file_id;
+        let file = cursor.document.file;
+        let line_index = cursor.document.line_index;
+        let offset = cursor.offset;
 
         for binding in snapshot.facts().bindings.values() {
             let span = binding.span;
@@ -985,62 +877,26 @@ impl LanguageServer for Backend {
         let Some(snapshot) = self.get_snapshot(uri).await else {
             return Ok(None);
         };
-        let Some(file_id) = snapshot.get_file_id(uri) else {
+        let Some(cursor) = snapshot.position(uri, position) else {
             return Ok(None);
         };
-        let Some(file) = snapshot.files().get(&file_id) else {
-            return Ok(None);
-        };
-        let Some(line_index) = snapshot.get_line_index(file_id) else {
-            return Ok(None);
-        };
-        let Some(offset) = line_index.position_to_offset(position) else {
-            return Ok(None);
-        };
+        let file_id = cursor.document.file_id;
+        let file = cursor.document.file;
+        let offset = cursor.offset;
 
         let mut edits: std::collections::HashMap<Url, Vec<TextEdit>> =
             std::collections::HashMap::new();
 
-        let definition_span = resolve_definition_span(
-            &snapshot,
-            file,
-            file_id,
-            offset,
-            |expression| match expression {
-                syntax::ast::Expression::Identifier {
-                    resolution: IdentifierResolution::Definition(qname),
-                    ..
-                } => {
-                    if validation::check_rename_guards(qname.as_str()).is_err() {
-                        return None;
-                    }
-                    snapshot
-                        .definitions()
-                        .get(qname.as_str())
-                        .and_then(|d| d.name_span)
-                }
+        if let Some(syntax::ast::Expression::Identifier {
+            resolution: IdentifierResolution::Definition(qname),
+            ..
+        }) = find_expression_at(&file.items, offset)
+            && validation::check_rename_guards(qname.as_str()).is_err()
+        {
+            return Ok(None);
+        }
 
-                syntax::ast::Expression::DotAccess {
-                    expression,
-                    member,
-                    span,
-                    ..
-                } => resolve_dot_access_definition(expression, member, *span, file, &snapshot),
-
-                syntax::ast::Expression::Match { arms, .. } => {
-                    resolve_match_pattern_definition(arms, offset, file, &snapshot)
-                        .or_else(|| resolve_word_at_offset(&file.source, offset, file, &snapshot))
-                }
-
-                syntax::ast::Expression::IfLet { pattern, .. }
-                | syntax::ast::Expression::WhileLet { pattern, .. } => {
-                    resolve_enum_in_pattern(pattern, offset, file, &snapshot)
-                        .or_else(|| resolve_word_at_offset(&file.source, offset, file, &snapshot))
-                }
-
-                _ => resolve_word_at_offset(&file.source, offset, file, &snapshot),
-            },
-        );
+        let definition_span = resolve_symbol_definition_span(&snapshot, file, file_id, offset);
 
         let Some(definition_span) = definition_span else {
             return Ok(None);
@@ -1050,43 +906,28 @@ impl LanguageServer for Backend {
             return Ok(None);
         }
 
-        let Some(definition_uri) = snapshot.get_uri(definition_span.file_id).cloned() else {
+        let Some(definition_source) = snapshot.source(definition_span.file_id) else {
             return Ok(None);
         };
+        let definition_uri = definition_source.uri.clone();
 
-        if let Some(definition_line_index) = snapshot.get_line_index(definition_span.file_id) {
-            edits
-                .entry(definition_uri.clone())
-                .or_default()
-                .push(TextEdit {
-                    range: definition_line_index.span_to_range(definition_span),
-                    new_text: new_name.clone(),
-                });
-        }
+        edits
+            .entry(definition_uri.clone())
+            .or_default()
+            .push(TextEdit {
+                range: definition_source.line_index.span_to_range(definition_span),
+                new_text: new_name.clone(),
+            });
 
-        for entry in self.snapshots.iter() {
-            let snap = &entry.value().snapshot;
-            let Some(target_file_id) = snap.get_file_id(&definition_uri) else {
-                continue;
-            };
-            let target_span = syntax::ast::Span::new(
-                target_file_id,
-                definition_span.byte_offset,
-                definition_span.byte_length,
-            );
-            for usage in &snap.facts().usages {
-                if usage.definition_span == target_span
-                    && let Some(usage_uri) = snap.get_uri(usage.usage_span.file_id)
-                    && let Some(usage_line_index) = snap.get_line_index(usage.usage_span.file_id)
-                {
-                    let replace_span = trailing_segment_span(usage.usage_span, snap);
-
-                    edits.entry(usage_uri.clone()).or_default().push(TextEdit {
-                        range: usage_line_index.span_to_range(replace_span),
-                        new_text: new_name.clone(),
-                    });
-                }
-            }
+        for location in usage_locations(
+            self.open_document_snapshots(),
+            &definition_uri,
+            definition_span,
+        ) {
+            edits.entry(location.uri).or_default().push(TextEdit {
+                range: location.range,
+                new_text: new_name.clone(),
+            });
         }
 
         if edits.is_empty() {
@@ -1105,12 +946,11 @@ impl LanguageServer for Backend {
         let Some(snapshot) = self.get_snapshot(uri).await else {
             return Ok(None);
         };
-        let Some(file_id) = snapshot.get_file_id(uri) else {
+        let Some(document) = snapshot.document(uri) else {
             return Ok(None);
         };
-        let Some(line_index) = snapshot.get_line_index(file_id) else {
-            return Ok(None);
-        };
+        let file_id = document.file_id;
+        let line_index = document.line_index;
 
         let mut actions: Vec<CodeActionOrCommand> = Vec::new();
 
@@ -1166,18 +1006,12 @@ impl LanguageServer for Backend {
         let Some(snapshot) = self.get_snapshot(uri).await else {
             return Ok(None);
         };
-        let Some(file_id) = snapshot.get_file_id(uri) else {
+        let Some(cursor) = snapshot.position(uri, position) else {
             return Ok(None);
         };
-        let Some(file) = snapshot.files().get(&file_id) else {
-            return Ok(None);
-        };
-        let Some(line_index) = snapshot.get_line_index(file_id) else {
-            return Ok(None);
-        };
-        let Some(offset) = line_index.position_to_offset(position) else {
-            return Ok(None);
-        };
+        let file_id = cursor.document.file_id;
+        let file = cursor.document.file;
+        let offset = cursor.offset;
 
         // An in-progress `#[ ... ]` is exclusive: when the cursor is in attribute
         // position, offer only the attributes relevant to the target it attaches
@@ -1286,39 +1120,7 @@ impl LanguageServer for Backend {
 
         let mut items = Vec::new();
 
-        const KEYWORDS: &[&str] = &[
-            "fn",
-            "let",
-            "if",
-            "else",
-            "match",
-            "enum",
-            "struct",
-            "type",
-            "interface",
-            "impl",
-            "const",
-            "return",
-            "defer",
-            "import",
-            "mut",
-            "pub",
-            "for",
-            "in",
-            "while",
-            "loop",
-            "break",
-            "continue",
-            "select",
-            "task",
-            "try",
-            "recover",
-            "assert",
-            "as",
-            "true",
-            "false",
-        ];
-        for kw in KEYWORDS {
+        for kw in validation::KEYWORDS {
             items.push(CompletionItem {
                 label: kw.to_string(),
                 kind: Some(CompletionItemKind::KEYWORD),
@@ -1396,18 +1198,11 @@ impl LanguageServer for Backend {
         let Some(snapshot) = self.get_snapshot(uri).await else {
             return Ok(None);
         };
-        let Some(file_id) = snapshot.get_file_id(uri) else {
+        let Some(cursor) = snapshot.position(uri, position) else {
             return Ok(None);
         };
-        let Some(file) = snapshot.files().get(&file_id) else {
-            return Ok(None);
-        };
-        let Some(line_index) = snapshot.get_line_index(file_id) else {
-            return Ok(None);
-        };
-        let Some(offset) = line_index.position_to_offset(position) else {
-            return Ok(None);
-        };
+        let file = cursor.document.file;
+        let offset = cursor.offset;
 
         Ok(signature_help::handle(&file.items, offset))
     }
@@ -1443,6 +1238,37 @@ fn trailing_segment_span(
         }
         None => usage_span,
     }
+}
+
+fn usage_locations(
+    snapshots: impl IntoIterator<Item = std::sync::Arc<AnalysisSnapshot>>,
+    definition_uri: &Url,
+    definition_span: syntax::ast::Span,
+) -> Vec<Location> {
+    let mut locations = Vec::new();
+    for snapshot in snapshots {
+        let Some(target_document) = snapshot.document(definition_uri) else {
+            continue;
+        };
+        let target_span = syntax::ast::Span::new(
+            target_document.file_id,
+            definition_span.byte_offset,
+            definition_span.byte_length,
+        );
+        for usage in &snapshot.facts().usages {
+            if usage.definition_span == target_span
+                && let Some(source) = snapshot.source(usage.usage_span.file_id)
+            {
+                locations.push(Location {
+                    uri: source.uri.clone(),
+                    range: source
+                        .line_index
+                        .span_to_range(trailing_segment_span(usage.usage_span, &snapshot)),
+                });
+            }
+        }
+    }
+    locations
 }
 
 /// Last identifier token in `usage_text`'s head (the run of id chars, dots and
