@@ -56,13 +56,8 @@
       }
       .charts {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(2, 1fr);
         gap: 14px;
-      }
-      @media (max-width: 980px) {
-        .charts {
-          grid-template-columns: repeat(2, 1fr);
-        }
       }
       @media (max-width: 620px) {
         .charts {
@@ -112,6 +107,7 @@
         position: relative;
         margin-top: 6px;
         height: 2.1rem;
+        font-size: 12px;
       }
       .deltas .cell {
         position: absolute;
@@ -122,16 +118,16 @@
         gap: 2px;
         white-space: nowrap;
       }
-      .deltas .month {
-        font-size: 10px;
+      .deltas .label {
+        font-size: 0.833em;
         color: var(--text-muted);
       }
       .deltas .value {
-        font-size: 0.75rem;
+        font-size: 0.9em;
         color: var(--text-secondary);
         font-variant-numeric: tabular-nums;
       }
-      .deltas .value.empty {
+      .deltas .value.quiet {
         color: var(--text-muted);
       }
       details {
@@ -200,6 +196,26 @@
         color: var(--text-primary);
         border-color: var(--text-muted);
       }
+      select {
+        appearance: none;
+        -webkit-appearance: none;
+        background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23898781' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 8px center/8px 5px;
+        color: var(--text-secondary);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 3px 24px 3px 9px;
+        font-family: inherit;
+        font-size: 0.75rem;
+        cursor: pointer;
+      }
+      select:hover {
+        color: var(--text-primary);
+        border-color: var(--text-muted);
+      }
+      select option {
+        background: var(--surface);
+        color: var(--text-secondary);
+      }
       .chart-tooltip {
         position: absolute;
         z-index: 10;
@@ -226,6 +242,10 @@
       <h1 id="suite-name"></h1>
       <span class="meta">updated <span id="last-update"></span></span>
       <span class="meta"><a id="repository-link" rel="noopener"></a></span>
+      <select id="granularity" aria-label="Delta granularity">
+        <option value="weekly">Weekly</option>
+        <option value="monthly">Monthly</option>
+      </select>
     </header>
     <main id="main"></main>
     <details>
@@ -264,9 +284,51 @@
           return pad(d.getDate()) + '.' + pad(d.getMonth() + 1);
         };
         const formatDate = (ms) => formatDay(ms) + '.' + new Date(ms).getFullYear();
+        // period boundaries are anchored in UTC, so read them back in UTC
+        const formatUTCDay = (ms) => {
+          const d = new Date(ms);
+          return pad(d.getUTCDate()) + '.' + pad(d.getUTCMonth() + 1);
+        };
         const formatCount = (v) => v.toLocaleString('en-US');
         const kFormat = (v) => (Math.abs(v) >= 1000 ? +(v / 1000).toFixed(1) + 'k' : String(v));
         const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+        const DAY_MS = 24 * 60 * 60 * 1000;
+        const WEEK_MS = 7 * DAY_MS;
+        const weekStart = (ms) => {
+          const d = new Date(ms);
+          return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+        };
+        // ISO 8601: the week holding the year's first Thursday is W1
+        const weekNumber = (ms) => {
+          const thursday = weekStart(ms) + 3 * DAY_MS;
+          const january4 = Date.UTC(new Date(thursday).getUTCFullYear(), 0, 4);
+          return 1 + Math.round((thursday - (weekStart(january4) + 3 * DAY_MS)) / WEEK_MS);
+        };
+
+        // a rolling quarter, so cells stay readable however long the history
+        // grows, with the whole history a dropdown away under monthly
+        const WEEKS_SHOWN = 12;
+
+        const GRANULARITY = {
+          weekly: {
+            start: weekStart,
+            next: (ms) => ms + WEEK_MS,
+            label: (ms) => 'W' + weekNumber(ms),
+            windowStart: (ms) => weekStart(ms) - (WEEKS_SHOWN - 1) * WEEK_MS,
+          },
+          monthly: {
+            start: (ms) => {
+              const d = new Date(ms);
+              return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
+            },
+            next: (ms) => {
+              const d = new Date(ms);
+              return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1);
+            },
+            label: (ms) => MONTH_NAMES[new Date(ms).getUTCMonth()],
+          },
+        };
 
         const crosshair = {
           id: 'crosshair',
@@ -333,6 +395,25 @@
           el.style.opacity = '1';
         }
 
+        function showSpanTooltip(element, text) {
+          const el = tooltipEl();
+          el.replaceChildren();
+          const line = document.createElement('div');
+          line.className = 'tt-title';
+          line.textContent = text;
+          el.appendChild(line);
+          const rect = element.getBoundingClientRect();
+          const maxLeft = window.scrollX + document.documentElement.clientWidth - el.offsetWidth - 8;
+          const left = rect.left + window.scrollX + rect.width / 2 - el.offsetWidth / 2;
+          el.style.left = Math.min(Math.max(left, window.scrollX + 8), maxLeft) + 'px';
+          el.style.top = rect.top + window.scrollY - el.offsetHeight - 6 + 'px';
+          el.style.opacity = '1';
+        }
+
+        function hideTooltip() {
+          tooltipEl().style.opacity = '0';
+        }
+
         const data = window.BENCHMARK_DATA;
         document.getElementById('last-update').textContent = formatDate(data.lastUpdate);
         const repoLink = document.getElementById('repository-link');
@@ -346,23 +427,36 @@
         };
 
         const main = document.getElementById('main');
-        for (const [suiteName, entries] of Object.entries(data.entries)) {
-          document.getElementById('suite-name').textContent = suiteName;
-          renderSuite(entries, main);
+        const granularitySelect = document.getElementById('granularity');
+        const charts = [];
+        let granularity = GRANULARITY[granularitySelect.value];
+
+        function render() {
+          for (const chart of charts) chart.destroy();
+          charts.length = 0;
+          main.replaceChildren();
+          for (const [suiteName, entries] of Object.entries(data.entries)) {
+            document.getElementById('suite-name').textContent = suiteName;
+            renderSuite(entries, main);
+          }
         }
+        granularitySelect.onchange = () => {
+          granularity = GRANULARITY[granularitySelect.value];
+          render();
+        };
+        render();
 
         function renderSuite(entries, parent) {
-          const monthTicks = [];
-          const firstDate = new Date(entries[0].date);
-          const lastDate = new Date(entries[entries.length - 1].date);
-          let tickYear = firstDate.getUTCFullYear();
-          let tickMonth = firstDate.getUTCMonth() + 1;
-          for (;;) {
-            const boundary = Date.UTC(tickYear, tickMonth, 1);
-            if (boundary > lastDate.getTime()) break;
-            monthTicks.push({ value: boundary });
-            tickMonth++;
+          const ticks = [];
+          const lastDate = entries[entries.length - 1].date;
+          // gridlines mark whole periods, so the first one lands past the
+          // partial period the history opens with
+          const firstFull = granularity.next(granularity.start(entries[0].date));
+          const windowed = granularity.windowStart ? Math.max(granularity.windowStart(lastDate), firstFull) : null;
+          for (let boundary = windowed || firstFull; boundary <= lastDate; boundary = granularity.next(boundary)) {
+            ticks.push({ value: boundary });
           }
+          const xMin = windowed || entries[0].date;
 
           // color by first appearance so a series keeps its hue as data grows
           const series = new Map();
@@ -404,15 +498,18 @@
             });
             return index;
           };
-          // one delta per month tick, exact because every month-end commit is
-          // sampled, the current month runs to the newest sample
-          const months = monthTicks.map((tick) => {
-            const date = new Date(tick.value);
-            const end = Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1);
+          // one delta per period, measured between the newest samples at or
+          // before each boundary, the current period runs to the newest sample
+          const starts = ticks.map((tick) => tick.value);
+          // the period the history opens mid-way through still earns a cell
+          if (!starts.length || starts[0] > xMin) starts.unshift(xMin);
+          const buckets = starts.map((start) => {
+            const end = granularity.next(granularity.start(start));
             return {
-              startValue: tick.value,
+              label: granularity.label(start),
+              startValue: start,
               endValue: end,
-              startIndex: lastAtOrBefore(tick.value),
+              startIndex: lastAtOrBefore(start),
               endIndex: lastAtOrBefore(end),
             };
           });
@@ -420,11 +517,11 @@
           const grid = document.createElement('div');
           grid.className = 'charts';
           parent.appendChild(grid);
-          for (const s of panels) renderPanel(grid, s, entries, monthTicks, yMax, months);
+          for (const s of panels) renderPanel(grid, s, entries, ticks, yMax, buckets, xMin);
           renderTable(panels, entries);
         }
 
-        function renderPanel(parent, s, entries, monthTicks, yMax, months) {
+        function renderPanel(parent, s, entries, ticks, yMax, buckets, xMin) {
           const card = document.createElement('div');
           card.className = 'card';
 
@@ -456,33 +553,51 @@
           const deltas = document.createElement('div');
           deltas.className = 'deltas';
           const deltaCells = [];
-          for (const month of months) {
+          const lastSample = entries[entries.length - 1].date;
+          for (const bucket of buckets) {
             const cell = document.createElement('div');
             cell.className = 'cell';
-            const monthLabel = document.createElement('span');
-            monthLabel.className = 'month';
-            monthLabel.textContent = MONTH_NAMES[new Date(month.startValue).getUTCMonth()];
-            cell.appendChild(monthLabel);
+            const bucketLabel = document.createElement('span');
+            bucketLabel.className = 'label';
+            bucketLabel.textContent = bucket.label;
+            cell.appendChild(bucketLabel);
             const deltaValue = document.createElement('span');
             deltaValue.className = 'value';
-            const start = month.startIndex < 0 ? null : s.values[month.startIndex];
-            const end = month.endIndex < 0 ? null : s.values[month.endIndex];
-            if (start != null && end != null) {
-              const thousands = +((end - start) / 1000).toFixed(1);
-              deltaValue.textContent = (thousands >= 0 ? '+' : '') + thousands + 'k';
-            } else {
-              deltaValue.textContent = '0k';
-              deltaValue.classList.add('empty');
-            }
+            const start = bucket.startIndex < 0 ? null : s.values[bucket.startIndex];
+            const end = bucket.endIndex < 0 ? null : s.values[bucket.endIndex];
+            const change = start == null || end == null ? 0 : end - start;
+            deltaValue.textContent = change === 0 ? '0' : (change > 0 ? '+' : '') + kFormat(change);
+            // only additions of 500 lines or more earn the series colour, the
+            // rest reads as quiet as a zero
+            if (change < 500) deltaValue.classList.add('quiet');
+            else deltaValue.style.color = s.color;
             cell.appendChild(deltaValue);
+            const closes = Math.min(bucket.endValue - DAY_MS, lastSample);
+            const span = formatUTCDay(bucket.startValue) + ' - ' + formatUTCDay(closes);
+            cell.onmouseenter = () => showSpanTooltip(cell, span);
+            cell.onmouseleave = hideTooltip;
             deltas.appendChild(cell);
-            deltaCells.push({ element: cell, start: month.startValue, end: month.endValue });
+            deltaCells.push({ element: cell, start: bucket.startValue, end: bucket.endValue });
           }
           card.appendChild(deltas);
           parent.appendChild(card);
 
-          // keep each month cell centered within its span through resizes, the
-          // current month's span is clipped at the newest sample
+          // shrink the row until no two neighbours touch, weekly buckets pack
+          // far tighter than monthly ones
+          const fitDeltas = () => {
+            deltas.style.fontSize = '';
+            const base = parseFloat(getComputedStyle(deltas).fontSize);
+            let scale = 1;
+            for (let i = 1; i < deltaCells.length; i++) {
+              const gap = deltaCells[i].center - deltaCells[i - 1].center;
+              const needed = (deltaCells[i].element.offsetWidth + deltaCells[i - 1].element.offsetWidth) / 2 + 3;
+              scale = Math.min(scale, gap / needed);
+            }
+            if (scale < 1) deltas.style.fontSize = Math.max(9, base * scale) + 'px';
+          };
+
+          // keep each cell centered within its span through resizes, the
+          // current period's span is clipped at the newest sample
           const deltaAlign = {
             id: 'deltaAlign',
             afterLayout(chart) {
@@ -490,12 +605,14 @@
               for (const cell of deltaCells) {
                 const startPixel = x.getPixelForValue(cell.start);
                 const endPixel = Math.min(x.getPixelForValue(cell.end), chart.chartArea.right);
-                cell.element.style.left = (startPixel + endPixel) / 2 + 'px';
+                cell.center = (startPixel + endPixel) / 2;
+                cell.element.style.left = cell.center + 'px';
               }
+              fitDeltas();
             },
           };
 
-          new Chart(canvas, {
+          const chart = new Chart(canvas, {
             type: 'line',
             data: {
               datasets: [
@@ -540,10 +657,10 @@
               scales: {
                 x: {
                   type: 'linear',
-                  min: entries[0].date,
+                  min: xMin,
                   max: entries[entries.length - 1].date,
                   afterBuildTicks: (axis) => {
-                    axis.ticks = monthTicks;
+                    axis.ticks = ticks;
                   },
                   grid: { color: token('--grid'), drawTicks: false },
                   border: { color: token('--axis') },
@@ -565,6 +682,7 @@
               },
             },
           });
+          charts.push(chart);
         }
 
         function latestValue(s) {
@@ -576,6 +694,7 @@
 
         function renderTable(panels, entries) {
           const table = document.getElementById('data-table');
+          table.replaceChildren();
           const thead = document.createElement('thead');
           const headRow = document.createElement('tr');
           for (const text of ['commit', ...panels.map((p) => p.name)]) {
