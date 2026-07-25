@@ -16,6 +16,7 @@ use lisette::pipeline::{
 
 use crate::cli_error;
 use crate::command::CheckAction;
+use crate::handlers::build::ProjectLayout;
 use crate::lock::acquire_target_lock;
 use crate::workspace::{GoWorkspace, WorkspaceBindgen, warm_typedefs};
 
@@ -79,6 +80,7 @@ pub fn check(
             CompileScope::Standalone,
             TypedefLocator::default(),
             "main",
+            None,
         );
     }
 
@@ -90,8 +92,8 @@ pub fn check(
 }
 
 fn check_project(project_path: &Path, options: &CheckOptions) -> i32 {
-    let kind = match super::build::resolve_project_kind(project_path) {
-        Some(kind) => kind,
+    let layout = match super::build::resolve_project_layout(project_path) {
+        Some(layout) => layout,
         None => return 1,
     };
 
@@ -143,6 +145,7 @@ fn check_project(project_path: &Path, options: &CheckOptions) -> i32 {
     let locator = locator.with_bindgen(bindgen);
 
     let go_module = manifest.project.name.clone();
+    let ProjectLayout { kind, sources } = layout;
     let result = match kind {
         ProjectKind::Binary => {
             let src_main = project_path.join("src").join("main.lis");
@@ -152,6 +155,7 @@ fn check_project(project_path: &Path, options: &CheckOptions) -> i32 {
                 CompileScope::Project(project_path.to_path_buf()),
                 locator,
                 &go_module,
+                Some(sources),
             )
         }
         ProjectKind::Library => {
@@ -163,6 +167,7 @@ fn check_project(project_path: &Path, options: &CheckOptions) -> i32 {
                 CompileScope::Project(project_path.to_path_buf()),
                 locator,
                 &go_module,
+                Some(sources),
             );
             report_check(&result, "", "", options, start)
         }
@@ -177,9 +182,10 @@ fn check_single_file(
     scope: CompileScope,
     locator: TypedefLocator,
     go_module: &str,
+    sources: Option<Vec<PathBuf>>,
 ) -> i32 {
     let start = Instant::now();
-    let compiled = match compile_single_file(file_path, scope, locator, go_module) {
+    let compiled = match compile_single_file(file_path, scope, locator, go_module, sources) {
         Ok(compiled) => compiled,
         Err(ReadFailure) => return 1,
     };
@@ -256,6 +262,7 @@ fn compile_single_file(
     scope: CompileScope,
     locator: TypedefLocator,
     go_module: &str,
+    sources: Option<Vec<PathBuf>>,
 ) -> Result<CompiledFile, ReadFailure> {
     let source = match fs::read_to_string(file_path) {
         Ok(s) => s,
@@ -288,6 +295,7 @@ fn compile_single_file(
         scope,
         locator,
         go_module,
+        sources,
     );
 
     Ok(CompiledFile {
@@ -303,6 +311,7 @@ fn compile_project_entry(
     scope: CompileScope,
     locator: TypedefLocator,
     go_module: &str,
+    sources: Option<Vec<PathBuf>>,
 ) -> CompileResult {
     let config = CompileConfig {
         mode: CompileMode::Check,
@@ -312,7 +321,10 @@ fn compile_project_entry(
         locator,
     };
 
-    let fs = LocalFileSystem::new(dir.to_str().unwrap_or("."));
+    let fs = match sources {
+        Some(sources) => LocalFileSystem::with_scanned_sources(dir, sources),
+        None => LocalFileSystem::new(dir.to_str().unwrap_or(".")),
+    };
     compile(input, &config, &fs)
 }
 
@@ -358,6 +370,7 @@ fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
                 CompileScope::Directory,
                 TypedefLocator::default(),
                 "main",
+                None,
             ) {
                 compiled = Some(result);
                 break;

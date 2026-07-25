@@ -15,6 +15,7 @@ pub use semantics::path::relative_to_cwd;
 
 pub struct LocalFileSystem {
     search_paths: Vec<(PathBuf, DisplayPathBase)>,
+    scanned_sources: Option<Vec<PathBuf>>,
 }
 
 impl LocalFileSystem {
@@ -32,7 +33,16 @@ impl LocalFileSystem {
                     (path, display_base)
                 })
                 .collect(),
+            scanned_sources: None,
         }
+    }
+
+    /// Build a loader rooted at `src_dir` whose module discovery reuses `sources`,
+    /// which must be the `.lis` files under that same directory.
+    pub fn with_scanned_sources(src_dir: &Path, sources: Vec<PathBuf>) -> Self {
+        let mut fs = Self::new(src_dir.to_str().unwrap_or("."));
+        fs.scanned_sources = Some(sources);
+        fs
     }
 
     fn collect_files(&self, folder_path: &Path, fs_name: &str, base: &DisplayPathBase) -> Files {
@@ -373,7 +383,15 @@ impl Loader for LocalFileSystem {
         let mut with_test: HashSet<PathBuf> = HashSet::default();
         let mut with_test_root_file: HashSet<PathBuf> = HashSet::default();
         let mut with_production_module: HashSet<PathBuf> = HashSet::default();
-        for path in collect_lis_filepaths_recursive(root) {
+        let walked;
+        let sources = match &self.scanned_sources {
+            Some(sources) => sources.as_slice(),
+            None => {
+                walked = collect_lis_filepaths_recursive(root);
+                &walked
+            }
+        };
+        for path in sources {
             let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
                 continue;
             };
