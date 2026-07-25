@@ -27,7 +27,10 @@ pub fn check_redundant_else(expression: &Expression, ctx: &NodeCtx) {
             continue;
         };
 
-        if matches!(alternative.as_ref(), Expression::Unit { .. }) || is_empty_block(alternative) {
+        let Some(alternative) = alternative.as_deref() else {
+            continue;
+        };
+        if is_empty_block(alternative) {
             continue;
         }
 

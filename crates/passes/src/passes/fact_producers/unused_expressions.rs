@@ -206,14 +206,21 @@ fn descend_discarded(
             consequence,
             alternative,
             ..
+        } => {
+            descend_discarded(consequence, mode, module_id, store, facts);
+            if let Some(alternative) = alternative {
+                descend_discarded(alternative, mode, module_id, store, facts);
+            }
         }
-        | Expression::IfLet {
+        Expression::IfLet {
             consequence,
             alternative,
             ..
         } => {
             descend_discarded(consequence, mode, module_id, store, facts);
-            descend_discarded(alternative, mode, module_id, store, facts);
+            if let Some(alternative) = alternative.expression() {
+                descend_discarded(alternative, mode, module_id, store, facts);
+            }
         }
         Expression::Match { arms, .. } => {
             for arm in arms {
@@ -315,7 +322,7 @@ fn emit_unused_at_leaf(
 fn lvalue_slice_growth_kind(expression: &Expression) -> Option<UnusedExpressionKind> {
     let Expression::Call {
         expression: callee,
-        call_kind: Some(CallKind::NativeMethod(NativeTypeKind::Slice)),
+        call_kind: CallKind::NativeMethod(NativeTypeKind::Slice),
         ..
     } = expression
     else {

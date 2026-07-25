@@ -2,7 +2,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::{LisetteDiagnostic, emit as emit_diag};
 use syntax::ast::{
-    EnumVariant, Expression, ImportAlias, Pattern, Span, StructKind, VariantFields, Visibility,
+    EnumVariant, Expression, ImportAlias, Pattern, Span, StructFields, VariantFields, Visibility,
 };
 use syntax::program::File;
 
@@ -197,7 +197,6 @@ impl Planner<'_> {
             name,
             name_span,
             fields,
-            kind,
             attributes,
             generics,
             ..
@@ -215,14 +214,14 @@ impl Planner<'_> {
             .push(*name_span);
 
         let members = selectors.entry(type_go).or_default();
-        match kind {
-            StructKind::Record => {
+        match fields {
+            StructFields::Record(fields) => {
                 for field in fields {
                     let field_go = struct_field_go_name(field, attributes);
                     members.entry(field_go).or_default().push(field.name_span);
                 }
             }
-            StructKind::Tuple => {
+            StructFields::Tuple(fields) => {
                 // A single-field tuple with no generics is a newtype (a Go
                 // scalar type, no struct fields); empty tuples have none.
                 let is_newtype = fields.len() == 1 && generics.is_empty();
@@ -391,8 +390,9 @@ impl Planner<'_> {
     ) {
         let mut seen: HashSet<String> = HashSet::default();
         for variant in variants {
-            let is_struct = variant.fields.is_struct();
-            let single_field = variant.fields.len() == 1;
+            let Some(field_shape) = syntax::go_names::enum_field_shape(&variant.fields) else {
+                continue;
+            };
             let field_names = variant
                 .fields
                 .iter()
@@ -402,8 +402,7 @@ impl Planner<'_> {
                         &variant.name,
                         &field.name,
                         index,
-                        is_struct,
-                        single_field,
+                        field_shape,
                         name,
                     )
                 })

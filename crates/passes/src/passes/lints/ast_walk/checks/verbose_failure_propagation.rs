@@ -29,11 +29,14 @@ pub fn check_verbose_failure_propagation(expression: &Expression, ctx: &NodeCtx)
             span,
             ..
         } => {
+            let Some(alternative) = alternative.expression() else {
+                return;
+            };
             let wildcard = Pattern::WildCard {
                 span: alternative.get_span(),
             };
             let a = (pattern, consequence.as_ref());
-            let b = (&wildcard, alternative.as_ref());
+            let b = (&wildcard, alternative);
             (propagation_fires(scrutinee, a, b), span, 2)
         }
         _ => return,

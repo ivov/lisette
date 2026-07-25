@@ -1,13 +1,6 @@
 ---
 source: tests/spec/parse/mod.rs
-description: |
-  
-  fn factorial(n: int) -> int {
-    if n <= 1 {
-      return 1;
-    }
-    return n * factorial(n - 1);
-  }
+description: "\nfn factorial(n: int) -> int {\n  if n <= 1 {\n    return 1;\n  }\n  return n * factorial(n - 1);\n}\n"
 ---
 [
     Function {
@@ -136,16 +129,7 @@ description: |
                                 byte_length: 19,
                             },
                         },
-                        alternative: Unit {
-                            ty: Var {
-                                id: uninferred,
-                            },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 33,
-                                byte_length: 29,
-                            },
-                        },
+                        alternative: None,
                         ty: Var {
                             id: uninferred,
                         },
@@ -232,7 +216,7 @@ description: |
                                     byte_offset: 76,
                                     byte_length: 16,
                                 },
-                                call_kind: None,
+                                call_kind: Unresolved,
                             },
                             ty: Var {
                                 id: uninferred,

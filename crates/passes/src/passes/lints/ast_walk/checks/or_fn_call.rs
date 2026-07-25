@@ -104,7 +104,7 @@ fn does_real_work(argument: &Expression) -> bool {
             call_kind,
             ..
         } => {
-            if is_value_constructor(callee, call_kind.as_ref()) {
+            if is_value_constructor(callee, call_kind) {
                 args.iter().any(does_real_work)
             } else {
                 true
@@ -114,12 +114,12 @@ fn does_real_work(argument: &Expression) -> bool {
     }
 }
 
-fn is_value_constructor(callee: &Expression, call_kind: Option<&CallKind>) -> bool {
+fn is_value_constructor(callee: &Expression, call_kind: &CallKind) -> bool {
     match call_kind {
-        Some(CallKind::TupleStructConstructor) => true,
+        CallKind::TupleStructConstructor => true,
         // Enum-variant constructors resolve to `Regular`; an unresolved callee
         // may still be one, so fall back to the leaf-name shape in both cases.
-        Some(CallKind::Regular) | None => is_pascal_case_constructor(callee),
+        CallKind::Regular | CallKind::Unresolved => is_pascal_case_constructor(callee),
         _ => false,
     }
 }

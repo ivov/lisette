@@ -18,7 +18,10 @@ pub fn check_collapsible_else_if(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
-    let Expression::Block { items, .. } = alternative.as_ref() else {
+    let Some(alternative) = alternative.as_deref() else {
+        return;
+    };
+    let Expression::Block { items, .. } = alternative else {
         return;
     };
     let [

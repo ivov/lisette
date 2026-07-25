@@ -3,7 +3,7 @@ use ecow::EcoString;
 use super::{ParamMode, Parser};
 use crate::ast::{
     Annotation, Attribute, AttributeArg, ConstInitializer, EnumFieldDefinition, EnumVariant,
-    Expression, Generic, ParentInterface, Span, StructFieldDefinition, StructKind, VariantFields,
+    Expression, Generic, ParentInterface, Span, StructFieldDefinition, StructFields, VariantFields,
     Visibility,
 };
 use crate::lex::Token;
@@ -427,8 +427,7 @@ impl<'source> Parser<'source> {
             name,
             name_span,
             generics,
-            fields,
-            kind: StructKind::Record,
+            fields: StructFields::Record(fields),
             visibility: Visibility::Private,
             span: self.span_from_tokens(start),
         }
@@ -480,8 +479,7 @@ impl<'source> Parser<'source> {
             name,
             name_span,
             generics,
-            fields,
-            kind: StructKind::Tuple,
+            fields: StructFields::Tuple(fields),
             visibility: Visibility::Private,
             span: self.span_from_tokens(start),
         }

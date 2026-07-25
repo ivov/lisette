@@ -264,6 +264,8 @@ impl NativeTypeKind {
 /// What a call expression resolved to during type checking.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CallKind {
+    /// The call has not reached semantic classification yet.
+    Unresolved,
     /// Regular function or method call
     Regular,
     /// Tuple struct constructor (e.g., `Point(1, 2)`)

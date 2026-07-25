@@ -86,9 +86,11 @@ impl InferCtx<'_> {
                 consequence,
                 alternative,
                 ..
-            } => self
-                .find_alias(consequence, true)
-                .or_else(|| self.find_alias(alternative, true)),
+            } => self.find_alias(consequence, true).or_else(|| {
+                alternative
+                    .as_deref()
+                    .and_then(|alternative| self.find_alias(alternative, true))
+            }),
             Expression::Tuple { elements, .. } => {
                 elements.iter().find_map(|e| self.find_alias(e, true))
             }
@@ -105,7 +107,7 @@ impl InferCtx<'_> {
             } => elements.iter().find_map(|e| self.find_alias(e, true)),
             Expression::Call {
                 args,
-                call_kind: Some(CallKind::TupleStructConstructor),
+                call_kind: CallKind::TupleStructConstructor,
                 ..
             } => args.iter().find_map(|a| self.find_alias(a, true)),
             _ => None,
@@ -181,17 +183,14 @@ pub(super) fn clone_call_receiver(expression: &Expression) -> Option<&Expression
     match callee.unwrap_parens() {
         Expression::DotAccess {
             expression, member, ..
-        } if member == "clone"
-            && args.is_empty()
-            && !matches!(call_kind, Some(CallKind::UfcsMethod)) =>
-        {
+        } if member == "clone" && args.is_empty() && !matches!(call_kind, CallKind::UfcsMethod) => {
             Some(expression)
         }
         Expression::Identifier { .. }
             if args.len() == 1
                 && matches!(
                     call_kind,
-                    Some(CallKind::NativeMethodIdentifier(_) | CallKind::ReceiverMethodUfcs { .. })
+                    CallKind::NativeMethodIdentifier(_) | CallKind::ReceiverMethodUfcs { .. }
                 )
                 && callee
                     .get_var_name()

@@ -13,7 +13,6 @@ impl InferCtx<'_> {
             name_span,
             generics,
             fields,
-            kind,
             visibility,
             span,
         } = expression
@@ -29,7 +28,6 @@ impl InferCtx<'_> {
                 DefinitionBody::Struct {
                     generics: definition_generics,
                     fields: definition_fields,
-                    kind: definition_kind,
                     ..
                 },
             ..
@@ -42,7 +40,6 @@ impl InferCtx<'_> {
                 definition_name_span.expect("struct definition has a name span");
             let definition_generics = definition_generics.clone();
             let definition_fields = definition_fields.clone();
-            let definition_kind = *definition_kind;
 
             Expression::Struct {
                 doc,
@@ -51,7 +48,6 @@ impl InferCtx<'_> {
                 name_span: definition_name_span,
                 generics: definition_generics,
                 fields: definition_fields,
-                kind: definition_kind,
                 visibility,
                 span,
             }
@@ -63,7 +59,6 @@ impl InferCtx<'_> {
                 name_span,
                 generics,
                 fields,
-                kind,
                 visibility,
                 span,
             }

@@ -3,7 +3,7 @@ use rustc_hash::FxHashSet as HashSet;
 use crate::checker::EnvResolve;
 use crate::zero::{NoZero, NoZeroReason};
 use ecow::EcoString;
-use syntax::ast::{Expression, Span, StructFieldAssignment, StructSpread};
+use syntax::ast::{Expression, Span, StructFieldAssignment, StructFields, StructSpread};
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{SubstitutionMap, Type, substitute, unqualified_name};
 
@@ -43,7 +43,7 @@ impl StructLiteral {
 struct ResolvedStruct {
     qualified_name: EcoString,
     ty: Type,
-    fields: Vec<syntax::ast::StructFieldDefinition>,
+    fields: StructFields,
     alias_underlying: Option<Type>,
 }
 
@@ -486,8 +486,6 @@ impl InferCtx<'_> {
         let written_enum = written_name
             .rsplit_once('.')
             .map_or(enum_name, |(prefix, _)| prefix);
-        let target_single = variant_fields.len() == 1;
-
         let missing: Vec<String> = variant_fields
             .iter()
             .enumerate()
@@ -497,8 +495,7 @@ impl InferCtx<'_> {
                     target_variant,
                     &field.name,
                     *field_index,
-                    true,
-                    target_single,
+                    syntax::go_names::EnumFieldShape::Struct,
                     enum_name,
                 );
                 !variants.iter().all(|variant| {
@@ -507,13 +504,17 @@ impl InferCtx<'_> {
                         .iter()
                         .enumerate()
                         .any(|(other_index, other)| {
+                            let Some(field_shape) =
+                                syntax::go_names::enum_field_shape(&variant.fields)
+                            else {
+                                return false;
+                            };
                             other.name == field.name
                                 && syntax::go_names::enum_field_go_name(
                                     &variant.name,
                                     &other.name,
                                     other_index,
-                                    variant.fields.is_struct(),
-                                    variant.fields.len() == 1,
+                                    field_shape,
                                     enum_name,
                                 ) == target_slot
                         })

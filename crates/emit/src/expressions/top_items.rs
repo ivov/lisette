@@ -35,11 +35,10 @@ impl Planner<'_> {
                 name,
                 generics,
                 fields,
-                kind,
                 ..
             } => {
                 let doc_comment = emit_doc(doc);
-                let code = self.emit_struct_definition(name, generics, fields, kind, attributes);
+                let code = self.emit_struct_definition(name, generics, fields, attributes);
                 format!("{}{}", doc_comment, code)
             }
             Expression::Enum {

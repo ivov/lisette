@@ -5,7 +5,7 @@ use crate::checker::TypeEnv;
 use crate::checker::infer::InferCtx;
 use crate::checker::scopes::Scopes;
 use crate::store::Store;
-use syntax::ast::{Annotation, Expression, Span};
+use syntax::ast::{Annotation, Expression, Span, StructFields};
 use syntax::program::{DefinitionBody, Visibility};
 use syntax::types::{CompoundKind, Type, build_substitution_map, substitute};
 
@@ -589,7 +589,7 @@ impl InferCtx<'_> {
         let type_args = resolved.get_type_params().unwrap_or_default();
         let (generics, field_types): (&[syntax::ast::Generic], Vec<Type>) = match &definition.body {
             DefinitionBody::Struct {
-                kind: syntax::ast::StructKind::Tuple,
+                fields: StructFields::Tuple(_),
                 ..
             } => return false,
             DefinitionBody::Struct {

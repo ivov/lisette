@@ -49,7 +49,9 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
     }
     let mut mutations = MutationInfo::default();
     for (&binding_id, b) in facts.bindings.iter() {
-        mutations.record(binding_id, b.mutation);
+        if let Some(mutation) = b.mutation {
+            mutations.record(binding_id, mutation);
+        }
     }
 
     // Canonicalize diagnostic order so the output is stable regardless of

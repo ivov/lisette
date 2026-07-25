@@ -46,14 +46,21 @@ fn flag_tail_returns(expression: &Expression, sink: &LocalSink) {
             consequence,
             alternative,
             ..
+        } => {
+            flag_tail_returns(consequence, sink);
+            if let Some(alternative) = alternative {
+                flag_tail_returns(alternative, sink);
+            }
         }
-        | Expression::IfLet {
+        Expression::IfLet {
             consequence,
             alternative,
             ..
         } => {
             flag_tail_returns(consequence, sink);
-            flag_tail_returns(alternative, sink);
+            if let Some(alternative) = alternative.expression() {
+                flag_tail_returns(alternative, sink);
+            }
         }
         Expression::Match { arms, .. } => {
             for arm in arms {

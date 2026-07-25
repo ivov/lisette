@@ -1,16 +1,6 @@
 ---
 source: tests/spec/parse/mod.rs
-description: |
-  
-  fn test(a: int) {
-    if a > 100 {
-      print("very large");
-    } else if a > 10 {
-      print("large");
-    } else {
-      print("small or medium");
-    }
-  }
+description: "\nfn test(a: int) {\n  if a > 100 {\n    print(\"very large\");\n  } else if a > 10 {\n    print(\"large\");\n  } else {\n    print(\"small or medium\");\n  }\n}\n"
 ---
 [
     Function {
@@ -136,7 +126,7 @@ description: |
                                         byte_offset: 38,
                                         byte_length: 19,
                                     },
-                                    call_kind: None,
+                                    call_kind: Unresolved,
                                 },
                             ],
                             ty: Var {
@@ -148,159 +138,163 @@ description: |
                                 byte_length: 30,
                             },
                         },
-                        alternative: If {
-                            condition: Binary {
-                                operator: GreaterThan,
-                                left: Identifier {
-                                    value: "a",
+                        alternative: Some(
+                            If {
+                                condition: Binary {
+                                    operator: GreaterThan,
+                                    left: Identifier {
+                                        value: "a",
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 71,
+                                            byte_length: 1,
+                                        },
+                                        resolution: Unresolved,
+                                    },
+                                    right: Literal {
+                                        literal: Integer {
+                                            value: 10,
+                                            text: None,
+                                        },
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 75,
+                                            byte_length: 2,
+                                        },
+                                    },
                                     ty: Var {
                                         id: uninferred,
                                     },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 71,
-                                        byte_length: 1,
-                                    },
-                                    resolution: Unresolved,
-                                },
-                                right: Literal {
-                                    literal: Integer {
-                                        value: 10,
-                                        text: None,
-                                    },
-                                    ty: Var {
-                                        id: uninferred,
-                                    },
-                                    span: Span {
-                                        file_id: 0,
-                                        byte_offset: 75,
-                                        byte_length: 2,
+                                        byte_length: 6,
                                     },
                                 },
-                                ty: Var {
-                                    id: uninferred,
-                                },
-                                span: Span {
-                                    file_id: 0,
-                                    byte_offset: 71,
-                                    byte_length: 6,
-                                },
-                            },
-                            consequence: Block {
-                                items: [
-                                    Call {
-                                        expression: Identifier {
-                                            value: "print",
+                                consequence: Block {
+                                    items: [
+                                        Call {
+                                            expression: Identifier {
+                                                value: "print",
+                                                ty: Var {
+                                                    id: uninferred,
+                                                },
+                                                span: Span {
+                                                    file_id: 0,
+                                                    byte_offset: 84,
+                                                    byte_length: 5,
+                                                },
+                                                resolution: Unresolved,
+                                            },
+                                            args: [
+                                                Literal {
+                                                    literal: String {
+                                                        value: "large",
+                                                        raw: false,
+                                                    },
+                                                    ty: Var {
+                                                        id: uninferred,
+                                                    },
+                                                    span: Span {
+                                                        file_id: 0,
+                                                        byte_offset: 90,
+                                                        byte_length: 7,
+                                                    },
+                                                },
+                                            ],
+                                            spread: None,
+                                            type_arguments: None,
                                             ty: Var {
                                                 id: uninferred,
                                             },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 84,
-                                                byte_length: 5,
+                                                byte_length: 14,
                                             },
-                                            resolution: Unresolved,
+                                            call_kind: Unresolved,
                                         },
-                                        args: [
-                                            Literal {
-                                                literal: String {
-                                                    value: "large",
-                                                    raw: false,
+                                    ],
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 78,
+                                        byte_length: 25,
+                                    },
+                                },
+                                alternative: Some(
+                                    Block {
+                                        items: [
+                                            Call {
+                                                expression: Identifier {
+                                                    value: "print",
+                                                    ty: Var {
+                                                        id: uninferred,
+                                                    },
+                                                    span: Span {
+                                                        file_id: 0,
+                                                        byte_offset: 115,
+                                                        byte_length: 5,
+                                                    },
+                                                    resolution: Unresolved,
                                                 },
+                                                args: [
+                                                    Literal {
+                                                        literal: String {
+                                                            value: "small or medium",
+                                                            raw: false,
+                                                        },
+                                                        ty: Var {
+                                                            id: uninferred,
+                                                        },
+                                                        span: Span {
+                                                            file_id: 0,
+                                                            byte_offset: 121,
+                                                            byte_length: 17,
+                                                        },
+                                                    },
+                                                ],
+                                                spread: None,
+                                                type_arguments: None,
                                                 ty: Var {
                                                     id: uninferred,
                                                 },
                                                 span: Span {
                                                     file_id: 0,
-                                                    byte_offset: 90,
-                                                    byte_length: 7,
+                                                    byte_offset: 115,
+                                                    byte_length: 24,
                                                 },
+                                                call_kind: Unresolved,
                                             },
                                         ],
-                                        spread: None,
-                                        type_arguments: None,
                                         ty: Var {
                                             id: uninferred,
                                         },
                                         span: Span {
                                             file_id: 0,
-                                            byte_offset: 84,
-                                            byte_length: 14,
+                                            byte_offset: 109,
+                                            byte_length: 35,
                                         },
-                                        call_kind: None,
                                     },
-                                ],
+                                ),
                                 ty: Var {
                                     id: uninferred,
                                 },
                                 span: Span {
                                     file_id: 0,
-                                    byte_offset: 78,
-                                    byte_length: 25,
+                                    byte_offset: 68,
+                                    byte_length: 76,
                                 },
                             },
-                            alternative: Block {
-                                items: [
-                                    Call {
-                                        expression: Identifier {
-                                            value: "print",
-                                            ty: Var {
-                                                id: uninferred,
-                                            },
-                                            span: Span {
-                                                file_id: 0,
-                                                byte_offset: 115,
-                                                byte_length: 5,
-                                            },
-                                            resolution: Unresolved,
-                                        },
-                                        args: [
-                                            Literal {
-                                                literal: String {
-                                                    value: "small or medium",
-                                                    raw: false,
-                                                },
-                                                ty: Var {
-                                                    id: uninferred,
-                                                },
-                                                span: Span {
-                                                    file_id: 0,
-                                                    byte_offset: 121,
-                                                    byte_length: 17,
-                                                },
-                                            },
-                                        ],
-                                        spread: None,
-                                        type_arguments: None,
-                                        ty: Var {
-                                            id: uninferred,
-                                        },
-                                        span: Span {
-                                            file_id: 0,
-                                            byte_offset: 115,
-                                            byte_length: 24,
-                                        },
-                                        call_kind: None,
-                                    },
-                                ],
-                                ty: Var {
-                                    id: uninferred,
-                                },
-                                span: Span {
-                                    file_id: 0,
-                                    byte_offset: 109,
-                                    byte_length: 35,
-                                },
-                            },
-                            ty: Var {
-                                id: uninferred,
-                            },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 68,
-                                byte_length: 76,
-                            },
-                        },
+                        ),
                         ty: Var {
                             id: uninferred,
                         },

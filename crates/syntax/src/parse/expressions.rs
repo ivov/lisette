@@ -9,7 +9,7 @@ use crate::ast::{
     SelectArmPattern, Span, StructFieldAssignment, StructSpread, UnaryOperator, Visibility,
 };
 use crate::lex::TokenKind::{self, *};
-use crate::program::DotAccessResolution;
+use crate::program::{CallKind, DotAccessResolution};
 use crate::types::Type;
 
 #[derive(Clone, Copy)]
@@ -434,7 +434,7 @@ impl<'source> Parser<'source> {
             spread: spread.map(Box::new),
             type_arguments: CallTypeArguments::unresolved(raw_type_args),
             span: self.span_from_offset(start_offset),
-            call_kind: None,
+            call_kind: CallKind::Unresolved,
         }
     }
 

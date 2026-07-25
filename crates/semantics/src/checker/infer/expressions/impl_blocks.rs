@@ -1,6 +1,6 @@
 use ecow::EcoString;
 use syntax::ast::{Annotation, Expression, Generic, ParentInterface, Span};
-use syntax::program::{Definition, DefinitionBody};
+use syntax::program::Definition;
 use syntax::types::Type;
 
 use crate::checker::infer::InferCtx;
@@ -44,16 +44,10 @@ impl InferCtx<'_> {
         // type name) shadows the constructor function in the parent scope. Re-insert the
         // constructor so it's callable from within impl methods.
         if let Type::Nominal { id, .. } = &impl_ty
-            && let Some(Definition {
-                body:
-                    DefinitionBody::Struct {
-                        constructor: Some(ctor_ty),
-                        ..
-                    },
-                ..
-            }) = store.get_definition(id)
+            && let Some(ctor_ty) = store
+                .get_definition(id)
+                .and_then(Definition::constructor_type)
         {
-            let ctor_ty = ctor_ty.clone();
             self.scopes
                 .current_mut()
                 .insert_value(receiver_name.to_string(), ctor_ty);

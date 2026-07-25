@@ -308,12 +308,7 @@ impl InferCtx<'_> {
         self.own_candidate(&resolved, method)
             .or_else(|| self.promoted_candidate(&resolved, method))
             .or_else(|| self.bound_candidate(&resolved, method))
-            .unwrap_or(syntax::go_names::ConformanceCandidate {
-                exported: false,
-                depth: 0,
-                owner: None,
-                shadowed: false,
-            })
+            .unwrap_or(syntax::go_names::ConformanceCandidate::Unresolved)
     }
 
     fn own_candidate(
@@ -329,10 +324,10 @@ impl InferCtx<'_> {
             &mut rustc_hash::FxHashSet::default(),
         )?;
         // UFCS-lowered methods emit as free functions, not selectors.
-        Some(syntax::go_names::ConformanceCandidate {
+        Some(syntax::go_names::ConformanceCandidate::Resolved {
             exported: public,
             depth: 0,
-            owner: Some(id.into()),
+            owner: id.into(),
             shadowed: self.is_ufcs_method(id, method),
         })
     }
@@ -364,10 +359,10 @@ impl InferCtx<'_> {
         };
         let shadowed = promotion::field_selector_depth(store, resolved, &selector)
             .is_some_and(|field_depth| field_depth <= member.depth);
-        Some(syntax::go_names::ConformanceCandidate {
+        Some(syntax::go_names::ConformanceCandidate::Resolved {
             exported: public,
             depth: member.depth,
-            owner: Some(member.declaring_type.as_eco().clone()),
+            owner: member.declaring_type.as_eco().clone(),
             shadowed,
         })
     }
@@ -395,10 +390,10 @@ impl InferCtx<'_> {
                 method,
                 &mut rustc_hash::FxHashSet::default(),
             )?;
-            Some(syntax::go_names::ConformanceCandidate {
+            Some(syntax::go_names::ConformanceCandidate::Resolved {
                 exported: public,
                 depth: 0,
-                owner: Some(qualified.as_eco().clone()),
+                owner: qualified.as_eco().clone(),
                 shadowed: false,
             })
         })
@@ -448,13 +443,18 @@ impl InferCtx<'_> {
         let interface_is_public = store
             .get_definition(interface_qualified_id)
             .is_some_and(|d| d.visibility.is_public());
-        let own_candidate = |name: &str| syntax::go_names::ConformanceCandidate {
-            exported: store
+        let own_candidate = |name: &str| {
+            store
                 .get_definition(&format!("{own_id}.{name}"))
-                .is_some_and(|d| d.visibility.is_public()),
-            depth: 0,
-            owner: Some(own_id.into()),
-            shadowed: self.is_ufcs_method(own_id, name),
+                .map(
+                    |definition| syntax::go_names::ConformanceCandidate::Resolved {
+                        exported: definition.visibility.is_public(),
+                        depth: 0,
+                        owner: own_id.into(),
+                        shadowed: self.is_ufcs_method(own_id, name),
+                    },
+                )
+                .unwrap_or(syntax::go_names::ConformanceCandidate::Unresolved)
         };
         let covered = interface.methods.keys().all(|method| {
             syntax::go_names::conformance_method(

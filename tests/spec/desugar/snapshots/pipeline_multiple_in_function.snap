@@ -80,7 +80,7 @@ description: |
                                 byte_offset: 23,
                                 byte_length: 11,
                             },
-                            call_kind: None,
+                            call_kind: Unresolved,
                         },
                         mode: Plain,
                         ty: Var {
@@ -144,7 +144,7 @@ description: |
                                 byte_offset: 46,
                                 byte_length: 11,
                             },
-                            call_kind: None,
+                            call_kind: Unresolved,
                         },
                         mode: Plain,
                         ty: Var {

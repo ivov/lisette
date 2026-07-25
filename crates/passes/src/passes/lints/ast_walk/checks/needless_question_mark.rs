@@ -32,14 +32,21 @@ fn flag_tail(expression: &Expression, ctx: &NodeCtx) {
             consequence,
             alternative,
             ..
+        } => {
+            flag_tail(consequence, ctx);
+            if let Some(alternative) = alternative {
+                flag_tail(alternative, ctx);
+            }
         }
-        | Expression::IfLet {
+        Expression::IfLet {
             consequence,
             alternative,
             ..
         } => {
             flag_tail(consequence, ctx);
-            flag_tail(alternative, ctx);
+            if let Some(alternative) = alternative.expression() {
+                flag_tail(alternative, ctx);
+            }
         }
         Expression::Match { arms, .. } => {
             for arm in arms {

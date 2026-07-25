@@ -32,7 +32,7 @@ pub fn check_redundant_closure(expression: &Expression, ctx: &NodeCtx) {
         return;
     };
 
-    if !matches!(call_kind, Some(CallKind::Regular))
+    if !matches!(call_kind, CallKind::Regular)
         || spread.is_some()
         || !type_arguments.is_empty()
         || args.len() != params.len()

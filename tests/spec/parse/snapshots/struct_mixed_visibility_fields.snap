@@ -19,81 +19,82 @@ description: |
             byte_length: 6,
         },
         generics: [],
-        fields: [
-            StructFieldDefinition {
-                doc: None,
-                attributes: [],
-                name: "name",
-                name_span: Span {
-                    file_id: 0,
-                    byte_offset: 23,
-                    byte_length: 4,
-                },
-                annotation: Constructor {
-                    name: "string",
-                    params: [],
-                    span: Span {
+        fields: Record(
+            [
+                StructFieldDefinition {
+                    doc: None,
+                    attributes: [],
+                    name: "name",
+                    name_span: Span {
                         file_id: 0,
-                        byte_offset: 29,
-                        byte_length: 6,
-                    },
-                },
-                visibility: Public,
-                ty: Var {
-                    id: uninferred,
-                },
-                embedded: false,
-            },
-            StructFieldDefinition {
-                doc: None,
-                attributes: [],
-                name: "secret",
-                name_span: Span {
-                    file_id: 0,
-                    byte_offset: 39,
-                    byte_length: 6,
-                },
-                annotation: Constructor {
-                    name: "string",
-                    params: [],
-                    span: Span {
-                        file_id: 0,
-                        byte_offset: 47,
-                        byte_length: 6,
-                    },
-                },
-                visibility: Private,
-                ty: Var {
-                    id: uninferred,
-                },
-                embedded: false,
-            },
-            StructFieldDefinition {
-                doc: None,
-                attributes: [],
-                name: "enabled",
-                name_span: Span {
-                    file_id: 0,
-                    byte_offset: 61,
-                    byte_length: 7,
-                },
-                annotation: Constructor {
-                    name: "bool",
-                    params: [],
-                    span: Span {
-                        file_id: 0,
-                        byte_offset: 70,
+                        byte_offset: 23,
                         byte_length: 4,
                     },
+                    annotation: Constructor {
+                        name: "string",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 29,
+                            byte_length: 6,
+                        },
+                    },
+                    visibility: Public,
+                    ty: Var {
+                        id: uninferred,
+                    },
+                    embedded: false,
                 },
-                visibility: Public,
-                ty: Var {
-                    id: uninferred,
+                StructFieldDefinition {
+                    doc: None,
+                    attributes: [],
+                    name: "secret",
+                    name_span: Span {
+                        file_id: 0,
+                        byte_offset: 39,
+                        byte_length: 6,
+                    },
+                    annotation: Constructor {
+                        name: "string",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 47,
+                            byte_length: 6,
+                        },
+                    },
+                    visibility: Private,
+                    ty: Var {
+                        id: uninferred,
+                    },
+                    embedded: false,
                 },
-                embedded: false,
-            },
-        ],
-        kind: Record,
+                StructFieldDefinition {
+                    doc: None,
+                    attributes: [],
+                    name: "enabled",
+                    name_span: Span {
+                        file_id: 0,
+                        byte_offset: 61,
+                        byte_length: 7,
+                    },
+                    annotation: Constructor {
+                        name: "bool",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 70,
+                            byte_length: 4,
+                        },
+                    },
+                    visibility: Public,
+                    ty: Var {
+                        id: uninferred,
+                    },
+                    embedded: false,
+                },
+            ],
+        ),
         visibility: Private,
         span: Span {
             file_id: 0,

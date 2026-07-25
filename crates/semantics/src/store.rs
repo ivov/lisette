@@ -406,14 +406,14 @@ impl Store {
 
     pub(crate) fn fields_of(&self, qualified_name: &str) -> Option<&[StructFieldDefinition]> {
         match &self.get_definition(qualified_name)?.body {
-            DefinitionBody::Struct { fields, .. } => Some(fields),
+            DefinitionBody::Struct { fields, .. } => Some(fields.as_slice()),
             _ => None,
         }
     }
 
     pub fn struct_kind(&self, qualified_name: &str) -> Option<syntax::ast::StructKind> {
         match &self.get_definition(qualified_name)?.body {
-            DefinitionBody::Struct { kind, .. } => Some(*kind),
+            DefinitionBody::Struct { fields, .. } => Some(fields.kind()),
             _ => None,
         }
     }
@@ -705,7 +705,7 @@ fn method_lookup_key(ty: &Type) -> Option<Symbol> {
 #[cfg(test)]
 mod closed_domain_tests {
     use super::*;
-    use syntax::ast::{Annotation, Generic, Span, StructKind};
+    use syntax::ast::{Annotation, Generic, Span, StructFieldDefinition, StructFields};
     use syntax::program::{AliasKind, Attributes, TypeAttribute, Visibility};
     use syntax::types::CompoundKind;
 
@@ -729,7 +729,7 @@ mod closed_domain_tests {
             doc: None,
             body: DefinitionBody::Struct {
                 generics: vec![],
-                fields: vec![StructFieldDefinition {
+                fields: StructFields::Tuple(vec![StructFieldDefinition {
                     doc: None,
                     attributes: vec![],
                     name: "0".into(),
@@ -738,13 +738,27 @@ mod closed_domain_tests {
                     visibility: syntax::ast::Visibility::Private,
                     ty: Type::Simple(SimpleKind::Int),
                     embedded: false,
-                }],
-                kind: StructKind::Tuple,
+                }]),
                 methods: Default::default(),
-                constructor: None,
                 attributes,
             },
         }
+    }
+
+    #[test]
+    fn tuple_struct_constructor_is_derived_from_fields_and_type() {
+        let definition = struct_def(nominal_int("m.Point"), false);
+
+        let constructor = definition
+            .constructor_type()
+            .expect("tuple structs have constructors");
+        let function = constructor
+            .as_function_type()
+            .expect("constructor should be callable");
+
+        assert_eq!(function.params.len(), 1);
+        assert_eq!(function.params[0].ty, Type::Simple(SimpleKind::Int));
+        assert_eq!(function.return_type.as_ref(), &definition.ty);
     }
 
     fn int_const(ty: Type, value: u64) -> Definition {
@@ -755,9 +769,7 @@ mod closed_domain_tests {
             name_span: None,
             doc: None,
             body: DefinitionBody::Value {
-                kind: syntax::program::ValueKind::Constant {
-                    value: Some(Literal::Integer { value, text: None }),
-                },
+                kind: syntax::program::ValueKind::Constant(Literal::Integer { value, text: None }),
                 allowed_lints: vec![],
                 go_hints: vec![],
                 go_name: None,

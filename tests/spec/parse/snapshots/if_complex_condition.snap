@@ -1,12 +1,6 @@
 ---
 source: tests/spec/parse/mod.rs
-description: |
-  
-  fn test(a: int, b: bool) {
-    if (a * 2 > 50) && b || is_special(a) {
-      // complex condition
-    }
-  }
+description: "\nfn test(a: int, b: bool) {\n  if (a * 2 > 50) && b || is_special(a) {\n    // complex condition\n  }\n}\n"
 ---
 [
     Function {
@@ -212,7 +206,7 @@ description: |
                                     byte_offset: 54,
                                     byte_length: 13,
                                 },
-                                call_kind: None,
+                                call_kind: Unresolved,
                             },
                             ty: Var {
                                 id: uninferred,
@@ -234,16 +228,7 @@ description: |
                                 byte_length: 30,
                             },
                         },
-                        alternative: Unit {
-                            ty: Var {
-                                id: uninferred,
-                            },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 30,
-                                byte_length: 68,
-                            },
-                        },
+                        alternative: None,
                         ty: Var {
                             id: uninferred,
                         },

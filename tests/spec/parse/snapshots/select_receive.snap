@@ -124,7 +124,7 @@ description: |
                                             byte_offset: 59,
                                             byte_length: 10,
                                         },
-                                        call_kind: None,
+                                        call_kind: Unresolved,
                                     },
                                 },
                             },

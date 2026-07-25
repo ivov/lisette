@@ -1,14 +1,6 @@
 ---
 source: tests/spec/parse/mod.rs
-description: |
-  
-  fn calculate(a: int, b: int) -> int {
-    let result = a + b; // this is a comment
-    if result > 10 {
-      print("Large!\n");
-    }
-    return result;
-  }
+description: "\nfn calculate(a: int, b: int) -> int {\n  let result = a + b; // this is a comment\n  if result > 10 {\n    print(\"Large!\\n\");\n  }\n  return result;\n}\n"
 ---
 [
     Function {
@@ -226,7 +218,7 @@ description: |
                                         byte_offset: 105,
                                         byte_length: 17,
                                     },
-                                    call_kind: None,
+                                    call_kind: Unresolved,
                                 },
                             ],
                             ty: Var {
@@ -238,16 +230,7 @@ description: |
                                 byte_length: 28,
                             },
                         },
-                        alternative: Unit {
-                            ty: Var {
-                                id: uninferred,
-                            },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 84,
-                                byte_length: 43,
-                            },
-                        },
+                        alternative: None,
                         ty: Var {
                             id: uninferred,
                         },

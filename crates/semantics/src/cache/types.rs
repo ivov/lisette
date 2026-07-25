@@ -3,7 +3,7 @@ use rustc_hash::FxHashMap as HashMap;
 use ecow::EcoString;
 use serde::{Deserialize, Serialize};
 use syntax::ast::{
-    Annotation, AttributeArg, Generic, Span, StructKind, Visibility as FieldVisibility,
+    Annotation, AttributeArg, Generic, Span, StructFields, Visibility as FieldVisibility,
 };
 use syntax::program::{
     AliasKind, Attributes, Definition, DefinitionBody, Interface, MethodSignatures, Module,
@@ -154,6 +154,12 @@ pub struct CachedStructField {
     attributes: Vec<CachedAttribute>,
     doc: Option<String>,
     embedded: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum CachedStructFields {
+    Record(Vec<CachedStructField>),
+    Tuple(Vec<CachedStructField>),
 }
 
 impl CachedStructField {
@@ -329,7 +335,8 @@ pub struct CachedDefinition {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum CachedValueKind {
     Runtime,
-    Constant { value: Option<CachedLiteral> },
+    ConstantDeclaration,
+    Constant(CachedLiteral),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -348,10 +355,8 @@ pub enum CachedDefinitionBody {
     },
     Struct {
         generics: Vec<CachedGeneric>,
-        fields: Vec<CachedStructField>,
-        kind: StructKind,
+        fields: CachedStructFields,
         methods: MethodSignatures,
-        constructor: Option<Type>,
         attributes: Attributes,
     },
     Interface {
@@ -427,22 +432,28 @@ impl CachedDefinition {
             DefinitionBody::Struct {
                 generics,
                 fields,
-                kind,
                 methods,
-                constructor,
                 attributes,
             } => CachedDefinitionBody::Struct {
                 generics: generics
                     .iter()
                     .map(|g| CachedGeneric::from_generic(g, file_id_to_index))
                     .collect(),
-                fields: fields
-                    .iter()
-                    .map(|f| CachedStructField::from_field(f, file_id_to_index))
-                    .collect(),
-                kind: *kind,
+                fields: match fields {
+                    StructFields::Record(fields) => CachedStructFields::Record(
+                        fields
+                            .iter()
+                            .map(|f| CachedStructField::from_field(f, file_id_to_index))
+                            .collect(),
+                    ),
+                    StructFields::Tuple(fields) => CachedStructFields::Tuple(
+                        fields
+                            .iter()
+                            .map(|f| CachedStructField::from_field(f, file_id_to_index))
+                            .collect(),
+                    ),
+                },
                 methods: methods.clone(),
-                constructor: constructor.clone(),
                 attributes: attributes.clone(),
             },
             DefinitionBody::Interface { definition } => CachedDefinitionBody::Interface {
@@ -457,9 +468,10 @@ impl CachedDefinition {
             } => CachedDefinitionBody::Value {
                 kind: match kind {
                     ValueKind::Runtime => CachedValueKind::Runtime,
-                    ValueKind::Constant { value } => CachedValueKind::Constant {
-                        value: value.as_ref().map(CachedLiteral::from_literal),
-                    },
+                    ValueKind::ConstantDeclaration => CachedValueKind::ConstantDeclaration,
+                    ValueKind::Constant(value) => {
+                        CachedValueKind::Constant(CachedLiteral::from_literal(value))
+                    }
                 },
                 allowed_lints: allowed_lints.clone(),
                 go_hints: go_hints.clone(),
@@ -521,16 +533,19 @@ impl CachedDefinition {
             CachedDefinitionBody::Struct {
                 generics,
                 fields,
-                kind,
                 methods,
-                constructor,
                 attributes,
             } => DefinitionBody::Struct {
                 generics: generics.iter().map(|g| g.to_generic(file_ids)).collect(),
-                fields: fields.iter().map(|f| f.to_field(file_ids)).collect(),
-                kind: *kind,
+                fields: match fields {
+                    CachedStructFields::Record(fields) => {
+                        StructFields::Record(fields.iter().map(|f| f.to_field(file_ids)).collect())
+                    }
+                    CachedStructFields::Tuple(fields) => {
+                        StructFields::Tuple(fields.iter().map(|f| f.to_field(file_ids)).collect())
+                    }
+                },
                 methods: methods.clone(),
-                constructor: constructor.clone(),
                 attributes: attributes.clone(),
             },
             CachedDefinitionBody::Interface { definition } => DefinitionBody::Interface {
@@ -545,9 +560,8 @@ impl CachedDefinition {
             } => DefinitionBody::Value {
                 kind: match kind {
                     CachedValueKind::Runtime => ValueKind::Runtime,
-                    CachedValueKind::Constant { value } => ValueKind::Constant {
-                        value: value.as_ref().map(CachedLiteral::to_literal),
-                    },
+                    CachedValueKind::ConstantDeclaration => ValueKind::ConstantDeclaration,
+                    CachedValueKind::Constant(value) => ValueKind::Constant(value.to_literal()),
                 },
                 allowed_lints: allowed_lints.clone(),
                 go_hints: go_hints.clone(),

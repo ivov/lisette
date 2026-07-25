@@ -14,7 +14,7 @@ use crate::plan::calls::CallableOrigin;
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use crate::types::native::NativeGoType;
 use syntax::EcoString;
-use syntax::ast::{Expression, ResolvedCallTypeArguments, StructKind};
+use syntax::ast::{Expression, ResolvedCallTypeArguments, StructFields};
 use syntax::program::{CallKind, Definition, DefinitionBody};
 use syntax::types::{
     CompoundKind, FunctionParameter, SimpleKind, Type, build_substitution_map, substitute,
@@ -299,7 +299,7 @@ impl Planner<'_> {
             .resolved_types()
             .expect("emission requires checked call type arguments");
 
-        let call_kind = call_kind.filter(|_| !self.is_local_binding(function))?;
+        let call_kind = (!self.is_local_binding(function)).then_some(*call_kind)?;
         let kind = match call_kind {
             CallKind::NativeMethod(kind) | CallKind::NativeMethodIdentifier(kind) => kind,
             _ => return None,
@@ -568,8 +568,7 @@ impl Planner<'_> {
         let Some(Definition {
             body:
                 DefinitionBody::Struct {
-                    kind,
-                    fields,
+                    fields: StructFields::Tuple(fields),
                     generics,
                     ..
                 },
@@ -579,9 +578,6 @@ impl Planner<'_> {
             return None;
         };
 
-        if *kind != StructKind::Tuple {
-            return None;
-        }
         if fields.len() == 1 && generics.is_empty() {
             return None;
         }

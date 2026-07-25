@@ -630,12 +630,11 @@ mod tests {
         };
 
         let empty_files = HashMap::default();
-        let const_def = make_value(ValueKind::Constant {
-            value: Some(Literal::Integer {
-                value: 5,
-                text: None,
-            }),
-        });
+        let const_def = make_value(ValueKind::Constant(Literal::Integer {
+            value: 5,
+            text: None,
+        }));
+        let declaration_def = make_value(ValueKind::ConstantDeclaration);
         let var_def = make_value(ValueKind::Runtime);
 
         let mut definitions = HashMap::default();
@@ -646,6 +645,10 @@ mod tests {
         definitions.insert(
             "mymod.counter".to_string(),
             CachedDefinition::from_definition(&var_def, &empty_files),
+        );
+        definitions.insert(
+            "mymod.DECL".to_string(),
+            CachedDefinition::from_definition(&declaration_def, &empty_files),
         );
 
         let interface = ModuleInterface {
@@ -670,12 +673,18 @@ mod tests {
         );
 
         assert!(built.module.definitions["mymod.MAX"].is_const());
+        assert!(built.module.definitions["mymod.DECL"].is_const());
+        assert!(
+            built.module.definitions["mymod.DECL"]
+                .const_value()
+                .is_none()
+        );
         assert!(!built.module.definitions["mymod.counter"].is_const());
     }
 
     #[test]
     fn serialized_attribute_survives_cache_roundtrip() {
-        use syntax::ast::StructKind;
+        use syntax::ast::StructFields;
         use syntax::program::{Attributes, Definition, DefinitionBody, TypeAttribute, Visibility};
 
         let mut attributes = Attributes::default();
@@ -692,10 +701,8 @@ mod tests {
             doc: None,
             body: DefinitionBody::Struct {
                 generics: vec![],
-                fields: vec![],
-                kind: StructKind::Record,
+                fields: StructFields::Record(vec![]),
                 methods: Default::default(),
-                constructor: None,
                 attributes,
             },
         };

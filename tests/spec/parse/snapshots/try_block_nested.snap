@@ -90,7 +90,7 @@ description: |
                                                         byte_offset: 61,
                                                         byte_length: 13,
                                                     },
-                                                    call_kind: None,
+                                                    call_kind: Unresolved,
                                                 },
                                                 ty: Var {
                                                     id: uninferred,
@@ -151,7 +151,7 @@ description: |
                                             byte_offset: 87,
                                             byte_length: 13,
                                         },
-                                        call_kind: None,
+                                        call_kind: Unresolved,
                                     },
                                     ty: Var {
                                         id: uninferred,

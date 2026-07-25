@@ -1,12 +1,6 @@
 ---
 source: tests/spec/parse/mod.rs
-description: |
-  
-  struct Point { x: int }
-  fn test(other: Point) {
-    let x = 1;
-    if other == Point { x } { true } else { false }
-  }
+description: "\nstruct Point { x: int }\nfn test(other: Point) {\n  let x = 1;\n  if other == Point { x } { true } else { false }\n}\n"
 ---
 [
     Struct {
@@ -19,33 +13,34 @@ description: |
             byte_length: 5,
         },
         generics: [],
-        fields: [
-            StructFieldDefinition {
-                doc: None,
-                attributes: [],
-                name: "x",
-                name_span: Span {
-                    file_id: 0,
-                    byte_offset: 16,
-                    byte_length: 1,
-                },
-                annotation: Constructor {
-                    name: "int",
-                    params: [],
-                    span: Span {
+        fields: Record(
+            [
+                StructFieldDefinition {
+                    doc: None,
+                    attributes: [],
+                    name: "x",
+                    name_span: Span {
                         file_id: 0,
-                        byte_offset: 19,
-                        byte_length: 3,
+                        byte_offset: 16,
+                        byte_length: 1,
                     },
+                    annotation: Constructor {
+                        name: "int",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 19,
+                            byte_length: 3,
+                        },
+                    },
+                    visibility: Private,
+                    ty: Var {
+                        id: uninferred,
+                    },
+                    embedded: false,
                 },
-                visibility: Private,
-                ty: Var {
-                    id: uninferred,
-                },
-                embedded: false,
-            },
-        ],
-        kind: Record,
+            ],
+        ),
         visibility: Private,
         span: Span {
             file_id: 0,
@@ -219,31 +214,33 @@ description: |
                                 byte_length: 8,
                             },
                         },
-                        alternative: Block {
-                            items: [
-                                Literal {
-                                    literal: Boolean(
-                                        false,
-                                    ),
-                                    ty: Var {
-                                        id: uninferred,
+                        alternative: Some(
+                            Block {
+                                items: [
+                                    Literal {
+                                        literal: Boolean(
+                                            false,
+                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 104,
+                                            byte_length: 5,
+                                        },
                                     },
-                                    span: Span {
-                                        file_id: 0,
-                                        byte_offset: 104,
-                                        byte_length: 5,
-                                    },
+                                ],
+                                ty: Var {
+                                    id: uninferred,
                                 },
-                            ],
-                            ty: Var {
-                                id: uninferred,
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 102,
+                                    byte_length: 9,
+                                },
                             },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 102,
-                                byte_length: 9,
-                            },
-                        },
+                        ),
                         ty: Var {
                             id: uninferred,
                         },

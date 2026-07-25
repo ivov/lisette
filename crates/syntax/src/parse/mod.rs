@@ -4,6 +4,7 @@ use crate::lex;
 use crate::lex::TokenKind::*;
 use crate::lex::{Token, TokenKind};
 use crate::types::Type;
+use std::ops::{Deref, DerefMut};
 
 pub(crate) const MAX_TUPLE_ARITY: usize = 5;
 pub const TUPLE_FIELDS: &[&str] = &["First", "Second", "Third", "Fourth", "Fifth"];
@@ -48,6 +49,33 @@ pub struct Parser<'source> {
     file_id: u32,
     source: &'source str,
     depth: u32,
+}
+
+/// A recursion frame owns the parser depth it opened and restores the previous
+/// depth even when parsing exits early or panics.
+struct RecursionScope<'parser, 'source> {
+    parser: &'parser mut Parser<'source>,
+    previous_depth: u32,
+}
+
+impl<'parser, 'source> Deref for RecursionScope<'parser, 'source> {
+    type Target = Parser<'source>;
+
+    fn deref(&self) -> &Self::Target {
+        self.parser
+    }
+}
+
+impl<'parser, 'source> DerefMut for RecursionScope<'parser, 'source> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.parser
+    }
+}
+
+impl Drop for RecursionScope<'_, '_> {
+    fn drop(&mut self) {
+        self.parser.depth = self.previous_depth;
+    }
 }
 
 impl<'source> Parser<'source> {
@@ -580,16 +608,25 @@ impl<'source> Parser<'source> {
     }
 
     fn with_recursion<T>(&mut self, parse: impl FnOnce(&mut Self) -> T) -> Option<T> {
-        let outer_depth = self.depth;
-        if !self.try_deepen() {
-            return None;
-        }
-        let result = parse(self);
-        self.depth = outer_depth;
-        Some(result)
+        let mut scope = self.enter_recursion()?;
+        Some(parse(&mut scope))
     }
 
-    fn try_deepen(&mut self) -> bool {
+    fn enter_recursion(&mut self) -> Option<RecursionScope<'_, 'source>> {
+        let previous_depth = self.depth;
+        if self.depth >= MAX_DEPTH {
+            let span = self.span_from_token(self.current_token());
+            self.track_error_at(span, "too deeply nested", "Reduce nesting depth");
+            return None;
+        }
+        self.depth += 1;
+        Some(RecursionScope {
+            parser: self,
+            previous_depth,
+        })
+    }
+
+    fn deepen(&mut self) -> bool {
         if self.depth >= MAX_DEPTH {
             let span = self.span_from_token(self.current_token());
             self.track_error_at(span, "too deeply nested", "Reduce nesting depth");

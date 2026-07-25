@@ -94,7 +94,9 @@ fn is_singleton_pattern(pattern: &Pattern, store: &Store) -> bool {
     match pattern {
         Pattern::Literal { .. } => true,
         Pattern::EnumVariant {
-            resolution: ConstructorPatternResolution::Const { .. },
+            resolution:
+                ConstructorPatternResolution::Const { .. }
+                | ConstructorPatternResolution::ConstValue { .. },
             ..
         } => true,
         Pattern::EnumVariant {
@@ -179,26 +181,17 @@ fn patterns_disjoint(a: &Pattern, b: &Pattern) -> bool {
         }
         (
             P::EnumVariant {
-                resolution:
-                    ConstructorPatternResolution::Const {
-                        value: Some(la), ..
-                    },
+                resolution: ConstructorPatternResolution::ConstValue { value: la, .. },
                 ..
             },
             P::EnumVariant {
-                resolution:
-                    ConstructorPatternResolution::Const {
-                        value: Some(lb), ..
-                    },
+                resolution: ConstructorPatternResolution::ConstValue { value: lb, .. },
                 ..
             },
         ) => distinct_literals(la, lb),
         (
             P::EnumVariant {
-                resolution:
-                    ConstructorPatternResolution::Const {
-                        value: Some(cv), ..
-                    },
+                resolution: ConstructorPatternResolution::ConstValue { value: cv, .. },
                 ..
             },
             P::Literal { literal: lv, .. },
@@ -206,10 +199,7 @@ fn patterns_disjoint(a: &Pattern, b: &Pattern) -> bool {
         | (
             P::Literal { literal: lv, .. },
             P::EnumVariant {
-                resolution:
-                    ConstructorPatternResolution::Const {
-                        value: Some(cv), ..
-                    },
+                resolution: ConstructorPatternResolution::ConstValue { value: cv, .. },
                 ..
             },
         ) => distinct_literals(cv, lv),

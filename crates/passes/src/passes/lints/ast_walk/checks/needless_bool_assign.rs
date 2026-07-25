@@ -15,6 +15,9 @@ pub fn check_needless_bool_assign(expression: &Expression, ctx: &NodeCtx) {
     else {
         return;
     };
+    let Some(alternative) = alternative.as_deref() else {
+        return;
+    };
 
     let (Some((then_target, then_value)), Some((else_target, else_value))) = (
         single_bool_assignment(consequence),

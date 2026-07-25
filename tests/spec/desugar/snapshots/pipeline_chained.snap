@@ -73,7 +73,7 @@ description: "fn test() { x |> f |> g; }"
                                     byte_offset: 12,
                                     byte_length: 6,
                                 },
-                                call_kind: None,
+                                call_kind: Unresolved,
                             },
                         ],
                         spread: None,
@@ -86,7 +86,7 @@ description: "fn test() { x |> f |> g; }"
                             byte_offset: 12,
                             byte_length: 11,
                         },
-                        call_kind: None,
+                        call_kind: Unresolved,
                     },
                 ],
                 ty: Var {

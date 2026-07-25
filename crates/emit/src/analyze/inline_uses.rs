@@ -174,7 +174,9 @@ impl<'a> Walker<'a> {
             } => {
                 self.walk(condition);
                 self.walk(consequence);
-                self.walk(alternative);
+                if let Some(alternative) = alternative {
+                    self.walk(alternative);
+                }
             }
             Expression::IfLet {
                 pattern,
@@ -187,7 +189,9 @@ impl<'a> Walker<'a> {
                 self.with_shadow(pattern_binds_name(pattern, self.name), |w| {
                     w.walk(consequence)
                 });
-                self.walk(alternative);
+                if let Some(alternative) = alternative.expression() {
+                    self.walk(alternative);
+                }
             }
             Expression::Match { subject, arms, .. } => {
                 self.walk(subject);

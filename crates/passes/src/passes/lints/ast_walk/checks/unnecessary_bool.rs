@@ -15,6 +15,9 @@ pub fn check_unnecessary_bool(expression: &Expression, ctx: &NodeCtx) {
     else {
         return;
     };
+    let Some(alternative) = alternative.as_deref() else {
+        return;
+    };
 
     let (Some(then_value), Some(else_value)) = (
         block_single_bool(consequence),

@@ -159,6 +159,38 @@ pub enum ConstInitializer {
     Value(Box<Expression>),
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum IfLetAlternative {
+    Absent,
+    Present {
+        expression: Box<Expression>,
+        else_span: Span,
+    },
+}
+
+impl IfLetAlternative {
+    pub fn expression(&self) -> Option<&Expression> {
+        match self {
+            Self::Absent => None,
+            Self::Present { expression, .. } => Some(expression),
+        }
+    }
+
+    pub fn expression_mut(&mut self) -> Option<&mut Expression> {
+        match self {
+            Self::Absent => None,
+            Self::Present { expression, .. } => Some(expression),
+        }
+    }
+
+    pub fn else_span(&self) -> Option<Span> {
+        match self {
+            Self::Absent => None,
+            Self::Present { else_span, .. } => Some(*else_span),
+        }
+    }
+}
+
 impl ConstInitializer {
     pub fn value(&self) -> Option<&Expression> {
         match self {
@@ -277,7 +309,10 @@ pub enum ConstructorPatternResolution {
     Unresolved,
     Const {
         qualified_name: EcoString,
-        value: Option<Literal>,
+    },
+    ConstValue {
+        qualified_name: EcoString,
+        value: Literal,
     },
     EnumVariant {
         enum_name: EcoString,
@@ -563,6 +598,65 @@ pub enum AttributeArg {
 pub enum StructKind {
     Record,
     Tuple,
+}
+
+/// The field collection carries the struct's shape so it cannot disagree with
+/// the fields it describes.
+#[derive(Debug, Clone, PartialEq)]
+pub enum StructFields {
+    Record(Vec<StructFieldDefinition>),
+    Tuple(Vec<StructFieldDefinition>),
+}
+
+impl StructFields {
+    pub fn kind(&self) -> StructKind {
+        match self {
+            Self::Record(_) => StructKind::Record,
+            Self::Tuple(_) => StructKind::Tuple,
+        }
+    }
+
+    pub fn as_slice(&self) -> &[StructFieldDefinition] {
+        match self {
+            Self::Record(fields) | Self::Tuple(fields) => fields,
+        }
+    }
+}
+
+impl std::ops::Deref for StructFields {
+    type Target = [StructFieldDefinition];
+
+    fn deref(&self) -> &Self::Target {
+        self.as_slice()
+    }
+}
+
+impl std::ops::DerefMut for StructFields {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match self {
+            Self::Record(fields) | Self::Tuple(fields) => fields,
+        }
+    }
+}
+
+impl<'a> IntoIterator for &'a StructFields {
+    type Item = &'a StructFieldDefinition;
+    type IntoIter = std::slice::Iter<'a, StructFieldDefinition>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.as_slice().iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a mut StructFields {
+    type Item = &'a mut StructFieldDefinition;
+    type IntoIter = std::slice::IterMut<'a, StructFieldDefinition>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        match self {
+            StructFields::Record(fields) | StructFields::Tuple(fields) => fields.iter_mut(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1063,12 +1157,12 @@ pub enum Expression {
         type_arguments: CallTypeArguments,
         ty: Type,
         span: Span,
-        call_kind: Option<CallKind>,
+        call_kind: CallKind,
     },
     If {
         condition: Box<Expression>,
         consequence: Box<Expression>,
-        alternative: Box<Expression>,
+        alternative: Option<Box<Expression>>,
         ty: Type,
         span: Span,
     },
@@ -1076,8 +1170,7 @@ pub enum Expression {
         pattern: Pattern,
         scrutinee: Box<Expression>,
         consequence: Box<Expression>,
-        alternative: Box<Expression>,
-        else_span: Option<Span>,
+        alternative: IfLetAlternative,
         ty: Type,
         span: Span,
     },
@@ -1227,8 +1320,7 @@ pub enum Expression {
         name: EcoString,
         name_span: Span,
         generics: Vec<Generic>,
-        fields: Vec<StructFieldDefinition>,
-        kind: StructKind,
+        fields: StructFields,
         visibility: Visibility,
         span: Span,
     },
@@ -1540,7 +1632,7 @@ impl Expression {
             } => {
                 condition.contains_break()
                     || consequence.contains_break()
-                    || alternative.contains_break()
+                    || alternative.as_deref().is_some_and(Self::contains_break)
             }
 
             Expression::IfLet {
@@ -1551,7 +1643,7 @@ impl Expression {
             } => {
                 scrutinee.contains_break()
                     || consequence.contains_break()
-                    || alternative.contains_break()
+                    || alternative.expression().is_some_and(Self::contains_break)
             }
 
             Expression::Match { subject, arms, .. } => {
@@ -1611,7 +1703,11 @@ impl Expression {
                 alternative,
                 ..
             } => {
-                if consequence.diverges().is_some() && alternative.diverges().is_some() {
+                if consequence.diverges().is_some()
+                    && alternative
+                        .as_deref()
+                        .is_some_and(|alternative| alternative.diverges().is_some())
+                {
                     Some(DeadCodeCause::DivergingIf)
                 } else {
                     None
@@ -1623,7 +1719,11 @@ impl Expression {
                 alternative,
                 ..
             } => {
-                if consequence.diverges().is_some() && alternative.diverges().is_some() {
+                if consequence.diverges().is_some()
+                    && alternative
+                        .expression()
+                        .is_some_and(|alternative| alternative.diverges().is_some())
+                {
                     Some(DeadCodeCause::DivergingIf)
                 } else {
                     None
@@ -1720,13 +1820,25 @@ impl Expression {
                 consequence,
                 alternative,
                 ..
-            } => children![condition, consequence, alternative],
+            } => {
+                let mut c = children![condition, consequence];
+                if let Some(alternative) = alternative {
+                    c.push(alternative);
+                }
+                c
+            }
             Expression::IfLet {
                 scrutinee,
                 consequence,
                 alternative,
                 ..
-            } => children![scrutinee, consequence, alternative],
+            } => {
+                let mut c = children![scrutinee, consequence];
+                if let Some(alternative) = alternative.expression() {
+                    c.push(alternative);
+                }
+                c
+            }
             Expression::Match { subject, arms, .. } => {
                 let mut c = children![subject.as_ref()];
                 for arm in arms {
@@ -1976,20 +2088,20 @@ impl Expression {
                 name_span,
                 generics,
                 fields,
-                kind,
                 span,
                 ..
             } => {
-                let fields = if kind == StructKind::Tuple {
-                    fields
-                        .into_iter()
-                        .map(|f| StructFieldDefinition {
-                            visibility: Visibility::Public,
-                            ..f
-                        })
-                        .collect()
-                } else {
-                    fields
+                let fields = match fields {
+                    StructFields::Tuple(fields) => StructFields::Tuple(
+                        fields
+                            .into_iter()
+                            .map(|f| StructFieldDefinition {
+                                visibility: Visibility::Public,
+                                ..f
+                            })
+                            .collect(),
+                    ),
+                    StructFields::Record(fields) => StructFields::Record(fields),
                 };
                 Expression::Struct {
                     doc,
@@ -1998,7 +2110,6 @@ impl Expression {
                     name_span,
                     generics,
                     fields,
-                    kind,
                     visibility: Visibility::Public,
                     span,
                 }
@@ -2114,9 +2225,8 @@ impl Expression {
         match self {
             Self::Block { items, .. } if items.is_empty() => false,
             Self::Unit { .. } => false,
-            Self::If { alternative, .. } | Self::IfLet { alternative, .. } => {
-                alternative.has_else()
-            }
+            Self::If { alternative, .. } => alternative.as_deref().is_some_and(Self::has_else),
+            Self::IfLet { alternative, .. } => alternative.expression().is_some_and(Self::has_else),
             _ => true,
         }
     }

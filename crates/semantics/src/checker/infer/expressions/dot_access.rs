@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::checker::EnvResolve;
 use ecow::EcoString;
-use syntax::ast::{Expression, IdentifierResolution, Span, StructKind};
+use syntax::ast::{Expression, IdentifierResolution, Span, StructFields, StructKind};
 use syntax::program::{
     Definition, DefinitionBody, DotAccessResolution, NativeTypeKind, ReceiverCoercion,
 };
@@ -436,7 +436,6 @@ impl InferCtx<'_> {
             body:
                 DefinitionBody::Struct {
                     fields: struct_fields,
-                    kind: struct_kind,
                     generics,
                     ..
                 },
@@ -446,7 +445,7 @@ impl InferCtx<'_> {
             return None;
         };
 
-        let struct_kind = *struct_kind;
+        let struct_kind = struct_fields.kind();
         let struct_type = struct_type.clone();
         let is_newtype =
             struct_kind == StructKind::Tuple && struct_fields.len() == 1 && generics.is_empty();
@@ -616,7 +615,7 @@ impl InferCtx<'_> {
             && matches!(
                 store.get_definition(&resolved_definition).map(|d| &d.body),
                 Some(DefinitionBody::Struct {
-                    kind: StructKind::Tuple,
+                    fields: StructFields::Tuple(_),
                     ..
                 })
             )
@@ -633,7 +632,7 @@ impl InferCtx<'_> {
             && matches!(
                 store.get_definition(&resolved_definition).map(|d| &d.body),
                 Some(DefinitionBody::Struct {
-                    kind: StructKind::Record,
+                    fields: StructFields::Record(_),
                     ..
                 })
             )

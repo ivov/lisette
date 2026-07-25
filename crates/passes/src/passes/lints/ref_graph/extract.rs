@@ -321,7 +321,9 @@ pub(super) fn walk_expression(
             walk_expression(module, scrutinee, graph, alias_map, ctx);
             walk_pattern(module, pattern, graph, alias_map, ctx);
             walk_expression(module, consequence, graph, alias_map, ctx);
-            walk_expression(module, alternative, graph, alias_map, ctx);
+            if let Some(alternative) = alternative.expression() {
+                walk_expression(module, alternative, graph, alias_map, ctx);
+            }
         }
 
         Expression::WhileLet {

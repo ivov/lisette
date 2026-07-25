@@ -1,6 +1,7 @@
 use crate::ast::{BinaryOperator, CallTypeArguments, Expression, Span};
 use crate::ast_folder::AstFolder;
 use crate::parse::ParseError;
+use crate::program::CallKind;
 use crate::types::Type;
 
 #[derive(Debug)]
@@ -143,7 +144,7 @@ impl Desugarer {
                 type_arguments: CallTypeArguments::none(),
                 ty: Type::uninferred(),
                 span,
-                call_kind: None,
+                call_kind: CallKind::Unresolved,
             },
 
             Expression::Call {

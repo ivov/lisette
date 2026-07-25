@@ -1,12 +1,6 @@
 ---
 source: tests/spec/parse/mod.rs
-description: |
-  
-  fn test(a: int, b: int) {
-    if (a > 0) && (b < 10) {
-      // ...
-    }
-  }
+description: "\nfn test(a: int, b: int) {\n  if (a > 0) && (b < 10) {\n    // ...\n  }\n}\n"
 ---
 [
     Function {
@@ -194,16 +188,7 @@ description: |
                                 byte_length: 16,
                             },
                         },
-                        alternative: Unit {
-                            ty: Var {
-                                id: uninferred,
-                            },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 29,
-                                byte_length: 39,
-                            },
-                        },
+                        alternative: None,
                         ty: Var {
                             id: uninferred,
                         },

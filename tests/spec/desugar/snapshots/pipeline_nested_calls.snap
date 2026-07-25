@@ -115,7 +115,7 @@ description: "fn test() { x |> add(multiply(2, 3)) |> subtract(1); }"
                                             byte_offset: 21,
                                             byte_length: 14,
                                         },
-                                        call_kind: None,
+                                        call_kind: Unresolved,
                                     },
                                 ],
                                 spread: None,
@@ -128,7 +128,7 @@ description: "fn test() { x |> add(multiply(2, 3)) |> subtract(1); }"
                                     byte_offset: 12,
                                     byte_length: 24,
                                 },
-                                call_kind: None,
+                                call_kind: Unresolved,
                             },
                             Literal {
                                 literal: Integer {
@@ -155,7 +155,7 @@ description: "fn test() { x |> add(multiply(2, 3)) |> subtract(1); }"
                             byte_offset: 12,
                             byte_length: 39,
                         },
-                        call_kind: None,
+                        call_kind: Unresolved,
                     },
                 ],
                 ty: Var {

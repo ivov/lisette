@@ -1,8 +1,8 @@
 use crate::checker::EnvResolve;
 use rustc_hash::{FxHashMap, FxHashSet};
 use syntax::ast::{
-    EnumFieldDefinition, EnumVariant, Expression, Generic, Span, StructFieldDefinition, StructKind,
-    VariantFields,
+    EnumFieldDefinition, EnumVariant, Expression, Generic, Span, StructFieldDefinition,
+    StructFields, VariantFields,
 };
 use syntax::containment::{EnumPayloads, definition_contains_by_value};
 use syntax::program::{AliasKind, Definition, DefinitionBody, MethodSignatures, Visibility};
@@ -144,20 +144,23 @@ impl TaskState {
             return;
         }
 
-        // (variant_name, field_name, is_struct, type, span)
-        let mut seen: FxHashMap<String, (&str, &str, bool, &Type, Span)> = FxHashMap::default();
+        // (variant_name, field_name, field shape, type, span)
+        let mut seen: FxHashMap<
+            String,
+            (&str, &str, syntax::go_names::EnumFieldShape, &Type, Span),
+        > = FxHashMap::default();
 
         for variant in variants {
-            let is_struct = variant.fields.is_struct();
-            let single_field = variant.fields.len() == 1;
+            let Some(field_shape) = syntax::go_names::enum_field_shape(&variant.fields) else {
+                continue;
+            };
 
             for (fi, field) in variant.fields.iter().enumerate() {
                 let go_name = syntax::go_names::enum_field_go_name(
                     &variant.name,
                     &field.name,
                     fi,
-                    is_struct,
-                    single_field,
+                    field_shape,
                     name,
                 );
 
@@ -168,10 +171,10 @@ impl TaskState {
                 } else {
                     variant.name_span
                 };
-                let Some(&(v_a, f_a, is_struct_a, ty_a, _)) = seen.get(&go_name) else {
+                let Some(&(v_a, f_a, shape_a, ty_a, _)) = seen.get(&go_name) else {
                     seen.insert(
                         go_name,
-                        (&variant.name, &field.name, is_struct, &field.ty, span),
+                        (&variant.name, &field.name, field_shape, &field.ty, span),
                     );
                     continue;
                 };
@@ -184,12 +187,12 @@ impl TaskState {
                     continue;
                 }
 
-                let loc_a = if is_struct_a {
+                let loc_a = if shape_a == syntax::go_names::EnumFieldShape::Struct {
                     format!("{}.{}.{}", name, v_a, f_a)
                 } else {
                     format!("{}.{}", name, v_a)
                 };
-                let loc_b = if is_struct {
+                let loc_b = if field_shape == syntax::go_names::EnumFieldShape::Struct {
                     format!("{}.{}.{}", name, variant.name, field.name)
                 } else {
                     format!("{}.{}", name, variant.name)
@@ -275,7 +278,6 @@ impl TaskState {
             name_span,
             generics,
             fields,
-            kind,
             span,
             doc,
             attributes,
@@ -312,6 +314,11 @@ impl TaskState {
             })
             .collect();
 
+        let new_fields = match fields {
+            StructFields::Record(_) => StructFields::Record(new_fields),
+            StructFields::Tuple(_) => StructFields::Tuple(new_fields),
+        };
+
         self.scopes.pop();
 
         let visibility = self
@@ -338,9 +345,7 @@ impl TaskState {
                 body: DefinitionBody::Struct {
                     generics,
                     fields: new_fields,
-                    kind: *kind,
                     methods: Default::default(),
-                    constructor: None,
                     attributes,
                 },
             },
@@ -735,8 +740,7 @@ fn is_faithful_imported_graph(
     }
     match &definition.body {
         DefinitionBody::Struct {
-            fields,
-            kind: StructKind::Record,
+            fields: StructFields::Record(fields),
             generics,
             ..
         } if generics.is_empty() => fields
@@ -773,7 +777,7 @@ fn is_deferred_local_target(store: &Store, ty: &Type) -> bool {
     match store.get_definition(id).map(|definition| &definition.body) {
         Some(
             DefinitionBody::Struct {
-                kind: StructKind::Record,
+                fields: StructFields::Record(_),
                 ..
             }
             | DefinitionBody::Interface { .. },

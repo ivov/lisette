@@ -45,7 +45,7 @@ fn is_invariant(
             resolution: IdentifierResolution::Binding(id),
             ..
         } => match bindings.get(id) {
-            Some(fact) if !fact.mutation.happened() => {
+            Some(fact) if fact.mutation.is_none() => {
                 *references_binding = true;
                 true
             }

@@ -1,7 +1,7 @@
 use crate::checker::EnvResolve;
 use crate::facts::BranchSubsumption;
 use syntax::ast::BindingKind;
-use syntax::ast::{Binding, Expression, MatchArm, Pattern, Span};
+use syntax::ast::{Binding, Expression, IfLetAlternative, MatchArm, Pattern, Span};
 use syntax::types::{SimpleKind, Type};
 
 use crate::checker::infer::InferCtx;
@@ -229,7 +229,7 @@ impl InferCtx<'_> {
         &mut self,
         condition: Box<Expression>,
         consequence: Box<Expression>,
-        alternative: Box<Expression>,
+        alternative: Option<Box<Expression>>,
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
@@ -237,7 +237,7 @@ impl InferCtx<'_> {
         let alternative_ty = self.new_type_var();
 
         let is_expression = !expected_ty.is_ignored();
-        let has_no_else = !alternative.has_else();
+        let has_no_else = alternative.is_none();
 
         // When expected_ty is already resolved to a concrete type (e.g. an
         // interface from a return type annotation), use a shared type variable
@@ -252,7 +252,8 @@ impl InferCtx<'_> {
 
         // Branch bodies are tail-like contexts where Never calls are valid.
         let new_consequence = self.infer_root_expression(*consequence, &consequence_ty);
-        let new_alternative = self.infer_root_expression(*alternative, &alternative_ty);
+        let new_alternative = alternative
+            .map(|alternative| self.infer_root_expression(*alternative, &alternative_ty));
 
         if has_no_else {
             // An `if` without `else` always has type () (unit), like Rust.
@@ -261,7 +262,10 @@ impl InferCtx<'_> {
                 let unit_ty = self.type_unit();
                 self.unify(expected_ty, &unit_ty, &span);
             }
-        } else if is_expression && !expected_is_concrete {
+        } else if is_expression
+            && !expected_is_concrete
+            && let Some(new_alternative) = new_alternative.as_ref()
+        {
             let consequence_span = new_consequence.get_span();
             let alternative_span = new_alternative.get_span();
             self.reconcile_and_unify(
@@ -288,7 +292,7 @@ impl InferCtx<'_> {
         Expression::If {
             condition: new_condition.into(),
             consequence: new_consequence.into(),
-            alternative: new_alternative.into(),
+            alternative: new_alternative.map(Box::new),
             ty: result_ty,
             span,
         }
@@ -328,12 +332,24 @@ impl InferCtx<'_> {
             scrutinee,
             consequence,
             alternative,
-            else_span,
             span,
             ..
         } = expression
         else {
             unreachable!("infer_if_let called with non-IfLet expression");
+        };
+        let (alternative, else_span) = match alternative {
+            IfLetAlternative::Absent => (
+                Expression::Unit {
+                    ty: Type::uninferred(),
+                    span,
+                },
+                None,
+            ),
+            IfLetAlternative::Present {
+                expression,
+                else_span,
+            } => (*expression, Some(else_span)),
         };
         let is_if_let_without_else = else_span.is_none();
         let arms = vec![
@@ -347,7 +363,7 @@ impl InferCtx<'_> {
                     span: alternative.get_span(),
                 },
                 guard: None,
-                expression: alternative,
+                expression: Box::new(alternative),
             },
         ];
 
@@ -367,8 +383,13 @@ impl InferCtx<'_> {
             pattern: pattern_arm.pattern,
             scrutinee: new_scrutinee.into(),
             consequence: pattern_arm.expression,
-            alternative: wildcard_arm.expression,
-            else_span,
+            alternative: match else_span {
+                None => IfLetAlternative::Absent,
+                Some(else_span) => IfLetAlternative::Present {
+                    expression: wildcard_arm.expression,
+                    else_span,
+                },
+            },
             ty: result_ty,
             span,
         }

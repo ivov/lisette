@@ -89,7 +89,7 @@ description: |
                                                     byte_offset: 69,
                                                     byte_length: 13,
                                                 },
-                                                call_kind: None,
+                                                call_kind: Unresolved,
                                             },
                                         ],
                                         ty: Var {
@@ -140,7 +140,7 @@ description: |
                                         byte_offset: 94,
                                         byte_length: 13,
                                     },
-                                    call_kind: None,
+                                    call_kind: Unresolved,
                                 },
                             ],
                             ty: Var {

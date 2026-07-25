@@ -1,21 +1,6 @@
 ---
 source: tests/spec/parse/mod.rs
-description: |
-  
-  struct Counter {
-    value: int,
-  }
-  
-  impl Counter {
-    fn complex_logic(self: Counter) -> int {
-      let x = self.value + 1;
-      let y = x * 2;
-      if y > 10 {
-        return y;
-      }
-      return x;
-    }
-  }
+description: "\nstruct Counter {\n  value: int,\n}\n\nimpl Counter {\n  fn complex_logic(self: Counter) -> int {\n    let x = self.value + 1;\n    let y = x * 2;\n    if y > 10 {\n      return y;\n    }\n    return x;\n  }\n}\n"
 ---
 [
     Struct {
@@ -28,33 +13,34 @@ description: |
             byte_length: 7,
         },
         generics: [],
-        fields: [
-            StructFieldDefinition {
-                doc: None,
-                attributes: [],
-                name: "value",
-                name_span: Span {
-                    file_id: 0,
-                    byte_offset: 20,
-                    byte_length: 5,
-                },
-                annotation: Constructor {
-                    name: "int",
-                    params: [],
-                    span: Span {
+        fields: Record(
+            [
+                StructFieldDefinition {
+                    doc: None,
+                    attributes: [],
+                    name: "value",
+                    name_span: Span {
                         file_id: 0,
-                        byte_offset: 27,
-                        byte_length: 3,
+                        byte_offset: 20,
+                        byte_length: 5,
                     },
+                    annotation: Constructor {
+                        name: "int",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 27,
+                            byte_length: 3,
+                        },
+                    },
+                    visibility: Private,
+                    ty: Var {
+                        id: uninferred,
+                    },
+                    embedded: false,
                 },
-                visibility: Private,
-                ty: Var {
-                    id: uninferred,
-                },
-                embedded: false,
-            },
-        ],
-        kind: Record,
+            ],
+        ),
         visibility: Private,
         span: Span {
             file_id: 0,
@@ -334,16 +320,7 @@ description: |
                                         byte_length: 23,
                                     },
                                 },
-                                alternative: Unit {
-                                    ty: Var {
-                                        id: uninferred,
-                                    },
-                                    span: Span {
-                                        file_id: 0,
-                                        byte_offset: 144,
-                                        byte_length: 33,
-                                    },
-                                },
+                                alternative: None,
                                 ty: Var {
                                     id: uninferred,
                                 },

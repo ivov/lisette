@@ -59,7 +59,7 @@ description: "fn test() { x |> (f); }"
                             byte_offset: 12,
                             byte_length: 8,
                         },
-                        call_kind: None,
+                        call_kind: Unresolved,
                     },
                 ],
                 ty: Var {

@@ -98,11 +98,17 @@ pub struct EqualityIndex {
     by_id: HashMap<String, EqualityInfo>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EqualityKind {
+    DeclaredMethod,
+    SynthesizedMethod,
+    UfcsLowered,
+}
+
 #[derive(Debug, Clone)]
-enum EqualityInfo {
-    DeclaredMethod { private_to_module: Option<String> },
-    SynthesizedMethod { private_to_module: Option<String> },
-    UfcsLowered { private_to_module: Option<String> },
+struct EqualityInfo {
+    kind: EqualityKind,
+    private_to_module: Option<String>,
 }
 
 fn visible_from(private_to_module: &Option<String>, current_module: &str) -> bool {
@@ -114,43 +120,62 @@ fn visible_from(private_to_module: &Option<String>, current_module: &str) -> boo
 
 impl EqualityIndex {
     pub fn insert_declared_method(&mut self, id: String, private_to_module: Option<String>) {
-        self.by_id
-            .insert(id, EqualityInfo::DeclaredMethod { private_to_module });
+        self.by_id.insert(
+            id,
+            EqualityInfo {
+                kind: EqualityKind::DeclaredMethod,
+                private_to_module,
+            },
+        );
     }
 
     pub fn insert_synthesized_method(&mut self, id: String, private_to_module: Option<String>) {
-        self.by_id
-            .insert(id, EqualityInfo::SynthesizedMethod { private_to_module });
+        self.by_id.insert(
+            id,
+            EqualityInfo {
+                kind: EqualityKind::SynthesizedMethod,
+                private_to_module,
+            },
+        );
     }
 
     pub fn insert_ufcs_lowered(&mut self, id: String, private_to_module: Option<String>) {
-        self.by_id
-            .insert(id, EqualityInfo::UfcsLowered { private_to_module });
+        self.by_id.insert(
+            id,
+            EqualityInfo {
+                kind: EqualityKind::UfcsLowered,
+                private_to_module,
+            },
+        );
     }
 
     pub fn usable_from(&self, id: &str, current_module: &str) -> bool {
         matches!(
             self.by_id.get(id),
-            Some(
-                EqualityInfo::DeclaredMethod { private_to_module }
-                    | EqualityInfo::SynthesizedMethod { private_to_module }
-            )
-                if visible_from(private_to_module, current_module)
+            Some(EqualityInfo {
+                kind: EqualityKind::DeclaredMethod | EqualityKind::SynthesizedMethod,
+                private_to_module,
+            }) if visible_from(private_to_module, current_module)
         )
     }
 
     pub fn is_ufcs_lowered_from(&self, id: &str, current_module: &str) -> bool {
         matches!(
             self.by_id.get(id),
-            Some(EqualityInfo::UfcsLowered { private_to_module })
-                if visible_from(private_to_module, current_module)
+            Some(EqualityInfo {
+                kind: EqualityKind::UfcsLowered,
+                private_to_module,
+            }) if visible_from(private_to_module, current_module)
         )
     }
 
     pub fn is_synthesized(&self, id: &str) -> bool {
         matches!(
             self.by_id.get(id),
-            Some(EqualityInfo::SynthesizedMethod { .. })
+            Some(EqualityInfo {
+                kind: EqualityKind::SynthesizedMethod,
+                ..
+            })
         )
     }
 }
@@ -162,46 +187,37 @@ pub struct MutationInfo {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BindingMutation {
-    Unchanged,
     Direct,
     ThroughAlias,
 }
 
 impl BindingMutation {
-    pub fn happened(self) -> bool {
-        self != Self::Unchanged
-    }
-
     pub fn merged_with(self, other: Self) -> Self {
         match (self, other) {
             (Self::ThroughAlias, _) | (_, Self::ThroughAlias) => Self::ThroughAlias,
-            (Self::Direct, _) | (_, Self::Direct) => Self::Direct,
-            (Self::Unchanged, Self::Unchanged) => Self::Unchanged,
+            (Self::Direct, Self::Direct) => Self::Direct,
         }
     }
 }
 
 impl MutationInfo {
     pub fn record(&mut self, id: AstBindingId, mutation: BindingMutation) {
-        let merged = self.mutation(id).merged_with(mutation);
-        if merged.happened() {
-            self.bindings.insert(id, merged);
-        }
+        self.bindings
+            .entry(id)
+            .and_modify(|current| *current = current.merged_with(mutation))
+            .or_insert(mutation);
     }
 
-    pub fn mutation(&self, id: AstBindingId) -> BindingMutation {
-        self.bindings
-            .get(&id)
-            .copied()
-            .unwrap_or(BindingMutation::Unchanged)
+    pub fn mutation(&self, id: AstBindingId) -> Option<BindingMutation> {
+        self.bindings.get(&id).copied()
     }
 
     pub fn is_mutated(&self, id: AstBindingId) -> bool {
-        self.mutation(id).happened()
+        self.bindings.contains_key(&id)
     }
 
     pub fn is_alias_mutated(&self, id: AstBindingId) -> bool {
-        self.mutation(id) == BindingMutation::ThroughAlias
+        self.mutation(id) == Some(BindingMutation::ThroughAlias)
     }
 }
 

@@ -273,19 +273,19 @@ fn is_fresh_slice_value(receiver: &Expression) -> bool {
             call_kind,
             ..
         } => match call_kind {
-            Some(CallKind::NativeConstructor(NativeTypeKind::Slice)) => true,
-            Some(
-                CallKind::NativeMethod(NativeTypeKind::Slice)
-                | CallKind::NativeMethodIdentifier(NativeTypeKind::Slice),
-            ) => match extract_native_method_name(callee.unwrap_parens()) {
-                "append" => {
-                    let receiver_argument_count =
-                        matches!(call_kind, Some(CallKind::NativeMethodIdentifier(_))) as usize;
-                    args.len() > receiver_argument_count || spread.is_some()
+            CallKind::NativeConstructor(NativeTypeKind::Slice) => true,
+            CallKind::NativeMethod(NativeTypeKind::Slice)
+            | CallKind::NativeMethodIdentifier(NativeTypeKind::Slice) => {
+                match extract_native_method_name(callee.unwrap_parens()) {
+                    "append" => {
+                        let receiver_argument_count =
+                            matches!(call_kind, CallKind::NativeMethodIdentifier(_)) as usize;
+                        args.len() > receiver_argument_count || spread.is_some()
+                    }
+                    "reserve" | "clone" | "filter" | "map" => true,
+                    _ => false,
                 }
-                "reserve" | "clone" | "filter" | "map" => true,
-                _ => false,
-            },
+            }
             _ => false,
         },
         _ => false,

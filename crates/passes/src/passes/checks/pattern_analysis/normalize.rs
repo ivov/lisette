@@ -149,13 +149,12 @@ pub fn normalize_pattern(
             ..
         } => match resolution {
             ConstructorPatternResolution::Unresolved => Wildcard,
-            ConstructorPatternResolution::Const {
-                qualified_name,
-                value,
-            } => match value {
-                Some(Literal::Boolean(b)) => normalize_boolean(*b, unions),
-                Some(literal) => NormalizedPattern::Literal(literal.clone()),
-                None => NormalizedPattern::OpaqueConst(qualified_name.to_string()),
+            ConstructorPatternResolution::Const { qualified_name } => {
+                NormalizedPattern::OpaqueConst(qualified_name.to_string())
+            }
+            ConstructorPatternResolution::ConstValue { value, .. } => match value {
+                Literal::Boolean(b) => normalize_boolean(*b, unions),
+                literal => NormalizedPattern::Literal(literal.clone()),
             },
             ConstructorPatternResolution::EnumVariant {
                 enum_name,

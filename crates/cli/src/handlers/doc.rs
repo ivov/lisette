@@ -7,7 +7,7 @@ use stdlib::{
     Target, format_targets, get_go_stdlib_package_targets, get_go_stdlib_packages,
     get_go_stdlib_typedef,
 };
-use syntax::ast::{Annotation, Binding, Expression, Generic, Pattern, StructKind, VariantFields};
+use syntax::ast::{Annotation, Binding, Expression, Generic, Pattern, StructFields, VariantFields};
 
 #[derive(Debug, Clone, Copy)]
 enum TypeKind {
@@ -198,15 +198,9 @@ fn function_signature(
     }
 }
 
-fn struct_definition(
-    name: &str,
-    gen_str: &str,
-    fields: &[syntax::ast::StructFieldDefinition],
-    kind: &StructKind,
-    show_pub: bool,
-) -> String {
-    match kind {
-        StructKind::Record => {
+fn struct_definition(name: &str, gen_str: &str, fields: &StructFields, show_pub: bool) -> String {
+    match fields {
+        StructFields::Record(fields) => {
             let visible: Vec<_> = if show_pub {
                 fields.iter().collect()
             } else {
@@ -233,7 +227,7 @@ fn struct_definition(
                 format!("struct {}{} {{ {} }}", name, gen_str, field_strs.join(", "))
             }
         }
-        StructKind::Tuple => {
+        StructFields::Tuple(fields) => {
             let field_strs: Vec<String> = fields
                 .iter()
                 .map(|f| annotation_to_string(&f.annotation))
@@ -366,12 +360,11 @@ fn build_index_from_source(source: &str) -> PreludeIndex {
                 name,
                 generics,
                 fields,
-                kind,
                 ..
             } => {
                 let gen_names: Vec<String> = generics.iter().map(|g| g.name.to_string()).collect();
                 let gen_str = generics_to_string(generics);
-                let definition = struct_definition(name, &gen_str, fields, kind, true);
+                let definition = struct_definition(name, &gen_str, fields, true);
                 types.push(TypeInfo {
                     name: name.to_string(),
                     generics: gen_names,
@@ -579,12 +572,11 @@ fn build_go_package_index(source: &str, package: &str) -> GoPackageIndex {
                 name,
                 generics,
                 fields,
-                kind,
                 ..
             } => {
                 let gen_names: Vec<String> = generics.iter().map(|g| g.name.to_string()).collect();
                 let gen_str = generics_to_string(generics);
-                let definition = struct_definition(name, &gen_str, fields, kind, false);
+                let definition = struct_definition(name, &gen_str, fields, false);
                 types.push(TypeInfo {
                     name: name.to_string(),
                     generics: gen_names,

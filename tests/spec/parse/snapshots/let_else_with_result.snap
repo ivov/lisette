@@ -89,7 +89,7 @@ description: |
                                 byte_offset: 38,
                                 byte_length: 12,
                             },
-                            call_kind: None,
+                            call_kind: Unresolved,
                         },
                         mode: Else {
                             block: Block {

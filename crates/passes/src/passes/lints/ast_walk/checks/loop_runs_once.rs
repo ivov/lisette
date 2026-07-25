@@ -32,12 +32,16 @@ fn always_exits(expression: &Expression) -> bool {
             consequence,
             alternative,
             ..
-        }
-        | Expression::IfLet {
+        } => alternative
+            .as_deref()
+            .is_some_and(|alternative| always_exits(consequence) && always_exits(alternative)),
+        Expression::IfLet {
             consequence,
             alternative,
             ..
-        } => always_exits(consequence) && always_exits(alternative),
+        } => alternative
+            .expression()
+            .is_some_and(|alternative| always_exits(consequence) && always_exits(alternative)),
         Expression::Match { arms, .. } => {
             !arms.is_empty() && arms.iter().all(|arm| always_exits(&arm.expression))
         }

@@ -63,7 +63,7 @@ impl<'source> Parser<'source> {
             }
 
             if self.at_range() && RANGE_PREC > min_prec {
-                if !self.try_deepen() {
+                if !self.deepen() {
                     break;
                 }
                 lhs = self.parse_range(Some(lhs.into()), start, context);
@@ -71,7 +71,7 @@ impl<'source> Parser<'source> {
             }
 
             if self.current_token().kind == As && CAST_PREC > min_prec {
-                if !self.try_deepen() {
+                if !self.deepen() {
                     break;
                 }
                 self.next();
@@ -95,7 +95,7 @@ impl<'source> Parser<'source> {
             if let Some(prec) = self.binary_operator_precedence(self.current_token().kind)
                 && prec > min_prec
             {
-                if !self.try_deepen() {
+                if !self.deepen() {
                     break;
                 }
                 let operator = self.parse_binary_operator();
@@ -111,7 +111,7 @@ impl<'source> Parser<'source> {
             }
 
             if self.is_postfix_operator(&lhs, context) {
-                if !self.try_deepen() {
+                if !self.deepen() {
                     break;
                 }
                 if self.is_format_string(&lhs)

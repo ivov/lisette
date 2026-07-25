@@ -7,7 +7,7 @@ use crate::control_flow::fallible;
 use crate::definitions::enum_layout::{EnumLayout, FieldTypeInfo, FieldTypeMap};
 use crate::definitions::structs::is_raw_function_type;
 use crate::names::go_name;
-use syntax::ast::{Pattern, RestPattern, StructKind};
+use syntax::ast::{Pattern, RestPattern, StructFields};
 use syntax::containment::enum_payload_pointer_wrapped;
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{Type, substitute};
@@ -128,7 +128,7 @@ impl Planner<'_> {
             matches!(
                 &resolved.definition.body,
                 DefinitionBody::Struct {
-                    kind: StructKind::Tuple,
+                    fields: StructFields::Tuple(_),
                     ..
                 }
             )
@@ -149,8 +149,7 @@ impl Planner<'_> {
     pub(crate) fn get_newtype_underlying(&self, ty: &Type) -> Option<Type> {
         let resolved = self.resolve_nominal(ty)?;
         if let DefinitionBody::Struct {
-            kind: StructKind::Tuple,
-            fields,
+            fields: StructFields::Tuple(fields),
             generics,
             ..
         } = &resolved.definition.body

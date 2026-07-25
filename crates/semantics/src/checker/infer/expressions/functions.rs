@@ -1,7 +1,7 @@
 use crate::checker::{EnvResolve, resolved_generic_bounds};
 use ecow::EcoString;
 use syntax::ast::{
-    Annotation, Binding, Expression, IdentifierResolution, Literal, Pattern, Span, StructKind,
+    Annotation, Binding, Expression, IdentifierResolution, Literal, Pattern, Span, StructFields,
     UnaryOperator,
 };
 use syntax::ast::{BindingKind, CallTypeArguments};
@@ -369,7 +369,7 @@ impl InferCtx<'_> {
                 type_arguments: CallTypeArguments::checked_without_types(type_args),
                 ty: Type::Error,
                 span,
-                call_kind: None,
+                call_kind: CallKind::Unresolved,
             };
         }
 
@@ -594,7 +594,7 @@ impl InferCtx<'_> {
             type_arguments,
             ty: call_ty,
             span,
-            call_kind: Some(call_kind),
+            call_kind,
         }
     }
 
@@ -733,7 +733,7 @@ impl InferCtx<'_> {
             type_arguments: CallTypeArguments::checked_without_types(type_args),
             ty: array_ty,
             span,
-            call_kind: Some(CallKind::NativeConstructor(NativeTypeKind::Array)),
+            call_kind: CallKind::NativeConstructor(NativeTypeKind::Array),
         }
     }
 
@@ -1088,7 +1088,7 @@ impl InferCtx<'_> {
                 type_arguments,
                 ty: Type::Error,
                 span,
-                call_kind: Some(CallKind::Regular),
+                call_kind: CallKind::Regular,
             };
         }
 
@@ -1104,7 +1104,7 @@ impl InferCtx<'_> {
             type_arguments,
             ty: named_ty,
             span,
-            call_kind: Some(CallKind::Regular),
+            call_kind: CallKind::Regular,
         }
     }
 
@@ -1393,7 +1393,7 @@ impl InferCtx<'_> {
                     if matches!(
                         store.get_definition(&qualified).map(|d| &d.body),
                         Some(DefinitionBody::Struct {
-                            kind: StructKind::Tuple,
+                            fields: StructFields::Tuple(_),
                             ..
                         })
                     ) {
@@ -1513,7 +1513,7 @@ impl InferCtx<'_> {
         if matches!(
             definition.map(|d| &d.body),
             Some(DefinitionBody::Struct {
-                kind: StructKind::Tuple,
+                fields: StructFields::Tuple(_),
                 ..
             })
         ) {
@@ -1533,7 +1533,7 @@ impl InferCtx<'_> {
                 return matches!(
                     store.get_definition(&id).map(|d| &d.body),
                     Some(DefinitionBody::Struct {
-                        kind: StructKind::Tuple,
+                        fields: StructFields::Tuple(_),
                         ..
                     })
                 );

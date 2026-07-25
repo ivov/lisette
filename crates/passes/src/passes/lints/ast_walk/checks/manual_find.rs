@@ -61,10 +61,7 @@ fn native_slice_method<'a>(
         return None;
     };
 
-    if !matches!(
-        call_kind,
-        Some(CallKind::NativeMethod(NativeTypeKind::Slice))
-    ) {
+    if !matches!(call_kind, CallKind::NativeMethod(NativeTypeKind::Slice)) {
         return None;
     }
 

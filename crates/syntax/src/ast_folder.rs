@@ -1,5 +1,6 @@
 use crate::ast::{
-    Expression, FormatStringPart, MatchArm, SelectArm, SelectArmPattern, StructSpread,
+    Expression, FormatStringPart, IfLetAlternative, MatchArm, SelectArm, SelectArmPattern,
+    StructSpread,
 };
 
 pub(crate) trait AstFolder {
@@ -89,7 +90,8 @@ pub(crate) trait AstFolder {
             } => If {
                 condition: Box::new(self.fold_expression(*condition)),
                 consequence: Box::new(self.fold_expression(*consequence)),
-                alternative: Box::new(self.fold_expression(*alternative)),
+                alternative: alternative
+                    .map(|alternative| Box::new(self.fold_expression(*alternative))),
                 ty,
                 span,
             },
@@ -99,15 +101,22 @@ pub(crate) trait AstFolder {
                 scrutinee,
                 consequence,
                 alternative,
-                else_span,
                 ty,
                 span,
             } => IfLet {
                 pattern,
                 scrutinee: Box::new(self.fold_expression(*scrutinee)),
                 consequence: Box::new(self.fold_expression(*consequence)),
-                alternative: Box::new(self.fold_expression(*alternative)),
-                else_span,
+                alternative: match alternative {
+                    IfLetAlternative::Absent => IfLetAlternative::Absent,
+                    IfLetAlternative::Present {
+                        expression,
+                        else_span,
+                    } => IfLetAlternative::Present {
+                        expression: Box::new(self.fold_expression(*expression)),
+                        else_span,
+                    },
+                },
                 ty,
                 span,
             },

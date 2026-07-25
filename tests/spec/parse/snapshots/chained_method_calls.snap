@@ -77,7 +77,7 @@ description: |
                                         byte_offset: 26,
                                         byte_length: 13,
                                     },
-                                    call_kind: None,
+                                    call_kind: Unresolved,
                                 },
                                 member: "method2",
                                 ty: Var {
@@ -101,7 +101,7 @@ description: |
                                 byte_offset: 26,
                                 byte_length: 23,
                             },
-                            call_kind: None,
+                            call_kind: Unresolved,
                         },
                         mode: Plain,
                         ty: Var {

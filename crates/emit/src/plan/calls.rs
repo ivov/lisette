@@ -130,7 +130,7 @@ impl<'a> Planner<'a> {
 
         let go_return = self.resolve_go_call_abi(expression);
 
-        let kind = call_kind.filter(|_| !self.is_local_binding(function));
+        let kind = (!self.is_local_binding(function)).then_some(*call_kind);
 
         let callee_plan = if self.is_go_callable(function) {
             CallableOrigin::GoInterop
@@ -147,7 +147,7 @@ impl<'a> Planner<'a> {
                 Some(CallKind::ReceiverMethodUfcs { is_public }) => {
                     CallableOrigin::ReceiverMethodUfcs { is_public }
                 }
-                None | Some(CallKind::Regular) => CallableOrigin::Regular,
+                None | Some(CallKind::Unresolved | CallKind::Regular) => CallableOrigin::Regular,
             }
         };
 

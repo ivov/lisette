@@ -157,7 +157,9 @@ pub(crate) fn expression_contains_binding(expression: &Expression, name: &str) -
         } => {
             pattern_contains_name(pattern, name)
                 || expression_contains_binding(consequence, name)
-                || expression_contains_binding(alternative, name)
+                || alternative
+                    .expression()
+                    .is_some_and(|alternative| expression_contains_binding(alternative, name))
         }
         Expression::Match { arms, .. } => arms
             .iter()
@@ -172,7 +174,9 @@ pub(crate) fn expression_contains_binding(expression: &Expression, name: &str) -
             ..
         } => {
             expression_contains_binding(consequence, name)
-                || expression_contains_binding(alternative, name)
+                || alternative
+                    .as_deref()
+                    .is_some_and(|alternative| expression_contains_binding(alternative, name))
         }
         Expression::Select { arms, .. } => arms.iter().any(|arm| match &arm.pattern {
             SelectArmPattern::Receive { binding, .. } => pattern_contains_name(binding, name),

@@ -1,14 +1,6 @@
 ---
 source: tests/spec/parse/mod.rs
-description: |
-  
-  fn test() {
-    let x = loop {
-      if done() {
-        break 42;
-      }
-    };
-  }
+description: "\nfn test() {\n  let x = loop {\n    if done() {\n      break 42;\n    }\n  };\n}\n"
 ---
 [
     Function {
@@ -73,7 +65,7 @@ description: |
                                                 byte_offset: 37,
                                                 byte_length: 6,
                                             },
-                                            call_kind: None,
+                                            call_kind: Unresolved,
                                         },
                                         consequence: Block {
                                             items: [
@@ -110,16 +102,7 @@ description: |
                                                 byte_length: 23,
                                             },
                                         },
-                                        alternative: Unit {
-                                            ty: Var {
-                                                id: uninferred,
-                                            },
-                                            span: Span {
-                                                file_id: 0,
-                                                byte_offset: 34,
-                                                byte_length: 33,
-                                            },
-                                        },
+                                        alternative: None,
                                         ty: Var {
                                             id: uninferred,
                                         },

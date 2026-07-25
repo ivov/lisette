@@ -125,7 +125,7 @@ description: |
                                             byte_offset: 57,
                                             byte_length: 14,
                                         },
-                                        call_kind: None,
+                                        call_kind: Unresolved,
                                     },
                                     mode: Else {
                                         block: Block {
@@ -199,7 +199,7 @@ description: |
                                         byte_offset: 96,
                                         byte_length: 13,
                                     },
-                                    call_kind: None,
+                                    call_kind: Unresolved,
                                 },
                             ],
                             ty: Var {

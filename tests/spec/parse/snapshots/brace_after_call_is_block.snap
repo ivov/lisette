@@ -152,7 +152,7 @@ description: |
                             byte_offset: 56,
                             byte_length: 11,
                         },
-                        call_kind: None,
+                        call_kind: Unresolved,
                     },
                     Block {
                         items: [

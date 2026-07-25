@@ -2,10 +2,8 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use ecow::EcoString;
 
-use crate::ast::{
-    Annotation, EnumVariant, Generic, Literal, Span, StructFieldDefinition, StructKind,
-};
-use crate::types::{Type, build_substitution_map, substitute};
+use crate::ast::{Annotation, EnumVariant, Generic, Literal, Span, StructFields};
+use crate::types::{FunctionParameter, Type, build_substitution_map, substitute};
 
 #[derive(Debug, Clone)]
 pub struct Definition {
@@ -34,7 +32,8 @@ pub type Attributes = HashSet<TypeAttribute>;
 #[derive(Debug, Clone)]
 pub enum ValueKind {
     Runtime,
-    Constant { value: Option<Literal> },
+    ConstantDeclaration,
+    Constant(Literal),
 }
 
 #[derive(Debug, Clone)]
@@ -53,10 +52,8 @@ pub enum DefinitionBody {
     },
     Struct {
         generics: Vec<Generic>,
-        fields: Vec<StructFieldDefinition>,
-        kind: StructKind,
+        fields: StructFields,
         methods: MethodSignatures,
-        constructor: Option<Type>,
         attributes: Attributes,
     },
     Interface {
@@ -123,8 +120,7 @@ impl Definition {
         matches!(
             &self.body,
             DefinitionBody::Struct {
-                kind: StructKind::Tuple,
-                fields,
+                fields: StructFields::Tuple(fields),
                 generics,
                 ..
             } if fields.len() == 1 && generics.is_empty()
@@ -138,8 +134,10 @@ impl Definition {
         self.is_newtype()
             && matches!(
                 &self.body,
-                DefinitionBody::Struct { fields, .. }
-                    if crate::types::peel_alias(&fields[0].ty, lookup).is_ref()
+                DefinitionBody::Struct {
+                    fields: StructFields::Tuple(fields),
+                    ..
+                } if crate::types::peel_alias(&fields[0].ty, lookup).is_ref()
             )
     }
 
@@ -163,11 +161,50 @@ impl Definition {
             return Some(target);
         }
         match &self.body {
-            DefinitionBody::Struct { fields, .. } if self.is_newtype() => {
-                Some(fields[0].ty.clone())
-            }
+            DefinitionBody::Struct {
+                fields: StructFields::Tuple(fields),
+                ..
+            } if self.is_newtype() => Some(fields[0].ty.clone()),
             _ => None,
         }
+    }
+
+    /// Returns the callable type of a tuple struct constructor.
+    ///
+    /// The constructor is derived from the struct's resolved fields and type
+    /// rather than stored separately, so it cannot become stale when either
+    /// source changes.
+    pub fn constructor_type(&self) -> Option<Type> {
+        let DefinitionBody::Struct {
+            fields: StructFields::Tuple(fields),
+            generics,
+            ..
+        } = &self.body
+        else {
+            return None;
+        };
+
+        let return_type = self.ty.unwrap_forall().clone();
+        let function = Type::function(
+            fields
+                .iter()
+                .map(|field| FunctionParameter::new(field.ty.clone(), false))
+                .collect(),
+            Default::default(),
+            return_type.into(),
+        );
+
+        Some(if generics.is_empty() {
+            function
+        } else {
+            Type::Forall {
+                vars: generics
+                    .iter()
+                    .map(|generic| generic.name.clone())
+                    .collect(),
+                body: Box::new(function),
+            }
+        })
     }
 
     pub fn is_transparent_type_alias(&self) -> bool {
@@ -214,9 +251,9 @@ impl Definition {
     pub fn const_value(&self) -> Option<&Literal> {
         match &self.body {
             DefinitionBody::Value {
-                kind: ValueKind::Constant { value },
+                kind: ValueKind::Constant(value),
                 ..
-            } => value.as_ref(),
+            } => Some(value),
             _ => None,
         }
     }
@@ -225,7 +262,7 @@ impl Definition {
         matches!(
             self.body,
             DefinitionBody::Value {
-                kind: ValueKind::Constant { .. },
+                kind: ValueKind::ConstantDeclaration | ValueKind::Constant(_),
                 ..
             }
         )

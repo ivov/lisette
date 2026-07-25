@@ -4,7 +4,8 @@ use crate::INDENT_WIDTH;
 use crate::lindig::{Document, join, strict_break};
 use syntax::ast::{
     Annotation, Attribute, AttributeArg, Binding, ConstInitializer, EnumVariant, Expression,
-    FunctionBody, Generic, ParentInterface, Span, StructFieldDefinition, StructKind, VariantFields,
+    FunctionBody, Generic, ParentInterface, Span, StructFieldDefinition, StructFields,
+    VariantFields,
 };
 
 impl<'a> Formatter<'a> {
@@ -61,32 +62,34 @@ impl<'a> Formatter<'a> {
         &mut self,
         name: &'a str,
         generics: &'a [Generic],
-        fields: &'a [StructFieldDefinition],
+        fields: &'a StructFields,
         span: &Span,
-        kind: StructKind,
     ) -> Document<'a> {
         let generics_doc = Self::generics(generics);
         let header = Document::str("struct ").append(name).append(generics_doc);
         let struct_end = span.byte_offset + span.byte_length;
 
-        if kind == StructKind::Tuple {
-            let type_docs: Vec<_> = fields
-                .iter()
-                .map(|f| Self::annotation(&f.annotation))
-                .collect();
-            return header
-                .append("(")
-                .append(join(type_docs, Document::str(", ")))
-                .append(")");
+        let fields = match fields {
+            StructFields::Record(fields) => fields,
+            StructFields::Tuple(fields) => {
+                let type_docs: Vec<_> = fields
+                    .iter()
+                    .map(|f| Self::annotation(&f.annotation))
+                    .collect();
+                return header
+                    .append("(")
+                    .append(join(type_docs, Document::str(", ")))
+                    .append(")");
+            }
+        };
+
+        if fields.is_empty() {
+            return self.empty_struct_body(header, struct_end);
         }
 
         let with_field_attrs = fields.iter().any(|f| !f.attributes.is_empty());
         let with_pub_fields = fields.iter().any(|f| f.visibility.is_public());
         let with_embeds = fields.iter().any(|f| f.embedded);
-
-        if fields.is_empty() {
-            return self.empty_struct_body(header, struct_end);
-        }
 
         let (field_entries, trailing, with_comments) =
             self.struct_fields_with_comments(fields, struct_end);

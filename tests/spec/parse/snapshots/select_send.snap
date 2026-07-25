@@ -118,7 +118,7 @@ description: |
                                             byte_offset: 43,
                                             byte_length: 11,
                                         },
-                                        call_kind: None,
+                                        call_kind: Unresolved,
                                     },
                                     body: Call {
                                         expression: Identifier {
@@ -159,7 +159,7 @@ description: |
                                             byte_offset: 58,
                                             byte_length: 13,
                                         },
-                                        call_kind: None,
+                                        call_kind: Unresolved,
                                     },
                                 },
                             },

@@ -23,7 +23,7 @@ use std::cell::RefCell;
 use diagnostics::{IssueKind, LocalSink, PatternIssue};
 use semantics::context::AnalysisContext;
 use semantics::store::Store;
-use syntax::ast::{Expression, Literal, Pattern, SelectArmPattern, Span};
+use syntax::ast::{Expression, IfLetAlternative, Literal, Pattern, SelectArmPattern, Span};
 use syntax::types::Type;
 
 use maranget::is_useful;
@@ -162,7 +162,9 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Local
         } => {
             check(condition, ctx, sink);
             check(consequence, ctx, sink);
-            check(alternative, ctx, sink);
+            if let Some(alternative) = alternative {
+                check(alternative, ctx, sink);
+            }
         }
 
         Expression::IfLet {
@@ -170,13 +172,14 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Local
             scrutinee,
             consequence,
             alternative,
-            else_span,
             ..
         } => {
             check(scrutinee, ctx, sink);
-            check_if_let(pattern, alternative, *else_span, ctx);
+            check_if_let(pattern, alternative, ctx);
             check(consequence, ctx, sink);
-            check(alternative, ctx, sink);
+            if let Some(alternative) = alternative.expression() {
+                check(alternative, ctx, sink);
+            }
         }
 
         Expression::Match {
@@ -466,12 +469,7 @@ fn check_redundancy_with_guards(
     !found_redundant
 }
 
-fn check_if_let(
-    pattern: &Pattern,
-    alternative: &Expression,
-    else_span: Option<Span>,
-    ctx: &PatternAnalysisContext,
-) {
+fn check_if_let(pattern: &Pattern, alternative: &IfLetAlternative, ctx: &PatternAnalysisContext) {
     // Suppress lints for patterns that already have or-pattern binding errors.
     if ctx.or_pattern_error_spans.contains(&pattern.get_span()) {
         return;
@@ -480,14 +478,16 @@ fn check_if_let(
     if is_pattern_irrefutable(pattern, ctx.store) {
         ctx.add_issue(pattern.get_span(), IssueKind::RedundantIfLet);
 
-        if let Some(else_span) = else_span
-            && !is_trivial_expression(alternative)
+        if let (Some(alternative_expression), Some(else_span)) =
+            (alternative.expression(), alternative.else_span())
+            && !is_trivial_expression(alternative_expression)
         {
             ctx.add_issue(else_span, IssueKind::UnreachableIfLetElse);
         }
-    } else if let Some(else_span) = else_span
-        && is_trivial_expression(alternative)
-        && !alternative.is_conditional()
+    } else if let (Some(alternative_expression), Some(else_span)) =
+        (alternative.expression(), alternative.else_span())
+        && is_trivial_expression(alternative_expression)
+        && !alternative_expression.is_conditional()
     {
         ctx.add_issue(else_span, IssueKind::RedundantIfLetElse);
     }

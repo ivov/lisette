@@ -1,7 +1,7 @@
 use rustc_hash::FxHashSet as HashSet;
 
 use syntax::EcoString;
-use syntax::ast::{Generic, Span, VariantFields};
+use syntax::ast::{Generic, Span, StructFields, VariantFields};
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{FunctionParameter, Symbol, Type};
 
@@ -310,7 +310,7 @@ fn is_tuple_struct(store: &Store, qualified: &Symbol) -> bool {
     matches!(
         store.get_definition(qualified.as_str()).map(|d| &d.body),
         Some(DefinitionBody::Struct {
-            kind: syntax::ast::StructKind::Tuple,
+            fields: StructFields::Tuple(_),
             ..
         })
     )

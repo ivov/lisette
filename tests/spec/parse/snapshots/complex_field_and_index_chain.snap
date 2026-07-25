@@ -112,7 +112,7 @@ description: |
                                         byte_offset: 35,
                                         byte_length: 12,
                                     },
-                                    call_kind: None,
+                                    call_kind: Unresolved,
                                 },
                                 member: "nested",
                                 ty: Var {

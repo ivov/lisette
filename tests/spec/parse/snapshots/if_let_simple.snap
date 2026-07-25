@@ -1,12 +1,6 @@
 ---
 source: tests/spec/parse/mod.rs
-description: |
-  
-  fn test(opt: Option<int>) {
-    if let Some(x) = opt {
-      print(x);
-    }
-  }
+description: "\nfn test(opt: Option<int>) {\n  if let Some(x) = opt {\n    print(x);\n  }\n}\n"
 ---
 [
     Function {
@@ -138,7 +132,7 @@ description: |
                                         byte_offset: 58,
                                         byte_length: 8,
                                     },
-                                    call_kind: None,
+                                    call_kind: Unresolved,
                                 },
                             ],
                             ty: Var {
@@ -150,17 +144,7 @@ description: |
                                 byte_length: 19,
                             },
                         },
-                        alternative: Unit {
-                            ty: Var {
-                                id: uninferred,
-                            },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 31,
-                                byte_length: 40,
-                            },
-                        },
-                        else_span: None,
+                        alternative: Absent,
                         ty: Var {
                             id: uninferred,
                         },

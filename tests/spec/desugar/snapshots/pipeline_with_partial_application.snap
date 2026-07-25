@@ -73,7 +73,7 @@ description: "fn test() { x |> add(5); }"
                             byte_offset: 12,
                             byte_length: 11,
                         },
-                        call_kind: None,
+                        call_kind: Unresolved,
                     },
                 ],
                 ty: Var {

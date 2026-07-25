@@ -4,9 +4,9 @@ use crate::INDENT_WIDTH;
 use crate::comments::prepend_comments;
 use crate::lindig::{Document, concat, flex_break, join, strict_break};
 use syntax::ast::{
-    Annotation, BinaryOperator, Binding, CallTypeArguments, Expression, FormatStringPart, Literal,
-    MatchArm, Pattern, SelectArm, SelectArmPattern, Span, StructFieldAssignment, StructSpread,
-    UnaryOperator,
+    Annotation, BinaryOperator, Binding, CallTypeArguments, Expression, FormatStringPart,
+    IfLetAlternative, Literal, MatchArm, Pattern, SelectArm, SelectArmPattern, Span,
+    StructFieldAssignment, StructSpread, UnaryOperator,
 };
 
 impl<'a> Formatter<'a> {
@@ -47,7 +47,7 @@ impl<'a> Formatter<'a> {
                 consequence,
                 alternative,
                 ..
-            } => self.if_(condition, consequence, alternative),
+            } => self.if_(condition, consequence, alternative.as_deref()),
 
             Expression::IfLet {
                 pattern,
@@ -343,7 +343,7 @@ impl<'a> Formatter<'a> {
         &mut self,
         condition: &'a Expression,
         consequence: &'a Expression,
-        alternative: &'a Expression,
+        alternative: Option<&'a Expression>,
     ) -> Document<'a> {
         let if_doc = Document::str("if ")
             .append(self.expression(condition))
@@ -351,11 +351,12 @@ impl<'a> Formatter<'a> {
             .append(self.as_inline_block(consequence));
 
         match alternative {
-            Expression::Unit { .. } => if_doc,
-            Expression::If { .. } | Expression::IfLet { .. } => {
+            None => if_doc,
+            Some(Expression::Unit { .. }) => if_doc,
+            Some(alternative @ (Expression::If { .. } | Expression::IfLet { .. })) => {
                 if_doc.append(" else ").append(self.expression(alternative))
             }
-            _ => if_doc
+            Some(alternative) => if_doc
                 .append(" else ")
                 .append(self.as_inline_block(alternative)),
         }
@@ -367,7 +368,7 @@ impl<'a> Formatter<'a> {
         pattern: &'a Pattern,
         scrutinee: &'a Expression,
         consequence: &'a Expression,
-        alternative: &'a Expression,
+        alternative: &'a IfLetAlternative,
     ) -> Document<'a> {
         let if_let_doc = Document::str("if let ")
             .append(self.pattern(pattern))
@@ -377,13 +378,15 @@ impl<'a> Formatter<'a> {
             .append(self.as_inline_block(consequence));
 
         match alternative {
-            Expression::Unit { .. } => if_let_doc,
-            Expression::If { .. } | Expression::IfLet { .. } => if_let_doc
-                .append(" else ")
-                .append(self.expression(alternative)),
-            _ => if_let_doc
-                .append(" else ")
-                .append(self.as_inline_block(alternative)),
+            IfLetAlternative::Absent => if_let_doc,
+            IfLetAlternative::Present { expression, .. } => match expression.as_ref() {
+                Expression::If { .. } | Expression::IfLet { .. } => if_let_doc
+                    .append(" else ")
+                    .append(self.expression(expression)),
+                _ => if_let_doc
+                    .append(" else ")
+                    .append(self.as_inline_block(expression)),
+            },
         }
         .group()
     }
@@ -622,15 +625,15 @@ impl<'a> Formatter<'a> {
             // Single-segment chain: probe-format the root to drain any inner-receiver
             // comments, then check if comments remain before the member. If so, there
             // are genuine inter-segment comments and we should use chain formatting.
-            let snapshot = self.comments.cursor_snapshot();
-            let root_doc = self.expression(root);
-            let has_inter_segment_comments = self
-                .comments
-                .has_comments_before(chain_segments[0].member_start);
-            if has_inter_segment_comments {
-                return self.format_method_chain_with_root(root_doc, &chain_segments);
+            if let Some(doc) = self.probe(|formatter| {
+                let root_doc = formatter.expression(root);
+                formatter
+                    .comments
+                    .has_comments_before(chain_segments[0].member_start)
+                    .then(|| formatter.format_method_chain_with_root(root_doc, &chain_segments))
+            }) {
+                return doc;
             }
-            self.comments.restore_cursor(snapshot);
         }
 
         let head = self

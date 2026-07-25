@@ -1,12 +1,13 @@
 use crate::_harness::infer;
 use syntax::ast::{
     Annotation, BinaryOperator, CallTypeArguments, ConstructorPatternResolution, Expression,
-    Pattern,
+    IfLetAlternative, Pattern, StructFields,
 };
 use syntax::lex::Lexer;
 use syntax::parse::Parser;
 use syntax::program::{
-    BindingMutation, Definition, DefinitionBody, File, Module, MutationInfo, ValueKind, Visibility,
+    BindingMutation, Definition, DefinitionBody, EqualityIndex, File, Module, MutationInfo,
+    ValueKind, Visibility,
 };
 use syntax::types::{FunctionParameter, SubstitutionMap, Type, TypeVarId, substitute};
 
@@ -50,8 +51,22 @@ fn alias_mutation_is_not_downgraded_by_a_direct_mark() {
     mutations.record(7, BindingMutation::ThroughAlias);
     mutations.record(7, BindingMutation::Direct);
 
-    assert_eq!(mutations.mutation(7), BindingMutation::ThroughAlias);
-    assert_eq!(mutations.mutation(8), BindingMutation::Unchanged);
+    assert_eq!(mutations.mutation(7), Some(BindingMutation::ThroughAlias));
+    assert_eq!(mutations.mutation(8), None);
+}
+
+#[test]
+fn equality_index_has_one_visibility_rule_for_all_kinds() {
+    let mut index = EqualityIndex::default();
+    index.insert_declared_method("public".into(), None);
+    index.insert_synthesized_method("private".into(), Some("module".into()));
+    index.insert_ufcs_lowered("ufcs".into(), Some("module".into()));
+
+    assert!(index.usable_from("public", "other"));
+    assert!(index.usable_from("private", "module"));
+    assert!(!index.usable_from("private", "other"));
+    assert!(index.is_ufcs_lowered_from("ufcs", "module"));
+    assert!(!index.is_ufcs_lowered_from("ufcs", "other"));
 }
 
 #[test]
@@ -86,6 +101,77 @@ fn test(value: int) {
 
     assert!(saw_unresolved_type_arguments);
     assert!(saw_shift);
+}
+
+#[test]
+fn struct_shape_owns_its_field_collection() {
+    let source = "struct Record { value: int }\nstruct Tuple(int)";
+    let lexed = Lexer::new(source, 0).lex();
+    assert!(lexed.errors.is_empty(), "{:?}", lexed.errors);
+    let parsed = Parser::new(lexed.tokens, source).parse();
+    assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+
+    let [
+        Expression::Struct {
+            fields: StructFields::Record(record_fields),
+            ..
+        },
+        Expression::Struct {
+            fields: StructFields::Tuple(tuple_fields),
+            ..
+        },
+    ] = parsed.ast.as_slice()
+    else {
+        panic!("expected record and tuple struct definitions");
+    };
+
+    assert_eq!(record_fields.len(), 1);
+    assert_eq!(tuple_fields.len(), 1);
+}
+
+#[test]
+fn conditional_alternatives_encode_presence_directly() {
+    let result = syntax::build_ast(
+        r#"
+fn main() {
+  let plain = if true { 1 }
+  let with_else = if false { 1 } else { 2 }
+  let plain_let = if let Some(value) = Some(1) { value }
+  let let_with_else = if let Some(value) = Some(1) { value } else { 0 }
+}
+"#,
+        0,
+    );
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+
+    let mut plain_if = false;
+    let mut if_with_else = false;
+    let mut plain_if_let = false;
+    let mut if_let_with_else = false;
+    for item in &result.ast {
+        walk(item, &mut |expression| match expression {
+            Expression::If { alternative, .. } => {
+                if alternative.is_none() {
+                    plain_if = true;
+                } else {
+                    if_with_else = true;
+                }
+            }
+            Expression::IfLet { alternative, .. } => match alternative {
+                IfLetAlternative::Absent => plain_if_let = true,
+                IfLetAlternative::Present { else_span, .. } => {
+                    assert_eq!(else_span.byte_length, 4);
+                    if_let_with_else = true;
+                }
+            },
+            _ => {}
+        });
+    }
+
+    assert!(plain_if);
+    assert!(if_with_else);
+    assert!(plain_if_let);
+    assert!(if_let_with_else);
 }
 
 #[test]
@@ -316,7 +402,7 @@ fn value_definition(kind: ValueKind) -> Definition {
 
 #[test]
 fn nonliteral_constants_remain_distinguishable_from_runtime_values() {
-    let constant = value_definition(ValueKind::Constant { value: None });
+    let constant = value_definition(ValueKind::ConstantDeclaration);
     let runtime = value_definition(ValueKind::Runtime);
 
     assert!(constant.is_const());

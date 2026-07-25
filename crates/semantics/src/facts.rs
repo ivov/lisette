@@ -204,7 +204,7 @@ impl Facts {
                 span,
                 kind,
                 used: false,
-                mutation: BindingMutation::Unchanged,
+                mutation: None,
                 origin,
             },
         );
@@ -225,7 +225,9 @@ impl Facts {
 
     pub(crate) fn mark_mutated(&mut self, id: BindingId) {
         if let Some(fact) = self.bindings.get_mut(&id) {
-            fact.mutation = fact.mutation.merged_with(BindingMutation::Direct);
+            fact.mutation = Some(fact.mutation.map_or(BindingMutation::Direct, |mutation| {
+                mutation.merged_with(BindingMutation::Direct)
+            }));
         }
     }
 
@@ -233,7 +235,12 @@ impl Facts {
     /// capture, mut argument or receiver), so a call can rebind it.
     pub(crate) fn mark_alias_mutated(&mut self, id: BindingId) {
         if let Some(fact) = self.bindings.get_mut(&id) {
-            fact.mutation = fact.mutation.merged_with(BindingMutation::ThroughAlias);
+            fact.mutation = Some(
+                fact.mutation
+                    .map_or(BindingMutation::ThroughAlias, |mutation| {
+                        mutation.merged_with(BindingMutation::ThroughAlias)
+                    }),
+            );
         }
     }
 
@@ -387,7 +394,7 @@ pub struct BindingFact {
     pub span: Span,
     pub kind: BindingKind,
     pub used: bool,
-    pub mutation: BindingMutation,
+    pub mutation: Option<BindingMutation>,
     pub origin: BindingOrigin,
 }
 
@@ -505,7 +512,10 @@ mod tests {
         facts.mark_alias_mutated(id);
         facts.mark_mutated(id);
 
-        assert_eq!(facts.bindings[&id].mutation, BindingMutation::ThroughAlias);
+        assert_eq!(
+            facts.bindings[&id].mutation,
+            Some(BindingMutation::ThroughAlias)
+        );
     }
 
     #[test]

@@ -16,6 +16,16 @@ impl<'a> Formatter<'a> {
         Self { comments }
     }
 
+    /// Run a formatting probe and keep its cursor changes only when it yields a document.
+    fn probe<R>(&mut self, probe: impl FnOnce(&mut Self) -> Option<R>) -> Option<R> {
+        let snapshot = self.comments.cursor_state();
+        let result = probe(self);
+        if result.is_none() {
+            self.comments.restore_cursor(snapshot);
+        }
+        result
+    }
+
     pub(crate) fn module(&mut self, top_level_items: &'a [Expression]) -> Document<'a> {
         let (imports, rest): (Vec<_>, Vec<_>) = top_level_items
             .iter()
@@ -190,13 +200,12 @@ impl<'a> Formatter<'a> {
                 name,
                 generics,
                 fields,
-                kind,
                 visibility,
                 span,
                 ..
             } => (
                 *visibility,
-                self.struct_definition(name, generics, fields, span, *kind),
+                self.struct_definition(name, generics, fields, span),
             ),
 
             Expression::Enum {

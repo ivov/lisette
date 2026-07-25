@@ -1,15 +1,6 @@
 ---
 source: tests/spec/parse/mod.rs
-description: |
-  
-  fn test(opt: Option<int>) -> int {
-    let result = if let Some(x) = opt {
-      x * 2
-    } else {
-      0
-    };
-    result
-  }
+description: "\nfn test(opt: Option<int>) -> int {\n  let result = if let Some(x) = opt {\n    x * 2\n  } else {\n    0\n  };\n  result\n}\n"
 ---
 [
     Function {
@@ -174,39 +165,39 @@ description: |
                                     byte_length: 15,
                                 },
                             },
-                            alternative: Block {
-                                items: [
-                                    Literal {
-                                        literal: Integer {
-                                            value: 0,
-                                            text: None,
+                            alternative: Present {
+                                expression: Block {
+                                    items: [
+                                        Literal {
+                                            literal: Integer {
+                                                value: 0,
+                                                text: None,
+                                            },
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 99,
+                                                byte_length: 1,
+                                            },
                                         },
-                                        ty: Var {
-                                            id: uninferred,
-                                        },
-                                        span: Span {
-                                            file_id: 0,
-                                            byte_offset: 99,
-                                            byte_length: 1,
-                                        },
+                                    ],
+                                    ty: Var {
+                                        id: uninferred,
                                     },
-                                ],
-                                ty: Var {
-                                    id: uninferred,
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 93,
+                                        byte_length: 11,
+                                    },
                                 },
-                                span: Span {
-                                    file_id: 0,
-                                    byte_offset: 93,
-                                    byte_length: 11,
-                                },
-                            },
-                            else_span: Some(
-                                Span {
+                                else_span: Span {
                                     file_id: 0,
                                     byte_offset: 88,
                                     byte_length: 4,
                                 },
-                            ),
+                            },
                             ty: Var {
                                 id: uninferred,
                             },

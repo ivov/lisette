@@ -1033,7 +1033,9 @@ fn collect_enum_variant_checks(
 
     // A const pattern is a value comparison against a named constant, emitted
     // as a Go `case` expression rather than an enum tag or newtype destructure.
-    if let ConstructorPatternResolution::Const { qualified_name, .. } = resolution {
+    if let ConstructorPatternResolution::Const { qualified_name }
+    | ConstructorPatternResolution::ConstValue { qualified_name, .. } = resolution
+    {
         collect_const_pattern_check(planner, path, qualified_name, collector);
         return;
     }

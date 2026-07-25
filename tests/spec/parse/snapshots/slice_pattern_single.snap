@@ -149,7 +149,7 @@ description: |
                                         byte_offset: 57,
                                         byte_length: 18,
                                     },
-                                    call_kind: None,
+                                    call_kind: Unresolved,
                                 },
                             },
                             MatchArm {
@@ -199,7 +199,7 @@ description: |
                                         byte_offset: 86,
                                         byte_length: 14,
                                     },
-                                    call_kind: None,
+                                    call_kind: Unresolved,
                                 },
                             },
                         ],

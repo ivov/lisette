@@ -66,7 +66,7 @@ description: |
                                     byte_offset: 29,
                                     byte_length: 11,
                                 },
-                                call_kind: None,
+                                call_kind: Unresolved,
                             },
                             member: "x",
                             ty: Var {

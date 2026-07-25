@@ -149,7 +149,9 @@ impl<'a> FreezeFolder<'a> {
             } => {
                 self.freeze_expr(condition.as_mut());
                 self.freeze_expr(consequence.as_mut());
-                self.freeze_expr(alternative.as_mut());
+                if let Some(alternative) = alternative {
+                    self.freeze_expr(alternative.as_mut());
+                }
             }
 
             Expression::IfLet {
@@ -160,7 +162,9 @@ impl<'a> FreezeFolder<'a> {
             } => {
                 self.freeze_expr(scrutinee.as_mut());
                 self.freeze_expr(consequence.as_mut());
-                self.freeze_expr(alternative.as_mut());
+                if let Some(alternative) = alternative.expression_mut() {
+                    self.freeze_expr(alternative);
+                }
             }
 
             Expression::Match { subject, arms, .. } => {

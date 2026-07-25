@@ -5,7 +5,7 @@ use crate::expressions::top_items::emit_doc;
 use crate::names::go_name::{self, prelude_qualifier};
 use crate::utils::{synthesized_local_name, synthesized_receiver_name};
 use rustc_hash::{FxHashMap, FxHashSet};
-use syntax::ast::{Attribute, Generic, StructFieldDefinition, StructKind};
+use syntax::ast::{Attribute, Generic, StructFieldDefinition, StructFields};
 use syntax::attributes::struct_attribute_forces_field_export;
 use syntax::program::{Definition, DefinitionBody, Interface, MethodSignatures};
 use syntax::types::Type;
@@ -17,15 +17,17 @@ impl Planner<'_> {
         &mut self,
         name: &str,
         generics: &[Generic],
-        fields: &[StructFieldDefinition],
-        kind: &StructKind,
+        fields: &StructFields,
         struct_attrs: &[Attribute],
     ) -> String {
         let generics_string = self.generics_to_string(generics);
 
-        if *kind == StructKind::Tuple {
+        let StructFields::Record(fields) = fields else {
+            let StructFields::Tuple(fields) = fields else {
+                unreachable!();
+            };
             return self.emit_tuple_struct(name, &generics_string, fields, generics, struct_attrs);
-        }
+        };
 
         let mut field_strings: Vec<String> = Vec::with_capacity(fields.len());
         let mut stringer_fields: Vec<StringerField> = Vec::with_capacity(fields.len());

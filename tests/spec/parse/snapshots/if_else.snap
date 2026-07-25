@@ -1,14 +1,6 @@
 ---
 source: tests/spec/parse/mod.rs
-description: |
-  
-  fn test(a: int) {
-    if a > 10 {
-      print("large");
-    } else {
-      print("small or medium");
-    }
-  }
+description: "\nfn test(a: int) {\n  if a > 10 {\n    print(\"large\");\n  } else {\n    print(\"small or medium\");\n  }\n}\n"
 ---
 [
     Function {
@@ -134,7 +126,7 @@ description: |
                                         byte_offset: 37,
                                         byte_length: 14,
                                     },
-                                    call_kind: None,
+                                    call_kind: Unresolved,
                                 },
                             ],
                             ty: Var {
@@ -146,59 +138,61 @@ description: |
                                 byte_length: 25,
                             },
                         },
-                        alternative: Block {
-                            items: [
-                                Call {
-                                    expression: Identifier {
-                                        value: "print",
+                        alternative: Some(
+                            Block {
+                                items: [
+                                    Call {
+                                        expression: Identifier {
+                                            value: "print",
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 68,
+                                                byte_length: 5,
+                                            },
+                                            resolution: Unresolved,
+                                        },
+                                        args: [
+                                            Literal {
+                                                literal: String {
+                                                    value: "small or medium",
+                                                    raw: false,
+                                                },
+                                                ty: Var {
+                                                    id: uninferred,
+                                                },
+                                                span: Span {
+                                                    file_id: 0,
+                                                    byte_offset: 74,
+                                                    byte_length: 17,
+                                                },
+                                            },
+                                        ],
+                                        spread: None,
+                                        type_arguments: None,
                                         ty: Var {
                                             id: uninferred,
                                         },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 68,
-                                            byte_length: 5,
+                                            byte_length: 24,
                                         },
-                                        resolution: Unresolved,
+                                        call_kind: Unresolved,
                                     },
-                                    args: [
-                                        Literal {
-                                            literal: String {
-                                                value: "small or medium",
-                                                raw: false,
-                                            },
-                                            ty: Var {
-                                                id: uninferred,
-                                            },
-                                            span: Span {
-                                                file_id: 0,
-                                                byte_offset: 74,
-                                                byte_length: 17,
-                                            },
-                                        },
-                                    ],
-                                    spread: None,
-                                    type_arguments: None,
-                                    ty: Var {
-                                        id: uninferred,
-                                    },
-                                    span: Span {
-                                        file_id: 0,
-                                        byte_offset: 68,
-                                        byte_length: 24,
-                                    },
-                                    call_kind: None,
+                                ],
+                                ty: Var {
+                                    id: uninferred,
                                 },
-                            ],
-                            ty: Var {
-                                id: uninferred,
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 62,
+                                    byte_length: 35,
+                                },
                             },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 62,
-                                byte_length: 35,
-                            },
-                        },
+                        ),
                         ty: Var {
                             id: uninferred,
                         },

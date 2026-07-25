@@ -158,10 +158,10 @@ impl Planner<'_> {
                 .definition(id)
                 .is_some_and(|d| d.visibility.is_public())
         };
-        let own_candidate = |name: &str| syntax::go_names::ConformanceCandidate {
+        let own_candidate = |name: &str| syntax::go_names::ConformanceCandidate::Resolved {
             exported: is_public_definition(&format!("{source_id}.{name}")),
             depth: 0,
-            owner: Some(source_id.as_eco().clone()),
+            owner: source_id.as_eco().clone(),
             shadowed: self.facts.is_ufcs_method(source_id.as_str(), name),
         };
 

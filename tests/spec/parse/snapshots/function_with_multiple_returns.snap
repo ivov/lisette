@@ -1,13 +1,6 @@
 ---
 source: tests/spec/parse/mod.rs
-description: |
-  
-  fn abs(x: int) -> int {
-    if x < 0 {
-      return -x;
-    }
-    return x;
-  }
+description: "\nfn abs(x: int) -> int {\n  if x < 0 {\n    return -x;\n  }\n  return x;\n}\n"
 ---
 [
     Function {
@@ -145,16 +138,7 @@ description: |
                                 byte_length: 20,
                             },
                         },
-                        alternative: Unit {
-                            ty: Var {
-                                id: uninferred,
-                            },
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 27,
-                                byte_length: 29,
-                            },
-                        },
+                        alternative: None,
                         ty: Var {
                             id: uninferred,
                         },

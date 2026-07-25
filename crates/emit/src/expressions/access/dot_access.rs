@@ -1,4 +1,4 @@
-use syntax::ast::{Expression, StructKind};
+use syntax::ast::{Expression, StructFields};
 use syntax::program::{
     Definition, DefinitionBody, DotAccessKind as SemanticDotKind, ReceiverCoercion,
 };
@@ -366,8 +366,7 @@ impl Planner<'_> {
         let Some(Definition {
             body:
                 DefinitionBody::Struct {
-                    kind,
-                    fields,
+                    fields: StructFields::Tuple(fields),
                     generics,
                     ..
                 },
@@ -376,10 +375,6 @@ impl Planner<'_> {
         else {
             return None;
         };
-
-        if *kind != StructKind::Tuple {
-            return None;
-        }
 
         if fields.len() == 1 && generics.is_empty() {
             let underlying_ty = self.go_type_string(&fields[0].ty);

@@ -647,28 +647,19 @@ impl TaskState {
     /// Resolves the value type for a definition. Returns the constructor type for
     /// structs with constructors (tuple structs) and for type aliases pointing to them.
     fn resolve_definition_value_type(&self, store: &Store, definition: &Definition) -> Type {
-        if let DefinitionBody::Struct {
-            constructor: Some(ctor_ty),
-            ..
-        } = &definition.body
-        {
-            return ctor_ty.clone();
+        if let Some(constructor_ty) = definition.constructor_type() {
+            return constructor_ty;
         }
 
         // Type alias to tuple struct should return constructor type.
         if let DefinitionBody::TypeAlias { .. } = &definition.body {
             let underlying = store.peel_alias(&definition.ty);
             if let Type::Nominal { id, .. } = &underlying
-                && let Some(Definition {
-                    body:
-                        DefinitionBody::Struct {
-                            constructor: Some(ctor_ty),
-                            ..
-                        },
-                    ..
-                }) = store.get_definition(id)
+                && let Some(constructor_ty) = store
+                    .get_definition(id)
+                    .and_then(Definition::constructor_type)
             {
-                return ctor_ty.clone();
+                return constructor_ty;
             }
         }
 
@@ -995,15 +986,9 @@ impl TaskState {
                 let simple_name = qn
                     .strip_prefix(&module_prefix)
                     .expect("qualified_name must start with module prefix");
-                let ty = if let DefinitionBody::Struct {
-                    constructor: Some(ctor_ty),
-                    ..
-                } = &definition.body
-                {
-                    ctor_ty.clone()
-                } else {
-                    definition.ty.clone()
-                };
+                let ty = definition
+                    .constructor_type()
+                    .unwrap_or_else(|| definition.ty.clone());
                 StructFieldDefinition {
                     doc: None,
                     attributes: vec![],

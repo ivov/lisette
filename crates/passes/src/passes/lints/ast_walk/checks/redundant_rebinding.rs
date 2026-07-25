@@ -59,7 +59,7 @@ pub fn check_redundant_rebinding(expression: &Expression, ctx: &NodeCtx) {
         .facts
         .bindings
         .get(outer_id)
-        .is_some_and(|b| !b.kind.is_mutable() && !b.mutation.happened());
+        .is_some_and(|b| !b.kind.is_mutable() && b.mutation.is_none());
     if !outer_is_stable {
         return;
     }
@@ -68,7 +68,7 @@ pub fn check_redundant_rebinding(expression: &Expression, ctx: &NodeCtx) {
         .facts
         .bindings
         .values()
-        .any(|b| b.span == *new_span && b.used && !b.mutation.happened());
+        .any(|b| b.span == *new_span && b.used && b.mutation.is_none());
     if !new_is_plain_use {
         return;
     }

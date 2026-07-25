@@ -74,7 +74,7 @@ description: "fn test() { let result = x |> func; }"
                                 byte_offset: 25,
                                 byte_length: 9,
                             },
-                            call_kind: None,
+                            call_kind: Unresolved,
                         },
                         mode: Plain,
                         ty: Var {

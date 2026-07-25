@@ -533,10 +533,8 @@ fn store_get_definition_domain_style_go_module() {
             doc: None,
             body: syntax::program::DefinitionBody::Struct {
                 generics: vec![],
-                fields: vec![],
-                kind: syntax::ast::StructKind::Record,
+                fields: syntax::ast::StructFields::Record(vec![]),
                 methods: Default::default(),
-                constructor: None,
                 attributes: Default::default(),
             },
         },

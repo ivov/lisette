@@ -1,5 +1,5 @@
 use super::{MAX_TUPLE_ARITY, Parser};
-use crate::ast::{Expression, MatchArm, Span};
+use crate::ast::{Expression, IfLetAlternative, MatchArm, Span};
 use crate::lex::TokenKind::*;
 use crate::types::Type;
 
@@ -90,22 +90,19 @@ impl<'source> Parser<'source> {
 
             let alternative = if parser.advance_if(Else) {
                 if parser.is(If) {
-                    parser.parse_if()
+                    Some(parser.parse_if().into())
                 } else {
-                    parser.parse_block_expression()
+                    Some(parser.parse_block_expression().into())
                 }
             } else {
-                Expression::Unit {
-                    ty: Type::uninferred(),
-                    span: parser.span_from_tokens(start),
-                }
+                None
             };
 
             Expression::If {
                 ty: Type::uninferred(),
                 condition: condition.into(),
                 consequence: consequence.into(),
-                alternative: alternative.into(),
+                alternative,
                 span: parser.span_from_tokens(start),
             }
         }) {
@@ -127,7 +124,7 @@ impl<'source> Parser<'source> {
         let scrutinee = self.parse_control_flow_header();
         let consequence = self.parse_block_expression();
 
-        let (alternative, else_span) = if self.is(Else) {
+        let alternative = if self.is(Else) {
             let else_token = self.current_token();
             let else_span = Span::new(self.file_id, else_token.byte_offset, else_token.byte_length);
             self.next(); // consume `else`
@@ -136,23 +133,19 @@ impl<'source> Parser<'source> {
             } else {
                 self.parse_block_expression()
             };
-            (alt, Some(else_span))
+            IfLetAlternative::Present {
+                expression: alt.into(),
+                else_span,
+            }
         } else {
-            (
-                Expression::Unit {
-                    ty: Type::uninferred(),
-                    span: self.span_from_tokens(start),
-                },
-                None,
-            )
+            IfLetAlternative::Absent
         };
 
         Expression::IfLet {
             pattern,
             scrutinee: scrutinee.into(),
             consequence: consequence.into(),
-            alternative: alternative.into(),
-            else_span,
+            alternative,
             ty: Type::uninferred(),
             span: self.span_from_tokens(start),
         }

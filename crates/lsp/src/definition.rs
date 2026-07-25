@@ -401,7 +401,8 @@ pub(crate) fn resolve_enum_in_pattern(
                         .get(qualified.as_str())
                         .and_then(|d| d.name_span)
                 }
-                ConstructorPatternResolution::Const { qualified_name, .. } => snapshot
+                ConstructorPatternResolution::Const { qualified_name }
+                | ConstructorPatternResolution::ConstValue { qualified_name, .. } => snapshot
                     .definitions()
                     .get(qualified_name.as_str())
                     .and_then(|d| d.name_span),

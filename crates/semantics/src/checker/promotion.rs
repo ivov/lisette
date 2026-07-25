@@ -425,7 +425,7 @@ fn instantiate_method(store: &Store, container: &Type, method_ty: &Type) -> Opti
 #[cfg(test)]
 mod tests {
     use super::*;
-    use syntax::ast::{Annotation, Span, StructFieldDefinition, StructKind};
+    use syntax::ast::{Annotation, Span, StructFieldDefinition, StructFields};
     use syntax::program::Visibility as ProgVis;
     use syntax::program::{Attributes, Definition, DefinitionBody, Interface};
     use syntax::types::FunctionParameter;
@@ -514,10 +514,8 @@ mod tests {
                 name,
                 DefinitionBody::Struct {
                     generics: vec![],
-                    fields,
-                    kind: StructKind::Record,
+                    fields: StructFields::Record(fields),
                     methods: method_map,
-                    constructor: None,
                     attributes: Attributes::default(),
                 },
             )
@@ -541,10 +539,8 @@ mod tests {
                         .into_iter()
                         .map(|g| Generic::new(g, vec![], Span::dummy()))
                         .collect(),
-                    fields,
-                    kind: StructKind::Record,
+                    fields: StructFields::Record(fields),
                     methods: method_map,
-                    constructor: None,
                     attributes: Attributes::default(),
                 },
             )

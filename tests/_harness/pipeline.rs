@@ -258,7 +258,9 @@ impl CompiledTest {
                 if !b.used {
                     unused.mark_binding_unused(b.span);
                 }
-                mutations.record(binding_id, b.mutation);
+                if let Some(mutation) = b.mutation {
+                    mutations.record(binding_id, mutation);
+                }
             }
 
             let ufcs_methods = checker.take_ufcs_methods();

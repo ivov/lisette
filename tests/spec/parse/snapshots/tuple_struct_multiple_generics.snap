@@ -36,57 +36,58 @@ description: |
                 },
             },
         ],
-        fields: [
-            StructFieldDefinition {
-                doc: None,
-                attributes: [],
-                name: "_0",
-                name_span: Span {
-                    file_id: 0,
-                    byte_offset: 19,
-                    byte_length: 1,
-                },
-                annotation: Constructor {
-                    name: "A",
-                    params: [],
-                    span: Span {
+        fields: Tuple(
+            [
+                StructFieldDefinition {
+                    doc: None,
+                    attributes: [],
+                    name: "_0",
+                    name_span: Span {
                         file_id: 0,
                         byte_offset: 19,
                         byte_length: 1,
                     },
+                    annotation: Constructor {
+                        name: "A",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 19,
+                            byte_length: 1,
+                        },
+                    },
+                    visibility: Private,
+                    ty: Var {
+                        id: uninferred,
+                    },
+                    embedded: false,
                 },
-                visibility: Private,
-                ty: Var {
-                    id: uninferred,
-                },
-                embedded: false,
-            },
-            StructFieldDefinition {
-                doc: None,
-                attributes: [],
-                name: "_1",
-                name_span: Span {
-                    file_id: 0,
-                    byte_offset: 22,
-                    byte_length: 1,
-                },
-                annotation: Constructor {
-                    name: "B",
-                    params: [],
-                    span: Span {
+                StructFieldDefinition {
+                    doc: None,
+                    attributes: [],
+                    name: "_1",
+                    name_span: Span {
                         file_id: 0,
                         byte_offset: 22,
                         byte_length: 1,
                     },
+                    annotation: Constructor {
+                        name: "B",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 22,
+                            byte_length: 1,
+                        },
+                    },
+                    visibility: Private,
+                    ty: Var {
+                        id: uninferred,
+                    },
+                    embedded: false,
                 },
-                visibility: Private,
-                ty: Var {
-                    id: uninferred,
-                },
-                embedded: false,
-            },
-        ],
-        kind: Tuple,
+            ],
+        ),
         visibility: Private,
         span: Span {
             file_id: 0,

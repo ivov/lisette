@@ -219,7 +219,7 @@ description: |
                                         byte_offset: 92,
                                         byte_length: 8,
                                     },
-                                    call_kind: None,
+                                    call_kind: Unresolved,
                                 },
                                 Assignment {
                                     target: Identifier {

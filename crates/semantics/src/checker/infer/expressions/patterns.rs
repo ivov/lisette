@@ -459,15 +459,12 @@ impl InferCtx<'_> {
             return Some(ty);
         }
         let definition = self.resolve_struct_definition(identifier)?;
-        match &definition.body {
-            DefinitionBody::Struct {
-                constructor: Some(constructor_ty),
-                ..
-            } => Some(constructor_ty.clone()),
-            _ if !is_bare_name && self.scrutinee_is_interface(expected_ty) => {
-                Some(definition.ty.clone())
-            }
-            _ => None,
+        if let Some(constructor_ty) = definition.constructor_type() {
+            Some(constructor_ty)
+        } else if !is_bare_name && self.scrutinee_is_interface(expected_ty) {
+            Some(definition.ty.clone())
+        } else {
+            None
         }
     }
 
@@ -588,7 +585,6 @@ impl InferCtx<'_> {
         }
 
         let (const_ty, _) = self.instantiate(definition_ty);
-        let const_value = definition.const_value().cloned();
         let unify_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
         self.unify(&unify_expected, &const_ty, &span);
 
@@ -597,14 +593,21 @@ impl InferCtx<'_> {
         }
 
         let resolved_ty = const_ty.resolve_in(&self.env);
+        let resolution = match definition.const_value().cloned() {
+            Some(value) => ConstructorPatternResolution::ConstValue {
+                qualified_name: qualified,
+                value,
+            },
+            None => ConstructorPatternResolution::Const {
+                qualified_name: qualified,
+            },
+        };
+
         Some(Pattern::EnumVariant {
             identifier: identifier.into(),
             fields: vec![],
             rest,
-            resolution: ConstructorPatternResolution::Const {
-                qualified_name: qualified,
-                value: const_value,
-            },
+            resolution,
             ty: resolved_ty,
             span,
         })

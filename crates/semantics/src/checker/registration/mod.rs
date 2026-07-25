@@ -18,7 +18,7 @@ use crate::call_classification::compute_module_ufcs;
 use crate::diagnostics::{GoImportSite, emit_for_locator_result};
 use syntax::ast::{
     Annotation, Attribute, AttributeArg, Binding, EnumVariant, Expression, Generic, Span,
-    StructKind, VariantFields, Visibility as SyntacticVisibility,
+    StructFields, VariantFields, Visibility as SyntacticVisibility,
 };
 use syntax::attributes::struct_attribute_forces_field_export;
 use syntax::program::{
@@ -839,7 +839,7 @@ impl TaskState {
                     self.register_variable_declaration(store, item, visibility)
                 }
                 Expression::Struct {
-                    kind: StructKind::Tuple,
+                    fields: StructFields::Tuple(_),
                     ..
                 } => self.register_tuple_struct_constructor(store, item),
                 _ => (),
@@ -985,7 +985,10 @@ impl TaskState {
             ));
         }
 
-        let const_value = expression.value().and_then(canonical_const_literal);
+        let kind = match expression.value().and_then(canonical_const_literal) {
+            Some(value) => syntax::program::ValueKind::Constant(value),
+            None => syntax::program::ValueKind::ConstantDeclaration,
+        };
 
         self.current_module_mut(store).definitions.insert(
             qualified_name,
@@ -996,7 +999,7 @@ impl TaskState {
                 name_span: Some(*identifier_span),
                 doc: doc.clone(),
                 body: DefinitionBody::Value {
-                    kind: syntax::program::ValueKind::Constant { value: const_value },
+                    kind,
                     allowed_lints: vec![],
                     go_hints: vec![],
                     go_name: None,
@@ -1061,10 +1064,7 @@ impl TaskState {
     fn register_tuple_struct_constructor(&mut self, store: &mut Store, item: &Expression) {
         let Expression::Struct {
             name,
-            generics,
-            fields,
-            kind: StructKind::Tuple,
-            span,
+            fields: StructFields::Tuple(_),
             ..
         } = item
         else {
@@ -1072,34 +1072,14 @@ impl TaskState {
         };
 
         let qualified_name = self.qualify_name(name);
-        let struct_ty = store
-            .get_type(&qualified_name)
-            .expect("struct type scheme must exist")
-            .clone();
-
-        self.scopes.push();
-        self.put_in_scope(generics);
-
-        let field_types: Vec<Type> = fields
-            .iter()
-            .map(|f| self.convert_to_type(&*store, &f.annotation, span))
-            .collect();
-
-        self.scopes.pop();
-
-        let constructor_ty =
-            tuple_struct_constructor_type_from_fields(&field_types, &struct_ty, generics);
+        let constructor_ty = store
+            .get_definition(&qualified_name)
+            .and_then(Definition::constructor_type)
+            .expect("tuple struct definition must have a constructor type");
 
         let scope = self.scopes.current_mut();
         scope.insert_value(qualified_name.to_string(), constructor_ty.clone());
         scope.insert_value(name.to_string(), constructor_ty.clone());
-
-        let module = self.current_module_mut(store);
-        if let Some(def) = module.definitions.get_mut(qualified_name.as_str())
-            && let DefinitionBody::Struct { constructor, .. } = &mut def.body
-        {
-            *constructor = Some(constructor_ty);
-        }
     }
 
     pub(crate) fn extract_signature_parts(
@@ -1278,36 +1258,6 @@ pub(super) fn enum_variant_constructor_type(
             .fields
             .iter()
             .map(|field| FunctionParameter::new(field.ty.clone(), false))
-            .collect(),
-        Default::default(),
-        return_type.into(),
-    );
-
-    if generics.is_empty() {
-        fn_ty
-    } else {
-        Type::Forall {
-            vars: generics.iter().map(|g| g.name.clone()).collect(),
-            body: Box::new(fn_ty),
-        }
-    }
-}
-
-fn tuple_struct_constructor_type_from_fields(
-    field_types: &[Type],
-    struct_ty: &Type,
-    generics: &[Generic],
-) -> Type {
-    let return_type = match struct_ty {
-        Type::Forall { body, .. } => body.as_ref().clone(),
-        _ => struct_ty.clone(),
-    };
-
-    let fn_ty = Type::function(
-        field_types
-            .iter()
-            .cloned()
-            .map(|ty| FunctionParameter::new(ty, false))
             .collect(),
         Default::default(),
         return_type.into(),

@@ -721,7 +721,7 @@ fn is_native_method_call(expression: &Expression) -> bool {
     matches!(
         expression.unwrap_parens(),
         Expression::Call {
-            call_kind: Some(CallKind::NativeMethod(_) | CallKind::NativeMethodIdentifier(_)),
+            call_kind: CallKind::NativeMethod(_) | CallKind::NativeMethodIdentifier(_),
             ..
         }
     )
