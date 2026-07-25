@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:unicode"
+  
+  fn main() {
+    let cs: Slice<rune> = ['a', '1']
+    let letters = cs.filter(unicode.IsLetter)
+    let _ = letters
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"unicode"
+)
+
+func main() {
+	cs := []rune{'a', '1'}
+	letters := lisette.SliceFilter(cs, unicode.IsLetter)
+	_ = letters
+}

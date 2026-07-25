@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/idx"
+  
+  fn main() {
+    let xs: Slice<string> = ["hello"]
+    let ys = xs.map(idx.Find)
+    let _ = ys
+  }
+---
+package main
+
+import (
+	"example.com/idx"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	xs := []string{"hello"}
+	ys := lisette.SliceMap(xs, func(arg0 string) lisette.Option[int] {
+		ret_1 := idx.Find(arg0)
+		return lisette.OptionFromCommaOk[int](ret_1, ret_1 != -1)
+	})
+	_ = ys
+}

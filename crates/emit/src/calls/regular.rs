@@ -621,9 +621,7 @@ impl<'a> Planner<'a> {
             .facts
             .resolve_to_function_type(param_ty.unwrap_forall())?;
         let param_ret = param_fn.get_function_ret()?;
-        let param_abi = self
-            .classify_direct_emission(param_ret)
-            .unwrap_or_else(|| self.value_return_abi(param_ret));
+        let param_abi = self.callable_return_abi(param_ret);
 
         let arg_ty = arg.get_type();
         let arg_fn = self
@@ -687,9 +685,7 @@ impl<'a> Planner<'a> {
             .facts
             .resolve_to_function_type(variadic_inner.unwrap_forall())?;
         let param_ret = param_fn.get_function_ret()?;
-        let param_abi = self
-            .classify_direct_emission(param_ret)
-            .unwrap_or_else(|| self.value_return_abi(param_ret));
+        let param_abi = self.callable_return_abi(param_ret);
 
         let spread_ty = spread.get_type();
         let element_ty = spread_ty.unwrap_forall().inner()?;

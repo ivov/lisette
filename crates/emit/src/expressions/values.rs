@@ -31,25 +31,29 @@ impl Planner<'_> {
             && matches!(callee.origin, CallableOrigin::GoInterop)
         {
             let abi = &callee.abi.result;
-            let source_layout = ValueLayout::Function {
-                function_type: expression.get_type(),
-                layout: callee.abi.function_layout(),
-            };
+            let matches_slot = self.go_fn_slot_abi(expression, ctx).as_ref() == Some(abi);
             let target_layout = self.value_layout(&expression.get_type(), SlotOrigin::Lisette);
-            let same_abi = matches!(
-                &target_layout,
-                ValueLayout::Function { layout, .. } if layout.return_abi == *abi
-            );
-            let layout_coercion = CoercionPlan::bridge(self, &source_layout, &target_layout);
-            if !ctx.is_callee() && same_abi && !layout_coercion.is_identity() {
-                let value = self.plan_operand(expression, ctx);
-                return value.map_rendered_as_computed(|setup, value, _| {
-                    let (bridge_setup, value) = layout_coercion.lower(self, value);
-                    setup.extend(bridge_setup);
-                    GoExpression::opaque_with_deferred_evaluation(value, true)
-                });
+            let same_abi = matches_slot
+                && matches!(
+                    &target_layout,
+                    ValueLayout::Function { layout, .. } if layout.return_abi == *abi
+                );
+            if !ctx.is_callee() && same_abi {
+                let source_layout = ValueLayout::Function {
+                    function_type: expression.get_type(),
+                    layout: callee.abi.function_layout(),
+                };
+                let layout_coercion = CoercionPlan::bridge(self, &source_layout, &target_layout);
+                if !layout_coercion.is_identity() {
+                    let value = self.plan_operand(expression, ctx);
+                    return value.map_rendered_as_computed(|setup, value, _| {
+                        let (bridge_setup, value) = layout_coercion.lower(self, value);
+                        setup.extend(bridge_setup);
+                        GoExpression::opaque_with_deferred_evaluation(value, true)
+                    });
+                }
             }
-            if !self.go_fn_matches_lowered_slot(expression, abi, ctx) {
+            if !matches_slot {
                 let mut setup = Vec::new();
                 let value = if self.go_fn_needs_lowered_tuple_adapter(expression, abi, ctx) {
                     self.emit_go_fn_lowered_tuple_adapter(&mut setup, expression)
@@ -58,7 +62,7 @@ impl Planner<'_> {
                 {
                     self.emit_go_fn_sentinel_adapter(&mut setup, expression, *value)
                 } else {
-                    self.emit_go_fn_wrapper(&mut setup, expression, abi)
+                    self.emit_go_fn_wrapper(&mut setup, expression, &callee.abi)
                 };
                 return ValuePlan::computed(
                     setup,
@@ -171,25 +175,21 @@ impl Planner<'_> {
         emit_lisette_callback_wrapper(self, setup, &raw, fn_ty)
     }
 
-    /// True when a Go function value's natural ABI matches the slot's
-    /// lowered shape — wrapping would be identity.
-    fn go_fn_matches_lowered_slot(
+    /// Result ABI the slot expects from a Go function value, or `None` when
+    /// the value is not a function. A forced-tagged slot calls through a
+    /// Lisette-shaped callback, so it wants the tagged ABI, not the lowered one.
+    fn go_fn_slot_abi(
         &self,
         expression: &Expression,
-        source: &CallableReturnAbi,
         ctx: ExpressionContext<'_>,
-    ) -> bool {
-        if ctx.forces_tagged_go_function() {
-            return false;
-        }
+    ) -> Option<CallableReturnAbi> {
         let fn_ty = expression.get_type();
-        let Some(f) = fn_ty.as_function_type() else {
-            return false;
-        };
-        let target = self
-            .classify_direct_emission(&f.return_type)
-            .unwrap_or_else(|| self.value_return_abi(&f.return_type));
-        source == &target
+        let f = fn_ty.as_function_type()?;
+        Some(if ctx.forces_tagged_go_function() {
+            self.value_return_abi(&f.return_type)
+        } else {
+            self.callable_return_abi(&f.return_type)
+        })
     }
 
     /// True when a tuple-ok fallible Go function value must be wrapped to match a lowered slot.
@@ -199,29 +199,21 @@ impl Planner<'_> {
         source: &CallableReturnAbi,
         ctx: ExpressionContext<'_>,
     ) -> bool {
-        if ctx.forces_tagged_go_function() {
-            return false;
-        }
-        let fn_ty = expression.get_type();
-        let Some(f) = fn_ty.as_function_type() else {
-            return false;
-        };
-        let target = self
-            .classify_direct_emission(&f.return_type)
-            .unwrap_or_else(|| self.value_return_abi(&f.return_type));
         matches!(
-            (source, target),
+            (source, self.go_fn_slot_abi(expression, ctx)),
             (
                 CallableReturnAbi::Result {
                     payload: PayloadLayout::Flattened,
                 } | CallableReturnAbi::Partial {
                     payload: PayloadLayout::Flattened,
                 },
-                CallableReturnAbi::Result {
-                    payload: PayloadLayout::Packed,
-                } | CallableReturnAbi::Partial {
-                    payload: PayloadLayout::Packed,
-                }
+                Some(
+                    CallableReturnAbi::Result {
+                        payload: PayloadLayout::Packed,
+                    } | CallableReturnAbi::Partial {
+                        payload: PayloadLayout::Packed,
+                    }
+                )
             )
         )
     }

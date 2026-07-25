@@ -1,0 +1,40 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/aws"
+  
+  fn main() {
+    let keys: Slice<string> = ["k"]
+    let out = keys.map(aws.Fetch)
+    let _ = out
+  }
+---
+package main
+
+import (
+	"example.com/aws"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	keys := []string{"k"}
+	out := lisette.SliceMap(keys, func(arg0 string) lisette.Option[[]lisette.Option[string]] {
+		ret_1, ret_2 := aws.Fetch(arg0)
+		if ret_2 {
+			src_3 := ret_1
+			wrapped_4 := make([]lisette.Option[string], len(src_3))
+			for i_5, v_6 := range src_3 {
+				if v_6 != nil {
+					wrapped_4[i_5] = lisette.MakeOptionSome[string](*v_6)
+				} else {
+					wrapped_4[i_5] = lisette.MakeOptionNone[string]()
+				}
+			}
+			return lisette.MakeOptionSome[[]lisette.Option[string]](wrapped_4)
+		} else {
+			return lisette.MakeOptionNone[[]lisette.Option[string]]()
+		}
+	})
+	_ = out
+}

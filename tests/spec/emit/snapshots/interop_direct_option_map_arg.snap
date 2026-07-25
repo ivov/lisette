@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:strings"
+  
+  fn main() {
+    let s: Option<string> = Some("a")
+    let upper = s.map(strings.ToUpper)
+    let _ = upper
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"strings"
+)
+
+func main() {
+	s := lisette.MakeOptionSome("a")
+	upper := lisette.OptionMap(s, strings.ToUpper)
+	_ = upper
+}
