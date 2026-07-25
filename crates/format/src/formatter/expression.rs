@@ -539,6 +539,7 @@ impl<'a> Formatter<'a> {
             .append(strict_break("", " "))
             .append(self.expression(right_operand))
             .group()
+            .measure_flat()
     }
 
     fn pipeline(&mut self, left: &'a Expression, right: &'a Expression) -> Document<'a> {
@@ -670,8 +671,8 @@ impl<'a> Formatter<'a> {
                     .append("(")
                     .append(spread_doc.group().next_break_fits(true))
                     .append(")")
-                    .next_break_fits(false)
-                    .group();
+                    .group()
+                    .next_break_fits(false);
             }
             let mut entries = self.call_arg_entries(args);
             let spread_start = spread_expr.get_span().byte_offset;
@@ -679,15 +680,7 @@ impl<'a> Formatter<'a> {
             let spread_doc = self.expression(spread_expr).append(Document::str("..."));
             let (body, close_sep) =
                 Self::join_pattern_entries(entries, Some((spread_leading, spread_doc)), "");
-            return head
-                .append("(")
-                .append(strict_break("", ""))
-                .append(body)
-                .nest(INDENT_WIDTH)
-                .append(close_sep)
-                .append(")")
-                .next_break_fits(false)
-                .group();
+            return Self::wrap_args(head, body, close_sep).next_break_fits(false);
         }
 
         let Some((last, init)) = args
@@ -696,39 +689,26 @@ impl<'a> Formatter<'a> {
         else {
             let entries = self.call_arg_entries(args);
             let (body, close_sep) = Self::join_pattern_entries(entries, None, "");
-            return head
-                .append("(")
-                .append(strict_break("", ""))
-                .append(body)
-                .nest(INDENT_WIDTH)
-                .append(close_sep)
-                .append(")")
-                .group();
+            return Self::wrap_args(head, body, close_sep);
         };
 
-        if init.is_empty() {
-            let last_doc = self.expression(last).group().next_break_fits(true);
-            head.append("(")
-                .append(last_doc)
-                .append(")")
-                .next_break_fits(false)
-                .group()
-        } else {
-            let mut entries = self.call_arg_entries(init);
-            let last_start = last.get_span().byte_offset;
-            let last_leading = self.split_for_rest(&mut entries, last_start);
-            let last_doc = self.expression(last).group().next_break_fits(true);
-            let (body, close_sep) =
-                Self::join_pattern_entries(entries, Some((last_leading, last_doc)), "");
-            head.append("(")
-                .append(strict_break("", ""))
-                .append(body)
-                .nest(INDENT_WIDTH)
-                .append(close_sep)
-                .append(")")
-                .next_break_fits(false)
-                .group()
-        }
+        let mut entries = self.call_arg_entries(init);
+        let last_start = last.get_span().byte_offset;
+        let last_leading = self.split_for_rest(&mut entries, last_start);
+        let last_doc = self.expression(last).group().next_break_fits(true);
+        let (body, close_sep) =
+            Self::join_pattern_entries(entries, Some((last_leading, last_doc)), "");
+        Self::wrap_args(head, body, close_sep).next_break_fits(false)
+    }
+
+    fn wrap_args(head: Document<'a>, body: Document<'a>, close_sep: Document<'a>) -> Document<'a> {
+        head.append("(")
+            .append(strict_break("", ""))
+            .append(body)
+            .nest_if_broken(INDENT_WIDTH)
+            .append(close_sep)
+            .append(")")
+            .group()
     }
 
     fn call_arg_entries(&mut self, args: &'a [Expression]) -> Vec<PatternEntry<'a>> {
@@ -870,7 +850,7 @@ impl<'a> Formatter<'a> {
 
         Document::str(name)
             .append(" {")
-            .append(strict_break(" ", " "))
+            .append(strict_break("", " "))
             .append(body)
             .nest(INDENT_WIDTH)
             .append(close_sep)
@@ -919,6 +899,7 @@ impl<'a> Formatter<'a> {
                 .append(strict_break(",", ""))
                 .append("|")
                 .group()
+                .measure_flat()
         };
 
         let return_doc = if return_annotation.is_unknown() {

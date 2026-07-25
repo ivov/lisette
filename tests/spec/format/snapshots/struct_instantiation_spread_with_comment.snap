@@ -10,7 +10,7 @@ description: |-
   }
 ---
 fn test() {
-  Point { 
+  Point {
     x: 1,
     // inherit the rest
     ..other,

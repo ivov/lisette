@@ -717,6 +717,63 @@ fn lambda_with_block() {
 }
 
 #[test]
+fn lambda_arg_keeps_params_intact_in_overlong_call() {
+    assert_format_snapshot!(
+        "fn main() {\n  let handler = some_quite_long_method_name_which_causes_weird_formatting(|a_rather_long_parameter_name| a_rather_long_parameter_name + 1)\n}"
+    );
+}
+
+#[test]
+fn lambda_block_arg_keeps_params_intact_in_overlong_call() {
+    assert_format_snapshot!(
+        "fn main() {\n  let handler = some_quite_long_method_name_which_causes_weird_formatting(|a_rather_long_parameter_name| { a_rather_long_parameter_name + 1 })\n}"
+    );
+}
+
+#[test]
+fn lambda_block_arg_keeps_params_intact_after_leading_args() {
+    assert_format_snapshot!(
+        "fn main() {\n  let handler = some_quite_long_method_name(items, |a_rather_long_parameter_name| { a_rather_long_parameter_name + 1 })\n}"
+    );
+}
+
+#[test]
+fn lambda_arg_expands_call_instead_of_wrapping_body() {
+    assert_format_snapshot!(
+        "fn main() {\n  let z = f(first_arg, |x| a_very_long_name_one_here + a_very_long_name_two_here_x)\n}"
+    );
+}
+
+#[test]
+fn match_arg_expands_call_instead_of_wrapping_subject() {
+    assert_format_snapshot!(
+        "fn main() {\n  let z = f(first_arg, match a_scrutinee_name_one + a_scrutinee_name_two_here_long { 1 => 2, _ => 3 })\n}"
+    );
+}
+
+#[test]
+fn lambda_arg_hugs_through_nested_call() {
+    assert_format_snapshot!(
+        "fn f(items: Slice<int>, id: int) -> Result<Slice<int>, string> {\n  Ok(items.map(|t| if t.id == id { models.Task { status: models.Status.Done, ..t } } else { t }))\n}"
+    );
+}
+
+#[test]
+fn lambda_match_body_arg_hugs_call_parens() {
+    assert_format_snapshot!("fn test() { items.map(|x| match x { Some(v) => v, None => 0 }) }");
+}
+
+#[test]
+fn lambda_block_arg_hugs_call_parens() {
+    assert_format_snapshot!("fn test() { foo(|x| { x + 1 }) }");
+}
+
+#[test]
+fn lambda_block_arg_hugs_call_parens_after_leading_args() {
+    assert_format_snapshot!("fn test() { foo(a, b, |x| { x + 1 }) }");
+}
+
+#[test]
 fn loop_break() {
     assert_format_snapshot!("fn test() { loop { break } }");
 }

@@ -84,7 +84,7 @@ impl<'a> Formatter<'a> {
                     let (body, close_sep) = Self::join_pattern_entries(entries, rest_info, " ");
                     Document::string(identifier.to_string())
                         .append(" {")
-                        .append(strict_break(" ", " "))
+                        .append(strict_break("", " "))
                         .append(body)
                         .nest(INDENT_WIDTH)
                         .append(close_sep)

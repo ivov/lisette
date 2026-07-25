@@ -330,7 +330,7 @@ mod tests {
         let entries = vec![entry(None, "a", None)];
         let (body, close_sep) = Formatter::join_pattern_entries(entries, None, " ");
         let out = Document::str("{")
-            .append(strict_break(" ", " "))
+            .append(strict_break("", " "))
             .append(body)
             .nest(2)
             .append(close_sep)

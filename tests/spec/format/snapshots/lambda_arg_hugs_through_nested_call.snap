@@ -1,0 +1,14 @@
+---
+source: tests/spec/format/mod.rs
+description: |-
+  fn f(items: Slice<int>, id: int) -> Result<Slice<int>, string> {
+    Ok(items.map(|t| if t.id == id { models.Task { status: models.Status.Done, ..t } } else { t }))
+  }
+---
+fn f(items: Slice<int>, id: int) -> Result<Slice<int>, string> {
+  Ok(items.map(|t| if t.id == id {
+    models.Task { status: models.Status.Done, ..t }
+  } else {
+    t
+  }))
+}

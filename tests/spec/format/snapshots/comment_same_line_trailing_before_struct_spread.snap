@@ -11,7 +11,7 @@ description: |-
 struct Point { x: int, y: int }
 
 fn f(other: Point) -> Point {
-  Point { 
+  Point {
     x: 1, // trailing
     ..other,
   }
