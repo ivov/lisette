@@ -45,7 +45,8 @@ impl CompileMode {
     fn phase(self) -> CompilePhase {
         match self {
             Self::Check => CompilePhase::Check,
-            Self::Emit { .. } | Self::Test => CompilePhase::Emit,
+            Self::Emit { .. } => CompilePhase::Emit,
+            Self::Test => CompilePhase::Test,
         }
     }
 
@@ -174,7 +175,6 @@ pub fn compile(input: CompileInput<'_>, config: &CompileConfig, fs: &dyn Loader)
         project_root: config.scope.project_root(),
         compile_phase: config.mode.phase(),
         project_kind,
-        emit_tests,
         locator: config.locator.clone(),
         go_module: config.go_module.clone(),
         disable_cache,
@@ -324,6 +324,7 @@ mod tests {
             mode: match target_phase {
                 CompilePhase::Check => CompileMode::Check,
                 CompilePhase::Emit => CompileMode::Emit { sourcemap: false },
+                CompilePhase::Test => CompileMode::Test,
             },
             go_module: "test".to_string(),
             entry_package_name: entry_package_name.to_string(),
@@ -473,7 +474,6 @@ mod tests {
             project_root: Some(project_dir.to_path_buf()),
             compile_phase: CompilePhase::Check,
             project_kind: ProjectKind::Binary,
-            emit_tests: false,
             locator,
             go_module: "test".to_string(),
             disable_cache: false,
@@ -579,7 +579,6 @@ mod tests {
             project_root: Some(project_dir.to_path_buf()),
             compile_phase: CompilePhase::Check,
             project_kind: ProjectKind::Binary,
-            emit_tests: false,
             locator,
             go_module: "test".to_string(),
             disable_cache: false,

@@ -784,12 +784,12 @@ impl TaskState {
                 .unwrap_or_default();
             let value_types = declaration_value_position_types(definition);
 
-            self.scopes.push();
-            self.put_in_scope(&generics);
-            self.record_resolved_generic_bounds(&generics);
-            self.check_transitive_generic_bounds(store, &generics, span);
-            self.check_value_position_bounds(store, &generics, &value_types);
-            self.scopes.pop();
+            self.with_scope(|this| {
+                this.put_in_scope(&generics);
+                this.record_resolved_generic_bounds(&generics);
+                this.check_transitive_generic_bounds(store, &generics, span);
+                this.check_value_position_bounds(store, &generics, &value_types);
+            });
         }
     }
 
@@ -877,26 +877,28 @@ impl TaskState {
 
         let qualified_name = self.qualify_name(name);
 
-        self.scopes.push();
-        self.put_in_scope(generics);
+        let fn_ty = self.with_scope(|this| {
+            this.put_in_scope(generics);
 
-        let test_params;
-        let params: &[Binding] = if syntax::attributes::has_test_attribute(attributes) {
-            test_params = test_functions::normalize_test_params(params.clone(), true);
-            &test_params
-        } else {
-            params
-        };
+            let test_params;
+            let params: &[Binding] = if syntax::attributes::has_test_attribute(attributes) {
+                test_params = test_functions::normalize_test_params(params.clone(), true);
+                &test_params
+            } else {
+                params
+            };
 
-        let fn_ty = self.extract_signature_parts(store, generics, params, return_annotation, span);
+            let fn_ty =
+                this.extract_signature_parts(store, generics, params, return_annotation, span);
 
-        let (signature_pairs, signature_bounds) = function_signature_pairs(&fn_ty, params, *span);
-        for bound in &signature_bounds {
-            self.record_generic_bound(&bound.param_name, bound.ty.clone());
-        }
-        self.check_value_position_bounds(store, &[], &signature_pairs);
-
-        self.scopes.pop();
+            let (signature_pairs, signature_bounds) =
+                function_signature_pairs(&fn_ty, params, *span);
+            for bound in &signature_bounds {
+                this.record_generic_bound(&bound.param_name, bound.ty.clone());
+            }
+            this.check_value_position_bounds(store, &[], &signature_pairs);
+            fn_ty
+        });
 
         let item_visibility =
             self.compute_item_visibility(&*store, syntactic_visibility, visibility);
@@ -1090,30 +1092,30 @@ impl TaskState {
         return_annotation: &Annotation,
         span: &Span,
     ) -> Type {
-        self.scopes.push();
-        self.put_in_scope(generics);
-        let generics = self.resolve_generic_bounds(store, generics, span);
-        self.check_transitive_generic_bounds(store, &generics, *span);
-        let bounds = resolved_generic_bounds(&generics);
+        let (generics, bounds, param_types, return_ty) = self.with_scope(|this| {
+            this.put_in_scope(generics);
+            let generics = this.resolve_generic_bounds(store, generics, span);
+            this.check_transitive_generic_bounds(store, &generics, *span);
+            let bounds = resolved_generic_bounds(&generics);
 
-        let (param_types, return_ty) = self.without_diagnostics(|this| {
-            let param_types: Vec<Type> = params
-                .iter()
-                .map(|binding| match &binding.annotation {
-                    Some(a) => this.convert_variadic_to_type(store, a, span),
-                    None if !binding.ty.is_uninferred() => binding.ty.clone(),
-                    None => this.new_type_var(),
-                })
-                .collect();
+            let (param_types, return_ty) = this.without_diagnostics(|this| {
+                let param_types: Vec<Type> = params
+                    .iter()
+                    .map(|binding| match &binding.annotation {
+                        Some(a) => this.convert_variadic_to_type(store, a, span),
+                        None if !binding.ty.is_uninferred() => binding.ty.clone(),
+                        None => this.new_type_var(),
+                    })
+                    .collect();
 
-            let return_ty = match return_annotation {
-                Annotation::Unknown => this.type_unit(),
-                _ => this.convert_to_type(store, return_annotation, span),
-            };
-            (param_types, return_ty)
+                let return_ty = match return_annotation {
+                    Annotation::Unknown => this.type_unit(),
+                    _ => this.convert_to_type(store, return_annotation, span),
+                };
+                (param_types, return_ty)
+            });
+            (generics, bounds, param_types, return_ty)
         });
-
-        self.scopes.pop();
 
         let function_params = param_types
             .into_iter()

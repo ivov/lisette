@@ -53,16 +53,15 @@ impl InferCtx<'_> {
             self.new_type_var()
         };
 
-        if operator == Negative {
-            self.scopes.increment_negation_depth();
-        }
-
-        let new_expression =
-            self.with_value_context(|s| s.infer_expression(*operand, &operand_expected_ty));
-
-        if operator == Negative {
-            self.scopes.decrement_negation_depth();
-        }
+        let new_expression = if operator == Negative {
+            self.in_negation(|this| {
+                this.with_value_context(|this| {
+                    this.infer_expression(*operand, &operand_expected_ty)
+                })
+            })
+        } else {
+            self.with_value_context(|this| this.infer_expression(*operand, &operand_expected_ty))
+        };
         let operand_span = new_expression.get_span();
 
         let expression_ty = match operator {

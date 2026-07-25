@@ -205,7 +205,6 @@ fn emit_and_write(
         locator: TypedefLocator::default(),
         compile_phase: CompilePhase::Emit,
         project_kind: semantics::inference::ProjectKind::Binary,
-        emit_tests: false,
         go_module: module.clone(),
         disable_cache: true,
     });

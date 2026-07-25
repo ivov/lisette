@@ -104,28 +104,27 @@ impl InferCtx<'_> {
             .unwrap_or_else(|| ty.to_string());
         let pair = (type_id, interface_qualified_id.to_string());
 
-        if !self.satisfying_stack.insert(pair.clone()) {
+        let Some(violations) = self.with_satisfaction_check(pair, |this| {
+            let adapter_capable =
+                this.adapter_capable_receiver(ty, interface, interface_qualified_id);
+            let mut check = ConformanceTraversal {
+                receiver: ty,
+                span: *span,
+                adapter_capable,
+                violations: Vec::new(),
+                visiting: rustc_hash::FxHashSet::default(),
+            };
+            this.collect_interface_violations(
+                &mut check,
+                interface,
+                interface_qualified_id,
+                type_args,
+                None,
+            );
+            check.violations
+        }) else {
             return Ok(());
-        }
-
-        let adapter_capable = self.adapter_capable_receiver(ty, interface, interface_qualified_id);
-        let mut check = ConformanceTraversal {
-            receiver: ty,
-            span: *span,
-            adapter_capable,
-            violations: Vec::new(),
-            visiting: rustc_hash::FxHashSet::default(),
         };
-        self.collect_interface_violations(
-            &mut check,
-            interface,
-            interface_qualified_id,
-            type_args,
-            None,
-        );
-        let violations = check.violations;
-
-        self.satisfying_stack.remove(&pair);
 
         let builtin_receiver = self.is_builtin_receiver(ty);
 
@@ -201,6 +200,20 @@ impl InferCtx<'_> {
                 ));
         }
         Err(violations)
+    }
+
+    fn with_satisfaction_check<T>(
+        &mut self,
+        pair: (String, String),
+        check: impl FnOnce(&mut Self) -> T,
+    ) -> Option<T> {
+        if !self.satisfying_stack.insert(pair.clone()) {
+            return None;
+        }
+        let result = check(self);
+        let removed = self.satisfying_stack.remove(&pair);
+        debug_assert!(removed, "satisfaction check must remove its own guard");
+        Some(result)
     }
 
     fn is_builtin_receiver(&self, ty: &Type) -> bool {
@@ -599,34 +612,35 @@ impl InferCtx<'_> {
                 &map,
             );
 
-            if signature.receiver_pinned && signature.matched {
-                self.validate_comma_ok_abi(
-                    check,
-                    interface,
-                    interface_qualified_id,
-                    method_name,
-                    impl_method_name.as_str(),
-                );
-            }
-
-            if !signature.receiver_pinned {
-                method_violations.push(InterfaceMethodViolation::Missing(MissingMethod {
-                    name: method_name.to_string(),
-                    signature: method_ty.clone(),
-                    private_candidate: None,
-                }));
-            } else if !signature.matched {
-                method_violations.push(InterfaceMethodViolation::Incompatible {
-                    name: method_name.to_string(),
-                    expected: signature.substituted_method,
-                    actual: signature.incompatible_impl,
-                });
-            } else {
-                let spelling_pinned = syntax::go_names::interface_matches_by_source_name(
-                    interface_qualified_id,
-                    interface_is_public,
-                );
-                self.record_conformance_use(ty, impl_method_name.as_str(), spelling_pinned);
+            match signature {
+                SignatureCheck::Matched => {
+                    self.validate_comma_ok_abi(
+                        check,
+                        interface,
+                        interface_qualified_id,
+                        method_name,
+                        impl_method_name.as_str(),
+                    );
+                    let spelling_pinned = syntax::go_names::interface_matches_by_source_name(
+                        interface_qualified_id,
+                        interface_is_public,
+                    );
+                    self.record_conformance_use(ty, impl_method_name.as_str(), spelling_pinned);
+                }
+                SignatureCheck::ReceiverMismatch => {
+                    method_violations.push(InterfaceMethodViolation::Missing(MissingMethod {
+                        name: method_name.to_string(),
+                        signature: method_ty.clone(),
+                        private_candidate: None,
+                    }));
+                }
+                SignatureCheck::Incompatible { expected, actual } => {
+                    method_violations.push(InterfaceMethodViolation::Incompatible {
+                        name: method_name.to_string(),
+                        expected,
+                        actual,
+                    });
+                }
             }
         }
 
@@ -720,7 +734,7 @@ impl InferCtx<'_> {
             &impl_method,
             map,
         );
-        (signature.receiver_pinned && signature.matched).then_some(impl_name)
+        matches!(signature, SignatureCheck::Matched).then_some(impl_name)
     }
 
     fn check_method_signature(
@@ -767,33 +781,39 @@ impl InferCtx<'_> {
         )
         .unwrap_or_else(|| impl_method_without_receiver.clone());
 
-        let candidate_ty = ty.strip_refs().resolve_in(&self.env);
-        let mut receiver_pinned = true;
-        let mut resolved_impl_method = None;
-        self.scopes.enter_invariant_position();
-        let sig_match = self.speculatively(|this| {
-            let mut ctx = InferCtx::new(this, store);
-            if let Some(receiver) = &receiver_to_pin {
-                ctx.try_unify(receiver, &candidate_ty, &Span::dummy())
-                    .inspect_err(|_| receiver_pinned = false)?;
-            }
-            let result = ctx.try_unify(
-                &strip_bounds(&substituted_method),
-                &strip_bounds(&impl_for_unify),
-                &Span::dummy(),
-            );
-            if result.is_err() {
-                resolved_impl_method = Some(impl_method_without_receiver.resolve_in(&ctx.env));
-            }
-            result
-        });
-        self.scopes.exit_invariant_position();
+        enum Mismatch {
+            Receiver,
+            Signature,
+        }
 
-        SignatureCheck {
-            receiver_pinned,
-            matched: sig_match.is_ok(),
-            substituted_method,
-            incompatible_impl: resolved_impl_method.unwrap_or(impl_method_without_receiver),
+        let candidate_ty = ty.strip_refs().resolve_in(&self.env);
+        let mut resolved_impl_method = None;
+        let sig_match = self.in_invariant_position(|ctx| {
+            ctx.speculatively(|this| {
+                let mut ctx = InferCtx::new(this, store);
+                if let Some(receiver) = &receiver_to_pin {
+                    ctx.try_unify(receiver, &candidate_ty, &Span::dummy())
+                        .map_err(|_| Mismatch::Receiver)?;
+                }
+                ctx.try_unify(
+                    &strip_bounds(&substituted_method),
+                    &strip_bounds(&impl_for_unify),
+                    &Span::dummy(),
+                )
+                .map_err(|_| {
+                    resolved_impl_method = Some(impl_method_without_receiver.resolve_in(&ctx.env));
+                    Mismatch::Signature
+                })
+            })
+        });
+
+        match sig_match {
+            Ok(()) => SignatureCheck::Matched,
+            Err(Mismatch::Receiver) => SignatureCheck::ReceiverMismatch,
+            Err(Mismatch::Signature) => SignatureCheck::Incompatible {
+                expected: substituted_method,
+                actual: resolved_impl_method.unwrap_or(impl_method_without_receiver),
+            },
         }
     }
 
@@ -858,11 +878,10 @@ enum SelectedMethod {
     Missing,
 }
 
-struct SignatureCheck {
-    receiver_pinned: bool,
-    matched: bool,
-    substituted_method: Type,
-    incompatible_impl: Type,
+enum SignatureCheck {
+    Matched,
+    ReceiverMismatch,
+    Incompatible { expected: Type, actual: Type },
 }
 
 fn method_definition_public(

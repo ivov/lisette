@@ -7,6 +7,12 @@ use crate::checker::infer::{BuiltinBound, InferCtx};
 use crate::generics::{apply_bounds, bound_implied, type_argument_children};
 use crate::store::Store;
 
+#[derive(Clone, Copy)]
+enum BoundCheckContext {
+    Declaration,
+    Value,
+}
+
 impl TaskState {
     pub(crate) fn check_transitive_generic_bounds(
         &mut self,
@@ -19,7 +25,13 @@ impl TaskState {
                 .resolved_bounds()
                 .expect("generic bounds were resolved before checking")
             {
-                self.check_bound_type(store, own_generics, declaration_span, bound, true, false);
+                self.check_bound_type(
+                    store,
+                    own_generics,
+                    declaration_span,
+                    bound,
+                    BoundCheckContext::Declaration,
+                );
             }
         }
     }
@@ -33,7 +45,7 @@ impl TaskState {
         let mut seen = rustc_hash::FxHashSet::default();
         for (ty, span) in types {
             if seen.insert(ty.to_string()) {
-                self.check_bound_type(store, own_generics, *span, ty, false, true);
+                self.check_bound_type(store, own_generics, *span, ty, BoundCheckContext::Value);
             }
         }
     }
@@ -44,8 +56,7 @@ impl TaskState {
         own_generics: &[Generic],
         declaration_span: Span,
         ty: &Type,
-        check_map_keys: bool,
-        defer_to_interface_list: bool,
+        context: BoundCheckContext,
     ) {
         if let Type::Nominal { id, params, .. } = ty
             && !params.is_empty()
@@ -56,10 +67,10 @@ impl TaskState {
                 declaration_span,
                 id,
                 params,
-                defer_to_interface_list,
+                context,
             );
         }
-        if check_map_keys
+        if matches!(context, BoundCheckContext::Declaration)
             && let Type::Compound {
                 kind: CompoundKind::Map,
                 args,
@@ -69,14 +80,7 @@ impl TaskState {
             self.check_map_key_comparable(store, key, declaration_span);
         }
         for child in type_argument_children(ty) {
-            self.check_bound_type(
-                store,
-                own_generics,
-                declaration_span,
-                child,
-                check_map_keys,
-                defer_to_interface_list,
-            );
+            self.check_bound_type(store, own_generics, declaration_span, child, context);
         }
     }
 
@@ -87,7 +91,7 @@ impl TaskState {
         declaration_span: Span,
         referenced_id: &str,
         argument_types: &[Type],
-        defer_to_interface_list: bool,
+        context: BoundCheckContext,
     ) {
         let Some(definition) = store.get_definition(referenced_id) else {
             return;
@@ -105,7 +109,7 @@ impl TaskState {
             {
                 continue;
             }
-            if defer_to_interface_list
+            if matches!(context, BoundCheckContext::Value)
                 && resolved_required
                     .get_qualified_id()
                     .and_then(BuiltinBound::from_qualified_id)
@@ -143,15 +147,17 @@ impl TaskState {
                     .get_qualified_id()
                     .is_some_and(|id| store.get_interface(id).is_some())
             {
-                if defer_to_interface_list {
-                    self.pending_interface_bound_checks.push((
+                match context {
+                    BoundCheckContext::Declaration => self.pending_generic_bound_checks.push((
                         argument,
                         required,
                         declaration_span,
-                    ));
-                } else {
-                    self.pending_generic_bound_checks
-                        .push((argument, required, declaration_span));
+                    )),
+                    BoundCheckContext::Value => self.pending_interface_bound_checks.push((
+                        argument,
+                        required,
+                        declaration_span,
+                    )),
                 }
             }
         }

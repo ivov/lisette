@@ -2,7 +2,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::LocalSink;
 use semantics::module_graph::kahn::topological_sort;
-use semantics::module_graph::{ModuleGraphOptions, Roots, build_module_graph};
+use semantics::module_graph::{DependencyGraph, ModuleGraphOptions, Roots, build_module_graph};
 use semantics::store::Store;
 
 use crate::_harness::filesystem::MockFileSystem;
@@ -50,7 +50,7 @@ fn kahn_simple_dependency_chain() {
     edges.insert("b".to_string(), HashSet::from_iter(["c".to_string()]));
     edges.insert("c".to_string(), HashSet::default());
 
-    let (order, cycles) = topological_sort(&edges);
+    let (order, cycles) = topological_sort(&DependencyGraph::from(edges));
 
     assert!(cycles.is_empty());
     let pos_a = order.iter().position(|x| x == "a").unwrap();
@@ -71,7 +71,7 @@ fn kahn_diamond_dependency() {
     edges.insert("c".to_string(), HashSet::from_iter(["d".to_string()]));
     edges.insert("d".to_string(), HashSet::default());
 
-    let (order, cycles) = topological_sort(&edges);
+    let (order, cycles) = topological_sort(&DependencyGraph::from(edges));
 
     assert!(cycles.is_empty());
     let pos_a = order.iter().position(|x| x == "a").unwrap();
@@ -91,7 +91,7 @@ fn kahn_simple_cycle() {
     edges.insert("b".to_string(), HashSet::from_iter(["c".to_string()]));
     edges.insert("c".to_string(), HashSet::from_iter(["a".to_string()]));
 
-    let (_, cycles) = topological_sort(&edges);
+    let (_, cycles) = topological_sort(&DependencyGraph::from(edges));
 
     assert!(!cycles.is_empty());
 }
@@ -103,7 +103,7 @@ fn kahn_no_dependencies() {
     edges.insert("b".to_string(), HashSet::default());
     edges.insert("c".to_string(), HashSet::default());
 
-    let (order, cycles) = topological_sort(&edges);
+    let (order, cycles) = topological_sort(&DependencyGraph::from(edges));
 
     assert!(cycles.is_empty());
     assert_eq!(order.len(), 3);
@@ -127,16 +127,42 @@ fn test_only_imports_excluded_from_production_edges() {
     );
 
     assert!(
-        result.edges["math"].contains("fixture"),
+        result.dependencies.contains_dependency("math", "fixture"),
         "a test-file import must still be a graph edge for reachability"
     );
     assert!(
-        !result.production_edges["math"].contains("fixture"),
+        !result
+            .dependencies
+            .contains_production_dependency("math", "fixture"),
         "a test-only import must not enter production edges that importers key on"
     );
     assert!(
-        !result.production_edges["main"].contains("fixture"),
+        !result
+            .dependencies
+            .contains_production_dependency("main", "fixture"),
         "the test-only dependency must not propagate to production importers"
+    );
+}
+
+#[test]
+fn production_import_classification_wins_when_tests_import_the_same_module() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("main", "main.lis", r#"import "fixture""#);
+    fs.add_file("main", "main.test.lis", r#"import "fixture""#);
+    fs.add_file("fixture", "fixture.lis", "pub fn sample() -> int { 2 }");
+
+    let mut store = Store::new();
+    let sink = LocalSink::new();
+    let result = build_module_graph(
+        &mut store,
+        roots("main"),
+        graph_options(&fs, &sink, &default_resolver(), false),
+    );
+
+    assert!(
+        result
+            .dependencies
+            .contains_production_dependency("main", "fixture")
     );
 }
 
@@ -222,7 +248,7 @@ fn additional_roots_widen_graph_but_not_reachable_set() {
     );
 
     assert!(result.order.iter().any(|m| m == "orphan"));
-    assert!(result.edges.contains_key("orphan"));
+    assert!(result.dependencies.contains_module("orphan"));
     assert!(result.files.contains_key("orphan"));
     assert!(
         !result.primary_reachable.contains("orphan"),
@@ -307,7 +333,6 @@ fn check_analyzes_orphan_and_surfaces_its_error() {
         project_root: Some(tmp.path().to_path_buf()),
         compile_phase: CompilePhase::Check,
         project_kind: semantics::inference::ProjectKind::Binary,
-        emit_tests: false,
         locator: deps::TypedefLocator::default(),
         go_module: String::new(),
         disable_cache: true,
@@ -364,7 +389,6 @@ fn check_analyzes_tests_in_declaration_only_module() {
         project_root: Some(tmp.path().to_path_buf()),
         compile_phase: CompilePhase::Check,
         project_kind: semantics::inference::ProjectKind::Binary,
-        emit_tests: false,
         locator: deps::TypedefLocator::default(),
         go_module: String::new(),
         disable_cache: true,
@@ -736,7 +760,6 @@ fn main() {
         project_root: None,
         compile_phase: CompilePhase::Check,
         project_kind: semantics::inference::ProjectKind::Binary,
-        emit_tests: false,
         locator: resolver,
         go_module: String::new(),
         disable_cache: false,
@@ -831,7 +854,6 @@ fn main() {
         project_root: None,
         compile_phase: CompilePhase::Check,
         project_kind: semantics::inference::ProjectKind::Binary,
-        emit_tests: false,
         locator: resolver.clone(),
         go_module: String::new(),
         disable_cache: false,
@@ -862,7 +884,6 @@ fn main() {
         project_root: None,
         compile_phase: CompilePhase::Check,
         project_kind: semantics::inference::ProjectKind::Binary,
-        emit_tests: false,
         locator: resolver,
         go_module: String::new(),
         disable_cache: false,

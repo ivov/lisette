@@ -209,9 +209,8 @@ impl InferCtx<'_> {
         expected_ty: &Type,
     ) -> Expression {
         let expression_ty = self.new_type_var();
-        let prior_dot_access_base = self.scopes.set_dot_access_base(true);
-        let new_expression = self.infer_expression(*expression, &expression_ty);
-        self.scopes.set_dot_access_base(prior_dot_access_base);
+        let new_expression =
+            self.with_dot_access_base(|state| state.infer_expression(*expression, &expression_ty));
         let resolved_expression_ty =
             self.normalize_aliased_ref(expression_ty.resolve_in(&self.env));
 

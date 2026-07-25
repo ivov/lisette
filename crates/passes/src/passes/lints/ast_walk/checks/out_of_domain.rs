@@ -132,7 +132,10 @@ fn negate_literal(literal: &Literal, base: SimpleKind) -> Option<DomainValue> {
 }
 
 fn is_member(domain: &ClosedDomain, value: &DomainValue) -> bool {
-    domain.members.iter().any(|member| member.value == *value)
+    domain
+        .members
+        .iter()
+        .any(|member| member.value(domain.base) == *value)
 }
 
 fn emit(span: Span, domain: &ClosedDomain, ctx: &NodeCtx) {
@@ -145,8 +148,8 @@ fn emit(span: Span, domain: &ClosedDomain, ctx: &NodeCtx) {
 
 /// Renders a member as the user wrote it: runes keep their `'...'` surface form,
 /// everything else renders its comparable value (already sign-corrected).
-fn render_member(member: &ClosedMember) -> String {
-    match (&member.literal, &member.value) {
+fn render_member(member: &ClosedMember, base: SimpleKind) -> String {
+    match (member.literal(), member.value(base)) {
         (Literal::Char(text), _) => format!("'{text}'"),
         (_, DomainValue::Int(value)) => value.to_string(),
         (_, DomainValue::Str(value)) => format!("\"{value}\""),
@@ -163,16 +166,22 @@ fn render_valid(domain: &ClosedDomain) -> String {
         return format!(
             "{}={} ..= {}={}",
             first.display_name,
-            render_member(first),
+            render_member(first, domain.base),
             last.display_name,
-            render_member(last),
+            render_member(last, domain.base),
         );
     }
 
     domain
         .members
         .iter()
-        .map(|member| format!("{}={}", member.display_name, render_member(member)))
+        .map(|member| {
+            format!(
+                "{}={}",
+                member.display_name,
+                render_member(member, domain.base)
+            )
+        })
         .collect::<Vec<_>>()
         .join(", ")
 }
@@ -183,7 +192,7 @@ fn render_valid(domain: &ClosedDomain) -> String {
 fn is_contiguous_integer_domain(domain: &ClosedDomain) -> bool {
     let mut previous: Option<i128> = None;
     for member in &domain.members {
-        let DomainValue::Int(value) = member.value else {
+        let DomainValue::Int(value) = member.value(domain.base) else {
             return false;
         };
         if previous.is_some_and(|p| value != p + 1) {

@@ -134,7 +134,24 @@ impl TaskState {
         functions: &[Expression],
         span: &Span,
     ) {
-        self.scopes.push();
+        let static_methods = self.with_scope(|this| {
+            this.populate_impl_methods_in_scope(store, annotation, generics, functions, span)
+        });
+
+        let scope = self.scopes.current_mut();
+        for (name, ty) in static_methods {
+            scope.insert_value(name, ty);
+        }
+    }
+
+    fn populate_impl_methods_in_scope(
+        &mut self,
+        store: &mut Store,
+        annotation: &Annotation,
+        generics: &[Generic],
+        functions: &[Expression],
+        span: &Span,
+    ) -> Vec<(String, Type)> {
         self.put_in_scope(generics);
         let generics = self.resolve_generic_bounds(&*store, generics, span);
         let impl_bounds = resolved_generic_bounds(&generics);
@@ -142,8 +159,7 @@ impl TaskState {
         self.check_undeclared_impl_type_params(annotation, &generics);
         let receiver_ty = self.convert_receiver_to_type(&*store, annotation, span);
         let Some(type_name) = receiver_ty.get_name() else {
-            self.scopes.pop();
-            return;
+            return Vec::new();
         };
         // Prelude built-ins like `Array` have no qualified name to key methods by.
         let Some(receiver_qualified_name) = receiver_ty.get_qualified_name() else {
@@ -152,8 +168,7 @@ impl TaskState {
                 crate::prelude::PRELUDE_MODULE_ID,
                 *span,
             ));
-            self.scopes.pop();
-            return;
+            return Vec::new();
         };
         let module_id = self.cursor.module_id.clone();
         let is_d_lis = self.is_d_lis(&*store);
@@ -167,8 +182,7 @@ impl TaskState {
                 type_module,
                 *span,
             ));
-            self.scopes.pop();
-            return;
+            return Vec::new();
         }
 
         if self.current_file_is_test(store)
@@ -181,8 +195,7 @@ impl TaskState {
                     type_name,
                     annotation.get_span(),
                 ));
-            self.scopes.pop();
-            return;
+            return Vec::new();
         }
 
         if !self.is_d_lis(&*store)
@@ -199,8 +212,7 @@ impl TaskState {
                 type_name,
                 annotation.get_span(),
             ));
-            self.scopes.pop();
-            return;
+            return Vec::new();
         }
 
         if self.impl_has_simple_type_params(&receiver_ty, &generics) {
@@ -265,13 +277,13 @@ impl TaskState {
 
             let (method_signature_pairs, method_signature_bounds) =
                 super::function_signature_pairs(&fn_ty, fn_sig.params, fn_span);
-            self.scopes.push();
-            self.put_in_scope(fn_sig.generics);
-            for bound in &method_signature_bounds {
-                self.record_generic_bound(&bound.param_name, bound.ty.clone());
-            }
-            self.check_value_position_bounds(&*store, &[], &method_signature_pairs);
-            self.scopes.pop();
+            self.with_scope(|this| {
+                this.put_in_scope(fn_sig.generics);
+                for bound in &method_signature_bounds {
+                    this.record_generic_bound(&bound.param_name, bound.ty.clone());
+                }
+                this.check_value_position_bounds(&*store, &[], &method_signature_pairs);
+            });
 
             let method_ty = wrap_with_impl_generics(&fn_ty, &generics, &impl_bounds);
 
@@ -338,12 +350,7 @@ impl TaskState {
             );
         }
 
-        self.scopes.pop();
-
-        let scope = self.scopes.current_mut();
-        for (name, ty) in static_methods {
-            scope.insert_value(name, ty);
-        }
+        static_methods
     }
 
     pub(super) fn populate_interface(&mut self, store: &mut Store, expression: &Expression) {
@@ -360,15 +367,6 @@ impl TaskState {
         else {
             unreachable!("populate_interface called with non-Interface expression");
         };
-        self.scopes.push();
-        self.put_in_scope(generics);
-        let generics = self.resolve_generic_bounds(&*store, generics, span);
-
-        let new_parents = parents
-            .iter()
-            .map(|s| self.convert_to_type(&*store, &s.annotation, &s.span))
-            .collect();
-
         let module_id = self.cursor.module_id.clone();
         let is_d_lis = self.is_d_lis(&*store);
         struct MethodDef {
@@ -379,92 +377,102 @@ impl TaskState {
             name_span: Span,
             doc: Option<String>,
         }
-        let mut method_defs: Vec<MethodDef> = Vec::new();
-        let mut self_receiver_spans: Vec<Span> = Vec::new();
-        let methods = fn_expressions
-            .iter()
-            .map(|fe| {
-                let (fn_attrs, fn_doc) = if let Expression::Function {
-                    attributes, doc, ..
-                } = fe
-                {
-                    (attributes.as_slice(), doc.clone())
-                } else {
-                    (&[][..], None)
-                };
-                let method_sig = fe.function_definition_view();
-                let method_span = fe.get_span();
-                let fn_ty = self.extract_signature_parts(
-                    &*store,
-                    method_sig.generics,
-                    method_sig.params,
-                    method_sig.annotation,
-                    &method_span,
-                );
-                let fn_ty = match &fn_ty {
-                    Type::Forall { body, .. } => body.as_ref().clone(),
-                    _ => fn_ty,
-                };
+        let (generics, new_parents, methods, method_defs) = self.with_scope(|this| {
+            this.put_in_scope(generics);
+            let generics = this.resolve_generic_bounds(&*store, generics, span);
 
-                // Interface methods declare no receiver: it is always the implementing
-                // type. Reject an explicit `self` and strip it so the rest still checks.
-                let self_receiver_span = method_sig.params.first().and_then(|p| match &p.pattern {
-                    Pattern::Identifier { identifier, span } if identifier == "self" => Some(*span),
-                    _ => None,
-                });
-                if let Some(self_span) = self_receiver_span {
-                    self_receiver_spans.push(self_span);
-                }
-                let fn_ty = if self_receiver_span.is_some() {
-                    match fn_ty {
-                        Type::Function(f) => f.without_receiver(),
-                        other => other,
+            let new_parents = parents
+                .iter()
+                .map(|parent| this.convert_to_type(&*store, &parent.annotation, &parent.span))
+                .collect();
+
+            let mut method_defs = Vec::new();
+            let mut self_receiver_spans = Vec::new();
+            let methods = fn_expressions
+                .iter()
+                .map(|fe| {
+                    let (fn_attrs, fn_doc) = if let Expression::Function {
+                        attributes, doc, ..
+                    } = fe
+                    {
+                        (attributes.as_slice(), doc.clone())
+                    } else {
+                        (&[][..], None)
+                    };
+                    let method_sig = fe.function_definition_view();
+                    let method_span = fe.get_span();
+                    let fn_ty = this.extract_signature_parts(
+                        &*store,
+                        method_sig.generics,
+                        method_sig.params,
+                        method_sig.annotation,
+                        &method_span,
+                    );
+                    let fn_ty = match &fn_ty {
+                        Type::Forall { body, .. } => body.as_ref().clone(),
+                        _ => fn_ty,
+                    };
+
+                    let self_receiver_span =
+                        method_sig.params.first().and_then(|p| match &p.pattern {
+                            Pattern::Identifier { identifier, span } if identifier == "self" => {
+                                Some(*span)
+                            }
+                            _ => None,
+                        });
+                    if let Some(self_span) = self_receiver_span {
+                        self_receiver_spans.push(self_span);
                     }
-                } else {
-                    fn_ty
-                };
+                    let fn_ty = if self_receiver_span.is_some() {
+                        match fn_ty {
+                            Type::Function(f) => f.without_receiver(),
+                            other => other,
+                        }
+                    } else {
+                        fn_ty
+                    };
 
-                let (mut signature_pairs, signature_bounds) =
-                    super::function_signature_pairs(&fn_ty, &[], method_span);
-                if let Type::Function(f) = fn_ty.unwrap_forall() {
-                    signature_pairs.push(((*f.return_type).clone(), method_span));
-                }
-                self.scopes.push();
-                self.put_in_scope(&generics);
-                self.record_resolved_generic_bounds(&generics);
-                self.put_in_scope(method_sig.generics);
-                for bound in &signature_bounds {
-                    self.record_generic_bound(&bound.param_name, bound.ty.clone());
-                }
-                self.check_value_position_bounds(&*store, &[], &signature_pairs);
-                self.scopes.pop();
-
-                let go_hints = extract_attribute_flags(fn_attrs, "go");
-                if go_hints.iter().any(|h| h == "unexported") {
-                    (
-                        super::seal_method_key(is_d_lis, fn_attrs, &module_id, method_sig.name),
-                        fn_ty,
-                    )
-                } else {
-                    method_defs.push(MethodDef {
-                        name: method_sig.name.clone(),
-                        ty: fn_ty.clone(),
-                        go_hints,
-                        allowed_lints: extract_attribute_flags(fn_attrs, "allow"),
-                        name_span: method_sig.name_span,
-                        doc: fn_doc,
+                    let (mut signature_pairs, signature_bounds) =
+                        super::function_signature_pairs(&fn_ty, &[], method_span);
+                    if let Type::Function(f) = fn_ty.unwrap_forall() {
+                        signature_pairs.push(((*f.return_type).clone(), method_span));
+                    }
+                    this.with_scope(|this| {
+                        this.put_in_scope(&generics);
+                        this.record_resolved_generic_bounds(&generics);
+                        this.put_in_scope(method_sig.generics);
+                        for bound in &signature_bounds {
+                            this.record_generic_bound(&bound.param_name, bound.ty.clone());
+                        }
+                        this.check_value_position_bounds(&*store, &[], &signature_pairs);
                     });
-                    (method_sig.name.clone(), fn_ty)
-                }
-            })
-            .collect();
 
-        for self_span in self_receiver_spans {
-            self.sink
-                .push(diagnostics::infer::self_in_interface_method(self_span));
-        }
+                    let go_hints = extract_attribute_flags(fn_attrs, "go");
+                    if go_hints.iter().any(|h| h == "unexported") {
+                        (
+                            super::seal_method_key(is_d_lis, fn_attrs, &module_id, method_sig.name),
+                            fn_ty,
+                        )
+                    } else {
+                        method_defs.push(MethodDef {
+                            name: method_sig.name.clone(),
+                            ty: fn_ty.clone(),
+                            go_hints,
+                            allowed_lints: extract_attribute_flags(fn_attrs, "allow"),
+                            name_span: method_sig.name_span,
+                            doc: fn_doc,
+                        });
+                        (method_sig.name.clone(), fn_ty)
+                    }
+                })
+                .collect();
 
-        self.scopes.pop();
+            for self_span in self_receiver_spans {
+                this.sink
+                    .push(diagnostics::infer::self_in_interface_method(self_span));
+            }
+            (generics, new_parents, methods, method_defs)
+        });
 
         let qualified_name = self.qualify_name(interface_name);
         let interface_ty = store

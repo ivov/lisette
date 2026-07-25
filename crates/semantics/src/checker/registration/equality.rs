@@ -8,7 +8,7 @@ use syntax::types::{FunctionParameter, Symbol, Type};
 use super::{TaskState, resolved_generic_bounds, wrap_with_impl_generics};
 use crate::checker::infer::expressions::comparison::{check_not_equatable, param_is_comparable};
 use crate::checker::registration::derived_attributes::{
-    DerivedAttribute, DerivedAttributeKind, DerivedAttributeTarget,
+    DerivedAttribute, DerivedAttributeContext, DerivedAttributeTarget,
 };
 use crate::store::Store;
 
@@ -34,15 +34,19 @@ enum UserEquals {
 }
 
 impl TaskState {
-    fn process_equality_candidate(&mut self, store: &mut Store, candidate: &DerivedAttribute) {
-        debug_assert_eq!(candidate.kind, DerivedAttributeKind::Equality);
+    fn process_equality_candidate(
+        &mut self,
+        store: &mut Store,
+        context: &DerivedAttributeContext,
+        candidate: &DerivedAttribute,
+    ) -> Option<Symbol> {
         let name = match &candidate.target {
             DerivedAttributeTarget::Misplaced => {
                 self.sink
                     .push(diagnostics::attribute::equality_not_a_struct_or_enum(
                         &candidate.span,
                     ));
-                return;
+                return None;
             }
             DerivedAttributeTarget::Struct { name } | DerivedAttributeTarget::Enum { name, .. } => {
                 name
@@ -54,21 +58,21 @@ impl TaskState {
                 .push(diagnostics::attribute::equality_with_arguments(
                     &candidate.span,
                 ));
-            return;
+            return None;
         }
-        if candidate.is_d_lis {
+        if context.is_d_lis {
             self.sink
                 .push(diagnostics::attribute::equality_in_typedef(&candidate.span));
-            return;
+            return None;
         }
 
-        let qualified = Symbol::from_parts(&candidate.module_id, name);
+        let qualified = Symbol::from_parts(&context.module_id, name);
         if is_tuple_struct(store, &qualified) {
             self.sink
                 .push(diagnostics::attribute::equality_on_tuple_struct(
                     &candidate.span,
                 ));
-            return;
+            return None;
         }
 
         match user_equals(store, &qualified) {
@@ -78,23 +82,23 @@ impl TaskState {
                         .push(diagnostics::attribute::equality_specialized_equals(
                             &candidate.span,
                         ));
-                    return;
+                    return None;
                 }
-                return;
+                return None;
             }
             UserEquals::Conflict => {
                 self.sink
                     .push(diagnostics::attribute::equality_conflicting_equals(
                         &candidate.span,
                     ));
-                return;
+                return None;
             }
             UserEquals::Specialized => {
                 self.sink
                     .push(diagnostics::attribute::equality_specialized_equals(
                         &candidate.span,
                     ));
-                return;
+                return None;
             }
             UserEquals::None => {}
         }
@@ -104,34 +108,40 @@ impl TaskState {
                 .push(diagnostics::attribute::equality_conflicting_equals(
                     &candidate.span,
                 ));
-            return;
+            return None;
         }
 
-        self.synthesize_equals(store, &candidate.module_id, &qualified);
-        self.facts.equality_derivations.push(qualified.to_string());
+        self.synthesize_equals(store, &context.module_id, &qualified);
+        Some(qualified)
     }
 
     /// Synthesize queued equality methods, build the verdict, and gate derivations.
     /// Run once after registration has discovered every UFCS method.
     pub fn finalize_equality(&mut self, store: &mut Store) {
-        let candidates = std::mem::take(&mut self.pending_equality_attributes);
-        for candidate in &candidates {
-            self.process_equality_candidate(store, candidate);
+        let batches = std::mem::take(&mut self.pending_equality_attributes);
+        let mut derivations = Vec::new();
+        for batch in &batches {
+            for candidate in &batch.candidates {
+                if let Some(derivation) =
+                    self.process_equality_candidate(store, &batch.context, candidate)
+                {
+                    derivations.push(derivation);
+                }
+            }
         }
-        self.record_equality_index(store);
-        self.validate_equality_derivations(store);
+        self.record_equality_index(store, &derivations);
+        self.validate_equality_derivations(store, &derivations);
     }
 
-    fn validate_equality_derivations(&mut self, store: &Store) {
-        let derivations = std::mem::take(&mut self.facts.equality_derivations);
-        for id in &derivations {
-            let qualified = Symbol::from_raw(id.as_str());
+    fn validate_equality_derivations(&mut self, store: &Store, derivations: &[Symbol]) {
+        for qualified in derivations {
+            let id = qualified.as_str();
             let module_id = store
                 .module_for_qualified_name(id)
                 .map(str::to_string)
                 .unwrap_or_default();
             let name = syntax::types::unqualified_name(id).to_string();
-            self.gate_equality_derivation(store, &name, &qualified, &module_id);
+            self.gate_equality_derivation(store, &name, qualified, &module_id);
         }
     }
 
@@ -185,28 +195,26 @@ impl TaskState {
             _ => return,
         };
 
-        self.scopes.push();
-        self.put_in_scope(&generics);
-        self.record_resolved_generic_bounds(&generics);
+        self.with_scope(|this| {
+            this.put_in_scope(&generics);
+            this.record_resolved_generic_bounds(&generics);
 
-        for (field_name, field_span, field_ty) in &fields {
-            let reason = check_not_equatable(&self.env, store, field_ty, module_id, &|name| {
-                param_is_comparable(&self.scopes, &self.env, name)
-            });
-            if let Some(reason) = reason {
-                self.sink
-                    .push(diagnostics::attribute::cannot_derive_equality(
-                        type_name, field_name, field_span, reason,
-                    ));
+            for (field_name, field_span, field_ty) in &fields {
+                let reason = check_not_equatable(&this.env, store, field_ty, module_id, &|name| {
+                    param_is_comparable(&this.scopes, &this.env, name)
+                });
+                if let Some(reason) = reason {
+                    this.sink
+                        .push(diagnostics::attribute::cannot_derive_equality(
+                            type_name, field_name, field_span, reason,
+                        ));
+                }
             }
-        }
-
-        self.scopes.pop();
+        });
     }
 
-    fn record_equality_index(&mut self, store: &mut Store) {
-        let synthesized: HashSet<String> =
-            self.facts.equality_derivations.iter().cloned().collect();
+    fn record_equality_index(&mut self, store: &mut Store, derivations: &[Symbol]) {
+        let synthesized: HashSet<&str> = derivations.iter().map(Symbol::as_str).collect();
 
         let ids: Vec<Symbol> = store
             .modules

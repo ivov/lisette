@@ -14,20 +14,136 @@ use diagnostics::LocalSink;
 
 pub type ModuleId = String;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DependencyKind {
+    Production,
+    TestOnly,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ImportUse {
+    LinkOnly,
+    Referenced,
+}
+
+impl ImportUse {
+    fn merge(self, other: Self) -> Self {
+        if self == Self::Referenced || other == Self::Referenced {
+            Self::Referenced
+        } else {
+            Self::LinkOnly
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Dependency {
+    kind: DependencyKind,
+    usage: ImportUse,
+}
+
+/// One canonical classification for every direct module dependency.
+#[derive(Debug, Default)]
+pub struct DependencyGraph {
+    edges: HashMap<ModuleId, HashMap<ModuleId, Dependency>>,
+}
+
+impl DependencyGraph {
+    pub fn contains_module(&self, module_id: &str) -> bool {
+        self.edges.contains_key(module_id)
+    }
+
+    pub fn contains_dependency(&self, module_id: &str, dependency: &str) -> bool {
+        self.edges
+            .get(module_id)
+            .is_some_and(|dependencies| dependencies.contains_key(dependency))
+    }
+
+    pub fn contains_production_dependency(&self, module_id: &str, dependency: &str) -> bool {
+        matches!(
+            self.edges
+                .get(module_id)
+                .and_then(|dependencies| dependencies.get(dependency))
+                .map(|dependency| dependency.kind),
+            Some(DependencyKind::Production)
+        )
+    }
+
+    pub(crate) fn modules(&self) -> impl Iterator<Item = &ModuleId> {
+        self.edges.keys()
+    }
+
+    pub(crate) fn dependencies(&self, module_id: &str) -> impl Iterator<Item = &ModuleId> {
+        self.edges
+            .get(module_id)
+            .into_iter()
+            .flat_map(HashMap::keys)
+    }
+
+    pub(crate) fn production_dependencies(
+        &self,
+        module_id: &str,
+    ) -> impl Iterator<Item = &ModuleId> {
+        self.edges
+            .get(module_id)
+            .into_iter()
+            .flat_map(|dependencies| {
+                dependencies.iter().filter_map(|(module_id, dependency)| {
+                    (dependency.kind == DependencyKind::Production).then_some(module_id)
+                })
+            })
+    }
+
+    pub(crate) fn is_link_only_module(&self, module_id: &str) -> bool {
+        let mut uses = self
+            .edges
+            .values()
+            .filter_map(|dependencies| dependencies.get(module_id))
+            .map(|dependency| dependency.usage);
+        matches!(uses.next(), Some(ImportUse::LinkOnly))
+            && uses.all(|usage| usage == ImportUse::LinkOnly)
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.edges.len()
+    }
+
+    fn insert(&mut self, module_id: ModuleId, dependencies: HashMap<ModuleId, Dependency>) {
+        self.edges.insert(module_id, dependencies);
+    }
+}
+
+impl From<HashMap<ModuleId, HashSet<ModuleId>>> for DependencyGraph {
+    fn from(edges: HashMap<ModuleId, HashSet<ModuleId>>) -> Self {
+        Self {
+            edges: edges
+                .into_iter()
+                .map(|(module_id, dependencies)| {
+                    let dependencies = dependencies
+                        .into_iter()
+                        .map(|dependency| {
+                            (
+                                dependency,
+                                Dependency {
+                                    kind: DependencyKind::Production,
+                                    usage: ImportUse::Referenced,
+                                },
+                            )
+                        })
+                        .collect();
+                    (module_id, dependencies)
+                })
+                .collect(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct ModuleGraphResult {
     pub order: Vec<ModuleId>,
     pub cycles: Vec<Vec<ModuleId>>,
     pub files: HashMap<ModuleId, Vec<File>>,
-    /// Direct dependencies of each module, test-file imports included. Drives
-    /// reachability, topological order, and a module's own cache validity.
-    pub edges: HashMap<ModuleId, HashSet<ModuleId>>,
-    /// `edges` minus imports that appear only in `.test.lis` files. Drives the
-    /// `module_hash` propagated to dependents, so a test-only import never
-    /// invalidates production importers.
-    pub production_edges: HashMap<ModuleId, HashSet<ModuleId>>,
-    /// `go:` modules that are only ever blank-imported in the visited file set.
-    pub(crate) link_only_modules: HashSet<ModuleId>,
+    pub dependencies: DependencyGraph,
     /// Reachable from the primary roots, snapshotted before `additional` runs.
     pub primary_reachable: HashSet<ModuleId>,
 }
@@ -70,12 +186,10 @@ pub fn build_module_graph(
         standalone_mode,
         locator,
         include_tests,
-        edges: HashMap::default(),
-        production_edges: HashMap::default(),
+        dependencies: DependencyGraph::default(),
         visited: HashSet::default(),
         files: HashMap::default(),
         import_spans: HashMap::default(),
-        blank_tracker: BlankTracker::default(),
     };
     builder.visit(primary);
     let primary_reachable = builder.visited.clone();
@@ -90,12 +204,10 @@ struct GraphBuilder<'a> {
     standalone_mode: bool,
     locator: &'a TypedefLocator,
     include_tests: bool,
-    edges: HashMap<ModuleId, HashSet<ModuleId>>,
-    production_edges: HashMap<ModuleId, HashSet<ModuleId>>,
+    dependencies: DependencyGraph,
     visited: HashSet<ModuleId>,
     files: HashMap<ModuleId, Vec<File>>,
     import_spans: HashMap<ModuleId, Span>,
-    blank_tracker: BlankTracker,
 }
 
 impl<'a> GraphBuilder<'a> {
@@ -138,12 +250,11 @@ impl<'a> GraphBuilder<'a> {
                     .flat_map(|f| f.imports())
                     .map(|import| import.name.to_string())
                     .collect();
-                let imports_with_spans = process_file_imports(
+                let imports = process_file_imports(
                     file_imports,
                     self.sink,
                     self.standalone_mode,
                     self.locator,
-                    &mut self.blank_tracker,
                 );
 
                 let has_production_file = module_files.iter().any(|file| !file.is_test());
@@ -185,81 +296,62 @@ impl<'a> GraphBuilder<'a> {
 
                 self.files.insert(module_id.clone(), module_files);
 
-                let imports: HashSet<_> = imports_with_spans.keys().cloned().collect();
-
-                for (import, span) in imports_with_spans {
-                    if !self.visited.contains(&import) {
+                for (import, resolved) in &imports {
+                    if !self.visited.contains(import) {
                         to_visit.push(import.clone());
                     }
-                    self.import_spans.entry(import).or_insert(span);
+                    self.import_spans
+                        .entry(import.clone())
+                        .or_insert(resolved.span);
                 }
 
-                let production_edge_set: HashSet<ModuleId> = if has_parsed_files {
+                let dependencies: HashMap<ModuleId, Dependency> = if has_parsed_files {
                     imports
-                        .iter()
-                        .filter(|import| production_import_names.contains(import.as_str()))
-                        .cloned()
+                        .into_iter()
+                        .map(|(import, resolved)| {
+                            let kind = if production_import_names.contains(import.as_str()) {
+                                DependencyKind::Production
+                            } else {
+                                DependencyKind::TestOnly
+                            };
+                            (
+                                import,
+                                Dependency {
+                                    kind,
+                                    usage: resolved.usage,
+                                },
+                            )
+                        })
                         .collect()
                 } else {
-                    imports.clone()
+                    imports
+                        .into_iter()
+                        .map(|(import, resolved)| {
+                            (
+                                import,
+                                Dependency {
+                                    kind: DependencyKind::Production,
+                                    usage: resolved.usage,
+                                },
+                            )
+                        })
+                        .collect()
                 };
-                self.production_edges
-                    .insert(module_id.clone(), production_edge_set);
-                self.edges.insert(module_id.clone(), imports);
+                self.dependencies.insert(module_id.clone(), dependencies);
             }
         }
     }
 
     fn finish(self, primary_reachable: HashSet<ModuleId>) -> ModuleGraphResult {
-        let (order, cycles) = kahn::topological_sort(&self.edges);
+        let (order, cycles) = kahn::topological_sort(&self.dependencies);
 
         ModuleGraphResult {
             order,
             cycles,
             files: self.files,
-            edges: self.edges,
-            production_edges: self.production_edges,
-            link_only_modules: self.blank_tracker.into_link_only_modules(),
+            dependencies: self.dependencies,
             primary_reachable,
         }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum ImportUse {
-    LinkOnly,
-    Referenced,
-}
-
-#[derive(Default)]
-struct BlankTracker {
-    modules: HashMap<ModuleId, ImportUse>,
-}
-
-impl BlankTracker {
-    fn record(&mut self, module_id: &str, is_blank: bool) {
-        let use_kind = if is_blank {
-            ImportUse::LinkOnly
-        } else {
-            ImportUse::Referenced
-        };
-        self.modules
-            .entry(module_id.to_string())
-            .and_modify(|prior| {
-                if use_kind == ImportUse::Referenced {
-                    *prior = ImportUse::Referenced;
-                }
-            })
-            .or_insert(use_kind);
-    }
-
-    fn into_link_only_modules(self) -> HashSet<ModuleId> {
-        self.modules
-            .into_iter()
-            .filter_map(|(module_id, use_kind)| {
-                (use_kind == ImportUse::LinkOnly).then_some(module_id)
-            })
-            .collect()
     }
 }
 
@@ -319,8 +411,7 @@ fn batch_parse_modules(
         }
     }
 
-    let parsed: Vec<(ModuleId, File, Vec<syntax::ParseError>)> = if jobs.len() < PARALLEL_THRESHOLD
-    {
+    let parsed: Vec<(File, Vec<syntax::ParseError>)> = if jobs.len() < PARALLEL_THRESHOLD {
         jobs.into_iter().map(parse_one).collect()
     } else {
         use rayon::prelude::*;
@@ -328,9 +419,12 @@ fn batch_parse_modules(
     };
 
     let mut grouped: HashMap<ModuleId, Vec<File>> = HashMap::default();
-    for (module_id, file, errors) in parsed {
+    for (file, errors) in parsed {
         sink.extend_parse_errors(errors);
-        grouped.entry(module_id).or_default().push(file);
+        grouped
+            .entry(file.module_id.clone())
+            .or_default()
+            .push(file);
     }
     grouped
 }
@@ -342,7 +436,7 @@ fn scan_one(fs: &dyn Loader, module_id: &str) -> Vec<(String, semantics_loader::
     entries
 }
 
-fn parse_one(job: ParseJob) -> (ModuleId, File, Vec<syntax::ParseError>) {
+fn parse_one(job: ParseJob) -> (File, Vec<syntax::ParseError>) {
     let result = syntax::build_ast(&job.source, job.file_id);
     let file = File::new(
         &job.module_id,
@@ -353,7 +447,19 @@ fn parse_one(job: ParseJob) -> (ModuleId, File, Vec<syntax::ParseError>) {
         result.file_comment,
         job.file_id,
     );
-    (job.module_id, file, result.errors)
+    (file, result.errors)
+}
+
+#[derive(Clone, Copy)]
+struct ResolvedImport {
+    span: Span,
+    usage: ImportUse,
+}
+
+struct PendingGoImport<'a> {
+    name: &'a str,
+    span: Span,
+    usage: ImportUse,
 }
 
 fn process_file_imports(
@@ -361,17 +467,31 @@ fn process_file_imports(
     sink: &LocalSink,
     standalone_mode: bool,
     locator: &TypedefLocator,
-    blank_tracker: &mut BlankTracker,
-) -> HashMap<ModuleId, Span> {
+) -> HashMap<ModuleId, ResolvedImport> {
     let mut imports = HashMap::default();
-    let referenced_go_imports: HashSet<&str> = file_imports
-        .iter()
-        .filter(|import| {
-            import.name.starts_with("go:") && !matches!(import.alias, Some(ImportAlias::Blank(_)))
-        })
-        .map(|import| import.name.as_str())
-        .collect();
-    let mut go_import_results: HashMap<&str, bool> = HashMap::default();
+    let mut pending_go_imports: Vec<PendingGoImport<'_>> = Vec::new();
+    for file_import in &file_imports {
+        if !file_import.name.starts_with("go:") {
+            continue;
+        }
+        let usage = if matches!(file_import.alias, Some(ImportAlias::Blank(_))) {
+            ImportUse::LinkOnly
+        } else {
+            ImportUse::Referenced
+        };
+        if let Some(pending) = pending_go_imports
+            .iter_mut()
+            .find(|pending| pending.name == file_import.name)
+        {
+            pending.usage = pending.usage.merge(usage);
+        } else {
+            pending_go_imports.push(PendingGoImport {
+                name: &file_import.name,
+                span: file_import.name_span,
+                usage,
+            });
+        }
+    }
 
     for file_import in &file_imports {
         if file_import.name == "prelude" {
@@ -389,42 +509,50 @@ fn process_file_imports(
         }
 
         if let Some(go_pkg) = file_import.name.strip_prefix("go:") {
-            let is_blank = matches!(file_import.alias, Some(ImportAlias::Blank(_)));
-            let ok = *go_import_results
-                .entry(file_import.name.as_str())
-                .or_insert_with(|| {
-                    if referenced_go_imports.contains(file_import.name.as_str()) {
-                        let result = locator.find_typedef_content(go_pkg);
-                        emit_for_locator_result(
-                            &result,
-                            &GoImportSite {
-                                import_name: &file_import.name,
-                                go_pkg,
-                                name_span: Some(file_import.name_span),
-                                target: locator.target(),
-                                standalone_mode,
-                                replace_importer: None,
-                            },
-                            sink,
-                        )
-                    } else {
-                        let status = locator.validate_declaration(go_pkg);
-                        emit_for_declaration_status(
-                            &status,
-                            &file_import.name,
+            let Some(index) = pending_go_imports
+                .iter()
+                .position(|pending| pending.name == file_import.name)
+            else {
+                continue;
+            };
+            let pending = pending_go_imports.remove(index);
+            let ok = match pending.usage {
+                ImportUse::Referenced => {
+                    let result = locator.find_typedef_content(go_pkg);
+                    emit_for_locator_result(
+                        &result,
+                        &GoImportSite {
+                            import_name: pending.name,
                             go_pkg,
-                            file_import.name_span,
-                            locator.target(),
+                            name_span: Some(pending.span),
+                            target: locator.target(),
                             standalone_mode,
-                            sink,
-                        )
-                    }
-                });
+                            replace_importer: None,
+                        },
+                        sink,
+                    )
+                }
+                ImportUse::LinkOnly => {
+                    let status = locator.validate_declaration(go_pkg);
+                    emit_for_declaration_status(
+                        &status,
+                        pending.name,
+                        go_pkg,
+                        pending.span,
+                        locator.target(),
+                        standalone_mode,
+                        sink,
+                    )
+                }
+            };
             if ok {
-                blank_tracker.record(&file_import.name, is_blank);
-                imports
-                    .entry(file_import.name.to_string())
-                    .or_insert(file_import.name_span);
+                imports.insert(
+                    pending.name.to_string(),
+                    ResolvedImport {
+                        span: pending.span,
+                        usage: pending.usage,
+                    },
+                );
             }
             continue;
         }
@@ -459,7 +587,10 @@ fn process_file_imports(
 
         imports
             .entry(file_import.name.to_string())
-            .or_insert(file_import.name_span);
+            .or_insert(ResolvedImport {
+                span: file_import.name_span,
+                usage: ImportUse::Referenced,
+            });
     }
 
     imports
@@ -482,18 +613,12 @@ mod tests {
 
     fn is_link_only(imports: Vec<FileImport>) -> bool {
         let sink = LocalSink::new();
-        let mut tracker = BlankTracker::default();
-        let resolved = process_file_imports(
-            imports,
-            &sink,
-            false,
-            &TypedefLocator::default(),
-            &mut tracker,
-        );
+        let resolved = process_file_imports(imports, &sink, false, &TypedefLocator::default());
 
         assert!(!sink.has_errors());
-        assert!(resolved.contains_key("go:fmt"));
-        tracker.into_link_only_modules().contains("go:fmt")
+        resolved
+            .get("go:fmt")
+            .is_some_and(|resolved| resolved.usage == ImportUse::LinkOnly)
     }
 
     #[test]
@@ -509,5 +634,24 @@ mod tests {
         assert!(!is_link_only(
             vec![go_import(false, 0), go_import(true, 1),]
         ));
+    }
+
+    #[test]
+    fn referenced_edge_wins_across_importing_modules() {
+        let dependency = |usage| Dependency {
+            kind: DependencyKind::Production,
+            usage,
+        };
+        let mut graph = DependencyGraph::default();
+        graph.insert(
+            "blank_importer".into(),
+            HashMap::from_iter([("go:fmt".into(), dependency(ImportUse::LinkOnly))]),
+        );
+        graph.insert(
+            "referencing_importer".into(),
+            HashMap::from_iter([("go:fmt".into(), dependency(ImportUse::Referenced))]),
+        );
+
+        assert!(!graph.is_link_only_module("go:fmt"));
     }
 }

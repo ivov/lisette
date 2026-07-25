@@ -92,7 +92,7 @@ impl InferCtx<'_> {
                     file_comment: file.file_comment,
                 };
 
-                ctx.typed_files.push((module_id.to_string(), typed_file));
+                ctx.typed_files.push(typed_file);
             },
         );
     }

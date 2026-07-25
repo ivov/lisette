@@ -5,21 +5,17 @@ use syntax::types::{FunctionParameter, Symbol, Type};
 use super::{TaskState, wrap_with_impl_generics};
 use crate::call_classification::is_ufcs_method_type;
 use crate::checker::registration::derived_attributes::{
-    DerivedAttribute, DerivedAttributeKind, DerivedAttributeTarget,
+    DerivedAttribute, DerivedAttributeContext, DerivedAttributeTarget,
 };
 use crate::store::Store;
 
 impl TaskState {
-    pub(super) fn register_display(&mut self, store: &mut Store, candidates: &[DerivedAttribute]) {
-        for candidate in candidates
-            .iter()
-            .filter(|candidate| candidate.kind == DerivedAttributeKind::Display)
-        {
-            self.process_display_candidate(store, candidate);
-        }
-    }
-
-    fn process_display_candidate(&mut self, store: &mut Store, candidate: &DerivedAttribute) {
+    pub(super) fn process_display_candidate(
+        &mut self,
+        store: &mut Store,
+        context: &DerivedAttributeContext,
+        candidate: &DerivedAttribute,
+    ) {
         let (name, is_struct) = match &candidate.target {
             DerivedAttributeTarget::Misplaced => {
                 self.sink
@@ -39,13 +35,13 @@ impl TaskState {
                 ));
             return;
         }
-        if candidate.is_d_lis {
+        if context.is_d_lis {
             self.sink
                 .push(diagnostics::attribute::display_in_typedef(&candidate.span));
             return;
         }
 
-        let qualified = Symbol::from_parts(&candidate.module_id, name);
+        let qualified = Symbol::from_parts(&context.module_id, name);
         if is_struct
             && let Some(definition) = store.get_definition(qualified.as_str())
             && definition.is_pointer_backed_newtype(|id| store.get_definition(id))
@@ -57,7 +53,7 @@ impl TaskState {
             return;
         }
 
-        self.synthesize_to_string(store, &candidate.module_id, &candidate.span, &qualified);
+        self.synthesize_to_string(store, &context.module_id, &candidate.span, &qualified);
     }
 
     fn synthesize_to_string(

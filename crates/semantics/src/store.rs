@@ -19,9 +19,18 @@ pub struct ClosedMember {
     /// Qualified the way the user writes it (e.g. `time.Sunday`), for the diagnostic.
     pub display_name: EcoString,
     /// The member's source literal, for rendering the valid-set hint.
-    pub literal: Literal,
-    /// The comparable form, derived once so membership and sort never disagree.
-    pub value: DomainValue,
+    literal: Literal,
+}
+
+impl ClosedMember {
+    pub fn literal(&self) -> &Literal {
+        &self.literal
+    }
+
+    pub fn value(&self, base: SimpleKind) -> DomainValue {
+        DomainValue::from_literal(&self.literal, base)
+            .expect("closed-domain members have a literal compatible with their base")
+    }
 }
 
 /// The curated valid-value set of a `#[go(closed_domain)]` named primitive.
@@ -100,8 +109,6 @@ pub struct Store {
     /// `Arc` so registration workers share a read view; [`Arc::make_mut`]
     /// writes stay zero-copy while a module has a single owner.
     pub modules: HashMap<String, Arc<Module>>,
-    /// file ID -> module ID
-    files: HashMap<u32, String>,
     /// Go module ID -> package name from the typedef `// Package:` directive.
     pub go_package_names: HashMap<String, String>,
     /// File ID -> on-disk path of the `.d.lis` typedef. Lets the LSP map go: typedef
@@ -117,7 +124,7 @@ pub struct Store {
     pub test_index: TestIndex,
     /// File IDs of `.test.lis` files, for detecting test-file context during
     /// inference after a module's `files` have been taken out.
-    pub test_file_ids: HashSet<u32>,
+    test_file_ids: HashSet<u32>,
     /// Read during inference to gate the binary-only `main` signature check.
     pub(crate) project_kind: crate::inference::ProjectKind,
 }
@@ -141,7 +148,6 @@ impl Store {
         .collect();
 
         Self {
-            files: Default::default(),
             modules,
             go_package_names: Default::default(),
             typedef_paths: Default::default(),
@@ -161,10 +167,6 @@ impl Store {
 
     pub(crate) fn reserve_file_ids(&self, count: u32) -> u32 {
         self.next_file_id.fetch_add(count, Ordering::Relaxed)
-    }
-
-    pub fn register_file(&mut self, file_id: u32, module_id: &str) {
-        self.files.insert(file_id, module_id.to_string());
     }
 
     pub(crate) fn entry_module_id(&self) -> &'static str {
@@ -205,10 +207,10 @@ impl Store {
         }
     }
 
-    /// Stores a file in the module and registers the file_id -> module_id mapping.
+    /// Stores a file in its owning module.
     pub fn store_file(&mut self, file: File) {
         let module_id = file.module_id.clone();
-        self.files.insert(file.id, module_id.clone());
+        self.update_test_file_classification(&file);
 
         let module = self
             .get_module_mut(&module_id)
@@ -216,14 +218,27 @@ impl Store {
         module.files.insert(file.id, file);
     }
 
+    fn update_test_file_classification(&mut self, file: &File) {
+        if file.is_test() {
+            self.test_file_ids.insert(file.id);
+        } else {
+            self.test_file_ids.remove(&file.id);
+        }
+    }
+
     pub fn get_file(&self, file_id: u32) -> Option<&File> {
-        let module_id = self.files.get(&file_id)?;
-        let module = self.get_module(module_id)?;
-        module.get_file(file_id)
+        self.modules
+            .values()
+            .find_map(|module| module.get_file(file_id))
     }
 
     pub(crate) fn get_file_mut(&mut self, file_id: u32) -> Option<&mut File> {
-        let module_id = self.files.get(&file_id)?.clone();
+        let module_id = self.modules.iter().find_map(|(module_id, module)| {
+            module
+                .files
+                .contains_key(&file_id)
+                .then(|| module_id.clone())
+        })?;
         let module = Arc::make_mut(self.modules.get_mut(&module_id)?);
         module.files.get_mut(&file_id)
     }
@@ -249,15 +264,16 @@ impl Store {
         self.modules.get_mut(module_id).map(Arc::make_mut)
     }
 
-    /// Inserts a worker-built module (e.g. cache-decoded) and indexes its files.
-    pub(crate) fn insert_prebuilt_module(
-        &mut self,
-        module_id: String,
-        module: Module,
-        file_map: Vec<(u32, String)>,
-    ) {
-        for (file_id, owner) in file_map {
-            self.files.insert(file_id, owner);
+    /// Inserts a worker-built module (e.g. cache-decoded).
+    pub(crate) fn insert_prebuilt_module(&mut self, module: Module) {
+        let module_id = module.id.clone();
+        if let Some(previous) = self.modules.remove(&module_id) {
+            for file_id in previous.files.keys() {
+                self.test_file_ids.remove(file_id);
+            }
+        }
+        for file in module.files.values() {
+            self.update_test_file_classification(file);
         }
         self.modules.insert(module_id.clone(), Arc::new(module));
         self.visited_modules.insert(module_id);
@@ -268,7 +284,6 @@ impl Store {
     pub(crate) fn registration_view(&self) -> Store {
         Store {
             modules: self.modules.clone(),
-            files: self.files.clone(),
             go_package_names: self.go_package_names.clone(),
             typedef_paths: HashMap::default(),
             visited_modules: HashSet::default(),
@@ -303,6 +318,10 @@ impl Store {
         definition
             .name_span
             .is_some_and(|span| self.test_file_ids.contains(&span.file_id))
+    }
+
+    pub(crate) fn is_test_file(&self, file_id: u32) -> bool {
+        self.test_file_ids.contains(&file_id)
     }
 
     pub fn module_for_qualified_name<'a>(&'a self, qualified_name: &'a str) -> Option<&'a str> {
@@ -374,13 +393,12 @@ impl Store {
                 if module.id != *declaring_module {
                     continue;
                 }
-                let Some(value) = DomainValue::from_literal(const_literal, *base) else {
+                if DomainValue::from_literal(const_literal, *base).is_none() {
                     continue;
-                };
+                }
                 members.entry(id.clone()).or_default().push(ClosedMember {
                     display_name: domain_display_name(qualified_name.as_str()).into(),
                     literal: const_literal.clone(),
-                    value,
                 });
             }
         }
@@ -390,7 +408,7 @@ impl Store {
             let Some(mut domain_members) = members.remove(&type_id) else {
                 continue;
             };
-            domain_members.sort_by(|a, b| a.value.cmp(&b.value));
+            domain_members.sort_by_key(|member| member.value(base));
             domains.insert(
                 type_id.clone(),
                 ClosedDomain {
@@ -716,6 +734,30 @@ mod closed_domain_tests {
             id: Symbol::from_raw(id),
             params: vec![],
         }
+    }
+
+    #[test]
+    fn storing_a_file_owns_its_test_classification() {
+        let mut store = Store::new();
+        store.add_module("m");
+        store.store_file(File::new("m", "sample.test.lis", "", "", vec![], None, 42));
+
+        assert!(store.is_test_file(42));
+
+        store.store_file(File::new("m", "sample.lis", "", "", vec![], None, 42));
+
+        assert!(!store.is_test_file(42));
+    }
+
+    #[test]
+    fn replacing_a_module_removes_its_old_test_classification() {
+        let mut store = Store::new();
+        store.add_module("m");
+        store.store_file(File::new("m", "sample.test.lis", "", "", vec![], None, 42));
+
+        store.insert_prebuilt_module(Module::new("m"));
+
+        assert!(!store.is_test_file(42));
     }
 
     fn struct_def(ty: Type, closed_domain: bool) -> Definition {

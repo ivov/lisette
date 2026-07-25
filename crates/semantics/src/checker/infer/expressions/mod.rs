@@ -291,13 +291,40 @@ impl InferCtx<'_> {
         }
     }
 
+    fn with_use_context<F, R>(&mut self, context: crate::checker::scopes::UseContext, f: F) -> R
+    where
+        F: FnOnce(&mut Self) -> R,
+    {
+        let prev_ctx = self.scopes.replace_use_context(context);
+        let result = f(self);
+        self.scopes.restore_use_context(prev_ctx);
+        result
+    }
+
     fn with_value_context<F, R>(&mut self, f: F) -> R
     where
         F: FnOnce(&mut Self) -> R,
     {
-        let prev_ctx = self.scopes.set_value_context();
+        self.with_use_context(crate::checker::scopes::UseContext::Value, f)
+    }
+
+    fn with_dot_access_base<F, R>(&mut self, f: F) -> R
+    where
+        F: FnOnce(&mut Self) -> R,
+    {
+        let previous = self.scopes.replace_dot_access_base(true);
         let result = f(self);
-        self.scopes.restore_use_context(prev_ctx);
+        self.scopes.replace_dot_access_base(previous);
+        result
+    }
+
+    fn with_let_binding_rhs<F, R>(&mut self, f: F) -> R
+    where
+        F: FnOnce(&mut Self) -> R,
+    {
+        let previous = self.scopes.replace_let_binding_rhs(true);
+        let result = f(self);
+        self.scopes.replace_let_binding_rhs(previous);
         result
     }
 }

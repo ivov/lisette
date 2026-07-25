@@ -152,15 +152,15 @@ impl InferCtx<'_> {
             };
         }
 
-        self.scopes.push();
-        self.register_block_local_items(&items);
-
-        let new_items = self.infer_block_items(items, expected_ty.clone());
-
-        let last_item = new_items.last().expect("block must have at least one item");
-        let block_ty = last_item.get_type();
-
-        self.scopes.pop();
+        let (new_items, block_ty) = self.with_scope(|this| {
+            this.register_block_local_items(&items);
+            let new_items = this.infer_block_items(items, expected_ty.clone());
+            let block_ty = new_items
+                .last()
+                .expect("block must have at least one item")
+                .get_type();
+            (new_items, block_ty)
+        });
 
         Expression::Block {
             items: new_items,
@@ -380,15 +380,14 @@ impl InferCtx<'_> {
         // Prevent simple assignment targets from being marked as "used" in the lint system.
         // Complex targets like `a[i]` or `r.*` have subexpressions that ARE being read.
         let is_simple_target = matches!(&*target, Expression::Identifier { .. });
-        let prev_ctx = if is_simple_target {
-            Some(self.scopes.set_assignment_target_context())
+        let new_target = if is_simple_target {
+            self.with_use_context(
+                crate::checker::scopes::UseContext::AssignmentTarget,
+                |state| state.infer_expression(*target, &target_ty),
+            )
         } else {
-            None
+            self.infer_expression(*target, &target_ty)
         };
-        let new_target = self.infer_expression(*target, &target_ty);
-        if let Some(ctx) = prev_ctx {
-            self.scopes.restore_use_context(ctx);
-        }
 
         if let Some(kind) =
             check_non_addressable_assignment_target(&new_target, &self.env, self.store)
@@ -597,17 +596,13 @@ impl InferCtx<'_> {
                 self.new_type_var()
             };
 
-            let prev_ctx = if !is_last {
-                Some(self.scopes.set_statement_context())
+            let inferred_item = if !is_last {
+                self.with_use_context(crate::checker::scopes::UseContext::Statement, |state| {
+                    state.infer_root_expression(item, &expression_ty)
+                })
             } else {
-                None
+                self.infer_root_expression(item, &expression_ty)
             };
-
-            let inferred_item = self.infer_root_expression(item, &expression_ty);
-
-            if let Some(ctx) = prev_ctx {
-                self.scopes.restore_use_context(ctx);
-            }
 
             if let Some(cause) = inferred_item.diverges() {
                 diverged_at = Some((i, cause));

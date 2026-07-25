@@ -3,21 +3,17 @@ use syntax::types::{CompoundKind, Symbol, Type};
 
 use super::TaskState;
 use crate::checker::registration::derived_attributes::{
-    DerivedAttribute, DerivedAttributeKind, DerivedAttributeTarget,
+    DerivedAttribute, DerivedAttributeContext, DerivedAttributeTarget,
 };
 use crate::store::Store;
 
 impl TaskState {
-    pub(super) fn register_iterate(&mut self, store: &mut Store, candidates: &[DerivedAttribute]) {
-        for candidate in candidates
-            .iter()
-            .filter(|candidate| candidate.kind == DerivedAttributeKind::Iterate)
-        {
-            self.process_iterate_candidate(store, candidate);
-        }
-    }
-
-    fn process_iterate_candidate(&mut self, store: &mut Store, candidate: &DerivedAttribute) {
+    pub(super) fn process_iterate_candidate(
+        &mut self,
+        store: &mut Store,
+        context: &DerivedAttributeContext,
+        candidate: &DerivedAttribute,
+    ) {
         let DerivedAttributeTarget::Enum {
             name,
             name_span,
@@ -30,7 +26,7 @@ impl TaskState {
             return;
         };
 
-        if candidate.is_d_lis {
+        if context.is_d_lis {
             self.sink
                 .push(diagnostics::attribute::iterate_in_typedef(&candidate.span));
             return;
@@ -50,7 +46,7 @@ impl TaskState {
             return;
         }
 
-        let qualified = Symbol::from_parts(&candidate.module_id, name);
+        let qualified = Symbol::from_parts(&context.module_id, name);
         let variants_key = qualified.with_segment("variants");
 
         // A static method or a variant literally named `variants` both register
@@ -86,7 +82,7 @@ impl TaskState {
         let fn_ty = Type::function(vec![], Default::default(), Box::new(slice_ty));
 
         let module = store
-            .get_module_mut(&candidate.module_id)
+            .get_module_mut(&context.module_id)
             .expect("module must exist");
         module.definitions.insert(
             variants_key,

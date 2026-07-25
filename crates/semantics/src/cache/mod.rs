@@ -183,16 +183,12 @@ pub(crate) fn compute_module_hash(production_hash: u64, dep_hashes: &HashMap<Str
     hasher.finish()
 }
 
-pub(crate) fn get_dependency_module_hashes(
-    module_id: &str,
-    edges: &HashMap<String, HashSet<String>>,
+pub(crate) fn get_dependency_module_hashes<'a>(
+    dependencies: impl IntoIterator<Item = &'a String>,
     module_hashes: &HashMap<String, u64>,
 ) -> HashMap<String, u64> {
-    let Some(deps) = edges.get(module_id) else {
-        return HashMap::default();
-    };
-
-    deps.iter()
+    dependencies
+        .into_iter()
         .map(|dep_id| {
             let hash = if dep_id.starts_with("go:") || dep_id == "prelude" {
                 STDLIB_HASH
@@ -243,7 +239,6 @@ pub(crate) fn try_load_cache(
     expected_dep_hashes: &HashMap<String, u64>,
     expected_artifact_hash: Option<u64>,
     project_root: &Path,
-    check_go_files: bool,
 ) -> Option<ModuleInterface> {
     let path = cache_path(project_root, module_id);
     let interface: ModuleInterface = disk::read(&path).ok()?;
@@ -253,8 +248,8 @@ pub(crate) fn try_load_cache(
         return None;
     }
 
-    if check_go_files {
-        if interface.emit_stamp != expected_artifact_hash {
+    if let Some(expected_artifact_hash) = expected_artifact_hash {
+        if interface.emit_stamp != Some(expected_artifact_hash) {
             return None;
         }
         if !all_go_outputs_exist(module_id, &interface.files, project_root) {
@@ -363,10 +358,7 @@ fn extract_public_definitions(
 }
 
 pub(crate) struct CachedModuleBuild {
-    pub module_id: String,
     pub module: Module,
-    /// `(file_id, module_id)` pairs for the store's file -> module index.
-    pub file_map: Vec<(u32, String)>,
     pub ufcs_methods: Vec<(String, String)>,
 }
 
@@ -378,12 +370,10 @@ pub(crate) fn build_cached_module(
 ) -> CachedModuleBuild {
     let mut module = Module::new(&module_id);
     let mut file_ids: Vec<u32> = Vec::with_capacity(cached.files.len());
-    let mut file_map: Vec<(u32, String)> = Vec::with_capacity(cached.files.len());
 
     for (index, cached_file) in cached.files.iter().enumerate() {
         let file_id = file_id_base + index as u32;
         file_ids.push(file_id);
-        file_map.push((file_id, module_id.clone()));
 
         let display_path = cached_file_display_path(display_base, &module_id, &cached_file.name);
         let file = File::new_cached(
@@ -401,9 +391,7 @@ pub(crate) fn build_cached_module(
     }
 
     CachedModuleBuild {
-        module_id,
         module,
-        file_map,
         ufcs_methods: cached.ufcs_methods,
     }
 }
@@ -797,7 +785,7 @@ mod tests {
         let mut module_hashes = HashMap::default();
         module_hashes.insert("user_mod".to_string(), 12345u64);
 
-        let result = get_dependency_module_hashes("my_mod", &edges, &module_hashes);
+        let result = get_dependency_module_hashes(&edges["my_mod"], &module_hashes);
 
         assert_eq!(result.get("go:fmt"), Some(&STDLIB_HASH));
         assert_eq!(result.get("prelude"), Some(&STDLIB_HASH));
@@ -942,7 +930,7 @@ mod tests {
         let path = cache_path(root, "greet");
         std::fs::write(&path, bincode::serialize(&interface).unwrap()).unwrap();
 
-        let loaded = try_load_cache("greet", 100, &HashMap::default(), None, root, false);
+        let loaded = try_load_cache("greet", 100, &HashMap::default(), None, root);
         assert!(loaded.is_some(), "Check phase must accept unstamped cache");
 
         let loaded = try_load_cache(
@@ -951,7 +939,6 @@ mod tests {
             &HashMap::default(),
             Some(compute_emit_artifact_hash(100, "github.com/test/x")),
             root,
-            true,
         );
         assert!(
             loaded.is_none(),
@@ -989,15 +976,7 @@ mod tests {
         std::fs::write(&path, bincode::serialize(&interface).unwrap()).unwrap();
 
         assert!(
-            try_load_cache(
-                "greet",
-                100,
-                &HashMap::default(),
-                Some(artifact_hash),
-                root,
-                true,
-            )
-            .is_some()
+            try_load_cache("greet", 100, &HashMap::default(), Some(artifact_hash), root).is_some()
         );
 
         let stamp = EmitStamp {
@@ -1007,15 +986,7 @@ mod tests {
         apply_emit_stamps(root, &[(stamp, None)]).unwrap();
 
         assert!(
-            try_load_cache(
-                "greet",
-                100,
-                &HashMap::default(),
-                Some(artifact_hash),
-                root,
-                true,
-            )
-            .is_none()
+            try_load_cache("greet", 100, &HashMap::default(), Some(artifact_hash), root).is_none()
         );
     }
 }

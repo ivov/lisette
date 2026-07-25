@@ -10,8 +10,8 @@ use crate::store::Store;
 
 struct CachedFileBounds {
     file_id: u32,
-    items: Vec<Expression>,
     missing_types: Vec<Expression>,
+    bounds_to_restore: Vec<(Symbol, Vec<Generic>)>,
     imports: Vec<FileImport>,
 }
 
@@ -69,19 +69,23 @@ fn restore_module_bounds(
         .map(|(file_id, source)| {
             let items = syntax::build_ast(&source, file_id).ast;
             let imports = cached_imports(&items);
-            let missing_types = items
-                .iter()
-                .filter(|item| {
-                    type_name(item).is_some_and(|name| {
-                        !cached_names.contains(&Symbol::from_parts(module_id, name))
-                    })
-                })
-                .cloned()
-                .collect();
+            let mut missing_types = Vec::new();
+            let mut bounds_to_restore = Vec::new();
+            for item in items {
+                let Some((bare_name, generics)) = type_generics(&item) else {
+                    continue;
+                };
+                let name = Symbol::from_parts(module_id, bare_name);
+                if !cached_names.contains(&name) {
+                    missing_types.push(item);
+                } else if pending.contains(&name) {
+                    bounds_to_restore.push((name, generics.to_vec()));
+                }
+            }
             CachedFileBounds {
                 file_id,
-                items,
                 missing_types,
+                bounds_to_restore,
                 imports,
             }
         })
@@ -121,18 +125,10 @@ fn restore_module_bounds(
     }
 
     for file in files {
-        let definitions: Vec<(Symbol, Vec<Generic>)> = file
-            .items
-            .iter()
-            .filter_map(|item| {
-                let (name, generics) = type_generics(item)?;
-                let name = Symbol::from_parts(module_id, name);
-                pending.contains(&name).then(|| (name, generics.to_vec()))
-            })
-            .collect();
-        if definitions.is_empty() {
+        if file.bounds_to_restore.is_empty() {
             continue;
         }
+        let definitions = file.bounds_to_restore;
         checker.with_file_context_mut(
             store,
             module_id,
@@ -144,10 +140,10 @@ fn restore_module_bounds(
                     let Some(span) = generics.first().map(|generic| generic.span) else {
                         continue;
                     };
-                    checker.scopes.push();
-                    checker.put_in_scope(&generics);
-                    let resolved = checker.resolve_generic_bounds(&*store, &generics, &span);
-                    checker.scopes.pop();
+                    let resolved = checker.with_scope(|checker| {
+                        checker.put_in_scope(&generics);
+                        checker.resolve_generic_bounds(&*store, &generics, &span)
+                    });
 
                     let Some(definition) = store
                         .get_module_mut(module_id)
@@ -185,16 +181,6 @@ fn cached_imports(items: &[Expression]) -> Vec<FileImport> {
             })
         })
         .collect()
-}
-
-fn type_name(expression: &Expression) -> Option<&str> {
-    match expression {
-        Expression::Enum { name, .. }
-        | Expression::Struct { name, .. }
-        | Expression::Interface { name, .. }
-        | Expression::TypeAlias { name, .. } => Some(name),
-        _ => None,
-    }
 }
 
 fn type_generics(expression: &Expression) -> Option<(&str, &[Generic])> {

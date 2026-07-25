@@ -4,13 +4,6 @@ use syntax::ast::{Attribute, Expression, Span, VariantFields};
 use super::TaskState;
 use crate::store::Store;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum DerivedAttributeKind {
-    Display,
-    Equality,
-    Iterate,
-}
-
 #[derive(Debug, Clone)]
 pub(crate) enum DerivedAttributeTarget {
     Struct {
@@ -25,18 +18,38 @@ pub(crate) enum DerivedAttributeTarget {
     Misplaced,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DerivedAttributeKind {
+    Display,
+    Equality,
+    Iterate,
+}
+
 /// One source occurrence of an attribute that synthesizes a type capability.
 ///
 /// Placement is classified once for all three attributes. This keeps additions to
 /// the AST from being accepted or rejected differently by parallel scanners.
 #[derive(Debug, Clone)]
 pub(crate) struct DerivedAttribute {
-    pub(crate) module_id: String,
-    pub(crate) kind: DerivedAttributeKind,
     pub(crate) span: Span,
     pub(crate) has_args: bool,
-    pub(crate) is_d_lis: bool,
     pub(crate) target: DerivedAttributeTarget,
+    kind: DerivedAttributeKind,
+}
+
+pub(crate) struct DerivedAttributeContext {
+    pub(crate) module_id: String,
+    pub(crate) is_d_lis: bool,
+}
+
+struct DerivedAttributes {
+    context: DerivedAttributeContext,
+    candidates: Vec<DerivedAttribute>,
+}
+
+pub(crate) struct PendingEqualityAttributes {
+    pub(crate) context: DerivedAttributeContext,
+    pub(crate) candidates: Vec<DerivedAttribute>,
 }
 
 impl TaskState {
@@ -45,8 +58,13 @@ impl TaskState {
         store: &mut Store,
         items: &[Expression],
     ) {
-        let candidates =
-            collect_derived_attributes(&self.cursor.module_id, self.is_d_lis(store), items);
+        let candidates = collect_derived_attributes(
+            DerivedAttributeContext {
+                module_id: self.cursor.module_id.clone(),
+                is_d_lis: self.is_d_lis(store),
+            },
+            items,
+        );
         self.register_derived_attributes(store, candidates);
     }
 
@@ -60,35 +78,61 @@ impl TaskState {
             module
                 .files
                 .values()
-                .flat_map(|file| {
-                    collect_derived_attributes(module_id, file.is_d_lis(), &file.items)
+                .map(|file| {
+                    collect_derived_attributes(
+                        DerivedAttributeContext {
+                            module_id: module_id.to_string(),
+                            is_d_lis: file.is_d_lis(),
+                        },
+                        &file.items,
+                    )
                 })
-                .collect()
+                .collect::<Vec<_>>()
         };
-        self.register_derived_attributes(store, candidates);
+        for candidates in candidates {
+            self.register_derived_attributes(store, candidates);
+        }
     }
 
-    fn register_derived_attributes(
-        &mut self,
-        store: &mut Store,
-        candidates: Vec<DerivedAttribute>,
-    ) {
-        self.register_iterate(store, &candidates);
-        self.register_display(store, &candidates);
-        self.pending_equality_attributes.extend(
-            candidates
-                .into_iter()
-                .filter(|candidate| candidate.kind == DerivedAttributeKind::Equality),
-        );
+    fn register_derived_attributes(&mut self, store: &mut Store, candidates: DerivedAttributes) {
+        let DerivedAttributes {
+            context,
+            candidates,
+        } = candidates;
+        for candidate in candidates
+            .iter()
+            .filter(|candidate| candidate.kind == DerivedAttributeKind::Iterate)
+        {
+            self.process_iterate_candidate(store, &context, candidate);
+        }
+        for candidate in candidates
+            .iter()
+            .filter(|candidate| candidate.kind == DerivedAttributeKind::Display)
+        {
+            self.process_display_candidate(store, &context, candidate);
+        }
+        let equality: Vec<_> = candidates
+            .into_iter()
+            .filter(|candidate| candidate.kind == DerivedAttributeKind::Equality)
+            .collect();
+        if !equality.is_empty() {
+            self.pending_equality_attributes
+                .push(PendingEqualityAttributes {
+                    context,
+                    candidates: equality,
+                });
+        }
     }
 }
 
 fn collect_derived_attributes(
-    module_id: &str,
-    is_d_lis: bool,
+    context: DerivedAttributeContext,
     items: &[Expression],
-) -> Vec<DerivedAttribute> {
-    let mut out = Vec::new();
+) -> DerivedAttributes {
+    let mut out = DerivedAttributes {
+        context,
+        candidates: Vec::new(),
+    };
     for item in items {
         match item {
             Expression::Struct {
@@ -98,16 +142,12 @@ fn collect_derived_attributes(
                 ..
             } => {
                 collect_attributes(
-                    module_id,
-                    is_d_lis,
                     attributes,
                     DerivedAttributeTarget::Struct { name: name.clone() },
                     &mut out,
                 );
                 for field in fields {
                     collect_attributes(
-                        module_id,
-                        is_d_lis,
                         field.attributes(),
                         DerivedAttributeTarget::Misplaced,
                         &mut out,
@@ -122,8 +162,6 @@ fn collect_derived_attributes(
                 variants,
                 ..
             } => collect_attributes(
-                module_id,
-                is_d_lis,
                 attributes,
                 DerivedAttributeTarget::Enum {
                     name: name.clone(),
@@ -137,13 +175,7 @@ fn collect_derived_attributes(
                 &mut out,
             ),
             Expression::Function { attributes, .. } | Expression::TypeAlias { attributes, .. } => {
-                collect_attributes(
-                    module_id,
-                    is_d_lis,
-                    attributes,
-                    DerivedAttributeTarget::Misplaced,
-                    &mut out,
-                )
+                collect_attributes(attributes, DerivedAttributeTarget::Misplaced, &mut out)
             }
             Expression::ImplBlock { methods, .. }
             | Expression::Interface {
@@ -152,13 +184,7 @@ fn collect_derived_attributes(
             } => {
                 for method in methods {
                     if let Expression::Function { attributes, .. } = method {
-                        collect_attributes(
-                            module_id,
-                            is_d_lis,
-                            attributes,
-                            DerivedAttributeTarget::Misplaced,
-                            &mut out,
-                        );
+                        collect_attributes(attributes, DerivedAttributeTarget::Misplaced, &mut out);
                     }
                 }
             }
@@ -169,29 +195,21 @@ fn collect_derived_attributes(
 }
 
 fn collect_attributes(
-    module_id: &str,
-    is_d_lis: bool,
     attributes: &[Attribute],
     target: DerivedAttributeTarget,
-    out: &mut Vec<DerivedAttribute>,
+    out: &mut DerivedAttributes,
 ) {
-    const DERIVED: [(&str, DerivedAttributeKind); 3] = [
-        ("display", DerivedAttributeKind::Display),
-        ("equality", DerivedAttributeKind::Equality),
-        ("iterate", DerivedAttributeKind::Iterate),
-    ];
-
-    for (name, kind) in DERIVED {
-        let Some(attribute) = attributes.iter().find(|attribute| attribute.name == name) else {
-            continue;
-        };
-        out.push(DerivedAttribute {
-            module_id: module_id.to_string(),
-            kind,
-            span: attribute.span,
-            has_args: !attribute.args.is_empty(),
-            is_d_lis,
-            target: target.clone(),
-        });
-    }
+    let mut collect = |name: &str, kind, target| {
+        if let Some(attribute) = attributes.iter().find(|attribute| attribute.name == name) {
+            out.candidates.push(DerivedAttribute {
+                span: attribute.span,
+                has_args: !attribute.args.is_empty(),
+                target,
+                kind,
+            });
+        }
+    };
+    collect("display", DerivedAttributeKind::Display, target.clone());
+    collect("equality", DerivedAttributeKind::Equality, target.clone());
+    collect("iterate", DerivedAttributeKind::Iterate, target);
 }

@@ -1,5 +1,3 @@
-use rustc_hash::FxHashMap as HashMap;
-
 use crate::checker::EnvResolve;
 use crate::checker::infer::BuiltinBound;
 use crate::checker::infer::expressions::comparison::{
@@ -13,6 +11,7 @@ use syntax::types::{
 };
 
 use crate::checker::TaskState;
+use crate::checker::scopes::DeferredMapKeyCheck;
 use crate::generics::apply_bounds;
 use crate::prelude::PRELUDE_MODULE_ID;
 use crate::store::Store;
@@ -623,10 +622,7 @@ impl TaskState {
 
         for (i, (name, param_span)) in undeclared.iter().enumerate() {
             self.scopes
-                .current_mut()
-                .type_params
-                .get_or_insert_with(HashMap::default)
-                .insert(name.clone(), generics.len() + i);
+                .insert_type_param(name.clone(), generics.len() + i);
             self.sink
                 .push(diagnostics::infer::undeclared_impl_type_param(
                     name,
@@ -675,14 +671,17 @@ impl TaskState {
     }
 
     pub(crate) fn check_deferred_map_key_bounds(&mut self, store: &Store) {
-        for (key, span, check_concrete) in self.scopes.take_deferred_map_key_checks() {
-            if check_concrete {
-                let resolved = key.resolve_in(&self.env);
-                if !store.resolves_to_unknown(&resolved) {
-                    self.check_map_key_comparable(store, &resolved, span);
+        for check in self.scopes.take_deferred_map_key_checks() {
+            match check {
+                DeferredMapKeyCheck::Comparable { key, span } => {
+                    let resolved = key.resolve_in(&self.env);
+                    if !store.resolves_to_unknown(&resolved) {
+                        self.check_map_key_comparable(store, &resolved, span);
+                    }
                 }
-            } else {
-                self.check_missing_map_key_bounds(store, &key, span);
+                DeferredMapKeyCheck::Bounds { key, span } => {
+                    self.check_missing_map_key_bounds(store, &key, span);
+                }
             }
         }
     }

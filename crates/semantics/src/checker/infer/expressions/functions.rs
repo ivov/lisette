@@ -17,6 +17,7 @@ use super::primitives::contains_deref;
 use super::struct_call::same_nominal;
 use crate::checker::infer::InferCtx;
 use crate::checker::registration::test_functions::normalize_test_params;
+use crate::checker::scopes::DeferredMapKeyCheck;
 use crate::inference::ProjectKind;
 use crate::store::ENTRY_MODULE_ID;
 
@@ -32,10 +33,14 @@ struct TypeConversionCall {
 
 struct CallSignature {
     parameters: Vec<FunctionParameter>,
-    variadic: Option<FunctionParameter>,
-    declared_parameter_count: usize,
+    variadic: Option<VariadicParameter>,
     return_type: Type,
     bounds: Vec<Bound>,
+}
+
+struct VariadicParameter {
+    parameter: FunctionParameter,
+    first_index: usize,
 }
 
 impl InferCtx<'_> {
@@ -146,70 +151,66 @@ impl InferCtx<'_> {
                 .push(diagnostics::infer::invalid_main_signature(name_span));
         }
 
-        self.scopes.push();
+        let (generics, new_params, return_ty, base_fn_ty, new_body) = self.with_scope(|this| {
+            this.put_in_scope(&generics);
+            let generics = this.ensure_generic_bounds(store, generics, &span);
+            let bounds = resolved_generic_bounds(&generics);
 
-        self.put_in_scope(&generics);
-        let generics = self.ensure_generic_bounds(store, generics, &span);
-        let bounds = resolved_generic_bounds(&generics);
+            let resolved_expected = expected_ty.resolve_in(&this.env);
+            let expected_function = store.resolve_to_function_type(&resolved_expected);
+            let expected_params = expected_function
+                .as_ref()
+                .and_then(Type::get_function_params)
+                .unwrap_or_default();
+            let is_test = attributes.iter().any(|a| a.name == "test");
+            let params = normalize_test_params(params, is_test);
+            let new_params = this.infer_function_params(params, expected_params, true);
 
-        let resolved_expected = expected_ty.resolve_in(&self.env);
-        let expected_function = store.resolve_to_function_type(&resolved_expected);
-        let expected_params = expected_function
-            .as_ref()
-            .and_then(Type::get_function_params)
-            .unwrap_or_default();
-        let is_test = attributes.iter().any(|a| a.name == "test");
-        let params = normalize_test_params(params, is_test);
-        let new_params = self.infer_function_params(params, expected_params, true);
-
-        if is_test
-            || new_params
+            if is_test {
+                this.scopes.set_test_fn_name(name.clone());
+            } else if new_params
                 .iter()
-                .any(|p| self.param_provides_test_handle(p))
-        {
-            self.scopes.mark_test_handle();
-        }
-        if is_test {
-            self.scopes.set_test_fn_name(name.clone());
-        }
-        self.mark_test_context_params_used(&new_params);
+                .any(|param| this.param_provides_test_handle(param))
+            {
+                this.scopes.mark_test_handle();
+            }
+            this.mark_test_context_params_used(&new_params);
 
-        let unit_ty = self.type_unit();
-        let return_ty =
-            self.infer_return_type(&return_annotation, &resolved_expected, &span, unit_ty);
+            let unit_ty = this.type_unit();
+            let return_ty =
+                this.infer_return_type(&return_annotation, &resolved_expected, &span, unit_ty);
 
-        self.scopes.current_mut().fn_return_type = Some(return_ty.clone());
+            this.scopes.current_mut().fn_return_type = Some(return_ty.clone());
 
-        let base_fn_ty = Type::function(
-            new_params
-                .iter()
-                .map(|param| {
-                    FunctionParameter::named(
-                        param.ty.clone(),
-                        param.pattern.get_identifier(),
-                        param.is_mutable(),
-                    )
-                })
-                .collect(),
-            bounds,
-            return_ty.clone().into(),
-        );
+            let base_fn_ty = Type::function(
+                new_params
+                    .iter()
+                    .map(|param| {
+                        FunctionParameter::named(
+                            param.ty.clone(),
+                            param.pattern.get_identifier(),
+                            param.is_mutable(),
+                        )
+                    })
+                    .collect(),
+                bounds,
+                return_ty.clone().into(),
+            );
 
-        // The later unused-expression check honors allow attributes.
-        let has_implicit_unit_return = return_annotation == Annotation::Unknown;
-        let body_ty = if has_implicit_unit_return {
-            Type::ignored()
-        } else {
-            return_ty.clone()
-        };
+            let has_implicit_unit_return = return_annotation == Annotation::Unknown;
+            let body_ty = if has_implicit_unit_return {
+                Type::ignored()
+            } else {
+                return_ty.clone()
+            };
 
-        let new_body = body.map_definition(|body| {
-            self.infer_function_body(Box::new(body), &body_ty, &return_annotation, &return_ty)
+            let new_body = body.map_definition(|body| {
+                this.infer_function_body(Box::new(body), &body_ty, &return_annotation, &return_ty)
+            });
+
+            this.check_deferred_map_key_bounds(store);
+            (generics, new_params, return_ty, base_fn_ty, new_body)
         });
-
-        self.check_deferred_map_key_bounds(store);
-
-        self.scopes.pop();
 
         let fn_ty = if generics.is_empty() {
             base_fn_ty
@@ -250,68 +251,62 @@ impl InferCtx<'_> {
         expected_ty: &Type,
     ) -> Expression {
         let store = self.store;
-        self.scopes.push();
+        let (new_params, base_fn_ty, new_body) = self.with_scope(|this| {
+            let resolved_expected = expected_ty.resolve_in(&this.env);
+            let expected_function = store.resolve_to_function_type(&resolved_expected);
+            let expected_params = expected_function
+                .as_ref()
+                .and_then(Type::get_function_params)
+                .unwrap_or_default();
+            let new_params = this.infer_function_params(params, expected_params, false);
 
-        // Resolve type variables so that a Go function alias bound via speculative
-        // unification (e.g. T = tea.Cmd) is visible as its underlying function shape.
-        let resolved_expected = expected_ty.resolve_in(&self.env);
-        let expected_function = store.resolve_to_function_type(&resolved_expected);
-        let expected_params = expected_function
-            .as_ref()
-            .and_then(Type::get_function_params)
-            .unwrap_or_default();
-        let new_params = self.infer_function_params(params, expected_params, false);
-
-        if new_params
-            .iter()
-            .any(|p| self.param_provides_test_handle(p))
-        {
-            self.scopes.mark_test_handle();
-        }
-        self.mark_test_context_params_used(&new_params);
-
-        let default_return = self.new_type_var();
-        let return_ty = self.infer_return_type(
-            &return_annotation,
-            &resolved_expected,
-            &span,
-            default_return,
-        );
-
-        self.scopes.current_mut().fn_return_type = Some(return_ty.clone());
-
-        let base_fn_ty = Type::function(
-            new_params
+            if new_params
                 .iter()
-                .map(|param| {
-                    FunctionParameter::named(
-                        param.ty.clone(),
-                        param.pattern.get_identifier(),
-                        param.is_mutable(),
-                    )
-                })
-                .collect(),
-            vec![],
-            return_ty.clone().into(),
-        );
+                .any(|param| this.param_provides_test_handle(param))
+            {
+                this.scopes.mark_test_handle();
+            }
+            this.mark_test_context_params_used(&new_params);
 
-        // Reset loop depth — closures introduce a new function scope, so
-        // `defer` inside a closure body should not be flagged as "defer in loop"
-        // even when the closure is lexically inside a loop.
-        let saved_loop_depth = self.scopes.reset_loop_depth();
-        // The later unused-expression check honors allow attributes.
-        let relax_body_to_unit = return_annotation == Annotation::Unknown && return_ty.is_unit();
-        let body_ty = if relax_body_to_unit {
-            Type::ignored()
-        } else {
-            return_ty.clone()
-        };
-        let new_body = self.infer_function_body(body, &body_ty, &return_annotation, &return_ty);
-        self.scopes.restore_loop_depth(saved_loop_depth);
+            let default_return = this.new_type_var();
+            let return_ty = this.infer_return_type(
+                &return_annotation,
+                &resolved_expected,
+                &span,
+                default_return,
+            );
 
-        self.check_deferred_map_key_bounds(store);
+            this.scopes.current_mut().fn_return_type = Some(return_ty.clone());
 
-        self.scopes.pop();
+            let base_fn_ty = Type::function(
+                new_params
+                    .iter()
+                    .map(|param| {
+                        FunctionParameter::named(
+                            param.ty.clone(),
+                            param.pattern.get_identifier(),
+                            param.is_mutable(),
+                        )
+                    })
+                    .collect(),
+                vec![],
+                return_ty.clone().into(),
+            );
+
+            let relax_body_to_unit =
+                return_annotation == Annotation::Unknown && return_ty.is_unit();
+            let body_ty = if relax_body_to_unit {
+                Type::ignored()
+            } else {
+                return_ty.clone()
+            };
+            let new_body = this.without_enclosing_loop(|this| {
+                this.infer_function_body(body, &body_ty, &return_annotation, &return_ty)
+            });
+
+            this.check_deferred_map_key_bounds(store);
+            (new_params, base_fn_ty, new_body)
+        });
 
         self.unify(expected_ty, &base_fn_ty, &span);
 
@@ -374,9 +369,10 @@ impl InferCtx<'_> {
         let store = self.store;
         let callee_ty = self.new_type_var();
 
-        let prev_context = self.scopes.set_callee_context();
-        let callee_expression = self.infer_expression(*expression, &callee_ty);
-        self.scopes.restore_use_context(prev_context);
+        let callee_expression = self
+            .with_use_context(crate::checker::scopes::UseContext::Callee, |state| {
+                state.infer_expression(*expression, &callee_ty)
+            });
 
         let forall_ty = self.resolve_callee_forall_type(&callee_expression, &type_args);
         let (callee_ty, type_arguments) =
@@ -400,7 +396,6 @@ impl InferCtx<'_> {
         let CallSignature {
             parameters,
             variadic,
-            declared_parameter_count,
             return_type: return_ty,
             bounds,
         } = self.extract_call_signature(callee_ty, &args, &callee_expression);
@@ -443,7 +438,10 @@ impl InferCtx<'_> {
         self.check_call_arity(&parameters, &new_args, &callee_expression, &span);
         self.check_mut_param_arguments(&new_args, &parameters, &callee_expression);
 
-        self.check_range_to_for_variadic(&new_args, variadic.as_ref());
+        self.check_range_to_for_variadic(
+            &new_args,
+            variadic.as_ref().map(|variadic| &variadic.parameter),
+        );
 
         if let Some(idx) = substring_range_idx
             && let Some(arg) = new_args.get(idx)
@@ -458,17 +456,21 @@ impl InferCtx<'_> {
 
         let new_spread = spread.map(|spread_expr| match &variadic {
             Some(variadic) => {
-                let expected = if variadic.ty.is_unknown() {
+                let expected = if variadic.parameter.ty.is_unknown() {
                     let var = self.new_type_var();
                     self.type_slice(var)
                 } else {
-                    self.type_slice(variadic.ty.clone())
+                    self.type_slice(variadic.parameter.ty.clone())
                 };
                 let inferred =
                     self.with_value_context(|s| s.infer_expression(*spread_expr, &expected));
-                if variadic.mutable {
+                if variadic.parameter.mutable {
                     let callee_label = callee_label(&callee_expression);
-                    self.check_arg_against_mut_param(&inferred, &variadic.ty, &callee_label);
+                    self.check_arg_against_mut_param(
+                        &inferred,
+                        &variadic.parameter.ty,
+                        &callee_label,
+                    );
                 }
                 inferred
             }
@@ -499,14 +501,24 @@ impl InferCtx<'_> {
         if let Some((CompoundKind::Map, arguments)) = resolved_return.as_compound()
             && let Some(key) = arguments.first()
         {
-            let check_concrete = matches!(
+            let check = if matches!(
                 call_kind,
                 CallKind::NativeConstructor(NativeTypeKind::Map)
                     | CallKind::NativeMethod(NativeTypeKind::Map)
                     | CallKind::NativeMethodIdentifier(NativeTypeKind::Map)
-            ) && !expected_is_map;
-            self.scopes
-                .defer_map_key_check(key.clone(), span, check_concrete);
+            ) && !expected_is_map
+            {
+                DeferredMapKeyCheck::Comparable {
+                    key: key.clone(),
+                    span,
+                }
+            } else {
+                DeferredMapKeyCheck::Bounds {
+                    key: key.clone(),
+                    span,
+                }
+            };
+            self.scopes.defer_map_key_check(check);
         }
 
         self.check_native_mutating_call(&callee_expression, &span);
@@ -533,17 +545,17 @@ impl InferCtx<'_> {
         if type_args.is_empty()
             && new_spread.is_none()
             && let Some(variadic) = &variadic
-            && new_args.len() < declared_parameter_count
+            && new_args.len() <= variadic.first_index
         {
             let already_covered = return_check_recorded
-                && resolved_return.contains_type(&variadic.ty.resolve_in(&self.env));
+                && resolved_return.contains_type(&variadic.parameter.ty.resolve_in(&self.env));
             if !already_covered {
                 let module_id = self.cursor.module_id.clone();
                 self.facts
                     .deferred
                     .generic_calls
                     .push(crate::facts::GenericCallCheck {
-                        ty: variadic.ty.clone(),
+                        ty: variadic.parameter.ty.clone(),
                         span,
                         module_id,
                     });
@@ -933,68 +945,69 @@ impl InferCtx<'_> {
         let function_ty = self.store.resolve_to_function_type(&callee_ty);
         let is_variadic = function_ty.as_ref().and_then(Type::is_variadic);
 
-        let (parameters, variadic, declared_parameter_count, return_type) =
-            match self.extract_function_type(&callee_ty) {
-                Some((mut params, return_type)) => {
-                    let declared_parameter_count = params.len();
-                    let variadic = is_variadic.map(|variadic_ty| {
-                        let variadic = params
-                            .pop()
-                            .expect("variadic function has a trailing parameter");
-                        while params.len() < arg_count {
-                            params.push(variadic.with_type(variadic_ty.clone()));
-                        }
-                        variadic.with_type(variadic_ty)
-                    });
-                    (params, variadic, declared_parameter_count, return_type)
-                }
-                None if callee_ty.is_variable() => {
-                    let parameters = (0..arg_count)
-                        .map(|_| FunctionParameter::new(self.new_type_var(), false))
-                        .collect();
-                    (parameters, None, arg_count, self.new_type_var())
-                }
-                None if callee_ty.resolve_in(&self.env).is_error() => {
-                    let parameters = (0..arg_count)
-                        .map(|_| FunctionParameter::new(Type::Error, false))
-                        .collect();
-                    (parameters, None, arg_count, Type::Error)
-                }
-                None => {
-                    let callee_name = match callee_expression.unwrap_parens() {
-                        Expression::Identifier {
-                            value, resolution, ..
-                        } if !matches!(resolution, IdentifierResolution::Binding(_)) => {
-                            Some(value.as_str())
-                        }
+        let (parameters, variadic, return_type) = match self.extract_function_type(&callee_ty) {
+            Some((mut params, return_type)) => {
+                let variadic = is_variadic.map(|variadic_ty| {
+                    let parameter = params
+                        .pop()
+                        .expect("variadic function has a trailing parameter");
+                    let first_index = params.len();
+                    while params.len() < arg_count {
+                        params.push(parameter.with_type(variadic_ty.clone()));
+                    }
+                    VariadicParameter {
+                        parameter: parameter.with_type(variadic_ty),
+                        first_index,
+                    }
+                });
+                (params, variadic, return_type)
+            }
+            None if callee_ty.is_variable() => {
+                let parameters = (0..arg_count)
+                    .map(|_| FunctionParameter::new(self.new_type_var(), false))
+                    .collect();
+                (parameters, None, self.new_type_var())
+            }
+            None if callee_ty.resolve_in(&self.env).is_error() => {
+                let parameters = (0..arg_count)
+                    .map(|_| FunctionParameter::new(Type::Error, false))
+                    .collect();
+                (parameters, None, Type::Error)
+            }
+            None => {
+                let callee_name = match callee_expression.unwrap_parens() {
+                    Expression::Identifier {
+                        value, resolution, ..
+                    } if !matches!(resolution, IdentifierResolution::Binding(_)) => {
+                        Some(value.as_str())
+                    }
+                    _ => None,
+                };
+                let arg_name = if args.len() == 1 {
+                    match args[0].unwrap_parens() {
+                        Expression::Identifier { value, .. } => Some(value.as_str()),
                         _ => None,
-                    };
-                    let arg_name = if args.len() == 1 {
-                        match args[0].unwrap_parens() {
-                            Expression::Identifier { value, .. } => Some(value.as_str()),
-                            _ => None,
-                        }
-                    } else {
-                        None
-                    };
-                    self.sink.push(diagnostics::infer::not_callable(
-                        &callee_ty,
-                        callee_name,
-                        arg_name,
-                        self.store.underlying_type(&callee_ty).is_some(),
-                        callee_expression.get_span(),
-                    ));
-                    let parameters = (0..arg_count)
-                        .map(|_| FunctionParameter::new(Type::Error, false))
-                        .collect();
-                    (parameters, None, arg_count, Type::Error)
-                }
-            };
+                    }
+                } else {
+                    None
+                };
+                self.sink.push(diagnostics::infer::not_callable(
+                    &callee_ty,
+                    callee_name,
+                    arg_name,
+                    self.store.underlying_type(&callee_ty).is_some(),
+                    callee_expression.get_span(),
+                ));
+                let parameters = (0..arg_count)
+                    .map(|_| FunctionParameter::new(Type::Error, false))
+                    .collect();
+                (parameters, None, Type::Error)
+            }
+        };
 
         CallSignature {
             parameters,
             variadic,
-            declared_parameter_count,
             return_type,
             bounds,
         }

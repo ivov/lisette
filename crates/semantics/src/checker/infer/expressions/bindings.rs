@@ -147,9 +147,9 @@ impl InferCtx<'_> {
             self.new_type_var()
         };
 
-        let prior_let_rhs = self.scopes.set_let_binding_rhs(true);
-        let new_value = self.with_value_context(|s| s.infer_expression(*value, &ty));
-        self.scopes.set_let_binding_rhs(prior_let_rhs);
+        let new_value = self.with_let_binding_rhs(|state| {
+            state.with_value_context(|state| state.infer_expression(*value, &ty))
+        });
 
         let new_mode = mode.map_else(|else_expression, else_span| {
             let else_ty = self.new_type_var();

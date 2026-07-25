@@ -113,23 +113,8 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
 
             let files = graph_result.files.remove(&module_id).unwrap_or_default();
 
-            let prev_module_id = checker.cursor.module_id.clone();
-            checker.cursor.module_id = module_id.to_string();
             store.store_module(&module_id, files);
-            let test_ids: Vec<u32> = store
-                .get_module(&module_id)
-                .map(|module| {
-                    module
-                        .files
-                        .values()
-                        .filter(|file| file.is_test())
-                        .map(|file| file.id)
-                        .collect()
-                })
-                .unwrap_or_default();
-            store.test_file_ids.extend(test_ids);
             checker.register_module(&mut store, &module_id);
-            checker.cursor.module_id = prev_module_id;
 
             to_infer.push(module_id);
         }
@@ -139,14 +124,11 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
         checker.finalize_tests(&mut store);
 
         for module_id in &to_infer {
-            let prev_module_id = checker.cursor.module_id.clone();
-            checker.cursor.module_id = module_id.to_string();
             let module_files = checker.take_module_files(&mut store, module_id);
             InferCtx::new(&mut checker, &store).infer_module(module_id, module_files);
-            checker.cursor.module_id = prev_module_id;
         }
 
-        for (_, typed_file) in std::mem::take(&mut checker.typed_files) {
+        for typed_file in std::mem::take(&mut checker.typed_files) {
             store.store_file(typed_file);
         }
 

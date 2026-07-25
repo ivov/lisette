@@ -1,5 +1,5 @@
 use crate::checker::EnvResolve;
-use crate::checker::scopes::{DepthCounter, RecoverBlockContext, TryBlockContext, TryCarrier};
+use crate::checker::scopes::{RecoverBlockContext, TryBlockContext, TryCarrier, TryUsage};
 use syntax::ast::{Expression, Span};
 use syntax::types::Type;
 
@@ -48,7 +48,7 @@ impl InferCtx<'_> {
                     .scopes
                     .lookup_try_block_context_mut()
                     .expect("try block context was just found");
-                let has_mismatch = ctx.carrier.observe(observed);
+                let has_mismatch = ctx.usage.observe(observed);
                 (ctx.ok_ty.clone(), ctx.err_ty.clone(), has_mismatch)
             };
 
@@ -225,32 +225,25 @@ impl InferCtx<'_> {
         let ok_ty = self.new_type_var();
         let err_ty = self.new_type_var();
 
-        self.scopes.push();
-        {
-            let scope = self.scopes.current_mut();
-            scope.try_block_context = Some(TryBlockContext {
+        let (new_items, usage) = self.with_scope(|this| {
+            let entry_loop_depth = this.scopes.loop_depth();
+            this.scopes.set_try_block_context(TryBlockContext {
                 ok_ty: ok_ty.clone(),
                 err_ty: err_ty.clone(),
-                carrier: TryCarrier::Unset,
-                loop_depth: DepthCounter::new(),
+                usage: TryUsage::default(),
+                entry_loop_depth,
             });
-        }
-
-        self.register_block_local_items(&items);
-
-        let new_items = self.infer_block_items(items, ok_ty.clone());
-
-        let carrier = {
-            let ctx = self
+            this.register_block_local_items(&items);
+            let new_items = this.infer_block_items(items, ok_ty.clone());
+            let usage = this
                 .scopes
-                .current()
-                .try_block_context
-                .as_ref()
-                .expect("try_block_context must exist");
-            ctx.carrier
-        };
+                .current_try_block_context()
+                .expect("try block scope must carry its context")
+                .usage;
+            (new_items, usage)
+        });
 
-        if !carrier.was_used() {
+        if !usage.was_used() {
             self.sink
                 .push(diagnostics::infer::try_block_no_question_mark(
                     try_keyword_span,
@@ -290,41 +283,27 @@ impl InferCtx<'_> {
             inner_ty
         };
 
-        let block_ty = match carrier {
-            TryCarrier::Result => {
+        let block_ty = match usage {
+            TryUsage::Carrier(TryCarrier::Result) => {
                 self.unify(&ok_ty, &inner_ty, &span);
                 self.type_result(store, inner_ty, err_ty)
             }
-            TryCarrier::Option => {
+            TryUsage::Carrier(TryCarrier::Option) => {
                 self.unify(&ok_ty, &inner_ty, &span);
                 self.type_option(store, inner_ty)
             }
-            TryCarrier::Unset | TryCarrier::Unknown => {
+            TryUsage::Unused | TryUsage::Unknown => {
                 let new_err_ty = self.new_type_var();
                 self.type_result(store, inner_ty, new_err_ty)
             }
         };
 
         self.unify(expected_ty, &block_ty, &try_keyword_span);
-        self.scopes.pop();
-
         Expression::TryBlock {
             items: new_items,
             ty: block_ty,
             try_keyword_span,
             span,
-        }
-    }
-
-    pub(super) fn increment_try_block_loop_depth(&mut self) {
-        if let Some(ctx) = self.scopes.lookup_try_block_context_mut() {
-            ctx.loop_depth.increment();
-        }
-    }
-
-    pub(super) fn decrement_try_block_loop_depth(&mut self) {
-        if let Some(ctx) = self.scopes.lookup_try_block_context_mut() {
-            ctx.loop_depth.decrement();
         }
     }
 
@@ -354,19 +333,13 @@ impl InferCtx<'_> {
             };
         }
 
-        self.scopes.push();
-        {
-            let scope = self.scopes.current_mut();
-            scope.recover_block_context = Some(RecoverBlockContext {
-                loop_depth: DepthCounter::new(),
-            });
-        }
-
-        self.register_block_local_items(&items);
-
-        let new_items = self.infer_block_items(items, inner_ty);
-
-        self.scopes.pop();
+        let new_items = self.with_scope(|this| {
+            let entry_loop_depth = this.scopes.loop_depth();
+            this.scopes
+                .set_recover_block_context(RecoverBlockContext { entry_loop_depth });
+            this.register_block_local_items(&items);
+            this.infer_block_items(items, inner_ty)
+        });
 
         let last_item = new_items.last().expect("block must have at least one item");
         let result_inner_ty = last_item.get_type();
@@ -386,18 +359,6 @@ impl InferCtx<'_> {
             ty: block_ty,
             recover_keyword_span,
             span,
-        }
-    }
-
-    pub(super) fn increment_recover_block_loop_depth(&mut self) {
-        if let Some(ctx) = self.scopes.lookup_recover_block_context_mut() {
-            ctx.loop_depth.increment();
-        }
-    }
-
-    pub(super) fn decrement_recover_block_loop_depth(&mut self) {
-        if let Some(ctx) = self.scopes.lookup_recover_block_context_mut() {
-            ctx.loop_depth.decrement();
         }
     }
 }

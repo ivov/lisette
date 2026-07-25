@@ -798,59 +798,61 @@ impl InferCtx<'_> {
         let mut inferred = vec![first];
 
         for pattern in patterns.iter().skip(1) {
-            self.scopes.push();
-            let checkpoint = self.facts.binding_checkpoint();
-            let alt = self.infer_pattern_inner(pattern.clone(), expected_ty.clone(), kind, false);
-            let alt_bindings = collect_pattern_bindings(&alt);
-            let alt_names: HashSet<&str> =
-                alt_bindings.iter().map(|(name, _)| name.as_str()).collect();
+            let alt = self.with_temporary_bindings(|this| {
+                this.with_scope(|this| {
+                    let alt =
+                        this.infer_pattern_inner(pattern.clone(), expected_ty.clone(), kind, false);
+                    let alt_bindings = collect_pattern_bindings(&alt);
+                    let alt_names: HashSet<&str> =
+                        alt_bindings.iter().map(|(name, _)| name.as_str()).collect();
 
-            if first_names != alt_names {
-                let missing_in_alt: Vec<&str> =
-                    first_names.difference(&alt_names).copied().collect();
-                let missing_in_first: Vec<&str> =
-                    alt_names.difference(&first_names).copied().collect();
+                    if first_names != alt_names {
+                        let missing_in_alt: Vec<&str> =
+                            first_names.difference(&alt_names).copied().collect();
+                        let missing_in_first: Vec<&str> =
+                            alt_names.difference(&first_names).copied().collect();
 
-                let error_span = if let Some(name) = missing_in_alt.first() {
-                    first_bindings
-                        .iter()
-                        .find(|(n, _)| n == *name)
-                        .map(|(_, s)| *s)
-                } else if let Some(name) = missing_in_first.first() {
-                    alt_bindings
-                        .iter()
-                        .find(|(n, _)| n == *name)
-                        .map(|(_, s)| *s)
-                } else {
-                    None
-                };
+                        let error_span = if let Some(name) = missing_in_alt.first() {
+                            first_bindings
+                                .iter()
+                                .find(|(n, _)| n == *name)
+                                .map(|(_, s)| *s)
+                        } else if let Some(name) = missing_in_first.first() {
+                            alt_bindings
+                                .iter()
+                                .find(|(n, _)| n == *name)
+                                .map(|(_, s)| *s)
+                        } else {
+                            None
+                        };
 
-                self.sink
-                    .push(diagnostics::infer::or_pattern_binding_mismatch(
-                        error_span.unwrap_or(span),
-                        &missing_in_alt,
-                        &missing_in_first,
-                    ));
-                self.facts.or_pattern_error_spans.insert(span);
-            } else {
-                for (name, alt_span) in &alt_bindings {
-                    if let Some(first_ty) = first_binding_types.get(name)
-                        && let Some(alt_ty) = self.scopes.lookup_value(name)
-                    {
-                        let first_resolved = first_ty.resolve_in(&self.env);
-                        let alt_resolved = alt_ty.resolve_in(&self.env);
-                        if first_resolved != alt_resolved {
-                            self.sink.push(diagnostics::infer::or_pattern_type_mismatch(
-                                *alt_span,
-                                &first_resolved.to_string(),
-                                &alt_resolved.to_string(),
+                        this.sink
+                            .push(diagnostics::infer::or_pattern_binding_mismatch(
+                                error_span.unwrap_or(span),
+                                &missing_in_alt,
+                                &missing_in_first,
                             ));
+                        this.facts.or_pattern_error_spans.insert(span);
+                    } else {
+                        for (name, alt_span) in &alt_bindings {
+                            if let Some(first_ty) = first_binding_types.get(name)
+                                && let Some(alt_ty) = this.scopes.lookup_value(name)
+                            {
+                                let first_resolved = first_ty.resolve_in(&this.env);
+                                let alt_resolved = alt_ty.resolve_in(&this.env);
+                                if first_resolved != alt_resolved {
+                                    this.sink.push(diagnostics::infer::or_pattern_type_mismatch(
+                                        *alt_span,
+                                        &first_resolved.to_string(),
+                                        &alt_resolved.to_string(),
+                                    ));
+                                }
+                            }
                         }
                     }
-                }
-            }
-            self.scopes.pop();
-            self.facts.remove_bindings_from(checkpoint);
+                    alt
+                })
+            });
             inferred.push(alt);
         }
 

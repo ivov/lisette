@@ -25,11 +25,7 @@ pub enum MemberKind {
 #[derive(Clone, Debug)]
 pub struct ResolvedMember {
     pub(crate) depth: usize,
-    #[cfg_attr(not(test), expect(dead_code))]
-    embed_path: Vec<EcoString>,
     pub declaring_type: Symbol,
-    #[cfg_attr(not(test), expect(dead_code))]
-    indirect: bool,
     pub kind: MemberKind,
 }
 
@@ -105,14 +101,13 @@ struct Entry {
     indirect: bool,
     /// Reached by more than one path at this depth, so its members collide.
     multiples: bool,
-    embed_path: Vec<EcoString>,
 }
 
 fn walk(store: &Store, outer: &Type) -> Vec<Entry> {
     let mut visited: Vec<Entry> = Vec::new();
     let mut seen: HashSet<String> = HashSet::default();
 
-    let Some(root) = nominal_entry(store, outer.clone(), 0, false, false, Vec::new()) else {
+    let Some(root) = nominal_entry(store, outer.clone(), 0, false, false) else {
         return visited;
     };
     let mut current = vec![root];
@@ -145,15 +140,12 @@ fn walk(store: &Store, outer: &Type) -> Vec<Entry> {
                 let field_ty = instantiate_field(store, &entry.ty, &field.ty);
                 let resolved_field = store.deep_resolve_alias(&field_ty);
                 let (target, is_pointer) = deref_once(&resolved_field);
-                let mut path = entry.embed_path.clone();
-                path.push(field.name.clone());
                 if let Some(child) = nominal_entry(
                     store,
                     target,
                     depth + 1,
                     entry.indirect || is_pointer,
                     entry.multiples,
-                    path,
                 ) {
                     next.push(child);
                 }
@@ -272,9 +264,7 @@ fn build_member(outer: &Type, entry: &Entry, candidate: &Candidate) -> ResolvedM
 
     ResolvedMember {
         depth: entry.depth,
-        embed_path: entry.embed_path.clone(),
         declaring_type: candidate.declaring_type.clone(),
-        indirect: entry.indirect,
         kind,
     }
 }
@@ -309,7 +299,6 @@ fn nominal_entry(
     depth: usize,
     indirect: bool,
     multiples: bool,
-    embed_path: Vec<EcoString>,
 ) -> Option<Entry> {
     let resolved = store.deep_resolve_alias(&target);
     if !matches!(resolved, Type::Nominal { .. }) {
@@ -320,7 +309,6 @@ fn nominal_entry(
         depth,
         indirect,
         multiples,
-        embed_path,
     })
 }
 
@@ -631,8 +619,6 @@ mod tests {
         b.struct_("N1", vec![vembed("N0")], vec![]);
         let member = found(resolve_selector(&b.store, &nominal("N1"), "m"));
         assert_eq!(member.depth, 1);
-        assert_eq!(member.embed_path, vec![EcoString::from("N0")]);
-        assert!(!member.indirect);
         assert!(!is_pointer_receiver(&member));
     }
 
@@ -642,7 +628,6 @@ mod tests {
         b.struct_("N0", vec![], vec![("pm", pointer_method("N0"))]);
         b.struct_("N1", vec![vembed("N0")], vec![]);
         let member = found(resolve_selector(&b.store, &nominal("N1"), "pm"));
-        assert!(!member.indirect);
         assert!(is_pointer_receiver(&member));
     }
 
@@ -652,7 +637,6 @@ mod tests {
         b.struct_("N0", vec![], vec![("pm", pointer_method("N0"))]);
         b.struct_("N1", vec![pembed("N0")], vec![]);
         let member = found(resolve_selector(&b.store, &nominal("N1"), "pm"));
-        assert!(member.indirect);
         assert!(!is_pointer_receiver(&member));
     }
 
@@ -662,7 +646,6 @@ mod tests {
         b.struct_("N0", vec![], vec![("m", value_method("N0"))]);
         b.struct_("N1", vec![pembed("N0")], vec![]);
         let member = found(resolve_selector(&b.store, &nominal("N1"), "m"));
-        assert!(member.indirect);
         assert!(!is_pointer_receiver(&member));
     }
 
@@ -675,7 +658,6 @@ mod tests {
         b.struct_("N3", vec![vembed("N2")], vec![]);
         let member = found(resolve_selector(&b.store, &nominal("N3"), "pm"));
         assert_eq!(member.depth, 3);
-        assert!(!member.indirect);
         assert!(is_pointer_receiver(&member));
     }
 
@@ -688,7 +670,6 @@ mod tests {
         b.struct_("N3", vec![vembed("N2")], vec![]);
         let member = found(resolve_selector(&b.store, &nominal("N3"), "pm"));
         assert_eq!(member.depth, 3);
-        assert!(member.indirect);
         assert!(!is_pointer_receiver(&member));
     }
 
@@ -701,7 +682,6 @@ mod tests {
         b.struct_("N3", vec![vembed("N2")], vec![]);
         let member = found(resolve_selector(&b.store, &nominal("N3"), "m"));
         assert_eq!(member.depth, 3);
-        assert!(!member.indirect);
         assert!(!is_pointer_receiver(&member));
     }
 

@@ -340,6 +340,36 @@ fn try_block_with_loop_inside() {
 }
 
 #[test]
+fn try_block_cannot_break_an_enclosing_loop() {
+    infer(
+        r#"{
+    for i in 0..3 {
+      try {
+        break
+        Option.Some(i)?
+      }
+    }
+    }"#,
+    )
+    .assert_infer_code("try_block_break");
+}
+
+#[test]
+fn try_block_cannot_continue_an_enclosing_loop() {
+    infer(
+        r#"{
+    for i in 0..3 {
+      try {
+        continue
+        Option.Some(i)?
+      }
+    }
+    }"#,
+    )
+    .assert_infer_code("try_block_continue");
+}
+
+#[test]
 fn try_block_in_if_condition() {
     infer(
         r#"{

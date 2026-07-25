@@ -39,7 +39,6 @@ pub struct Facts {
     pub always_failing_try_blocks: Vec<Span>,
     pub expression_only_fstrings: Vec<ExpressionOnlyFstringFact>,
     pub interface_satisfied_methods: HashMap<(String, String), Vec<InterfaceSatisfaction>>,
-    pub(crate) equality_derivations: Vec<String>,
     pub(crate) test_functions: Vec<TestFunction>,
 
     pub(crate) deferred: DeferredChecks,
@@ -158,9 +157,15 @@ pub struct StatementTailCheck {
 }
 
 #[derive(Debug, Clone)]
+pub(crate) struct BranchArm {
+    pub(crate) ty: Type,
+    pub(crate) span: Span,
+}
+
+#[derive(Debug, Clone)]
 pub struct BranchSubsumption {
     pub(crate) result_ty: Type,
-    pub(crate) arms: Vec<(Type, Span)>,
+    pub(crate) arms: Vec<BranchArm>,
 }
 
 #[derive(Debug, Clone)]
@@ -186,7 +191,6 @@ impl Facts {
             function_spans: Vec::new(),
             usages: HashSet::default(),
             interface_satisfied_methods: HashMap::default(),
-            equality_derivations: Vec::new(),
             test_functions: Vec::new(),
             bound_types: HashMap::default(),
         }
@@ -346,11 +350,9 @@ impl Facts {
             function_spans,
             usages,
             interface_satisfied_methods,
-            equality_derivations,
             test_functions,
             bound_types,
         } = other;
-        self.equality_derivations.extend(equality_derivations);
         self.test_functions.extend(test_functions);
         self.bound_types.extend(bound_types);
 
