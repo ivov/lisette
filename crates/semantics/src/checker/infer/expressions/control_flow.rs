@@ -96,7 +96,7 @@ impl InferCtx<'_> {
                 }
                 let before = self.sink.len();
                 if self
-                    .try_unify(arm_ty, &obligation.result_ty, arm_span)
+                    .try_unify(&obligation.result_ty, arm_ty, arm_span)
                     .is_err()
                     && self.sink.len() == before
                 {

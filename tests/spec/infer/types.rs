@@ -1698,6 +1698,27 @@ fn main() {
 }
 
 #[test]
+fn interface_value_narrowed_with_assert_type_satisfies_concrete_positions() {
+    infer(
+        r#"
+struct FooError {}
+impl FooError { fn Error(self) -> string { "foo failed" } }
+struct Holder { inner: FooError }
+fn take(f: FooError) -> string { f.Error() }
+fn unwrap(e: error) -> Option<FooError> { assert_type<FooError>(e) }
+fn main() {
+  let e: error = FooError {}
+  let concrete = assert_type<FooError>(e).unwrap_or(FooError {})
+  let held = Holder { inner: concrete }
+  let _ = take(held.inner)
+  let _ = unwrap(e)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn failed_cast_to_interface_reports_single_error() {
     infer(
         r#"

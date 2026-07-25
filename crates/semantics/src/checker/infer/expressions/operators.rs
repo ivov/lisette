@@ -606,10 +606,19 @@ impl InferCtx<'_> {
         right_operand_ty: &Type,
         span: &Span,
     ) {
+        let errors_before = self.sink.len();
         if self
             .try_unify(left_operand_ty, right_operand_ty, span)
             .is_err()
         {
+            if self.sink.len() == errors_before
+                && self
+                    .try_unify(right_operand_ty, left_operand_ty, span)
+                    .is_ok()
+            {
+                return;
+            }
+
             let left_resolved = left_operand_ty.resolve_in(&self.env);
             let right_resolved = right_operand_ty.resolve_in(&self.env);
             self.sink

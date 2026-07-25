@@ -1810,6 +1810,189 @@ fn test() {
 }
 
 #[test]
+fn infer_function_value_with_concrete_param_where_interface_param_expected() {
+    let input = r#"
+struct FooError {}
+
+impl FooError {
+  fn Error(self) -> string { "foo failed" }
+}
+
+struct Bar {
+  map_foo_err: fn(FooError) -> string,
+}
+
+fn build(mapper: fn(error) -> string) -> string {
+  mapper(FooError {})
+}
+
+fn test() {
+  let bar = Bar { map_foo_err: |foo| foo.Error() }
+  let _result = build(bar.map_foo_err)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_function_value_with_interface_param_where_concrete_param_expected() {
+    let input = r#"
+enum Bar {
+  Wrap(error),
+}
+
+struct FooError {}
+
+impl FooError {
+  fn Error(self) -> string { "foo failed" }
+}
+
+fn run(make_bar: fn(FooError) -> Bar) -> Bar {
+  make_bar(FooError {})
+}
+
+fn test() -> Bar {
+  run(Bar.Wrap)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_function_value_with_concrete_return_where_interface_return_expected() {
+    let input = r#"
+struct FooError {}
+
+impl FooError {
+  fn Error(self) -> string { "foo failed" }
+}
+
+fn make_foo_err() -> FooError {
+  FooError {}
+}
+
+fn run(make: fn() -> error) -> string {
+  make().Error()
+}
+
+fn test() -> string {
+  run(make_foo_err)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_function_value_with_concrete_param_where_unknown_param_expected() {
+    let input = r#"
+fn apply(f: fn(Unknown) -> int) -> int {
+  f(1)
+}
+
+fn double(value: int) -> int {
+  value * 2
+}
+
+fn test() -> int {
+  apply(double)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_concrete_type_argument_where_unknown_type_argument_expected() {
+    let input = r#"
+struct Box<T> {
+  pub value: T,
+}
+
+fn take(b: Box<Unknown>) -> int {
+  assert_type<int>(b.value).unwrap_or(0)
+}
+
+fn test() -> int {
+  let b: Box<int> = Box { value: 1 }
+  take(b)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_interface_value_where_concrete_param_expected() {
+    let input = r#"
+struct FooError {}
+
+impl FooError {
+  fn Error(self) -> string { "foo failed" }
+}
+
+fn take(f: FooError) -> string { f.Error() }
+
+fn test() -> string {
+  let e: error = FooError {}
+  take(e)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_interface_value_where_concrete_annotation_expected() {
+    let input = r#"
+struct FooError {}
+
+impl FooError {
+  fn Error(self) -> string { "foo failed" }
+}
+
+fn test() -> string {
+  let e: error = FooError {}
+  let concrete: FooError = e
+  concrete.Error()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_interface_value_where_concrete_field_expected() {
+    let input = r#"
+struct FooError {}
+
+impl FooError {
+  fn Error(self) -> string { "foo failed" }
+}
+
+struct Holder {
+  pub inner: FooError,
+}
+
+fn test() -> string {
+  let e: error = FooError {}
+  let held = Holder { inner: e }
+  held.inner.Error()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_interface_value_where_concrete_return_expected() {
+    let input = r#"
+struct FooError {}
+
+impl FooError {
+  fn Error(self) -> string { "foo failed" }
+}
+
+fn unwrap(e: error) -> FooError { e }
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_called_function_when_function_alias_expected() {
     let input = r#"
 type Cmd = fn() -> int

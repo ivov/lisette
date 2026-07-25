@@ -92,7 +92,7 @@ struct InheritedContext {
     loop_depth: DepthCounter,
     defer_block_depth: DepthCounter,
     negation_depth: DepthCounter,
-    type_param_depth: DepthCounter,
+    invariant_depth: DepthCounter,
     use_context: UseContext,
     in_test_handle: bool,
     test_fn_name: Option<EcoString>,
@@ -552,16 +552,16 @@ impl Scopes {
         std::mem::replace(&mut self.let_binding_rhs, value)
     }
 
-    pub(crate) fn increment_type_param_depth(&mut self) {
-        self.current_mut().inherited.type_param_depth.increment();
+    pub(crate) fn enter_invariant_position(&mut self) {
+        self.current_mut().inherited.invariant_depth.increment();
     }
 
-    pub(crate) fn decrement_type_param_depth(&mut self) {
-        self.current_mut().inherited.type_param_depth.decrement();
+    pub(crate) fn exit_invariant_position(&mut self) {
+        self.current_mut().inherited.invariant_depth.decrement();
     }
 
-    pub(crate) fn is_inside_type_param(&self) -> bool {
-        self.current().inherited.type_param_depth.is_active()
+    pub(crate) fn is_inside_invariant_position(&self) -> bool {
+        self.current().inherited.invariant_depth.is_active()
     }
 
     pub(crate) fn set_impl_receiver_type(&mut self, ty: Option<Type>) {

@@ -1,6 +1,7 @@
 use diagnostics::{Edit, Fix};
 use syntax::ast::{Expression, IdentifierResolution, Pattern};
 use syntax::program::{CallKind, DotAccessKind};
+use syntax::types::Type;
 
 use super::helpers::lambda_is_annotated;
 use crate::passes::walk::NodeCtx;
@@ -8,7 +9,11 @@ use semantics::facts::Facts;
 
 pub fn check_redundant_closure(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Lambda {
-        params, body, span, ..
+        params,
+        body,
+        span,
+        ty: lambda_ty,
+        ..
     } = expression
     else {
         return;
@@ -54,8 +59,14 @@ pub fn check_redundant_closure(expression: &Expression, ctx: &NodeCtx) {
         param_names.push(identifier.as_str());
     }
 
-    let Some(callee_name) = hoistable_callee(callee.unwrap_parens(), &param_names, ctx.facts)
-    else {
+    let callee = callee.unwrap_parens();
+    let callee_ty = callee.get_type();
+
+    if !signatures_match(lambda_ty, &callee_ty) {
+        return;
+    }
+
+    let Some(callee_name) = hoistable_callee(callee, &callee_ty, &param_names, ctx.facts) else {
         return;
     };
 
@@ -69,6 +80,25 @@ pub fn check_redundant_closure(expression: &Expression, ctx: &NodeCtx) {
     ctx.sink.push(diagnostic);
 }
 
+fn signatures_match(lambda_ty: &Type, callee_ty: &Type) -> bool {
+    let (lambda_positions, callee_positions) = (
+        lambda_ty.unwrap_forall().children(),
+        callee_ty.unwrap_forall().children(),
+    );
+
+    lambda_positions.len() == callee_positions.len()
+        && lambda_positions
+            .iter()
+            .zip(&callee_positions)
+            .all(|(closure_ty, callee_ty)| {
+                closure_ty == callee_ty || is_unresolved(closure_ty) || is_unresolved(callee_ty)
+            })
+}
+
+fn is_unresolved(ty: &Type) -> bool {
+    matches!(ty, Type::Var { .. } | Type::Parameter(_))
+}
+
 fn lambda_body(body: &Expression) -> &Expression {
     match body.unwrap_parens() {
         Expression::Block { items, .. } if items.len() == 1 => items[0].unwrap_parens(),
@@ -76,11 +106,15 @@ fn lambda_body(body: &Expression) -> &Expression {
     }
 }
 
-fn hoistable_callee(callee: &Expression, params: &[&str], facts: &Facts) -> Option<String> {
+fn hoistable_callee(
+    callee: &Expression,
+    callee_ty: &Type,
+    params: &[&str],
+    facts: &Facts,
+) -> Option<String> {
     // A `mut`-param callee (e.g. `sort.Ints`) is valid only wrapped in a closure,
     // never as a bare function value.
-    if callee
-        .get_type()
+    if callee_ty
         .get_function_params()
         .is_some_and(|params| params.iter().any(|param| param.mutable))
     {

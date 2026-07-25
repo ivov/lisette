@@ -52,6 +52,12 @@ pub enum Dispatched {
     Fallthrough,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClosureAdapter {
+    Widens,
+    Narrows,
+}
+
 impl InferCtx<'_> {
     /// Make two types equal. Returns `false` when they do not match.
     ///
@@ -112,7 +118,7 @@ impl InferCtx<'_> {
             (Type::Var { id, .. }, _) => self.unify_type_variable(*id, &r2, span, false),
             (_, Type::Var { id, .. }) => self.unify_type_variable(*id, &r1, span, true),
 
-            _ if r1_is_unknown && self.scopes.is_inside_type_param() => {
+            _ if r1_is_unknown && self.scopes.is_inside_invariant_position() => {
                 Err(UnifyError::TypeMismatch)
             }
             _ if r1_is_unknown => Ok(()),
@@ -205,10 +211,7 @@ impl InferCtx<'_> {
                 // rejected inside generic positions.
                 let a1 = a1.clone();
                 let a2 = a2.clone();
-                self.scopes.increment_type_param_depth();
-                let result = self.unify_pairs(a1.iter().zip(a2.iter()), span);
-                self.scopes.decrement_type_param_depth();
-                result
+                self.in_invariant_position(|this| this.unify_pairs(a1.iter().zip(a2.iter()), span))
             }
 
             (Nominal { .. }, Nominal { .. }) => self.unify_constructors(&r1, &r2, span),
@@ -276,7 +279,7 @@ impl InferCtx<'_> {
     fn should_unify_refs(&self, t1: &Type, t2: &Type) -> bool {
         let either_is_ref = t1.is_ref() || t2.is_ref();
         let both_concrete = !t1.is_variable() && !t2.is_variable();
-        let neither_is_interface = !self.is_interface(t1) && !self.is_interface(t2);
+        let neither_is_interface = !self.store.is_interface(t1) && !self.store.is_interface(t2);
         let neither_is_unknown = !t1.is_unknown() && !t2.is_unknown();
         let neither_is_error = !t1.is_error() && !t2.is_error();
         let neither_is_never = !t1.is_never() && !t2.is_never();
@@ -300,13 +303,11 @@ impl InferCtx<'_> {
             .is_some_and(|definition| definition.is_transparent_type_alias())
     }
 
-    fn is_interface(&self, ty: &Type) -> bool {
-        let store = self.store;
-        if let Type::Nominal { id, .. } = ty {
-            store.get_interface(id).is_some()
-        } else {
-            false
-        }
+    fn in_invariant_position<T>(&mut self, unify: impl FnOnce(&mut Self) -> T) -> T {
+        self.scopes.enter_invariant_position();
+        let result = unify(self);
+        self.scopes.exit_invariant_position();
+        result
     }
 
     fn unify_refs(&mut self, t1: &Type, t2: &Type, span: &Span) -> Result<(), UnifyError> {
@@ -425,16 +426,16 @@ impl InferCtx<'_> {
         // Bail on the first error rather than collecting via `unify_pairs`:
         // continuing past a failed pair would bind subsequent type variables
         // and erase their original names from the diagnostic.
-        self.scopes.increment_type_param_depth();
-        let mut result = Ok(());
-        for (p1, p2) in params1.iter().zip(params2) {
-            if let Err(e) = self.try_unify(p1, p2, span) {
-                result = Err(e);
-                break;
+        self.in_invariant_position(|this| {
+            let mut result = Ok(());
+            for (p1, p2) in params1.iter().zip(params2) {
+                if let Err(e) = this.try_unify(p1, p2, span) {
+                    result = Err(e);
+                    break;
+                }
             }
-        }
-        self.scopes.decrement_type_param_depth();
-        result
+            result
+        })
     }
 
     fn try_coerce_or_satisfy_interface(
@@ -464,7 +465,7 @@ impl InferCtx<'_> {
             return Ok(());
         }
 
-        if self.scopes.is_inside_type_param() {
+        if self.scopes.is_inside_invariant_position() {
             return Err(UnifyError::TypeMismatch);
         }
 
@@ -482,20 +483,13 @@ impl InferCtx<'_> {
             && symbol1.starts_with("go:")
             && store.get_interface(symbol1).is_some()
         {
-            return self.try_unify(&params2[0], t1, span);
+            return self.try_unify(t1, &params2[0], span);
         }
 
         if let Some(interface) = store.get_interface(symbol1).cloned() {
             return self
                 .satisfies_interface(t2, &interface, symbol1, params1, span)
                 .and_then(|()| self.check_pointer_receivers(t2, &interface, symbol1, span))
-                .map_err(|_| UnifyError::AlreadyReported);
-        }
-
-        if let Some(interface) = store.get_interface(symbol2).cloned() {
-            return self
-                .satisfies_interface(t1, &interface, symbol2, params2, span)
-                .and_then(|()| self.check_pointer_receivers(t1, &interface, symbol2, span))
                 .map_err(|_| UnifyError::AlreadyReported);
         }
 
@@ -547,14 +541,17 @@ impl InferCtx<'_> {
             return Err(UnifyError::TypeMismatch);
         }
 
-        let params_result = self.unify_pairs(
-            f1.params
-                .iter()
-                .zip(&f2.params)
-                .map(|(left, right)| (&left.ty, &right.ty)),
-            span,
-        );
-        let return_type_result = self.try_unify(&f1.return_type, &f2.return_type, span);
+        let (params_result, return_type_result) = self.in_invariant_position(|this| {
+            let params_result = this.unify_pairs(
+                f1.params
+                    .iter()
+                    .zip(&f2.params)
+                    .map(|(left, right)| (&left.ty, &right.ty)),
+                span,
+            );
+            let return_type_result = this.try_unify(&f1.return_type, &f2.return_type, span);
+            (params_result, return_type_result)
+        });
 
         for bound in &f1.bounds {
             self.check_function_bound(bound, &f1.params, span);
@@ -806,8 +803,22 @@ impl InferCtx<'_> {
                 {
                     format!("Annotate the slice literal: `let xs: {} = [v1, v2, ...]`", expected)
                 }
-                _ => "The expected type contains `Unknown`. Produce the value in a context where the expected type provides the `Unknown` slot (annotation, parameter type, struct field, or return position).".to_string(),
+                _ if self.store.resolve_to_function_type(expected).is_some()
+                    && self.store.resolve_to_function_type(actual).is_some() =>
+                {
+                    "Function types must match exactly, and `Unknown` matches only `Unknown`. Declare the function with the expected signature and narrow with `assert_type` inside, or wrap it in a closure that narrows at the call site".to_string()
+                }
+                _ => format!(
+                    "`Unknown` matches only `Unknown`, never a concrete type. Build `{expected}` from a value already annotated as `Unknown`, e.g. `let value: Unknown = ...`, or change the expected type to `{actual}`"
+                ),
             };
+        }
+
+        if self.store.is_interface(actual) && !self.store.is_interface(expected) {
+            return format!(
+                "An interface value does not carry its concrete type. Narrow it with `assert_type`, e.g. `let value = assert_type<{}>(value)?`",
+                expected
+            );
         }
 
         if self.store.is_numeric_compatible_with(expected, actual) {
@@ -820,10 +831,53 @@ impl InferCtx<'_> {
             return "Remove the `()` so that the type matches".to_string();
         }
 
+        match self.closure_adapter(expected, actual) {
+            Some(ClosureAdapter::Widens) => {
+                return "Function types must match exactly. Wrap the value in a closure to convert at the call site, e.g. `|value| callee(value)`".to_string();
+            }
+            Some(ClosureAdapter::Narrows) => {
+                return "Function types must match exactly. Wrap the value in a closure that narrows the interface value with `assert_type`, or change the signature to match".to_string();
+            }
+            None => {}
+        }
+
         format!(
             "Change the type annotation to `{}` or convert the value to `{}`",
             actual, expected
         )
+    }
+
+    fn closure_adapter(&self, expected: &Type, actual: &Type) -> Option<ClosureAdapter> {
+        if !matches!((expected, actual), (Function(_), Function(_))) {
+            return None;
+        }
+
+        let (expected_positions, actual_positions) = (expected.children(), actual.children());
+        if expected_positions.len() != actual_positions.len() {
+            return None;
+        }
+        let return_index = expected_positions.len().checked_sub(1)?;
+
+        let mut adapter = None;
+        for (index, (left, right)) in expected_positions.iter().zip(&actual_positions).enumerate() {
+            if left == right {
+                continue;
+            }
+            if !self.store.is_interface(left) && !self.store.is_interface(right) {
+                return None;
+            }
+            let narrows = if index == return_index {
+                self.store.is_interface(right)
+            } else {
+                self.store.is_interface(left)
+            };
+            if narrows {
+                adapter = Some(ClosureAdapter::Narrows);
+            } else if adapter.is_none() {
+                adapter = Some(ClosureAdapter::Widens);
+            }
+        }
+        adapter
     }
 
     /// Whether the emitter absorbs this bounded generic into a pointer type argument

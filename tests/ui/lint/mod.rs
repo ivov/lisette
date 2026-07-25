@@ -15123,6 +15123,70 @@ fn main() {
 }
 
 #[test]
+fn redundant_closure_coerced_param_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+enum Bar {
+  Wrap(error),
+}
+
+struct FooError {}
+
+impl FooError {
+  fn Error(self) -> string { "foo failed" }
+}
+
+fn run(make_bar: fn(FooError) -> Bar) -> Bar {
+  make_bar(FooError {})
+}
+
+fn main() {
+  let _ = run(|e| Bar.Wrap(e))
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_closure_coerced_return_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct FooError {}
+
+impl FooError {
+  fn Error(self) -> string { "foo failed" }
+}
+
+fn make_foo_err() -> FooError {
+  FooError {}
+}
+
+fn run(make: fn() -> error) -> string {
+  make().Error()
+}
+
+fn main() {
+  let _ = run(|| make_foo_err())
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_closure_generic_callee() {
+    assert_lint_snapshot!(
+        r#"
+fn identity<T>(value: T) -> T { value }
+
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = xs.map(|x| identity(x))
+}
+"#
+    );
+}
+
+#[test]
 fn redundant_closure_mut_param_callee_no_warning() {
     assert_no_lint_warnings!(
         r#"

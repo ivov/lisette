@@ -761,7 +761,7 @@ impl InferCtx<'_> {
         let candidate_ty = ty.strip_refs().resolve_in(&self.env);
         let mut receiver_pinned = true;
         let mut resolved_impl_method = None;
-        self.scopes.increment_type_param_depth();
+        self.scopes.enter_invariant_position();
         let sig_match = self.speculatively(|this| {
             let mut ctx = InferCtx::new(this, store);
             if let Some(receiver) = &receiver_to_pin {
@@ -778,7 +778,7 @@ impl InferCtx<'_> {
             }
             result
         });
-        self.scopes.decrement_type_param_depth();
+        self.scopes.exit_invariant_position();
 
         SignatureCheck {
             receiver_pinned,
