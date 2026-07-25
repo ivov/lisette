@@ -72,7 +72,7 @@ fn check_field_attributes(
 ) {
     let mut seen_keys: Vec<(&str, &Attribute)> = Vec::new();
 
-    for attribute in &field.attributes {
+    for attribute in field.attributes() {
         let attribute_key = get_attribute_key(attribute);
 
         check_unknown_attribute(attribute, sink);

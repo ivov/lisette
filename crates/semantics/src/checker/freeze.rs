@@ -8,8 +8,7 @@
 
 use syntax::ast::{
     Binding, EnumFieldDefinition, Expression, FormatStringPart, Literal, Pattern, SelectArm,
-    SelectArmPattern, SequencePatternResolution, StructFieldDefinition, StructSpread,
-    VariantFields,
+    SequencePatternResolution, StructFieldDefinition, StructSpread, VariantFields,
 };
 use syntax::types::Type;
 
@@ -311,8 +310,8 @@ impl<'a> FreezeFolder<'a> {
     }
 
     fn recurse_select_arm(&mut self, arm: &mut SelectArm) {
-        match &mut arm.pattern {
-            SelectArmPattern::Receive {
+        match arm {
+            SelectArm::Receive {
                 binding,
                 receive_expression,
                 body,
@@ -321,14 +320,14 @@ impl<'a> FreezeFolder<'a> {
                 self.freeze_expr(receive_expression.as_mut());
                 self.freeze_expr(body.as_mut());
             }
-            SelectArmPattern::Send {
+            SelectArm::Send {
                 send_expression,
                 body,
             } => {
                 self.freeze_expr(send_expression.as_mut());
                 self.freeze_expr(body.as_mut());
             }
-            SelectArmPattern::MatchReceive {
+            SelectArm::MatchReceive {
                 receive_expression,
                 arms,
             } => {
@@ -341,7 +340,7 @@ impl<'a> FreezeFolder<'a> {
                     }
                 }
             }
-            SelectArmPattern::WildCard { body } => {
+            SelectArm::WildCard { body } => {
                 self.freeze_expr(body.as_mut());
             }
         }

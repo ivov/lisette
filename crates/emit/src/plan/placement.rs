@@ -122,7 +122,7 @@ pub(crate) fn try_elide_tail_let(items: &[Expression]) -> Option<(&Expression, &
 }
 
 pub(crate) fn expression_contains_binding(expression: &Expression, name: &str) -> bool {
-    use syntax::ast::{Pattern, RestPattern, SelectArmPattern};
+    use syntax::ast::{Pattern, RestPattern, SelectArm};
     fn pattern_contains_name(pattern: &Pattern, name: &str) -> bool {
         match pattern {
             Pattern::Identifier { identifier, .. } => identifier.as_str() == name,
@@ -178,9 +178,9 @@ pub(crate) fn expression_contains_binding(expression: &Expression, name: &str) -
                     .as_deref()
                     .is_some_and(|alternative| expression_contains_binding(alternative, name))
         }
-        Expression::Select { arms, .. } => arms.iter().any(|arm| match &arm.pattern {
-            SelectArmPattern::Receive { binding, .. } => pattern_contains_name(binding, name),
-            SelectArmPattern::MatchReceive { arms, .. } => {
+        Expression::Select { arms, .. } => arms.iter().any(|arm| match arm {
+            SelectArm::Receive { binding, .. } => pattern_contains_name(binding, name),
+            SelectArm::MatchReceive { arms, .. } => {
                 arms.iter().any(|a| pattern_contains_name(&a.pattern, name))
             }
             _ => false,

@@ -65,67 +65,65 @@ description: |
                 items: [
                     Select {
                         arms: [
-                            SelectArm {
-                                pattern: Receive {
-                                    binding: Identifier {
-                                        identifier: "x",
-                                        span: Span {
-                                            file_id: 0,
-                                            byte_offset: 49,
-                                            byte_length: 1,
-                                        },
+                            Receive {
+                                binding: Identifier {
+                                    identifier: "x",
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 49,
+                                        byte_length: 1,
                                     },
-                                    receive_expression: Identifier {
-                                        value: "ch",
-                                        ty: Var {
-                                            id: uninferred,
-                                        },
-                                        span: Span {
-                                            file_id: 0,
-                                            byte_offset: 53,
-                                            byte_length: 2,
-                                        },
-                                        resolution: Unresolved,
+                                },
+                                receive_expression: Identifier {
+                                    value: "ch",
+                                    ty: Var {
+                                        id: uninferred,
                                     },
-                                    body: Call {
-                                        expression: Identifier {
-                                            value: "process",
-                                            ty: Var {
-                                                id: uninferred,
-                                            },
-                                            span: Span {
-                                                file_id: 0,
-                                                byte_offset: 59,
-                                                byte_length: 7,
-                                            },
-                                            resolution: Unresolved,
-                                        },
-                                        args: [
-                                            Identifier {
-                                                value: "x",
-                                                ty: Var {
-                                                    id: uninferred,
-                                                },
-                                                span: Span {
-                                                    file_id: 0,
-                                                    byte_offset: 67,
-                                                    byte_length: 1,
-                                                },
-                                                resolution: Unresolved,
-                                            },
-                                        ],
-                                        spread: None,
-                                        type_arguments: None,
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 53,
+                                        byte_length: 2,
+                                    },
+                                    resolution: Unresolved,
+                                },
+                                body: Call {
+                                    expression: Identifier {
+                                        value: "process",
                                         ty: Var {
                                             id: uninferred,
                                         },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 59,
-                                            byte_length: 10,
+                                            byte_length: 7,
                                         },
-                                        call_kind: Unresolved,
+                                        resolution: Unresolved,
                                     },
+                                    args: [
+                                        Identifier {
+                                            value: "x",
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 67,
+                                                byte_length: 1,
+                                            },
+                                            resolution: Unresolved,
+                                        },
+                                    ],
+                                    spread: None,
+                                    type_arguments: None,
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 59,
+                                        byte_length: 10,
+                                    },
+                                    call_kind: Unresolved,
                                 },
                             },
                         ],

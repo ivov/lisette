@@ -22,7 +22,6 @@ description: |
             [
                 StructFieldDefinition {
                     doc: None,
-                    attributes: [],
                     name: "timeout",
                     name_span: Span {
                         file_id: 0,
@@ -42,11 +41,12 @@ description: |
                     ty: Var {
                         id: uninferred,
                     },
-                    embedded: false,
+                    kind: Named {
+                        attributes: [],
+                    },
                 },
                 StructFieldDefinition {
                     doc: None,
-                    attributes: [],
                     name: "retries",
                     name_span: Span {
                         file_id: 0,
@@ -66,7 +66,9 @@ description: |
                     ty: Var {
                         id: uninferred,
                     },
-                    embedded: false,
+                    kind: Named {
+                        attributes: [],
+                    },
                 },
             ],
         ),

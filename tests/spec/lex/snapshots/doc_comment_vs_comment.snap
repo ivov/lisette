@@ -26,20 +26,5 @@ LexResult {
         },
     ],
     errors: [],
-    trivia: Trivia {
-        comments: [
-            (
-                0,
-                18,
-            ),
-        ],
-        doc_comments: [
-            (
-                19,
-                34,
-            ),
-        ],
-        file_comments: [],
-        blank_lines: [],
-    },
+    blank_lines: [],
 }

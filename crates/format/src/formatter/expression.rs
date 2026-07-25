@@ -5,8 +5,8 @@ use crate::comments::prepend_comments;
 use crate::lindig::{Document, concat, flex_break, join, strict_break};
 use syntax::ast::{
     Annotation, BinaryOperator, Binding, CallTypeArguments, Expression, FormatStringPart,
-    IfLetAlternative, Literal, MatchArm, Pattern, SelectArm, SelectArmPattern, Span,
-    StructFieldAssignment, StructSpread, UnaryOperator,
+    IfLetAlternative, Literal, MatchArm, Pattern, SelectArm, Span, StructFieldAssignment,
+    StructSpread, UnaryOperator,
 };
 
 impl<'a> Formatter<'a> {
@@ -972,21 +972,21 @@ impl<'a> Formatter<'a> {
     }
 
     fn select_arm_start(arm: &'a SelectArm) -> u32 {
-        match &arm.pattern {
-            SelectArmPattern::Receive { binding, .. } => binding.get_span().byte_offset,
-            SelectArmPattern::Send {
+        match arm {
+            SelectArm::Receive { binding, .. } => binding.get_span().byte_offset,
+            SelectArm::Send {
                 send_expression, ..
             } => send_expression.get_span().byte_offset,
-            SelectArmPattern::MatchReceive {
+            SelectArm::MatchReceive {
                 receive_expression, ..
             } => receive_expression.get_span().byte_offset,
-            SelectArmPattern::WildCard { body } => body.get_span().byte_offset,
+            SelectArm::WildCard { body } => body.get_span().byte_offset,
         }
     }
 
     fn select_arm_body(&mut self, arm: &'a SelectArm, upper_bound: u32) -> Document<'a> {
-        match &arm.pattern {
-            SelectArmPattern::Receive {
+        match arm {
+            SelectArm::Receive {
                 binding,
                 receive_expression,
                 body,
@@ -998,7 +998,7 @@ impl<'a> Formatter<'a> {
                 .append(" => ")
                 .append(self.expression(body))
                 .append(","),
-            SelectArmPattern::Send {
+            SelectArm::Send {
                 send_expression,
                 body,
             } => self
@@ -1006,7 +1006,7 @@ impl<'a> Formatter<'a> {
                 .append(" => ")
                 .append(self.expression(body))
                 .append(","),
-            SelectArmPattern::MatchReceive {
+            SelectArm::MatchReceive {
                 receive_expression,
                 arms,
             } => {
@@ -1024,7 +1024,7 @@ impl<'a> Formatter<'a> {
                 let body = self.join_sibling_body(entries, body_end);
                 Self::braced_body(header, body).append(",")
             }
-            SelectArmPattern::WildCard { body } => Document::str("_")
+            SelectArm::WildCard { body } => Document::str("_")
                 .append(" => ")
                 .append(self.expression(body))
                 .append(","),

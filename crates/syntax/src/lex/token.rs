@@ -8,6 +8,12 @@ pub struct Token<'source> {
     pub(crate) byte_length: u32,
 }
 
+impl Token<'_> {
+    pub fn end_offset(self) -> u32 {
+        self.byte_offset + self.byte_length
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TokenKind {
     Integer,

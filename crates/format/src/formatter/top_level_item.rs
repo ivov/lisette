@@ -87,9 +87,9 @@ impl<'a> Formatter<'a> {
             return self.empty_struct_body(header, struct_end);
         }
 
-        let with_field_attrs = fields.iter().any(|f| !f.attributes.is_empty());
+        let with_field_attrs = fields.iter().any(|f| !f.attributes().is_empty());
         let with_pub_fields = fields.iter().any(|f| f.visibility.is_public());
-        let with_embeds = fields.iter().any(|f| f.embedded);
+        let with_embeds = fields.iter().any(|f| f.is_embedded());
 
         let (field_entries, trailing, with_comments) =
             self.struct_fields_with_comments(fields, struct_end);
@@ -150,7 +150,7 @@ impl<'a> Formatter<'a> {
 
         for field in fields {
             let leading_edge = field
-                .attributes
+                .attributes()
                 .first()
                 .map(|a| a.span.byte_offset)
                 .unwrap_or(field.name_span.byte_offset);
@@ -173,12 +173,12 @@ impl<'a> Formatter<'a> {
                 last.trailing = Some(t);
             }
 
-            let field_attrs = self.field_attributes(&field.attributes);
+            let field_attrs = self.field_attributes(field.attributes());
             let between_attrs_and_name = self
                 .comments
                 .take_comments_before(field.name_span.byte_offset);
 
-            let field_definition = if field.embedded {
+            let field_definition = if field.is_embedded() {
                 Document::str("embed ").append(Self::annotation(&field.annotation))
             } else if field.visibility.is_public() {
                 Document::str("pub ")

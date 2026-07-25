@@ -338,7 +338,7 @@ fn collect_items(
                     for struct_field in fields {
                         let field_id = StructFieldId::new(&qualified_name, &struct_field.name);
                         let has_tag_attribute =
-                            struct_field.attributes.iter().any(|a| a.name == "tag");
+                            struct_field.attributes().iter().any(|a| a.name == "tag");
                         graph.add_struct_field(
                             field_id,
                             StructFieldInfo {
@@ -349,7 +349,7 @@ fn collect_items(
                                 parent_has_display_attr: has_display_attr,
                                 parent_synthesizes_equals: synthesizes_equals,
                                 has_tag_attribute,
-                                embedded: struct_field.embedded,
+                                embedded: struct_field.is_embedded(),
                             },
                         );
                     }

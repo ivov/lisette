@@ -1,17 +1,17 @@
 use crate::checker::EnvResolve;
 use crate::facts::SelectExhaustivenessCheck;
-use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, SelectArmPattern, Span};
+use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, Span};
 use syntax::program::{ChannelOperation, channel_operation};
 use syntax::types::{Type, unqualified_name};
 
 use crate::checker::infer::InferCtx;
 
-fn select_arm_body_span(pattern: &SelectArmPattern) -> Span {
+fn select_arm_body_span(pattern: &SelectArm) -> Span {
     match pattern {
-        SelectArmPattern::Receive { body, .. }
-        | SelectArmPattern::Send { body, .. }
-        | SelectArmPattern::WildCard { body } => body.get_span(),
-        SelectArmPattern::MatchReceive {
+        SelectArm::Receive { body, .. }
+        | SelectArm::Send { body, .. }
+        | SelectArm::WildCard { body } => body.get_span(),
+        SelectArm::MatchReceive {
             receive_expression, ..
         } => receive_expression.get_span(),
     }
@@ -79,20 +79,20 @@ impl InferCtx<'_> {
                     &result_ty
                 };
 
-                let new_arm_pattern = match arm.pattern {
-                    SelectArmPattern::Receive {
+                let new_arm = match arm {
+                    SelectArm::Receive {
                         binding,
                         receive_expression,
                         body,
                         ..
                     } => self.infer_select_receive(binding, receive_expression, body, arm_target),
 
-                    SelectArmPattern::Send {
+                    SelectArm::Send {
                         send_expression,
                         body,
                     } => self.infer_select_send(send_expression, body, arm_target),
 
-                    SelectArmPattern::MatchReceive {
+                    SelectArm::MatchReceive {
                         receive_expression,
                         arms: match_arms,
                     } => self.infer_select_match_receive(
@@ -102,23 +102,19 @@ impl InferCtx<'_> {
                         value_position,
                     ),
 
-                    SelectArmPattern::WildCard { body } => {
-                        self.infer_select_wildcard(body, arm_target)
-                    }
+                    SelectArm::WildCard { body } => self.infer_select_wildcard(body, arm_target),
                 };
 
                 if needs_reconciliation {
                     arm_target_types.push(arm_target.clone());
                 }
                 if value_position {
-                    arm_target_spans.push(select_arm_body_span(&new_arm_pattern));
+                    arm_target_spans.push(select_arm_body_span(&new_arm));
                 }
 
                 self.scopes.pop();
 
-                SelectArm {
-                    pattern: new_arm_pattern,
-                }
+                new_arm
             })
             .collect();
 
@@ -130,11 +126,11 @@ impl InferCtx<'_> {
 
         let shorthand_receive_count = new_arms
             .iter()
-            .filter(|arm| matches!(arm.pattern, SelectArmPattern::Receive { .. }))
+            .filter(|arm| matches!(arm, SelectArm::Receive { .. }))
             .count();
         let has_default = new_arms
             .iter()
-            .any(|arm| matches!(arm.pattern, SelectArmPattern::WildCard { .. }));
+            .any(|arm| matches!(arm, SelectArm::WildCard { .. }));
         if !expected_ty.is_ignored() && shorthand_receive_count == 1 && !has_default {
             self.facts
                 .select_exhaustiveness_checks
@@ -157,7 +153,7 @@ impl InferCtx<'_> {
         receive_expression: Box<Expression>,
         body: Box<Expression>,
         result_ty: &Type,
-    ) -> SelectArmPattern {
+    ) -> SelectArm {
         let receive_ty = self.new_type_var();
         let new_receive_expression = self.infer_expression(*receive_expression, &receive_ty);
 
@@ -229,7 +225,7 @@ impl InferCtx<'_> {
 
         let new_body = self.infer_root_expression(*body, result_ty);
 
-        SelectArmPattern::Receive {
+        SelectArm::Receive {
             binding: Box::new(new_binding),
             receive_expression: Box::new(new_receive_expression),
             body: Box::new(new_body),
@@ -241,7 +237,7 @@ impl InferCtx<'_> {
         send_expression: Box<Expression>,
         body: Box<Expression>,
         result_ty: &Type,
-    ) -> SelectArmPattern {
+    ) -> SelectArm {
         let send_ty = self.new_type_var();
         let new_send_expression = self.infer_expression(*send_expression, &send_ty);
 
@@ -257,7 +253,7 @@ impl InferCtx<'_> {
 
         let new_body = self.infer_root_expression(*body, result_ty);
 
-        SelectArmPattern::Send {
+        SelectArm::Send {
             send_expression: Box::new(new_send_expression),
             body: Box::new(new_body),
         }
@@ -269,7 +265,7 @@ impl InferCtx<'_> {
         match_arms: Vec<MatchArm>,
         result_ty: &Type,
         value_position: bool,
-    ) -> SelectArmPattern {
+    ) -> SelectArm {
         let receive_ty = self.new_type_var();
         let new_receive_expression = self.infer_expression(*receive_expression, &receive_ty);
 
@@ -357,19 +353,15 @@ impl InferCtx<'_> {
             let _ = self.try_unify(result_ty, first, &span);
         }
 
-        SelectArmPattern::MatchReceive {
+        SelectArm::MatchReceive {
             receive_expression: Box::new(new_receive_expression),
             arms: new_match_arms,
         }
     }
 
-    fn infer_select_wildcard(
-        &mut self,
-        body: Box<Expression>,
-        result_ty: &Type,
-    ) -> SelectArmPattern {
+    fn infer_select_wildcard(&mut self, body: Box<Expression>, result_ty: &Type) -> SelectArm {
         let new_body = self.infer_root_expression(*body, result_ty);
-        SelectArmPattern::WildCard {
+        SelectArm::WildCard {
             body: Box::new(new_body),
         }
     }

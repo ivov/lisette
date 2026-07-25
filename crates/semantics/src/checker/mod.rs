@@ -991,13 +991,12 @@ impl TaskState {
                     .unwrap_or_else(|| definition.ty.clone());
                 StructFieldDefinition {
                     doc: None,
-                    attributes: vec![],
                     visibility: AstVisibility::Public,
                     name: simple_name.into(),
                     name_span: Span::dummy(),
                     annotation: Annotation::Unknown,
                     ty,
-                    embedded: false,
+                    kind: syntax::ast::StructFieldKind::Named { attributes: vec![] },
                 }
             })
             .collect();

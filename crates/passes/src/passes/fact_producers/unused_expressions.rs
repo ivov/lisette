@@ -1,5 +1,5 @@
 use diagnostics::UnusedExpressionKind;
-use syntax::ast::{Annotation, Expression, SelectArmPattern, Span, UnaryOperator};
+use syntax::ast::{Annotation, Expression, SelectArm, Span, UnaryOperator};
 use syntax::program::{CallKind, NativeTypeKind};
 use syntax::types::{Symbol, Type};
 
@@ -229,13 +229,13 @@ fn descend_discarded(
         }
         Expression::Select { arms, .. } => {
             for arm in arms {
-                match &arm.pattern {
-                    SelectArmPattern::Receive { body, .. }
-                    | SelectArmPattern::Send { body, .. }
-                    | SelectArmPattern::WildCard { body } => {
+                match arm {
+                    SelectArm::Receive { body, .. }
+                    | SelectArm::Send { body, .. }
+                    | SelectArm::WildCard { body } => {
                         descend_discarded(body, mode, module_id, store, facts);
                     }
-                    SelectArmPattern::MatchReceive {
+                    SelectArm::MatchReceive {
                         arms: match_arms, ..
                     } => {
                         for match_arm in match_arms {

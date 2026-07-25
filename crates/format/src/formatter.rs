@@ -18,7 +18,7 @@ impl<'a> Formatter<'a> {
 
     /// Run a formatting probe and keep its cursor changes only when it yields a document.
     fn probe<R>(&mut self, probe: impl FnOnce(&mut Self) -> Option<R>) -> Option<R> {
-        let snapshot = self.comments.cursor_state();
+        let snapshot = self.comments.cursor();
         let result = probe(self);
         if result.is_none() {
             self.comments.restore_cursor(snapshot);

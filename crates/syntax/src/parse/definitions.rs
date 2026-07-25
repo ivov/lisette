@@ -3,8 +3,8 @@ use ecow::EcoString;
 use super::{ParamMode, Parser};
 use crate::ast::{
     Annotation, Attribute, AttributeArg, ConstInitializer, EnumFieldDefinition, EnumVariant,
-    Expression, Generic, ParentInterface, Span, StructFieldDefinition, StructFields, VariantFields,
-    Visibility,
+    Expression, Generic, ParentInterface, Span, StructFieldDefinition, StructFieldKind,
+    StructFields, VariantFields, Visibility,
 };
 use crate::lex::Token;
 use crate::lex::TokenKind::*;
@@ -458,13 +458,12 @@ impl<'source> Parser<'source> {
 
             fields.push(StructFieldDefinition {
                 doc: None,
-                attributes: vec![],
                 name: format!("_{}", index).into(),
                 name_span: field_span,
                 annotation,
                 visibility: Visibility::Private,
                 ty: Type::uninferred(),
-                embedded: false,
+                kind: StructFieldKind::Named { attributes: vec![] },
             });
 
             index += 1;
@@ -531,13 +530,12 @@ impl<'source> Parser<'source> {
 
         Some(StructFieldDefinition {
             doc,
-            attributes,
             visibility,
             name,
             name_span,
             annotation: self.parse_annotation(),
             ty: Type::uninferred(),
-            embedded: false,
+            kind: StructFieldKind::Named { attributes },
         })
     }
 
@@ -571,13 +569,12 @@ impl<'source> Parser<'source> {
 
         Some(StructFieldDefinition {
             doc,
-            attributes: vec![],
             visibility: Visibility::Private,
             name,
             name_span: span,
             annotation,
             ty: Type::uninferred(),
-            embedded: true,
+            kind: StructFieldKind::Embedded,
         })
     }
 

@@ -2,7 +2,7 @@ use std::cell::RefCell;
 
 use diagnostics::LocalSink;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use syntax::ast::{Expression, Pattern, RestPattern, SelectArmPattern, Span};
+use syntax::ast::{Expression, Pattern, RestPattern, SelectArm, Span};
 use syntax::program::File;
 
 use semantics::facts::Facts;
@@ -132,11 +132,11 @@ fn visit_node<'a, E, P>(
         }
         Expression::Select { arms, .. } => {
             for arm in arms {
-                match &arm.pattern {
-                    SelectArmPattern::Receive { binding, .. } => {
+                match arm {
+                    SelectArm::Receive { binding, .. } => {
                         visit_pattern(binding, PatternRole::Binding, pattern_visitor);
                     }
-                    SelectArmPattern::MatchReceive {
+                    SelectArm::MatchReceive {
                         arms: match_arms, ..
                     } => {
                         for match_arm in match_arms {
@@ -147,7 +147,7 @@ fn visit_node<'a, E, P>(
                             );
                         }
                     }
-                    SelectArmPattern::Send { .. } | SelectArmPattern::WildCard { .. } => {}
+                    SelectArm::Send { .. } | SelectArm::WildCard { .. } => {}
                 }
             }
         }

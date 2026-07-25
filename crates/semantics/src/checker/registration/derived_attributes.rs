@@ -108,7 +108,7 @@ fn collect_derived_attributes(
                     collect_attributes(
                         module_id,
                         is_d_lis,
-                        &field.attributes,
+                        field.attributes(),
                         DerivedAttributeTarget::Misplaced,
                         &mut out,
                     );

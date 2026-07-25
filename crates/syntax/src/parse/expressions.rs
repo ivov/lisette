@@ -6,7 +6,7 @@ use super::{MAX_TUPLE_ARITY, ParamMode, ParseError, Parser};
 use crate::ast::{
     Annotation, Attribute, BinaryOperator, Binding, CallTypeArguments, Expression,
     FormatStringPart, FunctionBody, IdentifierResolution, ImportAlias, LetMode, Literal, SelectArm,
-    SelectArmPattern, Span, StructFieldAssignment, StructSpread, UnaryOperator, Visibility,
+    Span, StructFieldAssignment, StructSpread, UnaryOperator, Visibility,
 };
 use crate::lex::TokenKind::{self, *};
 use crate::program::{CallKind, DotAccessResolution};
@@ -1535,31 +1535,25 @@ impl<'source> Parser<'source> {
                 let receive_expression = Box::new(self.parse_expression());
                 self.ensure(ArrowDouble);
                 let body = Box::new(self.parse_expression());
-                SelectArm {
-                    pattern: SelectArmPattern::Receive {
-                        binding: Box::new(binding),
-                        receive_expression,
-                        body,
-                    },
+                SelectArm::Receive {
+                    binding: Box::new(binding),
+                    receive_expression,
+                    body,
                 }
             }
             Match => {
                 let match_expression = self.parse_match();
                 if let Expression::Match { subject, arms, .. } = match_expression {
-                    SelectArm {
-                        pattern: SelectArmPattern::MatchReceive {
-                            receive_expression: subject,
-                            arms,
-                        },
+                    SelectArm::MatchReceive {
+                        receive_expression: subject,
+                        arms,
                     }
                 } else {
                     self.ensure(ArrowDouble);
                     let body = Box::new(self.parse_expression());
-                    SelectArm {
-                        pattern: SelectArmPattern::Send {
-                            send_expression: Box::new(match_expression),
-                            body,
-                        },
+                    SelectArm::Send {
+                        send_expression: Box::new(match_expression),
+                        body,
                     }
                 }
             }
@@ -1567,19 +1561,15 @@ impl<'source> Parser<'source> {
                 self.next();
                 self.ensure(ArrowDouble);
                 let body = Box::new(self.parse_expression());
-                SelectArm {
-                    pattern: SelectArmPattern::WildCard { body },
-                }
+                SelectArm::WildCard { body }
             }
             _ => {
                 let send_expression = Box::new(self.parse_expression());
                 self.ensure(ArrowDouble);
                 let body = Box::new(self.parse_expression());
-                SelectArm {
-                    pattern: SelectArmPattern::Send {
-                        send_expression,
-                        body,
-                    },
+                SelectArm::Send {
+                    send_expression,
+                    body,
                 }
             }
         }

@@ -1,4 +1,4 @@
-use syntax::ast::{Expression, SelectArmPattern};
+use syntax::ast::{Expression, SelectArm};
 
 use crate::patterns::binding_decls::pattern_binds_name;
 
@@ -308,7 +308,7 @@ impl<'a> Walker<'a> {
                 // see the select wait as preceding.
                 self.barriers_seen += 1;
                 for arm in arms {
-                    self.walk_select_arm(&arm.pattern);
+                    self.walk_select_arm(arm);
                 }
             }
             Expression::TryBlock { items, .. } | Expression::RecoverBlock { items, .. } => {
@@ -376,9 +376,9 @@ impl<'a> Walker<'a> {
         self.shadow_depth = pre_shadow;
     }
 
-    fn walk_select_arm(&mut self, pattern: &SelectArmPattern) {
+    fn walk_select_arm(&mut self, pattern: &SelectArm) {
         match pattern {
-            SelectArmPattern::Receive {
+            SelectArm::Receive {
                 binding,
                 receive_expression,
                 body,
@@ -394,14 +394,14 @@ impl<'a> Walker<'a> {
                     self.shadow_depth -= 1;
                 }
             }
-            SelectArmPattern::Send {
+            SelectArm::Send {
                 send_expression,
                 body,
             } => {
                 self.walk(send_expression);
                 self.walk_in_enclosure(body);
             }
-            SelectArmPattern::MatchReceive {
+            SelectArm::MatchReceive {
                 receive_expression,
                 arms,
             } => {
@@ -422,7 +422,7 @@ impl<'a> Walker<'a> {
                 }
                 self.enclosure_depth -= 1;
             }
-            SelectArmPattern::WildCard { body } => {
+            SelectArm::WildCard { body } => {
                 self.walk_in_enclosure(body);
             }
         }

@@ -151,7 +151,7 @@ impl Planner<'_> {
     ) -> Option<StringerKind> {
         let mut kinds = fields
             .iter()
-            .filter(|f| f.embedded)
+            .filter(|f| f.is_embedded())
             .filter_map(|f| self.stringer_kind(&f.ty, visited));
         let first = kinds.next()?;
         if kinds.next().is_some() {
@@ -222,7 +222,7 @@ impl Planner<'_> {
         f: &StructFieldDefinition,
         struct_attrs: &[Attribute],
     ) -> (String, StringerField) {
-        if f.embedded {
+        if f.is_embedded() {
             let field_with_doc = format!("{}{}", emit_doc(&f.doc), self.go_type_string(&f.ty));
             let stringer_field = StringerField {
                 source_name: f.name.to_string(),

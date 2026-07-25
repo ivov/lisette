@@ -1,5 +1,5 @@
 use crate::lindig::{Document, concat, join};
-use syntax::lex::Trivia;
+use syntax::lex::{Token, TokenKind};
 
 #[derive(Debug, Clone)]
 pub struct Comment<'a> {
@@ -9,66 +9,47 @@ pub struct Comment<'a> {
 
 pub struct Comments<'a> {
     comments: Vec<Comment<'a>>,
-    comments_cursor: usize,
-
     doc_comments: Vec<Comment<'a>>,
-    doc_comments_cursor: usize,
-
     file_comments: Vec<Comment<'a>>,
-
-    empty_lines: &'a [u32],
-    empty_cursor: usize,
-
+    empty_lines: Vec<u32>,
+    cursor: Cursor,
     source: &'a str,
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct CursorState {
+#[derive(Clone, Copy, Default)]
+pub(crate) struct Cursor {
     comments: usize,
     doc_comments: usize,
     empty_lines: usize,
 }
 
 impl<'a> Comments<'a> {
-    pub fn from_trivia(trivia: &'a Trivia, source: &'a str) -> Self {
-        let comments = trivia
-            .comments
-            .iter()
-            .filter_map(|&(start, end)| {
-                let content = source.get(start as usize..end as usize)?;
-                let content = content.strip_prefix("//").unwrap_or(content);
-                Some(Comment { start, content })
-            })
-            .collect();
-
-        let doc_comments = trivia
-            .doc_comments
-            .iter()
-            .filter_map(|&(start, end)| {
-                let content = source.get(start as usize..end as usize)?;
-                let content = content.strip_prefix("///").unwrap_or(content);
-                Some(Comment { start, content })
-            })
-            .collect();
-
-        let file_comments = trivia
-            .file_comments
-            .iter()
-            .filter_map(|&(start, end)| {
-                let content = source.get(start as usize..end as usize)?;
-                let content = content.strip_prefix("//!").unwrap_or(content);
-                Some(Comment { start, content })
-            })
-            .collect();
+    pub fn from_lexed(tokens: &[Token<'_>], blank_lines: Vec<u32>, source: &'a str) -> Self {
+        let mut comments = Vec::new();
+        let mut doc_comments = Vec::new();
+        let mut file_comments = Vec::new();
+        for token in tokens {
+            let (prefix, destination) = match token.kind {
+                TokenKind::Comment => ("//", &mut comments),
+                TokenKind::DocComment => ("///", &mut doc_comments),
+                TokenKind::FileComment => ("//!", &mut file_comments),
+                _ => continue,
+            };
+            let start = token.byte_offset;
+            let content = source
+                .get(start as usize..token.end_offset() as usize)
+                .expect("comment token must be a valid source range")
+                .strip_prefix(prefix)
+                .expect("comment token text must match its kind");
+            destination.push(Comment { start, content });
+        }
 
         Self {
             comments,
-            comments_cursor: 0,
             doc_comments,
-            doc_comments_cursor: 0,
             file_comments,
-            empty_lines: &trivia.blank_lines,
-            empty_cursor: 0,
+            empty_lines: blank_lines,
+            cursor: Cursor::default(),
             source,
         }
     }
@@ -98,18 +79,12 @@ impl<'a> Comments<'a> {
         true
     }
 
-    pub(crate) fn cursor_state(&self) -> CursorState {
-        CursorState {
-            comments: self.comments_cursor,
-            doc_comments: self.doc_comments_cursor,
-            empty_lines: self.empty_cursor,
-        }
+    pub(crate) fn cursor(&self) -> Cursor {
+        self.cursor
     }
 
-    pub(crate) fn restore_cursor(&mut self, state: CursorState) {
-        self.comments_cursor = state.comments;
-        self.doc_comments_cursor = state.doc_comments;
-        self.empty_cursor = state.empty_lines;
+    pub(crate) fn restore_cursor(&mut self, cursor: Cursor) {
+        self.cursor = cursor;
     }
 
     /// Drains comments before `before`; returns `(same_line, new_line, has_blank_above)`.
@@ -118,21 +93,21 @@ impl<'a> Comments<'a> {
         before: u32,
         mut is_split_point: impl FnMut(u32) -> bool,
     ) -> (Option<Document<'a>>, Option<Document<'a>>, bool) {
-        let comment_end = self.comments[self.comments_cursor..]
+        let comment_end = self.comments[self.cursor.comments..]
             .iter()
             .position(|c| c.start >= before)
-            .map(|i| self.comments_cursor + i)
+            .map(|i| self.cursor.comments + i)
             .unwrap_or(self.comments.len());
-        let popped_comments = &self.comments[self.comments_cursor..comment_end];
-        self.comments_cursor = comment_end;
+        let popped_comments = &self.comments[self.cursor.comments..comment_end];
+        self.cursor.comments = comment_end;
 
-        let empty_end = self.empty_lines[self.empty_cursor..]
+        let empty_end = self.empty_lines[self.cursor.empty_lines..]
             .iter()
             .position(|&l| l >= before)
-            .map(|i| self.empty_cursor + i)
+            .map(|i| self.cursor.empty_lines + i)
             .unwrap_or(self.empty_lines.len());
-        let popped_empty = &self.empty_lines[self.empty_cursor..empty_end];
-        self.empty_cursor = empty_end;
+        let popped_empty = &self.empty_lines[self.cursor.empty_lines..empty_end];
+        self.cursor.empty_lines = empty_end;
 
         let comments_iter = popped_comments.iter().map(|c| (c.start, Some(c.content)));
         let empty_iter = popped_empty.iter().map(|&pos| (pos, None));
@@ -189,23 +164,23 @@ impl<'a> Comments<'a> {
     }
 
     pub fn take_comments_before(&mut self, position: u32) -> Option<Document<'a>> {
-        let comment_end = self.comments[self.comments_cursor..]
+        let comment_end = self.comments[self.cursor.comments..]
             .iter()
             .position(|c| c.start >= position)
-            .map(|i| self.comments_cursor + i)
+            .map(|i| self.cursor.comments + i)
             .unwrap_or(self.comments.len());
 
-        let empty_end = self.empty_lines[self.empty_cursor..]
+        let empty_end = self.empty_lines[self.cursor.empty_lines..]
             .iter()
             .position(|&l| l >= position)
-            .map(|i| self.empty_cursor + i)
+            .map(|i| self.cursor.empty_lines + i)
             .unwrap_or(self.empty_lines.len());
 
-        let popped_comments = &self.comments[self.comments_cursor..comment_end];
-        let popped_empty = &self.empty_lines[self.empty_cursor..empty_end];
+        let popped_comments = &self.comments[self.cursor.comments..comment_end];
+        let popped_empty = &self.empty_lines[self.cursor.empty_lines..empty_end];
 
-        self.comments_cursor = comment_end;
-        self.empty_cursor = empty_end;
+        self.cursor.comments = comment_end;
+        self.cursor.empty_lines = empty_end;
 
         let comments_iter = popped_comments.iter().map(|c| (c.start, Some(c.content)));
         let empty_iter = popped_empty.iter().map(|&position| (position, None));
@@ -223,14 +198,14 @@ impl<'a> Comments<'a> {
     }
 
     pub fn take_doc_comments_before(&mut self, position: u32) -> Option<Document<'a>> {
-        let end = self.doc_comments[self.doc_comments_cursor..]
+        let end = self.doc_comments[self.cursor.doc_comments..]
             .iter()
             .position(|c| c.start >= position)
-            .map(|i| self.doc_comments_cursor + i)
+            .map(|i| self.cursor.doc_comments + i)
             .unwrap_or(self.doc_comments.len());
 
-        let popped = &self.doc_comments[self.doc_comments_cursor..end];
-        self.doc_comments_cursor = end;
+        let popped = &self.doc_comments[self.cursor.doc_comments..end];
+        self.cursor.doc_comments = end;
 
         doc_comment_to_document(popped.iter().map(|c| c.content))
     }
@@ -253,19 +228,19 @@ impl<'a> Comments<'a> {
     }
 
     pub fn take_empty_lines_before(&mut self, position: u32) -> bool {
-        let end = self.empty_lines[self.empty_cursor..]
+        let end = self.empty_lines[self.cursor.empty_lines..]
             .iter()
             .position(|&l| l >= position)
-            .map(|i| self.empty_cursor + i)
+            .map(|i| self.cursor.empty_lines + i)
             .unwrap_or(self.empty_lines.len());
 
-        let found = end > self.empty_cursor;
-        self.empty_cursor = end;
+        let found = end > self.cursor.empty_lines;
+        self.cursor.empty_lines = end;
         found
     }
 
     pub fn has_comments_before(&self, position: u32) -> bool {
-        self.comments[self.comments_cursor..]
+        self.comments[self.cursor.comments..]
             .first()
             .is_some_and(|c| c.start < position)
     }
@@ -337,7 +312,7 @@ impl<'a> Comments<'a> {
         let start = span.byte_offset;
         let end = span.byte_offset + span.byte_length;
 
-        self.comments[self.comments_cursor..]
+        self.comments[self.cursor.comments..]
             .iter()
             .any(|c| c.start >= start && c.start < end)
     }
@@ -404,12 +379,25 @@ pub fn prepend_comments<'a>(doc: Document<'a>, comments: Option<Document<'a>>) -
 mod tests {
     use super::*;
 
-    fn trivia(comments: Vec<(u32, u32)>, blank_lines: Vec<u32>) -> Trivia {
-        Trivia {
+    fn comments<'a>(
+        source: &'a str,
+        ranges: Vec<(u32, u32)>,
+        blank_lines: Vec<u32>,
+    ) -> Comments<'a> {
+        let comments = ranges
+            .into_iter()
+            .map(|(start, end)| Comment {
+                start,
+                content: &source[start as usize + 2..end as usize],
+            })
+            .collect::<Vec<_>>();
+        Comments {
             comments,
             doc_comments: Vec::new(),
             file_comments: Vec::new(),
-            blank_lines,
+            empty_lines: blank_lines,
+            cursor: Cursor::default(),
+            source,
         }
     }
 
@@ -420,8 +408,7 @@ mod tests {
     #[test]
     fn take_split_at_line_start_no_comments_returns_none() {
         let source = "fn f() {}";
-        let t = trivia(Vec::new(), Vec::new());
-        let mut c = Comments::from_trivia(&t, source);
+        let mut c = comments(source, Vec::new(), Vec::new());
         let (same, new, has_blank) = c.take_split_at_line_start(100);
         assert_eq!(render(same), None);
         assert_eq!(render(new), None);
@@ -431,8 +418,7 @@ mod tests {
     #[test]
     fn take_split_at_line_start_routes_same_line_vs_standalone() {
         let source = "x // a\n  // b\n y";
-        let t = trivia(vec![(2, 6), (9, 13)], Vec::new());
-        let mut c = Comments::from_trivia(&t, source);
+        let mut c = comments(source, vec![(2, 6), (9, 13)], Vec::new());
         let (same, new, has_blank) = c.take_split_at_line_start(source.len() as u32);
         assert_eq!(render(same).as_deref(), Some("// a"));
         assert_eq!(render(new).as_deref(), Some("// b"));
@@ -442,8 +428,7 @@ mod tests {
     #[test]
     fn take_split_at_line_start_blank_before_new_line_sets_has_blank_above() {
         let source = "x // a\n\n  // b\n";
-        let t = trivia(vec![(2, 6), (10, 14)], vec![7]);
-        let mut c = Comments::from_trivia(&t, source);
+        let mut c = comments(source, vec![(2, 6), (10, 14)], vec![7]);
         let (same, new, has_blank) = c.take_split_at_line_start(source.len() as u32);
         assert_eq!(render(same).as_deref(), Some("// a"));
         assert_eq!(render(new).as_deref(), Some("// b"));
@@ -453,8 +438,7 @@ mod tests {
     #[test]
     fn take_split_at_line_start_blank_between_new_line_entries_preserves_separator() {
         let source = "  // a\n\n  // b\n";
-        let t = trivia(vec![(2, 6), (10, 14)], vec![7]);
-        let mut c = Comments::from_trivia(&t, source);
+        let mut c = comments(source, vec![(2, 6), (10, 14)], vec![7]);
         let (same, new, has_blank) = c.take_split_at_line_start(source.len() as u32);
         assert_eq!(render(same), None);
         let new_str = render(new).expect("new_line should have content");
@@ -467,8 +451,7 @@ mod tests {
     #[test]
     fn take_split_at_line_start_all_same_line() {
         let source = "a // 1 // 2";
-        let t = trivia(vec![(2, 6), (7, 11)], Vec::new());
-        let mut c = Comments::from_trivia(&t, source);
+        let mut c = comments(source, vec![(2, 6), (7, 11)], Vec::new());
         let (same, new, has_blank) = c.take_split_at_line_start(source.len() as u32);
         let same_str = render(same).expect("same_line should have content");
         assert!(same_str.contains("// 1"));
@@ -480,8 +463,7 @@ mod tests {
     #[test]
     fn take_split_at_line_start_advances_cursor() {
         let source = "x // a\n  // b\n";
-        let t = trivia(vec![(2, 6), (9, 13)], Vec::new());
-        let mut c = Comments::from_trivia(&t, source);
+        let mut c = comments(source, vec![(2, 6), (9, 13)], Vec::new());
         let (same1, new1, _) = c.take_split_at_line_start(7);
         assert_eq!(render(same1).as_deref(), Some("// a"));
         assert_eq!(render(new1), None);
@@ -493,8 +475,7 @@ mod tests {
     #[test]
     fn take_split_at_line_start_respects_before_bound() {
         let source = "// a\n// b\n";
-        let t = trivia(vec![(0, 4), (5, 9)], Vec::new());
-        let mut c = Comments::from_trivia(&t, source);
+        let mut c = comments(source, vec![(0, 4), (5, 9)], Vec::new());
         let (_, new, _) = c.take_split_at_line_start(5);
         assert_eq!(render(new).as_deref(), Some("// a"));
         let (_, new2, _) = c.take_split_at_line_start(source.len() as u32);
@@ -504,8 +485,7 @@ mod tests {
     #[test]
     fn take_split_by_newline_after_classifier_uses_anchor() {
         let source = "x // a\n  // b\n";
-        let t = trivia(vec![(2, 6), (9, 13)], Vec::new());
-        let mut c = Comments::from_trivia(&t, source);
+        let mut c = comments(source, vec![(2, 6), (9, 13)], Vec::new());
         let (same, new, _) = c.take_split_by_newline_after(2, source.len() as u32);
         assert_eq!(render(same).as_deref(), Some("// a"));
         assert_eq!(render(new).as_deref(), Some("// b"));

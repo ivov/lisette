@@ -131,12 +131,12 @@ impl InferCtx<'_> {
 
     /// Reject multiple `let Some(v) = ch.receive()` arms in one select.
     pub(crate) fn check_multiple_select_receives(&mut self, arms: &[syntax::ast::SelectArm]) {
-        use syntax::ast::SelectArmPattern;
+        use syntax::ast::SelectArm;
 
         let mut first_receive_span: Option<Span> = None;
 
         for arm in arms {
-            let SelectArmPattern::Receive { binding, .. } = &arm.pattern else {
+            let SelectArm::Receive { binding, .. } = arm else {
                 continue;
             };
             let inner = match binding.as_ref() {
@@ -165,12 +165,12 @@ impl InferCtx<'_> {
     }
 
     pub(crate) fn check_duplicate_select_defaults(&mut self, arms: &[syntax::ast::SelectArm]) {
-        use syntax::ast::SelectArmPattern;
+        use syntax::ast::SelectArm;
 
         let mut first_default_span: Option<Span> = None;
 
         for arm in arms {
-            if let SelectArmPattern::WildCard { body } = &arm.pattern {
+            if let SelectArm::WildCard { body } = arm {
                 if let Some(first_span) = first_default_span {
                     self.sink.push(diagnostics::infer::duplicate_select_default(
                         first_span,

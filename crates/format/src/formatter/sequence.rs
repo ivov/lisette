@@ -201,7 +201,6 @@ impl<'a> Formatter<'a> {
 mod tests {
     use super::*;
     use crate::comments::Comments;
-    use syntax::lex::Trivia;
 
     fn entry<'a>(
         leading: Option<&'a str>,
@@ -238,13 +237,23 @@ mod tests {
             .to_pretty_string(80)
     }
 
-    fn trivia(comments: Vec<(u32, u32)>, blank_lines: Vec<u32>) -> Trivia {
-        Trivia {
-            comments,
-            doc_comments: Vec::new(),
-            file_comments: Vec::new(),
-            blank_lines,
-        }
+    fn comments<'a>(
+        source: &'a str,
+        ranges: Vec<(u32, u32)>,
+        blank_lines: Vec<u32>,
+    ) -> Comments<'a> {
+        let mut lexed = syntax::lex::Lexer::new(source, 0).lex();
+        lexed.blank_lines = blank_lines;
+        let selected = lexed
+            .tokens
+            .into_iter()
+            .filter(|token| {
+                ranges
+                    .iter()
+                    .any(|&(start, end)| token.byte_offset == start && token.end_offset() == end)
+            })
+            .collect::<Vec<_>>();
+        Comments::from_lexed(&selected, lexed.blank_lines, source)
     }
 
     fn render_opt(doc: Option<Document<'_>>) -> Option<String> {
@@ -343,8 +352,7 @@ mod tests {
     #[test]
     fn sibling_lead_split_no_prev_returns_all_as_leading() {
         let source = "// c\nfn f() {}";
-        let t = trivia(vec![(0, 4)], Vec::new());
-        let comments = Comments::from_trivia(&t, source);
+        let comments = comments(source, vec![(0, 4)], Vec::new());
         let mut f = Formatter::new(comments);
         let (same, leading, has_blank) = f.sibling_lead_split(false, source.len() as u32);
         assert_eq!(render_opt(same), None);
@@ -355,8 +363,7 @@ mod tests {
     #[test]
     fn sibling_lead_split_with_prev_routes_at_line_start() {
         let source = "x // a\n  // b\n";
-        let t = trivia(vec![(2, 6), (9, 13)], Vec::new());
-        let comments = Comments::from_trivia(&t, source);
+        let comments = comments(source, vec![(2, 6), (9, 13)], Vec::new());
         let mut f = Formatter::new(comments);
         let (same, leading, _) = f.sibling_lead_split(true, source.len() as u32);
         assert_eq!(render_opt(same).as_deref(), Some("// a"));
@@ -366,8 +373,7 @@ mod tests {
     #[test]
     fn push_pattern_entry_attaches_trailing_to_previous() {
         let source = "x // tail\n  y";
-        let t = trivia(vec![(2, 9)], Vec::new());
-        let comments = Comments::from_trivia(&t, source);
+        let comments = comments(source, vec![(2, 9)], Vec::new());
         let mut f = Formatter::new(comments);
         let mut entries: Vec<PatternEntry<'_>> = Vec::new();
         f.push_pattern_entry(&mut entries, 0, |_| Document::str("a"));
@@ -383,8 +389,7 @@ mod tests {
     #[test]
     fn push_pattern_entry_split_runs_before_build() {
         let source = "// pre\nx";
-        let t = trivia(vec![(0, 6)], Vec::new());
-        let comments = Comments::from_trivia(&t, source);
+        let comments = comments(source, vec![(0, 6)], Vec::new());
         let mut f = Formatter::new(comments);
         let mut entries: Vec<PatternEntry<'_>> = Vec::new();
         let mut build_called = false;
@@ -403,8 +408,7 @@ mod tests {
     #[test]
     fn split_for_rest_attaches_trailing_and_returns_leading() {
         let source = "x // tail\n// pre\n..rest";
-        let t = trivia(vec![(2, 9), (10, 16)], Vec::new());
-        let comments = Comments::from_trivia(&t, source);
+        let comments = comments(source, vec![(2, 9), (10, 16)], Vec::new());
         let mut f = Formatter::new(comments);
         let mut entries: Vec<PatternEntry<'_>> = vec![entry(None, "a", None)];
         let leading = f.split_for_rest(&mut entries, 17);
@@ -418,8 +422,7 @@ mod tests {
     #[test]
     fn join_sibling_body_attaches_same_line_to_last_entry() {
         let source = "x // tail\n}";
-        let t = trivia(vec![(2, 9)], Vec::new());
-        let comments = Comments::from_trivia(&t, source);
+        let comments = comments(source, vec![(2, 9)], Vec::new());
         let mut f = Formatter::new(comments);
         let entries = vec![SiblingEntry {
             leading: None,
@@ -435,8 +438,7 @@ mod tests {
     #[test]
     fn join_sibling_body_standalone_renders_as_separated_block() {
         let source = "x\n  // tail\n}";
-        let t = trivia(vec![(4, 11)], Vec::new());
-        let comments = Comments::from_trivia(&t, source);
+        let comments = comments(source, vec![(4, 11)], Vec::new());
         let mut f = Formatter::new(comments);
         let entries = vec![SiblingEntry {
             leading: None,
@@ -452,8 +454,7 @@ mod tests {
     #[test]
     fn join_sibling_body_empty_entries_drains_as_standalone() {
         let source = "// only\n";
-        let t = trivia(vec![(0, 7)], Vec::new());
-        let comments = Comments::from_trivia(&t, source);
+        let comments = comments(source, vec![(0, 7)], Vec::new());
         let mut f = Formatter::new(comments);
         let body = f.join_sibling_body(Vec::new(), source.len() as u32);
         let out = render_doc(body);

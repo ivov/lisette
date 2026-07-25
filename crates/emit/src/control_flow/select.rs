@@ -10,7 +10,7 @@ use crate::plan::bodies::{
 };
 use crate::plan::placement::unreachable_panic_if_needed;
 use crate::plan::values::{GoExpression, ValuePlan};
-use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, SelectArmPattern};
+use syntax::ast::{Expression, MatchArm, Pattern, SelectArm};
 use syntax::program::{ChannelOperation, channel_operation};
 use syntax::types::Type;
 
@@ -56,9 +56,9 @@ impl Planner<'_> {
         arms: &[SelectArm],
         place: &PlacePlan,
     ) -> SelectStatementPlan {
-        let needs_retry_loop = arms.iter().any(|arm| {
-            matches!(&arm.pattern, SelectArmPattern::Receive { binding, .. } if binding.is_some_pattern())
-        });
+        let needs_retry_loop = arms.iter().any(
+            |arm| matches!(arm, SelectArm::Receive { binding, .. } if binding.is_some_pattern()),
+        );
 
         let mut setup: Vec<LoweredStatement> = Vec::new();
         let prep = self.preprocess_select_arms(&mut setup, arms, needs_retry_loop);
@@ -142,15 +142,15 @@ impl Planner<'_> {
         let mut prepared = Vec::with_capacity(arms.len());
 
         for arm in arms {
-            let prepared_arm = match &arm.pattern {
-                SelectArmPattern::Send {
+            let prepared_arm = match arm {
+                SelectArm::Send {
                     send_expression,
                     body,
                 } => PreparedSelectArm::Send {
                     body,
                     operation: self.prepare_send_arm(setup, send_expression, needs_retry_loop),
                 },
-                SelectArmPattern::Receive {
+                SelectArm::Receive {
                     receive_expression,
                     binding,
                     body,
@@ -176,7 +176,7 @@ impl Planner<'_> {
                         element_ty: receive_expression.get_type().ok_type(),
                     }
                 }
-                SelectArmPattern::MatchReceive {
+                SelectArm::MatchReceive {
                     receive_expression,
                     arms,
                 } => {
@@ -195,7 +195,7 @@ impl Planner<'_> {
                         element_ty: receive_expression.get_type().ok_type(),
                     }
                 }
-                SelectArmPattern::WildCard { body } => PreparedSelectArm::Default { body },
+                SelectArm::WildCard { body } => PreparedSelectArm::Default { body },
             };
             prepared.push(prepared_arm);
         }

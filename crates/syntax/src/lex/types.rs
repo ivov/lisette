@@ -5,19 +5,11 @@ use crate::parse::ParseError;
 pub struct LexResult<'source> {
     pub tokens: Vec<Token<'source>>,
     pub errors: Vec<ParseError>,
-    pub trivia: Trivia,
+    pub blank_lines: Vec<u32>,
 }
 
 impl<'source> LexResult<'source> {
     pub fn failed(&self) -> bool {
         !self.errors.is_empty()
     }
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct Trivia {
-    pub comments: Vec<(u32, u32)>,
-    pub doc_comments: Vec<(u32, u32)>,
-    pub file_comments: Vec<(u32, u32)>,
-    pub blank_lines: Vec<u32>,
 }

@@ -4,7 +4,7 @@ use semantics::checker::promotion::{self, MemberKind, Resolution};
 use semantics::store::Store;
 use syntax::ast::{
     Annotation, Attribute, Binding, CallTypeArguments, Expression, Generic, ImportAlias, Pattern,
-    SelectArm, SelectArmPattern, StructSpread,
+    SelectArm, StructSpread,
 };
 use syntax::program::File;
 use syntax::program::{DefinitionBody, DotAccessKind, EqualityIndex, Module};
@@ -527,8 +527,8 @@ fn walk_select(
     ctx: Option<&ModuleItemId>,
 ) {
     for arm in arms {
-        match &arm.pattern {
-            SelectArmPattern::Receive {
+        match arm {
+            SelectArm::Receive {
                 binding,
                 receive_expression,
                 body,
@@ -538,14 +538,14 @@ fn walk_select(
                 walk_expression(module, receive_expression, graph, alias_map, ctx);
                 walk_expression(module, body, graph, alias_map, ctx);
             }
-            SelectArmPattern::Send {
+            SelectArm::Send {
                 send_expression,
                 body,
             } => {
                 walk_expression(module, send_expression, graph, alias_map, ctx);
                 walk_expression(module, body, graph, alias_map, ctx);
             }
-            SelectArmPattern::MatchReceive {
+            SelectArm::MatchReceive {
                 receive_expression,
                 arms: match_arms,
             } => {
@@ -555,7 +555,7 @@ fn walk_select(
                     walk_expression(module, &match_arm.expression, graph, alias_map, ctx);
                 }
             }
-            SelectArmPattern::WildCard { body } => {
+            SelectArm::WildCard { body } => {
                 walk_expression(module, body, graph, alias_map, ctx);
             }
         }

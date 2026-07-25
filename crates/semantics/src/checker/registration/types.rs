@@ -301,7 +301,7 @@ impl TaskState {
             .iter()
             .map(|f| {
                 let field_ty = self.convert_to_type(&*store, &f.annotation, span);
-                let visibility = if f.embedded {
+                let visibility = if f.is_embedded() {
                     embed_field_visibility(&*store, &field_ty)
                 } else {
                     f.visibility
@@ -366,7 +366,7 @@ impl TaskState {
             let DefinitionBody::Struct { fields, .. } = &definition.body else {
                 continue;
             };
-            for field in fields.iter().filter(|f| f.embedded) {
+            for field in fields.iter().filter(|f| f.is_embedded()) {
                 self.validate_embed_target(store, &field.ty, field.name_span);
             }
         }
@@ -745,7 +745,7 @@ fn is_faithful_imported_graph(
             ..
         } if generics.is_empty() => fields
             .iter()
-            .filter(|field| field.embedded)
+            .filter(|field| field.is_embedded())
             .all(|field| is_faithful_imported_graph(store, &field.ty, seen)),
         DefinitionBody::Struct { generics, .. } if generics.is_empty() => {
             has_selector_surface(store, &target)

@@ -23,7 +23,7 @@ use std::cell::RefCell;
 use diagnostics::{IssueKind, LocalSink, PatternIssue};
 use semantics::context::AnalysisContext;
 use semantics::store::Store;
-use syntax::ast::{Expression, IfLetAlternative, Literal, Pattern, SelectArmPattern, Span};
+use syntax::ast::{Expression, IfLetAlternative, Literal, Pattern, SelectArm, Span};
 use syntax::types::Type;
 
 use maranget::is_useful;
@@ -324,8 +324,8 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Local
 
         Expression::Select { arms, .. } => {
             for arm in arms {
-                match &arm.pattern {
-                    SelectArmPattern::Receive {
+                match arm {
+                    SelectArm::Receive {
                         receive_expression,
                         body,
                         ..
@@ -333,14 +333,14 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Local
                         check(receive_expression.as_ref(), ctx, sink);
                         check(body.as_ref(), ctx, sink);
                     }
-                    SelectArmPattern::Send {
+                    SelectArm::Send {
                         send_expression,
                         body,
                     } => {
                         check(send_expression.as_ref(), ctx, sink);
                         check(body.as_ref(), ctx, sink);
                     }
-                    SelectArmPattern::MatchReceive {
+                    SelectArm::MatchReceive {
                         receive_expression,
                         arms: match_arms,
                     } => {
@@ -349,7 +349,7 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Local
                             check(&match_arm.expression, ctx, sink);
                         }
                     }
-                    SelectArmPattern::WildCard { body } => {
+                    SelectArm::WildCard { body } => {
                         check(body.as_ref(), ctx, sink);
                     }
                 }

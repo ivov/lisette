@@ -16,36 +16,12 @@ pub struct DesugarResult {
 /// - `x |> func` into `func(x)`
 /// - `x |> func(a, b)` into `func(x, a, b)`
 pub fn desugar(expressions: Vec<Expression>) -> DesugarResult {
-    if !contains_pipeline(&expressions) {
-        return DesugarResult {
-            ast: expressions,
-            errors: Vec::new(),
-        };
-    }
-
     let mut desugarer = Desugarer::new();
     let ast = desugarer.fold_module(expressions);
     DesugarResult {
         ast,
         errors: desugarer.errors,
     }
-}
-
-fn contains_pipeline(expressions: &[Expression]) -> bool {
-    let mut pending: Vec<_> = expressions.iter().collect();
-    while let Some(expression) = pending.pop() {
-        if matches!(
-            expression,
-            Expression::Binary {
-                operator: BinaryOperator::Pipeline,
-                ..
-            }
-        ) {
-            return true;
-        }
-        pending.extend(expression.children());
-    }
-    false
 }
 
 struct Desugarer {

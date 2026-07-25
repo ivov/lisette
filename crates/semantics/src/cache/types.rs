@@ -151,9 +151,14 @@ pub struct CachedStructField {
     name_span: CachedSpan,
     ty: Type,
     visibility: FieldVisibility,
-    attributes: Vec<CachedAttribute>,
     doc: Option<String>,
-    embedded: bool,
+    kind: CachedStructFieldKind,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+enum CachedStructFieldKind {
+    Named { attributes: Vec<CachedAttribute> },
+    Embedded,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -167,31 +172,43 @@ impl CachedStructField {
         field: &syntax::ast::StructFieldDefinition,
         file_id_to_index: &HashMap<u32, u32>,
     ) -> Self {
+        let kind = match &field.kind {
+            syntax::ast::StructFieldKind::Named { attributes } => CachedStructFieldKind::Named {
+                attributes: attributes
+                    .iter()
+                    .map(CachedAttribute::from_attribute)
+                    .collect(),
+            },
+            syntax::ast::StructFieldKind::Embedded => CachedStructFieldKind::Embedded,
+        };
         Self {
             name: field.name.clone(),
             name_span: CachedSpan::from_span(&field.name_span, file_id_to_index),
             ty: Clone::clone(&field.ty),
             visibility: field.visibility,
-            attributes: field
-                .attributes
-                .iter()
-                .map(CachedAttribute::from_attribute)
-                .collect(),
             doc: field.doc.clone(),
-            embedded: field.embedded,
+            kind,
         }
     }
 
     fn to_field(&self, file_ids: &[u32]) -> syntax::ast::StructFieldDefinition {
+        let kind = match &self.kind {
+            CachedStructFieldKind::Named { attributes } => syntax::ast::StructFieldKind::Named {
+                attributes: attributes
+                    .iter()
+                    .map(CachedAttribute::to_attribute)
+                    .collect(),
+            },
+            CachedStructFieldKind::Embedded => syntax::ast::StructFieldKind::Embedded,
+        };
         syntax::ast::StructFieldDefinition {
             doc: self.doc.clone(),
             name: self.name.clone(),
             name_span: self.name_span.to_span(file_ids),
             ty: self.ty.clone(),
             visibility: self.visibility,
-            attributes: self.attributes.iter().map(|a| a.to_attribute()).collect(),
             annotation: Annotation::Unknown,
-            embedded: self.embedded,
+            kind,
         }
     }
 }

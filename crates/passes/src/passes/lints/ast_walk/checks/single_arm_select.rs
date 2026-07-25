@@ -1,5 +1,5 @@
 use crate::passes::walk::NodeCtx;
-use syntax::ast::{Expression, SelectArmPattern, Span};
+use syntax::ast::{Expression, SelectArm, Span};
 
 use super::helpers::span_text;
 
@@ -12,9 +12,9 @@ pub fn check_single_arm_select(expression: &Expression, ctx: &NodeCtx) {
         return;
     };
 
-    let SelectArmPattern::MatchReceive {
+    let SelectArm::MatchReceive {
         receive_expression, ..
-    } = &arm.pattern
+    } = arm
     else {
         return;
     };

@@ -30,7 +30,6 @@ description: |
             [
                 StructFieldDefinition {
                     doc: None,
-                    attributes: [],
                     name: "_0",
                     name_span: Span {
                         file_id: 0,
@@ -50,7 +49,9 @@ description: |
                     ty: Var {
                         id: uninferred,
                     },
-                    embedded: false,
+                    kind: Named {
+                        attributes: [],
+                    },
                 },
             ],
         ),

@@ -7,7 +7,7 @@
 use crate::passes::walk::NodeCtx;
 use diagnostics::LocalSink;
 use rustc_hash::FxHashMap as HashMap;
-use syntax::ast::{Binding, Expression, MatchArm, Pattern, SelectArm, SelectArmPattern, Span};
+use syntax::ast::{Binding, Expression, MatchArm, Pattern, SelectArm, Span};
 
 use syntax::ast::collect_pattern_bindings;
 
@@ -48,9 +48,9 @@ fn visit_match_arm(arm: &MatchArm, sink: &LocalSink) {
 }
 
 fn visit_select_arm(arm: &SelectArm, sink: &LocalSink) {
-    if let SelectArmPattern::Receive { binding, .. } = &arm.pattern {
+    if let SelectArm::Receive { binding, .. } = arm {
         check_pattern(binding, sink);
-    } else if let SelectArmPattern::MatchReceive { arms, .. } = &arm.pattern {
+    } else if let SelectArm::MatchReceive { arms, .. } = arm {
         for arm in arms {
             visit_match_arm(arm, sink);
         }

@@ -32,7 +32,7 @@ description: |
                         EnumFieldDefinition {
                             name: "field0",
                             name_span: Span {
-                                file_id: 0,
+                                file_id: 4294967295,
                                 byte_offset: 0,
                                 byte_length: 0,
                             },
@@ -52,7 +52,7 @@ description: |
                         EnumFieldDefinition {
                             name: "field1",
                             name_span: Span {
-                                file_id: 0,
+                                file_id: 4294967295,
                                 byte_offset: 0,
                                 byte_length: 0,
                             },
@@ -72,7 +72,7 @@ description: |
                         EnumFieldDefinition {
                             name: "field2",
                             name_span: Span {
-                                file_id: 0,
+                                file_id: 4294967295,
                                 byte_offset: 0,
                                 byte_length: 0,
                             },
@@ -92,7 +92,7 @@ description: |
                         EnumFieldDefinition {
                             name: "field3",
                             name_span: Span {
-                                file_id: 0,
+                                file_id: 4294967295,
                                 byte_offset: 0,
                                 byte_length: 0,
                             },
@@ -125,7 +125,7 @@ description: |
                         EnumFieldDefinition {
                             name: "field0",
                             name_span: Span {
-                                file_id: 0,
+                                file_id: 4294967295,
                                 byte_offset: 0,
                                 byte_length: 0,
                             },
