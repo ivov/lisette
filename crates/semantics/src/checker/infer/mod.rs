@@ -193,16 +193,16 @@ impl InferCtx<'_> {
             return;
         }
 
-        let before = self.sink.len();
-        let const_ty = if let Some(annotation) = annotation {
-            self.convert_to_type(store, annotation, span)
-        } else {
-            expression
-                .value()
-                .and_then(|value| self.type_from_literal_expression(value))
-                .unwrap_or_else(|| self.new_type_var())
-        };
-        self.sink.truncate(before);
+        let const_ty = self.without_diagnostics(|this| {
+            if let Some(annotation) = annotation {
+                this.convert_to_type(store, annotation, span)
+            } else {
+                expression
+                    .value()
+                    .and_then(|value| this.type_from_literal_expression(value))
+                    .unwrap_or_else(|| this.new_type_var())
+            }
+        });
 
         let scope = self.scopes.current_mut();
         scope.insert_const(identifier.to_string(), const_ty);
@@ -222,9 +222,9 @@ impl InferCtx<'_> {
         };
 
         let store = self.store;
-        let before = self.sink.len();
-        let fn_ty = self.extract_signature_parts(store, generics, params, return_annotation, span);
-        self.sink.truncate(before);
+        let fn_ty = self.without_diagnostics(|this| {
+            this.extract_signature_parts(store, generics, params, return_annotation, span)
+        });
 
         let scope = self.scopes.current_mut();
         scope.insert_value(name.to_string(), fn_ty);

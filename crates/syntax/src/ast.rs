@@ -273,12 +273,7 @@ impl std::fmt::Debug for MatchArm {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct SelectArm {
-    pub pattern: SelectArmPattern,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum SelectArmPattern {
+pub enum SelectArm {
     Receive {
         binding: Box<Pattern>,
         receive_expression: Box<Expression>,
@@ -662,13 +657,31 @@ impl<'a> IntoIterator for &'a mut StructFields {
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructFieldDefinition {
     pub doc: Option<String>,
-    pub attributes: Vec<Attribute>,
     pub name: EcoString,
     pub name_span: Span,
     pub annotation: Annotation,
     pub visibility: Visibility,
     pub ty: Type,
-    pub embedded: bool,
+    pub kind: StructFieldKind,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum StructFieldKind {
+    Named { attributes: Vec<Attribute> },
+    Embedded,
+}
+
+impl StructFieldDefinition {
+    pub fn attributes(&self) -> &[Attribute] {
+        match &self.kind {
+            StructFieldKind::Named { attributes } => attributes,
+            StructFieldKind::Embedded => &[],
+        }
+    }
+
+    pub fn is_embedded(&self) -> bool {
+        matches!(self.kind, StructFieldKind::Embedded)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1080,14 +1093,14 @@ impl Span {
 
     pub fn dummy() -> Self {
         Span {
-            file_id: 0,
+            file_id: u32::MAX,
             byte_offset: 0,
             byte_length: 0,
         }
     }
 
     pub fn is_dummy(&self) -> bool {
-        self.byte_length == 0
+        self.file_id == u32::MAX
     }
 
     pub fn end(&self) -> u32 {
@@ -1095,11 +1108,13 @@ impl Span {
     }
 
     pub fn merge(self, other: Span) -> Span {
-        Span::new(
-            self.file_id,
-            self.byte_offset,
-            other.end() - self.byte_offset,
-        )
+        assert_eq!(
+            self.file_id, other.file_id,
+            "cannot merge spans from different files"
+        );
+        let start = self.byte_offset.min(other.byte_offset);
+        let end = self.end().max(other.end());
+        Span::new(self.file_id, start, end - start)
     }
 }
 
@@ -1671,13 +1686,13 @@ impl Expression {
 
             Expression::Function { .. } | Expression::Lambda { .. } => false,
 
-            Expression::Select { arms, .. } => arms.iter().any(|arm| match &arm.pattern {
-                SelectArmPattern::Receive { body, .. } => body.contains_break(),
-                SelectArmPattern::Send { body, .. } => body.contains_break(),
-                SelectArmPattern::MatchReceive { arms, .. } => {
+            Expression::Select { arms, .. } => arms.iter().any(|arm| match arm {
+                SelectArm::Receive { body, .. } => body.contains_break(),
+                SelectArm::Send { body, .. } => body.contains_break(),
+                SelectArm::MatchReceive { arms, .. } => {
                     arms.iter().any(|a| a.expression.contains_break())
                 }
-                SelectArmPattern::WildCard { body } => body.contains_break(),
+                SelectArm::WildCard { body } => body.contains_break(),
             }),
 
             Expression::Cast { expression, .. } => expression.contains_break(),
@@ -1896,8 +1911,8 @@ impl Expression {
             Expression::Select { arms, .. } => {
                 let mut c = Vec::new();
                 for arm in arms {
-                    match &arm.pattern {
-                        SelectArmPattern::Receive {
+                    match arm {
+                        SelectArm::Receive {
                             receive_expression,
                             body,
                             ..
@@ -1905,14 +1920,14 @@ impl Expression {
                             c.push(receive_expression.as_ref());
                             c.push(body.as_ref());
                         }
-                        SelectArmPattern::Send {
+                        SelectArm::Send {
                             send_expression,
                             body,
                         } => {
                             c.push(send_expression.as_ref());
                             c.push(body.as_ref());
                         }
-                        SelectArmPattern::MatchReceive {
+                        SelectArm::MatchReceive {
                             receive_expression,
                             arms: match_arms,
                         } => {
@@ -1924,7 +1939,7 @@ impl Expression {
                                 c.push(&ma.expression);
                             }
                         }
-                        SelectArmPattern::WildCard { body } => {
+                        SelectArm::WildCard { body } => {
                             c.push(body.as_ref());
                         }
                     }

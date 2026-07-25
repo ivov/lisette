@@ -58,7 +58,7 @@ fn as_two_arm(expression: &Expression) -> Option<TwoArm<'_>> {
     }
 }
 
-pub fn check_collapsible_match(expression: &Expression, ctx: &NodeCtx) {
+pub fn check_collapsible_match(expression: &Expression, ctx: &mut NodeCtx) {
     let Some(outer) = as_two_arm(expression) else {
         return;
     };
@@ -105,13 +105,12 @@ pub fn check_collapsible_match(expression: &Expression, ctx: &NodeCtx) {
 
     // Claim both nodes so `match_as_if_let` does not also advise on a node the
     // merge removes.
-    let mut claimed = ctx.claimed_spans.borrow_mut();
-    claimed.insert(Span::new(
+    ctx.claimed_spans.insert(Span::new(
         outer.span.file_id,
         outer.span.byte_offset,
         outer.keyword_len,
     ));
-    claimed.insert(Span::new(
+    ctx.claimed_spans.insert(Span::new(
         inner.span.file_id,
         inner.span.byte_offset,
         inner.keyword_len,

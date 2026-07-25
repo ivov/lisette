@@ -21,7 +21,7 @@ pub fn check_match_as_if_let(expression: &Expression, ctx: &NodeCtx) {
     }
 
     let match_keyword_span = Span::new(span.file_id, span.byte_offset, 5);
-    if ctx.claimed_spans.borrow().contains(&match_keyword_span) {
+    if ctx.claimed_spans.contains(&match_keyword_span) {
         return;
     }
 

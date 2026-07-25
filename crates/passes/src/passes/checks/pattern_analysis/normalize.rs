@@ -33,17 +33,13 @@ fn pattern_type_args(ctx: &NormalizationContext, ty: &Type) -> Vec<Type> {
 
 pub struct NormalizationContext<'a> {
     pub store: &'a Store,
-    pub cache: &'a InhabitanceCache,
     pub scrutinee_type: Option<Type>,
 }
 
 impl<'a> NormalizationContext<'a> {
-    /// Child context for a nested field/element, carrying that position's type
-    /// as the scrutinee so the interface-implementer path can fire there.
     fn at_position(&self, scrutinee_type: Option<Type>) -> NormalizationContext<'a> {
         NormalizationContext {
             store: self.store,
-            cache: self.cache,
             scrutinee_type,
         }
     }
@@ -113,13 +109,14 @@ pub fn normalize_arm(
     arm: &MatchArm,
     unions: &mut UnionTable,
     ctx: &NormalizationContext,
+    cache: &mut InhabitanceCache,
 ) -> Vec<Row> {
     match &arm.pattern {
         Pattern::Or { patterns, .. } => patterns
             .iter()
-            .map(|alt| vec![normalize_pattern(alt, unions, ctx)])
+            .map(|alt| vec![normalize_pattern(alt, unions, ctx, cache)])
             .collect(),
-        pattern => vec![vec![normalize_pattern(pattern, unions, ctx)]],
+        pattern => vec![vec![normalize_pattern(pattern, unions, ctx, cache)]],
     }
 }
 
@@ -127,11 +124,12 @@ pub fn normalize_pattern(
     pattern: &Pattern,
     unions: &mut UnionTable,
     ctx: &NormalizationContext,
+    cache: &mut InhabitanceCache,
 ) -> NormalizedPattern {
     match pattern {
         Pattern::Identifier { .. } | Pattern::WildCard { .. } | Pattern::Unit { .. } => Wildcard,
 
-        Pattern::AsBinding { pattern, .. } => normalize_pattern(pattern, unions, ctx),
+        Pattern::AsBinding { pattern, .. } => normalize_pattern(pattern, unions, ctx, cache),
 
         Pattern::Literal { literal, .. } => {
             if let Literal::Boolean(b) = literal {
@@ -195,7 +193,7 @@ pub fn normalize_pattern(
                     .enumerate()
                     .map(|(i, f)| {
                         let child = ctx.at_position(field_types.get(i).cloned());
-                        normalize_pattern(f, unions, &child)
+                        normalize_pattern(f, unions, &child, cache)
                     })
                     .collect();
 
@@ -244,7 +242,7 @@ pub fn normalize_pattern(
                         }) => variants
                             .iter()
                             .filter(|v| {
-                                is_variant_inhabited(v, &type_args, generics, ctx.store, ctx.cache)
+                                is_variant_inhabited(v, &type_args, generics, ctx.store, cache)
                             })
                             .map(|v| Constructor {
                                 tag_id: format!("{}.{}", enum_name, v.name),
@@ -260,7 +258,7 @@ pub fn normalize_pattern(
                             &type_args,
                             generics,
                             ctx.store,
-                            ctx.cache,
+                            cache,
                         ) =>
                         {
                             vec![Constructor {
@@ -319,7 +317,7 @@ pub fn normalize_pattern(
                         .find_map(|field| {
                             if field.name == f.name {
                                 let child = ctx.at_position(Some(substitute(&f.ty, &substitution)));
-                                Some(normalize_pattern(&field.value, unions, &child))
+                                Some(normalize_pattern(&field.value, unions, &child, cache))
                             } else {
                                 None
                             }
@@ -333,7 +331,7 @@ pub fn normalize_pattern(
             if unions.get(&type_name).is_none() {
                 let alternatives = variants
                     .iter()
-                    .filter(|v| is_variant_inhabited(v, &type_args, generics, ctx.store, ctx.cache))
+                    .filter(|v| is_variant_inhabited(v, &type_args, generics, ctx.store, cache))
                     .map(|v| Constructor {
                         tag_id: format!("{}.{}", enum_name, v.name),
                         arity: v.fields.len(),
@@ -381,7 +379,7 @@ pub fn normalize_pattern(
                         .find_map(|field| {
                             if field.name == f.name {
                                 let child = ctx.at_position(Some(substitute(&f.ty, &substitution)));
-                                Some(normalize_pattern(&field.value, unions, &child))
+                                Some(normalize_pattern(&field.value, unions, &child, cache))
                             } else {
                                 None
                             }
@@ -408,7 +406,7 @@ pub fn normalize_pattern(
                     &type_args,
                     generics,
                     ctx.store,
-                    ctx.cache,
+                    cache,
                 );
 
                 if is_inhabited {
@@ -439,7 +437,7 @@ pub fn normalize_pattern(
             rest,
             resolution: SequencePatternResolution::Slice { element_type },
             ..
-        } => normalize_slice(prefix, rest.is_present(), element_type, unions, ctx),
+        } => normalize_slice(prefix, rest.is_present(), element_type, unions, ctx, cache),
 
         Pattern::Slice {
             prefix,
@@ -449,14 +447,14 @@ pub fn normalize_pattern(
                     length,
                 },
             ..
-        } => normalize_array(prefix, element_type, *length, unions, ctx),
+        } => normalize_array(prefix, element_type, *length, unions, ctx, cache),
 
         Pattern::Slice {
             resolution: SequencePatternResolution::Unresolved,
             ..
         } => Wildcard,
 
-        Pattern::Tuple { elements, .. } => normalize_tuple(elements, unions, ctx),
+        Pattern::Tuple { elements, .. } => normalize_tuple(elements, unions, ctx, cache),
 
         Pattern::Or { .. } => {
             unreachable!("Or-pattern should be handled by normalize_arm")
@@ -464,28 +462,17 @@ pub fn normalize_pattern(
     }
 }
 
-/// Normalize a slice pattern into nested EmptySlice/NonEmptySlice constructors.
-///
-/// Slice is modeled as a 2-variant type:
-/// - EmptySlice: represents []
-/// - NonEmptySlice(head, tail): represents [head, ..tail]
-///
-/// Examples:
-/// - [] → EmptySlice
-/// - [a] → NonEmptySlice(a, EmptySlice)
-/// - [a, b] → NonEmptySlice(a, NonEmptySlice(b, EmptySlice))
-/// - [a, ..rest] → NonEmptySlice(a, Wildcard)
-/// - [..] → Wildcard (matches any slice)
 fn normalize_slice(
     prefix: &[Pattern],
     has_rest: bool,
     element_type: &Type,
     unions: &mut UnionTable,
     ctx: &NormalizationContext,
+    cache: &mut InhabitanceCache,
 ) -> NormalizedPattern {
     let type_name = make_type_key("Slice", std::slice::from_ref(element_type));
     if unions.get(&type_name).is_none() {
-        let element_inhabited = is_inhabited(element_type, ctx.store, ctx.cache);
+        let element_inhabited = is_inhabited(element_type, ctx.store, cache);
 
         let mut constructors = vec![Constructor {
             tag_id: "EmptySlice".to_string(),
@@ -527,7 +514,7 @@ fn normalize_slice(
     let element_ctx = ctx.at_position(Some(element_type.clone()));
     let mut result = tail;
     for element in prefix.iter().rev() {
-        let head = normalize_pattern(element, unions, &element_ctx);
+        let head = normalize_pattern(element, unions, &element_ctx, cache);
         result = NormalizedPattern::Constructor {
             type_name: type_name.clone(),
             tag: "NonEmptySlice".to_string(),
@@ -542,6 +529,7 @@ fn normalize_tuple(
     elements: &[Pattern],
     unions: &mut UnionTable,
     ctx: &NormalizationContext,
+    cache: &mut InhabitanceCache,
 ) -> NormalizedPattern {
     let arity = elements.len();
     let type_name = format!("Tuple{}", arity);
@@ -564,7 +552,7 @@ fn normalize_tuple(
         .enumerate()
         .map(|(i, e)| {
             let child = ctx.at_position(element_types.as_ref().and_then(|ts| ts.get(i).cloned()));
-            normalize_pattern(e, unions, &child)
+            normalize_pattern(e, unions, &child, cache)
         })
         .collect();
 
@@ -581,6 +569,7 @@ fn normalize_array(
     length: u64,
     unions: &mut UnionTable,
     ctx: &NormalizationContext,
+    cache: &mut InhabitanceCache,
 ) -> NormalizedPattern {
     let type_name = make_type_key(
         &format!("Array{length}"),
@@ -605,7 +594,7 @@ fn normalize_array(
     }
 
     if unions.get(&type_name).is_none() {
-        let constructors = if is_inhabited(element_type, ctx.store, ctx.cache) {
+        let constructors = if is_inhabited(element_type, ctx.store, cache) {
             vec![Constructor {
                 tag_id: "ArrayCons".to_string(),
                 arity: 2,
@@ -621,8 +610,8 @@ fn normalize_array(
     };
 
     let element_ctx = ctx.at_position(Some(element_type.clone()));
-    let head = normalize_pattern(first, unions, &element_ctx);
-    let tail = normalize_array(rest, element_type, length - 1, unions, ctx);
+    let head = normalize_pattern(first, unions, &element_ctx, cache);
+    let tail = normalize_array(rest, element_type, length - 1, unions, ctx, cache);
 
     NormalizedPattern::Constructor {
         type_name,

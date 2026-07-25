@@ -150,7 +150,7 @@ impl TaskState {
     }
 
     fn check_resolved_generic_obligations(&mut self, store: &Store) {
-        let obligations = std::mem::take(&mut self.facts.generic_bound_obligations);
+        let obligations = std::mem::take(&mut self.facts.deferred.generic_bounds);
         let mut unresolved = Vec::new();
         let mut seen = rustc_hash::FxHashSet::default();
 
@@ -208,7 +208,7 @@ impl TaskState {
             }
         }
 
-        self.facts.generic_bound_obligations = unresolved;
+        self.facts.deferred.generic_bounds = unresolved;
     }
 }
 

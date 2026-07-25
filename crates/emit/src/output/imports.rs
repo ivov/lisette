@@ -177,8 +177,10 @@ fn detect_collisions(
     groups
         .into_iter()
         .map(|(alias, paths)| {
-            let owned: Vec<String> = paths.into_iter().map(str::to_string).collect();
-            emit_diag::go_import_collision(&alias, &owned)
+            let [first, second, rest @ ..] = paths.as_slice() else {
+                unreachable!("collision groups contain at least two paths")
+            };
+            emit_diag::go_import_collision(&alias, first, second, rest)
         })
         .collect()
 }

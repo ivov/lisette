@@ -267,22 +267,24 @@ impl InferCtx<'_> {
                 .push(diagnostics::infer::propagate_in_condition(span));
         }
 
-        let errors_before = self.sink.len();
-        let expression_ty = self.resolve_binary_type(
-            &operator,
-            BinaryOperands {
-                left: BinaryOperand {
-                    ty: &left.ty,
-                    span: left.expression.get_span(),
+        let store = self.store;
+        let (expression_ty, reported) = self.tracking_diagnostics(|this| {
+            InferCtx::new(this, store).resolve_binary_type(
+                &operator,
+                BinaryOperands {
+                    left: BinaryOperand {
+                        ty: &left.ty,
+                        span: left.expression.get_span(),
+                    },
+                    right: BinaryOperand {
+                        ty: &right.ty,
+                        span: right.expression.get_span(),
+                    },
                 },
-                right: BinaryOperand {
-                    ty: &right.ty,
-                    span: right.expression.get_span(),
-                },
-            },
-            span,
-        );
-        if self.sink.len() != errors_before {
+                span,
+            )
+        });
+        if reported {
             self.facts.type_error_spans.insert(span);
         }
 
@@ -606,12 +608,12 @@ impl InferCtx<'_> {
         right_operand_ty: &Type,
         span: &Span,
     ) {
-        let errors_before = self.sink.len();
-        if self
-            .try_unify(left_operand_ty, right_operand_ty, span)
-            .is_err()
-        {
-            if self.sink.len() == errors_before
+        let store = self.store;
+        let (unification, reported) = self.tracking_diagnostics(|this| {
+            InferCtx::new(this, store).try_unify(left_operand_ty, right_operand_ty, span)
+        });
+        if unification.is_err() {
+            if !reported
                 && self
                     .try_unify(right_operand_ty, left_operand_ty, span)
                     .is_ok()

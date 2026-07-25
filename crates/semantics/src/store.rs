@@ -705,7 +705,9 @@ fn method_lookup_key(ty: &Type) -> Option<Symbol> {
 #[cfg(test)]
 mod closed_domain_tests {
     use super::*;
-    use syntax::ast::{Annotation, Generic, Span, StructFieldDefinition, StructFields};
+    use syntax::ast::{
+        Annotation, Generic, Span, StructFieldDefinition, StructFieldKind, StructFields,
+    };
     use syntax::program::{AliasKind, Attributes, TypeAttribute, Visibility};
     use syntax::types::CompoundKind;
 
@@ -731,13 +733,12 @@ mod closed_domain_tests {
                 generics: vec![],
                 fields: StructFields::Tuple(vec![StructFieldDefinition {
                     doc: None,
-                    attributes: vec![],
                     name: "0".into(),
                     name_span: syntax::ast::Span::dummy(),
                     annotation: syntax::ast::Annotation::Unknown,
                     visibility: syntax::ast::Visibility::Private,
                     ty: Type::Simple(SimpleKind::Int),
-                    embedded: false,
+                    kind: StructFieldKind::Named { attributes: vec![] },
                 }]),
                 methods: Default::default(),
                 attributes,

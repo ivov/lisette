@@ -74,18 +74,15 @@ fn main() {
         Command::Format { path, check } => handlers::format(path, check),
         Command::Check {
             path,
-            errors_only,
-            warnings_only,
-            deny_warnings,
+            filter,
+            action,
             format,
-            fix,
-        } => handlers::check(path, errors_only, warnings_only, deny_warnings, format, fix),
+        } => handlers::check(path, filter, action, format),
         Command::Test {
             path,
             go_flags,
-            filter,
-            failed,
-        } => handlers::test(path, go_flags, filter, failed),
+            selection,
+        } => handlers::test(path, go_flags, selection),
         Command::Overview => {
             handlers::help::print_main_help();
             0
@@ -107,12 +104,7 @@ fn main() {
         } => handlers::add(&dependency, replace.as_deref()),
         Command::Sync => handlers::sync(),
         Command::Lsp => handlers::lsp(),
-        Command::Bindgen {
-            package,
-            output,
-            version,
-            verbose,
-        } => handlers::bindgen(&package, output, version, verbose),
+        Command::Bindgen { target, verbose } => handlers::bindgen(target, verbose),
         Command::Doc { query } => handlers::doc(query),
         Command::DocSearch { query } => handlers::doc_search(&query),
         Command::Learn => handlers::learn(),

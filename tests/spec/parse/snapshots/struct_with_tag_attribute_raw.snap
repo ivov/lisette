@@ -33,21 +33,6 @@ description: |
             [
                 StructFieldDefinition {
                     doc: None,
-                    attributes: [
-                        Attribute {
-                            name: "tag",
-                            args: [
-                                Raw(
-                                    "json:\"name,omitempty\" validate:\"required\"",
-                                ),
-                            ],
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 24,
-                                byte_length: 51,
-                            },
-                        },
-                    ],
                     name: "name",
                     name_span: Span {
                         file_id: 0,
@@ -67,7 +52,23 @@ description: |
                     ty: Var {
                         id: uninferred,
                     },
-                    embedded: false,
+                    kind: Named {
+                        attributes: [
+                            Attribute {
+                                name: "tag",
+                                args: [
+                                    Raw(
+                                        "json:\"name,omitempty\" validate:\"required\"",
+                                    ),
+                                ],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 24,
+                                    byte_length: 51,
+                                },
+                            },
+                        ],
+                    },
                 },
             ],
         ),

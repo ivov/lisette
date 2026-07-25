@@ -2,7 +2,6 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use diagnostics::PatternIssue;
 use syntax::EcoString;
 use syntax::ast::{BindingId, BindingKind, DeadCodeCause, Span};
 use syntax::program::{BindingMutation, TestFunction};
@@ -35,9 +34,7 @@ pub struct Facts {
     pub bindings: HashMap<BindingId, BindingFact>,
     pub usages: HashSet<Usage>,
 
-    // Lint-support facts recorded during semantic analysis and read by passes::lints.
     pub dead_code: Vec<DeadCodeFact>,
-    pub pattern_issues: Vec<PatternIssue>,
     pub overused_references: Vec<OverusedReferenceFact>,
     pub always_failing_try_blocks: Vec<Span>,
     pub expression_only_fstrings: Vec<ExpressionOnlyFstringFact>,
@@ -45,12 +42,7 @@ pub struct Facts {
     pub(crate) equality_derivations: Vec<String>,
     pub(crate) test_functions: Vec<TestFunction>,
 
-    pub generic_call_checks: Vec<GenericCallCheck>,
-    pub generic_bound_obligations: Vec<GenericBoundObligation>,
-    pub empty_collection_checks: Vec<EmptyCollectionCheck>,
-    pub empty_literal_checks: Vec<EmptyLiteralCheck>,
-    pub slice_make_checks: Vec<SliceMakeCheck>,
-    pub statement_tail_checks: Vec<StatementTailCheck>,
+    pub(crate) deferred: DeferredChecks,
 
     /// Value-position `match`/`select` arms that did not reconcile, drained and
     /// checked against the use-site result type at the end of `infer_file`.
@@ -74,6 +66,27 @@ pub struct Facts {
     /// annotation's span. Lets emit render bounds from the resolved type
     /// instead of re-resolving the annotation.
     pub bound_types: HashMap<Span, Type>,
+}
+
+#[derive(Debug, Default)]
+pub struct DeferredChecks {
+    pub generic_calls: Vec<GenericCallCheck>,
+    pub generic_bounds: Vec<GenericBoundObligation>,
+    pub empty_collections: Vec<EmptyCollectionCheck>,
+    pub empty_literals: Vec<EmptyLiteralCheck>,
+    pub slice_makes: Vec<SliceMakeCheck>,
+    pub statement_tails: Vec<StatementTailCheck>,
+}
+
+impl DeferredChecks {
+    fn merge(&mut self, other: Self) {
+        self.generic_calls.extend(other.generic_calls);
+        self.generic_bounds.extend(other.generic_bounds);
+        self.empty_collections.extend(other.empty_collections);
+        self.empty_literals.extend(other.empty_literals);
+        self.slice_makes.extend(other.slice_makes);
+        self.statement_tails.extend(other.statement_tails);
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -162,16 +175,10 @@ impl Facts {
             allocator,
             bindings: HashMap::default(),
             dead_code: Vec::new(),
-            pattern_issues: Vec::new(),
             overused_references: Vec::new(),
             always_failing_try_blocks: Vec::new(),
             expression_only_fstrings: Vec::new(),
-            generic_call_checks: Vec::new(),
-            generic_bound_obligations: Vec::new(),
-            empty_collection_checks: Vec::new(),
-            empty_literal_checks: Vec::new(),
-            slice_make_checks: Vec::new(),
-            statement_tail_checks: Vec::new(),
+            deferred: DeferredChecks::default(),
             branch_subsumptions: Vec::new(),
             select_exhaustiveness_checks: Vec::new(),
             or_pattern_error_spans: HashSet::default(),
@@ -187,6 +194,10 @@ impl Facts {
 
     pub(crate) fn allocator(&self) -> Arc<BindingIdAllocator> {
         self.allocator.clone()
+    }
+
+    pub fn take_deferred_checks(&mut self) -> DeferredChecks {
+        std::mem::take(&mut self.deferred)
     }
 
     pub(crate) fn add_binding(
@@ -324,16 +335,10 @@ impl Facts {
             allocator: _,
             bindings,
             dead_code,
-            pattern_issues,
             overused_references,
             always_failing_try_blocks,
             expression_only_fstrings,
-            generic_call_checks,
-            generic_bound_obligations,
-            empty_collection_checks,
-            empty_literal_checks,
-            slice_make_checks,
-            statement_tail_checks,
+            deferred,
             branch_subsumptions,
             select_exhaustiveness_checks,
             or_pattern_error_spans,
@@ -351,19 +356,12 @@ impl Facts {
 
         self.bindings.extend(bindings);
         self.dead_code.extend(dead_code);
-        self.pattern_issues.extend(pattern_issues);
         self.overused_references.extend(overused_references);
         self.always_failing_try_blocks
             .extend(always_failing_try_blocks);
         self.expression_only_fstrings
             .extend(expression_only_fstrings);
-        self.generic_call_checks.extend(generic_call_checks);
-        self.generic_bound_obligations
-            .extend(generic_bound_obligations);
-        self.empty_collection_checks.extend(empty_collection_checks);
-        self.empty_literal_checks.extend(empty_literal_checks);
-        self.slice_make_checks.extend(slice_make_checks);
-        self.statement_tail_checks.extend(statement_tail_checks);
+        self.deferred.merge(deferred);
         self.branch_subsumptions.extend(branch_subsumptions);
         self.select_exhaustiveness_checks
             .extend(select_exhaustiveness_checks);

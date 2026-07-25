@@ -1,11 +1,18 @@
 package convert
 
-import "testing"
+import (
+	"go/constant"
+	"go/token"
+	"go/types"
+	"testing"
+
+	"github.com/ivov/lisette/bindgen/internal/extract"
+)
 
 func mkConsts(values ...string) []constInfo {
 	out := make([]constInfo, len(values))
 	for i, v := range values {
-		out[i] = constInfo{index: i, name: "C", value: v}
+		out[i] = constInfo{result: ConvertResult{ConstValue: v}}
 	}
 	return out
 }
@@ -83,5 +90,24 @@ func TestIsSequentialRange(t *testing.T) {
 				t.Errorf("%s: want %v, got %v", c.name, c.want, got)
 			}
 		})
+	}
+}
+
+func TestClassifyConstGroupsMovesTypeAndConstantsOutOfRegularSymbols(t *testing.T) {
+	pkg := types.NewPackage("example.com/status", "status")
+	typeObj := types.NewTypeName(token.NoPos, pkg, "Status", nil)
+	named := types.NewNamed(typeObj, types.Typ[types.Int], nil)
+	first := types.NewConst(token.NoPos, pkg, "Ready", named, constant.MakeInt64(1))
+	second := types.NewConst(token.NoPos, pkg, "Done", named, constant.MakeInt64(2))
+	symbols := []convertedSymbol{
+		{export: extract.SymbolExport{Obj: typeObj}, result: ConvertResult{Name: "Status", Kind: extract.ExportType}},
+		{export: extract.SymbolExport{Obj: first}, result: ConvertResult{Name: "Ready", Kind: extract.ExportConstant, ConstValue: "1"}},
+		{export: extract.SymbolExport{Obj: second}, result: ConvertResult{Name: "Done", Kind: extract.ExportConstant, ConstValue: "2"}},
+	}
+
+	regular, groups, _ := classifyConstGroups(symbols, nil, pkg.Path())
+
+	if len(regular) != 0 || len(groups) != 1 || groups[0].Type.Name != "Status" || len(groups[0].Constants) != 2 {
+		t.Fatalf("classification = regular %#v, groups %#v", regular, groups)
 	}
 }

@@ -33,21 +33,6 @@ description: |
             [
                 StructFieldDefinition {
                     doc: None,
-                    attributes: [
-                        Attribute {
-                            name: "json",
-                            args: [
-                                String(
-                                    "userName",
-                                ),
-                            ],
-                            span: Span {
-                                file_id: 0,
-                                byte_offset: 25,
-                                byte_length: 19,
-                            },
-                        },
-                    ],
                     name: "name",
                     name_span: Span {
                         file_id: 0,
@@ -67,7 +52,23 @@ description: |
                     ty: Var {
                         id: uninferred,
                     },
-                    embedded: false,
+                    kind: Named {
+                        attributes: [
+                            Attribute {
+                                name: "json",
+                                args: [
+                                    String(
+                                        "userName",
+                                    ),
+                                ],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 25,
+                                    byte_length: 19,
+                                },
+                            },
+                        ],
+                    },
                 },
             ],
         ),

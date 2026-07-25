@@ -1,7 +1,7 @@
 use crate::_harness::infer;
 use syntax::ast::{
     Annotation, BinaryOperator, CallTypeArguments, ConstructorPatternResolution, Expression,
-    IfLetAlternative, Pattern, StructFields,
+    IfLetAlternative, Pattern, SelectArm, Span, StructFieldKind, StructFields,
 };
 use syntax::lex::Lexer;
 use syntax::parse::Parser;
@@ -16,6 +16,26 @@ fn walk(expression: &Expression, visit: &mut impl FnMut(&Expression)) {
     for child in expression.children() {
         walk(child, visit);
     }
+}
+
+#[test]
+fn zero_width_source_spans_are_not_dummy_spans() {
+    let source_position = Span::new(0, 12, 0);
+
+    assert_eq!(
+        (source_position.is_dummy(), Span::dummy().is_dummy()),
+        (false, true)
+    );
+}
+
+#[test]
+fn span_merge_is_order_independent() {
+    let earlier = Span::new(3, 10, 4);
+    let later = Span::new(3, 20, 2);
+    let merged = Span::new(3, 10, 12);
+
+    assert_eq!(earlier.merge(later), merged);
+    assert_eq!(later.merge(earlier), merged);
 }
 
 #[test]
@@ -127,6 +147,59 @@ fn struct_shape_owns_its_field_collection() {
 
     assert_eq!(record_fields.len(), 1);
     assert_eq!(tuple_fields.len(), 1);
+}
+
+#[test]
+fn struct_field_kind_owns_only_valid_metadata() {
+    let result = syntax::build_ast(
+        r#"
+struct Inner {}
+struct Outer {
+  #[json(omitempty)]
+  value: int,
+  embed Inner,
+}
+"#,
+        0,
+    );
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let Expression::Struct {
+        fields: StructFields::Record(fields),
+        ..
+    } = &result.ast[1]
+    else {
+        panic!("expected a record struct");
+    };
+    let [named, embedded] = fields.as_slice() else {
+        panic!("expected named and embedded fields");
+    };
+
+    assert!(matches!(
+        &named.kind,
+        StructFieldKind::Named { attributes } if attributes.len() == 1
+    ));
+    assert!(matches!(&embedded.kind, StructFieldKind::Embedded));
+    assert!(embedded.attributes().is_empty());
+}
+
+#[test]
+fn select_arms_are_their_pattern_variants() {
+    let result = syntax::build_ast(
+        "fn test(ch: Receiver<int>) { select { let value = ch => value, _ => 0 } }",
+        0,
+    );
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let mut kinds = None;
+    walk(&result.ast[0], &mut |expression| {
+        if let Expression::Select { arms, .. } = expression {
+            kinds = Some((
+                matches!(arms.first(), Some(SelectArm::Receive { .. })),
+                matches!(arms.get(1), Some(SelectArm::WildCard { .. })),
+            ));
+        }
+    });
+
+    assert_eq!(kinds, Some((true, true)));
 }
 
 #[test]

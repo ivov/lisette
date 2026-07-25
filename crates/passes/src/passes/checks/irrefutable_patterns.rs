@@ -17,7 +17,7 @@
 
 use crate::passes::walk::NodeCtx;
 use diagnostics::LocalSink;
-use syntax::ast::{Binding, Expression, Pattern, SelectArm, SelectArmPattern};
+use syntax::ast::{Binding, Expression, Pattern, SelectArm};
 
 pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
     let sink = ctx.sink;
@@ -54,7 +54,7 @@ fn visit_param(param: &Binding, sink: &LocalSink) {
 }
 
 fn visit_select_arm(arm: &SelectArm, sink: &LocalSink) {
-    if let SelectArmPattern::Receive { binding, .. } = &arm.pattern {
+    if let SelectArm::Receive { binding, .. } = arm {
         check_binding_pattern(binding, sink);
     }
 }

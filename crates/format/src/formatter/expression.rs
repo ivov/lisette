@@ -5,8 +5,8 @@ use crate::comments::prepend_comments;
 use crate::lindig::{Document, concat, flex_break, join, strict_break};
 use syntax::ast::{
     Annotation, BinaryOperator, Binding, CallTypeArguments, Expression, FormatStringPart,
-    IfLetAlternative, Literal, MatchArm, Pattern, SelectArm, SelectArmPattern, Span,
-    StructFieldAssignment, StructSpread, UnaryOperator,
+    IfLetAlternative, LetMode, Literal, MatchArm, Pattern, SelectArm, Span, StructFieldAssignment,
+    StructSpread, UnaryOperator,
 };
 
 impl<'a> Formatter<'a> {
@@ -38,7 +38,7 @@ impl<'a> Formatter<'a> {
                 value,
                 mode,
                 ..
-            } => self.let_(binding, value, mode.else_block(), mode.is_assert()),
+            } => self.let_(binding, value, mode),
 
             Expression::Return { expression, .. } => self.return_(expression),
 
@@ -162,7 +162,15 @@ impl<'a> Formatter<'a> {
                 ..
             } => self.lambda(params, return_annotation, body, span),
 
-            _ => self.definition(expression),
+            Expression::Function { .. }
+            | Expression::Struct { .. }
+            | Expression::Enum { .. }
+            | Expression::TypeAlias { .. }
+            | Expression::Interface { .. }
+            | Expression::ImplBlock { .. }
+            | Expression::Const { .. }
+            | Expression::VariableDeclaration { .. }
+            | Expression::ModuleImport { .. } => self.definition(expression),
         };
 
         prepend_comments(doc, comments)
@@ -278,9 +286,10 @@ impl<'a> Formatter<'a> {
 
         for (i, item) in items.iter().enumerate() {
             let start = item.get_span().byte_offset;
+            let leading = self.comments.take_comments_and_blank_lines_before(start);
 
             if i > 0 {
-                if self.comments.take_empty_lines_before(start) {
+                if leading.has_blank_line {
                     docs.push(Document::Newline);
                     docs.push(Document::Newline);
                 } else {
@@ -288,15 +297,16 @@ impl<'a> Formatter<'a> {
                 }
             }
 
-            docs.push(self.expression(item));
+            let item = self.expression(item);
+            docs.push(prepend_comments(item, leading.document));
         }
 
-        let (same_line, standalone, _) = self.comments.take_split_at_line_start(block_end);
-        if let Some(t) = same_line {
+        let trailing = self.comments.take_split_at_line_start(block_end);
+        if let Some(t) = trailing.trailing {
             docs.push(Document::str(" "));
             docs.push(t);
         }
-        if let Some(t) = standalone {
+        if let Some(t) = trailing.leading {
             docs.push(Document::Newline);
             docs.push(t.force_break());
         }
@@ -314,10 +324,14 @@ impl<'a> Formatter<'a> {
         &mut self,
         binding: &'a Binding,
         value: &'a Expression,
-        else_block: Option<&'a Expression>,
-        assert: bool,
+        mode: &'a LetMode,
     ) -> Document<'a> {
-        let keyword = if assert { "let assert " } else { "let " };
+        let (keyword, else_block) = match mode {
+            LetMode::Plain => ("let ", None),
+            LetMode::Assert => ("let assert ", None),
+            LetMode::Else { block, .. } => ("let ", Some(block.as_ref())),
+            LetMode::InvalidAssertElse { block, .. } => ("let assert ", Some(block.as_ref())),
+        };
 
         let base = Document::str(keyword)
             .append(self.binding(binding))
@@ -623,17 +637,11 @@ impl<'a> Formatter<'a> {
             if chain_segments.len() >= 2 {
                 return self.format_method_chain(root, &chain_segments);
             }
-            // Single-segment chain: probe-format the root to drain any inner-receiver
-            // comments, then check if comments remain before the member. If so, there
-            // are genuine inter-segment comments and we should use chain formatting.
-            if let Some(doc) = self.probe(|formatter| {
-                let root_doc = formatter.expression(root);
-                formatter
-                    .comments
-                    .has_comments_before(chain_segments[0].member_start)
-                    .then(|| formatter.format_method_chain_with_root(root_doc, &chain_segments))
-            }) {
-                return doc;
+            if self
+                .comments
+                .has_comment_immediately_before(chain_segments[0].member_start.saturating_sub(1))
+            {
+                return self.format_method_chain(root, &chain_segments);
             }
         }
 
@@ -669,18 +677,21 @@ impl<'a> Formatter<'a> {
                 let spread_doc = self.expression(spread_expr).append(Document::str("..."));
                 return head
                     .append("(")
-                    .append(spread_doc.group().next_break_fits(true))
+                    .append(spread_doc.group().next_break_fits())
                     .append(")")
                     .group()
-                    .next_break_fits(false);
+                    .next_break_does_not_fit();
             }
             let mut entries = self.call_arg_entries(args);
             let spread_start = spread_expr.get_span().byte_offset;
-            let spread_leading = self.split_for_rest(&mut entries, spread_start);
-            let spread_doc = self.expression(spread_expr).append(Document::str("..."));
-            let (body, close_sep) =
-                Self::join_pattern_entries(entries, Some((spread_leading, spread_doc)), "");
-            return Self::wrap_args(head, body, close_sep).next_break_fits(false);
+            self.push_pattern_entry(&mut entries, spread_start, |formatter| {
+                formatter
+                    .expression(spread_expr)
+                    .append(Document::str("..."))
+            });
+            let joined = Self::join_pattern_entries(entries, "");
+            return Self::wrap_args(head, joined.body, joined.close_separator)
+                .next_break_does_not_fit();
         }
 
         let Some((last, init)) = args
@@ -688,17 +699,17 @@ impl<'a> Formatter<'a> {
             .filter(|(last, _)| is_inlinable_arg(last, args.len()))
         else {
             let entries = self.call_arg_entries(args);
-            let (body, close_sep) = Self::join_pattern_entries(entries, None, "");
-            return Self::wrap_args(head, body, close_sep);
+            let joined = Self::join_pattern_entries(entries, "");
+            return Self::wrap_args(head, joined.body, joined.close_separator);
         };
 
         let mut entries = self.call_arg_entries(init);
         let last_start = last.get_span().byte_offset;
-        let last_leading = self.split_for_rest(&mut entries, last_start);
-        let last_doc = self.expression(last).group().next_break_fits(true);
-        let (body, close_sep) =
-            Self::join_pattern_entries(entries, Some((last_leading, last_doc)), "");
-        Self::wrap_args(head, body, close_sep).next_break_fits(false)
+        self.push_pattern_entry(&mut entries, last_start, |formatter| {
+            formatter.expression(last).group().next_break_fits()
+        });
+        let joined = Self::join_pattern_entries(entries, "");
+        Self::wrap_args(head, joined.body, joined.close_separator).next_break_does_not_fit()
     }
 
     fn wrap_args(head: Document<'a>, body: Document<'a>, close_sep: Document<'a>) -> Document<'a> {
@@ -826,34 +837,31 @@ impl<'a> Formatter<'a> {
             });
         }
 
-        let rest_info = match spread {
-            StructSpread::None => None,
-            StructSpread::From(spread_expression) => {
-                let dots_pos = spread_expression.get_span().byte_offset.saturating_sub(2);
-                let leading = self.split_for_rest(&mut entries, dots_pos);
-                Some((
-                    leading,
-                    Document::str("..").append(self.expression(spread_expression)),
-                ))
-            }
-            StructSpread::Autofill { span } => {
-                let leading = self.split_for_rest(&mut entries, span.byte_offset);
-                Some((leading, Document::str("..")))
-            }
-        };
-
-        if entries.is_empty() && rest_info.is_none() {
+        if entries.is_empty() && matches!(spread, StructSpread::None) {
             return Document::str(name).append(" {}");
         }
 
-        let (body, close_sep) = Self::join_pattern_entries(entries, rest_info, " ");
+        match spread {
+            StructSpread::None => {}
+            StructSpread::From(spread_expression) => {
+                let dots_pos = spread_expression.get_span().byte_offset.saturating_sub(2);
+                self.push_pattern_entry(&mut entries, dots_pos, |formatter| {
+                    Document::str("..").append(formatter.expression(spread_expression))
+                });
+            }
+            StructSpread::Autofill { span } => {
+                self.push_pattern_entry(&mut entries, span.byte_offset, |_| Document::str(".."));
+            }
+        }
+
+        let joined = Self::join_pattern_entries(entries, " ");
 
         Document::str(name)
             .append(" {")
             .append(strict_break("", " "))
-            .append(body)
+            .append(joined.body)
             .nest(INDENT_WIDTH)
-            .append(close_sep)
+            .append(joined.close_separator)
             .append("}")
             .group()
     }
@@ -972,21 +980,21 @@ impl<'a> Formatter<'a> {
     }
 
     fn select_arm_start(arm: &'a SelectArm) -> u32 {
-        match &arm.pattern {
-            SelectArmPattern::Receive { binding, .. } => binding.get_span().byte_offset,
-            SelectArmPattern::Send {
+        match arm {
+            SelectArm::Receive { binding, .. } => binding.get_span().byte_offset,
+            SelectArm::Send {
                 send_expression, ..
             } => send_expression.get_span().byte_offset,
-            SelectArmPattern::MatchReceive {
+            SelectArm::MatchReceive {
                 receive_expression, ..
             } => receive_expression.get_span().byte_offset,
-            SelectArmPattern::WildCard { body } => body.get_span().byte_offset,
+            SelectArm::WildCard { body } => body.get_span().byte_offset,
         }
     }
 
     fn select_arm_body(&mut self, arm: &'a SelectArm, upper_bound: u32) -> Document<'a> {
-        match &arm.pattern {
-            SelectArmPattern::Receive {
+        match arm {
+            SelectArm::Receive {
                 binding,
                 receive_expression,
                 body,
@@ -998,7 +1006,7 @@ impl<'a> Formatter<'a> {
                 .append(" => ")
                 .append(self.expression(body))
                 .append(","),
-            SelectArmPattern::Send {
+            SelectArm::Send {
                 send_expression,
                 body,
             } => self
@@ -1006,7 +1014,7 @@ impl<'a> Formatter<'a> {
                 .append(" => ")
                 .append(self.expression(body))
                 .append(","),
-            SelectArmPattern::MatchReceive {
+            SelectArm::MatchReceive {
                 receive_expression,
                 arms,
             } => {
@@ -1024,7 +1032,7 @@ impl<'a> Formatter<'a> {
                 let body = self.join_sibling_body(entries, body_end);
                 Self::braced_body(header, body).append(",")
             }
-            SelectArmPattern::WildCard { body } => Document::str("_")
+            SelectArm::WildCard { body } => Document::str("_")
                 .append(" => ")
                 .append(self.expression(body))
                 .append(","),

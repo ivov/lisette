@@ -190,9 +190,9 @@ pub fn compile_project_files_with_tests(
     let analysis = analyze_output.result;
 
     assert!(
-        analysis.errors.is_empty(),
+        analysis.errors().is_empty(),
         "Expected no errors, got: {:?}",
-        analysis.errors
+        analysis.errors()
     );
 
     Planner::emit(

@@ -4,7 +4,7 @@ use syntax::ast::Expression;
 
 use super::helpers::{has_escaping_control_flow, is_postfix_tight, span_text};
 
-pub fn check_redundant_closure_call(expression: &Expression, ctx: &NodeCtx) {
+pub fn check_redundant_closure_call(expression: &Expression, ctx: &mut NodeCtx) {
     let Expression::Call {
         expression: callee,
         args,
@@ -42,7 +42,7 @@ pub fn check_redundant_closure_call(expression: &Expression, ctx: &NodeCtx) {
     }
 
     // Claim the closure so `redundant_closure` does not also advise on it.
-    ctx.claimed_spans.borrow_mut().insert(*lambda_span);
+    ctx.claimed_spans.insert(*lambda_span);
 
     let mut diagnostic = diagnostics::lint::redundant_closure_call(span);
     if return_annotation.is_unknown()

@@ -221,9 +221,9 @@ func TestGenerateStd(t *testing.T) {
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
-	targets := []cli.Target{
-		{GOOS: "darwin", GOARCH: "arm64"},
-		{GOOS: "linux", GOARCH: "amd64"},
+	targets, err := cli.ParseTargets("darwin/arm64,linux/amd64")
+	if err != nil {
+		t.Fatalf("parse targets: %v", err)
 	}
 	result, err := cli.GenerateStd(context.Background(), tmpDir, "0.0.0", "0.0.0", nil, targets)
 	if err != nil {
@@ -257,7 +257,10 @@ func TestGenerateStdRejectsSingleTarget(t *testing.T) {
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
-	targets := []cli.Target{{GOOS: "darwin", GOARCH: "arm64"}}
+	targets, err := cli.ParseTargets("darwin/arm64")
+	if err != nil {
+		t.Fatalf("parse targets: %v", err)
+	}
 	_, err = cli.GenerateStd(context.Background(), tmpDir, "0.0.0", "0.0.0", nil, targets)
 	if err == nil {
 		t.Fatal("expected GenerateStd to reject single-target invocation")

@@ -1,12 +1,9 @@
-use std::fs::File;
-use std::path::{Path, PathBuf};
-
+use super::project::MutationProject;
 use super::reconciliation::{
     ReplacedRoot, ReplacedRootMode, ReplacementIdentity, ResolvedDependency,
     apply_graph_to_manifest, declared_replacements, finalize_manifest_via, reconcile_root,
 };
 use crate::go_cli;
-use crate::lock::{acquire_mutation_lock, acquire_target_lock};
 use crate::output::{print_add_success, print_preview_notice, print_progress, print_warning};
 use crate::workspace::GoWorkspace;
 use crate::{cli_error, error};
@@ -19,14 +16,16 @@ struct ParsedDependency {
     version: String,
 }
 
-struct ProjectContext {
-    project_root: PathBuf,
-    target_dir: PathBuf,
-    manifest: deps::Manifest,
-    typedef_cache_dir: PathBuf,
+struct AddPlan {
+    project: MutationProject,
+    dependency: ResolvedDependency,
     resolved_version: String,
-    _mutation_lock: File,
-    _target_lock: File,
+    source: DependencySource,
+}
+
+enum DependencySource {
+    Remote,
+    Replacement(ReplacementIdentity),
 }
 
 pub fn add(dep_string: &str, replace: Option<&str>) -> i32 {
@@ -50,12 +49,12 @@ pub fn add(dep_string: &str, replace: Option<&str>) -> i32 {
         }
     };
 
-    let (project_ctx, resolved_dep) = match setup_project(parsed_dep) {
-        Ok(pair) => pair,
+    let plan = match setup_project(parsed_dep) {
+        Ok(plan) => plan,
         Err(code) => return code,
     };
 
-    run_add_pipeline(project_ctx, resolved_dep, None)
+    run_add_pipeline(plan)
 }
 
 /// Expand a bare `owner/repo` to `github.com/owner/repo`; keep a non-GitHub path as-is.
@@ -124,28 +123,29 @@ fn add_replace(original_arg: &str, replace_spec: &str) -> i32 {
         }
     };
 
-    let (project_ctx, resolved_dep, replacement) =
-        match setup_project_replace(&original, &replacement_path, &replace_query) {
-            Ok(triple) => triple,
-            Err(code) => return code,
-        };
+    let plan = match setup_project_replace(&original, &replacement_path, &replace_query) {
+        Ok(plan) => plan,
+        Err(code) => return code,
+    };
 
-    run_add_pipeline(project_ctx, resolved_dep, Some(replacement))
+    run_add_pipeline(plan)
 }
 
-fn run_add_pipeline(
-    project_ctx: ProjectContext,
-    resolved_dep: ResolvedDependency,
-    replacement: Option<ReplacementIdentity>,
-) -> i32 {
+fn run_add_pipeline(plan: AddPlan) -> i32 {
+    let project = &plan.project;
+    let resolved_dep = &plan.dependency;
+    let replacement = match &plan.source {
+        DependencySource::Remote => None,
+        DependencySource::Replacement(replacement) => Some(replacement),
+    };
     let workspace = GoWorkspace::new(
-        &project_ctx.target_dir,
-        &project_ctx.typedef_cache_dir,
+        &project.target_dir,
+        &project.typedef_cache_dir,
         Target::host(),
     );
 
-    let mut replacements = declared_replacements(&project_ctx.manifest);
-    match &replacement {
+    let mut replacements = declared_replacements(&project.manifest);
+    match replacement {
         Some(replacement) => {
             replacements.insert(resolved_dep.canonical_module.clone(), replacement.clone());
         }
@@ -154,19 +154,19 @@ fn run_add_pipeline(
         }
     }
 
-    let module_graph = match reconcile_root(&resolved_dep, &workspace, &replacements) {
+    let module_graph = match reconcile_root(resolved_dep, &workspace, &replacements) {
         Ok(graph) => graph,
         Err(code) => return code,
     };
 
     let upgraded = match apply_graph_to_manifest(
         &resolved_dep.canonical_module,
-        &project_ctx.project_root,
-        &project_ctx.manifest,
-        &project_ctx.resolved_version,
+        &project.root,
+        &project.manifest,
+        &plan.resolved_version,
         &workspace,
         &module_graph,
-        replacement.as_ref().map(|identity| ReplacedRoot {
+        replacement.map(|identity| ReplacedRoot {
             identity,
             mode: ReplacedRootMode::AddDirect,
         }),
@@ -175,15 +175,14 @@ fn run_add_pipeline(
         Err(code) => return code,
     };
 
-    if let Err(code) = finalize_manifest_via(&project_ctx.project_root, &[]) {
+    if let Err(code) = finalize_manifest_via(&project.root, &[]) {
         return code;
     }
 
     let dep_version = module_graph
-        .versions
-        .get(&resolved_dep.canonical_module)
-        .cloned()
-        .unwrap_or(project_ctx.resolved_version);
+        .version(&resolved_dep.canonical_module)
+        .map(str::to_string)
+        .unwrap_or(plan.resolved_version);
 
     let upgraded_tuples: Vec<(&str, &str, &str)> = upgraded
         .iter()
@@ -196,15 +195,16 @@ fn run_add_pipeline(
         })
         .collect();
 
-    let replacement_label = replacement
-        .as_ref()
-        .map(|f| (f.replacement_path.as_str(), f.replacement_version.as_str()));
+    let replacement_label =
+        replacement.map(|f| (f.replacement_path.as_str(), f.replacement_version.as_str()));
 
+    let edges = module_graph.edges();
+    let versions = module_graph.versions();
     print_add_success(
         &resolved_dep.canonical_module,
         &dep_version,
-        &module_graph.edges,
-        &module_graph.versions,
+        &edges,
+        &versions,
         &upgraded_tuples,
         replacement_label,
     );
@@ -443,109 +443,8 @@ fn enrich_with_parent_hint(workspace: &GoWorkspace, path: &str, msg: String) -> 
     )
 }
 
-pub(crate) fn find_project_root() -> Option<PathBuf> {
-    let cwd = std::env::current_dir().ok()?;
-    let mut current: &Path = &cwd;
-    loop {
-        if current.join("lisette.toml").is_file() {
-            return Some(current.to_path_buf());
-        }
-        current = current.parent()?;
-    }
-}
-
-struct ProjectSetup {
-    project_root: PathBuf,
-    target_dir: PathBuf,
-    manifest: deps::Manifest,
-    typedef_cache_dir: PathBuf,
-    mutation_lock: File,
-    target_lock: File,
-}
-
-fn open_project_for_mutation() -> Result<ProjectSetup, i32> {
-    let project_root = match find_project_root() {
-        Some(root) => root,
-        None => {
-            cli_error!(
-                "No project found",
-                "No `lisette.toml` in current directory or in any parent",
-                "Run `lis new <name>` to create a project"
-            );
-            return Err(1);
-        }
-    };
-
-    let manifest = match deps::parse_manifest(&project_root) {
-        Ok(m) => m,
-        Err(msg) => {
-            cli_error!("Failed to read manifest", msg, "Fix `lisette.toml`");
-            return Err(1);
-        }
-    };
-
-    if let Err(msg) = deps::check_toolchain_version(&manifest) {
-        let trimmed = msg
-            .strip_prefix("Toolchain mismatch: ")
-            .unwrap_or(&msg)
-            .to_string();
-        error!("toolchain mismatch", trimmed);
-        return Err(1);
-    }
-
-    if let Err(msg) = deps::check_no_subpackage_deps(&manifest) {
-        cli_error!(
-            "Invalid `lisette.toml`",
-            msg,
-            "Fix `lisette.toml` and retry"
-        );
-        return Err(1);
-    }
-
-    if let Err(msg) = deps::validate_project_name(&manifest.project.name) {
-        cli_error!(
-            "Invalid project name",
-            msg,
-            "Rename `project.name` in `lisette.toml`"
-        );
-        return Err(1);
-    }
-
-    print_preview_notice("Third-party Go dependencies", true);
-
-    let project_target_dir = project_root.join("target");
-    if project_target_dir.is_file() {
-        cli_error!(
-            "Failed to set up target directory",
-            "`target/` exists but is a file, not a directory",
-            "Remove or move `target/` and retry"
-        );
-        return Err(1);
-    }
-    if let Err(e) = std::fs::create_dir_all(&project_target_dir) {
-        error!(
-            "failed to set up target directory",
-            format!("Failed to create target directory: {}", e)
-        );
-        return Err(1);
-    }
-
-    let mutation_lock = acquire_mutation_lock(&project_target_dir)?;
-    let target_lock = acquire_target_lock(&project_target_dir)?;
-    let typedef_cache_dir = deps::typedef_cache_dir(&project_root);
-
-    Ok(ProjectSetup {
-        project_root,
-        target_dir: project_target_dir,
-        manifest,
-        typedef_cache_dir,
-        mutation_lock,
-        target_lock,
-    })
-}
-
 /// Write `target/go.mod` from the manifest, plus one `extra` dep not yet in it.
-fn write_target_go_mod(setup: &ProjectSetup, extra: Option<(&str, deps::GoDependency)>) -> bool {
+fn write_target_go_mod(setup: &MutationProject, extra: Option<(&str, deps::GoDependency)>) -> bool {
     let mut go_deps = setup.manifest.go_deps();
     if let Some((module, dep)) = extra {
         go_deps.insert(module.to_string(), dep);
@@ -555,11 +454,10 @@ fn write_target_go_mod(setup: &ProjectSetup, extra: Option<(&str, deps::GoDepend
 
 /// Write `target/go.mod` from an explicit dependency set.
 fn write_target_go_mod_from(
-    setup: &ProjectSetup,
+    setup: &MutationProject,
     go_deps: std::collections::BTreeMap<String, deps::GoDependency>,
 ) -> bool {
-    let locator =
-        deps::TypedefLocator::new(go_deps, Some(setup.project_root.clone()), Target::host());
+    let locator = deps::TypedefLocator::new(go_deps, Some(setup.root.clone()), Target::host());
     if let Err(msg) =
         go_cli::write_go_mod(&setup.target_dir, &setup.manifest.project.name, &locator)
     {
@@ -589,10 +487,9 @@ fn strip_replacement_for(
     }
 }
 
-fn setup_project(
-    parsed_dep: ParsedDependency,
-) -> Result<(ProjectContext, ResolvedDependency), i32> {
-    let setup = open_project_for_mutation()?;
+fn setup_project(parsed_dep: ParsedDependency) -> Result<AddPlan, i32> {
+    let setup = MutationProject::open()?;
+    print_preview_notice("Third-party Go dependencies", true);
     let mut go_deps = setup.manifest.go_deps();
     strip_replacement_for(&mut go_deps, &parsed_dep.requested_package);
     if !write_target_go_mod_from(&setup, go_deps) {
@@ -640,25 +537,21 @@ fn setup_project(
         canonical_module: info.path,
     };
 
-    let ctx = ProjectContext {
-        project_root: setup.project_root,
-        target_dir: setup.target_dir,
-        manifest: setup.manifest,
-        typedef_cache_dir: setup.typedef_cache_dir,
+    Ok(AddPlan {
+        project: setup,
+        dependency: resolved,
         resolved_version: info.version,
-        _mutation_lock: setup.mutation_lock,
-        _target_lock: setup.target_lock,
-    };
-
-    Ok((ctx, resolved))
+        source: DependencySource::Remote,
+    })
 }
 
 fn setup_project_replace(
     original: &str,
     replacement_path: &str,
     replace_query: &str,
-) -> Result<(ProjectContext, ResolvedDependency, ReplacementIdentity), i32> {
-    let setup = open_project_for_mutation()?;
+) -> Result<AddPlan, i32> {
+    let setup = MutationProject::open()?;
+    print_preview_notice("Third-party Go dependencies", true);
 
     if !write_target_go_mod(&setup, None) {
         return Err(1);
@@ -714,22 +607,15 @@ fn setup_project_replace(
         canonical_module: original.to_string(),
     };
 
-    let ctx = ProjectContext {
-        project_root: setup.project_root,
-        target_dir: setup.target_dir,
-        manifest: setup.manifest,
-        typedef_cache_dir: setup.typedef_cache_dir,
+    Ok(AddPlan {
+        project: setup,
+        dependency: resolved,
         resolved_version: resolution.resolved_version.clone(),
-        _mutation_lock: setup.mutation_lock,
-        _target_lock: setup.target_lock,
-    };
-
-    let replacement = ReplacementIdentity {
-        replacement_path: replacement_path.to_string(),
-        replacement_version: resolution.resolved_version,
-    };
-
-    Ok((ctx, resolved, replacement))
+        source: DependencySource::Replacement(ReplacementIdentity {
+            replacement_path: replacement_path.to_string(),
+            replacement_version: resolution.resolved_version,
+        }),
+    })
 }
 
 #[cfg(test)]

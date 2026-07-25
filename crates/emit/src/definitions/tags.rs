@@ -115,7 +115,7 @@ pub(super) fn interpret_field_attributes(
         }
     }
 
-    for attribute in &field.attributes {
+    for attribute in field.attributes() {
         if let Some(config) = interpret_field_attribute(attribute, &struct_defaults) {
             configs.push(config);
         }

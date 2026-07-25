@@ -180,11 +180,11 @@ pub fn struct_field_is_exported(
     field: &crate::ast::StructFieldDefinition,
     struct_forces_export: bool,
 ) -> bool {
-    !field.embedded
+    !field.is_embedded()
         && (field.visibility.is_public()
             || struct_forces_export
             || field
-                .attributes
+                .attributes()
                 .iter()
                 .any(crate::attributes::field_attribute_forces_export))
 }
@@ -196,7 +196,7 @@ pub fn struct_field_go_name(
 ) -> Cow<'_, str> {
     if struct_field_is_exported(field, struct_forces_export) {
         Cow::Owned(escape_keyword(&snake_to_camel(&field.name)).into_owned())
-    } else if field.embedded {
+    } else if field.is_embedded() {
         escape_keyword(&field.name)
     } else {
         Cow::Owned(escape_keyword(&snake_to_lower_camel(&field.name)).into_owned())

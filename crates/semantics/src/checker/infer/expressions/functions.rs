@@ -195,8 +195,7 @@ impl InferCtx<'_> {
             return_ty.clone().into(),
         );
 
-        // `Type::ignored()` defers the tail-position check to
-        // `passes/fact_producers/unused_expressions.rs`, which honors `#[allow(unused_*)]`.
+        // The later unused-expression check honors allow attributes.
         let has_implicit_unit_return = return_annotation == Annotation::Unknown;
         let body_ty = if has_implicit_unit_return {
             Type::ignored()
@@ -300,8 +299,7 @@ impl InferCtx<'_> {
         // `defer` inside a closure body should not be flagged as "defer in loop"
         // even when the closure is lexically inside a loop.
         let saved_loop_depth = self.scopes.reset_loop_depth();
-        // `Type::ignored()` defers the tail-position check to
-        // `passes/fact_producers/unused_expressions.rs`, which honors `#[allow(unused_*)]`.
+        // The later unused-expression check honors allow attributes.
         let relax_body_to_unit = return_annotation == Annotation::Unknown && return_ty.is_unit();
         let body_ty = if relax_body_to_unit {
             Type::ignored()
@@ -520,7 +518,8 @@ impl InferCtx<'_> {
         if return_check_recorded {
             let module_id = self.cursor.module_id.clone();
             self.facts
-                .generic_call_checks
+                .deferred
+                .generic_calls
                 .push(crate::facts::GenericCallCheck {
                     ty: return_ty.clone(),
                     span,
@@ -541,7 +540,8 @@ impl InferCtx<'_> {
             if !already_covered {
                 let module_id = self.cursor.module_id.clone();
                 self.facts
-                    .generic_call_checks
+                    .deferred
+                    .generic_calls
                     .push(crate::facts::GenericCallCheck {
                         ty: variadic.ty.clone(),
                         span,
@@ -572,7 +572,8 @@ impl InferCtx<'_> {
         if callee_path.as_deref() == Some("Slice.make") {
             let module_id = self.cursor.module_id.clone();
             self.facts
-                .slice_make_checks
+                .deferred
+                .slice_makes
                 .push(crate::facts::SliceMakeCheck {
                     ty: call_ty.clone(),
                     span,

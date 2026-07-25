@@ -114,9 +114,9 @@ impl InferCtx<'_> {
         let new_parents = parents
             .into_iter()
             .map(|parent| {
-                let before = self.sink.len();
-                let parent_ty = self.convert_to_type(store, &parent.annotation, &parent.span);
-                self.sink.truncate(before);
+                let parent_ty = self.without_diagnostics(|this| {
+                    this.convert_to_type(store, &parent.annotation, &parent.span)
+                });
                 self.check_interface_parent(&parent_ty, parent.span);
                 ParentInterface {
                     annotation: parent.annotation,

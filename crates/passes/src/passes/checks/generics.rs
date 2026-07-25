@@ -1,7 +1,4 @@
 //! Hard errors over generic-parameter shapes.
-//!
-//! Lint-style fact production for unused/bound-only type params lives in
-//! `passes::fact_producers::generics`.
 
 use diagnostics::LocalSink;
 use syntax::ast::{Annotation, Expression, Generic, Span};

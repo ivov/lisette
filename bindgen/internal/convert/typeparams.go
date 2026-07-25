@@ -74,11 +74,11 @@ func (ps TypeParamSpecs) UseBlock() string {
 // Named-type identity is checked before .Underlying(), which discards the
 // wrapper — afterwards cmp.Ordered's structural shape would short-circuit
 // as plain `comparable`.
-func recognizeBound(constraint types.Type, conv *Converter) (boundExpr string, ok bool) {
+func recognizeBound(constraint types.Type, conv *Converter, substitutions map[string]string) (boundExpr string, ok bool) {
 	if named, isNamed := constraint.(*types.Named); isNamed {
 		obj := named.Obj()
 		if obj.Pkg() != nil && obj.Pkg().Path() == "cmp" && obj.Name() == "Ordered" {
-			return qualifyTypeNameBound(obj, nil, conv)
+			return qualifyTypeNameBound(obj, nil, conv, substitutions)
 		}
 	}
 
@@ -108,12 +108,12 @@ func recognizeBound(constraint types.Type, conv *Converter) (boundExpr string, o
 	if iface.IsMethodSet() && iface.NumMethods() > 0 {
 		switch t := constraint.(type) {
 		case *types.Named:
-			return qualifyTypeNameBound(t.Obj(), t.TypeArgs(), conv)
+			return qualifyTypeNameBound(t.Obj(), t.TypeArgs(), conv, substitutions)
 		case *types.Alias:
 			if isGenericAlias(t) {
 				return "", false
 			}
-			return qualifyTypeNameBound(t.Obj(), t.TypeArgs(), conv)
+			return qualifyTypeNameBound(t.Obj(), t.TypeArgs(), conv, substitutions)
 		}
 	}
 
@@ -153,7 +153,7 @@ func isOrderedBasicKind(kind types.BasicKind) bool {
 // Renders a Named or Alias bound by its TypeName, qualifying with the package
 // alias when external and tracking the external package on conv. Bounds in the
 // current package render unqualified to avoid a self-import.
-func qualifyTypeNameBound(obj *types.TypeName, typeArgs *types.TypeList, conv *Converter) (string, bool) {
+func qualifyTypeNameBound(obj *types.TypeName, typeArgs *types.TypeList, conv *Converter, substitutions map[string]string) (string, bool) {
 	pkg := obj.Pkg()
 	if pkg == nil {
 		if obj.Name() == "error" {
@@ -176,7 +176,7 @@ func qualifyTypeNameBound(obj *types.TypeName, typeArgs *types.TypeList, conv *C
 	}
 	args := make([]string, 0, typeArgs.Len())
 	for arg := range typeArgs.Types() {
-		result := ToLisette(arg, conv)
+		result := toLisetteWithSubstitutions(arg, conv, substitutions)
 		if result.SkipReason != nil {
 			return "", false
 		}

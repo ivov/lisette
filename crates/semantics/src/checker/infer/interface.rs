@@ -1,6 +1,6 @@
 use crate::checker::EnvResolve;
 use crate::store::Store;
-use diagnostics::infer::{InterfaceViolation, MissingMethod};
+use diagnostics::infer::{InterfaceMethodViolation, InterfaceViolation, MissingMethod};
 use syntax::ast::Span;
 use syntax::program::{DefinitionBody, Interface, MethodSignatures};
 use syntax::types::{GO_IMPORT_PREFIX, SubstitutionMap, Type, substitute};
@@ -142,8 +142,12 @@ impl InferCtx<'_> {
 
         let resolved = ty.resolve_in(&self.env);
         if let Some(sealed) = violations.iter().find(|v| {
-            v.missing
+            v.methods
                 .iter()
+                .filter_map(|method| match method {
+                    InterfaceMethodViolation::Missing(method) => Some(method),
+                    InterfaceMethodViolation::Incompatible { .. } => None,
+                })
                 .any(|method| crate::checker::sealing::is_unexported_key(&method.name))
         }) {
             let type_name = resolved
@@ -511,8 +515,7 @@ impl InferCtx<'_> {
             .zip(type_args.iter().cloned())
             .collect();
 
-        let mut missing: Vec<MissingMethod> = Vec::new();
-        let mut incompatible: Vec<(String, Type, Type)> = Vec::new();
+        let mut method_violations = Vec::new();
 
         let resolved_receiver = store.deep_resolve_alias(&ty.strip_refs().resolve_in(&self.env));
         let receiver_id = match &resolved_receiver {
@@ -562,11 +565,11 @@ impl InferCtx<'_> {
                             ),
                         );
                     }
-                    missing.push(MissingMethod {
+                    method_violations.push(InterfaceMethodViolation::Missing(MissingMethod {
                         name: method_name.to_string(),
                         signature: method_ty.clone(),
                         private_candidate: None,
-                    });
+                    }));
                     continue;
                 }
                 SelectedMethod::Missing => {
@@ -578,11 +581,11 @@ impl InferCtx<'_> {
                         method_ty,
                         &map,
                     );
-                    missing.push(MissingMethod {
+                    method_violations.push(InterfaceMethodViolation::Missing(MissingMethod {
                         name: method_name.to_string(),
                         signature: method_ty.clone(),
                         private_candidate,
-                    });
+                    }));
                     continue;
                 }
             };
@@ -607,17 +610,17 @@ impl InferCtx<'_> {
             }
 
             if !signature.receiver_pinned {
-                missing.push(MissingMethod {
+                method_violations.push(InterfaceMethodViolation::Missing(MissingMethod {
                     name: method_name.to_string(),
                     signature: method_ty.clone(),
                     private_candidate: None,
-                });
+                }));
             } else if !signature.matched {
-                incompatible.push((
-                    method_name.to_string(),
-                    signature.substituted_method,
-                    signature.incompatible_impl,
-                ));
+                method_violations.push(InterfaceMethodViolation::Incompatible {
+                    name: method_name.to_string(),
+                    expected: signature.substituted_method,
+                    actual: signature.incompatible_impl,
+                });
             } else {
                 let spelling_pinned = syntax::go_names::interface_matches_by_source_name(
                     interface_qualified_id,
@@ -627,12 +630,11 @@ impl InferCtx<'_> {
             }
         }
 
-        if !missing.is_empty() || !incompatible.is_empty() {
+        if !method_violations.is_empty() {
             check.violations.push(InterfaceViolation {
                 interface_name: interface.name.to_string(),
                 parent_of: parent_of.map(String::from),
-                missing,
-                incompatible,
+                methods: method_violations,
             });
         }
 

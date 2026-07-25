@@ -4,31 +4,28 @@ use std::process::Command;
 use stdlib::Target;
 
 use crate::cli_error;
+use crate::command::BindgenTarget;
 
-pub fn bindgen(
-    target_pkg: &str,
-    output: Option<String>,
-    version: Option<String>,
-    verbose: bool,
-) -> i32 {
+pub fn bindgen(target: BindgenTarget, verbose: bool) -> i32 {
     if let Err(code) = crate::go_cli::require_go() {
         return code;
     }
 
-    if target_pkg == "stdlib" {
-        let source_dir = Path::new("bindgen");
-        if !source_dir.exists() {
-            cli_error!(
-                "Failed to generate std bindings",
-                "Bindgen source not found at `bindgen`",
-                "Run this command from the Lisette project root"
-            );
-            return 1;
+    match target {
+        BindgenTarget::Stdlib { version } => {
+            let source_dir = Path::new("bindgen");
+            if !source_dir.exists() {
+                cli_error!(
+                    "Failed to generate std bindings",
+                    "Bindgen source not found at `bindgen`",
+                    "Run this command from the Lisette project root"
+                );
+                return 1;
+            }
+            bindgen_std(source_dir, version, verbose)
         }
-        return bindgen_std(source_dir, version, verbose);
+        BindgenTarget::Package { name, output } => bindgen_pkg(&name, output, verbose),
     }
-
-    bindgen_pkg(target_pkg, output, verbose)
 }
 
 fn bindgen_pkg(target_pkg: &str, output: Option<String>, verbose: bool) -> i32 {

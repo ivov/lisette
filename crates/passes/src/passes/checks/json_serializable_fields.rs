@@ -63,7 +63,7 @@ fn unserializable_kind(annotation: &Annotation) -> Option<&'static str> {
 
 fn is_json_skipped(field: &StructFieldDefinition) -> bool {
     field
-        .attributes
+        .attributes()
         .iter()
         .any(|attribute| match attribute.name.as_str() {
             "json" => attribute.args.iter().any(skips_field),

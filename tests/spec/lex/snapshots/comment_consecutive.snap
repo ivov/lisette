@@ -52,19 +52,5 @@ LexResult {
         },
     ],
     errors: [],
-    trivia: Trivia {
-        comments: [
-            (
-                4,
-                20,
-            ),
-            (
-                25,
-                42,
-            ),
-        ],
-        doc_comments: [],
-        file_comments: [],
-        blank_lines: [],
-    },
+    blank_lines: [],
 }

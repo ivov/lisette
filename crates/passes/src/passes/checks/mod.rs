@@ -31,10 +31,9 @@ pub(crate) mod temp_producing;
 pub(crate) mod unchanging_loop_condition;
 mod visibility;
 
-use diagnostics::{LisetteDiagnostic, LocalSink, PatternIssue};
+use diagnostics::{LisetteDiagnostic, LocalSink};
 use rayon::prelude::*;
 use rustc_hash::FxHashSet as HashSet;
-use std::sync::Arc;
 use syntax::program::{File, Module};
 
 use crate::passes::walk::NodeCtx;
@@ -42,14 +41,16 @@ use semantics::context::AnalysisContext;
 use semantics::facts::Facts;
 use semantics::store::Store;
 
-use super::PARALLEL_THRESHOLD;
+use super::{PARALLEL_THRESHOLD, source_file_work};
 
 pub(crate) fn run_all(
     analysis: &AnalysisContext,
     facts: &Facts,
-) -> (Vec<LisetteDiagnostic>, Vec<PatternIssue>) {
+    run_lints: bool,
+) -> (Vec<LisetteDiagnostic>, Vec<LisetteDiagnostic>) {
     let store = analysis.store;
     let sink = LocalSink::new();
+    let pattern_lint_sink = LocalSink::new();
 
     let mut module_ids: Vec<&str> = store.modules.keys().map(String::as_str).collect();
     module_ids.sort_unstable();
@@ -59,67 +60,52 @@ pub(crate) fn run_all(
     }
     instantiation_cycle::run(store, &sink);
 
-    let mut work: Vec<(&Module, &File)> = store
-        .modules
-        .values()
-        .map(Arc::as_ref)
-        .flat_map(|module| module.source_files().map(move |file| (module, file)))
-        .collect();
-    work.sort_unstable_by(|a, b| {
-        a.0.id
-            .cmp(&b.0.id)
-            .then_with(|| a.1.name.cmp(&b.1.name))
-            .then_with(|| a.1.id.cmp(&b.1.id))
-    });
+    let work = source_file_work(store);
 
     let or_spans = &facts.or_pattern_error_spans;
 
     let ufcs_methods = analysis.ufcs_methods;
 
     if work.len() < PARALLEL_THRESHOLD {
-        let pattern_ctx = pattern_analysis::Context::new(analysis, or_spans);
+        let mut pattern_ctx = pattern_analysis::Context::new(
+            analysis,
+            or_spans,
+            &sink,
+            run_lints.then_some(&pattern_lint_sink),
+        );
         for (module, file) in &work {
-            run_file_checks(
-                module,
-                file,
-                store,
-                facts,
-                ufcs_methods,
-                &sink,
-                &pattern_ctx,
-            );
+            run_file_checks(module, file, store, facts, ufcs_methods, &mut pattern_ctx);
         }
-        return (sink.take(), pattern_ctx.take_issues());
+        return (
+            sink.into_diagnostics(),
+            pattern_lint_sink.into_diagnostics(),
+        );
     }
 
-    type WorkerOutput = (LocalSink, Vec<PatternIssue>);
-    let outputs: Vec<WorkerOutput> = work
+    let worker_sinks: Vec<(LocalSink, LocalSink)> = work
         .par_iter()
         .map(|(module, file)| {
             let local_sink = LocalSink::new();
-            let pattern_ctx = pattern_analysis::Context::new(analysis, or_spans);
-            run_file_checks(
-                module,
-                file,
-                store,
-                facts,
-                ufcs_methods,
+            let local_pattern_lint_sink = LocalSink::new();
+            let mut pattern_ctx = pattern_analysis::Context::new(
+                analysis,
+                or_spans,
                 &local_sink,
-                &pattern_ctx,
+                run_lints.then_some(&local_pattern_lint_sink),
             );
-            (local_sink, pattern_ctx.take_issues())
+            run_file_checks(module, file, store, facts, ufcs_methods, &mut pattern_ctx);
+            drop(pattern_ctx);
+            (local_sink, local_pattern_lint_sink)
         })
         .collect();
 
-    let mut worker_sinks = Vec::with_capacity(outputs.len());
-    let mut all_issues = Vec::new();
-    for (worker_sink, issues) in outputs {
-        worker_sinks.push(worker_sink);
-        all_issues.extend(issues);
-    }
-    let mut diagnostics = sink.take();
+    let (worker_sinks, worker_pattern_lint_sinks): (Vec<_>, Vec<_>) =
+        worker_sinks.into_iter().unzip();
+    let mut diagnostics = sink.into_diagnostics();
     diagnostics.extend(LocalSink::merge(worker_sinks));
-    (diagnostics, all_issues)
+    let mut pattern_lints = pattern_lint_sink.into_diagnostics();
+    pattern_lints.extend(LocalSink::merge(worker_pattern_lint_sinks));
+    (diagnostics, pattern_lints)
 }
 
 fn run_file_checks(
@@ -128,10 +114,10 @@ fn run_file_checks(
     store: &Store,
     facts: &Facts,
     ufcs_methods: &HashSet<(String, String)>,
-    sink: &LocalSink,
-    pattern_ctx: &pattern_analysis::Context,
+    pattern_ctx: &mut pattern_analysis::Context,
 ) {
-    let ctx = NodeCtx {
+    let sink = pattern_ctx.sink();
+    let mut ctx = NodeCtx {
         store,
         facts,
         files: &module.files,
@@ -141,7 +127,7 @@ fn run_file_checks(
         sink,
         claimed_spans: Default::default(),
     };
-    node_walk::run(&file.items, &ctx);
+    node_walk::run(&file.items, &mut ctx);
     interpolation_stringer::run(&file.items, store, ufcs_methods, sink);
 
     prelude_shadowing::run(&file.items, store, sink);
@@ -151,6 +137,6 @@ fn run_file_checks(
     empty_select_default::run(&file.items, sink);
 
     for expression in &file.items {
-        pattern_analysis::check(expression, pattern_ctx, sink);
+        pattern_analysis::check(expression, pattern_ctx);
     }
 }

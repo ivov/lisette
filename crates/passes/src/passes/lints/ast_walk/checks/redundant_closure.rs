@@ -21,7 +21,7 @@ pub fn check_redundant_closure(expression: &Expression, ctx: &NodeCtx) {
 
     // An immediately-invoked closure is owned by `redundant_closure_call`, which
     // claims this span when it removes the wrapper.
-    if ctx.claimed_spans.borrow().contains(span) {
+    if ctx.claimed_spans.contains(span) {
         return;
     }
 

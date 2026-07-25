@@ -94,12 +94,11 @@ impl InferCtx<'_> {
                 if arm.is_never() || arm.is_error() {
                     continue;
                 }
-                let before = self.sink.len();
-                if self
-                    .try_unify(&obligation.result_ty, arm_ty, arm_span)
-                    .is_err()
-                    && self.sink.len() == before
-                {
+                let store = self.store;
+                let (unification, reported) = self.tracking_diagnostics(|this| {
+                    InferCtx::new(this, store).try_unify(&obligation.result_ty, arm_ty, arm_span)
+                });
+                if unification.is_err() && !reported {
                     let result = obligation.result_ty.resolve_in(&self.env);
                     self.sink.push(diagnostics::infer::branch_type_mismatch(
                         &arm, *arm_span, &result,
@@ -123,14 +122,12 @@ impl InferCtx<'_> {
         let mut widened_to: Option<Type> = None;
 
         for next in &branch_types[1..] {
-            let diag_count = self.sink.len();
             if self
                 .speculatively(|this| InferCtx::new(this, store).try_unify(&common, next, span))
                 .is_ok()
             {
                 continue;
             }
-            self.sink.truncate(diag_count);
 
             if self
                 .speculatively(|this| InferCtx::new(this, store).try_unify(next, &common, span))
@@ -140,7 +137,6 @@ impl InferCtx<'_> {
                 widened_to = Some(common.clone());
                 continue;
             }
-            self.sink.truncate(diag_count);
 
             return BranchReconciliation::Failed;
         }

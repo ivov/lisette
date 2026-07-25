@@ -90,7 +90,7 @@ pub(crate) fn resolve_dot_access_definition(
             .or_else(|| {
                 file.imports().into_iter().find_map(|import| {
                     if import
-                        .effective_alias(&snapshot.result.go_package_names)
+                        .effective_alias(&snapshot.result.emit_input.go_package_names)
                         .is_none()
                     {
                         let qualified = format!("{}.{}", import.name, name);
@@ -134,9 +134,11 @@ pub(crate) fn resolve_dot_access_definition(
             }
         ) {
             resolve_by_type()
-        } else if let Some(module_name) =
-            find_module_by_alias(file, root_identifier, &snapshot.result.go_package_names)
-        {
+        } else if let Some(module_name) = find_module_by_alias(
+            file,
+            root_identifier,
+            &snapshot.result.emit_input.go_package_names,
+        ) {
             let qualified = dotted_path
                 .strip_prefix(root_identifier)
                 .map(|rest| format!("{}{}", module_name, rest))
@@ -153,9 +155,11 @@ pub(crate) fn resolve_dot_access_definition(
     } = expression.unwrap_parens()
         && !matches!(resolution, IdentifierResolution::Binding(_))
     {
-        if let Some(module_name) =
-            find_module_by_alias(file, value.as_str(), &snapshot.result.go_package_names)
-        {
+        if let Some(module_name) = find_module_by_alias(
+            file,
+            value.as_str(),
+            &snapshot.result.emit_input.go_package_names,
+        ) {
             let qualified = format!("{}.{}", module_name, member);
             snapshot
                 .definitions()
@@ -250,12 +254,16 @@ fn resolve_constructor_name(
 
     if cursor_in_name <= dot_pos {
         let first = &name[..dot_pos];
-        return resolve_import_span(first, file, &snapshot.result.go_package_names)
+        return resolve_import_span(first, file, &snapshot.result.emit_input.go_package_names)
             .or_else(|| lookup_definition_span(first, file, snapshot));
     }
 
     let (qualifier, simple) = name.split_once('.')?;
-    let module_name = find_module_by_alias(file, qualifier, &snapshot.result.go_package_names)?;
+    let module_name = find_module_by_alias(
+        file,
+        qualifier,
+        &snapshot.result.emit_input.go_package_names,
+    )?;
 
     let qualified = format!("{}.{}", module_name, simple);
 
@@ -513,13 +521,11 @@ fn record_pattern_field_span(
 /// Resolve the definition span at the given cursor offset.
 ///
 /// Checks binding definitions first, then falls back to expression-based resolution.
-/// `extra_match` handles caller-specific arms (e.g. DotAccess for references, rename guards).
-pub(crate) fn resolve_definition_span(
+pub(crate) fn resolve_symbol_definition_span(
     snapshot: &AnalysisSnapshot,
     file: &syntax::program::File,
     file_id: u32,
     offset: u32,
-    extra_match: impl FnOnce(&Expression) -> Option<syntax::ast::Span>,
 ) -> Option<syntax::ast::Span> {
     snapshot
         .facts()
@@ -539,6 +545,14 @@ pub(crate) fn resolve_definition_span(
                     resolution: IdentifierResolution::Binding(id),
                     ..
                 } => snapshot.facts().bindings.get(id).map(|b| b.span),
+
+                Expression::Identifier {
+                    resolution: IdentifierResolution::Definition(qname),
+                    ..
+                } => snapshot
+                    .definitions()
+                    .get(qname.as_str())
+                    .and_then(|definition| definition.name_span),
 
                 Expression::Function { name_span, .. }
                 | Expression::Interface { name_span, .. }
@@ -588,7 +602,24 @@ pub(crate) fn resolve_definition_span(
                     ..
                 } => resolve_struct_call_field(field_assignments, name, ty, offset, file, snapshot),
 
-                other => extra_match(other),
+                Expression::DotAccess {
+                    expression,
+                    member,
+                    span,
+                    ..
+                } => resolve_dot_access_definition(expression, member, *span, file, snapshot),
+
+                Expression::Match { arms, .. } => {
+                    resolve_match_pattern_definition(arms, offset, file, snapshot)
+                        .or_else(|| resolve_word_at_offset(&file.source, offset, file, snapshot))
+                }
+
+                Expression::IfLet { pattern, .. } | Expression::WhileLet { pattern, .. } => {
+                    resolve_enum_in_pattern(pattern, offset, file, snapshot)
+                        .or_else(|| resolve_word_at_offset(&file.source, offset, file, snapshot))
+                }
+
+                _ => resolve_word_at_offset(&file.source, offset, file, snapshot),
             }
         })
 }

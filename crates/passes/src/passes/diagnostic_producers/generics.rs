@@ -1,25 +1,20 @@
-//! Generic-parameter fact producers for the lint layer.
-//!
-//! Records facts for later rendering by `lints::from_facts`.
-
+use diagnostics::LisetteDiagnostic;
 use ecow::EcoString;
 use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::{Annotation, Binding, Expression, Generic};
 use syntax::types::Type;
 
-use super::ProducedFacts;
-
-pub(crate) fn run(typed_ast: &[Expression], local: &mut ProducedFacts) {
+pub(crate) fn run(typed_ast: &[Expression], diagnostics: &mut Vec<LisetteDiagnostic>) {
     for item in typed_ast {
-        visit_expression(item, local);
+        visit_expression(item, diagnostics);
     }
 }
 
-fn visit_expression(expression: &Expression, local: &mut ProducedFacts) {
+fn visit_expression(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
     match expression {
         Expression::ImplBlock { methods, .. } => {
             for method in methods {
-                visit_expression(method, local);
+                visit_expression(method, diagnostics);
             }
             return;
         }
@@ -41,13 +36,19 @@ fn visit_expression(expression: &Expression, local: &mut ProducedFacts) {
                     .map(|g| g.name.clone())
                     .filter(|name| !still_missing.contains(name))
                     .collect();
-                check_unused_type_parameters(generics, params, return_type, &found_in_body, local);
+                check_unused_type_parameters(
+                    generics,
+                    params,
+                    return_type,
+                    &found_in_body,
+                    diagnostics,
+                );
                 check_type_params_only_in_bound(
                     generics,
                     params,
                     return_type,
                     &found_in_body,
-                    local,
+                    diagnostics,
                 );
             }
         }
@@ -55,7 +56,7 @@ fn visit_expression(expression: &Expression, local: &mut ProducedFacts) {
     }
 
     for child in expression.children() {
-        visit_expression(child, local);
+        visit_expression(child, diagnostics);
     }
 }
 
@@ -64,7 +65,7 @@ fn check_unused_type_parameters(
     params: &[Binding],
     return_type: &Type,
     found_in_body: &HashSet<EcoString>,
-    local: &mut ProducedFacts,
+    diagnostics: &mut Vec<LisetteDiagnostic>,
 ) {
     let mut remaining: HashSet<EcoString> = generics.iter().map(|g| g.name.clone()).collect();
     for param in params {
@@ -84,7 +85,7 @@ fn check_unused_type_parameters(
         }
 
         if remaining.contains(&generic.name) {
-            local.add_unused_type_param(generic.span);
+            diagnostics.push(diagnostics::lint::unused_type_parameter(&generic.span));
         }
     }
 }
@@ -94,7 +95,7 @@ fn check_type_params_only_in_bound(
     params: &[Binding],
     return_type: &Type,
     found_in_body: &HashSet<EcoString>,
-    local: &mut ProducedFacts,
+    diagnostics: &mut Vec<LisetteDiagnostic>,
 ) {
     if generics.iter().all(|generic| generic.bound_count() == 0) {
         return;
@@ -110,7 +111,10 @@ fn check_type_params_only_in_bound(
         if generic.name.starts_with('_') || !only_in_bound.contains(&generic.name) {
             continue;
         }
-        local.add_type_param_only_in_bound(generic.name.to_string(), generic.span);
+        diagnostics.push(diagnostics::lint::type_param_only_in_bound(
+            &generic.span,
+            generic.name.as_str(),
+        ));
     }
 }
 

@@ -46,7 +46,7 @@ pub fn has_direct_embed(store: &Store, ty: &Type) -> bool {
     };
     store
         .fields_of(id.as_str())
-        .is_some_and(|fields| fields.iter().any(|f| f.embedded))
+        .is_some_and(|fields| fields.iter().any(|field| field.is_embedded()))
 }
 
 pub fn resolve_selector(store: &Store, outer: &Type, name: &str) -> Resolution {
@@ -139,7 +139,7 @@ fn walk(store: &Store, outer: &Type) -> Vec<Entry> {
                 continue;
             };
             for field in fields {
-                if !field.embedded {
+                if !field.is_embedded() {
                     continue;
                 }
                 let field_ty = instantiate_field(store, &entry.ty, &field.ty);
@@ -425,7 +425,7 @@ fn instantiate_method(store: &Store, container: &Type, method_ty: &Type) -> Opti
 #[cfg(test)]
 mod tests {
     use super::*;
-    use syntax::ast::{Annotation, Span, StructFieldDefinition, StructFields};
+    use syntax::ast::{Annotation, Span, StructFieldDefinition, StructFieldKind, StructFields};
     use syntax::program::Visibility as ProgVis;
     use syntax::program::{Attributes, Definition, DefinitionBody, Interface};
     use syntax::types::FunctionParameter;
@@ -462,13 +462,16 @@ mod tests {
     fn field(name: &str, ty: Type, embedded: bool) -> StructFieldDefinition {
         StructFieldDefinition {
             doc: None,
-            attributes: vec![],
             name: name.into(),
             name_span: Span::dummy(),
             annotation: Annotation::Unknown,
             visibility: Visibility::Public,
             ty,
-            embedded,
+            kind: if embedded {
+                StructFieldKind::Embedded
+            } else {
+                StructFieldKind::Named { attributes: vec![] }
+            },
         }
     }
 

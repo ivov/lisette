@@ -45,7 +45,9 @@ impl Planner<'_> {
         matches!(
             &resolved.definition.body,
             DefinitionBody::Struct { fields, .. }
-                if fields.iter().any(|f| f.name == field_name && f.embedded)
+                if fields
+                    .iter()
+                    .any(|f| f.name == field_name && f.is_embedded())
         )
     }
 

@@ -1,5 +1,5 @@
 use diagnostics::LocalSink;
-use syntax::ast::{Expression, SelectArmPattern};
+use syntax::ast::{Expression, SelectArm};
 
 pub(crate) fn run(typed_ast: &[Expression], sink: &LocalSink) {
     for item in typed_ast {
@@ -10,7 +10,7 @@ pub(crate) fn run(typed_ast: &[Expression], sink: &LocalSink) {
 fn visit_expression(expression: &Expression, in_loop: bool, sink: &LocalSink) {
     if in_loop && let Expression::Select { arms, .. } = expression {
         for arm in arms {
-            if let SelectArmPattern::WildCard { body } = &arm.pattern
+            if let SelectArm::WildCard { body } = arm
                 && is_empty_body(body)
             {
                 sink.push(diagnostics::infer::empty_select_default(&body.get_span()));

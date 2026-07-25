@@ -4048,19 +4048,19 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message().contains("Type mismatch")),
         "expected the type mismatch to still be reported: {:?}",
-        result.errors
+        result.errors()
     );
     assert!(
         !result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message() == "Impossible comparison"),
         "must not flag a type-invalid comparison as impossible: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -4080,19 +4080,19 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message().contains("Type mismatch")),
         "expected the non-boolean conjunct type error to still be reported: {:?}",
-        result.errors
+        result.errors()
     );
     assert!(
         !result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message() == "Impossible comparison"),
         "must not reason across a non-boolean conjunct in a type-invalid chain: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -4113,19 +4113,19 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message().contains("Type mismatch")),
         "expected the invalid-comparison type error to still be reported: {:?}",
-        result.errors
+        result.errors()
     );
     assert!(
         !result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message() == "Impossible comparison"),
         "must not reason across an out-of-scope or invalid comparison conjunct: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -4147,19 +4147,19 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message().contains("Type mismatch")),
         "expected the invalid comparison inside the disjunction to still be reported: {:?}",
-        result.errors
+        result.errors()
     );
     assert!(
         !result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message() == "Impossible comparison"),
         "must not reason across a disjunction hiding an invalid comparison: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -4179,19 +4179,19 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message().contains("Type mismatch")),
         "expected the type mismatch to still be reported: {:?}",
-        result.errors
+        result.errors()
     );
     assert!(
         !result
-            .lints
+            .lints()
             .iter()
             .any(|d| d.plain_message() == "Redundant comparison"),
         "must not flag a type-invalid comparison as redundant: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -4211,19 +4211,19 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message().contains("Type mismatch")),
         "expected the type mismatch to still be reported: {:?}",
-        result.errors
+        result.errors()
     );
     assert!(
         !result
-            .lints
+            .lints()
             .iter()
             .any(|d| d.plain_message() == "Comparisons can be combined"),
         "must not flag a type-invalid comparison as combinable: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -4383,19 +4383,19 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message().contains("Type mismatch")),
         "expected the named-type boundary error to still be reported: {:?}",
-        result.errors
+        result.errors()
     );
     assert!(
         !result
-            .lints
+            .lints()
             .iter()
             .any(|d| d.plain_message() == "Comparisons can be combined"),
         "must not combine comparisons across a named-type boundary: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -4418,19 +4418,19 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message().contains("Type mismatch")),
         "expected the named-vs-plain-string error to still be reported: {:?}",
-        result.errors
+        result.errors()
     );
     assert!(
         !result
-            .lints
+            .lints()
             .iter()
             .any(|d| d.plain_message() == "Comparisons can be combined"),
         "must not combine comparisons of a named type against a plain primitive: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -4479,19 +4479,19 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message().contains("negate")),
         "expected the unsigned-negation error to still be reported: {:?}",
-        result.errors
+        result.errors()
     );
     assert!(
         !result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message() == "Impossible comparison"),
         "must not flag a comparison against an invalid unsigned negation: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -4511,19 +4511,19 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message().contains("negate")),
         "expected the unsigned-negation error to still be reported: {:?}",
-        result.errors
+        result.errors()
     );
     assert!(
         !result
-            .lints
+            .lints()
             .iter()
             .any(|d| d.plain_message() == "Redundant comparison"),
         "must not flag a comparison against an invalid unsigned negation: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -4543,19 +4543,19 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message().contains("negate")),
         "expected the unsigned-negation error to still be reported: {:?}",
-        result.errors
+        result.errors()
     );
     assert!(
         !result
-            .lints
+            .lints()
             .iter()
             .any(|d| d.plain_message() == "Comparisons can be combined"),
         "must not flag a comparison against an invalid unsigned negation: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -4575,19 +4575,19 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message().contains("overflow")),
         "expected the literal-overflow error to still be reported: {:?}",
-        result.errors
+        result.errors()
     );
     assert!(
         !result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message() == "Impossible comparison"),
         "must not flag a comparison against an overflowing literal: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -4607,19 +4607,19 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message().contains("overflow")),
         "expected the literal-overflow error to still be reported: {:?}",
-        result.errors
+        result.errors()
     );
     assert!(
         !result
-            .lints
+            .lints()
             .iter()
             .any(|d| d.plain_message() == "Redundant comparison"),
         "must not flag a comparison against an overflowing literal: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -4639,19 +4639,19 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message().contains("overflow")),
         "expected the literal-overflow error to still be reported: {:?}",
-        result.errors
+        result.errors()
     );
     assert!(
         !result
-            .lints
+            .lints()
             .iter()
             .any(|d| d.plain_message() == "Comparisons can be combined"),
         "must not flag a comparison against an overflowing literal: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -4671,19 +4671,19 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message().contains("overflow")),
         "expected the float-overflow error to still be reported: {:?}",
-        result.errors
+        result.errors()
     );
     assert!(
         !result
-            .lints
+            .lints()
             .iter()
             .any(|d| d.plain_message() == "Comparisons can be combined"),
         "must not flag a comparison against an overflowing float literal: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -4705,19 +4705,19 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message().contains("Type mismatch")),
         "expected the orderability type error to still be reported: {:?}",
-        result.errors
+        result.errors()
     );
     assert!(
         !result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message() == "Impossible comparison"),
         "must not flag a comparison on a non-orderable `uintptr`: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -4739,19 +4739,19 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message().contains("Type mismatch")),
         "expected the orderability type error to still be reported: {:?}",
-        result.errors
+        result.errors()
     );
     assert!(
         !result
-            .lints
+            .lints()
             .iter()
             .any(|d| d.plain_message() == "Redundant comparison"),
         "must not flag a comparison on a non-orderable `uintptr`: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -4773,19 +4773,19 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message().contains("Type mismatch")),
         "expected the orderability type error to still be reported: {:?}",
-        result.errors
+        result.errors()
     );
     assert!(
         !result
-            .lints
+            .lints()
             .iter()
             .any(|d| d.plain_message() == "Comparisons can be combined"),
         "must not flag a comparison on a non-orderable `uintptr`: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -4901,19 +4901,19 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         !result
-            .lints
+            .lints()
             .iter()
             .any(|d| d.plain_message() == "Incompatible bit mask"),
         "must leave the type-bound case to unsigned_comparison: {:?}",
-        result.lints
+        result.lints()
     );
     assert!(
         result
-            .lints
+            .lints()
             .iter()
             .any(|d| d.plain_message() == "Comparison is always true"),
         "expected unsigned_comparison to own this comparison: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -5132,19 +5132,19 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message().contains("Type mismatch")),
         "expected the uintptr bitwise/orderability type error to still be reported: {:?}",
-        result.errors
+        result.errors()
     );
     assert!(
         !result
-            .lints
+            .lints()
             .iter()
             .any(|d| d.plain_message() == "Incompatible bit mask"),
         "must not flag a masked comparison on a non-orderable `uintptr`: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -5274,19 +5274,19 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message().contains("Type mismatch")),
         "expected the uintptr arithmetic type error to still be reported: {:?}",
-        result.errors
+        result.errors()
     );
     assert!(
         !result
-            .lints
+            .lints()
             .iter()
             .any(|d| d.plain_message() == "Equal operands"),
         "must not flag arithmetic equal operands on a non-arithmetic `uintptr`: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -5308,19 +5308,19 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message().contains("Type mismatch")),
         "expected the uintptr-alias bitwise type error to still be reported: {:?}",
-        result.errors
+        result.errors()
     );
     assert!(
         !result
-            .lints
+            .lints()
             .iter()
             .any(|d| d.plain_message() == "Equal operands"),
         "must not flag bitwise equal operands on a `uintptr`-backed alias: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -5342,19 +5342,19 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|d| d.plain_message().contains("Type mismatch")),
         "expected the uintptr-newtype bitwise type error to still be reported: {:?}",
-        result.errors
+        result.errors()
     );
     assert!(
         !result
-            .lints
+            .lints()
             .iter()
             .any(|d| d.plain_message() == "Equal operands"),
         "must not flag bitwise equal operands on a `uintptr`-backed newtype: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -7484,17 +7484,17 @@ fn main() {
     );
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "unexpected errors: {:?}",
-        result.errors
+        result.errors()
     );
     assert!(
         result
-            .lints
+            .lints()
             .iter()
             .any(|d| d.plain_message() == "Unused field"),
         "local Size.width is never read and must warn despite the geo.Size.width read: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -7533,17 +7533,17 @@ fn main() {
     );
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "unexpected errors: {:?}",
-        result.errors
+        result.errors()
     );
     assert!(
         result
-            .lints
+            .lints()
             .iter()
             .any(|d| d.plain_message() == "Unused field"),
         "local Size.width is never read and must warn despite the promoted geo.Size.width read: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -14532,7 +14532,7 @@ fn main() {}
     fs.add_file(ENTRY_MODULE_ID, "other.lis", "fn warned_helper() {}\n");
     let result = compile_check(fs);
     let unused_functions: Vec<_> = result
-        .lints
+        .lints()
         .iter()
         .filter(|d| d.plain_message() == "Unused function")
         .collect();
@@ -14540,7 +14540,7 @@ fn main() {}
         unused_functions.len(),
         1,
         "allow in main.lis must suppress only allowed_helper, leaving warned_helper in other.lis: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -14563,11 +14563,11 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .lints
+            .lints()
             .iter()
             .any(|d| d.lint_name() == Some("non_pascal_case_type")),
         "reference-graph allow scoping must not silence AST-walk naming lints: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -14594,11 +14594,11 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .lints
+            .lints()
             .iter()
             .any(|d| d.lint_name() == Some("internal_type_leak")),
         "allow must not suppress the internal_type_leak guardrail: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -16581,14 +16581,14 @@ fn main() {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "unexpected errors: {:?}",
-        result.errors
+        result.errors()
     );
     assert!(
-        result.lints.is_empty(),
+        result.lints().is_empty(),
         "import used only in a qualified tuple-variant pattern should produce no lints: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -16631,14 +16631,14 @@ fn main() {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "unexpected errors: {:?}",
-        result.errors
+        result.errors()
     );
     assert!(
-        result.lints.is_empty(),
+        result.lints().is_empty(),
         "import used only in a qualified struct-variant pattern should produce no lints: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -16680,14 +16680,14 @@ fn main() {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "unexpected errors: {:?}",
-        result.errors
+        result.errors()
     );
     assert!(
-        result.lints.is_empty(),
+        result.lints().is_empty(),
         "import used only in a qualified struct pattern should produce no lints: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -16725,11 +16725,11 @@ fn main() {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "unexpected errors: {:?}",
-        result.errors
+        result.errors()
     );
-    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    let codes: Vec<&str> = result.lints().iter().filter_map(|l| l.code_str()).collect();
     assert!(
         !codes.contains(&"lint.unused_import"),
         "models import is used in the pattern and must not be flagged: {codes:?}"
@@ -16777,11 +16777,11 @@ fn main() {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "unexpected errors: {:?}",
-        result.errors
+        result.errors()
     );
-    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    let codes: Vec<&str> = result.lints().iter().filter_map(|l| l.code_str()).collect();
     assert!(
         !codes.contains(&"lint.unused_import"),
         "tvcall import is used and must not be flagged: {codes:?}"
@@ -16826,11 +16826,11 @@ fn main() {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "unexpected errors: {:?}",
-        result.errors
+        result.errors()
     );
-    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    let codes: Vec<&str> = result.lints().iter().filter_map(|l| l.code_str()).collect();
     assert!(
         !codes.contains(&"lint.unused_import"),
         "tvcall import is used and must not be flagged: {codes:?}"
@@ -16864,11 +16864,11 @@ fn main() {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "unexpected errors: {:?}",
-        result.errors
+        result.errors()
     );
-    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    let codes: Vec<&str> = result.lints().iter().filter_map(|l| l.code_str()).collect();
     assert!(
         !codes.contains(&"lint.unused_import"),
         "limits import is used and must not be flagged: {codes:?}"
@@ -16924,11 +16924,11 @@ fn main() {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "unexpected errors: {:?}",
-        result.errors
+        result.errors()
     );
-    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    let codes: Vec<&str> = result.lints().iter().filter_map(|l| l.code_str()).collect();
     assert!(
         !codes.contains(&"lint.unused_import"),
         "foreign import is used and must not be flagged: {codes:?}"
@@ -16995,11 +16995,11 @@ fn main() {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "unexpected errors: {:?}",
-        result.errors
+        result.errors()
     );
-    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    let codes: Vec<&str> = result.lints().iter().filter_map(|l| l.code_str()).collect();
     assert!(
         !codes.contains(&"lint.unused_import"),
         "foreign import is used and must not be flagged: {codes:?}"
@@ -17079,11 +17079,11 @@ fn main() {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "unexpected errors: {:?}",
-        result.errors
+        result.errors()
     );
-    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    let codes: Vec<&str> = result.lints().iter().filter_map(|l| l.code_str()).collect();
     assert!(
         !codes.contains(&"lint.unused_import"),
         "shapes import is used in the bound and must not be flagged: {codes:?}"
@@ -17129,11 +17129,11 @@ fn main() {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "unexpected errors: {:?}",
-        result.errors
+        result.errors()
     );
-    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    let codes: Vec<&str> = result.lints().iter().filter_map(|l| l.code_str()).collect();
     assert!(
         !codes.contains(&"lint.unused_import"),
         "shapes import is used in the bound and must not be flagged: {codes:?}"
@@ -17468,11 +17468,11 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         !result
-            .lints
+            .lints()
             .iter()
             .any(|d| d.plain_message() == "Exact float comparison"),
         "float_cmp must not fire on a checker-rejected newtype comparison: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -17646,11 +17646,11 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         !result
-            .lints
+            .lints()
             .iter()
             .any(|d| d.plain_message() == "Float equality without `abs`"),
         "must not fire on a checker-rejected newtype subtraction: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -17711,11 +17711,11 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         !result
-            .lints
+            .lints()
             .iter()
             .any(|d| d.plain_message() == "Exact float comparison"),
         "must not fire on a checker-rejected plain-vs-newtype comparison: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -18431,7 +18431,7 @@ fn main() {
 
     let result = compile_check(fs);
     let map_unwrap_or = result
-        .lints
+        .lints()
         .iter()
         .filter(|l| l.code_str() == Some("lint.map_unwrap_or"))
         .count();
@@ -18440,7 +18440,7 @@ fn main() {
         0,
         "`map_or` reorders the default before the mapper, unsound when the default does work: {:?}",
         result
-            .lints
+            .lints()
             .iter()
             .filter_map(|l| l.code_str())
             .collect::<Vec<_>>()
@@ -18773,7 +18773,7 @@ fn main() {
 
     let result = compile_check(fs);
     let map_or_none = result
-        .lints
+        .lints()
         .iter()
         .filter(|l| l.code_str() == Some("lint.map_or_none"))
         .count();
@@ -18782,7 +18782,7 @@ fn main() {
         0,
         "`.ok()` would discard the upcast to `Option<Printable>`: {:?}",
         result
-            .lints
+            .lints()
             .iter()
             .filter_map(|l| l.code_str())
             .collect::<Vec<_>>()
@@ -19291,12 +19291,12 @@ fn main() {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "unexpected errors: {:?}",
-        result.errors
+        result.errors()
     );
     let unused_fns = result
-        .lints
+        .lints()
         .iter()
         .filter(|l| l.code_str() == Some("lint.unused_function"))
         .count();
@@ -19305,7 +19305,7 @@ fn main() {
         1,
         "only the uncalled Other.equals should be flagged: {:?}",
         result
-            .lints
+            .lints()
             .iter()
             .filter_map(|l| l.code_str())
             .collect::<Vec<_>>()
@@ -19341,11 +19341,11 @@ fn main() {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "unexpected errors: {:?}",
-        result.errors
+        result.errors()
     );
-    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    let codes: Vec<&str> = result.lints().iter().filter_map(|l| l.code_str()).collect();
     assert!(
         !codes.contains(&"lint.unused_function"),
         "Point.equals satisfies Eq and must not be flagged unused: {codes:?}"
@@ -19374,11 +19374,11 @@ fn main() {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "unexpected errors: {:?}",
-        result.errors
+        result.errors()
     );
-    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    let codes: Vec<&str> = result.lints().iter().filter_map(|l| l.code_str()).collect();
     assert!(
         !codes.contains(&"lint.unused_function"),
         "File.close is called through a ref alias and must not be flagged unused: {codes:?}"
@@ -19419,11 +19419,11 @@ fn main() {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "unexpected errors: {:?}",
-        result.errors
+        result.errors()
     );
-    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    let codes: Vec<&str> = result.lints().iter().filter_map(|l| l.code_str()).collect();
     assert!(
         codes.contains(&"lint.unused_function"),
         "the local Inner.equals is unused: `a.equals(b)` dispatches to the imported \
@@ -19462,12 +19462,12 @@ fn main() {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "unexpected errors: {:?}",
-        result.errors
+        result.errors()
     );
     let unused_fns = result
-        .lints
+        .lints()
         .iter()
         .filter(|l| l.code_str() == Some("lint.unused_function"))
         .count();
@@ -19476,7 +19476,7 @@ fn main() {
         1,
         "Outer's hand-written equals suppresses synthesis and never calls Inner.equals, so Inner.equals must be flagged rather than rooted off the bare attribute: {:?}",
         result
-            .lints
+            .lints()
             .iter()
             .filter_map(|l| l.code_str())
             .collect::<Vec<_>>()
@@ -19511,11 +19511,11 @@ fn main() {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "unexpected errors: {:?}",
-        result.errors
+        result.errors()
     );
-    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    let codes: Vec<&str> = result.lints().iter().filter_map(|l| l.code_str()).collect();
     assert!(
         !codes.contains(&"lint.unused_function"),
         "Inner.equals is reached via equals dispatch through a ref-alias slice and must not be flagged unused: {codes:?}"
@@ -19556,12 +19556,12 @@ fn main() {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "unexpected errors: {:?}",
-        result.errors
+        result.errors()
     );
     let unused_fns = result
-        .lints
+        .lints()
         .iter()
         .filter(|l| l.code_str() == Some("lint.unused_function"))
         .count();
@@ -19570,7 +19570,7 @@ fn main() {
         1,
         "H is an opaque newtype: calling H.equals credits H.equals (keyed under H, not its underlying), and must not be treated as a container dispatch that keeps Inner.equals alive; only the uncalled Inner.equals is unused: {:?}",
         result
-            .lints
+            .lints()
             .iter()
             .filter_map(|l| l.code_str())
             .collect::<Vec<_>>()
@@ -19609,12 +19609,12 @@ fn main() {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "unexpected errors: {:?}",
-        result.errors
+        result.errors()
     );
     let unused_fns = result
-        .lints
+        .lints()
         .iter()
         .filter(|l| l.code_str() == Some("lint.unused_function"))
         .count();
@@ -19623,7 +19623,7 @@ fn main() {
         1,
         "expected only the unrelated Other.equals flagged: {:?}",
         result
-            .lints
+            .lints()
             .iter()
             .filter_map(|l| l.code_str())
             .collect::<Vec<_>>()
@@ -19661,12 +19661,12 @@ fn main() {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "unexpected errors: {:?}",
-        result.errors
+        result.errors()
     );
     let unused_fns = result
-        .lints
+        .lints()
         .iter()
         .filter(|l| l.code_str() == Some("lint.unused_function"))
         .count();
@@ -19675,7 +19675,7 @@ fn main() {
         1,
         "Wrap.equals dispatches to Holder.equals (kept), which never calls Leaf.equals; only Leaf.equals must be flagged, not rooted through Holder's type argument: {:?}",
         result
-            .lints
+            .lints()
             .iter()
             .filter_map(|l| l.code_str())
             .collect::<Vec<_>>()
@@ -19711,11 +19711,11 @@ fn main() {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "unexpected errors: {:?}",
-        result.errors
+        result.errors()
     );
-    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    let codes: Vec<&str> = result.lints().iter().filter_map(|l| l.code_str()).collect();
     assert!(
         !codes.contains(&"lint.unused_function"),
         "Point.equals satisfies Eq and must not be flagged unused: {codes:?}"
@@ -19744,11 +19744,11 @@ fn main() {}
     fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
 
     let result = compile_check(fs);
-    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    let codes: Vec<&str> = result.lints().iter().filter_map(|l| l.code_str()).collect();
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "alpha-equivalent impl bound must be accepted: {:?} {codes:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -19787,11 +19787,11 @@ fn main() {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "unexpected errors: {:?}",
-        result.errors
+        result.errors()
     );
-    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    let codes: Vec<&str> = result.lints().iter().filter_map(|l| l.code_str()).collect();
     assert!(
         codes.contains(&"lint.unused_function"),
         "local Inner.equals is unused: Wrap dispatches to the imported models.Inner.equals, \
@@ -19821,11 +19821,11 @@ fn main() {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "unexpected errors: {:?}",
-        result.errors
+        result.errors()
     );
-    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    let codes: Vec<&str> = result.lints().iter().filter_map(|l| l.code_str()).collect();
     assert!(
         codes.contains(&"lint.unused_function"),
         "the struct T's equals is unused: the field's `T` is a generic parameter, not the \
@@ -19867,11 +19867,11 @@ fn main() {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "unexpected errors: {:?}",
-        result.errors
+        result.errors()
     );
-    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    let codes: Vec<&str> = result.lints().iter().filter_map(|l| l.code_str()).collect();
     assert!(
         codes.contains(&"lint.unused_function"),
         "local Inner.equals is unused: the slice elements are imported models.Inner, so \
@@ -20172,11 +20172,11 @@ pub fn f(c: int) -> int {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "the checker keys opaque consts by name, so it accepts this match: {:?}",
-        result.errors
+        result.errors()
     );
-    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    let codes: Vec<&str> = result.lints().iter().filter_map(|l| l.code_str()).collect();
     assert!(
         !codes.contains(&"lint.match_same_arms"),
         "codes.A and codes.B share the value BASE, so merging codes.C | codes.B over \
@@ -20219,11 +20219,11 @@ pub fn f(o: Option<int>) -> int {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "the `as` arm is valid: {:?}",
-        result.errors
+        result.errors()
     );
-    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    let codes: Vec<&str> = result.lints().iter().filter_map(|l| l.code_str()).collect();
     assert!(
         !codes.contains(&"lint.match_same_arms"),
         "merging `Some(2)` into the `Some(0) as x` arm would yield the malformed \
@@ -20555,7 +20555,7 @@ pub fn f(s: Single) {
     fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
 
     let result = compile_check(fs);
-    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    let codes: Vec<&str> = result.lints().iter().filter_map(|l| l.code_str()).collect();
     assert!(
         !codes.contains(&"lint.while_let_loop"),
         "a single-variant enum makes the variant pattern irrefutable, so the \
@@ -20696,7 +20696,7 @@ fn main() {
     fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
 
     let result = compile_check(fs);
-    let codes: Vec<&str> = result.lints.iter().filter_map(|l| l.code_str()).collect();
+    let codes: Vec<&str> = result.lints().iter().filter_map(|l| l.code_str()).collect();
     assert!(
         !codes.contains(&"lint.redundant_rebinding"),
         "an unused rebinding is owned by `unused_variable`, which gives the same \

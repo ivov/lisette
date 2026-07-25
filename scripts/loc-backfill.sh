@@ -3,7 +3,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-out=${1:?usage: scripts/loc-backfill.sh <output-data.js>}
+out=${1:?usage: scripts/loc-backfill.sh <output-data.js> [existing-data.js]}
+existing=${2:-}
 
 workdir=$(mktemp -d)
 trap 'rm -rf "$workdir"' EXIT
@@ -11,14 +12,21 @@ trap 'rm -rf "$workdir"' EXIT
 entries="$workdir/entries.ndjson"
 : > "$entries"
 
-for sha in $(git log --first-parent --reverse main --date=format:'%G-%V %Y-%m' --format='%H %cd' |
+sampled="$workdir/sampled.txt"
+: > "$sampled"
+if [ -n "$existing" ]; then
+  sed '1s/^window.BENCHMARK_DATA = //' "$existing" > "$workdir/existing.json"
+  jq -r '.entries["production-loc"][].commit.id' "$workdir/existing.json" > "$sampled"
+fi
+
+for sha in $(TZ=UTC git log --first-parent --reverse main --date=format-local:'%G-%V %Y-%m' --format='%H %cd' |
   awk '
-    { order[NR] = $1; if (!($2 in week_first)) week_first[$2] = $1; month_last[$3] = $1 }
+    { order[NR] = $1; week_last[$2] = $1; month_last[$3] = $1 }
     END {
-      for (w in week_first) keep[week_first[w]]
+      for (w in week_last) keep[week_last[w]]
       for (m in month_last) keep[month_last[m]]
       for (i = 1; i <= NR; i++) if (order[i] in keep) print order[i]
-    }'); do
+    }' | { grep -v -x -F -f "$sampled" || true; }); do
   tree="$workdir/tree"
   mkdir "$tree"
   git archive "$sha" | tar -x -C "$tree"
@@ -52,9 +60,17 @@ for sha in $(git log --first-parent --reverse main --date=format:'%G-%V %Y-%m' -
   echo "counted $sha" >&2
 done
 
+counted=$(jq -s . "$entries")
+if [ -n "$existing" ]; then
+  merged=$(jq --argjson counted "$counted" \
+    '.entries["production-loc"] |= ((. + $counted) | sort_by(.date))' "$workdir/existing.json")
+else
+  merged=$(jq -n --argjson entries "$counted" \
+    '{lastUpdate: 0, repoUrl: "https://github.com/ivov/lisette",
+      entries: {"production-loc": $entries}}')
+fi
+
 {
   printf 'window.BENCHMARK_DATA = '
-  jq -n --argjson entries "$(jq -s . "$entries")" \
-    '{lastUpdate: 0, repoUrl: "https://github.com/ivov/lisette",
-      entries: {"production-loc": $entries}}'
+  printf '%s' "$merged"
 } > "$out"

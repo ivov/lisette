@@ -221,6 +221,7 @@ impl MutationInfo {
     }
 }
 
+#[derive(Default)]
 pub struct EmitInput {
     pub files: HashMap<u32, File>,
     pub definitions: HashMap<Symbol, Definition>,

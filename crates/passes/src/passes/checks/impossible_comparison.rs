@@ -5,7 +5,7 @@ use crate::passes::comparison::{
 use crate::passes::walk::NodeCtx;
 use syntax::ast::{BinaryOperator, Expression, Span, UnaryOperator};
 
-pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
+pub(crate) fn check(expression: &Expression, ctx: &mut NodeCtx) {
     let Expression::Binary {
         operator: BinaryOperator::And,
         span: root_span,
@@ -16,7 +16,7 @@ pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
     };
 
     // A nested `&&` is covered by the outermost chain that encloses it.
-    if ctx.claimed_spans.borrow().contains(root_span) {
+    if ctx.claimed_spans.contains(root_span) {
         return;
     }
 
@@ -67,7 +67,7 @@ fn collect_conjuncts<'a>(
     expression: &'a Expression,
     root_span: &Span,
     conjuncts: &mut Vec<&'a Expression>,
-    ctx: &NodeCtx,
+    ctx: &mut NodeCtx,
 ) {
     match expression.unwrap_parens() {
         Expression::Binary {
@@ -78,7 +78,7 @@ fn collect_conjuncts<'a>(
             ..
         } => {
             if span != root_span {
-                ctx.claimed_spans.borrow_mut().insert(*span);
+                ctx.claimed_spans.insert(*span);
             }
             collect_conjuncts(left, root_span, conjuncts, ctx);
             collect_conjuncts(right, root_span, conjuncts, ctx);

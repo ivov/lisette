@@ -82,13 +82,22 @@ func generateRustIndexFile(outDir string, partition partitioned, targets []Targe
 		return nil
 	}
 
-	commonPaths := sortedKeys(partition.common)
+	var commonPaths []string
+	for pkgPath, pkg := range partition {
+		if len(pkg.variants) == 1 {
+			commonPaths = append(commonPaths, pkgPath)
+		}
+	}
+	slices.Sort(commonPaths)
 	commonEntries := buildEntries(commonPaths, nil)
 
 	// Invert variants into per-target entries pointing at canonical files.
 	perTarget := make(map[Target]map[string]Target)
-	for pkgPath, variants := range partition.variants {
-		for _, v := range variants {
+	for pkgPath, pkg := range partition {
+		if len(pkg.variants) == 1 {
+			continue
+		}
+		for _, v := range pkg.variants {
 			for _, t := range v.targets {
 				if perTarget[t] == nil {
 					perTarget[t] = make(map[string]Target)
@@ -115,10 +124,10 @@ func generateRustIndexFile(outDir string, partition partitioned, targets []Targe
 		overlayBlocks.WriteString(buildEntries(paths, entries))
 		overlayBlocks.WriteString("    ])\n});\n\n")
 
-		fmt.Fprintf(&matchArms, "        (%q, %q) => Some(&%s),\n", target.GOOS, target.GOARCH, staticName)
+		fmt.Fprintf(&matchArms, "        (%q, %q) => Some(&%s),\n", target.goos, target.goarch, staticName)
 	}
 
-	intendedEntries := buildIntendedEntries(partition.intendedTargets)
+	intendedEntries := buildIntendedEntries(partition, len(targets))
 
 	content := fmt.Sprintf(rustIndexFileTemplate,
 		commonEntries,
@@ -134,15 +143,6 @@ func generateRustIndexFile(outDir string, partition partitioned, targets []Targe
 
 	fmt.Fprintf(os.Stderr, "\nGenerated: %s\n", rustFilePath)
 	return nil
-}
-
-func sortedKeys(m map[string]string) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-	return keys
 }
 
 // buildEntries renders HashMap entries for a typedef map. When `canonical`
@@ -163,27 +163,29 @@ func buildEntries(pkgPaths []string, canonical map[string]Target) string {
 	return b.String()
 }
 
-func buildIntendedEntries(intended map[string][]Target) string {
-	pkgs := make([]string, 0, len(intended))
-	for pkg := range intended {
-		pkgs = append(pkgs, pkg)
+func buildIntendedEntries(partition partitioned, targetCount int) string {
+	var pkgs []string
+	for pkgPath, pkg := range partition {
+		if len(pkg.targets) < targetCount {
+			pkgs = append(pkgs, pkgPath)
+		}
 	}
 	slices.Sort(pkgs)
 
 	var b strings.Builder
-	for _, pkg := range pkgs {
+	for _, pkgPath := range pkgs {
 		var pairs strings.Builder
-		for i, t := range intended[pkg] {
+		for i, t := range partition[pkgPath].targets {
 			if i > 0 {
 				pairs.WriteString(", ")
 			}
-			fmt.Fprintf(&pairs, "(%q, %q)", t.GOOS, t.GOARCH)
+			fmt.Fprintf(&pairs, "(%q, %q)", t.goos, t.goarch)
 		}
-		fmt.Fprintf(&b, "            (%q, &[%s][..]),\n", pkg, pairs.String())
+		fmt.Fprintf(&b, "            (%q, &[%s][..]),\n", pkgPath, pairs.String())
 	}
 	return b.String()
 }
 
 func overlayStaticName(target Target) string {
-	return "GO_STDLIB_" + strings.ToUpper(target.GOOS) + "_" + strings.ToUpper(target.GOARCH)
+	return "GO_STDLIB_" + strings.ToUpper(target.goos) + "_" + strings.ToUpper(target.goarch)
 }

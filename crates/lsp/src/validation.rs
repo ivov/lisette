@@ -1,5 +1,5 @@
 /// All keywords, including contextual ones (`var`, `self`).
-const KEYWORDS: &[&str] = &[
+pub(crate) const KEYWORDS: &[&str] = &[
     "fn",
     "let",
     "if",

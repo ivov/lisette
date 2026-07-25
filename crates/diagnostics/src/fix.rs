@@ -35,21 +35,29 @@ impl Edit {
 #[derive(Debug, Clone)]
 pub struct Fix {
     message: String,
-    edits: Vec<Edit>,
+    first: Edit,
+    rest: Box<[Edit]>,
 }
 
 impl Fix {
     pub fn new(message: impl Into<String>, edit: Edit) -> Self {
         Self {
             message: message.into(),
-            edits: vec![edit],
+            first: edit,
+            rest: Box::default(),
         }
     }
 
-    pub fn multi(message: impl Into<String>, edits: Vec<Edit>) -> Self {
+    pub fn multi(message: impl Into<String>, first: Edit, rest: Vec<Edit>) -> Self {
+        assert!(
+            rest.iter()
+                .all(|edit| edit.span.file_id == first.span.file_id),
+            "one fix cannot edit multiple files",
+        );
         Self {
             message: message.into(),
-            edits,
+            first,
+            rest: rest.into_boxed_slice(),
         }
     }
 
@@ -57,8 +65,20 @@ impl Fix {
         &self.message
     }
 
-    pub fn edits(&self) -> &[Edit] {
-        &self.edits
+    pub fn edits(&self) -> impl Iterator<Item = &Edit> + Clone {
+        std::iter::once(&self.first).chain(self.rest.iter())
+    }
+
+    pub(crate) fn file_id(&self) -> u32 {
+        self.first.span.file_id
+    }
+
+    fn earliest_offset(&self) -> u32 {
+        self.rest
+            .iter()
+            .fold(self.first.span.byte_offset, |offset, edit| {
+                offset.min(edit.span.byte_offset)
+            })
     }
 }
 
@@ -73,27 +93,26 @@ pub struct FixApplicationOutcome {
 /// (boundary adjacency counts as overlap), else the whole fix is skipped and stays
 /// reported on the next run.
 pub fn apply_fixes(source: &str, mut fixes: Vec<&Fix>) -> FixApplicationOutcome {
-    fixes.sort_by_key(|fix| fix.edits().iter().map(|edit| edit.span().byte_offset).min());
+    fixes.sort_by_key(|fix| fix.earliest_offset());
 
     let mut accepted: Vec<&Edit> = Vec::new();
     let mut applied = 0;
 
     for fix in fixes {
-        let edits = fix.edits();
         // A fix's own edits are authored together, so adjacent ones concatenate.
         // Only edits that share a byte genuinely conflict.
-        let internally_clear = edits.iter().enumerate().all(|(i, a)| {
-            edits[i + 1..]
-                .iter()
+        let internally_clear = fix.edits().enumerate().all(|(i, a)| {
+            fix.edits()
+                .skip(i + 1)
                 .all(|b| !spans_share_byte(a.span(), b.span()))
         });
-        let clear_of_accepted = edits.iter().all(|edit| {
+        let clear_of_accepted = fix.edits().all(|edit| {
             accepted
                 .iter()
                 .all(|other| !spans_overlap(edit.span(), other.span()))
         });
         if internally_clear && clear_of_accepted {
-            accepted.extend(edits);
+            accepted.extend(fix.edits());
             applied += 1;
         }
     }
@@ -175,10 +194,8 @@ mod tests {
     fn applies_all_edits_of_a_multi_edit_fix() {
         let fix = Fix::multi(
             "m",
-            vec![
-                Edit::replacement(span(0, 1), "A"),
-                Edit::replacement(span(4, 1), "E"),
-            ],
+            Edit::replacement(span(0, 1), "A"),
+            vec![Edit::replacement(span(4, 1), "E")],
         );
         let applied = apply_fixes("abcde", vec![&fix]);
         assert_eq!(applied.source, "AbcdE");
@@ -189,10 +206,8 @@ mod tests {
     fn applies_adjacent_edits_within_one_fix() {
         let fix = Fix::multi(
             "m",
-            vec![
-                Edit::replacement(span(0, 1), "X"),
-                Edit::deletion(span(1, 2)),
-            ],
+            Edit::replacement(span(0, 1), "X"),
+            vec![Edit::deletion(span(1, 2))],
         );
         let applied = apply_fixes("abcd", vec![&fix]);
         assert_eq!(applied.source, "Xd");
@@ -204,10 +219,8 @@ mod tests {
         let blocker = Fix::new("b", Edit::replacement(span(0, 1), "Z"));
         let multi = Fix::multi(
             "m",
-            vec![
-                Edit::replacement(span(0, 1), "A"),
-                Edit::replacement(span(4, 1), "E"),
-            ],
+            Edit::replacement(span(0, 1), "A"),
+            vec![Edit::replacement(span(4, 1), "E")],
         );
         let applied = apply_fixes("abcde", vec![&blocker, &multi]);
         assert_eq!(applied.source, "Zbcde");
@@ -222,6 +235,16 @@ mod tests {
         assert!(
             !syntax::build_ast(&applied.source, 0).errors.is_empty(),
             "the CLI write-gate relies on build_ast rejecting malformed fix output"
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "one fix cannot edit multiple files")]
+    fn rejects_edits_in_different_files() {
+        let _ = Fix::multi(
+            "invalid",
+            Edit::deletion(Span::new(0, 0, 1)),
+            vec![Edit::deletion(Span::new(1, 0, 1))],
         );
     }
 }

@@ -22,13 +22,13 @@ use semantics::store::{ClosedDomain, ClosedMember, DomainValue, Store};
 /// negation. The visitor walks parents before children, so the negation arm
 /// claims its magnitude before the literal arm reaches it; this stops `-1` from
 /// being judged on the magnitude `1` alone.
-pub fn check_out_of_domain_value(expression: &Expression, ctx: &NodeCtx) {
+pub fn check_out_of_domain_value(expression: &Expression, ctx: &mut NodeCtx) {
     match expression {
         Expression::Literal { literal, ty, span } => {
             let Some(domain) = closed_domain_of(ty, ctx.store) else {
                 return;
             };
-            if ctx.claimed_spans.borrow().contains(span) {
+            if ctx.claimed_spans.contains(span) {
                 return;
             }
             let Some(value) = DomainValue::from_literal(literal, domain.base) else {
@@ -51,7 +51,7 @@ pub fn check_out_of_domain_value(expression: &Expression, ctx: &NodeCtx) {
             let Some((value, magnitude_span)) = negative_value(inner, domain.base) else {
                 return;
             };
-            ctx.claimed_spans.borrow_mut().insert(magnitude_span);
+            ctx.claimed_spans.insert(magnitude_span);
             if !is_member(domain, &value) {
                 emit(*span, domain, ctx);
             }

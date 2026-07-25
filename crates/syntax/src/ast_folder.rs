@@ -1,6 +1,5 @@
 use crate::ast::{
-    Expression, FormatStringPart, IfLetAlternative, MatchArm, SelectArm, SelectArmPattern,
-    StructSpread,
+    Expression, FormatStringPart, IfLetAlternative, MatchArm, SelectArm, StructSpread,
 };
 
 pub(crate) trait AstFolder {
@@ -524,37 +523,36 @@ pub(crate) trait AstFolder {
     }
 
     fn fold_select_arm(&mut self, arm: SelectArm) -> SelectArm {
-        let pattern = match arm.pattern {
-            SelectArmPattern::Receive {
+        match arm {
+            SelectArm::Receive {
                 binding,
                 receive_expression,
                 body,
-            } => SelectArmPattern::Receive {
+            } => SelectArm::Receive {
                 binding,
                 receive_expression: Box::new(self.fold_expression(*receive_expression)),
                 body: Box::new(self.fold_expression(*body)),
             },
-            SelectArmPattern::Send {
+            SelectArm::Send {
                 send_expression,
                 body,
-            } => SelectArmPattern::Send {
+            } => SelectArm::Send {
                 send_expression: Box::new(self.fold_expression(*send_expression)),
                 body: Box::new(self.fold_expression(*body)),
             },
-            SelectArmPattern::MatchReceive {
+            SelectArm::MatchReceive {
                 receive_expression,
                 arms,
-            } => SelectArmPattern::MatchReceive {
+            } => SelectArm::MatchReceive {
                 receive_expression: Box::new(self.fold_expression(*receive_expression)),
                 arms: arms
                     .into_iter()
                     .map(|arm| self.fold_match_arm(arm))
                     .collect(),
             },
-            SelectArmPattern::WildCard { body } => SelectArmPattern::WildCard {
+            SelectArm::WildCard { body } => SelectArm::WildCard {
                 body: Box::new(self.fold_expression(*body)),
             },
-        };
-        SelectArm { pattern }
+        }
     }
 }

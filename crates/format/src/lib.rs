@@ -18,12 +18,12 @@ pub fn format_source(source: &str) -> Result<String, Vec<ParseError>> {
         return Err(lex_result.errors);
     }
 
+    let comments = Comments::from_lexed(&lex_result.tokens, lex_result.blank_lines, source);
     let parse_result = Parser::new(lex_result.tokens, source).parse();
     if parse_result.failed() {
         return Err(parse_result.errors);
     }
 
-    let comments = Comments::from_trivia(&lex_result.trivia, source);
     let mut formatter = Formatter::new(comments);
     let document = formatter.module(&parse_result.ast);
     let output = document.to_pretty_string(MAX_LINE_WIDTH);

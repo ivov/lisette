@@ -53,23 +53,9 @@ pub fn load(target_dir: &Path) -> HashSet<(String, String)> {
 mod tests {
     use super::*;
     use crate::handlers::test::report::Status;
-    use syntax::ast::Span;
 
     fn row(package: &str, go_name: &str, status: Status) -> TestRow {
-        TestRow {
-            package: package.into(),
-            go_name: go_name.into(),
-            name: go_name.into(),
-            description: None,
-            status,
-            elapsed: None,
-            output: String::new(),
-            failure: None,
-            skip_reason: None,
-            logs: vec![],
-            children: vec![],
-            span: Span::new(0, 0, 0),
-        }
+        TestRow::with_status(package, go_name, status)
     }
 
     #[test]

@@ -8,7 +8,7 @@ use syntax::types::{CompoundKind, Symbol, Type};
 
 use crate::passes::walk::NodeCtx;
 
-pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
+pub(crate) fn check(expression: &Expression, ctx: &mut NodeCtx) {
     match expression {
         Expression::Let { binding, value, .. } => {
             if binding.annotation.is_some()
@@ -18,7 +18,7 @@ pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
                     ..
                 } = value.unwrap_parens()
             {
-                ctx.claimed_spans.borrow_mut().insert(*span);
+                ctx.claimed_spans.insert(*span);
             }
         }
         Expression::Call {
@@ -27,7 +27,7 @@ pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
             span,
             ..
         } => {
-            if ctx.claimed_spans.borrow().contains(span) {
+            if ctx.claimed_spans.contains(span) {
                 return;
             }
             report_bad_map_key(ctx.store, ty, *span, ctx.sink, &mut HashSet::default());

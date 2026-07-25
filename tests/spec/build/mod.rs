@@ -730,12 +730,13 @@ fn main() {
 
     let result = compile_check(fs);
 
-    assert_eq!(result.errors.len(), 1, "Expected exactly one error");
+    assert_eq!(result.errors().len(), 1, "Expected exactly one error");
 
-    let error = &result.errors[0];
+    let error = &result.errors()[0];
     let file_id = error.file_id().expect("Error should have a file_id");
 
     let file = result
+        .emit_input
         .files
         .get(&file_id)
         .expect("file_id should exist in files map");
@@ -848,9 +849,9 @@ fn main() {
     let result = compile_check(fs);
 
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "Expected no errors when matching enum variants with qualified names, got: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -893,14 +894,14 @@ fn main() {
     let result = compile_check(fs);
 
     let has_exhaustiveness_error = result
-        .errors
+        .errors()
         .iter()
         .any(|e| e.to_string().to_lowercase().contains("not exhaustive"));
 
     assert!(
         has_exhaustiveness_error,
         "Expected non-exhaustive pattern error, got: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -934,20 +935,20 @@ fn main() {
     let result = compile_check(fs);
 
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "Expected no errors, got: {:?}",
-        result.errors
+        result.errors()
     );
 
     let has_unused_warning = result
-        .lints
+        .lints()
         .iter()
         .any(|l| l.to_string().to_lowercase().contains("unused"));
 
     assert!(
         has_unused_warning,
         "Expected unused variable warning in dependency module, got lints: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -989,13 +990,13 @@ fn main() {
     let result = compile_check(fs);
 
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "Expected no errors, got: {:?}",
-        result.errors
+        result.errors()
     );
 
     let unused_warnings: Vec<_> = result
-        .lints
+        .lints()
         .iter()
         .filter(|l| l.to_string().to_lowercase().contains("unused"))
         .collect();
@@ -2396,9 +2397,9 @@ fn main() {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "Expected no errors, got: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -2435,11 +2436,11 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|e| e.code_str() == Some("infer.type_mismatch")),
         "Expected type_mismatch error for covariant generics, got: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -2669,12 +2670,12 @@ fn shadowing_prelude_types_is_forbidden() {
         let result = compile_check(fs);
         assert!(
             result
-                .errors
+                .errors()
                 .iter()
                 .any(|e| e.code_str() == Some("infer.prelude_type_shadowed")),
             "Expected prelude shadowing error for `{}`, got: {:?}",
             type_name,
-            result.errors
+            result.errors()
         );
     }
 }
@@ -2720,12 +2721,12 @@ fn shadowing_prelude_functions_is_forbidden() {
         let result = compile_check(fs);
         assert!(
             result
-                .errors
+                .errors()
                 .iter()
                 .any(|e| e.code_str() == Some("infer.prelude_function_shadowed")),
             "Expected prelude shadowing error for `{}`, got: {:?}",
             fn_name,
-            result.errors
+            result.errors()
         );
     }
 }
@@ -3179,14 +3180,14 @@ fn main() {
     let result = compile_check(fs);
 
     let has_unknown_error = result
-        .errors
+        .errors()
         .iter()
         .any(|e| e.to_string().contains("Unknown"));
 
     assert!(
         has_unknown_error,
         "Expected cannot_match_on_unknown error, got: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -3306,11 +3307,11 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|e| e.code_str() == Some("infer.immutable_arg_to_mut_param")),
         "Expected immutable_arg_to_mut_param error, got: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -3355,11 +3356,11 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|e| e.code_str() == Some("infer.type_mismatch")),
         "Expected type_mismatch error, got: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -4141,9 +4142,9 @@ fn main() {
 
     let result = compile_check_standalone(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "Expected no errors in standalone check, got: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -4180,14 +4181,14 @@ import "mod"
     let result = compile_check(fs);
 
     let has_cycle_error = result
-        .errors
+        .errors()
         .iter()
         .any(|e| e.to_string().contains("Import cycle"));
 
     assert!(
         has_cycle_error,
         "Expected import cycle error, got: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -4228,9 +4229,9 @@ fn main() {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "Expected no errors, got: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -4256,9 +4257,9 @@ pub fn bazzle(f: Foo) {
 
     let result = compile_check(fs);
     assert!(
-        result.errors.is_empty(),
+        result.errors().is_empty(),
         "Expected no errors, got: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -4277,9 +4278,9 @@ fn main() {}
     fs.add_file("./sub", "lib.lis", "pub struct Foo {}\n");
 
     let result = compile_check(fs);
-    assert_eq!(result.errors.len(), 1);
+    assert_eq!(result.errors().len(), 1);
     assert_eq!(
-        result.errors[0].code_str(),
+        result.errors()[0].code_str(),
         Some("resolve.invalid_module_path")
     );
 }
@@ -4300,12 +4301,12 @@ fn main() {}
         fs,
         locator_with_go_dep("github.com/gin-gonic/gin", "v1.12.0"),
     );
-    assert_eq!(result.errors.len(), 1);
+    assert_eq!(result.errors().len(), 1);
     assert_eq!(
-        result.errors[0].code_str(),
+        result.errors()[0].code_str(),
         Some("resolve.missing_go_prefix")
     );
-    let rendered = result.errors[0].plain_help().unwrap_or_default();
+    let rendered = result.errors()[0].plain_help().unwrap_or_default();
     assert!(
         rendered.contains("import \"go:github.com/gin-gonic/gin\""),
         "expected suggestion in help, got: {}",
@@ -4329,12 +4330,12 @@ fn main() {}
         fs,
         locator_with_go_dep("github.com/gin-gonic/gin", "v1.12.0"),
     );
-    assert_eq!(result.errors.len(), 1);
+    assert_eq!(result.errors().len(), 1);
     assert_eq!(
-        result.errors[0].code_str(),
+        result.errors()[0].code_str(),
         Some("resolve.missing_go_prefix")
     );
-    let rendered = result.errors[0].plain_help().unwrap_or_default();
+    let rendered = result.errors()[0].plain_help().unwrap_or_default();
     assert!(
         rendered.contains("import \"go:github.com/gin-gonic/gin/render\""),
         "expected suggestion in help, got: {}",
@@ -4358,12 +4359,12 @@ fn main() {}
         fs,
         locator_with_go_dep("github.com/gin-gonic/gin", "v1.12.0"),
     );
-    assert_eq!(result.errors.len(), 1);
+    assert_eq!(result.errors().len(), 1);
     assert_eq!(
-        result.errors[0].code_str(),
+        result.errors()[0].code_str(),
         Some("resolve.missing_go_prefix")
     );
-    let rendered = result.errors[0].plain_help().unwrap_or_default();
+    let rendered = result.errors()[0].plain_help().unwrap_or_default();
     assert!(
         rendered.contains("import _ \"go:github.com/gin-gonic/gin\""),
         "expected blank-preserving suggestion in help, got: {}",
@@ -4386,7 +4387,7 @@ fn main() {}
 
     let result = compile_check(fs);
     let blank_errors: Vec<_> = result
-        .errors
+        .errors()
         .iter()
         .filter(|e| e.code_str() == Some("resolve.blank_import_non_go"))
         .collect();
@@ -4394,7 +4395,7 @@ fn main() {}
         blank_errors.len(),
         1,
         "expected single blank_import_non_go diagnostic, got: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -4414,7 +4415,7 @@ fn main() {}
         fs,
         locator_with_go_dep("github.com/gin-gonic/gin", "v1.12.0"),
     );
-    let codes: Vec<_> = result.errors.iter().map(|e| e.code_str()).collect();
+    let codes: Vec<_> = result.errors().iter().map(|e| e.code_str()).collect();
     assert!(
         codes.contains(&Some("resolve.invalid_module_path")),
         "expected invalid_module_path, got: {:?}",
@@ -4447,9 +4448,9 @@ fn main() {}
         fs,
         locator_with_go_dep("github.com/gin-gonic/gin", "v1.12.0"),
     );
-    assert_eq!(result.errors.len(), 1);
+    assert_eq!(result.errors().len(), 1);
     assert_eq!(
-        result.errors[0].code_str(),
+        result.errors()[0].code_str(),
         Some("resolve.invalid_module_path")
     );
 }
@@ -6529,6 +6530,7 @@ fn main() {
     let result = compile_check(fs);
 
     let displays: Vec<&str> = result
+        .emit_input
         .files
         .values()
         .map(|f| f.display_path.as_str())
@@ -6538,7 +6540,12 @@ fn main() {
         "module file must carry its relative path on display_path; got: {displays:?}"
     );
 
-    let names: Vec<&str> = result.files.values().map(|f| f.name.as_str()).collect();
+    let names: Vec<&str> = result
+        .emit_input
+        .files
+        .values()
+        .map(|f| f.name.as_str())
+        .collect();
     assert!(
         names.contains(&"greet.lis"),
         "module file must keep bare identity name; got: {names:?}"
@@ -7859,11 +7866,11 @@ fn main() {
     let result = compile_check(fs);
 
     assert!(
-        result.errors.iter().any(|d| d
+        result.errors().iter().any(|d| d
             .code_str()
             .is_some_and(|c| c.contains("test_impl_on_production_type"))),
         "the test-impl restriction must fire even when modules register in parallel, got: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -7884,12 +7891,12 @@ fn private_test_interface_does_not_flag_production_method() {
     let result = compile_check(fs);
 
     assert!(
-        !result.errors.iter().any(|d| d
+        !result.errors().iter().any(|d| d
             .code_str()
             .is_some_and(|c| c.contains("non_pub_interface_pub_impl"))),
         "a private interface in a test file must not flag a production public method, got: {:?}",
         result
-            .errors
+            .errors()
             .iter()
             .filter_map(|d| d.code_str().map(str::to_string))
             .collect::<Vec<_>>()
@@ -7908,12 +7915,12 @@ fn underscore_test_suffix_rejected_as_entry_file() {
     let result = compile_standalone_entry(fs, "helpers_test.lis", CompilePhase::Check);
 
     assert!(
-        result.errors.iter().any(|d| d
+        result.errors().iter().any(|d| d
             .code_str()
             .is_some_and(|c| c.contains("wrong_test_file_suffix"))),
         "a `_test.lis` entry file must be rejected, got: {:?}",
         result
-            .errors
+            .errors()
             .iter()
             .filter_map(|d| d.code_str().map(str::to_string))
             .collect::<Vec<_>>()
@@ -7928,12 +7935,12 @@ fn test_file_rejected_as_emit_entry() {
     let result = compile_standalone_entry(fs, "demo.test.lis", CompilePhase::Emit);
 
     assert!(
-        result.errors.iter().any(|d| d
+        result.errors().iter().any(|d| d
             .code_str()
             .is_some_and(|c| c.contains("cannot_emit_test_file"))),
         "a `.test.lis` entry must not be emitted as a program, got: {:?}",
         result
-            .errors
+            .errors()
             .iter()
             .filter_map(|d| d.code_str().map(str::to_string))
             .collect::<Vec<_>>()
@@ -7948,12 +7955,15 @@ fn test_file_allowed_as_check_entry() {
     let result = compile_standalone_entry(fs, "demo.test.lis", CompilePhase::Check);
 
     assert!(
-        !result.errors.iter().any(|d| d.code_str().is_some_and(|c| {
-            c.contains("wrong_test_file_suffix") || c.contains("cannot_emit_test_file")
-        })),
+        !result
+            .errors()
+            .iter()
+            .any(|d| d.code_str().is_some_and(|c| {
+                c.contains("wrong_test_file_suffix") || c.contains("cannot_emit_test_file")
+            })),
         "checking a `.test.lis` file directly must be allowed, got: {:?}",
         result
-            .errors
+            .errors()
             .iter()
             .filter_map(|d| d.code_str().map(str::to_string))
             .collect::<Vec<_>>()
@@ -7982,12 +7992,12 @@ fn test_index_records_test_functions() {
     let result = compile_check(fs);
 
     assert!(
-        !result.errors.iter().any(|d| d.is_error()),
+        !result.errors().iter().any(|d| d.is_error()),
         "no errors expected, got: {:?}",
-        result.errors
+        result.errors()
     );
 
-    let tests = result.test_index.tests();
+    let tests = result.emit_input.test_index.tests();
     assert_eq!(tests.len(), 2, "expected 2 tests, got: {tests:?}");
 
     let alpha = tests
@@ -8026,15 +8036,15 @@ fn test_index_complete_under_parallel_registration() {
     let result = compile_check(fs);
 
     assert!(
-        !result.errors.iter().any(|d| d.is_error()),
+        !result.errors().iter().any(|d| d.is_error()),
         "no errors expected, got: {:?}",
-        result.errors
+        result.errors()
     );
     assert_eq!(
-        result.test_index.tests().len(),
+        result.emit_input.test_index.tests().len(),
         4,
         "every module's test must be recorded under parallel registration, got: {:?}",
-        result.test_index.tests()
+        result.emit_input.test_index.tests()
     );
 }
 

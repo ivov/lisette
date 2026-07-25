@@ -1,14 +1,6 @@
 use crate::LisetteDiagnostic;
 use syntax::ast::Span;
 
-use crate::IssueKind;
-
-#[derive(Debug, Clone)]
-pub struct PatternIssue {
-    pub span: Span,
-    pub kind: IssueKind,
-}
-
 pub fn non_exhaustive(match_span: Span, cases: &[String]) -> LisetteDiagnostic {
     let arms: Vec<String> = cases
         .iter()
@@ -52,13 +44,18 @@ pub fn redundant_arm(
         .with_help(help)
 }
 
-pub fn refutable_pattern(
-    pattern_span: Span,
-    witness: &str,
-    slice_info: Option<(usize, bool)>,
-) -> LisetteDiagnostic {
-    let label = describe_pattern_expectation(witness, slice_info);
-    let help = build_refutability_help(witness);
+#[derive(Debug, Clone, Copy)]
+pub enum RefutablePattern<'a> {
+    ExactSlice(usize),
+    SlicePrefix(usize),
+    Some,
+    Ok,
+    Other(&'a str),
+}
+
+pub fn refutable_pattern(pattern_span: Span, pattern: RefutablePattern<'_>) -> LisetteDiagnostic {
+    let label = describe_pattern_expectation(pattern);
+    let help = build_refutability_help(pattern);
 
     LisetteDiagnostic::error("Pattern might not match")
         .with_infer_code("refutable_pattern")
@@ -66,42 +63,32 @@ pub fn refutable_pattern(
         .with_help(help)
 }
 
-fn describe_pattern_expectation(witness: &str, slice_info: Option<(usize, bool)>) -> String {
-    if witness.starts_with('[') {
-        if let Some((len, has_rest)) = slice_info {
-            if has_rest {
-                return format!("only matches {} or more elements", len);
-            }
+fn describe_pattern_expectation(pattern: RefutablePattern<'_>) -> String {
+    match pattern {
+        RefutablePattern::ExactSlice(len) => {
             let word = if len == 1 { "element" } else { "elements" };
-            return format!("only matches {} {}", len, word);
+            format!("only matches {} {}", len, word)
         }
-
-        return "only matches specific length".to_string();
+        RefutablePattern::SlicePrefix(len) => {
+            format!("only matches {} or more elements", len)
+        }
+        RefutablePattern::Some => "only matches `Some`".to_string(),
+        RefutablePattern::Ok => "only matches `Ok`".to_string(),
+        RefutablePattern::Other(witness) => format!("does not match `{}`", witness),
     }
-
-    if witness.contains("None") {
-        return "only matches `Some`".to_string();
-    }
-
-    if witness.contains("Err") {
-        return "only matches `Ok`".to_string();
-    }
-
-    format!("does not match `{}`", witness)
 }
 
-fn build_refutability_help(witness: &str) -> String {
-    if witness.starts_with('[') {
-        return r#"Use `match` to handle slices of any length:
+fn build_refutability_help(pattern: RefutablePattern<'_>) -> String {
+    match pattern {
+        RefutablePattern::ExactSlice(_) | RefutablePattern::SlicePrefix(_) => {
+            r#"Use `match` to handle slices of any length:
     match slice {
         [a, b] => ...,
         _ => ...,
     }"#
-        .to_string();
-    }
-
-    if witness.contains("None") {
-        return r#"Use `if let` to handle only `Some`:
+            .to_string()
+        }
+        RefutablePattern::Some => r#"Use `if let` to handle only `Some`:
     if let Some(x) = opt {
         ...
     }
@@ -110,11 +97,8 @@ Or use `match` to also handle `None`:
         Some(x) => ...,
         None => ...,
     }"#
-        .to_string();
-    }
-
-    if witness.contains("Err") {
-        return r#"Use `if let` to handle only `Ok`:
+        .to_string(),
+        RefutablePattern::Ok => r#"Use `if let` to handle only `Ok`:
     if let Ok(x) = result {
         ...
     }
@@ -123,11 +107,26 @@ Or use `match` to also handle `Err`:
         Ok(x) => ...,
         Err(e) => ...,
     }"#
-        .to_string();
+        .to_string(),
+        RefutablePattern::Other(witness) => format!(
+            "Use `match` to handle all cases:\n    match value {{\n        {} => ...,\n        _ => ...,\n    }}",
+            witness
+        ),
     }
+}
 
-    format!(
-        "Use `match` to handle all cases:\n    match value {{\n        {} => ...,\n        _ => ...,\n    }}",
-        witness
-    )
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn other_refutable_patterns_do_not_infer_kind_from_witness_text() {
+        let diagnostic =
+            refutable_pattern(Span::new(0, 0, 1), RefutablePattern::Other("MyNoneVariant"));
+
+        assert_eq!(
+            diagnostic.plain_label(),
+            Some("does not match `MyNoneVariant`")
+        );
+    }
 }

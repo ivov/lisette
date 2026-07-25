@@ -40,7 +40,11 @@ func ioInterfaceFromPackage(pkg *types.Package, name string) *types.Interface {
 // ReturnsToLisette converts a Go function's return types to Lisette.
 // The qualifiedName is used for config lookups (e.g. "LookupEnv" or "Rat.Float64").
 func ReturnsToLisette(signature *types.Signature, conv *Converter, qualifiedName string) TypeResult {
-	return returnsToLisetteRecursive(signature, make(map[types.Type]bool), conv, qualifiedName)
+	return returnsToLisetteRecursive(signature, make(map[types.Type]bool), conv, qualifiedName, nil)
+}
+
+func returnsToLisetteWithSubstitutions(signature *types.Signature, conv *Converter, qualifiedName string, substitutions map[string]string) TypeResult {
+	return returnsToLisetteRecursive(signature, make(map[types.Type]bool), conv, qualifiedName, substitutions)
 }
 
 // maybeWrapNilableFunction wraps function-typed returns in Option.
@@ -52,7 +56,7 @@ func ReturnsToLisette(signature *types.Signature, conv *Converter, qualifiedName
 func maybeWrapNilableFunction(t types.Type, lisetteType string, conv *Converter, qualifiedName string) (string, bool) {
 	switch t.(type) {
 	case *types.Signature:
-		if conv != nil && conv.cfg != nil && conv.cfg.IsNonNilableReturn(conv.currentPkgPath, qualifiedName) {
+		if conv != nil && conv.cfg.IsNonNilableReturn(conv.currentPkgPath, qualifiedName) {
 			return lisetteType, false
 		}
 		return optionOf(lisetteType), true
@@ -60,7 +64,7 @@ func maybeWrapNilableFunction(t types.Type, lisetteType string, conv *Converter,
 		if _, ok := t.Underlying().(*types.Signature); !ok {
 			return lisetteType, false
 		}
-		if conv != nil && conv.cfg != nil && conv.cfg.ShouldWrapNilableReturn(conv.currentPkgPath, qualifiedName) {
+		if conv != nil && conv.cfg.ShouldWrapNilableReturn(conv.currentPkgPath, qualifiedName) {
 			return optionOf(lisetteType), true
 		}
 		return lisetteType, false
@@ -69,11 +73,11 @@ func maybeWrapNilableFunction(t types.Type, lisetteType string, conv *Converter,
 	}
 }
 
-func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]bool, conv *Converter, qualifiedName string) TypeResult {
+func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]bool, conv *Converter, qualifiedName string, substitutions map[string]string) TypeResult {
 	results := signature.Results()
 
 	if results.Len() == 0 {
-		if conv != nil && conv.cfg != nil && conv.cfg.IsNeverReturn(conv.currentPkgPath, qualifiedName) {
+		if conv != nil && conv.cfg.IsNeverReturn(conv.currentPkgPath, qualifiedName) {
 			return TypeResult{LisetteType: "Never"}
 		}
 		return TypeResult{LisetteType: "()"}
@@ -81,10 +85,10 @@ func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]b
 
 	if results.Len() == 1 {
 		if isErrorType(results.At(0).Type()) {
-			if conv.cfg != nil && conv.cfg.HasDirectError(conv.currentPkgPath, qualifiedName) {
+			if conv.cfg.HasDirectError(conv.currentPkgPath, qualifiedName) {
 				return TypeResult{LisetteType: "error"}
 			}
-			if conv.cfg != nil && conv.cfg.HasNilableError(conv.currentPkgPath, qualifiedName) {
+			if conv.cfg.HasNilableError(conv.currentPkgPath, qualifiedName) {
 				return TypeResult{LisetteType: "Option<error>"}
 			}
 			if looksLikeNilableError(qualifiedName, signature) {
@@ -96,7 +100,7 @@ func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]b
 		if isPointerToErrorImpl(results.At(0).Type()) {
 			return TypeResult{LisetteType: "error", IsDirectError: true}
 		}
-		elem := toLisetteRecursive(results.At(0).Type(), seen, conv)
+		elem := toLisetteRecursive(results.At(0).Type(), seen, conv, substitutions)
 		if elem.SkipReason == nil {
 			wrapped, applied := maybeWrapNilableFunction(results.At(0).Type(), elem.LisetteType, conv, qualifiedName)
 			elem.LisetteType = wrapped
@@ -118,12 +122,12 @@ func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]b
 	}
 
 	if isErrorType(last.Type()) {
-		inner := collectReturnTypes(results, 0, results.Len()-1, seen, conv, qualifiedName)
+		inner := collectReturnTypes(results, 0, results.Len()-1, seen, conv, qualifiedName, substitutions)
 		innerType := inner.LisetteType
 		if inner.SkipReason != nil {
 			innerType = "Unknown"
 		}
-		if (conv.cfg != nil && conv.cfg.IsPartialResult(conv.currentPkgPath, qualifiedName)) ||
+		if conv.cfg.IsPartialResult(conv.currentPkgPath, qualifiedName) ||
 			isPartialIOMethod(signature, qualifiedName) {
 			return TypeResult{
 				LisetteType:          partialOf(innerType),
@@ -142,7 +146,7 @@ func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]b
 	if isBoolType(last.Type()) {
 		if shouldConvertToOption(last.Name(), conv, qualifiedName) {
 			nilable := results.Len() == 2 && isNilableGoType(results.At(0).Type())
-			inner := collectReturnTypes(results, 0, results.Len()-1, seen, conv, qualifiedName)
+			inner := collectReturnTypes(results, 0, results.Len()-1, seen, conv, qualifiedName, substitutions)
 			innerType := inner.LisetteType
 			if inner.SkipReason != nil {
 				innerType = "Unknown"
@@ -156,12 +160,12 @@ func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]b
 		}
 	}
 
-	return collectReturnTypes(results, 0, results.Len(), seen, conv, qualifiedName)
+	return collectReturnTypes(results, 0, results.Len(), seen, conv, qualifiedName, substitutions)
 }
 
 // shouldConvertToOption determines if a (T, bool) return should become Option<T>.
 func shouldConvertToOption(boolName string, conv *Converter, qualifiedName string) bool {
-	if conv.cfg != nil && conv.cfg.HasBoolAsFlag(conv.currentPkgPath, qualifiedName) {
+	if conv.cfg.HasBoolAsFlag(conv.currentPkgPath, qualifiedName) {
 		return false
 	}
 
@@ -182,7 +186,7 @@ func shouldConvertToOption(boolName string, conv *Converter, qualifiedName strin
 // crates/syntax/src/parse/mod.rs.
 const maxReturnTupleArity = 5
 
-func collectReturnTypes(results *types.Tuple, start, end int, seen map[types.Type]bool, conv *Converter, qualifiedName string) TypeResult {
+func collectReturnTypes(results *types.Tuple, start, end int, seen map[types.Type]bool, conv *Converter, qualifiedName string, substitutions map[string]string) TypeResult {
 	count := end - start
 
 	if count == 0 {
@@ -190,7 +194,7 @@ func collectReturnTypes(results *types.Tuple, start, end int, seen map[types.Typ
 	}
 
 	if count == 1 {
-		elem := toLisetteRecursive(results.At(start).Type(), seen, conv)
+		elem := toLisetteRecursive(results.At(start).Type(), seen, conv, substitutions)
 		if elem.SkipReason == nil {
 			wrapped, applied := maybeWrapNilableFunction(results.At(start).Type(), elem.LisetteType, conv, qualifiedName)
 			elem.LisetteType = wrapped
@@ -211,7 +215,7 @@ func collectReturnTypes(results *types.Tuple, start, end int, seen map[types.Typ
 	var elems []string
 	anyApplied := false
 	for i := start; i < end; i++ {
-		elem := toLisetteRecursive(results.At(i).Type(), seen, conv)
+		elem := toLisetteRecursive(results.At(i).Type(), seen, conv, substitutions)
 		if elem.SkipReason != nil {
 			return elem
 		}

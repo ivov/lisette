@@ -1716,11 +1716,11 @@ fn compile_private_function_not_accessible_via_bare_name() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|e| e.code_str() == Some("resolve.name_not_found")),
         "Expected name_not_found error for private_fn, got: {:?}",
-        result.errors
+        result.errors()
     );
 }
 

@@ -302,6 +302,8 @@ async fn completion_includes_keywords() {
     assert!(labels.iter().any(|l| l == "match"));
     assert!(labels.iter().any(|l| l == "struct"));
     assert!(labels.iter().any(|l| l == "enum"));
+    assert!(labels.iter().any(|l| l == "var"));
+    assert!(labels.iter().any(|l| l == "self"));
 
     client.shutdown().await;
 }

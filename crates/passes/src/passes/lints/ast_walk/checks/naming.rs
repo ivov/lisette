@@ -31,7 +31,7 @@ pub fn check_expression_naming<'a>(
             }
 
             if !is_d_lis {
-                for field in fields.iter().filter(|f| !f.embedded) {
+                for field in fields.iter().filter(|f| !f.is_embedded()) {
                     check_snake_case(
                         &field.name,
                         &field.name_span,

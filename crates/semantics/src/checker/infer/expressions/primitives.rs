@@ -575,7 +575,8 @@ impl InferCtx<'_> {
                     // ignored context — never fire
                 } else if matches!(expected, Type::Var { .. }) {
                     self.facts
-                        .statement_tail_checks
+                        .deferred
+                        .statement_tails
                         .push(crate::facts::StatementTailCheck {
                             expected_ty: last_item_expected_ty.clone(),
                             span: item_span,

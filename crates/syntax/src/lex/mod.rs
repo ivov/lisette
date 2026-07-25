@@ -1,5 +1,5 @@
 pub use token::{Token, TokenKind};
-pub use types::{LexResult, Trivia};
+pub use types::LexResult;
 
 use crate::parse::ParseError;
 
@@ -12,7 +12,7 @@ pub struct Lexer<'source> {
     current_offset: usize,
     file_id: u32,
     errors: Vec<ParseError>,
-    trivia: Trivia,
+    blank_lines: Vec<u32>,
     last_newline_offset: Option<usize>,
 }
 
@@ -23,7 +23,7 @@ impl<'source> Lexer<'source> {
             current_offset: 0,
             file_id,
             errors: vec![],
-            trivia: Trivia::default(),
+            blank_lines: Vec::new(),
             last_newline_offset: None,
         }
     }
@@ -57,7 +57,7 @@ impl<'source> Lexer<'source> {
         LexResult {
             tokens,
             errors: self.errors,
-            trivia: self.trivia,
+            blank_lines: self.blank_lines,
         }
     }
 
@@ -289,7 +289,7 @@ impl<'source> Lexer<'source> {
                     .chars()
                     .all(|c| c.is_ascii_whitespace() && c != '\n');
             if is_blank {
-                self.trivia.blank_lines.push(offset as u32);
+                self.blank_lines.push(offset as u32);
             }
         }
 
@@ -1345,10 +1345,6 @@ impl<'source> Lexer<'source> {
             self.skip_to_eol();
             let end_offset = self.current_offset;
 
-            self.trivia
-                .file_comments
-                .push((start_offset as u32, end_offset as u32));
-
             return Token {
                 kind: TokenKind::FileComment,
                 text: &self.input[text_start..end_offset],
@@ -1365,10 +1361,6 @@ impl<'source> Lexer<'source> {
             self.skip_to_eol();
             let end_offset = self.current_offset;
 
-            self.trivia
-                .doc_comments
-                .push((start_offset as u32, end_offset as u32));
-
             return Token {
                 kind: TokenKind::DocComment,
                 text: &self.input[text_start..end_offset],
@@ -1379,10 +1371,6 @@ impl<'source> Lexer<'source> {
 
         self.skip_to_eol();
         let end_offset = self.current_offset;
-
-        self.trivia
-            .comments
-            .push((start_offset as u32, end_offset as u32));
 
         Token {
             kind: TokenKind::Comment,

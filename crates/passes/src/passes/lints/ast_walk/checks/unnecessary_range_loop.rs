@@ -39,12 +39,11 @@ pub fn check_unnecessary_range_loop(expression: &Expression, ctx: &NodeCtx) {
     let mut walk = Walk {
         index_id,
         collection_id,
-        found: false,
-        blocked: false,
+        outcome: WalkOutcome::Searching,
     };
     walk.visit(body);
 
-    if walk.found && !walk.blocked {
+    if walk.outcome == WalkOutcome::FoundIndexing {
         ctx.sink
             .push(diagnostics::lint::unnecessary_range_loop(span, collection));
     }
@@ -90,19 +89,25 @@ fn length_receiver(expression: &Expression) -> Option<(&str, BindingId)> {
 struct Walk {
     index_id: BindingId,
     collection_id: BindingId,
-    found: bool,
-    blocked: bool,
+    outcome: WalkOutcome,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum WalkOutcome {
+    Searching,
+    FoundIndexing,
+    Blocked,
 }
 
 impl Walk {
     fn visit(&mut self, expression: &Expression) {
-        if self.blocked {
+        if self.outcome == WalkOutcome::Blocked {
             return;
         }
         match expression {
             Expression::Assignment { target, value, .. } => {
                 if touches_slice_place(target) {
-                    self.blocked = true;
+                    self.outcome = WalkOutcome::Blocked;
                     return;
                 }
                 self.visit(target);
@@ -112,7 +117,7 @@ impl Walk {
                 expression: inner, ..
             } => {
                 if touches_slice_place(inner) {
-                    self.blocked = true;
+                    self.outcome = WalkOutcome::Blocked;
                     return;
                 }
                 self.visit(inner);
@@ -122,7 +127,7 @@ impl Walk {
             | Expression::Lambda { .. }
             | Expression::Task { .. }
             | Expression::Defer { .. } => {
-                self.blocked = true;
+                self.outcome = WalkOutcome::Blocked;
             }
             Expression::IndexedAccess {
                 expression: receiver,
@@ -132,7 +137,7 @@ impl Walk {
                 if receiver.binding_id() == Some(self.collection_id)
                     && index.binding_id() == Some(self.index_id)
                 {
-                    self.found = true;
+                    self.outcome = WalkOutcome::FoundIndexing;
                     return;
                 }
                 self.visit(receiver);
@@ -140,7 +145,7 @@ impl Walk {
             }
             other => {
                 if other.binding_id() == Some(self.index_id) {
-                    self.blocked = true;
+                    self.outcome = WalkOutcome::Blocked;
                     return;
                 }
                 for child in other.children() {

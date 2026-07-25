@@ -1,28 +1,34 @@
 use crate::LisetteDiagnostic;
 use syntax::ast::Span;
 
+pub enum MissingModuleReason {
+    NotFound,
+    GoStandardLibrary,
+    Standalone,
+    UnnecessarySrcPrefix(String),
+}
+
 pub fn module_not_found(
     module_name: &str,
     span: Span,
-    is_go_stdlib: bool,
-    standalone: bool,
-    src_prefix_hint: Option<String>,
+    reason: MissingModuleReason,
 ) -> LisetteDiagnostic {
-    let help = if let Some(stripped) = src_prefix_hint {
-        format!(
+    let help = match reason {
+        MissingModuleReason::UnnecessarySrcPrefix(stripped) => format!(
             "Did you mean `import \"{}\"`? The `src/` prefix is not needed — imports are relative to the source directory.",
             stripped
-        )
-    } else if is_go_stdlib {
-        format!(
+        ),
+        MissingModuleReason::GoStandardLibrary => format!(
             "No `{}` module found in your local project. Did you mean `import \"go:{}\"` from Go's stdlib?",
             module_name, module_name
-        )
-    } else if standalone {
-        "When executing `lis run` on an individual file, that file may import only from the Go standard library. To import modules normally, use `lis new` to create a project."
-            .to_string()
-    } else {
-        "Check the module path and ensure the file exists".to_string()
+        ),
+        MissingModuleReason::Standalone => {
+            "When executing `lis run` on an individual file, that file may import only from the Go standard library. To import modules normally, use `lis new` to create a project."
+                .to_string()
+        }
+        MissingModuleReason::NotFound => {
+            "Check the module path and ensure the file exists".to_string()
+        }
     };
 
     LisetteDiagnostic::error("Module not found")

@@ -33,25 +33,5 @@ LexResult {
         },
     ],
     errors: [],
-    trivia: Trivia {
-        comments: [
-            (
-                17,
-                27,
-            ),
-        ],
-        doc_comments: [
-            (
-                28,
-                35,
-            ),
-        ],
-        file_comments: [
-            (
-                0,
-                16,
-            ),
-        ],
-        blank_lines: [],
-    },
+    blank_lines: [],
 }

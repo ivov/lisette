@@ -10860,16 +10860,16 @@ fn main() -> Result<(), string> {
     fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
     let result = compile_check(fs);
     assert!(
-        !result.errors.is_empty(),
+        !result.errors().is_empty(),
         "Expected error for main with return type"
     );
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|e| e.code_str() == Some("infer.invalid_main_signature")),
         "Expected invalid_main_signature error, got: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -10884,16 +10884,16 @@ fn main(x: int) {
     fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
     let result = compile_check(fs);
     assert!(
-        !result.errors.is_empty(),
+        !result.errors().is_empty(),
         "Expected error for main with params"
     );
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|e| e.code_str() == Some("infer.invalid_main_signature")),
         "Expected invalid_main_signature error, got: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -10908,16 +10908,16 @@ fn main() -> int {
     fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
     let result = compile_check(fs);
     assert!(
-        !result.errors.is_empty(),
+        !result.errors().is_empty(),
         "Expected error for main with int return"
     );
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|e| e.code_str() == Some("infer.invalid_main_signature")),
         "Expected invalid_main_signature error, got: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -10935,14 +10935,14 @@ fn main() {
 "#;
     fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
     let result = compile_check(fs);
-    assert!(!result.errors.is_empty(), "Expected error");
+    assert!(!result.errors().is_empty(), "Expected error");
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|e| e.code_str() == Some("resolve.name_shadows_import")),
         "Expected name_shadows_import error, got: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -10961,14 +10961,14 @@ fn main() {
 "#;
     fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
     let result = compile_check(fs);
-    assert!(!result.errors.is_empty(), "Expected error");
+    assert!(!result.errors().is_empty(), "Expected error");
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|e| e.code_str() == Some("resolve.name_shadows_import")),
         "Expected name_shadows_import error, got: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -10987,14 +10987,14 @@ fn main() {
 "#;
     fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
     let result = compile_check(fs);
-    assert!(!result.errors.is_empty(), "Expected error");
+    assert!(!result.errors().is_empty(), "Expected error");
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|e| e.code_str() == Some("resolve.name_shadows_import")),
         "Expected name_shadows_import error, got: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -11018,11 +11018,11 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|e| e.code_str() == Some("resolve.name_shadows_import")),
         "Expected name_shadows_import error, got: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -11043,11 +11043,11 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|e| e.code_str() == Some("resolve.name_shadows_import")),
         "Expected name_shadows_import error, got: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -11067,11 +11067,11 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         result
-            .errors
+            .errors()
             .iter()
             .any(|e| e.code_str() == Some("resolve.name_shadows_import")),
         "Expected name_shadows_import error, got: {:?}",
-        result.errors
+        result.errors()
     );
 }
 
@@ -13312,11 +13312,11 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         !result
-            .lints
+            .lints()
             .iter()
             .any(|l| l.code_str() == Some("lint.unused_value")),
         "Expected no lint.unused_value on c.tick() after .unwrap() poisoned the receiver type, got: {:?}",
-        result.lints
+        result.lints()
     );
 }
 
@@ -13341,11 +13341,11 @@ fn main() {
     let result = compile_check(fs);
     assert!(
         !result
-            .errors
+            .errors()
             .iter()
             .any(|e| e.code_str() == Some("infer.mismatched_return_value")),
         "Expected no infer.mismatched_return_value on tail c.tick() after .unwrap() poisoned the receiver type, got: {:?}",
-        result.errors
+        result.errors()
     );
 }
 

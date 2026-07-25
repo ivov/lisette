@@ -58,7 +58,7 @@ pub fn parse_and_register_prelude(store: &mut Store, sink: &LocalSink) {
             checker.check_pending_generic_bounds(&*store);
         },
     );
-    sink.extend(checker.sink.take());
+    sink.extend(checker.sink.into_diagnostics());
 }
 
 /// Registers the test-only prelude module (`TestContext`). Scopes the main prelude during
@@ -106,7 +106,7 @@ pub fn parse_and_register_test_prelude(store: &mut Store, sink: &LocalSink) {
             checker.check_pending_generic_bounds(&*store);
         },
     );
-    sink.extend(checker.sink.take());
+    sink.extend(checker.sink.into_diagnostics());
 }
 
 pub fn compute_prelude_ufcs(store: &Store) -> Vec<(String, String)> {

@@ -434,7 +434,7 @@ func (c *Converter) isProvenNonNilCallResult(call *ast.CallExpr) bool {
 		}
 	}
 
-	if c.cfg != nil && c.cfg.IsNonNilableReturn(calleePkg, qualName) {
+	if c.cfg.IsNonNilableReturn(calleePkg, qualName) {
 		return true
 	}
 
@@ -506,7 +506,7 @@ func (c *Converter) crossPkgFuncDecl(obj types.Object, pkgPath string) *ast.Func
 	}
 	tempConv, ok := c.crossPkgConverters[pkgPath]
 	if !ok {
-		tempConv = NewConverter(pkgPath, importedPkg, c.cfg)
+		tempConv = NewConverter(pkgPath, importedPkg, &c.cfg)
 		tempConv.noCrossPkg = true
 		c.crossPkgConverters[pkgPath] = tempConv
 	}
@@ -550,7 +550,7 @@ func (c *Converter) isProvenNonNilCrossPkgFunc(obj types.Object, pkgPath string)
 	}
 	tempConv, ok := c.crossPkgConverters[pkgPath]
 	if !ok {
-		tempConv = NewConverter(pkgPath, importedPkg, c.cfg)
+		tempConv = NewConverter(pkgPath, importedPkg, &c.cfg)
 		tempConv.noCrossPkg = true
 		c.crossPkgConverters[pkgPath] = tempConv
 	}

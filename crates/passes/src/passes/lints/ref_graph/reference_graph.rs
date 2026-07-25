@@ -2,8 +2,6 @@ use ecow::EcoString;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::Span;
-use syntax::types::Type;
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ModuleItemId {
     pub name: EcoString,
@@ -44,18 +42,6 @@ impl StructFieldId {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct StructFieldInfo {
-    pub span: Span,
-    pub is_public: bool,
-    pub parent_is_public: bool,
-    pub parent_has_serialization_attr: bool,
-    pub parent_has_display_attr: bool,
-    pub parent_synthesizes_equals: bool,
-    pub has_tag_attribute: bool,
-    pub embedded: bool,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnumVariantId {
     pub enum_name: EcoString,
@@ -71,25 +57,13 @@ impl EnumVariantId {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct EnumVariantInfo {
-    pub span: Span,
-    pub parent_is_public: bool,
-    pub parent_has_serialization_attr: bool,
-}
-
 #[derive(Debug, Default)]
 pub struct ReferenceGraph {
-    nodes: HashSet<ModuleItemId>,
     edges: HashMap<ModuleItemId, HashSet<ModuleItemId>>,
     entrypoints: HashSet<ModuleItemId>,
     items: HashMap<ModuleItemId, ItemInfo>,
-    struct_fields: HashMap<StructFieldId, StructFieldInfo>,
-    used_struct_fields: HashSet<StructFieldId>,
-    enum_variants: HashMap<EnumVariantId, EnumVariantInfo>,
-    used_enum_variants: HashSet<EnumVariantId>,
-    pending_equals_dispatch: Vec<(ModuleItemId, Type)>,
-    pending_equals_roots: Vec<(String, Type)>,
+    unused_struct_fields: HashMap<StructFieldId, Span>,
+    unused_enum_variants: HashMap<EnumVariantId, Span>,
 }
 
 impl ReferenceGraph {
@@ -98,28 +72,18 @@ impl ReferenceGraph {
     }
 
     pub fn add_item(&mut self, id: ModuleItemId, span: Span, kind: ItemKind, is_entry_point: bool) {
-        self.nodes.insert(id.clone());
-        self.items.insert(
-            id.clone(),
-            ItemInfo {
-                span,
-                kind,
-                statement_span: None,
-            },
-        );
+        self.items.insert(id.clone(), ItemInfo { span, kind });
         if is_entry_point {
             self.entrypoints.insert(id);
         }
     }
 
     pub fn add_import(&mut self, id: ModuleItemId, span: Span, statement_span: Span) {
-        self.nodes.insert(id.clone());
         self.items.insert(
             id,
             ItemInfo {
                 span,
-                kind: ItemKind::Import,
-                statement_span: Some(statement_span),
+                kind: ItemKind::Import { statement_span },
             },
         );
     }
@@ -128,24 +92,6 @@ impl ReferenceGraph {
         self.edges.entry(from.clone()).or_default().insert(to);
     }
 
-    pub fn record_equals_dispatch(&mut self, from: ModuleItemId, receiver_ty: Type) {
-        self.pending_equals_dispatch.push((from, receiver_ty));
-    }
-
-    pub fn take_equals_dispatch(&mut self) -> Vec<(ModuleItemId, Type)> {
-        std::mem::take(&mut self.pending_equals_dispatch)
-    }
-
-    pub fn record_equals_root(&mut self, owner: String, field_ty: Type) {
-        self.pending_equals_roots.push((owner, field_ty));
-    }
-
-    pub fn take_equals_roots(&mut self) -> Vec<(String, Type)> {
-        std::mem::take(&mut self.pending_equals_roots)
-    }
-
-    /// Mark an item as used by adding it to entrypoints.
-    /// Used when we know an item is used but it's not reachable through normal call graph.
     pub fn mark_as_used(&mut self, id: ModuleItemId) {
         self.entrypoints.insert(id);
     }
@@ -174,8 +120,8 @@ impl ReferenceGraph {
 
     pub fn get_unreachable(&self) -> Vec<&ModuleItemId> {
         let reachable = self.compute_reachable();
-        self.nodes
-            .iter()
+        self.items
+            .keys()
             .filter(|id| !reachable.contains(*id))
             .collect()
     }
@@ -184,54 +130,34 @@ impl ReferenceGraph {
         self.items.get(id)
     }
 
-    pub fn add_struct_field(&mut self, id: StructFieldId, info: StructFieldInfo) {
-        self.struct_fields.insert(id, info);
+    pub fn add_struct_field(&mut self, id: StructFieldId, span: Span) {
+        self.unused_struct_fields.insert(id, span);
     }
 
     pub fn mark_struct_field_used(&mut self, id: StructFieldId) {
-        self.used_struct_fields.insert(id);
+        self.unused_struct_fields.remove(&id);
     }
 
-    pub fn add_enum_variant(&mut self, id: EnumVariantId, info: EnumVariantInfo) {
-        self.enum_variants.insert(id, info);
+    pub fn add_enum_variant(&mut self, id: EnumVariantId, span: Span) {
+        self.unused_enum_variants.insert(id, span);
     }
 
     pub fn mark_enum_variant_used(&mut self, id: EnumVariantId) {
-        self.used_enum_variants.insert(id);
+        self.unused_enum_variants.remove(&id);
     }
 
-    pub fn get_unused_struct_fields(&self) -> Vec<(&StructFieldId, &StructFieldInfo)> {
-        self.struct_fields
-            .iter()
-            .filter(|(id, info)| {
-                !info.is_public
-                    && !info.parent_is_public
-                    && !info.parent_has_serialization_attr
-                    && !info.parent_has_display_attr
-                    && !info.parent_synthesizes_equals
-                    && !info.has_tag_attribute
-                    && !info.embedded
-                    && !self.used_struct_fields.contains(*id)
-                    && !id.field_name.starts_with('_')
-            })
-            .collect()
+    pub fn get_unused_struct_fields(&self) -> impl Iterator<Item = &Span> {
+        self.unused_struct_fields.values()
     }
 
-    pub fn get_unused_enum_variants(&self) -> Vec<(&EnumVariantId, &EnumVariantInfo)> {
-        self.enum_variants
-            .iter()
-            .filter(|(id, info)| {
-                !info.parent_is_public
-                    && !info.parent_has_serialization_attr
-                    && !self.used_enum_variants.contains(*id)
-            })
-            .collect()
+    pub fn get_unused_enum_variants(&self) -> impl Iterator<Item = &Span> {
+        self.unused_enum_variants.values()
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ItemKind {
-    Import,
+    Import { statement_span: Span },
     Type,
     Function,
     Constant,
@@ -241,5 +167,45 @@ pub enum ItemKind {
 pub struct ItemInfo {
     pub span: Span,
     pub kind: ItemKind,
-    pub statement_span: Option<Span>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn span(offset: u32) -> Span {
+        Span::new(0, offset, 1)
+    }
+
+    #[test]
+    fn references_make_registered_items_reachable_without_a_second_node_registry() {
+        let mut graph = ReferenceGraph::new();
+        let root = ModuleItemId::new("root");
+        let child = ModuleItemId::new("child");
+        graph.add_item(root.clone(), span(0), ItemKind::Function, true);
+        graph.add_item(child.clone(), span(1), ItemKind::Function, false);
+        graph.add_reference(&root, child);
+
+        assert!(graph.get_unreachable().is_empty());
+    }
+
+    #[test]
+    fn using_member_removes_it_from_the_unused_candidates() {
+        let mut graph = ReferenceGraph::new();
+        let field = StructFieldId::new("module.Type", "field");
+        let variant = EnumVariantId::new("Type", "Variant");
+        graph.add_struct_field(field.clone(), span(0));
+        graph.add_enum_variant(variant.clone(), span(1));
+
+        graph.mark_struct_field_used(field);
+        graph.mark_enum_variant_used(variant);
+
+        assert_eq!(
+            (
+                graph.get_unused_struct_fields().count(),
+                graph.get_unused_enum_variants().count(),
+            ),
+            (0, 0)
+        );
+    }
 }

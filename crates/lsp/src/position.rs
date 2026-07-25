@@ -20,6 +20,10 @@ impl LineIndex {
         }
     }
 
+    pub(crate) fn source(&self) -> &str {
+        &self.source
+    }
+
     pub(crate) fn position_to_offset(&self, position: Position) -> Option<u32> {
         let line_start = *self.line_starts.get(position.line as usize)?;
         let line_end = self

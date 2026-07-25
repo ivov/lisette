@@ -20,25 +20,145 @@ pub(crate) struct ResolvedDependency {
     pub(crate) canonical_module: String,
 }
 
+#[derive(Default)]
 pub(crate) struct GraphResult {
-    /// Final MVS-selected version for each reconciled module, e.g.
-    /// `{ "github.com/gorilla/mux" → "v1.8.1" }`.
-    pub(crate) versions: HashMap<String, String>,
-    /// For each reconciled module, the third-party modules it imports
-    /// via its typedefs, e.g. `{ "mux" → ["context"] }`.
-    pub(crate) edges: HashMap<String, Vec<String>>,
-    /// Modules whose `find_third_party_modules` result is recorded in
-    /// `edges`. Cache-walk inserts go in `versions` only; the post-walk
-    /// expansion pass catches them up before manifest application.
-    expanded: HashSet<String>,
+    modules: HashMap<String, ModuleState>,
+}
+
+enum ModuleState {
+    /// Known through a typedef import, but not yet exhaustively scanned.
+    Discovered {
+        version: String,
+        known_dependencies: Vec<String>,
+    },
+    /// Scanned at this version. An empty dependency list is a real leaf.
+    Expanded {
+        version: String,
+        dependencies: Vec<String>,
+    },
+}
+
+impl ModuleState {
+    fn version(&self) -> &str {
+        match self {
+            Self::Discovered { version, .. } | Self::Expanded { version, .. } => version,
+        }
+    }
+
+    fn dependencies(&self) -> &[String] {
+        match self {
+            Self::Discovered {
+                known_dependencies, ..
+            } => known_dependencies,
+            Self::Expanded { dependencies, .. } => dependencies,
+        }
+    }
+
+    fn dependencies_mut(&mut self) -> &mut Vec<String> {
+        match self {
+            Self::Discovered {
+                known_dependencies, ..
+            } => known_dependencies,
+            Self::Expanded { dependencies, .. } => dependencies,
+        }
+    }
+
+    fn is_expanded(&self) -> bool {
+        matches!(self, Self::Expanded { .. })
+    }
 }
 
 impl GraphResult {
+    pub(crate) fn version(&self, module: &str) -> Option<&str> {
+        self.modules.get(module).map(ModuleState::version)
+    }
+
+    fn is_expanded(&self, module: &str) -> bool {
+        self.modules
+            .get(module)
+            .is_some_and(ModuleState::is_expanded)
+    }
+
+    fn discover(&mut self, module: String, version: String) {
+        self.modules
+            .entry(module)
+            .or_insert_with(|| ModuleState::Discovered {
+                version,
+                known_dependencies: Vec::new(),
+            });
+    }
+
+    fn expand(&mut self, module: String, version: String, mut dependencies: Vec<String>) {
+        if let Some(ModuleState::Discovered {
+            known_dependencies, ..
+        }) = self.modules.get(&module)
+        {
+            for dependency in known_dependencies {
+                if !dependencies.contains(dependency) {
+                    dependencies.push(dependency.clone());
+                }
+            }
+        }
+        self.modules.insert(
+            module,
+            ModuleState::Expanded {
+                version,
+                dependencies,
+            },
+        );
+    }
+
+    fn rediscover(&mut self, module: String, version: String) {
+        self.modules.insert(
+            module,
+            ModuleState::Discovered {
+                version,
+                known_dependencies: Vec::new(),
+            },
+        );
+    }
+
+    fn record_dependency(&mut self, parent: String, version: String, dependency: String) {
+        let state = self
+            .modules
+            .entry(parent)
+            .or_insert_with(|| ModuleState::Discovered {
+                version,
+                known_dependencies: Vec::new(),
+            });
+        let dependencies = state.dependencies_mut();
+        if !dependencies.contains(&dependency) {
+            dependencies.push(dependency);
+        }
+    }
+
+    fn discovered_modules(&self) -> Vec<String> {
+        self.modules
+            .iter()
+            .filter(|(_, state)| !state.is_expanded())
+            .map(|(module, _)| module.clone())
+            .collect()
+    }
+
+    pub(crate) fn versions(&self) -> HashMap<String, String> {
+        self.modules
+            .iter()
+            .map(|(module, state)| (module.clone(), state.version().to_string()))
+            .collect()
+    }
+
+    pub(crate) fn edges(&self) -> HashMap<String, Vec<String>> {
+        self.modules
+            .iter()
+            .map(|(module, state)| (module.clone(), state.dependencies().to_vec()))
+            .collect()
+    }
+
     /// Invert `edges` into a `module → parents` map, excluding the added root.
     fn transitive_map(&self, added_module: &str) -> HashMap<String, Vec<String>> {
         let mut transitives: HashMap<String, Vec<String>> = HashMap::new();
-        for (parent, children) in &self.edges {
-            for child in children {
+        for (parent, state) in &self.modules {
+            for child in state.dependencies() {
                 if child != added_module {
                     let parents = transitives.entry(child.clone()).or_default();
                     if !parents.contains(parent) {
@@ -196,9 +316,7 @@ fn reconcile_module_graph(
 ) -> Result<GraphResult, i32> {
     let canonical_module = dep.canonical_module.as_str();
 
-    let mut module_versions: HashMap<String, String> = HashMap::new();
-    let mut edges: HashMap<String, Vec<String>> = HashMap::new();
-    let mut expanded: HashSet<String> = HashSet::new();
+    let mut graph = GraphResult::default();
     let mut failed_transitives: HashSet<String> = HashSet::new();
     let mut queue: Vec<String> = vec![canonical_module.to_string()];
 
@@ -225,14 +343,11 @@ fn reconcile_module_graph(
                 }
             };
 
-            if module_versions
-                .get(&module_path)
-                .is_some_and(|v| *v == module_version)
-            {
+            if graph.version(&module_path) == Some(&module_version) {
                 continue;
             }
 
-            if !is_explicit && !module_versions.contains_key(&module_path) {
+            if !is_explicit && graph.version(&module_path).is_none() {
                 print_progress(&format!("Resolving transitive dep {}", module_path));
             }
 
@@ -277,16 +392,14 @@ fn reconcile_module_graph(
                 ));
             }
 
-            module_versions.insert(module_path.clone(), module_version);
-            edges.insert(module_path.clone(), listed.modules.clone());
-            expanded.insert(module_path);
+            graph.expand(module_path, module_version, listed.modules.clone());
 
             for next in listed.modules {
                 queue.push(next);
             }
         }
 
-        let drift = detect_mvs_drift(workspace, &module_versions);
+        let drift = detect_mvs_drift(workspace, &graph);
         if let Some((module, msg)) = drift.errors.first() {
             error!(
                 "failed to resolve module version",
@@ -309,11 +422,7 @@ fn reconcile_module_graph(
         ));
     }
 
-    Ok(GraphResult {
-        versions: module_versions,
-        edges,
-        expanded,
-    })
+    Ok(graph)
 }
 
 /// The `Replacement` a module's typedef cache is keyed by, if it is a declared replacement.
@@ -441,8 +550,8 @@ fn walk_typedef_cache(
 
             // Record cache-walk-discovered modules so the manifest declares
             // every module whose typedef ends up in the cache.
-            let next_version = if let Some(v) = module_graph.versions.get(&containing.path) {
-                v.clone()
+            let next_version = if let Some(version) = module_graph.version(&containing.path) {
+                version.to_string()
             } else {
                 let resolved = if !containing.version.is_empty() {
                     containing.version
@@ -455,20 +564,15 @@ fn walk_typedef_cache(
                         }
                     }
                 };
-                module_graph
-                    .versions
-                    .insert(containing.path.clone(), resolved.clone());
-                module_graph
-                    .edges
-                    .entry(containing.path.clone())
-                    .or_default();
+                module_graph.discover(containing.path.clone(), resolved.clone());
                 resolved
             };
 
-            let parent_edges = module_graph.edges.entry(module_path.clone()).or_default();
-            if !parent_edges.contains(&containing.path) {
-                parent_edges.push(containing.path.clone());
-            }
+            module_graph.record_dependency(
+                module_path.clone(),
+                version.clone(),
+                containing.path.clone(),
+            );
 
             let key = (containing.path.clone(), import.clone());
             if visited.contains(&key) {
@@ -495,10 +599,10 @@ fn rebuild_drifted_cache_entries(
     replacements: &HashMap<String, ReplacementIdentity>,
 ) {
     for entry in bindgenned {
-        let Some(current) = graph.versions.get(&entry.module) else {
+        let Some(current) = graph.version(&entry.module) else {
             continue;
         };
-        if current == &entry.version {
+        if current == entry.version {
             continue;
         }
         let module = GoModule {
@@ -527,30 +631,23 @@ fn warn_stubbed(stubs: &[String]) {
     }
 }
 
-/// Run the manifest walk for modules in `graph.versions` whose
-/// `find_third_party_modules` result is missing, until the graph is closed
-/// under MVS drift. Failures are warnings since these are all transitives.
+/// Exhaustively scan modules known only through typedef imports, until the
+/// graph is closed under MVS drift. Failures are warnings since these are all
+/// transitives.
 fn expand_unwalked_modules(workspace: &GoWorkspace, graph: &mut GraphResult) -> Result<(), i32> {
     let mut failed: HashSet<String> = HashSet::new();
 
-    let mut queue: Vec<String> = graph
-        .versions
-        .keys()
-        .filter(|m| !graph.expanded.contains(*m))
-        .cloned()
-        .collect();
+    let mut queue = graph.discovered_modules();
 
     loop {
         while let Some(module_path) = queue.pop() {
-            if graph.expanded.contains(&module_path) {
+            if graph.is_expanded(&module_path) {
                 continue;
             }
 
-            if !graph.versions.contains_key(&module_path) {
+            if graph.version(&module_path).is_none() {
                 match workspace.query_version(&module_path) {
-                    Ok(v) => {
-                        graph.versions.insert(module_path.clone(), v);
-                    }
+                    Ok(version) => graph.discover(module_path.clone(), version),
                     Err(msg) => {
                         if failed.insert(module_path.clone()) {
                             print_warning(&format!("skipping transitive {}: {}", module_path, msg));
@@ -577,22 +674,19 @@ fn expand_unwalked_modules(workspace: &GoWorkspace, graph: &mut GraphResult) -> 
                 ));
             }
 
-            let entry = graph.edges.entry(module_path.clone()).or_default();
-            for next in &listed.modules {
-                if !entry.contains(next) {
-                    entry.push(next.clone());
-                }
-            }
-            graph.expanded.insert(module_path);
+            let Some(version) = graph.version(&module_path).map(str::to_string) else {
+                continue;
+            };
+            graph.expand(module_path, version, listed.modules.clone());
 
             for next in listed.modules {
-                if !graph.expanded.contains(&next) {
+                if !graph.is_expanded(&next) {
                     queue.push(next);
                 }
             }
         }
 
-        let drift = detect_mvs_drift(workspace, &graph.versions);
+        let drift = detect_mvs_drift(workspace, graph);
         for (module, msg) in drift.errors {
             if failed.insert(module.clone()) {
                 print_warning(&format!(
@@ -609,9 +703,7 @@ fn expand_unwalked_modules(workspace: &GoWorkspace, graph: &mut GraphResult) -> 
         // Drifted module's outgoing edges may have changed; parent edges
         // pointing at it still stand (parent still imports it).
         for (module, new_version) in drift.upgraded {
-            graph.versions.insert(module.clone(), new_version);
-            graph.expanded.remove(&module);
-            graph.edges.remove(&module);
+            graph.rediscover(module.clone(), new_version);
             queue.push(module);
         }
     }
@@ -685,11 +777,12 @@ struct DriftReport {
 
 /// Snapshot every recorded module's pin and return the diff against Go's
 /// current state.
-fn detect_mvs_drift(workspace: &GoWorkspace, versions: &HashMap<String, String>) -> DriftReport {
+fn detect_mvs_drift(workspace: &GoWorkspace, graph: &GraphResult) -> DriftReport {
     let mut report = DriftReport::default();
-    let snapshot: Vec<(String, String)> = versions
+    let snapshot: Vec<(String, String)> = graph
+        .modules
         .iter()
-        .map(|(k, v)| (k.clone(), v.clone()))
+        .map(|(module, state)| (module.clone(), state.version().to_string()))
         .collect();
     for (module, recorded) in snapshot {
         match workspace.query_version(&module) {
@@ -705,6 +798,21 @@ pub(crate) struct DirectUpgrade {
     pub(crate) path: String,
     pub(crate) old_version: String,
     pub(crate) new_version: String,
+}
+
+#[derive(Default)]
+pub(crate) struct ManifestChanges {
+    pub(crate) trimmed: Vec<deps::TrimmedVia>,
+    pub(crate) promoted: Vec<String>,
+    pub(crate) removed: Vec<String>,
+}
+
+impl ManifestChanges {
+    pub(crate) fn extend(&mut self, other: Self) {
+        self.trimmed.extend(other.trimmed);
+        self.promoted.extend(other.promoted);
+        self.removed.extend(other.removed);
+    }
 }
 
 /// Update `lisette.toml` to reflect the newly reconciled `added_dep` subgraph,
@@ -735,11 +843,7 @@ pub(crate) fn apply_graph_to_manifest(
 ) -> Result<Vec<DirectUpgrade>, i32> {
     let existing_deps = manifest.go_deps();
     let transitives = graph.transitive_map(added_dep);
-    let added_dep_version = graph
-        .versions
-        .get(added_dep)
-        .map(|v| v.as_str())
-        .unwrap_or(fallback_version);
+    let added_dep_version = graph.version(added_dep).unwrap_or(fallback_version);
     let mut upgraded: Vec<DirectUpgrade> = Vec::new();
 
     let root_result = match replaced_root {
@@ -778,8 +882,8 @@ pub(crate) fn apply_graph_to_manifest(
     sorted_transitives.sort_by(|a, b| a.0.cmp(b.0));
 
     for (module_path, parents) in &sorted_transitives {
-        let version = match graph.versions.get(module_path.as_str()) {
-            Some(v) => v.as_str(),
+        let version = match graph.version(module_path) {
+            Some(version) => version,
             None => continue,
         };
 
@@ -918,10 +1022,8 @@ pub(crate) fn apply_graph_to_manifest(
 pub(crate) fn finalize_manifest_via(
     project_root: &Path,
     imported_pkgs: &[String],
-) -> Result<(Vec<deps::TrimmedVia>, deps::ResolveReport), i32> {
-    let mut all_trimmed = Vec::new();
-    let mut promoted = Vec::new();
-    let mut removed = Vec::new();
+) -> Result<ManifestChanges, i32> {
+    let mut changes = ManifestChanges::default();
 
     loop {
         let trimmed = trim_dead_via_parents(project_root).map_err(|msg| {
@@ -935,14 +1037,61 @@ pub(crate) fn finalize_manifest_via(
 
         let changed =
             !trimmed.is_empty() || !report.promoted.is_empty() || !report.removed.is_empty();
-        all_trimmed.extend(trimmed);
-        promoted.extend(report.promoted);
-        removed.extend(report.removed);
+        changes.trimmed.extend(trimmed);
+        changes.promoted.extend(report.promoted);
+        changes.removed.extend(report.removed);
 
         if !changed {
             break;
         }
     }
 
-    Ok((all_trimmed, deps::ResolveReport { promoted, removed }))
+    Ok(changes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn expanded_leaf_is_not_left_pending() {
+        let mut graph = GraphResult::default();
+        graph.discover("leaf".to_string(), "v1.0.0".to_string());
+
+        graph.expand("leaf".to_string(), "v1.0.0".to_string(), Vec::new());
+
+        assert!(graph.discovered_modules().is_empty());
+    }
+
+    #[test]
+    fn expanding_preserves_dependencies_found_by_the_typedef_walk() {
+        let mut graph = GraphResult::default();
+        graph.record_dependency(
+            "parent".to_string(),
+            "v1.0.0".to_string(),
+            "typedef-child".to_string(),
+        );
+
+        graph.expand(
+            "parent".to_string(),
+            "v1.0.0".to_string(),
+            vec!["manifest-child".to_string()],
+        );
+
+        assert_eq!(graph.edges()["parent"], ["manifest-child", "typedef-child"]);
+    }
+
+    #[test]
+    fn version_drift_discards_dependencies_from_the_old_version() {
+        let mut graph = GraphResult::default();
+        graph.expand(
+            "module".to_string(),
+            "v1.0.0".to_string(),
+            vec!["old-child".to_string()],
+        );
+
+        graph.expand("module".to_string(), "v2.0.0".to_string(), Vec::new());
+
+        assert!(graph.edges()["module"].is_empty());
+    }
 }

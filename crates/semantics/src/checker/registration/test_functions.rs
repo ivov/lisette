@@ -204,7 +204,7 @@ fn collect_test_candidates(
         } => {
             flag_misplaced(attributes, sink);
             for field in fields {
-                flag_misplaced(&field.attributes, sink);
+                flag_misplaced(field.attributes(), sink);
             }
         }
         Expression::Enum { attributes, .. } => flag_misplaced(attributes, sink),

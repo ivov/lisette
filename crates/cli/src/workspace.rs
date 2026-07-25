@@ -832,10 +832,10 @@ pub(crate) fn warm_typedefs(
 
     let mut seen: HashSet<String> = HashSet::new();
     let mut roots: Vec<String> = scanned
-        .non_blank
-        .into_iter()
+        .non_blank()
         .filter(|pkg| locator.is_declared_go_dep(pkg))
-        .filter(|pkg| seen.insert(pkg.clone()))
+        .filter(|pkg| seen.insert((*pkg).to_string()))
+        .map(str::to_string)
         .collect();
     if roots.is_empty() {
         return;

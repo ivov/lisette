@@ -52,14 +52,11 @@ pub fn format_witness(pattern: &NormalizedPattern) -> String {
     }
 }
 
-/// Formats a normalized pattern for display (e.g., in error messages).
-/// Unlike `format_witness()`, this can handle patterns with literal fields,
-/// since user-written patterns may contain literals in struct constructors.
+/// Formats user-written patterns, including literal fields.
 pub fn format_pattern(pattern: &NormalizedPattern) -> String {
     match pattern {
         NormalizedPattern::Wildcard => "_".to_string(),
 
-        // User-written patterns can contain literals in their fields
         NormalizedPattern::Literal(lit) => format_literal(lit),
 
         NormalizedPattern::OpaqueConst(key) => strip_module_prefix(key),

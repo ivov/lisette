@@ -75,10 +75,8 @@ fn check_arm(arm: &MatchArm, ctx: &NodeCtx) {
         let guard_deletion = Span::new(span.file_id, pattern_end, guard_end - pattern_end);
         diagnostic = diagnostic.with_fix(Fix::multi(
             format!("Fold `{binding} == {literal_text}` into the pattern"),
-            vec![
-                Edit::replacement(*binding_span, literal_text.to_string()),
-                Edit::deletion(guard_deletion),
-            ],
+            Edit::replacement(*binding_span, literal_text.to_string()),
+            vec![Edit::deletion(guard_deletion)],
         ));
     }
     ctx.sink.push(diagnostic);

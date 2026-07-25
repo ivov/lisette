@@ -1,0 +1,11 @@
+---
+source: tests/spec/format/mod.rs
+description: |-
+  fn test() { (first_value + // receiver detail
+  second_value).combine() }
+---
+fn test() {
+  (first_value +
+  // receiver detail
+  second_value).combine()
+}
