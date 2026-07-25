@@ -40,7 +40,7 @@ fn host_module_cache_dir(project_root: &std::path::Path, module: &str) -> std::p
 }
 
 fn has_diagnostic_code(sink: &LocalSink, code: &str) -> bool {
-    sink.take().iter().any(|d| d.code_str() == Some(code))
+    sink.any(|diagnostic| diagnostic.code_str() == Some(code))
 }
 
 #[test]
@@ -321,11 +321,11 @@ fn check_analyzes_orphan_and_surfaces_its_error() {
     assert!(
         output
             .result
-            .errors
+            .errors()
             .iter()
             .any(|e| e.code_str() == Some("infer.type_mismatch")),
         "check must analyze the orphan and surface its error: {:?}",
-        output.result.errors
+        output.result.errors()
     );
 }
 
@@ -373,11 +373,11 @@ fn check_analyzes_tests_in_declaration_only_module() {
     assert!(
         output
             .result
-            .errors
+            .errors()
             .iter()
             .any(|e| e.code_str() == Some("infer.type_mismatch")),
         "a test in a declaration-plus-test module must be checked: {:?}",
-        output.result.errors
+        output.result.errors()
     );
 }
 
@@ -446,7 +446,7 @@ fn graph_declared_dep_missing_typedef() {
 
     assert!(sink.has_errors());
 
-    let diags = sink.take();
+    let diags = sink.into_diagnostics();
     let missing = diags
         .iter()
         .find(|d| d.code_str() == Some("resolve.missing_go_typedef"))
@@ -490,7 +490,7 @@ fn graph_subpackage_missing_typedef_points_at_add() {
 
     assert!(sink.has_errors());
 
-    let diags = sink.take();
+    let diags = sink.into_diagnostics();
     let missing = diags
         .iter()
         .find(|d| d.code_str() == Some("resolve.missing_go_typedef"))
@@ -744,7 +744,7 @@ fn main() {
     .result;
 
     let impl_errors: Vec<_> = result
-        .errors
+        .errors()
         .iter()
         .filter(|e| {
             e.code_str()
@@ -759,7 +759,7 @@ fn main() {
     );
 
     let method_errors: Vec<_> = result
-        .errors
+        .errors()
         .iter()
         .filter(|e| e.code_str().is_some_and(|c| c == "infer.member_not_found"))
         .collect();
@@ -839,9 +839,9 @@ fn main() {
     .result;
 
     assert!(
-        result1.errors.is_empty(),
+        result1.errors().is_empty(),
         "first run should succeed: {:?}",
-        result1.errors,
+        result1.errors(),
     );
 
     // Second run — must still succeed (not load stale cache for third-party)
@@ -870,8 +870,8 @@ fn main() {
     .result;
 
     assert!(
-        result2.errors.is_empty(),
+        result2.errors().is_empty(),
         "second run must not fail from stale stdlib cache: {:?}",
-        result2.errors,
+        result2.errors(),
     );
 }

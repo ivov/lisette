@@ -180,10 +180,7 @@ fn run_standalone(file: &str, args: Vec<String>, sourcemap: bool, go_flags: &[St
         &no_loader,
     );
 
-    let filter = Filter {
-        errors_only: false,
-        warnings_only: false,
-    };
+    let filter = Filter::All;
 
     let counts = render::render_all(
         &result.errors,

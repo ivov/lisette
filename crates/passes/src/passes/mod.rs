@@ -52,8 +52,8 @@ pub fn run(
     run_lints: bool,
 ) {
     let facts_ref: &Facts = facts;
-    let ((checks_diagnostics, pattern_issues), lint_outputs) = rayon::join(
-        || checks::run_all(analysis, facts_ref),
+    let ((checks_diagnostics, pattern_lints), lint_outputs) = rayon::join(
+        || checks::run_all(analysis, facts_ref, run_lints),
         || {
             run_lints.then(|| {
                 let (produced_facts, (ast_walk_diagnostics, ref_graph_output)) = rayon::join(
@@ -73,14 +73,7 @@ pub fn run(
     sink.extend(checks_diagnostics);
     deferred::run(analysis.store, facts.take_deferred_checks(), sink);
     if let Some((produced_facts, ast_walk_diagnostics, ref_graph_output)) = lint_outputs {
-        lints::from_facts::run(
-            analysis,
-            facts,
-            pattern_issues,
-            produced_facts,
-            unused,
-            sink,
-        );
+        lints::from_facts::run(analysis, facts, pattern_lints, produced_facts, unused, sink);
         let (ref_graph_diagnostics, ref_graph_unused) = ref_graph_output;
         sink.extend(ast_walk_diagnostics);
         sink.extend(ref_graph_diagnostics);

@@ -51,7 +51,7 @@ pub(crate) fn run(
         for module in &modules {
             apply_ref_lints(module, facts, store, &mut unused, &sink);
         }
-        return (sink.take(), unused);
+        return (sink.into_diagnostics(), unused);
     }
 
     type WorkerOutput = (LocalSink, UnusedInfo);

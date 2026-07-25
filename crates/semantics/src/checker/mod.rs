@@ -1031,13 +1031,31 @@ impl TaskState {
         );
     }
 
-    /// Run a closure speculatively: if it returns `Err`, all type variable
-    /// bindings performed during the closure are rolled back.
+    /// Run a closure speculatively: if it returns `Err`, type variable bindings
+    /// and diagnostics produced during the closure are rolled back together.
     fn speculatively<T, E>(&mut self, f: impl FnOnce(&mut Self) -> Result<T, E>) -> Result<T, E> {
+        let diagnostics_before = self.sink.checkpoint();
         self.env.begin_speculation();
         let result = f(self);
-        self.env.end_speculation(result.is_err());
+        let rollback = result.is_err();
+        self.env.end_speculation(rollback);
+        if rollback {
+            self.sink.rollback(diagnostics_before);
+        }
         result
+    }
+
+    fn without_diagnostics<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        let diagnostics_before = self.sink.checkpoint();
+        let result = f(self);
+        self.sink.rollback(diagnostics_before);
+        result
+    }
+
+    fn tracking_diagnostics<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> (T, bool) {
+        let checkpoint = self.sink.checkpoint();
+        let result = f(self);
+        (result, self.sink.has_changed_since(checkpoint))
     }
 }
 
@@ -1157,4 +1175,43 @@ fn is_reserved_import_alias(name: &str) -> bool {
         | "assert_type"
         | "imaginary"
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn failed_speculation_rolls_back_diagnostics() {
+        let mut task = TaskState::with_fresh_allocator();
+        task.sink
+            .push(diagnostics::LisetteDiagnostic::error("before"));
+
+        let result: Result<(), ()> = task.speculatively(|task| {
+            task.sink
+                .push(diagnostics::LisetteDiagnostic::error("speculative"));
+            Err(())
+        });
+
+        assert!(result.is_err());
+        let diagnostics = task.sink.into_diagnostics();
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].plain_message(), "before");
+    }
+
+    #[test]
+    fn successful_speculation_keeps_diagnostics() {
+        let mut task = TaskState::with_fresh_allocator();
+
+        let result: Result<(), ()> = task.speculatively(|task| {
+            task.sink
+                .push(diagnostics::LisetteDiagnostic::error("reported"));
+            Ok(())
+        });
+
+        assert!(result.is_ok());
+        let diagnostics = task.sink.into_diagnostics();
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].plain_message(), "reported");
+    }
 }

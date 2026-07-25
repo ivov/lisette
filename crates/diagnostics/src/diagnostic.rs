@@ -1,5 +1,5 @@
 use miette::{Diagnostic, LabeledSpan, Severity};
-use owo_colors::{OwoColorize, Style};
+use owo_colors::OwoColorize;
 use std::fmt;
 use std::sync::Arc;
 
@@ -95,15 +95,24 @@ fn strip_period(s: &str, strip: bool) -> &str {
     }
 }
 
-fn span_to_labeled(span: &Span, text: String, primary: bool) -> LabeledSpan {
-    let source_span = miette::SourceSpan::new(
-        (span.byte_offset as usize).into(),
-        span.byte_length as usize,
-    );
-    if primary {
-        LabeledSpan::new_primary_with_span(Some(text), source_span)
-    } else {
-        LabeledSpan::new_with_span(Some(text), source_span)
+#[derive(Debug, Clone)]
+struct Label {
+    span: Span,
+    text: String,
+    primary: bool,
+}
+
+impl Label {
+    fn to_miette(&self, text: String) -> LabeledSpan {
+        let source_span = miette::SourceSpan::new(
+            (self.span.byte_offset as usize).into(),
+            self.span.byte_length as usize,
+        );
+        if self.primary {
+            LabeledSpan::new_primary_with_span(Some(text), source_span)
+        } else {
+            LabeledSpan::new_with_span(Some(text), source_span)
+        }
     }
 }
 
@@ -180,20 +189,23 @@ where
 #[must_use]
 pub struct LisetteDiagnostic {
     message: String,
-    labels: Vec<LabeledSpan>,
+    labels: Vec<Label>,
     help: Option<String>,
     note: Option<String>,
     severity: Severity,
     code: Option<String>,
-    file_id: Option<u32>,
-    use_color: bool,
-    label_accent: Option<Style>,
     fix: Option<crate::Fix>,
 }
 
 impl fmt::Display for LisetteDiagnostic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.use_color {
+        self.fmt_message(f, false)
+    }
+}
+
+impl LisetteDiagnostic {
+    fn fmt_message(&self, f: &mut fmt::Formatter<'_>, use_color: bool) -> fmt::Result {
+        if use_color {
             let styled_message = match self.severity {
                 Severity::Error => {
                     format_with_backticks(&self.message, true, |s| format!("{}", s.red().bold()))
@@ -207,7 +219,7 @@ impl fmt::Display for LisetteDiagnostic {
             };
             write!(f, "{}", styled_message)?;
         } else {
-            self.message.fmt(f)?;
+            f.write_str(&self.message)?;
         }
         Ok(())
     }
@@ -274,41 +286,12 @@ impl Diagnostic for LisetteDiagnostic {
             help: self.help.as_deref(),
             note: self.note.as_deref(),
             diagnostic_code,
-            use_color: self.use_color,
+            use_color: false,
         }))
     }
 
     fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
-        let use_color = self.use_color;
-        let severity = self.severity;
-        let accent = self.label_accent;
-
-        let formatted_labels = self.labels.iter().map(move |span| {
-            if let Some(label) = span.label() {
-                let formatted = if use_color {
-                    let style = move |s: &str| match accent {
-                        Some(accent) => format!("{}", s.style(accent)),
-                        None => match severity {
-                            Severity::Error => format!("{}", s.red()),
-                            Severity::Warning => format!("{}", s.yellow()),
-                            Severity::Advice => format!("{}", s.blue()),
-                        },
-                    };
-                    format_with_backticks(label, true, style)
-                } else {
-                    label.to_string()
-                };
-                if span.primary() {
-                    LabeledSpan::new_primary_with_span(Some(formatted), *span.inner())
-                } else {
-                    LabeledSpan::new_with_span(Some(formatted), *span.inner())
-                }
-            } else {
-                span.clone()
-            }
-        });
-
-        Some(Box::new(formatted_labels))
+        Some(Box::new(self.formatted_labels(false).into_iter()))
     }
 
     fn code<'a>(&'a self) -> Option<Box<dyn fmt::Display + 'a>> {
@@ -324,7 +307,8 @@ impl LisetteDiagnostic {
     pub fn plain_label(&self) -> Option<&str> {
         self.labels
             .iter()
-            .find_map(|span| span.label().filter(|text| !text.is_empty()))
+            .map(|label| label.text.as_str())
+            .find(|text| !text.is_empty())
     }
 
     pub fn plain_help(&self) -> Option<&str> {
@@ -343,16 +327,8 @@ impl LisetteDiagnostic {
             note: None,
             severity,
             code: None,
-            file_id: None,
-            use_color: false,
-            label_accent: None,
             fix: None,
         }
-    }
-
-    pub fn with_label_accent(mut self, accent: Style) -> Self {
-        self.label_accent = Some(accent);
-        self
     }
 
     pub fn error(message: impl Into<String>) -> Self {
@@ -367,25 +343,22 @@ impl LisetteDiagnostic {
         Self::new(message, Severity::Advice)
     }
 
-    pub(crate) fn with_color(mut self, use_color: bool) -> Self {
-        self.use_color = use_color;
-        self
-    }
-
     pub fn with_span_label(mut self, span: &Span, text: impl Into<String>) -> Self {
-        if self.file_id.is_none() {
-            self.file_id = Some(span.file_id);
-        }
-        self.labels.push(span_to_labeled(span, text.into(), false));
+        self.push_label(span, text.into(), false);
         self
     }
 
     pub fn with_span_primary_label(mut self, span: &Span, text: impl Into<String>) -> Self {
-        if self.file_id.is_none() {
-            self.file_id = Some(span.file_id);
-        }
-        self.labels.push(span_to_labeled(span, text.into(), true));
+        self.push_label(span, text.into(), true);
         self
+    }
+
+    fn push_label(&mut self, span: &Span, text: String, primary: bool) {
+        self.labels.push(Label {
+            span: *span,
+            text,
+            primary,
+        });
     }
 
     pub fn with_help(mut self, help: impl Into<String>) -> Self {
@@ -399,6 +372,11 @@ impl LisetteDiagnostic {
     }
 
     pub fn with_fix(mut self, fix: crate::Fix) -> Self {
+        assert_eq!(
+            self.file_id(),
+            Some(fix.file_id()),
+            "a fix must edit the file labeled by its diagnostic",
+        );
         self.fix = Some(fix);
         self
     }
@@ -452,6 +430,34 @@ impl LisetteDiagnostic {
         miette::Report::new(self).with_source_code(miette::NamedSource::new(filename, source))
     }
 
+    pub(crate) fn into_rendered(self, use_color: bool) -> RenderedDiagnostic {
+        RenderedDiagnostic {
+            diagnostic: self,
+            use_color,
+        }
+    }
+
+    fn formatted_labels(&self, use_color: bool) -> Vec<LabeledSpan> {
+        let file_id = self.file_id();
+        self.labels
+            .iter()
+            .filter(|label| Some(label.span.file_id) == file_id)
+            .map(|label| {
+                let formatted = if use_color {
+                    let style = |s: &str| match self.severity {
+                        Severity::Error => format!("{}", s.red()),
+                        Severity::Warning => format!("{}", s.yellow()),
+                        Severity::Advice => format!("{}", s.blue()),
+                    };
+                    format_with_backticks(&label.text, true, style)
+                } else {
+                    label.text.clone()
+                };
+                label.to_miette(formatted)
+            })
+            .collect()
+    }
+
     pub fn code_str(&self) -> Option<&str> {
         self.code.as_deref()
     }
@@ -461,19 +467,27 @@ impl LisetteDiagnostic {
     }
 
     pub fn primary_offset(&self) -> usize {
-        self.labels.first().map(|l| l.offset()).unwrap_or(0)
+        self.labels
+            .first()
+            .map(|label| label.span.byte_offset as usize)
+            .unwrap_or(0)
     }
 
-    pub(crate) fn label_offsets(&self) -> Vec<usize> {
-        self.labels.iter().map(|l| l.offset()).collect()
+    pub(crate) fn label_points(&self) -> Vec<(u32, usize)> {
+        self.labels
+            .iter()
+            .map(|label| (label.span.file_id, label.span.byte_offset as usize))
+            .collect()
     }
 
     pub fn location_offset(&self) -> Option<usize> {
+        let file_id = self.file_id()?;
         self.labels
             .iter()
-            .find(|l| l.primary())
+            .filter(|label| label.span.file_id == file_id)
+            .find(|label| label.primary)
             .or_else(|| self.labels.first())
-            .map(|l| l.offset())
+            .map(|label| label.span.byte_offset as usize)
     }
 
     pub(crate) fn severity_word(&self) -> &'static str {
@@ -485,7 +499,7 @@ impl LisetteDiagnostic {
     }
 
     pub fn file_id(&self) -> Option<u32> {
-        self.file_id
+        self.labels.first().map(|label| label.span.file_id)
     }
 
     pub fn is_error(&self) -> bool {
@@ -510,6 +524,48 @@ impl LisetteDiagnostic {
     }
 }
 
+#[derive(Debug)]
+pub(crate) struct RenderedDiagnostic {
+    diagnostic: LisetteDiagnostic,
+    use_color: bool,
+}
+
+impl fmt::Display for RenderedDiagnostic {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.diagnostic.fmt_message(f, self.use_color)
+    }
+}
+
+impl std::error::Error for RenderedDiagnostic {}
+
+impl Diagnostic for RenderedDiagnostic {
+    fn severity(&self) -> Option<Severity> {
+        Some(self.diagnostic.severity)
+    }
+
+    fn help<'a>(&'a self) -> Option<Box<dyn fmt::Display + 'a>> {
+        let diagnostic_code = self.diagnostic.code.as_deref();
+        if self.diagnostic.help.is_none()
+            && self.diagnostic.note.is_none()
+            && diagnostic_code.is_none()
+        {
+            return None;
+        }
+        Some(Box::new(HelpText {
+            help: self.diagnostic.help.as_deref(),
+            note: self.diagnostic.note.as_deref(),
+            diagnostic_code,
+            use_color: self.use_color,
+        }))
+    }
+
+    fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
+        Some(Box::new(
+            self.diagnostic.formatted_labels(self.use_color).into_iter(),
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -521,5 +577,25 @@ mod tests {
         assert!(!diagnostic.is_error());
         assert!(!diagnostic.is_warning());
         assert_eq!(diagnostic.severity_word(), "info");
+    }
+
+    #[test]
+    #[should_panic(expected = "a fix must edit the file labeled by its diagnostic")]
+    fn rejects_fix_for_a_different_file() {
+        let fix = crate::Fix::new("invalid", crate::Edit::deletion(Span::new(1, 0, 1)));
+        let _ = LisetteDiagnostic::error("invalid")
+            .with_span_label(&Span::new(0, 0, 1), "label")
+            .with_fix(fix);
+    }
+
+    #[test]
+    fn labels_keep_their_own_file_identity() {
+        let diagnostic = LisetteDiagnostic::error("cross-file")
+            .with_span_primary_label(&Span::new(3, 4, 1), "first")
+            .with_span_label(&Span::new(7, 8, 1), "second");
+
+        assert_eq!(diagnostic.file_id(), Some(3));
+        assert_eq!(diagnostic.label_points(), vec![(3, 4), (7, 8)]);
+        assert_eq!(diagnostic.formatted_labels(false).len(), 1);
     }
 }

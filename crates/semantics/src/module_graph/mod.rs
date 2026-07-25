@@ -165,12 +165,19 @@ impl<'a> GraphBuilder<'a> {
                             })
                             .map(String::from);
 
+                        let reason = if let Some(stripped) = src_prefix_hint {
+                            diagnostics::module_graph::MissingModuleReason::UnnecessarySrcPrefix(
+                                stripped,
+                            )
+                        } else if is_go_stdlib {
+                            diagnostics::module_graph::MissingModuleReason::GoStandardLibrary
+                        } else if self.standalone_mode {
+                            diagnostics::module_graph::MissingModuleReason::Standalone
+                        } else {
+                            diagnostics::module_graph::MissingModuleReason::NotFound
+                        };
                         self.sink.push(diagnostics::module_graph::module_not_found(
-                            module_id,
-                            *span,
-                            is_go_stdlib,
-                            self.standalone_mode,
-                            src_prefix_hint,
+                            module_id, *span, reason,
                         ));
                     }
                     continue;

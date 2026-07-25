@@ -30,7 +30,7 @@ pub(crate) fn restore_cached_generic_bounds(
             cached_modules.contains(&module_id),
         );
     }
-    sink.extend(checker.sink.take());
+    sink.extend(checker.sink.into_diagnostics());
 }
 
 fn restore_module_bounds(

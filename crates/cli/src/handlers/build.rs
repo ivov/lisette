@@ -357,10 +357,7 @@ pub(super) fn build_locked(prep: &BuildPrep, options: BuildOptions) -> BuildOutc
     });
     let result = compile(entry, &compile_config, &local_fs);
 
-    let filter = Filter {
-        errors_only: false,
-        warnings_only: false,
-    };
+    let filter = Filter::All;
 
     let counts = render::render_all(
         &result.errors,

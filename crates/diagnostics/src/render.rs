@@ -14,22 +14,25 @@ pub enum OutputFormat {
     Unix,
 }
 
-pub struct Filter {
-    pub errors_only: bool,
-    pub warnings_only: bool,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Filter {
+    #[default]
+    All,
+    Errors,
+    Warnings,
 }
 
 impl Filter {
     fn show_errors(&self) -> bool {
-        !self.warnings_only
+        matches!(self, Self::All | Self::Errors)
     }
 
     fn show_warnings(&self) -> bool {
-        !self.errors_only
+        matches!(self, Self::All | Self::Warnings)
     }
 
     fn show_info(&self) -> bool {
-        !self.errors_only && !self.warnings_only
+        matches!(self, Self::All)
     }
 }
 
@@ -43,7 +46,13 @@ fn format_time(elapsed: Duration) -> String {
     }
 }
 
-pub fn print_summary(file_count: usize, elapsed: Duration, errors: i32, warnings: i32, info: i32) {
+pub fn print_summary(
+    file_count: usize,
+    elapsed: Duration,
+    errors: usize,
+    warnings: usize,
+    info: usize,
+) {
     let time_string = format_time(elapsed);
     let use_color = std::env::var("NO_COLOR").is_err();
     let time_display = if use_color {
@@ -171,10 +180,9 @@ fn render(
     filename: &str,
     use_color: bool,
 ) {
-    let report = diagnostic
-        .clone()
-        .with_color(use_color)
-        .with_source_code(source.clone(), filename.to_string());
+    let report = diagnostic.clone().into_rendered(use_color);
+    let report = miette::Report::new(report)
+        .with_source_code(miette::NamedSource::new(filename, source.clone()));
     let mut output = String::new();
     if handler.render_report(&mut output, report.as_ref()).is_ok() {
         eprintln!("{}", output);
@@ -186,19 +194,26 @@ pub fn render_to_string(
     source: &str,
     filename: &str,
     use_color: bool,
-    accent: Style,
     context_lines: usize,
 ) -> String {
+    let accent = if diagnostic.is_error() {
+        Style::new().red()
+    } else if diagnostic.is_info() {
+        Style::new().blue()
+    } else {
+        Style::new().yellow()
+    };
     let handler = if use_color {
         accent_handler(accent)
     } else {
         nocolor_handler()
     }
     .with_context_lines(context_lines);
-    let report = diagnostic
-        .clone()
-        .with_color(use_color)
-        .with_source_code(IndexedSource::new(source), filename.to_string());
+    let report = diagnostic.clone().into_rendered(use_color);
+    let report = miette::Report::new(report).with_source_code(miette::NamedSource::new(
+        filename,
+        IndexedSource::new(source),
+    ));
     let mut output = String::new();
     let _ = handler.render_report(&mut output, report.as_ref());
     output
@@ -226,9 +241,9 @@ fn render_group<F: Fn(u32) -> Option<(String, String)>>(
 
 pub struct Counts {
     pub files: usize,
-    pub errors: i32,
-    pub warnings: i32,
-    pub info: i32,
+    pub errors: usize,
+    pub warnings: usize,
+    pub info: usize,
 }
 
 /// Resolves a `file_id` to its source, falling back to the entry file.
@@ -269,30 +284,46 @@ fn partition_diagnostics<'a>(
     errors: &'a [LisetteDiagnostic],
     lints: &'a [LisetteDiagnostic],
     filter: &Filter,
-) -> (
-    Vec<&'a LisetteDiagnostic>,
-    Vec<&'a LisetteDiagnostic>,
-    Vec<&'a LisetteDiagnostic>,
-) {
-    let mut error_bucket = Vec::new();
-    let mut warning_bucket = Vec::new();
-    let mut info_bucket = Vec::new();
+) -> DiagnosticGroups<'a> {
+    let mut groups = DiagnosticGroups::default();
 
     for diagnostic in errors.iter().chain(lints.iter()) {
         if diagnostic.is_error() {
             if filter.show_errors() {
-                error_bucket.push(diagnostic);
+                groups.errors.push(diagnostic);
             }
         } else if diagnostic.is_info() {
             if filter.show_info() {
-                info_bucket.push(diagnostic);
+                groups.info.push(diagnostic);
             }
         } else if filter.show_warnings() {
-            warning_bucket.push(diagnostic);
+            groups.warnings.push(diagnostic);
         }
     }
 
-    (error_bucket, warning_bucket, info_bucket)
+    groups
+}
+
+#[derive(Default)]
+struct DiagnosticGroups<'a> {
+    errors: Vec<&'a LisetteDiagnostic>,
+    warnings: Vec<&'a LisetteDiagnostic>,
+    info: Vec<&'a LisetteDiagnostic>,
+}
+
+impl DiagnosticGroups<'_> {
+    fn is_empty(&self) -> bool {
+        self.errors.is_empty() && self.warnings.is_empty() && self.info.is_empty()
+    }
+
+    fn counts(&self, file_count: usize) -> Counts {
+        Counts {
+            files: file_count.max(1),
+            errors: self.errors.len(),
+            warnings: self.warnings.len(),
+            info: self.info.len(),
+        }
+    }
 }
 
 pub fn render_all(
@@ -304,26 +335,25 @@ pub fn render_all(
     default_source: &str,
     default_filename: &str,
 ) -> Counts {
-    let (errors, warnings, info) = partition_diagnostics(errors, lints, filter);
+    let groups = partition_diagnostics(errors, lints, filter);
 
-    let has_diagnostics = !errors.is_empty() || !warnings.is_empty() || !info.is_empty();
-    if has_diagnostics {
+    if !groups.is_empty() {
         eprintln!(); // Blank line before first diagnostic
     }
 
     let use_color = std::env::var("NO_COLOR").is_err();
     let mut sources = SourceCache::new(get_source, default_source, default_filename);
 
-    render_group(&errors, Style::new().red(), use_color, &mut sources);
-    render_group(&warnings, Style::new().yellow(), use_color, &mut sources);
-    render_group(&info, Style::new().blue(), use_color, &mut sources);
+    render_group(&groups.errors, Style::new().red(), use_color, &mut sources);
+    render_group(
+        &groups.warnings,
+        Style::new().yellow(),
+        use_color,
+        &mut sources,
+    );
+    render_group(&groups.info, Style::new().blue(), use_color, &mut sources);
 
-    Counts {
-        files: file_count.max(1),
-        errors: errors.len() as i32,
-        warnings: warnings.len() as i32,
-        info: info.len() as i32,
-    }
+    groups.counts(file_count)
 }
 
 /// Renders one diagnostic as `file:line:col: severity: message [code]`.
@@ -353,22 +383,22 @@ pub fn render_unix(
     default_source: &str,
     default_filename: &str,
 ) -> (String, Counts) {
-    let (errors, warnings, info) = partition_diagnostics(errors, lints, filter);
+    let groups = partition_diagnostics(errors, lints, filter);
 
     let mut sources = SourceCache::new(get_source, default_source, default_filename);
     let mut output = String::new();
-    for diagnostic in errors.iter().chain(warnings.iter()).chain(info.iter()) {
+    for diagnostic in groups
+        .errors
+        .iter()
+        .chain(&groups.warnings)
+        .chain(&groups.info)
+    {
         let (src, name) = sources.get(diagnostic.file_id());
         output.push_str(&unix_line(diagnostic, &src, &name));
         output.push('\n');
     }
 
-    let counts = Counts {
-        files: file_count.max(1),
-        errors: errors.len() as i32,
-        warnings: warnings.len() as i32,
-        info: info.len() as i32,
-    };
+    let counts = groups.counts(file_count);
     (output, counts)
 }
 
@@ -377,44 +407,40 @@ mod tests {
     use super::*;
 
     fn show_all() -> Filter {
-        Filter {
-            errors_only: false,
-            warnings_only: false,
-        }
+        Filter::All
     }
 
     #[test]
     fn each_severity_lands_in_its_own_bucket() {
         let errors = vec![LisetteDiagnostic::error("e")];
         let lints = vec![LisetteDiagnostic::warn("w"), LisetteDiagnostic::info("i")];
-        let (errors, warnings, info) = partition_diagnostics(&errors, &lints, &show_all());
-        assert_eq!(errors.len(), 1);
-        assert_eq!(warnings.len(), 1);
-        assert_eq!(info.len(), 1);
+        let groups = partition_diagnostics(&errors, &lints, &show_all());
+        assert_eq!(
+            (
+                groups.errors.len(),
+                groups.warnings.len(),
+                groups.info.len()
+            ),
+            (1, 1, 1)
+        );
     }
 
     #[test]
     fn info_hidden_under_errors_only() {
         let empty: Vec<LisetteDiagnostic> = Vec::new();
         let lints = vec![LisetteDiagnostic::info("i")];
-        let filter = Filter {
-            errors_only: true,
-            warnings_only: false,
-        };
-        let (_, _, info) = partition_diagnostics(&empty, &lints, &filter);
-        assert!(info.is_empty());
+        let filter = Filter::Errors;
+        let groups = partition_diagnostics(&empty, &lints, &filter);
+        assert!(groups.info.is_empty());
     }
 
     #[test]
     fn info_hidden_under_warnings_only() {
         let empty: Vec<LisetteDiagnostic> = Vec::new();
         let lints = vec![LisetteDiagnostic::info("i")];
-        let filter = Filter {
-            errors_only: false,
-            warnings_only: true,
-        };
-        let (_, _, info) = partition_diagnostics(&empty, &lints, &filter);
-        assert!(info.is_empty());
+        let filter = Filter::Warnings;
+        let groups = partition_diagnostics(&empty, &lints, &filter);
+        assert!(groups.info.is_empty());
     }
 
     #[test]

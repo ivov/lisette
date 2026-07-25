@@ -1,8 +1,8 @@
 use rustc_hash::FxHashMap as HashMap;
 
+use diagnostics::LisetteDiagnostic;
 use diagnostics::LocalSink;
 use diagnostics::{Edit, Fix};
-use diagnostics::{LisetteDiagnostic, PatternIssue};
 use semantics::context::AnalysisContext;
 use semantics::facts::Facts;
 use syntax::ast::Span;
@@ -62,7 +62,7 @@ pub enum Lint {
 pub(crate) fn run(
     analysis: &AnalysisContext,
     facts: &Facts,
-    pattern_issues: Vec<PatternIssue>,
+    pattern_lints: Vec<LisetteDiagnostic>,
     mut diagnostics: Vec<LisetteDiagnostic>,
     unused: &mut UnusedInfo,
     sink: &LocalSink,
@@ -78,7 +78,7 @@ pub(crate) fn run(
         &mut diagnostics,
     );
     collect_dead_code(facts, &mut diagnostics);
-    collect_pattern_issues(&pattern_issues, &mut diagnostics);
+    diagnostics.extend(pattern_lints);
     collect_overused_references(facts, &mut diagnostics);
     collect_always_failing_try_blocks(facts, &mut diagnostics);
     collect_expression_only_fstrings(facts, &sources, &mut diagnostics);
@@ -133,7 +133,7 @@ fn erroring_function_spans(facts: &Facts, sink: &LocalSink) -> Vec<Span> {
         .iter()
         .filter(|function_span| {
             error_points.iter().any(|(file_id, offset)| {
-                *file_id == Some(function_span.file_id)
+                *file_id == function_span.file_id
                     && function_span.byte_offset as usize <= *offset
                     && *offset < function_span.end() as usize
             })
@@ -198,12 +198,6 @@ fn collect_bindings(
 fn collect_dead_code(facts: &Facts, out: &mut Vec<LisetteDiagnostic>) {
     for dc in &facts.dead_code {
         out.push(diagnostics::lint::dead_code(&dc.span, dc.cause));
-    }
-}
-
-fn collect_pattern_issues(issues: &[PatternIssue], out: &mut Vec<LisetteDiagnostic>) {
-    for issue in issues {
-        out.push(diagnostics::lint::pattern_issue(&issue.span, issue.kind));
     }
 }
 

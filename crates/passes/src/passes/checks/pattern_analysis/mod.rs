@@ -19,33 +19,43 @@ pub use self::PatternAnalysisContext as Context;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
-use diagnostics::{IssueKind, LocalSink, PatternIssue};
+use diagnostics::{IssueKind, LocalSink};
 use semantics::context::AnalysisContext;
 use semantics::store::Store;
-use syntax::ast::{Expression, IfLetAlternative, Literal, Pattern, SelectArm, Span};
-use syntax::types::Type;
+use syntax::ast::{
+    ConstructorPatternResolution, Expression, IfLetAlternative, Literal, Pattern, SelectArm, Span,
+};
+use syntax::types::{Type, unqualified_name};
 
 use maranget::is_useful;
 use normalize::normalize_arm;
 
-pub struct PatternAnalysisContext<'a> {
+pub struct PatternAnalysisContext<'a, 'sink> {
     pub store: &'a Store,
     cache: InhabitanceCache,
-    issues: Vec<PatternIssue>,
     or_pattern_error_spans: &'a HashSet<Span>,
+    sink: &'sink LocalSink,
+    lint_sink: Option<&'sink LocalSink>,
 }
 
-impl<'a> PatternAnalysisContext<'a> {
+impl<'a, 'sink> PatternAnalysisContext<'a, 'sink> {
     pub fn new(
         analysis: &'a AnalysisContext<'a>,
         or_pattern_error_spans: &'a HashSet<Span>,
+        sink: &'sink LocalSink,
+        lint_sink: Option<&'sink LocalSink>,
     ) -> Self {
         Self {
             store: analysis.store,
             cache: InhabitanceCache::new(),
-            issues: Vec::new(),
             or_pattern_error_spans,
+            sink,
+            lint_sink,
         }
+    }
+
+    pub fn sink(&self) -> &'sink LocalSink {
+        self.sink
     }
 
     fn normalize_context(&self) -> NormalizationContext<'a> {
@@ -62,53 +72,52 @@ impl<'a> PatternAnalysisContext<'a> {
         }
     }
 
-    fn add_issue(&mut self, span: Span, kind: IssueKind) {
-        self.issues.push(PatternIssue { span, kind });
-    }
-
-    pub fn take_issues(self) -> Vec<PatternIssue> {
-        self.issues
+    fn add_issue(&self, span: Span, kind: IssueKind) {
+        if let Some(sink) = self.lint_sink {
+            sink.push(diagnostics::lint::pattern_issue(&span, kind));
+        }
     }
 }
 
-pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext, sink: &LocalSink) {
+pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
+    let sink = ctx.sink;
     match expression {
         Expression::Literal { literal, .. } => {
             if let Literal::Slice(expressions) = literal {
                 for e in expressions {
-                    check(e, ctx, sink);
+                    check(e, ctx);
                 }
             }
         }
 
         Expression::Function { params, body, .. } => {
             for param in params {
-                if !check_refutability(&param.pattern, ctx, sink) {
+                if !check_refutability(&param.pattern, ctx) {
                     return;
                 }
             }
             if let Some(body) = body.definition() {
-                check(body, ctx, sink);
+                check(body, ctx);
             }
         }
         Expression::Lambda { params, body, .. } => {
             for param in params {
-                if !check_refutability(&param.pattern, ctx, sink) {
+                if !check_refutability(&param.pattern, ctx) {
                     return;
                 }
             }
-            check(body, ctx, sink);
+            check(body, ctx);
         }
 
         Expression::Block { items, .. } => {
             for e in items {
-                check(e, ctx, sink);
+                check(e, ctx);
             }
         }
 
         Expression::TryBlock { items, .. } | Expression::RecoverBlock { items, .. } => {
             for e in items {
-                check(e, ctx, sink);
+                check(e, ctx);
             }
         }
 
@@ -118,10 +127,10 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext, sink: &L
             mode,
             ..
         } => {
-            check(value, ctx, sink);
+            check(value, ctx);
 
             if let Some(else_expression) = mode.else_block() {
-                check(else_expression, ctx, sink);
+                check(else_expression, ctx);
 
                 if is_pattern_irrefutable(&binding.pattern, ctx.store) {
                     ctx.add_issue(binding.pattern.get_span(), IssueKind::RedundantLetElse);
@@ -130,7 +139,8 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext, sink: &L
                 if is_pattern_irrefutable(&binding.pattern, ctx.store) {
                     ctx.add_issue(binding.pattern.get_span(), IssueKind::RedundantLetAssert);
                 }
-            } else if !check_refutability(&binding.pattern, ctx, sink) {
+            } else {
+                check_refutability(&binding.pattern, ctx);
             }
         }
 
@@ -142,12 +152,12 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext, sink: &L
             spread,
             ..
         } => {
-            check(expression, ctx, sink);
+            check(expression, ctx);
             for e in args {
-                check(e, ctx, sink);
+                check(e, ctx);
             }
             if let Some(spread_expr) = spread.as_ref() {
-                check(spread_expr, ctx, sink);
+                check(spread_expr, ctx);
             }
         }
 
@@ -157,10 +167,10 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext, sink: &L
             alternative,
             ..
         } => {
-            check(condition, ctx, sink);
-            check(consequence, ctx, sink);
+            check(condition, ctx);
+            check(consequence, ctx);
             if let Some(alternative) = alternative {
-                check(alternative, ctx, sink);
+                check(alternative, ctx);
             }
         }
 
@@ -171,11 +181,11 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext, sink: &L
             alternative,
             ..
         } => {
-            check(scrutinee, ctx, sink);
+            check(scrutinee, ctx);
             check_if_let(pattern, alternative, ctx);
-            check(consequence, ctx, sink);
+            check(consequence, ctx);
             if let Some(alternative) = alternative.expression() {
-                check(alternative, ctx, sink);
+                check(alternative, ctx);
             }
         }
 
@@ -185,7 +195,7 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext, sink: &L
             span,
             ..
         } => {
-            check(subject, ctx, sink);
+            check(subject, ctx);
 
             if !is_inhabited(&subject.get_type(), ctx.store, &mut ctx.cache) {
                 return;
@@ -222,16 +232,16 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext, sink: &L
             }
 
             for a in arms {
-                check(&a.expression, ctx, sink);
+                check(&a.expression, ctx);
                 if let Some(guard) = &a.guard {
-                    check(guard, ctx, sink);
+                    check(guard, ctx);
                 }
             }
         }
 
         Expression::Tuple { elements, .. } => {
             for e in elements {
-                check(e, ctx, sink);
+                check(e, ctx);
             }
         }
 
@@ -239,49 +249,49 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext, sink: &L
         Expression::Struct { .. } => {}
         Expression::StructCall { spread, .. } => {
             if let Some(expression) = spread.as_expression() {
-                check(expression, ctx, sink);
+                check(expression, ctx);
             }
         }
-        Expression::DotAccess { expression, .. } => check(expression, ctx, sink),
+        Expression::DotAccess { expression, .. } => check(expression, ctx),
         Expression::Assignment { .. } => {}
 
-        Expression::Return { expression, .. } => check(expression, ctx, sink),
-        Expression::Propagate { expression, .. } => check(expression, ctx, sink),
+        Expression::Return { expression, .. } => check(expression, ctx),
+        Expression::Propagate { expression, .. } => check(expression, ctx),
 
         Expression::Interface { .. } => {}
         Expression::ImplBlock { methods, .. } => {
             for e in methods {
-                check(e, ctx, sink);
+                check(e, ctx);
             }
         }
 
         Expression::Binary { left, right, .. } => {
-            check(left, ctx, sink);
-            check(right, ctx, sink);
+            check(left, ctx);
+            check(right, ctx);
         }
 
-        Expression::Paren { expression, .. } => check(expression, ctx, sink),
-        Expression::Unary { expression, .. } => check(expression, ctx, sink),
+        Expression::Paren { expression, .. } => check(expression, ctx),
+        Expression::Unary { expression, .. } => check(expression, ctx),
         Expression::Const { expression, .. } => {
             if let Some(value) = expression.value() {
-                check(value, ctx, sink);
+                check(value, ctx);
             }
         }
-        Expression::Reference { expression, .. } => check(expression, ctx, sink),
+        Expression::Reference { expression, .. } => check(expression, ctx),
         Expression::IndexedAccess {
             expression, index, ..
         } => {
-            check(expression, ctx, sink);
-            check(index, ctx, sink);
+            check(expression, ctx);
+            check(index, ctx);
         }
 
-        Expression::Loop { body, .. } => check(body, ctx, sink),
+        Expression::Loop { body, .. } => check(body, ctx),
 
         Expression::While {
             condition, body, ..
         } => {
-            check(condition, ctx, sink);
-            check(body, ctx, sink);
+            check(condition, ctx);
+            check(body, ctx);
         }
 
         Expression::WhileLet {
@@ -290,8 +300,8 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext, sink: &L
             body,
             ..
         } => {
-            check(scrutinee, ctx, sink);
-            check(body, ctx, sink);
+            check(scrutinee, ctx);
+            check(body, ctx);
 
             if is_pattern_irrefutable(pattern, ctx.store) {
                 sink.push(diagnostics::pattern::irrefutable_while_let(
@@ -306,18 +316,18 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext, sink: &L
             body,
             ..
         } => {
-            if !check_refutability(&binding.pattern, ctx, sink) {
+            if !check_refutability(&binding.pattern, ctx) {
                 return;
             }
-            check(iterable, ctx, sink);
-            check(body, ctx, sink);
+            check(iterable, ctx);
+            check(body, ctx);
         }
 
-        Expression::Task { expression, .. } => check(expression, ctx, sink),
+        Expression::Task { expression, .. } => check(expression, ctx),
 
-        Expression::Defer { expression, .. } => check(expression, ctx, sink),
+        Expression::Defer { expression, .. } => check(expression, ctx),
 
-        Expression::Assert { expression, .. } => check(expression, ctx, sink),
+        Expression::Assert { expression, .. } => check(expression, ctx),
 
         Expression::Select { arms, .. } => {
             for arm in arms {
@@ -327,42 +337,42 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext, sink: &L
                         body,
                         ..
                     } => {
-                        check(receive_expression.as_ref(), ctx, sink);
-                        check(body.as_ref(), ctx, sink);
+                        check(receive_expression.as_ref(), ctx);
+                        check(body.as_ref(), ctx);
                     }
                     SelectArm::Send {
                         send_expression,
                         body,
                     } => {
-                        check(send_expression.as_ref(), ctx, sink);
-                        check(body.as_ref(), ctx, sink);
+                        check(send_expression.as_ref(), ctx);
+                        check(body.as_ref(), ctx);
                     }
                     SelectArm::MatchReceive {
                         receive_expression,
                         arms: match_arms,
                     } => {
-                        check(receive_expression.as_ref(), ctx, sink);
+                        check(receive_expression.as_ref(), ctx);
                         for match_arm in match_arms {
-                            check(&match_arm.expression, ctx, sink);
+                            check(&match_arm.expression, ctx);
                         }
                     }
                     SelectArm::WildCard { body } => {
-                        check(body.as_ref(), ctx, sink);
+                        check(body.as_ref(), ctx);
                     }
                 }
             }
         }
         Expression::Range { start, end, .. } => {
             if let Some(start_expression) = start {
-                check(start_expression, ctx, sink);
+                check(start_expression, ctx);
             }
             if let Some(end_expression) = end {
-                check(end_expression, ctx, sink);
+                check(end_expression, ctx);
             }
         }
 
         Expression::Cast { expression, .. } => {
-            check(expression, ctx, sink);
+            check(expression, ctx);
         }
 
         Expression::TypeAlias { .. } => {}
@@ -372,7 +382,7 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext, sink: &L
         Expression::RawGo { .. } => {}
         Expression::Break { value, .. } => {
             if let Some(v) = value {
-                check(v, ctx, sink);
+                check(v, ctx);
             }
         }
         Expression::Continue { .. } => {}
@@ -491,11 +501,7 @@ fn check_if_let(
     }
 }
 
-fn check_refutability(
-    pattern: &Pattern,
-    ctx: &mut PatternAnalysisContext,
-    sink: &LocalSink,
-) -> bool {
+fn check_refutability(pattern: &Pattern, ctx: &mut PatternAnalysisContext) -> bool {
     if matches!(pattern, Pattern::Or { .. }) {
         return true;
     }
@@ -513,21 +519,54 @@ fn check_refutability(
         let witness = witnesses.first().expect("witnesses not empty");
         let witness_string = format_witness(witness);
 
-        let slice_info = if let Pattern::Slice { prefix, rest, .. } = pattern {
-            Some((prefix.len(), rest.is_present()))
-        } else {
-            None
-        };
-
-        sink.push(diagnostics::pattern::refutable_pattern(
+        ctx.sink.push(diagnostics::pattern::refutable_pattern(
             pattern.get_span(),
-            &witness_string,
-            slice_info,
+            refutable_pattern(pattern, &witness_string),
         ));
         return false;
     }
 
     true
+}
+
+fn refutable_pattern<'a>(
+    pattern: &Pattern,
+    witness: &'a str,
+) -> diagnostics::pattern::RefutablePattern<'a> {
+    let pattern = match pattern {
+        Pattern::AsBinding { pattern, .. } => pattern,
+        pattern => pattern,
+    };
+
+    match pattern {
+        Pattern::Slice { prefix, rest, .. } if rest.is_present() => {
+            diagnostics::pattern::RefutablePattern::SlicePrefix(prefix.len())
+        }
+        Pattern::Slice { prefix, .. } => {
+            diagnostics::pattern::RefutablePattern::ExactSlice(prefix.len())
+        }
+        Pattern::EnumVariant {
+            resolution:
+                ConstructorPatternResolution::EnumVariant {
+                    enum_name,
+                    variant_name,
+                },
+            ..
+        } if unqualified_name(enum_name) == "Option" && variant_name == "Some" => {
+            diagnostics::pattern::RefutablePattern::Some
+        }
+        Pattern::EnumVariant {
+            resolution:
+                ConstructorPatternResolution::EnumVariant {
+                    enum_name,
+                    variant_name,
+                },
+            ..
+        } if unqualified_name(enum_name) == "Result" && variant_name == "Ok" => {
+            diagnostics::pattern::RefutablePattern::Ok
+        }
+        _ => diagnostics::pattern::RefutablePattern::Other(witness),
+    }
 }
 
 pub fn is_pattern_irrefutable(pattern: &Pattern, store: &Store) -> bool {

@@ -117,7 +117,7 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     store.store_file(typed_file);
     store.build_closed_domains();
 
-    let inference_len = checker.sink.len();
+    let inference_checkpoint = checker.sink.checkpoint();
 
     let ufcs_methods = checker.shared_ufcs_methods();
     let analysis = semantics::context::AnalysisContext::new(&store, &ufcs_methods);
@@ -137,9 +137,9 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
         "infer.type_not_inferred",
         "infer.missing_type_argument",
     ];
-    let mut all_diagnostics = checker.sink.take();
-    let pass_diagnostics = all_diagnostics.split_off(inference_len);
-    let mut diagnostics: Vec<LisetteDiagnostic> = all_diagnostics
+    let (inference_diagnostics, pass_diagnostics) =
+        checker.sink.into_diagnostics_since(inference_checkpoint);
+    let mut diagnostics: Vec<LisetteDiagnostic> = inference_diagnostics
         .into_iter()
         .filter(|diagnostic| !diagnostic.is_error())
         .collect();

@@ -963,16 +963,16 @@ impl TaskState {
 
         let qualified_name = self.qualify_name(identifier);
 
-        let before = self.sink.len();
-        let const_ty = if let Some(annotation) = maybe_annotation {
-            self.convert_to_type(store, annotation, span)
-        } else {
-            expression
-                .value()
-                .and_then(|value| self.type_from_literal_expression(value))
-                .unwrap_or_else(|| self.new_type_var())
-        };
-        self.sink.truncate(before);
+        let const_ty = self.without_diagnostics(|this| {
+            if let Some(annotation) = maybe_annotation {
+                this.convert_to_type(store, annotation, span)
+            } else {
+                expression
+                    .value()
+                    .and_then(|value| this.type_from_literal_expression(value))
+                    .unwrap_or_else(|| this.new_type_var())
+            }
+        });
 
         let item_visibility =
             self.compute_item_visibility(&*store, syntactic_visibility, visibility);
@@ -1096,23 +1096,22 @@ impl TaskState {
         self.check_transitive_generic_bounds(store, &generics, *span);
         let bounds = resolved_generic_bounds(&generics);
 
-        let before = self.sink.len();
+        let (param_types, return_ty) = self.without_diagnostics(|this| {
+            let param_types: Vec<Type> = params
+                .iter()
+                .map(|binding| match &binding.annotation {
+                    Some(a) => this.convert_variadic_to_type(store, a, span),
+                    None if !binding.ty.is_uninferred() => binding.ty.clone(),
+                    None => this.new_type_var(),
+                })
+                .collect();
 
-        let param_types: Vec<Type> = params
-            .iter()
-            .map(|binding| match &binding.annotation {
-                Some(a) => self.convert_variadic_to_type(store, a, span),
-                None if !binding.ty.is_uninferred() => binding.ty.clone(),
-                None => self.new_type_var(),
-            })
-            .collect();
-
-        let return_ty = match return_annotation {
-            Annotation::Unknown => self.type_unit(),
-            _ => self.convert_to_type(store, return_annotation, span),
-        };
-
-        self.sink.truncate(before);
+            let return_ty = match return_annotation {
+                Annotation::Unknown => this.type_unit(),
+                _ => this.convert_to_type(store, return_annotation, span),
+            };
+            (param_types, return_ty)
+        });
 
         self.scopes.pop();
 

@@ -69,10 +69,8 @@ pub fn check_match_same_arms(expression: &Expression, ctx: &NodeCtx) {
         ctx.sink.push(
             diagnostics::lint::match_same_arms(&later_span, earlier_text).with_fix(Fix::multi(
                 format!("Merge into `{merged}`"),
-                vec![
-                    Edit::replacement(earlier_span, merged),
-                    Edit::deletion(deletion),
-                ],
+                Edit::replacement(earlier_span, merged),
+                vec![Edit::deletion(deletion)],
             )),
         );
     }

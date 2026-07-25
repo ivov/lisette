@@ -210,9 +210,9 @@ fn emit_and_write(
         disable_cache: true,
     });
     let result = output.result;
-    if !result.errors.is_empty() {
+    if !result.errors().is_empty() {
         let codes = result
-            .errors
+            .errors()
             .iter()
             .filter_map(|e| e.code_str().map(str::to_string))
             .collect();

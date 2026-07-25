@@ -157,19 +157,15 @@ impl SharedState {
         let facts = analyze_output.facts;
 
         if has_parse_errors {
-            let mut all_errors = parse_errors;
-            all_errors.append(&mut result.errors);
-            result.errors = all_errors;
+            result.prepend_errors(parse_errors);
         }
 
         if let Some(msg) = manifest_error {
-            result
-                .errors
-                .push(LisetteDiagnostic::error(msg).with_resolve_code("manifest_error"));
+            result.push_error(LisetteDiagnostic::error(msg).with_resolve_code("manifest_error"));
         }
 
         if let Some(msg) = bindgen_error {
-            result.errors.push(
+            result.push_error(
                 LisetteDiagnostic::error(format!(
                     "Could not start bindgen for this project: {}",
                     msg
@@ -239,9 +235,8 @@ impl SharedState {
 
         snapshot
             .result
-            .errors
+            .diagnostics()
             .iter()
-            .chain(&snapshot.result.lints)
             .filter(|d| {
                 let fid = d.file_id();
                 fid == Some(file_id) || fid.is_none()

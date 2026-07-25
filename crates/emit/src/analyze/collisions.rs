@@ -668,9 +668,10 @@ fn report_collisions(map: SpanMap, diagnostics: &mut Vec<LisetteDiagnostic>) {
     for (go, mut spans) in groups {
         spans.sort_by_key(|span| (span.file_id, span.byte_offset));
         spans.dedup();
-        if spans.len() > 1 {
-            diagnostics.push(emit_diag::go_name_collision(&go, &spans, None));
-        }
+        let [first, second, rest @ ..] = spans.as_slice() else {
+            continue;
+        };
+        diagnostics.push(emit_diag::go_name_collision(&go, first, second, rest, None));
     }
 }
 

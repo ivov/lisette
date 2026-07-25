@@ -233,7 +233,7 @@ pub(crate) fn run(analysis: &AnalysisContext, facts: &Facts) -> Vec<LisetteDiagn
         for module in &modules {
             run_module(module, store, facts, &sink, &deprecated, &usages_by_file);
         }
-        return sink.take();
+        return sink.into_diagnostics();
     }
 
     let worker_sinks: Vec<LocalSink> = modules
@@ -285,7 +285,7 @@ fn run_module(
             deprecation::sweep(usages, deprecated, &file_sink);
         }
 
-        let produced = file_sink.take();
+        let produced = file_sink.into_diagnostics();
         if produced.is_empty() {
             continue;
         }

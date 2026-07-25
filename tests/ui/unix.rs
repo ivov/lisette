@@ -8,10 +8,7 @@ use syntax::lex::Lexer;
 use syntax::parse::Parser;
 
 fn unfiltered() -> Filter {
-    Filter {
-        errors_only: false,
-        warnings_only: false,
-    }
+    Filter::All
 }
 
 #[test]
@@ -112,5 +109,5 @@ fn test() {
         assert!(line.starts_with("src/main.lis:"));
         assert!(line.contains(": error: "));
     }
-    assert_eq!(output.lines().count() as i32, counts.errors);
+    assert_eq!(output.lines().count(), counts.errors);
 }

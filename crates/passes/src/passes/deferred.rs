@@ -134,7 +134,7 @@ mod tests {
         });
         let sink = LocalSink::new();
         run(&Store::new(), checks, &sink);
-        sink.take()
+        sink.into_diagnostics()
             .iter()
             .filter_map(|d| d.code_str().map(str::to_string))
             .collect()

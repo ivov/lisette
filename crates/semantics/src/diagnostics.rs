@@ -133,9 +133,11 @@ fn emit_unknown_stdlib(
         sink.push(diagnostics::module_graph::module_not_found(
             import_name,
             span,
-            false,
-            standalone_mode,
-            None,
+            if standalone_mode {
+                diagnostics::module_graph::MissingModuleReason::Standalone
+            } else {
+                diagnostics::module_graph::MissingModuleReason::NotFound
+            },
         ));
     }
 }
@@ -152,9 +154,7 @@ fn emit_undeclared(
         sink.push(diagnostics::module_graph::module_not_found(
             import_name,
             span,
-            false,
-            true,
-            None,
+            diagnostics::module_graph::MissingModuleReason::Standalone,
         ));
     } else if let Some(replaced_module) = replace_importer {
         sink.push(diagnostics::module_graph::undeclared_go_import_via_replace(

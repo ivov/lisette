@@ -90,7 +90,7 @@ pub(crate) fn resolve_dot_access_definition(
             .or_else(|| {
                 file.imports().into_iter().find_map(|import| {
                     if import
-                        .effective_alias(&snapshot.result.go_package_names)
+                        .effective_alias(&snapshot.result.emit_input.go_package_names)
                         .is_none()
                     {
                         let qualified = format!("{}.{}", import.name, name);
@@ -134,9 +134,11 @@ pub(crate) fn resolve_dot_access_definition(
             }
         ) {
             resolve_by_type()
-        } else if let Some(module_name) =
-            find_module_by_alias(file, root_identifier, &snapshot.result.go_package_names)
-        {
+        } else if let Some(module_name) = find_module_by_alias(
+            file,
+            root_identifier,
+            &snapshot.result.emit_input.go_package_names,
+        ) {
             let qualified = dotted_path
                 .strip_prefix(root_identifier)
                 .map(|rest| format!("{}{}", module_name, rest))
@@ -153,9 +155,11 @@ pub(crate) fn resolve_dot_access_definition(
     } = expression.unwrap_parens()
         && !matches!(resolution, IdentifierResolution::Binding(_))
     {
-        if let Some(module_name) =
-            find_module_by_alias(file, value.as_str(), &snapshot.result.go_package_names)
-        {
+        if let Some(module_name) = find_module_by_alias(
+            file,
+            value.as_str(),
+            &snapshot.result.emit_input.go_package_names,
+        ) {
             let qualified = format!("{}.{}", module_name, member);
             snapshot
                 .definitions()
@@ -250,12 +254,16 @@ fn resolve_constructor_name(
 
     if cursor_in_name <= dot_pos {
         let first = &name[..dot_pos];
-        return resolve_import_span(first, file, &snapshot.result.go_package_names)
+        return resolve_import_span(first, file, &snapshot.result.emit_input.go_package_names)
             .or_else(|| lookup_definition_span(first, file, snapshot));
     }
 
     let (qualifier, simple) = name.split_once('.')?;
-    let module_name = find_module_by_alias(file, qualifier, &snapshot.result.go_package_names)?;
+    let module_name = find_module_by_alias(
+        file,
+        qualifier,
+        &snapshot.result.emit_input.go_package_names,
+    )?;
 
     let qualified = format!("{}.{}", module_name, simple);
 

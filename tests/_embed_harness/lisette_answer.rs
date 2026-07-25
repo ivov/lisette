@@ -178,7 +178,7 @@ fn check(source: &str) -> Checked {
 
     Checked {
         parse_failed: false,
-        errors: output.result.errors,
+        errors: output.result.errors().to_vec(),
     }
 }
 

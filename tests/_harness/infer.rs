@@ -82,7 +82,7 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
     if sink.has_errors() {
         return InferResult {
             ast: vec![],
-            errors: sink.take(),
+            errors: sink.into_diagnostics(),
             definitions: HashMap::default(),
         };
     }
@@ -172,7 +172,7 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
             );
         }
 
-        sink.extend(checker.sink.take());
+        sink.extend(checker.sink.into_diagnostics());
         ast
     };
 
@@ -185,7 +185,7 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
 
     InferResult {
         ast,
-        errors: sink.take(),
+        errors: sink.into_diagnostics(),
         definitions,
     }
 }

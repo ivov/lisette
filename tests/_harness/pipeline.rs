@@ -273,7 +273,7 @@ impl CompiledTest {
                 .cloned()
                 .collect();
 
-            sink.extend(checker.sink.take());
+            sink.extend(checker.sink.into_diagnostics());
 
             (
                 typed_ast,
@@ -289,7 +289,7 @@ impl CompiledTest {
 
         InferenceResult {
             ast: typed_ast,
-            errors: sink.take(),
+            errors: sink.into_diagnostics(),
             definitions,
             module_id: TEST_MODULE_ID.to_string(),
             unused,

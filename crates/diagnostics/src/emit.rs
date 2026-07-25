@@ -1,10 +1,15 @@
 use crate::LisetteDiagnostic;
 use syntax::ast::Span;
 
-pub fn go_name_collision(go_name: &str, spans: &[Span], detail: Option<&str>) -> LisetteDiagnostic {
-    debug_assert!(spans.len() > 1, "a collision needs at least two sources");
+pub fn go_name_collision(
+    go_name: &str,
+    first: &Span,
+    second: &Span,
+    rest: &[Span],
+    detail: Option<&str>,
+) -> LisetteDiagnostic {
     let mut diagnostic = LisetteDiagnostic::error(format!("Go name collision on `{}`", go_name));
-    for (index, span) in spans.iter().enumerate() {
+    for (index, span) in [first, second].into_iter().chain(rest).enumerate() {
         let label = format!("becomes `{}` in Go", go_name);
         diagnostic = if index == 0 {
             diagnostic.with_span_primary_label(span, label)
@@ -48,8 +53,14 @@ pub fn reserved_go_qualifier(name: &str, span: &Span) -> LisetteDiagnostic {
         ))
 }
 
-pub fn go_import_collision(alias: &str, paths: &[String]) -> LisetteDiagnostic {
-    let mut sorted = paths.to_vec();
+pub fn go_import_collision(
+    alias: &str,
+    first: &str,
+    second: &str,
+    rest: &[&str],
+) -> LisetteDiagnostic {
+    let mut sorted = vec![first, second];
+    sorted.extend_from_slice(rest);
     sorted.sort();
 
     let bullet_list = sorted
@@ -58,7 +69,7 @@ pub fn go_import_collision(alias: &str, paths: &[String]) -> LisetteDiagnostic {
         .collect::<Vec<_>>()
         .join("\n");
 
-    let suggestion_target = sorted.last().cloned().unwrap_or_default();
+    let suggestion_target = sorted[sorted.len() - 1];
 
     LisetteDiagnostic::error("Go import collision")
         .with_emit_code("go_import_collision")

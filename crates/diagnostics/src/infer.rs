@@ -2054,8 +2054,17 @@ pub fn type_conversion_arity(
 pub struct InterfaceViolation {
     pub interface_name: String,
     pub parent_of: Option<String>,
-    pub missing: Vec<MissingMethod>,
-    pub incompatible: Vec<(String, Type, Type)>,
+    pub methods: Vec<InterfaceMethodViolation>,
+}
+
+#[derive(Debug, Clone)]
+pub enum InterfaceMethodViolation {
+    Missing(MissingMethod),
+    Incompatible {
+        name: String,
+        expected: Type,
+        actual: Type,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -2107,33 +2116,45 @@ pub fn interface_not_implemented(
             format!("From `{}`", violation.interface_name)
         };
 
-        if !violation.missing.is_empty() {
-            let methods: Vec<String> = violation
-                .missing
-                .iter()
-                .flat_map(|method| {
-                    let mut lines = vec![format!("  - {}: {}", method.name, method.signature)];
-                    if let Some(private_name) = &method.private_candidate {
-                        lines.push(format!(
+        let missing: Vec<String> = violation
+            .methods
+            .iter()
+            .filter_map(|method| match method {
+                InterfaceMethodViolation::Missing(method) => Some(method),
+                InterfaceMethodViolation::Incompatible { .. } => None,
+            })
+            .flat_map(|method| {
+                std::iter::once(format!("  - {}: {}", method.name, method.signature)).chain(
+                    method.private_candidate.iter().map(|private_name| {
+                        format!(
                             "    (add `pub` to the private method `{}` to satisfy this)",
                             private_name
-                        ));
-                    }
-                    lines
-                })
-                .collect();
-            missing_sections.push((header.clone(), methods));
+                        )
+                    }),
+                )
+            })
+            .collect();
+        if !missing.is_empty() {
+            missing_sections.push((header.clone(), missing));
         }
 
-        if !violation.incompatible.is_empty() {
-            let methods: Vec<String> = violation
-                .incompatible
-                .iter()
-                .map(|(name, expected, actual)| {
-                    format!("  - {}: expected `{}`, found `{}`", name, expected, actual)
-                })
-                .collect();
-            incompatible_sections.push((header, methods));
+        let incompatible: Vec<String> = violation
+            .methods
+            .iter()
+            .filter_map(|method| match method {
+                InterfaceMethodViolation::Missing(_) => None,
+                InterfaceMethodViolation::Incompatible {
+                    name,
+                    expected,
+                    actual,
+                } => Some(format!(
+                    "  - {}: expected `{}`, found `{}`",
+                    name, expected, actual
+                )),
+            })
+            .collect();
+        if !incompatible.is_empty() {
+            incompatible_sections.push((header, incompatible));
         }
     }
 

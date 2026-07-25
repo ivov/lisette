@@ -44,11 +44,14 @@ pub fn check(
         return 1;
     }
 
+    let filter = match (errors_only, warnings_only) {
+        (true, false) => Filter::Errors,
+        (false, true) => Filter::Warnings,
+        (false, false) => Filter::All,
+        (true, true) => unreachable!("mutually exclusive flags are rejected by argument parsing"),
+    };
     let options = CheckOptions {
-        filter: Filter {
-            errors_only,
-            warnings_only,
-        },
+        filter,
         format,
         fix,
         deny_warnings,
@@ -400,7 +403,7 @@ fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
     exit_code(all_errors, total_warnings, options.deny_warnings)
 }
 
-fn exit_code(errors: i32, warnings: i32, deny_warnings: bool) -> i32 {
+fn exit_code(errors: usize, warnings: usize, deny_warnings: bool) -> i32 {
     i32::from(errors > 0 || (deny_warnings && warnings > 0))
 }
 

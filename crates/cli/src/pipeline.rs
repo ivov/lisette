@@ -120,12 +120,14 @@ pub fn compile(
     let unreachable_modules = analyze_output.unreachable_modules;
 
     let user_file_count = semantic_result
+        .emit_input
         .files
         .values()
         .filter(|file| !file.is_d_lis())
         .count();
 
     let sources: HashMap<u32, SourceInfo> = semantic_result
+        .emit_input
         .files
         .iter()
         .map(|(file_id, file)| {
@@ -140,9 +142,10 @@ pub fn compile(
         .collect();
 
     let failed = semantic_result.failed();
-    let mut errors = semantic_result.errors.clone();
-    let mut lints = semantic_result.lints.clone();
+    let mut errors = semantic_result.errors().to_vec();
+    let mut lints = semantic_result.lints().to_vec();
     let mut live_modules: Vec<String> = semantic_result
+        .emit_input
         .files
         .values()
         .filter(|file| !file.is_d_lis())
@@ -150,7 +153,7 @@ pub fn compile(
         .collect();
     live_modules.sort_unstable();
     live_modules.dedup();
-    let test_index = semantic_result.test_index.clone();
+    let test_index = semantic_result.emit_input.test_index.clone();
 
     if !unreachable_modules.is_empty() && !config.emit_tests {
         lints.push(diagnostics::module_graph::unreachable_modules(
@@ -439,12 +442,11 @@ mod tests {
         })
         .result;
 
-        let mut cached: Vec<String> = result.cached_modules.iter().cloned().collect();
+        let mut cached: Vec<String> = result.emit_input.cached_modules.iter().cloned().collect();
         cached.sort();
         let mut diags: Vec<(bool, Option<String>)> = result
-            .errors
+            .diagnostics()
             .iter()
-            .chain(result.lints.iter())
             .map(|d| (d.is_error(), d.code_str().map(|s| s.to_string())))
             .collect();
         diags.sort();
@@ -546,6 +548,7 @@ mod tests {
         });
         let mut names: Vec<String> = output
             .result
+            .emit_input
             .test_index
             .tests()
             .iter()

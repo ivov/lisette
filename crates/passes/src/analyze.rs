@@ -3,7 +3,7 @@ use std::sync::Arc;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::SemanticResult;
-use syntax::program::{MutationInfo, UnusedInfo};
+use syntax::program::{EmitInput, MutationInfo, UnusedInfo};
 
 use semantics::cache::{EmitStamp, compute_emit_artifact_hash, save_module_cache};
 use semantics::facts::Facts;
@@ -56,9 +56,8 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
 
     // Canonicalize diagnostic order so the output is stable regardless of
     // phase ordering, FxHashMap iteration, or parallel inference scheduling.
-    let mut all_diagnostics = sink.take();
+    let mut all_diagnostics = sink.into_diagnostics();
     all_diagnostics.sort_by(diagnostics::LisetteDiagnostic::sort_key);
-    let (errors, lints): (Vec<_>, Vec<_>) = all_diagnostics.into_iter().partition(|d| d.is_error());
 
     let emit_stamps: Vec<EmitStamp> = compiled_modules
         .iter()
@@ -69,7 +68,9 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
         .collect();
 
     if cache_enabled && let Some(ref project_root) = project_root {
-        let has_errors = errors.iter().any(|e| e.is_error());
+        let has_errors = all_diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.is_error());
         if !has_errors {
             let save = |compiled: &semantics::cache::CompiledModule| {
                 let file_ids: HashSet<u32> = store
@@ -77,10 +78,12 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
                     .map(|m| m.file_ids().collect())
                     .unwrap_or_default();
 
-                let has_module_lints = lints.iter().any(|lint| {
-                    lint.file_id()
-                        .map(|fid| file_ids.contains(&fid))
-                        .unwrap_or(true)
+                let has_module_lints = all_diagnostics.iter().any(|diagnostic| {
+                    !diagnostic.is_error()
+                        && diagnostic
+                            .file_id()
+                            .map(|fid| file_ids.contains(&fid))
+                            .unwrap_or(true)
                 });
                 if !has_module_lints
                     && let Err(e) = save_module_cache(compiled, &store, project_root, &ufcs_methods)
@@ -126,22 +129,23 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
         files.extend(module.files);
     }
 
-    let result = SemanticResult {
-        files,
-        definitions,
-        errors,
-        lints,
-        entry_module_id: ENTRY_MODULE_ID.to_string(),
-        unused,
-        mutations,
-        cached_modules,
-        ufcs_methods,
-        equality_index: store.equality_index,
-        test_index: store.test_index,
-        typedef_paths: store.typedef_paths,
-        go_package_names: store.go_package_names,
-        go_module_ids,
-    };
+    let result = SemanticResult::new(
+        EmitInput {
+            files,
+            definitions,
+            entry_module_id: ENTRY_MODULE_ID.to_string(),
+            unused,
+            mutations,
+            cached_modules,
+            ufcs_methods,
+            equality_index: store.equality_index,
+            test_index: store.test_index,
+            go_package_names: store.go_package_names,
+            go_module_ids,
+        },
+        all_diagnostics,
+        store.typedef_paths,
+    );
 
     AnalyzeOutput {
         result,

@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::time::Duration;
 
-use owo_colors::{OwoColorize, Style};
+use owo_colors::OwoColorize;
 use semantics::store::ENTRY_MODULE_ID;
 use serde::Deserialize;
 use syntax::ast::Span;
@@ -745,16 +745,9 @@ fn render_log(record: &LogRecord, sources: &Sources, color: bool) -> Option<Stri
     let info = sources.get(&record.file)?;
     let span = Span::new(record.file, record.lo, record.hi.saturating_sub(record.lo));
     let diagnostic = LisetteDiagnostic::info(String::new())
-        .with_span_primary_label(&span, truncate_log_value(&record.value))
-        .with_label_accent(Style::new().blue());
-    let rendered = diagnostics::render::render_to_string(
-        &diagnostic,
-        &info.source,
-        &info.filename,
-        color,
-        Style::new().blue(),
-        2,
-    );
+        .with_span_primary_label(&span, truncate_log_value(&record.value));
+    let rendered =
+        diagnostics::render::render_to_string(&diagnostic, &info.source, &info.filename, color, 2);
     Some(rendered.lines().skip(1).collect::<Vec<_>>().join("\n"))
 }
 
@@ -947,14 +940,8 @@ fn render_failure(
             diagnostic = diagnostic.with_note(notes.join("\n"));
         }
     }
-    let rendered = diagnostics::render::render_to_string(
-        &diagnostic,
-        &info.source,
-        &info.filename,
-        color,
-        Style::new().red(),
-        2,
-    );
+    let rendered =
+        diagnostics::render::render_to_string(&diagnostic, &info.source, &info.filename, color, 2);
     let body = rendered.lines().skip(1).collect::<Vec<_>>().join("\n");
     let suffix = (!paired).then(|| record.message.clone());
     Some((suffix, body))
