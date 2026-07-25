@@ -58,7 +58,7 @@ use checks::{
     check_wildcard_in_or_patterns,
 };
 
-fn run_expression_checks(expression: &Expression, ctx: &NodeCtx<'_>, role: FunctionRole<'_>) {
+fn run_expression_checks(expression: &Expression, ctx: &mut NodeCtx<'_>, role: FunctionRole<'_>) {
     apply_expression_checks!(
         expression,
         ctx,
@@ -189,7 +189,7 @@ fn run_expression_checks(expression: &Expression, ctx: &NodeCtx<'_>, role: Funct
     );
 }
 
-fn run_pattern_checks(pattern: &Pattern, ctx: &NodeCtx<'_>, role: PatternRole) {
+fn run_pattern_checks(pattern: &Pattern, ctx: &mut NodeCtx<'_>, role: PatternRole) {
     apply_pattern_checks!(
         pattern,
         ctx,
@@ -264,7 +264,7 @@ fn run_module(
 ) {
     for (file_id, file) in module.source_file_entries() {
         let file_sink = LocalSink::new();
-        let ctx = NodeCtx {
+        let mut ctx = NodeCtx {
             store,
             facts,
             files: &module.files,
@@ -274,7 +274,12 @@ fn run_module(
             sink: &file_sink,
             claimed_spans: Default::default(),
         };
-        walk_nodes(&file.items, &ctx, run_expression_checks, run_pattern_checks);
+        walk_nodes(
+            &file.items,
+            &mut ctx,
+            run_expression_checks,
+            run_pattern_checks,
+        );
 
         if let Some(usages) = usages_by_file.get(file_id) {
             deprecation::sweep(usages, deprecated, &file_sink);

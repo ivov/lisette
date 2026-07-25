@@ -12,7 +12,7 @@ use super::{
     unchanging_loop_condition,
 };
 
-fn run_expression_checks(expression: &Expression, ctx: &NodeCtx<'_>, _role: FunctionRole<'_>) {
+fn run_expression_checks(expression: &Expression, ctx: &mut NodeCtx<'_>, _role: FunctionRole<'_>) {
     apply_expression_checks!(
         expression,
         ctx,
@@ -64,8 +64,8 @@ fn run_expression_checks(expression: &Expression, ctx: &NodeCtx<'_>, _role: Func
     );
 }
 
-fn ignore_patterns(_: &Pattern, _: &NodeCtx<'_>, _: PatternRole) {}
+fn ignore_patterns(_: &Pattern, _: &mut NodeCtx<'_>, _: PatternRole) {}
 
-pub(crate) fn run<'a>(items: &'a [Expression], ctx: &NodeCtx<'a>) {
+pub(crate) fn run<'a>(items: &'a [Expression], ctx: &mut NodeCtx<'a>) {
     walk_nodes(items, ctx, run_expression_checks, ignore_patterns);
 }

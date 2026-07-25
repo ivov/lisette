@@ -1,13 +1,12 @@
 use diagnostics::LocalSink;
 use rustc_hash::FxHashSet as HashSet;
 
-use semantics::facts::Facts;
-use semantics::facts::GenericBoundOrigin;
+use semantics::facts::{DeferredChecks, GenericBoundOrigin};
 use semantics::generics::bound_display_name;
 use semantics::store::Store;
 use syntax::types::{CompoundKind, TypeVarId};
 
-pub(crate) fn run(store: &Store, facts: &mut Facts, sink: &LocalSink) {
+pub(crate) fn run(store: &Store, checks: DeferredChecks, sink: &LocalSink) {
     let mut reported_vars: HashSet<(String, TypeVarId)> = HashSet::default();
     let mut collected = Vec::new();
     let mut report_vars = |ty: &syntax::types::Type, module_id: &str| {
@@ -15,13 +14,13 @@ pub(crate) fn run(store: &Store, facts: &mut Facts, sink: &LocalSink) {
         ty.collect_unbound_variables(&mut collected);
         reported_vars.extend(collected.iter().map(|v| (module_id.to_string(), *v)));
     };
-    for check in std::mem::take(&mut facts.generic_call_checks) {
+    for check in checks.generic_calls {
         if check.ty.has_unbound_variables() {
             sink.push(diagnostics::infer::cannot_infer_type_argument(check.span));
             report_vars(&check.ty, &check.module_id);
         }
     }
-    for obligation in std::mem::take(&mut facts.generic_bound_obligations) {
+    for obligation in checks.generic_bounds {
         if obligation.argument.has_unbound_variables() {
             let required_name = bound_display_name(store, &obligation.required);
             let diagnostic = match &obligation.origin {
@@ -46,7 +45,7 @@ pub(crate) fn run(store: &Store, facts: &mut Facts, sink: &LocalSink) {
             report_vars(&obligation.argument, &obligation.module_id);
         }
     }
-    for check in std::mem::take(&mut facts.empty_collection_checks) {
+    for check in checks.empty_collections {
         if check.ty.has_unbound_variables() {
             sink.push(diagnostics::infer::uninferred_binding(
                 &check.name,
@@ -56,7 +55,7 @@ pub(crate) fn run(store: &Store, facts: &mut Facts, sink: &LocalSink) {
         }
     }
     let mut reported_literal_spans = HashSet::default();
-    for check in std::mem::take(&mut facts.empty_literal_checks) {
+    for check in checks.empty_literals {
         if !check.ty.has_unbound_variables() {
             continue;
         }
@@ -72,7 +71,7 @@ pub(crate) fn run(store: &Store, facts: &mut Facts, sink: &LocalSink) {
             sink.push(diagnostics::infer::empty_slice_no_element_type(check.span));
         }
     }
-    for check in std::mem::take(&mut facts.slice_make_checks) {
+    for check in checks.slice_makes {
         let slice_ty = store.peel_alias(&check.ty);
         let Some((CompoundKind::Slice, args)) = slice_ty.as_compound() else {
             continue;
@@ -90,7 +89,7 @@ pub(crate) fn run(store: &Store, facts: &mut Facts, sink: &LocalSink) {
             ));
         }
     }
-    for check in std::mem::take(&mut facts.statement_tail_checks) {
+    for check in checks.statement_tails {
         if !check.expected_ty.is_unit()
             && !check.expected_ty.is_variable()
             && !check.expected_ty.is_ignored()
@@ -107,8 +106,7 @@ pub(crate) fn run(store: &Store, facts: &mut Facts, sink: &LocalSink) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use semantics::facts::{BindingIdAllocator, EmptyLiteralCheck, GenericCallCheck};
-    use std::sync::Arc;
+    use semantics::facts::{EmptyLiteralCheck, GenericCallCheck};
     use syntax::ast::Span;
     use syntax::types::{CompoundKind, Type};
 
@@ -123,19 +121,19 @@ mod tests {
     }
 
     fn run_checks(call_module: &str, literal_module: &str) -> Vec<String> {
-        let mut facts = Facts::new(Arc::new(BindingIdAllocator::default()));
-        facts.generic_call_checks.push(GenericCallCheck {
+        let mut checks = DeferredChecks::default();
+        checks.generic_calls.push(GenericCallCheck {
             ty: unbound_slice(5),
             span: Span::new(0, 0, 10),
             module_id: call_module.to_string(),
         });
-        facts.empty_literal_checks.push(EmptyLiteralCheck {
+        checks.empty_literals.push(EmptyLiteralCheck {
             ty: unbound_slice(5),
             span: Span::new(1, 4, 2),
             module_id: literal_module.to_string(),
         });
         let sink = LocalSink::new();
-        run(&Store::new(), &mut facts, &sink);
+        run(&Store::new(), checks, &sink);
         sink.take()
             .iter()
             .filter_map(|d| d.code_str().map(str::to_string))

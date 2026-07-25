@@ -1,5 +1,4 @@
 use rustc_hash::FxHashMap as HashMap;
-use std::cell::RefCell;
 
 use semantics::store::Store;
 use syntax::ast::{EnumVariant, Generic, StructFieldDefinition};
@@ -16,7 +15,7 @@ enum InhabitanceState {
 
 #[derive(Default)]
 pub struct InhabitanceCache {
-    cache: RefCell<HashMap<String, InhabitanceState>>,
+    states: HashMap<String, InhabitanceState>,
 }
 
 impl InhabitanceCache {
@@ -60,7 +59,7 @@ fn type_key(ty: &Type) -> String {
     }
 }
 
-pub fn is_inhabited(ty: &Type, store: &Store, cache: &InhabitanceCache) -> bool {
+pub fn is_inhabited(ty: &Type, store: &Store, cache: &mut InhabitanceCache) -> bool {
     match ty {
         Type::Never => return false,
         Type::Function(_) => return true,
@@ -74,21 +73,14 @@ pub fn is_inhabited(ty: &Type, store: &Store, cache: &InhabitanceCache) -> bool 
 
     let key = type_key(ty);
 
-    {
-        let cache_ref = cache.cache.borrow();
-        if let Some(state) = cache_ref.get(&key) {
-            return match state {
-                InhabitanceState::Visiting => true,
-                InhabitanceState::Inhabited => true,
-                InhabitanceState::Uninhabited => false,
-            };
-        }
+    if let Some(state) = cache.states.get(&key) {
+        return match state {
+            InhabitanceState::Visiting | InhabitanceState::Inhabited => true,
+            InhabitanceState::Uninhabited => false,
+        };
     }
 
-    cache
-        .cache
-        .borrow_mut()
-        .insert(key.clone(), InhabitanceState::Visiting);
+    cache.states.insert(key.clone(), InhabitanceState::Visiting);
 
     let result = match ty {
         Type::Nominal { id, params, .. } => check_constructor_inhabited(id, params, store, cache),
@@ -102,7 +94,7 @@ pub fn is_inhabited(ty: &Type, store: &Store, cache: &InhabitanceCache) -> bool 
     } else {
         InhabitanceState::Uninhabited
     };
-    cache.cache.borrow_mut().insert(key, final_state);
+    cache.states.insert(key, final_state);
 
     result
 }
@@ -111,7 +103,7 @@ fn check_constructor_inhabited(
     id: &str,
     params: &[Type],
     store: &Store,
-    cache: &InhabitanceCache,
+    cache: &mut InhabitanceCache,
 ) -> bool {
     let Some(definition) = store.get_definition(id) else {
         return true;
@@ -170,7 +162,7 @@ pub fn is_variant_inhabited(
     type_args: &[Type],
     generics: &[Generic],
     store: &Store,
-    cache: &InhabitanceCache,
+    cache: &mut InhabitanceCache,
 ) -> bool {
     let map = build_substitution_map(generics, type_args);
     is_variant_inhabited_with_map(variant, &map, store, cache)
@@ -180,7 +172,7 @@ fn is_variant_inhabited_with_map(
     variant: &EnumVariant,
     map: &SubstitutionMap,
     store: &Store,
-    cache: &InhabitanceCache,
+    cache: &mut InhabitanceCache,
 ) -> bool {
     variant.fields.iter().all(|field| {
         let field_ty = substitute(&field.ty, map);
@@ -193,7 +185,7 @@ pub fn is_struct_inhabited(
     type_args: &[Type],
     generics: &[Generic],
     store: &Store,
-    cache: &InhabitanceCache,
+    cache: &mut InhabitanceCache,
 ) -> bool {
     let map = build_substitution_map(generics, type_args);
     fields.iter().all(|f| {

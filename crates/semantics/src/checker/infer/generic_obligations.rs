@@ -47,7 +47,8 @@ impl InferCtx<'_> {
         let module_id = self.cursor.module_id.clone();
         let available_bounds = self.visible_parameter_bounds();
         self.facts
-            .generic_bound_obligations
+            .deferred
+            .generic_bounds
             .push(GenericBoundObligation {
                 argument: bound.argument,
                 required: bound.required,

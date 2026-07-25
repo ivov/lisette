@@ -7,14 +7,20 @@ use semantics::store::Store;
 
 pub(crate) fn run(typed_ast: &[Expression], module_id: &str, store: &Store, sink: &LocalSink) {
     for item in typed_ast {
-        visit_expression(item, false, false, module_id, store, sink);
+        visit_expression(item, Position::Value, module_id, store, sink);
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Position {
+    Value,
+    Callee,
+    DotAccessBase,
 }
 
 fn visit_expression(
     expression: &Expression,
-    is_callee: bool,
-    is_dot_access_base: bool,
+    position: Position,
     module_id: &str,
     store: &Store,
     sink: &LocalSink,
@@ -22,9 +28,9 @@ fn visit_expression(
     if let Expression::Identifier {
         value, ty, span, ..
     } = expression
-        && !is_callee
+        && position != Position::Callee
     {
-        check_one(value, ty, *span, is_dot_access_base, module_id, store, sink);
+        check_one(value, ty, *span, position, module_id, store, sink);
     }
 
     match expression {
@@ -34,27 +40,27 @@ fn visit_expression(
             spread,
             ..
         } => {
-            visit_expression(callee, true, false, module_id, store, sink);
+            visit_expression(callee, Position::Callee, module_id, store, sink);
             for arg in args {
-                visit_expression(arg, false, false, module_id, store, sink);
+                visit_expression(arg, Position::Value, module_id, store, sink);
             }
             if let Some(s) = spread.as_ref() {
-                visit_expression(s, false, false, module_id, store, sink);
+                visit_expression(s, Position::Value, module_id, store, sink);
             }
         }
         Expression::Paren {
             expression: inner, ..
         } => {
-            visit_expression(inner, is_callee, is_dot_access_base, module_id, store, sink);
+            visit_expression(inner, position, module_id, store, sink);
         }
         Expression::DotAccess {
             expression: inner, ..
         } => {
-            visit_expression(inner, false, true, module_id, store, sink);
+            visit_expression(inner, Position::DotAccessBase, module_id, store, sink);
         }
         _ => {
             for child in expression.children() {
-                visit_expression(child, false, false, module_id, store, sink);
+                visit_expression(child, Position::Value, module_id, store, sink);
             }
         }
     }
@@ -64,7 +70,7 @@ fn check_one(
     value: &str,
     ty: &Type,
     span: Span,
-    is_dot_access_base: bool,
+    position: Position,
     module_id: &str,
     store: &Store,
     sink: &LocalSink,
@@ -90,7 +96,9 @@ fn check_one(
             sink.push(diagnostics::infer::native_constructor_value(value, span));
             return;
         }
-        if !is_dot_access_base && resolves_to_struct_kind(&qualified, StructKind::Record, store) {
+        if position != Position::DotAccessBase
+            && resolves_to_struct_kind(&qualified, StructKind::Record, store)
+        {
             sink.push(diagnostics::infer::record_struct_value(value, span));
             return;
         }

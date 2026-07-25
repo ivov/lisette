@@ -1,8 +1,6 @@
-use std::cell::RefCell;
-
 use diagnostics::LocalSink;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use syntax::ast::{Expression, Pattern, RestPattern, SelectArm, Span};
+use syntax::ast::{Expression, Pattern, SelectArm, Span};
 use syntax::program::File;
 
 use semantics::facts::Facts;
@@ -16,9 +14,8 @@ pub(crate) struct NodeCtx<'a> {
     pub source: &'a str,
     pub is_d_lis: bool,
     pub sink: &'a LocalSink,
-    /// Node spans already claimed by an enclosing node, so a check does not also
-    /// judge them standalone (e.g. the nested `&&` of an outer comparison chain).
-    pub claimed_spans: RefCell<HashSet<Span>>,
+    /// Spans claimed by enclosing nodes to prevent duplicate diagnostics.
+    pub claimed_spans: HashSet<Span>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -66,19 +63,20 @@ pub(crate) use apply_pattern_checks;
 
 pub(crate) fn walk_nodes<'a, E, P>(
     ast: &'a [Expression],
-    ctx: &NodeCtx<'a>,
+    ctx: &mut NodeCtx<'a>,
     expression_checks: E,
     pattern_checks: P,
 ) where
-    E: Fn(&Expression, &NodeCtx<'a>, FunctionRole<'a>),
-    P: Fn(&Pattern, &NodeCtx<'a>, PatternRole),
+    E: Fn(&Expression, &mut NodeCtx<'a>, FunctionRole<'a>),
+    P: Fn(&Pattern, &mut NodeCtx<'a>, PatternRole),
 {
-    visit_ast(
+    visit_ast_with(
         ast,
-        &mut |expression, role| {
+        ctx,
+        &mut |expression, role, ctx| {
             expression_checks(expression, ctx, role);
         },
-        &mut |pattern, role| {
+        &mut |pattern, role, ctx| {
             pattern_checks(pattern, ctx, role);
         },
     );
@@ -92,49 +90,68 @@ pub fn visit_ast<'a, E, P>(
     E: FnMut(&Expression, FunctionRole<'a>),
     P: FnMut(&Pattern, PatternRole),
 {
+    visit_ast_with(
+        ast,
+        &mut (),
+        &mut |expression, role, ()| expression_visitor(expression, role),
+        &mut |pattern, role, ()| pattern_visitor(pattern, role),
+    );
+}
+
+fn visit_ast_with<'a, C, E, P>(
+    ast: &'a [Expression],
+    ctx: &mut C,
+    expression_visitor: &mut E,
+    pattern_visitor: &mut P,
+) where
+    E: FnMut(&Expression, FunctionRole<'a>, &mut C),
+    P: FnMut(&Pattern, PatternRole, &mut C),
+{
     for expression in ast {
         visit_node(
             expression,
             FunctionRole::Free,
+            ctx,
             expression_visitor,
             pattern_visitor,
         );
     }
 }
 
-fn visit_node<'a, E, P>(
+fn visit_node<'a, C, E, P>(
     expression: &'a Expression,
     role: FunctionRole<'a>,
+    ctx: &mut C,
     expression_visitor: &mut E,
     pattern_visitor: &mut P,
 ) where
-    E: FnMut(&Expression, FunctionRole<'a>),
-    P: FnMut(&Pattern, PatternRole),
+    E: FnMut(&Expression, FunctionRole<'a>, &mut C),
+    P: FnMut(&Pattern, PatternRole, &mut C),
 {
-    expression_visitor(expression, role);
+    expression_visitor(expression, role, ctx);
 
     match expression {
         Expression::Function { params, .. } | Expression::Lambda { params, .. } => {
             for param in params {
-                visit_pattern(&param.pattern, PatternRole::Parameter, pattern_visitor);
+                visit_pattern(&param.pattern, PatternRole::Parameter, ctx, pattern_visitor);
             }
         }
         Expression::Let { binding, .. } | Expression::For { binding, .. } => {
-            visit_pattern(&binding.pattern, PatternRole::Binding, pattern_visitor);
+            visit_pattern(&binding.pattern, PatternRole::Binding, ctx, pattern_visitor);
         }
         Expression::IfLet { pattern, .. } | Expression::WhileLet { pattern, .. } => {
-            visit_pattern(pattern, PatternRole::Binding, pattern_visitor);
+            visit_pattern(pattern, PatternRole::Binding, ctx, pattern_visitor);
         }
         Expression::Match { arms, .. } => {
             for arm in arms {
-                visit_pattern(&arm.pattern, PatternRole::Binding, pattern_visitor);
+                visit_pattern(&arm.pattern, PatternRole::Binding, ctx, pattern_visitor);
             }
         }
         Expression::Select { arms, .. } => {
             for arm in arms {
                 match arm {
                     SelectArm::Receive { binding, .. } => {
-                        visit_pattern(binding, PatternRole::Binding, pattern_visitor);
+                        visit_pattern(binding, PatternRole::Binding, ctx, pattern_visitor);
                     }
                     SelectArm::MatchReceive {
                         arms: match_arms, ..
@@ -143,6 +160,7 @@ fn visit_node<'a, E, P>(
                             visit_pattern(
                                 &match_arm.pattern,
                                 PatternRole::Binding,
+                                ctx,
                                 pattern_visitor,
                             );
                         }
@@ -164,16 +182,17 @@ fn visit_node<'a, E, P>(
         _ => FunctionRole::Free,
     };
     for child in expression.children() {
-        visit_node(child, child_role, expression_visitor, pattern_visitor);
+        visit_node(child, child_role, ctx, expression_visitor, pattern_visitor);
     }
 }
 
-fn visit_pattern<F: FnMut(&Pattern, PatternRole)>(
+fn visit_pattern<C, F: FnMut(&Pattern, PatternRole, &mut C)>(
     pattern: &Pattern,
     role: PatternRole,
+    ctx: &mut C,
     visitor: &mut F,
 ) {
-    visitor(pattern, role);
+    visitor(pattern, role, ctx);
 
     match pattern {
         Pattern::Literal { .. }
@@ -183,39 +202,36 @@ fn visit_pattern<F: FnMut(&Pattern, PatternRole)>(
 
         Pattern::EnumVariant { fields, .. } => {
             for field in fields {
-                visit_pattern(field, role, visitor);
+                visit_pattern(field, role, ctx, visitor);
             }
         }
 
         Pattern::Struct { fields, .. } => {
             for field in fields {
-                visit_pattern(&field.value, role, visitor);
+                visit_pattern(&field.value, role, ctx, visitor);
             }
         }
 
         Pattern::Tuple { elements, .. } => {
             for element in elements {
-                visit_pattern(element, role, visitor);
+                visit_pattern(element, role, ctx, visitor);
             }
         }
 
-        Pattern::Slice { prefix, rest, .. } => {
+        Pattern::Slice { prefix, .. } => {
             for p in prefix {
-                visit_pattern(p, role, visitor);
-            }
-            if let RestPattern::Bind { .. } = rest {
-                // rest binding is not a pattern itself
+                visit_pattern(p, role, ctx, visitor);
             }
         }
 
         Pattern::Or { patterns, .. } => {
             for p in patterns {
-                visit_pattern(p, role, visitor);
+                visit_pattern(p, role, ctx, visitor);
             }
         }
 
         Pattern::AsBinding { pattern, .. } => {
-            visit_pattern(pattern, role, visitor);
+            visit_pattern(pattern, role, ctx, visitor);
         }
     }
 }

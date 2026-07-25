@@ -1,6 +1,7 @@
 use diagnostics::LocalSink;
 use syntax::ast::Expression;
 use syntax::program::UnusedInfo;
+use syntax::program::{File, Module};
 
 use semantics::context::AnalysisContext;
 use semantics::facts::Facts;
@@ -8,13 +9,29 @@ use semantics::facts::Facts;
 pub(crate) mod checks;
 pub(crate) mod comparison;
 mod deferred;
-mod fact_producers;
+mod diagnostic_producers;
 mod lints;
 pub(crate) mod walk;
 
 pub use lints::Lint;
 
 pub(crate) const PARALLEL_THRESHOLD: usize = 4;
+
+pub(crate) fn source_file_work(store: &semantics::store::Store) -> Vec<(&Module, &File)> {
+    let mut work: Vec<_> = store
+        .modules
+        .values()
+        .map(std::sync::Arc::as_ref)
+        .flat_map(|module| module.source_files().map(move |file| (module, file)))
+        .collect();
+    work.sort_unstable_by(|a, b| {
+        a.0.id
+            .cmp(&b.0.id)
+            .then_with(|| a.1.name.cmp(&b.1.name))
+            .then_with(|| a.1.id.cmp(&b.1.id))
+    });
+    work
+}
 
 pub(crate) fn is_trivial_expression(expression: &Expression) -> bool {
     match expression {
@@ -40,7 +57,7 @@ pub fn run(
         || {
             run_lints.then(|| {
                 let (produced_facts, (ast_walk_diagnostics, ref_graph_output)) = rayon::join(
-                    || fact_producers::run_all(analysis),
+                    || diagnostic_producers::run_all(analysis),
                     || {
                         rayon::join(
                             || lints::ast_walk::run(analysis, facts_ref),
@@ -53,12 +70,17 @@ pub fn run(
         },
     );
 
-    facts.pattern_issues = pattern_issues;
-
     sink.extend(checks_diagnostics);
-    deferred::run(analysis.store, facts, sink);
+    deferred::run(analysis.store, facts.take_deferred_checks(), sink);
     if let Some((produced_facts, ast_walk_diagnostics, ref_graph_output)) = lint_outputs {
-        lints::from_facts::run(analysis, facts, &produced_facts, unused, sink);
+        lints::from_facts::run(
+            analysis,
+            facts,
+            pattern_issues,
+            produced_facts,
+            unused,
+            sink,
+        );
         let (ref_graph_diagnostics, ref_graph_unused) = ref_graph_output;
         sink.extend(ast_walk_diagnostics);
         sink.extend(ref_graph_diagnostics);

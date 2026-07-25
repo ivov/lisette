@@ -3,9 +3,9 @@ use crate::passes::walk::NodeCtx;
 use syntax::ast::Expression;
 use syntax::types::SimpleKind;
 
-pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
+pub(crate) fn check(expression: &Expression, ctx: &mut NodeCtx) {
     let span = expression.get_span();
-    if ctx.claimed_spans.borrow().contains(&span) {
+    if ctx.claimed_spans.contains(&span) {
         return;
     }
 
@@ -55,7 +55,7 @@ pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
-    ctx.claimed_spans.borrow_mut().insert(nested.get_span());
+    ctx.claimed_spans.insert(nested.get_span());
     ctx.sink
         .push(diagnostics::infer::min_max(&span, outer_constant));
 }

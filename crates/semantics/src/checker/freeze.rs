@@ -347,10 +347,10 @@ impl<'a> FreezeFolder<'a> {
     }
 
     pub fn freeze_facts(&self, facts: &mut crate::facts::Facts) {
-        for check in &mut facts.generic_call_checks {
+        for check in &mut facts.deferred.generic_calls {
             self.env.resolve_in_place(&mut check.ty);
         }
-        for obligation in &mut facts.generic_bound_obligations {
+        for obligation in &mut facts.deferred.generic_bounds {
             self.env.resolve_in_place(&mut obligation.argument);
             self.env.resolve_in_place(&mut obligation.required);
             if let crate::facts::GenericBoundOrigin::Construction {
@@ -366,16 +366,16 @@ impl<'a> FreezeFolder<'a> {
                 }
             }
         }
-        for check in &mut facts.empty_collection_checks {
+        for check in &mut facts.deferred.empty_collections {
             self.env.resolve_in_place(&mut check.ty);
         }
-        for check in &mut facts.empty_literal_checks {
+        for check in &mut facts.deferred.empty_literals {
             self.env.resolve_in_place(&mut check.ty);
         }
-        for check in &mut facts.slice_make_checks {
+        for check in &mut facts.deferred.slice_makes {
             self.env.resolve_in_place(&mut check.ty);
         }
-        for check in &mut facts.statement_tail_checks {
+        for check in &mut facts.deferred.statement_tails {
             self.env.resolve_in_place(&mut check.expected_ty);
         }
     }

@@ -177,7 +177,8 @@ impl InferCtx<'_> {
                 if new_elements.is_empty() && unified {
                     let module_id = self.cursor.module_id.clone();
                     self.facts
-                        .empty_literal_checks
+                        .deferred
+                        .empty_literals
                         .push(crate::facts::EmptyLiteralCheck {
                             ty: slice_ty.clone(),
                             span,

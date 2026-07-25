@@ -110,7 +110,7 @@ pub(super) fn walk_expression(
                 && member == "equals"
                 && is_container_receiver(&expression.get_type(), alias_map)
             {
-                graph.record_equals_dispatch(from.clone(), expression.get_type());
+                add_equals_references(graph, from, &expression.get_type(), module, alias_map);
             }
         }
 
@@ -164,8 +164,8 @@ pub(super) fn walk_expression(
             for v in variants {
                 for f in &v.fields {
                     walk_annotation(module, &f.annotation, graph, alias_map, &enum_ctx);
-                    if has_equality {
-                        graph.record_equals_root(owner.clone(), f.ty.clone());
+                    if has_equality && alias_map.store.equality_index.is_synthesized(&owner) {
+                        mark_equals_roots(graph, &f.ty, module, alias_map);
                     }
                 }
             }
@@ -188,8 +188,8 @@ pub(super) fn walk_expression(
             let has_equality = has_equality_attr(attributes);
             for f in fields {
                 walk_annotation(module, &f.annotation, graph, alias_map, &struct_ctx);
-                if has_equality {
-                    graph.record_equals_root(owner.clone(), f.ty.clone());
+                if has_equality && alias_map.store.equality_index.is_synthesized(&owner) {
+                    mark_equals_roots(graph, &f.ty, module, alias_map);
                 }
             }
         }
@@ -363,7 +363,6 @@ pub(super) fn walk_expression(
             walk_expression(module, expression, graph, alias_map, ctx);
         }
 
-        // All remaining expressions: recurse into children.
         _ => {
             for child in expression.children() {
                 walk_expression(module, child, graph, alias_map, ctx);
@@ -382,10 +381,7 @@ fn walk_identifier(
     add_ref(graph, ctx, alias_map, module, extract_base_name(value));
     let mut segments = value.split('.');
     let first = segments.next().unwrap_or("");
-    // Handle "Type.method" identifiers (method used as value).
-    // The type checker desugars `Type.method` to `Identifier("Type.method")`.
-    // Add references to both the type and the method so they aren't
-    // falsely flagged as unused.
+    // Static method values are represented as qualified identifiers.
     if let Some(second) = segments.next()
         && is_upper(first)
     {
@@ -426,7 +422,7 @@ fn walk_call(
             && let Some(receiver) = args.first()
             && is_container_receiver(&receiver.get_type(), alias_map)
         {
-            graph.record_equals_dispatch(from.clone(), receiver.get_type());
+            add_equals_references(graph, from, &receiver.get_type(), module, alias_map);
         }
     }
     walk_expression(module, callee, graph, alias_map, ctx);
@@ -647,7 +643,6 @@ fn walk_annotation(
 ) {
     match ann {
         Annotation::Constructor { name, params, .. } => {
-            // For qualified names like "models.Item", extract the import alias "models"
             let base_name = extract_base_name(name);
             if let Some(to) = alias_map.resolve(module, base_name) {
                 graph.add_reference(from, to);
@@ -684,10 +679,7 @@ fn walk_type(
 ) {
     match ty {
         Type::Nominal { id, params, .. } => {
-            // Type IDs from the current module are stored qualified (e.g. "_entry_.Greeter").
-            // Strip the module prefix so extract_base_name sees the local name, not the
-            // module id — otherwise "module.Type" is misread as "import_alias.Type" and
-            // the reference is lost.
+            // Keep a local qualified type from being mistaken for an import.
             let module_prefix = format!("{}.", module.id);
             let local_id = id.strip_prefix(&module_prefix).unwrap_or(id);
             let base_name = extract_base_name(local_id);
@@ -812,8 +804,6 @@ fn walk_callable_body(
     }
 }
 
-/// The graph node for a `member` method call on `receiver_ty`, resolving the receiver to
-/// its unqualified type name so `equals` is keyed per receiver type.
 fn method_node(member: &str, receiver_ty: &Type, aliases: &AliasMap) -> ModuleItemId {
     match type_name(receiver_ty, aliases) {
         Some(name) => ModuleItemId::method(member, &name),
@@ -834,6 +824,41 @@ fn credits_local_method(receiver_ty: &Type, module: &Module, aliases: &AliasMap)
 
 fn has_equality_attr(attributes: &[Attribute]) -> bool {
     attributes.iter().any(|a| a.name == "equality")
+}
+
+fn add_equals_references(
+    graph: &mut ReferenceGraph,
+    from: &ModuleItemId,
+    ty: &Type,
+    module: &Module,
+    aliases: &AliasMap,
+) {
+    let mut targets = Vec::new();
+    let ty = ty.strip_refs();
+    equals_targets(
+        &ty,
+        module,
+        aliases.store,
+        &aliases.store.equality_index,
+        &mut targets,
+    );
+    for to in targets {
+        graph.add_reference(from, to);
+    }
+}
+
+fn mark_equals_roots(graph: &mut ReferenceGraph, ty: &Type, module: &Module, aliases: &AliasMap) {
+    let mut targets = Vec::new();
+    equals_targets(
+        ty,
+        module,
+        aliases.store,
+        &aliases.store.equality_index,
+        &mut targets,
+    );
+    for target in targets {
+        graph.mark_as_used(target);
+    }
 }
 
 pub(super) fn equals_targets(
@@ -887,8 +912,6 @@ fn is_container_receiver(receiver_ty: &Type, aliases: &AliasMap) -> bool {
     current.is_slice() || current.is_map()
 }
 
-/// Follow promotion so a read through an embed credits the declaring struct's
-/// field, not a non-existent field on the embedder.
 fn mark_promoted_field_read(
     receiver_ty: &Type,
     member: &str,
@@ -929,15 +952,14 @@ fn extract_base_name(name: &str) -> &str {
     let mut segments = name.split('.');
     let p0 = segments.next().unwrap_or("");
     let Some(p1) = segments.next() else {
-        return p0; // 1 part
+        return p0;
     };
     let Some(_p2) = segments.next() else {
-        return if is_upper(p1) { p0 } else { p1 }; // 2 parts
+        return if is_upper(p1) { p0 } else { p1 };
     };
     if segments.next().is_none() {
-        return p1; // 3 parts
+        return p1;
     }
-    // 4+ parts: first uppercase segment, else the last segment.
     name.split('.')
         .find(|p| is_upper(p))
         .or_else(|| name.split('.').next_back())

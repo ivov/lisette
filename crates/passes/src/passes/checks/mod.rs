@@ -34,7 +34,6 @@ mod visibility;
 use diagnostics::{LisetteDiagnostic, LocalSink, PatternIssue};
 use rayon::prelude::*;
 use rustc_hash::FxHashSet as HashSet;
-use std::sync::Arc;
 use syntax::program::{File, Module};
 
 use crate::passes::walk::NodeCtx;
@@ -42,7 +41,7 @@ use semantics::context::AnalysisContext;
 use semantics::facts::Facts;
 use semantics::store::Store;
 
-use super::PARALLEL_THRESHOLD;
+use super::{PARALLEL_THRESHOLD, source_file_work};
 
 pub(crate) fn run_all(
     analysis: &AnalysisContext,
@@ -59,25 +58,14 @@ pub(crate) fn run_all(
     }
     instantiation_cycle::run(store, &sink);
 
-    let mut work: Vec<(&Module, &File)> = store
-        .modules
-        .values()
-        .map(Arc::as_ref)
-        .flat_map(|module| module.source_files().map(move |file| (module, file)))
-        .collect();
-    work.sort_unstable_by(|a, b| {
-        a.0.id
-            .cmp(&b.0.id)
-            .then_with(|| a.1.name.cmp(&b.1.name))
-            .then_with(|| a.1.id.cmp(&b.1.id))
-    });
+    let work = source_file_work(store);
 
     let or_spans = &facts.or_pattern_error_spans;
 
     let ufcs_methods = analysis.ufcs_methods;
 
     if work.len() < PARALLEL_THRESHOLD {
-        let pattern_ctx = pattern_analysis::Context::new(analysis, or_spans);
+        let mut pattern_ctx = pattern_analysis::Context::new(analysis, or_spans);
         for (module, file) in &work {
             run_file_checks(
                 module,
@@ -86,7 +74,7 @@ pub(crate) fn run_all(
                 facts,
                 ufcs_methods,
                 &sink,
-                &pattern_ctx,
+                &mut pattern_ctx,
             );
         }
         return (sink.take(), pattern_ctx.take_issues());
@@ -97,7 +85,7 @@ pub(crate) fn run_all(
         .par_iter()
         .map(|(module, file)| {
             let local_sink = LocalSink::new();
-            let pattern_ctx = pattern_analysis::Context::new(analysis, or_spans);
+            let mut pattern_ctx = pattern_analysis::Context::new(analysis, or_spans);
             run_file_checks(
                 module,
                 file,
@@ -105,7 +93,7 @@ pub(crate) fn run_all(
                 facts,
                 ufcs_methods,
                 &local_sink,
-                &pattern_ctx,
+                &mut pattern_ctx,
             );
             (local_sink, pattern_ctx.take_issues())
         })
@@ -129,9 +117,9 @@ fn run_file_checks(
     facts: &Facts,
     ufcs_methods: &HashSet<(String, String)>,
     sink: &LocalSink,
-    pattern_ctx: &pattern_analysis::Context,
+    pattern_ctx: &mut pattern_analysis::Context,
 ) {
-    let ctx = NodeCtx {
+    let mut ctx = NodeCtx {
         store,
         facts,
         files: &module.files,
@@ -141,7 +129,7 @@ fn run_file_checks(
         sink,
         claimed_spans: Default::default(),
     };
-    node_walk::run(&file.items, &ctx);
+    node_walk::run(&file.items, &mut ctx);
     interpolation_stringer::run(&file.items, store, ufcs_methods, sink);
 
     prelude_shadowing::run(&file.items, store, sink);

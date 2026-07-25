@@ -182,7 +182,8 @@ impl InferCtx<'_> {
         {
             let module_id = self.cursor.module_id.clone();
             self.facts
-                .empty_collection_checks
+                .deferred
+                .empty_collections
                 .push(crate::facts::EmptyCollectionCheck {
                     name: name.to_string(),
                     ty: new_binding.ty.clone(),

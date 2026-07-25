@@ -18,7 +18,6 @@ pub use witness::format_witness;
 pub use self::PatternAnalysisContext as Context;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use std::cell::RefCell;
 
 use diagnostics::{IssueKind, LocalSink, PatternIssue};
 use semantics::context::AnalysisContext;
@@ -32,7 +31,7 @@ use normalize::normalize_arm;
 pub struct PatternAnalysisContext<'a> {
     pub store: &'a Store,
     cache: InhabitanceCache,
-    issues: RefCell<Vec<PatternIssue>>,
+    issues: Vec<PatternIssue>,
     or_pattern_error_spans: &'a HashSet<Span>,
 }
 
@@ -44,37 +43,35 @@ impl<'a> PatternAnalysisContext<'a> {
         Self {
             store: analysis.store,
             cache: InhabitanceCache::new(),
-            issues: RefCell::new(Vec::new()),
+            issues: Vec::new(),
             or_pattern_error_spans,
         }
     }
 
-    fn normalize_context(&self) -> NormalizationContext<'_> {
+    fn normalize_context(&self) -> NormalizationContext<'a> {
         NormalizationContext {
             store: self.store,
-            cache: &self.cache,
             scrutinee_type: None,
         }
     }
 
-    fn normalize_context_for_match(&self, scrutinee_type: Type) -> NormalizationContext<'_> {
+    fn normalize_context_for_match(&self, scrutinee_type: Type) -> NormalizationContext<'a> {
         NormalizationContext {
             store: self.store,
-            cache: &self.cache,
             scrutinee_type: Some(scrutinee_type),
         }
     }
 
-    fn add_issue(&self, span: Span, kind: IssueKind) {
-        self.issues.borrow_mut().push(PatternIssue { span, kind });
+    fn add_issue(&mut self, span: Span, kind: IssueKind) {
+        self.issues.push(PatternIssue { span, kind });
     }
 
     pub fn take_issues(self) -> Vec<PatternIssue> {
-        self.issues.into_inner()
+        self.issues
     }
 }
 
-pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &LocalSink) {
+pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext, sink: &LocalSink) {
     match expression {
         Expression::Literal { literal, .. } => {
             if let Literal::Slice(expressions) = literal {
@@ -190,7 +187,7 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Local
         } => {
             check(subject, ctx, sink);
 
-            if !is_inhabited(&subject.get_type(), ctx.store, &ctx.cache) {
+            if !is_inhabited(&subject.get_type(), ctx.store, &mut ctx.cache) {
                 return;
             }
 
@@ -200,7 +197,7 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Local
             let unguarded_rows: Vec<Row> = arms
                 .iter()
                 .filter(|arm| !arm.has_guard())
-                .flat_map(|arm| normalize_arm(arm, &mut unions, &norm_ctx))
+                .flat_map(|arm| normalize_arm(arm, &mut unions, &norm_ctx, &mut ctx.cache))
                 .collect();
 
             if let Err(witnesses) = check_exhaustiveness(&unguarded_rows, &unions) {
@@ -220,7 +217,7 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Local
                 return;
             }
 
-            if !check_redundancy_with_guards(arms, &mut unions, &norm_ctx, sink) {
+            if !check_redundancy_with_guards(arms, &mut unions, &norm_ctx, &mut ctx.cache, sink) {
                 return;
             }
 
@@ -382,18 +379,18 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Local
     }
 }
 
-/// Returns true if no redundancy found, false if an error was pushed to sink.
 fn check_redundancy_with_guards(
     arms: &[syntax::ast::MatchArm],
     unions: &mut UnionTable,
     norm_ctx: &NormalizationContext,
+    cache: &mut InhabitanceCache,
     sink: &LocalSink,
 ) -> bool {
     let mut unguarded_previous: Vec<(usize, Row)> = vec![];
     let mut found_redundant = false;
 
     for (index, arm) in arms.iter().enumerate() {
-        let current_rows = normalize_arm(arm, unions, norm_ctx);
+        let current_rows = normalize_arm(arm, unions, norm_ctx, cache);
 
         let mut current_arm_rows: Vec<Row> = vec![];
 
@@ -457,8 +454,6 @@ fn check_redundancy_with_guards(
             current_arm_rows.push(current_row.clone());
         }
 
-        // Only unguarded arms count towards making later arms redundant.
-        // Guarded arms are treated as potentially non-matching.
         if !arm.has_guard() {
             for current_row in current_rows {
                 unguarded_previous.push((index, current_row));
@@ -469,8 +464,11 @@ fn check_redundancy_with_guards(
     !found_redundant
 }
 
-fn check_if_let(pattern: &Pattern, alternative: &IfLetAlternative, ctx: &PatternAnalysisContext) {
-    // Suppress lints for patterns that already have or-pattern binding errors.
+fn check_if_let(
+    pattern: &Pattern,
+    alternative: &IfLetAlternative,
+    ctx: &mut PatternAnalysisContext,
+) {
     if ctx.or_pattern_error_spans.contains(&pattern.get_span()) {
         return;
     }
@@ -493,15 +491,23 @@ fn check_if_let(pattern: &Pattern, alternative: &IfLetAlternative, ctx: &Pattern
     }
 }
 
-/// Returns true if pattern is irrefutable, false if an error was pushed to sink.
-fn check_refutability(pattern: &Pattern, ctx: &PatternAnalysisContext, sink: &LocalSink) -> bool {
+fn check_refutability(
+    pattern: &Pattern,
+    ctx: &mut PatternAnalysisContext,
+    sink: &LocalSink,
+) -> bool {
     if matches!(pattern, Pattern::Or { .. }) {
         return true;
     }
 
     let mut unions = HashMap::default();
     let norm_ctx = ctx.normalize_context();
-    let row = vec![normalize_pattern(pattern, &mut unions, &norm_ctx)];
+    let row = vec![normalize_pattern(
+        pattern,
+        &mut unions,
+        &norm_ctx,
+        &mut ctx.cache,
+    )];
 
     if let Err(witnesses) = check_exhaustiveness(&[row], &unions) {
         let witness = witnesses.first().expect("witnesses not empty");
@@ -525,10 +531,9 @@ fn check_refutability(pattern: &Pattern, ctx: &PatternAnalysisContext, sink: &Lo
 }
 
 pub fn is_pattern_irrefutable(pattern: &Pattern, store: &Store) -> bool {
-    let cache = InhabitanceCache::new();
+    let mut cache = InhabitanceCache::new();
     let norm_ctx = NormalizationContext {
         store,
-        cache: &cache,
         scrutinee_type: None,
     };
 
@@ -537,10 +542,15 @@ pub fn is_pattern_irrefutable(pattern: &Pattern, store: &Store) -> bool {
     let rows: Vec<Row> = if let Pattern::Or { patterns, .. } = pattern {
         patterns
             .iter()
-            .map(|alt| vec![normalize_pattern(alt, &mut unions, &norm_ctx)])
+            .map(|alt| vec![normalize_pattern(alt, &mut unions, &norm_ctx, &mut cache)])
             .collect()
     } else {
-        vec![vec![normalize_pattern(pattern, &mut unions, &norm_ctx)]]
+        vec![vec![normalize_pattern(
+            pattern,
+            &mut unions,
+            &norm_ctx,
+            &mut cache,
+        )]]
     };
 
     check_exhaustiveness(&rows, &unions).is_ok()

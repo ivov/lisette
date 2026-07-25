@@ -1,15 +1,12 @@
 use rustc_hash::FxHashMap as HashMap;
-use rustc_hash::FxHashSet as HashSet;
 
-use diagnostics::LisetteDiagnostic;
 use diagnostics::LocalSink;
 use diagnostics::{Edit, Fix};
+use diagnostics::{LisetteDiagnostic, PatternIssue};
 use semantics::context::AnalysisContext;
 use semantics::facts::Facts;
 use syntax::ast::Span;
 use syntax::program::UnusedInfo;
-
-use super::super::fact_producers::{ProducedFact, ProducedFacts};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Lint {
@@ -62,25 +59,14 @@ pub enum Lint {
     ReplaceableWithAutofill,
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct LintConfig {
-    disabled: HashSet<Lint>,
-}
-
-impl LintConfig {
-    pub fn is_enabled(&self, lint: Lint) -> bool {
-        !self.disabled.contains(&lint)
-    }
-}
-
 pub(crate) fn run(
     analysis: &AnalysisContext,
     facts: &Facts,
-    produced: &ProducedFacts,
+    pattern_issues: Vec<PatternIssue>,
+    mut diagnostics: Vec<LisetteDiagnostic>,
     unused: &mut UnusedInfo,
     sink: &LocalSink,
 ) {
-    let mut diagnostics: Vec<LisetteDiagnostic> = Vec::new();
     let sources = source_by_file(analysis);
 
     let erroring_functions = erroring_function_spans(facts, sink);
@@ -92,8 +78,7 @@ pub(crate) fn run(
         &mut diagnostics,
     );
     collect_dead_code(facts, &mut diagnostics);
-    collect_pattern_issues(facts, &mut diagnostics);
-    collect_produced_facts(produced, &mut diagnostics);
+    collect_pattern_issues(&pattern_issues, &mut diagnostics);
     collect_overused_references(facts, &mut diagnostics);
     collect_always_failing_try_blocks(facts, &mut diagnostics);
     collect_expression_only_fstrings(facts, &sources, &mut diagnostics);
@@ -216,37 +201,9 @@ fn collect_dead_code(facts: &Facts, out: &mut Vec<LisetteDiagnostic>) {
     }
 }
 
-fn collect_pattern_issues(facts: &Facts, out: &mut Vec<LisetteDiagnostic>) {
-    for issue in &facts.pattern_issues {
+fn collect_pattern_issues(issues: &[PatternIssue], out: &mut Vec<LisetteDiagnostic>) {
+    for issue in issues {
         out.push(diagnostics::lint::pattern_issue(&issue.span, issue.kind));
-    }
-}
-
-fn collect_produced_facts(produced: &ProducedFacts, out: &mut Vec<LisetteDiagnostic>) {
-    for fact in &produced.items {
-        let diagnostic = match fact {
-            ProducedFact::UnusedExpression { span, kind } => {
-                diagnostics::lint::unused_expression(span, *kind)
-            }
-            ProducedFact::DiscardedTail {
-                span,
-                return_type,
-                expected_span,
-                expected_type,
-            } => diagnostics::infer::mismatched_tail_value(
-                span,
-                return_type,
-                expected_span,
-                expected_type,
-            ),
-            ProducedFact::UnusedTypeParam { span } => {
-                diagnostics::lint::unused_type_parameter(span)
-            }
-            ProducedFact::TypeParamOnlyInBound { name, span } => {
-                diagnostics::lint::type_param_only_in_bound(span, name)
-            }
-        };
-        out.push(diagnostic);
     }
 }
 

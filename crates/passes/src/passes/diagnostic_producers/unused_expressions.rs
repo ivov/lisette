@@ -1,12 +1,10 @@
-use diagnostics::UnusedExpressionKind;
+use diagnostics::{LisetteDiagnostic, UnusedExpressionKind};
 use syntax::ast::{Annotation, Expression, SelectArm, Span, UnaryOperator};
 use syntax::program::{CallKind, NativeTypeKind};
 use syntax::types::{Symbol, Type};
 
 use diagnostics::infer::MismatchedTailKind;
 use semantics::store::Store;
-
-use super::ProducedFacts;
 
 struct TailContext<'a> {
     expected_span: Span,
@@ -17,7 +15,7 @@ pub(crate) fn run(
     typed_ast: &[Expression],
     module_id: &str,
     store: &Store,
-    facts: &mut ProducedFacts,
+    facts: &mut Vec<LisetteDiagnostic>,
 ) {
     for item in typed_ast {
         visit_expression(item, None, module_id, store, facts);
@@ -29,7 +27,7 @@ fn visit_expression(
     tail_ctx: Option<&TailContext<'_>>,
     module_id: &str,
     store: &Store,
-    facts: &mut ProducedFacts,
+    facts: &mut Vec<LisetteDiagnostic>,
 ) {
     match expression {
         Expression::Block { items, ty, .. }
@@ -86,7 +84,7 @@ fn visit_expression(
             if tail_is_discarded && !matches!(body.as_ref(), Expression::Block { .. }) {
                 descend_discarded(
                     body,
-                    &DiscardMode::Tail(ctx.as_ref()),
+                    &DiscardMode::Tail(ctx.as_ref().into()),
                     module_id,
                     store,
                     facts,
@@ -127,7 +125,12 @@ fn visit_expression(
     }
 }
 
-fn visit_loop_body(body: &Expression, module_id: &str, store: &Store, facts: &mut ProducedFacts) {
+fn visit_loop_body(
+    body: &Expression,
+    module_id: &str,
+    store: &Store,
+    facts: &mut Vec<LisetteDiagnostic>,
+) {
     let items = match body {
         Expression::Block { items, .. }
         | Expression::TryBlock { items, .. }
@@ -146,9 +149,7 @@ fn visit_loop_body(body: &Expression, module_id: &str, store: &Store, facts: &mu
     }
 }
 
-/// 1-byte span at the start of `span`. Anchors the "expected" label when
-/// there is no explicit return-type annotation. Lands on the body's `{` for
-/// functions and the leading `|` for lambdas.
+// Anchor inferred return types to the function body or lambda delimiter.
 fn signature_marker_span(span: Span) -> Span {
     Span::new(span.file_id, span.byte_offset, 1)
 }
@@ -159,7 +160,7 @@ fn visit_block_items(
     tail_ctx: Option<&TailContext<'_>>,
     module_id: &str,
     store: &Store,
-    facts: &mut ProducedFacts,
+    facts: &mut Vec<LisetteDiagnostic>,
 ) {
     let len = items.len();
     for (i, item) in items.iter().enumerate() {
@@ -171,18 +172,35 @@ fn visit_block_items(
         }
 
         if is_last && !is_statement_only && tail_is_discarded {
-            descend_discarded(item, &DiscardMode::Tail(tail_ctx), module_id, store, facts);
+            descend_discarded(
+                item,
+                &DiscardMode::Tail(tail_ctx.into()),
+                module_id,
+                store,
+                facts,
+            );
         }
     }
 }
 
-/// Whether the descent is checking a tail-position discard (function/lambda
-/// return value type-mismatch, hard error) or a non-tail discard (statement-
-/// position unused expression, warning). Same structural walk; different
-/// fact emitted at value leaves.
 enum DiscardMode<'a> {
-    Tail(Option<&'a TailContext<'a>>),
+    Tail(TailExpectation<'a>),
     NonTail,
+}
+
+#[derive(Clone, Copy)]
+enum TailExpectation<'a> {
+    Declared(&'a TailContext<'a>),
+    Inferred,
+}
+
+impl<'a> From<Option<&'a TailContext<'a>>> for TailExpectation<'a> {
+    fn from(context: Option<&'a TailContext<'a>>) -> Self {
+        match context {
+            Some(context) => Self::Declared(context),
+            None => Self::Inferred,
+        }
+    }
 }
 
 fn descend_discarded(
@@ -190,7 +208,7 @@ fn descend_discarded(
     mode: &DiscardMode<'_>,
     module_id: &str,
     store: &Store,
-    facts: &mut ProducedFacts,
+    facts: &mut Vec<LisetteDiagnostic>,
 ) {
     match expression.unwrap_parens() {
         Expression::Block { items, .. }
@@ -273,7 +291,7 @@ fn descend_loop_break_values(
     mode: &DiscardMode<'_>,
     module_id: &str,
     store: &Store,
-    facts: &mut ProducedFacts,
+    facts: &mut Vec<LisetteDiagnostic>,
 ) {
     match expression {
         Expression::Break {
@@ -301,7 +319,7 @@ fn emit_unused_at_leaf(
     leaf: &Expression,
     module_id: &str,
     store: &Store,
-    facts: &mut ProducedFacts,
+    facts: &mut Vec<LisetteDiagnostic>,
 ) {
     let span = leaf.get_span();
     let is_literal = is_literal_or_negated_literal(leaf);
@@ -312,7 +330,7 @@ fn emit_unused_at_leaf(
     }
     if let Some(kind) = lvalue_slice_growth_kind(leaf) {
         if !allowed_lints.iter().any(|s| s == "unused_value") {
-            facts.add_unused_expression(span, kind);
+            facts.push(diagnostics::lint::unused_expression(&span, kind));
         }
         return;
     }
@@ -346,10 +364,10 @@ fn lvalue_slice_growth_kind(expression: &Expression) -> Option<UnusedExpressionK
 
 fn check_discarded_tail(
     item: &Expression,
-    tail_ctx: Option<&TailContext<'_>>,
+    expectation: TailExpectation<'_>,
     module_id: &str,
     store: &Store,
-    facts: &mut ProducedFacts,
+    facts: &mut Vec<LisetteDiagnostic>,
 ) {
     let unwrapped = item.unwrap_parens();
     let reported_ty = get_call_return_type(unwrapped).unwrap_or_else(|| unwrapped.get_type());
@@ -377,17 +395,17 @@ fn check_discarded_tail(
         return;
     }
 
-    let (expected_span, expected_ty) = match tail_ctx {
-        Some(ctx) => (ctx.expected_span, ctx.expected_ty.to_string()),
-        None => (item.get_span(), reported_ty.to_string()),
+    let (expected_span, expected_ty) = match expectation {
+        TailExpectation::Declared(ctx) => (ctx.expected_span, ctx.expected_ty.to_string()),
+        TailExpectation::Inferred => (item.get_span(), reported_ty.to_string()),
     };
 
-    facts.add_discarded_tail(
-        item.get_span(),
-        reported_ty.to_string(),
-        expected_span,
-        expected_ty,
-    );
+    facts.push(diagnostics::infer::mismatched_tail_value(
+        &item.get_span(),
+        &reported_ty.to_string(),
+        &expected_span,
+        &expected_ty,
+    ));
 }
 
 fn emit_unused_expression(
@@ -395,7 +413,7 @@ fn emit_unused_expression(
     ty: &Type,
     is_literal: bool,
     allowed_lints: &[String],
-    facts: &mut ProducedFacts,
+    facts: &mut Vec<LisetteDiagnostic>,
 ) {
     let kind = if is_literal {
         Some(UnusedExpressionKind::Literal)
@@ -419,7 +437,7 @@ fn emit_unused_expression(
     if let Some(kind) = kind
         && !allowed_lints.iter().any(|s| s == kind.lint_name())
     {
-        facts.add_unused_expression(span, kind);
+        facts.push(diagnostics::lint::unused_expression(&span, kind));
     }
 }
 

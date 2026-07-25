@@ -20,13 +20,8 @@ use syntax::program::Module;
 use syntax::program::UnusedInfo;
 use syntax::program::{File, FileImport};
 
-use super::Lint as LintEnum;
-use super::from_facts::LintConfig;
-use extract::{AliasMap, equals_targets, is_upper, walk_expression};
-use reference_graph::{
-    EnumVariantId, EnumVariantInfo, ItemKind, ModuleItemId, ReferenceGraph, StructFieldId,
-    StructFieldInfo,
-};
+use extract::{AliasMap, is_upper, walk_expression};
+use reference_graph::{EnumVariantId, ItemKind, ModuleItemId, ReferenceGraph, StructFieldId};
 use syntax::attributes::SERIALIZATION_KEYS;
 use visibility_constraints::check_visibility_constraints;
 
@@ -41,8 +36,6 @@ pub(crate) fn run(
     facts: &Facts,
 ) -> (Vec<LisetteDiagnostic>, UnusedInfo) {
     let store = analysis.store;
-    let config = LintConfig::default();
-
     let mut modules: Vec<&Module> = store
         .modules
         .values()
@@ -56,7 +49,7 @@ pub(crate) fn run(
     if modules.len() < PARALLEL_THRESHOLD {
         let sink = LocalSink::new();
         for module in &modules {
-            apply_ref_lints(module, &config, facts, store, &mut unused, &sink);
+            apply_ref_lints(module, facts, store, &mut unused, &sink);
         }
         return (sink.take(), unused);
     }
@@ -67,14 +60,7 @@ pub(crate) fn run(
         .map(|module| {
             let local_sink = LocalSink::new();
             let mut local_unused = UnusedInfo::default();
-            apply_ref_lints(
-                module,
-                &config,
-                facts,
-                store,
-                &mut local_unused,
-                &local_sink,
-            );
+            apply_ref_lints(module, facts, store, &mut local_unused, &local_sink);
             (local_sink, local_unused)
         })
         .collect();
@@ -89,13 +75,12 @@ pub(crate) fn run(
 
 fn apply_ref_lints(
     module: &Module,
-    config: &LintConfig,
     facts: &Facts,
     store: &Store,
     unused: &mut UnusedInfo,
     sink: &LocalSink,
 ) {
-    let result = run_ref_lints(module, config, facts, store);
+    let result = run_ref_lints(module, facts, store);
     if !result.unused_import_aliases.is_empty() {
         unused.imports_by_module.insert(
             module.id.clone().into(),
@@ -121,12 +106,7 @@ fn apply_ref_lints(
     sink.extend(diagnostics);
 }
 
-fn run_ref_lints(
-    module: &Module,
-    config: &LintConfig,
-    facts: &Facts,
-    store: &Store,
-) -> RefLintResult {
+fn run_ref_lints(module: &Module, facts: &Facts, store: &Store) -> RefLintResult {
     let files = &module.files;
     let equality_index = &store.equality_index;
     let mut diagnostics = Vec::new();
@@ -149,31 +129,6 @@ fn run_ref_lints(
         }
     }
 
-    for (from, receiver_ty) in graph.take_equals_dispatch() {
-        let mut targets = Vec::new();
-        equals_targets(
-            &receiver_ty.strip_refs(),
-            module,
-            store,
-            equality_index,
-            &mut targets,
-        );
-        for to in targets {
-            graph.add_reference(&from, to);
-        }
-    }
-
-    for (owner, field_ty) in graph.take_equals_roots() {
-        if !equality_index.is_synthesized(&owner) {
-            continue;
-        }
-        let mut targets = Vec::new();
-        equals_targets(&field_ty, module, store, equality_index, &mut targets);
-        for to in targets {
-            graph.mark_as_used(to);
-        }
-    }
-
     for ((method_module_id, method_name), satisfactions) in &facts.interface_satisfied_methods {
         if method_module_id != &module.id {
             continue;
@@ -189,41 +144,34 @@ fn run_ref_lints(
 
     for item_id in graph.get_unreachable() {
         if let Some(info) = graph.get_item(item_id) {
-            if info.kind == ItemKind::Import {
+            if matches!(info.kind, ItemKind::Import { .. }) {
                 unused_import_aliases.insert(item_id.name.to_string());
             }
             if info.kind == ItemKind::Function {
                 unused_definition_spans.push(info.span);
             }
-            if let Some(mut diagnostic) = create_unused_diagnostic(info.kind, &info.span, config) {
-                if let Some(statement_span) = info.statement_span
-                    && let Some(file) = files.get(&statement_span.file_id)
-                {
-                    let deletion = statement_deletion(&file.source, statement_span);
-                    diagnostic = diagnostic.with_fix(Fix::new(
-                        "Remove the unused import",
-                        Edit::deletion(deletion),
-                    ));
-                }
-                diagnostics.push(diagnostic);
+            let mut diagnostic = create_unused_diagnostic(info.kind, &info.span);
+            if let ItemKind::Import { statement_span } = info.kind
+                && let Some(file) = files.get(&statement_span.file_id)
+            {
+                let deletion = statement_deletion(&file.source, statement_span);
+                diagnostic = diagnostic.with_fix(Fix::new(
+                    "Remove the unused import",
+                    Edit::deletion(deletion),
+                ));
             }
+            diagnostics.push(diagnostic);
         }
     }
 
-    if config.is_enabled(LintEnum::InternalTypeLeak) {
-        check_visibility_constraints(module, files, &mut diagnostics);
+    check_visibility_constraints(module, files, &mut diagnostics);
+
+    for span in graph.get_unused_struct_fields() {
+        diagnostics.push(diagnostics::lint::unused_field(span));
     }
 
-    if config.is_enabled(LintEnum::UnusedStructField) {
-        for (_, field_info) in graph.get_unused_struct_fields() {
-            diagnostics.push(diagnostics::lint::unused_field(&field_info.span));
-        }
-    }
-
-    if config.is_enabled(LintEnum::UnusedEnumVariant) {
-        for (_, variant_info) in graph.get_unused_enum_variants() {
-            diagnostics.push(diagnostics::lint::unused_variant(&variant_info.span));
-        }
+    for span in graph.get_unused_enum_variants() {
+        diagnostics.push(diagnostics::lint::unused_variant(span));
     }
 
     RefLintResult {
@@ -307,14 +255,9 @@ fn collect_items(
 
                     for enum_variant in variants {
                         let variant_id = EnumVariantId::new(name, &enum_variant.name);
-                        graph.add_enum_variant(
-                            variant_id,
-                            EnumVariantInfo {
-                                span: enum_variant.name_span,
-                                parent_is_public: is_public,
-                                parent_has_serialization_attr: has_serialization_attr,
-                            },
-                        );
+                        if !is_public && !has_serialization_attr {
+                            graph.add_enum_variant(variant_id, enum_variant.name_span);
+                        }
                     }
                 }
                 Expression::Struct {
@@ -339,19 +282,17 @@ fn collect_items(
                         let field_id = StructFieldId::new(&qualified_name, &struct_field.name);
                         let has_tag_attribute =
                             struct_field.attributes().iter().any(|a| a.name == "tag");
-                        graph.add_struct_field(
-                            field_id,
-                            StructFieldInfo {
-                                span: struct_field.name_span,
-                                is_public: struct_field.visibility == Visibility::Public,
-                                parent_is_public: is_public,
-                                parent_has_serialization_attr: has_serialization_attr,
-                                parent_has_display_attr: has_display_attr,
-                                parent_synthesizes_equals: synthesizes_equals,
-                                has_tag_attribute,
-                                embedded: struct_field.is_embedded(),
-                            },
-                        );
+                        let lint_candidate = struct_field.visibility != Visibility::Public
+                            && !is_public
+                            && !has_serialization_attr
+                            && !has_display_attr
+                            && !synthesizes_equals
+                            && !has_tag_attribute
+                            && !struct_field.is_embedded()
+                            && !struct_field.name.starts_with('_');
+                        if lint_candidate {
+                            graph.add_struct_field(field_id, struct_field.name_span);
+                        }
                     }
                 }
                 Expression::TypeAlias {
@@ -428,21 +369,12 @@ fn has_serialization_attr(attributes: &[Attribute]) -> bool {
     })
 }
 
-fn create_unused_diagnostic(
-    kind: ItemKind,
-    span: &Span,
-    config: &LintConfig,
-) -> Option<LisetteDiagnostic> {
-    let (lint, diagnostic_fn): (LintEnum, fn(&Span) -> LisetteDiagnostic) = match kind {
-        ItemKind::Import => (LintEnum::UnusedImport, diagnostics::lint::unused_import),
-        ItemKind::Type => (LintEnum::UnusedType, diagnostics::lint::unused_type),
-        ItemKind::Function => (LintEnum::UnusedFunction, diagnostics::lint::unused_function),
-        ItemKind::Constant => (LintEnum::UnusedConstant, diagnostics::lint::unused_constant),
+fn create_unused_diagnostic(kind: ItemKind, span: &Span) -> LisetteDiagnostic {
+    let diagnostic_fn: fn(&Span) -> LisetteDiagnostic = match kind {
+        ItemKind::Import { .. } => diagnostics::lint::unused_import,
+        ItemKind::Type => diagnostics::lint::unused_type,
+        ItemKind::Function => diagnostics::lint::unused_function,
+        ItemKind::Constant => diagnostics::lint::unused_constant,
     };
-
-    if !config.is_enabled(lint) {
-        return None;
-    }
-
-    Some(diagnostic_fn(span))
+    diagnostic_fn(span)
 }
