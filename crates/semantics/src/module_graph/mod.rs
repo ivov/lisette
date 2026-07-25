@@ -7,12 +7,20 @@ use syntax::ast::{ImportAlias, Span};
 use syntax::program::File;
 
 use crate::diagnostics::{GoImportSite, emit_for_declaration_status, emit_for_locator_result};
+use crate::inference::ProjectKind;
 use crate::loader as semantics_loader;
 use crate::loader::Loader;
-use crate::store::Store;
+use crate::store::{ENTRY_MODULE_ID, Store};
 use diagnostics::LocalSink;
 
 pub type ModuleId = String;
+
+pub fn root_import_target(name: &str, importer: &str, kind: ProjectKind) -> Option<&'static str> {
+    (name == semantics_loader::ROOT_IMPORT
+        && kind == ProjectKind::Library
+        && semantics_loader::is_external_test_module(importer))
+    .then_some(ENTRY_MODULE_ID)
+}
 
 #[derive(Debug)]
 pub struct ModuleGraphResult {
@@ -43,6 +51,7 @@ pub struct ModuleGraphOptions<'a> {
     pub loader: Option<&'a dyn Loader>,
     pub sink: &'a LocalSink,
     pub standalone_mode: bool,
+    pub has_project_root: bool,
     pub locator: &'a TypedefLocator,
     pub include_tests: bool,
 }
@@ -60,6 +69,7 @@ pub fn build_module_graph(
         loader,
         sink,
         standalone_mode,
+        has_project_root,
         locator,
         include_tests,
     } = options;
@@ -68,6 +78,7 @@ pub fn build_module_graph(
         loader,
         sink,
         standalone_mode,
+        has_project_root,
         locator,
         include_tests,
         edges: HashMap::default(),
@@ -88,6 +99,7 @@ struct GraphBuilder<'a> {
     loader: Option<&'a dyn Loader>,
     sink: &'a LocalSink,
     standalone_mode: bool,
+    has_project_root: bool,
     locator: &'a TypedefLocator,
     include_tests: bool,
     edges: HashMap<ModuleId, HashSet<ModuleId>>,
@@ -120,6 +132,7 @@ impl<'a> GraphBuilder<'a> {
                 self.loader,
                 self.sink,
                 self.include_tests,
+                self.has_project_root,
             );
 
             for module_id in &batch {
@@ -138,10 +151,22 @@ impl<'a> GraphBuilder<'a> {
                     .flat_map(|f| f.imports())
                     .map(|import| import.name.to_string())
                     .collect();
+                let root_has_production = self
+                    .files
+                    .get(ENTRY_MODULE_ID)
+                    .is_some_and(|files| files.iter().any(|f| !f.is_test() && !f.is_d_lis()))
+                    || self
+                        .store
+                        .get_module(ENTRY_MODULE_ID)
+                        .is_some_and(|m| m.files.values().any(|f| !f.is_test()));
                 let imports_with_spans = process_file_imports(
                     file_imports,
                     self.sink,
                     self.standalone_mode,
+                    self.has_project_root,
+                    root_has_production,
+                    module_id,
+                    self.store.project_kind,
                     self.locator,
                     &mut self.blank_tracker,
                 );
@@ -150,7 +175,8 @@ impl<'a> GraphBuilder<'a> {
                 let module_exists = has_production_file
                     || self.store.has(module_id)
                     || module_id.starts_with("go:")
-                    || semantics_loader::is_external_test_module(module_id);
+                    || (self.has_project_root
+                        && semantics_loader::is_external_test_module(module_id));
 
                 if !module_exists {
                     if let Some(span) = self.import_spans.get(module_id) {
@@ -271,6 +297,7 @@ fn batch_parse_modules(
     loader: Option<&dyn Loader>,
     sink: &LocalSink,
     include_tests: bool,
+    has_project_root: bool,
 ) -> HashMap<ModuleId, Vec<File>> {
     let Some(fs) = loader else {
         return HashMap::default();
@@ -292,8 +319,26 @@ fn batch_parse_modules(
 
     let mut jobs: Vec<ParseJob> = Vec::new();
     for (module_id, entries) in scanned {
+        let is_external_test =
+            has_project_root && semantics_loader::is_external_test_module(module_id);
         for (filename, content) in entries {
-            if filename.ends_with("_test.lis") {
+            if is_external_test {
+                match semantics_loader::external_test_file_issue(&filename) {
+                    Some(semantics_loader::ExternalTestFileIssue::WrongSuffix) => {
+                        sink.push(diagnostics::module_graph::wrong_test_file_suffix(
+                            &content.display_path,
+                        ));
+                        continue;
+                    }
+                    Some(semantics_loader::ExternalTestFileIssue::NotATestFile) => {
+                        sink.push(diagnostics::module_graph::non_test_file_under_tests(
+                            &content.display_path,
+                        ));
+                        continue;
+                    }
+                    None => {}
+                }
+            } else if filename.ends_with("_test.lis") {
                 sink.push(diagnostics::module_graph::wrong_test_file_suffix(
                     &content.display_path,
                 ));
@@ -350,10 +395,15 @@ fn parse_one(job: ParseJob) -> (ModuleId, File, Vec<syntax::ParseError>) {
     (job.module_id, file, result.errors)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn process_file_imports(
     file_imports: Vec<syntax::program::FileImport>,
     sink: &LocalSink,
     standalone_mode: bool,
+    has_project_root: bool,
+    root_has_production: bool,
+    importer: &str,
+    project_kind: ProjectKind,
     locator: &TypedefLocator,
     blank_tracker: &mut BlankTracker,
 ) -> HashMap<ModuleId, Span> {
@@ -382,10 +432,49 @@ fn process_file_imports(
             continue;
         }
 
-        if !standalone_mode && semantics_loader::is_external_test_module(&file_import.name) {
+        if file_import.name == ENTRY_MODULE_ID {
+            sink.push(diagnostics::module_graph::cannot_import_entry(
+                file_import.name_span,
+            ));
+            continue;
+        }
+
+        if has_project_root && semantics_loader::is_external_test_module(&file_import.name) {
             sink.push(diagnostics::module_graph::cannot_import_external_tests(
                 file_import.name_span,
             ));
+            continue;
+        }
+
+        if has_project_root && file_import.name == semantics_loader::ROOT_IMPORT {
+            if let Some(ImportAlias::Blank(span)) = &file_import.alias {
+                sink.push(diagnostics::infer::blank_import_non_go(*span));
+            } else {
+                match root_import_target(&file_import.name, importer, project_kind) {
+                    Some(_) if !root_has_production => {
+                        sink.push(
+                            diagnostics::module_graph::cannot_import_root_without_source(
+                                file_import.name_span,
+                            ),
+                        );
+                    }
+                    Some(entry) => {
+                        imports
+                            .entry(entry.to_string())
+                            .or_insert(file_import.name_span);
+                    }
+                    None if project_kind == ProjectKind::Binary => {
+                        sink.push(diagnostics::module_graph::cannot_import_root_in_binary(
+                            file_import.name_span,
+                        ));
+                    }
+                    None => {
+                        sink.push(diagnostics::module_graph::cannot_import_root_from_src(
+                            file_import.name_span,
+                        ));
+                    }
+                }
+            }
             continue;
         }
 
@@ -488,6 +577,10 @@ mod tests {
             imports,
             &sink,
             false,
+            false,
+            false,
+            "caller",
+            ProjectKind::Binary,
             &TypedefLocator::default(),
             &mut tracker,
         );
@@ -527,6 +620,10 @@ mod tests {
                 }],
                 &sink,
                 false,
+                true,
+                true,
+                "caller",
+                ProjectKind::Binary,
                 &TypedefLocator::default(),
                 &mut tracker,
             );
@@ -549,15 +646,45 @@ mod tests {
                 span,
             }],
             &sink,
-            true,
+            false,
+            false,
+            false,
+            "caller",
+            ProjectKind::Binary,
             &TypedefLocator::default(),
             &mut tracker,
         );
 
         assert!(
             !sink.has_errors(),
-            "standalone mode has no `tests/` to reserve"
+            "a non-project check has no `tests/` to reserve"
         );
         assert!(resolved.contains_key("tests"));
+    }
+
+    #[test]
+    fn root_import_resolves_only_for_library_external_tests() {
+        assert_eq!(
+            root_import_target("root", "tests", ProjectKind::Library),
+            Some(ENTRY_MODULE_ID)
+        );
+        assert_eq!(
+            root_import_target("root", "tests/integration", ProjectKind::Library),
+            Some(ENTRY_MODULE_ID)
+        );
+        assert_eq!(
+            root_import_target("root", "geometry", ProjectKind::Library),
+            None,
+            "src modules cannot import the root"
+        );
+        assert_eq!(
+            root_import_target("root", "tests", ProjectKind::Binary),
+            None,
+            "a binary has no importable root"
+        );
+        assert_eq!(
+            root_import_target("routes", "tests", ProjectKind::Library),
+            None
+        );
     }
 }

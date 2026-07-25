@@ -5,7 +5,7 @@ use tower_lsp::lsp_types::Url;
 
 use crate::project::ProjectConfig;
 
-pub(crate) const ENTRY_MODULE_ID: &str = "_entry_";
+pub(crate) use syntax::ENTRY_MODULE_ID;
 
 pub(crate) fn module_id_from_components(rel: &Path) -> String {
     rel.components()
@@ -53,23 +53,23 @@ pub(crate) fn module_file_to_path(
     }
 }
 
-fn path_to_module_file(config: &ProjectConfig, file_path: &Path) -> Option<(String, String)> {
+fn path_to_module_file(config: &ProjectConfig, file_path: &Path) -> Option<(String, String, bool)> {
     let filename = file_path.file_name()?.to_str()?.to_string();
 
     if config.standalone_mode {
         if file_path.parent()? == config.root {
-            return Some((ENTRY_MODULE_ID.to_string(), filename));
+            return Some((ENTRY_MODULE_ID.to_string(), filename, false));
         }
         let relative = file_path.strip_prefix(&config.root).ok()?;
         let module_id = relative.parent()?.to_str()?.to_string();
-        Some((module_id, filename))
+        Some((module_id, filename, false))
     } else {
         if let Ok(relative) = file_path.strip_prefix(&config.root)
             && let Some(dir) = relative.parent()
         {
             let module_id = module_id_from_components(dir);
             if is_external_test_module(&module_id) {
-                return Some((module_id, filename));
+                return Some((module_id, filename, true));
             }
         }
 
@@ -86,11 +86,14 @@ fn path_to_module_file(config: &ProjectConfig, file_path: &Path) -> Option<(Stri
             relative.parent()?.to_str()?.to_string()
         };
 
-        Some((module_id, filename))
+        Some((module_id, filename, false))
     }
 }
 
-pub(crate) fn uri_to_module_file(config: &ProjectConfig, uri: &Url) -> Option<(String, String)> {
+pub(crate) fn uri_to_module_file(
+    config: &ProjectConfig,
+    uri: &Url,
+) -> Option<(String, String, bool)> {
     let file_path = uri.to_file_path().ok()?;
     path_to_module_file(config, &file_path)
 }

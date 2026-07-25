@@ -332,6 +332,36 @@ Useful flags:
 
 To select tests by name, use `lis test --filter` rather than `-run`.
 
+## Testing a library root
+
+The root package of a library is named `root`. In a [library project](12-modules.md#library-projects), use `import "root"` to externally test files directly under `src/`.
+
+```
+src/
+├── geo.lis
+└── shapes/
+    └── shapes.lis
+tests/
+└── api.test.lis
+```
+
+In `tests/api.test.lis`:
+
+```rs
+import "root"
+import "shapes"
+
+#[test]
+fn distance_is_symmetric() {
+  assert root.distance(2, 9) == root.distance(9, 2)
+}
+
+#[test]
+fn square_has_four_sides() {
+  assert shapes.sides(shapes.square()) == 4
+}
+```
+
 <br>
 
 <table><tr>

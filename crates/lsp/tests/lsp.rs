@@ -13229,3 +13229,428 @@ async fn external_test_file_is_analyzed_with_visibility_rules() {
 
     client.shutdown().await;
 }
+
+fn geo_library_project() -> (tempfile::TempDir, std::path::PathBuf) {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().to_path_buf();
+    std::fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"example.com/you/geo\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(
+        root.join("src/geo.lis"),
+        "pub struct Point { pub x: int, pub y: int }\npub fn distance(a: int, b: int) -> int { if a > b { a - b } else { b - a } }\n",
+    )
+    .unwrap();
+    std::fs::create_dir_all(root.join("tests")).unwrap();
+    (dir, root)
+}
+
+#[tokio::test]
+async fn external_test_root_import_resolves() {
+    let (_dir, root) = geo_library_project();
+    let content = "import \"root\"\n\n#[test]\nfn value() {\n  let p = root.Point { x: 1, y: 2 }\n  assert p.x == 1\n  assert root.distance(2, 9) == 7\n}\n";
+    let test_path = root.join("tests/api.test.lis");
+    std::fs::write(&test_path, content).unwrap();
+
+    let mut client = TestClient::new().await;
+    client.initialize_with_root(&root).await;
+
+    let uri = Url::from_file_path(&test_path).unwrap().to_string();
+    client.open(&uri, content).await;
+
+    let diags = client.await_diagnostics_for(&uri).await.unwrap_or_default();
+    assert!(
+        diags.is_empty(),
+        "valid root import must not error in the editor: {diags:?}"
+    );
+
+    let broken = content.replace("root.distance(2, 9)", "root.missing(2, 9)");
+    client.change(&uri, &broken, 2).await;
+    let diags = client.await_diagnostics_for(&uri).await.unwrap_or_default();
+    assert!(
+        diags.iter().any(
+            |d| d.message.contains("missing") || d.message.to_lowercase().contains("not found")
+        ),
+        "a genuine reference error through `root` is still reported: {diags:?}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn external_test_root_import_in_binary_reports_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(root.join("lisette.toml"), "").unwrap();
+
+    let src = root.join("src");
+    std::fs::create_dir_all(&src).unwrap();
+    std::fs::write(src.join("main.lis"), "fn main() {}\n").unwrap();
+
+    let tests = root.join("tests");
+    std::fs::create_dir_all(&tests).unwrap();
+    let content = "import \"root\"\n\n#[test]\nfn value() {\n  assert true\n}\n";
+    let test_path = tests.join("api.test.lis");
+    std::fs::write(&test_path, content).unwrap();
+
+    let mut client = TestClient::new().await;
+    client.initialize_with_root(root).await;
+
+    let uri = Url::from_file_path(&test_path).unwrap().to_string();
+    client.open(&uri, content).await;
+
+    let diags = client.await_diagnostics_for(&uri).await.unwrap_or_default();
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.message.contains("binary has no importable root")),
+        "a binary root import must report the rejection in the editor: {diags:?}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn external_test_goto_definition_into_root_resolves_to_src() {
+    let (_dir, root) = geo_library_project();
+    let content = "import \"root\"\n\n#[test]\nfn value() {\n  let p = root.Point { x: 1, y: 2 }\n  assert p.x == 1\n  assert root.distance(2, 9) == 7\n}\n";
+    let test_path = root.join("tests/api.test.lis");
+    std::fs::write(&test_path, content).unwrap();
+
+    let mut client = TestClient::new().await;
+    client.initialize_with_root(&root).await;
+
+    let uri = Url::from_file_path(&test_path).unwrap().to_string();
+    client.open(&uri, content).await;
+    let _ = client.await_diagnostics_for(&uri).await;
+
+    let def = client.goto_definition(&uri, 6, 16).await;
+    let loc = def
+        .as_ref()
+        .and_then(definition_location)
+        .expect("go-to-definition through `root` should resolve");
+    let target = loc.uri.to_file_path().unwrap();
+    assert!(
+        target.ends_with("src/geo.lis"),
+        "root definition must resolve under src/, got {target:?}"
+    );
+    assert!(
+        definition_target_text(&loc).contains("distance"),
+        "the jump should land on `distance`"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn external_test_hover_survives_reanalysis() {
+    let (_dir, root) = geo_library_project();
+    let content = "import \"root\"\n\n#[test]\nfn value() {\n  let total = root.distance(2, 9)\n  assert total == 7\n}\n";
+    let test_path = root.join("tests/api.test.lis");
+    std::fs::write(&test_path, content).unwrap();
+
+    let mut client = TestClient::new().await;
+    client.initialize_with_root(&root).await;
+
+    let uri = Url::from_file_path(&test_path).unwrap().to_string();
+    client.open(&uri, content).await;
+    let _ = client.await_diagnostics_for(&uri).await;
+
+    client.change(&uri, content, 2).await;
+    let _ = client.await_diagnostics_for(&uri).await;
+
+    let hover = client.hover(&uri, 4, 6).await;
+    assert!(
+        hover.is_some(),
+        "hover on a local binding must survive re-analysis (no empty-AST cache reload)"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn external_test_non_test_file_is_flagged() {
+    let (_dir, root) = geo_library_project();
+    let content = "pub fn helper() -> int { 1 }\n";
+    let helper_path = root.join("tests/helper.lis");
+    std::fs::write(&helper_path, content).unwrap();
+
+    let mut client = TestClient::new().await;
+    client.initialize_with_root(&root).await;
+
+    let uri = Url::from_file_path(&helper_path).unwrap().to_string();
+    client.open(&uri, content).await;
+
+    let diags = client.await_diagnostics_for(&uri).await.unwrap_or_default();
+    assert!(
+        diags.iter().any(|d| d.message.contains("not a test file")),
+        "a non-test file under tests/ must be flagged in the editor: {diags:?}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn external_test_misnamed_suffix_is_flagged() {
+    let (_dir, root) = geo_library_project();
+    let content = "#[test]\nfn t() {}\n";
+    let misnamed = root.join("tests/api_test.lis");
+    std::fs::write(&misnamed, content).unwrap();
+
+    let mut client = TestClient::new().await;
+    client.initialize_with_root(&root).await;
+
+    let uri = Url::from_file_path(&misnamed).unwrap().to_string();
+    client.open(&uri, content).await;
+
+    let diags = client.await_diagnostics_for(&uri).await.unwrap_or_default();
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.message.contains("unsupported suffix")),
+        "a `_test.lis` file must be flagged in the editor even though the graph drops it: {diags:?}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn external_test_root_import_in_subpackage_only_library_is_rejected() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"example.com/you/geo\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+
+    let shapes = root.join("src/shapes");
+    std::fs::create_dir_all(&shapes).unwrap();
+    std::fs::write(shapes.join("shapes.lis"), "pub fn area() -> int { 4 }\n").unwrap();
+
+    let tests = root.join("tests");
+    std::fs::create_dir_all(&tests).unwrap();
+    let content = "import \"root\"\n\n#[test]\nfn t() {\n  assert true\n}\n";
+    let test_path = tests.join("api.test.lis");
+    std::fs::write(&test_path, content).unwrap();
+
+    let mut client = TestClient::new().await;
+    client.initialize_with_root(root).await;
+
+    let uri = Url::from_file_path(&test_path).unwrap().to_string();
+    client.open(&uri, content).await;
+
+    let diags = client.await_diagnostics_for(&uri).await.unwrap_or_default();
+    assert!(
+        diags.iter().any(|d| d.message.contains("no root package")),
+        "a subpackage-only library has no importable root, even in the editor: {diags:?}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn external_test_root_namespace_hover_shows_root() {
+    let (_dir, root) = geo_library_project();
+    let content = "import \"root\"\n\n#[test]\nfn t() {\n  assert root.distance(2, 9) == 11\n}\n";
+    let test_path = root.join("tests/api.test.lis");
+    std::fs::write(&test_path, content).unwrap();
+
+    let mut client = TestClient::new().await;
+    client.initialize_with_root(&root).await;
+
+    let uri = Url::from_file_path(&test_path).unwrap().to_string();
+    client.open(&uri, content).await;
+    let _ = client.await_diagnostics_for(&uri).await;
+
+    let hover = client
+        .hover(&uri, 4, 9)
+        .await
+        .expect("hover on the root namespace should resolve");
+    let text = hover_content(&hover);
+    assert!(
+        !text.contains("_entry_"),
+        "namespace hover must not leak the internal `_entry_` name: {text}"
+    );
+    assert!(
+        text.contains("root"),
+        "namespace hover should show the source spelling `root`: {text}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn external_test_invalid_sibling_is_rejected() {
+    let (_dir, root) = geo_library_project();
+    let content = "import \"root\"\n\n#[test]\nfn t() {\n  assert true\n}\n";
+    let test_path = root.join("tests/api.test.lis");
+    std::fs::write(&test_path, content).unwrap();
+    std::fs::write(
+        root.join("tests/helper.lis"),
+        "pub fn shared() -> int { 2 }\n",
+    )
+    .unwrap();
+
+    let mut client = TestClient::new().await;
+    client.initialize_with_root(&root).await;
+
+    let uri = Url::from_file_path(&test_path).unwrap().to_string();
+    client.open(&uri, content).await;
+
+    let diags = client.await_diagnostics_for(&uri).await.unwrap_or_default();
+    assert!(
+        diags.iter().any(|d| d.message.contains("not a test file")),
+        "an invalid sibling under tests/ must be rejected while a valid test is open: {diags:?}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn src_tests_file_is_not_misclassified_as_external() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"example.com/you/geo\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+
+    let src_tests = root.join("src/tests");
+    std::fs::create_dir_all(&src_tests).unwrap();
+    let content = "fn f() -> int {\n  missing_symbol()\n}\n";
+    let file_path = src_tests.join("helper.lis");
+    std::fs::write(&file_path, content).unwrap();
+
+    let mut client = TestClient::new().await;
+    client.initialize_with_root(root).await;
+
+    let uri = Url::from_file_path(&file_path).unwrap().to_string();
+    client.open(&uri, content).await;
+
+    let diags = client.await_diagnostics_for(&uri).await.unwrap_or_default();
+    assert!(
+        diags.iter().any(|d| d.message.contains("missing_symbol")),
+        "a file under src/tests/ must be analyzed in place, not routed to the external tests/ dir: {diags:?}"
+    );
+    assert!(
+        !diags.iter().any(|d| d.message.contains("not a test file")),
+        "a src/tests/ file must not be treated as an external test: {diags:?}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn src_tests_siblings_load_from_src_directory() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"example.com/you/geo\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+
+    let src_tests = root.join("src/tests");
+    std::fs::create_dir_all(&src_tests).unwrap();
+    std::fs::write(
+        src_tests.join("sibling.lis"),
+        "pub fn from_sibling() -> int { 7 }\n",
+    )
+    .unwrap();
+    let content = "fn use_it() -> int {\n  from_sibling()\n}\n";
+    let file_path = src_tests.join("caller.lis");
+    std::fs::write(&file_path, content).unwrap();
+
+    let mut client = TestClient::new().await;
+    client.initialize_with_root(root).await;
+
+    let uri = Url::from_file_path(&file_path).unwrap().to_string();
+    client.open(&uri, content).await;
+
+    let diags = client.await_diagnostics_for(&uri).await.unwrap_or_default();
+    assert!(
+        !diags.iter().any(|d| d.message.contains("from_sibling")),
+        "a src/tests/ file must resolve siblings from src/tests/, not the external tests/ dir: {diags:?}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn src_tests_overlay_does_not_collide_with_external_tests() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"example.com/you/geo\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+
+    let src = root.join("src");
+    std::fs::create_dir_all(&src).unwrap();
+    std::fs::write(src.join("geo.lis"), "pub fn distance() -> int { 1 }\n").unwrap();
+
+    let src_tests = root.join("src/tests");
+    std::fs::create_dir_all(&src_tests).unwrap();
+    let src_helper = src_tests.join("shared.test.lis");
+    let src_helper_content = "fn from_src_tests() -> int { 1 }\n";
+    std::fs::write(&src_helper, src_helper_content).unwrap();
+
+    let tests = root.join("tests");
+    std::fs::create_dir_all(&tests).unwrap();
+    let api = tests.join("api.test.lis");
+    let api_content = "import \"root\"\n\n#[test]\nfn t() {\n  assert from_src_tests() == 1\n}\n";
+    std::fs::write(&api, api_content).unwrap();
+
+    let mut client = TestClient::new().await;
+    client.initialize_with_root(root).await;
+
+    let src_uri = Url::from_file_path(&src_helper).unwrap().to_string();
+    client.open(&src_uri, src_helper_content).await;
+    let _ = client.await_diagnostics_for(&src_uri).await;
+
+    let api_uri = Url::from_file_path(&api).unwrap().to_string();
+    client.open(&api_uri, api_content).await;
+
+    let diags = client
+        .await_diagnostics_for(&api_uri)
+        .await
+        .unwrap_or_default();
+    assert!(
+        diags.iter().any(|d| d.message.contains("from_src_tests")),
+        "a src/tests overlay must not leak into the external tests module: {diags:?}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn external_test_inlay_hint_does_not_leak_entry() {
+    let (_dir, root) = geo_library_project();
+    let content = "import \"root\"\n\n#[test]\nfn t() {\n  let x = root\n  assert true\n}\n";
+    let test_path = root.join("tests/api.test.lis");
+    std::fs::write(&test_path, content).unwrap();
+
+    let mut client = TestClient::new().await;
+    client.initialize_with_root(&root).await;
+
+    let uri = Url::from_file_path(&test_path).unwrap().to_string();
+    client.open(&uri, content).await;
+    let _ = client.await_diagnostics_for(&uri).await;
+
+    if let Some(hints) = client.inlay_hint(&uri, (0, 0), doc_end(content)).await {
+        for (_, _, label) in inlay_hint_triples(&hints) {
+            assert!(
+                !label.contains("_entry_"),
+                "inlay hints must not leak the internal `_entry_` name: {label}"
+            );
+        }
+    }
+
+    client.shutdown().await;
+}

@@ -35,10 +35,10 @@ impl SharedState {
         let line_index = LineIndex::new(&content);
 
         if let Some(config) = self.ensure_config(&uri).await
-            && let Some((module_id, filename)) = uri_to_module_file(&config, &uri)
+            && let Some((module_id, filename, external_test)) = uri_to_module_file(&config, &uri)
         {
             let mut loader = self.loader.write().await;
-            loader.set_overlay(&module_id, &filename, content.clone());
+            loader.set_overlay(external_test, &module_id, &filename, content.clone());
         }
 
         self.documents.insert(

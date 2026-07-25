@@ -377,10 +377,9 @@ fn entry_is_dir(entry: &std::fs::DirEntry, path: &Path) -> bool {
 
 impl Loader for LocalFileSystem {
     fn scan_folder(&self, folder_name: &str) -> Files {
-        if semantics::loader::is_external_test_module(folder_name) {
-            let Some((project_root, display_base)) = &self.project_root else {
-                return HashMap::default();
-            };
+        if semantics::loader::is_external_test_module(folder_name)
+            && let Some((project_root, display_base)) = &self.project_root
+        {
             return self.collect_files(&project_root.join(folder_name), folder_name, display_base);
         }
 

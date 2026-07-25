@@ -11,7 +11,7 @@ use syntax::program::{
 };
 use syntax::types::{SimpleKind, SubstitutionMap, Symbol, Type, substitute};
 
-pub const ENTRY_MODULE_ID: &str = "_entry_";
+pub use syntax::ENTRY_MODULE_ID;
 const ENTRY_FILE_ID: u32 = 0;
 
 #[derive(Debug, Clone)]

@@ -131,7 +131,7 @@ impl InferCtx<'_> {
             if let Some(import_path) = alias_to_path.get(definition_name) {
                 self.sink.push(diagnostics::infer::name_shadows_import(
                     definition_name,
-                    import_path,
+                    crate::loader::import_display_name(import_path),
                     name_span,
                 ));
             }
@@ -145,7 +145,7 @@ impl InferCtx<'_> {
         {
             self.sink.push(diagnostics::infer::name_shadows_import(
                 name,
-                import_path,
+                crate::loader::import_display_name(import_path),
                 span,
             ));
         }

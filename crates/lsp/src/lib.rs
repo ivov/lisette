@@ -147,10 +147,10 @@ impl LanguageServer for Backend {
         self.last_valid_snapshot.remove(uri);
 
         let overlay_removed = if let Some(config) = self.project_config.read().await.as_ref()
-            && let Some((module_id, filename)) = uri_to_module_file(config, uri)
+            && let Some((module_id, filename, external_test)) = uri_to_module_file(config, uri)
         {
             let mut loader = self.loader.write().await;
-            loader.remove_overlay(&module_id, &filename);
+            loader.remove_overlay(external_test, &module_id, &filename);
             true
         } else {
             false

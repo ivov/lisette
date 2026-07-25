@@ -10,10 +10,11 @@ use crate::project::ProjectConfig;
 #[derive(Clone)]
 pub(crate) struct OverlayLoader {
     config: ProjectConfig,
-    /// module_id -> filename -> content (in-memory overrides)
-    overlays: HashMap<String, HashMap<String, String>>,
+    overlays: HashMap<(bool, String), HashMap<String, String>>,
     /// Override path for ENTRY_MODULE_ID (set when analyzing submodule files).
     entry_module_path_override: Option<PathBuf>,
+    /// The external test module under analysis, surfaced as a discovered root.
+    external_test_root: Option<String>,
 }
 
 impl OverlayLoader {
@@ -22,6 +23,7 @@ impl OverlayLoader {
             config,
             overlays: HashMap::default(),
             entry_module_path_override: None,
+            external_test_root: None,
         }
     }
 
@@ -29,21 +31,34 @@ impl OverlayLoader {
         self.config = config;
     }
 
-    pub(crate) fn set_overlay(&mut self, module_id: &str, filename: &str, content: String) {
+    pub(crate) fn set_overlay(
+        &mut self,
+        external_test: bool,
+        module_id: &str,
+        filename: &str,
+        content: String,
+    ) {
         self.overlays
-            .entry(module_id.to_string())
+            .entry((external_test, module_id.to_string()))
             .or_default()
             .insert(filename.to_string(), content);
     }
 
-    pub(crate) fn remove_overlay(&mut self, module_id: &str, filename: &str) {
-        if let Some(module_overlays) = self.overlays.get_mut(module_id) {
+    pub(crate) fn remove_overlay(&mut self, external_test: bool, module_id: &str, filename: &str) {
+        if let Some(module_overlays) = self
+            .overlays
+            .get_mut(&(external_test, module_id.to_string()))
+        {
             module_overlays.remove(filename);
         }
     }
 
     pub(crate) fn set_entry_module_path(&mut self, path: Option<PathBuf>) {
         self.entry_module_path_override = path;
+    }
+
+    pub(crate) fn set_external_test_root(&mut self, module_id: Option<String>) {
+        self.external_test_root = module_id;
     }
 
     fn module_path(&self, module_id: &str) -> PathBuf {
@@ -77,27 +92,20 @@ impl Loader for OverlayLoader {
             }
         }
 
-        if module_id == ENTRY_MODULE_ID {
-            if let Some(ref override_path) = self.entry_module_path_override {
-                if let Some(actual_module_id) = self.derive_module_id(override_path)
-                    && let Some(module_overlays) = self.overlays.get(&actual_module_id)
-                {
-                    for (filename, content) in module_overlays {
-                        files.insert(
-                            filename.clone(),
-                            FileContent::new(content.clone(), filename.clone()),
-                        );
-                    }
-                }
-            } else if let Some(module_overlays) = self.overlays.get(ENTRY_MODULE_ID) {
-                for (filename, content) in module_overlays {
-                    files.insert(
-                        filename.clone(),
-                        FileContent::new(content.clone(), filename.clone()),
-                    );
-                }
-            }
-        } else if let Some(module_overlays) = self.overlays.get(module_id) {
+        let overlay_key = if module_id == ENTRY_MODULE_ID {
+            let derived = match &self.entry_module_path_override {
+                Some(override_path) => self.derive_module_id(override_path),
+                None => Some(ENTRY_MODULE_ID.to_string()),
+            };
+            derived.map(|id| (false, id))
+        } else {
+            let external = self.external_test_root.as_deref() == Some(module_id);
+            Some((external, module_id.to_string()))
+        };
+
+        if let Some(key) = overlay_key
+            && let Some(module_overlays) = self.overlays.get(&key)
+        {
             for (filename, content) in module_overlays {
                 files.insert(
                     filename.clone(),
@@ -113,7 +121,7 @@ impl Loader for OverlayLoader {
         DiscoveredModules {
             production_modules: vec![ENTRY_MODULE_ID.to_string()],
             internal_test_roots: Vec::new(),
-            external_test_roots: Vec::new(),
+            external_test_roots: self.external_test_root.iter().cloned().collect(),
         }
     }
 }

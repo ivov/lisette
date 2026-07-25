@@ -59,7 +59,8 @@ pub(crate) fn find_module_by_alias(
 impl SharedState {
     async fn run_analysis(&self, uri: &Url) -> Result<AnalysisSnapshot, Vec<Diagnostic>> {
         let config = self.ensure_config(uri).await.ok_or_else(Vec::new)?;
-        let (module_id, filename) = uri_to_module_file(&config, uri).ok_or_else(Vec::new)?;
+        let (module_id, filename, external_test) =
+            uri_to_module_file(&config, uri).ok_or_else(Vec::new)?;
 
         let source = self
             .documents
@@ -67,13 +68,40 @@ impl SharedState {
             .map(|doc| doc.content.clone())
             .ok_or_else(Vec::new)?;
 
+        if external_test && let Some(issue) = semantics::loader::external_test_file_issue(&filename)
+        {
+            let diagnostic = match issue {
+                semantics::loader::ExternalTestFileIssue::WrongSuffix => {
+                    diagnostics::module_graph::wrong_test_file_suffix(&filename)
+                }
+                semantics::loader::ExternalTestFileIssue::NotATestFile => {
+                    diagnostics::module_graph::non_test_file_under_tests(&filename)
+                }
+            };
+            return Err(vec![convert_diagnostic(
+                &diagnostic,
+                &LineIndex::new(&source),
+            )]);
+        }
+
         let loader_clone = {
             let mut loader = self.loader.write().await;
-            let module_dir = module_id_to_dir(&config, &module_id);
-            loader.set_entry_module_path(Some(module_dir));
-            let clone = loader.clone();
-            loader.set_entry_module_path(None);
-            clone
+            if external_test {
+                loader.set_external_test_root(Some(module_id.clone()));
+                let clone = loader.clone();
+                loader.set_external_test_root(None);
+                clone
+            } else {
+                let module_dir = uri
+                    .to_file_path()
+                    .ok()
+                    .and_then(|path| path.parent().map(std::path::Path::to_path_buf))
+                    .unwrap_or_else(|| module_id_to_dir(&config, &module_id));
+                loader.set_entry_module_path(Some(module_dir));
+                let clone = loader.clone();
+                loader.set_entry_module_path(None);
+                clone
+            }
         };
 
         let lex_result = Lexer::new(&source, 0).lex();
@@ -137,13 +165,17 @@ impl SharedState {
                 load_siblings: true,
             },
             loader: &loader_clone,
-            entry: Some(EntryFile {
-                source,
-                display_path: filename.clone(),
-                filename,
-                ast: desugar_result.ast,
-                file_comment: parse_result.file_comment,
-            }),
+            entry: if external_test {
+                None
+            } else {
+                Some(EntryFile {
+                    source,
+                    display_path: filename.clone(),
+                    filename,
+                    ast: desugar_result.ast,
+                    file_comment: parse_result.file_comment,
+                })
+            },
             project_root: if config.standalone_mode {
                 None
             } else {
@@ -154,12 +186,12 @@ impl SharedState {
             emit_tests: false,
             locator,
             go_module: String::new(),
-            disable_cache: false,
+            disable_cache: external_test,
         });
         let mut result = analyze_output.result;
         let facts = analyze_output.facts;
 
-        if has_parse_errors {
+        if has_parse_errors && !external_test {
             let mut all_errors = parse_errors;
             all_errors.append(&mut result.errors);
             result.errors = all_errors;
@@ -190,6 +222,7 @@ impl SharedState {
             has_parse_errors,
             &config,
             uri,
+            external_test,
         ))
     }
 

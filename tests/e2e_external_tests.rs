@@ -167,6 +167,68 @@ fn import_of_tests_namespace_is_rejected() {
 }
 
 #[test]
+fn loose_directory_tests_import_is_not_reserved_but_unresolved() {
+    let dir = tempfile::tempdir().unwrap();
+    let loose = dir.path();
+    fs::write(loose.join("a.lis"), "import \"tests\"\n\nfn f() { g() }\n").unwrap();
+    fs::write(loose.join("b.lis"), "pub fn g() {}\n").unwrap();
+
+    let check = lis(loose, &["check"]);
+    let out = combined(&check);
+    assert!(!check.status.success(), "expected failure: {out}");
+    assert!(
+        out.contains("Module not found"),
+        "a missing `tests` module outside a project is unresolved, not reserved: {out}"
+    );
+    assert!(
+        !out.contains("reserved"),
+        "the `tests` reservation must not apply outside a project: {out}"
+    );
+}
+
+#[test]
+fn loose_directory_tests_folder_is_importable() {
+    let dir = tempfile::tempdir().unwrap();
+    let loose = dir.path();
+    fs::write(
+        loose.join("a.lis"),
+        "import \"tests\"\n\nfn f() { tests.helper() }\n",
+    )
+    .unwrap();
+    fs::create_dir_all(loose.join("tests")).unwrap();
+    fs::write(loose.join("tests/util.lis"), "pub fn helper() {}\n").unwrap();
+
+    let check = lis(loose, &["check"]);
+    let out = combined(&check);
+    assert!(
+        check.status.success(),
+        "a real `tests/` sub-directory outside a project is an ordinary module: {out}"
+    );
+}
+
+#[test]
+fn subpackage_only_library_rejects_root_import() {
+    let (_dir, project) = scaffold("example.com/you/geo");
+    fs::create_dir_all(project.join("src/shapes")).unwrap();
+    fs::write(
+        project.join("src/shapes/shapes.lis"),
+        "pub fn area() -> int { 4 }\n",
+    )
+    .unwrap();
+    fs::create_dir_all(project.join("tests")).unwrap();
+    fs::write(
+        project.join("tests/api.test.lis"),
+        "import \"root\"\n\n#[test]\nfn t() {\n  assert root.missing() == 1\n}\n",
+    )
+    .unwrap();
+
+    let check = lis(&project, &["check"]);
+    let out = combined(&check);
+    assert!(!check.status.success(), "expected failure: {out}");
+    assert!(out.contains("no root package"), "got: {out}");
+}
+
+#[test]
 fn src_tests_directory_is_reserved() {
     let (_dir, project) = scaffold_binary_with_math("extreserved");
     fs::create_dir_all(project.join("src/tests")).unwrap();
@@ -257,4 +319,204 @@ fn library_project_runs_external_tests() {
     let build = lis(&project, &["build"]);
     assert!(build.status.success(), "build failed: {}", combined(&build));
     assert!(!project.join("target/tests").exists());
+}
+
+fn scaffold_geo_library() -> (tempfile::TempDir, PathBuf) {
+    let (dir, project) = scaffold("example.com/acme/geo");
+    fs::write(
+        project.join("src/geo.lis"),
+        "pub fn distance(a: int, b: int) -> int {\n  if a > b { a - b } else { b - a }\n}\n",
+    )
+    .unwrap();
+    fs::create_dir_all(project.join("tests")).unwrap();
+    (dir, project)
+}
+
+#[test]
+fn warm_check_catches_root_api_change() {
+    let (_dir, project) = scaffold_geo_library();
+    fs::write(
+        project.join("tests/api.test.lis"),
+        "import \"root\"\n\n#[test]\nfn value() {\n  assert root.distance(2, 9) == 7\n}\n",
+    )
+    .unwrap();
+
+    let cold = lis(&project, &["check"]);
+    assert!(
+        cold.status.success(),
+        "cold check failed: {}",
+        combined(&cold)
+    );
+
+    fs::write(
+        project.join("src/geo.lis"),
+        "pub fn renamed(a: int, b: int) -> int {\n  if a > b { a - b } else { b - a }\n}\n",
+    )
+    .unwrap();
+
+    let warm = lis(&project, &["check"]);
+    let out = combined(&warm);
+    assert!(
+        !warm.status.success(),
+        "warm check missed the root change: {out}"
+    );
+    assert!(
+        out.contains("not found in module"),
+        "the stale root member must be reported on a warm run: {out}"
+    );
+}
+
+#[test]
+fn library_external_test_imports_root() {
+    if !go_available() {
+        eprintln!("skipping: `go` not found");
+        return;
+    }
+    let (_dir, project) = scaffold_geo_library();
+    fs::write(
+        project.join("tests/api.test.lis"),
+        "import \"root\"\n\n#[test]\nfn symmetric() {\n  assert root.distance(2, 9) == root.distance(9, 2)\n}\n\n#[test]\nfn value() {\n  assert root.distance(2, 9) == 7\n}\n",
+    )
+    .unwrap();
+
+    let test = lis(&project, &["test"]);
+    let out = combined(&test);
+    assert!(test.status.success(), "test failed: {out}");
+    assert!(out.contains("\n  tests/\n"), "got: {out}");
+    assert!(out.contains("2 passed"), "got: {out}");
+
+    let emitted = fs::read_to_string(project.join("target/tests/api_test.go")).unwrap();
+    assert!(
+        emitted.contains("\"example.com/acme/geo\""),
+        "root package imported at the bare module path: {emitted}"
+    );
+    assert!(
+        !emitted.contains("_entry_"),
+        "the internal entry id must not leak into Go: {emitted}"
+    );
+    assert!(
+        emitted.contains("root.Distance("),
+        "root API referenced through the `root` qualifier: {emitted}"
+    );
+
+    let build = lis(&project, &["build"]);
+    assert!(build.status.success(), "build failed: {}", combined(&build));
+}
+
+#[test]
+fn aliased_root_import_binds() {
+    if !go_available() {
+        eprintln!("skipping: `go` not found");
+        return;
+    }
+    let (_dir, project) = scaffold_geo_library();
+    fs::write(
+        project.join("tests/api.test.lis"),
+        "import g \"root\"\n\n#[test]\nfn value() {\n  assert g.distance(2, 9) == 7\n}\n",
+    )
+    .unwrap();
+
+    let test = lis(&project, &["test"]);
+    assert!(test.status.success(), "test failed: {}", combined(&test));
+    let emitted = fs::read_to_string(project.join("target/tests/api_test.go")).unwrap();
+    assert!(
+        emitted.contains("g.Distance("),
+        "the source alias carries through to the Go qualifier: {emitted}"
+    );
+}
+
+#[test]
+fn root_import_from_src_is_rejected() {
+    let (_dir, project) = scaffold("example.com/acme/geo");
+    fs::write(project.join("src/geo.lis"), "pub fn top() -> int { 1 }\n").unwrap();
+    fs::create_dir_all(project.join("src/util")).unwrap();
+    fs::write(
+        project.join("src/util/util.lis"),
+        "import \"root\"\npub fn helper() -> int {\n  root.top()\n}\n",
+    )
+    .unwrap();
+
+    let check = lis(&project, &["check"]);
+    let out = combined(&check);
+    assert!(!check.status.success(), "expected failure: {out}");
+    assert!(
+        out.contains("only from external tests"),
+        "src imports of root are steered away: {out}"
+    );
+}
+
+#[test]
+fn root_import_in_binary_is_rejected() {
+    let (_dir, project) = scaffold("example.com/acme/bin");
+    fs::write(project.join("src/main.lis"), "fn main() {}\n").unwrap();
+    fs::create_dir_all(project.join("tests")).unwrap();
+    fs::write(
+        project.join("tests/api.test.lis"),
+        "import \"root\"\n\n#[test]\nfn t() {\n  assert root.x() == 1\n}\n",
+    )
+    .unwrap();
+
+    let check = lis(&project, &["check"]);
+    let out = combined(&check);
+    assert!(!check.status.success(), "expected failure: {out}");
+    assert!(
+        out.contains("A binary has no importable root"),
+        "binary roots are not importable: {out}"
+    );
+}
+
+#[test]
+fn src_root_directory_is_reserved() {
+    let (_dir, project) = scaffold("example.com/acme/geo");
+    fs::write(project.join("src/geo.lis"), "pub fn x() -> int { 1 }\n").unwrap();
+    fs::create_dir_all(project.join("src/root")).unwrap();
+    fs::write(project.join("src/root/r.lis"), "pub fn y() -> int { 2 }\n").unwrap();
+
+    let check = lis(&project, &["check"]);
+    let out = combined(&check);
+    assert!(!check.status.success(), "expected failure: {out}");
+    assert!(out.contains("Reserved module directory"), "got: {out}");
+}
+
+#[test]
+fn src_entry_directory_is_reserved() {
+    let (_dir, project) = scaffold("example.com/acme/geo");
+    fs::write(project.join("src/geo.lis"), "pub fn x() -> int { 1 }\n").unwrap();
+    fs::create_dir_all(project.join("src/_entry_")).unwrap();
+    fs::write(
+        project.join("src/_entry_/e.lis"),
+        "pub fn y() -> int { 2 }\n",
+    )
+    .unwrap();
+
+    let check = lis(&project, &["check"]);
+    let out = combined(&check);
+    assert!(!check.status.success(), "expected failure: {out}");
+    assert!(out.contains("Reserved module directory"), "got: {out}");
+    assert!(
+        out.contains("internal entry module"),
+        "the entry collision must be named: {out}"
+    );
+}
+
+#[test]
+fn type_mismatch_through_root_shows_source_spelling() {
+    let (_dir, project) = scaffold_geo_library();
+    fs::write(
+        project.join("tests/api.test.lis"),
+        "import \"root\"\n\n#[test]\nfn t() {\n  let x: int = root\n  assert x == 1\n}\n",
+    )
+    .unwrap();
+
+    let check = lis(&project, &["check"]);
+    let out = combined(&check);
+    assert!(!check.status.success(), "expected failure: {out}");
+    assert!(
+        out.contains("found `root`"),
+        "the namespace type must render as `root`, not the internal id: {out}"
+    );
+    assert!(
+        !out.contains("_entry_"),
+        "the internal id must not leak: {out}"
+    );
 }

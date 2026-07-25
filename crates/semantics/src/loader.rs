@@ -33,11 +33,36 @@ pub fn is_production_module_file(name: &str) -> bool {
 
 pub const EXTERNAL_TESTS_DIR: &str = "tests";
 
+pub use syntax::ROOT_IMPORT;
+
 pub fn is_external_test_module(module_id: &str) -> bool {
     module_id == EXTERNAL_TESTS_DIR
         || module_id
             .strip_prefix(EXTERNAL_TESTS_DIR)
             .is_some_and(|rest| rest.starts_with('/'))
+}
+
+pub fn import_display_name(module_id: &str) -> &str {
+    if module_id == crate::store::ENTRY_MODULE_ID {
+        ROOT_IMPORT
+    } else {
+        module_id
+    }
+}
+
+pub enum ExternalTestFileIssue {
+    WrongSuffix,
+    NotATestFile,
+}
+
+pub fn external_test_file_issue(name: &str) -> Option<ExternalTestFileIssue> {
+    if name.ends_with(".test.lis") {
+        None
+    } else if name.ends_with("_test.lis") {
+        Some(ExternalTestFileIssue::WrongSuffix)
+    } else {
+        Some(ExternalTestFileIssue::NotATestFile)
+    }
 }
 
 #[derive(Debug, Clone, Default)]

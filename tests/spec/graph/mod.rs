@@ -28,6 +28,7 @@ fn graph_options<'a>(
         loader: Some(loader),
         sink,
         standalone_mode,
+        has_project_root: !standalone_mode,
         locator,
         include_tests: true,
     }

@@ -13,7 +13,11 @@ use lisette::fs::{LocalFileSystem, prune_orphan_go_files, prune_stale_root_go, r
 use lisette::pipeline::{
     CompileConfig, CompileEntry, CompilePhase, ProjectKind, Sources, TestIndex, compile,
 };
-use semantics::loader::{EXTERNAL_TESTS_DIR, is_production_module_file};
+use semantics::loader::{
+    EXTERNAL_TESTS_DIR, ExternalTestFileIssue, ROOT_IMPORT, external_test_file_issue,
+    is_production_module_file,
+};
+use semantics::store::ENTRY_MODULE_ID;
 
 pub fn emit(path: Option<String>, sourcemap: bool) -> i32 {
     with_locked_project(path, |prep| {
@@ -539,6 +543,22 @@ pub(super) fn resolve_project_kind(project_path: &Path) -> Option<ProjectKind> {
     let src = project_path.join("src");
     let sources = lisette::fs::collect_lis_filepaths_recursive(&src);
 
+    if let Some(rel) = sources.iter().find_map(|path| {
+        path.strip_prefix(&src)
+            .ok()
+            .filter(|rel| rel.starts_with(ENTRY_MODULE_ID))
+    }) {
+        cli_error!(
+            "Reserved module directory",
+            format!(
+                "`src/{}` sits under `src/{ENTRY_MODULE_ID}/`, which collides with the compiler's internal entry module",
+                rel.display()
+            ),
+            "Rename the module"
+        );
+        return None;
+    }
+
     if let Some((heading, reason, hint)) = go_ignored_shape(&src, "src", &sources) {
         cli_error!(heading, reason, hint);
         return None;
@@ -560,29 +580,51 @@ pub(super) fn resolve_project_kind(project_path: &Path) -> Option<ProjectKind> {
         return None;
     }
 
+    if let Some(rel) = sources.iter().find_map(|path| {
+        path.strip_prefix(&src)
+            .ok()
+            .filter(|rel| rel.starts_with(ROOT_IMPORT))
+    }) {
+        cli_error!(
+            "Reserved module directory",
+            format!(
+                "`src/{}` sits under `src/{ROOT_IMPORT}/`, which collides with the reserved `{ROOT_IMPORT}` spelling for the library's root package",
+                rel.display()
+            ),
+            "Rename the module"
+        );
+        return None;
+    }
+
     let tests_dir = project_path.join(EXTERNAL_TESTS_DIR);
     let test_sources = lisette::fs::collect_lis_filepaths_recursive(&tests_dir);
 
-    if let Some(rel) = test_sources.iter().find_map(|path| {
-        path.strip_prefix(&tests_dir)
-            .ok()
-            .filter(|rel| !rel.to_string_lossy().ends_with(".test.lis"))
+    if let Some((rel, issue)) = test_sources.iter().find_map(|path| {
+        let rel = path
+            .strip_prefix(&tests_dir)
+            .ok()?
+            .to_string_lossy()
+            .into_owned();
+        external_test_file_issue(&rel).map(|issue| (rel, issue))
     }) {
-        let rel = rel.display().to_string();
-        if let Some(stem) = rel.strip_suffix("_test.lis") {
-            cli_error!(
-                "Misnamed test file",
-                format!(
-                    "`{EXTERNAL_TESTS_DIR}/{rel}` uses `_test.lis`, but Lisette test files end in `.test.lis`"
-                ),
-                format!("Rename the file to `{EXTERNAL_TESTS_DIR}/{stem}.test.lis`")
-            );
-        } else {
-            cli_error!(
-                "Non-test file under `tests/`",
-                format!("`{EXTERNAL_TESTS_DIR}/{rel}` is not a `.test.lis` file"),
-                "Rename the file with a `.test.lis` suffix"
-            );
+        match issue {
+            ExternalTestFileIssue::WrongSuffix => {
+                let stem = rel.strip_suffix("_test.lis").unwrap_or(rel.as_str());
+                cli_error!(
+                    "Misnamed test file",
+                    format!(
+                        "`{EXTERNAL_TESTS_DIR}/{rel}` uses `_test.lis`, but Lisette test files end in `.test.lis`"
+                    ),
+                    format!("Rename the file to `{EXTERNAL_TESTS_DIR}/{stem}.test.lis`")
+                );
+            }
+            ExternalTestFileIssue::NotATestFile => {
+                cli_error!(
+                    "Non-test file under `tests/`",
+                    format!("`{EXTERNAL_TESTS_DIR}/{rel}` is not a `.test.lis` file"),
+                    "Rename the file with a `.test.lis` suffix"
+                );
+            }
         }
         return None;
     }

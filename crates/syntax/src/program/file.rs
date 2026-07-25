@@ -137,6 +137,25 @@ impl File {
             .collect()
     }
 
+    /// Redirects `import "{from}"` to `to`, keeping the source spelling as the qualifier.
+    pub fn rewrite_import(&mut self, from: &str, to: &str) {
+        for item in &mut self.items {
+            if let Expression::ModuleImport {
+                name,
+                name_span,
+                alias,
+                ..
+            } = item
+                && name.as_str() == from
+            {
+                if alias.is_none() {
+                    *alias = Some(ImportAlias::Named(name.clone(), *name_span));
+                }
+                *name = to.into();
+            }
+        }
+    }
+
     pub fn go_filename(&self) -> String {
         if let Some(stem) = self.name.strip_suffix(".test.lis") {
             return format!("{stem}_test.go");

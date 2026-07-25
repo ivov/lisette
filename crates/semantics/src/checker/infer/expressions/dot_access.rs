@@ -630,6 +630,7 @@ impl InferCtx<'_> {
             })?;
         let module_fields = module_fields.clone();
         let module_id = module_id.to_string();
+        let display_module = crate::loader::import_display_name(type_name);
         let module_ty = Type::ImportNamespace(module_id.clone().into());
 
         let kind = DotAccessKind::ModuleMember;
@@ -642,7 +643,7 @@ impl InferCtx<'_> {
             self.sink
                 .push(diagnostics::infer::function_or_value_not_found_in_module(
                     args.member_name,
-                    &module_id,
+                    display_module,
                     *args.span,
                 ));
             return Some((args.build_dot_access(Type::Error, Some(kind), None), kind));
@@ -663,7 +664,7 @@ impl InferCtx<'_> {
                 })
             )
         {
-            let display_name = format!("{}.{}", type_name, args.member_name);
+            let display_name = format!("{}.{}", display_module, args.member_name);
             self.sink.push(diagnostics::infer::native_constructor_value(
                 &display_name,
                 *args.span,
@@ -680,7 +681,7 @@ impl InferCtx<'_> {
                 })
             )
         {
-            let display_name = format!("{}.{}", type_name, args.member_name);
+            let display_name = format!("{}.{}", display_module, args.member_name);
             self.sink.push(diagnostics::infer::record_struct_value(
                 &display_name,
                 *args.span,
@@ -705,7 +706,7 @@ impl InferCtx<'_> {
             && !self.scopes.is_dot_access_base()
             && let Some(definition) = store.get_definition(&resolved_definition)
         {
-            let display_name = format!("{}.{}", type_name, args.member_name);
+            let display_name = format!("{}.{}", display_module, args.member_name);
             match &definition.body {
                 DefinitionBody::TypeAlias { .. } => {
                     let diagnostic = match store.deep_struct_kind(definition.ty.unwrap_forall()) {
@@ -732,7 +733,7 @@ impl InferCtx<'_> {
         if !self.scopes.is_callee_context() && !self.scopes.is_dot_access_base() {
             let phantom = phantom_type_params(&member_type);
             if !phantom.is_empty() {
-                let display_name = format!("{}.{}", type_name, args.member_name);
+                let display_name = format!("{}.{}", display_module, args.member_name);
                 self.sink
                     .push(diagnostics::infer::uninferable_generic_reference(
                         &display_name,
@@ -753,7 +754,7 @@ impl InferCtx<'_> {
         self.unify(args.expected_ty, &member_ty, args.span);
 
         if coerced_to_unconstrained_value {
-            let display_name = format!("{}.{}", type_name, args.member_name);
+            let display_name = format!("{}.{}", display_module, args.member_name);
             self.register_function_value_obligations(&display_name, &member_ty, *args.span);
         }
 
