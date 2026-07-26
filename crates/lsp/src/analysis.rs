@@ -294,6 +294,11 @@ pub(crate) fn convert_diagnostic(d: &LisetteDiagnostic, index: &LineIndex) -> Di
                 Some(label) => label.to_string(),
                 None => d.plain_message().to_string(),
             };
+            if let Some(first) = msg.chars().next()
+                && first.is_ascii_lowercase()
+            {
+                msg.replace_range(0..1, &first.to_ascii_uppercase().to_string());
+            }
             if let Some(help) = d.plain_help() {
                 msg.push_str(" · ");
                 msg.push_str(help);
@@ -326,5 +331,31 @@ mod tests {
         let index = LineIndex::new("");
         let diagnostic = convert_diagnostic(&LisetteDiagnostic::warn("w"), &index);
         assert_eq!(diagnostic.severity, Some(DiagnosticSeverity::WARNING));
+    }
+
+    #[test]
+    fn prose_label_is_capitalized() {
+        let span = syntax::ast::Span::new(0, 0, 1);
+        let diagnostic = convert_diagnostic(
+            &LisetteDiagnostic::warn("Unused function")
+                .with_span_label(&span, "never called")
+                .with_help("Call or remove this function"),
+            &LineIndex::new("x"),
+        );
+        assert_eq!(
+            diagnostic.message,
+            "Never called · Call or remove this function"
+        );
+    }
+
+    #[test]
+    fn identifier_led_label_is_left_untouched() {
+        let span = syntax::ast::Span::new(0, 0, 1);
+        let diagnostic = convert_diagnostic(
+            &LisetteDiagnostic::error("Name not found")
+                .with_span_label(&span, "`missing` not found in module `root`"),
+            &LineIndex::new("x"),
+        );
+        assert_eq!(diagnostic.message, "`missing` not found in module `root`");
     }
 }
