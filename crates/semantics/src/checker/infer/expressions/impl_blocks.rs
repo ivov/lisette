@@ -15,58 +15,53 @@ impl InferCtx<'_> {
         span: Span,
     ) -> Expression {
         let store = self.store;
-        self.scopes.push();
+        let (generics, impl_ty, new_methods) = self.with_scope(|this| {
+            this.put_in_scope(&generics);
+            let generics = this.ensure_generic_bounds(store, generics, &span);
 
-        self.put_in_scope(&generics);
-        let generics = self.ensure_generic_bounds(store, generics, &span);
+            this.check_undeclared_impl_type_params(&annotation, &generics);
+            let impl_ty = this.convert_receiver_to_type(store, &annotation, &span);
 
-        self.check_undeclared_impl_type_params(&annotation, &generics);
-        let impl_ty = self.convert_receiver_to_type(store, &annotation, &span);
-
-        if let Type::Nominal { id, .. } = &impl_ty
-            && self.impl_has_simple_type_params(&impl_ty, &generics)
-        {
-            let receiver_qualified = id.clone();
-            self.register_receiver_type_bounds(store, &receiver_qualified, &generics);
-        }
-
-        let receiver_ty = if generics.is_empty() {
-            impl_ty.clone()
-        } else {
-            Type::Forall {
-                vars: generics.iter().map(|g| g.name.clone()).collect(),
-                body: Box::new(impl_ty.clone()),
+            if let Type::Nominal { id, .. } = &impl_ty
+                && this.impl_has_simple_type_params(&impl_ty, &generics)
+            {
+                let receiver_qualified = id.clone();
+                this.register_receiver_type_bounds(store, &receiver_qualified, &generics);
             }
-        };
 
-        let scope = self.scopes.current_mut();
-        scope.insert_value(receiver_name.to_string(), receiver_ty);
+            let receiver_ty = if generics.is_empty() {
+                impl_ty.clone()
+            } else {
+                Type::Forall {
+                    vars: generics.iter().map(|g| g.name.clone()).collect(),
+                    body: Box::new(impl_ty.clone()),
+                }
+            };
 
-        // If this is a tuple struct with a constructor, the receiver_name (which is the
-        // type name) shadows the constructor function in the parent scope. Re-insert the
-        // constructor so it's callable from within impl methods.
-        if let Type::Nominal { id, .. } = &impl_ty
-            && let Some(ctor_ty) = store
-                .get_definition(id)
-                .and_then(Definition::constructor_type)
-        {
-            self.scopes
-                .current_mut()
-                .insert_value(receiver_name.to_string(), ctor_ty);
-        }
+            let scope = this.scopes.current_mut();
+            scope.insert_value(receiver_name.to_string(), receiver_ty);
 
-        self.scopes.set_impl_receiver_type(Some(impl_ty.clone()));
+            if let Type::Nominal { id, .. } = &impl_ty
+                && let Some(ctor_ty) = store
+                    .get_definition(id)
+                    .and_then(Definition::constructor_type)
+            {
+                this.scopes
+                    .current_mut()
+                    .insert_value(receiver_name.to_string(), ctor_ty);
+            }
 
-        let new_methods: Vec<Expression> = methods
-            .into_iter()
-            .map(|method| {
-                let method_ty = self.new_type_var();
-                self.infer_expression(method, &method_ty)
-            })
-            .collect();
+            this.scopes.set_impl_receiver_type(impl_ty.clone());
 
-        self.scopes.set_impl_receiver_type(None);
-        self.scopes.pop();
+            let new_methods = methods
+                .into_iter()
+                .map(|method| {
+                    let method_ty = this.new_type_var();
+                    this.infer_expression(method, &method_ty)
+                })
+                .collect();
+            (generics, impl_ty, new_methods)
+        });
 
         Expression::ImplBlock {
             annotation,
@@ -94,39 +89,36 @@ impl InferCtx<'_> {
             unreachable!()
         };
 
-        self.scopes.push();
-        self.put_in_scope(&generics);
-        let generics = self.ensure_generic_bounds(store, generics, &span);
+        let (generics, new_method_signatures, new_parents) = self.with_scope(|this| {
+            this.put_in_scope(&generics);
+            let generics = this.ensure_generic_bounds(store, generics, &span);
 
-        // Interface method parameters are declarations, not implementations — they
-        // have no body and are always "unused". Remove their bindings so the unused
-        // parameter lint doesn't fire.
-        let checkpoint = self.facts.binding_checkpoint();
-        let new_method_signatures = method_signatures
-            .into_iter()
-            .map(|method_signature| {
-                let signature_ty = self.new_type_var();
-                self.infer_expression(method_signature, &signature_ty)
-            })
-            .collect();
-        self.facts.remove_bindings_from(checkpoint);
+            let new_method_signatures = this.with_temporary_bindings(|this| {
+                method_signatures
+                    .into_iter()
+                    .map(|method_signature| {
+                        let signature_ty = this.new_type_var();
+                        this.infer_expression(method_signature, &signature_ty)
+                    })
+                    .collect()
+            });
 
-        let new_parents = parents
-            .into_iter()
-            .map(|parent| {
-                let parent_ty = self.without_diagnostics(|this| {
-                    this.convert_to_type(store, &parent.annotation, &parent.span)
-                });
-                self.check_interface_parent(&parent_ty, parent.span);
-                ParentInterface {
-                    annotation: parent.annotation,
-                    span: parent.span,
-                    ty: parent_ty,
-                }
-            })
-            .collect();
-
-        self.scopes.pop();
+            let new_parents = parents
+                .into_iter()
+                .map(|parent| {
+                    let parent_ty = this.without_diagnostics(|this| {
+                        this.convert_to_type(store, &parent.annotation, &parent.span)
+                    });
+                    this.check_interface_parent(&parent_ty, parent.span);
+                    ParentInterface {
+                        annotation: parent.annotation,
+                        span: parent.span,
+                        ty: parent_ty,
+                    }
+                })
+                .collect();
+            (generics, new_method_signatures, new_parents)
+        });
 
         Expression::Interface {
             doc,

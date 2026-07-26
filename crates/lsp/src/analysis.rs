@@ -166,7 +166,6 @@ impl SharedState {
             },
             compile_phase: CompilePhase::Check,
             project_kind,
-            emit_tests: false,
             locator,
             go_module: String::new(),
             disable_cache: external_test,

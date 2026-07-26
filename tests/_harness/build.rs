@@ -39,7 +39,6 @@ fn compile_with(
         locator,
         compile_phase: semantics::inference::CompilePhase::Check,
         project_kind: semantics::inference::ProjectKind::Binary,
-        emit_tests: false,
         go_module: String::new(),
         disable_cache: false,
     })
@@ -92,7 +91,6 @@ pub fn compile_standalone_entry(
         locator: deps::TypedefLocator::default(),
         compile_phase: phase,
         project_kind: semantics::inference::ProjectKind::Binary,
-        emit_tests: false,
         go_module: String::new(),
         disable_cache: true,
     })
@@ -181,9 +179,12 @@ pub fn compile_project_files_with_tests(
         }),
         project_root: None,
         locator: deps::TypedefLocator::default(),
-        compile_phase: semantics::inference::CompilePhase::Emit,
+        compile_phase: if emit_tests {
+            semantics::inference::CompilePhase::Test
+        } else {
+            semantics::inference::CompilePhase::Emit
+        },
         project_kind: semantics::inference::ProjectKind::Binary,
-        emit_tests,
         go_module: go_module.to_string(),
         disable_cache: true,
     });

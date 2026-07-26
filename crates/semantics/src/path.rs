@@ -8,8 +8,13 @@ pub fn relative_to_cwd(path: &Path) -> Option<String> {
 
 /// Cwd-relative display paths under a fixed base dir, resolving prefixes once.
 pub struct DisplayPathBase {
-    canonical: Option<(PathBuf, PathBuf)>,
-    plain: Option<(PathBuf, PathBuf)>,
+    resolution: DisplayPathResolution,
+}
+
+enum DisplayPathResolution {
+    Unknown,
+    Canonical { base: PathBuf, cwd: PathBuf },
+    Plain { base: PathBuf, cwd: PathBuf },
 }
 
 impl DisplayPathBase {
@@ -20,8 +25,7 @@ impl DisplayPathBase {
     fn with_cwd(base_dir: &Path, cwd: Option<PathBuf>) -> Self {
         let Some(cwd) = cwd else {
             return Self {
-                canonical: None,
-                plain: None,
+                resolution: DisplayPathResolution::Unknown,
             };
         };
         let absolute_base = if base_dir.is_absolute() {
@@ -29,22 +33,23 @@ impl DisplayPathBase {
         } else {
             cwd.join(base_dir)
         };
-        let canonical = match (cwd.canonicalize(), absolute_base.canonicalize()) {
-            (Ok(canonical_cwd), Ok(canonical_base)) => Some((canonical_base, canonical_cwd)),
-            _ => None,
+        let resolution = match (cwd.canonicalize(), absolute_base.canonicalize()) {
+            (Ok(cwd), Ok(base)) => DisplayPathResolution::Canonical { base, cwd },
+            _ => DisplayPathResolution::Plain {
+                base: absolute_base,
+                cwd,
+            },
         };
-        Self {
-            canonical,
-            plain: Some((absolute_base, cwd)),
-        }
+        Self { resolution }
     }
 
     /// Mirrors `relative_to_cwd` on the base dir joined with `rel`.
     pub fn relative(&self, rel: &Path) -> Option<String> {
-        if let Some((base, cwd)) = &self.canonical {
-            return relativize(base.join(rel).strip_prefix(cwd).ok()?);
-        }
-        let (base, cwd) = self.plain.as_ref()?;
+        let (base, cwd) = match &self.resolution {
+            DisplayPathResolution::Canonical { base, cwd }
+            | DisplayPathResolution::Plain { base, cwd } => (base, cwd),
+            DisplayPathResolution::Unknown => return None,
+        };
         relativize(base.join(rel).strip_prefix(cwd).ok()?)
     }
 }

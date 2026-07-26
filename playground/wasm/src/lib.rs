@@ -10,7 +10,9 @@ use std::sync::Arc;
 
 use lisette_semantics::loader::MemoryLoader;
 use lisette_passes::analyze;
-use lisette_semantics::inference::{AnalyzeInput, CompilePhase, SemanticConfig};
+use lisette_semantics::inference::{
+    AnalyzeInput, CompilePhase, EntryFile, ProjectKind, SemanticConfig,
+};
 use lisette_semantics::facts::{BindingIdAllocator, Facts};
 use lisette_syntax::ast::{Expression, Span, StructSpread};
 use lisette_syntax::program::{Definition, DefinitionBody};
@@ -207,15 +209,17 @@ fn run_analysis(code: &str) -> AnalysisResult {
             load_siblings: false,
         },
         loader: &loader,
-        source: code.to_string(),
-        filename: PLAYGROUND_FILE.to_string(),
-        display_path: PLAYGROUND_FILE.to_string(),
-        ast: ast_result.ast,
-        file_comment: ast_result.file_comment,
+        entry: Some(EntryFile {
+            source: code.to_string(),
+            filename: PLAYGROUND_FILE.to_string(),
+            display_path: PLAYGROUND_FILE.to_string(),
+            ast: ast_result.ast,
+            file_comment: ast_result.file_comment,
+        }),
         project_root: None,
         locator: lisette_deps::TypedefLocator::default(),
         compile_phase: CompilePhase::Check,
-        emit_tests: false,
+        project_kind: ProjectKind::Binary,
         go_module: String::new(),
         disable_cache: false,
     };
@@ -265,14 +269,16 @@ fn run_pipeline(
             load_siblings: false,
         },
         loader: &loader,
-        source: code.to_string(),
-        filename: PLAYGROUND_FILE.to_string(),
-        display_path: PLAYGROUND_FILE.to_string(),
-        ast: ast_result.ast,
-        file_comment: ast_result.file_comment,
+        entry: Some(EntryFile {
+            source: code.to_string(),
+            filename: PLAYGROUND_FILE.to_string(),
+            display_path: PLAYGROUND_FILE.to_string(),
+            ast: ast_result.ast,
+            file_comment: ast_result.file_comment,
+        }),
         project_root: None,
         compile_phase: phase.clone(),
-        emit_tests: false,
+        project_kind: ProjectKind::Binary,
         locator: lisette_deps::TypedefLocator::default(),
         go_module: String::new(),
         disable_cache: false,

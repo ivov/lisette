@@ -171,7 +171,6 @@ fn check(source: &str) -> Checked {
         locator: TypedefLocator::default(),
         compile_phase: CompilePhase::Check,
         project_kind: semantics::inference::ProjectKind::Binary,
-        emit_tests: false,
         go_module: String::new(),
         disable_cache: true,
     });

@@ -1,5 +1,5 @@
 use crate::checker::EnvResolve;
-use crate::facts::SelectExhaustivenessCheck;
+use crate::facts::{BranchArm, SelectExhaustivenessCheck};
 use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, Span};
 use syntax::program::{ChannelOperation, channel_operation};
 use syntax::types::{Type, unqualified_name};
@@ -55,12 +55,7 @@ impl InferCtx<'_> {
         let needs_reconciliation = result_ty.resolve_in(&self.env).is_variable();
         let value_position = needs_reconciliation && !expected_ty.is_ignored();
 
-        let mut arm_target_types: Vec<Type> = if needs_reconciliation {
-            Vec::with_capacity(arms.len())
-        } else {
-            Vec::new()
-        };
-        let mut arm_target_spans: Vec<Span> = if value_position {
+        let mut branches: Vec<BranchArm> = if needs_reconciliation {
             Vec::with_capacity(arms.len())
         } else {
             Vec::new()
@@ -69,59 +64,61 @@ impl InferCtx<'_> {
         let new_arms: Vec<SelectArm> = arms
             .into_iter()
             .map(|arm| {
-                self.scopes.push();
+                self.with_scope(|this| {
+                    let independent_ty;
+                    let arm_target = if needs_reconciliation {
+                        independent_ty = this.new_type_var();
+                        &independent_ty
+                    } else {
+                        &result_ty
+                    };
 
-                let independent_ty;
-                let arm_target = if needs_reconciliation {
-                    independent_ty = self.new_type_var();
-                    &independent_ty
-                } else {
-                    &result_ty
-                };
+                    let new_arm = match arm {
+                        SelectArm::Receive {
+                            binding,
+                            receive_expression,
+                            body,
+                            ..
+                        } => {
+                            this.infer_select_receive(binding, receive_expression, body, arm_target)
+                        }
 
-                let new_arm = match arm {
-                    SelectArm::Receive {
-                        binding,
-                        receive_expression,
-                        body,
-                        ..
-                    } => self.infer_select_receive(binding, receive_expression, body, arm_target),
+                        SelectArm::Send {
+                            send_expression,
+                            body,
+                        } => this.infer_select_send(send_expression, body, arm_target),
 
-                    SelectArm::Send {
-                        send_expression,
-                        body,
-                    } => self.infer_select_send(send_expression, body, arm_target),
+                        SelectArm::MatchReceive {
+                            receive_expression,
+                            arms: match_arms,
+                        } => this.infer_select_match_receive(
+                            receive_expression,
+                            match_arms,
+                            arm_target,
+                            value_position,
+                        ),
 
-                    SelectArm::MatchReceive {
-                        receive_expression,
-                        arms: match_arms,
-                    } => self.infer_select_match_receive(
-                        receive_expression,
-                        match_arms,
-                        arm_target,
-                        value_position,
-                    ),
+                        SelectArm::WildCard { body } => {
+                            this.infer_select_wildcard(body, arm_target)
+                        }
+                    };
 
-                    SelectArm::WildCard { body } => self.infer_select_wildcard(body, arm_target),
-                };
+                    if needs_reconciliation {
+                        branches.push(BranchArm {
+                            ty: arm_target.clone(),
+                            span: select_arm_body_span(&new_arm),
+                        });
+                    }
 
-                if needs_reconciliation {
-                    arm_target_types.push(arm_target.clone());
-                }
-                if value_position {
-                    arm_target_spans.push(select_arm_body_span(&new_arm));
-                }
-
-                self.scopes.pop();
-
-                new_arm
+                    new_arm
+                })
             })
             .collect();
 
         if value_position {
-            self.reconcile_and_unify(&result_ty, &arm_target_types, &arm_target_spans, &span);
-        } else if needs_reconciliation && let Some(first) = arm_target_types.first() {
-            let _ = self.try_unify(&result_ty, first, &span);
+            self.reconcile_and_unify(&result_ty, &branches, &span);
+        } else if let Some(first) = branches.first() {
+            let _ = self.try_unify(&result_ty, &first.ty, &span);
         }
 
         let shorthand_receive_count = new_arms
@@ -285,12 +282,7 @@ impl InferCtx<'_> {
         let needs_reconciliation = result_ty.resolve_in(&self.env).is_variable();
         let reconcile_in_value_position = needs_reconciliation && value_position;
 
-        let mut arm_expression_types: Vec<Type> = if needs_reconciliation {
-            Vec::with_capacity(match_arms.len())
-        } else {
-            Vec::new()
-        };
-        let mut arm_expression_spans: Vec<Span> = if reconcile_in_value_position {
+        let mut branches: Vec<BranchArm> = if needs_reconciliation {
             Vec::with_capacity(match_arms.len())
         } else {
             Vec::new()
@@ -299,58 +291,51 @@ impl InferCtx<'_> {
         let new_match_arms: Vec<MatchArm> = match_arms
             .into_iter()
             .map(|match_arm| {
-                self.scopes.push();
+                self.with_scope(|this| {
+                    let new_pattern = this.infer_pattern(
+                        match_arm.pattern,
+                        pattern_ty.clone(),
+                        syntax::ast::BindingKind::MatchArm,
+                    );
 
-                let new_pattern = self.infer_pattern(
-                    match_arm.pattern,
-                    pattern_ty.clone(),
-                    syntax::ast::BindingKind::MatchArm,
-                );
+                    let bool_ty = this.type_bool();
+                    let new_guard = match_arm.guard.map(|guard| {
+                        let guard_expression = this.infer_expression(*guard, &bool_ty);
+                        Box::new(guard_expression)
+                    });
 
-                let bool_ty = self.type_bool();
-                let new_guard = match_arm.guard.map(|guard| {
-                    let guard_expression = self.infer_expression(*guard, &bool_ty);
-                    Box::new(guard_expression)
-                });
+                    let independent_ty;
+                    let arm_expected = if needs_reconciliation {
+                        independent_ty = this.new_type_var();
+                        &independent_ty
+                    } else {
+                        result_ty
+                    };
 
-                let independent_ty;
-                let arm_expected = if needs_reconciliation {
-                    independent_ty = self.new_type_var();
-                    &independent_ty
-                } else {
-                    result_ty
-                };
+                    let new_expression =
+                        this.infer_root_expression(*match_arm.expression, arm_expected);
 
-                let new_expression =
-                    self.infer_root_expression(*match_arm.expression, arm_expected);
+                    if needs_reconciliation {
+                        branches.push(BranchArm {
+                            ty: arm_expected.clone(),
+                            span: new_expression.get_span(),
+                        });
+                    }
 
-                if needs_reconciliation {
-                    arm_expression_types.push(arm_expected.clone());
-                }
-                if reconcile_in_value_position {
-                    arm_expression_spans.push(new_expression.get_span());
-                }
-
-                self.scopes.pop();
-
-                MatchArm {
-                    pattern: new_pattern,
-                    guard: new_guard,
-                    expression: Box::new(new_expression),
-                }
+                    MatchArm {
+                        pattern: new_pattern,
+                        guard: new_guard,
+                        expression: Box::new(new_expression),
+                    }
+                })
             })
             .collect();
 
         let span = new_receive_expression.get_span();
         if reconcile_in_value_position {
-            self.reconcile_and_unify(
-                result_ty,
-                &arm_expression_types,
-                &arm_expression_spans,
-                &span,
-            );
-        } else if needs_reconciliation && let Some(first) = arm_expression_types.first() {
-            let _ = self.try_unify(result_ty, first, &span);
+            self.reconcile_and_unify(result_ty, &branches, &span);
+        } else if let Some(first) = branches.first() {
+            let _ = self.try_unify(result_ty, &first.ty, &span);
         }
 
         SelectArm::MatchReceive {

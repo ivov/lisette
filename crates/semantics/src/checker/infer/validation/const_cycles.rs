@@ -11,6 +11,11 @@ struct ConstEntry<'a> {
     body: &'a Expression,
 }
 
+struct ConstNode<'a> {
+    dependencies: Vec<&'a EcoString>,
+    span: Span,
+}
+
 impl InferCtx<'_> {
     pub fn check_const_cycles(&mut self, items_per_file: &[&[Expression]]) {
         let mut consts: Vec<ConstEntry<'_>> = Vec::new();
@@ -39,15 +44,19 @@ impl InferCtx<'_> {
 
         let const_names: HashSet<&EcoString> = consts.iter().map(|c| c.name).collect();
 
-        let mut deps: HashMap<&EcoString, Vec<&EcoString>> = HashMap::default();
-        let mut spans: HashMap<&EcoString, Span> = HashMap::default();
+        let mut nodes: HashMap<&EcoString, ConstNode<'_>> = HashMap::default();
         for entry in &consts {
             let mut refs: Vec<&EcoString> = Vec::new();
             collect_const_refs(entry.body, &const_names, &mut refs);
             refs.sort();
             refs.dedup();
-            deps.insert(entry.name, refs);
-            spans.insert(entry.name, entry.name_span);
+            nodes.insert(
+                entry.name,
+                ConstNode {
+                    dependencies: refs,
+                    span: entry.name_span,
+                },
+            );
         }
 
         let mut color: HashMap<&EcoString, Color> = HashMap::default();
@@ -61,8 +70,7 @@ impl InferCtx<'_> {
                 let mut path: Vec<&EcoString> = Vec::new();
                 dfs(
                     entry.name,
-                    &deps,
-                    &spans,
+                    &nodes,
                     &mut color,
                     &mut path,
                     &mut reported,
@@ -82,8 +90,7 @@ enum Color {
 
 fn dfs<'a>(
     node: &'a EcoString,
-    deps: &HashMap<&'a EcoString, Vec<&'a EcoString>>,
-    spans: &HashMap<&'a EcoString, Span>,
+    nodes: &HashMap<&'a EcoString, ConstNode<'a>>,
     color: &mut HashMap<&'a EcoString, Color>,
     path: &mut Vec<&'a EcoString>,
     reported: &mut HashSet<&'a EcoString>,
@@ -92,18 +99,18 @@ fn dfs<'a>(
     color.insert(node, Color::Gray);
     path.push(node);
 
-    if let Some(neighbors) = deps.get(node) {
-        for next in neighbors {
+    if let Some(current) = nodes.get(node) {
+        for next in &current.dependencies {
             match color.get(next).copied().unwrap_or(Color::White) {
-                Color::White => dfs(next, deps, spans, color, path, reported, sink),
+                Color::White => dfs(next, nodes, color, path, reported, sink),
                 Color::Gray => {
                     let start = path.iter().position(|n| *n == *next).unwrap_or(0);
                     let cycle: Vec<String> = path[start..].iter().map(|n| n.to_string()).collect();
                     let representative = path[start];
                     if reported.insert(representative)
-                        && let Some(span) = spans.get(representative)
+                        && let Some(representative) = nodes.get(representative)
                     {
-                        sink.push(diagnostics::infer::const_cycle(&cycle, *span));
+                        sink.push(diagnostics::infer::const_cycle(&cycle, representative.span));
                     }
                 }
                 Color::Black => {}

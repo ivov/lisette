@@ -84,7 +84,7 @@ impl InferCtx<'_> {
 
     pub(crate) fn check_break_in_try_block(&mut self, span: Span) {
         if let Some(ctx) = self.scopes.lookup_try_block_context()
-            && !ctx.loop_depth.is_active()
+            && self.scopes.loop_depth() == ctx.entry_loop_depth
         {
             self.sink.push(diagnostics::infer::break_in_try_block(span));
         }
@@ -92,7 +92,7 @@ impl InferCtx<'_> {
 
     pub(crate) fn check_continue_in_try_block(&mut self, span: Span) {
         if let Some(ctx) = self.scopes.lookup_try_block_context()
-            && !ctx.loop_depth.is_active()
+            && self.scopes.loop_depth() == ctx.entry_loop_depth
         {
             self.sink
                 .push(diagnostics::infer::continue_in_try_block(span));
@@ -108,7 +108,7 @@ impl InferCtx<'_> {
 
     pub(crate) fn check_break_in_recover_block(&mut self, span: Span) {
         if let Some(ctx) = self.scopes.lookup_recover_block_context()
-            && !ctx.loop_depth.is_active()
+            && self.scopes.loop_depth() == ctx.entry_loop_depth
         {
             self.sink
                 .push(diagnostics::infer::break_in_recover_block(span));
@@ -117,7 +117,7 @@ impl InferCtx<'_> {
 
     pub(crate) fn check_continue_in_recover_block(&mut self, span: Span) {
         if let Some(ctx) = self.scopes.lookup_recover_block_context()
-            && !ctx.loop_depth.is_active()
+            && self.scopes.loop_depth() == ctx.entry_loop_depth
         {
             self.sink
                 .push(diagnostics::infer::continue_in_recover_block(span));

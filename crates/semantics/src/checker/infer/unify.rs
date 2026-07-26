@@ -303,7 +303,7 @@ impl InferCtx<'_> {
             .is_some_and(|definition| definition.is_transparent_type_alias())
     }
 
-    fn in_invariant_position<T>(&mut self, unify: impl FnOnce(&mut Self) -> T) -> T {
+    pub(super) fn in_invariant_position<T>(&mut self, unify: impl FnOnce(&mut Self) -> T) -> T {
         self.scopes.enter_invariant_position();
         let result = unify(self);
         self.scopes.exit_invariant_position();

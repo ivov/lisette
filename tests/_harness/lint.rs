@@ -21,10 +21,8 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
 
     init_prelude(&mut store);
 
-    // Parser::new hardcodes file_id=0 in spans, so pin the test file to that id
-    // too; source-based diagnostics rely on span.file_id matching files map key.
+    // Parser::new hardcodes file_id=0 in spans, so pin the test file to that id too.
     let file_id = 0u32;
-    store.register_file(file_id, TEST_MODULE_ID);
 
     let lex_result = Lexer::new(source, file_id).lex();
     if lex_result.failed() {

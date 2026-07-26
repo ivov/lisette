@@ -1,5 +1,5 @@
 use crate::checker::EnvResolve;
-use crate::facts::BranchSubsumption;
+use crate::facts::{BranchArm, BranchSubsumption};
 use syntax::ast::BindingKind;
 use syntax::ast::{Binding, Expression, IfLetAlternative, MatchArm, Pattern, Span};
 use syntax::types::{SimpleKind, Type};
@@ -34,46 +34,36 @@ impl InferCtx<'_> {
     pub(crate) fn reconcile_and_unify(
         &mut self,
         result_ty: &Type,
-        branch_types: &[Type],
-        branch_spans: &[Span],
+        branches: &[BranchArm],
         span: &Span,
     ) {
-        if branch_types.is_empty() {
+        if branches.is_empty() {
             return;
         }
-        if branch_types
+        if branches
             .iter()
-            .any(|t| self.contains_pending_branch_var(t))
+            .any(|branch| self.contains_pending_branch_var(&branch.ty))
         {
-            self.record_branch_subsumption(result_ty, branch_types, branch_spans);
+            self.record_branch_subsumption(result_ty, branches);
             return;
         }
-        match self.reconcile_branch_types(branch_types, span) {
+        match self.reconcile_branch_types(branches, span) {
             BranchReconciliation::FirstBranch => {
-                self.unify(result_ty, &branch_types[0], span);
+                self.unify(result_ty, &branches[0].ty, span);
             }
             BranchReconciliation::Widened(ty) => {
                 self.unify(result_ty, &ty, span);
             }
             BranchReconciliation::Failed => {
-                self.record_branch_subsumption(result_ty, branch_types, branch_spans);
+                self.record_branch_subsumption(result_ty, branches);
             }
         }
     }
 
-    fn record_branch_subsumption(
-        &mut self,
-        result_ty: &Type,
-        branch_types: &[Type],
-        branch_spans: &[Span],
-    ) {
+    fn record_branch_subsumption(&mut self, result_ty: &Type, branches: &[BranchArm]) {
         self.facts.branch_subsumptions.push(BranchSubsumption {
             result_ty: result_ty.clone(),
-            arms: branch_types
-                .iter()
-                .cloned()
-                .zip(branch_spans.iter().copied())
-                .collect(),
+            arms: branches.to_vec(),
         });
     }
 
@@ -89,19 +79,25 @@ impl InferCtx<'_> {
     pub fn resolve_branch_subsumptions(&mut self) {
         let obligations = std::mem::take(&mut self.facts.branch_subsumptions);
         for obligation in obligations.into_iter().rev() {
-            for (arm_ty, arm_span) in &obligation.arms {
-                let arm = arm_ty.resolve_in(&self.env);
+            for branch in &obligation.arms {
+                let arm = branch.ty.resolve_in(&self.env);
                 if arm.is_never() || arm.is_error() {
                     continue;
                 }
                 let store = self.store;
                 let (unification, reported) = self.tracking_diagnostics(|this| {
-                    InferCtx::new(this, store).try_unify(&obligation.result_ty, arm_ty, arm_span)
+                    InferCtx::new(this, store).try_unify(
+                        &obligation.result_ty,
+                        &branch.ty,
+                        &branch.span,
+                    )
                 });
                 if unification.is_err() && !reported {
                     let result = obligation.result_ty.resolve_in(&self.env);
                     self.sink.push(diagnostics::infer::branch_type_mismatch(
-                        &arm, *arm_span, &result,
+                        &arm,
+                        branch.span,
+                        &result,
                     ));
                 }
             }
@@ -110,18 +106,19 @@ impl InferCtx<'_> {
 
     fn reconcile_branch_types(
         &mut self,
-        branch_types: &[Type],
+        branches: &[BranchArm],
         span: &Span,
     ) -> BranchReconciliation {
         let store = self.store;
-        if branch_types.len() < 2 {
+        if branches.len() < 2 {
             return BranchReconciliation::FirstBranch;
         }
 
-        let mut common = branch_types[0].clone();
+        let mut common = branches[0].ty.clone();
         let mut widened_to: Option<Type> = None;
 
-        for next in &branch_types[1..] {
+        for branch in &branches[1..] {
+            let next = &branch.ty;
             if self
                 .speculatively(|this| InferCtx::new(this, store).try_unify(&common, next, span))
                 .is_ok()
@@ -181,13 +178,9 @@ impl InferCtx<'_> {
     where
         F: FnOnce(&mut Self) -> Expression,
     {
-        self.increment_try_block_loop_depth();
-        self.increment_recover_block_loop_depth();
         self.scopes.increment_loop_depth();
         let result = f(self);
         self.scopes.decrement_loop_depth();
-        self.decrement_recover_block_loop_depth();
-        self.decrement_try_block_loop_depth();
         result
     }
 
@@ -198,12 +191,17 @@ impl InferCtx<'_> {
     where
         F: FnOnce(&mut Self) -> Expression,
     {
-        let prev_break_type = self.scopes.loop_break_type().cloned();
-        self.scopes.clear_loop_break_type();
-        let result = self.infer_in_loop_context(f);
-        if let Some(prev) = prev_break_type {
-            self.scopes.set_loop_break_type(prev);
-        }
+        self.with_loop_break_type(None, |this| this.infer_in_loop_context(f))
+    }
+
+    fn with_loop_break_type<T>(
+        &mut self,
+        break_type: Option<Type>,
+        f: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        let previous = self.scopes.replace_loop_break_type(break_type);
+        let result = f(self);
+        self.scopes.replace_loop_break_type(previous);
         result
     }
 
@@ -266,8 +264,16 @@ impl InferCtx<'_> {
             let alternative_span = new_alternative.get_span();
             self.reconcile_and_unify(
                 expected_ty,
-                &[consequence_ty.clone(), alternative_ty.clone()],
-                &[consequence_span, alternative_span],
+                &[
+                    BranchArm {
+                        ty: consequence_ty.clone(),
+                        span: consequence_span,
+                    },
+                    BranchArm {
+                        ty: alternative_ty.clone(),
+                        span: alternative_span,
+                    },
+                ],
                 &span,
             );
         }
@@ -429,39 +435,42 @@ impl InferCtx<'_> {
         let new_arms = arms
             .into_iter()
             .map(|a| {
-                self.scopes.push();
+                self.with_scope(|this| {
+                    let pattern_ty = subject_ty.resolve_in(&this.env);
+                    let new_pattern = this.infer_pattern(a.pattern, pattern_ty, arm_kind);
 
-                let pattern_ty = subject_ty.resolve_in(&self.env);
-                let new_pattern = self.infer_pattern(a.pattern, pattern_ty, arm_kind);
+                    let new_guard = a
+                        .guard
+                        .map(|guard| Box::new(this.infer_condition(*guard, &span)));
 
-                let new_guard = a
-                    .guard
-                    .map(|guard| Box::new(self.infer_condition(*guard, &span)));
+                    let independent_ty;
+                    let arm_expected = if arms_independent || needs_reconciliation {
+                        independent_ty = this.new_type_var();
+                        &independent_ty
+                    } else {
+                        &result_ty
+                    };
+                    // Arm body is a tail-like context where Never calls are valid.
+                    let new_expression = this.infer_root_expression(*a.expression, arm_expected);
 
-                let independent_ty;
-                let arm_expected = if arms_independent || needs_reconciliation {
-                    independent_ty = self.new_type_var();
-                    &independent_ty
-                } else {
-                    &result_ty
-                };
-                // Arm body is a tail-like context where Never calls are valid.
-                let new_expression = self.infer_root_expression(*a.expression, arm_expected);
-
-                self.scopes.pop();
-
-                MatchArm {
-                    pattern: new_pattern,
-                    guard: new_guard,
-                    expression: Box::new(new_expression),
-                }
+                    MatchArm {
+                        pattern: new_pattern,
+                        guard: new_guard,
+                        expression: Box::new(new_expression),
+                    }
+                })
             })
             .collect::<Vec<_>>();
 
         if needs_reconciliation {
-            let arm_types: Vec<Type> = new_arms.iter().map(|a| a.expression.get_type()).collect();
-            let arm_spans: Vec<Span> = new_arms.iter().map(|a| a.expression.get_span()).collect();
-            self.reconcile_and_unify(&result_ty, &arm_types, &arm_spans, &span);
+            let branches: Vec<BranchArm> = new_arms
+                .iter()
+                .map(|arm| BranchArm {
+                    ty: arm.expression.get_type(),
+                    span: arm.expression.get_span(),
+                })
+                .collect();
+            self.reconcile_and_unify(&result_ty, &branches, &span);
         } else if is_statement && let Some(first_arm) = new_arms.first() {
             // In statement position, set the match's type from the first arm so the
             // expression still has a well-defined type for inspection, even though
@@ -481,16 +490,9 @@ impl InferCtx<'_> {
     ) -> Expression {
         let break_ty = self.new_type_var();
 
-        let prev_break_type = self.scopes.loop_break_type().cloned();
-        self.scopes.set_loop_break_type(break_ty.clone());
-
-        let new_body = self.infer_in_loop_context(|s| s.infer_expression(*body, &Type::ignored()));
-
-        if let Some(prev) = prev_break_type {
-            self.scopes.set_loop_break_type(prev);
-        } else {
-            self.scopes.clear_loop_break_type();
-        }
+        let new_body = self.with_loop_break_type(Some(break_ty.clone()), |this| {
+            this.infer_in_loop_context(|this| this.infer_expression(*body, &Type::ignored()))
+        });
 
         let loop_type = if new_body.contains_break() {
             break_ty.clone()
@@ -552,17 +554,16 @@ impl InferCtx<'_> {
             &new_scrutinee.get_span(),
         );
 
-        self.scopes.push();
-        let new_pattern = self.infer_pattern(
-            pattern,
-            scrutinee_ty.resolve_in(&self.env),
-            BindingKind::WhileLet,
-        );
-
-        let new_body =
-            self.infer_in_non_value_loop_context(|s| s.infer_expression(*body, &Type::ignored()));
-
-        self.scopes.pop();
+        let (new_pattern, new_body) = self.with_scope(|this| {
+            let new_pattern = this.infer_pattern(
+                pattern,
+                scrutinee_ty.resolve_in(&this.env),
+                BindingKind::WhileLet,
+            );
+            let new_body = this
+                .infer_in_non_value_loop_context(|s| s.infer_expression(*body, &Type::ignored()));
+            (new_pattern, new_body)
+        });
 
         Expression::WhileLet {
             pattern: new_pattern,
@@ -704,42 +705,38 @@ impl InferCtx<'_> {
             self.unify(&element_ty, &annotated_ty, &span);
         }
 
-        // Push a new scope so the loop variable doesn't shadow outer bindings
-        self.scopes.push();
+        let (new_binding, new_body) = self.with_scope(|this| {
+            let inferred_pattern = this.infer_pattern(
+                binding.pattern,
+                element_ty.clone(),
+                BindingKind::Let { mutable: false },
+            );
 
-        let inferred_pattern = self.infer_pattern(
-            binding.pattern,
-            element_ty.clone(),
-            BindingKind::Let { mutable: false },
-        );
+            let new_binding = Binding {
+                pattern: inferred_pattern,
+                annotation: binding.annotation,
+                ty: element_ty.clone(),
+                mut_span: None,
+            };
 
-        let new_binding = Binding {
-            pattern: inferred_pattern,
-            annotation: binding.annotation,
-            ty: element_ty.clone(),
-            mut_span: None,
-        };
-
-        // When iterating over types that yield multiple values (`Map`, `EnumeratedSlice`),
-        // Go's `range` returns multiple values, so the binding must be a tuple literal.
-        // This does NOT apply to `Slice<(A, B)>` where the element is already a tuple value.
-        let requires_tuple_destructuring = matches!(iterable_ty_name, "Map" | "EnumeratedSlice")
-            || matches!(iter_seq, Some(IterSeqKind::Seq2));
-        if requires_tuple_destructuring && element_ty.is_tuple() {
-            match &new_binding.pattern {
-                Pattern::Tuple { .. } => (),
-                Pattern::WildCard { .. } => (),
-                _ => {
-                    self.sink
-                        .push(diagnostics::infer::tuple_literal_required_in_loop(span));
+            let requires_tuple_destructuring =
+                matches!(iterable_ty_name, "Map" | "EnumeratedSlice")
+                    || matches!(iter_seq, Some(IterSeqKind::Seq2));
+            if requires_tuple_destructuring && element_ty.is_tuple() {
+                match &new_binding.pattern {
+                    Pattern::Tuple { .. } => (),
+                    Pattern::WildCard { .. } => (),
+                    _ => {
+                        this.sink
+                            .push(diagnostics::infer::tuple_literal_required_in_loop(span));
+                    }
                 }
             }
-        }
 
-        let new_body =
-            self.infer_in_non_value_loop_context(|s| s.infer_expression(*body, &Type::ignored()));
-
-        self.scopes.pop();
+            let new_body = this
+                .infer_in_non_value_loop_context(|s| s.infer_expression(*body, &Type::ignored()));
+            (new_binding, new_body)
+        });
 
         Expression::For {
             binding: Box::new(new_binding),
@@ -824,20 +821,12 @@ impl InferCtx<'_> {
         self.unify(expected_ty, &unit_ty, &span);
 
         let is_block = matches!(*expression, Expression::Block { .. });
-        let saved_loop_depth = if is_block {
-            self.scopes.increment_defer_block_depth();
-            self.scopes.reset_loop_depth()
-        } else {
-            0
-        };
-
         let defer_ty = self.new_type_var();
-        let new_expression = self.infer_expression(*expression, &defer_ty);
-
-        if is_block {
-            self.scopes.restore_loop_depth(saved_loop_depth);
-            self.scopes.decrement_defer_block_depth();
-        }
+        let new_expression = if is_block {
+            self.in_defer_block(|this| this.infer_expression(*expression, &defer_ty))
+        } else {
+            self.infer_expression(*expression, &defer_ty)
+        };
 
         if let Some(propagate_span) = Self::find_propagate(&new_expression) {
             self.sink
@@ -961,12 +950,9 @@ impl InferCtx<'_> {
         self.unify(expected_ty, &unit_ty, &span);
 
         // task spawns a new goroutine — enclosing loop context doesn't apply
-        let saved_loop_depth = self.scopes.reset_loop_depth();
-
         let task_ty = self.new_type_var();
-        let new_expression = self.infer_expression(*expression, &task_ty);
-
-        self.scopes.restore_loop_depth(saved_loop_depth);
+        let new_expression =
+            self.without_enclosing_loop(|this| this.infer_expression(*expression, &task_ty));
 
         Expression::Task {
             expression: new_expression.into(),

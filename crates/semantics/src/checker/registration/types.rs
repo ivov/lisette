@@ -34,16 +34,15 @@ impl TaskState {
             .expect("enum type must exist")
             .clone();
 
-        self.scopes.push();
-        self.put_in_scope(generics);
-        let generics = self.resolve_generic_bounds(&*store, generics, span);
-
-        let new_variants: Vec<_> = variants
-            .iter()
-            .map(|v| self.resolve_enum_variant_fields(&*store, v, span))
-            .collect();
-
-        self.scopes.pop();
+        let (generics, new_variants) = self.with_scope(|this| {
+            this.put_in_scope(generics);
+            let generics = this.resolve_generic_bounds(&*store, generics, span);
+            let new_variants: Vec<_> = variants
+                .iter()
+                .map(|variant| this.resolve_enum_variant_fields(&*store, variant, span))
+                .collect();
+            (generics, new_variants)
+        });
 
         self.check_enum_field_type_conflicts(name, &new_variants);
 
@@ -293,33 +292,33 @@ impl TaskState {
             .expect("struct type scheme must exist")
             .clone();
 
-        self.scopes.push();
-        self.put_in_scope(generics);
-        let generics = self.resolve_generic_bounds(&*store, generics, span);
+        let (generics, new_fields) = self.with_scope(|this| {
+            this.put_in_scope(generics);
+            let generics = this.resolve_generic_bounds(&*store, generics, span);
 
-        let new_fields: Vec<StructFieldDefinition> = fields
-            .iter()
-            .map(|f| {
-                let field_ty = self.convert_to_type(&*store, &f.annotation, span);
-                let visibility = if f.is_embedded() {
-                    embed_field_visibility(&*store, &field_ty)
-                } else {
-                    f.visibility
-                };
-                StructFieldDefinition {
-                    ty: field_ty,
-                    visibility,
-                    ..f.clone()
-                }
-            })
-            .collect();
+            let new_fields = fields
+                .iter()
+                .map(|field| {
+                    let field_ty = this.convert_to_type(&*store, &field.annotation, span);
+                    let visibility = if field.is_embedded() {
+                        embed_field_visibility(&*store, &field_ty)
+                    } else {
+                        field.visibility
+                    };
+                    StructFieldDefinition {
+                        ty: field_ty,
+                        visibility,
+                        ..field.clone()
+                    }
+                })
+                .collect();
 
-        let new_fields = match fields {
-            StructFields::Record(_) => StructFields::Record(new_fields),
-            StructFields::Tuple(_) => StructFields::Tuple(new_fields),
-        };
-
-        self.scopes.pop();
+            let new_fields = match fields {
+                StructFields::Record(_) => StructFields::Record(new_fields),
+                StructFields::Tuple(_) => StructFields::Tuple(new_fields),
+            };
+            (generics, new_fields)
+        });
 
         let visibility = self
             .current_module(&*store)
@@ -477,6 +476,10 @@ impl TaskState {
     }
 
     pub(super) fn populate_type_alias(&mut self, store: &mut Store, expression: &Expression) {
+        self.with_scope(|this| this.populate_type_alias_in_scope(store, expression));
+    }
+
+    fn populate_type_alias_in_scope(&mut self, store: &mut Store, expression: &Expression) {
         let Expression::TypeAlias {
             name,
             name_span,
@@ -492,7 +495,6 @@ impl TaskState {
         };
         let qualified_name = self.qualify_name(name);
 
-        self.scopes.push();
         self.put_in_scope(generics);
         let generics = self.resolve_generic_bounds(&*store, generics, span);
 
@@ -556,8 +558,6 @@ impl TaskState {
                 ));
             }
 
-            self.scopes.pop();
-
             self.current_module_mut(store).definitions.insert(
                 qualified_name,
                 Definition {
@@ -607,8 +607,6 @@ impl TaskState {
                 body: Box::new(alias_reference),
             }
         };
-
-        self.scopes.pop();
 
         let visibility = self
             .current_module(&*store)

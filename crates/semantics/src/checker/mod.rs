@@ -14,7 +14,7 @@ use crate::facts::{BindingIdAllocator, Facts};
 use crate::store::Store;
 use diagnostics::LocalSink;
 use ecow::EcoString;
-use registration::derived_attributes::DerivedAttribute;
+use registration::derived_attributes::PendingEqualityAttributes;
 use scopes::Scopes;
 use syntax::ast::Visibility as AstVisibility;
 use syntax::ast::{Annotation, Expression, Generic, ImportAlias, Span, StructFieldDefinition};
@@ -120,7 +120,7 @@ pub(crate) enum FileContextKind {
 }
 
 struct SavedFileContext {
-    file_id: Option<u32>,
+    cursor: Cursor,
     scopes: Scopes,
     imports: ImportState,
 }
@@ -134,8 +134,8 @@ pub(crate) struct TaskOutput {
     facts: Facts,
     module_fields: Arc<ModuleFieldMap>,
     ufcs_methods: Arc<HashSet<UfcsMethod>>,
-    typed_files: Vec<(String, File)>,
-    pending_equality_attributes: Vec<DerivedAttribute>,
+    typed_files: Vec<File>,
+    pending_equality_attributes: Vec<PendingEqualityAttributes>,
     pending_generic_bound_checks: Vec<(Type, Type, Span)>,
     pending_interface_bound_checks: Vec<(Type, Type, Span)>,
     sink: LocalSink,
@@ -155,10 +155,12 @@ impl TaskSeed {
             module_fields,
             ufcs_methods,
         } = self;
-        let mut task = TaskState::new(binding_ids.clone(), LocalSink::new());
-        task.module_fields = module_fields.clone();
-        task.ufcs_methods = ufcs_methods.clone();
-        task
+        TaskState::new(
+            binding_ids.clone(),
+            LocalSink::new(),
+            module_fields.clone(),
+            ufcs_methods.clone(),
+        )
     }
 }
 
@@ -182,9 +184,9 @@ pub struct TaskState {
     /// while task-local additions are returned as part of their output.
     ufcs_methods: Arc<HashSet<UfcsMethod>>,
     /// Typed files produced by inference.
-    pub typed_files: Vec<(String, File)>,
+    pub typed_files: Vec<File>,
     /// Equality synthesis waits until registration has discovered all UFCS methods.
-    pub(crate) pending_equality_attributes: Vec<DerivedAttribute>,
+    pub(crate) pending_equality_attributes: Vec<PendingEqualityAttributes>,
     pub(crate) pending_generic_bound_checks: Vec<(Type, Type, Span)>,
     /// Interface bounds on concrete type arguments named in annotations. Drained
     /// once after inference, since body annotations register during it.
@@ -192,7 +194,12 @@ pub struct TaskState {
 }
 
 impl TaskState {
-    fn new(binding_ids: Arc<BindingIdAllocator>, sink: LocalSink) -> Self {
+    fn new(
+        binding_ids: Arc<BindingIdAllocator>,
+        sink: LocalSink,
+        module_fields: Arc<ModuleFieldMap>,
+        ufcs_methods: Arc<HashSet<UfcsMethod>>,
+    ) -> Self {
         Self {
             env: TypeEnv::new(),
             scopes: Scopes::new(),
@@ -202,8 +209,8 @@ impl TaskState {
             facts: Facts::new(binding_ids),
             satisfying_stack: rustc_hash::FxHashSet::default(),
             method_cache: HashMap::default(),
-            module_fields: Arc::default(),
-            ufcs_methods: Arc::default(),
+            module_fields,
+            ufcs_methods,
             typed_files: Vec::new(),
             pending_equality_attributes: Vec::new(),
             pending_generic_bound_checks: Vec::new(),
@@ -212,11 +219,28 @@ impl TaskState {
     }
 
     pub fn with_fresh_allocator() -> Self {
-        Self::new(Arc::new(BindingIdAllocator::new()), LocalSink::new())
+        Self::new(
+            Arc::new(BindingIdAllocator::new()),
+            LocalSink::new(),
+            Arc::default(),
+            Arc::default(),
+        )
     }
 
     pub(crate) fn with_sink(sink: LocalSink) -> Self {
-        Self::new(Arc::new(BindingIdAllocator::new()), sink)
+        Self::new(
+            Arc::new(BindingIdAllocator::new()),
+            sink,
+            Arc::default(),
+            Arc::default(),
+        )
+    }
+
+    pub(crate) fn with_scope<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        self.scopes.push();
+        let result = f(self);
+        self.scopes.pop();
+        result
     }
 
     pub(crate) fn worker_seed(&self) -> TaskSeed {
@@ -395,10 +419,7 @@ impl TaskState {
     pub(crate) fn put_in_scope(&mut self, generics: &[Generic]) {
         for (index, generic) in generics.iter().enumerate() {
             self.scopes
-                .current_mut()
-                .type_params
-                .get_or_insert_with(HashMap::default)
-                .insert(generic.name.to_string(), index);
+                .insert_type_param(generic.name.to_string(), index);
         }
     }
 
@@ -443,16 +464,7 @@ impl TaskState {
 
     fn record_generic_bound(&mut self, parameter: &str, bound: Type) {
         let qualified_parameter = self.qualify_name(parameter);
-        let bounds = self
-            .scopes
-            .current_mut()
-            .trait_bounds
-            .get_or_insert_with(HashMap::default)
-            .entry(qualified_parameter)
-            .or_default();
-        if !bounds.contains(&bound) {
-            bounds.push(bound);
-        }
+        self.scopes.insert_trait_bound(qualified_parameter, bound);
     }
 
     fn parameter_satisfies_bound(&self, parameter: &str, target: infer::BuiltinBound) -> bool {
@@ -548,7 +560,7 @@ impl TaskState {
     fn current_file_is_test(&self, store: &Store) -> bool {
         self.cursor
             .file_id
-            .is_some_and(|file_id| store.test_file_ids.contains(&file_id))
+            .is_some_and(|file_id| store.is_test_file(file_id))
     }
 
     /// A test-file definition is visible only to test files of the same module.
@@ -801,12 +813,10 @@ impl TaskState {
         kind: FileContextKind,
         f: impl FnOnce(&mut Self, &Store) -> T,
     ) -> T {
-        self.with_module_cursor(module_id, |this| {
-            let saved = this.enter_file_context(store, module_id, file_id, imports, kind);
-            let result = f(this, store);
-            this.exit_file_context(saved);
-            result
-        })
+        let saved = self.enter_file_context(store, module_id, file_id, imports, kind);
+        let result = f(self, store);
+        self.exit_file_context(saved);
+        result
     }
 
     pub(crate) fn with_file_context_mut<T>(
@@ -818,12 +828,10 @@ impl TaskState {
         kind: FileContextKind,
         f: impl FnOnce(&mut Self, &mut Store) -> T,
     ) -> T {
-        self.with_module_cursor(module_id, |this| {
-            let saved = this.enter_file_context(&*store, module_id, file_id, imports, kind);
-            let result = f(this, store);
-            this.exit_file_context(saved);
-            result
-        })
+        let saved = self.enter_file_context(&*store, module_id, file_id, imports, kind);
+        let result = f(self, store);
+        self.exit_file_context(saved);
+        result
     }
 
     fn enter_file_context(
@@ -835,7 +843,13 @@ impl TaskState {
         kind: FileContextKind,
     ) -> SavedFileContext {
         let saved = SavedFileContext {
-            file_id: self.cursor.file_id.replace(file_id),
+            cursor: std::mem::replace(
+                &mut self.cursor,
+                Cursor {
+                    module_id: module_id.into(),
+                    file_id: Some(file_id),
+                },
+            ),
             scopes: std::mem::take(&mut self.scopes),
             imports: std::mem::take(&mut self.imports),
         };
@@ -879,9 +893,9 @@ impl TaskState {
     }
 
     fn exit_file_context(&mut self, saved: SavedFileContext) {
+        self.cursor = saved.cursor;
         self.scopes = saved.scopes;
         self.imports = saved.imports;
-        self.cursor.file_id = saved.file_id;
     }
 
     pub fn failed(&self) -> bool {

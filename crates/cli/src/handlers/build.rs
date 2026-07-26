@@ -153,8 +153,8 @@ pub(super) fn link_project_binary(
 fn prepare_project_build(project_path: &Path) -> Result<BuildPrep, i32> {
     crate::go_cli::require_go()?;
 
-    let kind = match validate_project(project_path) {
-        Some(kind) => kind,
+    let layout = match validate_project(project_path) {
+        Some(layout) => layout,
         None => return Err(1),
     };
 
@@ -185,7 +185,8 @@ fn prepare_project_build(project_path: &Path) -> Result<BuildPrep, i32> {
         target_dir,
         manifest,
         locator,
-        kind,
+        kind: layout.kind,
+        sources: layout.sources,
     })
 }
 
@@ -195,6 +196,7 @@ pub(super) struct BuildPrep {
     pub manifest: deps::Manifest,
     pub locator: deps::TypedefLocator,
     pub kind: ProjectKind,
+    pub sources: Vec<PathBuf>,
 }
 
 pub(super) struct LockedProject {
@@ -364,8 +366,11 @@ pub(super) fn build_locked(
         locator: locator.clone(),
     };
 
-    let source_dir = src_dir.to_str().unwrap_or(".");
-    let local_fs = LocalFileSystem::new(source_dir, Some(&prep.project_path));
+    let local_fs = LocalFileSystem::with_scanned_sources(
+        &src_dir,
+        Some(&prep.project_path),
+        prep.sources.clone(),
+    );
 
     let input = match entry_bits.as_ref() {
         Some((source, display)) => CompileInput::Binary(CompileEntry {
@@ -542,7 +547,12 @@ pub(super) fn build_locked(
     })
 }
 
-pub(super) fn resolve_project_kind(project_path: &Path) -> Option<ProjectKind> {
+pub(super) struct ProjectLayout {
+    pub kind: ProjectKind,
+    pub sources: Vec<PathBuf>,
+}
+
+pub(super) fn resolve_project_layout(project_path: &Path) -> Option<ProjectLayout> {
     if project_path.join("main.lis").exists() {
         cli_error!(
             "Misplaced entrypoint",
@@ -649,7 +659,10 @@ pub(super) fn resolve_project_kind(project_path: &Path) -> Option<ProjectKind> {
     }
 
     if src.join("main.lis").exists() {
-        return Some(ProjectKind::Binary);
+        return Some(ProjectLayout {
+            kind: ProjectKind::Binary,
+            sources,
+        });
     }
 
     let has_production = sources.iter().any(|p| {
@@ -670,7 +683,10 @@ pub(super) fn resolve_project_kind(project_path: &Path) -> Option<ProjectKind> {
         return None;
     }
 
-    Some(ProjectKind::Library)
+    Some(ProjectLayout {
+        kind: ProjectKind::Library,
+        sources,
+    })
 }
 
 const GO_OS_NAMES: &[&str] = &[
@@ -813,7 +829,7 @@ fn go_ignored_shape(
     None
 }
 
-fn validate_project(project_path: &Path) -> Option<ProjectKind> {
+fn validate_project(project_path: &Path) -> Option<ProjectLayout> {
     if !project_path.exists() {
         cli_error!(
             "Project not found",
@@ -835,5 +851,5 @@ fn validate_project(project_path: &Path) -> Option<ProjectKind> {
         return None;
     }
 
-    resolve_project_kind(project_path)
+    resolve_project_layout(project_path)
 }
