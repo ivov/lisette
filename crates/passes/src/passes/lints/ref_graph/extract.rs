@@ -3,8 +3,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use semantics::checker::promotion::{self, MemberKind, Resolution};
 use semantics::store::Store;
 use syntax::ast::{
-    Annotation, Attribute, Binding, CallTypeArguments, Expression, Generic, ImportAlias, Pattern,
-    SelectArm, StructSpread,
+    Annotation, Attribute, Expression, ImportAlias, Pattern, SelectArm, StructSpread,
 };
 use syntax::program::File;
 use syntax::program::{DefinitionBody, DotAccessKind, EqualityIndex, Module};
@@ -64,23 +63,8 @@ pub(super) fn walk_expression(
             walk_identifier(module, value, graph, alias_map, ctx);
         }
 
-        Expression::Call {
-            expression: callee,
-            args,
-            spread,
-            type_arguments,
-            ..
-        } => {
-            walk_call(
-                module,
-                callee,
-                args,
-                spread,
-                type_arguments,
-                graph,
-                alias_map,
-                ctx,
-            );
+        Expression::Call { .. } => {
+            walk_call(module, expression, graph, alias_map, ctx);
         }
 
         Expression::StructCall { .. } => {
@@ -114,25 +98,9 @@ pub(super) fn walk_expression(
             }
         }
 
-        Expression::Function {
-            name,
-            generics,
-            params,
-            return_annotation,
-            body,
-            ..
-        } => {
+        Expression::Function { name, .. } => {
             let fn_ctx = ctx.cloned().unwrap_or_else(|| ModuleItemId::new(name));
-            walk_callable_body(
-                module,
-                generics,
-                params,
-                return_annotation,
-                body.definition(),
-                graph,
-                alias_map,
-                &fn_ctx,
-            );
+            walk_callable_body(module, expression, graph, alias_map, &fn_ctx);
         }
 
         Expression::Const {
@@ -274,26 +242,9 @@ pub(super) fn walk_expression(
                 }
             }
             for m in methods {
-                if let Expression::Function {
-                    name,
-                    generics,
-                    params,
-                    return_annotation,
-                    body,
-                    ..
-                } = m
-                {
+                if let Expression::Function { name, .. } = m {
                     let method_ctx = ModuleItemId::method(name, receiver_name);
-                    walk_callable_body(
-                        module,
-                        generics,
-                        params,
-                        return_annotation,
-                        body.definition(),
-                        graph,
-                        alias_map,
-                        &method_ctx,
-                    );
+                    walk_callable_body(module, m, graph, alias_map, &method_ctx);
                 } else {
                     walk_expression(module, m, graph, alias_map, ctx);
                 }
@@ -396,18 +347,24 @@ fn walk_identifier(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn walk_call(
     module: &Module,
-    callee: &Expression,
-    args: &[Expression],
-    spread: &Option<Box<Expression>>,
-    type_arguments: &CallTypeArguments,
+    expression: &Expression,
     graph: &mut ReferenceGraph,
     alias_map: &AliasMap,
     ctx: Option<&ModuleItemId>,
 ) {
-    if let Expression::Identifier { value, .. } = callee {
+    let Expression::Call {
+        expression: callee,
+        args,
+        spread,
+        type_arguments,
+        ..
+    } = expression
+    else {
+        return;
+    };
+    if let Expression::Identifier { value, .. } = callee.as_ref() {
         let mut segments = value.split('.');
         let first = segments.next().unwrap_or("");
         if segments.next().is_some() && is_upper(first) {
@@ -771,17 +728,23 @@ fn is_method_access(kind: Option<DotAccessKind>) -> bool {
     )
 }
 
-#[allow(clippy::too_many_arguments)]
 fn walk_callable_body(
     module: &Module,
-    generics: &[Generic],
-    params: &[Binding],
-    return_annotation: &Annotation,
-    body: Option<&Expression>,
+    function: &Expression,
     graph: &mut ReferenceGraph,
     alias_map: &AliasMap,
     fn_ctx: &ModuleItemId,
 ) {
+    let Expression::Function {
+        generics,
+        params,
+        return_annotation,
+        body,
+        ..
+    } = function
+    else {
+        return;
+    };
     for g in generics {
         for bound in g.bounds() {
             walk_annotation(module, bound, graph, alias_map, fn_ctx);
@@ -799,7 +762,7 @@ fn walk_callable_body(
         );
     }
     walk_annotation(module, return_annotation, graph, alias_map, fn_ctx);
-    if let Some(body) = body {
+    if let Some(body) = body.definition() {
         walk_expression(module, body, graph, alias_map, Some(fn_ctx));
     }
 }

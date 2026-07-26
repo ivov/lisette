@@ -16,7 +16,6 @@ use syntax::program::ReceiverCoercion;
 use syntax::types::Type;
 
 impl Planner<'_> {
-    #[allow(clippy::too_many_arguments)]
     fn ufcs_type_args(
         &mut self,
         function: &Expression,
@@ -107,12 +106,6 @@ impl Planner<'_> {
 
         let coercion = resolution.receiver_coercion();
         let receiver_ty = self.facts.strip_and_peel(&receiver.get_type());
-        let Type::Nominal {
-            id: qualified_name, ..
-        } = &receiver_ty
-        else {
-            unreachable!("UFCS receiver must be a constructor type");
-        };
 
         let (setup, receiver_arg, emitted_args, arguments_contain_deferred_evaluation) = self
             .lower_ufcs_call_args(
@@ -164,7 +157,6 @@ impl Planner<'_> {
             function,
             &call_plan.resolved,
             &receiver_ty,
-            qualified_name,
             member,
             type_args,
             CallArgShape {
@@ -263,17 +255,21 @@ impl Planner<'_> {
         self.stage_composite(arg, ExpressionContext::value())
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn build_ufcs_qualified_call(
         &mut self,
         function: &Expression,
         callee: &ResolvedCallee<'_>,
         receiver_ty: &Type,
-        qualified_name: &str,
         member: &str,
         type_args: ResolvedCallTypeArguments<'_>,
         arg_shape: CallArgShape,
     ) -> String {
+        let Type::Nominal {
+            id: qualified_name, ..
+        } = receiver_ty
+        else {
+            unreachable!("UFCS receiver must be a constructor type");
+        };
         let type_args_string = self
             .ufcs_type_args(function, callee, receiver_ty, type_args, arg_shape)
             .unwrap_or_default();

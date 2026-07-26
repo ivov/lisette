@@ -288,7 +288,6 @@ impl Planner<'_> {
 
     /// Compound map-tuple element pattern: capture key/value into fresh vars,
     /// destructure at the top of the body, discard the temp when unused.
-    #[allow(clippy::too_many_arguments)]
     fn lower_map_tuple_compound_body(
         &mut self,
         first: &Pattern,

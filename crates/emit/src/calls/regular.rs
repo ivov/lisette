@@ -213,9 +213,13 @@ impl<'a> Planner<'a> {
                 value_count: args.len(),
                 has_spread: spread.is_some(),
             },
-            &mut function_string,
             expression_ctx,
         );
+        if !type_args_string.is_empty()
+            && let Some(bracket_start) = function_string.find('[')
+        {
+            function_string.truncate(bracket_start);
+        }
 
         let args_ctx = CallArgsContext {
             plan: call_plan,
@@ -369,7 +373,6 @@ impl<'a> Planner<'a> {
         self.reconstruct_collapsed_type_args(recipe, &mapping)
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn resolve_call_type_args(
         &mut self,
         function: &Expression,
@@ -377,7 +380,6 @@ impl<'a> Planner<'a> {
         type_args: ResolvedCallTypeArguments<'_>,
         call_ty: Option<&Type>,
         arg_shape: CallArgShape,
-        function_string: &mut String,
         ctx: ExpressionContext<'_>,
     ) -> String {
         if callee_curries_receiver(callee) {
@@ -414,12 +416,6 @@ impl<'a> Planner<'a> {
                 candidate = slot_ty.and_then(|t| self.prelude_container_type_args(t));
             }
             type_args_string = candidate.unwrap_or_default();
-        }
-
-        if !type_args_string.is_empty()
-            && let Some(bracket_start) = function_string.find('[')
-        {
-            function_string.truncate(bracket_start);
         }
 
         type_args_string

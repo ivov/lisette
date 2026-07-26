@@ -389,7 +389,6 @@ impl Planner<'_> {
     /// Lower a block (or single expression) that assigns its tail into `var`.
     /// `has_go_braces` selects the scope discipline: a full Go-brace scope when
     /// the caller wraps the result in `{ }`, otherwise a binding frame.
-    #[allow(clippy::too_many_arguments)]
     pub(crate) fn lower_block_to_var(
         &mut self,
         expression: &Expression,

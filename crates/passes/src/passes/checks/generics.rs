@@ -104,7 +104,6 @@ fn check_unconstrained_bounded(bounds: &[Bound], span: &Span, sink: &LocalSink) 
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn check_constrained_return_type(
     return_ty: &Type,
     generics: &[Generic],

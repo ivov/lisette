@@ -53,3 +53,6 @@ path = "embed_diff.rs"
 [[test]]
 name = "manifest_pins"
 path = "manifest_pins.rs"
+
+[lints]
+workspace = true

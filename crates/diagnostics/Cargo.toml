@@ -16,3 +16,6 @@ syntax = { package = "lisette-syntax", version = "=0.9.0", path = "../syntax" }
 miette.workspace = true
 owo-colors.workspace = true
 rustc-hash.workspace = true
+
+[lints]
+workspace = true
