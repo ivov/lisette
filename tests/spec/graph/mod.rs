@@ -450,7 +450,6 @@ fn graph_declared_dep_missing_typedef() {
 
     let mut store = Store::new();
 
-    // Declare the dep in the resolver but do not place any .d.lis file on disk
     let mut go_deps = BTreeMap::new();
     go_deps.insert(
         "github.com/gorilla/mux".to_string(),
@@ -564,7 +563,6 @@ fn store_get_definition_domain_style_go_module() {
         },
     );
 
-    // Must find the definition despite dots in the module path
     let def = store.get_definition("go:github.com/gorilla/mux.Router");
     assert!(
         def.is_some(),
@@ -591,7 +589,6 @@ fn store_module_for_qualified_name_domain_style() {
         store.module_for_qualified_name("mymod.MyType"),
         Some("mymod"),
     );
-    // Enum variant: three dot-separated segments
     assert_eq!(
         store.module_for_qualified_name("go:github.com/gorilla/mux.Method.Get"),
         Some("go:github.com/gorilla/mux"),
@@ -606,8 +603,6 @@ fn stdlib_cache_excludes_third_party_modules() {
     let third_party = "go:github.com/gorilla/mux";
     let stdlib = "go:net/http";
 
-    // The canonical check: deps::is_third_party returns true for third-party
-    // paths (dot in first segment), false for stdlib paths.
     let is_stdlib_go = |id: &str| id.strip_prefix("go:").is_some_and(deps::is_stdlib);
 
     assert!(!is_stdlib_go(third_party));
@@ -637,12 +632,10 @@ fn store_module_for_qualified_name_nested_subpackage() {
     let mut store = Store::new();
     store.add_module("go:github.com/gorilla/mux");
 
-    // Subpackage types are qualified under the same module
     assert_eq!(
         store.module_for_qualified_name("go:github.com/gorilla/mux.Router"),
         Some("go:github.com/gorilla/mux"),
     );
-    // Method on a type: three segments after module prefix
     assert_eq!(
         store.module_for_qualified_name("go:github.com/gorilla/mux.Router.ServeHTTP"),
         Some("go:github.com/gorilla/mux"),
@@ -656,7 +649,6 @@ fn resolver_root_vs_subpackage_typedef_lookup() {
     let tmp = tempfile::tempdir().unwrap();
     let project_root = tmp.path();
 
-    // Set up cache with root package and subpackage
     let root_dir = host_module_cache_dir(project_root, "github.com/gorilla/mux@v1.8.0");
     let sub_dir = root_dir.join("middleware");
     std::fs::create_dir_all(&sub_dir).unwrap();
@@ -677,7 +669,6 @@ fn resolver_root_vs_subpackage_typedef_lookup() {
         stdlib::Target::host(),
     );
 
-    // Root package resolves to root .d.lis
     match resolver.find_typedef_content("github.com/gorilla/mux") {
         deps::TypedefLocatorResult::Found {
             content: source, ..
@@ -687,7 +678,6 @@ fn resolver_root_vs_subpackage_typedef_lookup() {
         other => panic!("Root package: expected Found, got {:?}", other),
     }
 
-    // Subpackage resolves to subpackage .d.lis
     match resolver.find_typedef_content("github.com/gorilla/mux/middleware") {
         deps::TypedefLocatorResult::Found {
             content: source, ..
@@ -836,7 +826,6 @@ fn main() {
 
     let build_result = syntax::build_ast(source, 0);
 
-    // First run — registers third-party module
     let result1 = analyze(AnalyzeInput {
         config: SemanticConfig {
             run_lints: false,
@@ -866,7 +855,6 @@ fn main() {
         result1.errors(),
     );
 
-    // Second run — must still succeed (not load stale cache for third-party)
     let result2 = analyze(AnalyzeInput {
         config: SemanticConfig {
             run_lints: false,

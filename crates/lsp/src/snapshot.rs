@@ -66,7 +66,7 @@ impl AnalysisSnapshot {
                 }
             } else if let Some(typedef_path) = result.typedef_paths.get(file_id) {
                 // The synthetic `file.name` for go: typedefs does not match the
-                // on-disk filename — use the path the locator captured.
+                // on-disk filename, use the path the locator captured.
                 match Url::from_file_path(typedef_path) {
                     Ok(uri) => uri,
                     Err(_) => continue,

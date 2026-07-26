@@ -1454,7 +1454,6 @@ impl InferCtx<'_> {
         let method = &value[last_dot + 1..];
         let type_part = &value[..last_dot];
 
-        // Resolve type name using checker's scope-aware lookup
         let qualified_name = self.lookup_qualified_name(store, type_part)?;
 
         // Follow type-alias chains through Simple/Compound underlying types
@@ -1500,7 +1499,7 @@ impl InferCtx<'_> {
             return None;
         }
 
-        // If it's a UFCS-lowered method, skip — the emitter handles it differently
+        // If it's a UFCS-lowered method, skip: the emitter handles it differently
         if self
             .ufcs_methods()
             .contains(&(qualified_name.to_string(), method.to_string()))

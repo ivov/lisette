@@ -232,7 +232,7 @@ impl InferCtx<'_> {
                 expression, span, ..
             } => {
                 // Only fire the generic ban when the dedicated
-                // `task_in_expression_position` check won't — avoids duplicates.
+                // `task_in_expression_position` check won't, avoids duplicates.
                 if is_subexpression && !self.scopes.is_value_context() {
                     self.sink
                         .push(diagnostics::infer::control_flow_in_expression("task", span));

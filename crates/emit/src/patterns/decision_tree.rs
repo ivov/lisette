@@ -25,11 +25,11 @@ pub(crate) enum PathSegment {
         offset: usize,
         go_type: String,
     },
-    /// `(*expression)` — auto-pointer deref for recursive enum fields.
+    /// `(*expression)`: auto-pointer deref for recursive enum fields.
     Deref,
-    /// `GoType(expression)` — newtype cast to underlying Go type.
+    /// `GoType(expression)`: newtype cast to underlying Go type.
     NewtypeCast(String),
-    /// `expression.(GoType)` — Go interface type assertion, inserted when a
+    /// `expression.(GoType)`: Go interface type assertion, inserted when a
     /// concrete pattern targets a Go interface at a non-root path.
     AssertedAs(String),
 }
@@ -745,7 +745,7 @@ fn type_assertion_to_check(assertion: TypeAssertion) -> Check {
 
 /// Recursively walk a pattern, collecting checks and bindings.
 ///
-/// `path_ty` is the expected type of the value at `path` — used to detect
+/// `path_ty` is the expected type of the value at `path`, used to detect
 /// when a struct pattern is matched against a Go interface (type switch).
 fn collect_checks_and_bindings(
     planner: &Planner,

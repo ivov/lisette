@@ -1,8 +1,8 @@
 mod lsp_harness;
 
 use lsp_harness::{
-    TestClient, completion_labels, definition_location, definition_target_text, doc_end,
-    hover_content, inlay_hint_triples, symbol_names,
+    TestClient, completion_labels, cursor, cursors, definition_location, definition_target_text,
+    doc_end, hover_content, inlay_hint_triples, symbol_names,
 };
 use tower_lsp::lsp_types::*;
 
@@ -201,15 +201,14 @@ async fn goto_definition_promoted_field() {
 async fn hover_on_explicit_type_arg_call_shows_substituted_signature() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "fn f<T>(xs: VarArgs<T>) {}\n\nfn main() {\n  f<Option<int>>()\n}",
-        )
-        .await;
+    let (source, line, character) =
+        cursor("fn f<T>(xs: VarArgs<T>) {}\n\nfn main() {\n  ~f<Option<int>>()\n}");
+    client.open(TEST_URI, &source).await;
 
-    // Hover the `f` callee in `f<Option<int>>()`.
-    let hover = client.hover(TEST_URI, 3, 2).await.expect("hover");
+    let hover = client
+        .hover(TEST_URI, line, character)
+        .await
+        .expect("hover");
     let content = hover_content(&hover);
     assert!(
         content.contains("VarArgs<Option<int>>"),
@@ -908,18 +907,18 @@ async fn hover_on_alias_target_qualified() {
         "pub enum Code { Ok, Err }",
     )
     .unwrap();
-    let main_content = "import \"response\"\n\ntype Code = response.Code\n";
-    std::fs::write(src.join("main.lis"), main_content).unwrap();
+    let (main_content, line, character) =
+        cursor("import \"response\"\n\ntype Code = response.C~ode\n");
+    std::fs::write(src.join("main.lis"), &main_content).unwrap();
 
     let mut client = TestClient::new().await;
     client.initialize_with_root(root).await;
     let main_uri = Url::from_file_path(src.join("main.lis"))
         .unwrap()
         .to_string();
-    client.open(&main_uri, main_content).await;
+    client.open(&main_uri, &main_content).await;
 
-    // cursor on the member `Code` after the dot
-    let hover = client.hover(&main_uri, 2, 22).await;
+    let hover = client.hover(&main_uri, line, character).await;
     let content = hover_content(&hover.expect("hover on response.Code"));
     assert!(content.contains("Code"), "got: {content}");
 
@@ -930,17 +929,14 @@ async fn hover_on_alias_target_qualified() {
 async fn hover_on_alias_target_in_function_type() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(TEST_URI, "type Handler = fn(int) -> string")
-        .await;
+    let (source, positions) = cursors("type Handler = fn(i~nt) -> s~tring");
+    client.open(TEST_URI, &source).await;
 
-    // cursor on `int` inside the function annotation
-    let hover_param = client.hover(TEST_URI, 0, 19).await;
+    let hover_param = client.hover(TEST_URI, positions[0].0, positions[0].1).await;
     let content = hover_content(&hover_param.expect("hover on int"));
     assert!(content.contains("int"), "got: {content}");
 
-    // cursor on `string` (return type)
-    let hover_ret = client.hover(TEST_URI, 0, 27).await;
+    let hover_ret = client.hover(TEST_URI, positions[1].0, positions[1].1).await;
     let content = hover_content(&hover_ret.expect("hover on string"));
     assert!(content.contains("string"), "got: {content}");
 
@@ -1038,19 +1034,19 @@ async fn hover_on_function_qualified_return_annotation() {
         "pub struct HandlerFunc { name: string }",
     )
     .unwrap();
-    let main_content =
-        "import \"http\"\n\nfn handle() -> http.HandlerFunc { http.HandlerFunc { name: \"\" } }\n";
-    std::fs::write(src.join("main.lis"), main_content).unwrap();
+    let (main_content, line, character) = cursor(
+        "import \"http\"\n\nfn handle() -> http.Hand~lerFunc { http.HandlerFunc { name: \"\" } }\n",
+    );
+    std::fs::write(src.join("main.lis"), &main_content).unwrap();
 
     let mut client = TestClient::new().await;
     client.initialize_with_root(root).await;
     let main_uri = Url::from_file_path(src.join("main.lis"))
         .unwrap()
         .to_string();
-    client.open(&main_uri, main_content).await;
+    client.open(&main_uri, &main_content).await;
 
-    // cursor on `HandlerFunc` after the dot in the return annotation
-    let hover = client.hover(&main_uri, 2, 24).await;
+    let hover = client.hover(&main_uri, line, character).await;
     let content = hover_content(&hover.expect("hover on http.HandlerFunc"));
     assert!(content.contains("HandlerFunc"), "got: {content}");
     assert!(
@@ -1118,12 +1114,13 @@ async fn goto_definition_on_stdlib_go_function_navigates_to_typedef() {
     let mut client = TestClient::new().await;
     client.initialize().await;
 
-    let source = "import \"go:fmt\"\n\nfn main() {\n  fmt.Println(\"hello\")\n}";
-    client.open(TEST_URI, source).await;
+    let (source, line, character) =
+        cursor("import \"go:fmt\"\n\nfn main() {\n  fmt.~Println(\"hello\")\n}");
+    client.open(TEST_URI, &source).await;
 
-    // The LSP materializes the whole stdlib typedef set to disk at startup, so
+    // The LSP writes the whole stdlib typedef set to disk at startup, so
     // go-to-definition navigates into the generated `.d.lis` file.
-    let response = client.goto_definition(TEST_URI, 3, 6).await;
+    let response = client.goto_definition(TEST_URI, line, character).await;
     let location = definition_location(
         &response.expect("go-to-definition on stdlib go: function should return a location"),
     )
@@ -1131,7 +1128,7 @@ async fn goto_definition_on_stdlib_go_function_navigates_to_typedef() {
     let path = location.uri.path();
     assert!(
         path.contains("stdlib-typedefs") && path.ends_with(".d.lis"),
-        "should land in a materialized typedef, got {path}"
+        "should land in an extracted typedef, got {path}"
     );
     assert!(
         definition_target_text(&location).starts_with("Println"),
@@ -1172,19 +1169,18 @@ async fn goto_definition_on_third_party_go_function_navigates_to_cache() {
 
     let src = root.join("src");
     std::fs::create_dir_all(&src).unwrap();
-    let main_content =
-        "import \"go:github.com/example/lib\"\n\nfn main() {\n  let _ = lib.DoStuff()\n}";
+    let (main_content, line, character) =
+        cursor("import \"go:github.com/example/lib\"\n\nfn main() {\n  let _ = lib.~DoStuff()\n}");
     let main_path = src.join("main.lis");
-    std::fs::write(&main_path, main_content).unwrap();
+    std::fs::write(&main_path, &main_content).unwrap();
 
     let mut client = TestClient::new().await;
     client.initialize_with_root(root).await;
 
     let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
-    client.open(&main_uri, main_content).await;
+    client.open(&main_uri, &main_content).await;
 
-    // Cursor on `DoStuff`.
-    let response = client.goto_definition(&main_uri, 3, 14).await;
+    let response = client.goto_definition(&main_uri, line, character).await;
     let location = definition_location(
         &response.expect("go-to-definition on third-party go: function should return a location"),
     )
@@ -1215,15 +1211,12 @@ async fn completion_empty_file() {
 async fn completion_attribute_on_struct() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(TEST_URI, "#[\nstruct Point { x: int, y: int }\n")
-        .await;
+    let (source, line, character) = cursor("#[~\nstruct Point { x: int, y: int }\n");
+    client.open(TEST_URI, &source).await;
 
-    // Cursor right after `#[` on line 0.
-    let response = client.completion(TEST_URI, 0, 2).await;
+    let response = client.completion(TEST_URI, line, character).await;
     let labels = completion_labels(&response.expect("attribute completions"));
 
-    // Relevant attributes for a struct, and none of the noise from before.
     assert!(labels.contains(&"json".to_string()));
     assert!(labels.contains(&"display".to_string()));
     assert!(labels.contains(&"tag".to_string()));
@@ -1238,12 +1231,10 @@ async fn completion_attribute_on_struct() {
 async fn completion_attribute_on_struct_field() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(TEST_URI, "struct Point {\n  #[\n  x: int\n}\n")
-        .await;
+    let (source, line, character) = cursor("struct Point {\n  #[~\n  x: int\n}\n");
+    client.open(TEST_URI, &source).await;
 
-    // Cursor right after `#[` on line 1.
-    let response = client.completion(TEST_URI, 1, 4).await;
+    let response = client.completion(TEST_URI, line, character).await;
     let labels = completion_labels(&response.expect("attribute completions"));
 
     assert!(labels.contains(&"json".to_string()));
@@ -1277,13 +1268,12 @@ async fn completion_attribute_on_enum() {
 async fn completion_attribute_before_interface_is_empty() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(TEST_URI, "#[\ninterface Service {\n  fn run()\n}\n")
-        .await;
+    let (source, line, character) = cursor("#[~\ninterface Service {\n  fn run()\n}\n");
+    client.open(TEST_URI, &source).await;
 
     // Attributes are rejected on interfaces, so offer nothing rather than a
     // union that would immediately parse as misplaced.
-    let response = client.completion(TEST_URI, 0, 2).await;
+    let response = client.completion(TEST_URI, line, character).await;
     let labels = completion_labels(&response.expect("attribute completions"));
     assert!(labels.is_empty(), "expected no completions, got {labels:?}");
 
@@ -1407,23 +1397,24 @@ async fn completion_struct_literal_offers_fields() {
     let mut client = TestClient::new().await;
     client.initialize().await;
 
-    let source = "\
+    let (source, line, character) = cursor(
+        "\
 struct Point { x: int, y: int }
 impl Point {
   pub fn sum(self) -> int { self.x + self.y }
 }
 fn main() {
-  let s = Point {  }
-}";
-    client.open(TEST_URI, source).await;
+  let s = Point { ~ }
+}",
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Cursor inside the literal body on line 5: `  let s = Point { | }`.
-    let response = client.completion(TEST_URI, 5, 18).await;
+    let response = client.completion(TEST_URI, line, character).await;
     let labels = completion_labels(&response.expect("struct literal field completions"));
 
     assert!(labels.contains(&"x".to_string()), "got: {labels:?}");
     assert!(labels.contains(&"y".to_string()), "got: {labels:?}");
-    // A literal body wants fields only — not the struct's methods.
+    // A literal body wants fields only, not the struct's methods.
     assert!(!labels.contains(&"sum".to_string()), "got: {labels:?}");
     assert!(
         !labels.iter().any(|l| l == "fn" || l == "let"),
@@ -1438,15 +1429,16 @@ async fn completion_struct_literal_value_position_offers_no_fields() {
     let mut client = TestClient::new().await;
     client.initialize().await;
 
-    let source = "\
+    let (source, line, character) = cursor(
+        "\
 struct Point { x: int, y: int }
 fn main() {
-  let s = Point { x: 1 }
-}";
-    client.open(TEST_URI, source).await;
+  let s = Point { x:~ 1 }
+}",
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Cursor right after the colon, before the value: `  let s = Point { x:| 1 }`.
-    let response = client.completion(TEST_URI, 2, 20).await;
+    let response = client.completion(TEST_URI, line, character).await;
     let labels = completion_labels(&response.expect("completions"));
 
     // A value position is not a field-name position: no fields, fall through to general completions.
@@ -1461,16 +1453,17 @@ async fn completion_struct_literal_nested_resolves_inner_struct() {
     let mut client = TestClient::new().await;
     client.initialize().await;
 
-    let source = "\
+    let (source, line, character) = cursor(
+        "\
 struct Inner { a: int, b: int }
 struct Outer { inner: Inner }
 fn main() {
-  let s = Outer { inner: Inner {  } }
-}";
-    client.open(TEST_URI, source).await;
+  let s = Outer { inner: Inner { ~ } }
+}",
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Cursor inside the nested literal: `… Outer { inner: Inner { | } }` on line 3.
-    let response = client.completion(TEST_URI, 3, 33).await;
+    let response = client.completion(TEST_URI, line, character).await;
     let labels = completion_labels(&response.expect("nested struct literal field completions"));
 
     // The inner literal offers Inner's fields, not Outer's.
@@ -1488,16 +1481,17 @@ async fn completion_struct_literal_ignores_comma_in_comment() {
 
     // A comma inside a comment is not a field separator: the field name detection
     // is token-based, so it must not treat this as a field-name position.
-    let source = "\
+    let (source, line, character) = cursor(
+        "\
 struct Point { x: int, y: int }
 fn main() {
   let s = Point { x: 1 //,
-  }
-}";
-    client.open(TEST_URI, source).await;
+  ~}
+}",
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Cursor before the closing brace on line 3: `  |}`.
-    let response = client.completion(TEST_URI, 3, 2).await;
+    let response = client.completion(TEST_URI, line, character).await;
     let labels = completion_labels(&response.expect("completions"));
 
     assert!(!labels.contains(&"x".to_string()), "got: {labels:?}");
@@ -1511,15 +1505,16 @@ async fn completion_struct_literal_omits_assigned_fields() {
     let mut client = TestClient::new().await;
     client.initialize().await;
 
-    let source = "\
+    let (source, line, character) = cursor(
+        "\
 struct Point { x: int, y: int }
 fn main() {
-  let s = Point { x: 1,  }
-}";
-    client.open(TEST_URI, source).await;
+  let s = Point { x: 1, ~ }
+}",
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Cursor after `x: 1, ` on line 2: `  let s = Point { x: 1, | }`.
-    let response = client.completion(TEST_URI, 2, 24).await;
+    let response = client.completion(TEST_URI, line, character).await;
     let labels = completion_labels(&response.expect("struct literal field completions"));
 
     assert!(labels.contains(&"y".to_string()), "got: {labels:?}");
@@ -1547,11 +1542,9 @@ async fn completion_struct_literal_respects_field_visibility() {
     )
     .unwrap();
     std::fs::create_dir_all(root_path.join("src/main")).unwrap();
-    std::fs::write(
-        root_path.join("src/main/main.lis"),
-        "import \"shapes\"\nfn main() {\n  let b = shapes.Box {  }\n}\n",
-    )
-    .unwrap();
+    let (main_source, line, character) =
+        cursor("import \"shapes\"\nfn main() {\n  let b = shapes.Box { ~ }\n}\n");
+    std::fs::write(root_path.join("src/main/main.lis"), &main_source).unwrap();
 
     client.initialize_with_root(root_path).await;
 
@@ -1567,15 +1560,9 @@ async fn completion_struct_literal_respects_field_visibility() {
             &std::fs::read_to_string(root_path.join("src/shapes/shapes.lis")).unwrap(),
         )
         .await;
-    client
-        .open(
-            &main_uri,
-            &std::fs::read_to_string(root_path.join("src/main/main.lis")).unwrap(),
-        )
-        .await;
+    client.open(&main_uri, &main_source).await;
 
-    // Cursor inside the cross-module literal body: `  let b = shapes.Box { | }`.
-    let response = client.completion(&main_uri, 2, 23).await;
+    let response = client.completion(&main_uri, line, character).await;
     let labels = completion_labels(&response.expect("struct literal field completions"));
 
     assert!(
@@ -2347,21 +2334,21 @@ async fn hover_match_arm_enum_variant_shows_enum_type() {
     let mut client = TestClient::new().await;
     client.initialize().await;
 
-    let source = "\
+    let (source, positions) = cursors(
+        "\
 enum Color { Red, Green, Blue(string) }
 fn main() {
   let c: Color = Color.Green
   match c {
-    Color.Red => 0,
+    Co~lor.Red => 0,
     Color.Green => 1,
-    Color.Blue(_) => 2,
+    Co~lor.Blue(_) => 2,
   }
-}";
-    client.open(TEST_URI, source).await;
+}",
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Hover on "Color" part of "Color.Red" in match arm pattern — should show
-    // the enum type, not the match expression's return type.
-    let hover = client.hover(TEST_URI, 4, 6).await;
+    let hover = client.hover(TEST_URI, positions[0].0, positions[0].1).await;
     assert!(
         hover.is_some(),
         "hover on match arm enum variant should return something"
@@ -2369,11 +2356,10 @@ fn main() {
     let content = hover_content(&hover.unwrap());
     assert!(
         content.contains("Color"),
-        "match arm enum variant should show enum type 'Color', got: {content}"
+        "match arm enum variant should show enum type 'Color', not the match expression's return type, got: {content}"
     );
 
-    // Same check for a variant with a field payload — hover on the variant name.
-    let hover = client.hover(TEST_URI, 6, 6).await;
+    let hover = client.hover(TEST_URI, positions[1].0, positions[1].1).await;
     assert!(
         hover.is_some(),
         "hover on match arm enum variant with payload should return something"
@@ -2392,19 +2378,20 @@ async fn hover_match_arm_literal_pattern_shows_type() {
     let mut client = TestClient::new().await;
     client.initialize().await;
 
-    let source = "\
+    let (source, positions) = cursors(
+        "\
 fn main() {
   let x = 1
   match x {
-    1 => 10,
+    ~1 => 10,
     2 => 20,
-    _ => 0,
+    ~_ => 0,
   }
-}";
-    client.open(TEST_URI, source).await;
+}",
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Hover on literal `1` in match arm pattern.
-    let hover = client.hover(TEST_URI, 3, 4).await;
+    let hover = client.hover(TEST_URI, positions[0].0, positions[0].1).await;
     assert!(
         hover.is_some(),
         "hover on literal pattern should return something"
@@ -2415,8 +2402,7 @@ fn main() {
         "literal pattern should show 'int', got: {content}"
     );
 
-    // Hover on wildcard `_` in match arm pattern.
-    let hover = client.hover(TEST_URI, 5, 4).await;
+    let hover = client.hover(TEST_URI, positions[1].0, positions[1].1).await;
     assert!(
         hover.is_some(),
         "hover on wildcard pattern should return something"
@@ -6935,14 +6921,16 @@ async fn stress_cross_module_hover_on_imported_function() {
     let src = root.join("src");
     std::fs::create_dir_all(&src).unwrap();
 
-    let main_content = "\
+    let (main_content, positions) = cursors(
+        "\
 import \"math\"
 
 fn main() {
-  let x = math.double(5)
+  let x = ma~th.d~ouble(5)
   x
-}";
-    std::fs::write(src.join("main.lis"), main_content).unwrap();
+}",
+    );
+    std::fs::write(src.join("main.lis"), &main_content).unwrap();
 
     let math_dir = src.join("math");
     std::fs::create_dir_all(&math_dir).unwrap();
@@ -6957,10 +6945,11 @@ fn main() {
 
     let main_path = src.join("main.lis");
     let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
-    client.open(&main_uri, main_content).await;
+    client.open(&main_uri, &main_content).await;
 
-    // Hover on `double` in `math.double(5)`
-    let hover = client.hover(&main_uri, 3, 16).await;
+    let hover = client
+        .hover(&main_uri, positions[1].0, positions[1].1)
+        .await;
     assert!(
         hover.is_some(),
         "hover on cross-module function should work"
@@ -6968,13 +6957,14 @@ fn main() {
     let content = hover_content(&hover.unwrap());
     assert!(content.contains("int"), "should show return type");
 
-    // Completion after `math.`
-    let completion = client.completion(&main_uri, 3, 12).await;
-    // May or may not include `double` depending on module loading — just ensure no crash
+    let completion = client
+        .completion(&main_uri, positions[0].0, positions[0].1)
+        .await;
     let _ = completion;
 
-    // References on `double`
-    let refs = client.references(&main_uri, 3, 16, true).await;
+    let refs = client
+        .references(&main_uri, positions[1].0, positions[1].1, true)
+        .await;
     let _ = refs; // no crash
 
     client.shutdown().await;
@@ -7001,32 +6991,40 @@ impl Circle {
     )
     .unwrap();
 
-    let main_content = "\
+    let (main_content, positions) = cursors(
+        "\
 import \"shapes\"
 
 fn main() {
   let c = shapes.Circle { radius: 5.0 }
-  c.area()
-}";
-    std::fs::write(src.join("main.lis"), main_content).unwrap();
+  ~c.~area~()
+}",
+    );
+    std::fs::write(src.join("main.lis"), &main_content).unwrap();
 
     let mut client = TestClient::new().await;
     client.initialize_with_root(root).await;
 
     let main_path = src.join("main.lis");
     let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
-    client.open(&main_uri, main_content).await;
+    client.open(&main_uri, &main_content).await;
 
-    // Hover on `c` should show Circle type
-    let hover = client.hover(&main_uri, 4, 2).await;
-    assert!(hover.is_some());
+    let hover = client
+        .hover(&main_uri, positions[0].0, positions[0].1)
+        .await;
+    assert!(
+        hover.is_some(),
+        "hover on struct instance should show Circle type"
+    );
 
-    // Goto definition on `area` should resolve
-    let def = client.goto_definition(&main_uri, 4, 4).await;
+    let def = client
+        .goto_definition(&main_uri, positions[1].0, positions[1].1)
+        .await;
     let _ = def; // just ensure no crash
 
-    // Signature help on area() call
-    let sig = client.signature_help(&main_uri, 4, 8).await;
+    let sig = client
+        .signature_help(&main_uri, positions[2].0, positions[2].1)
+        .await;
     let _ = sig; // no crash
 
     client.shutdown().await;
@@ -7070,7 +7068,6 @@ fn main() {
     let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
     client.open(&main_uri, main_content).await;
 
-    // All handlers at various positions — no crash
     for col in [0, 10, 20, 25] {
         let _ = client.hover(&main_uri, 3, col).await;
         let _ = client.completion(&main_uri, 3, col).await;
@@ -7098,24 +7095,25 @@ async fn stress_cross_module_rename_local_binding() {
     )
     .unwrap();
 
-    let main_content = "\
+    let (main_content, line, character) = cursor(
+        "\
 import \"util\"
 
 fn main() {
-  let msg = util.greet()
+  let ~msg = util.greet()
   msg
-}";
-    std::fs::write(src.join("main.lis"), main_content).unwrap();
+}",
+    );
+    std::fs::write(src.join("main.lis"), &main_content).unwrap();
 
     let mut client = TestClient::new().await;
     client.initialize_with_root(root).await;
 
     let main_path = src.join("main.lis");
     let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
-    client.open(&main_uri, main_content).await;
+    client.open(&main_uri, &main_content).await;
 
-    // Rename `msg` to `message`
-    let edit = client.rename(&main_uri, 3, 6, "message").await;
+    let edit = client.rename(&main_uri, line, character, "message").await;
     assert!(edit.is_some(), "rename should produce workspace edit");
     let changes = edit.unwrap().changes.unwrap();
     let file_edits = changes.get(&Url::parse(&main_uri).unwrap()).unwrap();
@@ -7310,24 +7308,19 @@ fn main() {
 async fn stress_go_import_completion_after_dot() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+    let (source, line, character) = cursor(
+        "\
 import \"go:strings\"
 
 fn main() {
-  strings.
+  strings.~
 }",
-        )
-        .await;
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Completion after `strings.` (line 3, col 10)
-    let completion = client.completion(TEST_URI, 3, 10).await;
-    // Should return some completions from Go strings package, not crash
-    let _ = completion;
+    let completion = client.completion(TEST_URI, line, character).await;
+    let _ = completion; // should return completions from Go strings package, not crash
 
-    // All handlers on the dot line
     for col in 0..11 {
         let _ = client.hover(TEST_URI, 3, col).await;
         let _ = client.goto_definition(TEST_URI, 3, col).await;
@@ -7354,7 +7347,6 @@ async fn stress_multiple_files_open() {
         .await;
     client.open(uri3, "fn main() { 42 }").await;
 
-    // Query all three files
     let h1 = client.hover(uri1, 0, 3).await;
     let h2 = client.hover(uri2, 0, 3).await;
     let h3 = client.hover(uri3, 0, 3).await;
@@ -7362,13 +7354,11 @@ async fn stress_multiple_files_open() {
     assert!(h2.is_some());
     assert!(h3.is_some());
 
-    // Completion on each
     let c1 = client.completion(uri1, 0, 0).await;
     let c2 = client.completion(uri2, 0, 0).await;
     assert!(c1.is_some());
     assert!(c2.is_some());
 
-    // Change one file, verify others unaffected
     client.change(uri2, "fn greet() -> int { 1 }", 2).await;
     let h1_after = client.hover(uri1, 0, 3).await;
     assert!(
@@ -7386,21 +7376,18 @@ async fn stress_multiple_files_open() {
 async fn stress_goto_def_on_type_annotation() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+    let (source, line, character) = cursor(
+        "\
 struct Point { x: int, y: int }
-fn distance(p: Point) -> float64 { 0.0 }
+fn distance(p: Po~int) -> float64 { 0.0 }
 fn main() {
   let p = Point { x: 1, y: 2 }
   distance(p)
 }",
-        )
-        .await;
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Goto definition on `Point` in the parameter type annotation
-    let def = client.goto_definition(TEST_URI, 1, 17).await;
+    let def = client.goto_definition(TEST_URI, line, character).await;
     assert!(
         def.is_some(),
         "should resolve type annotation to struct definition"
@@ -7413,18 +7400,15 @@ fn main() {
 async fn stress_goto_def_on_return_type_annotation() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+    let (source, line, character) = cursor(
+        "\
 struct Result2 { value: int }
-fn make() -> Result2 { Result2 { value: 1 } }
+fn make() -> Re~sult2 { Result2 { value: 1 } }
 fn main() { make() }",
-        )
-        .await;
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Goto definition on `Result2` in the return type
-    let def = client.goto_definition(TEST_URI, 1, 15).await;
+    let def = client.goto_definition(TEST_URI, line, character).await;
     assert!(
         def.is_some(),
         "should resolve return type annotation to struct definition"
@@ -7437,21 +7421,18 @@ fn main() { make() }",
 async fn stress_completion_on_self_in_impl_with_fields() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+    let (source, line, character) = cursor(
+        "\
 struct Player { name: string, score: int }
 impl Player {
   fn display(self: Player) -> string {
-    self.
+    self.~
   }
 }",
-        )
-        .await;
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Completion after `self.` (line 3, col 9)
-    let completion = client.completion(TEST_URI, 3, 9).await;
+    let completion = client.completion(TEST_URI, line, character).await;
     assert!(completion.is_some());
     let labels = completion_labels(&completion.unwrap());
     assert!(
@@ -7472,23 +7453,19 @@ impl Player {
 async fn stress_completion_chained_dot() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+    let (source, line, character) = cursor(
+        "\
 struct Wrapper { inner: Inner }
 struct Inner { value: int }
 fn main() {
   let w = Wrapper { inner: Inner { value: 42 } }
-  w.inner.
+  w.inner.~
 }",
-        )
-        .await;
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Completion after `w.inner.` (line 4, col 10)
-    let completion = client.completion(TEST_URI, 4, 10).await;
-    // Should provide completions for Inner type (field: value)
-    let _ = completion; // no crash
+    let completion = client.completion(TEST_URI, line, character).await;
+    let _ = completion; // should provide completions for Inner type (field: value), no crash
 
     client.shutdown().await;
 }
@@ -7531,10 +7508,8 @@ fn main() { 1 }",
 async fn stress_signature_help_on_method_with_self() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+    let (source, line, character) = cursor(
+        "\
 struct Counter { count: int }
 impl Counter {
   fn increment(self: Counter, by: int) -> Counter {
@@ -7543,20 +7518,18 @@ impl Counter {
 }
 fn main() {
   let c = Counter { count: 0 }
-  c.increment(5)
+  c.increment(5~)
 }",
-        )
-        .await;
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Signature help inside `c.increment(5)` — self should be stripped
-    let sig = client.signature_help(TEST_URI, 8, 15).await;
+    let sig = client.signature_help(TEST_URI, line, character).await;
     assert!(sig.is_some());
     let sig = sig.unwrap();
     let label = &sig.signatures[0].label;
-    // Should show `fn increment(int) -> Counter`, NOT `fn increment(Counter, int) -> Counter`
     assert!(
         !label.contains("Counter, int"),
-        "self param should be hidden in method signature: {}",
+        "self param should be hidden: expected `fn increment(int) -> Counter`, not `fn increment(Counter, int) -> Counter`, got {}",
         label
     );
 
@@ -7589,31 +7562,26 @@ async fn stress_alternating_valid_invalid_changes() {
     let mut client = TestClient::new().await;
     client.initialize().await;
 
-    // Start valid
     client.open(TEST_URI, "fn main() { 42 }").await;
     let h1 = client.hover(TEST_URI, 0, 4).await;
     assert!(h1.is_some());
 
-    // Make invalid
     client
         .change(TEST_URI, "fn main() { let x: int = \"bad\"", 2)
         .await;
     let _ = client.hover(TEST_URI, 0, 4).await;
     let _ = client.completion(TEST_URI, 0, 0).await;
 
-    // Make valid again
     client
         .change(TEST_URI, "fn main() { let x = 42; x }", 3)
         .await;
     let h3 = client.hover(TEST_URI, 0, 4).await;
     assert!(h3.is_some());
 
-    // Make completely broken
     client.change(TEST_URI, "}{}{}{", 4).await;
     let _ = client.hover(TEST_URI, 0, 0).await;
     let _ = client.completion(TEST_URI, 0, 0).await;
 
-    // Recover
     client.change(TEST_URI, "fn main() { 1 }", 5).await;
     let h5 = client.hover(TEST_URI, 0, 4).await;
     assert!(h5.is_some(), "server should recover from broken state");
@@ -7637,12 +7605,10 @@ fn main() {
         )
         .await;
 
-    // Rapid-fire completion requests on incomplete dot expression
     for _ in 0..10 {
         let _ = client.completion(TEST_URI, 3, 4).await;
     }
 
-    // Fix the code and verify hover recovers
     client
         .change(
             TEST_URI,
@@ -7671,13 +7637,11 @@ async fn stress_hover_at_every_byte_boundary() {
     let source = "fn f(x: int) -> int { x + 1 }";
     client.open(TEST_URI, source).await;
 
-    // Hit every character position on line 0
     for col in 0..source.len() as u32 {
         let _ = client.hover(TEST_URI, 0, col).await;
         let _ = client.goto_definition(TEST_URI, 0, col).await;
     }
 
-    // Also past the end
     let _ = client.hover(TEST_URI, 0, source.len() as u32 + 10).await;
     let _ = client.hover(TEST_URI, 100, 0).await;
 
@@ -7690,7 +7654,6 @@ async fn stress_all_handlers_past_end_of_source() {
     client.initialize().await;
     client.open(TEST_URI, "fn main() { 1 }").await;
 
-    // Way past end of file
     let _ = client.hover(TEST_URI, 999, 999).await;
     let _ = client.completion(TEST_URI, 999, 999).await;
     let _ = client.goto_definition(TEST_URI, 999, 999).await;
@@ -7700,7 +7663,6 @@ async fn stress_all_handlers_past_end_of_source() {
     let _ = client.rename(TEST_URI, 999, 999, "foo").await;
     let _ = client.inlay_hint(TEST_URI, (999, 999), (1000, 0)).await;
 
-    // Still alive
     let hover = client.hover(TEST_URI, 0, 4).await;
     assert!(hover.is_some());
 
@@ -7771,18 +7733,16 @@ fn describe(s: Shape) -> string {
 async fn stress_enum_match_all_handlers() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
-enum Direction {
+    let (source, positions) = cursors(
+        "\
+enum D~irection {
   North,
   South,
   East,
   West,
 }
 fn main() {
-  let d = Direction.North
+  let d = Direction.Nor~th
   match d {
     Direction.North => \"up\",
     Direction.South => \"down\",
@@ -7790,21 +7750,20 @@ fn main() {
     Direction.West => \"left\",
   }
 }",
-        )
-        .await;
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Hover on variant
-    let hover = client.hover(TEST_URI, 7, 23).await;
+    let hover = client.hover(TEST_URI, positions[1].0, positions[1].1).await;
     let _ = hover;
 
-    // No completion assertion — just verify handlers don't crash
+    // No completion assertion, just checks the handler does not crash.
     let _ = client.completion(TEST_URI, 7, 19).await;
 
-    // Prepare rename on enum name
-    let rename = client.prepare_rename(TEST_URI, 0, 6).await;
+    let rename = client
+        .prepare_rename(TEST_URI, positions[0].0, positions[0].1)
+        .await;
     assert!(rename.is_some());
 
-    // Document symbols
     let symbols = client.document_symbol(TEST_URI).await;
     assert!(symbols.is_some());
     let names = symbol_names(&symbols.unwrap());
@@ -7913,32 +7872,37 @@ async fn stress_cross_module_import_alias() {
     )
     .unwrap();
 
-    let main_content = "\
+    let (main_content, positions) = cursors(
+        "\
 import h \"helpers\"
 
 fn main() {
-  h.compute()
-}";
-    std::fs::write(src.join("main.lis"), main_content).unwrap();
+  h.~c~ompute()
+}",
+    );
+    std::fs::write(src.join("main.lis"), &main_content).unwrap();
 
     let mut client = TestClient::new().await;
     client.initialize_with_root(root).await;
 
     let main_path = src.join("main.lis");
     let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
-    client.open(&main_uri, main_content).await;
+    client.open(&main_uri, &main_content).await;
 
-    // Hover on `compute` via alias
-    let hover = client.hover(&main_uri, 3, 5).await;
-    let _ = hover; // no crash
+    let hover = client
+        .hover(&main_uri, positions[1].0, positions[1].1)
+        .await;
+    let _ = hover;
 
-    // Completion after `h.`
-    let completion = client.completion(&main_uri, 3, 4).await;
-    let _ = completion; // no crash
+    let completion = client
+        .completion(&main_uri, positions[0].0, positions[0].1)
+        .await;
+    let _ = completion;
 
-    // Goto def on `compute` via alias
-    let def = client.goto_definition(&main_uri, 3, 5).await;
-    let _ = def; // no crash
+    let def = client
+        .goto_definition(&main_uri, positions[1].0, positions[1].1)
+        .await;
+    let _ = def;
 
     client.shutdown().await;
 }
@@ -7988,38 +7952,32 @@ fn main(){sum(Tree.Node(Tree.Leaf(1),Tree.Leaf(2)))}",
 async fn stress_hover_on_all_literal_types() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+    let (source, positions) = cursors(
+        "\
 fn main() {
-  let a = 42
-  let b = 3.14
-  let c = true
-  let d = \"hello\"
-  let e = 'x'
+  let ~a = 42
+  let ~b = 3.14
+  let ~c = true
+  let ~d = \"hello\"
+  let ~e = 'x'
   let f = [1, 2, 3]
   let g = (1, \"two\", true)
   a
 }",
-        )
-        .await;
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Hover on each binding name
-    for (line, expected) in [
-        (1, "int"),
-        (2, "float64"),
-        (3, "bool"),
-        (4, "string"),
-        (5, "rune"),
-    ] {
-        let hover = client.hover(TEST_URI, line, 6).await;
-        assert!(hover.is_some(), "hover on line {} should work", line);
+    for (pos, expected) in positions
+        .iter()
+        .zip(["int", "float64", "bool", "string", "rune"])
+    {
+        let hover = client.hover(TEST_URI, pos.0, pos.1).await;
+        assert!(hover.is_some(), "hover on line {} should work", pos.0);
         let content = hover_content(&hover.unwrap());
         assert!(
             content.contains(expected),
             "line {}: expected '{}' in '{}'",
-            line,
+            pos.0,
             expected,
             content
         );
@@ -8033,17 +7991,16 @@ async fn hover_falls_back_to_last_valid_snapshot() {
     let mut client = TestClient::new().await;
     client.initialize().await;
 
-    // Start with valid code — this populates last_valid_snapshot
+    // Start with valid code: this populates last_valid_snapshot.
     client.open(TEST_URI, "fn main() { let x = 42; x }").await;
     let hover = client.hover(TEST_URI, 0, 3).await;
     assert!(hover.is_some(), "hover should work on valid code");
 
-    // Break the code with a lex error — run_analysis returns Err
+    // Break the code with a lex error: run_analysis returns Err.
     client
         .change(TEST_URI, "fn main() { let x = 42; x.", 2)
         .await;
 
-    // Hover should still work using last_valid_snapshot fallback
     let hover = client.hover(TEST_URI, 0, 3).await;
     assert!(
         hover.is_some(),
@@ -8054,7 +8011,7 @@ async fn hover_falls_back_to_last_valid_snapshot() {
 }
 
 /// Tests that completion after a dot following a multi-byte character
-/// doesn't panic in get_module_prefix (rfind + 1 byte offset issue).
+/// does not panic in get_module_prefix (rfind + 1 byte offset issue).
 #[tokio::test]
 async fn stress_completion_after_multibyte_identifier() {
     let mut client = TestClient::new().await;
@@ -8062,7 +8019,7 @@ async fn stress_completion_after_multibyte_identifier() {
 
     // CJK character (3 bytes each in UTF-8) used as separator before an identifier
     // This tests that `get_module_prefix` handles multi-byte chars correctly
-    // when doing `rfind(|c| ...).map(|i| i + 1)` — i+1 could be mid-char
+    // when doing `rfind(|c| ...).map(|i| i + 1)`: i+1 could be mid-char
     client
         .open(
             TEST_URI,
@@ -8075,7 +8032,6 @@ fn main() {
         )
         .await;
 
-    // All handlers at various positions on the dot access line
     for col in 0..10 {
         let _ = client.hover(TEST_URI, 3, col).await;
         let _ = client.completion(TEST_URI, 3, col).await;
@@ -8085,24 +8041,23 @@ fn main() {
     client.shutdown().await;
 }
 
-/// Specifically test that completion doesn't panic when a multi-byte
+/// Specifically test that completion does not panic when a multi-byte
 /// character appears right before an identifier followed by a dot.
 #[tokio::test]
 async fn stress_completion_multibyte_before_dot() {
     let mut client = TestClient::new().await;
     client.initialize().await;
 
-    // `let x = 1; 名.` — multi-byte char right before dot
+    // `let x = 1; 名.`: multi-byte char right before dot
     // The get_module_prefix rfind will find the multi-byte char as the non-ident boundary,
     // then `i + 1` might be mid-char, which would panic on `base[start..]`
-    // However, Lisette identifiers can only be ASCII, so this shouldn't happen in practice
-    // because the lexer wouldn't produce a multi-byte identifier. But the LSP should
+    // However, Lisette identifiers can only be ASCII, so this should not happen in practice
+    // because the lexer would not produce a multi-byte identifier. But the LSP should
     // handle it gracefully without panic.
     client
         .open(TEST_URI, "fn main() {\n  let x = 1\n  x\n}")
         .await;
 
-    // Just verify all handlers work at every position
     for line in 0..4 {
         for col in 0..20 {
             let _ = client.hover(TEST_URI, line, col).await;
@@ -8132,7 +8087,6 @@ fn main() {
         )
         .await;
 
-    // Hover/completion on `obj.x` line (after the emoji string line)
     for col in 0..8 {
         let _ = client.hover(TEST_URI, 4, col).await;
         let _ = client.completion(TEST_URI, 4, col).await;
@@ -8146,12 +8100,10 @@ async fn stress_snapshot_cache_invalidation() {
     let mut client = TestClient::new().await;
     client.initialize().await;
 
-    // Open with valid code
     client.open(TEST_URI, "fn main() { 42 }").await;
     let h1 = client.hover(TEST_URI, 0, 4).await;
     assert!(h1.is_some());
 
-    // Change to different valid code — cache should be invalidated
     client
         .change(TEST_URI, "fn greet() -> string { \"hi\" }", 2)
         .await;
@@ -8160,11 +8112,10 @@ async fn stress_snapshot_cache_invalidation() {
     let content = hover_content(&h2.unwrap());
     assert!(
         content.contains("string"),
-        "hover should reflect new code, got: {}",
+        "hover should reflect new code after cache invalidation, got: {}",
         content
     );
 
-    // Change back
     client.change(TEST_URI, "fn main() -> int { 42 }", 3).await;
     let h3 = client.hover(TEST_URI, 0, 4).await;
     assert!(h3.is_some());
@@ -8182,23 +8133,20 @@ async fn stress_snapshot_cache_invalidation() {
 async fn stress_rename_struct_with_usages() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
-struct Foo { x: int }
+    let (source, line, character) = cursor(
+        "\
+struct F~oo { x: int }
 fn make() -> Foo { Foo { x: 1 } }
 fn main() { let f: Foo = make(); f }",
-        )
-        .await;
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Prepare rename on struct name `Foo`
-    let prep = client.prepare_rename(TEST_URI, 0, 8).await;
+    let prep = client.prepare_rename(TEST_URI, line, character).await;
     assert!(prep.is_some());
 
-    // Rename — currently only renames the definition itself, not type annotation
+    // Rename currently only renames the definition itself, not type annotation
     // usages. This is a known limitation of the usage tracking system.
-    let edit = client.rename(TEST_URI, 0, 8, "Bar").await;
+    let edit = client.rename(TEST_URI, line, character, "Bar").await;
     assert!(edit.is_some());
     let changes = edit.unwrap().changes.unwrap();
     let edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
@@ -8328,7 +8276,6 @@ fn main() {{
     let dot_line = lines.len() as u32 - 2; // `  b.field_0` line
     let _ = client.completion(TEST_URI, dot_line, 4).await;
 
-    // All handlers on the struct definition line
     for col in [0, 5, 10, 20, 30, 40, 50] {
         let _ = client.hover(TEST_URI, 0, col).await;
         let _ = client.goto_definition(TEST_URI, 0, col).await;
@@ -8357,9 +8304,8 @@ async fn stress_incremental_method_chain_typing() {
         let _ = client.goto_definition(TEST_URI, 3, 3).await;
     }
 
-    // Final state should have working hover
     let hover = client.hover(TEST_URI, 3, 4).await;
-    assert!(hover.is_some());
+    assert!(hover.is_some(), "final state should have working hover");
 
     client.shutdown().await;
 }
@@ -8369,7 +8315,6 @@ async fn stress_incremental_function_typing() {
     let mut client = TestClient::new().await;
     client.initialize().await;
 
-    // Simulate typing a function definition character by character
     let stages = [
         "fn",
         "fn m",
@@ -8398,41 +8343,41 @@ async fn stress_incremental_function_typing() {
 async fn stress_hover_on_self_in_impl() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+    let (source, positions) = cursors(
+        "\
 struct Point { x: int, y: int }
 impl Point {
   fn origin() -> Point { Point { x: 0, y: 0 } }
-  fn shift(self: Point, dx: int) -> Point {
-    Point { x: self.x + dx, y: self.y }
+  fn shift(s~elf: Point, dx: int) -> Point {
+    Point { x: se~lf~.x + dx, y: self.y }
   }
 }
 fn main() {
-  let p = Point.origin()
-  p.shift(1)
+  let p = Point.o~rigin()
+  p.~shift(~1)
 }",
-        )
+    );
+    client.open(TEST_URI, &source).await;
+
+    let _ = client.hover(TEST_URI, positions[1].0, positions[1].1).await;
+
+    let _ = client.hover(TEST_URI, positions[0].0, positions[0].1).await;
+
+    let _ = client
+        .completion(TEST_URI, positions[2].0, positions[2].1)
         .await;
 
-    // Hover on `self` in `self.x` (line 4)
-    let _ = client.hover(TEST_URI, 4, 17).await;
+    let _ = client
+        .goto_definition(TEST_URI, positions[3].0, positions[3].1)
+        .await;
 
-    // Hover on `self` parameter (line 3)
-    let _ = client.hover(TEST_URI, 3, 12).await;
+    let _ = client
+        .goto_definition(TEST_URI, positions[4].0, positions[4].1)
+        .await;
 
-    // Completion after `self.` (line 4, col 17)
-    let _ = client.completion(TEST_URI, 4, 19).await;
-
-    // Goto def on static method call `Point.origin()`
-    let _ = client.goto_definition(TEST_URI, 8, 17).await;
-
-    // Goto def on instance method call `p.shift(1)`
-    let _ = client.goto_definition(TEST_URI, 9, 4).await;
-
-    // Signature help on `p.shift(1)` — should strip self
-    let sig = client.signature_help(TEST_URI, 9, 10).await;
+    let sig = client
+        .signature_help(TEST_URI, positions[5].0, positions[5].1)
+        .await;
     assert!(sig.is_some(), "signature help should return a result");
     let label = &sig.unwrap().signatures[0].label;
     assert!(
@@ -8448,10 +8393,8 @@ fn main() {
 async fn stress_completion_in_match_pattern() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+    let (source, line, character) = cursor(
+        "\
 enum Shape {
   Circle(float64),
   Rect(float64, float64),
@@ -8459,18 +8402,14 @@ enum Shape {
 fn main() {
   let s = Shape.Circle(1.0)
   match s {
-    Shape.
+    Shape.~
   }
 }",
-        )
-        .await;
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Completion after `Shape.` in pattern position (line 7, after the dot)
-    // `    Shape.` — dot at col 9, so col 10 is right after
-    // Should not crash, even if pattern-position completion isn't supported
-    let _ = client.completion(TEST_URI, 7, 10).await;
+    let _ = client.completion(TEST_URI, line, character).await;
 
-    // All handlers at various positions on the match arm line
     for col in 0..12 {
         let _ = client.hover(TEST_URI, 7, col).await;
         let _ = client.goto_definition(TEST_URI, 7, col).await;
@@ -8509,38 +8448,43 @@ pub fn is_warm(c: Color) -> bool {
     )
     .unwrap();
 
-    let main_content = "\
+    let (main_content, positions) = cursors(
+        "\
 import \"types\"
 
 fn main() {
-  let c = types.Color.Red
-  types.is_warm(c)
-}";
-    std::fs::write(src.join("main.lis"), main_content).unwrap();
+  let c = types.~Color.~Red
+  types.is~_warm(c~)
+}",
+    );
+    std::fs::write(src.join("main.lis"), &main_content).unwrap();
 
     let mut client = TestClient::new().await;
     client.initialize_with_root(root).await;
 
     let main_path = src.join("main.lis");
     let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
-    client.open(&main_uri, main_content).await;
+    client.open(&main_uri, &main_content).await;
 
-    // Goto def on `Color` (should go to enum definition in types.lis)
-    let _ = client.goto_definition(&main_uri, 3, 16).await;
+    let _ = client
+        .goto_definition(&main_uri, positions[0].0, positions[0].1)
+        .await;
 
-    // Goto def on `Red` (should go to variant definition)
-    let _ = client.goto_definition(&main_uri, 3, 22).await;
+    let _ = client
+        .goto_definition(&main_uri, positions[1].0, positions[1].1)
+        .await;
 
-    // Goto def on `is_warm`
-    let _ = client.goto_definition(&main_uri, 4, 10).await;
+    let _ = client
+        .goto_definition(&main_uri, positions[2].0, positions[2].1)
+        .await;
 
-    // Hover on the chain
     for col in [10, 14, 16, 20, 22, 24] {
         let _ = client.hover(&main_uri, 3, col).await;
     }
 
-    // Signature help on `types.is_warm(c)`
-    let _ = client.signature_help(&main_uri, 4, 17).await;
+    let _ = client
+        .signature_help(&main_uri, positions[3].0, positions[3].1)
+        .await;
 
     client.shutdown().await;
 }
@@ -8611,35 +8555,36 @@ fn classify(d: b.Workday) -> int {
 async fn stress_references_on_struct_field() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
-struct Config { width: int, height: int }
+    let (source, positions) = cursors(
+        "\
+struct Config { wi~dth: int, height: int }
 fn area(c: Config) -> int {
-  c.width * c.height
+  c.~width * c.height
 }
 fn main() {
-  let c = Config { width: 10, height: 20 }
+  let c = Config { w~idth: 10, height: 20 }
   area(c)
 }",
-        )
+    );
+    client.open(TEST_URI, &source).await;
+
+    let _ = client
+        .references(TEST_URI, positions[0].0, positions[0].1, true)
         .await;
 
-    // References on `width` in struct definition (line 0)
-    let _ = client.references(TEST_URI, 0, 18, true).await;
+    let _ = client
+        .references(TEST_URI, positions[2].0, positions[2].1, true)
+        .await;
 
-    // References on `width` in constructor (line 5)
-    let _ = client.references(TEST_URI, 5, 20, true).await;
+    let _ = client
+        .references(TEST_URI, positions[1].0, positions[1].1, true)
+        .await;
 
-    // References on `width` in `c.width` (line 2)
-    let _ = client.references(TEST_URI, 2, 4, true).await;
+    let _ = client
+        .goto_definition(TEST_URI, positions[1].0, positions[1].1)
+        .await;
 
-    // Goto def on `width` in `c.width`
-    let _ = client.goto_definition(TEST_URI, 2, 4).await;
-
-    // Hover on `width` in `c.width`
-    let _ = client.hover(TEST_URI, 2, 4).await;
+    let _ = client.hover(TEST_URI, positions[1].0, positions[1].1).await;
 
     client.shutdown().await;
 }
@@ -8676,7 +8621,6 @@ fn main() {
     let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
     client.open(&main_uri, main_content).await;
 
-    // All handlers on the import line
     for col in 0..16 {
         let _ = client.hover(&main_uri, 0, col).await;
         let _ = client.goto_definition(&main_uri, 0, col).await;
@@ -8691,21 +8635,18 @@ fn main() {
 async fn stress_hover_on_for_loop_components() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+    let (source, positions) = cursors(
+        "\
 fn main() {
   let items = [10, 20, 30]
-  for item in items {
-    item + 1
+  for ~item in ~items {
+    ~item + 1
   }
 }",
-        )
-        .await;
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Hover on `item` binding (line 2, col 6)
-    let hover = client.hover(TEST_URI, 2, 6).await;
+    let hover = client.hover(TEST_URI, positions[0].0, positions[0].1).await;
     assert!(hover.is_some());
     let content = hover_content(&hover.unwrap());
     assert!(
@@ -8714,12 +8655,10 @@ fn main() {
         content
     );
 
-    // Hover on `items` iterable (line 2, col 14)
-    let hover = client.hover(TEST_URI, 2, 14).await;
+    let hover = client.hover(TEST_URI, positions[1].0, positions[1].1).await;
     assert!(hover.is_some());
 
-    // Hover on `item` inside body (line 3, col 4)
-    let hover = client.hover(TEST_URI, 3, 4).await;
+    let hover = client.hover(TEST_URI, positions[2].0, positions[2].1).await;
     assert!(hover.is_some());
     let content = hover_content(&hover.unwrap());
     assert!(
@@ -8728,9 +8667,13 @@ fn main() {
         content
     );
 
-    // Goto def on `item` in body should go to for binding
-    let def = client.goto_definition(TEST_URI, 3, 4).await;
-    assert!(def.is_some());
+    let def = client
+        .goto_definition(TEST_URI, positions[2].0, positions[2].1)
+        .await;
+    assert!(
+        def.is_some(),
+        "goto def on item in loop body should resolve to the for binding"
+    );
 
     client.shutdown().await;
 }
@@ -8752,7 +8695,6 @@ fn main() {
         )
         .await;
 
-    // All handlers at every position on the pipeline line
     let line = "  let result = 5 |> double |> add_one";
     for col in 0..line.len() as u32 {
         let _ = client.hover(TEST_URI, 3, col).await;
@@ -8760,7 +8702,6 @@ fn main() {
         let _ = client.goto_definition(TEST_URI, 3, col).await;
     }
 
-    // Signature help at various points
     for col in [18, 22, 30, 35] {
         let _ = client.signature_help(TEST_URI, 3, col).await;
     }
@@ -8781,7 +8722,6 @@ async fn stress_cross_module_type_error_diagnostics() {
     std::fs::create_dir_all(&lib_dir).unwrap();
     std::fs::write(lib_dir.join("mymod.lis"), "pub fn get_num() -> int { 42 }").unwrap();
 
-    // Main has a type error using imported function
     let main_content = "\
 import \"mymod\"
 
@@ -8804,10 +8744,12 @@ fn main() {
         "should have type error for assigning int to string"
     );
 
-    // All handlers should still work despite diagnostics
     let _ = client.hover(&main_uri, 3, 20).await;
     let comp = client.completion(&main_uri, 3, 0).await;
-    assert!(comp.is_some());
+    assert!(
+        comp.is_some(),
+        "completion should still work despite diagnostics"
+    );
 
     client.shutdown().await;
 }
@@ -8824,7 +8766,6 @@ async fn stress_cross_module_sibling_files() {
     let mod_dir = src.join("shapes");
     std::fs::create_dir_all(&mod_dir).unwrap();
 
-    // Two sibling files in the same module
     std::fs::write(
         mod_dir.join("circle.lis"),
         "pub struct Circle { pub radius: float64 }",
@@ -8838,33 +8779,42 @@ async fn stress_cross_module_sibling_files() {
     // Module entry file
     std::fs::write(mod_dir.join("shapes.lis"), "").unwrap();
 
-    let main_content = "\
+    let (main_content, positions) = cursors(
+        "\
 import \"shapes\"
 
 fn main() {
-  let c = shapes.Circle { radius: 5.0 }
-  let r = shapes.Rect { width: 10.0, height: 20.0 }
-  c.radius + r.width
-}";
-    std::fs::write(src.join("main.lis"), main_content).unwrap();
+  let c = shapes~.C~ircle { radius: 5.0 }
+  let r = shapes.R~ect { width: 10.0, height: 20.0 }
+  c.~radius + r.w~idth
+}",
+    );
+    std::fs::write(src.join("main.lis"), &main_content).unwrap();
 
     let mut client = TestClient::new().await;
     client.initialize_with_root(root).await;
 
     let main_path = src.join("main.lis");
     let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
-    client.open(&main_uri, main_content).await;
+    client.open(&main_uri, &main_content).await;
 
-    // Hover on Circle and Rect
-    let _ = client.hover(&main_uri, 3, 18).await;
-    let _ = client.hover(&main_uri, 4, 18).await;
+    let _ = client
+        .hover(&main_uri, positions[1].0, positions[1].1)
+        .await;
+    let _ = client
+        .hover(&main_uri, positions[2].0, positions[2].1)
+        .await;
 
-    // Completion after `shapes.`
-    let _ = client.completion(&main_uri, 3, 16).await;
+    let _ = client
+        .completion(&main_uri, positions[0].0, positions[0].1)
+        .await;
 
-    // Goto def on `radius` and `width`
-    let _ = client.goto_definition(&main_uri, 5, 4).await;
-    let _ = client.goto_definition(&main_uri, 5, 16).await;
+    let _ = client
+        .goto_definition(&main_uri, positions[3].0, positions[3].1)
+        .await;
+    let _ = client
+        .goto_definition(&main_uri, positions[4].0, positions[4].1)
+        .await;
 
     client.shutdown().await;
 }
@@ -8873,30 +8823,25 @@ fn main() {
 async fn stress_hover_on_generic_params() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
-fn identity<T>(x: T) -> T { x }
+    let (source, line, character) = cursor(
+        "\
+fn identity<T~>(x: T) -> T { x }
 fn pair<A, B>(a: A, b: B) -> (A, B) { (a, b) }
 fn main() {
   identity(42)
   pair(1, \"hello\")
 }",
-        )
-        .await;
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Hover on `T` in generic param
-    let _ = client.hover(TEST_URI, 0, 13).await;
+    let _ = client.hover(TEST_URI, line, character).await;
 
-    // Hover on calls — should show inferred type
     let hover = client.hover(TEST_URI, 3, 2).await;
-    assert!(hover.is_some());
+    assert!(hover.is_some(), "hover on call should show inferred type");
 
     let hover = client.hover(TEST_URI, 4, 2).await;
-    assert!(hover.is_some());
+    assert!(hover.is_some(), "hover on call should show inferred type");
 
-    // Signature help on generic function calls
     let sig = client.signature_help(TEST_URI, 3, 11).await;
     assert!(sig.is_some());
 
@@ -8928,7 +8873,7 @@ fn main() {
     let hover = client.hover(TEST_URI, 1, 3).await;
     assert!(hover.is_some());
 
-    // Break with lex error (unclosed string)
+    // Break with a lex error
     client
         .change(
             TEST_URI,
@@ -8979,24 +8924,24 @@ fn main() {
 async fn stress_completion_on_map_indexed_access() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+    let (source, positions) = cursors(
+        "\
 struct Item { name: string, count: int }
 fn main() {
   let items: Slice<Item> = []
-  items[0].name
+  items[0].~n~ame
 }",
-        )
+    );
+    client.open(TEST_URI, &source).await;
+
+    let _ = client
+        .completion(TEST_URI, positions[0].0, positions[0].1)
         .await;
 
-    // Completion after `items[0].`
-    let _ = client.completion(TEST_URI, 3, 11).await;
-
-    // Hover and goto-def on field access
-    let _ = client.hover(TEST_URI, 3, 12).await;
-    let _ = client.goto_definition(TEST_URI, 3, 12).await;
+    let _ = client.hover(TEST_URI, positions[1].0, positions[1].1).await;
+    let _ = client
+        .goto_definition(TEST_URI, positions[1].0, positions[1].1)
+        .await;
 
     client.shutdown().await;
 }
@@ -9037,7 +8982,6 @@ fn main() {
     let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
     client.open(&main_uri, main_content).await;
 
-    // Hover, goto-def, completion on each module's function
     for col in [4, 14, 24] {
         let _ = client.hover(&main_uri, 5, col).await;
         let _ = client.goto_definition(&main_uri, 5, col).await;
@@ -9152,7 +9096,6 @@ async fn stress_diagnostics_after_rapid_edits() {
             .await;
     }
 
-    // Final change introduces a type error
     client
         .change(TEST_URI, "fn main() { let x: int = \"bad\"; x }", 7)
         .await;
@@ -9170,27 +9113,24 @@ async fn stress_diagnostics_after_rapid_edits() {
 async fn stress_hover_on_expression_values() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+    let (source, positions) = cursors(
+        "\
 fn main() {
-  let a = if true { 1 } else { 2 }
-  let b = match a {
+  let ~a = if true { 1 } else { 2 }
+  let ~b = match a {
     1 => \"one\",
     _ => \"other\",
   }
-  let c = {
+  let ~c = {
     let tmp = 42
     tmp + 1
   }
   a + c
 }",
-        )
-        .await;
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Hover on `a` — should be int
-    let hover = client.hover(TEST_URI, 1, 6).await;
+    let hover = client.hover(TEST_URI, positions[0].0, positions[0].1).await;
     assert!(hover.is_some());
     let content = hover_content(&hover.unwrap());
     assert!(
@@ -9199,8 +9139,7 @@ fn main() {
         content
     );
 
-    // Hover on `b` — should be string
-    let hover = client.hover(TEST_URI, 2, 6).await;
+    let hover = client.hover(TEST_URI, positions[1].0, positions[1].1).await;
     assert!(hover.is_some());
     let content = hover_content(&hover.unwrap());
     assert!(
@@ -9209,8 +9148,7 @@ fn main() {
         content
     );
 
-    // Hover on `c` — should be int (block expression)
-    let hover = client.hover(TEST_URI, 6, 6).await;
+    let hover = client.hover(TEST_URI, positions[2].0, positions[2].1).await;
     assert!(hover.is_some());
     let content = hover_content(&hover.unwrap());
     assert!(
@@ -9262,22 +9200,19 @@ fn value(t: Token) -> int {
 async fn stress_deep_field_access_chain() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+    let (source, line, character) = cursor(
+        "\
 struct A { b: B }
 struct B { c: C }
 struct C { value: int }
 fn main() {
   let a = A { b: B { c: C { value: 42 } } }
-  a.b.c.value
+  ~a.b.c.value
 }",
-        )
-        .await;
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Hover on each part of the chain
-    let hover = client.hover(TEST_URI, 5, 2).await;
+    let hover = client.hover(TEST_URI, line, character).await;
     assert!(hover.is_some());
 
     for col in [2, 4, 6, 8] {
@@ -9302,27 +9237,28 @@ async fn stress_cross_module_rename_function() {
     std::fs::create_dir_all(&lib_dir).unwrap();
     std::fs::write(lib_dir.join("lib.lis"), "pub fn compute() -> int { 42 }").unwrap();
 
-    let main_content = "\
+    let (main_content, line, character) = cursor(
+        "\
 import \"lib\"
 
 fn main() {
-  let x = lib.compute()
+  let x = lib.~compute()
   let y = lib.compute()
   x + y
-}";
-    std::fs::write(src.join("main.lis"), main_content).unwrap();
+}",
+    );
+    std::fs::write(src.join("main.lis"), &main_content).unwrap();
 
     let mut client = TestClient::new().await;
     client.initialize_with_root(root).await;
 
     let main_path = src.join("main.lis");
     let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
-    client.open(&main_uri, main_content).await;
+    client.open(&main_uri, &main_content).await;
 
-    // Try prepare rename and rename on cross-module function
-    let _ = client.prepare_rename(&main_uri, 3, 14).await;
-    let _ = client.rename(&main_uri, 3, 14, "calculate").await;
-    let _ = client.references(&main_uri, 3, 14, true).await;
+    let _ = client.prepare_rename(&main_uri, line, character).await;
+    let _ = client.rename(&main_uri, line, character, "calculate").await;
+    let _ = client.references(&main_uri, line, character, true).await;
 
     client.shutdown().await;
 }
@@ -9367,31 +9303,30 @@ fn main() {
 async fn goto_definition_method_call_via_dot_access() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+    let (source, line, character) = cursor(
+        "\
 struct User { pub name: string }
 impl User {
   pub fn greet(self: User) -> string { self.name }
 }
 fn main() {
   let u = User { name: \"Alice\" }
-  u.greet()
+  u.~greet()
 }",
-        )
-        .await;
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Cursor on "greet" in "u.greet()"
-    let response = client.goto_definition(TEST_URI, 6, 4).await;
+    let response = client.goto_definition(TEST_URI, line, character).await;
     assert!(
         response.is_some(),
         "goto_definition on method call should resolve"
     );
 
     let loc = definition_location(&response.unwrap()).unwrap();
-    // Should jump to the method definition (line 2: pub fn greet)
-    assert_eq!(loc.range.start.line, 2);
+    assert_eq!(
+        loc.range.start.line, 2,
+        "should jump to the method definition (`pub fn greet`)"
+    );
 
     client.shutdown().await;
 }
@@ -9400,31 +9335,27 @@ fn main() {
 async fn goto_definition_variable_in_dot_access() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+    let (source, line, character) = cursor(
+        "\
 struct Point { pub x: int }
 impl Point {
   pub fn translate(self: Point) -> Point { self }
 }
 fn main() {
   let p = Point { x: 1 }
-  p.translate()
+  ~p.translate()
 }",
-        )
-        .await;
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Cursor on "p" in "p.translate()"
-    let response = client.goto_definition(TEST_URI, 6, 2).await;
+    let response = client.goto_definition(TEST_URI, line, character).await;
     assert!(
         response.is_some(),
         "goto_definition on variable in dot access should resolve"
     );
 
     let loc = definition_location(&response.unwrap()).unwrap();
-    // Should jump to "let p = ..." (line 5)
-    assert_eq!(loc.range.start.line, 5);
+    assert_eq!(loc.range.start.line, 5, "should jump to `let p = ...`");
 
     client.shutdown().await;
 }
@@ -9433,15 +9364,11 @@ fn main() {
 async fn goto_definition_type_in_let_annotation() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "type UserID = int\nfn main() {\n  let x: UserID = 42\n}",
-        )
-        .await;
+    let (source, line, character) =
+        cursor("type UserID = int\nfn main() {\n  let x: ~UserID = 42\n}");
+    client.open(TEST_URI, &source).await;
 
-    // Cursor on "UserID" in "let x: UserID = 42" (line 2, col 9)
-    let response = client.goto_definition(TEST_URI, 2, 9).await;
+    let response = client.goto_definition(TEST_URI, line, character).await;
     assert!(
         response.is_some(),
         "goto_definition on type in let annotation should resolve"
@@ -9457,22 +9384,19 @@ async fn goto_definition_type_in_let_annotation() {
 async fn goto_definition_type_in_static_call() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+    let (source, line, character) = cursor(
+        "\
 struct Point { pub x: int }
 impl Point {
   pub fn origin() -> Point { Point { x: 0 } }
 }
 fn main() {
-  Point.origin()
+  ~Point.origin()
 }",
-        )
-        .await;
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Cursor on "Point" in "Point.origin()"
-    let response = client.goto_definition(TEST_URI, 5, 2).await;
+    let response = client.goto_definition(TEST_URI, line, character).await;
     assert!(
         response.is_some(),
         "goto_definition on type name in static call should resolve"
@@ -9488,23 +9412,21 @@ fn main() {
 async fn goto_definition_import_alias() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "import \"go:fmt\"\nfn main() {\n  fmt.Println(\"hi\")\n}",
-        )
-        .await;
+    let (source, line, character) =
+        cursor("import \"go:fmt\"\nfn main() {\n  ~fmt.Println(\"hi\")\n}");
+    client.open(TEST_URI, &source).await;
 
-    // Cursor on "fmt" in "fmt.Println"
-    let response = client.goto_definition(TEST_URI, 2, 2).await;
+    let response = client.goto_definition(TEST_URI, line, character).await;
     assert!(
         response.is_some(),
         "goto_definition on import alias should resolve"
     );
 
     let loc = definition_location(&response.unwrap()).unwrap();
-    // Should jump to the import statement (line 0)
-    assert_eq!(loc.range.start.line, 0);
+    assert_eq!(
+        loc.range.start.line, 0,
+        "should jump to the import statement"
+    );
 
     client.shutdown().await;
 }
@@ -9513,15 +9435,11 @@ async fn goto_definition_import_alias() {
 async fn goto_definition_pipe_operator() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "fn add(a: int, b: int) -> int { a + b }\nfn main() {\n  5 |> add(3)\n}",
-        )
-        .await;
+    let (source, line, character) =
+        cursor("fn add(a: int, b: int) -> int { a + b }\nfn main() {\n  5 |> ~add(3)\n}");
+    client.open(TEST_URI, &source).await;
 
-    // Cursor on "add" in "5 |> add(3)" (line 2, col 7)
-    let response = client.goto_definition(TEST_URI, 2, 7).await;
+    let response = client.goto_definition(TEST_URI, line, character).await;
     assert!(response.is_some(), "goto_definition in pipe should resolve");
 
     let loc = definition_location(&response.unwrap()).unwrap();
@@ -9534,11 +9452,9 @@ async fn goto_definition_pipe_operator() {
 async fn find_references_struct_name() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
-struct Point { pub x: int, pub y: int }
+    let (source, line, character) = cursor(
+        "\
+struct ~Point { pub x: int, pub y: int }
 fn make() -> Point {
   Point { x: 1, y: 2 }
 }
@@ -9546,18 +9462,16 @@ fn main() {
   let p: Point = make()
   p.x
 }",
-        )
-        .await;
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Cursor on "Point" in the struct definition (line 0, col 7)
-    let refs = client.references(TEST_URI, 0, 7, true).await;
+    let refs = client.references(TEST_URI, line, character, true).await;
     assert!(refs.is_some(), "find references for struct should succeed");
 
     let locations = refs.unwrap();
-    // Should find: definition (line 0), return type (line 1), constructor (line 2), type annotation (line 5)
     assert!(
         locations.len() >= 2,
-        "should find at least the definition and one usage, found {}",
+        "should find at least the definition and one usage (of definition, return type, constructor, type annotation), found {}",
         locations.len()
     );
 
@@ -9568,8 +9482,9 @@ fn main() {
 async fn rename_enum_variant_preserves_qualifier() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    let source = "\
-enum Color { Red, Green, Blue }
+    let (source, line, character) = cursor(
+        "\
+enum Color { ~Red, Green, Blue }
 fn main() {
   let c = Color.Red
   match c {
@@ -9577,27 +9492,26 @@ fn main() {
     Color.Green => 2,
     Color.Blue => 3,
   }
-}";
-    client.open(TEST_URI, source).await;
+}",
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Rename "Red" in the enum definition (line 0, col 13)
-    let edit = client.rename(TEST_URI, 0, 13, "Crimson").await;
+    let edit = client.rename(TEST_URI, line, character, "Crimson").await;
     assert!(edit.is_some(), "rename enum variant should succeed");
 
     let edit = edit.unwrap();
     let changes = edit.changes.unwrap();
     let edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
 
-    // Verify all edits replace only "Red" with "Crimson", not "Color.Red" with "Crimson"
     for text_edit in edits {
-        assert_eq!(text_edit.new_text, "Crimson");
-        // Each edit should be on a single line
+        assert_eq!(
+            text_edit.new_text, "Crimson",
+            "edit should replace the variant name with the new name"
+        );
         assert_eq!(
             text_edit.range.start.line, text_edit.range.end.line,
             "edit should be on a single line"
         );
-        // The edit range should span only the length of "Red" (3 chars),
-        // not "Color.Red" (9 chars)
         let char_span = text_edit.range.end.character - text_edit.range.start.character;
         assert_eq!(
             char_span, 3,
@@ -10048,20 +9962,19 @@ fn main() {
 async fn goto_definition_chained_pipe_operator() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+    let (source, positions) = cursors(
+        "\
 fn add(a: int, b: int) -> int { a + b }
 fn multiply(a: int, b: int) -> int { a * b }
 fn main() {
-  let result = 5 |> add(3) |> multiply(2)
+  let result = 5 |> ~add(3) |> ~multiply(2)
 }",
-        )
-        .await;
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Cursor on "add" in chained pipe "5 |> add(3) |> multiply(2)" (line 3, col 20)
-    let response = client.goto_definition(TEST_URI, 3, 20).await;
+    let response = client
+        .goto_definition(TEST_URI, positions[0].0, positions[0].1)
+        .await;
     assert!(
         response.is_some(),
         "goto_definition on add in chained pipe should resolve"
@@ -10069,8 +9982,9 @@ fn main() {
     let loc = definition_location(&response.unwrap()).unwrap();
     assert_eq!(loc.range.start.line, 0, "should jump to add definition");
 
-    // Cursor on "multiply" in chained pipe (line 3, col 30)
-    let response = client.goto_definition(TEST_URI, 3, 30).await;
+    let response = client
+        .goto_definition(TEST_URI, positions[1].0, positions[1].1)
+        .await;
     assert!(
         response.is_some(),
         "goto_definition on multiply in chained pipe should resolve"
@@ -10088,8 +10002,9 @@ fn main() {
 async fn rename_struct_updates_type_annotations() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    let source = "\
-pub struct Point { pub x: int, pub y: int }
+    let (source, line, character) = cursor(
+        "\
+pub struct ~Point { pub x: int, pub y: int }
 impl Point {
   pub fn new(x: int, y: int) -> Point {
     Point { x, y }
@@ -10100,22 +10015,20 @@ impl Point {
 }
 fn main() {
   let p: Point = Point.new(1, 2)
-}";
-    client.open(TEST_URI, source).await;
+}",
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Rename "Point" in the struct definition (line 0, col 11)
-    let edit = client.rename(TEST_URI, 0, 11, "Vec2").await;
+    let edit = client.rename(TEST_URI, line, character, "Vec2").await;
     assert!(edit.is_some(), "rename struct should succeed");
 
     let edit = edit.unwrap();
     let changes = edit.changes.unwrap();
     let edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
 
-    // Should update: struct def, impl target, return type, self param, other param,
-    // let type annotation, constructor call
     assert!(
         edits.len() >= 5,
-        "rename should update at least the definition + impl + return type + params + usage, got {}",
+        "rename should update at least the struct def, impl target, return type, params, and constructor call, got {}",
         edits.len()
     );
 
@@ -10123,13 +10036,12 @@ fn main() {
         assert_eq!(text_edit.new_text, "Vec2");
     }
 
-    // Verify no duplicate edits at the same position (which would cause double-rename)
     let mut seen = std::collections::HashSet::new();
     for text_edit in edits {
         let key = (text_edit.range.start.line, text_edit.range.start.character);
         assert!(
             seen.insert(key),
-            "duplicate edit at line {} col {} — would cause double-rename",
+            "duplicate edit at line {} col {}, would cause double-rename",
             key.0,
             key.1
         );
@@ -10142,11 +10054,9 @@ fn main() {
 async fn find_references_struct_includes_type_annotations() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
-pub struct Point { pub x: int, pub y: int }
+    let (source, line, character) = cursor(
+        "\
+pub struct ~Point { pub x: int, pub y: int }
 impl Point {
   pub fn origin() -> Point {
     Point { x: 0, y: 0 }
@@ -10155,23 +10065,19 @@ impl Point {
 fn main() {
   let p: Point = Point.origin()
 }",
-        )
-        .await;
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Cursor on "Point" in the struct definition (line 0, col 11)
-    let refs = client.references(TEST_URI, 0, 11, true).await;
+    let refs = client.references(TEST_URI, line, character, true).await;
     assert!(refs.is_some(), "find references for struct should succeed");
 
     let locations = refs.unwrap();
-    // Should find: definition (line 0), impl target (line 1), return type (line 2),
-    // constructor (line 3), type annotation (line 7), static call (line 7)
     assert!(
         locations.len() >= 4,
-        "should find at least 4 references (def + impl + return type + constructor), found {}",
+        "should find at least the definition, impl target, return type, and constructor call, found {}",
         locations.len()
     );
 
-    // Verify no duplicate locations
     let mut seen = std::collections::HashSet::new();
     for loc in &locations {
         let key = (loc.range.start.line, loc.range.start.character);
@@ -10190,8 +10096,9 @@ fn main() {
 async fn rename_struct_updates_static_method_calls() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    let source = "\
-pub struct Point { pub x: int, pub y: int }
+    let (source, line, character) = cursor(
+        "\
+pub struct ~Point { pub x: int, pub y: int }
 impl Point {
   pub fn new(x: int, y: int) -> Point {
     Point { x, y }
@@ -10203,34 +10110,31 @@ impl Point {
 fn main() {
   let p = Point.new(1, 2)
   let o = Point.origin()
-}";
-    client.open(TEST_URI, source).await;
+}",
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Rename "Point" in the struct definition (line 0, col 11)
-    let edit = client.rename(TEST_URI, 0, 11, "Vec2").await;
+    let edit = client.rename(TEST_URI, line, character, "Vec2").await;
     assert!(edit.is_some(), "rename struct should succeed");
 
     let edit = edit.unwrap();
     let changes = edit.changes.unwrap();
     let edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
 
-    // Collect (line, col) of all rename edits
     let positions: Vec<(u32, u32)> = edits
         .iter()
         .map(|e| (e.range.start.line, e.range.start.character))
         .collect();
 
-    // Point.new(1, 2) — line 10, "Point" starts at col 10
     assert!(
         positions.contains(&(10, 10)),
-        "rename should include Point in Point.new() — got edits at: {:?}",
+        "rename should include Point in `Point.new(1, 2)` on line 10, got edits at: {:?}",
         positions
     );
 
-    // Point.origin() — line 11, "Point" starts at col 10
     assert!(
         positions.contains(&(11, 10)),
-        "rename should include Point in Point.origin() — got edits at: {:?}",
+        "rename should include Point in `Point.origin()` on line 11, got edits at: {:?}",
         positions
     );
 
@@ -10241,17 +10145,12 @@ fn main() {
 async fn goto_definition_stdlib_member_navigates_to_typedef() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "import \"go:fmt\"\nfn main() {\n  fmt.Println(\"hello\")\n}",
-        )
-        .await;
+    let (source, line, character) =
+        cursor("import \"go:fmt\"\nfn main() {\n  fmt.~Println(\"hello\")\n}");
+    client.open(TEST_URI, &source).await;
 
-    // Cursor on "Println" in "fmt.Println" (line 2, col 6). The LSP materializes
-    // the stdlib typedefs at startup, so this navigates into the generated
-    // `.d.lis` file.
-    let response = client.goto_definition(TEST_URI, 2, 6).await;
+    // The LSP builds the stdlib typedefs at startup, so this navigates into the generated `.d.lis` file.
+    let response = client.goto_definition(TEST_URI, line, character).await;
     let location = definition_location(
         &response.expect("go-to-definition on stdlib member should return a location"),
     )
@@ -10259,7 +10158,7 @@ async fn goto_definition_stdlib_member_navigates_to_typedef() {
     let path = location.uri.path();
     assert!(
         path.contains("stdlib-typedefs") && path.ends_with(".d.lis"),
-        "should land in a materialized typedef, got {path}"
+        "should land in an extracted typedef, got {path}"
     );
     assert!(
         definition_target_text(&location).starts_with("Println"),
@@ -10371,16 +10270,17 @@ async fn goto_definition_through_propagate_operator() {
     let mut client = TestClient::new().await;
     client.initialize().await;
 
-    let source = "\
+    let (source, line, character) = cursor(
+        "\
 fn greet() -> Result<string, string> { Ok(\"hi\") }
 fn main() -> Result<(), string> {
-  let msg = greet()?
+  let msg = ~greet()?
   Ok(())
-}";
-    client.open(TEST_URI, source).await;
+}",
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Cursor on `greet` in `greet()?` — line 2, char 12
-    let response = client.goto_definition(TEST_URI, 2, 12).await;
+    let response = client.goto_definition(TEST_URI, line, character).await;
     assert!(
         response.is_some(),
         "goto_definition on function call inside propagate should resolve"
@@ -10397,15 +10297,16 @@ async fn goto_definition_same_module_function_call() {
     let mut client = TestClient::new().await;
     client.initialize().await;
 
-    let source = "\
+    let (source, line, character) = cursor(
+        "\
 fn helper() -> int { 42 }
 fn main() {
-  let x = helper()
-}";
-    client.open(TEST_URI, source).await;
+  let x = ~helper()
+}",
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Cursor on `helper` in `helper()` — line 2, char 10
-    let response = client.goto_definition(TEST_URI, 2, 10).await;
+    let response = client.goto_definition(TEST_URI, line, character).await;
     assert!(
         response.is_some(),
         "goto_definition on same-module function call should resolve"
@@ -10493,8 +10394,10 @@ async fn goto_definition_struct_field_cross_module() {
     let models_content = "pub struct Task {\n  pub id: int,\n  pub title: string,\n}";
     std::fs::write(models_dir.join("models.lis"), models_content).unwrap();
 
-    let main_content = "import \"models\"\n\nfn main() {\n  let t = models.Task { id: 1, title: \"hi\" }\n  let x = t.id\n}";
-    std::fs::write(src.join("main.lis"), main_content).unwrap();
+    let (main_content, line, character) = cursor(
+        "import \"models\"\n\nfn main() {\n  let t = models.Task { id: 1, title: \"hi\" }\n  let x = t.~id\n}",
+    );
+    std::fs::write(src.join("main.lis"), &main_content).unwrap();
 
     let mut client = TestClient::new().await;
     client.initialize_with_root(root).await;
@@ -10507,10 +10410,9 @@ async fn goto_definition_struct_field_cross_module() {
         .to_string();
 
     client.open(&models_uri, models_content).await;
-    client.open(&main_uri, main_content).await;
+    client.open(&main_uri, &main_content).await;
 
-    // Line 4: "  let x = t.id" — cursor on "i" of "id" at col 12
-    let response = client.goto_definition(&main_uri, 4, 12).await;
+    let response = client.goto_definition(&main_uri, line, character).await;
     assert!(
         response.is_some(),
         "goto_definition on cross-module struct field should resolve"
@@ -10522,10 +10424,9 @@ async fn goto_definition_struct_field_cross_module() {
         models_uri,
         "should navigate to models file"
     );
-    // Line 1 in models: "  pub id: int,"
     assert_eq!(
         loc.range.start.line, 1,
-        "should jump to 'id' field declaration"
+        "should jump to 'id' field declaration (line 1: `pub id: int,`)"
     );
 
     client.shutdown().await;
@@ -10535,24 +10436,23 @@ async fn goto_definition_struct_field_cross_module() {
 async fn goto_definition_struct_field_access() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+    let (source, positions) = cursors(
+        "\
 struct Task {
   pub id: int,
   pub title: string,
 }
 fn main() {
   let t = Task { id: 1, title: \"hello\" }
-  let x = t.id
-  let y = t.title
+  let x = t.i~d
+  let y = t.t~itle
 }",
-        )
-        .await;
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Cursor on "id" in "t.id" (line 6, col 13)
-    let response = client.goto_definition(TEST_URI, 6, 13).await;
+    let response = client
+        .goto_definition(TEST_URI, positions[0].0, positions[0].1)
+        .await;
     assert!(
         response.is_some(),
         "goto_definition on struct field access should resolve"
@@ -10563,8 +10463,9 @@ fn main() {
         "should jump to 'id' field declaration"
     );
 
-    // Cursor on "title" in "t.title" (line 7, col 13)
-    let response = client.goto_definition(TEST_URI, 7, 13).await;
+    let response = client
+        .goto_definition(TEST_URI, positions[1].0, positions[1].1)
+        .await;
     assert!(
         response.is_some(),
         "goto_definition on struct field 'title' should resolve"
@@ -10582,23 +10483,12 @@ fn main() {
 async fn goto_definition_enum_variant_in_match_pattern() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    // Line 0: enum Color { Red, Green, Blue }
-    // Line 1: fn describe(c: Color) -> string {
-    // Line 2:   match c {
-    // Line 3:     Color.Red => "red",
-    // Line 4:     Color.Green => "green",
-    // Line 5:     Color.Blue => "blue",
-    // Line 6:   }
-    // Line 7: }
-    client
-        .open(
-            TEST_URI,
-            "enum Color { Red, Green, Blue }\nfn describe(c: Color) -> string {\n  match c {\n    Color.Red => \"red\",\n    Color.Green => \"green\",\n    Color.Blue => \"blue\",\n  }\n}",
-        )
-        .await;
+    let (source, line, character) = cursor(
+        "enum Color { Red, Green, Blue }\nfn describe(c: Color) -> string {\n  match c {\n    Color.~Red => \"red\",\n    Color.Green => \"green\",\n    Color.Blue => \"blue\",\n  }\n}",
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Cursor on "Red" in "Color.Red" (line 3, col 10)
-    let response = client.goto_definition(TEST_URI, 3, 10).await;
+    let response = client.goto_definition(TEST_URI, line, character).await;
     assert!(
         response.is_some(),
         "goto_definition on enum variant in match pattern should resolve"
@@ -10616,22 +10506,12 @@ async fn goto_definition_enum_variant_in_match_pattern() {
 async fn goto_definition_enum_variant_with_payload_in_match() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    // Line 0: enum Msg { Text(string), Num(int) }
-    // Line 1: fn handle(m: Msg) -> string {
-    // Line 2:   match m {
-    // Line 3:     Msg.Text(s) => s,
-    // Line 4:     Msg.Num(n) => "num",
-    // Line 5:   }
-    // Line 6: }
-    client
-        .open(
-            TEST_URI,
-            "enum Msg { Text(string), Num(int) }\nfn handle(m: Msg) -> string {\n  match m {\n    Msg.Text(s) => s,\n    Msg.Num(n) => \"num\",\n  }\n}",
-        )
-        .await;
+    let (source, line, character) = cursor(
+        "enum Msg { Text(string), Num(int) }\nfn handle(m: Msg) -> string {\n  match m {\n    Msg.~Text(s) => s,\n    Msg.Num(n) => \"num\",\n  }\n}",
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Cursor on "Text" in "Msg.Text(s)" (line 3, col 8)
-    let response = client.goto_definition(TEST_URI, 3, 8).await;
+    let response = client.goto_definition(TEST_URI, line, character).await;
     assert!(
         response.is_some(),
         "goto_definition on enum variant with payload should resolve"
@@ -10649,21 +10529,12 @@ async fn goto_definition_enum_variant_with_payload_in_match() {
 async fn hover_match_arm_payload_binding_type() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    // Line 0: enum Wrapper { Val(string) }
-    // Line 1: fn extract(w: Wrapper) -> string {
-    // Line 2:   match w {
-    // Line 3:     Wrapper.Val(inner) => inner,
-    // Line 4:   }
-    // Line 5: }
-    client
-        .open(
-            TEST_URI,
-            "enum Wrapper { Val(string) }\nfn extract(w: Wrapper) -> string {\n  match w {\n    Wrapper.Val(inner) => inner,\n  }\n}",
-        )
-        .await;
+    let (source, line, character) = cursor(
+        "enum Wrapper { Val(string) }\nfn extract(w: Wrapper) -> string {\n  match w {\n    Wrapper.Val(~inner) => inner,\n  }\n}",
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Cursor on "inner" in "Wrapper.Val(inner)" (line 3, col 16)
-    let hover = client.hover(TEST_URI, 3, 16).await;
+    let hover = client.hover(TEST_URI, line, character).await;
     assert!(hover.is_some(), "hover on match arm binding should work");
     let content = hover_content(&hover.unwrap());
     assert!(
@@ -10678,15 +10549,12 @@ async fn hover_match_arm_payload_binding_type() {
 async fn signature_help_has_parameter_info() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "fn greet(name: string, age: int) -> string { name }\nfn main() { greet(\"hi\", 1) }",
-        )
-        .await;
+    let (source, line, character) = cursor(
+        "fn greet(name: string, age: int) -> string { name }\nfn main() { greet(\"~hi\", 1) }",
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Cursor inside greet call args (line 1, col 19)
-    let help = client.signature_help(TEST_URI, 1, 19).await;
+    let help = client.signature_help(TEST_URI, line, character).await;
     assert!(help.is_some(), "signature help should be returned");
 
     let sig = &help.unwrap().signatures[0];
@@ -10704,10 +10572,8 @@ async fn signature_help_has_parameter_info() {
 async fn signature_help_method_call_does_not_double_strip_self() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+    let (source, positions) = cursors(
+        "\
 struct Point { x: int, y: int }
 impl Point {
   pub fn translate(self, dx: int, dy: int) -> Point {
@@ -10721,15 +10587,15 @@ impl Point {
 }
 fn main() {
   let p = Point { x: 0, y: 0 }
-  let moved = p.translate(1, 2)
-  let dist = p.distance_sq(moved)
+  let moved = p.translate(~1, 2)
+  let dist = p.distance_sq(~moved)
 }",
-        )
-        .await;
+    );
+    client.open(TEST_URI, &source).await;
 
-    // translate(self, dx: int, dy: int) -> after self stripped, should show 2 params
-    // Line 13: "  let moved = p.translate(1, 2)" — '(' at col 25, cursor at col 26
-    let help = client.signature_help(TEST_URI, 13, 26).await;
+    let help = client
+        .signature_help(TEST_URI, positions[0].0, positions[0].1)
+        .await;
     assert!(help.is_some(), "translate sig help should exist");
     let sig = &help.unwrap().signatures[0];
     let params = sig.parameters.as_ref().expect("should have params");
@@ -10739,9 +10605,9 @@ fn main() {
         "translate should show 2 params (dx, dy) after self stripped"
     );
 
-    // distance_sq(self, other: Point) -> after self stripped, should show 1 param
-    // Line 14: "  let dist = p.distance_sq(moved)" — '(' at col 26, cursor at col 27
-    let help = client.signature_help(TEST_URI, 14, 27).await;
+    let help = client
+        .signature_help(TEST_URI, positions[1].0, positions[1].1)
+        .await;
     assert!(help.is_some(), "distance_sq sig help should exist");
     let sig = &help.unwrap().signatures[0];
     let params = sig.parameters.as_ref().expect("should have params");
@@ -10758,27 +10624,23 @@ fn main() {
 async fn goto_definition_enum_variant_in_tuple_match_pattern() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+    let (source, line, character) = cursor(
+        "\
 enum Shape {
   Circle(int),
   Rect(int, int),
 }
 fn match_pair(a: Shape, b: Shape) -> string {
   match (a, b) {
-    (Shape.Circle(_), Shape.Circle(_)) => \"two circles\",
+    (Shape.~Circle(_), Shape.Circle(_)) => \"two circles\",
     (Shape.Rect(_, _), Shape.Rect(_, _)) => \"two rects\",
     _ => \"mixed\",
   }
 }",
-        )
-        .await;
+    );
+    client.open(TEST_URI, &source).await;
 
-    // goto-def on Circle inside tuple pattern (line 6, on "Circle" in first tuple element)
-    let col = 11; // "Shape.Circle" - "Circle" starts at col 11
-    let response = client.goto_definition(TEST_URI, 6, col).await;
+    let response = client.goto_definition(TEST_URI, line, character).await;
     assert!(
         response.is_some(),
         "goto-def on Circle in tuple pattern should resolve"
@@ -10793,10 +10655,8 @@ fn match_pair(a: Shape, b: Shape) -> string {
 async fn goto_definition_chained_method_call() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+    let (source, line, character) = cursor(
+        "\
 struct Canvas { shapes: Slice<int>, name: string }
 impl Canvas {
   pub fn new(name: string) -> Canvas {
@@ -10807,17 +10667,12 @@ impl Canvas {
   }
 }
 fn main() {
-  let c = Canvas.new(\"test\").add(1).add(2)
+  let c = Canvas.new(\"test\").~add(1).add(2)
 }",
-        )
-        .await;
+    );
+    client.open(TEST_URI, &source).await;
 
-    // goto-def on first ".add" in the chain (line 10)
-    // Canvas.new("test").add(1).add(2)
-    // The first .add starts after Canvas.new("test")
-    let line_text = "  let c = Canvas.new(\"test\").add(1).add(2)";
-    let col = line_text.find(".add").unwrap() as u32 + 1; // on 'a' of first add
-    let response = client.goto_definition(TEST_URI, 10, col).await;
+    let response = client.goto_definition(TEST_URI, line, character).await;
     assert!(
         response.is_some(),
         "goto-def on chained .add() should resolve"
@@ -10832,10 +10687,8 @@ fn main() {
 async fn completion_on_function_parameter_dot_access() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+    let (source, line, character) = cursor(
+        "\
 struct Point { pub x: int, pub y: int }
 impl Point {
   pub fn translate(self, dx: int, dy: int) -> Point {
@@ -10843,14 +10696,12 @@ impl Point {
   }
 }
 fn process(p: Point) -> int {
-  p.x
+  p.~x
 }",
-        )
-        .await;
+    );
+    client.open(TEST_URI, &source).await;
 
-    // Completion after "p." in the function body (line 7, col after "p.")
-    let col = 4; // "  p." -> col 4 is after the dot
-    let response = client.completion(TEST_URI, 7, col).await;
+    let response = client.completion(TEST_URI, line, character).await;
     assert!(
         response.is_some(),
         "completion after param dot should return results"
@@ -11264,22 +11115,19 @@ fn main() -> int {
 async fn prepare_rename_on_dot_access_method() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            r#"struct Rect { width: int, height: int }
+    let (source, line, character) = cursor(
+        r#"struct Rect { width: int, height: int }
 impl Rect {
   fn area(self) -> int { self.width * self.height }
 }
 fn main() -> int {
   let r = Rect { width: 10, height: 20 }
-  r.area()
+  r.~area()
 }"#,
-        )
-        .await;
+    );
+    client.open(TEST_URI, &source).await;
 
-    // prepare_rename on "area" in "r.area()" (line 6, col 4)
-    let response = client.prepare_rename(TEST_URI, 6, 4).await;
+    let response = client.prepare_rename(TEST_URI, line, character).await;
     assert!(
         response.is_some(),
         "prepare_rename on method via dot access should return a result"
@@ -11332,20 +11180,17 @@ async fn rename_on_prelude_method_is_refused() {
 async fn prepare_rename_on_dot_access_field() {
     let mut client = TestClient::new().await;
     client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            r#"struct Point { x: int, y: int }
+    let (source, line, character) = cursor(
+        r#"struct Point { x: int, y: int }
 struct Rect { origin: Point, width: int }
 fn main() -> int {
   let r = Rect { origin: Point { x: 0, y: 0 }, width: 10 }
-  r.origin.x
+  r.origin.~x
 }"#,
-        )
-        .await;
+    );
+    client.open(TEST_URI, &source).await;
 
-    // prepare_rename on "x" in "r.origin.x" (line 4, col 11)
-    let response = client.prepare_rename(TEST_URI, 4, 11).await;
+    let response = client.prepare_rename(TEST_URI, line, character).await;
     assert!(
         response.is_some(),
         "prepare_rename on field via chained dot access should return a result"

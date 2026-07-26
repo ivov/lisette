@@ -11,7 +11,7 @@ use crate::plan::values::{
 use syntax::ast::{Expression, IdentifierResolution};
 use syntax::types::{FunctionParameter, Type};
 
-/// Folds `f(leading, spread...)` into `f(append([]T{leading}, spread...)...)` — Go rejects the former.
+/// Folds `f(leading, spread...)` into `f(append([]T{leading}, spread...)...)`: Go rejects the former.
 #[derive(Clone)]
 pub(crate) struct VariadicCombine {
     pub element_ty: Type,

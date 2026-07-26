@@ -510,6 +510,44 @@ pub fn doc_end(content: &str) -> (u32, u32) {
     (line, character)
 }
 
+/// Strips the single `~` cursor marker from a fixture and returns the clean
+/// source plus the marker's LSP position.
+pub fn cursor(source: &str) -> (String, u32, u32) {
+    let (clean, positions) = cursors(source);
+    let [(line, character)] = positions[..] else {
+        panic!(
+            "fixture should contain exactly one ~ marker, found {}",
+            positions.len()
+        );
+    };
+    (clean, line, character)
+}
+
+/// Strips every `~` cursor marker from a fixture and returns the clean source
+/// plus each marker's LSP position (line, UTF-16 character), in source order.
+pub fn cursors(source: &str) -> (String, Vec<(u32, u32)>) {
+    let mut clean = String::with_capacity(source.len());
+    let mut positions = Vec::new();
+    let mut line = 0u32;
+    let mut character = 0u32;
+    for c in source.chars() {
+        match c {
+            '~' => positions.push((line, character)),
+            '\n' => {
+                line += 1;
+                character = 0;
+                clean.push(c);
+            }
+            _ => {
+                character += c.len_utf16() as u32;
+                clean.push(c);
+            }
+        }
+    }
+    assert!(!positions.is_empty(), "fixture should contain a ~ marker");
+    (clean, positions)
+}
+
 pub fn inlay_hint_triples(hints: &[InlayHint]) -> Vec<(u32, u32, String)> {
     hints
         .iter()

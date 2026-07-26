@@ -417,7 +417,7 @@ impl InferCtx<'_> {
             return Err(UnifyError::TypeMismatch);
         }
 
-        // Generics are invariant — Box<Dog> is not Box<Animal>
+        // Generics are invariant: Box<Dog> is not Box<Animal>
         // even if Dog satisfies Animal. Track depth so we reject
         // interface coercion inside generic type params. All generic types
         // are treated uniformly, including prelude types (Option, Result,

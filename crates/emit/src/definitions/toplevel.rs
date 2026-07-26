@@ -78,7 +78,7 @@ impl Planner<'_> {
         let ty_str = self.go_type_string(ty);
 
         // `is_go_const_eligible` admits only literals, identifiers, and
-        // constexpr unary/binary — none of which carry setup statements.
+        // constexpr unary/binary, none of which carry setup statements.
         let raw_value = self.plan_value(expression, ExpressionContext::value());
         let value_text = raw_value.rendered();
         let value = if value_text.is_empty() {

@@ -251,7 +251,7 @@ impl InferCtx<'_> {
 
         if has_no_else {
             // An `if` without `else` always has type () (unit), like Rust.
-            // The consequence body can produce any type — it's discarded.
+            // The consequence body can produce any type, it's discarded.
             if is_expression {
                 let unit_ty = self.type_unit();
                 self.unify(expected_ty, &unit_ty, &span);
@@ -949,7 +949,7 @@ impl InferCtx<'_> {
         let unit_ty = self.type_unit();
         self.unify(expected_ty, &unit_ty, &span);
 
-        // task spawns a new goroutine — enclosing loop context doesn't apply
+        // task spawns a new goroutine, enclosing loop context doesn't apply
         let task_ty = self.new_type_var();
         let new_expression =
             self.without_enclosing_loop(|this| this.infer_expression(*expression, &task_ty));

@@ -512,7 +512,7 @@ impl TaskState {
 
         // Register interface methods as Definition::Value entries so the emitter
         // can look up their go_hints (e.g., comma_ok) by qualified name.
-        // Methods inherit the interface's visibility — a `pub interface`'s methods are implicitly public.
+        // Methods inherit the interface's visibility: a `pub interface`'s methods are implicitly public.
         for method in method_defs {
             let method_qualified_name = format!("{}.{}.{}", module_id, interface_name, method.name);
             module.definitions.insert(
@@ -627,7 +627,7 @@ impl TaskState {
         path: &mut Vec<String>,
     ) -> Option<Vec<String>> {
         if !visited.insert(current_id.to_string()) {
-            // Found a cycle — build the cycle path from where the repeated node appears
+            // Found a cycle, build the cycle path from where the repeated node appears
             let simple = |id: &str| -> String { unqualified_name(id).to_string() };
             if let Some(position) = path.iter().position(|p| p == current_id) {
                 let mut cycle: Vec<String> = path[position..].iter().map(|p| simple(p)).collect();

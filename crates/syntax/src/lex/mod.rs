@@ -411,7 +411,7 @@ impl<'source> Lexer<'source> {
             );
         }
 
-        // Skip decimal part if preceded by single `.` (e.g., `tuple.0.0` — don't lex `0.0` as float).
+        // Skip decimal part if preceded by single `.` (e.g., `tuple.0.0`, don't lex `0.0` as float).
         // Don't skip if preceded by `..` (range operator), e.g. `0..1.5` should lex `1.5` as float.
         let preceded_by_dot = start_offset > 0
             && self.input.as_bytes()[start_offset - 1] == b'.'

@@ -34,7 +34,7 @@ pub fn check_bool_literal_comparison(expression: &Expression, ctx: &NodeCtx) {
         _ => return,
     };
 
-    // Skip operands that cannot be rendered as a dotted path — suggesting `!x`
+    // Skip operands that cannot be rendered as a dotted path: suggesting `!x`
     // for `f() == true` would be misleading since no `x` exists.
     let Some(other_text) = other.as_dotted_path() else {
         return;

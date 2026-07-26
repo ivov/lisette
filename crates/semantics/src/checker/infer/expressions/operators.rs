@@ -536,7 +536,7 @@ impl InferCtx<'_> {
         span: &Span,
     ) -> bool {
         let resolved_ty = self.env.resolve(ty);
-        // Type variables (unresolved inference vars) are allowed — they'll be resolved later.
+        // Type variables (unresolved inference vars) are allowed, they'll be resolved later.
         // But type parameters (generic T without bounds) should be rejected:
         // Go requires `constraints.Ordered` for arithmetic on type params.
         if matches!(resolved_ty, Type::Var { .. } | Type::Error) {

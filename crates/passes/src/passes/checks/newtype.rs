@@ -1,5 +1,5 @@
 //! Newtype-related invariants. A newtype (single-field, non-generic tuple
-//! struct) compiles to a Go named scalar. `.0` is a cast, not a field — so
+//! struct) compiles to a Go named scalar. `.0` is a cast, not a field, so
 //! it's read-only (can't assign to) and non-addressable (can't take `&`).
 
 use diagnostics::LocalSink;

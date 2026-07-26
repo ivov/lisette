@@ -187,7 +187,7 @@ impl TaskState {
                     return Type::Error;
                 }
 
-                // Unit is internal — `()` desugars to Constructor { name: "Unit" }.
+                // Unit is internal: `()` desugars to Constructor { name: "Unit" }.
                 // Return the interned unit type directly, unless a user-defined
                 // type named `Unit` exists in scope.
                 if type_name == "Unit"
@@ -315,7 +315,7 @@ impl TaskState {
                     substitute(&body, &map)
                 };
 
-                // Reject Ref<InterfaceType> — Go pointer-to-interface is invalid
+                // Reject Ref<InterfaceType>: Go pointer-to-interface is invalid
                 if self.is_lis(store)
                     && qualified_name == "prelude.Ref"
                     && params.len() == 1
@@ -606,7 +606,7 @@ impl TaskState {
                     return None;
                 };
 
-                // Single uppercase letter not declared as a type param — always a typo.
+                // Single uppercase letter not declared as a type param, always a typo.
                 // Multi-letter names (Key, Error, etc.) are left to `type_not_found`.
                 if sub_params.is_empty()
                     && name.len() == 1

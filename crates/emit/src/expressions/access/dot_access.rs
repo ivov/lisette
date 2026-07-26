@@ -341,7 +341,7 @@ impl Planner<'_> {
     }
 
     /// Check if expression has an absorbed `Ref<T>` generic (T already emitted as `*Concrete`).
-    /// When true, suppress auto-deref coercion — the pointer is already the right type.
+    /// When true, suppress auto-deref coercion: the pointer is already the right type.
     fn is_absorbed_ref_generic(&self, expression: &Expression) -> bool {
         let check_expression = expression.deref_inner().unwrap_or(expression);
         let expression_ty = check_expression.get_type();

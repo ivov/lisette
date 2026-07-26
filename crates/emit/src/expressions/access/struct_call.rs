@@ -97,7 +97,7 @@ impl Planner<'_> {
         let mut base_contains_deferred_evaluation = false;
         let value = match spread {
             StructSpread::From(base) => {
-                // Never-typed spread base diverges — emit as statement and
+                // Never-typed spread base diverges, emit as statement and
                 // return a zero-value struct literal (dead code follows).
                 if base.get_type().is_never() {
                     if matches!(base.unwrap_parens(), Expression::Call { .. }) {

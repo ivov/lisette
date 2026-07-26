@@ -534,7 +534,7 @@ impl TaskState {
                 && !store.is_test_definition(definition)
             {
                 let rest = &qn[module_prefix.len()..];
-                // Only match if it's nested (contains a dot) — direct was tried above
+                // Only match if it's nested (contains a dot), direct was tried above
                 if rest.contains('.') {
                     return Some((qn.to_string(), definition));
                 }

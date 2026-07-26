@@ -198,7 +198,7 @@ impl InferCtx<'_> {
             };
         }
 
-        // Collapse &ref_var to ref_var — adding another reference layer is a no-op
+        // Collapse &ref_var to ref_var, adding another reference layer is a no-op
         let ref_ty = if is_already_ref {
             self.facts
                 .add_overused_reference(span, new_expression.get_var_name());
@@ -437,7 +437,7 @@ impl InferCtx<'_> {
 
             let is_deref = contains_deref(&new_target);
 
-            // Mutation through a Ref<T> binding doesn't require mut — the pointer
+            // Mutation through a Ref<T> binding doesn't require mut: the pointer
             // isn't being reassigned, the pointee is being mutated through it.
             let binding_is_ref = self
                 .scopes
@@ -489,7 +489,7 @@ impl InferCtx<'_> {
 
         // Only unify if the RHS type is still a variable (not yet resolved).
         // If the RHS was inferred with `value_expected` from the target, the
-        // type inference already emitted any mismatch diagnostic — a second
+        // type inference already emitted any mismatch diagnostic, a second
         // unify here would duplicate it.
         if value_ty.is_variable() {
             self.unify(&target_ty, &value_ty, &span);
@@ -571,7 +571,7 @@ impl InferCtx<'_> {
             if is_last && is_statement_only {
                 let expected = self.env.resolve(&last_item_expected_ty);
                 if last_item_expected_ty.is_ignored() {
-                    // ignored context — never fire
+                    // ignored context, never fire
                 } else if matches!(expected, Type::Var { .. }) {
                     self.facts
                         .deferred

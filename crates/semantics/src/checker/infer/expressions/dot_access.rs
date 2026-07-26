@@ -988,7 +988,7 @@ impl InferCtx<'_> {
             return None;
         }
 
-        // Don't remove self — the value type should include the receiver.
+        // Don't remove self: the value type should include the receiver.
         // Still unify the receiver type with the expression type for generic resolution.
         let receiver_ty = params[0].ty.resolve_in(&self.env);
         let receiver_stripped = receiver_ty.strip_refs();
@@ -1061,12 +1061,12 @@ impl InferCtx<'_> {
                 }
             }
             (true, true) => {
-                // Both are refs — normal unification (handles same depth)
+                // Both are refs, normal unification (handles same depth)
                 // Note: Multi-level mismatches (Ref<Ref<T>> vs Ref<T>) will fail in unify
                 self.unify(&receiver_ty, &actual_ty, span);
             }
             (false, false) => {
-                // Neither is ref — normal unification
+                // Neither is ref, normal unification
                 self.unify(&receiver_ty, &actual_ty, span);
             }
         }
@@ -1083,7 +1083,7 @@ impl InferCtx<'_> {
         span: &Span,
     ) {
         let store = self.store;
-        // Ref<T> methods can mutate — require `let mut` on the receiver binding,
+        // Ref<T> methods can mutate, require `let mut` on the receiver binding,
         // unless the receiver chain contains a deref (mutation goes through pointer).
         let Some(var_name) = receiver_expression.get_var_name() else {
             return;
@@ -1307,7 +1307,7 @@ impl InferCtx<'_> {
     fn is_dot_access_exported(&self, deref_ty: &Type, member_name: &str) -> bool {
         let store = self.store;
         let Type::Nominal { id, .. } = deref_ty.strip_refs() else {
-            // Type parameters (bounded generics) — can't determine module,
+            // Type parameters (bounded generics), can't determine module,
             // fall back to false; the emitter will check method_needs_export.
             return false;
         };
