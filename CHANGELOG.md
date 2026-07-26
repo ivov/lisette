@@ -2,6 +2,73 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.10.0](https://github.com/ivov/lisette/compare/lisette-v0.9.0...lisette-v0.10.0) - 2026-07-26
+
+### Features
+
+- feat: external tests [#1119](https://github.com/ivov/lisette/pull/1119) [`f31d29d`](https://github.com/ivov/lisette/commit/f31d29db48f8cd39ba7ddfc189d2dded7b4f5bd2)
+- feat: add LSP restart command and label-first diagnostics [#1106](https://github.com/ivov/lisette/pull/1106) [`1ac30e2`](https://github.com/ivov/lisette/commit/1ac30e21c58d2d0b8477dd8ae76e53a472ec76ab)
+- feat: library projects [#1094](https://github.com/ivov/lisette/pull/1094) [`afb405e`](https://github.com/ivov/lisette/commit/afb405e067f8d45b02b9f361217cbf023875c444)
+- feat: flag safe-to-rename interface-satisfying methods [#1093](https://github.com/ivov/lisette/pull/1093) [`c0d5d45`](https://github.com/ivov/lisette/commit/c0d5d45efe452cce6796647ee8be8c91eff7957c)
+- feat: interface satisfaction by emitted Go name [#1092](https://github.com/ivov/lisette/pull/1092) [`45ed646`](https://github.com/ivov/lisette/commit/45ed646e1ba501a50145aea77a7b10392d48e4f1)
+- feat: bind generics bounded by embedding interfaces or error [#1080](https://github.com/ivov/lisette/pull/1080) [`b1ea902`](https://github.com/ivov/lisette/commit/b1ea9024e797b49b49b60d0286b8a1aa94ac606e)
+- feat: `lis check` for orphan modules [#1075](https://github.com/ivov/lisette/pull/1075) [`185ff66`](https://github.com/ivov/lisette/commit/185ff660fdf7f5ead1186e9b370e022870dcc8f4)
+
+### Fixes
+
+- fix: never split a lambda param list to fit a long call [#1118](https://github.com/ivov/lisette/pull/1118) [`ab62199`](https://github.com/ivov/lisette/commit/ab6219925c6ed20c2ce21032191a283ff52a5c36)
+- fix: rebuild arrays and tuples whose elements widen to interfaces [#1117](https://github.com/ivov/lisette/pull/1117) [`93bb898`](https://github.com/ivov/lisette/commit/93bb8985386dd0bf4e7d758d0b9fe146fdaaa8a6)
+- fix: check function types invariantly at param and return [#1116](https://github.com/ivov/lisette/pull/1116) [`b0f81f1`](https://github.com/ivov/lisette/commit/b0f81f109cf8db5b069533155672d620b108da4b)
+- fix: accept Go function values in prelude combinators [#1115](https://github.com/ivov/lisette/pull/1115) [`e0b4879`](https://github.com/ivov/lisette/commit/e0b487998678b46d2a771d1f49afa12e371ff461)
+- fix: reject embedding a non-interface in an interface [#1114](https://github.com/ivov/lisette/pull/1114) [`ef984d8`](https://github.com/ivov/lisette/commit/ef984d8494ff237248d95f968b28eb6019870719)
+- fix: bound AST depth for long operator chains [#1105](https://github.com/ivov/lisette/pull/1105) [`5a0fccc`](https://github.com/ivov/lisette/commit/5a0fcccdb2a92e8177ad1fc378f0b57ee7f24256)
+- fix: emit idiomatic Go casing for constants and private names [#1098](https://github.com/ivov/lisette/pull/1098) [`ab71731`](https://github.com/ivov/lisette/commit/ab717310ebe17e3fac04a3aac82e6a62db2ac0b9)
+- fix: stack overflow on circular aliases with growing arguments [#1090](https://github.com/ivov/lisette/pull/1090) [`be4a595`](https://github.com/ivov/lisette/commit/be4a595820856662b87239761b03bea89bf39d60)
+- fix: parse `fn` types in tuple struct fields [#1089](https://github.com/ivov/lisette/pull/1089) [`95ba748`](https://github.com/ivov/lisette/commit/95ba74805c184eaa30416f7ecbfa13ce907b1bc6)
+- fix: false positives in lints [#1085](https://github.com/ivov/lisette/pull/1085) [`0e8dca4`](https://github.com/ivov/lisette/commit/0e8dca4f0bf5f6fd6f705e4f819c3be53c8166d7)
+- fix: preserve tuple type aliases at use sites [#1082](https://github.com/ivov/lisette/pull/1082) [`ce9d275`](https://github.com/ivov/lisette/commit/ce9d2751ce037166eee03eb7e06da803f5767f7a)
+- fix: shadowed variable in `else` leaking past diverging `if` [#1084](https://github.com/ivov/lisette/pull/1084) [`03d598e`](https://github.com/ivov/lisette/commit/03d598eaa80817925e01ebaeaf05fbc5d9a507ed)
+- fix: enforce generic bounds on nested return types [#1081](https://github.com/ivov/lisette/pull/1081) [`74d1e5a`](https://github.com/ivov/lisette/commit/74d1e5a5293742e9553d15aa73a5cd4eeb42fd42)
+- fix: resolve forward-referenced type aliases [#1074](https://github.com/ivov/lisette/pull/1074) [`4564597`](https://github.com/ivov/lisette/commit/4564597d46c4198a8a0d36366652a11d25cc29b0)
+- fix: reject variable shadowing imported module [#1073](https://github.com/ivov/lisette/pull/1073) [`4e2c006`](https://github.com/ivov/lisette/commit/4e2c006122d0c979b5e152b6be8d506bc4ac5f4d)
+- fix: refresh LSP diagnostics in other open files post-edit [#1070](https://github.com/ivov/lisette/pull/1070) [`c2f92e5`](https://github.com/ivov/lisette/commit/c2f92e55641b849804c7c28e4299f3c5ed0dce8b)
+
+### Internals
+
+- refactor: decompose complex functions [#1132](https://github.com/ivov/lisette/pull/1132) [`ec23a60`](https://github.com/ivov/lisette/commit/ec23a60dd2f26f445f3c12bd259ce935d231154b)
+- refactor: remove and forbid `too_many_arguments` exemptions [#1131](https://github.com/ivov/lisette/pull/1131) [`0b5fdfd`](https://github.com/ivov/lisette/commit/0b5fdfda8a2f7af1b26cad579fed25505338cc5d)
+- refactor: replace raw LSP test positions with cursor markers [#1130](https://github.com/ivov/lisette/pull/1130) [`abc1cf5`](https://github.com/ivov/lisette/commit/abc1cf50478eb1ca285dbcc7a63facc185d404b1)
+- perf: scan project sources once per check [#1129](https://github.com/ivov/lisette/pull/1129) [`23eb82c`](https://github.com/ivov/lisette/commit/23eb82c5fb1109ff49be379a00aef719cf498304)
+- refactor: model more semantics state with types [#1128](https://github.com/ivov/lisette/pull/1128) [`575af7e`](https://github.com/ivov/lisette/commit/575af7eee3ce44e4294a66e0d238ede534e518d1)
+- refactor: enforce build sequencing in CLI [#1127](https://github.com/ivov/lisette/pull/1127) [`2479b51`](https://github.com/ivov/lisette/commit/2479b51205bd9a9a3fa228cdc06c321a56e42a65)
+- refactor: simplify diagnostics collection [#1126](https://github.com/ivov/lisette/pull/1126) [`42ef2b7`](https://github.com/ivov/lisette/commit/42ef2b7cfa61a9656f44248399487589f7bed432)
+- refactor: simplify LSP's state model [#1125](https://github.com/ivov/lisette/pull/1125) [`2a085e3`](https://github.com/ivov/lisette/commit/2a085e3257e83de8cc6a3d8bae70bb57b6b8d6d0)
+- refactor: simplify diagnostic passes [#1124](https://github.com/ivov/lisette/pull/1124) [`baed5fd`](https://github.com/ivov/lisette/commit/baed5fdd57917192e66f416b2a736999feb24aeb)
+- refactor: simplify bindgen [#1123](https://github.com/ivov/lisette/pull/1123) [`26aa2b7`](https://github.com/ivov/lisette/commit/26aa2b7d705a4aa6f4839ac15dd8652abc483722)
+- chore: sample LoC backfill at week and month ends in UTC [#1122](https://github.com/ivov/lisette/pull/1122) [`68e7c4e`](https://github.com/ivov/lisette/commit/68e7c4e2e5d88656ba42021e9ca579161aa72569)
+- refactor: unify formatter trivia handling [#1121](https://github.com/ivov/lisette/pull/1121) [`e9a613b`](https://github.com/ivov/lisette/commit/e9a613b5e32f0c4494abae36defd81b76f41751d)
+- refactor: remove trivia duplication and flatten select arms [#1120](https://github.com/ivov/lisette/pull/1120) [`6f46024`](https://github.com/ivov/lisette/commit/6f46024ff9e886cade8f9f48cf0bc41be6609404)
+- refactor: reduce redundant representation state [#1113](https://github.com/ivov/lisette/pull/1113) [`2319347`](https://github.com/ivov/lisette/commit/2319347682d8fea943b0e516b182ee0322e05bad)
+- refactor: encode more invariants in type system [#1109](https://github.com/ivov/lisette/pull/1109) [`4550708`](https://github.com/ivov/lisette/commit/45507087b5ac0f4b4681a9f4d2ecb5f593aff66a)
+- refactor: restyle test report [#1108](https://github.com/ivov/lisette/pull/1108) [`fc853fb`](https://github.com/ivov/lisette/commit/fc853fbb69ade05b7548f367e0c4341b25ed874d)
+- ci: seed fuzz targets and cover missing operators [#1107](https://github.com/ivov/lisette/pull/1107) [`bb5f6b4`](https://github.com/ivov/lisette/commit/bb5f6b47575d96972d6158a810e1d279000a4b70)
+- refactor: polish arithmetic, type name, and interface diagnostics [#1104](https://github.com/ivov/lisette/pull/1104) [`852d210`](https://github.com/ivov/lisette/commit/852d2102e606f2c779199137d8ee28a8ab1cb382)
+- refactor: emit idiomatic Go for chains, errors, and key-only loops [#1103](https://github.com/ivov/lisette/pull/1103) [`0773678`](https://github.com/ivov/lisette/commit/077367874e1825d574d760409f2344275419397d)
+- refactor: simplify syntax representations [#1100](https://github.com/ivov/lisette/pull/1100) [`5135b35`](https://github.com/ivov/lisette/commit/5135b35807bbc210bc211a9626391a767943afa8)
+- refactor: remodel emit invariants [#1099](https://github.com/ivov/lisette/pull/1099) [`02b13a0`](https://github.com/ivov/lisette/commit/02b13a0ea7a23bbb1824e1435084d36ac1d23393)
+- refactor: simplify inference flows [#1097](https://github.com/ivov/lisette/pull/1097) [`8fef96b`](https://github.com/ivov/lisette/commit/8fef96b3111d59cecb57f8178142470a1195a8e8)
+- chore: sample month-end commits in LoC backfill [#1096](https://github.com/ivov/lisette/pull/1096) [`a52895d`](https://github.com/ivov/lisette/commit/a52895d4ebc28abcc8f38ee3f6ea660ee1fbdb7b)
+- refactor: tighten visibility and remove dead code [#1095](https://github.com/ivov/lisette/pull/1095) [`1acd340`](https://github.com/ivov/lisette/commit/1acd3408bbd3bb585d8707872318528bb3a7f217)
+- refactor: extract check-handler compile and report helpers [#1091](https://github.com/ivov/lisette/pull/1091) [`c0ed9c4`](https://github.com/ivov/lisette/commit/c0ed9c46d96b921cac40c94f52edb46d3fa93491)
+- refactor: suggest `error` for `Err` in type position [#1088](https://github.com/ivov/lisette/pull/1088) [`43ded48`](https://github.com/ivov/lisette/commit/43ded482f2760b9bee83e797382e241c9811016c)
+- ci: enforce block-style snapshot descriptions [#1086](https://github.com/ivov/lisette/pull/1086) [`af6c3ee`](https://github.com/ivov/lisette/commit/af6c3ee226783a820884a715a80001c2c46a8a2b)
+- refactor: model project kind and shared project layout [#1083](https://github.com/ivov/lisette/pull/1083) [`f0b34c6`](https://github.com/ivov/lisette/commit/f0b34c6bc71572efe75b76e60c57273b08b3d3b6)
+- refactor: drop getters that mirror public fields [#1079](https://github.com/ivov/lisette/pull/1079) [`1cccc2f`](https://github.com/ivov/lisette/commit/1cccc2f40610970d972d717af4c2dd7ac356abd6)
+- refactor: simplify cache persistence [#1078](https://github.com/ivov/lisette/pull/1078) [`4ac94a2`](https://github.com/ivov/lisette/commit/4ac94a265c77577f7577a4e094900e6e12a573be)
+- refactor: simplify select channel handling [#1077](https://github.com/ivov/lisette/pull/1077) [`96286bc`](https://github.com/ivov/lisette/commit/96286bc3f55e5399f45bca020e60a519902218c2)
+- refactor: unify generic bound handling [#1072](https://github.com/ivov/lisette/pull/1072) [`5a3f855`](https://github.com/ivov/lisette/commit/5a3f8554acf570c21727eb7a346db947a19a0a48)
+
+
 ## [0.9.0](https://github.com/ivov/lisette/compare/lisette-v0.8.0...lisette-v0.9.0) - 2026-07-19
 
 ### Features
