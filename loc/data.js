@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785021149382,
+  "lastUpdate": 1785068888129,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -12007,6 +12007,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/23eb82c5fb1109ff49be379a00aef719cf498304"
         },
         "date": 1785021148584,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 118528,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30170,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 24397,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 17077,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13557,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10849,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6555,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4451,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2764,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1039,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6084,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "abc1cf50478eb1ca285dbcc7a63facc185d404b1",
+          "message": "refactor: replace raw LSP test positions with cursor markers (#1130)",
+          "timestamp": "2026-07-26T14:27:46+02:00",
+          "tree_id": "fe18f0f739b98863f72354ced1852709f27b29e6",
+          "url": "https://github.com/ivov/lisette/commit/abc1cf50478eb1ca285dbcc7a63facc185d404b1"
+        },
+        "date": 1785068886777,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
