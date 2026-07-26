@@ -15,15 +15,21 @@ pub use semantics::path::relative_to_cwd;
 
 pub struct LocalFileSystem {
     search_paths: Vec<(PathBuf, DisplayPathBase)>,
+    project_root: Option<(PathBuf, DisplayPathBase)>,
     scanned_sources: Option<Vec<PathBuf>>,
+    scanned_test_sources: Option<Vec<PathBuf>>,
 }
 
 impl LocalFileSystem {
-    pub fn new(cwd: &str) -> Self {
+    pub fn new(cwd: &str, project_root: Option<&Path>) -> Self {
         let current_path = Path::new(cwd).to_path_buf();
         let stdlib_path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("src")
             .join("std");
+        let project_root = project_root.map(|root| {
+            let display_base = DisplayPathBase::new(root);
+            (root.to_path_buf(), display_base)
+        });
 
         Self {
             search_paths: [current_path, stdlib_path]
@@ -33,16 +39,55 @@ impl LocalFileSystem {
                     (path, display_base)
                 })
                 .collect(),
+            project_root,
             scanned_sources: None,
+            scanned_test_sources: None,
         }
     }
 
-    /// Build a loader rooted at `src_dir` whose module discovery reuses `sources`,
-    /// which must be the `.lis` files under that same directory.
-    pub fn with_scanned_sources(src_dir: &Path, sources: Vec<PathBuf>) -> Self {
-        let mut fs = Self::new(src_dir.to_str().unwrap_or("."));
+    /// Build a loader rooted at `src_dir` whose module discovery reuses `sources`
+    /// (the `.lis` files under that directory) and `test_sources` (the `.lis`
+    /// files under the project's `tests/` directory).
+    pub fn with_scanned_sources(
+        src_dir: &Path,
+        project_root: Option<&Path>,
+        sources: Vec<PathBuf>,
+        test_sources: Vec<PathBuf>,
+    ) -> Self {
+        let mut fs = Self::new(src_dir.to_str().unwrap_or("."), project_root);
         fs.scanned_sources = Some(sources);
+        fs.scanned_test_sources = Some(test_sources);
         fs
+    }
+
+    fn discover_external_test_roots(&self) -> Vec<String> {
+        let Some((project_root, _)) = &self.project_root else {
+            return Vec::new();
+        };
+        let tests_root = project_root.join(semantics::loader::EXTERNAL_TESTS_DIR);
+        let walked;
+        let test_sources = match &self.scanned_test_sources {
+            Some(test_sources) => test_sources.as_slice(),
+            None => {
+                walked = collect_lis_filepaths_recursive(&tests_root);
+                &walked
+            }
+        };
+        let mut dirs: HashSet<PathBuf> = HashSet::default();
+        for path in test_sources {
+            if path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.ends_with(".test.lis"))
+                && let Some(dir) = path.parent()
+            {
+                dirs.insert(dir.to_path_buf());
+            }
+        }
+        dirs.iter()
+            .filter_map(|dir| dir.strip_prefix(project_root).ok())
+            .map(module_id_from_rel)
+            .collect()
     }
 
     fn collect_files(&self, folder_path: &Path, fs_name: &str, base: &DisplayPathBase) -> Files {
@@ -359,6 +404,12 @@ fn entry_is_dir(entry: &std::fs::DirEntry, path: &Path) -> bool {
 
 impl Loader for LocalFileSystem {
     fn scan_folder(&self, folder_name: &str) -> Files {
+        if semantics::loader::is_external_test_module(folder_name)
+            && let Some((project_root, display_base)) = &self.project_root
+        {
+            return self.collect_files(&project_root.join(folder_name), folder_name, display_base);
+        }
+
         let fs_name = to_fs_path(folder_name);
         for (search_path, display_base) in &self.search_paths {
             let folder_path = if fs_name.is_empty() {
@@ -412,14 +463,15 @@ impl Loader for LocalFileSystem {
             .iter()
             .filter_map(|d| dir_to_id(d))
             .collect();
-        let test_roots = with_test
+        let internal_test_roots = with_test
             .iter()
             .filter(|dir| with_test_root_file.contains(*dir))
             .filter_map(|d| dir_to_id(d))
             .collect();
         DiscoveredModules {
             production_modules,
-            test_roots,
+            internal_test_roots,
+            external_test_roots: self.discover_external_test_roots(),
         }
     }
 }
@@ -836,7 +888,7 @@ mod tests {
         stdfs::create_dir_all(&decl_only).unwrap();
         write_file(&decl_only, "epsilon.d.lis", "pub fn ext() -> int\n");
 
-        let fs = LocalFileSystem::new(root.to_str().unwrap());
+        let fs = LocalFileSystem::new(root.to_str().unwrap(), None);
         let discovered = fs.discover_modules();
 
         let mut production = discovered.production_modules;
@@ -847,12 +899,60 @@ mod tests {
             "production modules are non-test, non-declaration dirs"
         );
 
-        let mut test_roots = discovered.test_roots;
-        test_roots.sort();
+        let mut internal_test_roots = discovered.internal_test_roots;
+        internal_test_roots.sort();
         assert_eq!(
-            test_roots,
+            internal_test_roots,
             vec!["alpha/beta".to_string()],
             "a test root needs both a test file and a production file"
+        );
+    }
+
+    #[test]
+    fn discover_modules_finds_external_test_roots() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("src");
+        stdfs::create_dir_all(&src).unwrap();
+        write_file(&src, "main.lis", "fn main() {}\n");
+
+        let tests_root = tmp.path().join("tests");
+        stdfs::create_dir_all(&tests_root).unwrap();
+        write_file(&tests_root, "arithmetic.test.lis", "#[test]\nfn t() {}\n");
+
+        let nested = tests_root.join("integration");
+        stdfs::create_dir_all(&nested).unwrap();
+        write_file(&nested, "flow.test.lis", "#[test]\nfn t() {}\n");
+
+        let empty = tests_root.join("empty");
+        stdfs::create_dir_all(&empty).unwrap();
+
+        let fs = LocalFileSystem::new(src.to_str().unwrap(), Some(tmp.path()));
+        let mut external = fs.discover_modules().external_test_roots;
+        external.sort();
+        assert_eq!(
+            external,
+            vec!["tests".to_string(), "tests/integration".to_string()],
+            "every tests/ dir holding a .test.lis is an external test module"
+        );
+    }
+
+    #[test]
+    fn scan_folder_roots_external_tests_at_project_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("src");
+        stdfs::create_dir_all(src.join("tests")).unwrap();
+        write_file(&src.join("tests"), "shadowed.lis", "pub fn x() {}\n");
+
+        let tests_root = tmp.path().join("tests");
+        stdfs::create_dir_all(&tests_root).unwrap();
+        write_file(&tests_root, "arithmetic.test.lis", "#[test]\nfn t() {}\n");
+
+        let fs = LocalFileSystem::new(src.to_str().unwrap(), Some(tmp.path()));
+        let files = fs.scan_folder("tests");
+        assert_eq!(
+            files.keys().collect::<Vec<_>>(),
+            vec!["arithmetic.test.lis"],
+            "the tests namespace resolves against the project root, not src/"
         );
     }
 }

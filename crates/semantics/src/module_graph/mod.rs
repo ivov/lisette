@@ -7,12 +7,20 @@ use syntax::ast::{ImportAlias, Span};
 use syntax::program::File;
 
 use crate::diagnostics::{GoImportSite, emit_for_declaration_status, emit_for_locator_result};
+use crate::inference::ProjectKind;
 use crate::loader as semantics_loader;
 use crate::loader::Loader;
-use crate::store::Store;
+use crate::store::{ENTRY_MODULE_ID, Store};
 use diagnostics::LocalSink;
 
 pub type ModuleId = String;
+
+pub fn root_import_target(name: &str, importer: &str, kind: ProjectKind) -> Option<&'static str> {
+    (name == semantics_loader::ROOT_IMPORT
+        && kind == ProjectKind::Library
+        && semantics_loader::is_external_test_module(importer))
+    .then_some(ENTRY_MODULE_ID)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DependencyKind {
@@ -159,6 +167,7 @@ pub struct ModuleGraphOptions<'a> {
     pub loader: Option<&'a dyn Loader>,
     pub sink: &'a LocalSink,
     pub standalone_mode: bool,
+    pub has_project_root: bool,
     pub locator: &'a TypedefLocator,
     pub include_tests: bool,
 }
@@ -176,6 +185,7 @@ pub fn build_module_graph(
         loader,
         sink,
         standalone_mode,
+        has_project_root,
         locator,
         include_tests,
     } = options;
@@ -184,6 +194,7 @@ pub fn build_module_graph(
         loader,
         sink,
         standalone_mode,
+        has_project_root,
         locator,
         include_tests,
         dependencies: DependencyGraph::default(),
@@ -202,6 +213,7 @@ struct GraphBuilder<'a> {
     loader: Option<&'a dyn Loader>,
     sink: &'a LocalSink,
     standalone_mode: bool,
+    has_project_root: bool,
     locator: &'a TypedefLocator,
     include_tests: bool,
     dependencies: DependencyGraph,
@@ -232,6 +244,7 @@ impl<'a> GraphBuilder<'a> {
                 self.loader,
                 self.sink,
                 self.include_tests,
+                self.has_project_root,
             );
 
             for module_id in &batch {
@@ -250,17 +263,33 @@ impl<'a> GraphBuilder<'a> {
                     .flat_map(|f| f.imports())
                     .map(|import| import.name.to_string())
                     .collect();
+                let root_has_production = self
+                    .files
+                    .get(ENTRY_MODULE_ID)
+                    .is_some_and(|files| files.iter().any(|f| !f.is_test() && !f.is_d_lis()))
+                    || self
+                        .store
+                        .get_module(ENTRY_MODULE_ID)
+                        .is_some_and(|m| m.files.values().any(|f| !f.is_test()));
                 let imports = process_file_imports(
                     file_imports,
-                    self.sink,
-                    self.standalone_mode,
-                    self.locator,
+                    ImportContext {
+                        sink: self.sink,
+                        standalone_mode: self.standalone_mode,
+                        has_project_root: self.has_project_root,
+                        root_has_production,
+                        importer: module_id,
+                        project_kind: self.store.project_kind,
+                        locator: self.locator,
+                    },
                 );
 
                 let has_production_file = module_files.iter().any(|file| !file.is_test());
                 let module_exists = has_production_file
                     || self.store.has(module_id)
-                    || module_id.starts_with("go:");
+                    || module_id.starts_with("go:")
+                    || (self.has_project_root
+                        && semantics_loader::is_external_test_module(module_id));
 
                 if !module_exists {
                     if let Some(span) = self.import_spans.get(module_id) {
@@ -369,6 +398,7 @@ fn batch_parse_modules(
     loader: Option<&dyn Loader>,
     sink: &LocalSink,
     include_tests: bool,
+    has_project_root: bool,
 ) -> HashMap<ModuleId, Vec<File>> {
     let Some(fs) = loader else {
         return HashMap::default();
@@ -390,8 +420,26 @@ fn batch_parse_modules(
 
     let mut jobs: Vec<ParseJob> = Vec::new();
     for (module_id, entries) in scanned {
+        let is_external_test =
+            has_project_root && semantics_loader::is_external_test_module(module_id);
         for (filename, content) in entries {
-            if filename.ends_with("_test.lis") {
+            if is_external_test {
+                match semantics_loader::external_test_file_issue(&filename) {
+                    Some(semantics_loader::ExternalTestFileIssue::WrongSuffix) => {
+                        sink.push(diagnostics::module_graph::wrong_test_file_suffix(
+                            &content.display_path,
+                        ));
+                        continue;
+                    }
+                    Some(semantics_loader::ExternalTestFileIssue::NotATestFile) => {
+                        sink.push(diagnostics::module_graph::non_test_file_under_tests(
+                            &content.display_path,
+                        ));
+                        continue;
+                    }
+                    None => {}
+                }
+            } else if filename.ends_with("_test.lis") {
                 sink.push(diagnostics::module_graph::wrong_test_file_suffix(
                     &content.display_path,
                 ));
@@ -438,15 +486,15 @@ fn scan_one(fs: &dyn Loader, module_id: &str) -> Vec<(String, semantics_loader::
 
 fn parse_one(job: ParseJob) -> (File, Vec<syntax::ParseError>) {
     let result = syntax::build_ast(&job.source, job.file_id);
-    let file = File::new(
-        &job.module_id,
-        &job.filename,
-        &job.display_path,
-        &job.source,
-        result.ast,
-        result.file_comment,
-        job.file_id,
-    );
+    let file = File {
+        id: job.file_id,
+        module_id: job.module_id,
+        name: job.filename,
+        display_path: job.display_path,
+        source: job.source,
+        items: result.ast,
+        file_comment: result.file_comment,
+    };
     (file, result.errors)
 }
 
@@ -462,12 +510,30 @@ struct PendingGoImport<'a> {
     usage: ImportUse,
 }
 
+#[derive(Clone, Copy)]
+struct ImportContext<'a> {
+    sink: &'a LocalSink,
+    standalone_mode: bool,
+    has_project_root: bool,
+    root_has_production: bool,
+    importer: &'a str,
+    project_kind: ProjectKind,
+    locator: &'a TypedefLocator,
+}
+
 fn process_file_imports(
     file_imports: Vec<syntax::program::FileImport>,
-    sink: &LocalSink,
-    standalone_mode: bool,
-    locator: &TypedefLocator,
+    ctx: ImportContext<'_>,
 ) -> HashMap<ModuleId, ResolvedImport> {
+    let ImportContext {
+        sink,
+        standalone_mode,
+        has_project_root,
+        root_has_production,
+        importer,
+        project_kind,
+        locator,
+    } = ctx;
     let mut imports = HashMap::default();
     let mut pending_go_imports: Vec<PendingGoImport<'_>> = Vec::new();
     for file_import in &file_imports {
@@ -508,6 +574,53 @@ fn process_file_imports(
             continue;
         }
 
+        if file_import.name == ENTRY_MODULE_ID {
+            sink.push(diagnostics::module_graph::cannot_import_entry(
+                file_import.name_span,
+            ));
+            continue;
+        }
+
+        if has_project_root && semantics_loader::is_external_test_module(&file_import.name) {
+            sink.push(diagnostics::module_graph::cannot_import_external_tests(
+                file_import.name_span,
+            ));
+            continue;
+        }
+
+        if has_project_root && file_import.name == semantics_loader::ROOT_IMPORT {
+            if let Some(ImportAlias::Blank(span)) = &file_import.alias {
+                sink.push(diagnostics::infer::blank_import_non_go(*span));
+            } else {
+                match root_import_target(&file_import.name, importer, project_kind) {
+                    Some(_) if !root_has_production => {
+                        sink.push(
+                            diagnostics::module_graph::cannot_import_root_without_source(
+                                file_import.name_span,
+                            ),
+                        );
+                    }
+                    Some(entry) => {
+                        imports.entry(entry.to_string()).or_insert(ResolvedImport {
+                            span: file_import.name_span,
+                            usage: ImportUse::Referenced,
+                        });
+                    }
+                    None if project_kind == ProjectKind::Binary => {
+                        sink.push(diagnostics::module_graph::cannot_import_root_in_binary(
+                            file_import.name_span,
+                        ));
+                    }
+                    None => {
+                        sink.push(diagnostics::module_graph::cannot_import_root_from_src(
+                            file_import.name_span,
+                        ));
+                    }
+                }
+            }
+            continue;
+        }
+
         if let Some(go_pkg) = file_import.name.strip_prefix("go:") {
             let Some(index) = pending_go_imports
                 .iter()
@@ -536,11 +649,14 @@ fn process_file_imports(
                     let status = locator.validate_declaration(go_pkg);
                     emit_for_declaration_status(
                         &status,
-                        pending.name,
-                        go_pkg,
-                        pending.span,
-                        locator.target(),
-                        standalone_mode,
+                        &GoImportSite {
+                            import_name: pending.name,
+                            go_pkg,
+                            name_span: Some(pending.span),
+                            target: locator.target(),
+                            standalone_mode,
+                            replace_importer: None,
+                        },
                         sink,
                     )
                 }
@@ -613,7 +729,18 @@ mod tests {
 
     fn is_link_only(imports: Vec<FileImport>) -> bool {
         let sink = LocalSink::new();
-        let resolved = process_file_imports(imports, &sink, false, &TypedefLocator::default());
+        let resolved = process_file_imports(
+            imports,
+            ImportContext {
+                sink: &sink,
+                standalone_mode: false,
+                has_project_root: false,
+                root_has_production: false,
+                importer: "caller",
+                project_kind: ProjectKind::Binary,
+                locator: &TypedefLocator::default(),
+            },
+        );
 
         assert!(!sink.has_errors());
         resolved
@@ -634,6 +761,89 @@ mod tests {
         assert!(!is_link_only(
             vec![go_import(false, 0), go_import(true, 1),]
         ));
+    }
+
+    #[test]
+    fn external_test_imports_are_rejected() {
+        for name in ["tests", "tests/integration"] {
+            let span = Span::new(0, 0, 1);
+            let sink = LocalSink::new();
+            let resolved = process_file_imports(
+                vec![FileImport {
+                    name: name.into(),
+                    name_span: span,
+                    alias: None,
+                    span,
+                }],
+                ImportContext {
+                    sink: &sink,
+                    standalone_mode: false,
+                    has_project_root: true,
+                    root_has_production: true,
+                    importer: "caller",
+                    project_kind: ProjectKind::Binary,
+                    locator: &TypedefLocator::default(),
+                },
+            );
+
+            assert!(sink.has_errors(), "`import \"{name}\"` should be rejected");
+            assert!(resolved.is_empty());
+        }
+    }
+
+    #[test]
+    fn external_test_reservation_is_project_only() {
+        let span = Span::new(0, 0, 1);
+        let sink = LocalSink::new();
+        let resolved = process_file_imports(
+            vec![FileImport {
+                name: "tests".into(),
+                name_span: span,
+                alias: None,
+                span,
+            }],
+            ImportContext {
+                sink: &sink,
+                standalone_mode: false,
+                has_project_root: false,
+                root_has_production: false,
+                importer: "caller",
+                project_kind: ProjectKind::Binary,
+                locator: &TypedefLocator::default(),
+            },
+        );
+
+        assert!(
+            !sink.has_errors(),
+            "a non-project check has no `tests/` to reserve"
+        );
+        assert!(resolved.contains_key("tests"));
+    }
+
+    #[test]
+    fn root_import_resolves_only_for_library_external_tests() {
+        assert_eq!(
+            root_import_target("root", "tests", ProjectKind::Library),
+            Some(ENTRY_MODULE_ID)
+        );
+        assert_eq!(
+            root_import_target("root", "tests/integration", ProjectKind::Library),
+            Some(ENTRY_MODULE_ID)
+        );
+        assert_eq!(
+            root_import_target("root", "geometry", ProjectKind::Library),
+            None,
+            "src modules cannot import the root"
+        );
+        assert_eq!(
+            root_import_target("root", "tests", ProjectKind::Binary),
+            None,
+            "a binary has no importable root"
+        );
+        assert_eq!(
+            root_import_target("routes", "tests", ProjectKind::Library),
+            None
+        );
     }
 
     #[test]

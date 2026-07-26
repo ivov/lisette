@@ -3,7 +3,7 @@
 //! After inference finishes, every `Type` field reachable through the AST is
 //! env-resolved: bound type variables are substituted with their values,
 //! unbound vars are left as-is. Downstream crates (emit, lsp, format, cache)
-//! therefore do not need access to the checker's `TypeEnv` — the emitter maps
+//! therefore do not need access to the checker's `TypeEnv`: the emitter maps
 //! any remaining unbound `Type::Var` to Go's `any`.
 
 use syntax::ast::{

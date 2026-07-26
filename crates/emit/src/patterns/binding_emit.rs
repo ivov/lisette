@@ -191,18 +191,11 @@ pub(crate) fn with_tree_bindings<R>(
     statements: &mut Vec<LoweredStatement>,
     bindings: &[PatternBinding],
     subject_var: &str,
-    consumers: &[&syntax::ast::Expression],
-    inline_blockers: &[&syntax::ast::Expression],
+    body: &syntax::ast::Expression,
     f: impl FnOnce(&mut Planner, &mut Vec<LoweredStatement>) -> R,
 ) -> R {
-    let overlays = tree_binding_statements(
-        planner,
-        statements,
-        bindings,
-        subject_var,
-        consumers,
-        inline_blockers,
-    );
+    let overlays =
+        tree_binding_statements(planner, statements, bindings, subject_var, &[body], &[]);
     let result = f(planner, statements);
     drop_inline_overlays(planner, &overlays);
     result

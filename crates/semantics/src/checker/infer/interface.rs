@@ -22,6 +22,15 @@ struct ConformanceTraversal<'a> {
     visiting: rustc_hash::FxHashSet<String>,
 }
 
+struct ConformanceSite<'a> {
+    ty: &'a Type,
+    symbol_methods: &'a MethodSignatures,
+    interface_qualified_id: &'a str,
+    interface_is_public: bool,
+    map: &'a SubstitutionMap,
+    receiver_id: Option<&'a str>,
+}
+
 fn method_comma_ok(store: &Store, type_id: &str, method: &str) -> bool {
     fn walk(
         store: &Store,
@@ -552,15 +561,17 @@ impl InferCtx<'_> {
             .get_definition(interface_qualified_id)
             .is_some_and(|d| d.visibility.is_public());
 
+        let site = ConformanceSite {
+            ty,
+            symbol_methods: &symbol_methods,
+            interface_qualified_id,
+            interface_is_public,
+            map: &map,
+            receiver_id: receiver_id.as_ref().map(|id| id.as_str()),
+        };
+
         for (method_name, method_ty) in &interface.methods {
-            let selected = self.select_impl_method(
-                ty,
-                &symbol_methods,
-                interface_qualified_id,
-                interface_is_public,
-                method_name.as_str(),
-                receiver_id.as_ref().map(|id| id.as_str()),
-            );
+            let selected = self.select_impl_method(&site, method_name.as_str());
             let (impl_method_name, symbol_method) = match selected {
                 SelectedMethod::Found(name, method) => (name, method),
                 SelectedMethod::UfcsOnly => {
@@ -586,14 +597,8 @@ impl InferCtx<'_> {
                     continue;
                 }
                 SelectedMethod::Missing => {
-                    let private_candidate = self.private_method_hint(
-                        ty,
-                        &symbol_methods,
-                        interface_qualified_id,
-                        method_name.as_str(),
-                        method_ty,
-                        &map,
-                    );
+                    let private_candidate =
+                        self.private_method_hint(&site, method_name.as_str(), method_ty);
                     method_violations.push(InterfaceMethodViolation::Missing(MissingMethod {
                         name: method_name.to_string(),
                         signature: method_ty.clone(),
@@ -603,14 +608,8 @@ impl InferCtx<'_> {
                 }
             };
 
-            let signature = self.check_method_signature(
-                ty,
-                interface_qualified_id,
-                method_name.as_str(),
-                method_ty,
-                &symbol_method,
-                &map,
-            );
+            let signature =
+                self.check_method_signature(&site, method_name.as_str(), method_ty, &symbol_method);
 
             match signature {
                 SignatureCheck::Matched => {
@@ -675,27 +674,22 @@ impl InferCtx<'_> {
         check.visiting.remove(interface_qualified_id);
     }
 
-    fn select_impl_method(
-        &self,
-        ty: &Type,
-        symbol_methods: &MethodSignatures,
-        interface_qualified_id: &str,
-        interface_is_public: bool,
-        method_name: &str,
-        receiver_id: Option<&str>,
-    ) -> SelectedMethod {
+    fn select_impl_method(&self, site: &ConformanceSite<'_>, method_name: &str) -> SelectedMethod {
         let selected = syntax::go_names::conformance_method(
-            symbol_methods,
-            interface_qualified_id,
-            interface_is_public,
+            site.symbol_methods,
+            site.interface_qualified_id,
+            site.interface_is_public,
             method_name,
-            &|name| self.conformance_candidate(ty, name),
+            &|name| self.conformance_candidate(site.ty, name),
         );
         let ufcs_probe = match &selected {
             Some((name, _)) => name.as_str(),
             None => method_name,
         };
-        if receiver_id.is_some_and(|id| self.is_ufcs_method(id, ufcs_probe)) {
+        if site
+            .receiver_id
+            .is_some_and(|id| self.is_ufcs_method(id, ufcs_probe))
+        {
             return SelectedMethod::UfcsOnly;
         }
         match selected {
@@ -706,48 +700,32 @@ impl InferCtx<'_> {
 
     fn private_method_hint(
         &mut self,
-        ty: &Type,
-        symbol_methods: &MethodSignatures,
-        interface_qualified_id: &str,
+        site: &ConformanceSite<'_>,
         method_name: &str,
         method_ty: &Type,
-        map: &SubstitutionMap,
     ) -> Option<String> {
-        let interface_is_public = self
-            .store
-            .get_definition(interface_qualified_id)
-            .is_some_and(|d| d.visibility.is_public());
         let (impl_name, impl_method) = syntax::go_names::conformance_method_if_public(
-            symbol_methods,
-            interface_qualified_id,
-            interface_is_public,
+            site.symbol_methods,
+            site.interface_qualified_id,
+            site.interface_is_public,
             method_name,
-            &|name| self.conformance_candidate(ty, name),
+            &|name| self.conformance_candidate(site.ty, name),
         )?;
         let impl_name = impl_name.to_string();
         let impl_method = impl_method.clone();
-        let signature = self.check_method_signature(
-            ty,
-            interface_qualified_id,
-            method_name,
-            method_ty,
-            &impl_method,
-            map,
-        );
+        let signature = self.check_method_signature(site, method_name, method_ty, &impl_method);
         matches!(signature, SignatureCheck::Matched).then_some(impl_name)
     }
 
     fn check_method_signature(
         &mut self,
-        ty: &Type,
-        interface_qualified_id: &str,
+        site: &ConformanceSite<'_>,
         method_name: &str,
         method_ty: &Type,
         symbol_method: &Type,
-        map: &SubstitutionMap,
     ) -> SignatureCheck {
         let store = self.store;
-        let substituted_method = substitute(method_ty, map);
+        let substituted_method = substitute(method_ty, site.map);
 
         let instantiated_method = match symbol_method {
             Type::Forall { .. } => self.instantiate(symbol_method).0,
@@ -773,7 +751,7 @@ impl InferCtx<'_> {
         };
 
         let impl_for_unify = covariant_return_adjustment(
-            interface_qualified_id,
+            site.interface_qualified_id,
             method_name,
             &substituted_method,
             &impl_method_without_receiver,
@@ -786,7 +764,7 @@ impl InferCtx<'_> {
             Signature,
         }
 
-        let candidate_ty = ty.strip_refs().resolve_in(&self.env);
+        let candidate_ty = site.ty.strip_refs().resolve_in(&self.env);
         let mut resolved_impl_method = None;
         let sig_match = self.in_invariant_position(|ctx| {
             ctx.speculatively(|this| {

@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use syntax::program::{File, Module};
 
+use crate::loader::is_external_test_module;
 use crate::store::{ENTRY_MODULE_ID, Store};
 use types::CachedDefinition;
 
@@ -146,6 +147,16 @@ pub(crate) fn hash_module_source_pair(files: &[File]) -> (u64, u64) {
     let production_hash = hash_module_sources(files.iter().filter(|f| !f.is_test()));
     let full_hash = if files.iter().any(|f| f.is_test()) {
         hash_module_sources(files)
+    } else {
+        production_hash
+    };
+    (production_hash, full_hash)
+}
+
+pub(crate) fn hash_module_source_pair_refs(files: &[&File]) -> (u64, u64) {
+    let production_hash = hash_module_sources(files.iter().copied().filter(|f| !f.is_test()));
+    let full_hash = if files.iter().any(|f| f.is_test()) {
+        hash_module_sources(files.iter().copied())
     } else {
         production_hash
     };
@@ -366,7 +377,8 @@ pub(crate) fn build_cached_module(
     module_id: String,
     file_id_base: u32,
     cached: ModuleInterface,
-    display_base: &DisplayPathBase,
+    src_base: &DisplayPathBase,
+    root_base: &DisplayPathBase,
 ) -> CachedModuleBuild {
     let mut module = Module::new(&module_id);
     let mut file_ids: Vec<u32> = Vec::with_capacity(cached.files.len());
@@ -375,7 +387,8 @@ pub(crate) fn build_cached_module(
         let file_id = file_id_base + index as u32;
         file_ids.push(file_id);
 
-        let display_path = cached_file_display_path(display_base, &module_id, &cached_file.name);
+        let display_path =
+            cached_file_display_path(src_base, root_base, &module_id, &cached_file.name);
         let file = File::new_cached(
             &module_id,
             &cached_file.name,
@@ -397,16 +410,22 @@ pub(crate) fn build_cached_module(
 }
 
 fn cached_file_display_path(
-    display_base: &DisplayPathBase,
+    src_base: &DisplayPathBase,
+    root_base: &DisplayPathBase,
     module_id: &str,
     bare_name: &str,
 ) -> String {
+    if is_external_test_module(module_id) {
+        return root_base
+            .relative(&Path::new(module_id).join(bare_name))
+            .unwrap_or_else(|| bare_name.to_string());
+    }
     let rel = if module_id == ENTRY_MODULE_ID {
         PathBuf::from(bare_name)
     } else {
         Path::new(module_id).join(bare_name)
     };
-    display_base
+    src_base
         .relative(&rel)
         .unwrap_or_else(|| bare_name.to_string())
 }
@@ -658,6 +677,7 @@ mod tests {
             0,
             interface,
             &DisplayPathBase::new(Path::new("/project/src")),
+            &DisplayPathBase::new(Path::new("/project")),
         );
 
         assert!(built.module.definitions["mymod.MAX"].is_const());
@@ -668,6 +688,29 @@ mod tests {
                 .is_none()
         );
         assert!(!built.module.definitions["mymod.counter"].is_const());
+    }
+
+    #[test]
+    fn cached_display_path_roots_external_tests_at_project_root() {
+        let src_base = DisplayPathBase::new(Path::new("proj/src"));
+        let root_base = DisplayPathBase::new(Path::new("proj"));
+
+        assert_eq!(
+            cached_file_display_path(&src_base, &root_base, "tests", "api.test.lis"),
+            "proj/tests/api.test.lis"
+        );
+        assert_eq!(
+            cached_file_display_path(&src_base, &root_base, "tests/flows", "flow.test.lis"),
+            "proj/tests/flows/flow.test.lis"
+        );
+        assert_eq!(
+            cached_file_display_path(&src_base, &root_base, "geometry", "geometry.lis"),
+            "proj/src/geometry/geometry.lis"
+        );
+        assert_eq!(
+            cached_file_display_path(&src_base, &root_base, ENTRY_MODULE_ID, "geo.lis"),
+            "proj/src/geo.lis"
+        );
     }
 
     #[test]
@@ -794,22 +837,18 @@ mod tests {
 
     #[test]
     fn hash_module_sources_independent_of_display_path() {
-        let cli_file = File::new(
+        let cli_file = File::new_cached(
             "greet",
             "greet.lis",
             "src/greet/greet.lis",
             "pub fn x() -> int { 1 }",
-            vec![],
-            None,
             1,
         );
-        let lsp_file = File::new(
+        let lsp_file = File::new_cached(
             "greet",
             "greet.lis",
             "greet.lis",
             "pub fn x() -> int { 1 }",
-            vec![],
-            None,
             1,
         );
 

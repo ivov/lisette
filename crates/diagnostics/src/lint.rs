@@ -1321,17 +1321,14 @@ pub fn manual_replace_all(
 pub fn needless_splitn(
     span: &Span,
     member: &str,
-    target: &str,
-    namespace: &str,
-    s: &str,
-    sep: &str,
-    count: &str,
+    original: &str,
+    replacement: &str,
 ) -> LisetteDiagnostic {
     LisetteDiagnostic::info(format!("Needless `{member}`"))
         .with_lint_code("needless_splitn")
         .with_span_label(span, "splits with no limit")
         .with_help(format!(
-            "`{namespace}.{member}({s}, {sep}, {count})` splits with no limit. Use `{namespace}.{target}({s}, {sep})`"
+            "`{original}` splits with no limit. Use `{replacement}`"
         ))
 }
 

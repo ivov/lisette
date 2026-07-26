@@ -75,6 +75,41 @@ pub fn reserved_module_import(span: Span) -> LisetteDiagnostic {
         .with_help("Rename the module so its import path does not begin with `**`.")
 }
 
+pub fn cannot_import_external_tests(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Invalid import")
+        .with_resolve_code("cannot_import_external_tests")
+        .with_span_label(&span, "reserved module name")
+        .with_help("The `tests` module at project root is reserved for external tests")
+}
+
+pub fn cannot_import_entry(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Invalid import")
+        .with_resolve_code("cannot_import_root")
+        .with_span_label(&span, "reserved module name")
+        .with_help("`_entry_` is an internal module. Import a library's root package with `root`")
+}
+
+pub fn cannot_import_root_from_src(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Invalid import")
+        .with_resolve_code("cannot_import_root")
+        .with_span_label(&span, "reserved module name")
+        .with_help("`root` names the library's root package and is importable only from external tests under `tests/`")
+}
+
+pub fn cannot_import_root_in_binary(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Invalid import")
+        .with_resolve_code("cannot_import_root")
+        .with_span_label(&span, "reserved module name")
+        .with_help("A binary has no importable root. Move testable code into a sub-module under `src/`, or make the project a library")
+}
+
+pub fn cannot_import_root_without_source(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Invalid import")
+        .with_resolve_code("cannot_import_root")
+        .with_span_label(&span, "no root package")
+        .with_help("This library has no root package because `src/` holds no source files directly. Import a sub-module by name, or add a source file under `src/`")
+}
+
 pub fn wrong_test_file_suffix(display_path: &str) -> LisetteDiagnostic {
     let help = match display_path.strip_suffix("_test.lis") {
         Some(stem) => format!(
@@ -90,6 +125,12 @@ pub fn wrong_test_file_suffix(display_path: &str) -> LisetteDiagnostic {
     ))
     .with_resolve_code("wrong_test_file_suffix")
     .with_help(help)
+}
+
+pub fn non_test_file_under_tests(display_path: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!("`{}` is not a test file", display_path))
+        .with_resolve_code("non_test_file_under_tests")
+        .with_help("Files under `tests/` must use the `.test.lis` suffix. Rename this file or move it into `src/`")
 }
 
 pub fn cannot_emit_test_file(display_path: &str) -> LisetteDiagnostic {

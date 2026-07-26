@@ -119,6 +119,13 @@ pub(crate) enum FileContextKind {
     TestPrelude,
 }
 
+pub(crate) struct FileContextSpec<'a> {
+    pub(crate) module_id: &'a str,
+    pub(crate) file_id: u32,
+    pub(crate) imports: &'a [FileImport],
+    pub(crate) kind: FileContextKind,
+}
+
 struct SavedFileContext {
     cursor: Cursor,
     scopes: Scopes,
@@ -534,7 +541,7 @@ impl TaskState {
                 && !store.is_test_definition(definition)
             {
                 let rest = &qn[module_prefix.len()..];
-                // Only match if it's nested (contains a dot) — direct was tried above
+                // Only match if it's nested (contains a dot), direct was tried above
                 if rest.contains('.') {
                     return Some((qn.to_string(), definition));
                 }
@@ -807,13 +814,10 @@ impl TaskState {
     fn with_file_context<T>(
         &mut self,
         store: &Store,
-        module_id: &str,
-        file_id: u32,
-        imports: &[FileImport],
-        kind: FileContextKind,
+        spec: FileContextSpec<'_>,
         f: impl FnOnce(&mut Self, &Store) -> T,
     ) -> T {
-        let saved = self.enter_file_context(store, module_id, file_id, imports, kind);
+        let saved = self.enter_file_context(store, spec);
         let result = f(self, store);
         self.exit_file_context(saved);
         result
@@ -822,26 +826,22 @@ impl TaskState {
     pub(crate) fn with_file_context_mut<T>(
         &mut self,
         store: &mut Store,
-        module_id: &str,
-        file_id: u32,
-        imports: &[FileImport],
-        kind: FileContextKind,
+        spec: FileContextSpec<'_>,
         f: impl FnOnce(&mut Self, &mut Store) -> T,
     ) -> T {
-        let saved = self.enter_file_context(&*store, module_id, file_id, imports, kind);
+        let saved = self.enter_file_context(&*store, spec);
         let result = f(self, store);
         self.exit_file_context(saved);
         result
     }
 
-    fn enter_file_context(
-        &mut self,
-        store: &Store,
-        module_id: &str,
-        file_id: u32,
-        imports: &[FileImport],
-        kind: FileContextKind,
-    ) -> SavedFileContext {
+    fn enter_file_context(&mut self, store: &Store, spec: FileContextSpec<'_>) -> SavedFileContext {
+        let FileContextSpec {
+            module_id,
+            file_id,
+            imports,
+            kind,
+        } = spec;
         let saved = SavedFileContext {
             cursor: std::mem::replace(
                 &mut self.cursor,
@@ -921,7 +921,7 @@ impl TaskState {
         for import in imports {
             if seen_paths.contains(import.name.as_str()) {
                 self.sink.push(diagnostics::infer::duplicate_import_path(
-                    &import.name,
+                    crate::loader::import_display_name(&import.name),
                     import.name_span,
                 ));
                 continue;
@@ -956,8 +956,8 @@ impl TaskState {
             {
                 self.sink.push(diagnostics::infer::import_conflict(
                     &effective,
-                    existing_path,
-                    &import.name,
+                    crate::loader::import_display_name(existing_path),
+                    crate::loader::import_display_name(&import.name),
                     import.name_span,
                 ));
                 continue;

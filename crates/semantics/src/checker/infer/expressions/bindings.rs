@@ -219,7 +219,11 @@ impl InferCtx<'_> {
                     store.get_definition(&qualified).map(|d| &d.body),
                     Some(DefinitionBody::Enum { .. })
                 ) {
-                    let type_name = format!("{}.{}", module_id, member);
+                    let type_name = format!(
+                        "{}.{}",
+                        crate::loader::import_display_name(module_id),
+                        member
+                    );
                     self.sink.push(diagnostics::infer::let_binding_enum_type(
                         &type_name,
                         new_value.get_span(),

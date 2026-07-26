@@ -70,26 +70,6 @@ fn is_major_version_segment(segment: &str) -> bool {
 }
 
 impl File {
-    pub fn new(
-        module_id: &str,
-        name: &str,
-        display_path: &str,
-        source: &str,
-        items: Vec<Expression>,
-        file_comment: Option<String>,
-        id: u32,
-    ) -> Self {
-        File {
-            id,
-            module_id: module_id.to_string(),
-            name: name.to_string(),
-            display_path: display_path.to_string(),
-            source: source.to_string(),
-            items,
-            file_comment,
-        }
-    }
-
     pub fn new_cached(
         module_id: &str,
         name: &str,
@@ -135,6 +115,25 @@ impl File {
                 _ => None,
             })
             .collect()
+    }
+
+    /// Redirects `import "{from}"` to `to`, keeping the source spelling as the qualifier.
+    pub fn rewrite_import(&mut self, from: &str, to: &str) {
+        for item in &mut self.items {
+            if let Expression::ModuleImport {
+                name,
+                name_span,
+                alias,
+                ..
+            } = item
+                && name.as_str() == from
+            {
+                if alias.is_none() {
+                    *alias = Some(ImportAlias::Named(name.clone(), *name_span));
+                }
+                *name = to.into();
+            }
+        }
     }
 
     pub fn go_filename(&self) -> String {

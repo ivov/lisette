@@ -486,16 +486,8 @@ fn nonliteral_constants_remain_distinguishable_from_runtime_values() {
 #[test]
 fn module_derives_file_classification_from_each_file() {
     let mut module = Module::new("example");
-    let source = File::new("example", "main.lis", "main.lis", "", vec![], None, 1);
-    let typedef = File::new(
-        "example",
-        "native.d.lis",
-        "native.d.lis",
-        "",
-        vec![],
-        None,
-        2,
-    );
+    let source = File::new_cached("example", "main.lis", "main.lis", "", 1);
+    let typedef = File::new_cached("example", "native.d.lis", "native.d.lis", "", 2);
     module.files.insert(source.id, source);
     module.files.insert(typedef.id, typedef);
 

@@ -13,6 +13,13 @@ enum BoundCheckContext {
     Value,
 }
 
+#[derive(Clone, Copy)]
+struct BoundsCheckSite<'a> {
+    store: &'a Store,
+    own_generics: &'a [Generic],
+    declaration_span: Span,
+}
+
 impl TaskState {
     pub(crate) fn check_transitive_generic_bounds(
         &mut self,
@@ -20,18 +27,17 @@ impl TaskState {
         own_generics: &[Generic],
         declaration_span: Span,
     ) {
+        let site = BoundsCheckSite {
+            store,
+            own_generics,
+            declaration_span,
+        };
         for generic in own_generics {
             for bound in generic
                 .resolved_bounds()
                 .expect("generic bounds were resolved before checking")
             {
-                self.check_bound_type(
-                    store,
-                    own_generics,
-                    declaration_span,
-                    bound,
-                    BoundCheckContext::Declaration,
-                );
+                self.check_bound_type(&site, bound, BoundCheckContext::Declaration);
             }
         }
     }
@@ -45,30 +51,26 @@ impl TaskState {
         let mut seen = rustc_hash::FxHashSet::default();
         for (ty, span) in types {
             if seen.insert(ty.to_string()) {
-                self.check_bound_type(store, own_generics, *span, ty, BoundCheckContext::Value);
+                let site = BoundsCheckSite {
+                    store,
+                    own_generics,
+                    declaration_span: *span,
+                };
+                self.check_bound_type(&site, ty, BoundCheckContext::Value);
             }
         }
     }
 
     fn check_bound_type(
         &mut self,
-        store: &Store,
-        own_generics: &[Generic],
-        declaration_span: Span,
+        site: &BoundsCheckSite<'_>,
         ty: &Type,
         context: BoundCheckContext,
     ) {
         if let Type::Nominal { id, params, .. } = ty
             && !params.is_empty()
         {
-            self.check_nominal_arguments(
-                store,
-                own_generics,
-                declaration_span,
-                id,
-                params,
-                context,
-            );
+            self.check_nominal_arguments(site, id, params, context);
         }
         if matches!(context, BoundCheckContext::Declaration)
             && let Type::Compound {
@@ -77,22 +79,25 @@ impl TaskState {
             } = ty
             && let Some(key) = args.first()
         {
-            self.check_map_key_comparable(store, key, declaration_span);
+            self.check_map_key_comparable(site.store, key, site.declaration_span);
         }
         for child in type_argument_children(ty) {
-            self.check_bound_type(store, own_generics, declaration_span, child, context);
+            self.check_bound_type(site, child, context);
         }
     }
 
     fn check_nominal_arguments(
         &mut self,
-        store: &Store,
-        own_generics: &[Generic],
-        declaration_span: Span,
+        site: &BoundsCheckSite<'_>,
         referenced_id: &str,
         argument_types: &[Type],
         context: BoundCheckContext,
     ) {
+        let BoundsCheckSite {
+            store,
+            own_generics,
+            declaration_span,
+        } = *site;
         let Some(definition) = store.get_definition(referenced_id) else {
             return;
         };

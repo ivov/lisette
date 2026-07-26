@@ -4,7 +4,7 @@ use syntax::ast::{Expression, Generic};
 use syntax::program::{FileImport, Visibility};
 use syntax::types::Symbol;
 
-use crate::checker::{FileContextKind, TaskState};
+use crate::checker::{FileContextKind, FileContextSpec, TaskState};
 use crate::prelude::PRELUDE_MODULE_ID;
 use crate::store::Store;
 
@@ -100,10 +100,12 @@ fn restore_module_bounds(
         }
         checker.with_file_context_mut(
             store,
-            module_id,
-            file.file_id,
-            &file.imports,
-            file_context_kind(module_id),
+            FileContextSpec {
+                module_id,
+                file_id: file.file_id,
+                imports: &file.imports,
+                kind: file_context_kind(module_id),
+            },
             |checker, store| {
                 checker.register_type_names(store, &file.missing_types, &Visibility::Private);
             },
@@ -116,10 +118,12 @@ fn restore_module_bounds(
         }
         checker.with_file_context_mut(
             store,
-            module_id,
-            file.file_id,
-            &file.imports,
-            file_context_kind(module_id),
+            FileContextSpec {
+                module_id,
+                file_id: file.file_id,
+                imports: &file.imports,
+                kind: file_context_kind(module_id),
+            },
             |checker, store| checker.register_type_definitions(store, &file.missing_types),
         );
     }
@@ -131,10 +135,12 @@ fn restore_module_bounds(
         let definitions = file.bounds_to_restore;
         checker.with_file_context_mut(
             store,
-            module_id,
-            file.file_id,
-            &file.imports,
-            file_context_kind(module_id),
+            FileContextSpec {
+                module_id,
+                file_id: file.file_id,
+                imports: &file.imports,
+                kind: file_context_kind(module_id),
+            },
             |checker, store| {
                 for (name, generics) in definitions {
                     let Some(span) = generics.first().map(|generic| generic.span) else {

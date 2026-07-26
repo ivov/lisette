@@ -139,13 +139,7 @@ pub fn normalize_pattern(
             NormalizedPattern::Literal(literal.clone())
         }
 
-        Pattern::EnumVariant {
-            fields,
-            rest,
-            resolution,
-            ty,
-            ..
-        } => normalize_enum_variant_pattern(fields, *rest, resolution, ty, unions, ctx, cache),
+        Pattern::EnumVariant { .. } => normalize_enum_variant_pattern(pattern, unions, ctx, cache),
 
         Pattern::Struct {
             fields,
@@ -185,14 +179,22 @@ pub fn normalize_pattern(
 }
 
 fn normalize_enum_variant_pattern(
-    fields: &[Pattern],
-    rest: bool,
-    resolution: &ConstructorPatternResolution,
-    ty: &Type,
+    pattern: &Pattern,
     unions: &mut UnionTable,
     ctx: &NormalizationContext,
     cache: &mut InhabitanceCache,
 ) -> NormalizedPattern {
+    let Pattern::EnumVariant {
+        fields,
+        rest,
+        resolution,
+        ty,
+        ..
+    } = pattern
+    else {
+        unreachable!("normalize_enum_variant_pattern called with non-EnumVariant pattern");
+    };
+    let rest = *rest;
     match resolution {
         ConstructorPatternResolution::Unresolved => Wildcard,
         ConstructorPatternResolution::Const { qualified_name } => {

@@ -192,7 +192,7 @@ fn has_zero_nominal_fields(
     visited: &mut Vec<Type>,
 ) -> Result<(), NoZero> {
     let Some(def) = store.get_definition(id.as_str()) else {
-        // Unknown nominal — conservatively reject.
+        // Unknown nominal, conservatively reject.
         return Err(NoZero {
             chain: vec![],
             reason: NoZeroReason::NoZeroForType,

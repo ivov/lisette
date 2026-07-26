@@ -19,6 +19,24 @@ enum IterSeqKind {
     Seq2,
 }
 
+enum MatchArmsKind {
+    Match,
+    IfLet { without_else: bool },
+}
+
+impl MatchArmsKind {
+    fn binding_kind(&self) -> BindingKind {
+        match self {
+            MatchArmsKind::Match => BindingKind::MatchArm,
+            MatchArmsKind::IfLet { .. } => BindingKind::IfLet,
+        }
+    }
+
+    fn is_if_let_without_else(&self) -> bool {
+        matches!(self, MatchArmsKind::IfLet { without_else: true })
+    }
+}
+
 fn iter_seq_kind(ty: &Type) -> Option<IterSeqKind> {
     let Type::Nominal { id, .. } = ty else {
         return None;
@@ -251,7 +269,7 @@ impl InferCtx<'_> {
 
         if has_no_else {
             // An `if` without `else` always has type () (unit), like Rust.
-            // The consequence body can produce any type — it's discarded.
+            // The consequence body can produce any type, it's discarded.
             if is_expression {
                 let unit_ty = self.type_unit();
                 self.unify(expected_ty, &unit_ty, &span);
@@ -307,14 +325,8 @@ impl InferCtx<'_> {
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
-        let (new_subject, new_arms, result_ty) = self.infer_match_arms(
-            subject,
-            arms,
-            BindingKind::MatchArm,
-            false,
-            span,
-            expected_ty,
-        );
+        let (new_subject, new_arms, result_ty) =
+            self.infer_match_arms(subject, arms, MatchArmsKind::Match, span, expected_ty);
 
         Expression::Match {
             subject: new_subject.into(),
@@ -372,8 +384,9 @@ impl InferCtx<'_> {
         let (new_scrutinee, mut new_arms, result_ty) = self.infer_match_arms(
             scrutinee,
             arms,
-            BindingKind::IfLet,
-            is_if_let_without_else,
+            MatchArmsKind::IfLet {
+                without_else: is_if_let_without_else,
+            },
             span,
             expected_ty,
         );
@@ -401,11 +414,12 @@ impl InferCtx<'_> {
         &mut self,
         subject: Box<Expression>,
         arms: Vec<MatchArm>,
-        arm_kind: BindingKind,
-        is_if_let_without_else: bool,
+        kind: MatchArmsKind,
         span: Span,
         expected_ty: &Type,
     ) -> (Expression, Vec<MatchArm>, Type) {
+        let arm_kind = kind.binding_kind();
+        let is_if_let_without_else = kind.is_if_let_without_else();
         let result_ty = self.new_type_var();
         let subject_ty = self.new_type_var();
         let new_subject = self.infer_expression(*subject, &subject_ty);
@@ -961,7 +975,7 @@ impl InferCtx<'_> {
         let unit_ty = self.type_unit();
         self.unify(expected_ty, &unit_ty, &span);
 
-        // task spawns a new goroutine — enclosing loop context doesn't apply
+        // task spawns a new goroutine, enclosing loop context doesn't apply
         let task_ty = self.new_type_var();
         let new_expression =
             self.without_enclosing_loop(|this| this.infer_expression(*expression, &task_ty));

@@ -631,7 +631,6 @@ fn extract_simple_tuple_vars(pattern: &Pattern) -> Option<Vec<String>> {
 
 impl Planner<'_> {
     /// Build a `LetPlan` by classifying the binding into a `LetForm`.
-    #[allow(clippy::too_many_arguments)]
     pub(crate) fn build_let_plan(
         &mut self,
         binding: &Binding,

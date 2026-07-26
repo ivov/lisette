@@ -19,3 +19,6 @@ serde = ["dep:serde", "ecow/serde"]
 ecow.workspace = true
 rustc-hash.workspace = true
 serde = { version = "1", features = ["derive", "rc"], optional = true }
+
+[lints]
+workspace = true

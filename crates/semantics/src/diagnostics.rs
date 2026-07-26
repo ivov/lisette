@@ -85,30 +85,28 @@ pub(crate) fn emit_for_locator_result(
 /// Emit a diagnostic for a non-OK `DeclarationStatus`; returns `true` if OK.
 pub(crate) fn emit_for_declaration_status(
     status: &DeclarationStatus,
-    import_name: &str,
-    go_pkg: &str,
-    name_span: Span,
-    target: Target,
-    standalone_mode: bool,
+    site: &GoImportSite,
     sink: &LocalSink,
 ) -> bool {
+    let GoImportSite {
+        import_name,
+        go_pkg,
+        name_span,
+        target,
+        standalone_mode,
+        ..
+    } = *site;
+    let span = name_span.unwrap_or_else(|| Span::new(0, 0, 0));
     match status {
         DeclarationStatus::Stdlib
         | DeclarationStatus::DeclaredThirdParty { .. }
         | DeclarationStatus::DeclaredReplacement { .. } => true,
         DeclarationStatus::UnknownStdlib => {
-            emit_unknown_stdlib(
-                import_name,
-                go_pkg,
-                name_span,
-                target,
-                standalone_mode,
-                sink,
-            );
+            emit_unknown_stdlib(import_name, go_pkg, span, target, standalone_mode, sink);
             false
         }
         DeclarationStatus::UndeclaredImport => {
-            emit_undeclared(import_name, go_pkg, name_span, standalone_mode, None, sink);
+            emit_undeclared(import_name, go_pkg, span, standalone_mode, None, sink);
             false
         }
     }

@@ -156,15 +156,15 @@ impl CompiledTest {
             InferCtx::new(&mut checker, &store).check_const_cycles(&[self.ast.as_slice()]);
 
             let test_file_id = store.new_file_id();
-            store.store_file(File::new(
-                TEST_MODULE_ID,
-                "test.lis",
-                "test.lis",
-                "",
-                self.ast.clone(),
-                None,
-                test_file_id,
-            ));
+            store.store_file(File {
+                id: test_file_id,
+                module_id: TEST_MODULE_ID.to_string(),
+                name: "test.lis".to_string(),
+                display_path: "test.lis".to_string(),
+                source: String::new(),
+                items: self.ast.clone(),
+                file_comment: None,
+            });
             checker.finalize_equality(&mut store);
             checker.check_pending_generic_bounds(&store);
 
@@ -200,15 +200,15 @@ impl CompiledTest {
             if !checker.failed() {
                 // Overwrite the stored file with the typed AST so passes::run
                 // sees post-inference items when iterating store.modules.
-                store.store_file(File::new(
-                    TEST_MODULE_ID,
-                    "test.lis",
-                    "test.lis",
-                    "",
-                    typed_ast.clone(),
-                    None,
-                    test_file_id,
-                ));
+                store.store_file(File {
+                    id: test_file_id,
+                    module_id: TEST_MODULE_ID.to_string(),
+                    name: "test.lis".to_string(),
+                    display_path: "test.lis".to_string(),
+                    source: String::new(),
+                    items: typed_ast.clone(),
+                    file_comment: None,
+                });
                 store.build_closed_domains();
                 let ufcs_methods = checker.shared_ufcs_methods();
                 let analysis = semantics::context::AnalysisContext::new(&store, &ufcs_methods);

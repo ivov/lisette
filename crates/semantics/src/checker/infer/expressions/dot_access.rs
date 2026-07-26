@@ -589,6 +589,7 @@ impl InferCtx<'_> {
             })?;
         let module_fields = module_fields.clone();
         let module_id = module_id.to_string();
+        let display_module = crate::loader::import_display_name(type_name);
         let module_ty = Type::ImportNamespace(module_id.clone().into());
 
         let Some(member_type) = module_fields
@@ -599,7 +600,7 @@ impl InferCtx<'_> {
             self.sink
                 .push(diagnostics::infer::function_or_value_not_found_in_module(
                     args.member_name,
-                    &module_id,
+                    display_module,
                     *args.span,
                 ));
             return Some(args.build_dot_access(
@@ -617,7 +618,7 @@ impl InferCtx<'_> {
             store,
             &resolved_definition,
             &member_type,
-            type_name,
+            display_module,
             args,
         );
 
@@ -632,7 +633,7 @@ impl InferCtx<'_> {
         self.unify(args.expected_ty, &member_ty, args.span);
 
         if coerced_to_unconstrained_value {
-            let display_name = format!("{}.{}", type_name, args.member_name);
+            let display_name = format!("{}.{}", display_module, args.member_name);
             self.register_function_value_obligations(&display_name, &member_ty, *args.span);
         }
 
@@ -650,12 +651,12 @@ impl InferCtx<'_> {
         store: &crate::store::Store,
         resolved_definition: &Symbol,
         member_type: &Type,
-        type_name: &str,
+        display_module: &str,
         args: &DotAccessResolutionArgs,
     ) {
         let is_callee_context = self.scopes.is_callee_context();
         let is_dot_access_base = self.scopes.is_dot_access_base();
-        let display_name = format!("{}.{}", type_name, args.member_name);
+        let display_name = format!("{}.{}", display_module, args.member_name);
 
         if let Some(definition) = store.get_definition(resolved_definition) {
             match &definition.body {
@@ -1001,7 +1002,7 @@ impl InferCtx<'_> {
             return None;
         }
 
-        // Don't remove self — the value type should include the receiver.
+        // Don't remove self: the value type should include the receiver.
         // Still unify the receiver type with the expression type for generic resolution.
         let receiver_ty = params[0].ty.resolve_in(&self.env);
         let receiver_stripped = receiver_ty.strip_refs();
@@ -1074,12 +1075,12 @@ impl InferCtx<'_> {
                 }
             }
             (true, true) => {
-                // Both are refs — normal unification (handles same depth)
+                // Both are refs, normal unification (handles same depth)
                 // Note: Multi-level mismatches (Ref<Ref<T>> vs Ref<T>) will fail in unify
                 self.unify(&receiver_ty, &actual_ty, span);
             }
             (false, false) => {
-                // Neither is ref — normal unification
+                // Neither is ref, normal unification
                 self.unify(&receiver_ty, &actual_ty, span);
             }
         }
@@ -1096,7 +1097,7 @@ impl InferCtx<'_> {
         span: &Span,
     ) {
         let store = self.store;
-        // Ref<T> methods can mutate — require `let mut` on the receiver binding,
+        // Ref<T> methods can mutate, require `let mut` on the receiver binding,
         // unless the receiver chain contains a deref (mutation goes through pointer).
         let Some(var_name) = receiver_expression.get_var_name() else {
             return;
@@ -1320,7 +1321,7 @@ impl InferCtx<'_> {
     fn is_dot_access_exported(&self, deref_ty: &Type, member_name: &str) -> bool {
         let store = self.store;
         let Type::Nominal { id, .. } = deref_ty.strip_refs() else {
-            // Type parameters (bounded generics) — can't determine module,
+            // Type parameters (bounded generics), can't determine module,
             // fall back to false; the emitter will check method_needs_export.
             return false;
         };

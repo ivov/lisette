@@ -4,6 +4,7 @@ use crate::calls::native::{clip_shared_capacity, is_clip_safe_path};
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
 use crate::definitions::functions::{is_breakless_loop, is_go_never};
+use crate::expressions::staging::SpreadSequenceOptions;
 use crate::plan::bodies::{
     AssignForm, AssignPlan, BreakValueAction, BreakValuePlan, LoopTransfer, LoweredBlock,
     LoweredStatement, PlacePlan,
@@ -389,7 +390,6 @@ impl Planner<'_> {
     /// Lower a block (or single expression) that assigns its tail into `var`.
     /// `has_go_braces` selects the scope discipline: a full Go-brace scope when
     /// the caller wraps the result in `{ }`, otherwise a binding frame.
-    #[allow(clippy::too_many_arguments)]
     pub(crate) fn lower_block_to_var(
         &mut self,
         expression: &Expression,
@@ -588,10 +588,11 @@ impl Planner<'_> {
         let sequenced = self.sequence_with_spread_values(
             stages,
             spread,
-            false,
-            "_arg",
-            combine,
-            CaptureBoundary::SiblingSequence,
+            SpreadSequenceOptions {
+                wrap_to_any: false,
+                combine,
+                boundary: CaptureBoundary::SiblingSequence,
+            },
         );
         let effect = sequenced.effect;
         let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();

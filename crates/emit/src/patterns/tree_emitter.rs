@@ -17,6 +17,13 @@ use crate::plan::bodies::{
 use crate::plan::placement::unreachable_panic_if_needed;
 use crate::utils::wrap_if_struct_literal;
 
+#[derive(Clone, Copy)]
+struct ChainGroup<'a> {
+    indices: &'a [usize],
+    tests: &'a [ChainTest],
+    conditions: &'a [Option<String>],
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum WalkRole {
     SwitchCase,
@@ -372,12 +379,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                     statements.extend(leaf);
                 }
             }
-            Decision::Guard {
-                arm_index,
-                bindings,
-                success,
-                failure,
-            } => self.walk_guard(statements, *arm_index, bindings, success, failure, ctx),
+            Decision::Guard { .. } => self.walk_guard(statements, decision, ctx),
             Decision::Switch { .. } => self.walk_switch(statements, decision, ctx),
             Decision::Chain { tests, fallback } => {
                 if ctx.is_grouped_retry() {
@@ -508,12 +510,19 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     fn walk_guard(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
-        arm_index: usize,
-        bindings: &[PatternBinding],
-        success: &Decision,
-        failure: &Decision,
+        decision: &Decision,
         ctx: &WalkCtx,
     ) {
+        let Decision::Guard {
+            arm_index,
+            bindings,
+            success,
+            failure,
+        } = decision
+        else {
+            unreachable!("walk_guard requires a Guard decision");
+        };
+        let arm_index = *arm_index;
         let needs_pre_scope = ctx.leaf_scope_explicit() && !bindings.is_empty();
         let arm = &self.arms[arm_index];
         let arm_body = &*arm.expression;
@@ -720,9 +729,11 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             let collapse_as_catchall = is_last_group && last_is_catchall && indices.len() == 1;
             self.emit_chain_group(
                 statements,
-                indices,
-                tests,
-                &conditions,
+                ChainGroup {
+                    indices,
+                    tests,
+                    conditions: &conditions,
+                },
                 &inner_ctx,
                 collapse_as_catchall,
             );
@@ -736,12 +747,15 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     fn emit_chain_group(
         &mut self,
         statements: &mut Vec<LoweredStatement>,
-        indices: &[usize],
-        tests: &[ChainTest],
-        conditions: &[Option<String>],
+        group: ChainGroup<'_>,
         ctx: &WalkCtx,
         collapse_as_catchall: bool,
     ) {
+        let ChainGroup {
+            indices,
+            tests,
+            conditions,
+        } = group;
         if collapse_as_catchall {
             self.walk(statements, &tests[indices[0]].decision, ctx);
             return;

@@ -643,7 +643,7 @@ impl Planner<'_> {
 
     /// Pin the receiver stage to a temp when it reads a mutable operand,
     /// carries no setup of its own, and a later argument (or the spread)
-    /// contains a call — so the receiver is captured before those args can
+    /// contains a call, so the receiver is captured before those args can
     /// mutate it. A receiver that is itself a call already evaluates eagerly.
     fn pin_receiver_if_mutated(
         &mut self,

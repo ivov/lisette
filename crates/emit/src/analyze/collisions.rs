@@ -23,6 +23,13 @@ enum CollectPayloadFields {
     No,
 }
 
+struct CollisionSinks<'a> {
+    package_block: &'a mut SpanMap,
+    selectors: &'a mut HashMap<String, SpanMap>,
+    interfaces: &'a mut HashMap<String, SpanMap>,
+    diagnostics: &'a mut Vec<LisetteDiagnostic>,
+}
+
 impl Planner<'_> {
     pub(crate) fn detect_name_collisions(&self, files: &[&File]) -> Vec<LisetteDiagnostic> {
         let mut package_block: SpanMap = HashMap::default();
@@ -34,10 +41,12 @@ impl Planner<'_> {
             for item in &file.items {
                 self.collect_item(
                     item,
-                    &mut package_block,
-                    &mut selectors,
-                    &mut interfaces,
-                    &mut diagnostics,
+                    &mut CollisionSinks {
+                        package_block: &mut package_block,
+                        selectors: &mut selectors,
+                        interfaces: &mut interfaces,
+                        diagnostics: &mut diagnostics,
+                    },
                     CollectPayloadFields::Yes,
                 );
             }
@@ -66,10 +75,12 @@ impl Planner<'_> {
             for item in &file.items {
                 self.collect_item(
                     item,
-                    &mut package_block,
-                    &mut selectors,
-                    &mut interfaces,
-                    &mut diagnostics,
+                    &mut CollisionSinks {
+                        package_block: &mut package_block,
+                        selectors: &mut selectors,
+                        interfaces: &mut interfaces,
+                        diagnostics: &mut diagnostics,
+                    },
                     CollectPayloadFields::No,
                 );
             }
@@ -85,12 +96,15 @@ impl Planner<'_> {
     fn collect_item(
         &self,
         item: &Expression,
-        package_block: &mut SpanMap,
-        selectors: &mut HashMap<String, SpanMap>,
-        interfaces: &mut HashMap<String, SpanMap>,
-        diagnostics: &mut Vec<LisetteDiagnostic>,
+        sinks: &mut CollisionSinks<'_>,
         payload_fields: CollectPayloadFields,
     ) {
+        let CollisionSinks {
+            package_block,
+            selectors,
+            interfaces,
+            diagnostics,
+        } = sinks;
         match item {
             Expression::Function { .. } => self.collect_function(item, package_block, diagnostics),
             Expression::Const { .. } => self.collect_const(item, package_block, diagnostics),

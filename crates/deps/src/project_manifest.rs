@@ -443,7 +443,7 @@ pub fn trim_dead_via_parents(project_root: &Path) -> Result<Vec<TrimmedVia>, Str
 /// `imported_pkgs` path maps to it by longest-declared-prefix; otherwise
 /// remove the entry.
 ///
-/// Each import maps to a single best key — its longest declared prefix. E.g.
+/// Each import maps to a single best key: its longest declared prefix. E.g.
 /// `k8s.io/api/core/v1` maps to `k8s.io/api` (not `k8s.io`) when both are
 /// declared, preventing double-counting against nested keys.
 pub fn resolve_empty_via(

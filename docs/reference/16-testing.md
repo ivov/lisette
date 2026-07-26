@@ -53,19 +53,28 @@ On failure, the test report includes a `Failures` section:
 
 ## Test files
 
-Test files end with `.test.lis` and sit in the same module as the logic they cover, so tests can access the module's private symbols directly.
+Test files end with `.test.lis` and come in two kinds.
+
+- **Internal tests** sit in the same dir as the logic they test, so internal tests can access all private symbols in that module.
+
+- **External tests** sit in a `tests/` dir at project root. External tests import modules like any other consumer, so external tests can access only public symbols. Integration tests belong here.
 
 ```
 src/
 ├── main.lis
-└── math/
-    ├── math.lis         # logic under test
-    └── math.test.lis    # tests internal to math module
+└── geometry/
+    ├── geometry.lis
+    ├── geometry.test.lis     # internal
+    ├── shapes.lis
+    └── shapes.test.lis       # internal
+tests/
+├── geometry.test.lis         # external
+└── integration/
+    ├── dimensions.test.lis   # external
+    └── roundtrip.test.lis    # external
 ```
 
 `lis check` includes test files and production code. `lis build` and `lis run` exclude test files from the emitted output.
-
-Tests external to a module are not supported yet.
 
 ## Test functions
 
@@ -322,6 +331,36 @@ Useful flags:
 | `-timeout 30s` | Fail the run if it exceeds the given duration |
 
 To select tests by name, use `lis test --filter` rather than `-run`.
+
+## Testing a library root
+
+The root package of a library is named `root`. In a [library project](12-modules.md#library-projects), use `import "root"` to externally test files directly under `src/`.
+
+```
+src/
+├── geo.lis
+└── shapes/
+    └── shapes.lis
+tests/
+└── api.test.lis
+```
+
+In `tests/api.test.lis`:
+
+```rs
+import "root"
+import "shapes"
+
+#[test]
+fn distance_is_symmetric() {
+  assert root.distance(2, 9) == root.distance(9, 2)
+}
+
+#[test]
+fn square_has_four_sides() {
+  assert shapes.sides(shapes.square()) == 4
+}
+```
 
 <br>
 

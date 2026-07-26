@@ -40,6 +40,7 @@ impl AnalysisSnapshot {
         has_parse_errors: bool,
         config: &ProjectConfig,
         analyzed_uri: &Url,
+        external_test: bool,
     ) -> Self {
         let mut sources = HashMap::default();
 
@@ -52,7 +53,7 @@ impl AnalysisSnapshot {
             .and_then(|p| p.parent().map(|d| d.to_path_buf()));
 
         for (file_id, file) in &result.emit_input.files {
-            let uri = if file.module_id == ENTRY_MODULE_ID {
+            let uri = if !external_test && file.module_id == ENTRY_MODULE_ID {
                 if analyzed_filename.as_deref() == Some(&file.name) {
                     analyzed_uri.clone()
                 } else if let Some(ref dir) = analyzed_dir {
@@ -66,7 +67,7 @@ impl AnalysisSnapshot {
                 }
             } else if let Some(typedef_path) = result.typedef_paths.get(file_id) {
                 // The synthetic `file.name` for go: typedefs does not match the
-                // on-disk filename — use the path the locator captured.
+                // on-disk filename, use the path the locator captured.
                 match Url::from_file_path(typedef_path) {
                     Ok(uri) => uri,
                     Err(_) => continue,

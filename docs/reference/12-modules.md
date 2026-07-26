@@ -126,6 +126,8 @@ geo/
         └── shapes.lis  # emits: target/shapes/shapes.go, package shapes
 ```
 
+To externally test a library's root package, see [Testing a library root](16-testing.md#testing-a-library-root).
+
 ## The prelude
 
 Lisette's prelude is a set of definitions that are always available in every file without an import.

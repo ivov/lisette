@@ -3,11 +3,10 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use semantics::checker::promotion::{self, MemberKind, Resolution};
 use semantics::store::Store;
 use syntax::ast::{
-    Annotation, Attribute, Binding, CallTypeArguments, Expression, Generic, ImportAlias, Pattern,
-    SelectArm, StructSpread,
+    Annotation, Attribute, Expression, ImportAlias, Pattern, SelectArm, StructSpread,
 };
 use syntax::program::File;
-use syntax::program::{DefinitionBody, DotAccessKind, DotAccessResolution, EqualityIndex, Module};
+use syntax::program::{DefinitionBody, DotAccessKind, EqualityIndex, Module};
 use syntax::types::{CompoundKind, Symbol, Type, unqualified_name};
 
 use super::reference_graph::{EnumVariantId, ModuleItemId, ReferenceGraph, StructFieldId};
@@ -70,43 +69,21 @@ pub(super) fn walk_expression(
             walk_identifier(module, value, graph, alias_map, ctx);
         }
 
-        Expression::Call {
-            expression: callee,
-            args,
-            spread,
-            type_arguments,
-            ..
-        } => {
-            walk_call(
-                module,
-                callee,
-                args,
-                spread,
-                type_arguments,
-                graph,
-                alias_map,
-                ctx,
-            );
+        Expression::Call { .. } => {
+            walk_call(module, expression, graph, alias_map, ctx);
         }
 
         Expression::StructCall { .. } => {
             walk_struct_call(module, expression, graph, alias_map, ctx);
         }
 
-        Expression::DotAccess {
-            expression,
-            member,
-            resolution,
-            ..
-        } => {
-            walk_dot_access(
-                module, expression, member, resolution, graph, alias_map, ctx,
-            );
+        Expression::DotAccess { .. } => {
+            walk_dot_access(module, expression, graph, alias_map, ctx);
         }
 
         Expression::Function { name, .. } => {
             let fn_ctx = item_ctx(ctx, name);
-            walk_function_like(module, expression, graph, alias_map, &fn_ctx);
+            walk_callable_body(module, expression, graph, alias_map, &fn_ctx);
         }
 
         Expression::Const {
@@ -248,7 +225,7 @@ pub(super) fn walk_expression(
             for m in methods {
                 if let Expression::Function { name, .. } = m {
                     let method_ctx = ModuleItemId::method(name, receiver_name);
-                    walk_function_like(module, m, graph, alias_map, &method_ctx);
+                    walk_callable_body(module, m, graph, alias_map, &method_ctx);
                 } else {
                     walk_expression(module, m, graph, alias_map, ctx);
                 }
@@ -351,18 +328,24 @@ fn walk_identifier(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn walk_call(
     module: &Module,
-    callee: &Expression,
-    args: &[Expression],
-    spread: &Option<Box<Expression>>,
-    type_arguments: &CallTypeArguments,
+    expression: &Expression,
     graph: &mut ReferenceGraph,
     alias_map: &AliasMap,
     ctx: Option<&ModuleItemId>,
 ) {
-    if let Expression::Identifier { value, .. } = callee {
+    let Expression::Call {
+        expression: callee,
+        args,
+        spread,
+        type_arguments,
+        ..
+    } = expression
+    else {
+        return;
+    };
+    if let Expression::Identifier { value, .. } = callee.as_ref() {
         let mut segments = value.split('.');
         let first = segments.next().unwrap_or("");
         if segments.next().is_some() && is_upper(first) {
@@ -472,13 +455,20 @@ fn walk_struct_call(
 
 fn walk_dot_access(
     module: &Module,
-    expression: &Expression,
-    member: &str,
-    resolution: &DotAccessResolution,
+    dot_access: &Expression,
     graph: &mut ReferenceGraph,
     alias_map: &AliasMap,
     ctx: Option<&ModuleItemId>,
 ) {
+    let Expression::DotAccess {
+        expression,
+        member,
+        resolution,
+        ..
+    } = dot_access
+    else {
+        unreachable!("walk_dot_access called with non-DotAccess expression");
+    };
     walk_expression(module, expression, graph, alias_map, ctx);
     let receiver_ty = expression.get_type();
     if let Some(ty_name) = qualified_type_name(&receiver_ty, alias_map) {
@@ -756,12 +746,12 @@ fn is_method_access(kind: Option<DotAccessKind>) -> bool {
     )
 }
 
-fn walk_function_like(
+fn walk_callable_body(
     module: &Module,
-    expr: &Expression,
+    function: &Expression,
     graph: &mut ReferenceGraph,
     alias_map: &AliasMap,
-    ctx_id: &ModuleItemId,
+    fn_ctx: &ModuleItemId,
 ) {
     let Expression::Function {
         generics,
@@ -769,33 +759,10 @@ fn walk_function_like(
         return_annotation,
         body,
         ..
-    } = expr
+    } = function
     else {
         return;
     };
-    walk_callable_body(
-        module,
-        generics,
-        params,
-        return_annotation,
-        body.definition(),
-        graph,
-        alias_map,
-        ctx_id,
-    );
-}
-
-#[allow(clippy::too_many_arguments)]
-fn walk_callable_body(
-    module: &Module,
-    generics: &[Generic],
-    params: &[Binding],
-    return_annotation: &Annotation,
-    body: Option<&Expression>,
-    graph: &mut ReferenceGraph,
-    alias_map: &AliasMap,
-    fn_ctx: &ModuleItemId,
-) {
     for g in generics {
         for bound in g.bounds() {
             walk_annotation(module, bound, graph, alias_map, fn_ctx);
@@ -813,7 +780,7 @@ fn walk_callable_body(
         );
     }
     walk_annotation(module, return_annotation, graph, alias_map, fn_ctx);
-    if let Some(body) = body {
+    if let Some(body) = body.definition() {
         walk_expression(module, body, graph, alias_map, Some(fn_ctx));
     }
 }

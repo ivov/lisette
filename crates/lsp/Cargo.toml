@@ -34,3 +34,6 @@ serde_json.workspace = true
 stdlib = { package = "lisette-stdlib", path = "../stdlib" }
 tempfile = "3"
 tokio-util = { version = "0.7", features = ["codec"] }
+
+[lints]
+workspace = true

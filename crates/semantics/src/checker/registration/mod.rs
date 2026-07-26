@@ -26,7 +26,7 @@ use syntax::program::{
 };
 use syntax::types::{Bound, FunctionParameter, Symbol, Type};
 
-use super::{FileContextKind, TaskState, resolved_generic_bounds};
+use super::{FileContextKind, FileContextSpec, TaskState, resolved_generic_bounds};
 use crate::store::Store;
 
 pub(crate) fn extract_package_directive(source: &str) -> Option<String> {
@@ -422,10 +422,12 @@ impl TaskState {
 
         self.with_file_context_mut(
             store,
-            module_id,
-            file_id,
-            &imports,
-            FileContextKind::ImportedTypedef,
+            FileContextSpec {
+                module_id,
+                file_id,
+                imports: &imports,
+                kind: FileContextKind::ImportedTypedef,
+            },
             |this, store| {
                 let items = std::mem::take(
                     &mut store
@@ -498,10 +500,12 @@ impl TaskState {
     ) {
         self.with_file_context_mut(
             store,
-            module_id,
-            file_id,
-            imports,
-            FileContextKind::Standard,
+            FileContextSpec {
+                module_id,
+                file_id,
+                imports,
+                kind: FileContextKind::Standard,
+            },
             |this, store| {
                 let items = std::mem::take(
                     &mut store

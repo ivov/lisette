@@ -665,7 +665,11 @@ fn package_display(package: &str, go_module: &str) -> String {
         .strip_prefix(go_module)
         .and_then(|rest| rest.strip_prefix('/'))
     {
-        format!("src/{module_id}")
+        if semantics::loader::is_external_test_module(module_id) {
+            module_id.to_string()
+        } else {
+            format!("src/{module_id}")
+        }
     } else {
         package.to_string()
     }
@@ -1739,6 +1743,30 @@ mod tests {
         assert!(text.contains("✓ adds_numbers"));
         assert!(text.contains("2 passed"));
         assert_eq!(exit_code(&report.rows, true), 0);
+    }
+
+    #[test]
+    fn external_groups_render_after_src_groups() {
+        let index = index(&[("zeta", "internal_case"), ("tests", "external_case")]);
+        let events = vec![
+            event("pass", "demo/zeta", Some("TestInternalCase"), None),
+            event("pass", "demo/tests", Some("TestExternalCase"), None),
+        ];
+        let report = build_report(&index, &events, "demo");
+        let text = render(
+            &report,
+            &no_sources(),
+            false,
+            Duration::from_millis(7),
+            TEST_WIDTH,
+        );
+
+        let src_position = text.find("  src/zeta/\n").expect("src group header");
+        let tests_position = text.find("  tests/\n").expect("tests group header");
+        assert!(
+            src_position < tests_position,
+            "src groups render first:\n{text}"
+        );
     }
 
     #[test]

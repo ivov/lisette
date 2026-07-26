@@ -14,7 +14,11 @@ use lisette::pipeline::{
     CompileConfig, CompileEntry, CompileInput, CompileMode, CompileScope, ProjectKind, Sources,
     TestIndex, compile,
 };
-use semantics::loader::is_production_module_file;
+use semantics::loader::{
+    EXTERNAL_TESTS_DIR, ExternalTestFileIssue, ROOT_IMPORT, external_test_file_issue,
+    is_production_module_file,
+};
+use semantics::store::ENTRY_MODULE_ID;
 
 pub fn emit(path: Option<String>, sourcemap: bool) -> i32 {
     with_locked_project(path, |prep| {
@@ -183,6 +187,7 @@ fn prepare_project_build(project_path: &Path) -> Result<BuildPrep, i32> {
         locator,
         kind: layout.kind,
         sources: layout.sources,
+        test_sources: layout.test_sources,
     })
 }
 
@@ -193,6 +198,7 @@ pub(super) struct BuildPrep {
     pub locator: deps::TypedefLocator,
     pub kind: ProjectKind,
     pub sources: Vec<PathBuf>,
+    pub test_sources: Vec<PathBuf>,
 }
 
 pub(super) struct LockedProject {
@@ -435,7 +441,12 @@ fn compile_project(
     };
 
     let src_dir = prep.project_path.join("src");
-    let local_fs = LocalFileSystem::with_scanned_sources(&src_dir, prep.sources.clone());
+    let local_fs = LocalFileSystem::with_scanned_sources(
+        &src_dir,
+        Some(&prep.project_path),
+        prep.sources.clone(),
+        prep.test_sources.clone(),
+    );
     compile(entry.compile_input(), &compile_config, &local_fs)
 }
 
@@ -446,16 +457,18 @@ fn render_diagnostics(
     render::render_all(
         &result.errors,
         &result.lints,
-        |file_id| {
-            result
-                .sources
-                .get(&file_id)
-                .map(|info| (info.source.clone(), info.filename.clone()))
-        },
+        render::SourceCache::new(
+            |file_id| {
+                result
+                    .sources
+                    .get(&file_id)
+                    .map(|info| (info.source.clone(), info.filename.clone()))
+            },
+            entry.source(),
+            entry.display(),
+        ),
         result.user_file_count,
         &Filter::All,
-        entry.source(),
-        entry.display(),
     )
 }
 
@@ -617,6 +630,7 @@ fn print_completion(label: &str, prep: &BuildPrep, counts: &render::Counts, star
 pub(super) struct ProjectLayout {
     pub kind: ProjectKind,
     pub sources: Vec<PathBuf>,
+    pub test_sources: Vec<PathBuf>,
 }
 
 pub(super) fn resolve_project_layout(project_path: &Path) -> Option<ProjectLayout> {
@@ -632,7 +646,95 @@ pub(super) fn resolve_project_layout(project_path: &Path) -> Option<ProjectLayou
     let src = project_path.join("src");
     let sources = lisette::fs::collect_lis_filepaths_recursive(&src);
 
-    if let Some((heading, reason, hint)) = go_ignored_shape(&src, &sources) {
+    if let Some(rel) = sources.iter().find_map(|path| {
+        path.strip_prefix(&src)
+            .ok()
+            .filter(|rel| rel.starts_with(ENTRY_MODULE_ID))
+    }) {
+        cli_error!(
+            "Reserved module directory",
+            format!(
+                "`src/{}` sits under `src/{ENTRY_MODULE_ID}/`, which collides with the compiler's internal entry module",
+                rel.display()
+            ),
+            "Rename the module"
+        );
+        return None;
+    }
+
+    if let Some((heading, reason, hint)) = go_ignored_shape(&src, "src", &sources) {
+        cli_error!(heading, reason, hint);
+        return None;
+    }
+
+    if let Some(rel) = sources.iter().find_map(|path| {
+        path.strip_prefix(&src)
+            .ok()
+            .filter(|rel| rel.starts_with(EXTERNAL_TESTS_DIR))
+    }) {
+        cli_error!(
+            "Reserved module directory",
+            format!(
+                "`src/{}` sits under `src/{EXTERNAL_TESTS_DIR}/`, which collides with the external test directory `{EXTERNAL_TESTS_DIR}/` at the project root",
+                rel.display()
+            ),
+            "Rename the module"
+        );
+        return None;
+    }
+
+    if let Some(rel) = sources.iter().find_map(|path| {
+        path.strip_prefix(&src)
+            .ok()
+            .filter(|rel| rel.starts_with(ROOT_IMPORT))
+    }) {
+        cli_error!(
+            "Reserved module directory",
+            format!(
+                "`src/{}` sits under `src/{ROOT_IMPORT}/`, which collides with the reserved `{ROOT_IMPORT}` spelling for the library's root package",
+                rel.display()
+            ),
+            "Rename the module"
+        );
+        return None;
+    }
+
+    let tests_dir = project_path.join(EXTERNAL_TESTS_DIR);
+    let test_sources = lisette::fs::collect_lis_filepaths_recursive(&tests_dir);
+
+    if let Some((rel, issue)) = test_sources.iter().find_map(|path| {
+        let rel = path
+            .strip_prefix(&tests_dir)
+            .ok()?
+            .to_string_lossy()
+            .into_owned();
+        external_test_file_issue(&rel).map(|issue| (rel, issue))
+    }) {
+        match issue {
+            ExternalTestFileIssue::WrongSuffix => {
+                let stem = rel.strip_suffix("_test.lis").unwrap_or(rel.as_str());
+                cli_error!(
+                    "Misnamed test file",
+                    format!(
+                        "`{EXTERNAL_TESTS_DIR}/{rel}` uses `_test.lis`, but Lisette test files end in `.test.lis`"
+                    ),
+                    format!("Rename the file to `{EXTERNAL_TESTS_DIR}/{stem}.test.lis`")
+                );
+            }
+            ExternalTestFileIssue::NotATestFile => {
+                cli_error!(
+                    "Non-test file under `tests/`",
+                    format!("`{EXTERNAL_TESTS_DIR}/{rel}` is not a `.test.lis` file"),
+                    "Rename the file with a `.test.lis` suffix"
+                );
+            }
+        }
+        return None;
+    }
+
+    if let Some((heading, reason, hint)) =
+        go_ignored_shape(&tests_dir, EXTERNAL_TESTS_DIR, &test_sources)
+    {
         cli_error!(heading, reason, hint);
         return None;
     }
@@ -641,6 +743,7 @@ pub(super) fn resolve_project_layout(project_path: &Path) -> Option<ProjectLayou
         return Some(ProjectLayout {
             kind: ProjectKind::Binary,
             sources,
+            test_sources,
         });
     }
 
@@ -665,6 +768,7 @@ pub(super) fn resolve_project_layout(project_path: &Path) -> Option<ProjectLayou
     Some(ProjectLayout {
         kind: ProjectKind::Library,
         sources,
+        test_sources,
     })
 }
 
@@ -737,9 +841,13 @@ fn go_platform_suffix(go_filename: &str) -> Option<String> {
     None
 }
 
-fn go_ignored_shape(src: &Path, sources: &[PathBuf]) -> Option<(&'static str, String, String)> {
+fn go_ignored_shape(
+    root: &Path,
+    root_label: &str,
+    sources: &[PathBuf],
+) -> Option<(&'static str, String, String)> {
     for path in sources {
-        let Ok(rel) = path.strip_prefix(src) else {
+        let Ok(rel) = path.strip_prefix(root) else {
             continue;
         };
         let Some(name) = rel.file_name().and_then(|n| n.to_str()) else {
@@ -758,7 +866,7 @@ fn go_ignored_shape(src: &Path, sources: &[PathBuf]) -> Option<(&'static str, St
                     return Some((
                         "Go-ignored module directory",
                         format!(
-                            "`src/{}` sits under `{}`, which the Go toolchain skips",
+                            "`{root_label}/{}` sits under `{}`, which the Go toolchain skips",
                             rel.display(),
                             segment
                         ),
@@ -780,7 +888,7 @@ fn go_ignored_shape(src: &Path, sources: &[PathBuf]) -> Option<(&'static str, St
             return Some((
                 "Go-ignored source file",
                 format!(
-                    "`src/{}` compiles to `{}`, which the Go toolchain skips",
+                    "`{root_label}/{}` compiles to `{}`, which the Go toolchain skips",
                     rel.display(),
                     go_filename
                 ),
@@ -792,12 +900,12 @@ fn go_ignored_shape(src: &Path, sources: &[PathBuf]) -> Option<(&'static str, St
             return Some((
                 "Platform-suffixed source file",
                 format!(
-                    "`src/{}` compiles to `{}`, which Go builds only on `{}`",
+                    "`{root_label}/{}` compiles to `{}`, which Go builds only on `{}`",
                     rel.display(),
                     go_filename,
                     suffix.replace('_', "/")
                 ),
-                format!("Rename it: Go reads the `_{suffix}` suffix as a build constraint"),
+                format!("Rename the file to drop the trailing `_{suffix}`"),
             ));
         }
     }

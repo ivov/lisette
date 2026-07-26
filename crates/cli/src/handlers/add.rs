@@ -1,6 +1,6 @@
 use super::project::MutationProject;
 use super::reconciliation::{
-    ReplacedRoot, ReplacedRootMode, ReplacementIdentity, ResolvedDependency,
+    ReplacedRoot, ReplacedRootMode, ReplacementIdentity, ResolvedDependency, RootWrite,
     apply_graph_to_manifest, declared_replacements, finalize_manifest_via, reconcile_root,
 };
 use crate::go_cli;
@@ -159,17 +159,22 @@ fn run_add_pipeline(plan: AddPlan) -> i32 {
         Err(code) => return code,
     };
 
+    let root_write = match replacement {
+        Some(identity) => RootWrite::Replaced(ReplacedRoot {
+            identity,
+            mode: ReplacedRootMode::AddDirect,
+        }),
+        None => RootWrite::Remote {
+            fallback_version: &plan.resolved_version,
+        },
+    };
     let upgraded = match apply_graph_to_manifest(
         &resolved_dep.canonical_module,
         &project.root,
         &project.manifest,
-        &plan.resolved_version,
         &workspace,
         &module_graph,
-        replacement.map(|identity| ReplacedRoot {
-            identity,
-            mode: ReplacedRootMode::AddDirect,
-        }),
+        root_write,
     ) {
         Ok(u) => u,
         Err(code) => return code,

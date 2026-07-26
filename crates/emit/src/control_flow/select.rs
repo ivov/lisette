@@ -529,10 +529,11 @@ impl Planner<'_> {
                 let some_block = this.lower_receive_some_arm(
                     some_arm,
                     match_arms,
-                    receiver_var_pattern,
-                    &case_var,
+                    TypedSubject {
+                        var: &case_var,
+                        ty: element_ty,
+                    },
                     needs_receiver_destructure,
-                    element_ty,
                     place,
                 );
                 let none_block = this.capture_scoped_block(|this| {
@@ -570,29 +571,26 @@ impl Planner<'_> {
 
     /// Lower the Some arm body (with payload destructure) so the caller can
     /// wrap it in `if ok` alongside the None arm. `None` if it renders empty.
-    #[allow(clippy::too_many_arguments)]
     fn lower_receive_some_arm(
         &mut self,
         some_arm: &MatchArm,
         match_arms: &[MatchArm],
-        receiver_var_pattern: &Pattern,
-        case_var: &str,
+        subject: TypedSubject<'_>,
         needs_receiver_destructure: bool,
-        element_ty: &syntax::types::Type,
         place: &PlacePlan,
     ) -> Option<LoweredBlock> {
         self.capture_scoped_block(|this| {
             if !needs_receiver_destructure {
                 return this.lower_block_to_place(&some_arm.expression, place);
             }
+            let Pattern::EnumVariant { fields, .. } = &some_arm.pattern else {
+                unreachable!("Some arm must carry an EnumVariant pattern");
+            };
             LoweredBlock {
                 statements: this.lower_select_match_receive_some_site(
-                    TypedSubject {
-                        var: case_var,
-                        ty: element_ty,
-                    },
+                    subject,
                     AnnotatedPattern {
-                        pattern: receiver_var_pattern,
+                        pattern: &fields[0],
                     },
                     &some_arm.expression,
                     match_arms,

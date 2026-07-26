@@ -212,7 +212,7 @@ impl<'source> Parser<'source> {
                 let s_stripped = if s.len() >= 3 && s.starts_with("r\"") && s.ends_with('"') {
                     &s[2..s.len() - 1]
                 } else if s.len() >= 2 && s.starts_with("r\"") {
-                    // unterminated raw string — strip prefix only
+                    // unterminated raw string, strip prefix only
                     &s[2..]
                 } else {
                     debug_assert!(

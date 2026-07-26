@@ -114,7 +114,7 @@ impl DefinitionBody {
 impl Definition {
     /// A newtype is a single-field, non-generic tuple struct. Relevant
     /// because Go compiles newtypes to named scalar types, so `.0` is a cast
-    /// rather than a field access — it cannot be assigned to, and taking
+    /// rather than a field access, it cannot be assigned to, and taking
     /// its address is invalid.
     pub fn is_newtype(&self) -> bool {
         matches!(

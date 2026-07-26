@@ -32,7 +32,7 @@ pub fn check_unnecessary_map_on_constructor(expression: &Expression, ctx: &NodeC
             _ => container.is_result(),
         };
         if confirmed && reorder_safe(payload, mapper, ctx.store) {
-            push_map_on_constructor(ctx, span, receiver, args, variant, "map", payload, mapper);
+            push_map_on_constructor(ctx, span, receiver, variant, payload, mapper);
         }
         return;
     }
@@ -46,26 +46,24 @@ pub fn check_unnecessary_map_on_constructor(expression: &Expression, ctx: &NodeC
             return;
         };
         if receiver.get_type().is_result() && reorder_safe(payload, mapper, ctx.store) {
-            push_map_on_constructor(ctx, span, receiver, args, "Err", "map_err", payload, mapper);
+            push_map_on_constructor(ctx, span, receiver, "Err", payload, mapper);
         }
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn push_map_on_constructor(
     ctx: &NodeCtx,
     span: &Span,
     receiver: &Expression,
-    args: &[Expression],
     variant: &str,
-    method: &str,
     payload: &Expression,
     mapper: &Expression,
 ) {
+    let method = if variant == "Err" { "map_err" } else { "map" };
     let mut diagnostic = diagnostics::lint::unnecessary_map_on_constructor(span, variant, method);
     // A lambda mapper needs beta-reduction to inline, so it reports without a fix.
     if !matches!(mapper.unwrap_parens(), Expression::Lambda { .. })
-        && reads_as_method_call(receiver, args)
+        && reads_as_method_call(receiver, std::slice::from_ref(mapper))
         && let (Some(mapper_text), Some(payload_text)) = (
             span_text(ctx.source, mapper),
             span_text(ctx.source, payload),

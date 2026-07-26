@@ -42,6 +42,23 @@ impl TypeArgumentChecks {
     }
 }
 
+#[derive(Clone, Copy)]
+struct ConvertMode {
+    variadic_allowed: bool,
+    type_argument_checks: TypeArgumentChecks,
+    position: TypePosition,
+}
+
+impl ConvertMode {
+    fn nested(self) -> Self {
+        ConvertMode {
+            variadic_allowed: false,
+            type_argument_checks: self.type_argument_checks.nested(),
+            position: TypePosition::Value,
+        }
+    }
+}
+
 impl TaskState {
     /// Resolves a generic-bound annotation. Bound-only markers like
     /// `Comparable` are admitted here; the same names in value position
@@ -56,9 +73,11 @@ impl TaskState {
             store,
             annotation,
             span,
-            false,
-            TypeArgumentChecks::Deferred,
-            TypePosition::Bound,
+            ConvertMode {
+                variadic_allowed: false,
+                type_argument_checks: TypeArgumentChecks::Deferred,
+                position: TypePosition::Bound,
+            },
         );
         if !result.contains_error() {
             self.facts
@@ -78,9 +97,11 @@ impl TaskState {
             store,
             annotation,
             span,
-            false,
-            TypeArgumentChecks::All,
-            TypePosition::Value,
+            ConvertMode {
+                variadic_allowed: false,
+                type_argument_checks: TypeArgumentChecks::All,
+                position: TypePosition::Value,
+            },
         )
     }
 
@@ -94,9 +115,11 @@ impl TaskState {
             store,
             annotation,
             span,
-            true,
-            TypeArgumentChecks::All,
-            TypePosition::Value,
+            ConvertMode {
+                variadic_allowed: true,
+                type_argument_checks: TypeArgumentChecks::All,
+                position: TypePosition::Value,
+            },
         )
     }
 
@@ -110,9 +133,11 @@ impl TaskState {
             store,
             annotation,
             span,
-            false,
-            TypeArgumentChecks::Descendants,
-            TypePosition::Value,
+            ConvertMode {
+                variadic_allowed: false,
+                type_argument_checks: TypeArgumentChecks::Descendants,
+                position: TypePosition::Value,
+            },
         )
     }
 
@@ -121,9 +146,7 @@ impl TaskState {
         store: &Store,
         annotation: &Annotation,
         span: &Span,
-        variadic_allowed: bool,
-        type_argument_checks: TypeArgumentChecks,
-        position: TypePosition,
+        mode: ConvertMode,
     ) -> Type {
         match annotation {
             Annotation::Unknown => self.new_type_var(),
@@ -142,9 +165,10 @@ impl TaskState {
                             store,
                             &param.annotation,
                             span,
-                            index == last_param,
-                            type_argument_checks.nested(),
-                            TypePosition::Value,
+                            ConvertMode {
+                                variadic_allowed: index == last_param,
+                                ..mode.nested()
+                            },
                         )
                     })
                     .collect();
@@ -153,14 +177,7 @@ impl TaskState {
                 let new_return_type = if matches!(return_type.as_ref(), Annotation::Unknown) {
                     self.type_unit()
                 } else {
-                    self.convert_to_type_mode(
-                        store,
-                        return_type,
-                        span,
-                        false,
-                        type_argument_checks.nested(),
-                        TypePosition::Value,
-                    )
+                    self.convert_to_type_mode(store, return_type, span, mode.nested())
                 };
 
                 Type::function(
@@ -174,34 +191,14 @@ impl TaskState {
                 )
             }
 
-            Annotation::Constructor {
-                name: type_name,
-                params,
-                span: annotation_span,
-            } => self.convert_constructor_annotation(
-                store,
-                type_name,
-                params,
-                *annotation_span,
-                span,
-                variadic_allowed,
-                type_argument_checks,
-                position,
-            ),
+            Annotation::Constructor { .. } => {
+                self.convert_constructor_annotation(store, annotation, span, mode)
+            }
 
             Annotation::Tuple { elements, .. } => {
                 let element_types = elements
                     .iter()
-                    .map(|element| {
-                        self.convert_to_type_mode(
-                            store,
-                            element,
-                            span,
-                            false,
-                            type_argument_checks.nested(),
-                            TypePosition::Value,
-                        )
-                    })
+                    .map(|element| self.convert_to_type_mode(store, element, span, mode.nested()))
                     .collect();
                 Type::Tuple(element_types)
             }
@@ -220,18 +217,28 @@ impl TaskState {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn convert_constructor_annotation(
         &mut self,
         store: &Store,
-        type_name: &EcoString,
-        params: &[Annotation],
-        annotation_span: Span,
+        annotation: &Annotation,
         span: &Span,
-        variadic_allowed: bool,
-        type_argument_checks: TypeArgumentChecks,
-        position: TypePosition,
+        mode: ConvertMode,
     ) -> Type {
+        let Annotation::Constructor {
+            name: type_name,
+            params,
+            span: annotation_span,
+        } = annotation
+        else {
+            unreachable!("convert_constructor_annotation called with non-Constructor annotation");
+        };
+        let annotation_span = *annotation_span;
+        let ConvertMode {
+            variadic_allowed,
+            type_argument_checks,
+            position,
+        } = mode;
+
         if type_name == "VarArgs" && !variadic_allowed {
             self.sink
                 .push(diagnostics::infer::variadic_type_not_allowed(
@@ -240,7 +247,7 @@ impl TaskState {
             return Type::Error;
         }
 
-        // Unit is internal — `()` desugars to Constructor { name: "Unit" }.
+        // Unit is internal: `()` desugars to Constructor { name: "Unit" }.
         // Return the interned unit type directly, unless a user-defined
         // type named `Unit` exists in scope.
         if type_name == "Unit"
@@ -262,13 +269,7 @@ impl TaskState {
 
         // `Array` carries a const-integer size, so it needs its own path.
         if type_name == "Array" {
-            return self.convert_array_annotation(
-                store,
-                params,
-                annotation_span,
-                span,
-                type_argument_checks,
-            );
+            return self.convert_array_annotation(store, params, annotation_span, span, mode);
         }
 
         let Some((qualified_name, ty)) =
@@ -325,16 +326,7 @@ impl TaskState {
 
         let concrete_args: Vec<Type> = params
             .iter()
-            .map(|arg| {
-                self.convert_to_type_mode(
-                    store,
-                    arg,
-                    span,
-                    false,
-                    type_argument_checks.nested(),
-                    TypePosition::Value,
-                )
-            })
+            .map(|arg| self.convert_to_type_mode(store, arg, span, mode.nested()))
             .collect();
 
         if generics.len() != params.len() {
@@ -365,7 +357,7 @@ impl TaskState {
             substitute(&body, &map)
         };
 
-        // Reject Ref<InterfaceType> — Go pointer-to-interface is invalid
+        // Reject Ref<InterfaceType>: Go pointer-to-interface is invalid
         if self.is_lis(store)
             && qualified_name == "prelude.Ref"
             && params.len() == 1
@@ -400,17 +392,10 @@ impl TaskState {
         params: &[Annotation],
         annotation_span: Span,
         span: &Span,
-        type_argument_checks: TypeArgumentChecks,
+        mode: ConvertMode,
     ) -> Type {
         if params.len() == 1 && self.cursor.module_id == PRELUDE_MODULE_ID {
-            let element = self.convert_to_type_mode(
-                store,
-                &params[0],
-                span,
-                false,
-                type_argument_checks.nested(),
-                TypePosition::Value,
-            );
+            let element = self.convert_to_type_mode(store, &params[0], span, mode.nested());
             return Type::Nominal {
                 id: Symbol::from_parts("prelude", "Array"),
                 params: vec![element],
@@ -423,26 +408,12 @@ impl TaskState {
                 annotation_span,
             ));
             for param in params {
-                let _ = self.convert_to_type_mode(
-                    store,
-                    param,
-                    span,
-                    false,
-                    type_argument_checks.nested(),
-                    TypePosition::Value,
-                );
+                let _ = self.convert_to_type_mode(store, param, span, mode.nested());
             }
             return Type::Error;
         }
 
-        let element = self.convert_to_type_mode(
-            store,
-            &params[0],
-            span,
-            false,
-            type_argument_checks.nested(),
-            TypePosition::Value,
-        );
+        let element = self.convert_to_type_mode(store, &params[0], span, mode.nested());
         if element.contains_error() {
             return Type::Error;
         }
@@ -625,7 +596,7 @@ impl TaskState {
                     return None;
                 };
 
-                // Single uppercase letter not declared as a type param — always a typo.
+                // Single uppercase letter not declared as a type param, always a typo.
                 // Multi-letter names (Key, Error, etc.) are left to `type_not_found`.
                 if sub_params.is_empty()
                     && name.len() == 1

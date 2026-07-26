@@ -6,7 +6,7 @@
 //!
 //! - `as` bindings (`pat as name`) are meaningless because there is no fall-
 //!   through arm to branch to.
-//! - Literal patterns would never match for non-literal scrutinees — the
+//! - Literal patterns would never match for non-literal scrutinees: the
 //!   compiler cannot prove they always match, so they are rejected.
 //! - Or-patterns are rejected because they imply branching; an irrefutable
 //!   single arm cannot choose among alternatives.

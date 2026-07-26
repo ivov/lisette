@@ -38,23 +38,19 @@ pub(crate) enum BridgeDirection {
 pub(crate) enum LayoutBridge {
     Identity,
     UnwrapNullableOption {
-        option_type: Type,
         target_payload: Box<ValueLayout>,
         payload: Box<LayoutBridge>,
     },
     UnwrapPointerOption {
-        option_type: Type,
         target_payload: Box<ValueLayout>,
         payload: Box<LayoutBridge>,
     },
     WrapNullableOption {
         option_type: Type,
-        source_payload: Box<ValueLayout>,
         payload: Box<LayoutBridge>,
     },
     WrapPointerOption {
         option_type: Type,
-        source_payload: Box<ValueLayout>,
         payload: Box<LayoutBridge>,
     },
     Reference {
@@ -261,15 +257,14 @@ pub(crate) fn resolve_layout_bridge(
     match (source, target) {
         (
             TaggedOption {
-                option_type,
                 payload: source_payload,
+                ..
             },
             NullableOption {
                 payload: target_payload,
                 ..
             },
         ) => LayoutBridge::UnwrapNullableOption {
-            option_type: option_type.clone(),
             target_payload: target_payload.clone(),
             payload: Box::new(resolve_layout_bridge(
                 planner,
@@ -279,15 +274,14 @@ pub(crate) fn resolve_layout_bridge(
         },
         (
             TaggedOption {
-                option_type,
                 payload: source_payload,
+                ..
             },
             PointerOption {
                 payload: target_payload,
                 ..
             },
         ) => LayoutBridge::UnwrapPointerOption {
-            option_type: option_type.clone(),
             target_payload: target_payload.clone(),
             payload: Box::new(resolve_layout_bridge(
                 planner,
@@ -306,7 +300,6 @@ pub(crate) fn resolve_layout_bridge(
             },
         ) => LayoutBridge::WrapNullableOption {
             option_type: option_type.clone(),
-            source_payload: source_payload.clone(),
             payload: Box::new(resolve_layout_bridge(
                 planner,
                 source_payload,
@@ -324,7 +317,6 @@ pub(crate) fn resolve_layout_bridge(
             },
         ) => LayoutBridge::WrapPointerOption {
             option_type: option_type.clone(),
-            source_payload: source_payload.clone(),
             payload: Box::new(resolve_layout_bridge(
                 planner,
                 source_payload,
@@ -333,13 +325,12 @@ pub(crate) fn resolve_layout_bridge(
         },
         (
             TaggedOption {
-                option_type,
                 payload: source_payload,
+                ..
             },
             target,
         ) if is_go_interface_slot(planner, target.logical_type()) => {
             LayoutBridge::UnwrapNullableOption {
-                option_type: option_type.clone(),
                 target_payload: Box::new(target.clone()),
                 payload: Box::new(resolve_layout_bridge(planner, source_payload, target)),
             }

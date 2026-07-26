@@ -602,8 +602,7 @@ impl Planner<'_> {
                     &mut branch,
                     &info.bindings,
                     effective,
-                    &[body],
-                    &[],
+                    body,
                     |this, branch| {
                         branch.extend(this.lower_block_as_body(body).statements);
                     },
@@ -677,8 +676,7 @@ impl Planner<'_> {
                 &mut statements,
                 &info.bindings,
                 &effective,
-                &[body],
-                &[],
+                body,
                 |this, statements| {
                     let block = this.lower_block_to_place(body, place);
                     statements.extend(block.statements);
@@ -697,8 +695,7 @@ impl Planner<'_> {
             &mut then_body,
             &info.bindings,
             &effective,
-            &[body],
-            &[],
+            body,
             |this, then_body| {
                 let block = this.lower_block_to_place(body, place);
                 then_body.extend(block.statements);

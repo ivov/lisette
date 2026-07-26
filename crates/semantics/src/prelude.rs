@@ -3,7 +3,7 @@ use stdlib::{LIS_PRELUDE_SOURCE, LIS_TEST_PRELUDE_SOURCE};
 use syntax::program::{File, Visibility};
 
 use crate::call_classification::compute_module_ufcs;
-use crate::checker::{FileContextKind, TaskState};
+use crate::checker::{FileContextKind, FileContextSpec, TaskState};
 use crate::store::Store;
 
 pub(crate) const PRELUDE_MODULE_ID: &str = "prelude";
@@ -41,10 +41,12 @@ pub fn parse_and_register_prelude(store: &mut Store, sink: &LocalSink) {
 
     checker.with_file_context_mut(
         store,
-        PRELUDE_MODULE_ID,
-        PRELUDE_FILE_ID,
-        &[],
-        FileContextKind::Prelude,
+        FileContextSpec {
+            module_id: PRELUDE_MODULE_ID,
+            file_id: PRELUDE_FILE_ID,
+            imports: &[],
+            kind: FileContextKind::Prelude,
+        },
         |checker, store| {
             for file in module.typedef_files() {
                 checker.register_type_names(store, &file.items, &Visibility::Public);
@@ -89,10 +91,12 @@ pub fn parse_and_register_test_prelude(store: &mut Store, sink: &LocalSink) {
 
     checker.with_file_context_mut(
         store,
-        TEST_PRELUDE_MODULE_ID,
-        file_id,
-        &[],
-        FileContextKind::TestPrelude,
+        FileContextSpec {
+            module_id: TEST_PRELUDE_MODULE_ID,
+            file_id,
+            imports: &[],
+            kind: FileContextKind::TestPrelude,
+        },
         |checker, store| {
             for file in module.typedef_files() {
                 checker.register_type_names(store, &file.items, &Visibility::Public);

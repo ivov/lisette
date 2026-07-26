@@ -1,7 +1,7 @@
 //! Hard errors over generic-parameter shapes.
 
 use diagnostics::LocalSink;
-use syntax::ast::{Annotation, Expression, Generic, Span};
+use syntax::ast::{Expression, Generic, Span};
 use syntax::types::{Bound, Type};
 
 use semantics::generics::{
@@ -57,22 +57,8 @@ fn visit_expression(
             }
             return;
         }
-        Expression::Function {
-            name,
-            generics,
-            return_annotation,
-            return_type,
-            ..
-        } => {
-            check_constrained_return_type(
-                return_type,
-                generics,
-                enclosing,
-                return_annotation,
-                name,
-                store,
-                sink,
-            );
+        Expression::Function { .. } => {
+            check_constrained_return_type(expression, enclosing, store, sink);
         }
         Expression::Call {
             expression: callee,
@@ -104,16 +90,22 @@ fn check_unconstrained_bounded(bounds: &[Bound], span: &Span, sink: &LocalSink) 
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn check_constrained_return_type(
-    return_ty: &Type,
-    generics: &[Generic],
+    function: &Expression,
     enclosing: Option<GenericContext<'_>>,
-    return_annotation: &Annotation,
-    fn_name: &str,
     store: &Store,
     sink: &LocalSink,
 ) {
+    let Expression::Function {
+        name: fn_name,
+        generics,
+        return_annotation,
+        return_type: return_ty,
+        ..
+    } = function
+    else {
+        return;
+    };
     let span = return_annotation.get_span();
     let mut seen = rustc_hash::FxHashSet::default();
     for applied in nested_type_obligations(store, return_ty) {

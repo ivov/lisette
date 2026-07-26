@@ -427,7 +427,7 @@ fn assignment_requires_target_capture(right_hand_side: Option<&ValuePlan>) -> bo
     assignment_has_setup(right_hand_side) || assignment_has_effectful_call(right_hand_side)
 }
 
-/// Recognize compound assignment — either `x += y` syntax (caller supplies
+/// Recognize compound assignment: either `x += y` syntax (caller supplies
 /// `compound_operator`) or the desugared `x = x + y` pattern.
 fn detect_compound_assignment<'a>(
     target: &Expression,

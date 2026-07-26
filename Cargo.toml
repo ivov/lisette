@@ -25,6 +25,9 @@ repository = "https://github.com/ivov/lisette"
 homepage = "https://lisette.run"
 description = "Little language inspired by Rust that compiles to Go"
 
+[workspace.lints.clippy]
+too_many_arguments = "forbid"
+
 [workspace.dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

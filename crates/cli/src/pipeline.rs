@@ -277,7 +277,7 @@ mod tests {
             .parent()
             .and_then(|p| p.to_str())
             .expect("temp project path is valid utf-8");
-        let fs_loader = LocalFileSystem::new(working_dir);
+        let fs_loader = LocalFileSystem::new(working_dir, Some(project_dir));
         let result = compile(
             CompileInput::Binary(CompileEntry {
                 source: &source,
@@ -331,7 +331,8 @@ mod tests {
             scope: CompileScope::Project(root.to_path_buf()),
             locator,
         };
-        let fs_loader = LocalFileSystem::new(source_path.parent().unwrap().to_str().unwrap());
+        let fs_loader =
+            LocalFileSystem::new(source_path.parent().unwrap().to_str().unwrap(), Some(root));
         let input = match project_kind {
             ProjectKind::Binary => CompileInput::Binary(CompileEntry {
                 source,
@@ -455,7 +456,7 @@ mod tests {
             .parent()
             .and_then(|p| p.to_str())
             .expect("temp project path is valid utf-8");
-        let fs_loader = LocalFileSystem::new(working_dir);
+        let fs_loader = LocalFileSystem::new(working_dir, Some(project_dir));
         let build_result = syntax::build_ast(&source, ENTRY_FILE_ID);
         let result = analyze(AnalyzeInput {
             config: SemanticConfig {
@@ -560,7 +561,7 @@ mod tests {
             .parent()
             .and_then(|p| p.to_str())
             .expect("temp project path is valid utf-8");
-        let fs_loader = LocalFileSystem::new(working_dir);
+        let fs_loader = LocalFileSystem::new(working_dir, Some(project_dir));
         let build_result = syntax::build_ast(&source, ENTRY_FILE_ID);
         let output = analyze(AnalyzeInput {
             config: SemanticConfig {

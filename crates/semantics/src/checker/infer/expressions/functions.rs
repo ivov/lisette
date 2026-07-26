@@ -31,6 +31,13 @@ struct TypeConversionCall {
     span: Span,
 }
 
+struct PseudoConstructorCall {
+    expression: Box<Expression>,
+    args: Vec<Expression>,
+    spread: Option<Box<Expression>>,
+    type_args: Vec<Annotation>,
+}
+
 struct CallSignature {
     parameters: Vec<FunctionParameter>,
     variadic: Option<VariadicParameter>,
@@ -354,8 +361,16 @@ impl InferCtx<'_> {
             _ => None,
         };
         if let Some(diagnostic) = pseudo_constructor_diagnostic {
-            return self
-                .reject_pseudo_constructor(diagnostic, expression, args, spread, type_args, span);
+            return self.reject_pseudo_constructor(
+                diagnostic,
+                PseudoConstructorCall {
+                    expression,
+                    args,
+                    spread,
+                    type_args,
+                },
+                span,
+            );
         }
 
         let store = self.store;
@@ -576,24 +591,23 @@ impl InferCtx<'_> {
     fn reject_pseudo_constructor(
         &mut self,
         diagnostic: diagnostics::LisetteDiagnostic,
-        expression: Box<Expression>,
-        args: Vec<Expression>,
-        spread: Option<Box<Expression>>,
-        type_args: Vec<Annotation>,
+        call: PseudoConstructorCall,
         span: Span,
     ) -> Expression {
         self.sink.push(diagnostic);
-        let new_args: Vec<Expression> = args
+        let new_args: Vec<Expression> = call
+            .args
             .into_iter()
             .map(|arg| self.with_value_context(|s| s.infer_expression(arg, &Type::Error)))
             .collect();
-        let new_spread = spread
+        let new_spread = call
+            .spread
             .map(|s| self.with_value_context(|state| state.infer_expression(*s, &Type::Error)));
         Expression::Call {
-            expression,
+            expression: call.expression,
             args: new_args,
             spread: new_spread.map(Box::new),
-            type_arguments: CallTypeArguments::checked_without_types(type_args),
+            type_arguments: CallTypeArguments::checked_without_types(call.type_args),
             ty: Type::Error,
             span,
             call_kind: CallKind::Unresolved,
@@ -1507,7 +1521,6 @@ impl InferCtx<'_> {
         let method = &value[last_dot + 1..];
         let type_part = &value[..last_dot];
 
-        // Resolve type name using checker's scope-aware lookup
         let qualified_name = self.lookup_qualified_name(store, type_part)?;
 
         // Follow type-alias chains through Simple/Compound underlying types
@@ -1553,7 +1566,7 @@ impl InferCtx<'_> {
             return None;
         }
 
-        // If it's a UFCS-lowered method, skip — the emitter handles it differently
+        // If it's a UFCS-lowered method, skip: the emitter handles it differently
         if self
             .ufcs_methods()
             .contains(&(qualified_name.to_string(), method.to_string()))

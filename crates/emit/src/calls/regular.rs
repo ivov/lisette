@@ -9,7 +9,7 @@ use crate::abi::coercion::CoercionPlan;
 use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::abi::transition::{emit_fn_arg_shape_adapter, emit_lisette_callback_wrapper};
 use crate::context::expression::ExpressionContext;
-use crate::expressions::staging::VariadicCombine;
+use crate::expressions::staging::{SpreadSequenceOptions, VariadicCombine};
 use crate::names::generics::extract_type_mapping;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::{ArgumentPlan, CallPlan, CallableOrigin, ResolvedCallee};
@@ -20,6 +20,15 @@ use crate::utils::{reads_mutable_operand, reads_unsequenced_mutable_operand};
 use crate::write_line;
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments};
 use syntax::types::Type;
+
+struct CallTypeArgsRequest<'e, 'c> {
+    function: &'e Expression,
+    callee: &'e ResolvedCallee<'c>,
+    type_args: ResolvedCallTypeArguments<'e>,
+    call_ty: Option<&'e Type>,
+    arg_shape: CallArgShape,
+    ctx: ExpressionContext<'e>,
+}
 
 struct CallArgsContext<'plan, 'facts> {
     plan: &'plan CallPlan<'facts>,
@@ -178,10 +187,11 @@ impl<'a> Planner<'a> {
             let sequenced = self.sequence_with_spread_values(
                 stages,
                 spread,
-                wrap_to_any,
-                "_arg",
-                combine,
-                expression_ctx.capture_boundary(),
+                SpreadSequenceOptions {
+                    wrap_to_any,
+                    combine,
+                    boundary: expression_ctx.capture_boundary(),
+                },
             );
             let effect = self.regular_call_effect(function, sequenced.effect);
             let (setup, args_strings) = sequenced.into_rendered();
@@ -204,18 +214,22 @@ impl<'a> Planner<'a> {
             function_string = format!("({})", function_string);
         }
 
-        let type_args_string = self.resolve_call_type_args(
+        let type_args_string = self.resolve_call_type_args(CallTypeArgsRequest {
             function,
-            &call_plan.resolved,
-            resolved_type_args,
+            callee: &call_plan.resolved,
+            type_args: resolved_type_args,
             call_ty,
-            CallArgShape {
+            arg_shape: CallArgShape {
                 value_count: args.len(),
                 has_spread: spread.is_some(),
             },
-            &mut function_string,
-            expression_ctx,
-        );
+            ctx: expression_ctx,
+        });
+        if !type_args_string.is_empty()
+            && let Some(bracket_start) = function_string.find('[')
+        {
+            function_string.truncate(bracket_start);
+        }
 
         let args_ctx = CallArgsContext {
             plan: call_plan,
@@ -369,17 +383,15 @@ impl<'a> Planner<'a> {
         self.reconstruct_collapsed_type_args(recipe, &mapping)
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn resolve_call_type_args(
-        &mut self,
-        function: &Expression,
-        callee: &ResolvedCallee<'_>,
-        type_args: ResolvedCallTypeArguments<'_>,
-        call_ty: Option<&Type>,
-        arg_shape: CallArgShape,
-        function_string: &mut String,
-        ctx: ExpressionContext<'_>,
-    ) -> String {
+    fn resolve_call_type_args(&mut self, request: CallTypeArgsRequest<'_, '_>) -> String {
+        let CallTypeArgsRequest {
+            function,
+            callee,
+            type_args,
+            call_ty,
+            arg_shape,
+            ctx,
+        } = request;
         if callee_curries_receiver(callee) {
             return String::new();
         }
@@ -414,12 +426,6 @@ impl<'a> Planner<'a> {
                 candidate = slot_ty.and_then(|t| self.prelude_container_type_args(t));
             }
             type_args_string = candidate.unwrap_or_default();
-        }
-
-        if !type_args_string.is_empty()
-            && let Some(bracket_start) = function_string.find('[')
-        {
-            function_string.truncate(bracket_start);
         }
 
         type_args_string
@@ -462,9 +468,11 @@ impl<'a> Planner<'a> {
                 .resolved
                 .declared_type()
                 .and_then(|ty| ty.unwrap_forall().get_function_params()),
-            ctx.wrap_spread_to_any,
-            ctx.combine_variadic.clone(),
-            ctx.capture_boundary,
+            SpreadSequenceOptions {
+                wrap_to_any: ctx.wrap_spread_to_any,
+                combine: ctx.combine_variadic.clone(),
+                boundary: ctx.capture_boundary,
+            },
         )
     }
 

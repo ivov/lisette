@@ -25,11 +25,11 @@ pub(crate) enum PathSegment {
         offset: usize,
         go_type: String,
     },
-    /// `(*expression)` — auto-pointer deref for recursive enum fields.
+    /// `(*expression)`: auto-pointer deref for recursive enum fields.
     Deref,
-    /// `GoType(expression)` — newtype cast to underlying Go type.
+    /// `GoType(expression)`: newtype cast to underlying Go type.
     NewtypeCast(String),
-    /// `expression.(GoType)` — Go interface type assertion, inserted when a
+    /// `expression.(GoType)`: Go interface type assertion, inserted when a
     /// concrete pattern targets a Go interface at a non-root path.
     AssertedAs(String),
 }
@@ -745,7 +745,7 @@ fn type_assertion_to_check(assertion: TypeAssertion) -> Check {
 
 /// Recursively walk a pattern, collecting checks and bindings.
 ///
-/// `path_ty` is the expected type of the value at `path` — used to detect
+/// `path_ty` is the expected type of the value at `path`, used to detect
 /// when a struct pattern is matched against a Go interface (type switch).
 fn collect_checks_and_bindings(
     planner: &Planner,
@@ -1315,7 +1315,6 @@ fn collect_struct_checks(
     let Pattern::Struct {
         fields,
         ty,
-        identifier,
         resolution,
         ..
     } = pattern
@@ -1323,9 +1322,8 @@ fn collect_struct_checks(
         return;
     };
 
-    let (enum_info, child_path) = resolve_struct_child_path(
-        planner, path, ty, identifier, resolution, path_ty, collector,
-    );
+    let (enum_info, child_path) =
+        resolve_struct_child_path(planner, path, pattern, path_ty, collector);
     let variant_fields = record_variant_fields(planner, resolution);
 
     for field in fields {
@@ -1356,12 +1354,19 @@ fn collect_struct_checks(
 fn resolve_struct_child_path(
     planner: &Planner,
     path: &AccessPath,
-    ty: &Type,
-    identifier: &str,
-    resolution: &RecordPatternResolution,
+    pattern: &Pattern,
     path_ty: Option<&Type>,
     collector: &mut PatternCollector,
 ) -> (Option<(String, String)>, AccessPath) {
+    let Pattern::Struct {
+        ty,
+        identifier,
+        resolution,
+        ..
+    } = pattern
+    else {
+        unreachable!("resolve_struct_child_path requires a Struct pattern");
+    };
     if let Some(asserted) = interface_assert_child_path(planner, path, ty, path_ty, collector) {
         return (None, asserted);
     }

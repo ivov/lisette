@@ -133,7 +133,6 @@ fn extract_key_from_raw(raw: &str) -> Option<&str> {
     raw.split(':').next().filter(|k| !k.is_empty())
 }
 
-/// Known tag options.
 const KNOWN_TAG_OPTIONS: &[&str] = &["snake_case", "camel_case", "omitempty", "skip", "string"];
 
 fn check_unknown_tag_options(attribute: &Attribute, sink: &LocalSink) {

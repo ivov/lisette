@@ -52,20 +52,13 @@ pub fn check_needless_splitn(expression: &Expression, ctx: &NodeCtx) {
         return;
     };
 
+    let original = format!("{namespace_text}.{member}({s_text}, {sep_text}, {count_text})");
     let replacement = format!("{namespace_text}.{target}({s_text}, {sep_text})");
     ctx.sink.push(
-        diagnostics::lint::needless_splitn(
-            span,
-            member.as_str(),
-            target,
-            namespace_text,
-            s_text,
-            sep_text,
-            count_text,
-        )
-        .with_fix(Fix::new(
-            format!("Replace with `{replacement}`"),
-            Edit::replacement(*span, replacement.clone()),
-        )),
+        diagnostics::lint::needless_splitn(span, member.as_str(), &original, &replacement)
+            .with_fix(Fix::new(
+                format!("Replace with `{replacement}`"),
+                Edit::replacement(*span, replacement.clone()),
+            )),
     );
 }

@@ -261,7 +261,7 @@ impl Planner<'_> {
             .unwrap_or_default()
     }
 
-    /// Classify with `#[go(...)]` hints — `comma_ok` shifts a nullable
+    /// Classify with `#[go(...)]` hints: `comma_ok` shifts a nullable
     /// `Option` return to comma-ok form.
     pub(crate) fn callable_return_abi_with_go_hints(
         &self,

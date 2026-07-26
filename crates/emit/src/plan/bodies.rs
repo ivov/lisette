@@ -92,7 +92,7 @@ pub(crate) enum LoweredStatement {
     /// re-derived by scanning text.
     DivergingRawGo(String),
     /// `panic("unreachable")` tail after a non-exhaustive branch in return
-    /// position — a structured diverging leaf.
+    /// position: a structured diverging leaf.
     UnreachablePanic,
 }
 

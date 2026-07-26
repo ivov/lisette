@@ -210,79 +210,66 @@ pub fn print_add_success(
         None => eprintln!("  ✓ Added {} {}", module_path, version),
     }
 
-    let mut visited: std::collections::HashSet<String> = std::collections::HashSet::new();
-    visited.insert(module_path.to_string());
-
-    let empty: Vec<String> = Vec::new();
-    let children = edges.get(module_path).unwrap_or(&empty);
-    let mut sorted: Vec<&String> = children.iter().collect();
-    sorted.sort();
-    for (i, child) in sorted.iter().enumerate() {
-        let is_last = i == sorted.len() - 1;
-        print_tree_node(
-            child,
-            "    ",
-            is_last,
-            edges,
-            versions,
-            colored,
-            &mut visited,
-        );
-    }
+    let mut printer = TreePrinter {
+        edges,
+        versions,
+        colored,
+        visited: std::collections::HashSet::new(),
+    };
+    printer.visited.insert(module_path.to_string());
+    printer.print_children(module_path, "    ");
 }
 
-fn print_tree_node(
-    node: &str,
-    prefix: &str,
-    is_last: bool,
-    edges: &std::collections::HashMap<String, Vec<String>>,
-    versions: &std::collections::HashMap<String, String>,
+struct TreePrinter<'a> {
+    edges: &'a std::collections::HashMap<String, Vec<String>>,
+    versions: &'a std::collections::HashMap<String, String>,
     colored: bool,
-    visited: &mut std::collections::HashSet<String>,
-) {
-    let branch = if is_last { "└─ " } else { "├─ " };
-    let version = versions.get(node).map(String::as_str).unwrap_or("");
-    let already_seen = !visited.insert(node.to_string());
+    visited: std::collections::HashSet<String>,
+}
 
-    if colored {
-        if already_seen {
-            eprintln!(
-                "{}{}{} {} {}",
-                prefix,
-                branch,
-                node.green(),
-                version.blue(),
-                "(*)".dimmed()
-            );
-        } else {
-            eprintln!("{}{}{} {}", prefix, branch, node.green(), version.blue());
+impl TreePrinter<'_> {
+    fn print_children(&mut self, node: &str, prefix: &str) {
+        let Some(children) = self.edges.get(node) else {
+            return;
+        };
+        let mut sorted: Vec<&String> = children.iter().collect();
+        sorted.sort();
+        for (i, child) in sorted.iter().enumerate() {
+            let is_last = i == sorted.len() - 1;
+            self.print_node(child, prefix, is_last);
         }
-    } else if already_seen {
-        eprintln!("{}{}{} {} (*)", prefix, branch, node, version);
-    } else {
-        eprintln!("{}{}{} {}", prefix, branch, node, version);
     }
 
-    if already_seen {
-        return;
-    }
+    fn print_node(&mut self, node: &str, prefix: &str, is_last: bool) {
+        let branch = if is_last { "└─ " } else { "├─ " };
+        let version = self.versions.get(node).map(String::as_str).unwrap_or("");
+        let already_seen = !self.visited.insert(node.to_string());
 
-    let empty: Vec<String> = Vec::new();
-    let children = edges.get(node).unwrap_or(&empty);
-    let mut sorted: Vec<&String> = children.iter().collect();
-    sorted.sort();
-    let child_prefix = format!("{}{}", prefix, if is_last { "   " } else { "│  " });
-    for (i, child) in sorted.iter().enumerate() {
-        let child_is_last = i == sorted.len() - 1;
-        print_tree_node(
-            child,
-            &child_prefix,
-            child_is_last,
-            edges,
-            versions,
-            colored,
-            visited,
-        );
+        if self.colored {
+            if already_seen {
+                eprintln!(
+                    "{}{}{} {} {}",
+                    prefix,
+                    branch,
+                    node.green(),
+                    version.blue(),
+                    "(*)".dimmed()
+                );
+            } else {
+                eprintln!("{}{}{} {}", prefix, branch, node.green(), version.blue());
+            }
+        } else if already_seen {
+            eprintln!("{}{}{} {} (*)", prefix, branch, node, version);
+        } else {
+            eprintln!("{}{}{} {}", prefix, branch, node, version);
+        }
+
+        if already_seen {
+            return;
+        }
+
+        let child_prefix = format!("{}{}", prefix, if is_last { "   " } else { "│  " });
+        self.print_children(node, &child_prefix);
     }
 }
 

@@ -114,7 +114,7 @@ pub fn typedef_cache_dir(project_root: &Path) -> PathBuf {
         .join(format!("lis@v{}", lis_version))
 }
 
-/// Version dir for the materialized stdlib typedefs, under `~/.lisette/cache`.
+/// Version dir for the extracted stdlib typedefs, under `~/.lisette/cache`.
 /// The name encodes the compiler version and stdlib content hash, so its
 /// existence proves the contents are current, and distinct versions or embedded
 /// stdlibs get distinct dirs.
@@ -140,7 +140,7 @@ pub fn stdlib_typedef_path(target: Target, go_pkg: &str) -> Option<PathBuf> {
     )
 }
 
-/// Materialize the whole embedded Go stdlib for `target` so the editor can open
+/// Extract the whole embedded Go stdlib for `target` so the editor can open
 /// typedefs as regular files. Runs once, at LSP startup.
 ///
 /// All-or-nothing: written to a temp dir then atomically renamed, so the target

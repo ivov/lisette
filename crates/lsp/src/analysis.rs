@@ -63,12 +63,29 @@ impl SharedState {
         let config = project.config;
         let filename = project.filename;
         let loader = project.loader;
+        let external_test = project.external_test;
 
         let source = self
             .documents
             .get(uri)
             .map(|document| document.content().to_string())
             .ok_or_else(Vec::new)?;
+
+        if external_test && let Some(issue) = semantics::loader::external_test_file_issue(&filename)
+        {
+            let diagnostic = match issue {
+                semantics::loader::ExternalTestFileIssue::WrongSuffix => {
+                    diagnostics::module_graph::wrong_test_file_suffix(&filename)
+                }
+                semantics::loader::ExternalTestFileIssue::NotATestFile => {
+                    diagnostics::module_graph::non_test_file_under_tests(&filename)
+                }
+            };
+            return Err(vec![convert_diagnostic(
+                &diagnostic,
+                &LineIndex::new(&source),
+            )]);
+        }
 
         let lex_result = Lexer::new(&source, 0).lex();
         if lex_result.failed() {
@@ -131,13 +148,17 @@ impl SharedState {
                 load_siblings: true,
             },
             loader: &loader,
-            entry: Some(EntryFile {
-                source,
-                display_path: filename.clone(),
-                filename,
-                ast: desugar_result.ast,
-                file_comment: parse_result.file_comment,
-            }),
+            entry: if external_test {
+                None
+            } else {
+                Some(EntryFile {
+                    source,
+                    display_path: filename.clone(),
+                    filename,
+                    ast: desugar_result.ast,
+                    file_comment: parse_result.file_comment,
+                })
+            },
             project_root: if standalone {
                 None
             } else {
@@ -147,12 +168,12 @@ impl SharedState {
             project_kind,
             locator,
             go_module: String::new(),
-            disable_cache: false,
+            disable_cache: external_test,
         });
         let mut result = analyze_output.result;
         let facts = analyze_output.facts;
 
-        if has_parse_errors {
+        if has_parse_errors && !external_test {
             result.prepend_errors(parse_errors);
         }
 
@@ -179,6 +200,7 @@ impl SharedState {
             has_parse_errors,
             &config,
             uri,
+            external_test,
         ))
     }
 
@@ -272,6 +294,11 @@ pub(crate) fn convert_diagnostic(d: &LisetteDiagnostic, index: &LineIndex) -> Di
                 Some(label) => label.to_string(),
                 None => d.plain_message().to_string(),
             };
+            if let Some(first) = msg.chars().next()
+                && first.is_ascii_lowercase()
+            {
+                msg.replace_range(0..1, &first.to_ascii_uppercase().to_string());
+            }
             if let Some(help) = d.plain_help() {
                 msg.push_str(" · ");
                 msg.push_str(help);
@@ -304,5 +331,31 @@ mod tests {
         let index = LineIndex::new("");
         let diagnostic = convert_diagnostic(&LisetteDiagnostic::warn("w"), &index);
         assert_eq!(diagnostic.severity, Some(DiagnosticSeverity::WARNING));
+    }
+
+    #[test]
+    fn prose_label_is_capitalized() {
+        let span = syntax::ast::Span::new(0, 0, 1);
+        let diagnostic = convert_diagnostic(
+            &LisetteDiagnostic::warn("Unused function")
+                .with_span_label(&span, "never called")
+                .with_help("Call or remove this function"),
+            &LineIndex::new("x"),
+        );
+        assert_eq!(
+            diagnostic.message,
+            "Never called · Call or remove this function"
+        );
+    }
+
+    #[test]
+    fn identifier_led_label_is_left_untouched() {
+        let span = syntax::ast::Span::new(0, 0, 1);
+        let diagnostic = convert_diagnostic(
+            &LisetteDiagnostic::error("Name not found")
+                .with_span_label(&span, "`missing` not found in module `root`"),
+            &LineIndex::new("x"),
+        );
+        assert_eq!(diagnostic.message, "`missing` not found in module `root`");
     }
 }

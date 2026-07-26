@@ -246,6 +246,9 @@ impl<'a> EmitFacts<'a> {
         if module == go_name::TEST_PRELUDE_MODULE {
             return go_name::TESTKIT_IMPORT_PATH.to_string();
         }
+        if self.is_entry_module(module) {
+            return self.go_module.clone();
+        }
         format!("{}/{}", self.go_module, module)
     }
 
