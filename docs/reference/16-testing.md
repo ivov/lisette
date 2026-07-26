@@ -67,7 +67,7 @@ src/
     ├── geometry.test.lis     # internal
     ├── shapes.lis
     └── shapes.test.lis       # internal
-tests/                        
+tests/
 ├── geometry.test.lis         # external
 └── integration/
     ├── dimensions.test.lis   # external

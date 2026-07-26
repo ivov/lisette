@@ -17,6 +17,7 @@ pub struct LocalFileSystem {
     search_paths: Vec<(PathBuf, DisplayPathBase)>,
     project_root: Option<(PathBuf, DisplayPathBase)>,
     scanned_sources: Option<Vec<PathBuf>>,
+    scanned_test_sources: Option<Vec<PathBuf>>,
 }
 
 impl LocalFileSystem {
@@ -40,18 +41,22 @@ impl LocalFileSystem {
                 .collect(),
             project_root,
             scanned_sources: None,
+            scanned_test_sources: None,
         }
     }
 
-    /// Build a loader rooted at `src_dir` whose module discovery reuses `sources`,
-    /// which must be the `.lis` files under that same directory.
+    /// Build a loader rooted at `src_dir` whose module discovery reuses `sources`
+    /// (the `.lis` files under that directory) and `test_sources` (the `.lis`
+    /// files under the project's `tests/` directory).
     pub fn with_scanned_sources(
         src_dir: &Path,
         project_root: Option<&Path>,
         sources: Vec<PathBuf>,
+        test_sources: Vec<PathBuf>,
     ) -> Self {
         let mut fs = Self::new(src_dir.to_str().unwrap_or("."), project_root);
         fs.scanned_sources = Some(sources);
+        fs.scanned_test_sources = Some(test_sources);
         fs
     }
 
@@ -60,8 +65,16 @@ impl LocalFileSystem {
             return Vec::new();
         };
         let tests_root = project_root.join(semantics::loader::EXTERNAL_TESTS_DIR);
+        let walked;
+        let test_sources = match &self.scanned_test_sources {
+            Some(test_sources) => test_sources.as_slice(),
+            None => {
+                walked = collect_lis_filepaths_recursive(&tests_root);
+                &walked
+            }
+        };
         let mut dirs: HashSet<PathBuf> = HashSet::default();
-        for path in collect_lis_filepaths_recursive(&tests_root) {
+        for path in test_sources {
             if path
                 .file_name()
                 .and_then(|name| name.to_str())

@@ -187,6 +187,7 @@ fn prepare_project_build(project_path: &Path) -> Result<BuildPrep, i32> {
         locator,
         kind: layout.kind,
         sources: layout.sources,
+        test_sources: layout.test_sources,
     })
 }
 
@@ -197,6 +198,7 @@ pub(super) struct BuildPrep {
     pub locator: deps::TypedefLocator,
     pub kind: ProjectKind,
     pub sources: Vec<PathBuf>,
+    pub test_sources: Vec<PathBuf>,
 }
 
 pub(super) struct LockedProject {
@@ -370,6 +372,7 @@ pub(super) fn build_locked(
         &src_dir,
         Some(&prep.project_path),
         prep.sources.clone(),
+        prep.test_sources.clone(),
     );
 
     let input = match entry_bits.as_ref() {
@@ -550,6 +553,7 @@ pub(super) fn build_locked(
 pub(super) struct ProjectLayout {
     pub kind: ProjectKind,
     pub sources: Vec<PathBuf>,
+    pub test_sources: Vec<PathBuf>,
 }
 
 pub(super) fn resolve_project_layout(project_path: &Path) -> Option<ProjectLayout> {
@@ -662,6 +666,7 @@ pub(super) fn resolve_project_layout(project_path: &Path) -> Option<ProjectLayou
         return Some(ProjectLayout {
             kind: ProjectKind::Binary,
             sources,
+            test_sources,
         });
     }
 
@@ -686,6 +691,7 @@ pub(super) fn resolve_project_layout(project_path: &Path) -> Option<ProjectLayou
     Some(ProjectLayout {
         kind: ProjectKind::Library,
         sources,
+        test_sources,
     })
 }
 

@@ -273,13 +273,15 @@ impl<'a> GraphBuilder<'a> {
                         .is_some_and(|m| m.files.values().any(|f| !f.is_test()));
                 let imports = process_file_imports(
                     file_imports,
-                    self.sink,
-                    self.standalone_mode,
-                    self.has_project_root,
-                    root_has_production,
-                    module_id,
-                    self.store.project_kind,
-                    self.locator,
+                    ImportContext {
+                        sink: self.sink,
+                        standalone_mode: self.standalone_mode,
+                        has_project_root: self.has_project_root,
+                        root_has_production,
+                        importer: module_id,
+                        project_kind: self.store.project_kind,
+                        locator: self.locator,
+                    },
                 );
 
                 let has_production_file = module_files.iter().any(|file| !file.is_test());
@@ -508,17 +510,30 @@ struct PendingGoImport<'a> {
     usage: ImportUse,
 }
 
-#[allow(clippy::too_many_arguments)]
-fn process_file_imports(
-    file_imports: Vec<syntax::program::FileImport>,
-    sink: &LocalSink,
+#[derive(Clone, Copy)]
+struct ImportContext<'a> {
+    sink: &'a LocalSink,
     standalone_mode: bool,
     has_project_root: bool,
     root_has_production: bool,
-    importer: &str,
+    importer: &'a str,
     project_kind: ProjectKind,
-    locator: &TypedefLocator,
+    locator: &'a TypedefLocator,
+}
+
+fn process_file_imports(
+    file_imports: Vec<syntax::program::FileImport>,
+    ctx: ImportContext<'_>,
 ) -> HashMap<ModuleId, ResolvedImport> {
+    let ImportContext {
+        sink,
+        standalone_mode,
+        has_project_root,
+        root_has_production,
+        importer,
+        project_kind,
+        locator,
+    } = ctx;
     let mut imports = HashMap::default();
     let mut pending_go_imports: Vec<PendingGoImport<'_>> = Vec::new();
     for file_import in &file_imports {
@@ -713,13 +728,15 @@ mod tests {
         let sink = LocalSink::new();
         let resolved = process_file_imports(
             imports,
-            &sink,
-            false,
-            false,
-            false,
-            "caller",
-            ProjectKind::Binary,
-            &TypedefLocator::default(),
+            ImportContext {
+                sink: &sink,
+                standalone_mode: false,
+                has_project_root: false,
+                root_has_production: false,
+                importer: "caller",
+                project_kind: ProjectKind::Binary,
+                locator: &TypedefLocator::default(),
+            },
         );
 
         assert!(!sink.has_errors());
@@ -755,13 +772,15 @@ mod tests {
                     alias: None,
                     span,
                 }],
-                &sink,
-                false,
-                true,
-                true,
-                "caller",
-                ProjectKind::Binary,
-                &TypedefLocator::default(),
+                ImportContext {
+                    sink: &sink,
+                    standalone_mode: false,
+                    has_project_root: true,
+                    root_has_production: true,
+                    importer: "caller",
+                    project_kind: ProjectKind::Binary,
+                    locator: &TypedefLocator::default(),
+                },
             );
 
             assert!(sink.has_errors(), "`import \"{name}\"` should be rejected");
@@ -780,13 +799,15 @@ mod tests {
                 alias: None,
                 span,
             }],
-            &sink,
-            false,
-            false,
-            false,
-            "caller",
-            ProjectKind::Binary,
-            &TypedefLocator::default(),
+            ImportContext {
+                sink: &sink,
+                standalone_mode: false,
+                has_project_root: false,
+                root_has_production: false,
+                importer: "caller",
+                project_kind: ProjectKind::Binary,
+                locator: &TypedefLocator::default(),
+            },
         );
 
         assert!(

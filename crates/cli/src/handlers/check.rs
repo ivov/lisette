@@ -32,6 +32,11 @@ struct CompiledFile {
     display_path: String,
 }
 
+struct ScannedSources {
+    sources: Vec<PathBuf>,
+    test_sources: Vec<PathBuf>,
+}
+
 struct ReadFailure;
 
 impl CheckOptions {
@@ -145,7 +150,15 @@ fn check_project(project_path: &Path, options: &CheckOptions) -> i32 {
     let locator = locator.with_bindgen(bindgen);
 
     let go_module = manifest.project.name.clone();
-    let ProjectLayout { kind, sources } = layout;
+    let ProjectLayout {
+        kind,
+        sources,
+        test_sources,
+    } = layout;
+    let scanned = ScannedSources {
+        sources,
+        test_sources,
+    };
     let result = match kind {
         ProjectKind::Binary => {
             let src_main = project_path.join("src").join("main.lis");
@@ -155,7 +168,7 @@ fn check_project(project_path: &Path, options: &CheckOptions) -> i32 {
                 CompileScope::Project(project_path.to_path_buf()),
                 locator,
                 &go_module,
-                Some(sources),
+                Some(scanned),
             )
         }
         ProjectKind::Library => {
@@ -167,7 +180,7 @@ fn check_project(project_path: &Path, options: &CheckOptions) -> i32 {
                 CompileScope::Project(project_path.to_path_buf()),
                 locator,
                 &go_module,
-                Some(sources),
+                Some(scanned),
             );
             report_check(&result, "", "", options, start)
         }
@@ -182,10 +195,10 @@ fn check_single_file(
     scope: CompileScope,
     locator: TypedefLocator,
     go_module: &str,
-    sources: Option<Vec<PathBuf>>,
+    scanned: Option<ScannedSources>,
 ) -> i32 {
     let start = Instant::now();
-    let compiled = match compile_single_file(file_path, scope, locator, go_module, sources) {
+    let compiled = match compile_single_file(file_path, scope, locator, go_module, scanned) {
         Ok(compiled) => compiled,
         Err(ReadFailure) => return 1,
     };
@@ -262,7 +275,7 @@ fn compile_single_file(
     scope: CompileScope,
     locator: TypedefLocator,
     go_module: &str,
-    sources: Option<Vec<PathBuf>>,
+    scanned: Option<ScannedSources>,
 ) -> Result<CompiledFile, ReadFailure> {
     let source = match fs::read_to_string(file_path) {
         Ok(s) => s,
@@ -295,7 +308,7 @@ fn compile_single_file(
         scope,
         locator,
         go_module,
-        sources,
+        scanned,
     );
 
     Ok(CompiledFile {
@@ -311,7 +324,7 @@ fn compile_project_entry(
     scope: CompileScope,
     locator: TypedefLocator,
     go_module: &str,
-    sources: Option<Vec<PathBuf>>,
+    scanned: Option<ScannedSources>,
 ) -> CompileResult {
     let project_root = locator.project_root().map(|p| p.to_path_buf());
     let config = CompileConfig {
@@ -322,10 +335,16 @@ fn compile_project_entry(
         locator,
     };
 
-    let fs = match sources {
-        Some(sources) => {
-            LocalFileSystem::with_scanned_sources(dir, project_root.as_deref(), sources)
-        }
+    let fs = match scanned {
+        Some(ScannedSources {
+            sources,
+            test_sources,
+        }) => LocalFileSystem::with_scanned_sources(
+            dir,
+            project_root.as_deref(),
+            sources,
+            test_sources,
+        ),
         None => LocalFileSystem::new(dir.to_str().unwrap_or("."), project_root.as_deref()),
     };
     compile(input, &config, &fs)
