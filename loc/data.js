@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785068888129,
+  "lastUpdate": 1785069308234,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -12136,6 +12136,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "lsp",
             "value": 4451,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2764,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1039,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6084,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0b5fdfda8a2f7af1b26cad579fed25505338cc5d",
+          "message": "refactor: remove and forbid `too_many_arguments` exemptions (#1131)",
+          "timestamp": "2026-07-26T14:34:44+02:00",
+          "tree_id": "c11ac74f8c07a1f90ad48bdc4e80030d26602075",
+          "url": "https://github.com/ivov/lisette/commit/0b5fdfda8a2f7af1b26cad579fed25505338cc5d"
+        },
+        "date": 1785069306847,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 118464,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30192,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 24384,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 17027,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13559,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 10840,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6546,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4444,
             "unit": "lines"
           },
           {
