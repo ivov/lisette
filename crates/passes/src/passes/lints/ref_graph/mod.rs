@@ -14,7 +14,9 @@ use diagnostics::{Edit, Fix};
 use semantics::context::AnalysisContext;
 use semantics::facts::Facts;
 use semantics::store::Store;
-use syntax::ast::{Attribute, AttributeArg, Expression, ImportAlias, Span, Visibility};
+use syntax::ast::{
+    Attribute, AttributeArg, Expression, ImportAlias, Span, StructFieldDefinition, Visibility,
+};
 use syntax::program::EqualityIndex;
 use syntax::program::Module;
 use syntax::program::UnusedInfo;
@@ -221,8 +223,7 @@ fn collect_items(
                     ..
                 } => {
                     let id = ModuleItemId::new(name);
-                    let is_test = syntax::attributes::has_test_attribute(attributes);
-                    let is_entry = *visibility == Visibility::Public || name == "main" || is_test;
+                    let is_entry = function_is_entry(name, *visibility, attributes);
                     graph.add_item(id, *name_span, ItemKind::Function, is_entry);
                 }
                 Expression::Const {
@@ -272,25 +273,17 @@ fn collect_items(
                     let is_public = *visibility == Visibility::Public;
                     graph.add_item(id, *name_span, ItemKind::Type, is_public);
 
-                    let has_serialization_attr = has_serialization_attr(attributes);
-
-                    let has_display_attr = attributes.iter().any(|a| a.name == "display");
                     let qualified_name = format!("{module_id}.{name}");
-                    let synthesizes_equals = equality_index.is_synthesized(&qualified_name);
+                    let flags = StructLintFlags {
+                        is_public,
+                        has_serialization_attr: has_serialization_attr(attributes),
+                        has_display_attr: attributes.iter().any(|a| a.name == "display"),
+                        synthesizes_equals: equality_index.is_synthesized(&qualified_name),
+                    };
 
                     for struct_field in fields {
-                        let field_id = StructFieldId::new(&qualified_name, &struct_field.name);
-                        let has_tag_attribute =
-                            struct_field.attributes().iter().any(|a| a.name == "tag");
-                        let lint_candidate = struct_field.visibility != Visibility::Public
-                            && !is_public
-                            && !has_serialization_attr
-                            && !has_display_attr
-                            && !synthesizes_equals
-                            && !has_tag_attribute
-                            && !struct_field.is_embedded()
-                            && !struct_field.name.starts_with('_');
-                        if lint_candidate {
+                        if field_is_lint_candidate(struct_field, &flags) {
+                            let field_id = StructFieldId::new(&qualified_name, &struct_field.name);
                             graph.add_struct_field(field_id, struct_field.name_span);
                         }
                     }
@@ -300,16 +293,8 @@ fn collect_items(
                     name_span,
                     visibility,
                     ..
-                } => {
-                    let id = ModuleItemId::new(name);
-                    graph.add_item(
-                        id,
-                        *name_span,
-                        ItemKind::Type,
-                        *visibility == Visibility::Public,
-                    );
                 }
-                Expression::Interface {
+                | Expression::Interface {
                     name,
                     name_span,
                     visibility,
@@ -337,9 +322,7 @@ fn collect_items(
                         } = method
                         {
                             let id = ModuleItemId::method(name, receiver_name);
-                            let is_entry = *visibility == Visibility::Public
-                                || is_upper(name)
-                                || matches!(name.as_str(), "string" | "goString" | "error");
+                            let is_entry = method_is_entry(name, *visibility);
                             graph.add_item(id, *name_span, ItemKind::Function, is_entry);
                         }
                     }
@@ -348,6 +331,35 @@ fn collect_items(
             }
         }
     }
+}
+
+fn function_is_entry(name: &str, visibility: Visibility, attributes: &[Attribute]) -> bool {
+    let is_test = syntax::attributes::has_test_attribute(attributes);
+    visibility == Visibility::Public || name == "main" || is_test
+}
+
+fn method_is_entry(name: &str, visibility: Visibility) -> bool {
+    visibility == Visibility::Public
+        || is_upper(name)
+        || matches!(name, "string" | "goString" | "error")
+}
+
+struct StructLintFlags {
+    is_public: bool,
+    has_serialization_attr: bool,
+    has_display_attr: bool,
+    synthesizes_equals: bool,
+}
+
+fn field_is_lint_candidate(field: &StructFieldDefinition, flags: &StructLintFlags) -> bool {
+    field.visibility != Visibility::Public
+        && !flags.is_public
+        && !flags.has_serialization_attr
+        && !flags.has_display_attr
+        && !flags.synthesizes_equals
+        && !field.attributes().iter().any(|a| a.name == "tag")
+        && !field.is_embedded()
+        && !field.name.starts_with('_')
 }
 
 fn has_serialization_attr(attributes: &[Attribute]) -> bool {

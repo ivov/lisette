@@ -33,8 +33,7 @@ fn visit_expression(
         Expression::Block { items, ty, .. }
         | Expression::TryBlock { items, ty, .. }
         | Expression::RecoverBlock { items, ty, .. } => {
-            let tail_is_discarded =
-                tail_ctx.is_some() || ty.is_unit() || ty.is_ignored() || ty.is_never();
+            let tail_is_discarded = tail_ctx.is_some() || discards_value(ty);
             visit_block_items(items, tail_is_discarded, tail_ctx, module_id, store, facts);
         }
         Expression::Function {
@@ -46,14 +45,7 @@ fn visit_expression(
             let Some(body) = body.definition() else {
                 return;
             };
-            let is_implicit_return = matches!(return_annotation, Annotation::Unknown);
-            let body_ty = body.get_type();
-            let tail_is_discarded = is_implicit_return
-                && (return_type.is_unit() || body_ty.is_ignored() || body_ty.is_never());
-            let ctx = tail_is_discarded.then(|| TailContext {
-                expected_span: signature_marker_span(body.get_span()),
-                expected_ty: return_type,
-            });
+            let ctx = tail_context_for_function(body, return_type, return_annotation);
             visit_expression(body, ctx.as_ref(), module_id, store, facts);
             return;
         }
@@ -64,24 +56,10 @@ fn visit_expression(
             return_annotation,
             ..
         } => {
-            let is_implicit_return = matches!(return_annotation, Annotation::Unknown);
-            let lambda_returns_unit = matches!(ty, Type::Function(f) if f.return_type.is_unit());
             let body_ty = body.get_type();
-            let tail_is_discarded = is_implicit_return
-                && (lambda_returns_unit
-                    || body_ty.is_unit()
-                    || body_ty.is_ignored()
-                    || body_ty.is_never());
-            let lambda_return_ty: &Type = match ty {
-                Type::Function(f) => &f.return_type,
-                _ => &body_ty,
-            };
-            let ctx = tail_is_discarded.then(|| TailContext {
-                expected_span: signature_marker_span(*span),
-                expected_ty: lambda_return_ty,
-            });
+            let ctx = tail_context_for_lambda(ty, *span, return_annotation, &body_ty);
 
-            if tail_is_discarded && !matches!(body.as_ref(), Expression::Block { .. }) {
+            if ctx.is_some() && !matches!(body.as_ref(), Expression::Block { .. }) {
                 descend_discarded(
                     body,
                     &DiscardMode::Tail(ctx.as_ref().into()),
@@ -94,22 +72,22 @@ fn visit_expression(
             visit_expression(body, ctx.as_ref(), module_id, store, facts);
             return;
         }
-        Expression::For { iterable, body, .. } => {
-            visit_expression(iterable, None, module_id, store, facts);
-            visit_loop_body(body, module_id, store, facts);
-            return;
+        Expression::For {
+            iterable: pre_child,
+            body,
+            ..
         }
-        Expression::While {
-            condition, body, ..
-        } => {
-            visit_expression(condition, None, module_id, store, facts);
-            visit_loop_body(body, module_id, store, facts);
-            return;
+        | Expression::While {
+            condition: pre_child,
+            body,
+            ..
         }
-        Expression::WhileLet {
-            scrutinee, body, ..
+        | Expression::WhileLet {
+            scrutinee: pre_child,
+            body,
+            ..
         } => {
-            visit_expression(scrutinee, None, module_id, store, facts);
+            visit_expression(pre_child, None, module_id, store, facts);
             visit_loop_body(body, module_id, store, facts);
             return;
         }
@@ -123,6 +101,45 @@ fn visit_expression(
     for child in expression.children() {
         visit_expression(child, None, module_id, store, facts);
     }
+}
+
+fn discards_value(ty: &Type) -> bool {
+    ty.is_unit() || ty.is_ignored() || ty.is_never()
+}
+
+fn tail_context_for_function<'a>(
+    body: &Expression,
+    return_type: &'a Type,
+    return_annotation: &Annotation,
+) -> Option<TailContext<'a>> {
+    let is_implicit_return = matches!(return_annotation, Annotation::Unknown);
+    let body_ty = body.get_type();
+    // Deliberately tests return_type.is_unit(), not body_ty.is_unit(), unlike the lambda case.
+    let tail_is_discarded =
+        is_implicit_return && (return_type.is_unit() || body_ty.is_ignored() || body_ty.is_never());
+    tail_is_discarded.then(|| TailContext {
+        expected_span: signature_marker_span(body.get_span()),
+        expected_ty: return_type,
+    })
+}
+
+fn tail_context_for_lambda<'a>(
+    ty: &'a Type,
+    span: Span,
+    return_annotation: &Annotation,
+    body_ty: &'a Type,
+) -> Option<TailContext<'a>> {
+    let is_implicit_return = matches!(return_annotation, Annotation::Unknown);
+    let lambda_returns_unit = matches!(ty, Type::Function(f) if f.return_type.is_unit());
+    let tail_is_discarded = is_implicit_return && (lambda_returns_unit || discards_value(body_ty));
+    let lambda_return_ty: &'a Type = match ty {
+        Type::Function(f) => &f.return_type,
+        _ => body_ty,
+    };
+    tail_is_discarded.then(|| TailContext {
+        expected_span: signature_marker_span(span),
+        expected_ty: lambda_return_ty,
+    })
 }
 
 fn visit_loop_body(

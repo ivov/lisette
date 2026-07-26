@@ -76,167 +76,36 @@ impl InferCtx<'_> {
             span,
         };
         let store = self.store;
-        if let Some(qualified_name) = self.lookup_qualified_name(store, &literal.name)
-            && let Some(Definition {
-                ty: struct_ty,
-                body:
-                    DefinitionBody::Struct {
-                        fields: struct_fields,
-                        ..
-                    },
-                ..
-            }) = store.get_definition(&qualified_name)
-        {
-            let struct_ty = struct_ty.clone();
-            let struct_fields = struct_fields.clone();
 
-            self.track_name_usage(
-                store,
-                &qualified_name,
-                &literal.span,
-                literal.name.len() as u32,
-            );
-            return self.infer_struct_call_for_struct(
-                literal,
-                ResolvedStruct {
-                    qualified_name,
-                    ty: struct_ty,
-                    fields: struct_fields,
-                    alias_underlying: None,
-                },
-                expected_ty,
-            );
+        if let Some(resolved) = self
+            .as_struct(store, &literal)
+            .or_else(|| self.as_alias_struct(store, &literal.name))
+        {
+            return self.infer_struct_call_for_struct(literal, resolved, expected_ty);
         }
 
+        // Opaque types (e.g., Go's sync.WaitGroup) can be zero-value instantiated
+        // with T{} even though they have no struct definition.
         if let Some(qualified_name) = self.lookup_qualified_name(store, &literal.name)
             && let Some(Definition {
                 ty: alias_ty,
                 body: DefinitionBody::TypeAlias { alias, .. },
                 ..
             }) = store.get_definition(&qualified_name)
+            && matches!(alias, syntax::program::AliasKind::Opaque(_))
+            && literal.fields.is_empty()
         {
             let alias_ty = alias_ty.clone();
-            let is_opaque = matches!(alias, syntax::program::AliasKind::Opaque(_));
-
-            let underlying = (!is_opaque).then(|| store.peel_alias(&alias_ty));
-            if let Some(Type::Nominal { id: struct_id, .. }) = &underlying
-                && let Some(Definition {
-                    ty: struct_ty,
-                    body:
-                        DefinitionBody::Struct {
-                            fields: struct_fields,
-                            ..
-                        },
-                    ..
-                }) = store.get_definition(struct_id)
-            {
-                let struct_ty = struct_ty.clone();
-                let struct_fields = struct_fields.clone();
-                let struct_id_str: EcoString = struct_id.into();
-                let alias_underlying = if matches!(&alias_ty, Type::Forall { .. }) {
-                    None
-                } else {
-                    underlying
-                };
-                return self.infer_struct_call_for_struct(
-                    literal,
-                    ResolvedStruct {
-                        qualified_name: struct_id_str,
-                        ty: struct_ty,
-                        fields: struct_fields,
-                        alias_underlying,
-                    },
-                    expected_ty,
-                );
-            }
-
-            // Opaque types (e.g., Go's sync.WaitGroup) can be zero-value instantiated
-            // with T{} even though they have no struct definition.
-            if is_opaque && literal.fields.is_empty() {
-                let (instantiated_ty, _) = self.instantiate(&alias_ty);
-                self.unify(expected_ty, &instantiated_ty, &literal.span);
-                return literal.with_type(instantiated_ty);
-            }
+            let (instantiated_ty, _) = self.instantiate(&alias_ty);
+            self.unify(expected_ty, &instantiated_ty, &literal.span);
+            return literal.with_type(instantiated_ty);
         }
 
-        if let Some((type_part, variant_name)) = literal.name.rsplit_once('.')
-            && let Some(qualified_name) = self.lookup_qualified_name(store, type_part)
-            && let Some(Definition {
-                ty: alias_ty,
-                body:
-                    DefinitionBody::TypeAlias {
-                        alias: syntax::program::AliasKind::Transparent { .. },
-                        ..
-                    },
-                ..
-            }) = store.get_definition(&qualified_name)
+        if let Some(resolved) = self
+            .as_alias_variant(store, &literal.name)
+            .or_else(|| self.as_variant(store, &literal.name))
         {
-            let alias_ty = alias_ty.clone();
-            let underlying = store.peel_alias(&alias_ty);
-            let variant_fields = if let Type::Nominal { id: enum_id, .. } = &underlying
-                && let Some(variants) = store.variants_of(enum_id)
-                && let Some(variant) = variants.iter().find(|v| v.name == variant_name)
-                && variant.fields.is_struct()
-            {
-                Some(variant.fields.iter().cloned().collect::<Vec<_>>())
-            } else {
-                None
-            };
-
-            if let Some(variant_fields) = variant_fields {
-                let (instantiated_ty, map) = self.instantiate(&alias_ty);
-                let instantiated_target = store.peel_alias(&instantiated_ty);
-                let enum_ty = match instantiated_target {
-                    Type::Function(f) => (*f.return_type).clone(),
-                    other => other,
-                };
-                return self.infer_struct_call_for_enum_variant(
-                    literal,
-                    ResolvedVariant {
-                        fields: variant_fields,
-                        substitutions: map,
-                        ty: enum_ty,
-                    },
-                    expected_ty,
-                );
-            }
-        }
-
-        if let Some(ty) = self.lookup_type(store, &literal.name) {
-            let (value_constructor_type, map) = self.instantiate(&ty);
-
-            let pattern_ty = match value_constructor_type {
-                Type::Function(f) => (*f.return_type).clone(),
-                Type::Nominal { .. } => value_constructor_type,
-                _ => {
-                    self.sink.push(diagnostics::infer::struct_not_found(
-                        &literal.name,
-                        literal.span,
-                    ));
-                    self.unify(expected_ty, &Type::Error, &literal.span);
-                    return literal.with_type(Type::Error);
-                }
-            };
-
-            let resolved_ty = pattern_ty.resolve_in(&self.env);
-            let variant_name = unqualified_name(&literal.name);
-
-            if let Type::Nominal { id, .. } = &resolved_ty
-                && let Some(variants) = store.variants_of(id)
-                && let Some(variant) = variants.iter().find(|v| v.name == variant_name)
-                && variant.fields.is_struct()
-            {
-                let variant_fields: Vec<_> = variant.fields.iter().cloned().collect();
-                return self.infer_struct_call_for_enum_variant(
-                    literal,
-                    ResolvedVariant {
-                        fields: variant_fields,
-                        substitutions: map,
-                        ty: pattern_ty,
-                    },
-                    expected_ty,
-                );
-            }
+            return self.infer_struct_call_for_enum_variant(literal, resolved, expected_ty);
         }
 
         self.sink.push(diagnostics::infer::struct_not_found(
@@ -245,6 +114,161 @@ impl InferCtx<'_> {
         ));
         self.unify(expected_ty, &Type::Error, &literal.span);
         literal.with_type(Type::Error)
+    }
+
+    fn as_struct(
+        &mut self,
+        store: &crate::store::Store,
+        literal: &StructLiteral,
+    ) -> Option<ResolvedStruct> {
+        let qualified_name = self.lookup_qualified_name(store, &literal.name)?;
+        let Definition {
+            ty: struct_ty,
+            body:
+                DefinitionBody::Struct {
+                    fields: struct_fields,
+                    ..
+                },
+            ..
+        } = store.get_definition(&qualified_name)?
+        else {
+            return None;
+        };
+        let struct_ty = struct_ty.clone();
+        let struct_fields = struct_fields.clone();
+
+        self.track_name_usage(
+            store,
+            &qualified_name,
+            &literal.span,
+            literal.name.len() as u32,
+        );
+        Some(ResolvedStruct {
+            qualified_name,
+            ty: struct_ty,
+            fields: struct_fields,
+            alias_underlying: None,
+        })
+    }
+
+    /// Resolve a `type Alias = Struct` name to its underlying struct.
+    fn as_alias_struct(&self, store: &crate::store::Store, name: &str) -> Option<ResolvedStruct> {
+        let qualified_name = self.lookup_qualified_name(store, name)?;
+        let Definition {
+            ty: alias_ty,
+            body: DefinitionBody::TypeAlias { alias, .. },
+            ..
+        } = store.get_definition(&qualified_name)?
+        else {
+            return None;
+        };
+        let alias_ty = alias_ty.clone();
+        let is_opaque = matches!(alias, syntax::program::AliasKind::Opaque(_));
+
+        let underlying = (!is_opaque).then(|| store.peel_alias(&alias_ty));
+        let Some(Type::Nominal { id: struct_id, .. }) = &underlying else {
+            return None;
+        };
+        let Definition {
+            ty: struct_ty,
+            body:
+                DefinitionBody::Struct {
+                    fields: struct_fields,
+                    ..
+                },
+            ..
+        } = store.get_definition(struct_id)?
+        else {
+            return None;
+        };
+        let struct_ty = struct_ty.clone();
+        let struct_fields = struct_fields.clone();
+        let struct_id_str: EcoString = struct_id.into();
+        // Deliberately None for a `Type::Forall` alias.
+        let alias_underlying = if matches!(&alias_ty, Type::Forall { .. }) {
+            None
+        } else {
+            underlying
+        };
+        Some(ResolvedStruct {
+            qualified_name: struct_id_str,
+            ty: struct_ty,
+            fields: struct_fields,
+            alias_underlying,
+        })
+    }
+
+    fn as_alias_variant(
+        &mut self,
+        store: &crate::store::Store,
+        name: &str,
+    ) -> Option<ResolvedVariant> {
+        let (type_part, variant_name) = name.rsplit_once('.')?;
+        let qualified_name = self.lookup_qualified_name(store, type_part)?;
+        let Definition {
+            ty: alias_ty,
+            body:
+                DefinitionBody::TypeAlias {
+                    alias: syntax::program::AliasKind::Transparent { .. },
+                    ..
+                },
+            ..
+        } = store.get_definition(&qualified_name)?
+        else {
+            return None;
+        };
+        let alias_ty = alias_ty.clone();
+        let underlying = store.peel_alias(&alias_ty);
+        let Type::Nominal { id: enum_id, .. } = &underlying else {
+            return None;
+        };
+        let variants = store.variants_of(enum_id)?;
+        let variant = variants.iter().find(|v| v.name == variant_name)?;
+        if !variant.fields.is_struct() {
+            return None;
+        }
+        let variant_fields: Vec<_> = variant.fields.iter().cloned().collect();
+
+        let (instantiated_ty, map) = self.instantiate(&alias_ty);
+        let instantiated_target = store.peel_alias(&instantiated_ty);
+        let enum_ty = match instantiated_target {
+            Type::Function(f) => (*f.return_type).clone(),
+            other => other,
+        };
+        Some(ResolvedVariant {
+            fields: variant_fields,
+            substitutions: map,
+            ty: enum_ty,
+        })
+    }
+
+    fn as_variant(&mut self, store: &crate::store::Store, name: &str) -> Option<ResolvedVariant> {
+        let ty = self.lookup_type(store, name)?;
+        let (value_constructor_type, map) = self.instantiate(&ty);
+
+        let pattern_ty = match value_constructor_type {
+            Type::Function(f) => (*f.return_type).clone(),
+            Type::Nominal { .. } => value_constructor_type,
+            _ => return None,
+        };
+
+        let resolved_ty = pattern_ty.resolve_in(&self.env);
+        let variant_name = unqualified_name(name);
+
+        let Type::Nominal { id, .. } = &resolved_ty else {
+            return None;
+        };
+        let variants = store.variants_of(id)?;
+        let variant = variants.iter().find(|v| v.name == variant_name)?;
+        if !variant.fields.is_struct() {
+            return None;
+        }
+        let variant_fields: Vec<_> = variant.fields.iter().cloned().collect();
+        Some(ResolvedVariant {
+            fields: variant_fields,
+            substitutions: map,
+            ty: pattern_ty,
+        })
     }
 
     fn infer_struct_call_for_struct(

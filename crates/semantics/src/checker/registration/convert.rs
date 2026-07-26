@@ -178,171 +178,16 @@ impl TaskState {
                 name: type_name,
                 params,
                 span: annotation_span,
-            } => {
-                if type_name == "VarArgs" && !variadic_allowed {
-                    self.sink
-                        .push(diagnostics::infer::variadic_type_not_allowed(
-                            *annotation_span,
-                        ));
-                    return Type::Error;
-                }
-
-                // Unit is internal — `()` desugars to Constructor { name: "Unit" }.
-                // Return the interned unit type directly, unless a user-defined
-                // type named `Unit` exists in scope.
-                if type_name == "Unit"
-                    && params.is_empty()
-                    && self.resolve_type_name(store, "Unit").is_none()
-                {
-                    return Type::unit();
-                }
-
-                if self.lookup_generic_index(type_name).is_some() {
-                    if !params.is_empty() {
-                        self.sink.push(diagnostics::infer::type_param_with_args(
-                            params.len(),
-                            *annotation_span,
-                        ));
-                    }
-                    return Type::Parameter(type_name.into());
-                }
-
-                // `Array` carries a const-integer size, so it needs its own path.
-                if type_name == "Array" {
-                    return self.convert_array_annotation(
-                        store,
-                        params,
-                        *annotation_span,
-                        span,
-                        type_argument_checks,
-                    );
-                }
-
-                let Some((qualified_name, ty)) =
-                    self.resolve_type_with_arity(store, type_name, params.len())
-                else {
-                    if type_name == "Self" {
-                        let receiver = self.scopes.impl_receiver_type().map(|ty| ty.stringify());
-                        self.sink.push(diagnostics::infer::self_type_not_supported(
-                            *annotation_span,
-                            receiver.as_deref(),
-                        ));
-                    } else {
-                        self.sink.push(diagnostics::infer::type_not_found(
-                            type_name,
-                            *annotation_span,
-                        ));
-                    }
-                    return Type::Error;
-                };
-
-                if let Some((kind, help)) =
-                    self.classify_non_type_name(store, &qualified_name, type_name)
-                {
-                    self.sink.push(diagnostics::infer::value_in_type_position(
-                        type_name,
-                        kind,
-                        *annotation_span,
-                        help,
-                    ));
-                    return Type::Error;
-                }
-
-                self.track_name_usage(
-                    store,
-                    &qualified_name,
-                    annotation_span,
-                    type_name.len() as u32,
-                );
-
-                if position == TypePosition::Value
-                    && let Some(builtin) =
-                        crate::checker::infer::BuiltinBound::from_qualified_id(&qualified_name)
-                {
-                    self.sink
-                        .push(diagnostics::infer::bound_only_in_value_position(
-                            builtin.label(),
-                            *annotation_span,
-                        ));
-                    return Type::Error;
-                }
-
-                let (generics, body) = match ty {
-                    Type::Forall { vars, body } => (vars, *body),
-                    other => (vec![], other),
-                };
-
-                let concrete_args: Vec<Type> = params
-                    .iter()
-                    .map(|arg| {
-                        self.convert_to_type_mode(
-                            store,
-                            arg,
-                            span,
-                            false,
-                            type_argument_checks.nested(),
-                            TypePosition::Value,
-                        )
-                    })
-                    .collect();
-
-                if generics.len() != params.len() {
-                    let generics_as_str: Vec<String> =
-                        generics.iter().map(|s| s.to_string()).collect();
-                    self.sink.push(diagnostics::infer::generics_arity_mismatch(
-                        &generics_as_str,
-                        params,
-                        &concrete_args,
-                        *span,
-                    ));
-                }
-                if type_argument_checks.current() && qualified_name != "prelude.Map" {
-                    self.check_type_argument_bounds(
-                        store,
-                        &qualified_name,
-                        &concrete_args,
-                        *annotation_span,
-                    );
-                }
-                let resolved_ty = if generics.is_empty() && concrete_args.is_empty() {
-                    body
-                } else {
-                    let map: SubstitutionMap = generics
-                        .iter()
-                        .cloned()
-                        .zip(concrete_args.iter().cloned())
-                        .collect();
-                    substitute(&body, &map)
-                };
-
-                // Reject Ref<InterfaceType> — Go pointer-to-interface is invalid
-                if self.is_lis(store)
-                    && qualified_name == "prelude.Ref"
-                    && params.len() == 1
-                    && let Some(inner) = resolved_ty.inner()
-                {
-                    let peeled_inner = store.peel_alias(&inner.resolve_in(&self.env));
-                    if let Some(inner_id) = peeled_inner.get_qualified_id()
-                        && store.get_interface(inner_id).is_some()
-                    {
-                        self.sink.push(diagnostics::infer::ref_of_interface_type(
-                            &inner,
-                            *annotation_span,
-                        ));
-                    }
-                }
-
-                if type_argument_checks.current()
-                    && qualified_name == "prelude.Map"
-                    && let Some(key_ty) = resolved_ty
-                        .get_type_params()
-                        .and_then(|parameters| parameters.first())
-                {
-                    self.check_map_key_comparable(store, key_ty, *annotation_span);
-                }
-
-                resolved_ty
-            }
+            } => self.convert_constructor_annotation(
+                store,
+                type_name,
+                params,
+                *annotation_span,
+                span,
+                variadic_allowed,
+                type_argument_checks,
+                position,
+            ),
 
             Annotation::Tuple { elements, .. } => {
                 let element_types = elements
@@ -373,6 +218,180 @@ impl TaskState {
                 unreachable!("Annotation::Opaque should not be converted to a type")
             }
         }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn convert_constructor_annotation(
+        &mut self,
+        store: &Store,
+        type_name: &EcoString,
+        params: &[Annotation],
+        annotation_span: Span,
+        span: &Span,
+        variadic_allowed: bool,
+        type_argument_checks: TypeArgumentChecks,
+        position: TypePosition,
+    ) -> Type {
+        if type_name == "VarArgs" && !variadic_allowed {
+            self.sink
+                .push(diagnostics::infer::variadic_type_not_allowed(
+                    annotation_span,
+                ));
+            return Type::Error;
+        }
+
+        // Unit is internal — `()` desugars to Constructor { name: "Unit" }.
+        // Return the interned unit type directly, unless a user-defined
+        // type named `Unit` exists in scope.
+        if type_name == "Unit"
+            && params.is_empty()
+            && self.resolve_type_name(store, "Unit").is_none()
+        {
+            return Type::unit();
+        }
+
+        if self.lookup_generic_index(type_name).is_some() {
+            if !params.is_empty() {
+                self.sink.push(diagnostics::infer::type_param_with_args(
+                    params.len(),
+                    annotation_span,
+                ));
+            }
+            return Type::Parameter(type_name.into());
+        }
+
+        // `Array` carries a const-integer size, so it needs its own path.
+        if type_name == "Array" {
+            return self.convert_array_annotation(
+                store,
+                params,
+                annotation_span,
+                span,
+                type_argument_checks,
+            );
+        }
+
+        let Some((qualified_name, ty)) =
+            self.resolve_type_with_arity(store, type_name, params.len())
+        else {
+            if type_name == "Self" {
+                let receiver = self.scopes.impl_receiver_type().map(|ty| ty.stringify());
+                self.sink.push(diagnostics::infer::self_type_not_supported(
+                    annotation_span,
+                    receiver.as_deref(),
+                ));
+            } else {
+                self.sink.push(diagnostics::infer::type_not_found(
+                    type_name,
+                    annotation_span,
+                ));
+            }
+            return Type::Error;
+        };
+
+        if let Some((kind, help)) = self.classify_non_type_name(store, &qualified_name, type_name) {
+            self.sink.push(diagnostics::infer::value_in_type_position(
+                type_name,
+                kind,
+                annotation_span,
+                help,
+            ));
+            return Type::Error;
+        }
+
+        self.track_name_usage(
+            store,
+            &qualified_name,
+            &annotation_span,
+            type_name.len() as u32,
+        );
+
+        if position == TypePosition::Value
+            && let Some(builtin) =
+                crate::checker::infer::BuiltinBound::from_qualified_id(&qualified_name)
+        {
+            self.sink
+                .push(diagnostics::infer::bound_only_in_value_position(
+                    builtin.label(),
+                    annotation_span,
+                ));
+            return Type::Error;
+        }
+
+        let (generics, body) = match ty {
+            Type::Forall { vars, body } => (vars, *body),
+            other => (vec![], other),
+        };
+
+        let concrete_args: Vec<Type> = params
+            .iter()
+            .map(|arg| {
+                self.convert_to_type_mode(
+                    store,
+                    arg,
+                    span,
+                    false,
+                    type_argument_checks.nested(),
+                    TypePosition::Value,
+                )
+            })
+            .collect();
+
+        if generics.len() != params.len() {
+            let generics_as_str: Vec<String> = generics.iter().map(|s| s.to_string()).collect();
+            self.sink.push(diagnostics::infer::generics_arity_mismatch(
+                &generics_as_str,
+                params,
+                &concrete_args,
+                *span,
+            ));
+        }
+        if type_argument_checks.current() && qualified_name != "prelude.Map" {
+            self.check_type_argument_bounds(
+                store,
+                &qualified_name,
+                &concrete_args,
+                annotation_span,
+            );
+        }
+        let resolved_ty = if generics.is_empty() && concrete_args.is_empty() {
+            body
+        } else {
+            let map: SubstitutionMap = generics
+                .iter()
+                .cloned()
+                .zip(concrete_args.iter().cloned())
+                .collect();
+            substitute(&body, &map)
+        };
+
+        // Reject Ref<InterfaceType> — Go pointer-to-interface is invalid
+        if self.is_lis(store)
+            && qualified_name == "prelude.Ref"
+            && params.len() == 1
+            && let Some(inner) = resolved_ty.inner()
+        {
+            let peeled_inner = store.peel_alias(&inner.resolve_in(&self.env));
+            if let Some(inner_id) = peeled_inner.get_qualified_id()
+                && store.get_interface(inner_id).is_some()
+            {
+                self.sink.push(diagnostics::infer::ref_of_interface_type(
+                    &inner,
+                    annotation_span,
+                ));
+            }
+        }
+
+        if type_argument_checks.current()
+            && qualified_name == "prelude.Map"
+            && let Some(key_ty) = resolved_ty
+                .get_type_params()
+                .and_then(|parameters| parameters.first())
+        {
+            self.check_map_key_comparable(store, key_ty, annotation_span);
+        }
+
+        resolved_ty
     }
 
     fn convert_array_annotation(

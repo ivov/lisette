@@ -36,6 +36,7 @@ use crate::definition::{
 use crate::project::find_project_root;
 use crate::snapshot::AnalysisSnapshot;
 use crate::traversal::find_expression_at;
+use syntax::program::File;
 
 pub use crate::service::{ProtocolAdapter, build_service};
 pub use crate::state::{Backend, SharedState};
@@ -286,6 +287,11 @@ impl LanguageServer for Backend {
                 .find(|b| b.span.file_id == file_id && offset_in_span(offset, &b.span))
                 .map(|b| b.span)
         };
+        let binding_or_word_fallback = |resolved: Option<syntax::ast::Span>| {
+            resolved
+                .or_else(&find_binding)
+                .or_else(|| resolve_word_at_offset(&file.source, offset, file, &snapshot))
+        };
 
         let definition_span = match expression {
             syntax::ast::Expression::Identifier {
@@ -410,59 +416,21 @@ impl LanguageServer for Backend {
                     .or_else(|| resolve_word_at_offset(&file.source, offset, file, &snapshot))
             }
 
-            syntax::ast::Expression::Match { arms, .. } => {
-                resolve_match_pattern_definition(arms, offset, file, &snapshot)
-                    .or_else(&find_binding)
-                    .or_else(|| resolve_word_at_offset(&file.source, offset, file, &snapshot))
-            }
+            syntax::ast::Expression::Match { arms, .. } => binding_or_word_fallback(
+                resolve_match_pattern_definition(arms, offset, file, &snapshot),
+            ),
 
             syntax::ast::Expression::IfLet { pattern, .. }
             | syntax::ast::Expression::WhileLet { pattern, .. } => {
-                resolve_enum_in_pattern(pattern, offset, file, &snapshot)
-                    .or_else(&find_binding)
-                    .or_else(|| resolve_word_at_offset(&file.source, offset, file, &snapshot))
+                binding_or_word_fallback(resolve_enum_in_pattern(pattern, offset, file, &snapshot))
             }
 
-            _ => find_binding()
-                .or_else(|| resolve_word_at_offset(&file.source, offset, file, &snapshot)),
+            _ => binding_or_word_fallback(None),
         };
 
-        let Some(definition_span) = definition_span else {
-            return Ok(None);
-        };
-
-        // A dummy span (zero length) would resolve to offset 0 of file_id 0;
-        // refuse rather than jump there.
-        if definition_span.is_dummy() {
-            return Ok(None);
-        }
-
-        if let Some(target_file) = snapshot.files().get(&definition_span.file_id) {
-            let end = (definition_span.byte_offset as usize)
-                .saturating_add(definition_span.byte_length as usize);
-            if end > target_file.source.len() {
-                return Ok(None);
-            }
-        }
-
-        // The typedef file may be absent (cache cleared, or pruned by another lis
-        // version); decline instead of returning a dangling Location.
-        if let Some(path) = snapshot.typedef_path(definition_span.file_id)
-            && !path.exists()
-        {
-            return Ok(None);
-        }
-
-        let Some(target) = snapshot.source(definition_span.file_id) else {
-            return Ok(None);
-        };
-
-        let range = target.line_index.span_to_range(definition_span);
-
-        Ok(Some(GotoDefinitionResponse::Scalar(Location {
-            uri: target.uri.clone(),
-            range,
-        })))
+        Ok(definition_span
+            .and_then(|span| location_for(span, &snapshot))
+            .map(GotoDefinitionResponse::Scalar))
     }
 
     async fn document_symbol(
@@ -651,13 +619,29 @@ impl LanguageServer for Backend {
         let line_index = cursor.document.line_index;
         let offset = cursor.offset;
 
+        let rename_response =
+            |span: syntax::ast::Span, placeholder: &str| -> Result<Option<PrepareRenameResponse>> {
+                Ok(Some(PrepareRenameResponse::RangeWithPlaceholder {
+                    range: line_index.span_to_range(span),
+                    placeholder: placeholder.to_string(),
+                }))
+            };
+        let rename_word_if_resolved =
+            |resolved: Option<syntax::ast::Span>| -> Result<Option<PrepareRenameResponse>> {
+                if let Some(definition_span) = resolved
+                    && !is_generated_typedef_span(&snapshot, &definition_span)
+                    && let Some((word, start, end)) = word_at_offset(&file.source, offset)
+                {
+                    let span = syntax::ast::Span::new(file_id, start as u32, (end - start) as u32);
+                    return rename_response(span, word);
+                }
+                Ok(None)
+            };
+
         for binding in snapshot.facts().bindings.values() {
             let span = binding.span;
             if span.file_id == file_id && offset_in_span(offset, &span) {
-                return Ok(Some(PrepareRenameResponse::RangeWithPlaceholder {
-                    range: line_index.span_to_range(span),
-                    placeholder: binding.name.clone(),
-                }));
+                return rename_response(span, &binding.name);
             }
         }
 
@@ -677,10 +661,7 @@ impl LanguageServer for Backend {
                 .and_then(|type_id| find_struct_field_span(&type_id, &fa.name, &snapshot))
                 .is_some()
         {
-            return Ok(Some(PrepareRenameResponse::RangeWithPlaceholder {
-                range: line_index.span_to_range(fa.name_span),
-                placeholder: fa.name.to_string(),
-            }));
+            return rename_response(fa.name_span, &fa.name);
         }
 
         match expression {
@@ -693,10 +674,7 @@ impl LanguageServer for Backend {
                 if let Some(binding) = snapshot.facts().bindings.get(id)
                     && binding.span.file_id == file_id
                 {
-                    Ok(Some(PrepareRenameResponse::RangeWithPlaceholder {
-                        range: line_index.span_to_range(*span),
-                        placeholder: value.to_string(),
-                    }))
+                    rename_response(*span, value)
                 } else {
                     Ok(None)
                 }
@@ -710,11 +688,7 @@ impl LanguageServer for Backend {
             } => {
                 validation::check_rename_guards(qname.as_str())?;
                 if snapshot.definitions().contains_key(qname.as_str()) {
-                    let short_name = syntax::types::unqualified_name(value);
-                    Ok(Some(PrepareRenameResponse::RangeWithPlaceholder {
-                        range: line_index.span_to_range(*span),
-                        placeholder: short_name.to_string(),
-                    }))
+                    rename_response(*span, syntax::types::unqualified_name(value))
                 } else {
                     Ok(None)
                 }
@@ -731,10 +705,7 @@ impl LanguageServer for Backend {
             } => {
                 let qname = format!("{}.{}", file.module_id, name);
                 validation::check_rename_guards(&qname)?;
-                Ok(Some(PrepareRenameResponse::RangeWithPlaceholder {
-                    range: line_index.span_to_range(*name_span),
-                    placeholder: name.to_string(),
-                }))
+                rename_response(*name_span, name)
             }
 
             syntax::ast::Expression::Struct {
@@ -748,16 +719,10 @@ impl LanguageServer for Backend {
                     && find_struct_field_span(&qname, &field.name, &snapshot).is_some()
                 {
                     validation::check_rename_guards(&qname)?;
-                    return Ok(Some(PrepareRenameResponse::RangeWithPlaceholder {
-                        range: line_index.span_to_range(field.name_span),
-                        placeholder: field.name.to_string(),
-                    }));
+                    return rename_response(field.name_span, &field.name);
                 }
                 validation::check_rename_guards(&qname)?;
-                Ok(Some(PrepareRenameResponse::RangeWithPlaceholder {
-                    range: line_index.span_to_range(*name_span),
-                    placeholder: name.to_string(),
-                }))
+                rename_response(*name_span, name)
             }
 
             syntax::ast::Expression::Enum {
@@ -772,25 +737,16 @@ impl LanguageServer for Backend {
                 {
                     let qname = format!("{}.{}.{}", file.module_id, name, variant.name);
                     validation::check_rename_guards(&qname)?;
-                    return Ok(Some(PrepareRenameResponse::RangeWithPlaceholder {
-                        range: line_index.span_to_range(variant.name_span),
-                        placeholder: variant.name.to_string(),
-                    }));
+                    return rename_response(variant.name_span, &variant.name);
                 }
                 let qualified_name = format!("{}.{}", file.module_id, name);
                 validation::check_rename_guards(&qualified_name)?;
-                Ok(Some(PrepareRenameResponse::RangeWithPlaceholder {
-                    range: line_index.span_to_range(*name_span),
-                    placeholder: name.to_string(),
-                }))
+                rename_response(*name_span, name)
             }
 
             syntax::ast::Expression::VariableDeclaration {
                 name, name_span, ..
-            } => Ok(Some(PrepareRenameResponse::RangeWithPlaceholder {
-                range: line_index.span_to_range(*name_span),
-                placeholder: name.to_string(),
-            })),
+            } => rename_response(*name_span, name),
 
             syntax::ast::Expression::Const {
                 identifier,
@@ -799,10 +755,7 @@ impl LanguageServer for Backend {
             } => {
                 let qname = format!("{}.{}", file.module_id, identifier);
                 validation::check_rename_guards(&qname)?;
-                Ok(Some(PrepareRenameResponse::RangeWithPlaceholder {
-                    range: line_index.span_to_range(*identifier_span),
-                    placeholder: identifier.to_string(),
-                }))
+                rename_response(*identifier_span, identifier)
             }
 
             syntax::ast::Expression::DotAccess {
@@ -821,59 +774,25 @@ impl LanguageServer for Backend {
                         span.byte_offset + span.byte_length - member.len() as u32,
                         member.len() as u32,
                     );
-                    Ok(Some(PrepareRenameResponse::RangeWithPlaceholder {
-                        range: line_index.span_to_range(member_span),
-                        placeholder: member.to_string(),
-                    }))
+                    rename_response(member_span, member)
                 } else {
                     Ok(None)
                 }
             }
 
-            syntax::ast::Expression::Match { arms, .. } => {
-                if let Some(def_span) =
-                    resolve_match_pattern_definition(arms, offset, file, &snapshot)
-                    && !is_generated_typedef_span(&snapshot, &def_span)
-                    && let Some((word, start, end)) = word_at_offset(&file.source, offset)
-                {
-                    let span = syntax::ast::Span::new(file_id, start as u32, (end - start) as u32);
-                    return Ok(Some(PrepareRenameResponse::RangeWithPlaceholder {
-                        range: line_index.span_to_range(span),
-                        placeholder: word.to_string(),
-                    }));
-                }
-                Ok(None)
-            }
+            syntax::ast::Expression::Match { arms, .. } => rename_word_if_resolved(
+                resolve_match_pattern_definition(arms, offset, file, &snapshot),
+            ),
 
             syntax::ast::Expression::IfLet { pattern, .. }
             | syntax::ast::Expression::WhileLet { pattern, .. } => {
-                if let Some(def_span) = resolve_enum_in_pattern(pattern, offset, file, &snapshot)
-                    && !is_generated_typedef_span(&snapshot, &def_span)
-                    && let Some((word, start, end)) = word_at_offset(&file.source, offset)
-                {
-                    let span = syntax::ast::Span::new(file_id, start as u32, (end - start) as u32);
-                    return Ok(Some(PrepareRenameResponse::RangeWithPlaceholder {
-                        range: line_index.span_to_range(span),
-                        placeholder: word.to_string(),
-                    }));
-                }
-                Ok(None)
+                rename_word_if_resolved(resolve_enum_in_pattern(pattern, offset, file, &snapshot))
             }
 
-            _ => {
-                if let Some((word, start, end)) = word_at_offset(&file.source, offset)
-                    && let Some(def_span) = lookup_definition_span(word, file, &snapshot)
-                    && !is_generated_typedef_span(&snapshot, &def_span)
-                {
-                    let span = syntax::ast::Span::new(file_id, start as u32, (end - start) as u32);
-                    Ok(Some(PrepareRenameResponse::RangeWithPlaceholder {
-                        range: line_index.span_to_range(span),
-                        placeholder: word.to_string(),
-                    }))
-                } else {
-                    Ok(None)
-                }
-            }
+            _ => rename_word_if_resolved(
+                word_at_offset(&file.source, offset)
+                    .and_then(|(word, _, _)| lookup_definition_span(word, file, &snapshot)),
+            ),
         }
     }
 
@@ -1030,174 +949,32 @@ impl LanguageServer for Backend {
             return Ok(Some(CompletionResponse::Array(items)));
         }
 
-        if let Some(module_name) = get_module_prefix(&file.source, offset as usize)
-            && let Some(imp) = file.imports().iter().find(|imp| {
-                imp.effective_alias(&snapshot.result.emit_input.go_package_names)
-                    .as_deref()
-                    == Some(module_name)
-            })
+        let module_prefix = get_module_prefix(&file.source, offset as usize);
+
+        if let Some(module_name) = module_prefix
+            && let Some(items) = imported_module_completions(module_name, file, &snapshot)
         {
-            let mut items = Vec::new();
-            for (qname, definition) in snapshot.definitions().iter() {
-                if let Some(rest) = qname.strip_prefix(imp.name.as_str())
-                    && let Some(name) = rest.strip_prefix('.')
-                    && !name.contains('.')
-                    && definition.visibility.is_public()
-                {
-                    items.push(CompletionItem {
-                        label: name.to_string(),
-                        kind: Some(definition_to_completion_kind(definition)),
-                        detail: Some(definition.ty.to_string()),
-                        ..Default::default()
-                    });
-                }
-            }
             return Ok(Some(CompletionResponse::Array(items)));
         }
 
-        if let Some(ctx) = detect_dot_context(file, offset, &snapshot) {
-            let items = match ctx {
-                DotContext::Instance(type_id) => {
-                    let same_module = id_is_in_module(&type_id, &file.module_id);
-                    get_instance_completions(&type_id, &snapshot, same_module)
-                }
-                DotContext::TypeLevel(type_id) => {
-                    get_type_completions(&type_id, &snapshot, &file.module_id)
-                }
-            };
+        if let Some(items) = dot_context_completions(file, offset, &snapshot) {
             return Ok(Some(CompletionResponse::Array(items)));
         }
 
-        if let Some(prefix) = get_module_prefix(&file.source, offset as usize) {
-            if prefix == "self" {
-                if let Some(impl_type) = traversal::find_enclosing_impl_type(&file.items, offset) {
-                    let type_id = format!("{}.{}", file.module_id, impl_type);
-                    let items = get_instance_completions(&type_id, &snapshot, true);
-                    return Ok(Some(CompletionResponse::Array(items)));
-                }
-            } else {
-                for module in [file.module_id.as_str(), "prelude"] {
-                    let qualified = format!("{module}.{prefix}");
-                    if let Some(definition) = snapshot.definitions().get(qualified.as_str())
-                        && definition.is_type_definition()
-                    {
-                        let items = get_type_completions(&qualified, &snapshot, &file.module_id);
-                        return Ok(Some(CompletionResponse::Array(items)));
-                    }
-                }
-
-                for import in file.imports() {
-                    let qualified = format!("{}.{}", import.name, prefix);
-                    if let Some(definition) = snapshot.definitions().get(qualified.as_str())
-                        && definition.is_type_definition()
-                        && definition.visibility.is_public()
-                    {
-                        let items = get_type_completions(&qualified, &snapshot, &file.module_id);
-                        return Ok(Some(CompletionResponse::Array(items)));
-                    }
-                }
-
-                let indexed =
-                    offset as usize >= 2 && file.source.as_bytes()[offset as usize - 2] == b']';
-                if let Some(type_id) =
-                    resolve_variable_type(prefix, file, offset, &snapshot, indexed)
-                {
-                    let same_module = id_is_in_module(&type_id, &file.module_id);
-                    let items = get_instance_completions(&type_id, &snapshot, same_module);
-                    return Ok(Some(CompletionResponse::Array(items)));
-                }
-            }
-
-            return Ok(Some(CompletionResponse::Array(vec![])));
-        }
-
-        // In a struct literal's field-name position, offer the unassigned fields.
-        if let Some((name, ty, assigned)) = detect_struct_literal_field_context(file, offset)
-            && let Some(type_id) = type_name(ty, &snapshot)
-        {
-            let same_module = id_is_in_module(&type_id, &file.module_id);
-            let items = get_struct_literal_completions(
-                &type_id,
-                name,
-                &snapshot,
-                same_module,
-                assigned,
-                offset,
-            );
+        if let Some(prefix) = module_prefix {
+            // A prefix that resolves to nothing still returns here: a `foo.`
+            // cursor must never fall through to the general completions below.
+            let items = module_prefix_completions(prefix, file, offset, &snapshot);
             return Ok(Some(CompletionResponse::Array(items)));
         }
 
-        let mut items = Vec::new();
-
-        for kw in validation::KEYWORDS {
-            items.push(CompletionItem {
-                label: kw.to_string(),
-                kind: Some(CompletionItemKind::KEYWORD),
-                ..Default::default()
-            });
+        if let Some(items) = struct_literal_field_completions(file, offset, &snapshot) {
+            return Ok(Some(CompletionResponse::Array(items)));
         }
 
-        const PRELUDE_TYPES: &[&str] = &[
-            "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32",
-            "uint64", "float32", "float64", "string", "bool", "rune", "byte", "Option", "Result",
-            "Slice", "Map", "Channel", "Array",
-        ];
-        for ty in PRELUDE_TYPES {
-            items.push(CompletionItem {
-                label: ty.to_string(),
-                kind: Some(CompletionItemKind::TYPE_PARAMETER),
-                ..Default::default()
-            });
-        }
-
-        const PRELUDE_VALUES: &[&str] = &[
-            "Some", "None", "Ok", "Err", "Unit", "println", "print", "panic", "len", "cap", "make",
-            "append", "copy",
-        ];
-        for val in PRELUDE_VALUES {
-            items.push(CompletionItem {
-                label: val.to_string(),
-                kind: Some(CompletionItemKind::FUNCTION),
-                ..Default::default()
-            });
-        }
-
-        let module_prefix = format!("{}.", file.module_id);
-        for (qname, definition) in snapshot.definitions().iter() {
-            if let Some(name) = qname.strip_prefix(&module_prefix)
-                && !name.contains('.')
-            {
-                items.push(CompletionItem {
-                    label: name.to_string(),
-                    kind: Some(definition_to_completion_kind(definition)),
-                    detail: Some(definition.ty.to_string()),
-                    ..Default::default()
-                });
-            }
-        }
-
-        for binding in snapshot.facts().bindings.values() {
-            if binding.span.file_id == file_id && binding.span.byte_offset < offset {
-                items.push(CompletionItem {
-                    label: binding.name.clone(),
-                    kind: Some(CompletionItemKind::VARIABLE),
-                    ..Default::default()
-                });
-            }
-        }
-
-        for import in file.imports() {
-            let alias = import
-                .effective_alias(&snapshot.result.emit_input.go_package_names)
-                .unwrap_or_else(|| import.name.to_string());
-            items.push(CompletionItem {
-                label: alias,
-                kind: Some(CompletionItemKind::MODULE),
-                ..Default::default()
-            });
-        }
-
-        Ok(Some(CompletionResponse::Array(items)))
+        Ok(Some(CompletionResponse::Array(general_completions(
+            file, file_id, offset, &snapshot,
+        ))))
     }
 
     async fn signature_help(&self, params: SignatureHelpParams) -> Result<Option<SignatureHelp>> {
@@ -1219,6 +996,218 @@ impl LanguageServer for Backend {
     async fn shutdown(&self) -> Result<()> {
         Ok(())
     }
+}
+
+fn location_for(span: syntax::ast::Span, snapshot: &AnalysisSnapshot) -> Option<Location> {
+    if span.is_dummy() {
+        return None;
+    }
+
+    if let Some(target_file) = snapshot.files().get(&span.file_id) {
+        let end = (span.byte_offset as usize).saturating_add(span.byte_length as usize);
+        if end > target_file.source.len() {
+            return None;
+        }
+    }
+
+    if let Some(path) = snapshot.typedef_path(span.file_id)
+        && !path.exists()
+    {
+        return None;
+    }
+
+    let target = snapshot.source(span.file_id)?;
+    Some(Location {
+        uri: target.uri.clone(),
+        range: target.line_index.span_to_range(span),
+    })
+}
+
+fn imported_module_completions(
+    module_name: &str,
+    file: &File,
+    snapshot: &AnalysisSnapshot,
+) -> Option<Vec<CompletionItem>> {
+    let imports = file.imports();
+    let imp = imports.iter().find(|imp| {
+        imp.effective_alias(&snapshot.result.emit_input.go_package_names)
+            .as_deref()
+            == Some(module_name)
+    })?;
+
+    let mut items = Vec::new();
+    for (qname, definition) in snapshot.definitions().iter() {
+        if let Some(rest) = qname.strip_prefix(imp.name.as_str())
+            && let Some(name) = rest.strip_prefix('.')
+            && !name.contains('.')
+            && definition.visibility.is_public()
+        {
+            items.push(CompletionItem {
+                label: name.to_string(),
+                kind: Some(definition_to_completion_kind(definition)),
+                detail: Some(definition.ty.to_string()),
+                ..Default::default()
+            });
+        }
+    }
+    Some(items)
+}
+
+fn dot_context_completions(
+    file: &File,
+    offset: u32,
+    snapshot: &AnalysisSnapshot,
+) -> Option<Vec<CompletionItem>> {
+    let ctx = detect_dot_context(file, offset, snapshot)?;
+    Some(match ctx {
+        DotContext::Instance(type_id) => {
+            let same_module = id_is_in_module(&type_id, &file.module_id);
+            get_instance_completions(&type_id, snapshot, same_module)
+        }
+        DotContext::TypeLevel(type_id) => get_type_completions(&type_id, snapshot, &file.module_id),
+    })
+}
+
+/// A `foo.` prefix that resolves to nothing still returns an (empty) result
+/// here: it must never fall through to the general completions below.
+fn module_prefix_completions(
+    prefix: &str,
+    file: &File,
+    offset: u32,
+    snapshot: &AnalysisSnapshot,
+) -> Vec<CompletionItem> {
+    if prefix == "self" {
+        if let Some(impl_type) = traversal::find_enclosing_impl_type(&file.items, offset) {
+            let type_id = format!("{}.{}", file.module_id, impl_type);
+            return get_instance_completions(&type_id, snapshot, true);
+        }
+        return Vec::new();
+    }
+
+    for module in [file.module_id.as_str(), "prelude"] {
+        let qualified = format!("{module}.{prefix}");
+        if let Some(definition) = snapshot.definitions().get(qualified.as_str())
+            && definition.is_type_definition()
+        {
+            return get_type_completions(&qualified, snapshot, &file.module_id);
+        }
+    }
+
+    for import in file.imports() {
+        let qualified = format!("{}.{}", import.name, prefix);
+        if let Some(definition) = snapshot.definitions().get(qualified.as_str())
+            && definition.is_type_definition()
+            && definition.visibility.is_public()
+        {
+            return get_type_completions(&qualified, snapshot, &file.module_id);
+        }
+    }
+
+    let indexed = offset as usize >= 2 && file.source.as_bytes()[offset as usize - 2] == b']';
+    if let Some(type_id) = resolve_variable_type(prefix, file, offset, snapshot, indexed) {
+        let same_module = id_is_in_module(&type_id, &file.module_id);
+        return get_instance_completions(&type_id, snapshot, same_module);
+    }
+
+    Vec::new()
+}
+
+/// In a struct literal's field-name position, offers the unassigned fields.
+fn struct_literal_field_completions(
+    file: &File,
+    offset: u32,
+    snapshot: &AnalysisSnapshot,
+) -> Option<Vec<CompletionItem>> {
+    let (name, ty, assigned) = detect_struct_literal_field_context(file, offset)?;
+    let type_id = type_name(ty, snapshot)?;
+    let same_module = id_is_in_module(&type_id, &file.module_id);
+    Some(get_struct_literal_completions(
+        &type_id,
+        name,
+        snapshot,
+        same_module,
+        assigned,
+        offset,
+    ))
+}
+
+fn general_completions(
+    file: &File,
+    file_id: u32,
+    offset: u32,
+    snapshot: &AnalysisSnapshot,
+) -> Vec<CompletionItem> {
+    let mut items = Vec::new();
+
+    for kw in validation::KEYWORDS {
+        items.push(CompletionItem {
+            label: kw.to_string(),
+            kind: Some(CompletionItemKind::KEYWORD),
+            ..Default::default()
+        });
+    }
+
+    const PRELUDE_TYPES: &[&str] = &[
+        "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64",
+        "float32", "float64", "string", "bool", "rune", "byte", "Option", "Result", "Slice", "Map",
+        "Channel", "Array",
+    ];
+    for ty in PRELUDE_TYPES {
+        items.push(CompletionItem {
+            label: ty.to_string(),
+            kind: Some(CompletionItemKind::TYPE_PARAMETER),
+            ..Default::default()
+        });
+    }
+
+    const PRELUDE_VALUES: &[&str] = &[
+        "Some", "None", "Ok", "Err", "Unit", "println", "print", "panic", "len", "cap", "make",
+        "append", "copy",
+    ];
+    for val in PRELUDE_VALUES {
+        items.push(CompletionItem {
+            label: val.to_string(),
+            kind: Some(CompletionItemKind::FUNCTION),
+            ..Default::default()
+        });
+    }
+
+    let module_prefix = format!("{}.", file.module_id);
+    for (qname, definition) in snapshot.definitions().iter() {
+        if let Some(name) = qname.strip_prefix(&module_prefix)
+            && !name.contains('.')
+        {
+            items.push(CompletionItem {
+                label: name.to_string(),
+                kind: Some(definition_to_completion_kind(definition)),
+                detail: Some(definition.ty.to_string()),
+                ..Default::default()
+            });
+        }
+    }
+
+    for binding in snapshot.facts().bindings.values() {
+        if binding.span.file_id == file_id && binding.span.byte_offset < offset {
+            items.push(CompletionItem {
+                label: binding.name.clone(),
+                kind: Some(CompletionItemKind::VARIABLE),
+                ..Default::default()
+            });
+        }
+    }
+
+    for import in file.imports() {
+        let alias = import
+            .effective_alias(&snapshot.result.emit_input.go_package_names)
+            .unwrap_or_else(|| import.name.to_string());
+        items.push(CompletionItem {
+            label: alias,
+            kind: Some(CompletionItemKind::MODULE),
+            ..Default::default()
+        });
+    }
+
+    items
 }
 
 fn ranges_overlap(a: Range, b: Range) -> bool {

@@ -5,6 +5,7 @@ use owo_colors::OwoColorize;
 use semantics::store::ENTRY_MODULE_ID;
 use serde::Deserialize;
 use syntax::ast::Span;
+use syntax::program::TestFunction;
 
 use crate::go_cli::GoTestEvent;
 use crate::output::{format_backticks, format_elapsed};
@@ -60,6 +61,21 @@ impl TestEvents {
     fn failure(&self) -> Option<FailureRecord> {
         let (count, parts) = self.failure_chunks.as_ref()?;
         reassemble_one(*count, parts)
+    }
+
+    fn record_attribute(&mut self, attribute: TestAttribute) {
+        match attribute {
+            TestAttribute::FailureChunk(envelope) => {
+                let chunks = self
+                    .failure_chunks
+                    .get_or_insert_with(|| (envelope.n, Vec::new()));
+                chunks.0 = envelope.n;
+                chunks.1.push((envelope.i, envelope.d));
+            }
+            TestAttribute::SkipReason(reason) => self.skip_reason = Some(reason),
+            TestAttribute::SubtestName(name) => self.subtest_name = Some(name),
+            TestAttribute::Log(record) => self.logs.push(record),
+        }
     }
 
     fn outcome(&self) -> TestOutcome {
@@ -283,25 +299,31 @@ fn name_or_title_contains(fn_name: &str, title: Option<&str>, pattern: &str) -> 
     fn_name.contains(pattern) || title.is_some_and(|t| t.contains(pattern))
 }
 
+fn test_function_name(test: &TestFunction) -> &str {
+    let prefix = format!("{}.", test.module_id);
+    test.qualified_name
+        .strip_prefix(&prefix)
+        .unwrap_or(&test.qualified_name)
+}
+
+fn test_key(test: &TestFunction, go_module: &str) -> TestKey {
+    let package = if test.module_id == ENTRY_MODULE_ID {
+        go_module.to_string()
+    } else {
+        format!("{}/{}", go_module, test.module_id)
+    };
+    (package, go_test_name(test_function_name(test)))
+}
+
 pub fn matching_tests(index: &TestIndex, go_module: &str, filter: &str) -> Vec<(String, String)> {
     index
         .tests()
         .iter()
         .filter_map(|test| {
-            let prefix = format!("{}.", test.module_id);
-            let fn_name = test
-                .qualified_name
-                .strip_prefix(&prefix)
-                .unwrap_or(&test.qualified_name);
-            if !name_or_title_contains(fn_name, test.title.as_deref(), filter) {
+            if !name_or_title_contains(test_function_name(test), test.title.as_deref(), filter) {
                 return None;
             }
-            let package = if test.module_id == ENTRY_MODULE_ID {
-                go_module.to_string()
-            } else {
-                format!("{}/{}", go_module, test.module_id)
-            };
-            Some((package, go_test_name(fn_name)))
+            Some(test_key(test, go_module))
         })
         .collect()
 }
@@ -310,19 +332,7 @@ pub fn all_test_keys(index: &TestIndex, go_module: &str) -> HashSet<(String, Str
     index
         .tests()
         .iter()
-        .map(|test| {
-            let prefix = format!("{}.", test.module_id);
-            let fn_name = test
-                .qualified_name
-                .strip_prefix(&prefix)
-                .unwrap_or(&test.qualified_name);
-            let package = if test.module_id == ENTRY_MODULE_ID {
-                go_module.to_string()
-            } else {
-                format!("{}/{}", go_module, test.module_id)
-            };
-            (package, go_test_name(fn_name))
-        })
+        .map(|test| test_key(test, go_module))
         .collect()
 }
 
@@ -344,143 +354,29 @@ pub fn build_report_filtered(
 
     for event in events {
         if event.action == "attr"
-            && event.key.as_deref() == Some(FAIL_ATTR_KEY)
-            && let (Some(test), Some(value)) = (&event.test, &event.value)
-            && let Ok(envelope) = serde_json::from_str::<FailEnvelope>(value)
-        {
-            let entry = tests
-                .entry((event.package.clone(), test.clone()))
-                .or_default()
-                .failure_chunks
-                .get_or_insert_with(|| (envelope.n, Vec::new()));
-            entry.0 = envelope.n;
-            entry.1.push((envelope.i, envelope.d));
-            continue;
-        }
-        if event.action == "attr"
-            && event.key.as_deref() == Some(SKIP_ATTR_KEY)
-            && let (Some(test), Some(value)) = (&event.test, &event.value)
-            && let Some(reason) = decode_hex(value).and_then(|b| String::from_utf8(b).ok())
+            && let (Some(key), Some(test), Some(value)) =
+                (event.key.as_deref(), &event.test, &event.value)
+            && let Some(attribute) = decode_test_attribute(key, value)
         {
             tests
                 .entry((event.package.clone(), test.clone()))
                 .or_default()
-                .skip_reason = Some(reason);
-            continue;
-        }
-        if event.action == "attr"
-            && event.key.as_deref() == Some(SUBTEST_ATTR_KEY)
-            && let (Some(test), Some(value)) = (&event.test, &event.value)
-            && let Some(name) = decode_hex(value).and_then(|b| String::from_utf8(b).ok())
-        {
-            tests
-                .entry((event.package.clone(), test.clone()))
-                .or_default()
-                .subtest_name = Some(name);
-            continue;
-        }
-        if event.action == "attr"
-            && event.key.as_deref() == Some(LOG_ATTR_KEY)
-            && let (Some(test), Some(value)) = (&event.test, &event.value)
-            && let Some(record) =
-                decode_hex(value).and_then(|b| serde_json::from_slice::<LogRecord>(&b).ok())
-        {
-            tests
-                .entry((event.package.clone(), test.clone()))
-                .or_default()
-                .logs
-                .push(record);
+                .record_attribute(attribute);
             continue;
         }
         let Some(test) = &event.test else {
-            match event.action.as_str() {
-                "build-output" => {
-                    if let Some(text) = &event.output {
-                        build_output.push_str(text);
-                    }
-                    if let Some(path) = &event.import_path {
-                        packages
-                            .entry(package_of_import_path(path).to_string())
-                            .or_default()
-                            .record_build_failure();
-                    }
-                }
-                "build-fail" => {
-                    if let Some(path) = &event.import_path {
-                        packages
-                            .entry(package_of_import_path(path).to_string())
-                            .or_default()
-                            .record_build_failure();
-                    }
-                }
-                "output" => {
-                    if let Some(text) = &event.output {
-                        packages
-                            .entry(event.package.clone())
-                            .or_default()
-                            .output
-                            .push_str(text);
-                    }
-                }
-                "pass" => {
-                    test_elapsed = test_elapsed.max(event.elapsed.unwrap_or(0.0));
-                }
-                "fail" => {
-                    packages
-                        .entry(event.package.clone())
-                        .or_default()
-                        .record_test_failure();
-                    test_elapsed = test_elapsed.max(event.elapsed.unwrap_or(0.0));
-                }
-                _ => {}
-            }
+            handle_package_event(event, &mut build_output, &mut packages, &mut test_elapsed);
             continue;
         };
         let state = tests
             .entry((event.package.clone(), test.clone()))
             .or_default();
-        match event.action.as_str() {
-            "run" => {
-                state.execution.start();
-            }
-            "pass" => {
-                state
-                    .execution
-                    .finish(TerminalStatus::Passed, event.elapsed);
-            }
-            "fail" => {
-                state
-                    .execution
-                    .finish(TerminalStatus::Failed, event.elapsed);
-            }
-            "skip" => {
-                state
-                    .execution
-                    .finish(TerminalStatus::Skipped, event.elapsed);
-            }
-            "output" => {
-                if let Some(text) = &event.output {
-                    state.output.push_str(text);
-                }
-            }
-            _ => {}
-        }
+        handle_test_event(event, state);
     }
 
     let mut rows = Vec::new();
     for test in index.tests() {
-        let prefix = format!("{}.", test.module_id);
-        let fn_name = test
-            .qualified_name
-            .strip_prefix(&prefix)
-            .unwrap_or(&test.qualified_name);
-        let package = if test.module_id == ENTRY_MODULE_ID {
-            go_module.to_string()
-        } else {
-            format!("{}/{}", go_module, test.module_id)
-        };
-        let go_name = go_test_name(fn_name);
-        let key = (package.clone(), go_name.clone());
+        let key = test_key(test, go_module);
         if let Some(set) = selected
             && !set.contains(&key)
         {
@@ -490,11 +386,15 @@ pub fn build_report_filtered(
         let outcome = state
             .map(TestEvents::outcome)
             .unwrap_or(TestOutcome::Unreached);
+        let (package, go_name) = key;
         let children = collect_children(&package, &go_name, &tests);
         rows.push(TestRow {
             package,
-            go_name: go_name.clone(),
-            name: test.title.clone().unwrap_or_else(|| fn_name.to_string()),
+            go_name,
+            name: test
+                .title
+                .clone()
+                .unwrap_or_else(|| test_function_name(test).to_string()),
             description: test.doc.clone(),
             outcome,
             output: state.map(|state| state.output.clone()).unwrap_or_default(),
@@ -509,6 +409,106 @@ pub fn build_report_filtered(
         packages,
         go_module: go_module.to_string(),
         test_elapsed,
+    }
+}
+
+/// A decoded `attr` event addressed to one test.
+enum TestAttribute {
+    FailureChunk(FailEnvelope),
+    SkipReason(String),
+    SubtestName(String),
+    Log(LogRecord),
+}
+
+fn decode_test_attribute(key: &str, value: &str) -> Option<TestAttribute> {
+    match key {
+        FAIL_ATTR_KEY => serde_json::from_str(value)
+            .ok()
+            .map(TestAttribute::FailureChunk),
+        SKIP_ATTR_KEY => decode_hex_utf8(value).map(TestAttribute::SkipReason),
+        SUBTEST_ATTR_KEY => decode_hex_utf8(value).map(TestAttribute::SubtestName),
+        LOG_ATTR_KEY => decode_hex(value)
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+            .map(TestAttribute::Log),
+        _ => None,
+    }
+}
+
+fn handle_package_event(
+    event: &GoTestEvent,
+    build_output: &mut String,
+    packages: &mut HashMap<String, PackageEvents>,
+    test_elapsed: &mut f64,
+) {
+    match event.action.as_str() {
+        "build-output" => {
+            if let Some(text) = &event.output {
+                build_output.push_str(text);
+            }
+            if let Some(path) = &event.import_path {
+                packages
+                    .entry(package_of_import_path(path).to_string())
+                    .or_default()
+                    .record_build_failure();
+            }
+        }
+        "build-fail" => {
+            if let Some(path) = &event.import_path {
+                packages
+                    .entry(package_of_import_path(path).to_string())
+                    .or_default()
+                    .record_build_failure();
+            }
+        }
+        "output" => {
+            if let Some(text) = &event.output {
+                packages
+                    .entry(event.package.clone())
+                    .or_default()
+                    .output
+                    .push_str(text);
+            }
+        }
+        "pass" => {
+            *test_elapsed = test_elapsed.max(event.elapsed.unwrap_or(0.0));
+        }
+        "fail" => {
+            packages
+                .entry(event.package.clone())
+                .or_default()
+                .record_test_failure();
+            *test_elapsed = test_elapsed.max(event.elapsed.unwrap_or(0.0));
+        }
+        _ => {}
+    }
+}
+
+fn handle_test_event(event: &GoTestEvent, state: &mut TestEvents) {
+    match event.action.as_str() {
+        "run" => {
+            state.execution.start();
+        }
+        "pass" => {
+            state
+                .execution
+                .finish(TerminalStatus::Passed, event.elapsed);
+        }
+        "fail" => {
+            state
+                .execution
+                .finish(TerminalStatus::Failed, event.elapsed);
+        }
+        "skip" => {
+            state
+                .execution
+                .finish(TerminalStatus::Skipped, event.elapsed);
+        }
+        "output" => {
+            if let Some(text) = &event.output {
+                state.output.push_str(text);
+            }
+        }
+        _ => {}
     }
 }
 
@@ -531,6 +531,10 @@ fn reassemble_one(n: usize, parts: &[(usize, String)]) -> Option<FailureRecord> 
     }
     let bytes = decode_hex(&joined)?;
     serde_json::from_slice::<FailureRecord>(&bytes).ok()
+}
+
+fn decode_hex_utf8(value: &str) -> Option<String> {
+    decode_hex(value).and_then(|bytes| String::from_utf8(bytes).ok())
 }
 
 fn decode_hex(hex: &str) -> Option<Vec<u8>> {

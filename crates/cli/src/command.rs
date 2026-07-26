@@ -117,27 +117,31 @@ fn parse_path_and_sourcemap(
     Ok((path, sourcemap))
 }
 
-fn try_parse_go_flags(
+/// Matches `arg` against a value-taking flag in both its `--flag value` and
+/// `--flag=value` forms. Returns `Ok(None)` when `arg` is not one of the
+/// given spellings.
+fn flag_value(
     arg: &str,
+    spellings: &[&str],
     arguments: &mut impl Iterator<Item = String>,
-    go_flags: &mut Vec<String>,
     command: &'static str,
-) -> Result<bool, ParseError> {
-    if arg == "--go-flags" {
-        let Some(value) = arguments.next() else {
-            return Err(ParseError::MissingArgument {
-                command,
-                argument: "--go-flags <flags>",
-            });
-        };
-        extend_go_flags(go_flags, &value)?;
-        Ok(true)
-    } else if let Some(value) = arg.strip_prefix("--go-flags=") {
-        extend_go_flags(go_flags, value)?;
-        Ok(true)
-    } else {
-        Ok(false)
+    argument: &'static str,
+) -> Result<Option<String>, ParseError> {
+    for spelling in spellings {
+        if arg == *spelling {
+            return match arguments.next() {
+                Some(value) => Ok(Some(value)),
+                None => Err(ParseError::MissingArgument { command, argument }),
+            };
+        }
+        if let Some(value) = arg
+            .strip_prefix(spelling)
+            .and_then(|rest| rest.strip_prefix('='))
+        {
+            return Ok(Some(value.to_string()));
+        }
     }
+    Ok(None)
 }
 
 fn extend_go_flags(go_flags: &mut Vec<String>, raw: &str) -> Result<(), ParseError> {
@@ -156,7 +160,7 @@ fn extend_go_flags(go_flags: &mut Vec<String>, raw: &str) -> Result<(), ParseErr
     }
 }
 
-fn parse_format(value: &str) -> Result<OutputFormat, ParseError> {
+fn parse_output(value: &str) -> Result<OutputFormat, ParseError> {
     match value {
         "unix" => Ok(OutputFormat::Unix),
         other => Err(ParseError::UnexpectedArgument {
@@ -232,441 +236,29 @@ impl Command {
         }
 
         match command.as_str() {
-            "new" => match arguments.next() {
-                Some(name) => Ok(Command::New { name }),
-                None => Err(ParseError::MissingArgument {
-                    command: "new",
-                    argument: "name",
-                }),
-            },
-
-            "build" | "b" => {
-                let mut path = None;
-                let mut sourcemap = false;
-                let mut go_flags = Vec::new();
-
-                while let Some(arg) = arguments.next() {
-                    if arg == "--sourcemap" {
-                        sourcemap = true;
-                    } else if arg.starts_with('-') {
-                        if !try_parse_go_flags(&arg, &mut arguments, &mut go_flags, "build")? {
-                            return Err(ParseError::UnknownFlag(arg));
-                        }
-                    } else {
-                        path = Some(arg);
-                    }
-                }
-
-                Ok(Command::Build {
-                    path,
-                    sourcemap,
-                    go_flags,
-                })
-            }
-
+            "new" => parse_new(arguments),
+            "build" | "b" => parse_build(arguments),
             "emit" | "e" => {
                 let (path, sourcemap) = parse_path_and_sourcemap(arguments)?;
                 Ok(Command::Emit { path, sourcemap })
             }
-
-            "run" | "r" => {
-                let mut target = None;
-                let mut args = Vec::new();
-                let mut sourcemap = false;
-                let mut go_flags = Vec::new();
-                let mut found_separator = false;
-
-                while let Some(arg) = arguments.next() {
-                    if found_separator {
-                        args.push(arg);
-                    } else if arg == "--" {
-                        found_separator = true;
-                    } else if arg == "--sourcemap" {
-                        sourcemap = true;
-                    } else if arg == "--go-flags" {
-                        let Some(value) = arguments.next() else {
-                            return Err(ParseError::MissingArgument {
-                                command: "run",
-                                argument: "--go-flags <flags>",
-                            });
-                        };
-                        extend_go_flags(&mut go_flags, &value)?;
-                    } else if let Some(value) = arg.strip_prefix("--go-flags=") {
-                        extend_go_flags(&mut go_flags, value)?;
-                    } else if arg.starts_with('-') {
-                        return Err(ParseError::UnknownFlag(arg));
-                    } else {
-                        target = Some(arg);
-                    }
-                }
-
-                if let Some(flag) = go_flags
-                    .iter()
-                    .find(|f| crate::go_cli::is_go_output_flag(f))
-                {
-                    return Err(ParseError::UnexpectedArgument {
-                        message: format!("`{}` cannot be passed to `lis run` via `--go-flags`", flag),
-                        reason: "`run` executes the binary it links at an internal path, so it owns `-o`"
-                            .to_string(),
-                        hint: "Use `lis build --go-flags \"-o <path>\"` to choose the output location"
-                            .to_string(),
-                    });
-                }
-
-                Ok(Command::Run {
-                    target,
-                    args,
-                    sourcemap,
-                    go_flags,
-                })
-            }
-
-            "format" | "f" => {
-                let mut path = None;
-                let mut check = false;
-
-                for arg in arguments {
-                    match arg.as_str() {
-                        "--check" => check = true,
-                        s if s.starts_with('-') => {
-                            return Err(ParseError::UnknownFlag(s.to_string()));
-                        }
-                        s => path = Some(s.to_string()),
-                    }
-                }
-
-                Ok(Command::Format { path, check })
-            }
-
-            "check" | "c" => {
-                let mut path = None;
-                let mut filter = None;
-                let mut deny_warnings = false;
-                let mut format = OutputFormat::Graphical;
-                let mut fix = false;
-
-                while let Some(arg) = arguments.next() {
-                    match arg.as_str() {
-                        "--errors-only" => match filter {
-                            Some(Filter::Warnings) => return Err(check_filter_conflict()),
-                            _ => filter = Some(Filter::Errors),
-                        },
-                        "--warnings-only" => match filter {
-                            Some(Filter::Errors) => return Err(check_filter_conflict()),
-                            _ => filter = Some(Filter::Warnings),
-                        },
-                        "--fix" => fix = true,
-                        "--output" => {
-                            let Some(value) = arguments.next() else {
-                                return Err(ParseError::MissingArgument {
-                                    command: "check",
-                                    argument: "--output <value>",
-                                });
-                            };
-                            format = parse_format(&value)?;
-                        }
-                        s if s.starts_with("--output=") => {
-                            format = parse_format(s.split_once('=').unwrap().1)?;
-                        }
-                        "--deny" => {
-                            let Some(value) = arguments.next() else {
-                                return Err(ParseError::MissingArgument {
-                                    command: "check",
-                                    argument: "--deny <value>",
-                                });
-                            };
-                            deny_warnings = parse_deny(&value)?;
-                        }
-                        s if s.starts_with("--deny=") => {
-                            deny_warnings = parse_deny(s.split_once('=').unwrap().1)?;
-                        }
-                        s if s.starts_with('-') => {
-                            return Err(ParseError::UnknownFlag(s.to_string()));
-                        }
-                        s => path = Some(s.to_string()),
-                    }
-                }
-
-                let filter = filter.unwrap_or_default();
-                if filter == Filter::Errors && deny_warnings {
-                    return Err(ParseError::UnexpectedArgument {
-                        message: "`--errors-only` and `--deny warnings` cannot be used together"
-                            .to_string(),
-                        reason: "`--errors-only` hides warnings, so `--deny warnings` would have nothing to act on"
-                            .to_string(),
-                        hint: "Drop `--errors-only` to make warnings fail the check".to_string(),
-                    });
-                }
-
-                if fix && deny_warnings {
-                    return Err(ParseError::UnexpectedArgument {
-                        message: "`--fix` and `--deny warnings` cannot be used together".to_string(),
-                        reason: "`--fix` reports what it rewrote, not which warnings remain, so it cannot fail on leftover warnings"
-                            .to_string(),
-                        hint: "Run `lis check --fix` first, then `lis check --deny warnings`"
-                            .to_string(),
-                    });
-                }
-
-                Ok(Command::Check {
-                    path,
-                    filter,
-                    action: if fix {
-                        CheckAction::Fix
-                    } else {
-                        CheckAction::Inspect { deny_warnings }
-                    },
-                    format,
-                })
-            }
-
-            "test" | "t" => {
-                let mut path = None;
-                let mut go_flags = Vec::new();
-                let mut selection = TestSelection::All;
-
-                while let Some(arg) = arguments.next() {
-                    if arg == "-f" || arg == "--filter" {
-                        let Some(value) = arguments.next() else {
-                            return Err(ParseError::MissingArgument {
-                                command: "test",
-                                argument: "--filter <pattern>",
-                            });
-                        };
-                        set_test_filter(&mut selection, value)?;
-                    } else if let Some(value) = arg.strip_prefix("--filter=") {
-                        set_test_filter(&mut selection, value.to_string())?;
-                    } else if let Some(value) = arg.strip_prefix("-f=") {
-                        set_test_filter(&mut selection, value.to_string())?;
-                    } else if arg == "--failed" {
-                        set_failed_selection(&mut selection)?;
-                    } else if arg.starts_with('-') {
-                        if !try_parse_go_flags(&arg, &mut arguments, &mut go_flags, "test")? {
-                            return Err(ParseError::UnknownFlag(arg));
-                        }
-                    } else {
-                        path = Some(arg);
-                    }
-                }
-
-                if let Some(flag) = go_flags.iter().find(|f| crate::go_cli::is_go_json_flag(f)) {
-                    return Err(ParseError::UnexpectedArgument {
-                        message: format!(
-                            "`{}` cannot be passed to `lis test` via `--go-flags`",
-                            flag
-                        ),
-                        reason: "`lis test` runs `go test -json` and parses that stream to render the report"
-                            .to_string(),
-                        hint: "Remove `-json`; `lis test` manages it".to_string(),
-                    });
-                }
-
-                if let Some(flag) = go_flags
-                    .iter()
-                    .find(|f| crate::go_cli::is_go_selection_flag(f))
-                {
-                    return Err(ParseError::UnexpectedArgument {
-                        message: format!(
-                            "`{}` cannot be passed to `lis test` via `--go-flags`",
-                            flag
-                        ),
-                        reason: "`lis test` selects which tests run and reconciles the report against them"
-                            .to_string(),
-                        hint: "Use `lis test --filter <pattern>` to select tests".to_string(),
-                    });
-                }
-
-                Ok(Command::Test {
-                    path,
-                    go_flags,
-                    selection,
-                })
-            }
-
+            "run" | "r" => parse_run(arguments),
+            "format" | "f" => parse_format(arguments),
+            "check" | "c" => parse_check(arguments),
+            "test" | "t" => parse_test(arguments),
             "help" | "--help" => Ok(Command::Help {
                 command: arguments.next(),
             }),
-
             "version" | "--version" => Ok(Command::Version),
-
-            "add" => {
-                let mut dependency = None;
-                let mut replace = None;
-
-                while let Some(arg) = arguments.next() {
-                    if arg == "--replace" {
-                        let Some(value) = arguments.next() else {
-                            return Err(ParseError::MissingArgument {
-                                command: "add",
-                                argument: "--replace <module@version>",
-                            });
-                        };
-                        replace = Some(value);
-                    } else if let Some(value) = arg.strip_prefix("--replace=") {
-                        replace = Some(value.to_string());
-                    } else if arg.starts_with('-') {
-                        return Err(ParseError::UnknownFlag(arg));
-                    } else if dependency.is_none() {
-                        dependency = Some(arg);
-                    } else {
-                        return Err(ParseError::UnexpectedArgument {
-                            message: format!("unexpected argument `{}`", arg),
-                            reason: "`lis add` accepts a single dependency".to_string(),
-                            hint: "Run `lis add` once per dep".to_string(),
-                        });
-                    }
-                }
-
-                match dependency {
-                    Some(dependency) => Ok(Command::Add {
-                        dependency,
-                        replace,
-                    }),
-                    None => Err(ParseError::MissingArgument {
-                        command: "add",
-                        argument: "dependency",
-                    }),
-                }
-            }
-
-            "sync" => {
-                if let Some(extra) = arguments.next() {
-                    return Err(ParseError::UnexpectedArgument {
-                        message: format!("unexpected argument `{}`", extra),
-                        reason: "`lis sync` takes no arguments".to_string(),
-                        hint: "Run `lis sync` from the project root".to_string(),
-                    });
-                }
-                Ok(Command::Sync)
-            }
-
+            "add" => parse_add(arguments),
+            "sync" => parse_sync(arguments),
             "lsp" => Ok(Command::Lsp),
-
             "learn" => Ok(Command::Learn),
-
             "complete" => Ok(Command::Completions {
                 shell: arguments.next(),
             }),
-
-            "doc" => {
-                let mut search = false;
-                let mut query = None;
-                let mut extra = None;
-
-                for arg in arguments {
-                    match arg.as_str() {
-                        "-s" | "--search" => search = true,
-                        s if s.starts_with('-') => {
-                            return Err(ParseError::UnknownFlag(s.to_string()));
-                        }
-                        _ if query.is_none() => query = Some(arg),
-                        _ if extra.is_none() => extra = Some(arg),
-                        _ => {}
-                    }
-                }
-
-                if search {
-                    match query {
-                        Some(q) => Ok(Command::DocSearch { query: q }),
-                        None => Err(ParseError::MissingArgument {
-                            command: "doc",
-                            argument: "search query",
-                        }),
-                    }
-                } else {
-                    if let (Some(q), Some(item)) = (&query, &extra) {
-                        return Err(ParseError::UnexpectedArgument {
-                            message: format!("unexpected argument `{}`", item),
-                            reason: "The `doc` command takes a single query argument".to_string(),
-                            hint: format!("Did you mean `lis doc {}.{}`?", q, item),
-                        });
-                    }
-                    Ok(Command::Doc { query })
-                }
-            }
-
-            "bindgen" => {
-                let mut positional = Vec::new();
-                let mut output = None;
-                let mut verbose = false;
-
-                while let Some(arg) = arguments.next() {
-                    match arg.as_str() {
-                        "-v" | "--verbose" => verbose = true,
-                        "-o" | "--output" => {
-                            let Some(value) = arguments.next() else {
-                                return Err(ParseError::MissingArgument {
-                                    command: "bindgen",
-                                    argument: "--output <path>",
-                                });
-                            };
-                            output = Some(value);
-                        }
-                        s if s.starts_with("-o=") || s.starts_with("--output=") => {
-                            let value = s.split_once('=').map(|(_, value)| value).unwrap_or("");
-                            if value.is_empty() {
-                                return Err(ParseError::MissingArgument {
-                                    command: "bindgen",
-                                    argument: "--output <path>",
-                                });
-                            }
-                            output = Some(value.to_string());
-                        }
-                        s if s.starts_with('-') => {
-                            return Err(ParseError::UnknownFlag(s.to_string()));
-                        }
-                        s => positional.push(s.to_string()),
-                    }
-                }
-
-                let Some(package) = positional.first() else {
-                    return Err(ParseError::MissingArgument {
-                        command: "bindgen",
-                        argument: "package",
-                    });
-                };
-                let extra = positional.get(1);
-                let trailing = positional.get(2);
-                if let Some(trailing) = trailing {
-                    return Err(ParseError::UnexpectedArgument {
-                        message: format!("unexpected argument `{trailing}`"),
-                        reason: "`lis bindgen` accepts at most a target and stdlib version"
-                            .to_string(),
-                        hint: "Remove the extra argument".to_string(),
-                    });
-                }
-
-                let target = if package == "stdlib" {
-                    if output.is_some() {
-                        return Err(ParseError::UnexpectedArgument {
-                            message: "`--output` cannot be used when generating stdlib bindings"
-                                .to_string(),
-                            reason:
-                                "stdlib bindings are written to the repository typedef directory"
-                                    .to_string(),
-                            hint: "Remove `--output`".to_string(),
-                        });
-                    }
-                    BindgenTarget::Stdlib {
-                        version: extra.cloned(),
-                    }
-                } else {
-                    if let Some(extra) = extra {
-                        return Err(ParseError::UnexpectedArgument {
-                            message: format!("unexpected argument `{extra}`"),
-                            reason: "package bindgen accepts a single package target".to_string(),
-                            hint: "Remove the extra argument".to_string(),
-                        });
-                    }
-                    BindgenTarget::Package {
-                        name: package.clone(),
-                        output,
-                    }
-                };
-
-                Ok(Command::Bindgen { target, verbose })
-            }
-
+            "doc" => parse_doc(arguments),
+            "bindgen" => parse_bindgen(arguments),
             _ => Err(ParseError::UnknownCommand(command)),
         }
     }
@@ -679,6 +271,408 @@ impl Command {
         let candidates: Vec<String> = COMMANDS.iter().map(|s| s.to_string()).collect();
         diagnostics::infer::find_similar_name(typo, &candidates)
     }
+}
+
+fn parse_new(mut arguments: impl Iterator<Item = String>) -> Result<Command, ParseError> {
+    match arguments.next() {
+        Some(name) => Ok(Command::New { name }),
+        None => Err(ParseError::MissingArgument {
+            command: "new",
+            argument: "name",
+        }),
+    }
+}
+
+fn parse_build(mut arguments: impl Iterator<Item = String>) -> Result<Command, ParseError> {
+    let mut path = None;
+    let mut sourcemap = false;
+    let mut go_flags = Vec::new();
+
+    while let Some(arg) = arguments.next() {
+        if arg == "--sourcemap" {
+            sourcemap = true;
+        } else if let Some(value) = flag_value(
+            &arg,
+            &["--go-flags"],
+            &mut arguments,
+            "build",
+            "--go-flags <flags>",
+        )? {
+            extend_go_flags(&mut go_flags, &value)?;
+        } else if arg.starts_with('-') {
+            return Err(ParseError::UnknownFlag(arg));
+        } else {
+            path = Some(arg);
+        }
+    }
+
+    Ok(Command::Build {
+        path,
+        sourcemap,
+        go_flags,
+    })
+}
+
+fn parse_run(mut arguments: impl Iterator<Item = String>) -> Result<Command, ParseError> {
+    let mut target = None;
+    let mut args = Vec::new();
+    let mut sourcemap = false;
+    let mut go_flags = Vec::new();
+    let mut found_separator = false;
+
+    while let Some(arg) = arguments.next() {
+        if found_separator {
+            args.push(arg);
+        } else if arg == "--" {
+            found_separator = true;
+        } else if arg == "--sourcemap" {
+            sourcemap = true;
+        } else if let Some(value) = flag_value(
+            &arg,
+            &["--go-flags"],
+            &mut arguments,
+            "run",
+            "--go-flags <flags>",
+        )? {
+            extend_go_flags(&mut go_flags, &value)?;
+        } else if arg.starts_with('-') {
+            return Err(ParseError::UnknownFlag(arg));
+        } else {
+            target = Some(arg);
+        }
+    }
+
+    if let Some(flag) = go_flags
+        .iter()
+        .find(|f| crate::go_cli::is_go_output_flag(f))
+    {
+        return Err(ParseError::UnexpectedArgument {
+            message: format!("`{}` cannot be passed to `lis run` via `--go-flags`", flag),
+            reason: "`run` executes the binary it links at an internal path, so it owns `-o`"
+                .to_string(),
+            hint: "Use `lis build --go-flags \"-o <path>\"` to choose the output location"
+                .to_string(),
+        });
+    }
+
+    Ok(Command::Run {
+        target,
+        args,
+        sourcemap,
+        go_flags,
+    })
+}
+
+fn parse_format(arguments: impl Iterator<Item = String>) -> Result<Command, ParseError> {
+    let mut path = None;
+    let mut check = false;
+
+    for arg in arguments {
+        match arg.as_str() {
+            "--check" => check = true,
+            s if s.starts_with('-') => {
+                return Err(ParseError::UnknownFlag(s.to_string()));
+            }
+            s => path = Some(s.to_string()),
+        }
+    }
+
+    Ok(Command::Format { path, check })
+}
+
+fn parse_check(mut arguments: impl Iterator<Item = String>) -> Result<Command, ParseError> {
+    let mut path = None;
+    let mut filter = None;
+    let mut deny_warnings = false;
+    let mut format = OutputFormat::Graphical;
+    let mut fix = false;
+
+    while let Some(arg) = arguments.next() {
+        if arg == "--errors-only" {
+            match filter {
+                Some(Filter::Warnings) => return Err(check_filter_conflict()),
+                _ => filter = Some(Filter::Errors),
+            }
+        } else if arg == "--warnings-only" {
+            match filter {
+                Some(Filter::Errors) => return Err(check_filter_conflict()),
+                _ => filter = Some(Filter::Warnings),
+            }
+        } else if arg == "--fix" {
+            fix = true;
+        } else if let Some(value) = flag_value(
+            &arg,
+            &["--output"],
+            &mut arguments,
+            "check",
+            "--output <value>",
+        )? {
+            format = parse_output(&value)?;
+        } else if let Some(value) =
+            flag_value(&arg, &["--deny"], &mut arguments, "check", "--deny <value>")?
+        {
+            deny_warnings = parse_deny(&value)?;
+        } else if arg.starts_with('-') {
+            return Err(ParseError::UnknownFlag(arg));
+        } else {
+            path = Some(arg);
+        }
+    }
+
+    let filter = filter.unwrap_or_default();
+    if filter == Filter::Errors && deny_warnings {
+        return Err(ParseError::UnexpectedArgument {
+            message: "`--errors-only` and `--deny warnings` cannot be used together".to_string(),
+            reason:
+                "`--errors-only` hides warnings, so `--deny warnings` would have nothing to act on"
+                    .to_string(),
+            hint: "Drop `--errors-only` to make warnings fail the check".to_string(),
+        });
+    }
+
+    if fix && deny_warnings {
+        return Err(ParseError::UnexpectedArgument {
+            message: "`--fix` and `--deny warnings` cannot be used together".to_string(),
+            reason: "`--fix` reports what it rewrote, not which warnings remain, so it cannot fail on leftover warnings"
+                .to_string(),
+            hint: "Run `lis check --fix` first, then `lis check --deny warnings`".to_string(),
+        });
+    }
+
+    Ok(Command::Check {
+        path,
+        filter,
+        action: if fix {
+            CheckAction::Fix
+        } else {
+            CheckAction::Inspect { deny_warnings }
+        },
+        format,
+    })
+}
+
+fn parse_test(mut arguments: impl Iterator<Item = String>) -> Result<Command, ParseError> {
+    let mut path = None;
+    let mut go_flags = Vec::new();
+    let mut selection = TestSelection::All;
+
+    while let Some(arg) = arguments.next() {
+        if let Some(value) = flag_value(
+            &arg,
+            &["-f", "--filter"],
+            &mut arguments,
+            "test",
+            "--filter <pattern>",
+        )? {
+            set_test_filter(&mut selection, value)?;
+        } else if arg == "--failed" {
+            set_failed_selection(&mut selection)?;
+        } else if let Some(value) = flag_value(
+            &arg,
+            &["--go-flags"],
+            &mut arguments,
+            "test",
+            "--go-flags <flags>",
+        )? {
+            extend_go_flags(&mut go_flags, &value)?;
+        } else if arg.starts_with('-') {
+            return Err(ParseError::UnknownFlag(arg));
+        } else {
+            path = Some(arg);
+        }
+    }
+
+    if let Some(flag) = go_flags.iter().find(|f| crate::go_cli::is_go_json_flag(f)) {
+        return Err(ParseError::UnexpectedArgument {
+            message: format!("`{}` cannot be passed to `lis test` via `--go-flags`", flag),
+            reason: "`lis test` runs `go test -json` and parses that stream to render the report"
+                .to_string(),
+            hint: "Remove `-json`; `lis test` manages it".to_string(),
+        });
+    }
+
+    if let Some(flag) = go_flags
+        .iter()
+        .find(|f| crate::go_cli::is_go_selection_flag(f))
+    {
+        return Err(ParseError::UnexpectedArgument {
+            message: format!("`{}` cannot be passed to `lis test` via `--go-flags`", flag),
+            reason: "`lis test` selects which tests run and reconciles the report against them"
+                .to_string(),
+            hint: "Use `lis test --filter <pattern>` to select tests".to_string(),
+        });
+    }
+
+    Ok(Command::Test {
+        path,
+        go_flags,
+        selection,
+    })
+}
+
+fn parse_add(mut arguments: impl Iterator<Item = String>) -> Result<Command, ParseError> {
+    let mut dependency = None;
+    let mut replace = None;
+
+    while let Some(arg) = arguments.next() {
+        if let Some(value) = flag_value(
+            &arg,
+            &["--replace"],
+            &mut arguments,
+            "add",
+            "--replace <module@version>",
+        )? {
+            replace = Some(value);
+        } else if arg.starts_with('-') {
+            return Err(ParseError::UnknownFlag(arg));
+        } else if dependency.is_none() {
+            dependency = Some(arg);
+        } else {
+            return Err(ParseError::UnexpectedArgument {
+                message: format!("unexpected argument `{}`", arg),
+                reason: "`lis add` accepts a single dependency".to_string(),
+                hint: "Run `lis add` once per dep".to_string(),
+            });
+        }
+    }
+
+    match dependency {
+        Some(dependency) => Ok(Command::Add {
+            dependency,
+            replace,
+        }),
+        None => Err(ParseError::MissingArgument {
+            command: "add",
+            argument: "dependency",
+        }),
+    }
+}
+
+fn parse_sync(mut arguments: impl Iterator<Item = String>) -> Result<Command, ParseError> {
+    if let Some(extra) = arguments.next() {
+        return Err(ParseError::UnexpectedArgument {
+            message: format!("unexpected argument `{}`", extra),
+            reason: "`lis sync` takes no arguments".to_string(),
+            hint: "Run `lis sync` from the project root".to_string(),
+        });
+    }
+    Ok(Command::Sync)
+}
+
+fn parse_doc(arguments: impl Iterator<Item = String>) -> Result<Command, ParseError> {
+    let mut search = false;
+    let mut query = None;
+    let mut extra = None;
+
+    for arg in arguments {
+        match arg.as_str() {
+            "-s" | "--search" => search = true,
+            s if s.starts_with('-') => {
+                return Err(ParseError::UnknownFlag(s.to_string()));
+            }
+            _ if query.is_none() => query = Some(arg),
+            _ if extra.is_none() => extra = Some(arg),
+            _ => {}
+        }
+    }
+
+    if search {
+        return match query {
+            Some(q) => Ok(Command::DocSearch { query: q }),
+            None => Err(ParseError::MissingArgument {
+                command: "doc",
+                argument: "search query",
+            }),
+        };
+    }
+
+    if let (Some(q), Some(item)) = (&query, &extra) {
+        return Err(ParseError::UnexpectedArgument {
+            message: format!("unexpected argument `{}`", item),
+            reason: "The `doc` command takes a single query argument".to_string(),
+            hint: format!("Did you mean `lis doc {}.{}`?", q, item),
+        });
+    }
+    Ok(Command::Doc { query })
+}
+
+fn parse_bindgen(mut arguments: impl Iterator<Item = String>) -> Result<Command, ParseError> {
+    let mut positional = Vec::new();
+    let mut output = None;
+    let mut verbose = false;
+
+    while let Some(arg) = arguments.next() {
+        if arg == "-v" || arg == "--verbose" {
+            verbose = true;
+        } else if let Some(value) = flag_value(
+            &arg,
+            &["-o", "--output"],
+            &mut arguments,
+            "bindgen",
+            "--output <path>",
+        )? {
+            if value.is_empty() {
+                return Err(ParseError::MissingArgument {
+                    command: "bindgen",
+                    argument: "--output <path>",
+                });
+            }
+            output = Some(value);
+        } else if arg.starts_with('-') {
+            return Err(ParseError::UnknownFlag(arg));
+        } else {
+            positional.push(arg);
+        }
+    }
+
+    let target = bindgen_target(&positional, output)?;
+    Ok(Command::Bindgen { target, verbose })
+}
+
+fn bindgen_target(
+    positional: &[String],
+    output: Option<String>,
+) -> Result<BindgenTarget, ParseError> {
+    let Some(package) = positional.first() else {
+        return Err(ParseError::MissingArgument {
+            command: "bindgen",
+            argument: "package",
+        });
+    };
+    let extra = positional.get(1);
+    if let Some(trailing) = positional.get(2) {
+        return Err(ParseError::UnexpectedArgument {
+            message: format!("unexpected argument `{trailing}`"),
+            reason: "`lis bindgen` accepts at most a target and stdlib version".to_string(),
+            hint: "Remove the extra argument".to_string(),
+        });
+    }
+
+    if package == "stdlib" {
+        if output.is_some() {
+            return Err(ParseError::UnexpectedArgument {
+                message: "`--output` cannot be used when generating stdlib bindings".to_string(),
+                reason: "stdlib bindings are written to the repository typedef directory"
+                    .to_string(),
+                hint: "Remove `--output`".to_string(),
+            });
+        }
+        return Ok(BindgenTarget::Stdlib {
+            version: extra.cloned(),
+        });
+    }
+
+    if let Some(extra) = extra {
+        return Err(ParseError::UnexpectedArgument {
+            message: format!("unexpected argument `{extra}`"),
+            reason: "package bindgen accepts a single package target".to_string(),
+            hint: "Remove the extra argument".to_string(),
+        });
+    }
+    Ok(BindgenTarget::Package {
+        name: package.clone(),
+        output,
+    })
 }
 
 #[cfg(test)]

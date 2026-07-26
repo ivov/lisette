@@ -1,7 +1,7 @@
 use diagnostics::LocalSink;
 use syntax::ast::{Expression, Span, StructKind};
 use syntax::program::{Definition, DefinitionBody, NativeTypeKind};
-use syntax::types::{Symbol, Type, unqualified_name};
+use syntax::types::{FunctionType, Symbol, Type, unqualified_name};
 
 use semantics::store::Store;
 
@@ -139,14 +139,7 @@ fn check_one(
     if NativeTypeKind::is_constructor_method(method_part)
         && !is_user_type(type_part, module_id, store)
     {
-        let ret_ty = match ty {
-            Type::Function(f) => Some(f.return_type.as_ref()),
-            Type::Forall { body, .. } => match body.as_ref() {
-                Type::Function(f) => Some(f.return_type.as_ref()),
-                _ => None,
-            },
-            _ => None,
-        };
+        let ret_ty = fn_signature(ty).map(|f| f.return_type.as_ref());
         if let Some(ret) = ret_ty {
             let is_native_ret = matches!(ret.get_name(), Some("Channel" | "Map" | "Slice"));
             if is_native_ret {
@@ -156,19 +149,10 @@ fn check_one(
         }
     }
 
-    let is_fn = matches!(ty, Type::Function(_) | Type::Forall { .. });
-    if !is_fn {
+    let Some(signature) = fn_signature(ty) else {
         return;
-    }
-    let fn_params = match ty {
-        Type::Function(f) => f.params.as_slice(),
-        Type::Forall { body, .. } => match body.as_ref() {
-            Type::Function(f) => f.params.as_slice(),
-            _ => return,
-        },
-        _ => return,
     };
-    let Some(first) = fn_params.first() else {
+    let Some(first) = signature.params.first() else {
         return;
     };
     let stripped = first.ty.strip_refs();
@@ -186,6 +170,17 @@ fn check_one(
 
     if !is_public {
         sink.push(diagnostics::infer::private_method_expression(span));
+    }
+}
+
+fn fn_signature(ty: &Type) -> Option<&FunctionType> {
+    match ty {
+        Type::Function(f) => Some(f),
+        Type::Forall { body, .. } => match body.as_ref() {
+            Type::Function(f) => Some(f),
+            _ => None,
+        },
+        _ => None,
     }
 }
 

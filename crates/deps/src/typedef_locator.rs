@@ -302,32 +302,17 @@ impl TypedefLocator {
         let cache_dir = typedef_cache_dir(project_root);
         let typedef_path = pkg.typedef_path(&cache_dir, self.target);
 
-        match read_typedef(&typedef_path) {
-            ReadOutcome::Found(content) => TypedefLocatorResult::Found {
-                content: Cow::Owned(content),
-                origin: TypedefOrigin::Cache(typedef_path),
-            },
-            ReadOutcome::Unreadable(error) => TypedefLocatorResult::UnreadableTypedef {
-                path: typedef_path,
-                error,
-            },
-            ReadOutcome::Missing => match &self.bindgen {
+        match read_cached_typedef(&typedef_path) {
+            Some(found) => found,
+            None => match &self.bindgen {
                 None => TypedefLocatorResult::MissingTypedef {
                     module: module_path,
                     version: display_version,
                     replacement_path,
                 },
                 Some(runner) => match runner.run(&pkg) {
-                    Ok(()) => match read_typedef(&typedef_path) {
-                        ReadOutcome::Found(content) => TypedefLocatorResult::Found {
-                            content: Cow::Owned(content),
-                            origin: TypedefOrigin::Cache(typedef_path),
-                        },
-                        ReadOutcome::Unreadable(error) => TypedefLocatorResult::UnreadableTypedef {
-                            path: typedef_path,
-                            error,
-                        },
-                        ReadOutcome::Missing => TypedefLocatorResult::BindgenFailed {
+                    Ok(()) => read_cached_typedef(&typedef_path).unwrap_or_else(|| {
+                        TypedefLocatorResult::BindgenFailed {
                             module: module_path,
                             version: display_version,
                             package: package_path.to_string(),
@@ -337,8 +322,8 @@ impl TypedefLocator {
                                     typedef_path.display()
                                 ),
                             },
-                        },
-                    },
+                        }
+                    }),
                     Err(kind) => TypedefLocatorResult::BindgenFailed {
                         module: module_path,
                         version: display_version,
@@ -362,6 +347,21 @@ fn read_typedef(path: &Path) -> ReadOutcome {
         Ok(s) => ReadOutcome::Found(s),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => ReadOutcome::Missing,
         Err(e) => ReadOutcome::Unreadable(e.to_string()),
+    }
+}
+
+/// Reads a cached typedef file, wrapping a hit or a read error; `None` on a cache miss.
+fn read_cached_typedef(path: &Path) -> Option<TypedefLocatorResult> {
+    match read_typedef(path) {
+        ReadOutcome::Found(content) => Some(TypedefLocatorResult::Found {
+            content: Cow::Owned(content),
+            origin: TypedefOrigin::Cache(path.to_path_buf()),
+        }),
+        ReadOutcome::Unreadable(error) => Some(TypedefLocatorResult::UnreadableTypedef {
+            path: path.to_path_buf(),
+            error,
+        }),
+        ReadOutcome::Missing => None,
     }
 }
 

@@ -177,18 +177,15 @@ pub struct InferenceOutput {
     pub unreachable_modules: Vec<String>,
 }
 
-/// Loads, registers, and infers every module, returning the artifacts the
-/// post-inference passes consume. Internal, unstable API.
-pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
-    let mut store = Store::new();
-    store.project_kind = input.project_kind;
-
-    let sink = LocalSink::new();
-
-    let include_tests = input.compile_phase.includes_tests();
-
-    store.init_entry_module();
-    let entry_filename = input.entry.map(|entry| {
+/// Registers the entry file (`main.lis`, or the library root), returning its
+/// filename so sibling loading can skip re-loading it.
+fn register_entry_file(
+    store: &mut Store,
+    sink: &LocalSink,
+    entry: Option<EntryFile>,
+    include_tests: bool,
+) -> Option<String> {
+    entry.map(|entry| {
         if entry.filename.ends_with("_test.lis") {
             sink.push(diagnostics::module_graph::wrong_test_file_suffix(
                 &entry.display_path,
@@ -206,52 +203,58 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
             entry.file_comment,
         );
         entry.filename
-    });
+    })
+}
 
-    if input.config.load_siblings {
-        for (filename, content) in input.loader.scan_folder(ENTRY_MODULE_ID) {
-            if Some(&filename) == entry_filename.as_ref() {
-                continue;
-            }
-            if filename.ends_with("_test.lis") {
-                sink.push(diagnostics::module_graph::wrong_test_file_suffix(
-                    &content.display_path,
-                ));
-                continue;
-            }
-            if !filename.ends_with(".lis")
-                || filename.ends_with(".d.lis")
-                || (filename.ends_with(".test.lis") && !include_tests)
-            {
-                continue;
-            }
-            let file_id = store.new_file_id();
-            let result = syntax::build_ast(&content.source, file_id);
-            sink.extend_parse_errors(result.errors);
-            store.store_file(File::new(
-                ENTRY_MODULE_ID,
-                &filename,
-                &content.display_path,
-                &content.source,
-                result.ast,
-                result.file_comment,
-                file_id,
-            ));
+/// Loads every other `.lis` file in the entry module's folder as a sibling file.
+fn load_sibling_files(
+    store: &mut Store,
+    sink: &LocalSink,
+    loader: &dyn Loader,
+    entry_filename: Option<&str>,
+    include_tests: bool,
+) {
+    for (filename, content) in loader.scan_folder(ENTRY_MODULE_ID) {
+        if Some(filename.as_str()) == entry_filename {
+            continue;
         }
+        if filename.ends_with("_test.lis") {
+            sink.push(diagnostics::module_graph::wrong_test_file_suffix(
+                &content.display_path,
+            ));
+            continue;
+        }
+        if !filename.ends_with(".lis")
+            || filename.ends_with(".d.lis")
+            || (filename.ends_with(".test.lis") && !include_tests)
+        {
+            continue;
+        }
+        let file_id = store.new_file_id();
+        let result = syntax::build_ast(&content.source, file_id);
+        sink.extend_parse_errors(result.errors);
+        store.store_file(File::new(
+            ENTRY_MODULE_ID,
+            &filename,
+            &content.display_path,
+            &content.source,
+            result.ast,
+            result.file_comment,
+            file_id,
+        ));
     }
+}
 
-    let entry_module = store.entry_module_id().to_string();
-    let discovered = if input.project_root.is_some() {
-        input.loader.discover_modules()
-    } else {
-        DiscoveredModules::default()
-    };
-
-    let include_test_roots = input.compile_phase.includes_tests();
-
-    let roots = match input.project_kind {
+fn compute_roots(
+    project_kind: ProjectKind,
+    compile_phase: CompilePhase,
+    discovered: &DiscoveredModules,
+    entry_module: String,
+) -> Roots {
+    let include_test_roots = compile_phase.includes_tests();
+    match project_kind {
         ProjectKind::Binary => {
-            let mut additional = match input.compile_phase {
+            let mut additional = match compile_phase {
                 CompilePhase::Check => discovered.production_modules.clone(),
                 CompilePhase::Emit | CompilePhase::Test => Vec::new(),
             };
@@ -275,9 +278,268 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
                 additional,
             }
         }
+    }
+}
+
+/// Production modules the primary roots never reached.
+fn find_unreachable_modules(
+    discovered: &DiscoveredModules,
+    graph_result: &crate::module_graph::ModuleGraphResult,
+) -> Vec<String> {
+    let mut unreachable: Vec<String> = discovered
+        .production_modules
+        .iter()
+        .filter(|m| !graph_result.primary_reachable.contains(m.as_str()))
+        .cloned()
+        .collect();
+    unreachable.sort();
+    unreachable
+}
+
+/// Loads the prelude from cache when possible, else parses and registers it fresh.
+fn load_prelude(store: &mut Store, sink: &LocalSink, cache_disabled: bool) -> bool {
+    let prelude_cache_hit = !cache_disabled
+        && prelude_cache::try_load_prelude_cache().is_some_and(|cached| {
+            prelude_cache::register_cached_prelude(store, cached);
+            true
+        });
+    if !prelude_cache_hit {
+        parse_and_register_prelude(store, sink);
+    }
+    prelude_cache_hit
+}
+
+struct ModuleInferenceInput<'a> {
+    graph_result: crate::module_graph::ModuleGraphResult,
+    sink: LocalSink,
+    module_cache_root: Option<&'a Path>,
+    check_go_files: bool,
+    cache_disabled: bool,
+    prelude_cache_hit: bool,
+    go_module: &'a str,
+    locator: &'a TypedefLocator,
+    standalone_mode: bool,
+}
+
+struct ModuleInferenceOutput {
+    facts: Facts,
+    cached_modules: HashSet<String>,
+    compiled_modules: Vec<CompiledModule>,
+    ufcs_methods: HashSet<(String, String)>,
+    sink: LocalSink,
+}
+
+/// Classifies every topo-ordered module as a `go:` import, a cache candidate,
+/// or pending registration, then registers and infers whatever was not
+/// served from cache.
+fn infer_all_modules(store: &mut Store, mut input: ModuleInferenceInput) -> ModuleInferenceOutput {
+    let mut checker = TaskState::with_sink(input.sink);
+    checker.extend_ufcs_methods(crate::prelude::compute_prelude_ufcs(store));
+
+    let mut module_hashes: HashMap<String, u64> = HashMap::default();
+    let mut cached_modules: HashSet<String> = HashSet::default();
+    let order = std::mem::take(&mut input.graph_result.order);
+    let dependencies = &input.graph_result.dependencies;
+
+    let mut go_cache = LazyGoStdlibCache::new(input.cache_disabled);
+
+    let mut to_infer: Vec<PendingModule> = Vec::new();
+    let mut candidates: Vec<CacheCandidate> = Vec::new();
+
+    let source_hashes: HashMap<String, (u64, u64)> =
+        if input.graph_result.files.len() < PARALLEL_THRESHOLD {
+            input
+                .graph_result
+                .files
+                .iter()
+                .map(|(id, files)| (id.clone(), hash_module_source_pair(files)))
+                .collect()
+        } else {
+            input
+                .graph_result
+                .files
+                .par_iter()
+                .map(|(id, files)| (id.clone(), hash_module_source_pair(files)))
+                .collect()
+        };
+
+    for (topo_rank, module_id) in order.into_iter().enumerate() {
+        if module_id.starts_with("go:") {
+            if dependencies.is_link_only_module(&module_id) {
+                continue;
+            }
+            register_go_module(
+                &mut checker,
+                store,
+                &module_id,
+                input.locator,
+                input.standalone_mode,
+                &mut go_cache,
+            );
+            continue;
+        }
+
+        if store.is_visited(&module_id) {
+            continue;
+        }
+
+        let files = input
+            .graph_result
+            .files
+            .remove(&module_id)
+            .unwrap_or_default();
+        // Production-only hash drives dependents/emit; all-files hash drives own validity.
+        let (production_hash, full_hash) = source_hashes
+            .get(&module_id)
+            .copied()
+            .unwrap_or_else(|| hash_module_source_pair(&files));
+
+        let dep_hashes =
+            get_dependency_module_hashes(dependencies.dependencies(&module_id), &module_hashes);
+        let production_dep_hashes = get_dependency_module_hashes(
+            dependencies.production_dependencies(&module_id),
+            &module_hashes,
+        );
+        let module_hash = compute_module_hash(production_hash, &production_dep_hashes);
+        module_hashes.insert(module_id.clone(), module_hash);
+
+        let is_entry = module_id == ENTRY_MODULE_ID;
+
+        let compiled = (!is_entry).then(|| CompiledModule {
+            module_id: module_id.clone(),
+            module_hash,
+            production_hash,
+            full_hash,
+            dep_hashes,
+        });
+
+        let expected_artifact_hash = input
+            .check_go_files
+            .then(|| compute_emit_artifact_hash(production_hash, input.go_module));
+
+        match (input.module_cache_root, compiled) {
+            (Some(_), Some(compiled)) => candidates.push(CacheCandidate {
+                compiled,
+                files,
+                topo_rank,
+                expected_artifact_hash,
+            }),
+            (None, compiled) | (Some(_), compiled @ None) => {
+                store.store_module(&module_id, files);
+                let pending = match compiled {
+                    Some(module) => PendingModule::Compiled { module, topo_rank },
+                    None => PendingModule::Entry {
+                        module_id,
+                        topo_rank,
+                    },
+                };
+                to_infer.push(pending);
+            }
+        }
+    }
+
+    let go_cache_module_ids = go_cache.into_module_ids();
+
+    let cache_load = match input.module_cache_root {
+        Some(root) => load_cache_candidates(&mut checker, store, candidates, root),
+        None => {
+            debug_assert!(candidates.is_empty());
+            CacheLoad::default()
+        }
+    };
+    cached_modules.extend(cache_load.cached);
+    to_infer.extend(cache_load.to_infer);
+
+    for pending in &to_infer {
+        checker.predeclare_module_types(store, pending.module_id());
+    }
+    restore_cached_generic_bounds(store, &checker.sink, &cached_modules);
+
+    to_infer.sort_by_key(PendingModule::topo_rank);
+    let mut compiled_modules = Vec::new();
+    let to_infer: Vec<String> = to_infer
+        .into_iter()
+        .map(|pending| match pending {
+            PendingModule::Entry { module_id, .. } => module_id,
+            PendingModule::Compiled { module, .. } => {
+                let module_id = module.module_id.clone();
+                compiled_modules.push(module);
+                module_id
+            }
+        })
+        .collect();
+
+    register_modules(&mut checker, store, &to_infer, dependencies);
+    infer_modules(&mut checker, store, &to_infer);
+
+    if !input.cache_disabled {
+        let all_go_modules: Vec<String> = store
+            .modules
+            .keys()
+            .filter(|id| id.strip_prefix("go:").is_some_and(deps::is_stdlib))
+            .cloned()
+            .collect();
+        // A non-empty list implies the lazy cache load was attempted.
+        let needs_save = !all_go_modules.is_empty()
+            && go_cache_module_ids.as_ref().is_none_or(|ids| {
+                all_go_modules.len() != ids.len()
+                    || all_go_modules.iter().any(|id| !ids.contains(id))
+            });
+        if needs_save {
+            go_stdlib::save_go_stdlib_cache(store, &all_go_modules, input.locator.target());
+        }
+    }
+
+    if !input.cache_disabled && !input.prelude_cache_hit {
+        prelude_cache::save_prelude_cache(store);
+    }
+
+    let ufcs_methods = checker.take_ufcs_methods();
+    ModuleInferenceOutput {
+        facts: checker.facts,
+        cached_modules,
+        compiled_modules,
+        ufcs_methods,
+        sink: checker.sink,
+    }
+}
+
+/// Loads, registers, and infers every module, returning the artifacts the
+/// post-inference passes consume. Internal, unstable API.
+pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
+    let mut store = Store::new();
+    store.project_kind = input.project_kind;
+
+    let sink = LocalSink::new();
+    let include_tests = input.compile_phase.includes_tests();
+
+    store.init_entry_module();
+    let entry_filename = register_entry_file(&mut store, &sink, input.entry, include_tests);
+    if input.config.load_siblings {
+        load_sibling_files(
+            &mut store,
+            &sink,
+            input.loader,
+            entry_filename.as_deref(),
+            include_tests,
+        );
+    }
+
+    let entry_module = store.entry_module_id().to_string();
+    let discovered = if input.project_root.is_some() {
+        input.loader.discover_modules()
+    } else {
+        DiscoveredModules::default()
     };
 
-    let mut graph_result = build_module_graph(
+    let roots = compute_roots(
+        input.project_kind,
+        input.compile_phase,
+        &discovered,
+        entry_module,
+    );
+
+    let graph_result = build_module_graph(
         &mut store,
         roots,
         ModuleGraphOptions {
@@ -292,215 +554,43 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
     for cycle in &graph_result.cycles {
         sink.push(diagnostics::module_graph::import_cycle(cycle));
     }
-
-    let mut unreachable_modules: Vec<String> = discovered
-        .production_modules
-        .iter()
-        .filter(|m| !graph_result.primary_reachable.contains(m.as_str()))
-        .cloned()
-        .collect();
-    unreachable_modules.sort();
+    let unreachable_modules = find_unreachable_modules(&discovered, &graph_result);
 
     let has_pre_check_errors = sink.has_errors();
 
     let cache_disabled = is_cache_disabled();
-
-    let prelude_cache_hit = if cache_disabled {
-        false
-    } else if let Some(cached) = prelude_cache::try_load_prelude_cache() {
-        prelude_cache::register_cached_prelude(&mut store, cached);
-        true
-    } else {
-        false
-    };
-
-    if !prelude_cache_hit {
-        parse_and_register_prelude(&mut store, &sink);
-    }
+    let prelude_cache_hit = load_prelude(&mut store, &sink, cache_disabled);
     parse_and_register_test_prelude(&mut store, &sink);
 
-    let module_cache_root = if cache_disabled || input.disable_cache {
-        None
-    } else {
-        input.project_root.as_deref()
-    };
+    let module_cache_root = (!cache_disabled && !input.disable_cache)
+        .then_some(input.project_root.as_deref())
+        .flatten();
     let cache_enabled = module_cache_root.is_some();
     let check_go_files = input.compile_phase.emits();
 
-    let (facts, cached_modules, compiled_modules, ufcs_methods, sink) = {
-        let mut checker = TaskState::with_sink(sink);
-        checker.extend_ufcs_methods(crate::prelude::compute_prelude_ufcs(&store));
-
-        let mut module_hashes: HashMap<String, u64> = HashMap::default();
-        let mut cached_modules: HashSet<String> = HashSet::default();
-        let order = std::mem::take(&mut graph_result.order);
-        let dependencies = &graph_result.dependencies;
-
-        let mut go_cache = LazyGoStdlibCache::new(cache_disabled);
-
-        let mut to_infer: Vec<PendingModule> = Vec::new();
-        let mut candidates: Vec<CacheCandidate> = Vec::new();
-
-        let source_hashes: HashMap<String, (u64, u64)> =
-            if graph_result.files.len() < PARALLEL_THRESHOLD {
-                graph_result
-                    .files
-                    .iter()
-                    .map(|(id, files)| (id.clone(), hash_module_source_pair(files)))
-                    .collect()
-            } else {
-                graph_result
-                    .files
-                    .par_iter()
-                    .map(|(id, files)| (id.clone(), hash_module_source_pair(files)))
-                    .collect()
-            };
-
-        for (topo_rank, module_id) in order.into_iter().enumerate() {
-            if module_id.starts_with("go:") {
-                if dependencies.is_link_only_module(&module_id) {
-                    continue;
-                }
-                register_go_module(
-                    &mut checker,
-                    &mut store,
-                    &module_id,
-                    &input.locator,
-                    input.config.standalone_mode,
-                    &mut go_cache,
-                );
-                continue;
-            }
-
-            if store.is_visited(&module_id) {
-                continue;
-            }
-
-            let files = graph_result.files.remove(&module_id).unwrap_or_default();
-            // Production-only hash drives dependents/emit; all-files hash drives own validity.
-            let (production_hash, full_hash) = source_hashes
-                .get(&module_id)
-                .copied()
-                .unwrap_or_else(|| hash_module_source_pair(&files));
-
-            let dep_hashes =
-                get_dependency_module_hashes(dependencies.dependencies(&module_id), &module_hashes);
-            let production_dep_hashes = get_dependency_module_hashes(
-                dependencies.production_dependencies(&module_id),
-                &module_hashes,
-            );
-            let module_hash = compute_module_hash(production_hash, &production_dep_hashes);
-            module_hashes.insert(module_id.clone(), module_hash);
-
-            let is_entry = module_id == ENTRY_MODULE_ID;
-
-            let compiled = (!is_entry).then(|| CompiledModule {
-                module_id: module_id.clone(),
-                module_hash,
-                production_hash,
-                full_hash,
-                dep_hashes,
-            });
-
-            let expected_artifact_hash = check_go_files
-                .then(|| compute_emit_artifact_hash(production_hash, &input.go_module));
-
-            match (module_cache_root, compiled) {
-                (Some(_), Some(compiled)) => candidates.push(CacheCandidate {
-                    compiled,
-                    files,
-                    topo_rank,
-                    expected_artifact_hash,
-                }),
-                (None, compiled) | (Some(_), compiled @ None) => {
-                    store.store_module(&module_id, files);
-                    let pending = match compiled {
-                        Some(module) => PendingModule::Compiled { module, topo_rank },
-                        None => PendingModule::Entry {
-                            module_id,
-                            topo_rank,
-                        },
-                    };
-                    to_infer.push(pending);
-                }
-            }
-        }
-
-        let go_cache_module_ids = go_cache.into_module_ids();
-
-        let cache_load = match module_cache_root {
-            Some(root) => load_cache_candidates(&mut checker, &mut store, candidates, root),
-            None => {
-                debug_assert!(candidates.is_empty());
-                CacheLoad::default()
-            }
-        };
-        cached_modules.extend(cache_load.cached);
-        to_infer.extend(cache_load.to_infer);
-
-        for pending in &to_infer {
-            checker.predeclare_module_types(&mut store, pending.module_id());
-        }
-        restore_cached_generic_bounds(&mut store, &checker.sink, &cached_modules);
-
-        to_infer.sort_by_key(PendingModule::topo_rank);
-        let mut compiled_modules = Vec::new();
-        let to_infer: Vec<String> = to_infer
-            .into_iter()
-            .map(|pending| match pending {
-                PendingModule::Entry { module_id, .. } => module_id,
-                PendingModule::Compiled { module, .. } => {
-                    let module_id = module.module_id.clone();
-                    compiled_modules.push(module);
-                    module_id
-                }
-            })
-            .collect();
-
-        register_modules(&mut checker, &mut store, &to_infer, dependencies);
-        infer_modules(&mut checker, &mut store, &to_infer);
-
-        if !cache_disabled {
-            let all_go_modules: Vec<String> = store
-                .modules
-                .keys()
-                .filter(|id| id.strip_prefix("go:").is_some_and(deps::is_stdlib))
-                .cloned()
-                .collect();
-            // A non-empty list implies the lazy cache load was attempted.
-            let needs_save = !all_go_modules.is_empty()
-                && go_cache_module_ids.as_ref().is_none_or(|ids| {
-                    all_go_modules.len() != ids.len()
-                        || all_go_modules.iter().any(|id| !ids.contains(id))
-                });
-            if needs_save {
-                go_stdlib::save_go_stdlib_cache(&store, &all_go_modules, input.locator.target());
-            }
-        }
-
-        if !cache_disabled && !prelude_cache_hit {
-            prelude_cache::save_prelude_cache(&store);
-        }
-
-        let ufcs_methods = checker.take_ufcs_methods();
-
-        (
-            checker.facts,
-            cached_modules,
-            compiled_modules,
-            ufcs_methods,
-            checker.sink,
-        )
-    };
+    let module_output = infer_all_modules(
+        &mut store,
+        ModuleInferenceInput {
+            graph_result,
+            sink,
+            module_cache_root,
+            check_go_files,
+            cache_disabled,
+            prelude_cache_hit,
+            go_module: &input.go_module,
+            locator: &input.locator,
+            standalone_mode: input.config.standalone_mode,
+        },
+    );
 
     InferenceOutput {
         store,
-        facts,
-        ufcs_methods,
-        sink,
+        facts: module_output.facts,
+        ufcs_methods: module_output.ufcs_methods,
+        sink: module_output.sink,
         has_pre_check_errors,
-        compiled_modules,
-        cached_modules,
+        compiled_modules: module_output.compiled_modules,
+        cached_modules: module_output.cached_modules,
         cache_enabled,
         unreachable_modules,
     }

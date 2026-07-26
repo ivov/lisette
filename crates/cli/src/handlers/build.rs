@@ -276,26 +276,115 @@ pub(super) fn build_locked(
     let emit_tests = mode == CompileMode::Test;
     let start = Instant::now();
 
-    if prep.kind == ProjectKind::Library
-        && !emit_tests
-        && let Some(key) = prep
-            .manifest
-            .go_deps()
-            .iter()
-            .find(|(_, dep)| matches!(dep, deps::GoDependency::Replaced { .. }))
-            .map(|(key, _)| key.clone())
-    {
-        cli_error!(
-            "Replaced dependency in a library",
-            format!(
-                "`{}` uses a `replace`, which Go ignores when this library is imported",
-                key
-            ),
-            "Depend on a published version, or keep this project a binary"
-        );
+    reject_library_replace(prep, emit_tests)?;
+    write_initial_go_mod(prep)?;
+    let locator = workspace_locator(prep);
+    let entry = EntryPoint::resolve(prep)?;
+
+    let result = compile_project(prep, mode, &entry, &locator);
+    let counts = render_diagnostics(&result, &entry);
+    if counts.errors > 0 {
         return Err(1);
     }
 
+    let mut emit = write_and_prune_outputs(prep, &result, sourcemap, emit_tests)?;
+    reconcile_target_manifest(prep, &locator, &mut emit)?;
+
+    if !sourcemap {
+        commit_emit_stamps(prep, &result);
+    }
+    // Committed only after gofmt + tidy succeed.
+    go_cli::write_emit_manifest(&prep.target_dir, &emit.new_manifest);
+
+    if let Some(label) = purpose.completion_label() {
+        print_completion(label, prep, &counts, start);
+    }
+
+    Ok(BuildArtifacts {
+        test_index: result.test_index,
+        sources: result.sources,
+    })
+}
+
+enum EntryPoint {
+    Binary { source: String, display: String },
+    Library,
+}
+
+impl EntryPoint {
+    fn resolve(prep: &BuildPrep) -> Result<Self, i32> {
+        match prep.kind {
+            ProjectKind::Binary => {
+                let main_lis = prep.project_path.join("src").join("main.lis");
+                let source = match fs::read_to_string(&main_lis) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        cli_error!(
+                            "Failed to compile Lisette project to Go",
+                            format!("Failed to read `{}`: {}", main_lis.display(), e),
+                            "Check file permissions"
+                        );
+                        return Err(1);
+                    }
+                };
+                let display = relative_to_cwd(&main_lis).unwrap_or_else(|| "main.lis".to_string());
+                Ok(Self::Binary { source, display })
+            }
+            ProjectKind::Library => Ok(Self::Library),
+        }
+    }
+
+    fn compile_input(&self) -> CompileInput<'_> {
+        match self {
+            Self::Binary { source, display } => CompileInput::Binary(CompileEntry {
+                source,
+                filename: "main.lis",
+                display_path: display,
+            }),
+            Self::Library => CompileInput::Library,
+        }
+    }
+
+    fn source(&self) -> &str {
+        match self {
+            Self::Binary { source, .. } => source,
+            Self::Library => "",
+        }
+    }
+
+    fn display(&self) -> &str {
+        match self {
+            Self::Binary { display, .. } => display,
+            Self::Library => "",
+        }
+    }
+}
+
+fn reject_library_replace(prep: &BuildPrep, emit_tests: bool) -> Result<(), i32> {
+    if prep.kind != ProjectKind::Library || emit_tests {
+        return Ok(());
+    }
+    let Some(key) = prep
+        .manifest
+        .go_deps()
+        .iter()
+        .find(|(_, dep)| matches!(dep, deps::GoDependency::Replaced { .. }))
+        .map(|(key, _)| key.clone())
+    else {
+        return Ok(());
+    };
+    cli_error!(
+        "Replaced dependency in a library",
+        format!(
+            "`{}` uses a `replace`, which Go ignores when this library is imported",
+            key
+        ),
+        "Depend on a published version, or keep this project a binary"
+    );
+    Err(1)
+}
+
+fn write_initial_go_mod(prep: &BuildPrep) -> Result<(), i32> {
     if let Err(e) =
         go_cli::write_go_mod(&prep.target_dir, &prep.manifest.project.name, &prep.locator)
     {
@@ -306,7 +395,10 @@ pub(super) fn build_locked(
         );
         return Err(1);
     }
+    Ok(())
+}
 
+fn workspace_locator(prep: &BuildPrep) -> deps::TypedefLocator {
     let typedef_cache_dir = deps::typedef_cache_dir(&prep.project_path);
 
     // Batch-warm the typedef cache so the lazy path during compile is all hits.
@@ -321,62 +413,37 @@ pub(super) fn build_locked(
         typedef_cache_dir,
         prep.locator.target(),
     ));
-    let locator = prep.locator.clone().with_bindgen(bindgen);
+    prep.locator.clone().with_bindgen(bindgen)
+}
 
+fn compile_project(
+    prep: &BuildPrep,
+    mode: CompileMode,
+    entry: &EntryPoint,
+    locator: &deps::TypedefLocator,
+) -> lisette::pipeline::CompileResult {
     let go_module_name = &prep.manifest.project.name;
-    let version = &prep.manifest.project.version;
-
-    let src_dir = prep.project_path.join("src");
-    let entry_bits = match prep.kind {
-        ProjectKind::Binary => {
-            let main_lis = src_dir.join("main.lis");
-            let source = match fs::read_to_string(&main_lis) {
-                Ok(s) => s,
-                Err(e) => {
-                    cli_error!(
-                        "Failed to compile Lisette project to Go",
-                        format!("Failed to read `{}`: {}", main_lis.display(), e),
-                        "Check file permissions"
-                    );
-                    return Err(1);
-                }
-            };
-            let display = relative_to_cwd(&main_lis).unwrap_or_else(|| "main.lis".to_string());
-            Some((source, display))
-        }
-        ProjectKind::Library => None,
-    };
-
-    let entry_package_name = match prep.kind {
-        ProjectKind::Binary => "main".to_string(),
-        ProjectKind::Library => emit::root_package_name(go_module_name),
-    };
-
-    let project_name = go_module_name.rsplit('/').next().unwrap_or(go_module_name);
-
     let compile_config = CompileConfig {
         mode,
         go_module: go_module_name.to_string(),
-        entry_package_name,
+        entry_package_name: match prep.kind {
+            ProjectKind::Binary => "main".to_string(),
+            ProjectKind::Library => emit::root_package_name(go_module_name),
+        },
         scope: CompileScope::Project(prep.project_path.clone()),
         locator: locator.clone(),
     };
 
+    let src_dir = prep.project_path.join("src");
     let local_fs = LocalFileSystem::with_scanned_sources(&src_dir, prep.sources.clone());
+    compile(entry.compile_input(), &compile_config, &local_fs)
+}
 
-    let input = match entry_bits.as_ref() {
-        Some((source, display)) => CompileInput::Binary(CompileEntry {
-            source,
-            filename: "main.lis",
-            display_path: display,
-        }),
-        None => CompileInput::Library,
-    };
-    let result = compile(input, &compile_config, &local_fs);
-
-    let filter = Filter::All;
-
-    let counts = render::render_all(
+fn render_diagnostics(
+    result: &lisette::pipeline::CompileResult,
+    entry: &EntryPoint,
+) -> render::Counts {
+    render::render_all(
         &result.errors,
         &result.lints,
         |file_id| {
@@ -386,15 +453,18 @@ pub(super) fn build_locked(
                 .map(|info| (info.source.clone(), info.filename.clone()))
         },
         result.user_file_count,
-        &filter,
-        entry_bits.as_ref().map(|(s, _)| s.as_str()).unwrap_or(""),
-        entry_bits.as_ref().map(|(_, d)| d.as_str()).unwrap_or(""),
-    );
+        &Filter::All,
+        entry.source(),
+        entry.display(),
+    )
+}
 
-    if counts.errors > 0 {
-        return Err(1);
-    }
-
+fn write_and_prune_outputs(
+    prep: &BuildPrep,
+    result: &lisette::pipeline::CompileResult,
+    sourcemap: bool,
+    emit_tests: bool,
+) -> Result<go_cli::EmitWriteResult, i32> {
     let heading = "Failed to compile Lisette project to Go";
     let produced: Vec<&str> = result.output.iter().map(|f| f.name.as_str()).collect();
 
@@ -433,7 +503,7 @@ pub(super) fn build_locked(
         prune_orphan_go_files(&prep.target_dir, &produced, &emitted, &result.live_modules)
     {
         cli_error!(
-            "Failed to compile Lisette project to Go",
+            heading,
             format!("Failed to prune stale Go files: {}", e),
             "Check file permissions"
         );
@@ -444,7 +514,7 @@ pub(super) fn build_locked(
         && let Err(e) = prune_stale_root_go(&prep.target_dir, &produced)
     {
         cli_error!(
-            "Failed to compile Lisette project to Go",
+            heading,
             format!("Failed to prune stale Go files: {}", e),
             "Check file permissions"
         );
@@ -455,12 +525,22 @@ pub(super) fn build_locked(
         && let Err(e) = remove_stale_test_outputs(&prep.target_dir, &mut emit.new_manifest)
     {
         cli_error!(
-            "Failed to compile Lisette project to Go",
+            heading,
             format!("Failed to remove stale test file: {}", e),
             "Check file permissions"
         );
         return Err(1);
     }
+
+    Ok(emit)
+}
+
+fn reconcile_target_manifest(
+    prep: &BuildPrep,
+    locator: &deps::TypedefLocator,
+    emit: &mut go_cli::EmitWriteResult,
+) -> Result<(), i32> {
+    let heading = "Failed to compile Lisette project to Go";
 
     // Drop manifest entries whose files pruning removed, so the import-set hash
     // below reflects only surviving output.
@@ -475,8 +555,7 @@ pub(super) fn build_locked(
         && prior != import_set_hash
     {
         go_cli::invalidate_go_mod_stamp(&prep.target_dir);
-        if let Err(e) =
-            go_cli::write_go_mod(&prep.target_dir, &prep.manifest.project.name, &locator)
+        if let Err(e) = go_cli::write_go_mod(&prep.target_dir, &prep.manifest.project.name, locator)
         {
             cli_error!(heading, e, "Check file permissions on `target/go.mod`");
             return Err(1);
@@ -492,51 +571,47 @@ pub(super) fn build_locked(
         cli_error!(heading, e.message, e.hint);
         return Err(1);
     }
+    Ok(())
+}
 
-    if !sourcemap
-        && let Err(e) = semantics::cache::apply_emit_stamps(
-            &prep.project_path,
-            &result
-                .emit_stamps
-                .iter()
-                .map(|s| (s.clone(), Some(s.artifact_hash)))
-                .collect::<Vec<_>>(),
-        )
-    {
+fn commit_emit_stamps(prep: &BuildPrep, result: &lisette::pipeline::CompileResult) {
+    if let Err(e) = semantics::cache::apply_emit_stamps(
+        &prep.project_path,
+        &result
+            .emit_stamps
+            .iter()
+            .map(|s| (s.clone(), Some(s.artifact_hash)))
+            .collect::<Vec<_>>(),
+    ) {
         eprintln!("warning: failed to write emit stamps: {e}");
     }
+}
 
-    // Committed only after gofmt + tidy succeed.
-    go_cli::write_emit_manifest(&prep.target_dir, &emit.new_manifest);
-
-    if let Some(label) = purpose.completion_label() {
-        if counts.errors + counts.warnings + counts.info == 0 {
-            eprintln!();
-        }
-        if use_color() {
-            use owo_colors::OwoColorize;
-            eprintln!(
-                "  ✓ {} {} v{} {}",
-                label,
-                project_name.bright_magenta(),
-                version,
-                format_elapsed(start.elapsed())
-            );
-        } else {
-            eprintln!(
-                "  ✓ {} `{}` v{} {}",
-                label,
-                project_name,
-                version,
-                format_elapsed(start.elapsed())
-            );
-        }
+fn print_completion(label: &str, prep: &BuildPrep, counts: &render::Counts, start: Instant) {
+    if counts.errors + counts.warnings + counts.info == 0 {
+        eprintln!();
     }
-
-    Ok(BuildArtifacts {
-        test_index: result.test_index,
-        sources: result.sources,
-    })
+    let go_module_name = &prep.manifest.project.name;
+    let project_name = go_module_name.rsplit('/').next().unwrap_or(go_module_name);
+    let version = &prep.manifest.project.version;
+    if use_color() {
+        use owo_colors::OwoColorize;
+        eprintln!(
+            "  ✓ {} {} v{} {}",
+            label,
+            project_name.bright_magenta(),
+            version,
+            format_elapsed(start.elapsed())
+        );
+    } else {
+        eprintln!(
+            "  ✓ {} `{}` v{} {}",
+            label,
+            project_name,
+            version,
+            format_elapsed(start.elapsed())
+        );
+    }
 }
 
 pub(super) struct ProjectLayout {

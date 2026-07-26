@@ -587,118 +587,8 @@ impl InferCtx<'_> {
         let iterable_ty = self.new_type_var();
         let new_iterable = self.infer_expression(*iterable, &iterable_ty);
 
-        let resolved_unpeeled = iterable_ty.resolve_in(&self.env);
-        let iter_seq = iter_seq_kind(&resolved_unpeeled);
-
-        // `iter.Seq<V>` / `iter.Seq2<K, V>` are Go range-over-func iterators
-        // stored as function aliases. Keep the nominal so its name and type args
-        // stay available; peeling expands it to an unnamed `fn(...)` shape.
-        let resolved_iterable_ty = if iter_seq.is_some() {
-            resolved_unpeeled
-        } else {
-            store.peel_alias(&resolved_unpeeled)
-        };
-
-        let iterable_is_error = resolved_iterable_ty.is_error();
-
-        let iterable_ty_name = match resolved_iterable_ty.get_name() {
-            Some(name) => name,
-            None => {
-                if !iterable_is_error {
-                    self.sink.push(diagnostics::infer::unknown_iterable_type(
-                        new_iterable.get_span(),
-                    ));
-                }
-                "Slice"
-            }
-        };
-
-        let fallback_args;
-        let iterable_ty_args = match resolved_iterable_ty.get_type_params() {
-            Some(args) => args,
-            None => {
-                let element = if iterable_is_error {
-                    Type::Error
-                } else {
-                    self.new_type_var()
-                };
-                fallback_args = [element.clone(), element];
-                &fallback_args
-            }
-        };
-
-        let element_ty = match iterable_ty_name {
-            "string" => {
-                let receiver = new_iterable.root_identifier().unwrap_or("s");
-                self.sink.push(diagnostics::infer::string_not_iterable(
-                    new_iterable.get_span(),
-                    receiver,
-                ));
-                Type::Error
-            }
-            "Slice" | "EnumeratedSlice" | "Receiver" | "Channel"
-                if !iterable_ty_args.is_empty() =>
-            {
-                if iterable_ty_name == "EnumeratedSlice" {
-                    Type::Tuple(vec![self.type_int(), iterable_ty_args[0].clone()])
-                } else {
-                    iterable_ty_args[0].clone()
-                }
-            }
-
-            // Array yields its element directly (not via `get_type_params`).
-            // A `Ref<Array>` peers to "Array" here but must be deref'd first.
-            "Array" => match &resolved_iterable_ty {
-                Type::Array { element, .. } => element.as_ref().clone(),
-                _ => {
-                    self.sink.push(diagnostics::infer::not_iterable(
-                        &resolved_iterable_ty,
-                        new_iterable.get_span(),
-                    ));
-                    Type::Error
-                }
-            },
-            "Map" if iterable_ty_args.len() >= 2 => Type::Tuple(vec![
-                iterable_ty_args[0].clone(),
-                iterable_ty_args[1].clone(),
-            ]),
-
-            "Seq" if iter_seq.is_some() && !iterable_ty_args.is_empty() => {
-                iterable_ty_args[0].clone()
-            }
-            "Seq2" if iter_seq.is_some() && iterable_ty_args.len() >= 2 => Type::Tuple(vec![
-                iterable_ty_args[0].clone(),
-                iterable_ty_args[1].clone(),
-            ]),
-
-            "Range" | "RangeInclusive" | "RangeFrom" if !iterable_ty_args.is_empty() => {
-                let elem_ty = &iterable_ty_args[0];
-                if elem_ty.get_name() != Some("int") && !elem_ty.is_variable() {
-                    self.sink
-                        .push(diagnostics::infer::non_int_range_not_iterable(
-                            elem_ty,
-                            new_iterable.get_span(),
-                        ));
-                }
-                elem_ty.clone()
-            }
-
-            "RangeTo" | "RangeToInclusive" => {
-                self.sink.push(diagnostics::infer::range_not_iterable(
-                    iterable_ty_name,
-                    new_iterable.get_span(),
-                ));
-                Type::Error
-            }
-
-            _ => {
-                self.sink.push(diagnostics::infer::not_iterable(
-                    &resolved_iterable_ty,
-                    new_iterable.get_span(),
-                ));
-                Type::Error
-            }
-        };
+        let (element_ty, iterable_ty_name, iter_seq) =
+            self.for_element_type(&iterable_ty, &new_iterable);
 
         if let Some(annotation) = &binding.annotation {
             let annotated_ty = self.convert_to_type(store, annotation, &span);
@@ -720,7 +610,7 @@ impl InferCtx<'_> {
             };
 
             let requires_tuple_destructuring =
-                matches!(iterable_ty_name, "Map" | "EnumeratedSlice")
+                matches!(iterable_ty_name.as_str(), "Map" | "EnumeratedSlice")
                     || matches!(iter_seq, Some(IterSeqKind::Seq2));
             if requires_tuple_destructuring && element_ty.is_tuple() {
                 match &new_binding.pattern {
@@ -744,6 +634,128 @@ impl InferCtx<'_> {
             body: new_body.into(),
             span,
         }
+    }
+
+    /// Derives a for-loop's element type, name, and `iter.Seq` kind from its iterable type.
+    fn for_element_type(
+        &mut self,
+        iterable_ty: &Type,
+        iterable_expr: &Expression,
+    ) -> (Type, String, Option<IterSeqKind>) {
+        let store = self.store;
+
+        let resolved_unpeeled = iterable_ty.resolve_in(&self.env);
+        let iter_seq = iter_seq_kind(&resolved_unpeeled);
+
+        let resolved_iterable_ty = if iter_seq.is_some() {
+            resolved_unpeeled
+        } else {
+            store.peel_alias(&resolved_unpeeled)
+        };
+
+        let iterable_is_error = resolved_iterable_ty.is_error();
+
+        let iterable_ty_name = match resolved_iterable_ty.get_name() {
+            Some(name) => name,
+            None => {
+                if !iterable_is_error {
+                    self.sink.push(diagnostics::infer::unknown_iterable_type(
+                        iterable_expr.get_span(),
+                    ));
+                }
+                "Slice"
+            }
+        };
+
+        let fallback_args;
+        let iterable_ty_args = match resolved_iterable_ty.get_type_params() {
+            Some(args) => args,
+            None => {
+                let element = if iterable_is_error {
+                    Type::Error
+                } else {
+                    self.new_type_var()
+                };
+                fallback_args = [element.clone(), element];
+                &fallback_args
+            }
+        };
+
+        let element_ty = match iterable_ty_name {
+            "string" => {
+                let receiver = iterable_expr.root_identifier().unwrap_or("s");
+                self.sink.push(diagnostics::infer::string_not_iterable(
+                    iterable_expr.get_span(),
+                    receiver,
+                ));
+                Type::Error
+            }
+
+            "Slice" | "EnumeratedSlice" | "Receiver" | "Channel"
+                if !iterable_ty_args.is_empty() =>
+            {
+                if iterable_ty_name == "EnumeratedSlice" {
+                    Type::Tuple(vec![self.type_int(), iterable_ty_args[0].clone()])
+                } else {
+                    iterable_ty_args[0].clone()
+                }
+            }
+
+            "Array" => match &resolved_iterable_ty {
+                Type::Array { element, .. } => element.as_ref().clone(),
+                _ => {
+                    self.sink.push(diagnostics::infer::not_iterable(
+                        &resolved_iterable_ty,
+                        iterable_expr.get_span(),
+                    ));
+                    Type::Error
+                }
+            },
+
+            "Map" if iterable_ty_args.len() >= 2 => Type::Tuple(vec![
+                iterable_ty_args[0].clone(),
+                iterable_ty_args[1].clone(),
+            ]),
+
+            "Seq" if iter_seq.is_some() && !iterable_ty_args.is_empty() => {
+                iterable_ty_args[0].clone()
+            }
+
+            "Seq2" if iter_seq.is_some() && iterable_ty_args.len() >= 2 => Type::Tuple(vec![
+                iterable_ty_args[0].clone(),
+                iterable_ty_args[1].clone(),
+            ]),
+
+            "Range" | "RangeInclusive" | "RangeFrom" if !iterable_ty_args.is_empty() => {
+                let elem_ty = &iterable_ty_args[0];
+                if elem_ty.get_name() != Some("int") && !elem_ty.is_variable() {
+                    self.sink
+                        .push(diagnostics::infer::non_int_range_not_iterable(
+                            elem_ty,
+                            iterable_expr.get_span(),
+                        ));
+                }
+                elem_ty.clone()
+            }
+
+            "RangeTo" | "RangeToInclusive" => {
+                self.sink.push(diagnostics::infer::range_not_iterable(
+                    iterable_ty_name,
+                    iterable_expr.get_span(),
+                ));
+                Type::Error
+            }
+
+            _ => {
+                self.sink.push(diagnostics::infer::not_iterable(
+                    &resolved_iterable_ty,
+                    iterable_expr.get_span(),
+                ));
+                Type::Error
+            }
+        };
+
+        (element_ty, iterable_ty_name.to_string(), iter_seq)
     }
 
     pub(super) fn infer_return_statement(

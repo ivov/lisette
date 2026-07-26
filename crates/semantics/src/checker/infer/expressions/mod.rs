@@ -15,7 +15,7 @@ pub mod propagate;
 pub mod select;
 pub mod struct_call;
 
-use syntax::ast::Expression;
+use syntax::ast::{Expression, Span};
 use syntax::types::Type;
 
 use crate::checker::infer::InferCtx;
@@ -231,24 +231,14 @@ impl InferCtx<'_> {
             Expression::Task {
                 expression, span, ..
             } => {
-                // Only fire the generic ban when the dedicated
-                // `task_in_expression_position` check won't — avoids duplicates.
-                if is_subexpression && !self.scopes.is_value_context() {
-                    self.sink
-                        .push(diagnostics::infer::control_flow_in_expression("task", span));
-                }
+                self.check_control_flow_in_expression("task", span, is_subexpression);
                 self.infer_task(expression, span, expected_ty)
             }
 
             Expression::Defer {
                 expression, span, ..
             } => {
-                if is_subexpression && !self.scopes.is_value_context() {
-                    self.sink
-                        .push(diagnostics::infer::control_flow_in_expression(
-                            "defer", span,
-                        ));
-                }
+                self.check_control_flow_in_expression("defer", span, is_subexpression);
                 self.infer_defer(expression, span, expected_ty)
             }
 
@@ -288,6 +278,14 @@ impl InferCtx<'_> {
             Expression::Break { value, span } => self.infer_break(value, span, is_subexpression),
             Expression::Continue { span } => self.infer_continue(span, is_subexpression),
             Expression::RawGo { text } => Expression::RawGo { text },
+        }
+    }
+
+    /// Bans `task`/`defer` as a bare subexpression, skipped when the dedicated check already fires.
+    fn check_control_flow_in_expression(&mut self, kind: &str, span: Span, is_subexpression: bool) {
+        if is_subexpression && !self.scopes.is_value_context() {
+            self.sink
+                .push(diagnostics::infer::control_flow_in_expression(kind, span));
         }
     }
 

@@ -7,7 +7,7 @@ use syntax::ast::{
     SelectArm, StructSpread,
 };
 use syntax::program::File;
-use syntax::program::{DefinitionBody, DotAccessKind, EqualityIndex, Module};
+use syntax::program::{DefinitionBody, DotAccessKind, DotAccessResolution, EqualityIndex, Module};
 use syntax::types::{CompoundKind, Symbol, Type, unqualified_name};
 
 use super::reference_graph::{EnumVariantId, ModuleItemId, ReferenceGraph, StructFieldId};
@@ -52,6 +52,12 @@ fn deref_for_keying(ty: &Type, aliases: &AliasMap) -> Type {
     aliases.store.peel_refs_and_aliases(ty).0
 }
 
+// ctx is `None` at the top level. Function/Const nest inside an enclosing item and inherit
+// it when present; every other item kind below always self-derives from its own name.
+fn item_ctx(ctx: Option<&ModuleItemId>, name: &str) -> ModuleItemId {
+    ctx.cloned().unwrap_or_else(|| ModuleItemId::new(name))
+}
+
 pub(super) fn walk_expression(
     module: &Module,
     expression: &Expression,
@@ -93,46 +99,14 @@ pub(super) fn walk_expression(
             resolution,
             ..
         } => {
-            walk_expression(module, expression, graph, alias_map, ctx);
-            let receiver_ty = expression.get_type();
-            if let Some(ty_name) = qualified_type_name(&receiver_ty, alias_map) {
-                graph.mark_struct_field_used(StructFieldId::new(ty_name.as_str(), member));
-            }
-            mark_promoted_field_read(&receiver_ty, member, graph, alias_map);
-            if let Some(from) = ctx
-                && is_method_access(resolution.kind())
-                && credits_local_method(&expression.get_type(), module, alias_map)
-            {
-                let to = method_node(member, &expression.get_type(), alias_map);
-                graph.add_reference(from, to);
-            }
-            if let Some(from) = ctx
-                && member == "equals"
-                && is_container_receiver(&expression.get_type(), alias_map)
-            {
-                add_equals_references(graph, from, &expression.get_type(), module, alias_map);
-            }
+            walk_dot_access(
+                module, expression, member, resolution, graph, alias_map, ctx,
+            );
         }
 
-        Expression::Function {
-            name,
-            generics,
-            params,
-            return_annotation,
-            body,
-            ..
-        } => {
-            let fn_ctx = ctx.cloned().unwrap_or_else(|| ModuleItemId::new(name));
-            walk_callable_body(
-                module,
-                generics,
-                params,
-                return_annotation,
-                body.definition(),
-                graph,
-                alias_map,
-                &fn_ctx,
-            );
+        Expression::Function { name, .. } => {
+            let fn_ctx = item_ctx(ctx, name);
+            walk_function_like(module, expression, graph, alias_map, &fn_ctx);
         }
 
         Expression::Const {
@@ -141,9 +115,7 @@ pub(super) fn walk_expression(
             expression,
             ..
         } => {
-            let const_ctx = ctx
-                .cloned()
-                .unwrap_or_else(|| ModuleItemId::new(identifier));
+            let const_ctx = item_ctx(ctx, identifier);
             if let Some(ann) = annotation {
                 walk_annotation(module, ann, graph, alias_map, &const_ctx);
             }
@@ -159,12 +131,12 @@ pub(super) fn walk_expression(
             ..
         } => {
             let enum_ctx = ModuleItemId::new(name);
-            let owner = format!("{}.{}", module.id, name);
-            let has_equality = has_equality_attr(attributes);
+            let synthesizes_equality =
+                has_synthesized_equality(module, name, attributes, alias_map);
             for v in variants {
                 for f in &v.fields {
                     walk_annotation(module, &f.annotation, graph, alias_map, &enum_ctx);
-                    if has_equality && alias_map.store.equality_index.is_synthesized(&owner) {
+                    if synthesizes_equality {
                         mark_equals_roots(graph, &f.ty, module, alias_map);
                     }
                 }
@@ -184,11 +156,11 @@ pub(super) fn walk_expression(
                     walk_annotation(module, bound, graph, alias_map, &struct_ctx);
                 }
             }
-            let owner = format!("{}.{}", module.id, name);
-            let has_equality = has_equality_attr(attributes);
+            let synthesizes_equality =
+                has_synthesized_equality(module, name, attributes, alias_map);
             for f in fields {
                 walk_annotation(module, &f.annotation, graph, alias_map, &struct_ctx);
-                if has_equality && alias_map.store.equality_index.is_synthesized(&owner) {
+                if synthesizes_equality {
                     mark_equals_roots(graph, &f.ty, module, alias_map);
                 }
             }
@@ -274,26 +246,9 @@ pub(super) fn walk_expression(
                 }
             }
             for m in methods {
-                if let Expression::Function {
-                    name,
-                    generics,
-                    params,
-                    return_annotation,
-                    body,
-                    ..
-                } = m
-                {
+                if let Expression::Function { name, .. } = m {
                     let method_ctx = ModuleItemId::method(name, receiver_name);
-                    walk_callable_body(
-                        module,
-                        generics,
-                        params,
-                        return_annotation,
-                        body.definition(),
-                        graph,
-                        alias_map,
-                        &method_ctx,
-                    );
+                    walk_function_like(module, m, graph, alias_map, &method_ctx);
                 } else {
                     walk_expression(module, m, graph, alias_map, ctx);
                 }
@@ -512,6 +467,36 @@ fn walk_struct_call(
                 }
             }
         }
+    }
+}
+
+fn walk_dot_access(
+    module: &Module,
+    expression: &Expression,
+    member: &str,
+    resolution: &DotAccessResolution,
+    graph: &mut ReferenceGraph,
+    alias_map: &AliasMap,
+    ctx: Option<&ModuleItemId>,
+) {
+    walk_expression(module, expression, graph, alias_map, ctx);
+    let receiver_ty = expression.get_type();
+    if let Some(ty_name) = qualified_type_name(&receiver_ty, alias_map) {
+        graph.mark_struct_field_used(StructFieldId::new(ty_name.as_str(), member));
+    }
+    mark_promoted_field_read(&receiver_ty, member, graph, alias_map);
+    if let Some(from) = ctx
+        && is_method_access(resolution.kind())
+        && credits_local_method(&receiver_ty, module, alias_map)
+    {
+        let to = method_node(member, &receiver_ty, alias_map);
+        graph.add_reference(from, to);
+    }
+    if let Some(from) = ctx
+        && member == "equals"
+        && is_container_receiver(&receiver_ty, alias_map)
+    {
+        add_equals_references(graph, from, &receiver_ty, module, alias_map);
     }
 }
 
@@ -771,6 +756,35 @@ fn is_method_access(kind: Option<DotAccessKind>) -> bool {
     )
 }
 
+fn walk_function_like(
+    module: &Module,
+    expr: &Expression,
+    graph: &mut ReferenceGraph,
+    alias_map: &AliasMap,
+    ctx_id: &ModuleItemId,
+) {
+    let Expression::Function {
+        generics,
+        params,
+        return_annotation,
+        body,
+        ..
+    } = expr
+    else {
+        return;
+    };
+    walk_callable_body(
+        module,
+        generics,
+        params,
+        return_annotation,
+        body.definition(),
+        graph,
+        alias_map,
+        ctx_id,
+    );
+}
+
 #[allow(clippy::too_many_arguments)]
 fn walk_callable_body(
     module: &Module,
@@ -824,6 +838,16 @@ fn credits_local_method(receiver_ty: &Type, module: &Module, aliases: &AliasMap)
 
 fn has_equality_attr(attributes: &[Attribute]) -> bool {
     attributes.iter().any(|a| a.name == "equality")
+}
+
+fn has_synthesized_equality(
+    module: &Module,
+    name: &str,
+    attributes: &[Attribute],
+    alias_map: &AliasMap,
+) -> bool {
+    let owner = format!("{}.{}", module.id, name);
+    has_equality_attr(attributes) && alias_map.store.equality_index.is_synthesized(&owner)
 }
 
 fn add_equals_references(

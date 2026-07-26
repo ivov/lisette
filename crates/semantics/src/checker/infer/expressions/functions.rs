@@ -43,6 +43,11 @@ struct VariadicParameter {
     first_index: usize,
 }
 
+enum DeferredCallCheckTarget {
+    GenericCall,
+    SliceMake,
+}
+
 impl InferCtx<'_> {
     fn check_call_arity(
         &mut self,
@@ -343,27 +348,14 @@ impl InferCtx<'_> {
             return self.infer_array_new_call(&expression, args, type_args, span, expected_ty);
         }
 
-        if let Some(diagnostic) = match callee_path.as_deref() {
+        let pseudo_constructor_diagnostic = match callee_path.as_deref() {
             Some("Map.make") => Some(diagnostics::infer::map_no_make_constructor(span)),
             Some("Channel.make") => Some(diagnostics::infer::channel_no_make_constructor(span)),
             _ => None,
-        } {
-            self.sink.push(diagnostic);
-            let new_args: Vec<Expression> = args
-                .into_iter()
-                .map(|arg| self.with_value_context(|s| s.infer_expression(arg, &Type::Error)))
-                .collect();
-            let new_spread = spread
-                .map(|s| self.with_value_context(|state| state.infer_expression(*s, &Type::Error)));
-            return Expression::Call {
-                expression,
-                args: new_args,
-                spread: new_spread.map(Box::new),
-                type_arguments: CallTypeArguments::checked_without_types(type_args),
-                ty: Type::Error,
-                span,
-                call_kind: CallKind::Unresolved,
-            };
+        };
+        if let Some(diagnostic) = pseudo_constructor_diagnostic {
+            return self
+                .reject_pseudo_constructor(diagnostic, expression, args, spread, type_args, span);
         }
 
         let store = self.store;
@@ -454,33 +446,14 @@ impl InferCtx<'_> {
             .resolve_in(&self.env)
             .is_error();
 
-        let new_spread = spread.map(|spread_expr| match &variadic {
-            Some(variadic) => {
-                let expected = if variadic.parameter.ty.is_unknown() {
-                    let var = self.new_type_var();
-                    self.type_slice(var)
-                } else {
-                    self.type_slice(variadic.parameter.ty.clone())
-                };
-                let inferred =
-                    self.with_value_context(|s| s.infer_expression(*spread_expr, &expected));
-                if variadic.parameter.mutable {
-                    let callee_label = callee_label(&callee_expression);
-                    self.check_arg_against_mut_param(
-                        &inferred,
-                        &variadic.parameter.ty,
-                        &callee_label,
-                    );
-                }
-                inferred
-            }
-            None => {
-                if !callee_is_unresolved {
-                    self.sink
-                        .push(diagnostics::infer::spread_on_non_variadic(span));
-                }
-                self.with_value_context(|s| s.infer_expression(*spread_expr, &Type::Error))
-            }
+        let new_spread = spread.map(|spread_expr| {
+            self.infer_spread_argument(
+                spread_expr,
+                variadic.as_ref(),
+                &callee_expression,
+                callee_is_unresolved,
+                span,
+            )
         });
 
         let resolved_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
@@ -528,15 +501,11 @@ impl InferCtx<'_> {
             && type_args.is_empty()
             && !self.is_enum_type(store, &resolved_return);
         if return_check_recorded {
-            let module_id = self.cursor.module_id.clone();
-            self.facts
-                .deferred
-                .generic_calls
-                .push(crate::facts::GenericCallCheck {
-                    ty: return_ty.clone(),
-                    span,
-                    module_id,
-                });
+            self.record_generic_call_check(
+                return_ty.clone(),
+                span,
+                DeferredCallCheckTarget::GenericCall,
+            );
         }
 
         // A zero-variadic-arg call can't infer its `VarArgs<T>` parameter from args.
@@ -550,15 +519,11 @@ impl InferCtx<'_> {
             let already_covered = return_check_recorded
                 && resolved_return.contains_type(&variadic.parameter.ty.resolve_in(&self.env));
             if !already_covered {
-                let module_id = self.cursor.module_id.clone();
-                self.facts
-                    .deferred
-                    .generic_calls
-                    .push(crate::facts::GenericCallCheck {
-                        ty: variadic.parameter.ty.clone(),
-                        span,
-                        module_id,
-                    });
+                self.record_generic_call_check(
+                    variadic.parameter.ty.clone(),
+                    span,
+                    DeferredCallCheckTarget::GenericCall,
+                );
             }
         }
 
@@ -582,15 +547,11 @@ impl InferCtx<'_> {
         }
 
         if callee_path.as_deref() == Some("Slice.make") {
-            let module_id = self.cursor.module_id.clone();
-            self.facts
-                .deferred
-                .slice_makes
-                .push(crate::facts::SliceMakeCheck {
-                    ty: call_ty.clone(),
-                    span,
-                    module_id,
-                });
+            self.record_generic_call_check(
+                call_ty.clone(),
+                span,
+                DeferredCallCheckTarget::SliceMake,
+            );
         }
 
         self.check_negative_size_literal(
@@ -608,6 +569,98 @@ impl InferCtx<'_> {
             ty: call_ty,
             span,
             call_kind,
+        }
+    }
+
+    /// Error-recovery rebuild for `Map.make`/`Channel.make`, which have no constructor.
+    fn reject_pseudo_constructor(
+        &mut self,
+        diagnostic: diagnostics::LisetteDiagnostic,
+        expression: Box<Expression>,
+        args: Vec<Expression>,
+        spread: Option<Box<Expression>>,
+        type_args: Vec<Annotation>,
+        span: Span,
+    ) -> Expression {
+        self.sink.push(diagnostic);
+        let new_args: Vec<Expression> = args
+            .into_iter()
+            .map(|arg| self.with_value_context(|s| s.infer_expression(arg, &Type::Error)))
+            .collect();
+        let new_spread = spread
+            .map(|s| self.with_value_context(|state| state.infer_expression(*s, &Type::Error)));
+        Expression::Call {
+            expression,
+            args: new_args,
+            spread: new_spread.map(Box::new),
+            type_arguments: CallTypeArguments::checked_without_types(type_args),
+            ty: Type::Error,
+            span,
+            call_kind: CallKind::Unresolved,
+        }
+    }
+
+    fn infer_spread_argument(
+        &mut self,
+        spread_expr: Box<Expression>,
+        variadic: Option<&VariadicParameter>,
+        callee_expression: &Expression,
+        callee_is_unresolved: bool,
+        span: Span,
+    ) -> Expression {
+        match variadic {
+            Some(variadic) => {
+                let expected = if variadic.parameter.ty.is_unknown() {
+                    let var = self.new_type_var();
+                    self.type_slice(var)
+                } else {
+                    self.type_slice(variadic.parameter.ty.clone())
+                };
+                let inferred =
+                    self.with_value_context(|s| s.infer_expression(*spread_expr, &expected));
+                if variadic.parameter.mutable {
+                    let callee_label = callee_label(callee_expression);
+                    self.check_arg_against_mut_param(
+                        &inferred,
+                        &variadic.parameter.ty,
+                        &callee_label,
+                    );
+                }
+                inferred
+            }
+            None => {
+                if !callee_is_unresolved {
+                    self.sink
+                        .push(diagnostics::infer::spread_on_non_variadic(span));
+                }
+                self.with_value_context(|s| s.infer_expression(*spread_expr, &Type::Error))
+            }
+        }
+    }
+
+    fn record_generic_call_check(&mut self, ty: Type, span: Span, target: DeferredCallCheckTarget) {
+        let module_id = self.cursor.module_id.clone();
+        match target {
+            DeferredCallCheckTarget::GenericCall => {
+                self.facts
+                    .deferred
+                    .generic_calls
+                    .push(crate::facts::GenericCallCheck {
+                        ty,
+                        span,
+                        module_id,
+                    });
+            }
+            DeferredCallCheckTarget::SliceMake => {
+                self.facts
+                    .deferred
+                    .slice_makes
+                    .push(crate::facts::SliceMakeCheck {
+                        ty,
+                        span,
+                        module_id,
+                    });
+            }
         }
     }
 

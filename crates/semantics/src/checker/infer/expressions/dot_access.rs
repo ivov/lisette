@@ -613,94 +613,13 @@ impl InferCtx<'_> {
             self.facts.add_usage(*args.span, definition_span);
         }
 
-        // Reject cross-module tuple-struct constructors used as values
-        if !self.scopes.is_callee_context()
-            && matches!(
-                store.get_definition(&resolved_definition).map(|d| &d.body),
-                Some(DefinitionBody::Struct {
-                    fields: StructFields::Tuple(_),
-                    ..
-                })
-            )
-        {
-            let display_name = format!("{}.{}", type_name, args.member_name);
-            self.sink.push(diagnostics::infer::native_constructor_value(
-                &display_name,
-                *args.span,
-            ));
-        }
-
-        if !self.scopes.is_callee_context()
-            && !self.scopes.is_dot_access_base()
-            && matches!(
-                store.get_definition(&resolved_definition).map(|d| &d.body),
-                Some(DefinitionBody::Struct {
-                    fields: StructFields::Record(_),
-                    ..
-                })
-            )
-        {
-            let display_name = format!("{}.{}", type_name, args.member_name);
-            self.sink.push(diagnostics::infer::record_struct_value(
-                &display_name,
-                *args.span,
-            ));
-        }
-
-        if !self.scopes.is_callee_context()
-            && !self.scopes.is_dot_access_base()
-            && !self.scopes.is_let_binding_rhs()
-            && matches!(
-                store.get_definition(&resolved_definition).map(|d| &d.body),
-                Some(DefinitionBody::Enum { .. })
-            )
-        {
-            self.sink
-                .push(diagnostics::infer::namespace_alias_used_as_value(
-                    *args.span,
-                ));
-        }
-
-        if !self.scopes.is_callee_context()
-            && !self.scopes.is_dot_access_base()
-            && let Some(definition) = store.get_definition(&resolved_definition)
-        {
-            let display_name = format!("{}.{}", type_name, args.member_name);
-            match &definition.body {
-                DefinitionBody::TypeAlias { .. } => {
-                    let diagnostic = match store.deep_struct_kind(definition.ty.unwrap_forall()) {
-                        Some(StructKind::Record) => {
-                            diagnostics::infer::record_struct_value(&display_name, *args.span)
-                        }
-                        Some(StructKind::Tuple) => {
-                            diagnostics::infer::native_constructor_value(&display_name, *args.span)
-                        }
-                        None => diagnostics::infer::type_used_as_value(&display_name, *args.span),
-                    };
-                    self.sink.push(diagnostic);
-                }
-                DefinitionBody::Interface { .. } => {
-                    self.sink.push(diagnostics::infer::type_used_as_value(
-                        &display_name,
-                        *args.span,
-                    ));
-                }
-                _ => {}
-            }
-        }
-
-        if !self.scopes.is_callee_context() && !self.scopes.is_dot_access_base() {
-            let phantom = phantom_type_params(&member_type);
-            if !phantom.is_empty() {
-                let display_name = format!("{}.{}", type_name, args.member_name);
-                self.sink
-                    .push(diagnostics::infer::uninferable_generic_reference(
-                        &display_name,
-                        &phantom,
-                        *args.span,
-                    ));
-            }
-        }
+        self.check_module_member_in_value_position(
+            store,
+            &resolved_definition,
+            &member_type,
+            type_name,
+            args,
+        );
 
         let (module_ty, _) = self.instantiate(&module_ty);
         let (member_ty, _) = self.instantiate(&member_type);
@@ -723,6 +642,100 @@ impl InferCtx<'_> {
                 definition: Some(resolved_definition),
             },
         ))
+    }
+
+    /// Rejects module members used in value position rather than called or used as a type.
+    fn check_module_member_in_value_position(
+        &mut self,
+        store: &crate::store::Store,
+        resolved_definition: &Symbol,
+        member_type: &Type,
+        type_name: &str,
+        args: &DotAccessResolutionArgs,
+    ) {
+        let is_callee_context = self.scopes.is_callee_context();
+        let is_dot_access_base = self.scopes.is_dot_access_base();
+        let display_name = format!("{}.{}", type_name, args.member_name);
+
+        if let Some(definition) = store.get_definition(resolved_definition) {
+            match &definition.body {
+                DefinitionBody::Struct {
+                    fields: StructFields::Tuple(_),
+                    ..
+                } => {
+                    // Deliberately omits `is_dot_access_base`, unlike the other arms below.
+                    if !is_callee_context {
+                        self.sink.push(diagnostics::infer::native_constructor_value(
+                            &display_name,
+                            *args.span,
+                        ));
+                    }
+                }
+                DefinitionBody::Struct {
+                    fields: StructFields::Record(_),
+                    ..
+                } => {
+                    if !is_callee_context && !is_dot_access_base {
+                        self.sink.push(diagnostics::infer::record_struct_value(
+                            &display_name,
+                            *args.span,
+                        ));
+                    }
+                }
+                DefinitionBody::Enum { .. } => {
+                    if !is_callee_context
+                        && !is_dot_access_base
+                        && !self.scopes.is_let_binding_rhs()
+                    {
+                        self.sink
+                            .push(diagnostics::infer::namespace_alias_used_as_value(
+                                *args.span,
+                            ));
+                    }
+                }
+                DefinitionBody::TypeAlias { .. } => {
+                    if !is_callee_context && !is_dot_access_base {
+                        let diagnostic = match store.deep_struct_kind(definition.ty.unwrap_forall())
+                        {
+                            Some(StructKind::Record) => {
+                                diagnostics::infer::record_struct_value(&display_name, *args.span)
+                            }
+                            Some(StructKind::Tuple) => {
+                                diagnostics::infer::native_constructor_value(
+                                    &display_name,
+                                    *args.span,
+                                )
+                            }
+                            None => {
+                                diagnostics::infer::type_used_as_value(&display_name, *args.span)
+                            }
+                        };
+                        self.sink.push(diagnostic);
+                    }
+                }
+                DefinitionBody::Interface { .. } => {
+                    if !is_callee_context && !is_dot_access_base {
+                        self.sink.push(diagnostics::infer::type_used_as_value(
+                            &display_name,
+                            *args.span,
+                        ));
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        if !is_callee_context && !is_dot_access_base {
+            let phantom = phantom_type_params(member_type);
+            if !phantom.is_empty() {
+                self.sink
+                    .push(diagnostics::infer::uninferable_generic_reference(
+                        &display_name,
+                        &phantom,
+                        *args.span,
+                    ));
+            }
+        }
     }
 
     fn as_instance_method(&mut self, args: &DotAccessResolutionArgs) -> Option<Expression> {

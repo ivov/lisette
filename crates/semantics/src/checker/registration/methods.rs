@@ -4,7 +4,8 @@ use syntax::ast::{
 };
 use syntax::program::{Definition, DefinitionBody, Interface, Visibility};
 use syntax::types::{
-    Symbol, Type, build_substitution_map, substitute, type_args_match_params, unqualified_name,
+    Bound, Symbol, Type, build_substitution_map, substitute, type_args_match_params,
+    unqualified_name,
 };
 
 use super::{extract_attribute_flags, has_recursive_instantiation, wrap_with_impl_generics};
@@ -15,6 +16,16 @@ struct ImplReceiver<'a> {
     module_id: &'a str,
     qualified_name: &'a str,
     display_name: &'a str,
+    receiver_ty: &'a Type,
+}
+
+/// Receiver type resolved from an `impl` block's annotation, with its generics' bounds registered.
+struct ResolvedImplReceiver {
+    receiver_ty: Type,
+    qualified_name: Symbol,
+    module_id: String,
+    generics: Vec<Generic>,
+    impl_bounds: Vec<Bound>,
 }
 
 impl TaskState {
@@ -152,15 +163,52 @@ impl TaskState {
         functions: &[Expression],
         span: &Span,
     ) -> Vec<(String, Type)> {
+        let Some(resolved) = self.resolve_impl_receiver(store, annotation, generics, span) else {
+            return Vec::new();
+        };
+        let type_name = resolved
+            .receiver_ty
+            .get_name()
+            .expect("a resolved receiver always has a name");
+        let receiver = ImplReceiver {
+            module_id: &resolved.module_id,
+            qualified_name: resolved.qualified_name.as_str(),
+            display_name: type_name,
+            receiver_ty: &resolved.receiver_ty,
+        };
+
+        // Static methods land in the parent scope, since this impl's generics scope drops here.
+        let mut static_methods: Vec<(String, Type)> = Vec::new();
+        for function in functions {
+            if let Some(entry) = self.register_impl_method(
+                store,
+                &receiver,
+                function,
+                &resolved.generics,
+                &resolved.impl_bounds,
+            ) {
+                static_methods.push(entry);
+            }
+        }
+
+        static_methods
+    }
+
+    /// Resolve an `impl` block's receiver annotation to a type, or `None` if it should be skipped.
+    fn resolve_impl_receiver(
+        &mut self,
+        store: &mut Store,
+        annotation: &Annotation,
+        generics: &[Generic],
+        span: &Span,
+    ) -> Option<ResolvedImplReceiver> {
         self.put_in_scope(generics);
         let generics = self.resolve_generic_bounds(&*store, generics, span);
         let impl_bounds = resolved_generic_bounds(&generics);
 
         self.check_undeclared_impl_type_params(annotation, &generics);
         let receiver_ty = self.convert_receiver_to_type(&*store, annotation, span);
-        let Some(type_name) = receiver_ty.get_name() else {
-            return Vec::new();
-        };
+        let type_name = receiver_ty.get_name()?;
         // Prelude built-ins like `Array` have no qualified name to key methods by.
         let Some(receiver_qualified_name) = receiver_ty.get_qualified_name() else {
             self.sink.push(diagnostics::infer::impl_on_foreign_type(
@@ -168,7 +216,7 @@ impl TaskState {
                 crate::prelude::PRELUDE_MODULE_ID,
                 *span,
             ));
-            return Vec::new();
+            return None;
         };
         let module_id = self.cursor.module_id.clone();
         let is_d_lis = self.is_d_lis(&*store);
@@ -182,7 +230,7 @@ impl TaskState {
                 type_module,
                 *span,
             ));
-            return Vec::new();
+            return None;
         }
 
         if self.current_file_is_test(store)
@@ -195,7 +243,7 @@ impl TaskState {
                     type_name,
                     annotation.get_span(),
                 ));
-            return Vec::new();
+            return None;
         }
 
         if !self.is_d_lis(&*store)
@@ -212,7 +260,7 @@ impl TaskState {
                 type_name,
                 annotation.get_span(),
             ));
-            return Vec::new();
+            return None;
         }
 
         if self.impl_has_simple_type_params(&receiver_ty, &generics) {
@@ -228,129 +276,141 @@ impl TaskState {
         }
         self.check_transitive_generic_bounds(&*store, &generics, *span);
 
-        let receiver = ImplReceiver {
-            module_id: &module_id,
-            qualified_name: receiver_qualified_name.as_str(),
-            display_name: type_name,
+        Some(ResolvedImplReceiver {
+            receiver_ty,
+            qualified_name: receiver_qualified_name,
+            module_id,
+            generics,
+            impl_bounds,
+        })
+    }
+
+    /// Register one impl function as a method, returning the static-method entry (if any) for the caller.
+    fn register_impl_method(
+        &mut self,
+        store: &mut Store,
+        receiver: &ImplReceiver<'_>,
+        function: &Expression,
+        generics: &[Generic],
+        impl_bounds: &[Bound],
+    ) -> Option<(String, Type)> {
+        let is_d_lis = self.is_d_lis(&*store);
+        let (fn_attrs, fn_doc) = if let Expression::Function {
+            attributes, doc, ..
+        } = function
+        {
+            (attributes.as_slice(), doc.clone())
+        } else {
+            (&[][..], None)
         };
-        let mut static_methods: Vec<(String, Type)> = Vec::new();
+        let fn_visibility = if let Expression::Function { visibility, .. } = function
+            && (*visibility == SyntacticVisibility::Public || is_d_lis)
+        {
+            Visibility::Public
+        } else {
+            Visibility::Private
+        };
+        let fn_sig = function.function_definition_view();
+        let fn_span = function.get_span();
+        let mut fn_ty = self.extract_signature_parts(
+            &*store,
+            fn_sig.generics,
+            fn_sig.params,
+            fn_sig.annotation,
+            &fn_span,
+        );
+        let qualified_name = format!("{}.{}", receiver.display_name, fn_sig.name);
+        let module_qualified_name = Symbol::from_parts(receiver.module_id, &qualified_name);
+        let is_instance_method = fn_sig.params.first().is_some_and(|p| {
+            matches!(p.pattern, Pattern::Identifier { ref identifier, .. } if identifier == "self")
+        });
 
-        for function in functions {
-            let (fn_attrs, fn_doc) = if let Expression::Function {
-                attributes, doc, ..
-            } = function
-            {
-                (attributes.as_slice(), doc.clone())
-            } else {
-                (&[][..], None)
-            };
-            let fn_visibility = if let Expression::Function { visibility, .. } = function
-                && (*visibility == SyntacticVisibility::Public || self.is_d_lis(&*store))
-            {
-                Visibility::Public
-            } else {
-                Visibility::Private
-            };
-            let fn_sig = function.function_definition_view();
-            let fn_span = function.get_span();
-            let mut fn_ty = self.extract_signature_parts(
-                &*store,
-                fn_sig.generics,
-                fn_sig.params,
-                fn_sig.annotation,
-                &fn_span,
-            );
-            let qualified_name = format!("{}.{}", type_name, fn_sig.name);
-            let module_qualified_name = Symbol::from_parts(&module_id, &qualified_name);
-            let is_instance_method = fn_sig.params.first().is_some_and(|p| {
-                matches!(p.pattern, Pattern::Identifier { ref identifier, .. } if identifier == "self")
-            });
+        let has_unannotated_self = fn_sig
+            .params
+            .first()
+            .is_some_and(|p| p.annotation.is_none());
 
-            let has_unannotated_self = fn_sig
-                .params
-                .first()
-                .is_some_and(|p| p.annotation.is_none());
-
-            if is_instance_method && has_unannotated_self {
-                fn_ty = fn_ty.with_replaced_first_param(&receiver_ty);
-            }
-
-            let (method_signature_pairs, method_signature_bounds) =
-                super::function_signature_pairs(&fn_ty, fn_sig.params, fn_span);
-            self.with_scope(|this| {
-                this.put_in_scope(fn_sig.generics);
-                for bound in &method_signature_bounds {
-                    this.record_generic_bound(&bound.param_name, bound.ty.clone());
-                }
-                this.check_value_position_bounds(&*store, &[], &method_signature_pairs);
-            });
-
-            let method_ty = wrap_with_impl_generics(&fn_ty, &generics, &impl_bounds);
-
-            let go_hints = extract_attribute_flags(fn_attrs, "go");
-            let method_key: EcoString =
-                if is_instance_method && go_hints.iter().any(|h| h == "unexported") {
-                    super::seal_method_key(is_d_lis, fn_attrs, &module_id, fn_sig.name)
-                } else {
-                    fn_sig.name.clone()
-                };
-
-            if !generics.is_empty()
-                && self.impl_has_simple_type_params(&receiver_ty, &generics)
-                && has_recursive_instantiation(&receiver_qualified_name, &fn_ty)
-            {
-                self.sink
-                    .push(diagnostics::infer::recursive_generic_instantiation(
-                        type_name,
-                        fn_sig.name_span,
-                    ));
-            }
-
-            if is_instance_method {
-                if !self.try_register_instance_method(
-                    store,
-                    &receiver,
-                    &method_key,
-                    fn_sig.name_span,
-                    &method_ty,
-                ) {
-                    continue;
-                }
-            } else {
-                static_methods.push((qualified_name, method_ty.clone()));
-            }
-
-            self.check_duplicate_method(
-                &*store,
-                &receiver,
-                fn_sig.name,
-                fn_sig.name_span,
-                generics.is_empty(),
-            );
-
-            let module = store
-                .get_module_mut(&module_id)
-                .expect("current module must exist in store");
-            module.definitions.insert(
-                module_qualified_name,
-                Definition {
-                    visibility: fn_visibility.clone(),
-                    ty: method_ty,
-                    name: None,
-                    name_span: Some(fn_sig.name_span),
-                    doc: fn_doc,
-                    body: DefinitionBody::Value {
-                        kind: syntax::program::ValueKind::Runtime,
-                        allowed_lints: extract_attribute_flags(fn_attrs, "allow"),
-                        go_hints,
-                        go_name: None,
-                        go_type_param_recipe: None,
-                    },
-                },
-            );
+        if is_instance_method && has_unannotated_self {
+            fn_ty = fn_ty.with_replaced_first_param(receiver.receiver_ty);
         }
 
-        static_methods
+        let (method_signature_pairs, method_signature_bounds) =
+            super::function_signature_pairs(&fn_ty, fn_sig.params, fn_span);
+        self.with_scope(|this| {
+            this.put_in_scope(fn_sig.generics);
+            for bound in &method_signature_bounds {
+                this.record_generic_bound(&bound.param_name, bound.ty.clone());
+            }
+            this.check_value_position_bounds(&*store, &[], &method_signature_pairs);
+        });
+
+        let method_ty = wrap_with_impl_generics(&fn_ty, generics, impl_bounds);
+
+        let go_hints = extract_attribute_flags(fn_attrs, "go");
+        let method_key: EcoString =
+            if is_instance_method && go_hints.iter().any(|h| h == "unexported") {
+                super::seal_method_key(is_d_lis, fn_attrs, receiver.module_id, fn_sig.name)
+            } else {
+                fn_sig.name.clone()
+            };
+
+        if !generics.is_empty()
+            && self.impl_has_simple_type_params(receiver.receiver_ty, generics)
+            && has_recursive_instantiation(receiver.qualified_name, &fn_ty)
+        {
+            self.sink
+                .push(diagnostics::infer::recursive_generic_instantiation(
+                    receiver.display_name,
+                    fn_sig.name_span,
+                ));
+        }
+
+        let mut static_entry = None;
+        if is_instance_method {
+            if !self.try_register_instance_method(
+                store,
+                receiver,
+                &method_key,
+                fn_sig.name_span,
+                &method_ty,
+            ) {
+                // Receiver not found: skip the duplicate check and the definition insert below.
+                return None;
+            }
+        } else {
+            static_entry = Some((qualified_name, method_ty.clone()));
+        }
+
+        self.check_duplicate_method(
+            &*store,
+            receiver,
+            fn_sig.name,
+            fn_sig.name_span,
+            generics.is_empty(),
+        );
+
+        let module = store
+            .get_module_mut(receiver.module_id)
+            .expect("current module must exist in store");
+        module.definitions.insert(
+            module_qualified_name,
+            Definition {
+                visibility: fn_visibility.clone(),
+                ty: method_ty,
+                name: None,
+                name_span: Some(fn_sig.name_span),
+                doc: fn_doc,
+                body: DefinitionBody::Value {
+                    kind: syntax::program::ValueKind::Runtime,
+                    allowed_lints: extract_attribute_flags(fn_attrs, "allow"),
+                    go_hints,
+                    go_name: None,
+                    go_type_param_recipe: None,
+                },
+            },
+        );
+
+        static_entry
     }
 
     pub(super) fn populate_interface(&mut self, store: &mut Store, expression: &Expression) {

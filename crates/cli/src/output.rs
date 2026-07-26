@@ -376,8 +376,8 @@ pub fn print_dimmed(text: &str) {
 
 #[macro_export]
 macro_rules! error {
-    ($msg:literal, $reason:expr) => {{
-        let msg = $crate::output::capitalize_first($msg);
+    ($msg:expr, $reason:expr) => {{
+        let msg = $crate::output::capitalize_first(&$msg);
         let reason = $reason;
         if $crate::output::use_color() {
             use owo_colors::OwoColorize;

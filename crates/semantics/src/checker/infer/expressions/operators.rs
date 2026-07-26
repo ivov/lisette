@@ -29,6 +29,19 @@ struct BinaryOperands<'a> {
     right: BinaryOperand<'a>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum NumericCompat {
+    SameAliased,
+    DifferentCompatible,
+    Neither,
+}
+
+impl NumericCompat {
+    fn is_compatible(self) -> bool {
+        !matches!(self, NumericCompat::Neither)
+    }
+}
+
 impl InferCtx<'_> {
     pub(super) fn infer_unary(
         &mut self,
@@ -310,33 +323,19 @@ impl InferCtx<'_> {
         let right_operand_ty = operands.right.ty;
         let left_span = &operands.left.span;
         let right_span = &operands.right.span;
+        let resolved_left_operand = left_operand_ty.resolve_in(&self.env);
+        let resolved_right_operand = right_operand_ty.resolve_in(&self.env);
         match operator {
             Equal | NotEqual => {
-                let resolved_left_operand = left_operand_ty.resolve_in(&self.env);
-                let resolved_right_operand = right_operand_ty.resolve_in(&self.env);
-
                 if !self.report_named_type_boundary(
                     &resolved_left_operand,
                     &resolved_right_operand,
                     span,
-                ) {
-                    let same_aliased_numeric = resolved_left_operand == resolved_right_operand
-                        && self.store.is_aliased_numeric_type(&resolved_left_operand);
-
-                    let different_but_compatible = resolved_left_operand != resolved_right_operand
-                        && self.store.is_numeric_compatible_with(
-                            &resolved_left_operand,
-                            &resolved_right_operand,
-                        );
-
-                    if !same_aliased_numeric && !different_but_compatible {
-                        self.unify_binary_operands(
-                            operator,
-                            left_operand_ty,
-                            right_operand_ty,
-                            &span,
-                        );
-                    }
+                ) && !self
+                    .numeric_compat(&resolved_left_operand, &resolved_right_operand)
+                    .is_compatible()
+                {
+                    self.unify_binary_operands(operator, left_operand_ty, right_operand_ty, &span);
                 }
                 let operands_match =
                     left_operand_ty.resolve_in(&self.env) == right_operand_ty.resolve_in(&self.env);
@@ -347,9 +346,6 @@ impl InferCtx<'_> {
             }
 
             And | Or => {
-                let resolved_left_operand = left_operand_ty.resolve_in(&self.env);
-                let resolved_right_operand = right_operand_ty.resolve_in(&self.env);
-
                 if self.report_named_type_boundary(
                     &resolved_left_operand,
                     &resolved_right_operand,
@@ -372,9 +368,6 @@ impl InferCtx<'_> {
             }
 
             LessThan | LessThanOrEqual | GreaterThan | GreaterThanOrEqual => {
-                let resolved_left_operand = left_operand_ty.resolve_in(&self.env);
-                let resolved_right_operand = right_operand_ty.resolve_in(&self.env);
-
                 if self.report_named_type_boundary(
                     &resolved_left_operand,
                     &resolved_right_operand,
@@ -383,16 +376,9 @@ impl InferCtx<'_> {
                     return self.type_bool();
                 }
 
-                let same_aliased_numeric = resolved_left_operand == resolved_right_operand
-                    && self.store.is_aliased_numeric_type(&resolved_left_operand);
-
-                let different_but_compatible = resolved_left_operand != resolved_right_operand
-                    && self.store.is_numeric_compatible_with(
-                        &resolved_left_operand,
-                        &resolved_right_operand,
-                    );
-
-                if (same_aliased_numeric || different_but_compatible)
+                if self
+                    .numeric_compat(&resolved_left_operand, &resolved_right_operand)
+                    .is_compatible()
                     && self.store.is_orderable(&resolved_left_operand)
                     && self.store.is_orderable(&resolved_right_operand)
                 {
@@ -406,9 +392,6 @@ impl InferCtx<'_> {
             }
 
             Addition => {
-                let resolved_left_operand = left_operand_ty.resolve_in(&self.env);
-                let resolved_right_operand = right_operand_ty.resolve_in(&self.env);
-
                 if let Some(result_ty) = self.try_operation_with_numeric_alias(
                     operator,
                     &resolved_left_operand,
@@ -452,11 +435,8 @@ impl InferCtx<'_> {
             }
 
             Subtraction | Multiplication | Division | Remainder => {
-                let left_resolved = left_operand_ty.resolve_in(&self.env);
-                let right_resolved = right_operand_ty.resolve_in(&self.env);
-
                 if matches!(operator, Remainder)
-                    && (left_resolved.is_float() || right_resolved.is_float())
+                    && (resolved_left_operand.is_float() || resolved_right_operand.is_float())
                 {
                     self.sink
                         .push(diagnostics::infer::float_modulo_not_supported(span));
@@ -464,12 +444,13 @@ impl InferCtx<'_> {
 
                 if let Some(result_ty) = self.try_operation_with_numeric_alias(
                     operator,
-                    &left_resolved,
-                    &right_resolved,
+                    &resolved_left_operand,
+                    &resolved_right_operand,
                     &span,
                 ) {
                     result_ty
-                } else if left_resolved.is_complex() || right_resolved.is_complex() {
+                } else if resolved_left_operand.is_complex() || resolved_right_operand.is_complex()
+                {
                     self.type_complex128()
                 } else {
                     let left_ok =
@@ -489,13 +470,10 @@ impl InferCtx<'_> {
             }
 
             BitwiseAnd | BitwiseOr | BitwiseXor | BitwiseAndNot => {
-                let left_resolved = left_operand_ty.resolve_in(&self.env);
-                let right_resolved = right_operand_ty.resolve_in(&self.env);
-
                 if let Some(result_ty) = self.try_operation_with_numeric_alias(
                     operator,
-                    &left_resolved,
-                    &right_resolved,
+                    &resolved_left_operand,
+                    &resolved_right_operand,
                     &span,
                 ) {
                     result_ty
@@ -525,6 +503,17 @@ impl InferCtx<'_> {
             Pipeline => {
                 panic!("Pipeline operator should have been desugared before type inference")
             }
+        }
+    }
+
+    /// Classifies whether two resolved operand types are numerically compatible.
+    fn numeric_compat(&self, left: &Type, right: &Type) -> NumericCompat {
+        if left == right && self.store.is_aliased_numeric_type(left) {
+            NumericCompat::SameAliased
+        } else if left != right && self.store.is_numeric_compatible_with(left, right) {
+            NumericCompat::DifferentCompatible
+        } else {
+            NumericCompat::Neither
         }
     }
 

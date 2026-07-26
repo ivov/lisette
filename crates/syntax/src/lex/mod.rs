@@ -392,32 +392,10 @@ impl<'source> Lexer<'source> {
 
         let mut kind = TokenKind::Integer;
 
-        while !self.at_eof() {
-            let byte = self.current_byte();
-            if byte.is_ascii_digit() || byte == b'_' {
-                if byte == b'_' && self.previous_char() == '_' {
-                    let underscore_start = self.current_offset - 1;
-                    self.error_consecutive_underscores(underscore_start);
-                }
-                self.next();
-            } else {
-                break;
-            }
-        }
+        self.scan_digits(|byte| byte.is_ascii_digit());
+        self.check_trailing_underscore();
 
-        if self.previous_char() == '_' {
-            self.error_number_trailing_underscore(
-                self.current_offset - self.previous_char().len_utf8(),
-            );
-        }
-
-        // Skip decimal part if preceded by single `.` (e.g., `tuple.0.0` — don't lex `0.0` as float).
-        // Don't skip if preceded by `..` (range operator), e.g. `0..1.5` should lex `1.5` as float.
-        let preceded_by_dot = start_offset > 0
-            && self.input.as_bytes()[start_offset - 1] == b'.'
-            && !(start_offset > 1 && self.input.as_bytes()[start_offset - 2] == b'.');
-
-        if !preceded_by_dot
+        if !self.preceded_by_single_dot(start_offset)
             && self.current_byte() == b'.'
             && self.peek_byte() != b'.'
             && (self.peek_byte().is_ascii_digit() || self.peek_byte() == b'_')
@@ -429,24 +407,8 @@ impl<'source> Lexer<'source> {
                 self.error_decimal_leading_underscore(self.current_offset);
             }
 
-            while !self.at_eof() {
-                let byte = self.current_byte();
-                if byte.is_ascii_digit() || byte == b'_' {
-                    if byte == b'_' && self.previous_char() == '_' {
-                        let underscore_start = self.current_offset - 1;
-                        self.error_consecutive_underscores(underscore_start);
-                    }
-                    self.next();
-                } else {
-                    break;
-                }
-            }
-
-            if self.previous_char() == '_' {
-                self.error_number_trailing_underscore(
-                    self.current_offset - self.previous_char().len_utf8(),
-                );
-            }
+            self.scan_digits(|byte| byte.is_ascii_digit());
+            self.check_trailing_underscore();
         }
 
         if self.current_byte() == b'e' || self.current_byte() == b'E' {
@@ -465,24 +427,8 @@ impl<'source> Lexer<'source> {
                 );
             }
 
-            while !self.at_eof() {
-                let byte = self.current_byte();
-                if byte.is_ascii_digit() || byte == b'_' {
-                    if byte == b'_' && self.previous_char() == '_' {
-                        let underscore_start = self.current_offset - 1;
-                        self.error_consecutive_underscores(underscore_start);
-                    }
-                    self.next();
-                } else {
-                    break;
-                }
-            }
-
-            if self.previous_char() == '_' {
-                self.error_number_trailing_underscore(
-                    self.current_offset - self.previous_char().len_utf8(),
-                );
-            }
+            self.scan_digits(|byte| byte.is_ascii_digit());
+            self.check_trailing_underscore();
         }
 
         if self.current_byte() == b'i' && !self.peek_byte().is_ascii_alphanumeric() {
@@ -505,12 +451,11 @@ impl<'source> Lexer<'source> {
         }
     }
 
-    fn lex_hex_number(&mut self, start_offset: usize) -> Token<'source> {
-        let digits_start = self.current_offset;
-
+    /// Consume digit and underscore bytes, reporting consecutive underscores.
+    fn scan_digits(&mut self, is_digit: impl Fn(u8) -> bool) {
         while !self.at_eof() {
             let byte = self.current_byte();
-            if byte.is_ascii_hexdigit() || byte == b'_' {
+            if is_digit(byte) || byte == b'_' {
                 if byte == b'_' && self.previous_char() == '_' {
                     let underscore_start = self.current_offset - 1;
                     self.error_consecutive_underscores(underscore_start);
@@ -520,21 +465,41 @@ impl<'source> Lexer<'source> {
                 break;
             }
         }
+    }
 
-        if self.current_offset == digits_start {
-            self.error_missing_hex_digits(start_offset, 2);
-        }
-
+    fn check_trailing_underscore(&mut self) {
         if self.previous_char() == '_' {
             self.error_number_trailing_underscore(
                 self.current_offset - self.previous_char().len_utf8(),
             );
         }
+    }
+
+    // A single preceding `.` is field access (e.g. `tuple.0.0`), so do not lex `0.0` as float.
+    // A preceding `..` is the range operator, so e.g. `0..1.5` should lex `1.5` as float.
+    fn preceded_by_single_dot(&self, start_offset: usize) -> bool {
+        start_offset > 0
+            && self.input.as_bytes()[start_offset - 1] == b'.'
+            && !(start_offset > 1 && self.input.as_bytes()[start_offset - 2] == b'.')
+    }
+
+    fn finish_radix_number(
+        &mut self,
+        start_offset: usize,
+        digits_start: usize,
+        base: &str,
+        error_missing_digits: fn(&mut Self, usize, usize),
+    ) -> Token<'source> {
+        if self.current_offset == digits_start {
+            error_missing_digits(self, start_offset, 2);
+        }
+
+        self.check_trailing_underscore();
 
         if self.current_byte() == b'i' && !self.peek_byte().is_ascii_alphanumeric() {
-            self.next(); // consume 'i'
+            self.next();
             let end_offset = self.current_offset;
-            self.error_non_decimal_imaginary("hex", start_offset, end_offset - start_offset);
+            self.error_non_decimal_imaginary(base, start_offset, end_offset - start_offset);
             return Token {
                 kind: TokenKind::Imaginary,
                 text: &self.input[start_offset..end_offset],
@@ -552,18 +517,25 @@ impl<'source> Lexer<'source> {
         }
     }
 
+    fn lex_hex_number(&mut self, start_offset: usize) -> Token<'source> {
+        let digits_start = self.current_offset;
+
+        self.scan_digits(|byte| byte.is_ascii_hexdigit());
+
+        self.finish_radix_number(
+            start_offset,
+            digits_start,
+            "hex",
+            Self::error_missing_hex_digits,
+        )
+    }
+
     fn lex_octal_number(&mut self, start_offset: usize) -> Token<'source> {
         let digits_start = self.current_offset;
 
-        while !self.at_eof() {
-            let byte = self.current_byte();
-            if (b'0'..=b'7').contains(&byte) || byte == b'_' {
-                if byte == b'_' && self.previous_char() == '_' {
-                    let underscore_start = self.current_offset - 1;
-                    self.error_consecutive_underscores(underscore_start);
-                }
-                self.next();
-            } else if byte == b'8' || byte == b'9' {
+        loop {
+            self.scan_digits(|byte| (b'0'..=b'7').contains(&byte));
+            if matches!(self.current_byte(), b'8' | b'9') {
                 self.error_invalid_octal_digit(self.current_offset);
                 self.next();
             } else {
@@ -571,49 +543,20 @@ impl<'source> Lexer<'source> {
             }
         }
 
-        if self.current_offset == digits_start {
-            self.error_missing_octal_digits(start_offset, 2);
-        }
-
-        if self.previous_char() == '_' {
-            self.error_number_trailing_underscore(
-                self.current_offset - self.previous_char().len_utf8(),
-            );
-        }
-
-        if self.current_byte() == b'i' && !self.peek_byte().is_ascii_alphanumeric() {
-            self.next(); // consume 'i'
-            let end_offset = self.current_offset;
-            self.error_non_decimal_imaginary("octal", start_offset, end_offset - start_offset);
-            return Token {
-                kind: TokenKind::Imaginary,
-                text: &self.input[start_offset..end_offset],
-                byte_offset: start_offset as u32,
-                byte_length: (end_offset - start_offset) as u32,
-            };
-        }
-
-        let end_offset = self.current_offset;
-        Token {
-            kind: TokenKind::Integer,
-            text: &self.input[start_offset..end_offset],
-            byte_offset: start_offset as u32,
-            byte_length: (end_offset - start_offset) as u32,
-        }
+        self.finish_radix_number(
+            start_offset,
+            digits_start,
+            "octal",
+            Self::error_missing_octal_digits,
+        )
     }
 
     fn lex_binary_number(&mut self, start_offset: usize) -> Token<'source> {
         let digits_start = self.current_offset;
 
-        while !self.at_eof() {
-            let byte = self.current_byte();
-            if byte == b'0' || byte == b'1' || byte == b'_' {
-                if byte == b'_' && self.previous_char() == '_' {
-                    let underscore_start = self.current_offset - 1;
-                    self.error_consecutive_underscores(underscore_start);
-                }
-                self.next();
-            } else if (b'2'..=b'9').contains(&byte) {
+        loop {
+            self.scan_digits(|byte| byte == b'0' || byte == b'1');
+            if (b'2'..=b'9').contains(&self.current_byte()) {
                 self.error_invalid_binary_digit(self.current_offset);
                 self.next();
             } else {
@@ -621,35 +564,12 @@ impl<'source> Lexer<'source> {
             }
         }
 
-        if self.current_offset == digits_start {
-            self.error_missing_binary_digits(start_offset, 2);
-        }
-
-        if self.previous_char() == '_' {
-            self.error_number_trailing_underscore(
-                self.current_offset - self.previous_char().len_utf8(),
-            );
-        }
-
-        if self.current_byte() == b'i' && !self.peek_byte().is_ascii_alphanumeric() {
-            self.next();
-            let end_offset = self.current_offset;
-            self.error_non_decimal_imaginary("binary", start_offset, end_offset - start_offset);
-            return Token {
-                kind: TokenKind::Imaginary,
-                text: &self.input[start_offset..end_offset],
-                byte_offset: start_offset as u32,
-                byte_length: (end_offset - start_offset) as u32,
-            };
-        }
-
-        let end_offset = self.current_offset;
-        Token {
-            kind: TokenKind::Integer,
-            text: &self.input[start_offset..end_offset],
-            byte_offset: start_offset as u32,
-            byte_length: (end_offset - start_offset) as u32,
-        }
+        self.finish_radix_number(
+            start_offset,
+            digits_start,
+            "binary",
+            Self::error_missing_binary_digits,
+        )
     }
 
     fn lex_identifier(&mut self) -> Token<'source> {

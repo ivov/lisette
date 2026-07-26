@@ -396,26 +396,8 @@ impl InferCtx<'_> {
                 .push(diagnostics::infer::non_addressable_assignment(kind, span));
         }
 
-        // Propagates type information to the RHS (e.g., lambda params
-        // get their types from a Map's value type).
-        let value_expected = target_ty.resolve_in(&self.env);
-        let (new_value, value_ty) = if let Some(operator) = compound_operator {
-            let inferred = self.infer_binary_with_left(
-                operator,
-                InferredOperand::new(new_target.clone(), target_ty.clone()),
-                value,
-                &value_expected,
-                span,
-            );
-            let Expression::Binary { right, .. } = inferred.expression else {
-                unreachable!("infer_binary_with_left always returns a binary")
-            };
-            (*right, inferred.ty)
-        } else {
-            let new_value = self.infer_expression(*value, &value_expected);
-            let value_ty = new_value.get_type();
-            (new_value, value_ty)
-        };
+        let (new_value, value_ty) =
+            self.infer_assignment_value(&new_target, &target_ty, value, compound_operator, span);
 
         // Track mutation for binding-rooted targets. Call-based lvalues
         // (e.g., `get().*.x = ...`) have no local binding to track.
@@ -448,25 +430,7 @@ impl InferCtx<'_> {
             let can_mutate = is_mutable || is_deref || binding_is_ref;
 
             if !can_mutate && self.imports.namespace(&var_name).is_none() {
-                let self_type_name = if var_name == "self" {
-                    self.lookup_type(store, "self")
-                        .and_then(|t| t.get_name().map(str::to_owned))
-                } else {
-                    None
-                };
-                let is_pattern_binding = self
-                    .scopes
-                    .lookup_binding_id(&var_name)
-                    .and_then(|id| self.facts.bindings.get(&id))
-                    .is_some_and(|b| b.kind.is_pattern_position());
-                let is_const = self.is_const_var(store, &var_name);
-                self.sink.push(diagnostics::infer::disallowed_mutation(
-                    &var_name,
-                    span,
-                    self_type_name.as_deref(),
-                    is_pattern_binding,
-                    is_const,
-                ));
+                self.report_disallowed_mutation(store, &var_name, span);
             }
 
             // Check for self-referential assignment: x = Expr { field: &x }
@@ -501,6 +465,63 @@ impl InferCtx<'_> {
             compound_operator,
             span,
         }
+    }
+
+    fn infer_assignment_value(
+        &mut self,
+        new_target: &Expression,
+        target_ty: &Type,
+        value: Box<Expression>,
+        compound_operator: Option<BinaryOperator>,
+        span: Span,
+    ) -> (Expression, Type) {
+        // Propagates type information to the RHS (e.g., lambda params
+        // get their types from a Map's value type).
+        let value_expected = target_ty.resolve_in(&self.env);
+        if let Some(operator) = compound_operator {
+            let inferred = self.infer_binary_with_left(
+                operator,
+                InferredOperand::new(new_target.clone(), target_ty.clone()),
+                value,
+                &value_expected,
+                span,
+            );
+            let Expression::Binary { right, .. } = inferred.expression else {
+                unreachable!("infer_binary_with_left always returns a binary")
+            };
+            (*right, inferred.ty)
+        } else {
+            let new_value = self.infer_expression(*value, &value_expected);
+            let value_ty = new_value.get_type();
+            (new_value, value_ty)
+        }
+    }
+
+    fn report_disallowed_mutation(
+        &mut self,
+        store: &crate::store::Store,
+        var_name: &str,
+        span: Span,
+    ) {
+        let self_type_name = if var_name == "self" {
+            self.lookup_type(store, "self")
+                .and_then(|t| t.get_name().map(str::to_owned))
+        } else {
+            None
+        };
+        let is_pattern_binding = self
+            .scopes
+            .lookup_binding_id(var_name)
+            .and_then(|id| self.facts.bindings.get(&id))
+            .is_some_and(|b| b.kind.is_pattern_position());
+        let is_const = self.is_const_var(store, var_name);
+        self.sink.push(diagnostics::infer::disallowed_mutation(
+            var_name,
+            span,
+            self_type_name.as_deref(),
+            is_pattern_binding,
+            is_const,
+        ));
     }
 
     pub(super) fn infer_tuple(

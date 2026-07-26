@@ -306,6 +306,26 @@ pub(crate) fn reconcile_root(
     Ok(graph)
 }
 
+fn handle_module_failure(
+    context: &str,
+    module_path: &str,
+    message: &str,
+    is_explicit: bool,
+    failed_transitives: &mut HashSet<String>,
+) -> Result<(), i32> {
+    if is_explicit {
+        match import_compat_hint(message) {
+            Some(hint) => cli_error!(context, message, hint),
+            None => error!(context, message),
+        }
+        return Err(1);
+    }
+    if failed_transitives.insert(module_path.to_string()) {
+        print_warning(&format!("skipping transitive {}: {}", module_path, message));
+    }
+    Ok(())
+}
+
 /// Manifest walk: BFS the third-party module subgraph from `dep.canonical_module`
 /// via `go list -json M/...`. Module-grained so the manifest declares every
 /// module a future subpackage import could reach; the outer loop converges
@@ -325,20 +345,15 @@ fn reconcile_module_graph(
             let is_explicit = module_path == canonical_module;
 
             let module_version = match workspace.query_version(&module_path) {
-                Ok(v) => v,
-                Err(msg) => {
-                    if is_explicit {
-                        match import_compat_hint(&msg) {
-                            Some(hint) => {
-                                cli_error!("failed to resolve module version", msg, hint)
-                            }
-                            None => error!("failed to resolve module version", msg),
-                        }
-                        return Err(1);
-                    }
-                    if failed_transitives.insert(module_path.clone()) {
-                        print_warning(&format!("skipping transitive {}: {}", module_path, msg));
-                    }
+                Ok(version) => version,
+                Err(message) => {
+                    handle_module_failure(
+                        "failed to resolve module version",
+                        &module_path,
+                        &message,
+                        is_explicit,
+                        &mut failed_transitives,
+                    )?;
                     continue;
                 }
             };
@@ -352,20 +367,15 @@ fn reconcile_module_graph(
             }
 
             let listed = match workspace.find_third_party_modules(&module_path) {
-                Ok(l) => l,
-                Err(msg) => {
-                    if is_explicit {
-                        match import_compat_hint(&msg) {
-                            Some(hint) => {
-                                cli_error!("failed to scan transitive modules", msg, hint)
-                            }
-                            None => error!("failed to scan transitive modules", msg),
-                        }
-                        return Err(1);
-                    }
-                    if failed_transitives.insert(module_path.clone()) {
-                        print_warning(&format!("skipping transitive {}: {}", module_path, msg));
-                    }
+                Ok(listed) => listed,
+                Err(message) => {
+                    handle_module_failure(
+                        "failed to scan transitive modules",
+                        &module_path,
+                        &message,
+                        is_explicit,
+                        &mut failed_transitives,
+                    )?;
                     continue;
                 }
             };
@@ -462,6 +472,29 @@ pub(crate) fn declared_replacements(
         .collect()
 }
 
+/// A package waiting to be bindgenned, pinned to its module's version.
+struct QueuedPackage {
+    module: String,
+    version: String,
+    package: String,
+}
+
+/// The identity the cache walk dedupes on: a package within its module.
+#[derive(PartialEq, Eq, Hash)]
+struct PackageKey {
+    module: String,
+    package: String,
+}
+
+impl QueuedPackage {
+    fn key(&self) -> PackageKey {
+        PackageKey {
+            module: self.module.clone(),
+            package: self.package.clone(),
+        }
+    }
+}
+
 /// Cache walk: bindgen the requested package, then recurse into each
 /// typedef's own `go:` imports. Sibling subpackages stay cache misses for
 /// the locator to handle on first access. Returns each bindgenned
@@ -473,8 +506,8 @@ fn walk_typedef_cache(
     module_graph: &mut GraphResult,
     replacements: &HashMap<String, ReplacementIdentity>,
 ) -> Result<Vec<BindgennedPackage>, i32> {
-    let mut visited: HashSet<(String, String)> = HashSet::new();
-    let mut queue: Vec<(String, String, String)> = Vec::new();
+    let mut visited: HashSet<PackageKey> = HashSet::new();
+    let mut queue: Vec<QueuedPackage> = Vec::new();
     let mut bindgenned: Vec<BindgennedPackage> = Vec::new();
 
     let seed_packages = seed_cache_walk(
@@ -484,105 +517,139 @@ fn walk_typedef_cache(
         &mut queue,
     )?;
 
-    while let Some((module_path, version, package_path)) = queue.pop() {
-        if !visited.insert((module_path.clone(), package_path.clone())) {
+    while let Some(entry) = queue.pop() {
+        if !visited.insert(entry.key()) {
             continue;
         }
 
-        let is_seed = seed_packages.contains(&(module_path.clone(), package_path.clone()));
+        let is_seed = seed_packages.contains(&entry.key());
         let module = GoModule {
-            path: &module_path,
-            version: &version,
-            replacement: replacement_for(&module_path, replacements),
+            path: &entry.module,
+            version: &entry.version,
+            replacement: replacement_for(&entry.module, replacements),
         };
 
-        match workspace.reconcile_package(module, &package_path) {
+        match workspace.reconcile_package(module, &entry.package) {
             Ok(stubs) => {
                 warn_stubbed(&stubs);
                 bindgenned.push(BindgennedPackage {
-                    module: module_path.clone(),
-                    version: version.clone(),
-                    package: package_path.clone(),
+                    module: entry.module.clone(),
+                    version: entry.version.clone(),
+                    package: entry.package.clone(),
                 });
             }
-            Err(msg) => {
+            Err(message) => {
                 if is_seed {
-                    error!("failed to bindgen package", msg);
+                    error!("failed to bindgen package", message);
                     return Err(1);
                 }
-                print_warning(&format!("skipping transitive {}: {}", package_path, msg));
+                print_warning(&format!(
+                    "skipping transitive {}: {}",
+                    entry.package, message
+                ));
                 continue;
             }
         }
 
-        let imports = match workspace.imports_of(module, &package_path) {
-            Ok(i) => i,
-            Err(msg) => {
+        let imports = match workspace.imports_of(module, &entry.package) {
+            Ok(imports) => imports,
+            Err(message) => {
                 print_warning(&format!(
                     "skipping import-walk for {}: {}",
-                    package_path, msg
+                    entry.package, message
                 ));
                 continue;
             }
         };
 
         for import in imports {
-            if deps::is_stdlib(&import) {
+            let Some(next) = classify_import(import, &entry, workspace, module_graph) else {
                 continue;
-            }
-            let containing = match workspace.find_containing_module(&import) {
-                Ok(info) if !info.path.is_empty() => info,
-                _ => {
-                    print_warning(&format!(
-                        "could not resolve containing module for `{}` (referenced by {})",
-                        import, package_path
-                    ));
-                    continue;
-                }
             };
-            if containing.path == module_path {
-                let key = (containing.path, import);
-                if !visited.contains(&key) {
-                    queue.push((key.0, version.clone(), key.1));
-                }
-                continue;
+            if !visited.contains(&next.key()) {
+                queue.push(next);
             }
-
-            // Record cache-walk-discovered modules so the manifest declares
-            // every module whose typedef ends up in the cache.
-            let next_version = if let Some(version) = module_graph.version(&containing.path) {
-                version.to_string()
-            } else {
-                let resolved = if !containing.version.is_empty() {
-                    containing.version
-                } else {
-                    match workspace.query_version(&containing.path) {
-                        Ok(v) => v,
-                        Err(msg) => {
-                            print_warning(&format!("skipping transitive {}: {}", import, msg));
-                            continue;
-                        }
-                    }
-                };
-                module_graph.discover(containing.path.clone(), resolved.clone());
-                resolved
-            };
-
-            module_graph.record_dependency(
-                module_path.clone(),
-                version.clone(),
-                containing.path.clone(),
-            );
-
-            let key = (containing.path.clone(), import.clone());
-            if visited.contains(&key) {
-                continue;
-            }
-            queue.push((containing.path, next_version, import));
         }
     }
 
     Ok(bindgenned)
+}
+
+/// Where one typedef import sends the cache walk next, if anywhere.
+fn classify_import(
+    import: String,
+    current: &QueuedPackage,
+    workspace: &GoWorkspace,
+    module_graph: &mut GraphResult,
+) -> Option<QueuedPackage> {
+    if deps::is_stdlib(&import) {
+        return None;
+    }
+    let containing = match workspace.find_containing_module(&import) {
+        Ok(info) if !info.path.is_empty() => info,
+        _ => {
+            print_warning(&format!(
+                "could not resolve containing module for `{}` (referenced by {})",
+                import, current.package
+            ));
+            return None;
+        }
+    };
+    if containing.path == current.module {
+        return Some(QueuedPackage {
+            module: containing.path,
+            version: current.version.clone(),
+            package: import,
+        });
+    }
+
+    // Record cache-walk-discovered modules so the manifest declares
+    // every module whose typedef ends up in the cache.
+    let next_version = resolve_discovered_version(
+        &containing.path,
+        containing.version,
+        &import,
+        workspace,
+        module_graph,
+    )?;
+
+    module_graph.record_dependency(
+        current.module.clone(),
+        current.version.clone(),
+        containing.path.clone(),
+    );
+
+    Some(QueuedPackage {
+        module: containing.path,
+        version: next_version,
+        package: import,
+    })
+}
+
+/// The graph's pin, else the version `go list` reported, else a fresh query.
+fn resolve_discovered_version(
+    containing_module: &str,
+    listed_version: String,
+    import: &str,
+    workspace: &GoWorkspace,
+    module_graph: &mut GraphResult,
+) -> Option<String> {
+    if let Some(version) = module_graph.version(containing_module) {
+        return Some(version.to_string());
+    }
+    let resolved = if !listed_version.is_empty() {
+        listed_version
+    } else {
+        match workspace.query_version(containing_module) {
+            Ok(version) => version,
+            Err(message) => {
+                print_warning(&format!("skipping transitive {}: {}", import, message));
+                return None;
+            }
+        }
+    };
+    module_graph.discover(containing_module.to_string(), resolved.clone());
+    Some(resolved)
 }
 
 pub(crate) struct BindgennedPackage {
@@ -717,22 +784,29 @@ fn seed_cache_walk(
     canonical_module: &str,
     requested_package: &str,
     workspace: &GoWorkspace,
-    queue: &mut Vec<(String, String, String)>,
-) -> Result<HashSet<(String, String)>, i32> {
+    queue: &mut Vec<QueuedPackage>,
+) -> Result<HashSet<PackageKey>, i32> {
     let version = match workspace.query_version(canonical_module) {
-        Ok(v) => v,
-        Err(msg) => {
-            error!("failed to resolve module version", msg);
+        Ok(version) => version,
+        Err(message) => {
+            error!("failed to resolve module version", message);
             return Err(1);
         }
     };
 
     let push_seed = |queue: &mut Vec<_>, seeds: &mut HashSet<_>, package: String| {
-        seeds.insert((canonical_module.to_string(), package.clone()));
-        queue.push((canonical_module.to_string(), version.clone(), package));
+        seeds.insert(PackageKey {
+            module: canonical_module.to_string(),
+            package: package.clone(),
+        });
+        queue.push(QueuedPackage {
+            module: canonical_module.to_string(),
+            version: version.clone(),
+            package,
+        });
     };
 
-    let mut seeds: HashSet<(String, String)> = HashSet::new();
+    let mut seeds: HashSet<PackageKey> = HashSet::new();
 
     if canonical_module != requested_package {
         push_seed(queue, &mut seeds, requested_package.to_string());
@@ -815,6 +889,18 @@ impl ManifestChanges {
     }
 }
 
+/// Upsert one manifest entry, mapping a write failure to the exit code.
+fn write_manifest_dependency(
+    project_root: &Path,
+    module: &str,
+    dependency: &deps::GoDependency,
+) -> Result<(), i32> {
+    upsert_go_dependency(project_root, module, dependency).map_err(|message| {
+        error!("failed to update manifest", message);
+        1
+    })
+}
+
 /// Update `lisette.toml` to reflect the newly reconciled `added_dep` subgraph,
 /// leaving every other direct dep and its transitives untouched.
 ///
@@ -846,37 +932,26 @@ pub(crate) fn apply_graph_to_manifest(
     let added_dep_version = graph.version(added_dep).unwrap_or(fallback_version);
     let mut upgraded: Vec<DirectUpgrade> = Vec::new();
 
-    let root_result = match replaced_root {
+    let root_dependency = match replaced_root {
         Some(replaced_root) => {
             let via = match replaced_root.mode {
                 ReplacedRootMode::SyncPreserveVia => existing_deps
                     .get(added_dep)
-                    .and_then(|d| d.via().map(<[String]>::to_vec)),
+                    .and_then(|dependency| dependency.via().map(<[String]>::to_vec)),
                 ReplacedRootMode::AddDirect => None,
             };
-            upsert_go_dependency(
-                project_root,
-                added_dep,
-                &deps::GoDependency::Replaced {
-                    replacement_path: replaced_root.identity.replacement_path.clone(),
-                    replacement_version: replaced_root.identity.replacement_version.clone(),
-                    via,
-                },
-            )
+            deps::GoDependency::Replaced {
+                replacement_path: replaced_root.identity.replacement_path.clone(),
+                replacement_version: replaced_root.identity.replacement_version.clone(),
+                via,
+            }
         }
-        None => upsert_go_dependency(
-            project_root,
-            added_dep,
-            &deps::GoDependency::Remote {
-                version: added_dep_version.to_string(),
-                via: None,
-            },
-        ),
+        None => deps::GoDependency::Remote {
+            version: added_dep_version.to_string(),
+            via: None,
+        },
     };
-    if let Err(msg) = root_result {
-        error!("failed to update manifest", msg);
-        return Err(1);
-    }
+    write_manifest_dependency(project_root, added_dep, &root_dependency)?;
 
     let mut sorted_transitives: Vec<(&String, &Vec<String>)> = transitives.iter().collect();
     sorted_transitives.sort_by(|a, b| a.0.cmp(b.0));
@@ -898,18 +973,14 @@ pub(crate) fn apply_graph_to_manifest(
             } = existing
                 && existing_version != version
             {
-                upsert_go_dependency(
+                write_manifest_dependency(
                     project_root,
                     module_path,
                     &deps::GoDependency::Remote {
                         version: version.to_string(),
                         via: None,
                     },
-                )
-                .map_err(|msg| {
-                    error!("failed to update manifest", msg);
-                    1
-                })?;
+                )?;
                 upgraded.push(DirectUpgrade {
                     path: (*module_path).clone(),
                     old_version: existing_version.clone(),
@@ -934,23 +1005,19 @@ pub(crate) fn apply_graph_to_manifest(
         via.sort();
 
         // A replaced transitive keeps its `replace` shape, only its `via` is reconciled.
-        let result = match existing {
+        match existing {
             Some(replaced @ deps::GoDependency::Replaced { .. }) => {
-                upsert_go_dependency(project_root, module_path, &replaced.with_via(Some(via)))
+                write_manifest_dependency(project_root, module_path, &replaced.with_via(Some(via)))?
             }
-            _ => upsert_go_dependency(
+            _ => write_manifest_dependency(
                 project_root,
                 module_path,
                 &deps::GoDependency::Remote {
                     version: version.to_string(),
                     via: Some(via),
                 },
-            ),
+            )?,
         };
-        if let Err(msg) = result {
-            error!("failed to update manifest", msg);
-            return Err(1);
-        }
     }
 
     let mut sorted_existing: Vec<(&String, &deps::GoDependency)> = existing_deps.iter().collect();
@@ -975,40 +1042,27 @@ pub(crate) fn apply_graph_to_manifest(
         filtered.sort();
 
         if filtered.is_empty() {
-            upsert_go_dependency(project_root, dep_path, &dep.with_via(Some(Vec::new()))).map_err(
-                |msg| {
-                    error!("failed to update manifest", msg);
-                    1
-                },
-            )?;
+            write_manifest_dependency(project_root, dep_path, &dep.with_via(Some(Vec::new())))?;
             continue;
         }
 
         match dep {
             deps::GoDependency::Replaced { .. } => {
-                upsert_go_dependency(project_root, dep_path, &dep.with_via(Some(filtered)))
-                    .map_err(|msg| {
-                        error!("failed to update manifest", msg);
-                        1
-                    })?;
+                write_manifest_dependency(project_root, dep_path, &dep.with_via(Some(filtered)))?;
             }
             deps::GoDependency::Remote { .. } => {
                 let dep_version = workspace.query_version(dep_path).map_err(|msg| {
                     error!("failed to resolve module version", msg);
                     1
                 })?;
-                upsert_go_dependency(
+                write_manifest_dependency(
                     project_root,
                     dep_path,
                     &deps::GoDependency::Remote {
                         version: dep_version,
                         via: Some(filtered),
                     },
-                )
-                .map_err(|msg| {
-                    error!("failed to update manifest", msg);
-                    1
-                })?;
+                )?;
             }
         }
     }
