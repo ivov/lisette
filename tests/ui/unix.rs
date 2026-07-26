@@ -97,11 +97,9 @@ fn test() {
     let (output, counts) = render::render_unix(
         &result.errors,
         &[],
-        |_| None,
+        render::SourceCache::new(|_| None, source, "src/main.lis"),
         1,
         &unfiltered(),
-        source,
-        "src/main.lis",
     );
 
     assert!(!output.contains('\u{1b}'));

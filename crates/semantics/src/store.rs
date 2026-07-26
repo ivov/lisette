@@ -740,11 +740,11 @@ mod closed_domain_tests {
     fn storing_a_file_owns_its_test_classification() {
         let mut store = Store::new();
         store.add_module("m");
-        store.store_file(File::new("m", "sample.test.lis", "", "", vec![], None, 42));
+        store.store_file(File::new_cached("m", "sample.test.lis", "", "", 42));
 
         assert!(store.is_test_file(42));
 
-        store.store_file(File::new("m", "sample.lis", "", "", vec![], None, 42));
+        store.store_file(File::new_cached("m", "sample.lis", "", "", 42));
 
         assert!(!store.is_test_file(42));
     }
@@ -753,7 +753,7 @@ mod closed_domain_tests {
     fn replacing_a_module_removes_its_old_test_classification() {
         let mut store = Store::new();
         store.add_module("m");
-        store.store_file(File::new("m", "sample.test.lis", "", "", vec![], None, 42));
+        store.store_file(File::new_cached("m", "sample.test.lis", "", "", 42));
 
         store.insert_prebuilt_module(Module::new("m"));
 

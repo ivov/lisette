@@ -42,6 +42,23 @@ impl TypeArgumentChecks {
     }
 }
 
+#[derive(Clone, Copy)]
+struct ConvertMode {
+    variadic_allowed: bool,
+    type_argument_checks: TypeArgumentChecks,
+    position: TypePosition,
+}
+
+impl ConvertMode {
+    fn nested(self) -> Self {
+        ConvertMode {
+            variadic_allowed: false,
+            type_argument_checks: self.type_argument_checks.nested(),
+            position: TypePosition::Value,
+        }
+    }
+}
+
 impl TaskState {
     /// Resolves a generic-bound annotation. Bound-only markers like
     /// `Comparable` are admitted here; the same names in value position
@@ -56,9 +73,11 @@ impl TaskState {
             store,
             annotation,
             span,
-            false,
-            TypeArgumentChecks::Deferred,
-            TypePosition::Bound,
+            ConvertMode {
+                variadic_allowed: false,
+                type_argument_checks: TypeArgumentChecks::Deferred,
+                position: TypePosition::Bound,
+            },
         );
         if !result.contains_error() {
             self.facts
@@ -78,9 +97,11 @@ impl TaskState {
             store,
             annotation,
             span,
-            false,
-            TypeArgumentChecks::All,
-            TypePosition::Value,
+            ConvertMode {
+                variadic_allowed: false,
+                type_argument_checks: TypeArgumentChecks::All,
+                position: TypePosition::Value,
+            },
         )
     }
 
@@ -94,9 +115,11 @@ impl TaskState {
             store,
             annotation,
             span,
-            true,
-            TypeArgumentChecks::All,
-            TypePosition::Value,
+            ConvertMode {
+                variadic_allowed: true,
+                type_argument_checks: TypeArgumentChecks::All,
+                position: TypePosition::Value,
+            },
         )
     }
 
@@ -110,9 +133,11 @@ impl TaskState {
             store,
             annotation,
             span,
-            false,
-            TypeArgumentChecks::Descendants,
-            TypePosition::Value,
+            ConvertMode {
+                variadic_allowed: false,
+                type_argument_checks: TypeArgumentChecks::Descendants,
+                position: TypePosition::Value,
+            },
         )
     }
 
@@ -121,10 +146,13 @@ impl TaskState {
         store: &Store,
         annotation: &Annotation,
         span: &Span,
-        variadic_allowed: bool,
-        type_argument_checks: TypeArgumentChecks,
-        position: TypePosition,
+        mode: ConvertMode,
     ) -> Type {
+        let ConvertMode {
+            variadic_allowed,
+            type_argument_checks,
+            position,
+        } = mode;
         match annotation {
             Annotation::Unknown => self.new_type_var(),
 
@@ -142,9 +170,10 @@ impl TaskState {
                             store,
                             &param.annotation,
                             span,
-                            index == last_param,
-                            type_argument_checks.nested(),
-                            TypePosition::Value,
+                            ConvertMode {
+                                variadic_allowed: index == last_param,
+                                ..mode.nested()
+                            },
                         )
                     })
                     .collect();
@@ -153,14 +182,7 @@ impl TaskState {
                 let new_return_type = if matches!(return_type.as_ref(), Annotation::Unknown) {
                     self.type_unit()
                 } else {
-                    self.convert_to_type_mode(
-                        store,
-                        return_type,
-                        span,
-                        false,
-                        type_argument_checks.nested(),
-                        TypePosition::Value,
-                    )
+                    self.convert_to_type_mode(store, return_type, span, mode.nested())
                 };
 
                 Type::function(
@@ -214,7 +236,7 @@ impl TaskState {
                         params,
                         *annotation_span,
                         span,
-                        type_argument_checks,
+                        mode,
                     );
                 }
 
@@ -274,16 +296,7 @@ impl TaskState {
 
                 let concrete_args: Vec<Type> = params
                     .iter()
-                    .map(|arg| {
-                        self.convert_to_type_mode(
-                            store,
-                            arg,
-                            span,
-                            false,
-                            type_argument_checks.nested(),
-                            TypePosition::Value,
-                        )
-                    })
+                    .map(|arg| self.convert_to_type_mode(store, arg, span, mode.nested()))
                     .collect();
 
                 if generics.len() != params.len() {
@@ -347,16 +360,7 @@ impl TaskState {
             Annotation::Tuple { elements, .. } => {
                 let element_types = elements
                     .iter()
-                    .map(|element| {
-                        self.convert_to_type_mode(
-                            store,
-                            element,
-                            span,
-                            false,
-                            type_argument_checks.nested(),
-                            TypePosition::Value,
-                        )
-                    })
+                    .map(|element| self.convert_to_type_mode(store, element, span, mode.nested()))
                     .collect();
                 Type::Tuple(element_types)
             }
@@ -381,17 +385,10 @@ impl TaskState {
         params: &[Annotation],
         annotation_span: Span,
         span: &Span,
-        type_argument_checks: TypeArgumentChecks,
+        mode: ConvertMode,
     ) -> Type {
         if params.len() == 1 && self.cursor.module_id == PRELUDE_MODULE_ID {
-            let element = self.convert_to_type_mode(
-                store,
-                &params[0],
-                span,
-                false,
-                type_argument_checks.nested(),
-                TypePosition::Value,
-            );
+            let element = self.convert_to_type_mode(store, &params[0], span, mode.nested());
             return Type::Nominal {
                 id: Symbol::from_parts("prelude", "Array"),
                 params: vec![element],
@@ -404,26 +401,12 @@ impl TaskState {
                 annotation_span,
             ));
             for param in params {
-                let _ = self.convert_to_type_mode(
-                    store,
-                    param,
-                    span,
-                    false,
-                    type_argument_checks.nested(),
-                    TypePosition::Value,
-                );
+                let _ = self.convert_to_type_mode(store, param, span, mode.nested());
             }
             return Type::Error;
         }
 
-        let element = self.convert_to_type_mode(
-            store,
-            &params[0],
-            span,
-            false,
-            type_argument_checks.nested(),
-            TypePosition::Value,
-        );
+        let element = self.convert_to_type_mode(store, &params[0], span, mode.nested());
         if element.contains_error() {
             return Type::Error;
         }

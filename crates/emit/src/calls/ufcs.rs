@@ -5,6 +5,7 @@ use rustc_hash::FxHashMap as HashMap;
 
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
+use crate::expressions::staging::SpreadSequenceOptions;
 use crate::names::generics::extract_type_mapping;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
@@ -14,6 +15,12 @@ use crate::types::native::NativeGoType;
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments};
 use syntax::program::ReceiverCoercion;
 use syntax::types::Type;
+
+#[derive(Clone, Copy)]
+struct UfcsCallSite<'e, 'c> {
+    function: &'e Expression,
+    callee: &'e ResolvedCallee<'c>,
+}
 
 impl Planner<'_> {
     fn ufcs_type_args(
@@ -106,16 +113,13 @@ impl Planner<'_> {
 
         let coercion = resolution.receiver_coercion();
         let receiver_ty = self.facts.strip_and_peel(&receiver.get_type());
+        let site = UfcsCallSite {
+            function,
+            callee: &call_plan.resolved,
+        };
 
-        let (setup, receiver_arg, emitted_args, arguments_contain_deferred_evaluation) = self
-            .lower_ufcs_call_args(
-                function,
-                receiver,
-                args,
-                spread,
-                &call_plan.resolved,
-                coercion,
-            );
+        let (setup, receiver_arg, emitted_args, arguments_contain_deferred_evaluation) =
+            self.lower_ufcs_call_args(site, receiver, args, spread, coercion);
         let receiver_arg = match coercion {
             Some(ReceiverCoercion::AutoDeref) => format!("*{receiver_arg}"),
             Some(ReceiverCoercion::AutoAddress) | None => receiver_arg,
@@ -154,8 +158,7 @@ impl Planner<'_> {
         new_args.extend(emitted_args);
 
         let fn_name = self.build_ufcs_qualified_call(
-            function,
-            &call_plan.resolved,
+            site,
             &receiver_ty,
             member,
             type_args,
@@ -177,13 +180,13 @@ impl Planner<'_> {
 
     fn lower_ufcs_call_args(
         &mut self,
-        function: &Expression,
+        site: UfcsCallSite<'_, '_>,
         receiver: &Expression,
         args: &[Expression],
         spread: Option<&Expression>,
-        callee: &ResolvedCallee<'_>,
         coercion: Option<ReceiverCoercion>,
     ) -> (Vec<LoweredStatement>, String, Vec<String>, bool) {
+        let UfcsCallSite { function, callee } = site;
         // The DotAccess function type curries `self` out, so its params line
         // up 1:1 with the user args. Pair each so a function-typed param
         // suppresses the Go-fn-value identity short-circuit before dispatch
@@ -223,9 +226,11 @@ impl Planner<'_> {
                         .and_then(|ty| ty.unwrap_forall().get_function_params())
                 })
                 .flatten(),
-            false,
-            combine,
-            CaptureBoundary::SiblingSequence,
+            SpreadSequenceOptions {
+                wrap_to_any: false,
+                combine,
+                boundary: CaptureBoundary::SiblingSequence,
+            },
         );
         let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
         let (setup, all_values) = sequenced.into_rendered();
@@ -257,13 +262,13 @@ impl Planner<'_> {
 
     fn build_ufcs_qualified_call(
         &mut self,
-        function: &Expression,
-        callee: &ResolvedCallee<'_>,
+        site: UfcsCallSite<'_, '_>,
         receiver_ty: &Type,
         member: &str,
         type_args: ResolvedCallTypeArguments<'_>,
         arg_shape: CallArgShape,
     ) -> String {
+        let UfcsCallSite { function, callee } = site;
         let Type::Nominal {
             id: qualified_name, ..
         } = receiver_ty
@@ -332,10 +337,11 @@ impl Planner<'_> {
         let sequenced = self.sequence_with_spread_values(
             stages,
             spread,
-            false,
-            "_arg",
-            combine,
-            CaptureBoundary::SiblingSequence,
+            SpreadSequenceOptions {
+                wrap_to_any: false,
+                combine,
+                boundary: CaptureBoundary::SiblingSequence,
+            },
         );
         let (setup, emitted_all) = sequenced.into_rendered();
 

@@ -12,6 +12,14 @@ use crate::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::values::{EvaluationEffect, GoExpression, ValuePlan};
 
+struct NullableFieldAccess<'a> {
+    expression_string: &'a str,
+    member: &'a str,
+    field: &'a str,
+    expression_ty: &'a Type,
+    result_ty: &'a Type,
+}
+
 impl Planner<'_> {
     pub(crate) fn plan_dot_access(
         &mut self,
@@ -81,11 +89,13 @@ impl Planner<'_> {
 
         if let Some(s) = self.plan_nullable_field_access(
             &mut setup,
-            &expression_string,
-            member,
-            &field,
-            &expression_ty,
-            result_ty,
+            NullableFieldAccess {
+                expression_string: &expression_string,
+                member,
+                field: &field,
+                expression_ty: &expression_ty,
+                result_ty,
+            },
         ) {
             return ValuePlan::computed(setup, GoExpression::opaque(s), effect);
         }
@@ -212,12 +222,15 @@ impl Planner<'_> {
     fn plan_nullable_field_access(
         &mut self,
         setup: &mut Vec<LoweredStatement>,
-        expression_string: &str,
-        member: &str,
-        field: &str,
-        expression_ty: &Type,
-        result_ty: &Type,
+        access: NullableFieldAccess<'_>,
     ) -> Option<String> {
+        let NullableFieldAccess {
+            expression_string,
+            member,
+            field,
+            expression_ty,
+            result_ty,
+        } = access;
         let source_layout = self.field_slot_layout(expression_ty, member, result_ty)?;
         let target_layout = self.value_layout(result_ty, SlotOrigin::Lisette);
         let coercion = CoercionPlan::bridge(self, &source_layout, &target_layout);

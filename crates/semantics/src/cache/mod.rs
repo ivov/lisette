@@ -794,22 +794,18 @@ mod tests {
 
     #[test]
     fn hash_module_sources_independent_of_display_path() {
-        let cli_file = File::new(
+        let cli_file = File::new_cached(
             "greet",
             "greet.lis",
             "src/greet/greet.lis",
             "pub fn x() -> int { 1 }",
-            vec![],
-            None,
             1,
         );
-        let lsp_file = File::new(
+        let lsp_file = File::new_cached(
             "greet",
             "greet.lis",
             "greet.lis",
             "pub fn x() -> int { 1 }",
-            vec![],
-            None,
             1,
         );
 

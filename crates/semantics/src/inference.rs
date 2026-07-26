@@ -228,15 +228,15 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
             let file_id = store.new_file_id();
             let result = syntax::build_ast(&content.source, file_id);
             sink.extend_parse_errors(result.errors);
-            store.store_file(File::new(
-                ENTRY_MODULE_ID,
-                &filename,
-                &content.display_path,
-                &content.source,
-                result.ast,
-                result.file_comment,
-                file_id,
-            ));
+            store.store_file(File {
+                id: file_id,
+                module_id: ENTRY_MODULE_ID.to_string(),
+                name: filename,
+                display_path: content.display_path,
+                source: content.source,
+                items: result.ast,
+                file_comment: result.file_comment,
+            });
         }
     }
 

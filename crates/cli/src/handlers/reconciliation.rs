@@ -194,6 +194,11 @@ pub(crate) struct ReplacedRoot<'a> {
     pub(crate) mode: ReplacedRootMode,
 }
 
+pub(crate) enum RootWrite<'a> {
+    Remote { fallback_version: &'a str },
+    Replaced(ReplacedRoot<'a>),
+}
+
 /// Re-walk every declared replacement's closure and reconcile the manifest, for `lis sync`.
 pub(crate) fn reconcile_declared_replacements(
     project_root: &Path,
@@ -266,10 +271,9 @@ pub(crate) fn reconcile_declared_replacements(
             original,
             project_root,
             &current,
-            &replacement.replacement_version,
             &workspace,
             graph,
-            Some(ReplacedRoot {
+            RootWrite::Replaced(ReplacedRoot {
                 identity: replacement,
                 mode: ReplacedRootMode::SyncPreserveVia,
             }),
@@ -836,18 +840,16 @@ pub(crate) fn apply_graph_to_manifest(
     added_dep: &str,
     project_root: &Path,
     manifest: &deps::Manifest,
-    fallback_version: &str,
     workspace: &GoWorkspace,
     graph: &GraphResult,
-    replaced_root: Option<ReplacedRoot>,
+    root: RootWrite<'_>,
 ) -> Result<Vec<DirectUpgrade>, i32> {
     let existing_deps = manifest.go_deps();
     let transitives = graph.transitive_map(added_dep);
-    let added_dep_version = graph.version(added_dep).unwrap_or(fallback_version);
     let mut upgraded: Vec<DirectUpgrade> = Vec::new();
 
-    let root_result = match replaced_root {
-        Some(replaced_root) => {
+    let root_result = match root {
+        RootWrite::Replaced(replaced_root) => {
             let via = match replaced_root.mode {
                 ReplacedRootMode::SyncPreserveVia => existing_deps
                     .get(added_dep)
@@ -864,14 +866,17 @@ pub(crate) fn apply_graph_to_manifest(
                 },
             )
         }
-        None => upsert_go_dependency(
-            project_root,
-            added_dep,
-            &deps::GoDependency::Remote {
-                version: added_dep_version.to_string(),
-                via: None,
-            },
-        ),
+        RootWrite::Remote { fallback_version } => {
+            let added_dep_version = graph.version(added_dep).unwrap_or(fallback_version);
+            upsert_go_dependency(
+                project_root,
+                added_dep,
+                &deps::GoDependency::Remote {
+                    version: added_dep_version.to_string(),
+                    via: None,
+                },
+            )
+        }
     };
     if let Err(msg) = root_result {
         error!("failed to update manifest", msg);

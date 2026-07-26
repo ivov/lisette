@@ -65,21 +65,7 @@ fn walk(
             ..
         } => collect_parameter_hints(callee, args, range, line_index, hints),
 
-        Expression::Lambda {
-            params,
-            return_annotation,
-            body,
-            ty,
-            ..
-        } => lambda_hints(
-            params,
-            return_annotation,
-            body,
-            ty,
-            range,
-            line_index,
-            hints,
-        ),
+        Expression::Lambda { .. } => lambda_hints(expression, range, line_index, hints),
 
         _ => {}
     }
@@ -160,21 +146,28 @@ fn collect_identifier_spans(pattern: &Pattern, out: &mut Vec<Span>) {
 
 /// `: T` hints for a lambda's un-annotated params, plus `-> T` when the return is omitted.
 fn lambda_hints(
-    params: &[Binding],
-    return_annotation: &Annotation,
-    body: &Expression,
-    ty: &Type,
+    lambda: &Expression,
     range: (u32, u32),
     line_index: &LineIndex,
     hints: &mut Vec<InlayHint>,
 ) {
+    let Expression::Lambda {
+        params,
+        return_annotation,
+        body,
+        ty,
+        ..
+    } = lambda
+    else {
+        return;
+    };
     for param in params {
         binding_type_hint(param, range, line_index, hints);
     }
 
     // Skip a curried lambda's return; the inner lambda's own hints convey the shape.
     if matches!(return_annotation, Annotation::Unknown)
-        && !matches!(body, Expression::Lambda { .. })
+        && !matches!(body.as_ref(), Expression::Lambda { .. })
         && let Some(ret) = ty.get_function_ret()
         && !ret.is_unit()
         && !ret.is_variable()

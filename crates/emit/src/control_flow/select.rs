@@ -529,7 +529,6 @@ impl Planner<'_> {
                 let some_block = this.lower_receive_some_arm(
                     some_arm,
                     match_arms,
-                    receiver_var_pattern,
                     TypedSubject {
                         var: &case_var,
                         ty: element_ty,
@@ -576,7 +575,6 @@ impl Planner<'_> {
         &mut self,
         some_arm: &MatchArm,
         match_arms: &[MatchArm],
-        receiver_var_pattern: &Pattern,
         subject: TypedSubject<'_>,
         needs_receiver_destructure: bool,
         place: &PlacePlan,
@@ -585,11 +583,14 @@ impl Planner<'_> {
             if !needs_receiver_destructure {
                 return this.lower_block_to_place(&some_arm.expression, place);
             }
+            let Pattern::EnumVariant { fields, .. } = &some_arm.pattern else {
+                unreachable!("Some arm must carry an EnumVariant pattern");
+            };
             LoweredBlock {
                 statements: this.lower_select_match_receive_some_site(
                     subject,
                     AnnotatedPattern {
-                        pattern: receiver_var_pattern,
+                        pattern: &fields[0],
                     },
                     &some_arm.expression,
                     match_arms,

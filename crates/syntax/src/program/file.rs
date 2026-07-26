@@ -70,26 +70,6 @@ fn is_major_version_segment(segment: &str) -> bool {
 }
 
 impl File {
-    pub fn new(
-        module_id: &str,
-        name: &str,
-        display_path: &str,
-        source: &str,
-        items: Vec<Expression>,
-        file_comment: Option<String>,
-        id: u32,
-    ) -> Self {
-        File {
-            id,
-            module_id: module_id.to_string(),
-            name: name.to_string(),
-            display_path: display_path.to_string(),
-            source: source.to_string(),
-            items,
-            file_comment,
-        }
-    }
-
     pub fn new_cached(
         module_id: &str,
         name: &str,

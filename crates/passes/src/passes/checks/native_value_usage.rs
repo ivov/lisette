@@ -1,5 +1,5 @@
 use diagnostics::LocalSink;
-use syntax::ast::{Expression, Span, StructKind};
+use syntax::ast::{Expression, StructKind};
 use syntax::program::{Definition, DefinitionBody, NativeTypeKind};
 use syntax::types::{Symbol, Type, unqualified_name};
 
@@ -25,12 +25,8 @@ fn visit_expression(
     store: &Store,
     sink: &LocalSink,
 ) {
-    if let Expression::Identifier {
-        value, ty, span, ..
-    } = expression
-        && position != Position::Callee
-    {
-        check_one(value, ty, *span, position, module_id, store, sink);
+    if matches!(expression, Expression::Identifier { .. }) && position != Position::Callee {
+        check_one(expression, position, module_id, store, sink);
     }
 
     match expression {
@@ -67,14 +63,20 @@ fn visit_expression(
 }
 
 fn check_one(
-    value: &str,
-    ty: &Type,
-    span: Span,
+    identifier: &Expression,
     position: Position,
     module_id: &str,
     store: &Store,
     sink: &LocalSink,
 ) {
+    let Expression::Identifier {
+        value, ty, span, ..
+    } = identifier
+    else {
+        return;
+    };
+    let value = value.as_str();
+    let span = *span;
     if matches!(
         value,
         "imaginary" | "assert_type" | "complex" | "real" | "panic"

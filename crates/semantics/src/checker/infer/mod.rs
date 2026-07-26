@@ -13,7 +13,7 @@ pub(crate) use unify::BuiltinBound;
 use rustc_hash::FxHashMap as HashMap;
 
 use super::freeze::FreezeFolder;
-use super::{FileContextKind, TaskState};
+use super::{FileContextKind, FileContextSpec, TaskState};
 use crate::store::Store;
 use syntax::ast::{Expression, Span};
 use syntax::program::{File, FileImport};
@@ -52,10 +52,12 @@ impl InferCtx<'_> {
 
         self.with_file_context(
             store,
-            module_id,
-            file_id,
-            &imports,
-            FileContextKind::Standard,
+            FileContextSpec {
+                module_id,
+                file_id,
+                imports: &imports,
+                kind: FileContextKind::Standard,
+            },
             |this, store| {
                 let mut ctx = InferCtx::new(this, store);
                 ctx.check_definition_module_collisions(&file.items, &imports);

@@ -11,7 +11,36 @@ use crate::lex::TokenKind::*;
 use crate::parse::error::ParseError;
 use crate::types::Type;
 
+struct DefinitionHeader<'source> {
+    doc: Option<std::string::String>,
+    attributes: Vec<Attribute>,
+    name: EcoString,
+    name_span: Span,
+    generics: Vec<Generic>,
+    start: Token<'source>,
+}
+
 impl<'source> Parser<'source> {
+    fn parse_definition_header(
+        &mut self,
+        doc: Option<std::string::String>,
+        attributes: Vec<Attribute>,
+        start: Token<'source>,
+    ) -> DefinitionHeader<'source> {
+        let name_token = self.current_token();
+        let name_span = Span::new(self.file_id, name_token.byte_offset, name_token.byte_length);
+        let name = self.read_identifier();
+        let generics = self.parse_generics();
+        DefinitionHeader {
+            doc,
+            attributes,
+            name,
+            name_span,
+            generics,
+            start,
+        }
+    }
+
     pub(crate) fn parse_attributes(&mut self) -> Vec<Attribute> {
         let mut attributes = vec![];
         loop {
@@ -148,10 +177,7 @@ impl<'source> Parser<'source> {
 
         self.ensure(Enum);
 
-        let name_token = self.current_token();
-        let name_span = Span::new(self.file_id, name_token.byte_offset, name_token.byte_length);
-        let name = self.read_identifier();
-        let generics = self.parse_generics();
+        let header = self.parse_definition_header(doc, attributes, start);
 
         let underlying_start = self.current_token();
         if self.advance_if(Colon) {
@@ -175,18 +201,10 @@ impl<'source> Parser<'source> {
 
         self.ensure(LeftCurlyBrace);
 
-        self.parse_regular_enum_body(doc, attributes, name, name_span, generics, start)
+        self.parse_regular_enum_body(header)
     }
 
-    fn parse_regular_enum_body(
-        &mut self,
-        doc: Option<std::string::String>,
-        attributes: Vec<Attribute>,
-        name: EcoString,
-        name_span: Span,
-        generics: Vec<Generic>,
-        start: Token<'source>,
-    ) -> Expression {
+    fn parse_regular_enum_body(&mut self, header: DefinitionHeader<'source>) -> Expression {
         let mut variants = vec![];
         let mut seen_variants: Vec<(EcoString, Span)> = vec![];
 
@@ -214,6 +232,14 @@ impl<'source> Parser<'source> {
 
         self.ensure(RightCurlyBrace);
 
+        let DefinitionHeader {
+            doc,
+            attributes,
+            name,
+            name_span,
+            generics,
+            start,
+        } = header;
         Expression::Enum {
             doc,
             attributes,
@@ -376,27 +402,16 @@ impl<'source> Parser<'source> {
 
         self.ensure(Struct);
 
-        let name_token = self.current_token();
-        let name_span = Span::new(self.file_id, name_token.byte_offset, name_token.byte_length);
-        let name = self.read_identifier();
-        let generics = self.parse_generics();
+        let header = self.parse_definition_header(doc, attributes, start);
 
         if self.is(LeftParen) {
-            return self.parse_tuple_struct(doc, attributes, name, name_span, generics, start);
+            return self.parse_tuple_struct(header);
         }
 
-        self.parse_named_struct(doc, attributes, name, name_span, generics, start)
+        self.parse_named_struct(header)
     }
 
-    fn parse_named_struct(
-        &mut self,
-        doc: Option<std::string::String>,
-        attributes: Vec<Attribute>,
-        name: EcoString,
-        name_span: Span,
-        generics: Vec<Generic>,
-        start: Token<'source>,
-    ) -> Expression {
+    fn parse_named_struct(&mut self, header: DefinitionHeader<'source>) -> Expression {
         let mut fields = vec![];
         let mut seen_fields: Vec<(EcoString, Span)> = vec![];
 
@@ -421,6 +436,14 @@ impl<'source> Parser<'source> {
 
         self.ensure(RightCurlyBrace);
 
+        let DefinitionHeader {
+            doc,
+            attributes,
+            name,
+            name_span,
+            generics,
+            start,
+        } = header;
         Expression::Struct {
             doc,
             attributes,
@@ -433,15 +456,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    fn parse_tuple_struct(
-        &mut self,
-        doc: Option<std::string::String>,
-        attributes: Vec<Attribute>,
-        name: EcoString,
-        name_span: Span,
-        generics: Vec<Generic>,
-        start: Token<'source>,
-    ) -> Expression {
+    fn parse_tuple_struct(&mut self, header: DefinitionHeader<'source>) -> Expression {
         self.ensure(LeftParen);
 
         let mut fields = vec![];
@@ -472,6 +487,14 @@ impl<'source> Parser<'source> {
 
         self.ensure(RightParen);
 
+        let DefinitionHeader {
+            doc,
+            attributes,
+            name,
+            name_span,
+            generics,
+            start,
+        } = header;
         Expression::Struct {
             doc,
             attributes,

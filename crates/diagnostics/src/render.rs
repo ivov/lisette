@@ -247,7 +247,7 @@ pub struct Counts {
 }
 
 /// Resolves a `file_id` to its source, falling back to the entry file.
-struct SourceCache<F> {
+pub struct SourceCache<F> {
     get_source: F,
     default_source: IndexedSource,
     default_filename: String,
@@ -255,7 +255,7 @@ struct SourceCache<F> {
 }
 
 impl<F: Fn(u32) -> Option<(String, String)>> SourceCache<F> {
-    fn new(get_source: F, default_source: &str, default_filename: &str) -> Self {
+    pub fn new(get_source: F, default_source: &str, default_filename: &str) -> Self {
         Self {
             get_source,
             default_source: IndexedSource::new(default_source),
@@ -329,11 +329,9 @@ impl DiagnosticGroups<'_> {
 pub fn render_all(
     errors: &[LisetteDiagnostic],
     lints: &[LisetteDiagnostic],
-    get_source: impl Fn(u32) -> Option<(String, String)>,
+    mut sources: SourceCache<impl Fn(u32) -> Option<(String, String)>>,
     file_count: usize,
     filter: &Filter,
-    default_source: &str,
-    default_filename: &str,
 ) -> Counts {
     let groups = partition_diagnostics(errors, lints, filter);
 
@@ -342,7 +340,6 @@ pub fn render_all(
     }
 
     let use_color = std::env::var("NO_COLOR").is_err();
-    let mut sources = SourceCache::new(get_source, default_source, default_filename);
 
     render_group(&groups.errors, Style::new().red(), use_color, &mut sources);
     render_group(
@@ -377,15 +374,12 @@ pub fn unix_line(diagnostic: &LisetteDiagnostic, source: &IndexedSource, filenam
 pub fn render_unix(
     errors: &[LisetteDiagnostic],
     lints: &[LisetteDiagnostic],
-    get_source: impl Fn(u32) -> Option<(String, String)>,
+    mut sources: SourceCache<impl Fn(u32) -> Option<(String, String)>>,
     file_count: usize,
     filter: &Filter,
-    default_source: &str,
-    default_filename: &str,
 ) -> (String, Counts) {
     let groups = partition_diagnostics(errors, lints, filter);
 
-    let mut sources = SourceCache::new(get_source, default_source, default_filename);
     let mut output = String::new();
     for diagnostic in groups
         .errors
@@ -447,7 +441,13 @@ mod tests {
     fn unix_counts_and_labels_info_separately() {
         let empty: Vec<LisetteDiagnostic> = Vec::new();
         let lints = vec![LisetteDiagnostic::info("advisory")];
-        let (output, counts) = render_unix(&empty, &lints, |_| None, 1, &show_all(), "", "f.lis");
+        let (output, counts) = render_unix(
+            &empty,
+            &lints,
+            SourceCache::new(|_| None, "", "f.lis"),
+            1,
+            &show_all(),
+        );
         assert_eq!(counts.errors, 0);
         assert_eq!(counts.warnings, 0);
         assert_eq!(counts.info, 1);

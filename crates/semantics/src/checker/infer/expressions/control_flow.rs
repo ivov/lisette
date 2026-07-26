@@ -19,6 +19,24 @@ enum IterSeqKind {
     Seq2,
 }
 
+enum MatchArmsKind {
+    Match,
+    IfLet { without_else: bool },
+}
+
+impl MatchArmsKind {
+    fn binding_kind(&self) -> BindingKind {
+        match self {
+            MatchArmsKind::Match => BindingKind::MatchArm,
+            MatchArmsKind::IfLet { .. } => BindingKind::IfLet,
+        }
+    }
+
+    fn is_if_let_without_else(&self) -> bool {
+        matches!(self, MatchArmsKind::IfLet { without_else: true })
+    }
+}
+
 fn iter_seq_kind(ty: &Type) -> Option<IterSeqKind> {
     let Type::Nominal { id, .. } = ty else {
         return None;
@@ -307,14 +325,8 @@ impl InferCtx<'_> {
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
-        let (new_subject, new_arms, result_ty) = self.infer_match_arms(
-            subject,
-            arms,
-            BindingKind::MatchArm,
-            false,
-            span,
-            expected_ty,
-        );
+        let (new_subject, new_arms, result_ty) =
+            self.infer_match_arms(subject, arms, MatchArmsKind::Match, span, expected_ty);
 
         Expression::Match {
             subject: new_subject.into(),
@@ -372,8 +384,9 @@ impl InferCtx<'_> {
         let (new_scrutinee, mut new_arms, result_ty) = self.infer_match_arms(
             scrutinee,
             arms,
-            BindingKind::IfLet,
-            is_if_let_without_else,
+            MatchArmsKind::IfLet {
+                without_else: is_if_let_without_else,
+            },
             span,
             expected_ty,
         );
@@ -401,11 +414,12 @@ impl InferCtx<'_> {
         &mut self,
         subject: Box<Expression>,
         arms: Vec<MatchArm>,
-        arm_kind: BindingKind,
-        is_if_let_without_else: bool,
+        kind: MatchArmsKind,
         span: Span,
         expected_ty: &Type,
     ) -> (Expression, Vec<MatchArm>, Type) {
+        let arm_kind = kind.binding_kind();
+        let is_if_let_without_else = kind.is_if_let_without_else();
         let result_ty = self.new_type_var();
         let subject_ty = self.new_type_var();
         let new_subject = self.infer_expression(*subject, &subject_ty);

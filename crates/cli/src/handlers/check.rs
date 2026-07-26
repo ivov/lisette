@@ -223,11 +223,9 @@ fn report_check(
         let (output, counts) = render::render_unix(
             &result.errors,
             &result.lints,
-            get_source,
+            render::SourceCache::new(get_source, source, filename),
             result.user_file_count,
             &options.filter,
-            source,
-            filename,
         );
         print!("{}", output);
         counts
@@ -235,11 +233,9 @@ fn report_check(
         render::render_all(
             &result.errors,
             &result.lints,
-            get_source,
+            render::SourceCache::new(get_source, source, filename),
             result.user_file_count,
             &options.filter,
-            source,
-            filename,
         )
     };
     if !unix {
@@ -399,11 +395,9 @@ fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
             let (output, counts) = render::render_unix(
                 &compiled.result.errors,
                 &compiled.result.lints,
-                get_source,
+                render::SourceCache::new(get_source, &compiled.source, &compiled.display_path),
                 compiled.result.user_file_count,
                 &options.filter,
-                &compiled.source,
-                &compiled.display_path,
             );
             print!("{}", output);
             counts
@@ -411,11 +405,9 @@ fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
             render::render_all(
                 &compiled.result.errors,
                 &compiled.result.lints,
-                get_source,
+                render::SourceCache::new(get_source, &compiled.source, &compiled.display_path),
                 compiled.result.user_file_count,
                 &options.filter,
-                &compiled.source,
-                &compiled.display_path,
             )
         };
         total_errors += counts.errors;

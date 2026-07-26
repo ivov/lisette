@@ -438,15 +438,15 @@ fn scan_one(fs: &dyn Loader, module_id: &str) -> Vec<(String, semantics_loader::
 
 fn parse_one(job: ParseJob) -> (File, Vec<syntax::ParseError>) {
     let result = syntax::build_ast(&job.source, job.file_id);
-    let file = File::new(
-        &job.module_id,
-        &job.filename,
-        &job.display_path,
-        &job.source,
-        result.ast,
-        result.file_comment,
-        job.file_id,
-    );
+    let file = File {
+        id: job.file_id,
+        module_id: job.module_id,
+        name: job.filename,
+        display_path: job.display_path,
+        source: job.source,
+        items: result.ast,
+        file_comment: result.file_comment,
+    };
     (file, result.errors)
 }
 
@@ -536,11 +536,14 @@ fn process_file_imports(
                     let status = locator.validate_declaration(go_pkg);
                     emit_for_declaration_status(
                         &status,
-                        pending.name,
-                        go_pkg,
-                        pending.span,
-                        locator.target(),
-                        standalone_mode,
+                        &GoImportSite {
+                            import_name: pending.name,
+                            go_pkg,
+                            name_span: Some(pending.span),
+                            target: locator.target(),
+                            standalone_mode,
+                            replace_importer: None,
+                        },
                         sink,
                     )
                 }

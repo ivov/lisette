@@ -19,6 +19,12 @@ pub(crate) struct VariadicCombine {
     pub fixed_count: usize,
 }
 
+pub(crate) struct SpreadSequenceOptions {
+    pub(crate) wrap_to_any: bool,
+    pub(crate) combine: Option<VariadicCombine>,
+    pub(crate) boundary: CaptureBoundary,
+}
+
 impl Planner<'_> {
     pub(crate) fn stage_or_capture(&mut self, expression: &Expression, prefix: &str) -> ValuePlan {
         if matches!(
@@ -375,18 +381,20 @@ impl Planner<'_> {
         &mut self,
         mut stages: Vec<ValuePlan>,
         spread: Option<&Expression>,
-        wrap_to_any: bool,
-        prefix: &str,
-        combine: Option<VariadicCombine>,
-        boundary: CaptureBoundary,
+        options: SpreadSequenceOptions,
     ) -> SequencedValues {
         let spread_index = spread.map(|s| {
             stages.push(self.stage_operand(s, ExpressionContext::value()));
             stages.len() - 1
         });
-        let mut sequenced = self.sequence_values(stages, boundary, prefix);
+        let mut sequenced = self.sequence_values(stages, options.boundary, "_arg");
         if let Some(i) = spread_index {
-            self.finalize_spread_stage(&mut sequenced.values, i, wrap_to_any, combine);
+            self.finalize_spread_stage(
+                &mut sequenced.values,
+                i,
+                options.wrap_to_any,
+                options.combine,
+            );
         }
         sequenced
     }
@@ -396,9 +404,7 @@ impl Planner<'_> {
         mut stages: Vec<ValuePlan>,
         spread: Option<&Expression>,
         adapter_params: Option<&[FunctionParameter]>,
-        wrap_to_any: bool,
-        combine: Option<VariadicCombine>,
-        boundary: CaptureBoundary,
+        options: SpreadSequenceOptions,
     ) -> SequencedValues {
         if let Some(spread) = spread
             && let Some(adapter_stage) =
@@ -406,10 +412,15 @@ impl Planner<'_> {
         {
             stages.push(adapter_stage);
             let spread_index = stages.len() - 1;
-            let mut sequenced = self.sequence_values(stages, boundary, "_arg");
-            self.finalize_spread_stage(&mut sequenced.values, spread_index, wrap_to_any, combine);
+            let mut sequenced = self.sequence_values(stages, options.boundary, "_arg");
+            self.finalize_spread_stage(
+                &mut sequenced.values,
+                spread_index,
+                options.wrap_to_any,
+                options.combine,
+            );
             return sequenced;
         }
-        self.sequence_with_spread_values(stages, spread, wrap_to_any, "_arg", combine, boundary)
+        self.sequence_with_spread_values(stages, spread, options)
     }
 }

@@ -379,16 +379,18 @@ pub(super) fn build_locked(
     let counts = render::render_all(
         &result.errors,
         &result.lints,
-        |file_id| {
-            result
-                .sources
-                .get(&file_id)
-                .map(|info| (info.source.clone(), info.filename.clone()))
-        },
+        render::SourceCache::new(
+            |file_id| {
+                result
+                    .sources
+                    .get(&file_id)
+                    .map(|info| (info.source.clone(), info.filename.clone()))
+            },
+            entry_bits.as_ref().map(|(s, _)| s.as_str()).unwrap_or(""),
+            entry_bits.as_ref().map(|(_, d)| d.as_str()).unwrap_or(""),
+        ),
         result.user_file_count,
         &filter,
-        entry_bits.as_ref().map(|(s, _)| s.as_str()).unwrap_or(""),
-        entry_bits.as_ref().map(|(_, d)| d.as_str()).unwrap_or(""),
     );
 
     if counts.errors > 0 {

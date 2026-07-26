@@ -233,9 +233,9 @@ impl Planner<'_> {
         match bridge {
             LayoutBridge::Identity => value.to_string(),
             LayoutBridge::UnwrapNullableOption {
-                option_type,
                 target_payload,
                 payload,
+                ..
             } => {
                 if payload.is_identity() {
                     let slot_type = target_payload.go_type(self);
@@ -244,7 +244,6 @@ impl Planner<'_> {
                     self.plan_option_projection_with_bridge(
                         statements,
                         value,
-                        option_type,
                         target_payload,
                         payload,
                         false,
@@ -252,9 +251,9 @@ impl Planner<'_> {
                 }
             }
             LayoutBridge::UnwrapPointerOption {
-                option_type,
                 target_payload,
                 payload,
+                ..
             } => {
                 if payload.is_identity() {
                     let slot_type = format!("*{}", target_payload.go_type(self));
@@ -263,7 +262,6 @@ impl Planner<'_> {
                     self.plan_option_projection_with_bridge(
                         statements,
                         value,
-                        option_type,
                         target_payload,
                         payload,
                         true,
@@ -272,8 +270,8 @@ impl Planner<'_> {
             }
             LayoutBridge::WrapNullableOption {
                 option_type,
-                source_payload,
                 payload,
+                ..
             } => {
                 if payload.is_identity() {
                     self.plan_nil_check_option_wrap(statements, value, option_type)
@@ -282,7 +280,6 @@ impl Planner<'_> {
                         statements,
                         value,
                         option_type,
-                        source_payload,
                         payload,
                         false,
                     )
@@ -290,20 +287,13 @@ impl Planner<'_> {
             }
             LayoutBridge::WrapPointerOption {
                 option_type,
-                source_payload,
                 payload,
+                ..
             } => {
                 if payload.is_identity() {
                     self.plan_pointer_to_option_wrap(statements, value, option_type)
                 } else {
-                    self.plan_option_wrap_with_bridge(
-                        statements,
-                        value,
-                        option_type,
-                        source_payload,
-                        payload,
-                        true,
-                    )
+                    self.plan_option_wrap_with_bridge(statements, value, option_type, payload, true)
                 }
             }
             LayoutBridge::Reference { pointee } => {
@@ -314,19 +304,9 @@ impl Planner<'_> {
             LayoutBridge::Function { source, target, .. } => {
                 self.plan_function_layout_bridge(statements, value, source, target)
             }
-            LayoutBridge::Aggregate {
-                source,
-                target,
-                key,
-                element,
-            } => self.plan_aggregate_layout_bridge(
-                statements,
-                value,
-                source,
-                target,
-                key.as_deref(),
-                element,
-            ),
+            LayoutBridge::Aggregate { .. } => {
+                self.plan_aggregate_layout_bridge(statements, value, bridge)
+            }
         }
     }
 
@@ -334,7 +314,6 @@ impl Planner<'_> {
         &mut self,
         statements: &mut Vec<LoweredStatement>,
         option_value: &str,
-        _option_type: &Type,
         target_payload: &ValueLayout,
         payload_bridge: &LayoutBridge,
         address: bool,
@@ -383,7 +362,6 @@ impl Planner<'_> {
         statements: &mut Vec<LoweredStatement>,
         raw_value: &str,
         option_type: &Type,
-        _source_payload: &ValueLayout,
         payload_bridge: &LayoutBridge,
         pointer: bool,
     ) -> String {
@@ -443,11 +421,21 @@ impl Planner<'_> {
         &mut self,
         statements: &mut Vec<LoweredStatement>,
         value: &str,
-        source_layout: &ValueLayout,
-        target_layout: &ValueLayout,
-        key_bridge: Option<&LayoutBridge>,
-        element_bridge: &LayoutBridge,
+        bridge: &LayoutBridge,
     ) -> String {
+        let LayoutBridge::Aggregate {
+            source,
+            target,
+            key,
+            element,
+        } = bridge
+        else {
+            unreachable!("plan_aggregate_layout_bridge requires an Aggregate bridge");
+        };
+        let source_layout: &ValueLayout = source;
+        let target_layout: &ValueLayout = target;
+        let element_bridge: &LayoutBridge = element;
+        let key_bridge = key.as_deref();
         self.require_stdlib();
         let source = self.hoist_tmp_value_statement(statements, "src", value);
         let direction = key_bridge

@@ -119,6 +119,13 @@ pub(crate) enum FileContextKind {
     TestPrelude,
 }
 
+pub(crate) struct FileContextSpec<'a> {
+    pub(crate) module_id: &'a str,
+    pub(crate) file_id: u32,
+    pub(crate) imports: &'a [FileImport],
+    pub(crate) kind: FileContextKind,
+}
+
 struct SavedFileContext {
     cursor: Cursor,
     scopes: Scopes,
@@ -807,13 +814,10 @@ impl TaskState {
     fn with_file_context<T>(
         &mut self,
         store: &Store,
-        module_id: &str,
-        file_id: u32,
-        imports: &[FileImport],
-        kind: FileContextKind,
+        spec: FileContextSpec<'_>,
         f: impl FnOnce(&mut Self, &Store) -> T,
     ) -> T {
-        let saved = self.enter_file_context(store, module_id, file_id, imports, kind);
+        let saved = self.enter_file_context(store, spec);
         let result = f(self, store);
         self.exit_file_context(saved);
         result
@@ -822,26 +826,22 @@ impl TaskState {
     pub(crate) fn with_file_context_mut<T>(
         &mut self,
         store: &mut Store,
-        module_id: &str,
-        file_id: u32,
-        imports: &[FileImport],
-        kind: FileContextKind,
+        spec: FileContextSpec<'_>,
         f: impl FnOnce(&mut Self, &mut Store) -> T,
     ) -> T {
-        let saved = self.enter_file_context(&*store, module_id, file_id, imports, kind);
+        let saved = self.enter_file_context(&*store, spec);
         let result = f(self, store);
         self.exit_file_context(saved);
         result
     }
 
-    fn enter_file_context(
-        &mut self,
-        store: &Store,
-        module_id: &str,
-        file_id: u32,
-        imports: &[FileImport],
-        kind: FileContextKind,
-    ) -> SavedFileContext {
+    fn enter_file_context(&mut self, store: &Store, spec: FileContextSpec<'_>) -> SavedFileContext {
+        let FileContextSpec {
+            module_id,
+            file_id,
+            imports,
+            kind,
+        } = spec;
         let saved = SavedFileContext {
             cursor: std::mem::replace(
                 &mut self.cursor,

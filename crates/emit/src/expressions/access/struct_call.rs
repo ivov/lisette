@@ -15,6 +15,12 @@ use crate::plan::bodies::LoweredStatement;
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use crate::utils::is_order_sensitive;
 
+struct SpreadInput<'a> {
+    base: &'a Expression,
+    base_staged: ValuePlan,
+    field_pairs: Vec<(String, String)>,
+}
+
 struct StructCallContext<'a> {
     name: &'a str,
     ty: &'a Type,
@@ -115,10 +121,12 @@ impl Planner<'_> {
                     let (spread_setup, value, contains_deferred_evaluation) =
                         if ctx.enum_ctx.is_some() {
                             self.lower_enum_variant_spread(
-                                base,
-                                base_staged,
+                                SpreadInput {
+                                    base,
+                                    base_staged,
+                                    field_pairs,
+                                },
                                 &ctx,
-                                field_pairs,
                                 field_assignments,
                                 expression_ctx,
                             )
@@ -608,13 +616,16 @@ impl Planner<'_> {
 
     fn lower_enum_variant_spread(
         &mut self,
-        base: &Expression,
-        base_staged: ValuePlan,
+        input: SpreadInput<'_>,
         ctx: &StructCallContext<'_>,
-        mut field_pairs: Vec<(String, String)>,
         field_assignments: &[StructFieldAssignment],
         expression_ctx: ExpressionContext<'_>,
     ) -> (Vec<LoweredStatement>, String, bool) {
+        let SpreadInput {
+            base,
+            base_staged,
+            mut field_pairs,
+        } = input;
         let assigned: HashSet<&str> = field_assignments.iter().map(|f| f.name.as_str()).collect();
         let carried = self
             .lookup_unspecified_fields(ctx.ty, ctx.name, ctx.enum_ctx.as_ref(), &assigned)
