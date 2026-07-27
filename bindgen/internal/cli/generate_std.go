@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ivov/lisette/bindgen/internal/config"
+	"github.com/ivov/lisette/bindgen/internal/convert"
 	"github.com/ivov/lisette/bindgen/internal/extract"
 	"golang.org/x/sync/errgroup"
 )
@@ -44,57 +44,66 @@ func GenerateStd(ctx context.Context, outDir, lisetteVersion, goVersion string, 
 	}
 
 	captured := make(map[Target]map[string]string)
+	var capturedMu sync.Mutex
+
+	targetGroup, targetCtx := errgroup.WithContext(ctx)
+	// two measured fastest, more contend on the go build cache
+	targetGroup.SetLimit(2)
 
 	for _, target := range targets {
-		fmt.Fprintf(os.Stderr, "\n=== Target %s ===\n", target)
+		targetGroup.Go(func() error {
+			loadStart := time.Now()
+			pkgs, err := extract.LoadStdPackages(target.goos, target.goarch, shouldSkipPackage)
+			if err != nil {
+				return fmt.Errorf("target %s: failed to load packages: %w", target, err)
+			}
+			fmt.Fprintf(os.Stderr, "[%s] loaded %d packages in %.1fs\n", target, len(pkgs), time.Since(loadStart).Seconds())
 
-		pkgPaths, err := listStdlibPackages(target)
-		if err != nil {
-			return GenerateStdResult{}, fmt.Errorf("target %s: failed to list stdlib packages: %w", target, err)
-		}
+			nilness := convert.NewNilnessAnalysis(pkgs, cfg)
 
-		loadStart := time.Now()
-		pkgs, err := extract.LoadPackages(pkgPaths, target.goos, target.goarch)
-		if err != nil {
-			return GenerateStdResult{}, fmt.Errorf("target %s: failed to load packages: %w", target, err)
-		}
-		fmt.Fprintf(os.Stderr, "Loaded %d packages in %.1fs\n\n", len(pkgs), time.Since(loadStart).Seconds())
+			var generated atomic.Int32
+			total := len(pkgs)
 
-		var generated atomic.Int32
-		total := len(pkgs)
+			results := make(map[string]string, len(pkgs))
+			var resultsMu sync.Mutex
 
-		results := make(map[string]string, len(pkgs))
-		var resultsMu sync.Mutex
+			g, gctx := errgroup.WithContext(targetCtx)
+			g.SetLimit(runtime.NumCPU())
 
-		g, gctx := errgroup.WithContext(ctx)
-		g.SetLimit(runtime.NumCPU())
+			for _, pkg := range pkgs {
+				g.Go(func() error {
+					select {
+					case <-gctx.Done():
+						return gctx.Err()
+					default:
+					}
 
-		for _, pkg := range pkgs {
-			g.Go(func() error {
-				select {
-				case <-gctx.Done():
-					return gctx.Err()
-				default:
-				}
+					result := generateFromPackage(pkg, pkg.PkgPath, lisetteVersion, goVersion, cfg, nilness)
 
-				result := generateFromPackage(pkg, pkg.PkgPath, lisetteVersion, goVersion, cfg)
+					resultsMu.Lock()
+					results[pkg.PkgPath] = result.Content
+					resultsMu.Unlock()
 
-				resultsMu.Lock()
-				results[pkg.PkgPath] = result.Content
-				resultsMu.Unlock()
+					n := generated.Add(1)
+					fmt.Fprintf(os.Stderr, "[%s %3d/%d] %s\n", target, n, total, pkg.PkgPath)
 
-				n := generated.Add(1)
-				fmt.Fprintf(os.Stderr, "[%3d/%d] %s\n", n, total, pkg.PkgPath)
+					return nil
+				})
+			}
 
-				return nil
-			})
-		}
+			if err := g.Wait(); err != nil {
+				return err
+			}
 
-		if err := g.Wait(); err != nil {
-			return GenerateStdResult{}, err
-		}
+			capturedMu.Lock()
+			captured[target] = results
+			capturedMu.Unlock()
+			return nil
+		})
+	}
 
-		captured[target] = results
+	if err := targetGroup.Wait(); err != nil {
+		return GenerateStdResult{}, err
 	}
 
 	partition := partitionByTarget(captured, targets)
@@ -116,31 +125,6 @@ func GenerateStd(ctx context.Context, outDir, lisetteVersion, goVersion string, 
 		Generated: totalGenerated,
 		Duration:  time.Since(start),
 	}, nil
-}
-
-// listStdlibPackages runs `go list std` per target so the list reflects
-// platform-conditional packages like `plugin` (absent on windows).
-func listStdlibPackages(target Target) ([]string, error) {
-	cmd := exec.Command("go", "list", "std")
-	cmd.Env = append(os.Environ(),
-		"GOOS="+target.goos,
-		"GOARCH="+target.goarch,
-		"CGO_ENABLED=0",
-	)
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, err
-	}
-
-	var pkgs []string
-	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
-		if shouldSkipPackage(line) {
-			continue
-		}
-		pkgs = append(pkgs, line)
-	}
-
-	return pkgs, nil
 }
 
 func shouldSkipPackage(pkg string) bool {

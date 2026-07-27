@@ -145,14 +145,12 @@ type Converter struct {
 	externalPkgs             ExternalPkgs
 	pkg                      *packages.Package
 	cfg                      config.Config
+	nilness                  *NilnessAnalysis             // nil falls back to name heuristics
 	uniformPointerTypes      map[string]bool              // lazily computed; types with 10+ single-pointer-return methods
 	manyToOneTypes           map[string]bool              // lazily computed; return types with 10+ free functions
 	majorityPointerTypes     map[string]bool              // lazily computed; types where ≥20 methods return same *T (>90%)
 	funcDeclCache            map[token.Pos]*ast.FuncDecl  // lazily built; AST function declarations by name position
-	nonNilCache              map[token.Pos]nilCacheResult // lazily built; proven non-nil results
-	fnIfaceReturnCache       map[*ast.FuncDecl]bool       // lazily built; memoized fnReturnsInterface lookup
-	crossPkgConverters       map[string]*Converter        // lazily built; cached converters for imported packages
-	noCrossPkg               bool                         // when true, skip cross-package transitive analysis
+	valueSpecIndex           map[token.Pos]valueSpecEntry // lazily built; const/var ValueSpecs by name position
 	reachableUnexportedTypes map[string]bool              // lazily computed; unexported type names reachable from an exported decl. nil = uncomputed
 	directProducers          map[string]bool              // lazily computed; names of unexported opaque-handle structs produced by a direct value-var. nil = uncomputed
 	ifaceCandidates          []*types.Named               // lazily computed; candidate named interfaces in scope (current pkg + direct imports). nil = uncomputed
@@ -163,7 +161,7 @@ type Converter struct {
 	synth []syntheticStruct
 }
 
-func NewConverter(pkgPath string, pkg *packages.Package, cfg *config.Config) *Converter {
+func NewConverter(pkgPath string, pkg *packages.Package, cfg *config.Config, nilness *NilnessAnalysis) *Converter {
 	var effectiveConfig config.Config
 	if cfg != nil {
 		effectiveConfig = *cfg
@@ -173,6 +171,7 @@ func NewConverter(pkgPath string, pkg *packages.Package, cfg *config.Config) *Co
 		externalPkgs:   make(ExternalPkgs),
 		pkg:            pkg,
 		cfg:            effectiveConfig,
+		nilness:        nilness,
 	}
 }
 

@@ -68,6 +68,7 @@ func RunPkg(args []string, defaultCfgJSON []byte) {
 	}
 
 	pkgPath := fs.Arg(0)
+	_ = fs.Parse(fs.Args()[1:])
 
 	cfg, err := config.LoadConfig(*configPath, defaultCfgJSON)
 	if err != nil {
@@ -171,8 +172,8 @@ func ParseTargets(s string) ([]Target, error) {
 	return targets, nil
 }
 
-func generateFromPackage(pkg *packages.Package, displayPath, lisetteVersion, goVersion string, cfg *config.Config) GeneratePkgResult {
-	converter := convert.NewConverter(pkg.PkgPath, pkg, cfg)
+func generateFromPackage(pkg *packages.Package, displayPath, lisetteVersion, goVersion string, cfg *config.Config, nilness *convert.NilnessAnalysis) GeneratePkgResult {
+	converter := convert.NewConverter(pkg.PkgPath, pkg, cfg, nilness)
 	exports := extract.ExtractExports(pkg, converter.EmbedIsFaithful)
 	converted := converter.ConvertAll(exports)
 

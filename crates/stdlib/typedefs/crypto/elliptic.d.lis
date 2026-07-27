@@ -69,12 +69,12 @@ pub fn P521() -> Curve
 /// 
 /// Deprecated: for ECDH, use the crypto/ecdh package. This function accepts an
 /// encoding equivalent to that of the NewPublicKey methods in crypto/ecdh.
-pub fn Unmarshal(curve: Curve, data: Slice<byte>) -> (Ref<big.Int>, Ref<big.Int>)
+pub fn Unmarshal(curve: Curve, data: Slice<byte>) -> (Option<Ref<big.Int>>, Option<Ref<big.Int>>)
 
 /// UnmarshalCompressed converts a point, serialized by [MarshalCompressed], into
 /// an x, y pair. It is an error if the point is not in compressed form, is not
 /// on the curve, or is the point at infinity. On error, x = nil.
-pub fn UnmarshalCompressed(curve: Curve, data: Slice<byte>) -> (Ref<big.Int>, Ref<big.Int>)
+pub fn UnmarshalCompressed(curve: Curve, data: Slice<byte>) -> (Option<Ref<big.Int>>, Option<Ref<big.Int>>)
 
 /// A Curve represents a short-form Weierstrass curve with a=-3.
 /// 

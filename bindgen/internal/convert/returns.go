@@ -38,13 +38,14 @@ func ioInterfaceFromPackage(pkg *types.Package, name string) *types.Interface {
 }
 
 // ReturnsToLisette converts a Go function's return types to Lisette.
-// The qualifiedName is used for config lookups (e.g. "LookupEnv" or "Rat.Float64").
-func ReturnsToLisette(signature *types.Signature, conv *Converter, qualifiedName string) TypeResult {
-	return returnsToLisetteRecursive(signature, make(map[types.Type]bool), conv, qualifiedName, nil)
+// qualifiedName addresses config lookups. A nil obj skips nil-witness
+// demotions.
+func ReturnsToLisette(signature *types.Signature, conv *Converter, obj types.Object, qualifiedName string) TypeResult {
+	return returnsToLisetteRecursive(signature, make(map[types.Type]bool), conv, obj, qualifiedName, nil)
 }
 
-func returnsToLisetteWithSubstitutions(signature *types.Signature, conv *Converter, qualifiedName string, substitutions map[string]string) TypeResult {
-	return returnsToLisetteRecursive(signature, make(map[types.Type]bool), conv, qualifiedName, substitutions)
+func returnsToLisetteWithSubstitutions(signature *types.Signature, conv *Converter, obj types.Object, qualifiedName string, substitutions map[string]string) TypeResult {
+	return returnsToLisetteRecursive(signature, make(map[types.Type]bool), conv, obj, qualifiedName, substitutions)
 }
 
 // maybeWrapNilableFunction wraps function-typed returns in Option.
@@ -73,7 +74,7 @@ func maybeWrapNilableFunction(t types.Type, lisetteType string, conv *Converter,
 	}
 }
 
-func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]bool, conv *Converter, qualifiedName string, substitutions map[string]string) TypeResult {
+func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]bool, conv *Converter, obj types.Object, qualifiedName string, substitutions map[string]string) TypeResult {
 	results := signature.Results()
 
 	if results.Len() == 0 {
@@ -122,21 +123,23 @@ func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]b
 	}
 
 	if isErrorType(last.Type()) {
-		inner := collectReturnTypes(results, 0, results.Len()-1, seen, conv, qualifiedName, substitutions)
+		partial := conv.cfg.IsPartialResult(conv.currentPkgPath, qualifiedName) ||
+			isPartialIOMethod(signature, qualifiedName)
+		var demoted map[int]bool
+		if !partial {
+			demoted = nilWitnessDemotions(conv, obj, results, 0, results.Len()-1, qualifiedName, true)
+		}
+		inner := collectReturnTypes(results, 0, results.Len()-1, seen, conv, qualifiedName, substitutions, demoted)
 		innerType := inner.LisetteType
 		if inner.SkipReason != nil {
 			innerType = "Unknown"
 		}
-		if conv.cfg.IsPartialResult(conv.currentPkgPath, qualifiedName) ||
-			isPartialIOMethod(signature, qualifiedName) {
-			return TypeResult{
-				LisetteType:          partialOf(innerType),
-				SkipReason:           inner.SkipReason,
-				NilableReturnApplied: inner.NilableReturnApplied,
-			}
+		wrapped := resultOf(innerType)
+		if partial {
+			wrapped = partialOf(innerType)
 		}
 		return TypeResult{
-			LisetteType:          resultOf(innerType),
+			LisetteType:          wrapped,
 			SkipReason:           inner.SkipReason,
 			NilableReturnApplied: inner.NilableReturnApplied,
 		}
@@ -146,7 +149,7 @@ func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]b
 	if isBoolType(last.Type()) {
 		if shouldConvertToOption(last.Name(), conv, qualifiedName) {
 			nilable := results.Len() == 2 && isNilableGoType(results.At(0).Type())
-			inner := collectReturnTypes(results, 0, results.Len()-1, seen, conv, qualifiedName, substitutions)
+			inner := collectReturnTypes(results, 0, results.Len()-1, seen, conv, qualifiedName, substitutions, nil)
 			innerType := inner.LisetteType
 			if inner.SkipReason != nil {
 				innerType = "Unknown"
@@ -160,7 +163,42 @@ func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]b
 		}
 	}
 
-	return collectReturnTypes(results, 0, results.Len(), seen, conv, qualifiedName, substitutions)
+	demoted := nilWitnessDemotions(conv, obj, results, 0, results.Len(), qualifiedName, false)
+	return collectReturnTypes(results, 0, results.Len(), seen, conv, qualifiedName, substitutions, demoted)
+}
+
+// nilWitnessDemotions: result indices demoted to Option by a witnessed nil
+// return. A non_nilable_return pin cancels.
+func nilWitnessDemotions(conv *Converter, obj types.Object, results *types.Tuple, start, end int, qualifiedName string, withNilError bool) map[int]bool {
+	if conv == nil || obj == nil {
+		return nil
+	}
+	facts, ok := conv.nilness.Function(obj)
+	if !ok || !facts.HasBody {
+		return nil
+	}
+	// promoted methods record pins under the declaring type's key
+	if conv.cfg.IsNonNilableReturn(conv.currentPkgPath, qualifiedName) {
+		return nil
+	}
+	if fn, ok := obj.(*types.Func); ok && fn.Pkg() != nil &&
+		conv.cfg.IsNonNilableReturn(fn.Pkg().Path(), qualifiedFunctionName(fn)) {
+		return nil
+	}
+	witnesses := facts.NilWitness
+	if withNilError {
+		witnesses = facts.NilWithNilError
+	}
+	var demoted map[int]bool
+	for i := start; i < end && i < len(witnesses); i++ {
+		if witnesses[i] && isNilableGoType(results.At(i).Type()) {
+			if demoted == nil {
+				demoted = make(map[int]bool)
+			}
+			demoted[i] = true
+		}
+	}
+	return demoted
 }
 
 // shouldConvertToOption determines if a (T, bool) return should become Option<T>.
@@ -186,7 +224,7 @@ func shouldConvertToOption(boolName string, conv *Converter, qualifiedName strin
 // crates/syntax/src/parse/mod.rs.
 const maxReturnTupleArity = 5
 
-func collectReturnTypes(results *types.Tuple, start, end int, seen map[types.Type]bool, conv *Converter, qualifiedName string, substitutions map[string]string) TypeResult {
+func collectReturnTypes(results *types.Tuple, start, end int, seen map[types.Type]bool, conv *Converter, qualifiedName string, substitutions map[string]string, demoted map[int]bool) TypeResult {
 	count := end - start
 
 	if count == 0 {
@@ -197,6 +235,9 @@ func collectReturnTypes(results *types.Tuple, start, end int, seen map[types.Typ
 		elem := toLisetteRecursive(results.At(start).Type(), seen, conv, substitutions)
 		if elem.SkipReason == nil {
 			wrapped, applied := maybeWrapNilableFunction(results.At(start).Type(), elem.LisetteType, conv, qualifiedName)
+			if demoted[start] && !applied {
+				wrapped = optionOf(wrapped)
+			}
 			elem.LisetteType = wrapped
 			if applied {
 				elem.NilableReturnApplied = true
@@ -222,6 +263,8 @@ func collectReturnTypes(results *types.Tuple, start, end int, seen map[types.Typ
 		wrapped, applied := maybeWrapNilableFunction(results.At(i).Type(), elem.LisetteType, conv, qualifiedName)
 		if applied {
 			anyApplied = true
+		} else if demoted[i] {
+			wrapped = optionOf(wrapped)
 		}
 		elems = append(elems, wrapped)
 	}

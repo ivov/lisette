@@ -247,7 +247,7 @@ func signatureToLisette(signature *types.Signature, seen map[types.Type]bool, co
 
 	returnType := "()"
 	if signature.Results().Len() > 0 {
-		ret := returnsToLisetteRecursive(signature, seen, conv, "", substitutions)
+		ret := returnsToLisetteRecursive(signature, seen, conv, nil, "", substitutions)
 		if ret.SkipReason != nil {
 			return ret
 		}

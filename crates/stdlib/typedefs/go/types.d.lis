@@ -320,7 +320,7 @@ pub fn LookupFieldOrMethod(
   addressable: bool,
   pkg: Ref<Package>,
   name: string,
-) -> (Object, Slice<int>, bool)
+) -> (Option<Object>, Slice<int>, bool)
 
 /// LookupSelection selects the field or method whose ID is Id(pkg,
 /// name), on a value of type T. If addressable is set, T is the type
@@ -1503,7 +1503,7 @@ impl Scope {
   /// object was inserted into the scope and already had a parent at that
   /// time (see Insert). This can only happen for dot-imported objects
   /// whose parent is the scope of the package that exported them.
-  fn LookupParent(self: Ref<Scope>, name: string, pos: token.Pos) -> (Ref<Scope>, Object)
+  fn LookupParent(self: Ref<Scope>, name: string, pos: token.Pos) -> (Option<Ref<Scope>>, Option<Object>)
 
   /// Names returns the scope's element names in sorted order.
   fn Names(self: Ref<Scope>) -> Slice<string>

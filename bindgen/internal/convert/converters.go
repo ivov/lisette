@@ -123,7 +123,7 @@ func (c *Converter) convertFunction(result *ConvertResult, symbolExport extract.
 	}
 	result.Params = params
 
-	returnType := c.applyReturnType(result, signature, result.Name, substitutions)
+	returnType := c.applyReturnType(result, signature, symbolExport.Obj, result.Name, substitutions)
 
 	c.resolveNilability(result, signature, returnType, nilabilityDecision{
 		obj:               symbolExport.Obj,
@@ -208,8 +208,8 @@ func (c *Converter) convertParams(sig *types.Signature, lookupName, methodName s
 	return out, nil
 }
 
-func (c *Converter) applyReturnType(result *ConvertResult, sig *types.Signature, lookupName string, substitutions map[string]string) TypeResult {
-	returnType := returnsToLisetteWithSubstitutions(sig, c, lookupName, substitutions)
+func (c *Converter) applyReturnType(result *ConvertResult, sig *types.Signature, obj types.Object, lookupName string, substitutions map[string]string) TypeResult {
+	returnType := returnsToLisetteWithSubstitutions(sig, c, obj, lookupName, substitutions)
 	if returnType.LisetteType != "" {
 		result.ReturnType = returnType.LisetteType
 	} else if returnType.SkipReason != nil {
@@ -250,16 +250,15 @@ func (c *Converter) resolveNilability(result *ConvertResult, sig *types.Signatur
 
 	forceNonNilable := false
 	if isSingleNilableReturn {
-		fn := c.findFuncDecl(d.obj)
-		if fn == nil {
-			forceNonNilable = d.heuristicNonNil(isSinglePointerReturn)
-		} else {
-			switch c.analyzeReturnNilability(fn) {
-			case returnNilabilityProvenNonNil:
+		if facts, ok := c.nilness.Function(d.obj); ok && facts.HasBody {
+			switch facts.Single {
+			case ReturnProvenNonNil:
 				forceNonNilable = true
-			case returnNilabilityInconclusive:
+			case ReturnUnknown:
 				forceNonNilable = d.nameIsConstructor
 			}
+		} else {
+			forceNonNilable = d.heuristicNonNil(isSinglePointerReturn)
 		}
 	}
 	for _, k := range d.lookups {
@@ -379,7 +378,7 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 	}
 	result.Params = params
 
-	returnType := c.applyReturnType(result, signature, qualifiedName, nil)
+	returnType := c.applyReturnType(result, signature, symbolExport.Obj, qualifiedName, nil)
 
 	lookups := []configKey{{c.currentPkgPath, qualifiedName}}
 	if symbolExport.IsPromoted && symbolExport.OriginalTypeName != "" {
@@ -923,58 +922,29 @@ func structHasHiddenEmbed(s *types.Struct, emitted []StructField) bool {
 }
 
 func (c *Converter) getOriginalLiteral(constObj *types.Const) string {
-	if c.pkg == nil {
+	entry, ok := c.valueSpecFor(constObj)
+	if !ok || entry.index >= len(entry.spec.Values) {
 		return ""
 	}
 
-	pos := constObj.Pos()
-	if !pos.IsValid() {
+	var literal string
+	switch v := entry.spec.Values[entry.index].(type) {
+	case *ast.BasicLit:
+		if v.Kind == token.INT {
+			literal = v.Value
+		}
+	case *ast.UnaryExpr:
+		// Handle negative numbers: -0x8000
+		if v.Op == token.SUB {
+			if lit, ok := v.X.(*ast.BasicLit); ok && lit.Kind == token.INT {
+				literal = "-" + lit.Value
+			}
+		}
+	}
+	if literal == "" {
 		return ""
 	}
-
-	for _, file := range c.pkg.Syntax {
-		if file == nil {
-			continue
-		}
-
-		tokenFile := c.pkg.Fset.File(file.Pos())
-		if tokenFile == nil || int(pos) < tokenFile.Base() || int(pos) >= tokenFile.Base()+tokenFile.Size() {
-			continue
-		}
-
-		var literal string
-		ast.Inspect(file, func(n ast.Node) bool {
-			vs, ok := n.(*ast.ValueSpec)
-			if !ok {
-				return true
-			}
-
-			for i, name := range vs.Names {
-				if name.Pos() == pos && i < len(vs.Values) {
-					switch v := vs.Values[i].(type) {
-					case *ast.BasicLit:
-						if v.Kind == token.INT {
-							literal = v.Value
-						}
-					case *ast.UnaryExpr:
-						// Handle negative numbers: -0x8000
-						if v.Op == token.SUB {
-							if lit, ok := v.X.(*ast.BasicLit); ok && lit.Kind == token.INT {
-								literal = "-" + lit.Value
-							}
-						}
-					}
-				}
-			}
-			return literal == ""
-		})
-
-		if literal != "" {
-			return normalizeLegacyOctal(literal)
-		}
-	}
-
-	return ""
+	return normalizeLegacyOctal(literal)
 }
 
 func normalizeLegacyOctal(literal string) string {
@@ -1006,45 +976,13 @@ func (c *Converter) inferRhsType(constObj *types.Const) types.Type {
 	if c.pkg == nil || c.pkg.TypesInfo == nil {
 		return nil
 	}
-
-	pos := constObj.Pos()
-	if !pos.IsValid() {
+	entry, ok := c.valueSpecFor(constObj)
+	if !ok || entry.index >= len(entry.spec.Values) {
 		return nil
 	}
-
-	var foundType types.Type
-	for _, file := range c.pkg.Syntax {
-		if file == nil {
-			continue
-		}
-
-		tokenFile := c.pkg.Fset.File(file.Pos())
-		if tokenFile == nil || int(pos) < tokenFile.Base() || int(pos) >= tokenFile.Base()+tokenFile.Size() {
-			continue
-		}
-
-		ast.Inspect(file, func(n ast.Node) bool {
-			vs, ok := n.(*ast.ValueSpec)
-			if !ok {
-				return true
-			}
-
-			for i, name := range vs.Names {
-				if name.Pos() == pos && i < len(vs.Values) {
-					rhsExpr := vs.Values[i]
-					if tv, ok := c.pkg.TypesInfo.Types[rhsExpr]; ok {
-						foundType = tv.Type
-					}
-				}
-			}
-			return foundType == nil
-		})
-
-		if foundType != nil {
-			return foundType
-		}
+	if tv, ok := c.pkg.TypesInfo.Types[entry.spec.Values[entry.index]]; ok {
+		return tv.Type
 	}
-
 	return nil
 }
 
@@ -1230,10 +1168,19 @@ var constructorPrefixes = [...]string{
 	"Acquire", "Start", "With", "QueryRow",
 }
 
-// looksLikeConstructor returns true if the function name matches a constructor prefix.
+// looksLikeConstructor reports whether the name matches a constructor
+// prefix at a word boundary.
 func looksLikeConstructor(name string) bool {
 	for _, prefix := range constructorPrefixes {
-		if strings.HasPrefix(name, prefix) {
+		if !strings.HasPrefix(name, prefix) {
+			continue
+		}
+		rest := name[len(prefix):]
+		if rest == "" {
+			return true
+		}
+		first := rune(rest[0])
+		if first >= 'A' && first <= 'Z' || first >= '0' && first <= '9' {
 			return true
 		}
 	}
@@ -1888,7 +1835,7 @@ func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeNam
 			return nil, false
 		}
 
-		returnType := ReturnsToLisette(signature, c, qualifiedName)
+		returnType := ReturnsToLisette(signature, c, method, qualifiedName)
 		if returnType.SkipReason != nil {
 			return nil, false
 		}

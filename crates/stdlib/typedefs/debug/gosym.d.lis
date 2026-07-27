@@ -154,7 +154,7 @@ impl Table {
 
   /// PCToLine looks up line number information for a program counter.
   /// If there is no information, it returns fn == nil.
-  fn PCToLine(self: Ref<Table>, pc: uint64) -> (string, int, Ref<Func>)
+  fn PCToLine(self: Ref<Table>, pc: uint64) -> (string, int, Option<Ref<Func>>)
 
   /// SymByAddr returns the text, data, or bss symbol starting at the given address.
   fn SymByAddr(self: Ref<Table>, addr: uint64) -> Option<Ref<Sym>>

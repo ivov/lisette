@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/ivov/lisette/bindgen/internal/config"
+	"github.com/ivov/lisette/bindgen/internal/convert"
 	"github.com/ivov/lisette/bindgen/internal/emit"
 	"github.com/ivov/lisette/bindgen/internal/extract"
 	"golang.org/x/tools/go/packages"
@@ -23,7 +24,8 @@ func GeneratePkg(pkgPath, lisetteVersion, goVersion string, cfg *config.Config) 
 		return generateUnloadableStub(pkgPath, pkg, lisetteVersion, goVersion), nil
 	}
 
-	return generateFromPackage(pkg, pkgPath, lisetteVersion, goVersion, cfg), nil
+	nilness := convert.NewNilnessAnalysis([]*packages.Package{pkg}, cfg)
+	return generateFromPackage(pkg, pkgPath, lisetteVersion, goVersion, cfg, nilness), nil
 }
 
 // generateUnloadableStub returns a header-only typedef with zero exports for

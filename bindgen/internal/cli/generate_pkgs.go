@@ -8,10 +8,12 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 
 	"github.com/ivov/lisette/bindgen/internal/config"
+	"github.com/ivov/lisette/bindgen/internal/convert"
 	"github.com/ivov/lisette/bindgen/internal/extract"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/tools/go/packages"
@@ -123,6 +125,21 @@ func GeneratePkgs(pkgPaths []string, lisetteVersion, goVersion string, cfg *conf
 		indexGraph(pkg)
 	}
 
+	analysisRoots := pkgs
+	if transitive {
+		rootPaths := make(map[string]bool, len(pkgs))
+		for _, pkg := range pkgs {
+			rootPaths[pkg.PkgPath] = true
+		}
+		analysisRoots = slices.Clone(pkgs)
+		for path, pkg := range byPath {
+			if !rootPaths[path] && convertibleDependency(path) {
+				analysisRoots = append(analysisRoots, pkg)
+			}
+		}
+	}
+	nilness := convert.NewNilnessAnalysis(analysisRoots, cfg)
+
 	visited := make(map[string]bool)
 	frontier := make([]string, 0, len(pkgPaths))
 	for _, input := range pkgPaths {
@@ -162,7 +179,7 @@ func GeneratePkgs(pkgPaths []string, lisetteVersion, goVersion string, cfg *conf
 					stub := generateUnloadableStub(pkgPath, pkg, lisetteVersion, goVersion)
 					wave[i] = waveResult{ok: ManifestOk{Package: pkgPath, Content: stub.Content, Stubbed: true}}
 				} else {
-					result := generateFromPackage(pkg, pkgPath, lisetteVersion, goVersion, cfg)
+					result := generateFromPackage(pkg, pkgPath, lisetteVersion, goVersion, cfg, nilness)
 					wave[i] = waveResult{
 						ok:      ManifestOk{Package: pkgPath, Content: result.Content, Stubbed: false},
 						imports: result.ExternalImports,
@@ -180,7 +197,7 @@ func GeneratePkgs(pkgPaths []string, lisetteVersion, goVersion string, cfg *conf
 				continue
 			}
 			for _, imp := range w.imports {
-				if visited[imp] || !isThirdPartyPackage(imp) || extract.IsInternalPackagePath(imp) {
+				if visited[imp] || !convertibleDependency(imp) {
 					continue
 				}
 				pkg := byPath[imp]
@@ -199,6 +216,12 @@ func GeneratePkgs(pkgPaths []string, lisetteVersion, goVersion string, cfg *conf
 	})
 
 	return manifest
+}
+
+// convertibleDependency reports whether a discovered import is eligible for
+// transitive conversion.
+func convertibleDependency(path string) bool {
+	return isThirdPartyPackage(path) && !extract.IsInternalPackagePath(path)
 }
 
 func isThirdPartyPackage(path string) bool {

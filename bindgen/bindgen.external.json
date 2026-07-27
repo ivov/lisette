@@ -209,13 +209,6 @@
           "Model.Init",
           "Model.Update"
         ],
-        "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1": [
-          "DurationFromInt",
-          "DurationFromString"
-        ],
-        "github.com/cloudflare/cfssl/csr": [
-          "ExtractCertificateRequest"
-        ],
         "github.com/getsentry/sentry-go": [
           "Span.GetTransaction"
         ],
@@ -225,31 +218,8 @@
         "github.com/hashicorp/vault/api": [
           "Client.Limiter"
         ],
-        "github.com/hashicorp/vault/sdk/logical": [
-          "HTTPResponseToLogicalResponse",
-          "ListResponse",
-          "ListResponseWithInfo",
-          "LogicalResponseToHTTPResponse",
-          "TestBackendConfig"
-        ],
-        "github.com/hetznercloud/hcloud-go/v2/hcloud": [
-          "ActionError.Action",
-          "Error.Response",
-          "LoadBalancer.PrivateNetFor",
-          "Server.PrivateNetFor"
-        ],
         "github.com/newrelic/go-agent/v3/newrelic": [
           "Transaction.NewGoroutine"
-        ],
-        "github.com/rs/zerolog": [
-          "Logger.WithLevel"
-        ],
-        "github.com/spf13/pflag": [
-          "Lookup",
-          "ShorthandLookup"
-        ],
-        "go.etcd.io/bbolt": [
-          "Bucket.Bucket"
         ],
         "gotest.tools/v3/fs": [
           "DirFromPath"
@@ -279,13 +249,6 @@
         ],
         "github.com/PuerkitoBio/goquery": [
           "CloneDocument",
-          "Document.Find",
-          "Document.FindMatcher",
-          "Document.FindSelection",
-          "Document.Get",
-          "Document.Next",
-          "Document.Parent",
-          "Document.Prev",
           "Selection.Find",
           "Selection.FindMatcher",
           "Selection.FindSelection",
@@ -296,9 +259,6 @@
         ],
         "github.com/Rhymond/go-money": [
           "Money.Currency"
-        ],
-        "github.com/VictoriaMetrics/fastcache": [
-          "LoadFromFileOrNew"
         ],
         "github.com/VictoriaMetrics/metrics": [
           "GetDefaultSet",
@@ -345,16 +305,12 @@
           "RegexLexer.Config"
         ],
         "github.com/alecthomas/chroma/v2/styles": [
-          "Get",
-          "Register"
+          "Get"
         ],
         "github.com/alecthomas/kong": [
-          "Application.Find",
           "Context.Selected",
           "Node.Find",
-          "Parse",
-          "Scan",
-          "ScanAsType"
+          "Parse"
         ],
         "github.com/alicebob/miniredis/v2": [
           "*"
@@ -368,44 +324,16 @@
           "*"
         ],
         "github.com/antlr4-go/antlr/v4": [
-          "ATN.NextTokens",
-          "ATN.NextTokensInContext",
-          "ATN.NextTokensNoContext",
-          "ATNConfigSet.Alts",
-          "ATNConfigSet.GetStates",
-          "ATNDeserializer.Deserialize",
-          "BailErrorStrategy.GetErrorRecoverySet",
-          "BailErrorStrategy.GetExpectedTokens",
-          "BaseInterpreterRuleContext.AddErrorNode",
-          "BaseInterpreterRuleContext.AddTokenNode",
           "BaseLexer.GetTokenSourceCharStreamPair",
-          "BaseParser.GetExpectedTokens",
-          "BaseParser.GetExpectedTokensWithinCurrentRule",
-          "BaseParserRuleContext.AddErrorNode",
-          "BaseParserRuleContext.AddTokenNode",
-          "DefaultErrorStrategy.GetErrorRecoverySet",
-          "DefaultErrorStrategy.GetExpectedTokens",
-          "LL1Analyzer.Look",
-          "PredictionModeGetAlts",
-          "PredictionModeGetStateToAltMap"
+          "DefaultErrorStrategy.GetExpectedTokens"
         ],
         "github.com/apache/arrow-go/v18/arrow": [
           "Column.Data",
-          "DenseUnionFromArrays",
-          "DenseUnionOf",
-          "MapType.ValueType",
-          "SparseUnionFromArrays",
-          "SparseUnionOf",
-          "StructOf"
+          "MapType.ValueType"
         ],
         "github.com/apache/arrow/go/v15/arrow": [
           "Column.Data",
-          "DenseUnionFromArrays",
-          "DenseUnionOf",
-          "MapType.ValueType",
-          "SparseUnionFromArrays",
-          "SparseUnionOf",
-          "StructOf"
+          "MapType.ValueType"
         ],
         "github.com/apache/arrow/go/v15/parquet/file": [
           "*.Descriptor",
@@ -447,7 +375,6 @@
         ],
         "github.com/beego/beego/v2/server/web": [
           "ControllerRegister.GetContext",
-          "Get",
           "HttpServer.Get",
           "Namespace.Get",
           "ReadFromRequest"
@@ -456,11 +383,7 @@
           "ListBuilder.List"
         ],
         "github.com/bits-and-blooms/bloom/v3": [
-          "BloomFilter.BitSet",
-          "From"
-        ],
-        "github.com/bojanz/currency": [
-          "Amount.BigInt"
+          "BloomFilter.BitSet"
         ],
         "github.com/bwmarrin/discordgo": [
           "*.Forward",
@@ -505,9 +428,7 @@
           "FromContext"
         ],
         "github.com/chzyer/readline": [
-          "Instance.GenPasswordConfig",
-          "Instance.SetConfig",
-          "Operation.GenPasswordConfig"
+          "Instance.SetConfig"
         ],
         "github.com/cloudflare/cloudflare-go/v2/**": [
           "*.ListAutoPaging"
@@ -543,23 +464,15 @@
           "ViewResult.Raw"
         ],
         "github.com/cristalhq/aconfig": [
-          "Loader.Flags",
-          "LoaderFor"
+          "Loader.Flags"
         ],
         "github.com/cschleiden/go-workflows/activity": [
           "Logger"
-        ],
-        "github.com/cschleiden/go-workflows/workflow": [
-          "Logger",
-          "WorkflowInstance"
         ],
         "github.com/danielgtaylor/huma/v2": [
           "MultipartFormFiles.Data",
           "SchemaFromField",
           "SchemaFromType"
-        ],
-        "github.com/decred/dcrd/dcrec/secp256k1/v4": [
-          "S256"
         ],
         "github.com/dgraph-io/badger/v4": [
           "Iterator.Item"
@@ -669,21 +582,13 @@
           "TriggerMetadataScheduled.GetSchedule",
           "UpgradeBuildpackResponse.GetDeployment"
         ],
-        "github.com/docker/cli/cli/config": [
-          "LoadDefaultConfigFile"
-        ],
         "github.com/dop251/goja": [
           "Proxy.Target",
-          "Runtime.GlobalObject",
-          "Runtime.Try",
-          "Symbol.ToObject"
+          "Runtime.GlobalObject"
         ],
         "github.com/eclipse/paho.mqtt.golang": [
           "ClientOptionsReader.TLSConfig",
           "ClientOptionsReader.WebsocketOptions"
-        ],
-        "github.com/eko/gocache/lib/v4/store": [
-          "*"
         ],
         "github.com/emersion/go-smtp": [
           "Conn.Server"
@@ -707,7 +612,6 @@
           "Struct.Field"
         ],
         "github.com/flosch/pongo2/v6": [
-          "ExecutionContext.Error",
           "Expression.GetPositionToken"
         ],
         "github.com/gabriel-vasile/mimetype": [
@@ -741,7 +645,6 @@
           "RouteContext"
         ],
         "github.com/go-faster/jx": [
-          "DecodeStr",
           "GetDecoder",
           "GetEncoder",
           "GetWriter"
@@ -758,11 +661,9 @@
         "github.com/go-pg/pg/v10": [
           "*.Model",
           "*.ModelContext",
-          "Conn.PoolStats",
           "DB.Conn",
           "DB.Listen",
           "DB.Options",
-          "DB.PoolStats",
           "SafeQuery",
           "Tx.Stmt"
         ],
@@ -840,38 +741,11 @@
         "github.com/gofiber/storage/sqlite3": [
           "Storage.Conn"
         ],
-        "github.com/gogo/protobuf/types": [
-          "TimestampNow"
-        ],
         "github.com/golang-module/carbon/v2": [
           "*"
         ],
-        "github.com/golang/geo/s2": [
-          "ConvexHullQuery.ConvexHull",
-          "EmptyLoop",
-          "FullLoop",
-          "FullPolygon",
-          "LaxLoopFromLoop",
-          "LaxLoopFromPoints",
-          "LaxPolygonFromPoints",
-          "LaxPolygonFromPolygon",
-          "LaxPolylineFromPolyline",
-          "LoopFromCell",
-          "LoopFromPoints",
-          "PaddedCellFromCellID",
-          "PaddedCellFromParentIJ",
-          "PolygonFromCell",
-          "PolygonFromLoops",
-          "PolygonFromOrientedLoops",
-          "RegularLoop",
-          "RegularLoopForFrame"
-        ],
         "github.com/gonum/stat": [
-          "CorrelationMatrix",
-          "CovarianceMatrix",
-          "CC.Left",
-          "CC.Right",
-          "PC.Vectors"
+          "CorrelationMatrix"
         ],
         "github.com/google/cel-go/cel": [
           "Ast.Expr",
@@ -880,17 +754,13 @@
           "Ast.ResultType",
           "Ast.SourceInfo",
           "CheckedExprToAst",
-          "InlineVariable.Type",
-          "ParsedExprToAst"
+          "InlineVariable.Type"
         ],
         "github.com/google/go-github/**": [
           "*"
         ],
         "github.com/gookit/color": [
-          "GetTheme",
-          "HEXStyle",
-          "RGBStyleFromString",
-          "S256"
+          "GetTheme"
         ],
         "github.com/gookit/config/v2": [
           "GetOptions",
@@ -914,7 +784,6 @@
           "Router.PathPrefix",
           "Router.Queries",
           "Router.Schemes",
-          "Router.Subrouter",
           "SetURLVars"
         ],
         "github.com/gorilla/sessions": [
@@ -937,7 +806,6 @@
           "Client.Request"
         ],
         "github.com/h2non/gock": [
-          "MockRequest.Reply",
           "Mocker.Request",
           "Mocker.Response",
           "Request.Get",
@@ -952,17 +820,10 @@
         ],
         "github.com/hashicorp/go-immutable-radix/v2": [
           "Tree.Root",
-          "Tree.Txn",
-          "Txn.Commit",
-          "Txn.CommitOnly",
           "Txn.Root"
         ],
         "github.com/hashicorp/go-memdb": [
-          "MemDB.DBSchema",
-          "MemDB.Txn"
-        ],
-        "github.com/hashicorp/go-set/v3": [
-          "TreeSetFrom"
+          "MemDB.DBSchema"
         ],
         "github.com/hashicorp/hcl/v2": [
           "EvalContext.Parent"
@@ -970,8 +831,6 @@
         "github.com/hashicorp/hcl/v2/hclwrite": [
           "Attribute.Expr",
           "Block.Body",
-          "Body.AppendBlock",
-          "Body.AppendNewBlock",
           "Body.SetAttributeRaw",
           "Body.SetAttributeTraversal",
           "Body.SetAttributeValue",
@@ -996,18 +855,6 @@
         "github.com/hibiken/asynq": [
           "GroupAggregatorFunc.Aggregate",
           "Task.ResultWriter"
-        ],
-        "github.com/huandu/go-sqlbuilder": [
-          "*.AddWhereExpr",
-          "CTEBuilder.DeleteFrom",
-          "CTEBuilder.Select",
-          "CTEBuilder.Update",
-          "CTEQuery",
-          "CTETable",
-          "DeleteFrom",
-          "InsertBuilder.Select",
-          "Select",
-          "Update"
         ],
         "github.com/ikeikeikeike/go-sitemap-generator/v2/stm": [
           "Location.Namer",
@@ -1065,10 +912,8 @@
           "Mapper.TypeMap"
         ],
         "github.com/joomcode/errorx": [
-          "EnsureStackTrace",
           "Error.Type",
-          "Namespace.Parent",
-          "NotRecognisedType"
+          "Namespace.Parent"
         ],
         "github.com/jroimartin/gocui": [
           "Gui.CurrentView"
@@ -1078,12 +923,7 @@
           "Fpdf.RegisterImage",
           "Fpdf.RegisterImageOptions",
           "Fpdf.RegisterImageOptionsReader",
-          "Fpdf.RegisterImageReader",
-          "Tpl.GetImageInfo",
-          "Tpl.RegisterImage",
-          "Tpl.RegisterImageOptions",
-          "Tpl.RegisterImageOptionsReader",
-          "Tpl.RegisterImageReader"
+          "Fpdf.RegisterImageReader"
         ],
         "github.com/kataras/iris/v12": [
           "Configuration.GetURLParamSeparator",
@@ -1121,8 +961,7 @@
           "EmailValidatorImpl.Client"
         ],
         "github.com/makeworld-the-better-one/dither/v2": [
-          "Ditherer.DitherCopy",
-          "Ditherer.DitherPaletted"
+          "Ditherer.DitherCopy"
         ],
         "github.com/markbates/goth": [
           "HTTPClientWithFallBack"
@@ -1171,12 +1010,6 @@
           "Session.WebsocketConnection"
         ],
         "github.com/olekukonko/tablewriter": [
-          "*.Alignment",
-          "*.Callbacks",
-          "*.Filter",
-          "*.Formatting",
-          "*.Merging",
-          "*.Padding",
           "Table.Debug",
           "Table.Logger"
         ],
@@ -1212,15 +1045,10 @@
           "Config.GetHTTPClient",
           "DefaultClientWithCustomTokenLifespans.GetTokenLifespans",
           "DefaultOpenIDConnectClient.GetJSONWebKeys",
-          "ErrorToRFC6749Error",
           "GetPostFormHTMLTemplate"
         ],
         "github.com/ory/oathkeeper-client-go": [
           "APIClient.GetConfig"
-        ],
-        "github.com/oschwald/maxminddb-golang": [
-          "Reader.Networks",
-          "Reader.NetworksWithin"
         ],
         "github.com/parquet-go/parquet-go": [
           "ConcurrentRowGroupWriter.Schema",
@@ -1243,8 +1071,6 @@
           "DigestNormalized"
         ],
         "github.com/pion/webrtc/v3": [
-          "*.PayloadType",
-          "*.SSRC",
           "*.Transport",
           "DTLSTransport.ICETransport",
           "DataChannel.ID",
@@ -1260,7 +1086,6 @@
           "RTPReceiver.RTPTransceiver"
         ],
         "github.com/pkg/sftp": [
-          "Client.Walk",
           "Request.Attributes"
         ],
         "github.com/prometheus/prometheus/rules": [
@@ -1300,21 +1125,7 @@
         ],
         "github.com/rivo/tview": [
           "*.SetBackgroundColor",
-          "*.SetBlurFunc",
-          "*.SetBorder",
-          "*.SetBorderAttributes",
-          "*.SetBorderColor",
-          "*.SetBorderPadding",
-          "*.SetBorderStyle",
-          "*.SetDrawFunc",
-          "*.SetFocusFunc",
-          "*.SetInputCapture",
-          "*.SetMouseCapture",
-          "*.SetTitle",
-          "*.SetTitleAlign",
-          "*.SetTitleColor",
           "Form.GetButton",
-          "Table.GetCell",
           "TreeView.GetCurrentNode",
           "TreeView.GetRoot"
         ],
@@ -1341,30 +1152,16 @@
           "*.Run"
         ],
         "github.com/shopspring/decimal": [
-          "Decimal.BigFloat",
-          "Decimal.BigInt",
-          "Decimal.Coefficient",
-          "Decimal.Rat"
+          "Decimal.BigInt"
         ],
         "github.com/signintech/gopdf": [
           "GetBuffer",
-          "GoPdf.AddOutlineWithPosition",
-          "ImageObj.GetRect",
-          "OutlinesObj.AddOutlinesWithPosition",
-          "PDFProtection.EncryptionObj"
+          "ImageObj.GetRect"
         ],
         "github.com/sijms/go-ora/v2": [
           "GetDefaultDriver"
         ],
-        "github.com/sirupsen/logrus": [
-          "Entry.Writer",
-          "Entry.WriterLevel",
-          "Logger.Writer",
-          "Logger.WriterLevel",
-          "StandardLogger"
-        ],
         "github.com/slack-go/slack": [
-          "*.Values",
           "RTM.GetInfo"
         ],
         "github.com/spf13/cobra": [
@@ -1431,7 +1228,6 @@
           "*.GetCell",
           "Cell.GetStyle",
           "Col.GetStyle",
-          "ColStore.Add",
           "Sheet.AddRow",
           "Sheet.Col"
         ],
@@ -1522,11 +1318,9 @@
           "GetScriptCache"
         ],
         "go.etcd.io/bbolt": [
-          "Bucket.Cursor",
           "Bucket.Tx",
           "Cursor.Bucket",
           "Tx.Bucket",
-          "Tx.Cursor",
           "Tx.DB"
         ],
         "go.etcd.io/etcd/client/v3": [
@@ -1585,25 +1379,12 @@
           "GridFSBucket.GetFilesCollection",
           "Session.Client"
         ],
-        "go.opentelemetry.io/collector/featuregate": [
-          "GlobalRegistry"
-        ],
-        "go.opentelemetry.io/otel/attribute": [
-          "EmptySet"
-        ],
         "go.opentelemetry.io/otel/sdk/resource": [
           "Environment"
         ],
         "go.uber.org/atomic": [
           "Pointer.Load",
           "Pointer.Swap"
-        ],
-        "go.uber.org/dig": [
-          "Container.Scope"
-        ],
-        "go.uber.org/mock/gomock": [
-          "Controller.RecordCall",
-          "Controller.RecordCallWithMethodType"
         ],
         "go.uber.org/zap": [
           "L",
@@ -1621,15 +1402,6 @@
         "golang.org/x/tools/go/types/typeutil": [
           "MethodSetCache.MethodSet"
         ],
-        "gonum.org/v1/gonum/mat": [
-          "DenseCopyOf",
-          "LU.LTo",
-          "VecDenseCopyOf"
-        ],
-        "google.golang.org/grpc/status": [
-          "Convert",
-          "FromProto"
-        ],
         "gopkg.in/ini.v1": [
           "Empty",
           "File.Section",
@@ -1639,16 +1411,12 @@
         "gorm.io/gen": [
           "DO.Row",
           "DO.UnderlyingDB",
-          "Generator.GenerateModel",
           "Generator.GenerateModelFrom"
         ],
         "gorm.io/gorm": [
-          "DB.Association",
           "DB.Find",
           "DB.FindInBatches",
-          "DB.Row",
-          "Statement.Find",
-          "Statement.FindInBatches"
+          "DB.Row"
         ],
         "gotest.tools/v3/icmd": [
           "RunCmd",
@@ -1723,9 +1491,6 @@
         "sigs.k8s.io/kustomize/api/types": [
           "EnabledPluginConfig",
           "MergeGlobalOptionsIntoLocal"
-        ],
-        "sigs.k8s.io/yaml": [
-          "DisallowUnknownFields"
         ]
       },
       "non_nilable_var": {

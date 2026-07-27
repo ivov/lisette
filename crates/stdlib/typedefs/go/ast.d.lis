@@ -215,7 +215,7 @@ pub fn Print(fset: Ref<token.FileSet>, x: Unknown) -> Result<(), error>
 pub fn SortImports(fset: Ref<token.FileSet>, f: Ref<File>)
 
 /// Unparen returns the expression with any enclosing parentheses removed.
-pub fn Unparen(e: Expr) -> Expr
+pub fn Unparen(e: Expr) -> Option<Expr>
 
 /// Walk traverses an AST in depth-first order: It starts by calling
 /// v.Visit(node); node must not be nil. If the visitor w returned by
