@@ -89,7 +89,6 @@ impl TaskState {
             Definition {
                 visibility,
                 ty: fn_ty,
-                name: None,
                 name_span: Some(*name_span),
                 doc: None,
                 body: DefinitionBody::Value {

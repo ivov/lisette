@@ -8002,13 +8002,13 @@ fn test_index_records_test_functions() {
 
     let alpha = tests
         .iter()
-        .find(|t| t.qualified_name == "math.alpha")
+        .find(|test| test.qualified_name() == "math.alpha")
         .expect("alpha must be recorded");
     assert_eq!(alpha.title, None);
 
     let beta = tests
         .iter()
-        .find(|t| t.qualified_name == "math.beta")
+        .find(|test| test.qualified_name() == "math.beta")
         .expect("beta must be recorded");
     assert_eq!(beta.title.as_deref(), Some("beta title"));
     assert!(

@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -17,12 +16,16 @@ const ENTRY_FILE_ID: u32 = 0;
 #[derive(Debug, Clone)]
 pub struct ClosedMember {
     /// Qualified the way the user writes it (e.g. `time.Sunday`), for the diagnostic.
-    pub display_name: EcoString,
+    display_name: EcoString,
     /// The member's source literal, for rendering the valid-set hint.
     literal: Literal,
 }
 
 impl ClosedMember {
+    pub fn display_name(&self) -> &str {
+        &self.display_name
+    }
+
     pub fn literal(&self) -> &Literal {
         &self.literal
     }
@@ -36,13 +39,27 @@ impl ClosedMember {
 /// The curated valid-value set of a `#[go(closed_domain)]` named primitive.
 #[derive(Debug, Clone)]
 pub struct ClosedDomain {
-    pub base: SimpleKind,
-    pub type_display: EcoString,
-    pub members: Vec<ClosedMember>,
+    base: SimpleKind,
+    type_display: EcoString,
+    members: Vec<ClosedMember>,
+}
+
+impl ClosedDomain {
+    pub fn base(&self) -> SimpleKind {
+        self.base
+    }
+
+    pub fn type_display(&self) -> &str {
+        &self.type_display
+    }
+
+    pub fn members(&self) -> &[ClosedMember] {
+        &self.members
+    }
 }
 
 /// A literal reduced to its comparable form for a closed domain's base kind.
-/// Float bases are not indexed, so only integers (signed `i128`) and strings occur.
+/// Float bases are unsupported, so only integers (signed `i128`) and strings occur.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum DomainValue {
     Int(i128),
@@ -111,20 +128,10 @@ pub struct Store {
     pub modules: HashMap<String, Arc<Module>>,
     /// Go module ID -> package name from the typedef `// Package:` directive.
     pub go_package_names: HashMap<String, String>,
-    /// File ID -> on-disk path of the `.d.lis` typedef. Lets the LSP map go: typedef
-    /// file IDs to the actual cache path so go-to-definition can navigate there.
-    pub typedef_paths: HashMap<u32, PathBuf>,
-    visited_modules: HashSet<String>,
     /// File ID counter. Starts at 2 because 0 is reserved for entry, 1 for prelude.
     next_file_id: AtomicU32,
-    /// Closed-domain index, keyed by the type's qualified name (the `id` in
-    /// `Type::Nominal`). Built once after registration by `build_closed_domains`.
-    pub closed_domains: HashMap<Symbol, ClosedDomain>,
     pub equality_index: EqualityIndex,
     pub test_index: TestIndex,
-    /// File IDs of `.test.lis` files, for detecting test-file context during
-    /// inference after a module's `files` have been taken out.
-    test_file_ids: HashSet<u32>,
     /// Read during inference to gate the binary-only `main` signature check.
     pub(crate) project_kind: crate::inference::ProjectKind,
 }
@@ -150,13 +157,9 @@ impl Store {
         Self {
             modules,
             go_package_names: Default::default(),
-            typedef_paths: Default::default(),
-            visited_modules: Default::default(),
             next_file_id: AtomicU32::new(2), // 0 = entrypoint, 1 = prelude
-            closed_domains: Default::default(),
             equality_index: Default::default(),
             test_index: Default::default(),
-            test_file_ids: Default::default(),
             project_kind: Default::default(),
         }
     }
@@ -191,6 +194,7 @@ impl Store {
             module_id: ENTRY_MODULE_ID.to_string(),
             name: filename.to_string(),
             display_path: display_path.to_string(),
+            source_path: None,
             source: source.to_string(),
             items: ast,
             file_comment,
@@ -198,7 +202,6 @@ impl Store {
     }
 
     pub fn store_module(&mut self, module_id: &str, files: Vec<File>) {
-        self.mark_visited(module_id);
         self.add_module(module_id);
 
         for file in files {
@@ -210,20 +213,11 @@ impl Store {
     /// Stores a file in its owning module.
     pub fn store_file(&mut self, file: File) {
         let module_id = file.module_id.clone();
-        self.update_test_file_classification(&file);
 
         let module = self
             .get_module_mut(&module_id)
             .expect("module must exist to store file");
         module.files.insert(file.id, file);
-    }
-
-    fn update_test_file_classification(&mut self, file: &File) {
-        if file.is_test() {
-            self.test_file_ids.insert(file.id);
-        } else {
-            self.test_file_ids.remove(&file.id);
-        }
     }
 
     pub fn get_file(&self, file_id: u32) -> Option<&File> {
@@ -266,17 +260,7 @@ impl Store {
 
     /// Inserts a worker-built module (e.g. cache-decoded).
     pub(crate) fn insert_prebuilt_module(&mut self, module: Module) {
-        let module_id = module.id.clone();
-        if let Some(previous) = self.modules.remove(&module_id) {
-            for file_id in previous.files.keys() {
-                self.test_file_ids.remove(file_id);
-            }
-        }
-        for file in module.files.values() {
-            self.update_test_file_classification(file);
-        }
-        self.modules.insert(module_id.clone(), Arc::new(module));
-        self.visited_modules.insert(module_id);
+        self.modules.insert(module.id.clone(), Arc::new(module));
     }
 
     /// `Arc`-bump snapshot for a registration worker, which inserts its own
@@ -285,23 +269,11 @@ impl Store {
         Store {
             modules: self.modules.clone(),
             go_package_names: self.go_package_names.clone(),
-            typedef_paths: HashMap::default(),
-            visited_modules: HashSet::default(),
             next_file_id: AtomicU32::new(self.next_file_id.load(Ordering::Relaxed)),
-            closed_domains: HashMap::default(),
             equality_index: EqualityIndex::default(),
             test_index: TestIndex::default(),
-            test_file_ids: self.test_file_ids.clone(),
             project_kind: self.project_kind,
         }
-    }
-
-    pub fn is_visited(&self, module_id: &str) -> bool {
-        self.visited_modules.contains(module_id)
-    }
-
-    pub(crate) fn mark_visited(&mut self, module_id: &str) {
-        self.visited_modules.insert(module_id.to_string());
     }
 
     pub fn get_definition(&self, qualified_name: &str) -> Option<&Definition> {
@@ -317,11 +289,12 @@ impl Store {
     pub fn is_test_definition(&self, definition: &Definition) -> bool {
         definition
             .name_span
-            .is_some_and(|span| self.test_file_ids.contains(&span.file_id))
+            .and_then(|span| self.get_file(span.file_id))
+            .is_some_and(File::is_test)
     }
 
     pub(crate) fn is_test_file(&self, file_id: u32) -> bool {
-        self.test_file_ids.contains(&file_id)
+        self.get_file(file_id).is_some_and(File::is_test)
     }
 
     pub fn module_for_qualified_name<'a>(&'a self, qualified_name: &'a str) -> Option<&'a str> {
@@ -356,70 +329,48 @@ impl Store {
         }
     }
 
-    pub fn build_closed_domains(&mut self) {
-        // type id -> (base kind, id of the module that declares the type)
-        let mut bases: HashMap<Symbol, (SimpleKind, String)> = HashMap::default();
-        for module in self.modules.values() {
-            for (qualified_name, definition) in &module.definitions {
-                // Float domains rely on exact-equality over fragile values and do
-                // not occur in the Go stdlib; they are deliberately not indexed.
-                if definition.is_closed_domain()
-                    && let Some(base) = self.underlying_simple_kind(&definition.ty)
-                    && !base.is_float()
-                {
-                    bases.insert(qualified_name.clone(), (base, module.id.clone()));
-                }
-            }
+    pub fn closed_domain(&self, type_id: &str) -> Option<ClosedDomain> {
+        let definition = self.get_definition(type_id)?;
+        if !definition.is_closed_domain() {
+            return None;
         }
 
-        if bases.is_empty() {
-            return;
+        // Float domains rely on exact equality over fragile values and do not
+        // occur in the Go stdlib, so they are deliberately unsupported.
+        let base = self.underlying_simple_kind(&definition.ty)?;
+        if base.is_float() {
+            return None;
         }
 
-        let mut members: HashMap<Symbol, Vec<ClosedMember>> = HashMap::default();
-        for module in self.modules.values() {
-            for (qualified_name, definition) in &module.definitions {
-                let Some(const_literal) = definition.const_value() else {
-                    continue;
-                };
+        let declaring_module = self.module_for_qualified_name(type_id)?;
+        let module = self.get_module(declaring_module)?;
+        let mut members: Vec<ClosedMember> = module
+            .definitions
+            .iter()
+            .filter_map(|(qualified_name, definition)| {
+                let literal = definition.const_value()?;
                 let Type::Nominal { id, .. } = &definition.ty else {
-                    continue;
+                    return None;
                 };
-                let Some((base, declaring_module)) = bases.get(id) else {
-                    continue;
-                };
-                // Only consts declared alongside the type extend its domain; a
-                // const of an imported closed type in user code must not widen it.
-                if module.id != *declaring_module {
-                    continue;
+                if id != type_id || DomainValue::from_literal(literal, base).is_none() {
+                    return None;
                 }
-                if DomainValue::from_literal(const_literal, *base).is_none() {
-                    continue;
-                }
-                members.entry(id.clone()).or_default().push(ClosedMember {
+                Some(ClosedMember {
                     display_name: domain_display_name(qualified_name.as_str()).into(),
-                    literal: const_literal.clone(),
-                });
-            }
+                    literal: literal.clone(),
+                })
+            })
+            .collect();
+        if members.is_empty() {
+            return None;
         }
+        members.sort_by_key(|member| member.value(base));
 
-        let mut domains: HashMap<Symbol, ClosedDomain> = HashMap::default();
-        for (type_id, (base, _)) in bases {
-            let Some(mut domain_members) = members.remove(&type_id) else {
-                continue;
-            };
-            domain_members.sort_by_key(|member| member.value(base));
-            domains.insert(
-                type_id.clone(),
-                ClosedDomain {
-                    base,
-                    type_display: domain_display_name(type_id.as_str()).into(),
-                    members: domain_members,
-                },
-            );
-        }
-
-        self.closed_domains = domains;
+        Some(ClosedDomain {
+            base,
+            type_display: domain_display_name(type_id).into(),
+            members,
+        })
     }
 
     pub(crate) fn fields_of(&self, qualified_name: &str) -> Option<&[StructFieldDefinition]> {
@@ -587,12 +538,12 @@ impl Store {
     }
 
     pub fn get_own_methods(&self, qualified_name: &str) -> Option<&MethodSignatures> {
-        match &self.get_definition(qualified_name)?.body {
-            DefinitionBody::Struct { methods, .. } => Some(methods),
-            DefinitionBody::TypeAlias { methods, .. } => Some(methods),
-            DefinitionBody::Enum { methods, .. } => Some(methods),
-            _ => None,
-        }
+        self.get_definition(qualified_name)?.methods()
+    }
+
+    pub fn is_ufcs_method(&self, qualified_type: &str, method: &str) -> bool {
+        self.get_definition(qualified_type)
+            .is_some_and(|definition| definition.is_ufcs_method(method))
     }
 
     pub(crate) fn get_all_methods(
@@ -737,7 +688,7 @@ mod closed_domain_tests {
     }
 
     #[test]
-    fn storing_a_file_owns_its_test_classification() {
+    fn test_classification_is_derived_from_the_stored_file() {
         let mut store = Store::new();
         store.add_module("m");
         store.store_file(File::new_cached("m", "sample.test.lis", "", "", 42));
@@ -745,17 +696,6 @@ mod closed_domain_tests {
         assert!(store.is_test_file(42));
 
         store.store_file(File::new_cached("m", "sample.lis", "", "", 42));
-
-        assert!(!store.is_test_file(42));
-    }
-
-    #[test]
-    fn replacing_a_module_removes_its_old_test_classification() {
-        let mut store = Store::new();
-        store.add_module("m");
-        store.store_file(File::new_cached("m", "sample.test.lis", "", "", 42));
-
-        store.insert_prebuilt_module(Module::new("m"));
 
         assert!(!store.is_test_file(42));
     }
@@ -768,7 +708,6 @@ mod closed_domain_tests {
         Definition {
             visibility: Visibility::Public,
             ty,
-            name: None,
             name_span: None,
             doc: None,
             body: DefinitionBody::Struct {
@@ -808,7 +747,6 @@ mod closed_domain_tests {
         Definition {
             visibility: Visibility::Public,
             ty,
-            name: None,
             name_span: None,
             doc: None,
             body: DefinitionBody::Value {
@@ -831,25 +769,22 @@ mod closed_domain_tests {
     }
 
     #[test]
-    fn tagged_type_with_members_is_indexed_and_sorted() {
+    fn tagged_type_with_members_is_derived_and_sorted() {
         let mut store = Store::new();
         let ty = nominal_int("m.Weekday");
         insert(&mut store, "m", "m.Weekday", struct_def(ty.clone(), true));
         insert(&mut store, "m", "m.Saturday", int_const(ty.clone(), 6));
         insert(&mut store, "m", "m.Sunday", int_const(ty.clone(), 0));
 
-        store.build_closed_domains();
-
         let domain = store
-            .closed_domains
-            .get("m.Weekday")
-            .expect("tagged type with members should be indexed");
-        assert_eq!(domain.base, SimpleKind::Int);
-        assert_eq!(domain.type_display.as_str(), "Weekday");
+            .closed_domain("m.Weekday")
+            .expect("tagged type with members should have a derived domain");
+        assert_eq!(domain.base(), SimpleKind::Int);
+        assert_eq!(domain.type_display(), "Weekday");
         let names: Vec<&str> = domain
-            .members
+            .members()
             .iter()
-            .map(|m| m.display_name.as_str())
+            .map(ClosedMember::display_name)
             .collect();
         assert_eq!(names, vec!["Sunday", "Saturday"]);
     }
@@ -861,9 +796,7 @@ mod closed_domain_tests {
         insert(&mut store, "m", "m.Plain", struct_def(ty.clone(), false));
         insert(&mut store, "m", "m.One", int_const(ty, 1));
 
-        store.build_closed_domains();
-
-        assert!(store.closed_domains.is_empty());
+        assert!(store.closed_domain("m.Plain").is_none());
     }
 
     #[test]
@@ -876,9 +809,7 @@ mod closed_domain_tests {
             struct_def(nominal_int("m.Empty"), true),
         );
 
-        store.build_closed_domains();
-
-        assert!(!store.closed_domains.contains_key("m.Empty"));
+        assert!(store.closed_domain("m.Empty").is_none());
     }
 
     #[test]
@@ -894,13 +825,11 @@ mod closed_domain_tests {
         insert(&mut store, "lib", "lib.Sunday", int_const(ty.clone(), 0));
         insert(&mut store, "user", "user.Bad", int_const(ty, 99));
 
-        store.build_closed_domains();
-
-        let domain = store.closed_domains.get("lib.Weekday").unwrap();
+        let domain = store.closed_domain("lib.Weekday").unwrap();
         let names: Vec<&str> = domain
-            .members
+            .members()
             .iter()
-            .map(|m| m.display_name.as_str())
+            .map(ClosedMember::display_name)
             .collect();
         assert_eq!(names, vec!["Sunday"]);
     }
@@ -923,7 +852,6 @@ mod closed_domain_tests {
                     vars: vec!["T".into()],
                     body: Box::new(alias_ref),
                 },
-                name: Some("Items".into()),
                 name_span: None,
                 doc: None,
                 body: DefinitionBody::TypeAlias {
@@ -974,7 +902,6 @@ mod closed_domain_tests {
             Definition {
                 visibility: Visibility::Public,
                 ty: nominal_int(name),
-                name: name.rsplit('.').next().map(Into::into),
                 name_span: None,
                 doc: None,
                 body: DefinitionBody::TypeAlias {

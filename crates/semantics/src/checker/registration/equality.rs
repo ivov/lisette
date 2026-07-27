@@ -77,7 +77,7 @@ impl TaskState {
 
         match user_equals(store, &qualified) {
             UserEquals::ValidReceiver => {
-                if self.is_ufcs_method(qualified.as_str(), "equals") {
+                if store.is_ufcs_method(qualified.as_str(), "equals") {
                     self.sink
                         .push(diagnostics::attribute::equality_specialized_equals(
                             &candidate.span,
@@ -116,7 +116,7 @@ impl TaskState {
     }
 
     /// Synthesize queued equality methods, build the verdict, and gate derivations.
-    /// Run once after registration has discovered every UFCS method.
+    /// Run once after registration has completed every type definition.
     pub fn finalize_equality(&mut self, store: &mut Store) {
         let batches = std::mem::take(&mut self.pending_equality_attributes);
         let mut derivations = Vec::new();
@@ -234,7 +234,7 @@ impl TaskState {
             let id_str = id.as_str();
             let visibility = equals_visibility(store, id_str);
             let classification = user_equals(store, &id);
-            if self.is_ufcs_method(id_str, "equals")
+            if store.is_ufcs_method(id_str, "equals")
                 && matches!(
                     classification,
                     UserEquals::ValidReceiver | UserEquals::Specialized
@@ -300,7 +300,6 @@ impl TaskState {
             .or_insert_with(|| Definition {
                 visibility,
                 ty: method_ty,
-                name: None,
                 name_span,
                 doc: None,
                 body: DefinitionBody::Value {

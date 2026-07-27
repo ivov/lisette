@@ -65,7 +65,7 @@ impl AnalysisSnapshot {
                 } else {
                     continue;
                 }
-            } else if let Some(typedef_path) = result.typedef_paths.get(file_id) {
+            } else if let Some(typedef_path) = &file.source_path {
                 // The synthetic `file.name` for go: typedefs does not match the
                 // on-disk filename, use the path the locator captured.
                 match Url::from_file_path(typedef_path) {
@@ -121,7 +121,12 @@ impl AnalysisSnapshot {
 
     /// On-disk path of a `go:` typedef file, if `file_id` names one.
     pub(crate) fn typedef_path(&self, file_id: u32) -> Option<&std::path::Path> {
-        self.result.typedef_paths.get(&file_id).map(|p| p.as_path())
+        self.result
+            .emit_input
+            .files
+            .get(&file_id)?
+            .source_path
+            .as_deref()
     }
 
     pub(crate) fn files(&self) -> &HashMap<u32, File> {

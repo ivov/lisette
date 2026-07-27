@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::hash::BuildHasher;
+use std::path::PathBuf;
 
 use ecow::EcoString;
 
@@ -15,6 +16,9 @@ pub struct File {
     /// Cwd-relative path for diagnostics and `--sourcemap` directives; equals
     /// `name` for synthetic/test loaders that have no notion of cwd.
     pub display_path: String,
+    /// Physical source path when it cannot be reconstructed from the module
+    /// and filename, notably for generated Go typedefs.
+    pub source_path: Option<PathBuf>,
     pub source: String,
     pub items: Vec<Expression>,
     pub file_comment: Option<String>,
@@ -82,6 +86,7 @@ impl File {
             module_id: module_id.to_string(),
             name: name.to_string(),
             display_path: display_path.to_string(),
+            source_path: None,
             source: source.to_string(),
             items: vec![],
             file_comment: None,

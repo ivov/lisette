@@ -7,7 +7,7 @@ pub mod types;
 pub(crate) use bounds::restore_cached_generic_bounds;
 
 use crate::path::DisplayPathBase;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::FxHashMap as HashMap;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::io;
@@ -84,13 +84,6 @@ pub struct ModuleInterface {
 
     stdlib_hash: u64,
 
-    /// This module's content hash: hash(production_hash + dependency module_hashes)
-    /// Used by downstream modules to detect transitive changes
-    module_hash: u64,
-
-    /// Hash of production files only; drives `module_hash` and the emit artifact.
-    production_hash: u64,
-
     /// Hash of all files, tests included; this module's own validity key.
     full_hash: u64,
 
@@ -100,9 +93,6 @@ pub struct ModuleInterface {
     pub(crate) files: Vec<CachedFile>,
 
     definitions: HashMap<String, CachedDefinition>,
-
-    /// UFCS method pairs for this module, computed during registration.
-    ufcs_methods: Vec<(String, String)>,
 
     /// Artifact hash of the on-disk Go files produced for this module.
     /// `None` after a Check-phase save or before the post-write stamp call;
@@ -120,9 +110,7 @@ pub struct CachedFile {
 #[derive(Debug, Clone)]
 pub struct CompiledModule {
     pub module_id: String,
-    /// Production-based hash propagated to dependents (production deps only).
-    pub(crate) module_hash: u64,
-    pub production_hash: u64,
+    pub artifact_hash: u64,
     pub(crate) full_hash: u64,
     pub(crate) dep_hashes: HashMap<String, u64>,
 }
@@ -297,10 +285,7 @@ pub fn save_module_cache(
     compiled: &CompiledModule,
     store: &Store,
     project_root: &Path,
-    ufcs_methods: &HashSet<(String, String)>,
 ) -> io::Result<()> {
-    let module_hash = compiled.module_hash;
-
     let Some(module) = store.get_module(&compiled.module_id) else {
         return Err(io::Error::other("module not found in store"));
     };
@@ -318,8 +303,6 @@ pub fn save_module_cache(
         version: CACHE_FORMAT_VERSION,
         compiler_version: COMPILER_VERSION_HASH,
         stdlib_hash: STDLIB_HASH,
-        module_hash,
-        production_hash: compiled.production_hash,
         full_hash: compiled.full_hash,
         dependency_hashes: compiled.dep_hashes.clone(),
         files: all_files
@@ -330,14 +313,6 @@ pub fn save_module_cache(
             })
             .collect(),
         definitions: extract_public_definitions(store, &compiled.module_id, &file_id_to_index),
-        ufcs_methods: {
-            let prefix = format!("{}.", compiled.module_id);
-            ufcs_methods
-                .iter()
-                .filter(|(type_id, _)| type_id.starts_with(&prefix))
-                .cloned()
-                .collect()
-        },
         emit_stamp: None,
     };
 
@@ -370,7 +345,6 @@ fn extract_public_definitions(
 
 pub(crate) struct CachedModuleBuild {
     pub module: Module,
-    pub ufcs_methods: Vec<(String, String)>,
 }
 
 pub(crate) fn build_cached_module(
@@ -403,10 +377,7 @@ pub(crate) fn build_cached_module(
         cached_definition.install_into(&mut module, qualified_name.into(), &file_ids);
     }
 
-    CachedModuleBuild {
-        module,
-        ufcs_methods: cached.ufcs_methods,
-    }
+    CachedModuleBuild { module }
 }
 
 fn cached_file_display_path(
@@ -467,6 +438,7 @@ pub(crate) fn is_cache_disabled() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rustc_hash::FxHashSet as HashSet;
     use syntax::types::{FunctionParameter, Symbol, Type};
 
     #[test]
@@ -561,13 +533,10 @@ mod tests {
             version: CACHE_FORMAT_VERSION + 1, // Wrong version
             compiler_version: COMPILER_VERSION_HASH,
             stdlib_hash: STDLIB_HASH,
-            module_hash: 0,
-            production_hash: 100,
             full_hash: 100,
             dependency_hashes: HashMap::default(),
             files: vec![],
             definitions: HashMap::default(),
-            ufcs_methods: vec![],
             emit_stamp: None,
         };
 
@@ -580,13 +549,10 @@ mod tests {
             version: CACHE_FORMAT_VERSION,
             compiler_version: COMPILER_VERSION_HASH + 1, // Wrong compiler
             stdlib_hash: STDLIB_HASH,
-            module_hash: 0,
-            production_hash: 100,
             full_hash: 100,
             dependency_hashes: HashMap::default(),
             files: vec![],
             definitions: HashMap::default(),
-            ufcs_methods: vec![],
             emit_stamp: None,
         };
 
@@ -599,13 +565,10 @@ mod tests {
             version: CACHE_FORMAT_VERSION,
             compiler_version: COMPILER_VERSION_HASH,
             stdlib_hash: STDLIB_HASH,
-            module_hash: 0,
-            production_hash: 100,
             full_hash: 100,
             dependency_hashes: HashMap::default(),
             files: vec![],
             definitions: HashMap::default(),
-            ufcs_methods: vec![],
             emit_stamp: None,
         };
 
@@ -624,7 +587,6 @@ mod tests {
                 id: Symbol::from_raw("int"),
                 params: vec![],
             },
-            name: None,
             name_span: None,
             doc: None,
             body: DefinitionBody::Value {
@@ -662,13 +624,10 @@ mod tests {
             version: CACHE_FORMAT_VERSION,
             compiler_version: COMPILER_VERSION_HASH,
             stdlib_hash: STDLIB_HASH,
-            module_hash: 0,
-            production_hash: 0,
             full_hash: 0,
             dependency_hashes: HashMap::default(),
             files: vec![],
             definitions,
-            ufcs_methods: vec![],
             emit_stamp: None,
         };
 
@@ -727,7 +686,6 @@ mod tests {
                 id: Symbol::from_raw("dep.Inner"),
                 params: vec![],
             },
-            name: Some("Inner".into()),
             name_span: None,
             doc: None,
             body: DefinitionBody::Struct {
@@ -755,13 +713,10 @@ mod tests {
             version: CACHE_FORMAT_VERSION,
             compiler_version: COMPILER_VERSION_HASH,
             stdlib_hash: STDLIB_HASH,
-            module_hash: 0,
-            production_hash: 100,
             full_hash: 100,
             dependency_hashes: cached_deps.clone(),
             files: vec![],
             definitions: HashMap::default(),
-            ufcs_methods: vec![],
             emit_stamp: None,
         };
 
@@ -889,13 +844,10 @@ mod tests {
             version: CACHE_FORMAT_VERSION,
             compiler_version: COMPILER_VERSION_HASH,
             stdlib_hash: STDLIB_HASH,
-            module_hash: 0,
-            production_hash: 100,
             full_hash: 100,
             dependency_hashes: HashMap::default(),
             files: vec![],
             definitions: HashMap::default(),
-            ufcs_methods: vec![],
             emit_stamp: None,
         };
         let path = cache_path(root, "greet");
@@ -954,8 +906,6 @@ mod tests {
             version: CACHE_FORMAT_VERSION,
             compiler_version: COMPILER_VERSION_HASH,
             stdlib_hash: STDLIB_HASH,
-            module_hash: 0,
-            production_hash: 100,
             full_hash: 100,
             dependency_hashes: HashMap::default(),
             files: vec![CachedFile {
@@ -963,7 +913,6 @@ mod tests {
                 source: String::new(),
             }],
             definitions: HashMap::default(),
-            ufcs_methods: vec![],
             emit_stamp: None,
         };
         let path = cache_path(root, "greet");
@@ -999,8 +948,6 @@ mod tests {
             version: CACHE_FORMAT_VERSION,
             compiler_version: COMPILER_VERSION_HASH,
             stdlib_hash: STDLIB_HASH,
-            module_hash: 0,
-            production_hash: 100,
             full_hash: 100,
             dependency_hashes: HashMap::default(),
             files: vec![CachedFile {
@@ -1008,7 +955,6 @@ mod tests {
                 source: String::new(),
             }],
             definitions: HashMap::default(),
-            ufcs_methods: vec![],
             emit_stamp: Some(artifact_hash),
         };
         let path = cache_path(root, "greet");

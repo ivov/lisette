@@ -11,7 +11,6 @@ use crate::passes::lints::span_edit::statement_deletion;
 use diagnostics::LisetteDiagnostic;
 use diagnostics::LocalSink;
 use diagnostics::{Edit, Fix};
-use semantics::context::AnalysisContext;
 use semantics::facts::Facts;
 use semantics::store::Store;
 use syntax::ast::{
@@ -33,11 +32,7 @@ struct RefLintResult {
     unused_definition_spans: Vec<Span>,
 }
 
-pub(crate) fn run(
-    analysis: &AnalysisContext,
-    facts: &Facts,
-) -> (Vec<LisetteDiagnostic>, UnusedInfo) {
-    let store = analysis.store;
+pub(crate) fn run(store: &Store, facts: &Facts) -> (Vec<LisetteDiagnostic>, UnusedInfo) {
     let mut modules: Vec<&Module> = store
         .modules
         .values()

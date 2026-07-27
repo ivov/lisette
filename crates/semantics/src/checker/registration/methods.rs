@@ -397,7 +397,6 @@ impl TaskState {
             Definition {
                 visibility: fn_visibility.clone(),
                 ty: method_ty,
-                name: None,
                 name_span: Some(fn_sig.name_span),
                 doc: fn_doc,
                 body: DefinitionBody::Value {
@@ -541,7 +540,6 @@ impl TaskState {
             .clone();
 
         let interface = Interface {
-            name: interface_name.into(),
             generics,
             parents: new_parents,
             methods,
@@ -561,7 +559,6 @@ impl TaskState {
             Definition {
                 visibility: visibility.clone(),
                 ty: interface_ty,
-                name: None,
                 name_span: Some(*name_span),
                 doc: doc.clone(),
                 body: DefinitionBody::Interface {
@@ -580,7 +577,6 @@ impl TaskState {
                 Definition {
                     visibility: visibility.clone(),
                     ty: method.ty,
-                    name: None,
                     name_span: Some(method.name_span),
                     doc: method.doc,
                     body: DefinitionBody::Value {

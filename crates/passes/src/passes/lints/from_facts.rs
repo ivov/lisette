@@ -3,8 +3,8 @@ use rustc_hash::FxHashMap as HashMap;
 use diagnostics::LisetteDiagnostic;
 use diagnostics::LocalSink;
 use diagnostics::{Edit, Fix};
-use semantics::context::AnalysisContext;
 use semantics::facts::Facts;
+use semantics::store::Store;
 use syntax::ast::Span;
 use syntax::program::UnusedInfo;
 
@@ -60,14 +60,14 @@ pub enum Lint {
 }
 
 pub(crate) fn run(
-    analysis: &AnalysisContext,
+    store: &Store,
     facts: &Facts,
     pattern_lints: Vec<LisetteDiagnostic>,
     mut diagnostics: Vec<LisetteDiagnostic>,
     unused: &mut UnusedInfo,
     sink: &LocalSink,
 ) {
-    let sources = source_by_file(analysis);
+    let sources = source_by_file(store);
 
     let erroring_functions = erroring_function_spans(facts, sink);
     collect_bindings(
@@ -87,9 +87,9 @@ pub(crate) fn run(
     sink.extend(diagnostics);
 }
 
-fn source_by_file<'a>(analysis: &AnalysisContext<'a>) -> HashMap<u32, &'a str> {
+fn source_by_file(store: &Store) -> HashMap<u32, &str> {
     let mut sources = HashMap::default();
-    for module in analysis.store.modules.values() {
+    for module in store.modules.values() {
         for (file_id, file) in module.source_file_entries() {
             sources.insert(*file_id, file.source.as_str());
         }

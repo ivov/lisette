@@ -552,7 +552,6 @@ fn store_get_definition_domain_style_go_module() {
                 id: "go:github.com/gorilla/mux.Router".into(),
                 params: vec![],
             },
-            name: Some("Router".into()),
             name_span: Some(syntax::ast::Span::dummy()),
             doc: None,
             body: syntax::program::DefinitionBody::Struct {

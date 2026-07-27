@@ -3,7 +3,6 @@ use rustc_hash::FxHashMap as HashMap;
 use semantics::loader::Loader;
 use semantics::{
     checker::TaskState,
-    checker::infer::InferCtx,
     module_graph::Roots,
     module_graph::{ModuleGraphOptions, build_module_graph},
     store::Store,
@@ -95,7 +94,6 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
 
     let ast = {
         let mut checker = TaskState::with_fresh_allocator();
-        checker.extend_ufcs_methods(semantics::prelude::compute_prelude_ufcs(&store));
         register_test_builtins(&mut store, &mut checker);
         checker.put_prelude_in_scope(&store);
 
@@ -108,10 +106,6 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
                         &mut store, &module_id, typedef, None, &locator,
                     );
                 }
-                continue;
-            }
-
-            if store.is_visited(&module_id) {
                 continue;
             }
 
@@ -128,12 +122,7 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
         checker.finalize_tests(&mut store);
 
         for module_id in &to_infer {
-            let module_files = checker.take_module_files(&mut store, module_id);
-            InferCtx::new(&mut checker, &store).infer_module(module_id, module_files);
-        }
-
-        for typed_file in std::mem::take(&mut checker.typed_files) {
-            store.store_file(typed_file);
+            checker.infer_module(&mut store, module_id);
         }
 
         checker.check_post_inference_bounds(&store);
@@ -145,12 +134,9 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
             .collect();
 
         if !checker.failed() {
-            store.build_closed_domains();
-            let ufcs_methods = checker.shared_ufcs_methods();
-            let analysis = semantics::context::AnalysisContext::new(&store, &ufcs_methods);
             let mut unused = syntax::program::UnusedInfo::default();
             passes::run(
-                &analysis,
+                &store,
                 &mut checker.facts,
                 &checker.sink,
                 &mut unused,

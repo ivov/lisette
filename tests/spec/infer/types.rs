@@ -3076,6 +3076,28 @@ fn pointer_to_struct_satisfies_interface() {
 }
 
 #[test]
+fn native_ref_keeps_its_structural_identity_during_interface_conformance() {
+    infer(
+        r#"
+interface Reader {
+  fn read() -> int
+}
+
+struct Buffer { value: int }
+
+impl Buffer {
+  fn read(self: Ref<Buffer>) -> int { self.value }
+}
+
+fn consume(reader: Reader) -> int { reader.read() }
+
+fn run(buffer: Ref<Buffer>) -> int { consume(buffer) }
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn interface_satisfied_by_receiver_method() {
     infer(
         r#"
@@ -6448,6 +6470,32 @@ fn main() {
 }
 "#,
     );
+    infer_module("main", fs).assert_no_errors();
+}
+
+#[test]
+fn imported_tuple_struct_alias_uses_the_underlying_constructor() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "models",
+        "models.lis",
+        r#"
+pub struct Identifier(int)
+pub type Id = Identifier
+"#,
+    );
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "models"
+
+fn main() {
+  let _id = models.Id(1)
+}
+"#,
+    );
+
     infer_module("main", fs).assert_no_errors();
 }
 

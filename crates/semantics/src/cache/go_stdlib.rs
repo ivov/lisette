@@ -100,7 +100,7 @@ pub(crate) fn load_cached_go_module(
     cache: &GoStdlibCache,
     target: Target,
 ) {
-    if store.is_visited(module_id) {
+    if store.has(module_id) {
         return;
     }
 
@@ -108,14 +108,13 @@ pub(crate) fn load_cached_go_module(
         return;
     };
 
+    // Presence is the recursion guard as well as the canonical loaded-module fact.
+    store.add_module(module_id);
+
     // Load transitive deps first
     let imports = cached.go_imports.clone();
     for dep in &imports {
         load_cached_go_module(store, dep, cache, target);
-    }
-
-    if store.is_visited(module_id) {
-        return; // May have been loaded as a transitive dep of a sibling
     }
 
     register_cached_go_module(store, module_id, cached, target);
@@ -127,9 +126,6 @@ fn register_cached_go_module(
     cached: &GoModuleCache,
     target: Target,
 ) {
-    store.add_module(module_id);
-    store.mark_visited(module_id);
-
     let go_pkg = module_id.strip_prefix("go:");
     let source = go_pkg.and_then(|go_pkg| get_go_stdlib_typedef(go_pkg, target));
 
@@ -148,12 +144,9 @@ fn register_cached_go_module(
     if let (Some(go_pkg), Some(source)) = (go_pkg, source) {
         let file_id = store.new_file_id();
         let filename = format!("{}.d.lis", go_pkg.replace('/', "_"));
-        store.store_file(File::new_cached(
-            module_id, &filename, &filename, source, file_id,
-        ));
-        if let Some(path) = deps::stdlib_typedef_path(target, go_pkg) {
-            store.typedef_paths.insert(file_id, path);
-        }
+        let mut file = File::new_cached(module_id, &filename, &filename, source, file_id);
+        file.source_path = deps::stdlib_typedef_path(target, go_pkg);
+        store.store_file(file);
         owned_file_id = [file_id];
         file_ids = &owned_file_id;
     }
@@ -191,5 +184,30 @@ mod tests {
     fn cache_file_name_includes_target_only() {
         let target = Target::new("darwin", "arm64");
         assert_eq!(cache_file_name(target), "stdlib_defs_darwin_arm64.bin");
+    }
+
+    #[test]
+    fn module_presence_terminates_cached_import_cycles() {
+        let module = |import: &str| GoModuleCache {
+            definitions: HashMap::default(),
+            go_imports: vec![import.to_string()],
+        };
+        let cache = GoStdlibCache {
+            version: CACHE_FORMAT_VERSION,
+            content_hash: GO_STDLIB_HASH,
+            compiler_version: COMPILER_VERSION_HASH,
+            modules: [
+                ("go:example/a".to_string(), module("go:example/b")),
+                ("go:example/b".to_string(), module("go:example/a")),
+            ]
+            .into_iter()
+            .collect(),
+        };
+        let mut store = Store::new();
+
+        load_cached_go_module(&mut store, "go:example/a", &cache, Target::host());
+
+        assert!(store.has("go:example/a"));
+        assert!(store.has("go:example/b"));
     }
 }

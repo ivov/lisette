@@ -16,7 +16,7 @@ use crate::cache::{
     hash_module_source_pair, hash_module_source_pair_refs, is_cache_disabled,
     prelude as prelude_cache, restore_cached_generic_bounds, try_load_cache,
 };
-use crate::checker::infer::InferCtx;
+use crate::checker::infer::{FileInferenceInput, InferCtx};
 use crate::checker::{TaskOutput, TaskState};
 use crate::diagnostics::{GoImportSite, emit_for_locator_result};
 use crate::facts::Facts;
@@ -68,7 +68,8 @@ pub struct EntryFile {
 pub struct AnalyzeInput<'a> {
     pub config: SemanticConfig,
     pub loader: &'a dyn Loader,
-    /// `None` for a library, whose root files load as siblings.
+    /// An explicitly supplied file, when the caller has one. Project files not
+    /// supplied here are discovered through the loader.
     pub entry: Option<EntryFile>,
     pub project_root: Option<PathBuf>,
     pub compile_phase: CompilePhase,
@@ -88,7 +89,6 @@ struct CacheCandidate {
     compiled: CompiledModule,
     files: Vec<File>,
     topo_rank: usize,
-    expected_artifact_hash: Option<u64>,
 }
 
 enum PendingModule {
@@ -168,12 +168,11 @@ impl LazyGoStdlibCache {
 pub struct InferenceOutput {
     pub store: Store,
     pub facts: Facts,
-    pub ufcs_methods: HashSet<(String, String)>,
     pub sink: LocalSink,
     pub has_pre_check_errors: bool,
     pub compiled_modules: Vec<CompiledModule>,
     pub cached_modules: HashSet<String>,
-    pub cache_enabled: bool,
+    pub cache_root: Option<PathBuf>,
     pub unreachable_modules: Vec<String>,
 }
 
@@ -238,6 +237,7 @@ fn load_sibling_files(
             module_id: ENTRY_MODULE_ID.to_string(),
             name: filename,
             display_path: content.display_path,
+            source_path: None,
             source: content.source,
             items: result.ast,
             file_comment: result.file_comment,
@@ -297,27 +297,40 @@ fn find_unreachable_modules(
     unreachable
 }
 
+#[derive(Clone, Copy)]
+enum PreludeCacheStatus {
+    Disabled,
+    Hit,
+    Miss,
+}
+
 /// Loads the prelude from cache when possible, else parses and registers it fresh.
-fn load_prelude(store: &mut Store, sink: &LocalSink, cache_disabled: bool) -> bool {
-    let prelude_cache_hit = !cache_disabled
-        && prelude_cache::try_load_prelude_cache().is_some_and(|cached| {
-            prelude_cache::register_cached_prelude(store, cached);
-            true
-        });
-    if !prelude_cache_hit {
+fn load_prelude(store: &mut Store, sink: &LocalSink, cache_disabled: bool) -> PreludeCacheStatus {
+    if cache_disabled {
         parse_and_register_prelude(store, sink);
+        return PreludeCacheStatus::Disabled;
     }
-    prelude_cache_hit
+
+    let hit = prelude_cache::try_load_prelude_cache().is_some_and(|cached| {
+        prelude_cache::register_cached_prelude(store, cached);
+        true
+    });
+    if hit {
+        PreludeCacheStatus::Hit
+    } else {
+        parse_and_register_prelude(store, sink);
+        PreludeCacheStatus::Miss
+    }
 }
 
 struct ModuleInferenceInput<'a> {
     graph_result: crate::module_graph::ModuleGraphResult,
     sink: LocalSink,
     module_cache_root: Option<&'a Path>,
-    check_go_files: bool,
-    cache_disabled: bool,
-    prelude_cache_hit: bool,
+    compile_phase: CompilePhase,
     go_module: &'a str,
+    cache_disabled: bool,
+    prelude_cache: PreludeCacheStatus,
     locator: &'a TypedefLocator,
     standalone_mode: bool,
     has_project_root: bool,
@@ -327,7 +340,6 @@ struct ModuleInferenceOutput {
     facts: Facts,
     cached_modules: HashSet<String>,
     compiled_modules: Vec<CompiledModule>,
-    ufcs_methods: HashSet<(String, String)>,
     sink: LocalSink,
 }
 
@@ -336,7 +348,6 @@ struct ModuleInferenceOutput {
 /// served from cache.
 fn infer_all_modules(store: &mut Store, mut input: ModuleInferenceInput) -> ModuleInferenceOutput {
     let mut checker = TaskState::with_sink(input.sink);
-    checker.extend_ufcs_methods(crate::prelude::compute_prelude_ufcs(store));
 
     let mut module_hashes: HashMap<String, u64> = HashMap::default();
     let mut cached_modules: HashSet<String> = HashSet::default();
@@ -392,10 +403,6 @@ fn infer_all_modules(store: &mut Store, mut input: ModuleInferenceInput) -> Modu
             continue;
         }
 
-        if store.is_visited(&module_id) {
-            continue;
-        }
-
         let mut files = input
             .graph_result
             .files
@@ -428,22 +435,16 @@ fn infer_all_modules(store: &mut Store, mut input: ModuleInferenceInput) -> Modu
 
         let compiled = (!is_entry).then(|| CompiledModule {
             module_id: module_id.clone(),
-            module_hash,
-            production_hash,
+            artifact_hash: compute_emit_artifact_hash(production_hash, input.go_module),
             full_hash,
             dep_hashes,
         });
-
-        let expected_artifact_hash = input
-            .check_go_files
-            .then(|| compute_emit_artifact_hash(production_hash, input.go_module));
 
         match (input.module_cache_root, compiled) {
             (Some(_), Some(compiled)) => candidates.push(CacheCandidate {
                 compiled,
                 files,
                 topo_rank,
-                expected_artifact_hash,
             }),
             (None, compiled) | (Some(_), compiled @ None) => {
                 store.store_module(&module_id, files);
@@ -462,7 +463,9 @@ fn infer_all_modules(store: &mut Store, mut input: ModuleInferenceInput) -> Modu
     let go_cache_module_ids = go_cache.into_module_ids();
 
     let cache_load = match input.module_cache_root {
-        Some(root) => load_cache_candidates(&mut checker, store, candidates, root),
+        Some(root) => {
+            load_cache_candidates(&mut checker, store, candidates, root, input.compile_phase)
+        }
         None => {
             debug_assert!(candidates.is_empty());
             CacheLoad::default()
@@ -511,16 +514,14 @@ fn infer_all_modules(store: &mut Store, mut input: ModuleInferenceInput) -> Modu
         }
     }
 
-    if !input.cache_disabled && !input.prelude_cache_hit {
+    if matches!(input.prelude_cache, PreludeCacheStatus::Miss) {
         prelude_cache::save_prelude_cache(store);
     }
 
-    let ufcs_methods = checker.take_ufcs_methods();
     ModuleInferenceOutput {
         facts: checker.facts,
         cached_modules,
         compiled_modules,
-        ufcs_methods,
         sink: checker.sink,
     }
 }
@@ -581,25 +582,25 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
     let has_pre_check_errors = sink.has_errors();
 
     let cache_disabled = is_cache_disabled();
-    let prelude_cache_hit = load_prelude(&mut store, &sink, cache_disabled);
+    let prelude_cache = load_prelude(&mut store, &sink, cache_disabled);
     parse_and_register_test_prelude(&mut store, &sink);
 
-    let module_cache_root = (!cache_disabled && !input.disable_cache)
-        .then_some(input.project_root.as_deref())
-        .flatten();
-    let cache_enabled = module_cache_root.is_some();
-    let check_go_files = input.compile_phase.emits();
-
+    let cache_root = if cache_disabled || input.disable_cache {
+        None
+    } else {
+        input.project_root.clone()
+    };
+    let module_cache_root = cache_root.as_deref();
     let module_output = infer_all_modules(
         &mut store,
         ModuleInferenceInput {
             graph_result,
             sink,
             module_cache_root,
-            check_go_files,
-            cache_disabled,
-            prelude_cache_hit,
+            compile_phase: input.compile_phase,
             go_module: &input.go_module,
+            cache_disabled,
+            prelude_cache,
             locator: &input.locator,
             standalone_mode: input.config.standalone_mode,
             has_project_root: input.project_root.is_some(),
@@ -609,12 +610,11 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
     InferenceOutput {
         store,
         facts: module_output.facts,
-        ufcs_methods: module_output.ufcs_methods,
         sink: module_output.sink,
         has_pre_check_errors,
         compiled_modules: module_output.compiled_modules,
         cached_modules: module_output.cached_modules,
-        cache_enabled,
+        cache_root,
         unreachable_modules,
     }
 }
@@ -633,7 +633,7 @@ fn register_go_module(
         && let Some(cache) = go_cache.get_or_load(locator.target())
     {
         load_cached_go_module(store, module_id, cache, locator.target());
-        if store.is_visited(module_id) {
+        if store.has(module_id) {
             return;
         }
     }
@@ -677,13 +677,15 @@ fn load_cache_candidates(
     store: &mut Store,
     candidates: Vec<CacheCandidate>,
     project_root: &Path,
+    compile_phase: CompilePhase,
 ) -> CacheLoad {
     let load = |c: &CacheCandidate| {
+        let expected_artifact_hash = compile_phase.emits().then_some(c.compiled.artifact_hash);
         try_load_cache(
             &c.compiled.module_id,
             c.compiled.full_hash,
             &c.compiled.dep_hashes,
-            c.expected_artifact_hash,
+            expected_artifact_hash,
             project_root,
         )
     };
@@ -731,7 +733,6 @@ fn load_cache_candidates(
     };
 
     for build in built {
-        checker.extend_ufcs_methods(build.ufcs_methods);
         let module_id = build.module.id.clone();
         store.insert_prebuilt_module(build.module);
         checker.collect_cached_module_tests(store, &module_id);
@@ -749,7 +750,7 @@ fn register_modules(
 ) {
     if to_infer.len() < PARALLEL_THRESHOLD {
         for module_id in to_infer {
-            checker.register_module(store, module_id);
+            checker.register_predeclared_module(store, module_id);
         }
         return;
     }
@@ -758,7 +759,7 @@ fn register_modules(
     // own detached module and reads the rest through a snapshot.
     for wave in registration_waves(to_infer, dependencies) {
         if wave.len() == 1 {
-            checker.register_module(store, &wave[0]);
+            checker.register_predeclared_module(store, &wave[0]);
             continue;
         }
 
@@ -786,7 +787,7 @@ fn register_modules(
                 for module in chunk {
                     let module_id = module.id.clone();
                     view.modules.insert(module_id.clone(), module);
-                    worker.register_module(&mut view, &module_id);
+                    worker.register_predeclared_module(&mut view, &module_id);
                     let module = view
                         .modules
                         .remove(&module_id)
@@ -816,10 +817,10 @@ fn infer_modules(checker: &mut TaskState, store: &mut Store, to_infer: &[String]
     checker.check_pending_generic_bounds(store);
     checker.finalize_tests(store);
 
-    let module_files: Vec<(String, Vec<File>)> = to_infer
+    let module_files: Vec<(String, Vec<FileInferenceInput>)> = to_infer
         .iter()
         .map(|module_id| {
-            let files = checker.take_module_files(store, module_id);
+            let files = TaskState::take_module_inference_input(store, module_id);
             (module_id.clone(), files)
         })
         .collect();
@@ -844,9 +845,7 @@ fn infer_modules(checker: &mut TaskState, store: &mut Store, to_infer: &[String]
         checker.absorb_outputs(outputs);
     }
 
-    for typed_file in std::mem::take(&mut checker.typed_files) {
-        store.store_file(typed_file);
-    }
+    checker.install_inferred_files(store);
 
     checker.check_post_inference_bounds(store);
 }

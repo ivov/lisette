@@ -303,7 +303,6 @@ impl CachedEnumField {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CachedInterface {
-    name: EcoString,
     generics: Vec<CachedGeneric>,
     parents: Vec<Type>,
     pub methods: MethodSignatures,
@@ -312,7 +311,6 @@ pub struct CachedInterface {
 impl CachedInterface {
     fn from_interface(iface: &Interface, file_id_to_index: &HashMap<u32, u32>) -> Self {
         Self {
-            name: iface.name.clone(),
             generics: iface
                 .generics
                 .iter()
@@ -325,7 +323,6 @@ impl CachedInterface {
 
     fn to_interface(&self, file_ids: &[u32]) -> Interface {
         Interface {
-            name: self.name.clone(),
             generics: self
                 .generics
                 .iter()
@@ -343,7 +340,6 @@ impl CachedInterface {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CachedDefinition {
     ty: Type,
-    name: Option<EcoString>,
     name_span: Option<CachedSpan>,
     doc: Option<String>,
     pub body: CachedDefinitionBody,
@@ -403,7 +399,6 @@ impl CachedDefinition {
     ) -> Self {
         let Definition {
             ty,
-            name,
             name_span,
             doc,
             body,
@@ -498,7 +493,6 @@ impl CachedDefinition {
         };
         CachedDefinition {
             ty: ty.clone(),
-            name: name.clone(),
             name_span: name_span.map(|s| CachedSpan::from_span(&s, file_id_to_index)),
             doc: doc.clone(),
             body,
@@ -589,7 +583,6 @@ impl CachedDefinition {
         Definition {
             visibility: Visibility::Public,
             ty: self.ty.clone(),
-            name: self.name.clone(),
             name_span: self.name_span.as_ref().map(|s| s.to_span(file_ids)),
             doc: self.doc.clone(),
             body,

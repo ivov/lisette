@@ -22,7 +22,6 @@ impl InferCtx<'_> {
 
         let qualified_name = self.qualify_name(&name);
         if let Some(Definition {
-            name: definition_name,
             name_span: definition_name_span,
             body:
                 DefinitionBody::Struct {
@@ -33,9 +32,6 @@ impl InferCtx<'_> {
             ..
         }) = store.get_definition(&qualified_name)
         {
-            let definition_name = definition_name
-                .clone()
-                .expect("struct definition has a name");
             let definition_name_span =
                 definition_name_span.expect("struct definition has a name span");
             let definition_generics = definition_generics.clone();
@@ -44,7 +40,7 @@ impl InferCtx<'_> {
             Expression::Struct {
                 doc,
                 attributes,
-                name: definition_name,
+                name,
                 name_span: definition_name_span,
                 generics: definition_generics,
                 fields: definition_fields,
@@ -84,7 +80,6 @@ impl InferCtx<'_> {
 
         let qualified_name = self.qualify_name(&name);
         if let Some(Definition {
-            name: alias_name,
             ty: definition_ty,
             body:
                 DefinitionBody::TypeAlias {
@@ -98,9 +93,7 @@ impl InferCtx<'_> {
             Expression::TypeAlias {
                 doc,
                 attributes,
-                name: alias_name
-                    .clone()
-                    .expect("type alias definition has a name"),
+                name,
                 name_span,
                 generics: definition_generics.clone(),
                 annotation: alias.annotation().clone(),

@@ -3,7 +3,6 @@ use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{FunctionParameter, Symbol, Type};
 
 use super::{TaskState, wrap_with_impl_generics};
-use crate::call_classification::is_ufcs_method_type;
 use crate::checker::registration::derived_attributes::{
     DerivedAttribute, DerivedAttributeContext, DerivedAttributeTarget,
 };
@@ -75,8 +74,12 @@ impl TaskState {
         let visibility = definition.visibility.clone();
         let name_span = definition.name_span;
 
-        if let Some(user_ty) = user_to_string_type(store, qualified) {
-            if is_ufcs_method_type(&user_ty, generics.len()) {
+        if let Some(user_ty) = definition
+            .methods()
+            .and_then(|methods| methods.get("to_string"))
+            .cloned()
+        {
+            if definition.is_ufcs_method("to_string") {
                 self.sink
                     .push(diagnostics::attribute::display_specialized_to_string(
                         attribute_span,
@@ -114,7 +117,6 @@ impl TaskState {
             .or_insert_with(|| Definition {
                 visibility,
                 ty: method_ty,
-                name: None,
                 name_span,
                 doc: None,
                 body: DefinitionBody::Value {
@@ -125,15 +127,6 @@ impl TaskState {
                     go_type_param_recipe: None,
                 },
             });
-    }
-}
-
-fn user_to_string_type(store: &Store, qualified: &Symbol) -> Option<Type> {
-    match &store.get_definition(qualified.as_str())?.body {
-        DefinitionBody::Struct { methods, .. } | DefinitionBody::Enum { methods, .. } => {
-            methods.get("to_string").cloned()
-        }
-        _ => None,
     }
 }
 

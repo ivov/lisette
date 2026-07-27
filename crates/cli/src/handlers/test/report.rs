@@ -299,20 +299,13 @@ fn name_or_title_contains(fn_name: &str, title: Option<&str>, pattern: &str) -> 
     fn_name.contains(pattern) || title.is_some_and(|t| t.contains(pattern))
 }
 
-fn test_function_name(test: &TestFunction) -> &str {
-    let prefix = format!("{}.", test.module_id);
-    test.qualified_name
-        .strip_prefix(&prefix)
-        .unwrap_or(&test.qualified_name)
-}
-
 fn test_key(test: &TestFunction, go_module: &str) -> TestKey {
-    let package = if test.module_id == ENTRY_MODULE_ID {
+    let package = if test.module_id() == ENTRY_MODULE_ID {
         go_module.to_string()
     } else {
-        format!("{}/{}", go_module, test.module_id)
+        format!("{}/{}", go_module, test.module_id())
     };
-    (package, go_test_name(test_function_name(test)))
+    (package, go_test_name(test.name()))
 }
 
 pub fn matching_tests(index: &TestIndex, go_module: &str, filter: &str) -> Vec<(String, String)> {
@@ -320,7 +313,7 @@ pub fn matching_tests(index: &TestIndex, go_module: &str, filter: &str) -> Vec<(
         .tests()
         .iter()
         .filter_map(|test| {
-            if !name_or_title_contains(test_function_name(test), test.title.as_deref(), filter) {
+            if !name_or_title_contains(test.name(), test.title.as_deref(), filter) {
                 return None;
             }
             Some(test_key(test, go_module))
@@ -394,7 +387,7 @@ pub fn build_report_filtered(
             name: test
                 .title
                 .clone()
-                .unwrap_or_else(|| test_function_name(test).to_string()),
+                .unwrap_or_else(|| test.name().to_string()),
             description: test.doc.clone(),
             outcome,
             output: state.map(|state| state.output.clone()).unwrap_or_default(),
@@ -1444,13 +1437,7 @@ mod tests {
     fn index(entries: &[(&str, &str)]) -> TestIndex {
         let mut index = TestIndex::default();
         for (module_id, name) in entries {
-            index.push(TestFunction {
-                module_id: module_id.to_string(),
-                qualified_name: format!("{module_id}.{name}"),
-                title: None,
-                doc: None,
-                span: span(),
-            });
+            index.push(TestFunction::new(module_id, name, None, None, span()));
         }
         index
     }
@@ -1837,21 +1824,21 @@ mod tests {
     fn every_module_groups_its_tests_under_filenames() {
         let mut index = TestIndex::default();
         for (name, file) in [("adds", 1u32), ("subtracts", 2u32)] {
-            index.push(TestFunction {
-                module_id: "math".to_string(),
-                qualified_name: format!("math.{name}"),
-                title: None,
-                doc: None,
-                span: Span::new(file, 0, 1),
-            });
+            index.push(TestFunction::new(
+                "math",
+                name,
+                None,
+                None,
+                Span::new(file, 0, 1),
+            ));
         }
-        index.push(TestFunction {
-            module_id: "io".to_string(),
-            qualified_name: "io.reads".to_string(),
-            title: None,
-            doc: None,
-            span: Span::new(3, 0, 1),
-        });
+        index.push(TestFunction::new(
+            "io",
+            "reads",
+            None,
+            None,
+            Span::new(3, 0, 1),
+        ));
         let events = vec![
             event("pass", "demo/math", Some("TestAdds"), None),
             event("pass", "demo/math", Some("TestSubtracts"), None),
@@ -2613,15 +2600,13 @@ mod tests {
     #[test]
     fn failure_block_shows_test_description() {
         let mut index = TestIndex::default();
-        index.push(TestFunction {
-            module_id: ENTRY_MODULE_ID.to_string(),
-            qualified_name: format!("{ENTRY_MODULE_ID}.multiplies"),
-            title: None,
-            doc: Some(
-                "Guards the multiplication that downstream calculations rely on.".to_string(),
-            ),
-            span: span(),
-        });
+        index.push(TestFunction::new(
+            ENTRY_MODULE_ID,
+            "multiplies",
+            None,
+            Some("Guards the multiplication that downstream calculations rely on.".to_string()),
+            span(),
+        ));
         let inner = r#"{"file":7,"lo":3,"hi":9,"message":"assertion failed","operands":[{"label":"left","value":"42"},{"label":"right","value":"43"}]}"#;
         let events = vec![
             attr_event("demo", "TestMultiplies", &fail_value(inner)),
@@ -2656,20 +2641,20 @@ mod tests {
 
     fn titled_index() -> TestIndex {
         let mut index = TestIndex::default();
-        index.push(TestFunction {
-            module_id: "csv".to_string(),
-            qualified_name: "csv.splits_csv".to_string(),
-            title: Some("splits and trims CSV fields".to_string()),
-            doc: Some("Trims surrounding whitespace before splitting.".to_string()),
-            span: span(),
-        });
-        index.push(TestFunction {
-            module_id: "csv".to_string(),
-            qualified_name: "csv.parses_number".to_string(),
-            title: None,
-            doc: None,
-            span: span(),
-        });
+        index.push(TestFunction::new(
+            "csv",
+            "splits_csv",
+            Some("splits and trims CSV fields".to_string()),
+            Some("Trims surrounding whitespace before splitting.".to_string()),
+            span(),
+        ));
+        index.push(TestFunction::new(
+            "csv",
+            "parses_number",
+            None,
+            None,
+            span(),
+        ));
         index
     }
 

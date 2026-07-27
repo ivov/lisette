@@ -65,11 +65,41 @@ impl UnusedInfo {
 
 #[derive(Debug, Clone)]
 pub struct TestFunction {
-    pub module_id: String,
-    pub qualified_name: String,
+    qualified_name: Symbol,
     pub title: Option<String>,
     pub doc: Option<String>,
     pub span: Span,
+}
+
+impl TestFunction {
+    pub fn new(
+        module_id: &str,
+        name: &str,
+        title: Option<String>,
+        doc: Option<String>,
+        span: Span,
+    ) -> Self {
+        Self {
+            qualified_name: Symbol::from_parts(module_id, name),
+            title,
+            doc,
+            span,
+        }
+    }
+
+    pub fn module_id(&self) -> &str {
+        self.qualified_name
+            .without_last_segment()
+            .expect("test names are constructed with a module")
+    }
+
+    pub fn qualified_name(&self) -> &str {
+        self.qualified_name.as_str()
+    }
+
+    pub fn name(&self) -> &str {
+        self.qualified_name.last_segment()
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -89,7 +119,7 @@ impl TestIndex {
     pub fn contains_qualified(&self, qualified_name: &str) -> bool {
         self.tests
             .iter()
-            .any(|t| t.qualified_name == qualified_name)
+            .any(|test| test.qualified_name == qualified_name)
     }
 }
 
@@ -229,7 +259,6 @@ pub struct EmitInput {
     pub unused: UnusedInfo,
     pub mutations: MutationInfo,
     pub cached_modules: HashSet<String>,
-    pub ufcs_methods: HashSet<(String, String)>,
     pub equality_index: EqualityIndex,
     pub test_index: TestIndex,
     pub go_package_names: HashMap<String, String>,

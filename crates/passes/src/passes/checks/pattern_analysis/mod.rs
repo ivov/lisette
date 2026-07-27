@@ -20,7 +20,6 @@ pub use self::PatternAnalysisContext as Context;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::{IssueKind, LocalSink};
-use semantics::context::AnalysisContext;
 use semantics::store::Store;
 use syntax::ast::{
     ConstructorPatternResolution, Expression, IfLetAlternative, Literal, Pattern, SelectArm, Span,
@@ -40,13 +39,13 @@ pub struct PatternAnalysisContext<'a, 'sink> {
 
 impl<'a, 'sink> PatternAnalysisContext<'a, 'sink> {
     pub fn new(
-        analysis: &'a AnalysisContext<'a>,
+        store: &'a Store,
         or_pattern_error_spans: &'a HashSet<Span>,
         sink: &'sink LocalSink,
         lint_sink: Option<&'sink LocalSink>,
     ) -> Self {
         Self {
-            store: analysis.store,
+            store,
             cache: InhabitanceCache::new(),
             or_pattern_error_spans,
             sink,

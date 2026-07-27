@@ -219,7 +219,6 @@ impl Planner<'_> {
 
     fn compute_enum_layout(&self, enum_id: &str) -> Option<EnumLayout> {
         let Definition {
-            name: Some(name),
             body: DefinitionBody::Enum {
                 generics, variants, ..
             },
@@ -229,6 +228,7 @@ impl Planner<'_> {
             return None;
         };
 
+        let name = syntax::types::unqualified_name(enum_id);
         if name == "Option" || name == "Result" || name == "Partial" {
             return None;
         }

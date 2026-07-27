@@ -14,7 +14,6 @@ use std::path::PathBuf;
 
 use deps::TypedefLocator;
 
-use crate::call_classification::compute_module_ufcs;
 use crate::diagnostics::{GoImportSite, emit_for_locator_result};
 use syntax::ast::{
     Annotation, Attribute, AttributeArg, Binding, EnumVariant, Expression, Generic, Span,
@@ -26,8 +25,14 @@ use syntax::program::{
 };
 use syntax::types::{Bound, FunctionParameter, Symbol, Type};
 
-use super::{FileContextKind, FileContextSpec, TaskState, resolved_generic_bounds};
+use super::{FileContext, TaskState, resolved_generic_bounds};
 use crate::store::Store;
+
+struct RegistrationFile {
+    id: u32,
+    imports: Vec<FileImport>,
+    items: Vec<Expression>,
+}
 
 pub(crate) fn extract_package_directive(source: &str) -> Option<String> {
     for line in source.lines().take(10) {
@@ -269,28 +274,75 @@ impl TaskState {
 
     pub fn register_module(&mut self, store: &mut Store, id: &str) {
         self.predeclare_module_types(store, id);
+        self.register_predeclared_module(store, id);
+    }
 
-        let file_data = self.module_file_data(store, id);
+    pub(crate) fn register_predeclared_module(&mut self, store: &mut Store, id: &str) {
+        let mut files = {
+            let module = store
+                .get_module_mut(id)
+                .expect("module must exist for registration");
+            module
+                .files
+                .values_mut()
+                .map(|file| RegistrationFile {
+                    id: file.id,
+                    imports: file.imports(),
+                    items: std::mem::take(&mut file.items),
+                })
+                .collect::<Vec<_>>()
+        };
 
-        for (file_id, imports) in &file_data {
-            self.register_file_type_aliases(store, id, *file_id, imports);
+        for file in &files {
+            self.with_file_context_mut(
+                store,
+                FileContext::Standard {
+                    module_id: id,
+                    file_id: file.id,
+                    imports: &file.imports,
+                },
+                |this, store| this.register_type_aliases(store, &file.items),
+            );
         }
 
-        for (file_id, imports) in &file_data {
-            self.register_file_type_bodies(store, id, *file_id, imports);
+        for file in &files {
+            self.with_file_context_mut(
+                store,
+                FileContext::Standard {
+                    module_id: id,
+                    file_id: file.id,
+                    imports: &file.imports,
+                },
+                |this, store| this.register_type_bodies(store, &file.items),
+            );
         }
 
-        for (file_id, imports) in &file_data {
-            self.register_file_values(store, id, *file_id, imports);
+        for file in &files {
+            self.with_file_context_mut(
+                store,
+                FileContext::Standard {
+                    module_id: id,
+                    file_id: file.id,
+                    imports: &file.imports,
+                },
+                |this, store| {
+                    this.check_type_generic_bounds(store, &file.items);
+                    this.register_impl_blocks(store, &file.items);
+                    this.register_values(store, &file.items, &Visibility::Private);
+                },
+            );
+        }
+
+        for file in &mut files {
+            store
+                .get_file_mut(file.id)
+                .expect("registered file must remain in the store")
+                .items = std::mem::take(&mut file.items);
         }
 
         self.register_module_derived_attributes(store, id);
         self.validate_module_embeds(store, id);
         self.check_module_recursive_types(store, id);
-
-        let module = store.get_module(id).expect("module must exist");
-        let ufcs_entries = compute_module_ufcs(module);
-        self.extend_ufcs_methods(ufcs_entries);
 
         self.register_module_tests(store, id);
         self.populate_module_generic_bounds(store, id);
@@ -333,11 +385,10 @@ impl TaskState {
         cache_path: Option<PathBuf>,
         locator: &TypedefLocator,
     ) {
-        if store.is_visited(module_id) {
+        if store.has(module_id) {
             return;
         }
 
-        store.mark_visited(module_id);
         store.add_module(module_id);
 
         if let Some(pkg_name) = extract_package_directive(source) {
@@ -361,6 +412,7 @@ impl TaskState {
             module_id: module_id.to_string(),
             name: filename.clone(),
             display_path: filename,
+            source_path: cache_path,
             source: source.to_string(),
             items: build_result.ast,
             file_comment: build_result.file_comment,
@@ -383,7 +435,7 @@ impl TaskState {
 
                 let import_module_id = format!("go:{}", go_pkg);
 
-                if store.is_visited(&import_module_id) {
+                if store.has(&import_module_id) {
                     continue;
                 }
 
@@ -415,18 +467,14 @@ impl TaskState {
             }
         }
 
-        if let Some(path) = cache_path {
-            store.typedef_paths.insert(file_id, path);
-        }
         store.store_file(file);
 
         self.with_file_context_mut(
             store,
-            FileContextSpec {
+            FileContext::ImportedTypedef {
                 module_id,
                 file_id,
                 imports: &imports,
-                kind: FileContextKind::ImportedTypedef,
             },
             |this, store| {
                 let items = std::mem::take(
@@ -479,89 +527,6 @@ impl TaskState {
         }
     }
 
-    fn module_file_data(&self, store: &Store, module_id: &str) -> Vec<(u32, Vec<FileImport>)> {
-        let module = store
-            .get_module(module_id)
-            .expect("module must exist for declaration");
-        module
-            .files
-            .iter()
-            .map(|(file_id, f)| (*file_id, f.imports()))
-            .collect()
-    }
-
-    fn with_file_items(
-        &mut self,
-        store: &mut Store,
-        module_id: &str,
-        file_id: u32,
-        imports: &[FileImport],
-        register: impl FnOnce(&mut Self, &mut Store, &[Expression]),
-    ) {
-        self.with_file_context_mut(
-            store,
-            FileContextSpec {
-                module_id,
-                file_id,
-                imports,
-                kind: FileContextKind::Standard,
-            },
-            |this, store| {
-                let items = std::mem::take(
-                    &mut store
-                        .get_file_mut(file_id)
-                        .expect("file must exist for registration")
-                        .items,
-                );
-
-                register(this, store, &items);
-
-                store
-                    .get_file_mut(file_id)
-                    .expect("file must exist after registration")
-                    .items = items;
-            },
-        );
-    }
-
-    fn register_file_type_aliases(
-        &mut self,
-        store: &mut Store,
-        module_id: &str,
-        file_id: u32,
-        imports: &[FileImport],
-    ) {
-        self.with_file_items(store, module_id, file_id, imports, |this, store, items| {
-            this.register_type_aliases(store, items);
-        });
-    }
-
-    fn register_file_type_bodies(
-        &mut self,
-        store: &mut Store,
-        module_id: &str,
-        file_id: u32,
-        imports: &[FileImport],
-    ) {
-        self.with_file_items(store, module_id, file_id, imports, |this, store, items| {
-            this.register_type_bodies(store, items);
-        });
-    }
-
-    fn register_file_values(
-        &mut self,
-        store: &mut Store,
-        module_id: &str,
-        file_id: u32,
-        imports: &[FileImport],
-    ) {
-        self.with_file_items(store, module_id, file_id, imports, |this, store, items| {
-            this.check_type_generic_bounds(store, items);
-            this.register_impl_blocks(store, items);
-            this.register_values(store, items, &Visibility::Private);
-        });
-    }
-
     pub fn register_types_and_values(
         &mut self,
         store: &mut Store,
@@ -577,11 +542,6 @@ impl TaskState {
         let module_id = self.cursor.module_id.clone();
         self.validate_module_embeds(store, &module_id);
         self.check_module_recursive_types(store, &module_id);
-
-        let module = store
-            .get_module(&module_id)
-            .expect("current module must exist after registration");
-        self.extend_ufcs_methods(compute_module_ufcs(module));
     }
 
     pub(crate) fn register_type_names(
@@ -700,7 +660,6 @@ impl TaskState {
                 Definition {
                     visibility: item_visibility,
                     ty,
-                    name: None,
                     name_span: None,
                     doc: None,
                     body: DefinitionBody::Value {
@@ -919,7 +878,6 @@ impl TaskState {
             Definition {
                 visibility: item_visibility,
                 ty: fn_ty,
-                name: None,
                 name_span: Some(*name_span),
                 doc: doc.clone(),
                 body: DefinitionBody::Value {
@@ -1001,7 +959,6 @@ impl TaskState {
             Definition {
                 visibility: item_visibility,
                 ty: const_ty,
-                name: None,
                 name_span: Some(*identifier_span),
                 doc: doc.clone(),
                 body: DefinitionBody::Value {
@@ -1053,7 +1010,6 @@ impl TaskState {
             Definition {
                 visibility: item_visibility,
                 ty: var_ty,
-                name: None,
                 name_span: Some(*name_span),
                 doc: doc.clone(),
                 body: DefinitionBody::Value {

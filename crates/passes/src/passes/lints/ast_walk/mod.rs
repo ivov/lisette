@@ -12,7 +12,6 @@ use crate::passes::walk::{
 use diagnostics::{LisetteDiagnostic, LocalSink};
 use rayon::prelude::*;
 use rustc_hash::FxHashMap as HashMap;
-use semantics::context::AnalysisContext;
 use semantics::facts::{Facts, Usage};
 use semantics::store::Store;
 use syntax::ast::{Expression, Pattern, Span};
@@ -206,9 +205,7 @@ fn run_pattern_checks(pattern: &Pattern, ctx: &mut NodeCtx<'_>, role: PatternRol
     }
 }
 
-pub(crate) fn run(analysis: &AnalysisContext, facts: &Facts) -> Vec<LisetteDiagnostic> {
-    let store = analysis.store;
-
+pub(crate) fn run(store: &Store, facts: &Facts) -> Vec<LisetteDiagnostic> {
     let deprecated = deprecation::build_index(store);
     let mut usages_by_file: HashMap<u32, Vec<&Usage>> = HashMap::default();
     if !deprecated.is_empty() {

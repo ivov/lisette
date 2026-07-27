@@ -171,38 +171,6 @@ impl InferCtx<'_> {
                 }
             }
 
-            // Simple/Compound vs Nominal interface: synthesise a nominal
-            // equivalent for the native type so interface coercion can check
-            // it (e.g. `string` satisfying `fmt.Stringer`).
-            (Type::Simple(kind), Nominal { .. }) => {
-                let synth = Type::Nominal {
-                    id: format!("prelude.{}", kind.leaf_name()).into(),
-                    params: vec![],
-                };
-                self.try_unify(&synth, &r2, span)
-            }
-            (Nominal { .. }, Type::Simple(kind)) => {
-                let synth = Type::Nominal {
-                    id: format!("prelude.{}", kind.leaf_name()).into(),
-                    params: vec![],
-                };
-                self.try_unify(&r1, &synth, span)
-            }
-            (Type::Compound { kind, args }, Nominal { .. }) => {
-                let synth = Type::Nominal {
-                    id: format!("prelude.{}", kind.leaf_name()).into(),
-                    params: args.clone(),
-                };
-                self.try_unify(&synth, &r2, span)
-            }
-            (Nominal { .. }, Type::Compound { kind, args }) => {
-                let synth = Type::Nominal {
-                    id: format!("prelude.{}", kind.leaf_name()).into(),
-                    params: args.clone(),
-                };
-                self.try_unify(&r1, &synth, span)
-            }
-
             (Type::Compound { kind: k1, args: a1 }, Type::Compound { kind: k2, args: a2 })
                 if k1 == k2 && a1.len() == a2.len() =>
             {
@@ -257,6 +225,11 @@ impl InferCtx<'_> {
                     None => Ok(()),
                 }
             }
+
+            (
+                Nominal { id, params },
+                actual @ (Type::Simple(_) | Type::Compound { .. } | Type::Array { .. }),
+            ) => self.try_satisfy_interface(actual, id, params, span),
 
             (Nominal { .. }, Function(_)) if store.underlying_type(&r1).is_some() => {
                 let u = store
@@ -486,14 +459,25 @@ impl InferCtx<'_> {
             return self.try_unify(t1, &params2[0], span);
         }
 
-        if let Some(interface) = store.get_interface(symbol1).cloned() {
-            return self
-                .satisfies_interface(t2, &interface, symbol1, params1, span)
-                .and_then(|()| self.check_pointer_receivers(t2, &interface, symbol1, span))
-                .map_err(|_| UnifyError::AlreadyReported);
-        }
+        self.try_satisfy_interface(t2, symbol1, params1, span)
+    }
 
-        Err(UnifyError::TypeMismatch)
+    fn try_satisfy_interface(
+        &mut self,
+        actual: &Type,
+        interface_id: &str,
+        type_args: &[Type],
+        span: &Span,
+    ) -> Result<(), UnifyError> {
+        if self.scopes.is_inside_invariant_position() {
+            return Err(UnifyError::TypeMismatch);
+        }
+        let Some(interface) = self.store.get_interface(interface_id).cloned() else {
+            return Err(UnifyError::TypeMismatch);
+        };
+        self.satisfies_interface(actual, &interface, interface_id, type_args, span)
+            .and_then(|()| self.check_pointer_receivers(actual, &interface, interface_id, span))
+            .map_err(|_| UnifyError::AlreadyReported)
     }
 
     fn unify_pairs<'a>(

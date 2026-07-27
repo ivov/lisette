@@ -103,13 +103,11 @@ impl CompiledTest {
             definitions,
             unused,
             mutations,
-            ufcs_methods,
             equality_index,
             go_package_names,
             go_module_ids,
         ) = {
             let mut checker = TaskState::with_fresh_allocator();
-            checker.extend_ufcs_methods(semantics::prelude::compute_prelude_ufcs(&store));
             checker.cursor.module_id = TEST_MODULE_ID.to_string();
             register_test_builtins(&mut store, &mut checker);
             checker.put_prelude_in_scope(&store);
@@ -161,6 +159,7 @@ impl CompiledTest {
                 module_id: TEST_MODULE_ID.to_string(),
                 name: "test.lis".to_string(),
                 display_path: "test.lis".to_string(),
+                source_path: None,
                 source: String::new(),
                 items: self.ast.clone(),
                 file_comment: None,
@@ -205,16 +204,14 @@ impl CompiledTest {
                     module_id: TEST_MODULE_ID.to_string(),
                     name: "test.lis".to_string(),
                     display_path: "test.lis".to_string(),
+                    source_path: None,
                     source: String::new(),
                     items: typed_ast.clone(),
                     file_comment: None,
                 });
-                store.build_closed_domains();
-                let ufcs_methods = checker.shared_ufcs_methods();
-                let analysis = semantics::context::AnalysisContext::new(&store, &ufcs_methods);
                 let mut harness_unused = UnusedInfo::default();
                 passes::run(
-                    &analysis,
+                    &store,
                     &mut checker.facts,
                     &checker.sink,
                     &mut harness_unused,
@@ -263,7 +260,6 @@ impl CompiledTest {
                 }
             }
 
-            let ufcs_methods = checker.take_ufcs_methods();
             let equality_index = std::mem::take(&mut store.equality_index);
             let go_package_names = store.go_package_names.clone();
             let go_module_ids: HashSet<String> = store
@@ -280,7 +276,6 @@ impl CompiledTest {
                 definitions,
                 unused,
                 mutations,
-                ufcs_methods,
                 equality_index,
                 go_package_names,
                 go_module_ids,
@@ -294,7 +289,6 @@ impl CompiledTest {
             module_id: TEST_MODULE_ID.to_string(),
             unused,
             mutations,
-            ufcs_methods,
             equality_index,
             go_package_names,
             go_module_ids,
@@ -309,7 +303,6 @@ pub struct InferenceResult {
     pub module_id: String,
     pub unused: UnusedInfo,
     pub mutations: MutationInfo,
-    pub ufcs_methods: HashSet<(String, String)>,
     pub equality_index: EqualityIndex,
     pub go_package_names: HashMap<String, String>,
     pub go_module_ids: HashSet<String>,
