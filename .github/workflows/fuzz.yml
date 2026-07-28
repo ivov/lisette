@@ -53,14 +53,14 @@ jobs:
           key: fuzz-corpus-parse-${{ github.run_id }}
 
       - name: Upload crash artifacts
-        if: failure()
+        if: failure() && hashFiles('fuzz/artifacts/**') != ''
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # ratchet:actions/upload-artifact@v6
         with:
           name: fuzz-crash-parse
           path: fuzz/artifacts/
 
       - name: Create issue on crash
-        if: failure()
+        if: failure() && hashFiles('fuzz/artifacts/**') != ''
         run: |
           gh issue create \
             --repo ivov/lisette \
@@ -69,6 +69,18 @@ jobs:
 
           **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           **Artifact:** \`fuzz-crash-parse\` (attached to the run)"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create issue on job failure
+        if: failure() && hashFiles('fuzz/artifacts/**') == ''
+        run: |
+          gh issue create \
+            --repo ivov/lisette \
+            --title "fuzz-parse job failed (run ${{ github.run_id }})" \
+            --body "The \`fuzz-parse\` job failed in a scheduled fuzz run. The usual cause is the target no longer building against current \`crates/\`.
+
+          **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -117,14 +129,14 @@ jobs:
           key: fuzz-corpus-infer-${{ github.run_id }}
 
       - name: Upload crash artifacts
-        if: failure()
+        if: failure() && hashFiles('fuzz/artifacts/**') != ''
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # ratchet:actions/upload-artifact@v6
         with:
           name: fuzz-crash-infer
           path: fuzz/artifacts/
 
       - name: Create issue on crash
-        if: failure()
+        if: failure() && hashFiles('fuzz/artifacts/**') != ''
         run: |
           gh issue create \
             --repo ivov/lisette \
@@ -133,5 +145,17 @@ jobs:
 
           **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           **Artifact:** \`fuzz-crash-infer\` (attached to the run)"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create issue on job failure
+        if: failure() && hashFiles('fuzz/artifacts/**') == ''
+        run: |
+          gh issue create \
+            --repo ivov/lisette \
+            --title "fuzz-infer job failed (run ${{ github.run_id }})" \
+            --body "The \`fuzz-infer\` job failed in a scheduled fuzz run. The usual cause is the target no longer building against current \`crates/\`.
+
+          **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
