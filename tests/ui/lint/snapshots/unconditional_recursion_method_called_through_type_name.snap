@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Unconditional recursion
+   ╭─[test.lis:8:5]
+ 7 │   fn spin(self) -> int {
+ 8 │     Counter.spin(self)
+   ·     ─────────┬────────
+   ·              ╰── recurses on every path
+ 9 │   }
+   ╰────
+  help: `spin` always calls itself, so it overflows the stack instead of returning. Add a base case that returns without recursing · code: [lint.unconditional_recursion]

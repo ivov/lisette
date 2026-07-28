@@ -48,8 +48,8 @@ use checks::{
     check_redundant_sprintf, check_regexp_in_loop, check_replaceable_with_autofill,
     check_rest_only_pattern, check_self_assignment, check_self_comparison,
     check_self_named_constructors, check_single_arm_select, check_single_element_loop,
-    check_type_limit_comparison, check_uninterpolated_fstring, check_unnecessary_bool,
-    check_unnecessary_first_then_check, check_unnecessary_lazy_evaluations,
+    check_type_limit_comparison, check_unconditional_recursion, check_uninterpolated_fstring,
+    check_unnecessary_bool, check_unnecessary_first_then_check, check_unnecessary_lazy_evaluations,
     check_unnecessary_map_on_constructor, check_unnecessary_min_or_max,
     check_unnecessary_range_loop, check_unnecessary_raw_string_expression,
     check_unnecessary_raw_string_pattern, check_unnecessary_return, check_unsigned_comparison,
@@ -168,6 +168,9 @@ fn run_expression_checks(expression: &Expression, ctx: &mut NodeCtx<'_>, role: F
             | Expression::ImplBlock { .. }
     ) {
         check_expression_naming(expression, ctx, role);
+    }
+    if matches!(expression, Expression::Function { .. }) {
+        check_unconditional_recursion(expression, ctx, role);
     }
     apply_expression_checks!(
         expression,
