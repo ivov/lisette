@@ -491,6 +491,7 @@ fn parse_one(job: ParseJob) -> (File, Vec<syntax::ParseError>) {
         module_id: job.module_id,
         name: job.filename,
         display_path: job.display_path,
+        source_path: None,
         source: job.source,
         items: result.ast,
         file_comment: result.file_comment,
@@ -500,12 +501,6 @@ fn parse_one(job: ParseJob) -> (File, Vec<syntax::ParseError>) {
 
 #[derive(Clone, Copy)]
 struct ResolvedImport {
-    span: Span,
-    usage: ImportUse,
-}
-
-struct PendingGoImport<'a> {
-    name: &'a str,
     span: Span,
     usage: ImportUse,
 }
@@ -535,7 +530,7 @@ fn process_file_imports(
         locator,
     } = ctx;
     let mut imports = HashMap::default();
-    let mut pending_go_imports: Vec<PendingGoImport<'_>> = Vec::new();
+    let mut pending_go_imports: HashMap<&str, ResolvedImport> = HashMap::default();
     for file_import in &file_imports {
         if !file_import.name.starts_with("go:") {
             continue;
@@ -545,18 +540,13 @@ fn process_file_imports(
         } else {
             ImportUse::Referenced
         };
-        if let Some(pending) = pending_go_imports
-            .iter_mut()
-            .find(|pending| pending.name == file_import.name)
-        {
-            pending.usage = pending.usage.merge(usage);
-        } else {
-            pending_go_imports.push(PendingGoImport {
-                name: &file_import.name,
+        pending_go_imports
+            .entry(&file_import.name)
+            .and_modify(|pending| pending.usage = pending.usage.merge(usage))
+            .or_insert(ResolvedImport {
                 span: file_import.name_span,
                 usage,
             });
-        }
     }
 
     for file_import in &file_imports {
@@ -622,20 +612,16 @@ fn process_file_imports(
         }
 
         if let Some(go_pkg) = file_import.name.strip_prefix("go:") {
-            let Some(index) = pending_go_imports
-                .iter()
-                .position(|pending| pending.name == file_import.name)
-            else {
+            let Some(pending) = pending_go_imports.remove(file_import.name.as_str()) else {
                 continue;
             };
-            let pending = pending_go_imports.remove(index);
             let ok = match pending.usage {
                 ImportUse::Referenced => {
                     let result = locator.find_typedef_content(go_pkg);
                     emit_for_locator_result(
                         &result,
                         &GoImportSite {
-                            import_name: pending.name,
+                            import_name: &file_import.name,
                             go_pkg,
                             name_span: Some(pending.span),
                             target: locator.target(),
@@ -650,7 +636,7 @@ fn process_file_imports(
                     emit_for_declaration_status(
                         &status,
                         &GoImportSite {
-                            import_name: pending.name,
+                            import_name: &file_import.name,
                             go_pkg,
                             name_span: Some(pending.span),
                             target: locator.target(),
@@ -663,7 +649,7 @@ fn process_file_imports(
             };
             if ok {
                 imports.insert(
-                    pending.name.to_string(),
+                    file_import.name.to_string(),
                     ResolvedImport {
                         span: pending.span,
                         usage: pending.usage,

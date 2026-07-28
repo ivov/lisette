@@ -31,11 +31,11 @@ pub fn check_out_of_domain_value(expression: &Expression, ctx: &mut NodeCtx) {
             if ctx.claimed_spans.contains(span) {
                 return;
             }
-            let Some(value) = DomainValue::from_literal(literal, domain.base) else {
+            let Some(value) = DomainValue::from_literal(literal, domain.base()) else {
                 return;
             };
-            if !is_member(domain, &value) {
-                emit(*span, domain, ctx);
+            if !is_member(&domain, &value) {
+                emit(*span, &domain, ctx);
             }
         }
 
@@ -48,12 +48,12 @@ pub fn check_out_of_domain_value(expression: &Expression, ctx: &mut NodeCtx) {
             let Some(domain) = closed_domain_of(ty, ctx.store) else {
                 return;
             };
-            let Some((value, magnitude_span)) = negative_value(inner, domain.base) else {
+            let Some((value, magnitude_span)) = negative_value(inner, domain.base()) else {
                 return;
             };
             ctx.claimed_spans.insert(magnitude_span);
-            if !is_member(domain, &value) {
-                emit(*span, domain, ctx);
+            if !is_member(&domain, &value) {
+                emit(*span, &domain, ctx);
             }
         }
 
@@ -68,12 +68,12 @@ pub fn check_out_of_domain_value(expression: &Expression, ctx: &mut NodeCtx) {
             };
             let Some((value, span)) = args
                 .first()
-                .and_then(|arg| constructor_arg(arg, domain.base))
+                .and_then(|arg| constructor_arg(arg, domain.base()))
             else {
                 return;
             };
-            if !is_member(domain, &value) {
-                emit(span, domain, ctx);
+            if !is_member(&domain, &value) {
+                emit(span, &domain, ctx);
             }
         }
 
@@ -81,11 +81,11 @@ pub fn check_out_of_domain_value(expression: &Expression, ctx: &mut NodeCtx) {
     }
 }
 
-fn closed_domain_of<'a>(ty: &Type, store: &'a Store) -> Option<&'a ClosedDomain> {
+fn closed_domain_of(ty: &Type, store: &Store) -> Option<ClosedDomain> {
     let Type::Nominal { id, .. } = ty else {
         return None;
     };
-    store.closed_domains.get(id.as_str())
+    store.closed_domain(id.as_str())
 }
 
 /// The negated value of a leading-minus integer literal, plus the magnitude
@@ -133,15 +133,15 @@ fn negate_literal(literal: &Literal, base: SimpleKind) -> Option<DomainValue> {
 
 fn is_member(domain: &ClosedDomain, value: &DomainValue) -> bool {
     domain
-        .members
+        .members()
         .iter()
-        .any(|member| member.value(domain.base) == *value)
+        .any(|member| member.value(domain.base()) == *value)
 }
 
 fn emit(span: Span, domain: &ClosedDomain, ctx: &NodeCtx) {
     ctx.sink.push(diagnostics::lint::out_of_domain_value(
         &span,
-        &domain.type_display,
+        domain.type_display(),
         &render_valid(domain),
     ));
 }
@@ -160,26 +160,26 @@ fn render_member(member: &ClosedMember, base: SimpleKind) -> String {
 /// every other domain (sparse, string, rune) lists its members, so the hint
 /// never implies a gap value is valid.
 fn render_valid(domain: &ClosedDomain) -> String {
-    if domain.members.len() >= 2 && is_contiguous_integer_domain(domain) {
-        let first = &domain.members[0];
-        let last = &domain.members[domain.members.len() - 1];
+    if domain.members().len() >= 2 && is_contiguous_integer_domain(domain) {
+        let first = &domain.members()[0];
+        let last = &domain.members()[domain.members().len() - 1];
         return format!(
             "{}={} ..= {}={}",
-            first.display_name,
-            render_member(first, domain.base),
-            last.display_name,
-            render_member(last, domain.base),
+            first.display_name(),
+            render_member(first, domain.base()),
+            last.display_name(),
+            render_member(last, domain.base()),
         );
     }
 
     domain
-        .members
+        .members()
         .iter()
         .map(|member| {
             format!(
                 "{}={}",
-                member.display_name,
-                render_member(member, domain.base)
+                member.display_name(),
+                render_member(member, domain.base())
             )
         })
         .collect::<Vec<_>>()
@@ -191,8 +191,8 @@ fn render_valid(domain: &ClosedDomain) -> String {
 /// range.
 fn is_contiguous_integer_domain(domain: &ClosedDomain) -> bool {
     let mut previous: Option<i128> = None;
-    for member in &domain.members {
-        let DomainValue::Int(value) = member.value(domain.base) else {
+    for member in domain.members() {
+        let DomainValue::Int(value) = member.value(domain.base()) else {
             return false;
         };
         if previous.is_some_and(|p| value != p + 1) {

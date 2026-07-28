@@ -575,27 +575,27 @@ impl InferCtx<'_> {
         // Look up by type-derived name first (works for non-aliased imports).
         // For aliased imports (e.g. `import u "utils"`), the map key is "u" but
         // the type name is "utils", so fall back to matching by import module id.
-        let (module_id, module_fields) = self
+        let module_id = self
             .imports
             .namespace(type_name)
-            .filter(|(module_id, _)| {
-                namespace_id.is_none_or(|namespace_id| *module_id == namespace_id)
-            })
+            .filter(|module_id| namespace_id.is_none_or(|namespace_id| *module_id == namespace_id))
             .or_else(|| {
                 let module_id = namespace_id?;
                 self.imports
                     .namespaces()
-                    .find(|(imported_module_id, _)| *imported_module_id == module_id)
+                    .find(|imported_module_id| *imported_module_id == module_id)
             })?;
-        let module_fields = module_fields.clone();
         let module_id = module_id.to_string();
         let display_module = crate::loader::import_display_name(type_name);
         let module_ty = Type::ImportNamespace(module_id.clone().into());
 
-        let Some(member_type) = module_fields
-            .iter()
-            .find(|f| f.name == args.member_name)
-            .map(|f| f.ty.clone())
+        let resolved_definition = Symbol::from_parts(&module_id, args.member_name);
+        let Some(definition) = store
+            .get_module(&module_id)
+            .and_then(|module| module.definitions.get(resolved_definition.as_str()))
+            .filter(|definition| {
+                definition.visibility.is_public() && !store.is_test_definition(definition)
+            })
         else {
             self.sink
                 .push(diagnostics::infer::function_or_value_not_found_in_module(
@@ -608,8 +608,8 @@ impl InferCtx<'_> {
                 DotAccessResolution::ModuleMember { definition: None },
             ));
         };
+        let member_type = self.resolve_definition_value_type(store, definition);
 
-        let resolved_definition = Symbol::from_parts(&module_id, args.member_name);
         if let Some(definition_span) = self.get_definition_name_span(store, &resolved_definition) {
             self.facts.add_usage(*args.span, definition_span);
         }
@@ -927,9 +927,9 @@ impl InferCtx<'_> {
 
         if !self.scopes.is_callee_context()
             && (matches!(deref_ty, Type::Nominal { id, .. }
-                    if self.is_ufcs_method(id.as_str(), args.member_name))
+                    if self.store.is_ufcs_method(id.as_str(), args.member_name))
                 || matches!(store.deep_resolve_alias(deref_ty), Type::Nominal { id, .. }
-                    if self.is_ufcs_method(id.as_str(), args.member_name))
+                    if self.store.is_ufcs_method(id.as_str(), args.member_name))
                 || matches!(method_ty, Type::Forall { vars, .. }
                     if vars.len() > self.get_receiver_generics_count(deref_ty)))
         {

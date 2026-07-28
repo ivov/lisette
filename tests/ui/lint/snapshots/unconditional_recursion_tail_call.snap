@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Unconditional recursion
+   ╭─[test.lis:3:3]
+ 2 │ fn runs_forever(n: int) -> int {
+ 3 │   runs_forever(n - 1)
+   ·   ─────────┬─────────
+   ·            ╰── recurses on every path
+ 4 │ }
+   ╰────
+  help: `runs_forever` always calls itself, so it overflows the stack instead of returning. Add a base case that returns without recursing · code: [lint.unconditional_recursion]

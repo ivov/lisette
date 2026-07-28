@@ -274,7 +274,7 @@ impl Regexp {
   /// may have been duplicated or removed. For example, the simplified form
   /// for /(x){1,2}/ is /(x)(x)?/ but both parentheses capture as $1.
   /// The returned regexp may share structure with or be the original.
-  fn Simplify(self: Ref<Regexp>) -> Ref<Regexp>
+  fn Simplify(self: Ref<Regexp>) -> Option<Ref<Regexp>>
 
   fn String(self: Ref<Regexp>) -> string
 }

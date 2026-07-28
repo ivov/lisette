@@ -6,7 +6,6 @@ use syntax::ast::{Generic, Visibility};
 use syntax::program::{DefinitionBody, MethodSignatures};
 use syntax::types::{CompoundKind, Symbol, Type, build_substitution_map, substitute};
 
-use crate::call_classification::is_ufcs_method_type;
 use crate::store::Store;
 
 #[derive(Clone, Debug)]
@@ -215,11 +214,13 @@ fn entry_candidate(store: &Store, ty: &Type, name: &str) -> Option<Candidate> {
         });
     }
 
-    if let Some(method_ty) = store.get_own_methods(id).and_then(|m| m.get(name)) {
+    if !store.is_ufcs_method(id, name)
+        && let Some(method_ty) = store.get_own_methods(id).and_then(|m| m.get(name))
+    {
         return Some(Candidate {
             declaring_type: Symbol::from_raw(id),
             detail: CandidateDetail::Method {
-                ty: instantiate_method(store, ty, method_ty)?,
+                ty: instantiate_method(store, ty, method_ty),
             },
         });
     }
@@ -391,23 +392,20 @@ fn instantiate_field(store: &Store, container: &Type, member_ty: &Type) -> Type 
     )
 }
 
-fn instantiate_method(store: &Store, container: &Type, method_ty: &Type) -> Option<Type> {
+fn instantiate_method(store: &Store, container: &Type, method_ty: &Type) -> Type {
     let Some(id) = container.get_qualified_id() else {
-        return Some(method_ty.clone());
+        return method_ty.clone();
     };
     let arity = declaring_generics(store, id).len();
-    if is_ufcs_method_type(method_ty, arity) {
-        return None;
-    }
     let args = container.get_type_params().unwrap_or_default();
     if args.is_empty() || arity == 0 {
-        return Some(method_ty.clone());
+        return method_ty.clone();
     }
     let Type::Forall { vars, body } = method_ty else {
-        return Some(method_ty.clone());
+        return method_ty.clone();
     };
     let map: HashMap<EcoString, Type> = vars.iter().cloned().zip(args.iter().cloned()).collect();
-    Some(substitute(body, &map))
+    substitute(body, &map)
 }
 
 #[cfg(test)]
@@ -478,7 +476,6 @@ mod tests {
             let def = Definition {
                 visibility: ProgVis::Public,
                 ty: nominal(name),
-                name: Some(name.into()),
                 name_span: None,
                 doc: None,
                 body,
@@ -546,7 +543,6 @@ mod tests {
                 name,
                 DefinitionBody::Interface {
                     definition: Interface {
-                        name: name.into(),
                         generics: vec![],
                         parents: parents.into_iter().map(nominal).collect(),
                         methods: method_map,

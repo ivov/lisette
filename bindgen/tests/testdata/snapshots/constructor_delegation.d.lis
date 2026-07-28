@@ -3,7 +3,7 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
-pub fn LookupWidget() -> Option<Ref<Widget>>
+pub fn LookupWidget() -> Ref<Widget>
 
 pub fn NewNilWidget() -> Option<Ref<Widget>>
 

@@ -838,7 +838,7 @@ impl Data {
   /// unit cu, which must be an [Entry] with tag [TagCompileUnit].
   /// 
   /// If this compilation unit has no line table, it returns nil, nil.
-  fn LineReader(self: Ref<Data>, cu: Ref<Entry>) -> Result<Ref<LineReader>, error>
+  fn LineReader(self: Ref<Data>, cu: Ref<Entry>) -> Result<Option<Ref<LineReader>>, error>
 
   /// Ranges returns the PC ranges covered by e, a slice of [low,high) pairs.
   /// Only some entry types, such as [TagCompileUnit] or [TagSubprogram], have PC
@@ -957,7 +957,7 @@ impl Reader {
   /// It returns nil, nil when it reaches the end of the section.
   /// It returns an error if the current offset is invalid or the data at the
   /// offset cannot be decoded as a valid [Entry].
-  fn Next(self: Ref<Reader>) -> Result<Ref<Entry>, error>
+  fn Next(self: Ref<Reader>) -> Result<Option<Ref<Entry>>, error>
 
   /// Seek positions the [Reader] at offset off in the encoded entry stream.
   /// Offset 0 can be used to denote the first entry.

@@ -3,13 +3,14 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use ecow::EcoString;
 
 use crate::ast::{Annotation, EnumVariant, Generic, Literal, Span, StructFields};
-use crate::types::{FunctionParameter, Type, build_substitution_map, substitute};
+use crate::types::{
+    FunctionParameter, Type, build_substitution_map, substitute, type_args_match_params,
+};
 
 #[derive(Debug, Clone)]
 pub struct Definition {
     pub visibility: Visibility,
     pub ty: Type,
-    pub name: Option<EcoString>,
     pub name_span: Option<Span>,
     pub doc: Option<String>,
     pub body: DefinitionBody,
@@ -277,6 +278,33 @@ impl Definition {
         }
     }
 
+    pub fn methods(&self) -> Option<&MethodSignatures> {
+        match &self.body {
+            DefinitionBody::Struct { methods, .. }
+            | DefinitionBody::TypeAlias { methods, .. }
+            | DefinitionBody::Enum { methods, .. } => Some(methods),
+            DefinitionBody::Interface { .. } | DefinitionBody::Value { .. } => None,
+        }
+    }
+
+    pub fn is_ufcs_method(&self, method: &str) -> bool {
+        let (methods, base_generics_count) = match &self.body {
+            DefinitionBody::Struct {
+                methods, generics, ..
+            }
+            | DefinitionBody::Enum {
+                methods, generics, ..
+            }
+            | DefinitionBody::TypeAlias {
+                methods, generics, ..
+            } => (methods, generics.len()),
+            DefinitionBody::Interface { .. } | DefinitionBody::Value { .. } => return false,
+        };
+        methods
+            .get(method)
+            .is_some_and(|method_ty| is_ufcs_method_type(method_ty, base_generics_count))
+    }
+
     fn attributes(&self) -> Option<&Attributes> {
         match &self.body {
             DefinitionBody::Struct { attributes, .. }
@@ -330,6 +358,29 @@ impl Definition {
     }
 }
 
+fn is_ufcs_method_type(method_ty: &Type, base_generics_count: usize) -> bool {
+    let Type::Forall { vars, body } = method_ty else {
+        return base_generics_count > 0;
+    };
+
+    if vars.len() > base_generics_count {
+        return true;
+    }
+
+    if let Type::Function(function) = body.as_ref()
+        && let Some(receiver) = function.params.first()
+        && let Type::Nominal {
+            params: receiver_params,
+            ..
+        } = receiver.ty.strip_refs()
+        && !type_args_match_params(&receiver_params, vars.iter())
+    {
+        return true;
+    }
+
+    false
+}
+
 pub type MethodSignatures = HashMap<EcoString, Type>;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -347,8 +398,75 @@ impl Visibility {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Interface {
-    pub name: EcoString,
     pub generics: Vec<Generic>,
     pub parents: Vec<Type>,
     pub methods: HashMap<EcoString, Type>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::Symbol;
+
+    fn generic(name: &str) -> Generic {
+        Generic::new(name, vec![], Span::dummy())
+    }
+
+    fn receiver(params: Vec<Type>) -> Type {
+        Type::Nominal {
+            id: Symbol::from_raw("m.Box"),
+            params,
+        }
+    }
+
+    fn method(vars: &[&str], receiver: Type) -> Type {
+        let function = Type::function(
+            vec![FunctionParameter::new(receiver, false)],
+            Default::default(),
+            Box::new(Type::unit()),
+        );
+        Type::Forall {
+            vars: vars.iter().map(|name| EcoString::from(*name)).collect(),
+            body: Box::new(function),
+        }
+    }
+
+    fn definition(method_ty: Type) -> Definition {
+        Definition {
+            visibility: Visibility::Public,
+            ty: receiver(vec![Type::Parameter("T".into())]),
+            name_span: None,
+            doc: None,
+            body: DefinitionBody::Struct {
+                generics: vec![generic("T")],
+                fields: StructFields::Record(vec![]),
+                methods: HashMap::from_iter([("map".into(), method_ty)]),
+                attributes: Attributes::default(),
+            },
+        }
+    }
+
+    #[test]
+    fn full_generic_receiver_is_a_selector_method() {
+        let definition = definition(method(&["T"], receiver(vec![Type::Parameter("T".into())])));
+
+        assert!(!definition.is_ufcs_method("map"));
+    }
+
+    #[test]
+    fn extra_method_generic_requires_ufcs() {
+        let definition = definition(method(
+            &["T", "U"],
+            receiver(vec![Type::Parameter("T".into())]),
+        ));
+
+        assert!(definition.is_ufcs_method("map"));
+    }
+
+    #[test]
+    fn specialized_receiver_requires_ufcs() {
+        let definition = definition(method(&["T"], receiver(vec![Type::int()])));
+
+        assert!(definition.is_ufcs_method("map"));
+    }
 }

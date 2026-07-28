@@ -5,7 +5,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use diagnostics::SemanticResult;
 use syntax::program::{EmitInput, MutationInfo, UnusedInfo};
 
-use semantics::cache::{EmitStamp, compute_emit_artifact_hash, save_module_cache};
+use semantics::cache::{EmitStamp, save_module_cache};
 use semantics::facts::Facts;
 use semantics::inference::AnalyzeInput;
 use semantics::inference::{InferenceOutput, PARALLEL_THRESHOLD, run_inference};
@@ -24,28 +24,21 @@ pub struct AnalyzeOutput {
 
 pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
     let run_lints = input.config.run_lints;
-    let go_module = input.go_module.clone();
-    let project_root = input.project_root.clone();
 
     let InferenceOutput {
-        mut store,
+        store,
         mut facts,
-        ufcs_methods,
         sink,
         has_pre_check_errors,
         compiled_modules,
         cached_modules,
-        cache_enabled,
+        cache_root,
         unreachable_modules,
     } = run_inference(input);
 
-    store.build_closed_domains();
-
-    let analysis = semantics::context::AnalysisContext::new(&store, &ufcs_methods);
-
     let mut unused = UnusedInfo::default();
     if !has_pre_check_errors {
-        passes::run(&analysis, &mut facts, &sink, &mut unused, run_lints);
+        passes::run(&store, &mut facts, &sink, &mut unused, run_lints);
     }
     let mut mutations = MutationInfo::default();
     for (&binding_id, b) in facts.bindings.iter() {
@@ -63,11 +56,11 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
         .iter()
         .map(|c| EmitStamp {
             module_id: c.module_id.clone(),
-            artifact_hash: compute_emit_artifact_hash(c.production_hash, &go_module),
+            artifact_hash: c.artifact_hash,
         })
         .collect();
 
-    if cache_enabled && let Some(ref project_root) = project_root {
+    if let Some(ref project_root) = cache_root {
         let has_errors = all_diagnostics
             .iter()
             .any(|diagnostic| diagnostic.is_error());
@@ -86,7 +79,7 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
                             .unwrap_or(true)
                 });
                 if !has_module_lints
-                    && let Err(e) = save_module_cache(compiled, &store, project_root, &ufcs_methods)
+                    && let Err(e) = save_module_cache(compiled, &store, project_root)
                 {
                     eprintln!(
                         "warning: failed to write cache for {}: {e}",
@@ -137,14 +130,12 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
             unused,
             mutations,
             cached_modules,
-            ufcs_methods,
             equality_index: store.equality_index,
             test_index: store.test_index,
             go_package_names: store.go_package_names,
             go_module_ids,
         },
         all_diagnostics,
-        store.typedef_paths,
     );
 
     AnalyzeOutput {

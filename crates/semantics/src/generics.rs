@@ -248,7 +248,6 @@ mod tests {
                     vec![nominal("m.A", vec![Type::Parameter("T".into())])],
                 )),
             },
-            name: None,
             name_span: None,
             doc: None,
             body: DefinitionBody::TypeAlias {

@@ -70,8 +70,6 @@ pub(crate) fn save_prelude_cache(store: &Store) {
 }
 
 pub(crate) fn register_cached_prelude(store: &mut Store, cached: PreludeCache) {
-    store.mark_visited(PRELUDE_MODULE_ID);
-
     // Register the prelude file for file_id → module_id mapping (needed by diagnostics).
     // Items are empty since we're loading definitions from cache.
     use syntax::program::File;
@@ -80,6 +78,7 @@ pub(crate) fn register_cached_prelude(store: &mut Store, cached: PreludeCache) {
         module_id: PRELUDE_MODULE_ID.to_string(),
         name: "prelude.d.lis".to_string(),
         display_path: "prelude.d.lis".to_string(),
+        source_path: deps::prelude_typedef_path(),
         source: stdlib::LIS_PRELUDE_SOURCE.to_string(),
         items: vec![],
         file_comment: None,
@@ -91,10 +90,6 @@ pub(crate) fn register_cached_prelude(store: &mut Store, cached: PreludeCache) {
         .expect("prelude module must be registered before loading cached definitions");
     for (qualified_name, cached_definition) in cached.definitions {
         cached_definition.install_into(module, qualified_name.into(), file_ids);
-    }
-
-    if let Some(path) = deps::prelude_typedef_path() {
-        store.typedef_paths.insert(PRELUDE_FILE_ID, path);
     }
 }
 

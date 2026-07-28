@@ -676,7 +676,7 @@ impl ClientSessionState {
   /// 
   /// It can be called by [ClientSessionCache.Put] to serialize (with
   /// [SessionState.Bytes]) and store the session.
-  fn ResumptionState(self: Ref<ClientSessionState>) -> Result<(Slice<byte>, Ref<SessionState>), error>
+  fn ResumptionState(self: Ref<ClientSessionState>) -> Result<(Slice<byte>, Option<Ref<SessionState>>), error>
 }
 
 impl Config {
@@ -708,7 +708,7 @@ impl Config {
     self: Ref<Config>,
     identity: Slice<byte>,
     cs: ConnectionState,
-  ) -> Result<Ref<SessionState>, error>
+  ) -> Result<Option<Ref<SessionState>>, error>
 
   /// EncryptTicket encrypts a ticket with the [Config]'s configured (or default)
   /// session ticket keys. It can be used as a [Config.WrapSession] implementation.

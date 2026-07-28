@@ -191,13 +191,13 @@ fn collect_test_candidates(
                 ));
                 return;
             }
-            records.push(TestFunction {
-                module_id: module_id.to_string(),
-                qualified_name: format!("{}.{}", module_id, name),
+            records.push(TestFunction::new(
+                module_id,
+                name,
                 title,
-                doc: doc.clone(),
-                span: *name_span,
-            });
+                doc.clone(),
+                *name_span,
+            ));
         }
         Expression::Struct {
             attributes, fields, ..

@@ -121,22 +121,6 @@
         "strings": ["Replacer.WriteString"]
       },
       "nilable_return": {
-        "crypto/tls": ["Conn.LocalAddr", "Conn.NetConn", "Conn.RemoteAddr"],
-        "database/sql": ["ColumnType.ScanType"],
-        "expvar": ["Get", "Map.Get"],
-        "go/types": [
-          "SizesFor",
-          "Const.Val",
-          "Info.ObjectOf", "Info.TypeOf",
-          "Scope.Insert", "Scope.Lookup"
-        ],
-        "image": ["Paletted.At"],
-        "image/color": ["Palette.Convert"],
-        "math/rand": ["NewZipf"],
-        "math/rand/v2": ["NewZipf"],
-        "os": ["NewFile"],
-        "reflect": ["TypeOf"],
-        "sync/atomic": ["Pointer.Load", "Pointer.Swap"]
       },
       "mutates_param": {
         "archive/tar": {
@@ -411,30 +395,25 @@
         }
       },
       "non_nilable_return": {
-        "bufio": ["NewReader", "NewReaderSize", "NewWriter", "NewWriterSize"],
         "compress/gzip": ["NewWriter"],
         "compress/zlib": ["NewWriter"],
-        "container/list": ["List.PushBack", "List.PushFront"],
-        "container/ring": ["Ring.Next", "Ring.Prev"],
+        "container/ring": ["Ring.Move", "Ring.Next", "Ring.Prev"],
         "context": ["AfterFunc"],
-        "crypto": ["Hash.New"],
-        "crypto/ecdh": ["P256", "P384", "P521", "PrivateKey.Curve", "PrivateKey.PublicKey", "PublicKey.Curve", "X25519"],
-        "crypto/elliptic": ["Curve.Params", "CurveParams.Params", "P224", "P256", "P384", "P521"],
+        "crypto/ecdh": ["PrivateKey.Curve", "PrivateKey.PublicKey", "PublicKey.Curve"],
+        "crypto/elliptic": ["Curve.Params"],
         "debug/dwarf": ["Reader.ByteOrder"],
-        "encoding/xml": ["NewTokenDecoder"],
-        "expvar": ["Handler"],
         "flag": ["FlagSet.Output"],
-        "go/ast": ["CommentMap.Update", "Unparen"],
+        "go/build/constraint": ["Parse"],
         "go/constant": [
-          "Imag", "MakeFromLiteral", "MakeImag",
-          "Num", "Real", "ToFloat", "ToInt", "UnaryOp"
+          "Imag",
+          "Real", "ToFloat", "ToInt"
         ],
         "go/doc/comment": ["Parser.Parse"],
+        "go/importer": ["Default"],
         "go/types": [
           "Alias.Obj", "Alias.Origin", "Alias.Rhs", "Alias.Underlying",
           "Array.Elem",
           "Chan.Elem",
-          "Default",
           "Func.Origin", "Func.Signature",
           "Interface.EmbeddedType", "Interface.ExplicitMethod", "Interface.Method",
           "Map.Elem", "Map.Key",
@@ -450,65 +429,51 @@
           "Term.Type",
           "Tuple.At",
           "TypeList.At",
-          "TypeParam.Constraint", "TypeParam.Obj", "TypeParam.Underlying", "TypeParamList.At",
+          "TypeParam.Constraint", "TypeParam.Obj", "TypeParamList.At",
           "Unalias",
           "Union.Term",
           "Var.Origin",
           "object.Type"
         ],
-        "hash/crc32": ["IEEETable", "MakeTable"],
-        "html/template": ["Must"],
         "image": [
           "Alpha.ColorModel", "Alpha16.ColorModel",
           "CMYK.ColorModel",
           "Gray.ColorModel", "Gray16.ColorModel",
           "NRGBA.ColorModel", "NRGBA64.ColorModel",
           "NYCbCrA.ColorModel",
-          "Paletted.ColorModel",
           "RGBA.ColorModel", "RGBA64.ColorModel",
           "Rectangle.ColorModel",
           "YCbCr.ColorModel"
         ],
-        "log": ["Default", "Logger.Writer", "Writer"],
-        "log/slog": ["Default", "Logger.Handler", "Value.LogValuer"],
+        "image/jpeg": ["Decode"],
+        "log": ["Logger.Writer", "Writer"],
+        "log/slog": ["Logger.Handler"],
         "net": [
           "conn.LocalAddr", "conn.RemoteAddr",
           "TCPListener.Addr",
           "UnixListener.Addr"
         ],
         "net/http": [
-          "AllowQuerySemicolons",
-          "CrossOriginProtection.Handler",
-          "MaxBytesHandler",
-          "NotFoundHandler",
           "Request.Context",
           "StripPrefix"
         ],
-        "net/http/httptest": ["NewRequest", "NewRequestWithContext", "ResponseRecorder.Result", "Server.Client"],
-        "net/http/httptrace": ["WithClientTrace"],
-        "net/textproto": [
-          "Conn.DotReader", "Conn.DotWriter",
-          "Reader.DotReader", "Writer.DotWriter"
-        ],
+        "net/http/httptest": ["ResponseRecorder.Result", "Server.Client"],
         "os/exec": ["CommandContext"],
         "reflect": [
-          "ArrayOf", "ChanOf", "FuncOf", "MapOf",
-          "PointerTo", "PtrTo", "SliceOf", "StructOf", "TypeFor",
-          "Value.Type"
+          "FuncOf",
+          "StructOf", "TypeFor"
         ],
-        "regexp": ["MustCompile", "MustCompilePOSIX"],
-        "regexp/syntax": ["Regexp.Simplify"],
-        "runtime/trace": ["StartRegion"],
+        "regexp/syntax": ["Parse"],
         "sync": ["OnceFunc", "OnceValue", "OnceValues"],
-        "syscall": ["MustLoadDLL", "DLL.MustFindProc"],
-        "testing": ["common.Context", "common.Output"],
-        "text/template": ["Must"],
-        "time": ["AfterFunc", "FixedZone", "NewTicker", "NewTimer", "Time.Location"]
+        "testing": ["common.Context"],
+        "text/template/parse": ["Tree.Parse"],
+        "time": ["AfterFunc", "FixedZone", "Time.Location"]
       },
       "non_nilable_var": {
         "crypto/rand": ["Reader"],
         "image/color": ["*"],
         "io/ioutil": ["Discard"],
+        "os": ["Stderr", "Stdin", "Stdout"],
         "unicode": ["*"]
       },
       "reflection_decode": {

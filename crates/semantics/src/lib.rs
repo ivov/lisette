@@ -1,7 +1,5 @@
 pub mod cache;
-pub mod call_classification;
 pub mod checker;
-pub mod context;
 pub(crate) mod diagnostics;
 pub mod facts;
 pub mod generics;

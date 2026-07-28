@@ -3,8 +3,8 @@ use syntax::ast::Expression;
 use syntax::program::UnusedInfo;
 use syntax::program::{File, Module};
 
-use semantics::context::AnalysisContext;
 use semantics::facts::Facts;
+use semantics::store::Store;
 
 pub(crate) mod checks;
 pub(crate) mod comparison;
@@ -45,7 +45,7 @@ pub(crate) fn is_trivial_expression(expression: &Expression) -> bool {
 }
 
 pub fn run(
-    analysis: &AnalysisContext,
+    store: &Store,
     facts: &mut Facts,
     sink: &LocalSink,
     unused: &mut UnusedInfo,
@@ -53,15 +53,15 @@ pub fn run(
 ) {
     let facts_ref: &Facts = facts;
     let ((checks_diagnostics, pattern_lints), lint_outputs) = rayon::join(
-        || checks::run_all(analysis, facts_ref, run_lints),
+        || checks::run_all(store, facts_ref, run_lints),
         || {
             run_lints.then(|| {
                 let (produced_facts, (ast_walk_diagnostics, ref_graph_output)) = rayon::join(
-                    || diagnostic_producers::run_all(analysis),
+                    || diagnostic_producers::run_all(store),
                     || {
                         rayon::join(
-                            || lints::ast_walk::run(analysis, facts_ref),
-                            || lints::ref_graph::run(analysis, facts_ref),
+                            || lints::ast_walk::run(store, facts_ref),
+                            || lints::ref_graph::run(store, facts_ref),
                         )
                     },
                 );
@@ -71,9 +71,9 @@ pub fn run(
     );
 
     sink.extend(checks_diagnostics);
-    deferred::run(analysis.store, facts.take_deferred_checks(), sink);
+    deferred::run(store, facts.take_deferred_checks(), sink);
     if let Some((produced_facts, ast_walk_diagnostics, ref_graph_output)) = lint_outputs {
-        lints::from_facts::run(analysis, facts, pattern_lints, produced_facts, unused, sink);
+        lints::from_facts::run(store, facts, pattern_lints, produced_facts, unused, sink);
         let (ref_graph_diagnostics, ref_graph_unused) = ref_graph_output;
         sink.extend(ast_walk_diagnostics);
         sink.extend(ref_graph_diagnostics);

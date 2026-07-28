@@ -3,7 +3,7 @@ use crate::store::Store;
 use diagnostics::infer::{InterfaceMethodViolation, InterfaceViolation, MissingMethod};
 use syntax::ast::Span;
 use syntax::program::{DefinitionBody, Interface, MethodSignatures};
-use syntax::types::{GO_IMPORT_PREFIX, SubstitutionMap, Type, substitute};
+use syntax::types::{GO_IMPORT_PREFIX, SubstitutionMap, Type, substitute, unqualified_name};
 
 use crate::checker::infer::InferCtx;
 
@@ -97,7 +97,7 @@ impl InferCtx<'_> {
         {
             self.sink
                 .push(diagnostics::infer::ref_to_interface_does_not_implement(
-                    &interface.name,
+                    unqualified_name(interface_qualified_id),
                     &resolved,
                     *span,
                 ));
@@ -181,7 +181,7 @@ impl InferCtx<'_> {
         if let Some(wrapper) = wrapper {
             self.sink
                 .push(diagnostics::infer::wrapper_does_not_implement_interface(
-                    &interface.name,
+                    unqualified_name(interface_qualified_id),
                     wrapper,
                     &resolved,
                     *span,
@@ -192,7 +192,7 @@ impl InferCtx<'_> {
                 .map_or_else(|| resolved.to_string(), str::to_owned);
             self.sink
                 .push(diagnostics::infer::builtin_type_cannot_implement_interface(
-                    &interface.name,
+                    unqualified_name(interface_qualified_id),
                     &type_name,
                     *span,
                 ));
@@ -202,7 +202,7 @@ impl InferCtx<'_> {
                 .map_or_else(|| resolved.to_string(), str::to_owned);
             self.sink
                 .push(diagnostics::infer::interface_not_implemented(
-                    &interface.name,
+                    unqualified_name(interface_qualified_id),
                     &type_name,
                     &violations,
                     *span,
@@ -271,7 +271,7 @@ impl InferCtx<'_> {
         let type_name = ty.get_name().map_or_else(|| ty.to_string(), str::to_owned);
         self.sink
             .push(diagnostics::infer::pointer_receiver_interface_mismatch(
-                &interface.name,
+                unqualified_name(interface_qualified_id),
                 &type_name,
                 &ptr_methods,
                 *span,
@@ -357,7 +357,7 @@ impl InferCtx<'_> {
             exported: public,
             depth: 0,
             owner: id.into(),
-            shadowed: self.is_ufcs_method(id, method),
+            shadowed: self.store.is_ufcs_method(id, method),
         })
     }
 
@@ -480,7 +480,7 @@ impl InferCtx<'_> {
                         exported: definition.visibility.is_public(),
                         depth: 0,
                         owner: own_id.into(),
-                        shadowed: self.is_ufcs_method(own_id, name),
+                        shadowed: self.store.is_ufcs_method(own_id, name),
                     },
                 )
                 .unwrap_or(syntax::go_names::ConformanceCandidate::Unresolved)
@@ -582,7 +582,7 @@ impl InferCtx<'_> {
                         self.sink.push(
                             diagnostics::infer::specialized_impl_cannot_satisfy_interface(
                                 &type_name,
-                                &interface.name,
+                                unqualified_name(interface_qualified_id),
                                 method_name,
                                 &receiver_generics,
                                 *span,
@@ -615,7 +615,6 @@ impl InferCtx<'_> {
                 SignatureCheck::Matched => {
                     self.validate_comma_ok_abi(
                         check,
-                        interface,
                         interface_qualified_id,
                         method_name,
                         impl_method_name.as_str(),
@@ -645,7 +644,7 @@ impl InferCtx<'_> {
 
         if !method_violations.is_empty() {
             check.violations.push(InterfaceViolation {
-                interface_name: interface.name.to_string(),
+                interface_name: unqualified_name(interface_qualified_id).to_string(),
                 parent_of: parent_of.map(String::from),
                 methods: method_violations,
             });
@@ -666,7 +665,7 @@ impl InferCtx<'_> {
                     &parent_interface,
                     &parent_name,
                     &substituted_parent_args,
-                    Some(&interface.name),
+                    Some(unqualified_name(interface_qualified_id)),
                 );
             }
         }
@@ -688,7 +687,7 @@ impl InferCtx<'_> {
         };
         if site
             .receiver_id
-            .is_some_and(|id| self.is_ufcs_method(id, ufcs_probe))
+            .is_some_and(|id| self.store.is_ufcs_method(id, ufcs_probe))
         {
             return SelectedMethod::UfcsOnly;
         }
@@ -798,7 +797,6 @@ impl InferCtx<'_> {
     fn validate_comma_ok_abi(
         &mut self,
         check: &ConformanceTraversal<'_>,
-        interface: &Interface,
         interface_qualified_id: &str,
         method_name: &str,
         impl_method_name: &str,
@@ -819,7 +817,7 @@ impl InferCtx<'_> {
         let adapter_reconciles = check.adapter_capable && interface_comma_ok && !selected_comma_ok;
         if interface_comma_ok != selected_comma_ok && !adapter_reconciles {
             self.sink.push(diagnostics::embed::comma_ok_abi_mismatch(
-                &interface.name,
+                unqualified_name(interface_qualified_id),
                 method_name,
                 check.span,
             ));

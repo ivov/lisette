@@ -7,9 +7,11 @@ use syntax::lex::Lexer;
 use syntax::parse::Parser;
 use syntax::program::{
     BindingMutation, Definition, DefinitionBody, EqualityIndex, File, Module, MutationInfo,
-    ValueKind, Visibility,
+    NativeTypeKind, TestFunction, ValueKind, Visibility,
 };
-use syntax::types::{FunctionParameter, SubstitutionMap, Type, TypeVarId, substitute};
+use syntax::types::{
+    CompoundKind, FunctionParameter, SubstitutionMap, Symbol, Type, TypeVarId, substitute,
+};
 
 fn walk(expression: &Expression, visit: &mut impl FnMut(&Expression)) {
     visit(expression);
@@ -296,6 +298,40 @@ fn checked_call_type_arguments_cannot_have_misaligned_types() {
 }
 
 #[test]
+fn native_type_classification_uses_the_canonical_type_variant() {
+    let native = Type::compound(CompoundKind::Slice, vec![Type::int()]);
+    let merely_named_like_native = Type::Nominal {
+        id: Symbol::from_parts("example", "Slice"),
+        params: vec![Type::int()],
+    };
+    let noncanonical_prelude_name = Type::Nominal {
+        id: Symbol::from_parts("prelude", "Slice"),
+        params: vec![Type::int()],
+    };
+    let merely_named_like_simple = Type::Nominal {
+        id: Symbol::from_parts("example", "int"),
+        params: vec![],
+    };
+
+    assert_eq!(
+        NativeTypeKind::from_type(&native),
+        Some(NativeTypeKind::Slice)
+    );
+    assert_eq!(NativeTypeKind::from_type(&merely_named_like_native), None);
+    assert!(noncanonical_prelude_name.as_compound().is_none());
+    assert!(merely_named_like_simple.as_simple().is_none());
+}
+
+#[test]
+fn test_function_derives_its_module_and_name_from_one_symbol() {
+    let test = TestFunction::new("example.com/math", "adds", None, None, Span::dummy());
+
+    assert_eq!(test.qualified_name(), "example.com/math.adds");
+    assert_eq!(test.module_id(), "example.com/math");
+    assert_eq!(test.name(), "adds");
+}
+
+#[test]
 fn placeholder_types_are_not_reserved_type_variable_ids() {
     let variable = Type::Var {
         id: TypeVarId::new(u32::MAX),
@@ -460,7 +496,6 @@ fn value_definition(kind: ValueKind) -> Definition {
     Definition {
         visibility: Visibility::Private,
         ty: Type::int(),
-        name: None,
         name_span: None,
         doc: None,
         body: DefinitionBody::Value {

@@ -1,6 +1,6 @@
 use crate::ast::Expression;
 use crate::types::Symbol;
-use crate::types::Type;
+use crate::types::{CompoundKind, SimpleKind, Type};
 
 pub fn resolved_definition(expression: &Expression) -> Option<&str> {
     match expression.unwrap_parens() {
@@ -218,19 +218,20 @@ pub enum NativeTypeKind {
 
 impl NativeTypeKind {
     pub fn from_type(ty: &Type) -> Option<Self> {
-        let resolved = ty.strip_refs();
-        // Skip module namespaces and Go-imported types: their leaf name can
-        // collide with a native type (e.g. `Slice`), but they are not native.
-        if resolved.as_import_namespace().is_some() {
-            return None;
-        }
-        if let Type::Nominal { ref id, .. } = resolved
-            && id.as_str().starts_with("go:")
-        {
-            return None;
-        }
-        let name = resolved.get_name()?;
-        Self::from_name(name)
+        Some(match ty.strip_refs() {
+            Type::Compound { kind, .. } => match kind {
+                CompoundKind::Slice => Self::Slice,
+                CompoundKind::EnumeratedSlice => Self::EnumeratedSlice,
+                CompoundKind::Map => Self::Map,
+                CompoundKind::Channel => Self::Channel,
+                CompoundKind::Sender => Self::Sender,
+                CompoundKind::Receiver => Self::Receiver,
+                CompoundKind::Ref | CompoundKind::VarArgs => return None,
+            },
+            Type::Simple(SimpleKind::String) => Self::String,
+            Type::Array { .. } => Self::Array,
+            _ => return None,
+        })
     }
 
     pub fn from_constructor_path(path: &str) -> Option<Self> {

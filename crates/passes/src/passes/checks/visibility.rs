@@ -16,7 +16,7 @@ pub(crate) fn run_module(module_id: &str, store: &Store, sink: &LocalSink) {
         .iter()
         .filter(|(key, _)| key.starts_with(&module_prefix))
         .filter(|(_, definition)| !store.is_test_definition(definition))
-        .filter_map(|(_, definition)| {
+        .filter_map(|(qualified_name, definition)| {
             if let Definition {
                 visibility: Visibility::Private,
                 body:
@@ -31,7 +31,7 @@ pub(crate) fn run_module(module_id: &str, store: &Store, sink: &LocalSink) {
                     .keys()
                     .map(|k| k.to_string())
                     .collect();
-                Some((interface_data.name.to_string(), method_names))
+                Some((qualified_name.last_segment().to_string(), method_names))
             } else {
                 None
             }
@@ -42,19 +42,19 @@ pub(crate) fn run_module(module_id: &str, store: &Store, sink: &LocalSink) {
         return;
     }
 
-    for (_, definition) in module
+    for (key, definition) in module
         .definitions
         .iter()
         .filter(|(key, _)| key.starts_with(&module_prefix))
         .filter(|(_, definition)| !store.is_test_definition(definition))
     {
         if let Definition {
-            name: Some(name),
             name_span: Some(name_span),
             body: DefinitionBody::Struct { methods, .. },
             ..
         } = definition
         {
+            let name = key.last_segment();
             for method_name in methods.keys() {
                 for (interface_name, interface_methods) in &non_pub_interfaces {
                     if interface_methods.contains(method_name.as_str()) {

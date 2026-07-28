@@ -121,17 +121,29 @@ fn LoadAndDelete(self: Ref<Map>, key: Unknown) -> (Unknown, bool)
 | Pointer in struct field       | `Option<Ref<T>>` |
 | Pointer in container element  | `Option<Ref<T>>` |
 
-Pointers in function return types are typically non-nilable, unless a [heuristic](internal/convert/nilcheck.go) says otherwise.
+For pointer and interface return types, bindgen runs an [SSA nilability analysis](internal/convert/nilness.go) over the whole loaded program: a return proven non-nil on every path emits `Ref<T>`, a witnessed nil path emits `Option<Ref<T>>`, and an inconclusive body falls back to constructor-name heuristics and config overrides.
 
 ```go
 func Open(name string) (*File, error)  // non-nil on success (typical case)
-func NewFile(fd uintptr, name string) *File  // nil on invalid fd (heuristic)
+func NewFile(fd uintptr, name string) *File  // nil on invalid fd (proven nil path)
 ```
 
 ```rs
 pub fn Open(name: string) -> Result<Ref<File>, error>
 pub fn NewFile(fd: uint, name: string) -> Option<Ref<File>>
 ```
+
+A `(T, error)` return presumes `T` non-nil on success, but when the analysis witnesses a return site where both values are nil, the payload demotes to `Option`:
+
+```go
+func (r *Reader) Next() (*Entry, error)  // returns nil, nil at end of section
+```
+
+```rs
+fn Next(self: Ref<Reader>) -> Result<Option<Ref<Entry>>, error>
+```
+
+The same applies per element in plain tuples, so `encoding/pem.Decode` emits `(Option<Ref<Block>>, Slice<byte>)`.
 
 ### Named primitive types
 
@@ -186,16 +198,17 @@ Bindgen accepts a config file with per-package overrides:
 
     // Override type mapping decisions
     "types": {
-      // Turn `Ref<T>` into `Option<Ref<T>>`
-      // e.g. `os.NewFile` returns `Option<Ref<File>>`
+      // Turn `Ref<T>` into `Option<Ref<T>>` when the analysis cannot see
+      // the nil path itself
       "nilable_return": {
-        "os": ["NewFile"],
+        "example.com/pkg": ["NewHandle"],
       },
 
-      // Turn `Option<Ref<T>>` into `Ref<T>`
-      // e.g. `reflect.TypeOf` returns `Ref<Type>`
+      // Turn `Option<Ref<T>>` into `Ref<T>` for API invariants the analysis
+      // cannot prove
+      // e.g. `sync.OnceValue` never returns a nil function value
       "non_nilable_return": {
-        "reflect": ["TypeOf"],
+        "sync": ["OnceValue"],
       },
 
       // Return `error` directly instead of `Result<(), error>`

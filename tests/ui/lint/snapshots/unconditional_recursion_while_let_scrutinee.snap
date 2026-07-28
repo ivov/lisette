@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Unconditional recursion
+   ╭─[test.lis:3:23]
+ 2 │ fn next_item(n: int) -> Option<int> {
+ 3 │   while let Some(v) = next_item(n) {
+   ·                       ──────┬─────
+   ·                             ╰── recurses on every path
+ 4 │     let _ = v
+   ╰────
+  help: `next_item` always calls itself, so it overflows the stack instead of returning. Add a base case that returns without recursing · code: [lint.unconditional_recursion]

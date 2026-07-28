@@ -1450,10 +1450,9 @@ impl InferCtx<'_> {
                 let receiver_ty = receiver.get_type().resolve_in(&self.env).strip_refs();
                 let peeled = store.deep_resolve_alias(&receiver_ty);
 
-                let ufcs_methods = self.ufcs_methods();
                 let is_ufcs_member = |ty: &Type| {
                     matches!(ty, Type::Nominal { id, .. }
-                        if ufcs_methods.contains(&(id.to_string(), member.to_string())))
+                        if store.is_ufcs_method(id, member))
                 };
                 if is_ufcs_member(&receiver_ty) || is_ufcs_member(&peeled) {
                     return CallKind::UfcsMethod;
@@ -1567,10 +1566,7 @@ impl InferCtx<'_> {
         }
 
         // If it's a UFCS-lowered method, skip: the emitter handles it differently
-        if self
-            .ufcs_methods()
-            .contains(&(qualified_name.to_string(), method.to_string()))
-        {
+        if store.is_ufcs_method(&qualified_name, method) {
             return None;
         }
 

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Unconditional recursion
+   ╭─[test.lis:7:16]
+ 6 │ fn spawn_wrap(n: int) -> int {
+ 7 │   task consume(spawn_wrap(n))
+   ·                ──────┬──────
+   ·                      ╰── recurses on every path
+ 8 │   0
+   ╰────
+  help: `spawn_wrap` always calls itself, so it overflows the stack instead of returning. Add a base case that returns without recursing · code: [lint.unconditional_recursion]

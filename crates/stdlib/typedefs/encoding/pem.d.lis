@@ -9,7 +9,7 @@ import "go:io"
 /// etc) in the input. It returns that block and the remainder of the input. If
 /// no PEM data is found, p is nil and the whole of the input is returned in
 /// rest. Blocks must start at the beginning of a line and end at the end of a line.
-pub fn Decode(data: Slice<byte>) -> (Ref<Block>, Slice<byte>)
+pub fn Decode(data: Slice<byte>) -> (Option<Ref<Block>>, Slice<byte>)
 
 /// Encode writes the PEM encoding of b to out.
 pub fn Encode(out: io.Writer, b: Ref<Block>) -> Result<(), error>

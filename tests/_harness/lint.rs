@@ -107,26 +107,17 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
         module_id: TEST_MODULE_ID.to_string(),
         name: "test.lis".to_string(),
         display_path: "test.lis".to_string(),
+        source_path: None,
         source: source.to_string(),
         items: typed_ast,
         file_comment: None,
     };
 
     store.store_file(typed_file);
-    store.build_closed_domains();
-
     let inference_checkpoint = checker.sink.checkpoint();
 
-    let ufcs_methods = checker.shared_ufcs_methods();
-    let analysis = semantics::context::AnalysisContext::new(&store, &ufcs_methods);
     let mut unused = UnusedInfo::default();
-    passes::run(
-        &analysis,
-        &mut checker.facts,
-        &checker.sink,
-        &mut unused,
-        true,
-    );
+    passes::run(&store, &mut checker.facts, &checker.sink, &mut unused, true);
 
     // Deferred inference errors surface during passes::run, mixed in with
     // the error-severity lint diagnostics the tests assert on.

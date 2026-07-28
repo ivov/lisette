@@ -132,7 +132,6 @@ impl Planner<'_> {
             .iter_definitions()
             .filter_map(|(key, definition)| {
                 let syntax::program::Definition {
-                    name: Some(name),
                     name_span: Some(name_span),
                     body: DefinitionBody::Enum { variants, .. },
                     ..
@@ -140,6 +139,7 @@ impl Planner<'_> {
                 else {
                     return None;
                 };
+                let name = key.last_segment();
                 if PreludeType::from_name(name).is_some() {
                     return None;
                 }

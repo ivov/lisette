@@ -1,7 +1,3 @@
-use std::path::PathBuf;
-
-use rustc_hash::FxHashMap as HashMap;
-
 use syntax::ParseError;
 use syntax::program::EmitInput;
 
@@ -10,18 +6,10 @@ use crate::LisetteDiagnostic;
 pub struct SemanticResult {
     pub emit_input: EmitInput,
     diagnostics: Vec<LisetteDiagnostic>,
-    /// File ID -> on-disk path of the `.d.lis` typedef. Populated for third-party
-    /// go: typedefs read from `target/.lisette/typedefs/...`; absent for embedded
-    /// stdlib typedefs.
-    pub typedef_paths: HashMap<u32, PathBuf>,
 }
 
 impl SemanticResult {
-    pub fn new(
-        emit_input: EmitInput,
-        diagnostics: Vec<LisetteDiagnostic>,
-        typedef_paths: HashMap<u32, PathBuf>,
-    ) -> Self {
+    pub fn new(emit_input: EmitInput, diagnostics: Vec<LisetteDiagnostic>) -> Self {
         let (mut errors, lints): (Vec<_>, Vec<_>) = diagnostics
             .into_iter()
             .partition(LisetteDiagnostic::is_error);
@@ -29,7 +17,6 @@ impl SemanticResult {
         Self {
             emit_input,
             diagnostics: errors,
-            typedef_paths,
         }
     }
 
@@ -40,7 +27,6 @@ impl SemanticResult {
                 ..EmitInput::default()
             },
             errors.into_iter().map(Into::into).collect(),
-            HashMap::default(),
         )
     }
 
@@ -95,7 +81,6 @@ mod tests {
                 LisetteDiagnostic::error("error"),
                 LisetteDiagnostic::info("info"),
             ],
-            HashMap::default(),
         );
 
         let messages = (
@@ -121,7 +106,6 @@ mod tests {
                 LisetteDiagnostic::warn("warning"),
                 LisetteDiagnostic::error("semantic"),
             ],
-            HashMap::default(),
         );
 
         result.prepend_errors([LisetteDiagnostic::error("parse")]);

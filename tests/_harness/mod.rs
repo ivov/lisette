@@ -48,7 +48,6 @@ pub fn register_test_builtins(store: &mut Store, _checker: &mut TaskState) {
                     vec![],
                     Box::new(return_type),
                 ),
-                name: None,
                 name_span: None,
                 doc: None,
                 body: DefinitionBody::Value {

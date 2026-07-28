@@ -590,7 +590,7 @@ mod tests {
             .test_index
             .tests()
             .iter()
-            .map(|t| t.qualified_name.clone())
+            .map(|test| test.qualified_name().to_string())
             .collect();
         names.sort();
         names

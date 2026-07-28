@@ -235,7 +235,7 @@ impl Float {
   /// for x > 0, and [Above] for x < 0.
   /// If a non-nil *[Int] argument z is provided, [Int] stores
   /// the result in z instead of allocating a new [Int].
-  fn Int(self: Ref<Float>, z: Ref<Int>) -> (Ref<Int>, Accuracy)
+  fn Int(self: Ref<Float>, z: Ref<Int>) -> (Option<Ref<Int>>, Accuracy)
 
   /// Int64 returns the integer resulting from truncating x towards zero.
   /// If [math.MinInt64] <= x <= [math.MaxInt64], the result is [Exact] if x is
@@ -356,7 +356,7 @@ impl Float {
   /// The result is [Exact] if x is not an Inf.
   /// If a non-nil *[Rat] argument z is provided, [Rat] stores
   /// the result in z instead of allocating a new [Rat].
-  fn Rat(self: Ref<Float>, z: Ref<Rat>) -> (Ref<Rat>, Accuracy)
+  fn Rat(self: Ref<Float>, z: Ref<Rat>) -> (Option<Ref<Rat>>, Accuracy)
 
   /// Scan is a support routine for [fmt.Scanner]; it sets z to the value of
   /// the scanned number. It accepts formats whose verbs are supported by

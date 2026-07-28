@@ -93,7 +93,6 @@ impl TaskState {
             let definition = Definition {
                 visibility: visibility.clone(),
                 ty: variant_ty,
-                name: None,
                 name_span: Some(variant_name_span),
                 doc: variant_doc,
                 body: DefinitionBody::Value {
@@ -121,7 +120,6 @@ impl TaskState {
             Definition {
                 visibility,
                 ty: enum_ty,
-                name: Some(name.into()),
                 name_span: Some(*name_span),
                 doc: doc.clone(),
                 body: DefinitionBody::Enum {
@@ -338,7 +336,6 @@ impl TaskState {
             Definition {
                 visibility,
                 ty: struct_ty,
-                name: Some(name.into()),
                 name_span: Some(*name_span),
                 doc: doc.clone(),
                 body: DefinitionBody::Struct {
@@ -454,7 +451,7 @@ impl TaskState {
                 if module.is_typedef(span.file_id) {
                     return None;
                 }
-                Some((qualified_name.as_str(), definition.name.as_deref()?, span))
+                Some((qualified_name.as_str(), qualified_name.last_segment(), span))
             })
             .collect();
         targets.sort_by_key(|(_, _, span)| (span.file_id, span.byte_offset));
@@ -563,7 +560,6 @@ impl TaskState {
                 Definition {
                     visibility,
                     ty: alias_ty,
-                    name: Some(name.into()),
                     name_span: Some(*name_span),
                     doc: doc.clone(),
                     body: DefinitionBody::TypeAlias {
@@ -628,7 +624,6 @@ impl TaskState {
             Definition {
                 visibility,
                 ty: alias_ty,
-                name: Some(name.into()),
                 name_span: Some(*name_span),
                 doc: doc.clone(),
                 body: DefinitionBody::TypeAlias {

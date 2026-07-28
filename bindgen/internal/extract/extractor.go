@@ -103,22 +103,39 @@ func LoadPackage(path string) (*packages.Package, error) {
 }
 
 func LoadPackages(paths []string, targetGOOS, targetGOARCH string) ([]*packages.Package, error) {
-	pkgs, err := packages.Load(currentLoadConfig(targetGOOS, targetGOARCH, false), paths...)
+	return loadCheckedPackages(paths, targetGOOS, targetGOARCH, nil)
+}
+
+// LoadStdPackages loads the `std` pattern, dropping roots matched by skip.
+// Load errors fail the call only for kept roots: internal packages may not
+// type-check on every platform and are never converted.
+func LoadStdPackages(targetGOOS, targetGOARCH string, skip func(string) bool) ([]*packages.Package, error) {
+	return loadCheckedPackages([]string{"std"}, targetGOOS, targetGOARCH, skip)
+}
+
+func loadCheckedPackages(patterns []string, targetGOOS, targetGOARCH string, skip func(string) bool) ([]*packages.Package, error) {
+	pkgs, err := packages.Load(currentLoadConfig(targetGOOS, targetGOARCH, false), patterns...)
 	if err != nil {
 		return nil, err
 	}
 
+	var kept []*packages.Package
 	var failures []string
 	for _, pkg := range pkgs {
+		if skip != nil && skip(pkg.PkgPath) {
+			continue
+		}
 		if len(pkg.Errors) > 0 {
 			failures = append(failures, fmt.Sprintf("%s: %v", pkg.PkgPath, pkg.Errors))
+			continue
 		}
+		kept = append(kept, pkg)
 	}
 	if len(failures) > 0 {
 		return nil, fmt.Errorf("packages.Load reported errors:\n  %s", strings.Join(failures, "\n  "))
 	}
 
-	return pkgs, nil
+	return kept, nil
 }
 
 // Like LoadPackages but keeps errored packages so the caller can classify them.

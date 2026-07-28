@@ -2760,6 +2760,15 @@ pub fn impossible_comparison(span: &Span) -> LisetteDiagnostic {
         )
 }
 
+pub fn always_true_disjunction(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Always-true comparison")
+        .with_infer_code("always_true_disjunction")
+        .with_span_label(span, "always `true`")
+        .with_help(
+            "Every value satisfies at least one side, so this `||` is always `true`. Check the bounds, or did you mean `&&`?",
+        )
+}
+
 pub fn nan_comparison(span: &Span, always_true: bool) -> LisetteDiagnostic {
     let result = if always_true { "true" } else { "false" };
 
@@ -2922,6 +2931,21 @@ pub fn integer_literal_overflow(
         .with_help(format!(
             "`{}` must be in range `{}` to `{}`",
             target_ty, min, max
+        ))
+}
+
+pub fn constant_cast_overflow(
+    span: &Span,
+    target_ty: &str,
+    value: i128,
+    min: i128,
+    max: i128,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Constant cast overflow")
+        .with_infer_code("constant_cast_overflow")
+        .with_span_label(span, format!("constant `{value}` overflows `{target_ty}`"))
+        .with_help(format!(
+            "This expression always evaluates to `{value}`, and `{target_ty}` must be in range `{min}` to `{max}`"
         ))
 }
 

@@ -20,7 +20,6 @@ pub(crate) struct EmitFactsConfig<'a> {
     pub(crate) definitions: &'a HashMap<Symbol, Definition>,
     pub(crate) unused: &'a UnusedInfo,
     pub(crate) mutations: &'a MutationInfo,
-    pub(crate) ufcs_methods: &'a HashSet<(String, String)>,
     pub(crate) equality_index: &'a EqualityIndex,
     pub(crate) test_index: &'a TestIndex,
     pub(crate) go_package_names: &'a HashMap<String, String>,
@@ -38,7 +37,6 @@ pub(crate) struct EmitFacts<'a> {
     definitions: &'a HashMap<Symbol, Definition>,
     unused: &'a UnusedInfo,
     mutations: &'a MutationInfo,
-    ufcs_methods: &'a HashSet<(String, String)>,
     equality_index: &'a EqualityIndex,
     test_index: &'a TestIndex,
     go_package_names: &'a HashMap<String, String>,
@@ -58,7 +56,6 @@ impl<'a> EmitFacts<'a> {
             definitions: config.definitions,
             unused: config.unused,
             mutations: config.mutations,
-            ufcs_methods: config.ufcs_methods,
             equality_index: config.equality_index,
             test_index: config.test_index,
             go_package_names: config.go_package_names,
@@ -194,8 +191,8 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn is_ufcs_method(&self, qualified_type: &str, method: &str) -> bool {
-        self.ufcs_methods
-            .contains(&(qualified_type.to_string(), method.to_string()))
+        self.definition(qualified_type)
+            .is_some_and(|definition| definition.is_ufcs_method(method))
     }
 
     pub(crate) fn usable_equals_from(&self, id: &str) -> bool {
@@ -277,10 +274,7 @@ impl<'a> EmitFacts<'a> {
             .iter()
             .any(|variant| variant.name == variant_name)
             .then(|| {
-                let enum_name = definition
-                    .name
-                    .as_deref()
-                    .unwrap_or_else(|| syntax::types::unqualified_name(enum_id));
+                let enum_name = syntax::types::unqualified_name(enum_id);
                 let make_function = go_name::enum_make_function(enum_name, variant_name);
                 if enum_id.starts_with(go_name::PRELUDE_PREFIX) {
                     format!("{}{}", go_name::PRELUDE_PREFIX, make_function)
