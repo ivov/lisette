@@ -13263,6 +13263,191 @@ fn main() {
 }
 
 #[test]
+fn constant_cast_overflow_folded_addition() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = (200 + 100) as int8
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_folded_shift() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = (1 << 40) as int32
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_negative_to_unsigned() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = (10 - 20) as uint8
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_bitwise_not() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = (^0) as uint8
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_negated_compound() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = (-(200 + 100)) as int8
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_multiplication_boundary() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = (2 * 64) as int8
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_in_range_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = (100 + 27) as int8
+  let _ = (0 - 128) as int8
+  let _ = (200 + 100) as int64
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_variable_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = (x + 100) as int8
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_float_operand_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = (1.5 * 200.0) as int8
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_bare_literal_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = 300 as int8
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_negated_literal_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = (-129) as int8
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_newtype_target() {
+    assert_lint_snapshot!(
+        r#"
+struct Small(int8)
+
+fn main() {
+  let _ = 300 as Small
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_alias_target() {
+    assert_lint_snapshot!(
+        r#"
+type Tiny = int8
+
+fn main() {
+  let _ = 300 as Tiny
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_named_constant_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+const N = 300
+
+fn main() {
+  let _ = N as int8
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_rune_literal_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = 'é' as int8
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_cast_in_arithmetic_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = ((5 as int8) + 3) as int16
+}
+"#
+    );
+}
+
+#[test]
 fn empty_infinite_loop_fires() {
     assert_lint_snapshot!(
         r#"

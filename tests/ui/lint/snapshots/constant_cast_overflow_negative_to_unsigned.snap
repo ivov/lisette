@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ✕ Constant cast overflow
+   ╭─[test.lis:3:11]
+ 2 │ fn main() {
+ 3 │   let _ = (10 - 20) as uint8
+   ·           ─────────┬────────
+   ·                    ╰── constant `-10` overflows `uint8`
+ 4 │ }
+   ╰────
+  help: This expression always evaluates to `-10`, and `uint8` must be in range `0` to `255` · code: [infer.constant_cast_overflow]

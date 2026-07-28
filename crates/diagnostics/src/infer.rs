@@ -2934,6 +2934,21 @@ pub fn integer_literal_overflow(
         ))
 }
 
+pub fn constant_cast_overflow(
+    span: &Span,
+    target_ty: &str,
+    value: i128,
+    min: i128,
+    max: i128,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Constant cast overflow")
+        .with_infer_code("constant_cast_overflow")
+        .with_span_label(span, format!("constant `{value}` overflows `{target_ty}`"))
+        .with_help(format!(
+            "This expression always evaluates to `{value}`, and `{target_ty}` must be in range `{min}` to `{max}`"
+        ))
+}
+
 pub fn float_literal_overflow(target_ty: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Float literal overflow")
         .with_infer_code("float_literal_overflow")

@@ -5,11 +5,11 @@ use crate::passes::walk::{
 };
 
 use super::{
-    always_true_disjunction, cast_nan_to_int, const_naming, decimal_file_mode, duplicate_bindings,
-    empty_infinite_loop, empty_range, enum_variant_value, impossible_comparison,
-    index_out_of_bounds, irrefutable_patterns, map_key, min_max, nan_comparison, newtype,
-    oversized_shift, pub_type_export, receivers, repeated_if_condition, stringer_signature,
-    temp_producing, unchanging_loop_condition,
+    always_true_disjunction, cast_nan_to_int, const_naming, constant_cast_overflow,
+    decimal_file_mode, duplicate_bindings, empty_infinite_loop, empty_range, enum_variant_value,
+    impossible_comparison, index_out_of_bounds, irrefutable_patterns, map_key, min_max,
+    nan_comparison, newtype, oversized_shift, pub_type_export, receivers, repeated_if_condition,
+    stringer_signature, temp_producing, unchanging_loop_condition,
 };
 
 fn run_expression_checks(expression: &Expression, ctx: &mut NodeCtx<'_>, _role: FunctionRole<'_>) {
@@ -19,6 +19,7 @@ fn run_expression_checks(expression: &Expression, ctx: &mut NodeCtx<'_>, _role: 
         (nan_comparison::check, &[Binary]),
         (min_max::check, &[Call]),
         (cast_nan_to_int::check, &[Cast]),
+        (constant_cast_overflow::check, &[Cast]),
         (impossible_comparison::check, &[Binary]),
         (always_true_disjunction::check, &[Binary]),
         (empty_range::check, &[Range]),
