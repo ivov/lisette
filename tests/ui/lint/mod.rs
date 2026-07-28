@@ -3854,6 +3854,279 @@ fn main() {
 }
 
 #[test]
+fn always_true_disjunction_two_inequalities() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5;
+  let _ = x != 1 || x != 2
+}
+"#
+    );
+}
+
+#[test]
+fn always_true_disjunction_overlapping_ranges() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5;
+  let _ = x > 0 || x < 10
+}
+"#
+    );
+}
+
+#[test]
+fn always_true_disjunction_literal_on_left() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5;
+  let _ = 5 > x || 4 < x
+}
+"#
+    );
+}
+
+#[test]
+fn always_true_disjunction_boundary_meet() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5;
+  let _ = x < 5 || x >= 5
+}
+"#
+    );
+}
+
+#[test]
+fn always_true_disjunction_integer_gap() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5;
+  let _ = x <= 0 || x >= 1
+}
+"#
+    );
+}
+
+#[test]
+fn always_true_disjunction_equality_covers_gap() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5;
+  let _ = x <= 0 || x == 1 || x >= 2
+}
+"#
+    );
+}
+
+#[test]
+fn always_true_disjunction_equality_inequality() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5;
+  let _ = x == 5 || x != 5
+}
+"#
+    );
+}
+
+#[test]
+fn always_true_disjunction_negative_bounds() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 0;
+  let _ = x >= -3 || x <= 0
+}
+"#
+    );
+}
+
+#[test]
+fn always_true_disjunction_unsigned_type_boundary() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x: uint8 = 5
+  let _ = x > 0 || x == 0
+}
+"#
+    );
+}
+
+#[test]
+fn always_true_disjunction_signed_type_boundary() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x: int8 = 5
+  let _ = x > -128 || x == -128
+}
+"#
+    );
+}
+
+#[test]
+fn always_true_disjunction_single_tautological_disjunct() {
+    let diagnostics = crate::_harness::lint::lint(
+        r#"
+fn main() {
+  let x: uint8 = 5
+  let flag = true
+  let _ = x >= 0 || flag
+}
+"#,
+    );
+    assert!(
+        diagnostics
+            .iter()
+            .any(|d| d.code_str() == Some("infer.always_true_disjunction")),
+        "an unsigned `>= 0` disjunct alone covers the domain: {diagnostics:?}"
+    );
+}
+
+#[test]
+fn always_true_disjunction_type_boundary_gap_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x: uint8 = 5
+  let _ = x > 1 || x == 0
+}
+"#
+    );
+}
+
+#[test]
+fn always_true_disjunction_chain_with_unrelated_disjunct() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5;
+  let flag = true;
+  let _ = x != 1 || flag || x != 2
+}
+"#
+    );
+}
+
+#[test]
+fn always_true_disjunction_chain_with_negated_disjunct() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5;
+  let flag = true;
+  let _ = x != 1 || !flag || x != 2
+}
+"#
+    );
+}
+
+#[test]
+fn always_true_disjunction_single_diagnostic_for_chain() {
+    let diagnostics = crate::_harness::lint::lint(
+        r#"
+fn main() {
+  let x = 5;
+  let _ = x != 1 || x != 2 || x != 3
+}
+"#,
+    );
+    let count = diagnostics
+        .iter()
+        .filter(|d| d.code_str() == Some("infer.always_true_disjunction"))
+        .count();
+    assert_eq!(
+        count, 1,
+        "a nested `||` chain must report once: {diagnostics:?}"
+    );
+}
+
+#[test]
+fn always_true_disjunction_integer_gap_value_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x = 5;
+  let _ = x <= 0 || x >= 2
+}
+"#
+    );
+}
+
+#[test]
+fn always_true_disjunction_float_operand_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let f: float64 = 1.0
+  let _ = f < 5 || f >= 5
+}
+"#
+    );
+}
+
+#[test]
+fn always_true_disjunction_satisfiable_exclusions_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x = 5;
+  let _ = x == 1 || x == 2
+}
+"#
+    );
+}
+
+#[test]
+fn always_true_disjunction_side_effecting_operand_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn pick() -> int { 7 }
+
+fn main() {
+  let _ = pick() != 1 || pick() != 2
+}
+"#
+    );
+}
+
+#[test]
+fn always_true_disjunction_side_effecting_disjunct_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn step() -> bool { true }
+
+fn main() {
+  let x = 0;
+  let _ = x != 1 || step() || x != 2
+}
+"#
+    );
+}
+
+#[test]
+fn always_true_disjunction_distinct_operands_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let a = 1;
+  let b = 2;
+  let _ = a != 1 || b != 2
+}
+"#
+    );
+}
+
+#[test]
 fn redundant_comparison_disjunction_narrower() {
     assert_lint_snapshot!(
         r#"
@@ -4164,6 +4437,103 @@ fn main() {
 }
 
 #[test]
+fn always_true_disjunction_skips_type_invalid_operand() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {
+  let x = "a";
+  let _ = x != 1 || x != 2
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors()
+            .iter()
+            .any(|d| d.plain_message().contains("Type mismatch")),
+        "expected the type mismatch to still be reported: {:?}",
+        result.errors()
+    );
+    assert!(
+        !result
+            .errors()
+            .iter()
+            .any(|d| d.plain_message() == "Always-true comparison"),
+        "must not flag a type-invalid comparison as always true: {:?}",
+        result.errors()
+    );
+}
+
+#[test]
+fn always_true_disjunction_non_boolean_disjunct_no_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {
+  let x = 0
+  let _ = x != 1 || 3 || x != 2
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors()
+            .iter()
+            .any(|d| d.plain_message().contains("Type mismatch")),
+        "expected the non-boolean disjunct type error to still be reported: {:?}",
+        result.errors()
+    );
+    assert!(
+        !result
+            .errors()
+            .iter()
+            .any(|d| d.plain_message() == "Always-true comparison"),
+        "must not reason across a non-boolean disjunct in a type-invalid chain: {:?}",
+        result.errors()
+    );
+}
+
+#[test]
+fn always_true_disjunction_invalid_comparison_disjunct_no_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {
+  let x = 0
+  let s = "a"
+  let _ = x != 1 || s < 5 || x != 2
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors()
+            .iter()
+            .any(|d| d.plain_message().contains("Type mismatch")),
+        "expected the invalid-comparison type error to still be reported: {:?}",
+        result.errors()
+    );
+    assert!(
+        !result
+            .errors()
+            .iter()
+            .any(|d| d.plain_message() == "Always-true comparison"),
+        "must not reason across an out-of-scope or invalid comparison disjunct: {:?}",
+        result.errors()
+    );
+}
+
+#[test]
 fn redundant_comparison_skips_type_invalid_operand() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
@@ -4316,6 +4686,7 @@ fn assert_no_chain_comparison_lints(source: &str) {
     let codes: Vec<&str> = diagnostics.iter().filter_map(|d| d.code_str()).collect();
     for code in [
         "infer.impossible_comparison",
+        "infer.always_true_disjunction",
         "lint.redundant_comparison",
         "lint.double_comparison",
     ] {

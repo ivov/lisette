@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ✕ Always-true comparison
+   ╭─[test.lis:5:11]
+ 4 │   let flag = true;
+ 5 │   let _ = x != 1 || flag || x != 2
+   ·           ────────────┬───────────
+   ·                       ╰── always `true`
+ 6 │ }
+   ╰────
+  help: Every value satisfies at least one side, so this `||` is always `true`. Check the bounds, or did you mean `&&`? · code: [infer.always_true_disjunction]

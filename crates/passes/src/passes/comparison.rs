@@ -172,6 +172,25 @@ pub(crate) fn negate_comparison(operator: BinaryOperator) -> Option<&'static str
     })
 }
 
+/// A value-stable boolean (identifier, field read, literal, or `!` of one),
+/// safe to carry a constraint run across in a `&&`/`||` chain.
+pub(crate) fn is_skippable_boolean(expression: &Expression) -> bool {
+    if !expression.get_type().is_boolean() {
+        return false;
+    }
+    match expression.unwrap_parens() {
+        Expression::Identifier { .. }
+        | Expression::DotAccess { .. }
+        | Expression::Literal { .. } => true,
+        Expression::Unary {
+            operator: UnaryOperator::Not,
+            expression: inner,
+            ..
+        } => is_skippable_boolean(inner),
+        _ => false,
+    }
+}
+
 pub(crate) fn is_side_effect_free(expression: &Expression) -> bool {
     match expression.unwrap_parens() {
         Expression::Identifier { .. } | Expression::Literal { .. } => true,

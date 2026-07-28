@@ -1,3 +1,4 @@
+pub(crate) mod always_true_disjunction;
 pub(crate) mod cast_nan_to_int;
 pub(crate) mod const_naming;
 pub(crate) mod decimal_file_mode;
