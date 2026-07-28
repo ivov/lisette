@@ -1,0 +1,10 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Unicode escape out of range
+   ╭─[test.lis:1:10]
+ 1 │ let x = '\u{110000}'
+   ·          ─────┬────
+   ·               ╰── codepoint exceeds U+10FFFF or is a surrogate (U+D800-U+DFFF)
+   ╰────
+  help: Unicode escapes must be valid scalar values: 0..=0xD7FF or 0xE000..=0x10FFFF · code: [lex.unicode_escape_out_of_range]

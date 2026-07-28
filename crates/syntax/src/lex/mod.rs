@@ -632,10 +632,92 @@ impl<'source> Lexer<'source> {
         }
     }
 
-    fn consume_unicode_escape(&mut self, escape_start: usize) {
+    fn consume_escape(&mut self, literal_start: usize, closing_quote: u8) -> bool {
+        let escape_start = self.current_offset;
+        self.next();
+
+        if self.at_eof() {
+            self.error_unterminated_escape(literal_start);
+            return false;
+        }
+
+        match self.current_byte() {
+            first @ b'0'..=b'7' => {
+                self.next();
+                let value = self.consume_octal_escape(first);
+                if value > 255 {
+                    self.error_octal_escape_out_of_range(
+                        escape_start,
+                        self.current_offset - escape_start,
+                    );
+                    return false;
+                }
+                true
+            }
+            b'x' => {
+                self.next();
+                self.consume_hex_escape(escape_start, 2).is_some()
+            }
+            b'u' => {
+                self.next();
+                match self.consume_unicode_escape(escape_start) {
+                    Some(codepoint) => self.check_scalar_value(codepoint, escape_start),
+                    None => false,
+                }
+            }
+            b'U' => {
+                self.next();
+                match self.consume_hex_escape(escape_start, 8) {
+                    Some(codepoint) => self.check_scalar_value(codepoint, escape_start),
+                    None => false,
+                }
+            }
+            b'a' | b'b' | b'f' | b'n' | b'r' | b't' | b'v' | b'\\' => {
+                self.next();
+                true
+            }
+            byte if byte == closing_quote => {
+                self.next();
+                true
+            }
+            _ => {
+                self.error_invalid_escape(self.current_char(), escape_start, closing_quote);
+                self.next();
+                false
+            }
+        }
+    }
+
+    fn check_scalar_value(&mut self, codepoint: u32, escape_start: usize) -> bool {
+        if char::from_u32(codepoint).is_some() {
+            return true;
+        }
+        self.error_unicode_escape_out_of_range(escape_start, self.current_offset - escape_start);
+        false
+    }
+
+    fn consume_hex_escape(&mut self, escape_start: usize, digits: usize) -> Option<u32> {
+        let mut value: u32 = 0;
+        for _ in 0..digits {
+            // At end of input `current_byte` yields 0, which is not a hex digit.
+            let Some(digit) = (self.current_byte() as char).to_digit(16) else {
+                self.error_invalid_hex_escape(
+                    escape_start,
+                    self.current_offset - escape_start,
+                    digits,
+                );
+                return None;
+            };
+            value = value * 16 + digit;
+            self.next();
+        }
+        Some(value)
+    }
+
+    fn consume_unicode_escape(&mut self, escape_start: usize) -> Option<u32> {
         if self.at_eof() || self.current_byte() != b'{' {
             self.error_invalid_unicode_escape(escape_start, self.current_offset - escape_start);
-            return;
+            return None;
         }
         self.next();
 
@@ -643,7 +725,7 @@ impl<'source> Lexer<'source> {
         let mut all_hex = true;
         while !self.at_eof() {
             let byte = self.current_byte();
-            if byte == b'}' || byte == b'"' || byte == b'\n' {
+            if byte == b'}' || byte == b'"' || byte == b'\'' || byte == b'\n' {
                 break;
             }
             if !byte.is_ascii_hexdigit() {
@@ -659,18 +741,16 @@ impl<'source> Lexer<'source> {
         }
 
         let hex_len = hex_end - hex_start;
-        let total_len = self.current_offset - escape_start;
 
         if !closed || !all_hex || hex_len == 0 || hex_len > 6 {
-            self.error_invalid_unicode_escape(escape_start, total_len);
-            return;
+            self.error_invalid_unicode_escape(escape_start, self.current_offset - escape_start);
+            return None;
         }
 
-        let codepoint = u32::from_str_radix(&self.input[hex_start..hex_end], 16)
-            .expect("hex digits validated above");
-        if char::from_u32(codepoint).is_none() {
-            self.error_unicode_escape_out_of_range(escape_start, total_len);
-        }
+        Some(
+            u32::from_str_radix(&self.input[hex_start..hex_end], 16)
+                .expect("hex digits validated above"),
+        )
     }
 
     /// Consume up to 2 more octal digits after the first has already been read.
@@ -696,56 +776,24 @@ impl<'source> Lexer<'source> {
 
         self.next();
 
-        let mut escaped = false;
         let mut terminated = false;
 
-        while !self.at_eof() && !terminated {
+        while !self.at_eof() {
             let byte = self.current_byte();
-            if escaped {
-                match byte {
-                    b'0'..=b'7' => {
-                        let escape_start = self.current_offset - 1;
-                        self.next();
-                        let value = self.consume_octal_escape(byte);
-                        if value > 255 {
-                            let escape_len = self.current_offset - escape_start;
-                            self.error_octal_escape_out_of_range(escape_start, escape_len);
-                        }
-                        escaped = false;
-                        continue;
-                    }
-                    b'u' => {
-                        let escape_start = self.current_offset - 1;
-                        self.next();
-                        self.consume_unicode_escape(escape_start);
-                        escaped = false;
-                        continue;
-                    }
-                    b'a' | b'b' | b'f' | b'n' | b'r' | b't' | b'v' | b'\\' | b'"' | b'x' | b'U' => {
-                    }
-                    b'\'' => {}
-                    _ => {
-                        self.error_invalid_escape(self.current_char());
-                    }
-                }
-                escaped = false;
-            } else if byte == b'\\' {
-                escaped = true;
-            } else if byte == b'"' {
+            if byte == b'\\' {
+                self.consume_escape(start_offset, b'"');
+                continue;
+            }
+            if byte == b'"' {
                 terminated = true;
                 self.next();
                 break;
             }
-
             self.next();
         }
 
         let end_offset = self.current_offset;
         let length = end_offset - start_offset;
-
-        if escaped {
-            self.error_unterminated_escape(start_offset);
-        }
 
         if !terminated {
             self.error_unterminated_string(start_offset, 1);
@@ -1089,22 +1137,8 @@ impl<'source> Lexer<'source> {
             let byte = self.current_byte();
 
             match byte {
-                b'\\' if !self.at_eof() => {
-                    let escape_start = self.current_offset;
-                    self.next();
-                    if !self.at_eof() {
-                        let b = self.current_byte();
-                        self.next();
-                        if matches!(b, b'0'..=b'7') {
-                            let value = self.consume_octal_escape(b);
-                            if value > 255 {
-                                let escape_len = self.current_offset - escape_start;
-                                self.error_octal_escape_out_of_range(escape_start, escape_len);
-                            }
-                        } else if b == b'u' {
-                            self.consume_unicode_escape(escape_start);
-                        }
-                    }
+                b'\\' => {
+                    self.consume_escape(start_offset, b'"');
                 }
                 b'{' if self.peek_byte() == b'{' => {
                     self.skip(2);
@@ -1153,78 +1187,7 @@ impl<'source> Lexer<'source> {
         let start_offset = self.current_offset;
 
         self.next();
-
-        if self.at_eof() || self.current_byte() == b'\'' {
-            self.error_empty_rune_literal(start_offset);
-            let end_offset = self.current_offset;
-            return Token {
-                kind: TokenKind::Char,
-                text: &self.input[start_offset..end_offset],
-                byte_offset: start_offset as u32,
-                byte_length: (end_offset - start_offset) as u32,
-            };
-        }
-
-        if self.current_byte() != b'\\' {
-            self.next();
-        } else {
-            self.next();
-
-            if self.at_eof() {
-                self.error_unterminated_escape(start_offset);
-                let end_offset = self.current_offset;
-                return Token {
-                    kind: TokenKind::Char,
-                    text: &self.input[start_offset..end_offset],
-                    byte_offset: start_offset as u32,
-                    byte_length: (end_offset - start_offset) as u32,
-                };
-            }
-
-            match self.current_byte() {
-                b'0'..=b'7' => {
-                    let escape_start = self.current_offset - 1;
-                    let first = self.current_byte();
-                    self.next();
-                    let value = self.consume_octal_escape(first);
-                    if value > 255 {
-                        let escape_len = self.current_offset - escape_start;
-                        self.error_octal_escape_out_of_range(escape_start, escape_len);
-                    }
-                }
-                b'a' | b'b' | b'f' | b'n' | b'r' | b't' | b'v' | b'\\' | b'\'' | b'x' => {
-                    self.next();
-                }
-                _ => {
-                    self.error_invalid_escape(self.current_char());
-
-                    while !self.at_eof() && self.current_byte() != b'\'' {
-                        self.next();
-                    }
-
-                    if !self.at_eof() && self.current_byte() == b'\'' {
-                        self.next();
-                    }
-
-                    let end_offset = self.current_offset;
-                    return Token {
-                        kind: TokenKind::Char,
-                        text: &self.input[start_offset..end_offset],
-                        byte_offset: start_offset as u32,
-                        byte_length: (end_offset - start_offset) as u32,
-                    };
-                }
-            }
-        }
-
-        if self.at_eof() || self.current_byte() != b'\'' {
-            let length = self.current_offset - start_offset;
-            self.error_unterminated_rune(start_offset, length);
-        }
-
-        if !self.at_eof() && self.current_byte() == b'\'' {
-            self.next();
-        }
+        self.scan_rune_body(start_offset);
 
         let end_offset = self.current_offset;
         Token {
@@ -1232,6 +1195,32 @@ impl<'source> Lexer<'source> {
             text: &self.input[start_offset..end_offset],
             byte_offset: start_offset as u32,
             byte_length: (end_offset - start_offset) as u32,
+        }
+    }
+
+    fn scan_rune_body(&mut self, start_offset: usize) {
+        if self.at_eof() || self.current_byte() == b'\'' {
+            self.error_empty_rune_literal(start_offset);
+            return;
+        }
+
+        if self.current_byte() != b'\\' {
+            self.next();
+        } else if !self.consume_escape(start_offset, b'\'') {
+            // Resync, else a mid-literal cursor also reports unterminated_rune.
+            while !self.at_eof() && self.current_byte() != b'\'' {
+                self.next();
+            }
+            if !self.at_eof() {
+                self.next();
+            }
+            return;
+        }
+
+        if !self.at_eof() && self.current_byte() == b'\'' {
+            self.next();
+        } else {
+            self.error_unterminated_rune(start_offset, self.current_offset - start_offset);
         }
     }
 
@@ -1375,6 +1364,67 @@ impl<'source> Lexer<'source> {
             text: &self.input[start_offset..self.current_offset],
             byte_offset: start_offset as u32,
             byte_length: (self.current_offset - start_offset) as u32,
+        }
+    }
+}
+
+/// Decodes a quote-stripped rune literal, covering every escape the lexer takes.
+pub fn rune_codepoint(text: &str) -> Option<u32> {
+    let Some(rest) = text.strip_prefix('\\') else {
+        return text.chars().next().map(|c| c as u32);
+    };
+    match rest.as_bytes().first()? {
+        b'a' => Some(7),
+        b'b' => Some(8),
+        b'f' => Some(12),
+        b'n' => Some(10),
+        b'r' => Some(13),
+        b't' => Some(9),
+        b'v' => Some(11),
+        b'\\' => Some(92),
+        b'\'' => Some(39),
+        b'x' | b'U' => u32::from_str_radix(&rest[1..], 16).ok(),
+        b'u' => {
+            let braced = rest[1..].strip_prefix('{')?.strip_suffix('}')?;
+            u32::from_str_radix(braced, 16).ok()
+        }
+        b'0'..=b'7' => u32::from_str_radix(rest, 8).ok(),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Lexer, rune_codepoint};
+
+    #[test]
+    fn rune_codepoint_decodes_every_escape_the_lexer_accepts() {
+        let cases = [
+            ("'a'", 97),
+            ("'中'", 0x4E2D),
+            ("'\\a'", 7),
+            ("'\\b'", 8),
+            ("'\\f'", 12),
+            ("'\\n'", 10),
+            ("'\\r'", 13),
+            ("'\\t'", 9),
+            ("'\\v'", 11),
+            ("'\\\\'", 92),
+            ("'\\''", 39),
+            ("'\\x41'", 65),
+            ("'\\xFF'", 255),
+            ("'\\101'", 65),
+            ("'\\377'", 255),
+            ("'\\u{41}'", 65),
+            ("'\\u{e9}'", 233),
+            ("'\\U0001F600'", 0x1F600),
+        ];
+
+        for (source, expected) in cases {
+            let result = Lexer::new(source, 0).lex();
+            assert!(result.errors.is_empty(), "{source} should lex cleanly");
+            let inner = &source[1..source.len() - 1];
+            assert_eq!(rune_codepoint(inner), Some(expected), "{source}");
         }
     }
 }

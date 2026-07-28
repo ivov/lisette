@@ -1,0 +1,22 @@
+---
+source: tests/spec/lex/mod.rs
+description: "'\\u{e9}'"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Char,
+            text: "'\\u{e9}'",
+            byte_offset: 0,
+            byte_length: 8,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 8,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    blank_lines: [],
+}

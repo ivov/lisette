@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/literals.rs
+description: |
+  
+  fn test() -> rune {
+    '\x41'
+  }
+---
+package main
+
+func test() rune {
+	return '\x41'
+}

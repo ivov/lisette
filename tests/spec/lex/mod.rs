@@ -101,6 +101,24 @@ fn char_escaped_quote() {
 }
 
 #[test]
+fn char_escaped_hex() {
+    let input = "'\\x41'";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn char_escaped_unicode() {
+    let input = "'\\u{e9}'";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn char_escaped_capital_unicode() {
+    let input = "'\\U0001F600'";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
 fn comment() {
     let input = "42; // meaning of life";
     assert_lex_snapshot!(input);

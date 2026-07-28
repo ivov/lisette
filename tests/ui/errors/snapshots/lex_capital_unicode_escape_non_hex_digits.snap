@@ -1,0 +1,10 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Invalid hex escape
+   ╭─[test.lis:1:10]
+ 1 │ let x = "\UZZZZZZZZ"
+   ·          ─┬
+   ·           ╰── expected 8 hex digits
+   ╰────
+  help: Hex escapes are `\xHH` with 2 digits and `\UHHHHHHHH` with 8 digits · code: [lex.invalid_hex_escape]

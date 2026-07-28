@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/literals.rs
+description: |
+  
+  fn test() -> rune {
+    '\U0001F600'
+  }
+---
+package main
+
+func test() rune {
+	return '\U0001F600'
+}

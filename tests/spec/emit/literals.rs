@@ -428,6 +428,46 @@ fn test() -> rune {
 }
 
 #[test]
+fn hex_escape_in_char() {
+    let input = r#"
+fn test() -> rune {
+  '\x41'
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unicode_escape_in_char() {
+    let input = r#"
+fn test() -> rune {
+  '\u{e9}'
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn capital_unicode_escape_in_char() {
+    let input = r#"
+fn test() -> rune {
+  '\U0001F600'
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn capital_unicode_escape_in_string() {
+    let input = r#"
+fn test() -> string {
+  "\U0001F600"
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn octal_escape_esc_in_string() {
     let input = r#"
 fn test() -> string {

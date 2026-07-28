@@ -1,0 +1,22 @@
+---
+source: tests/spec/lex/mod.rs
+description: "'\\U0001F600'"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Char,
+            text: "'\\U0001F600'",
+            byte_offset: 0,
+            byte_length: 12,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 12,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    blank_lines: [],
+}

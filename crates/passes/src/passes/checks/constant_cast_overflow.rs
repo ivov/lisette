@@ -1,6 +1,7 @@
 use crate::passes::comparison::signed_integer_literal;
 use crate::passes::walk::NodeCtx;
 use syntax::ast::{BinaryOperator, Expression, Literal, UnaryOperator};
+use syntax::lex::rune_codepoint;
 use syntax::types::{SimpleKind, Type};
 
 pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
@@ -35,6 +36,10 @@ pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
+    if ctx.store.has_underlying_rune(&operand.get_type()) && ctx.store.has_underlying_byte(ty) {
+        return;
+    }
+
     ctx.sink.push(diagnostics::infer::constant_cast_overflow(
         span,
         &ty.to_string(),
@@ -61,6 +66,10 @@ fn fold(expression: &Expression) -> Option<i128> {
             literal: Literal::Integer { value, text },
             ..
         } if !text.as_deref().is_some_and(|text| text.starts_with('-')) => Some(*value as i128),
+        Expression::Literal {
+            literal: Literal::Char(text),
+            ..
+        } => rune_codepoint(text).map(i128::from),
         Expression::Unary {
             operator,
             expression,

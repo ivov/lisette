@@ -268,17 +268,30 @@ impl<'source> Lexer<'source> {
         self.errors.push(error);
     }
 
-    pub(super) fn error_invalid_escape(&mut self, ch: char) {
-        let span = self.span((self.current_offset - 1) as u32, 2);
+    pub(super) fn error_invalid_escape(&mut self, ch: char, offset: usize, closing_quote: u8) {
+        let quote_escape = closing_quote as char;
+        let span = self.span(offset as u32, 2);
         let error = ParseError::new(
             "Invalid escape sequence",
             span,
             format!("`\\{ch}` is not a valid escape"),
         )
         .with_lex_code("invalid_escape_sequence")
-        .with_help(
-            "Valid escapes are `\\a`, `\\b`, `\\f`, `\\n`, `\\r`, `\\t`, `\\v`, `\\\\`, `\\'`, `\\xHH` (hex), `\\ooo` (octal), and `\\u{HEX}` (unicode)",
-        );
+        .with_help(format!(
+            "Valid escapes are `\\a`, `\\b`, `\\f`, `\\n`, `\\r`, `\\t`, `\\v`, `\\\\`, `\\{quote_escape}`, `\\xHH` (hex), `\\ooo` (octal), and `\\u{{HEX}}` or `\\UHHHHHHHH` (unicode)"
+        ));
+        self.errors.push(error);
+    }
+
+    pub(super) fn error_invalid_hex_escape(&mut self, offset: usize, length: usize, digits: usize) {
+        let span = self.span(offset as u32, length as u32);
+        let error = ParseError::new(
+            "Invalid hex escape",
+            span,
+            format!("expected {digits} hex digits"),
+        )
+        .with_lex_code("invalid_hex_escape")
+        .with_help("Hex escapes are `\\xHH` with 2 digits and `\\UHHHHHHHH` with 8 digits");
         self.errors.push(error);
     }
 

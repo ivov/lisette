@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ✕ Constant cast overflow
+   ╭─[test.lis:3:11]
+ 2 │ fn main() {
+ 3 │   let _ = 'é' as int8
+   ·           ─────┬─────
+   ·                ╰── constant `233` overflows `int8`
+ 4 │ }
+   ╰────
+  help: This expression always evaluates to `233`, and `int8` must be in range `-128` to `127` · code: [infer.constant_cast_overflow]

@@ -5,6 +5,7 @@ use ecow::EcoString;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::{EnumVariant, Expression, Literal, StructFieldDefinition};
+use syntax::lex::rune_codepoint;
 use syntax::program::{
     Definition, DefinitionBody, EqualityIndex, File, Interface, MethodSignatures, Module, TestIndex,
 };
@@ -73,7 +74,7 @@ impl DomainValue {
         // its two's-complement `u64`, so signed bases reinterpret it as `i64`.
         match base {
             SimpleKind::Rune => match literal {
-                Literal::Char(text) => char_codepoint(text).map(|cp| DomainValue::Int(cp as i128)),
+                Literal::Char(text) => rune_codepoint(text).map(|cp| DomainValue::Int(cp as i128)),
                 Literal::Integer { value, .. } => Some(DomainValue::Int(*value as i64 as i128)),
                 _ => None,
             },
@@ -98,28 +99,6 @@ impl DomainValue {
 /// `SimpleKind::is_unsigned_int`, so it is folded in here.
 fn is_unsigned_base(base: SimpleKind) -> bool {
     base.is_unsigned_int() || base == SimpleKind::Uintptr
-}
-
-/// Decodes a rune literal's inner text to a codepoint, covering the escapes the
-/// lexer accepts (`\a \b \f \n \r \t \v \\ \'`, `\x` hex, and octal `\NNN`).
-fn char_codepoint(text: &str) -> Option<u64> {
-    let Some(rest) = text.strip_prefix('\\') else {
-        return text.chars().next().map(|c| c as u64);
-    };
-    match rest.as_bytes().first()? {
-        b'a' => Some(7),
-        b'b' => Some(8),
-        b'f' => Some(12),
-        b'n' => Some(10),
-        b'r' => Some(13),
-        b't' => Some(9),
-        b'v' => Some(11),
-        b'\\' => Some(92),
-        b'\'' => Some(39),
-        b'x' => u64::from_str_radix(&rest[1..], 16).ok(),
-        b'0'..=b'7' => u64::from_str_radix(rest, 8).ok(),
-        _ => None,
-    }
 }
 
 pub struct Store {

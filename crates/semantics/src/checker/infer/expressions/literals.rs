@@ -1,6 +1,7 @@
 use crate::checker::EnvResolve;
 use crate::store::Store;
 use syntax::ast::{Expression, FormatStringPart, Literal, Span};
+use syntax::lex::rune_codepoint;
 use syntax::types::{SimpleKind, Type};
 
 use crate::checker::infer::InferCtx;
@@ -107,8 +108,8 @@ impl InferCtx<'_> {
             Literal::Char(char) => {
                 let resolved = expected_ty.resolve_in(&self.env);
                 let ty = if let Some(numeric) = numeric_adapt_target(&resolved, store) {
-                    if let Some(codepoint) = char_literal_codepoint(&char) {
-                        self.check_integer_literal_overflow(codepoint, &numeric, span);
+                    if let Some(codepoint) = rune_codepoint(&char) {
+                        self.check_integer_literal_overflow(codepoint as u64, &numeric, span);
                     }
                     resolved.clone()
                 } else {
@@ -269,21 +270,4 @@ fn adapts_to_named_type(ty: &Type, store: &Store, kind: SimpleKind) -> bool {
     matches!(&peeled, Type::Nominal { id, .. }
         if store.is_nominal_defined_type(id.as_str())
             && store.underlying_simple_kind(&peeled) == Some(kind))
-}
-
-fn char_literal_codepoint(s: &str) -> Option<u64> {
-    if let Some(rest) = s.strip_prefix('\\') {
-        match rest.as_bytes().first()? {
-            b'n' => Some(10),
-            b't' => Some(9),
-            b'r' => Some(13),
-            b'0' => Some(0),
-            b'\\' => Some(92),
-            b'\'' => Some(39),
-            b'x' => u64::from_str_radix(&rest[1..], 16).ok(),
-            _ => None,
-        }
-    } else {
-        s.chars().next().map(|c| c as u64)
-    }
 }

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ✕ Constant cast overflow
+   ╭─[test.lis:5:11]
+ 4 │ fn main() {
+ 5 │   let _ = '\u{1F600}' as Small
+   ·           ──────────┬─────────
+   ·                     ╰── constant `128512` overflows `Small`
+ 6 │ }
+   ╰────
+  help: This expression always evaluates to `128512`, and `Small` must be in range `-32768` to `32767` · code: [infer.constant_cast_overflow]

@@ -216,7 +216,7 @@ fn byte_from_octal(chars: &mut Peekable<Chars<'_>>, first: char) -> Option<u8> {
     u8::try_from(value).ok()
 }
 
-/// `\UXXXXXXXX`, which the lexer accepts undocumented and leaves to Go.
+/// `\UXXXXXXXX`, the eight-digit form of the unicode escape.
 fn char_from_eight_hex(chars: &mut Peekable<Chars<'_>>) -> Option<char> {
     let mut value = 0u32;
     for _ in 0..8 {

@@ -405,6 +405,90 @@ fn lex_octal_escape_out_of_range() {
 }
 
 #[test]
+fn lex_hex_escape_missing_digit_in_char() {
+    let input = r#"let x = '\x4'"#;
+    assert_lex_error_snapshot!(input);
+}
+
+#[test]
+fn lex_hex_escape_non_hex_digits_in_char() {
+    let input = r#"let x = '\xZZ'"#;
+    assert_lex_error_snapshot!(input);
+}
+
+#[test]
+fn lex_hex_escape_missing_digit_in_string() {
+    let input = r#"let x = "\x4""#;
+    assert_lex_error_snapshot!(input);
+}
+
+#[test]
+fn lex_hex_escape_non_hex_digits_in_string() {
+    let input = r#"let x = "\xZZ""#;
+    assert_lex_error_snapshot!(input);
+}
+
+#[test]
+fn lex_capital_unicode_escape_non_hex_digits() {
+    let input = r#"let x = "\UZZZZZZZZ""#;
+    assert_lex_error_snapshot!(input);
+}
+
+#[test]
+fn lex_capital_unicode_escape_above_max() {
+    let input = r#"let x = "\U0011FFFF""#;
+    assert_lex_error_snapshot!(input);
+}
+
+#[test]
+fn lex_single_quote_escape_in_string() {
+    let input = r#"let x = "a\'b""#;
+    assert_lex_error_snapshot!(input);
+}
+
+#[test]
+fn lex_double_quote_escape_in_char() {
+    let input = r#"let x = '\"'"#;
+    assert_lex_error_snapshot!(input);
+}
+
+#[test]
+fn lex_unicode_escape_empty_in_char() {
+    let input = r#"let x = '\u{}'"#;
+    assert_lex_error_snapshot!(input);
+}
+
+#[test]
+fn lex_unicode_escape_above_max_in_char() {
+    let input = r#"let x = '\u{110000}'"#;
+    assert_lex_error_snapshot!(input);
+}
+
+#[test]
+fn lex_unicode_escape_unterminated_in_char() {
+    let input = r#"let x = '\u{e9'"#;
+    assert_lex_error_snapshot!(input);
+}
+
+#[test]
+fn lex_invalid_escape_in_format_string() {
+    let input = r#"let x = f"a\qb""#;
+    assert_lex_error_snapshot!(input);
+}
+
+#[test]
+fn lex_single_quote_escape_in_format_string() {
+    let input = r#"let x = f"a\'b""#;
+    assert_lex_error_snapshot!(input);
+}
+
+#[test]
+fn lex_hex_escape_non_hex_digits_in_format_string() {
+    let input = r#"let x = f"\xZZ""#;
+    assert_lex_error_snapshot!(input);
+}
+
+#[test]
 fn lex_unicode_escape_missing_braces() {
     let input = r#"let x = "\u1F600""#;
     assert_lex_error_snapshot!(input);
@@ -8377,6 +8461,36 @@ fn infer_char_literal_overflow_uint8() {
     let input = r#"
 fn test() {
   let x: uint8 = '中';
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_octal_char_literal_overflow_int8() {
+    let input = r#"
+fn test() {
+  let x: int8 = '\377';
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_hex_char_literal_overflow_int8() {
+    let input = r#"
+fn test() {
+  let x: int8 = '\xFF';
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unicode_char_literal_overflow_uint8() {
+    let input = r#"
+fn test() {
+  let x: uint8 = '\u{1F600}';
 }
 "#;
     assert_infer_error_snapshot!(input);

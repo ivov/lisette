@@ -13426,11 +13426,57 @@ fn main() {
 }
 
 #[test]
-fn constant_cast_overflow_rune_literal_no_warning() {
-    assert_no_lint_warnings!(
+fn constant_cast_overflow_rune_literal() {
+    assert_lint_snapshot!(
         r#"
 fn main() {
   let _ = 'é' as int8
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_escaped_rune_literal() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = '\xFF' as int8
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_unicode_rune_literal_alias_target() {
+    assert_lint_snapshot!(
+        r#"
+type Small = int16
+
+fn main() {
+  let _ = '\u{1F600}' as Small
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_rune_literal_in_range_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = '\377' as uint16
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_rune_to_byte_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = '中' as uint8
 }
 "#
     );
