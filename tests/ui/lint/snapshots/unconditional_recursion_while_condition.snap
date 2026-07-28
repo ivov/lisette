@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Unconditional recursion
+   ╭─[test.lis:3:9]
+ 2 │ fn check(n: int) -> bool {
+ 3 │   while check(n) {
+   ·         ────┬───
+   ·             ╰── recurses on every path
+ 4 │     let _ = 1
+   ╰────
+  help: `check` always calls itself, so it overflows the stack instead of returning. Add a base case that returns without recursing · code: [lint.unconditional_recursion]

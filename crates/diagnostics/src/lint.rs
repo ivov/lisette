@@ -632,6 +632,15 @@ pub fn loop_runs_once(span: &Span) -> LisetteDiagnostic {
         )
 }
 
+pub fn unconditional_recursion(span: &Span, name: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Unconditional recursion")
+        .with_lint_code("unconditional_recursion")
+        .with_span_label(span, "recurses on every path")
+        .with_help(format!(
+            "`{name}` always calls itself, so it overflows the stack instead of returning. Add a base case that returns without recursing"
+        ))
+}
+
 pub fn unnecessary_return(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Unnecessary `return`")
         .with_lint_code("unnecessary_return")

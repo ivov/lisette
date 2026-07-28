@@ -13263,6 +13263,191 @@ fn main() {
 }
 
 #[test]
+fn constant_cast_overflow_folded_addition() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = (200 + 100) as int8
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_folded_shift() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = (1 << 40) as int32
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_negative_to_unsigned() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = (10 - 20) as uint8
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_bitwise_not() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = (^0) as uint8
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_negated_compound() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = (-(200 + 100)) as int8
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_multiplication_boundary() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = (2 * 64) as int8
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_in_range_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = (100 + 27) as int8
+  let _ = (0 - 128) as int8
+  let _ = (200 + 100) as int64
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_variable_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = (x + 100) as int8
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_float_operand_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = (1.5 * 200.0) as int8
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_bare_literal_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = 300 as int8
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_negated_literal_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = (-129) as int8
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_newtype_target() {
+    assert_lint_snapshot!(
+        r#"
+struct Small(int8)
+
+fn main() {
+  let _ = 300 as Small
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_alias_target() {
+    assert_lint_snapshot!(
+        r#"
+type Tiny = int8
+
+fn main() {
+  let _ = 300 as Tiny
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_named_constant_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+const N = 300
+
+fn main() {
+  let _ = N as int8
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_rune_literal_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = 'é' as int8
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_cast_in_arithmetic_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = ((5 as int8) + 3) as int16
+}
+"#
+    );
+}
+
+#[test]
 fn empty_infinite_loop_fires() {
     assert_lint_snapshot!(
         r#"
@@ -22454,6 +22639,1006 @@ impl Circle {
 
 fn main() {
   ()
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_tail_call() {
+    assert_lint_snapshot!(
+        r#"
+fn runs_forever(n: int) -> int {
+  runs_forever(n - 1)
+}
+
+fn main() {
+  let _ = runs_forever(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_return_form() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn spin(n: int) -> int {
+  return spin(n - 1)
+}
+
+fn main() {
+  let _ = spin(3)
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .lints()
+            .iter()
+            .any(|d| d.plain_message() == "Unconditional recursion"),
+        "a returned self-call recurses unconditionally: {:?}",
+        result.lints()
+    );
+}
+
+#[test]
+fn unconditional_recursion_after_straight_line_statements() {
+    assert_lint_snapshot!(
+        r#"
+fn shrink(n: int) -> int {
+  let half = n / 2
+  shrink(half)
+}
+
+fn main() {
+  let _ = shrink(8)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_self_call_in_operand() {
+    assert_lint_snapshot!(
+        r#"
+fn accumulate(n: int) -> int {
+  accumulate(n - 1) + 1
+}
+
+fn main() {
+  let _ = accumulate(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_self_call_in_argument() {
+    assert_lint_snapshot!(
+        r#"
+fn double(n: int) -> int {
+  n * 2
+}
+
+fn wrap(n: int) -> int {
+  double(wrap(n - 1))
+}
+
+fn main() {
+  let _ = wrap(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_self_call_in_if_condition() {
+    assert_lint_snapshot!(
+        r#"
+fn probe(n: int) -> int {
+  if probe(n - 1) > 0 {
+    return 1
+  }
+  0
+}
+
+fn main() {
+  let _ = probe(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_generic_function() {
+    assert_lint_snapshot!(
+        r#"
+fn echo<T>(value: T) -> T {
+  echo(value)
+}
+
+fn main() {
+  let _ = echo(1)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_base_case_return_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn countdown(n: int) -> int {
+  if n <= 0 {
+    return 0
+  }
+  countdown(n - 1)
+}
+
+fn main() {
+  let _ = countdown(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_branch_tail_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn countdown(n: int) -> int {
+  if n <= 0 { 0 } else { countdown(n - 1) }
+}
+
+fn main() {
+  let _ = countdown(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_match_arm_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn countdown(n: int) -> int {
+  match n {
+    0 => 0,
+    _ => countdown(n - 1),
+  }
+}
+
+fn main() {
+  let _ = countdown(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_loop_body_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn total(n: int) -> int {
+  let mut sum = 0
+  for i in 0..n {
+    sum = total(i)
+  }
+  sum
+}
+
+fn main() {
+  let _ = total(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_while_condition() {
+    assert_lint_snapshot!(
+        r#"
+fn check(n: int) -> bool {
+  while check(n) {
+    let _ = 1
+  }
+  true
+}
+
+fn main() {
+  let _ = check(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_for_iterable() {
+    assert_lint_snapshot!(
+        r#"
+fn limit(n: int) -> int {
+  for i in 0..limit(n) {
+    let _ = i
+  }
+  n
+}
+
+fn main() {
+  let _ = limit(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_while_let_scrutinee() {
+    assert_lint_snapshot!(
+        r#"
+fn next_item(n: int) -> Option<int> {
+  while let Some(v) = next_item(n) {
+    let _ = v
+  }
+  None
+}
+
+fn main() {
+  let _ = next_item(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_while_body_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn drain(n: int) -> int {
+  let mut i = n
+  while i > 0 {
+    let _ = drain(i - 1)
+    i -= 1
+  }
+  n
+}
+
+fn main() {
+  let _ = drain(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_lambda_body_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn indirect(n: int) -> int {
+  let again = |x: int| indirect(x) + 1
+  let _ = again
+  n
+}
+
+fn main() {
+  let _ = indirect(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_task_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn respawn() {
+  task respawn()
+}
+
+fn main() {
+  respawn()
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_after_defer() {
+    assert_lint_snapshot!(
+        r#"
+fn cleanup(n: int) -> int {
+  n + 1
+}
+
+fn descend(n: int) -> int {
+  defer cleanup(n)
+  descend(n - 1)
+}
+
+fn main() {
+  let _ = descend(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_after_task() {
+    assert_lint_snapshot!(
+        r#"
+fn cleanup(n: int) -> int {
+  n + 1
+}
+
+fn descend(n: int) -> int {
+  task cleanup(n)
+  descend(n - 1)
+}
+
+fn main() {
+  let _ = descend(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_propagate_before_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn lookup(n: int) -> Option<int> {
+  Some(n)
+}
+
+fn locate(n: int) -> Option<int> {
+  let found = lookup(n)?
+  locate(found)
+}
+
+fn main() {
+  let _ = locate(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_mutual_recursion_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn ping(n: int) -> int {
+  pong(n)
+}
+
+fn pong(n: int) -> int {
+  ping(n)
+}
+
+fn main() {
+  let _ = ping(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_shadowed_binding_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn lookup(n: int) -> int {
+  let lookup = |x: int| x + 1
+  lookup(n)
+}
+
+fn main() {
+  let _ = lookup(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_method_on_self() {
+    assert_lint_snapshot!(
+        r#"
+pub struct Counter {
+  value: int,
+}
+
+impl Counter {
+  fn spin(self) -> int {
+    self.spin()
+  }
+}
+
+fn main() {
+  let c = Counter { value: 1 }
+  let _ = c.spin()
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_method_on_other_receiver() {
+    assert_lint_snapshot!(
+        r#"
+pub struct Counter {
+  value: int,
+}
+
+impl Counter {
+  fn spin(self, other: Counter) -> int {
+    other.spin(self)
+  }
+}
+
+fn main() {
+  let a = Counter { value: 1 }
+  let b = Counter { value: 2 }
+  let _ = a.spin(b)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_method_called_through_type_name() {
+    assert_lint_snapshot!(
+        r#"
+pub struct Counter {
+  value: int,
+}
+
+impl Counter {
+  fn spin(self) -> int {
+    Counter.spin(self)
+  }
+}
+
+fn main() {
+  let c = Counter { value: 1 }
+  let _ = c.spin()
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_interface_dispatch_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub interface Spinner {
+  fn spin() -> int
+}
+
+pub struct Counter {
+  value: int,
+}
+
+pub struct Other {
+  value: int,
+}
+
+impl Other {
+  pub fn spin(self) -> int {
+    self.value
+  }
+}
+
+impl Counter {
+  pub fn spin(self) -> int {
+    let s: Spinner = Other { value: 1 }
+    s.spin()
+  }
+}
+
+fn main() {
+  let c = Counter { value: 1 }
+  let _ = c.spin()
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_generic_bound_dispatch_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub interface Spinner {
+  fn spin() -> int
+}
+
+pub struct Counter {
+  value: int,
+}
+
+impl Counter {
+  pub fn spin(self) -> int {
+    self.value
+  }
+
+  pub fn relay<T: Spinner>(self, x: T) -> int {
+    x.spin()
+  }
+}
+
+fn main() {
+  let c = Counter { value: 1 }
+  let _ = c.relay(c)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_both_if_branches() {
+    assert_lint_snapshot!(
+        r#"
+fn wander(n: int) -> int {
+  if n > 0 { wander(n - 1) } else { wander(n + 1) }
+}
+
+fn main() {
+  let _ = wander(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_all_match_arms() {
+    assert_lint_snapshot!(
+        r#"
+fn wander(n: int) -> int {
+  match n {
+    0 => wander(1),
+    _ => wander(n - 1),
+  }
+}
+
+fn main() {
+  let _ = wander(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_later_match_guard_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn pick(n: int) -> int {
+  match n {
+    0 => 0,
+    x if pick(x) > 0 => 1,
+    _ => 2,
+  }
+}
+
+fn main() {
+  let _ = pick(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_one_if_branch_returns_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn wander(n: int) -> int {
+  if n > 0 { wander(n - 1) } else { 0 }
+}
+
+fn main() {
+  let _ = wander(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_method_calls_same_named_function_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub struct Square {
+  side: int,
+}
+
+fn area(n: int) -> int {
+  n * n
+}
+
+impl Square {
+  fn area(self) -> int {
+    area(self.side)
+  }
+}
+
+fn main() {
+  let s = Square { side: 2 }
+  let _ = s.area()
+  let _ = area(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_panic_before_self_call_stays_silent() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn crash(n: int) -> int {
+  panic("boom")
+  crash(n - 1)
+}
+
+fn main() {
+  let _ = crash(3)
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        !result
+            .lints()
+            .iter()
+            .any(|d| d.plain_message() == "Unconditional recursion"),
+        "a diverging call before the self-call must suppress the lint: {:?}",
+        result.lints()
+    );
+}
+
+#[test]
+fn unconditional_recursion_never_call_before_self_call_stays_silent() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn fail(msg: string) -> Never {
+  panic(msg)
+}
+
+fn crash(n: int) -> int {
+  fail("boom")
+  crash(n - 1)
+}
+
+fn main() {
+  let _ = crash(3)
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        !result
+            .lints()
+            .iter()
+            .any(|d| d.plain_message() == "Unconditional recursion"),
+        "a `Never`-typed call before the self-call must suppress the lint: {:?}",
+        result.lints()
+    );
+}
+
+#[test]
+fn unconditional_recursion_fires_alongside_unrelated_type_error() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn spin(n: int) -> int {
+  let x: int = "mismatch"
+  spin(n + x)
+}
+
+fn main() {
+  let _ = spin(3)
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors()
+            .iter()
+            .any(|d| d.plain_message().contains("Type mismatch")),
+        "expected the type mismatch to still be reported: {:?}",
+        result.errors()
+    );
+    assert!(
+        result
+            .lints()
+            .iter()
+            .any(|d| d.plain_message() == "Unconditional recursion"),
+        "the recursion is unconditional regardless of the type error: {:?}",
+        result.lints()
+    );
+}
+
+#[test]
+fn unconditional_recursion_fires_in_test_file() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {
+  ()
+}
+"#,
+    );
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "helpers.test.lis",
+        r#"
+fn grow(n: int) -> int {
+  grow(n + 1)
+}
+
+fn test_growth() {
+  assert grow(1) > 0
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .lints()
+            .iter()
+            .any(|d| d.plain_message() == "Unconditional recursion"),
+        "the lint must also cover `.test.lis` files: {:?}",
+        result.lints()
+    );
+}
+
+#[test]
+fn unconditional_recursion_unresolved_call_before_self_call_stays_silent() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn crash(n: int) -> int {
+  undefined_helper()
+  crash(n)
+}
+
+fn main() {
+  let _ = crash(3)
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors()
+            .iter()
+            .any(|d| d.plain_message().contains("Name not found")),
+        "expected the unresolved name to still be reported: {:?}",
+        result.errors()
+    );
+    assert!(
+        !result
+            .lints()
+            .iter()
+            .any(|d| d.plain_message() == "Unconditional recursion"),
+        "an unresolved call cannot be proven to return, so the lint must stay silent: {:?}",
+        result.lints()
+    );
+}
+
+#[test]
+fn unconditional_recursion_self_call_in_task_argument() {
+    assert_lint_snapshot!(
+        r#"
+fn consume(n: int) -> int {
+  n
+}
+
+fn spawn_wrap(n: int) -> int {
+  task consume(spawn_wrap(n))
+  0
+}
+
+fn main() {
+  let _ = spawn_wrap(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_deferred_self_call_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn descend(n: int) -> int {
+  defer descend(n)
+  0
+}
+
+fn main() {
+  let _ = descend(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_deferred_self_call_then_infinite_loop_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn descend(n: int) -> int {
+  defer descend(n)
+  loop {
+    let _ = n
+  }
+}
+
+fn main() {
+  let _ = descend(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_after_task_block() {
+    assert_lint_snapshot!(
+        r#"
+fn cleanup() {
+  ()
+}
+
+fn spawn_wrap(n: int) -> int {
+  task {
+    cleanup()
+  }
+  spawn_wrap(n)
+}
+
+fn main() {
+  let _ = spawn_wrap(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_after_defer_block() {
+    assert_lint_snapshot!(
+        r#"
+fn cleanup() {
+  ()
+}
+
+fn descend(n: int) -> int {
+  defer {
+    cleanup()
+  }
+  descend(n)
+}
+
+fn main() {
+  let _ = descend(3)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_static_impl_function() {
+    assert_lint_snapshot!(
+        r#"
+pub struct Counter {
+  value: int,
+}
+
+impl Counter {
+  fn spin(n: int) -> int {
+    Counter.spin(n)
+  }
+}
+
+fn main() {
+  let _ = Counter.spin(1)
+}
+"#
+    );
+}
+
+#[test]
+fn unconditional_recursion_diverging_task_argument_stays_silent() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn fail(msg: string) -> Never {
+  panic(msg)
+}
+
+fn consume(n: int) -> int {
+  n
+}
+
+fn spawn_wrap(n: int) -> int {
+  task consume(fail("boom"))
+  spawn_wrap(n)
+}
+
+fn main() {
+  let _ = spawn_wrap(3)
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        !result
+            .lints()
+            .iter()
+            .any(|d| d.plain_message() == "Unconditional recursion"),
+        "a spawned call's arguments run here, so a diverging one makes the self-call unreachable: {:?}",
+        result.lints()
+    );
+}
+
+#[test]
+fn unconditional_recursion_diverging_defer_argument_stays_silent() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn fail(msg: string) -> Never {
+  panic(msg)
+}
+
+fn consume(n: int) -> int {
+  n
+}
+
+fn descend(n: int) -> int {
+  defer consume(fail("boom"))
+  descend(n)
+}
+
+fn main() {
+  let _ = descend(3)
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        !result
+            .lints()
+            .iter()
+            .any(|d| d.plain_message() == "Unconditional recursion"),
+        "a deferred call's arguments run here, so a diverging one makes the self-call unreachable: {:?}",
+        result.lints()
+    );
+}
+
+#[test]
+fn unconditional_recursion_loop_body_out_of_scope_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn spin(n: int) -> int {
+  loop {
+    let _ = spin(n)
+  }
+}
+
+fn main() {
+  let _ = spin(3)
 }
 "#
     );

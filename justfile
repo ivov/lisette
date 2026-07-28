@@ -90,6 +90,9 @@ loc:
     git archive gh-pages loc | tar -x -C target/loc-chart
     open target/loc-chart/loc/index.html
 
+check-fuzz-targets:
+    cargo check --manifest-path fuzz/Cargo.toml
+
 fuzz-parse duration="300":
     cargo +nightly fuzz run --sanitizer address parse fuzz/corpus/parse fuzz/seed_corpus -- -max_total_time={{duration}} -rss_limit_mb=2048 -dict=fuzz/lisette.dict
 

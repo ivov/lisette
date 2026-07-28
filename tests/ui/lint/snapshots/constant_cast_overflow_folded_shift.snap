@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ✕ Constant cast overflow
+   ╭─[test.lis:3:11]
+ 2 │ fn main() {
+ 3 │   let _ = (1 << 40) as int32
+   ·           ─────────┬────────
+   ·                    ╰── constant `1099511627776` overflows `int32`
+ 4 │ }
+   ╰────
+  help: This expression always evaluates to `1099511627776`, and `int32` must be in range `-2147483648` to `2147483647` · code: [infer.constant_cast_overflow]

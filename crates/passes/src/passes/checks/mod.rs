@@ -1,6 +1,7 @@
 pub(crate) mod always_true_disjunction;
 pub(crate) mod cast_nan_to_int;
 pub(crate) mod const_naming;
+pub(crate) mod constant_cast_overflow;
 pub(crate) mod decimal_file_mode;
 pub(crate) mod duplicate_bindings;
 pub(crate) mod empty_infinite_loop;
