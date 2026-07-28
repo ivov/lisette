@@ -1,9 +1,9 @@
 use crate::passes::comparison::{
     Bound, expressions_equivalent, flip_comparison, in_scope_comparison, is_side_effect_free,
-    signed_integer_literal, tighter,
+    is_skippable_boolean, signed_integer_literal, tighter,
 };
 use crate::passes::walk::NodeCtx;
-use syntax::ast::{BinaryOperator, Expression, Span, UnaryOperator};
+use syntax::ast::{BinaryOperator, Expression, Span};
 
 pub(crate) fn check(expression: &Expression, ctx: &mut NodeCtx) {
     let Expression::Binary {
@@ -84,26 +84,6 @@ fn collect_conjuncts<'a>(
             collect_conjuncts(right, root_span, conjuncts, ctx);
         }
         other => conjuncts.push(other),
-    }
-}
-
-/// Whether `expression` is a value-stable boolean safe to skip in the chain: a
-/// boolean identifier, field read, literal, or `!` of one. These cannot be a
-/// rejected comparison, so a run of constraints may carry across them.
-fn is_skippable_boolean(expression: &Expression) -> bool {
-    if !expression.get_type().is_boolean() {
-        return false;
-    }
-    match expression.unwrap_parens() {
-        Expression::Identifier { .. }
-        | Expression::DotAccess { .. }
-        | Expression::Literal { .. } => true,
-        Expression::Unary {
-            operator: UnaryOperator::Not,
-            expression: inner,
-            ..
-        } => is_skippable_boolean(inner),
-        _ => false,
     }
 }
 

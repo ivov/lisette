@@ -2760,6 +2760,15 @@ pub fn impossible_comparison(span: &Span) -> LisetteDiagnostic {
         )
 }
 
+pub fn always_true_disjunction(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Always-true comparison")
+        .with_infer_code("always_true_disjunction")
+        .with_span_label(span, "always `true`")
+        .with_help(
+            "Every value satisfies at least one side, so this `||` is always `true`. Check the bounds, or did you mean `&&`?",
+        )
+}
+
 pub fn nan_comparison(span: &Span, always_true: bool) -> LisetteDiagnostic {
     let result = if always_true { "true" } else { "false" };
 
