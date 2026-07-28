@@ -31,7 +31,9 @@ pub fn prewarm_typedef_cache(
                     }
                 }
             }
-            TypedefLocatorResult::UnknownStdlib | TypedefLocatorResult::UndeclaredImport => {
+            TypedefLocatorResult::UnknownStdlib
+            | TypedefLocatorResult::UndeclaredImport
+            | TypedefLocatorResult::InternalPackage { .. } => {
                 // Type-checker handles these.
             }
             TypedefLocatorResult::MissingTypedef {

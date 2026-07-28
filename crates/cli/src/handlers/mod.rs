@@ -10,7 +10,7 @@ mod learn;
 mod lsp;
 mod new;
 mod project;
-mod reconciliation;
+pub(crate) mod reconciliation;
 mod run;
 mod sync;
 mod test;

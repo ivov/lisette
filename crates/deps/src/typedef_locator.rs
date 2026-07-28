@@ -1,18 +1,35 @@
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use stdlib::Target;
 
 use crate::project_manifest::{
-    GoDependency, Manifest, check_no_subpackage_deps, check_toolchain_version, find_module_for_pkg,
-    parse_manifest,
+    GoDependency, Manifest, ReplacementSource, check_no_subpackage_deps, check_toolchain_version,
+    find_module_for_pkg, parse_manifest,
 };
-use crate::{GoModule, GoPackage, typedef_cache_dir};
+use crate::{GoModule, GoPackage, ReplacementTarget, typedef_cache_dir};
 
-/// `(module path, version to hand Go, optional (replacement path, version))`.
-type ResolvedModule = (String, String, Option<(String, String)>);
+/// `(module path, version to hand Go, optional replacement)`.
+type ResolvedModule = (String, String, Option<ResolvedReplacement>);
+
+#[derive(Debug, Clone)]
+pub enum ResolvedReplacement {
+    Module { path: String, version: String },
+    Local,
+}
+
+impl ResolvedReplacement {
+    pub fn as_target(&self) -> ReplacementTarget<'_> {
+        match self {
+            ResolvedReplacement::Module { path, version } => {
+                ReplacementTarget::Module(crate::Replacement { path, version })
+            }
+            ResolvedReplacement::Local => ReplacementTarget::LocalDirectory,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum TypedefLocatorResult {
@@ -24,11 +41,14 @@ pub enum TypedefLocatorResult {
     UnknownStdlib,
     /// Has a domain-style path but is not declared in the manifest.
     UndeclaredImport,
+    /// An `internal/` package of a dependency, unimportable across modules.
+    InternalPackage { module: String },
     /// Declared in the manifest but no `.d.lis` on disk and no bindgen runner.
     MissingTypedef {
         module: String,
         version: String,
         replacement_path: Option<String>,
+        local: bool,
     },
     /// Typedef file exists but could not be read.
     UnreadableTypedef { path: PathBuf, error: String },
@@ -62,6 +82,15 @@ pub enum DeclarationStatus {
         module: String,
         replacement_path: String,
         replacement_version: String,
+    },
+    DeclaredLocal {
+        module: String,
+        path: String,
+    },
+    /// An `internal/` package of a dependency, which Go forbids importing
+    /// across module boundaries.
+    InternalPackage {
+        module: String,
     },
     UnknownStdlib,
     UndeclaredImport,
@@ -124,6 +153,8 @@ pub struct TypedefLocator {
     project_root: Option<PathBuf>,
     target: Target,
     bindgen: Option<Arc<dyn Bindgen>>,
+    /// Computed at most once per locator: one build sees one snapshot of local source.
+    local_stamp: Arc<OnceLock<Option<String>>>,
 }
 
 impl TypedefLocator {
@@ -137,7 +168,27 @@ impl TypedefLocator {
             project_root,
             target,
             bindgen: None,
+            local_stamp: Arc::new(OnceLock::new()),
         }
+    }
+
+    /// The stamp value gating local typedefs, `None` when none are declared.
+    pub fn local_stamp_value(&self) -> Option<&str> {
+        self.local_stamp
+            .get_or_init(|| {
+                let project_root = self.project_root.as_deref()?;
+                let has_local = self.deps.values().any(|dep| {
+                    matches!(
+                        dep,
+                        GoDependency::Replaced {
+                            source: ReplacementSource::Local { .. },
+                            ..
+                        }
+                    )
+                });
+                has_local.then(|| crate::local_source::local_stamp_hash(project_root, &self.deps))
+            })
+            .as_deref()
     }
 
     pub fn from_project(project_root: &Path) -> Result<Self, String> {
@@ -189,17 +240,16 @@ impl TypedefLocator {
         let module = module.to_string();
         Some(match dep {
             GoDependency::Remote { version, .. } => (module, version.clone(), None),
-            GoDependency::Replaced {
-                replacement_path,
-                replacement_version,
-                ..
-            } => {
+            GoDependency::Replaced { source, .. } => {
                 let synthetic = crate::placeholder_require_version(&module);
-                (
-                    module,
-                    synthetic,
-                    Some((replacement_path.clone(), replacement_version.clone())),
-                )
+                let replacement = match source {
+                    ReplacementSource::Module { path, version } => ResolvedReplacement::Module {
+                        path: path.clone(),
+                        version: version.clone(),
+                    },
+                    ReplacementSource::Local { .. } => ResolvedReplacement::Local,
+                };
+                (module, synthetic, Some(replacement))
             }
         })
     }
@@ -217,6 +267,15 @@ impl TypedefLocator {
             };
         }
 
+        if let Some((module_path, _)) = find_module_for_pkg(&self.deps, package_path)
+            && package_path
+                .strip_prefix(module_path)
+                .is_some_and(|rest| rest.split('/').any(|segment| segment == "internal"))
+        {
+            return DeclarationStatus::InternalPackage {
+                module: module_path.to_string(),
+            };
+        }
         match find_module_for_pkg(&self.deps, package_path) {
             Some((module_path, GoDependency::Remote { version, .. })) => {
                 DeclarationStatus::DeclaredThirdParty {
@@ -227,14 +286,23 @@ impl TypedefLocator {
             Some((
                 module_path,
                 GoDependency::Replaced {
-                    replacement_path,
-                    replacement_version,
+                    source: ReplacementSource::Module { path, version },
                     ..
                 },
             )) => DeclarationStatus::DeclaredReplacement {
                 module: module_path.to_string(),
-                replacement_path: replacement_path.clone(),
-                replacement_version: replacement_version.clone(),
+                replacement_path: path.clone(),
+                replacement_version: version.clone(),
+            },
+            Some((
+                module_path,
+                GoDependency::Replaced {
+                    source: ReplacementSource::Local { path },
+                    ..
+                },
+            )) => DeclarationStatus::DeclaredLocal {
+                module: module_path.to_string(),
+                path: path.clone(),
             },
             None => DeclarationStatus::UndeclaredImport,
         }
@@ -259,6 +327,9 @@ impl TypedefLocator {
             }
             DeclarationStatus::UnknownStdlib => return TypedefLocatorResult::UnknownStdlib,
             DeclarationStatus::UndeclaredImport => return TypedefLocatorResult::UndeclaredImport,
+            DeclarationStatus::InternalPackage { module } => {
+                return TypedefLocatorResult::InternalPackage { module };
+            }
             DeclarationStatus::DeclaredThirdParty { module, version } => (module, version, None),
             DeclarationStatus::DeclaredReplacement {
                 module,
@@ -269,23 +340,34 @@ impl TypedefLocator {
                 (
                     module,
                     synthetic,
-                    Some((replacement_path, replacement_version)),
+                    Some(ResolvedReplacement::Module {
+                        path: replacement_path,
+                        version: replacement_version,
+                    }),
                 )
+            }
+            DeclarationStatus::DeclaredLocal { module, .. } => {
+                let synthetic = crate::placeholder_require_version(&module);
+                (module, synthetic, Some(ResolvedReplacement::Local))
             }
         };
 
+        let is_local = matches!(replacement, Some(ResolvedReplacement::Local));
         let display_version = match &replacement {
-            Some((_, replacement_version)) => replacement_version.clone(),
-            None => version.clone(),
+            Some(ResolvedReplacement::Module { version, .. }) => version.clone(),
+            Some(ResolvedReplacement::Local) | None => version.clone(),
         };
-
-        let replacement_path = replacement.as_ref().map(|(path, _)| path.clone());
+        let replacement_path = match &replacement {
+            Some(ResolvedReplacement::Module { path, .. }) => Some(path.clone()),
+            Some(ResolvedReplacement::Local) | None => None,
+        };
 
         let Some(project_root) = &self.project_root else {
             return TypedefLocatorResult::MissingTypedef {
                 module: module_path,
                 version: display_version,
                 replacement_path,
+                local: is_local,
             };
         };
 
@@ -293,14 +375,25 @@ impl TypedefLocator {
             module: GoModule {
                 path: &module_path,
                 version: &version,
-                replacement: replacement
-                    .as_ref()
-                    .map(|(path, version)| crate::Replacement { path, version }),
+                replacement: replacement.as_ref().map(ResolvedReplacement::as_target),
             },
             package: package_path,
         };
         let cache_dir = typedef_cache_dir(project_root);
         let typedef_path = pkg.typedef_path(&cache_dir, self.target);
+
+        if is_local
+            && let Some(stamp) = self.local_stamp_value()
+            && let Err(error) = crate::local_source::gate_local_typedef(&typedef_path, stamp)
+        {
+            return TypedefLocatorResult::UnreadableTypedef {
+                path: typedef_path,
+                error: format!(
+                    "the local module changed but its stale typedef could not be removed: {}",
+                    error
+                ),
+            };
+        }
 
         match read_cached_typedef(&typedef_path) {
             Some(found) => found,
@@ -309,6 +402,7 @@ impl TypedefLocator {
                     module: module_path,
                     version: display_version,
                     replacement_path,
+                    local: is_local,
                 },
                 Some(runner) => match runner.run(&pkg) {
                     Ok(()) => read_cached_typedef(&typedef_path).unwrap_or_else(|| {
@@ -376,8 +470,10 @@ mod tests {
         deps.insert(
             "github.com/df-mc/dragonfly".to_string(),
             GoDependency::Replaced {
-                replacement_path: "github.com/you/dragonfly".to_string(),
-                replacement_version: "v1.9.0".to_string(),
+                source: ReplacementSource::Module {
+                    path: "github.com/you/dragonfly".to_string(),
+                    version: "v1.9.0".to_string(),
+                },
                 via: None,
             },
         );
@@ -388,6 +484,7 @@ mod tests {
                 module,
                 version,
                 replacement_path,
+                local,
             } => {
                 assert_eq!(module, "github.com/df-mc/dragonfly");
                 assert_eq!(version, "v1.9.0");
@@ -395,8 +492,119 @@ mod tests {
                     replacement_path.as_deref(),
                     Some("github.com/you/dragonfly")
                 );
+                assert!(!local);
             }
             other => panic!("expected MissingTypedef, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn internal_packages_of_dependencies_are_rejected_at_classification() {
+        let mut deps = BTreeMap::new();
+        deps.insert(
+            "github.com/gorilla/mux".to_string(),
+            GoDependency::Remote {
+                version: "v1.8.0".to_string(),
+                via: None,
+            },
+        );
+        deps.insert(
+            "example.com/me/foo".to_string(),
+            GoDependency::Replaced {
+                source: ReplacementSource::Local {
+                    path: "../foo".to_string(),
+                },
+                via: None,
+            },
+        );
+        let locator = TypedefLocator::new(deps, None, Target::host());
+
+        for pkg in [
+            "github.com/gorilla/mux/internal/x",
+            "example.com/me/foo/internal",
+        ] {
+            assert!(
+                matches!(
+                    locator.validate_declaration(pkg),
+                    DeclarationStatus::InternalPackage { .. }
+                ),
+                "{}",
+                pkg
+            );
+        }
+        assert!(!matches!(
+            locator.validate_declaration("example.com/me/foo/internally"),
+            DeclarationStatus::InternalPackage { .. }
+        ));
+    }
+
+    fn local_project(module: &str, path: &str) -> (tempfile::TempDir, TypedefLocator) {
+        let project = tempfile::tempdir().unwrap();
+        let module_dir = project.path().join(path);
+        std::fs::create_dir_all(&module_dir).unwrap();
+        std::fs::write(
+            module_dir.join("go.mod"),
+            format!("module {}\n\ngo 1.25\n", module),
+        )
+        .unwrap();
+        std::fs::write(module_dir.join("lib.go"), "package lib\n").unwrap();
+
+        let mut deps = BTreeMap::new();
+        deps.insert(
+            module.to_string(),
+            GoDependency::Replaced {
+                source: ReplacementSource::Local {
+                    path: path.to_string(),
+                },
+                via: None,
+            },
+        );
+        let locator = TypedefLocator::new(deps, Some(project.path().to_path_buf()), Target::host());
+        (project, locator)
+    }
+
+    #[test]
+    fn local_stamp_gate_discards_typedef_when_local_source_changes() {
+        let module = "example.com/me/foo";
+        let (project, locator) = local_project(module, "foo");
+
+        let pkg = GoPackage {
+            module: GoModule {
+                path: module,
+                version: "v0.0.0",
+                replacement: Some(crate::ReplacementTarget::LocalDirectory),
+            },
+            package: module,
+        };
+        let typedef_path = pkg.typedef_path(&typedef_cache_dir(project.path()), Target::host());
+        std::fs::create_dir_all(typedef_path.parent().unwrap()).unwrap();
+        std::fs::write(&typedef_path, "// Generated\n").unwrap();
+
+        match locator.find_typedef_content(module) {
+            TypedefLocatorResult::MissingTypedef { local, .. } => assert!(local),
+            other => panic!("expected MissingTypedef after gate, got {:?}", other),
+        }
+
+        std::fs::write(&typedef_path, "// Generated\n").unwrap();
+        let same = TypedefLocator::new(
+            locator.deps().clone(),
+            Some(project.path().to_path_buf()),
+            Target::host(),
+        );
+        assert!(matches!(
+            same.find_typedef_content(module),
+            TypedefLocatorResult::Found { .. }
+        ));
+
+        std::fs::write(project.path().join("foo/lib.go"), "package lib // edited\n").unwrap();
+        let edited = TypedefLocator::new(
+            locator.deps().clone(),
+            Some(project.path().to_path_buf()),
+            Target::host(),
+        );
+        assert!(matches!(
+            edited.find_typedef_content(module),
+            TypedefLocatorResult::MissingTypedef { local: true, .. }
+        ));
     }
 }

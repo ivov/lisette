@@ -1,3 +1,4 @@
+mod local_source;
 mod project_manifest;
 mod typedef_locator;
 
@@ -33,13 +34,13 @@ fn typedef_home() -> Option<PathBuf> {
 }
 
 pub use project_manifest::{
-    GoDependency, Manifest, ResolveReport, TrimmedVia, check_no_subpackage_deps,
+    GoDependency, Manifest, ReplacementSource, ResolveReport, TrimmedVia, check_no_subpackage_deps,
     check_toolchain_version, parse_manifest, remove_go_dep, resolve_empty_via,
     trim_dead_via_parents, upsert_go_dependency, validate_project_name,
 };
 pub use typedef_locator::{
     Bindgen, BindgenFailure, BindgenGuard, BindgenSession, BindgenSetup, DeclarationStatus,
-    TypedefLocator, TypedefLocatorResult, TypedefOrigin,
+    ResolvedReplacement, TypedefLocator, TypedefLocatorResult, TypedefOrigin,
 };
 
 pub fn is_third_party(pkg: &str) -> bool {
@@ -304,11 +305,19 @@ pub fn ensure_prelude_extracted() {
     prune_stale_version_dirs(&version_dir);
 }
 
-/// The target of a replace directive: code from `path` at `version`.
+/// The target of a module-path replace directive: code from `path` at `version`.
 #[derive(Clone, Copy)]
 pub struct Replacement<'a> {
     pub path: &'a str,
     pub version: &'a str,
+}
+
+/// Where a replaced module's code comes from.
+#[derive(Clone, Copy)]
+pub enum ReplacementTarget<'a> {
+    Module(Replacement<'a>),
+    /// Carries no identity: local typedefs are stamp-gated, not version-keyed.
+    LocalDirectory,
 }
 
 #[derive(Clone, Copy)]
@@ -317,7 +326,7 @@ pub struct GoModule<'a> {
     pub path: &'a str,
     /// Version handed to Go commands. For a replaced module, a placeholder.
     pub version: &'a str,
-    pub replacement: Option<Replacement<'a>>,
+    pub replacement: Option<ReplacementTarget<'a>>,
 }
 
 /// A Go package within a module.
@@ -339,11 +348,15 @@ impl GoPackage<'_> {
     pub fn typedef_path(&self, base_dir: &Path, target: Target) -> PathBuf {
         let target_dir = base_dir.join(target.cache_segment());
         let module_dir = match self.module.replacement {
-            Some(replacement) => target_dir
+            Some(ReplacementTarget::Module(replacement)) => target_dir
                 .join("replaced")
                 .join(self.module.path)
                 .join("module")
                 .join(format!("{}@{}", replacement.path, replacement.version)),
+            Some(ReplacementTarget::LocalDirectory) => target_dir
+                .join("replaced")
+                .join(self.module.path)
+                .join("local"),
             None => target_dir.join(format!("{}@{}", self.module.path, self.module.version)),
         };
 
@@ -405,10 +418,10 @@ mod tests {
             module: GoModule {
                 path: "example.com/dragon",
                 version: "v0.0.0",
-                replacement: Some(Replacement {
+                replacement: Some(ReplacementTarget::Module(Replacement {
                     path: "fork.example/dragon",
                     version: "v1.2.0",
-                }),
+                })),
             },
             package: "example.com/dragon/server",
         };
@@ -418,6 +431,24 @@ mod tests {
             Path::new(
                 "/base/linux_amd64/replaced/example.com/dragon/module/fork.example/dragon@v1.2.0/server/server.d.lis"
             )
+        );
+    }
+
+    #[test]
+    fn typedef_path_uses_versionless_local_layout_for_local_directory() {
+        let target = Target::new("linux", "amd64");
+        let pkg = GoPackage {
+            module: GoModule {
+                path: "example.com/me/foo",
+                version: "v0.0.0",
+                replacement: Some(ReplacementTarget::LocalDirectory),
+            },
+            package: "example.com/me/foo/server",
+        };
+        let path = pkg.typedef_path(Path::new("/base"), target);
+        assert_eq!(
+            path,
+            Path::new("/base/linux_amd64/replaced/example.com/me/foo/local/server/server.d.lis")
         );
     }
 

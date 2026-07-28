@@ -411,6 +411,44 @@ import "go:github.com/gorilla/mux"
 
 To undo the replacement, re-add the dependency without `--replace`.
 
+### Depending on a local Go module
+
+A Lisette project can depend on a Go module located on disk:
+
+```sh
+├── my_lis_project/
+│   ├── lisette.toml
+│   └── src/
+│       └── main.lis
+└── ratelimit/
+    ├── go.mod # module example.com/acme/ratelimit
+    └── ratelimit.go
+```
+
+Specify the module's root dir with the `--path` flag:
+
+```sh
+cd my_lis_project
+lis add --path ../ratelimit
+```
+
+The local dependency is recorded in the manifest:
+
+```toml
+[dependencies.go]
+"example.com/acme/ratelimit" = { path = "../ratelimit" }
+```
+
+Your code imports the local dependency by the module path in its `go.mod`, like any other dependency:
+
+```rs
+import "go:example.com/acme/ratelimit"
+```
+
+As you edit the local Go module, run `lis check` in your Lisette project so typedefs are regenerated to reflect your changes.
+
+Once the Go module is published, use `lis add` to depend on the published module. Its import path stays the same, so no source changes.
+
 <br>
 
 <table><tr>

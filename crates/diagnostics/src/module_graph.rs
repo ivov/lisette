@@ -181,6 +181,40 @@ pub fn undeclared_go_import_via_replace(
         ))
 }
 
+pub fn undeclared_go_import_via_local(
+    go_pkg: &str,
+    local_module: &str,
+    span: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Undeclared Go dependency")
+        .with_resolve_code("undeclared_go_import")
+        .with_span_label(&span, "not in lisette.toml")
+        .with_help(format!(
+            "`{}` is a dependency of the local module `{}`. Run `lis sync` if it is published, or `lis add --path <dir>` if `{}` resolves it from a local directory",
+            go_pkg, local_module, local_module
+        ))
+}
+
+pub fn internal_go_package(go_pkg: &str, module: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Internal Go package")
+        .with_resolve_code("internal_go_package")
+        .with_span_label(&span, "not importable outside its module")
+        .with_help(format!(
+            "`{}` is an `internal` package of `{}`. Go forbids importing internal packages across module boundaries. Use the module's public API instead",
+            go_pkg, module
+        ))
+}
+
+pub fn missing_local_go_typedef(module: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Missing Go typedef")
+        .with_resolve_code("missing_go_typedef")
+        .with_span_label(&span, "no .d.lis file found")
+        .with_help(format!(
+            "Module `{}` is sourced from a local directory but has no typedef. Run `lis sync` to regenerate it.",
+            module
+        ))
+}
+
 pub fn missing_go_typedef(
     go_pkg: &str,
     module: &str,

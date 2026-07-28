@@ -413,6 +413,7 @@ impl<'a> GoWorkspace<'a> {
 
         let mut third_party: Vec<String> = Vec::new();
         let mut seen: HashSet<String> = HashSet::new();
+        let mut unresolved: Vec<UnresolvedTransitive> = Vec::new();
 
         for import in &import_set {
             if !deps::is_third_party(import) {
@@ -420,11 +421,11 @@ impl<'a> GoWorkspace<'a> {
             }
             let containing = match self.find_containing_module(import) {
                 Ok(info) => info,
-                Err(msg) => {
-                    crate::output::print_warning(&format!(
-                        "could not resolve transitive import `{}` from `{}`: {}; declare it manually with `lis add {}` if your code references it",
-                        import, module_path, msg, import
-                    ));
+                Err(message) => {
+                    unresolved.push(UnresolvedTransitive {
+                        import: import.clone(),
+                        message,
+                    });
                     continue;
                 }
             };
@@ -437,16 +438,64 @@ impl<'a> GoWorkspace<'a> {
         }
 
         third_party.sort();
+        unresolved.sort_by(|a, b| a.import.cmp(&b.import));
         Ok(ListedModules {
             modules: third_party,
             package_errors,
+            unresolved,
         })
     }
+
+    pub fn read_go_mod_summary(&self, go_mod: &Path) -> Result<GoModSummary, String> {
+        let go_mod_arg = go_mod.to_string_lossy();
+        let stdout = self.run_go(&["mod", "edit", "-json", &go_mod_arg])?;
+        let value: serde_json::Value = serde_json::from_str(&stdout)
+            .map_err(|e| format!("Failed to parse `go mod edit -json` output: {}", e))?;
+
+        let module_path = value["Module"]["Path"].as_str().unwrap_or("").to_string();
+        if module_path.is_empty() {
+            return Err(format!("`{}` has no `module` directive", go_mod.display()));
+        }
+
+        let mut directory_replaces = Vec::new();
+        if let Some(replaces) = value["Replace"].as_array() {
+            for entry in replaces {
+                let old = entry["Old"]["Path"].as_str().unwrap_or("");
+                let new = entry["New"]["Path"].as_str().unwrap_or("");
+                let has_version = entry["New"]["Version"]
+                    .as_str()
+                    .is_some_and(|v| !v.is_empty());
+                let is_directory = !has_version
+                    && (new.starts_with("./")
+                        || new.starts_with("../")
+                        || Path::new(new).is_absolute());
+                if is_directory && !old.is_empty() {
+                    directory_replaces.push((old.to_string(), new.to_string()));
+                }
+            }
+        }
+
+        Ok(GoModSummary {
+            module_path,
+            directory_replaces,
+        })
+    }
+}
+
+pub struct GoModSummary {
+    pub module_path: String,
+    pub directory_replaces: Vec<(String, String)>,
 }
 
 pub struct ListedModules {
     pub modules: Vec<String>,
     pub package_errors: Vec<PackageError>,
+    pub unresolved: Vec<UnresolvedTransitive>,
+}
+
+pub struct UnresolvedTransitive {
+    pub import: String,
+    pub message: String,
 }
 
 pub struct PackageError {
@@ -776,7 +825,7 @@ impl GoWorkspace<'_> {
                     version: &version,
                     replacement: replacement
                         .as_ref()
-                        .map(|(path, version)| deps::Replacement { path, version }),
+                        .map(deps::ResolvedReplacement::as_target),
                 },
                 package: &entry.package,
             };
@@ -830,10 +879,18 @@ pub(crate) fn warm_typedefs(
         return;
     };
 
+    // The warm batch writes no stamp sidecars, so the gate would discard its
+    // local typedefs. Those resolve through the stamp-gated lazy path instead.
+    let is_local = |pkg: &str| {
+        matches!(
+            locator.module_for_package(pkg),
+            Some((_, _, Some(deps::ResolvedReplacement::Local)))
+        )
+    };
     let mut seen: HashSet<String> = HashSet::new();
     let mut roots: Vec<String> = scanned
         .non_blank()
-        .filter(|pkg| locator.is_declared_go_dep(pkg))
+        .filter(|pkg| locator.is_declared_go_dep(pkg) && !is_local(pkg))
         .filter(|pkg| seen.insert((*pkg).to_string()))
         .map(str::to_string)
         .collect();
@@ -871,10 +928,13 @@ fn warm_stamp_for(roots: &[String], locator: &TypedefLocator) -> String {
             let source = match dep {
                 deps::GoDependency::Remote { version, .. } => version.clone(),
                 deps::GoDependency::Replaced {
-                    replacement_path,
-                    replacement_version,
+                    source: deps::ReplacementSource::Module { path, version },
                     ..
-                } => format!("{}@{}", replacement_path, replacement_version),
+                } => format!("{}@{}", path, version),
+                deps::GoDependency::Replaced {
+                    source: deps::ReplacementSource::Local { path },
+                    ..
+                } => format!("local:{}", path),
             };
             format!("{} {}", module, source)
         })
@@ -1027,8 +1087,28 @@ impl Bindgen for WorkspaceBindgen {
 
         match workspace.reconcile_package(module, pkg.package) {
             Ok(_stubs) => Ok(()),
-            Err(stderr) => Err(BindgenFailure::InvocationFailed { stderr }),
+            Err(stderr) => {
+                let stderr = self.with_local_child_hint(stderr);
+                Err(BindgenFailure::InvocationFailed { stderr })
+            }
         }
+    }
+}
+
+impl WorkspaceBindgen {
+    fn with_local_child_hint(&self, stderr: String) -> String {
+        let Some(project_root) = self.target_dir.parent() else {
+            return stderr;
+        };
+        let Ok(manifest) = deps::parse_manifest(project_root) else {
+            return stderr;
+        };
+        crate::handlers::reconciliation::augment_go_error_with_local_hint(
+            stderr,
+            project_root,
+            &self.target_dir,
+            &manifest,
+        )
     }
 }
 

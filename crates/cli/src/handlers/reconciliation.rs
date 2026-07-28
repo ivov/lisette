@@ -5,11 +5,11 @@
 //! so neither handler owns them.
 
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::go_cli;
 use crate::output::{print_progress, print_warning};
-use crate::workspace::GoWorkspace;
+use crate::workspace::{GoWorkspace, UnresolvedTransitive};
 use crate::{cli_error, error};
 use deps::{GoModule, resolve_empty_via, trim_dead_via_parents, upsert_go_dependency};
 use stdlib::Target;
@@ -174,13 +174,6 @@ impl GraphResult {
     }
 }
 
-/// The replacement a `--replace` add resolves to: where its code comes from.
-#[derive(Clone)]
-pub(crate) struct ReplacementIdentity {
-    pub(crate) replacement_path: String,
-    pub(crate) replacement_version: String,
-}
-
 /// How `apply_graph_to_manifest` writes a replaced root: `AddDirect` promotes it to
 /// a direct dep, `SyncPreserveVia` keeps an existing `via` (so a replaced
 /// transitive is not silently promoted).
@@ -190,7 +183,7 @@ pub(crate) enum ReplacedRootMode {
 }
 
 pub(crate) struct ReplacedRoot<'a> {
-    pub(crate) identity: &'a ReplacementIdentity,
+    pub(crate) identity: &'a deps::ReplacementSource,
     pub(crate) mode: ReplacedRootMode,
 }
 
@@ -205,21 +198,11 @@ pub(crate) fn reconcile_declared_replacements(
     target_dir: &Path,
     manifest: &deps::Manifest,
 ) -> Result<(), i32> {
-    let replaced_roots: Vec<(String, ReplacementIdentity)> = manifest
+    let replaced_roots: Vec<(String, deps::ReplacementSource)> = manifest
         .go_deps()
         .into_iter()
         .filter_map(|(module, dep)| match dep {
-            deps::GoDependency::Replaced {
-                replacement_path,
-                replacement_version,
-                ..
-            } => Some((
-                module,
-                ReplacementIdentity {
-                    replacement_path,
-                    replacement_version,
-                },
-            )),
+            deps::GoDependency::Replaced { source, .. } => Some((module, source)),
             deps::GoDependency::Remote { .. } => None,
         })
         .collect();
@@ -231,6 +214,7 @@ pub(crate) fn reconcile_declared_replacements(
     go_cli::require_go()?;
 
     // Seed every declared dep so MVS picks the versions the real build sees.
+    go_cli::invalidate_go_mod_stamp(target_dir);
     let locator = deps::TypedefLocator::new(
         manifest.go_deps(),
         Some(project_root.to_path_buf()),
@@ -245,17 +229,19 @@ pub(crate) fn reconcile_declared_replacements(
     let workspace = GoWorkspace::new(target_dir, &typedef_cache_dir, Target::host());
 
     // Walk all replacements before writing the manifest, so a partial failure leaves it untouched.
-    let replacements: HashMap<String, ReplacementIdentity> =
+    let replacements: HashMap<String, deps::ReplacementSource> =
         replaced_roots.iter().cloned().collect();
 
-    let mut walked: Vec<(String, ReplacementIdentity, GraphResult)> = Vec::new();
+    let locals = declared_local_dirs(&replacements, project_root);
+
+    let mut walked: Vec<(String, deps::ReplacementSource, GraphResult)> = Vec::new();
     for (original, replacement) in &replaced_roots {
         let resolved = ResolvedDependency {
             requested_package: original.clone(),
             canonical_module: original.clone(),
         };
 
-        let graph = reconcile_root(&resolved, &workspace, &replacements)?;
+        let graph = reconcile_root(&resolved, &workspace, &replacements, &locals)?;
         walked.push((original.clone(), replacement.clone(), graph));
     }
 
@@ -301,11 +287,12 @@ fn import_compat_hint(go_error: &str) -> Option<&'static str> {
 pub(crate) fn reconcile_root(
     dep: &ResolvedDependency,
     workspace: &GoWorkspace,
-    replacements: &HashMap<String, ReplacementIdentity>,
+    replacements: &HashMap<String, deps::ReplacementSource>,
+    locals: &[(String, PathBuf)],
 ) -> Result<GraphResult, i32> {
-    let mut graph = reconcile_module_graph(dep, workspace)?;
+    let mut graph = reconcile_module_graph(dep, workspace, locals)?;
     let bindgenned = walk_typedef_cache(dep, workspace, &mut graph, replacements)?;
-    expand_unwalked_modules(workspace, &mut graph)?;
+    expand_unwalked_modules(workspace, &mut graph, locals)?;
     rebuild_drifted_cache_entries(workspace, &graph, &bindgenned, replacements);
     Ok(graph)
 }
@@ -337,6 +324,7 @@ fn handle_module_failure(
 fn reconcile_module_graph(
     dep: &ResolvedDependency,
     workspace: &GoWorkspace,
+    locals: &[(String, PathBuf)],
 ) -> Result<GraphResult, i32> {
     let canonical_module = dep.canonical_module.as_str();
 
@@ -385,6 +373,12 @@ fn reconcile_module_graph(
             };
 
             if !listed.package_errors.is_empty() && is_explicit {
+                for err in &listed.package_errors {
+                    if let Some(hint) = local_child_hint_in_message(workspace, &err.message, locals)
+                    {
+                        return Err(undeclared_local_error(&format!("`{}`", err.package), &hint));
+                    }
+                }
                 let combined: String = listed
                     .package_errors
                     .iter()
@@ -405,6 +399,8 @@ fn reconcile_module_graph(
                     module_path, err.package, err.message
                 ));
             }
+
+            report_unresolved_transitives(workspace, &module_path, &listed.unresolved, locals)?;
 
             graph.expand(module_path, module_version, listed.modules.clone());
 
@@ -439,38 +435,301 @@ fn reconcile_module_graph(
     Ok(graph)
 }
 
-/// The `Replacement` a module's typedef cache is keyed by, if it is a declared replacement.
+/// The `ReplacementTarget` a module's typedef cache is keyed by, if it is a declared replacement.
 fn replacement_for<'a>(
     module_path: &str,
-    replacements: &'a HashMap<String, ReplacementIdentity>,
-) -> Option<deps::Replacement<'a>> {
+    replacements: &'a HashMap<String, deps::ReplacementSource>,
+) -> Option<deps::ReplacementTarget<'a>> {
+    replacements.get(module_path).map(|source| match source {
+        deps::ReplacementSource::Module { path, version } => {
+            deps::ReplacementTarget::Module(deps::Replacement { path, version })
+        }
+        deps::ReplacementSource::Local { .. } => deps::ReplacementTarget::LocalDirectory,
+    })
+}
+
+/// Declared local modules as `(module path, absolute directory)`.
+pub(crate) fn declared_local_dirs(
+    replacements: &HashMap<String, deps::ReplacementSource>,
+    project_root: &Path,
+) -> Vec<(String, PathBuf)> {
     replacements
-        .get(module_path)
-        .map(|identity| deps::Replacement {
-            path: &identity.replacement_path,
-            version: &identity.replacement_version,
+        .iter()
+        .filter_map(|(module, source)| match source {
+            deps::ReplacementSource::Local { path } => {
+                let declared = Path::new(path);
+                let joined = if declared.is_absolute() {
+                    declared.to_path_buf()
+                } else {
+                    project_root.join(declared)
+                };
+                Some((module.clone(), joined.canonicalize().unwrap_or(joined)))
+            }
+            deps::ReplacementSource::Module { .. } => None,
         })
+        .collect()
+}
+
+/// Where a declared local module's own `go.mod` maps an unresolved import.
+struct LocalChildHint {
+    parent_module: String,
+    child_module: String,
+    directory: PathBuf,
+    /// Nested inside the parent's directory rather than named by a `replace`.
+    nested: bool,
+}
+
+impl LocalChildHint {
+    fn describe(&self) -> String {
+        if self.nested {
+            format!(
+                "`{}` is a separate module nested in local module `{}` at `{}`, but `{}` is not declared in `lisette.toml`",
+                self.child_module,
+                self.parent_module,
+                self.directory.display(),
+                self.child_module
+            )
+        } else {
+            format!(
+                "local module `{}` resolves `{}` from `{}`, but `{}` is not declared in `lisette.toml`",
+                self.parent_module,
+                self.child_module,
+                self.directory.display(),
+                self.child_module
+            )
+        }
+    }
+}
+
+/// Powers diagnostics only, never resolution: the child's identity comes from
+/// its own `go.mod` when the user declares it.
+fn find_local_child(
+    workspace: &GoWorkspace,
+    locals: &[(String, PathBuf)],
+    covers: impl Fn(&str) -> bool,
+) -> Option<LocalChildHint> {
+    let mut best: Option<LocalChildHint> = None;
+    for (parent_module, parent_dir) in locals {
+        let Ok(summary) = workspace.read_go_mod_summary(&parent_dir.join("go.mod")) else {
+            continue;
+        };
+        for (old, new) in summary.directory_replaces {
+            let declared = locals.iter().any(|(module, _)| module == &old);
+            if declared || !covers(&old) {
+                continue;
+            }
+            if best
+                .as_ref()
+                .is_some_and(|prev| prev.child_module.len() >= old.len())
+            {
+                continue;
+            }
+            let new_path = Path::new(&new);
+            let joined = if new_path.is_absolute() {
+                new_path.to_path_buf()
+            } else {
+                parent_dir.join(new_path)
+            };
+            best = Some(LocalChildHint {
+                parent_module: parent_module.clone(),
+                child_module: old,
+                directory: joined.canonicalize().unwrap_or(joined),
+                nested: false,
+            });
+        }
+    }
+    best
+}
+
+fn local_child_hint(
+    workspace: &GoWorkspace,
+    import: &str,
+    locals: &[(String, PathBuf)],
+) -> Option<LocalChildHint> {
+    find_local_child(workspace, locals, |old| {
+        import == old || import.starts_with(&format!("{}/", old))
+    })
+    .or_else(|| nested_local_child(import, locals))
+}
+
+/// A nested module is excluded from its parent on-disk module, so a package
+/// under it resolves nowhere until the nested module is declared itself.
+fn nested_local_child(pkg_path: &str, locals: &[(String, PathBuf)]) -> Option<LocalChildHint> {
+    let (parent_module, parent_dir) = locals
+        .iter()
+        .filter(|(module, _)| pkg_path.starts_with(&format!("{}/", module)))
+        .max_by_key(|(module, _)| module.len())?;
+    let remainder = &pkg_path[parent_module.len() + 1..];
+
+    let mut child_module = parent_module.clone();
+    let mut directory = parent_dir.clone();
+    for segment in remainder.split('/') {
+        child_module = format!("{}/{}", child_module, segment);
+        directory = directory.join(segment);
+        if directory.join("go.mod").exists() {
+            return Some(LocalChildHint {
+                parent_module: parent_module.clone(),
+                child_module,
+                directory,
+                nested: true,
+            });
+        }
+    }
+    None
+}
+
+/// Every undeclared module nested inside a declared local module's directory.
+fn nested_local_candidates(locals: &[(String, PathBuf)]) -> Vec<LocalChildHint> {
+    let declared: HashSet<&str> = locals.iter().map(|(module, _)| module.as_str()).collect();
+    let mut candidates = Vec::new();
+    for (parent_module, parent_dir) in locals {
+        collect_nested_modules(
+            parent_dir,
+            parent_module,
+            parent_module,
+            &declared,
+            &mut candidates,
+        );
+    }
+    candidates
+}
+
+fn collect_nested_modules(
+    dir: &Path,
+    module: &str,
+    parent_module: &str,
+    declared: &HashSet<&str>,
+    out: &mut Vec<LocalChildHint>,
+) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(name) = entry.file_name().to_str().map(str::to_string) else {
+            continue;
+        };
+        if !path.is_dir() || name.starts_with('.') {
+            continue;
+        }
+        let child_module = format!("{}/{}", module, name);
+        if path.join("go.mod").exists() {
+            if !declared.contains(child_module.as_str()) {
+                out.push(LocalChildHint {
+                    parent_module: parent_module.to_string(),
+                    child_module,
+                    directory: path,
+                    nested: true,
+                });
+            }
+            continue;
+        }
+        collect_nested_modules(&path, &child_module, parent_module, declared, out);
+    }
+}
+
+fn local_child_hint_in_message(
+    workspace: &GoWorkspace,
+    message: &str,
+    locals: &[(String, PathBuf)],
+) -> Option<LocalChildHint> {
+    find_local_child(workspace, locals, |old| message_names_module(message, old))
+}
+
+/// Whether `message` names `module` at path boundaries: `example.com/foo`
+/// matches `example.com/foo/sub` but never `example.com/foobar`.
+fn message_names_module(message: &str, module: &str) -> bool {
+    let extends_segment = |c: char| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '~');
+    message.match_indices(module).any(|(start, _)| {
+        let before_ok = message[..start]
+            .chars()
+            .next_back()
+            .is_none_or(|c| !extends_segment(c) && c != '/');
+        let after_ok = message[start + module.len()..]
+            .chars()
+            .next()
+            .is_none_or(|c| !extends_segment(c));
+        before_ok && after_ok
+    })
+}
+
+fn undeclared_local_error(entity: &str, hint: &LocalChildHint) -> i32 {
+    cli_error!(
+        "Undeclared local module",
+        format!(
+            "{} needs `{}`: {}",
+            entity,
+            hint.child_module,
+            hint.describe()
+        ),
+        format!("Run `lis add --path {}`", hint.directory.display())
+    );
+    1
+}
+
+fn report_unresolved_transitives(
+    workspace: &GoWorkspace,
+    scanned_module: &str,
+    unresolved: &[UnresolvedTransitive],
+    locals: &[(String, PathBuf)],
+) -> Result<(), i32> {
+    for entry in unresolved {
+        if let Some(hint) = local_child_hint(workspace, &entry.import, locals) {
+            return Err(undeclared_local_error(
+                &format!("`{}`", entry.import),
+                &hint,
+            ));
+        }
+        print_warning(&format!(
+            "could not resolve transitive import `{}` from `{}`: {}; declare it manually with `lis add {}` if your code references it",
+            entry.import, scanned_module, entry.message, entry.import
+        ));
+    }
+    Ok(())
+}
+
+/// Go ignores a dependency's replace directives, so a local child fails
+/// resolution until declared itself. Appends the `lis add --path` remedy.
+pub(crate) fn augment_go_error_with_local_hint(
+    error: String,
+    project_root: &Path,
+    target_dir: &Path,
+    manifest: &deps::Manifest,
+) -> String {
+    let replacements = declared_replacements(manifest);
+    let locals = declared_local_dirs(&replacements, project_root);
+    if locals.is_empty() {
+        return error;
+    }
+    let workspace = GoWorkspace::new(target_dir, target_dir, Target::host());
+    let hint = find_local_child(&workspace, &locals, |old| {
+        message_names_module(&error, old) && !replacements.contains_key(old)
+    })
+    .or_else(|| {
+        nested_local_candidates(&locals)
+            .into_iter()
+            .find(|candidate| message_names_module(&error, &candidate.child_module))
+    });
+    match hint {
+        Some(hint) => format!(
+            "{}\n · {}. Run `lis add --path {}`",
+            error,
+            hint.describe(),
+            hint.directory.display()
+        ),
+        None => error,
+    }
 }
 
 /// The declared replacement redirects, keyed by original module path.
 pub(crate) fn declared_replacements(
     manifest: &deps::Manifest,
-) -> HashMap<String, ReplacementIdentity> {
+) -> HashMap<String, deps::ReplacementSource> {
     manifest
         .go_deps()
         .into_iter()
         .filter_map(|(module, dep)| match dep {
-            deps::GoDependency::Replaced {
-                replacement_path,
-                replacement_version,
-                ..
-            } => Some((
-                module,
-                ReplacementIdentity {
-                    replacement_path,
-                    replacement_version,
-                },
-            )),
+            deps::GoDependency::Replaced { source, .. } => Some((module, source)),
             deps::GoDependency::Remote { .. } => None,
         })
         .collect()
@@ -508,7 +767,7 @@ fn walk_typedef_cache(
     dep: &ResolvedDependency,
     workspace: &GoWorkspace,
     module_graph: &mut GraphResult,
-    replacements: &HashMap<String, ReplacementIdentity>,
+    replacements: &HashMap<String, deps::ReplacementSource>,
 ) -> Result<Vec<BindgennedPackage>, i32> {
     let mut visited: HashSet<PackageKey> = HashSet::new();
     let mut queue: Vec<QueuedPackage> = Vec::new();
@@ -667,7 +926,7 @@ fn rebuild_drifted_cache_entries(
     workspace: &GoWorkspace,
     graph: &GraphResult,
     bindgenned: &[BindgennedPackage],
-    replacements: &HashMap<String, ReplacementIdentity>,
+    replacements: &HashMap<String, deps::ReplacementSource>,
 ) {
     for entry in bindgenned {
         let Some(current) = graph.version(&entry.module) else {
@@ -705,7 +964,11 @@ fn warn_stubbed(stubs: &[String]) {
 /// Exhaustively scan modules known only through typedef imports, until the
 /// graph is closed under MVS drift. Failures are warnings since these are all
 /// transitives.
-fn expand_unwalked_modules(workspace: &GoWorkspace, graph: &mut GraphResult) -> Result<(), i32> {
+fn expand_unwalked_modules(
+    workspace: &GoWorkspace,
+    graph: &mut GraphResult,
+    locals: &[(String, PathBuf)],
+) -> Result<(), i32> {
     let mut failed: HashSet<String> = HashSet::new();
 
     let mut queue = graph.discovered_modules();
@@ -744,6 +1007,8 @@ fn expand_unwalked_modules(workspace: &GoWorkspace, graph: &mut GraphResult) -> 
                     module_path, err.package, err.message
                 ));
             }
+
+            report_unresolved_transitives(workspace, &module_path, &listed.unresolved, locals)?;
 
             let Some(version) = graph.version(&module_path).map(str::to_string) else {
                 continue;
@@ -943,8 +1208,7 @@ pub(crate) fn apply_graph_to_manifest(
                 ReplacedRootMode::AddDirect => None,
             };
             deps::GoDependency::Replaced {
-                replacement_path: replaced_root.identity.replacement_path.clone(),
-                replacement_version: replaced_root.identity.replacement_version.clone(),
+                source: replaced_root.identity.clone(),
                 via,
             }
         }
@@ -1111,6 +1375,79 @@ pub(crate) fn finalize_manifest_via(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn message_names_module_requires_path_boundaries() {
+        let module = "example.com/foo";
+        assert!(message_names_module(
+            "no module provides `example.com/foo`",
+            module
+        ));
+        assert!(message_names_module(
+            "unrecognized import path \"example.com/foo\"",
+            module
+        ));
+        assert!(message_names_module(
+            "missing example.com/foo/sub package",
+            module
+        ));
+        assert!(message_names_module("example.com/foo", module));
+
+        assert!(!message_names_module(
+            "no module provides example.com/foobar",
+            module
+        ));
+        assert!(!message_names_module(
+            "no module provides example.com/foo.v2",
+            module
+        ));
+        assert!(!message_names_module(
+            "path is other.com/example.com/foo",
+            module
+        ));
+        assert!(!message_names_module("unrelated error", module));
+    }
+
+    fn nested_fixture() -> (tempfile::TempDir, Vec<(String, PathBuf)>) {
+        let dir = tempfile::tempdir().unwrap();
+        let parent = dir.path().join("parent");
+        std::fs::create_dir_all(parent.join("child/sub")).unwrap();
+        std::fs::create_dir_all(parent.join("plain")).unwrap();
+        std::fs::write(parent.join("go.mod"), "module example.com/x/parent\n").unwrap();
+        std::fs::write(
+            parent.join("child/go.mod"),
+            "module example.com/x/parent/child\n",
+        )
+        .unwrap();
+        let locals = vec![("example.com/x/parent".to_string(), parent)];
+        (dir, locals)
+    }
+
+    #[test]
+    fn nested_local_child_stops_at_the_first_nested_go_mod() {
+        let (_dir, locals) = nested_fixture();
+
+        let hint = nested_local_child("example.com/x/parent/child/sub", &locals).unwrap();
+        assert_eq!(hint.child_module, "example.com/x/parent/child");
+        assert!(hint.nested);
+        assert!(hint.directory.ends_with("parent/child"));
+
+        assert!(nested_local_child("example.com/x/parent/plain", &locals).is_none());
+        assert!(nested_local_child("example.com/other/pkg", &locals).is_none());
+    }
+
+    #[test]
+    fn nested_local_candidates_skips_declared_modules() {
+        let (_dir, mut locals) = nested_fixture();
+
+        let found = nested_local_candidates(&locals);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].child_module, "example.com/x/parent/child");
+
+        let child_dir = locals[0].1.join("child");
+        locals.push(("example.com/x/parent/child".to_string(), child_dir));
+        assert!(nested_local_candidates(&locals).is_empty());
+    }
 
     #[test]
     fn expanded_leaf_is_not_left_pending() {

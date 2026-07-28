@@ -136,20 +136,27 @@ pub fn write_go_mod(dir: &Path, module_name: &str, locator: &TypedefLocator) -> 
             deps::GoDependency::Remote { version, .. } => {
                 requires.push(format!("\t{} {}", module_path, version));
             }
-            deps::GoDependency::Replaced {
-                replacement_path,
-                replacement_version,
-                ..
-            } => {
+            deps::GoDependency::Replaced { source, .. } => {
                 requires.push(format!(
                     "\t{} {}",
                     module_path,
                     deps::placeholder_require_version(module_path)
                 ));
-                replace_lines.push(format!(
-                    "replace {} => {} {}",
-                    module_path, replacement_path, replacement_version
-                ));
+                match source {
+                    deps::ReplacementSource::Module { path, version } => {
+                        replace_lines
+                            .push(format!("replace {} => {} {}", module_path, path, version));
+                    }
+                    deps::ReplacementSource::Local { path } => {
+                        let local_dir =
+                            resolve_local_module_dir(locator.project_root(), module_path, path)?;
+                        replace_lines.push(format!(
+                            "replace {} => {}",
+                            module_path,
+                            go_mod_quote(&local_dir.display().to_string())
+                        ));
+                    }
+                }
             }
         }
     }
@@ -171,7 +178,7 @@ pub fn write_go_mod(dir: &Path, module_name: &str, locator: &TypedefLocator) -> 
             content.push_str(&format!(
                 "\nreplace {} => {}\n",
                 PRELUDE_IMPORT_PATH,
-                canonical.display()
+                go_mod_quote(&canonical.display().to_string())
             ));
         }
     }
@@ -193,6 +200,45 @@ pub fn write_go_mod(dir: &Path, module_name: &str, locator: &TypedefLocator) -> 
     }
 
     Ok(())
+}
+
+/// The manifest path stays project-relative for portability, only the emitted
+/// `target/go.mod` needs the absolute form.
+fn resolve_local_module_dir(
+    project_root: Option<&Path>,
+    module_path: &str,
+    declared_path: &str,
+) -> Result<PathBuf, String> {
+    let declared = Path::new(declared_path);
+    let joined = if declared.is_absolute() {
+        declared.to_path_buf()
+    } else {
+        let Some(project_root) = project_root else {
+            return Err(format!(
+                "local module `{}` declares the relative path `{}` but no project root is available to resolve it",
+                module_path, declared_path
+            ));
+        };
+        project_root.join(declared)
+    };
+    let dir = joined.canonicalize().map_err(|_| {
+        format!(
+            "local module `{}` is declared at `{}`, but that directory does not exist",
+            module_path, declared_path
+        )
+    })?;
+    if !dir.join("go.mod").exists() {
+        return Err(format!(
+            "local module `{}` is declared at `{}`, but that directory has no `go.mod`",
+            module_path, declared_path
+        ));
+    }
+    Ok(dir)
+}
+
+/// Unquoted paths with spaces fail `go.mod` parsing.
+fn go_mod_quote(path: &str) -> String {
+    format!("\"{}\"", path.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
 pub struct GoCliError {
@@ -699,8 +745,10 @@ mod tests {
         let locator = locator_with(vec![(
             "github.com/df-mc/dragonfly",
             deps::GoDependency::Replaced {
-                replacement_path: "github.com/fork/dragonfly".to_string(),
-                replacement_version: "v0.0.0-20260101000000-abcdef123456".to_string(),
+                source: deps::ReplacementSource::Module {
+                    path: "github.com/fork/dragonfly".to_string(),
+                    version: "v0.0.0-20260101000000-abcdef123456".to_string(),
+                },
                 via: None,
             },
         )]);
@@ -728,8 +776,10 @@ mod tests {
         let locator = locator_with(vec![(
             "example.com/lib/v2",
             deps::GoDependency::Replaced {
-                replacement_path: "github.com/fork/lib/v2".to_string(),
-                replacement_version: "v2.3.0".to_string(),
+                source: deps::ReplacementSource::Module {
+                    path: "github.com/fork/lib/v2".to_string(),
+                    version: "v2.3.0".to_string(),
+                },
                 via: None,
             },
         )]);
@@ -746,6 +796,76 @@ mod tests {
             content.contains("replace example.com/lib/v2 => github.com/fork/lib/v2 v2.3.0"),
             "{}",
             content
+        );
+    }
+
+    fn local_dep(path: &str) -> deps::GoDependency {
+        deps::GoDependency::Replaced {
+            source: deps::ReplacementSource::Local {
+                path: path.to_string(),
+            },
+            via: None,
+        }
+    }
+
+    #[test]
+    fn write_go_mod_local_emits_synthetic_require_and_quoted_directory_replace() {
+        let project = tempfile::tempdir().unwrap();
+        let module_dir = project.path().join("foo");
+        std::fs::create_dir_all(&module_dir).unwrap();
+        std::fs::write(module_dir.join("go.mod"), "module example.com/me/foo\n").unwrap();
+        let target_dir = project.path().join("target");
+        std::fs::create_dir_all(&target_dir).unwrap();
+
+        let mut go_deps = std::collections::BTreeMap::new();
+        go_deps.insert("example.com/me/foo".to_string(), local_dep("foo"));
+        let locator =
+            deps::TypedefLocator::new(go_deps, Some(project.path().to_path_buf()), Target::host());
+
+        write_go_mod(&target_dir, "example.com/app", &locator).unwrap();
+        let content = std::fs::read_to_string(target_dir.join("go.mod")).unwrap();
+
+        assert!(
+            content.contains("example.com/me/foo v0.0.0\n"),
+            "{}",
+            content
+        );
+        let canonical = module_dir.canonicalize().unwrap();
+        let expected = format!("replace example.com/me/foo => \"{}\"", canonical.display());
+        assert!(content.contains(&expected), "{}", content);
+    }
+
+    #[test]
+    fn write_go_mod_local_errors_on_missing_directory_or_missing_go_mod() {
+        let project = tempfile::tempdir().unwrap();
+        let target_dir = project.path().join("target");
+        std::fs::create_dir_all(&target_dir).unwrap();
+
+        let mut go_deps = std::collections::BTreeMap::new();
+        go_deps.insert("example.com/me/foo".to_string(), local_dep("foo"));
+        let locator = deps::TypedefLocator::new(
+            go_deps.clone(),
+            Some(project.path().to_path_buf()),
+            Target::host(),
+        );
+        let error = write_go_mod(&target_dir, "example.com/app", &locator).unwrap_err();
+        assert!(error.contains("example.com/me/foo"), "{}", error);
+        assert!(error.contains("does not exist"), "{}", error);
+
+        std::fs::create_dir_all(project.path().join("foo")).unwrap();
+        let locator =
+            deps::TypedefLocator::new(go_deps, Some(project.path().to_path_buf()), Target::host());
+        let error = write_go_mod(&target_dir, "example.com/app", &locator).unwrap_err();
+        assert!(error.contains("no `go.mod`"), "{}", error);
+    }
+
+    #[test]
+    fn go_mod_quote_escapes_backslashes_and_quotes() {
+        assert_eq!(go_mod_quote("/plain/path"), "\"/plain/path\"");
+        assert_eq!(go_mod_quote("/with space/x"), "\"/with space/x\"");
+        assert_eq!(
+            go_mod_quote("C:\\Users\\dev\\foo"),
+            "\"C:\\\\Users\\\\dev\\\\foo\""
         );
     }
 

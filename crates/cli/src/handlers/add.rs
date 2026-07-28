@@ -1,7 +1,9 @@
+use std::path::{Path, PathBuf};
+
 use super::project::MutationProject;
 use super::reconciliation::{
-    ReplacedRoot, ReplacedRootMode, ReplacementIdentity, ResolvedDependency, RootWrite,
-    apply_graph_to_manifest, declared_replacements, finalize_manifest_via, reconcile_root,
+    ReplacedRoot, ReplacedRootMode, ResolvedDependency, RootWrite, apply_graph_to_manifest,
+    declared_local_dirs, declared_replacements, finalize_manifest_via, reconcile_root,
 };
 use crate::go_cli;
 use crate::output::{print_add_success, print_preview_notice, print_progress, print_warning};
@@ -25,13 +27,25 @@ struct AddPlan {
 
 enum DependencySource {
     Remote,
-    Replacement(ReplacementIdentity),
+    Replacement(deps::ReplacementSource),
 }
 
-pub fn add(dep_string: &str, replace: Option<&str>) -> i32 {
+pub fn add(dep_string: Option<&str>, replace: Option<&str>, path: Option<&str>) -> i32 {
     if let Err(code) = go_cli::require_go() {
         return code;
     }
+
+    if let Some(path) = path {
+        return add_local(path);
+    }
+    let Some(dep_string) = dep_string else {
+        cli_error!(
+            "Invalid dependency",
+            "no dependency given",
+            "Example: `lis add google/uuid@v1.6.0`"
+        );
+        return 1;
+    };
 
     if let Some(replace) = replace {
         return add_replace(dep_string, replace);
@@ -131,6 +145,139 @@ fn add_replace(original_arg: &str, replace_spec: &str) -> i32 {
     run_add_pipeline(plan)
 }
 
+/// `lis add --path <dir>`: declare a local Go module, identified by its own `go.mod`.
+fn add_local(path_arg: &str) -> i32 {
+    let plan = match setup_project_local(path_arg) {
+        Ok(plan) => plan,
+        Err(code) => return code,
+    };
+    run_add_pipeline(plan)
+}
+
+fn setup_project_local(path_arg: &str) -> Result<AddPlan, i32> {
+    let setup = MutationProject::open()?;
+    print_preview_notice("Local Go modules", true);
+
+    let invocation_dir = std::env::current_dir().map_err(|error| {
+        error!(
+            "failed to resolve directory",
+            format!("could not read the current directory: {}", error)
+        );
+        1
+    })?;
+    let requested = invocation_dir.join(path_arg);
+    let module_dir = requested.canonicalize().map_err(|_| {
+        cli_error!(
+            "Local module not found",
+            format!("`{}` is not a directory", path_arg),
+            "Pass the root directory of a Go module, e.g. `lis add --path ../auth`"
+        );
+        1
+    })?;
+    if !module_dir.is_dir() {
+        cli_error!(
+            "Local module not found",
+            format!("`{}` is not a directory", path_arg),
+            "Pass the root directory of a Go module, e.g. `lis add --path ../auth`"
+        );
+        return Err(1);
+    }
+    if !module_dir.join("go.mod").exists() {
+        cli_error!(
+            "Local module not found",
+            format!("`{}` has no `go.mod`", path_arg),
+            "Pass the root directory of a Go module, e.g. `lis add --path ../auth`"
+        );
+        return Err(1);
+    }
+
+    if !write_target_go_mod(&setup, None) {
+        return Err(1);
+    }
+    let workspace = GoWorkspace::new(&setup.target_dir, &setup.typedef_cache_dir, Target::host());
+
+    let summary = match workspace.read_go_mod_summary(&module_dir.join("go.mod")) {
+        Ok(summary) => summary,
+        Err(msg) => {
+            error!("failed to read local module", msg);
+            return Err(1);
+        }
+    };
+    let module = summary.module_path;
+
+    if !deps::is_third_party(&module) {
+        cli_error!(
+            "Local module not usable",
+            format!(
+                "`{}` declares module `{}`, which has no dot in its first path segment",
+                path_arg, module
+            ),
+            "Give the module a dotted path in its `go.mod`, e.g. `example.com/auth`"
+        );
+        return Err(1);
+    }
+
+    let manifest_path = manifest_relative_path(&setup.root, &module_dir);
+    let local_dep = deps::GoDependency::Replaced {
+        source: deps::ReplacementSource::Local {
+            path: manifest_path.clone(),
+        },
+        via: None,
+    };
+
+    if let Err(message) = deps::upsert_go_dependency(&setup.root, &module, &local_dep) {
+        error!("failed to update manifest", message);
+        return Err(1);
+    }
+    if !write_target_go_mod(&setup, Some((&module, local_dep))) {
+        return Err(1);
+    }
+
+    print_progress(&format!("Adding local module {}", module));
+
+    let resolved_version = deps::placeholder_require_version(&module);
+    Ok(AddPlan {
+        project: setup,
+        dependency: ResolvedDependency {
+            requested_package: module.clone(),
+            canonical_module: module,
+        },
+        resolved_version,
+        source: DependencySource::Replacement(deps::ReplacementSource::Local {
+            path: manifest_path,
+        }),
+    })
+}
+
+fn manifest_relative_path(project_root: &Path, module_dir: &Path) -> String {
+    let root = project_root
+        .canonicalize()
+        .unwrap_or_else(|_| project_root.to_path_buf());
+    let root_components: Vec<_> = root.components().collect();
+    let module_components: Vec<_> = module_dir.components().collect();
+
+    let shared = root_components
+        .iter()
+        .zip(module_components.iter())
+        .take_while(|(a, b)| a == b)
+        .count();
+    if shared == 0 {
+        return module_dir.display().to_string();
+    }
+
+    let mut relative = PathBuf::new();
+    for _ in shared..root_components.len() {
+        relative.push("..");
+    }
+    for component in &module_components[shared..] {
+        relative.push(component);
+    }
+    if relative.as_os_str().is_empty() {
+        relative.push(".");
+    }
+    relative.display().to_string()
+}
+
 fn run_add_pipeline(plan: AddPlan) -> i32 {
     let project = &plan.project;
     let resolved_dep = &plan.dependency;
@@ -154,7 +301,8 @@ fn run_add_pipeline(plan: AddPlan) -> i32 {
         }
     }
 
-    let module_graph = match reconcile_root(resolved_dep, &workspace, &replacements) {
+    let locals = declared_local_dirs(&replacements, &project.root);
+    let module_graph = match reconcile_root(resolved_dep, &workspace, &replacements, &locals) {
         Ok(graph) => graph,
         Err(code) => return code,
     };
@@ -200,8 +348,12 @@ fn run_add_pipeline(plan: AddPlan) -> i32 {
         })
         .collect();
 
-    let replacement_label =
-        replacement.map(|f| (f.replacement_path.as_str(), f.replacement_version.as_str()));
+    let replacement_label = replacement.map(|source| match source {
+        deps::ReplacementSource::Module { path, version } => {
+            crate::output::ReplacementLabel::Module { path, version }
+        }
+        deps::ReplacementSource::Local { path } => crate::output::ReplacementLabel::Local { path },
+    });
 
     let edges = module_graph.edges();
     let versions = module_graph.versions();
@@ -599,8 +751,10 @@ fn setup_project_replace(
     }
 
     let replaced_dep = deps::GoDependency::Replaced {
-        replacement_path: replacement_path.to_string(),
-        replacement_version: resolution.resolved_version.clone(),
+        source: deps::ReplacementSource::Module {
+            path: replacement_path.to_string(),
+            version: resolution.resolved_version.clone(),
+        },
         via: None,
     };
     if !write_target_go_mod(&setup, Some((original, replaced_dep))) {
@@ -616,9 +770,9 @@ fn setup_project_replace(
         project: setup,
         dependency: resolved,
         resolved_version: resolution.resolved_version.clone(),
-        source: DependencySource::Replacement(ReplacementIdentity {
-            replacement_path: replacement_path.to_string(),
-            replacement_version: resolution.resolved_version,
+        source: DependencySource::Replacement(deps::ReplacementSource::Module {
+            path: replacement_path.to_string(),
+            version: resolution.resolved_version,
         }),
     })
 }
@@ -692,8 +846,10 @@ mod tests {
         go_deps.insert(
             "go.opentelemetry.io/otel".to_string(),
             deps::GoDependency::Replaced {
-                replacement_path: "github.com/fork/otel".to_string(),
-                replacement_version: "v1.0.0".to_string(),
+                source: deps::ReplacementSource::Module {
+                    path: "github.com/fork/otel".to_string(),
+                    version: "v1.0.0".to_string(),
+                },
                 via: None,
             },
         );
@@ -722,8 +878,10 @@ mod tests {
         go_deps.insert(
             "go.opentelemetry.io/otel/sdk".to_string(),
             deps::GoDependency::Replaced {
-                replacement_path: "github.com/fork/otel-sdk".to_string(),
-                replacement_version: "v1.0.0".to_string(),
+                source: deps::ReplacementSource::Module {
+                    path: "github.com/fork/otel-sdk".to_string(),
+                    version: "v1.0.0".to_string(),
+                },
                 via: None,
             },
         );

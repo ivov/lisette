@@ -368,12 +368,18 @@ impl TaskState {
 
         let imports = file.imports();
 
-        let replace_importer = module_id.strip_prefix("go:").filter(|pkg| {
-            matches!(
-                locator.validate_declaration(pkg),
-                deps::DeclarationStatus::DeclaredReplacement { .. }
-            )
-        });
+        let replace_importer =
+            module_id
+                .strip_prefix("go:")
+                .and_then(|pkg| match locator.validate_declaration(pkg) {
+                    deps::DeclarationStatus::DeclaredReplacement { .. } => {
+                        Some(crate::diagnostics::ReplaceImporter::Module(pkg))
+                    }
+                    deps::DeclarationStatus::DeclaredLocal { .. } => {
+                        Some(crate::diagnostics::ReplaceImporter::Local(pkg))
+                    }
+                    _ => None,
+                });
 
         for import in &imports {
             if let Some(go_pkg) = import.name.strip_prefix("go:") {

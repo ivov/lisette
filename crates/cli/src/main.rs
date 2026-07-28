@@ -101,7 +101,8 @@ fn main() {
         Command::Add {
             dependency,
             replace,
-        } => handlers::add(&dependency, replace.as_deref()),
+            path,
+        } => handlers::add(dependency.as_deref(), replace.as_deref(), path.as_deref()),
         Command::Sync => handlers::sync(),
         Command::Lsp => handlers::lsp(),
         Command::Bindgen { target, verbose } => handlers::bindgen(target, verbose),

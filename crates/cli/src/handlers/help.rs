@@ -195,7 +195,8 @@ Arguments:
     {dependency:g} {(required):d}          Go module name
 
 Options:
-    {--replace:b} {<module>:g}             Source from another module
+    {--replace:b} {<module>:g}             Redirect to another module
+    {--path:b} {<dir>:g}                   Use a local module on disk
 
 Examples:
     `lis add` {google/uuid:g}            Latest version
@@ -203,7 +204,8 @@ Examples:
     `lis add` {google/uuid:g}{@2d3c2a9:b}    Exact commit hash or branch
     `lis add` {go.uber.org/zap:g}        Full path for non-GitHub host
     `lis add` {gorilla/mux:g} \\
-      {--replace:b} {you/mux:g}            Use your own fork of {gorilla/mux:g}",
+      {--replace:b} {you/mux:g}            Use your own fork of {gorilla/mux:g}
+    `lis add` {--path:b} {../auth:g}         Use the Go module at {../auth:g}",
         ),
 
         "sync" => print_help(

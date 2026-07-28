@@ -3,6 +3,13 @@ use diagnostics::LocalSink;
 use stdlib::Target;
 use syntax::ast::Span;
 
+/// The replaced module whose typedef the current import was reached through.
+#[derive(Clone, Copy)]
+pub(crate) enum ReplaceImporter<'a> {
+    Module(&'a str),
+    Local(&'a str),
+}
+
 /// The import site a typedef-resolution diagnostic refers to.
 pub(crate) struct GoImportSite<'a> {
     pub(crate) import_name: &'a str,
@@ -10,8 +17,9 @@ pub(crate) struct GoImportSite<'a> {
     pub(crate) name_span: Option<Span>,
     pub(crate) target: Target,
     pub(crate) standalone_mode: bool,
-    /// Set when reached through a replaced module's typedef, so the hint points at `lis sync`.
-    pub(crate) replace_importer: Option<&'a str>,
+    /// Set when reached through a replaced module's typedef, so the hint names
+    /// the right reconciliation command.
+    pub(crate) replace_importer: Option<ReplaceImporter<'a>>,
 }
 
 pub(crate) fn emit_for_locator_result(
@@ -43,18 +51,30 @@ pub(crate) fn emit_for_locator_result(
                 sink,
             );
         }
+        TypedefLocatorResult::InternalPackage { module } => {
+            sink.push(diagnostics::module_graph::internal_go_package(
+                go_pkg, module, span,
+            ));
+        }
         TypedefLocatorResult::MissingTypedef {
             module,
             version,
             replacement_path,
+            local,
         } => {
-            sink.push(diagnostics::module_graph::missing_go_typedef(
-                go_pkg,
-                module,
-                version,
-                replacement_path.as_deref(),
-                span,
-            ));
+            if *local {
+                sink.push(diagnostics::module_graph::missing_local_go_typedef(
+                    module, span,
+                ));
+            } else {
+                sink.push(diagnostics::module_graph::missing_go_typedef(
+                    go_pkg,
+                    module,
+                    version,
+                    replacement_path.as_deref(),
+                    span,
+                ));
+            }
         }
         TypedefLocatorResult::UnreadableTypedef { path, error } => {
             sink.push(diagnostics::module_graph::unreadable_go_typedef(
@@ -100,13 +120,20 @@ pub(crate) fn emit_for_declaration_status(
     match status {
         DeclarationStatus::Stdlib
         | DeclarationStatus::DeclaredThirdParty { .. }
-        | DeclarationStatus::DeclaredReplacement { .. } => true,
+        | DeclarationStatus::DeclaredReplacement { .. }
+        | DeclarationStatus::DeclaredLocal { .. } => true,
         DeclarationStatus::UnknownStdlib => {
             emit_unknown_stdlib(import_name, go_pkg, span, target, standalone_mode, sink);
             false
         }
         DeclarationStatus::UndeclaredImport => {
             emit_undeclared(import_name, go_pkg, span, standalone_mode, None, sink);
+            false
+        }
+        DeclarationStatus::InternalPackage { module } => {
+            sink.push(diagnostics::module_graph::internal_go_package(
+                go_pkg, module, span,
+            ));
             false
         }
     }
@@ -145,7 +172,7 @@ fn emit_undeclared(
     go_pkg: &str,
     span: Span,
     standalone_mode: bool,
-    replace_importer: Option<&str>,
+    replace_importer: Option<ReplaceImporter>,
     sink: &LocalSink,
 ) {
     if standalone_mode {
@@ -154,10 +181,16 @@ fn emit_undeclared(
             span,
             diagnostics::module_graph::MissingModuleReason::Standalone,
         ));
-    } else if let Some(replaced_module) = replace_importer {
+    } else if let Some(ReplaceImporter::Module(replaced_module)) = replace_importer {
         sink.push(diagnostics::module_graph::undeclared_go_import_via_replace(
             go_pkg,
             replaced_module,
+            span,
+        ));
+    } else if let Some(ReplaceImporter::Local(local_module)) = replace_importer {
+        sink.push(diagnostics::module_graph::undeclared_go_import_via_local(
+            go_pkg,
+            local_module,
             span,
         ));
     } else {

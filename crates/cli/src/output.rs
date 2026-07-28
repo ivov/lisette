@@ -168,13 +168,19 @@ pub fn print_preview_notice(feature: &str, plural: bool) {
     }
 }
 
+/// How an added replaced dependency is labeled in the success line.
+pub enum ReplacementLabel<'a> {
+    Module { path: &'a str, version: &'a str },
+    Local { path: &'a str },
+}
+
 pub fn print_add_success(
     module_path: &str,
     version: &str,
     edges: &std::collections::HashMap<String, Vec<String>>,
     versions: &std::collections::HashMap<String, String>,
     upgraded_directs: &[(&str, &str, &str)],
-    replacement: Option<(&str, &str)>,
+    replacement: Option<ReplacementLabel<'_>>,
 ) {
     eprintln!();
 
@@ -196,16 +202,30 @@ pub fn print_add_success(
     }
 
     match replacement {
-        Some((replacement_path, replacement_version)) if colored => eprintln!(
+        Some(ReplacementLabel::Module {
+            path: replacement_path,
+            version: replacement_version,
+        }) if colored => eprintln!(
             "  ✓ Added {} (replaced by {} {})",
             module_path.green(),
             replacement_path.green(),
             replacement_version.blue()
         ),
-        Some((replacement_path, replacement_version)) => eprintln!(
+        Some(ReplacementLabel::Module {
+            path: replacement_path,
+            version: replacement_version,
+        }) => eprintln!(
             "  ✓ Added {} (replaced by {} {})",
             module_path, replacement_path, replacement_version
         ),
+        Some(ReplacementLabel::Local { path }) if colored => eprintln!(
+            "  ✓ Added {} (local dir {})",
+            module_path.green(),
+            path.green()
+        ),
+        Some(ReplacementLabel::Local { path }) => {
+            eprintln!("  ✓ Added {} (local dir {})", module_path, path)
+        }
         None if colored => eprintln!("  ✓ Added {} {}", module_path.green(), version.blue()),
         None => eprintln!("  ✓ Added {} {}", module_path, version),
     }

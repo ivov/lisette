@@ -66,8 +66,9 @@ pub enum Command {
     },
     Version,
     Add {
-        dependency: String,
+        dependency: Option<String>,
         replace: Option<String>,
+        path: Option<String>,
     },
     Sync,
     Lsp,
@@ -513,6 +514,7 @@ fn parse_test(mut arguments: impl Iterator<Item = String>) -> Result<Command, Pa
 fn parse_add(mut arguments: impl Iterator<Item = String>) -> Result<Command, ParseError> {
     let mut dependency = None;
     let mut replace = None;
+    let mut path = None;
 
     while let Some(arg) = arguments.next() {
         if let Some(value) = flag_value(
@@ -523,6 +525,10 @@ fn parse_add(mut arguments: impl Iterator<Item = String>) -> Result<Command, Par
             "--replace <module@version>",
         )? {
             replace = Some(value);
+        } else if let Some(value) =
+            flag_value(&arg, &["--path"], &mut arguments, "add", "--path <dir>")?
+        {
+            path = Some(value);
         } else if arg.starts_with('-') {
             return Err(ParseError::UnknownFlag(arg));
         } else if dependency.is_none() {
@@ -536,12 +542,34 @@ fn parse_add(mut arguments: impl Iterator<Item = String>) -> Result<Command, Par
         }
     }
 
-    match dependency {
-        Some(dependency) => Ok(Command::Add {
-            dependency,
-            replace,
+    if path.is_some() && replace.is_some() {
+        return Err(ParseError::UnexpectedArgument {
+            message: "`--path` cannot be combined with `--replace`".to_string(),
+            reason: "`--path` declares a local module, `--replace` substitutes a published one"
+                .to_string(),
+            hint: "Use one of the two flags".to_string(),
+        });
+    }
+    if let (Some(_), Some(dependency)) = (&path, &dependency) {
+        return Err(ParseError::UnexpectedArgument {
+            message: format!("unexpected argument `{}`", dependency),
+            reason: "`--path` takes no module argument, the module path is read from the directory's `go.mod`".to_string(),
+            hint: "Run `lis add --path <dir>` with just the directory".to_string(),
+        });
+    }
+
+    match (dependency, path) {
+        (_, Some(path)) => Ok(Command::Add {
+            dependency: None,
+            replace: None,
+            path: Some(path),
         }),
-        None => Err(ParseError::MissingArgument {
+        (Some(dependency), None) => Ok(Command::Add {
+            dependency: Some(dependency),
+            replace,
+            path: None,
+        }),
+        (None, None) => Err(ParseError::MissingArgument {
             command: "add",
             argument: "dependency",
         }),
@@ -701,12 +729,14 @@ mod tests {
         let Ok(Command::Add {
             dependency,
             replace,
+            path,
         }) = parse(&["lis", "add", "github.com/gorilla/mux"])
         else {
             panic!("expected Add command");
         };
-        assert_eq!(dependency, "github.com/gorilla/mux");
+        assert_eq!(dependency.as_deref(), Some("github.com/gorilla/mux"));
         assert_eq!(replace, None);
+        assert_eq!(path, None);
     }
 
     #[test]
@@ -714,6 +744,7 @@ mod tests {
         let Ok(Command::Add {
             dependency,
             replace,
+            ..
         }) = parse(&[
             "lis",
             "add",
@@ -724,7 +755,7 @@ mod tests {
         else {
             panic!("expected Add command");
         };
-        assert_eq!(dependency, "github.com/df-mc/dragonfly");
+        assert_eq!(dependency.as_deref(), Some("github.com/df-mc/dragonfly"));
         assert_eq!(replace.as_deref(), Some("github.com/you/dragonfly@v1.2.0"));
     }
 
@@ -733,6 +764,7 @@ mod tests {
         let Ok(Command::Add {
             dependency,
             replace,
+            ..
         }) = parse(&[
             "lis",
             "add",
@@ -742,13 +774,45 @@ mod tests {
         else {
             panic!("expected Add command");
         };
-        assert_eq!(dependency, "github.com/df-mc/dragonfly");
+        assert_eq!(dependency.as_deref(), Some("github.com/df-mc/dragonfly"));
         assert_eq!(replace.as_deref(), Some("github.com/you/dragonfly@v1.2.0"));
     }
 
     #[test]
     fn add_replace_without_value_errors() {
         assert!(parse(&["lis", "add", "dep", "--replace"]).is_err());
+    }
+
+    #[test]
+    fn add_path_flag_takes_a_directory_and_no_module() {
+        let Ok(Command::Add {
+            dependency,
+            replace,
+            path,
+        }) = parse(&["lis", "add", "--path", "../foo"])
+        else {
+            panic!("expected Add command");
+        };
+        assert_eq!(dependency, None);
+        assert_eq!(replace, None);
+        assert_eq!(path.as_deref(), Some("../foo"));
+    }
+
+    #[test]
+    fn add_path_rejects_module_argument_and_replace_combination() {
+        assert!(parse(&["lis", "add", "example.com/foo", "--path", "../foo"]).is_err());
+        assert!(
+            parse(&[
+                "lis",
+                "add",
+                "--path",
+                "../foo",
+                "--replace",
+                "github.com/you/foo@v1.0.0"
+            ])
+            .is_err()
+        );
+        assert!(parse(&["lis", "add", "--path"]).is_err());
     }
 
     #[test]

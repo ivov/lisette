@@ -36,9 +36,21 @@ pub enum GoDependency {
         via: Option<Vec<String>>,
     },
     Replaced {
-        replacement_path: String,
-        replacement_version: String,
+        source: ReplacementSource,
         via: Option<Vec<String>>,
+    },
+}
+
+/// The right-hand side of a Go `replace` directive.
+#[derive(Debug, Clone)]
+pub enum ReplacementSource {
+    Module {
+        path: String,
+        version: String,
+    },
+    /// Relative to `lisette.toml` unless absolute.
+    Local {
+        path: String,
     },
 }
 
@@ -55,13 +67,8 @@ impl GoDependency {
                 version: version.clone(),
                 via,
             },
-            GoDependency::Replaced {
-                replacement_path,
-                replacement_version,
-                ..
-            } => GoDependency::Replaced {
-                replacement_path: replacement_path.clone(),
-                replacement_version: replacement_version.clone(),
+            GoDependency::Replaced { source, .. } => GoDependency::Replaced {
+                source: source.clone(),
                 via,
             },
         }
@@ -80,7 +87,7 @@ impl<'de> Deserialize<'de> for GoDependency {
 
             fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
                 f.write_str(
-                    "a version string, a table with `version` (and optional `via`), or a table with `replace` (and optional `via`)",
+                    "a version string, or a table with exactly one of `version`, `replacement`, or `path` (and optional `via`)",
                 )
             }
 
@@ -94,38 +101,43 @@ impl<'de> Deserialize<'de> for GoDependency {
             fn visit_map<M: MapAccess<'de>>(self, mut map: M) -> Result<GoDependency, M::Error> {
                 let mut version: Option<String> = None;
                 let mut replacement: Option<String> = None;
+                let mut path: Option<String> = None;
                 let mut via: Option<Vec<String>> = None;
 
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
                         "version" => version = Some(map.next_value()?),
                         "replacement" => replacement = Some(map.next_value()?),
+                        "path" => path = Some(map.next_value()?),
                         "via" => via = Some(map.next_value()?),
                         other => {
                             return Err(de::Error::unknown_field(
                                 other,
-                                &["version", "replacement", "via"],
+                                &["version", "replacement", "path", "via"],
                             ));
                         }
                     }
                 }
 
-                match (version, replacement) {
-                    (Some(version), None) => Ok(GoDependency::Remote { version, via }),
-                    (None, Some(replacement)) => {
-                        let (replacement_path, replacement_version) =
+                match (version, replacement, path) {
+                    (Some(version), None, None) => Ok(GoDependency::Remote { version, via }),
+                    (None, Some(replacement), None) => {
+                        let (path, version) =
                             split_replacement(&replacement).map_err(de::Error::custom)?;
                         Ok(GoDependency::Replaced {
-                            replacement_path,
-                            replacement_version,
+                            source: ReplacementSource::Module { path, version },
                             via,
                         })
                     }
-                    (Some(_), Some(_)) => Err(de::Error::custom(
-                        "a Go dependency cannot set both `version` and `replacement`",
+                    (None, None, Some(path)) => Ok(GoDependency::Replaced {
+                        source: ReplacementSource::Local { path },
+                        via,
+                    }),
+                    (None, None, None) => Err(de::Error::custom(
+                        "a Go dependency table needs `version`, `replacement`, or `path`",
                     )),
-                    (None, None) => Err(de::Error::custom(
-                        "a Go dependency table needs either `version` or `replacement`",
+                    _ => Err(de::Error::custom(
+                        "a Go dependency sets exactly one of `version`, `replacement`, or `path`",
                     )),
                 }
             }
@@ -174,25 +186,31 @@ pub fn parse_manifest(project_root: &Path) -> Result<Manifest, String> {
 }
 
 /// A replaced entry's key (the original module) and its `replace` target must
-/// both be third-party module paths, or resolution silently misclassifies them.
+/// both be third-party module paths, or resolution silently misclassifies them
+/// (a dotless key reads as the Go standard library).
 fn validate_go_dep_paths(manifest: &Manifest) -> Result<(), String> {
     for (key, dep) in &manifest.go_deps() {
-        let GoDependency::Replaced {
-            replacement_path, ..
-        } = dep
-        else {
+        let GoDependency::Replaced { source, .. } = dep else {
             continue;
         };
         if !crate::is_third_party(key) {
-            return Err(format!(
-                "`{}` in `[dependencies.go]` has a `replace` but is not a third-party module path (its first path segment needs a dot)",
-                key
-            ));
+            return Err(match source {
+                ReplacementSource::Module { .. } => format!(
+                    "`{}` in `[dependencies.go]` has a `replace` but is not a third-party module path (its first path segment needs a dot)",
+                    key
+                ),
+                ReplacementSource::Local { .. } => format!(
+                    "`{}` in `[dependencies.go]` has a local `path` but no dot in its first path segment; lisette reads dotless paths as Go standard library packages, so a local module needs a dotted module path like `example.com/{}` (a lisette limitation, not a Go rule)",
+                    key, key
+                ),
+            });
         }
-        if !crate::is_third_party(replacement_path) {
+        if let ReplacementSource::Module { path, .. } = source
+            && !crate::is_third_party(path)
+        {
             return Err(format!(
                 "the `replace` target `{}` for `{}` is not a third-party module path",
-                replacement_path, key
+                path, key
             ));
         }
     }
@@ -242,6 +260,17 @@ pub fn check_toolchain_version(manifest: &Manifest) -> Result<(), String> {
 pub fn check_no_subpackage_deps(manifest: &Manifest) -> Result<(), String> {
     let deps = manifest.go_deps();
     let has_via = |d: &GoDependency| d.via().is_some_and(|v| !v.is_empty());
+    // A `Local` entry's own `go.mod` establishes a module boundary, so a
+    // nested key is a distinct module, not a subpackage.
+    let is_local = |d: &GoDependency| {
+        matches!(
+            d,
+            GoDependency::Replaced {
+                source: ReplacementSource::Local { .. },
+                ..
+            }
+        )
+    };
 
     for (key, dep) in &deps {
         let Some((parent, parent_dep)) = deps
@@ -251,7 +280,7 @@ pub fn check_no_subpackage_deps(manifest: &Manifest) -> Result<(), String> {
             continue;
         };
 
-        if has_via(dep) || has_via(parent_dep) {
+        if has_via(dep) || has_via(parent_dep) || is_local(dep) || is_local(parent_dep) {
             continue;
         }
 
@@ -340,18 +369,19 @@ pub fn upsert_go_dependency(
                 go.insert(module_path, toml_edit::value(version.as_str()));
             }
         },
-        GoDependency::Replaced {
-            replacement_path,
-            replacement_version,
-            ..
-        } => {
+        GoDependency::Replaced { source, .. } => {
             let mut inline = toml_edit::InlineTable::new();
-            inline.insert(
-                "replacement",
-                format!("{}@{}", replacement_path, replacement_version)
-                    .as_str()
-                    .into(),
-            );
+            match source {
+                ReplacementSource::Module { path, version } => {
+                    inline.insert(
+                        "replacement",
+                        format!("{}@{}", path, version).as_str().into(),
+                    );
+                }
+                ReplacementSource::Local { path } => {
+                    inline.insert("path", path.as_str().into());
+                }
+            }
             if let Some(via_list) = via {
                 inline.insert("via", via_array(&via_list));
             }
@@ -704,15 +734,14 @@ version = "0.1.0"
         let manifest = parse_manifest(dir.path()).unwrap();
         match &manifest.go_deps()["github.com/df-mc/dragonfly"] {
             GoDependency::Replaced {
-                replacement_path,
-                replacement_version,
+                source: ReplacementSource::Module { path, version },
                 via,
             } => {
-                assert_eq!(replacement_path, "github.com/fork/dragonfly");
-                assert_eq!(replacement_version, "v1.2.0");
+                assert_eq!(path, "github.com/fork/dragonfly");
+                assert_eq!(version, "v1.2.0");
                 assert!(via.is_none());
             }
-            other => panic!("expected Replaced, got {:?}", other),
+            other => panic!("expected Replaced module, got {:?}", other),
         }
     }
 
@@ -724,18 +753,136 @@ version = "0.1.0"
         let manifest = parse_manifest(dir.path()).unwrap();
         match &manifest.go_deps()["github.com/df-mc/dragonfly"] {
             GoDependency::Replaced {
-                replacement_version,
+                source: ReplacementSource::Module { version, .. },
                 via,
-                ..
             } => {
-                assert_eq!(replacement_version, "v0.0.0-20260101000000-abcdef123456");
+                assert_eq!(version, "v0.0.0-20260101000000-abcdef123456");
                 assert_eq!(
                     via.as_deref(),
                     Some(["github.com/x/y".to_string()].as_slice())
                 );
             }
-            other => panic!("expected Replaced, got {:?}", other),
+            other => panic!("expected Replaced module, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn parses_local_path_entry() {
+        let dir = replacement_manifest(r#""example.com/me/foo" = { path = "../foo" }"#);
+        let manifest = parse_manifest(dir.path()).unwrap();
+        match &manifest.go_deps()["example.com/me/foo"] {
+            GoDependency::Replaced {
+                source: ReplacementSource::Local { path },
+                via,
+            } => {
+                assert_eq!(path, "../foo");
+                assert!(via.is_none());
+            }
+            other => panic!("expected Replaced local, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parses_local_path_entry_with_via() {
+        let dir = replacement_manifest(
+            r#""example.com/me/child" = { path = "../child", via = ["example.com/me/foo"] }"#,
+        );
+        let manifest = parse_manifest(dir.path()).unwrap();
+        let deps = manifest.go_deps();
+        assert_eq!(
+            deps["example.com/me/child"].via().unwrap(),
+            ["example.com/me/foo".to_string()].as_slice()
+        );
+    }
+
+    #[test]
+    fn rejects_dotless_local_key_as_lisette_limitation() {
+        let dir = replacement_manifest(r#""foo" = { path = "../foo" }"#);
+        let error = parse_manifest(dir.path()).unwrap_err();
+        assert!(error.contains("standard library"), "{}", error);
+        assert!(
+            error.contains("lisette limitation, not a Go rule"),
+            "{}",
+            error
+        );
+    }
+
+    #[test]
+    fn rejects_path_combined_with_version_or_replacement() {
+        let dir = replacement_manifest(
+            r#""example.com/me/foo" = { path = "../foo", version = "v1.0.0" }"#,
+        );
+        let error = parse_manifest(dir.path()).unwrap_err();
+        assert!(error.contains("exactly one"), "{}", error);
+
+        let dir = replacement_manifest(
+            r#""example.com/me/foo" = { path = "../foo", replacement = "github.com/fork/foo@v1.0.0" }"#,
+        );
+        let error = parse_manifest(dir.path()).unwrap_err();
+        assert!(error.contains("exactly one"), "{}", error);
+    }
+
+    #[test]
+    fn upsert_go_dependency_round_trips_local_shape() {
+        let dir = replacement_manifest("");
+        upsert_go_dependency(
+            dir.path(),
+            "example.com/me/foo",
+            &GoDependency::Replaced {
+                source: ReplacementSource::Local {
+                    path: "../foo".to_string(),
+                },
+                via: None,
+            },
+        )
+        .unwrap();
+        let after = manifest_text(&dir);
+        assert!(
+            after.contains(r#""example.com/me/foo" = { path = "../foo" }"#),
+            "{}",
+            after
+        );
+
+        let reparsed = parse_manifest(dir.path()).unwrap();
+        assert!(matches!(
+            reparsed.go_deps()["example.com/me/foo"],
+            GoDependency::Replaced {
+                source: ReplacementSource::Local { .. },
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn nested_local_modules_are_not_subpackages() {
+        let dir = project_with(
+            r#"[project]
+name = "demo"
+version = "0.1.0"
+
+[dependencies.go]
+"example.com/acme/parent" = { path = "../parent" }
+"example.com/acme/parent/child" = { path = "../parent/child" }
+"#,
+        );
+        let manifest = parse_manifest(dir.path()).unwrap();
+        assert!(check_no_subpackage_deps(&manifest).is_ok());
+    }
+
+    #[test]
+    fn local_module_under_remote_pin_is_not_a_subpackage() {
+        let dir = project_with(
+            r#"[project]
+name = "demo"
+version = "0.1.0"
+
+[dependencies.go]
+"example.com/acme/parent" = "v1.0.0"
+"example.com/acme/parent/child" = { path = "../child" }
+"#,
+        );
+        let manifest = parse_manifest(dir.path()).unwrap();
+        assert!(check_no_subpackage_deps(&manifest).is_ok());
     }
 
     #[test]
@@ -774,7 +921,7 @@ version = "0.1.0"
         );
         let error = parse_manifest(dir.path()).unwrap_err();
         assert!(
-            error.contains("both `version` and `replacement`"),
+            error.contains("exactly one of `version`, `replacement`, or `path`"),
             "{}",
             error
         );
@@ -787,8 +934,10 @@ version = "0.1.0"
             dir.path(),
             "github.com/df-mc/dragonfly",
             &GoDependency::Replaced {
-                replacement_path: "github.com/fork/dragonfly".to_string(),
-                replacement_version: "v1.2.0".to_string(),
+                source: ReplacementSource::Module {
+                    path: "github.com/fork/dragonfly".to_string(),
+                    version: "v1.2.0".to_string(),
+                },
                 via: Some(vec!["github.com/x/y".to_string()]),
             },
         )

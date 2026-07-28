@@ -581,7 +581,13 @@ fn reconcile_target_manifest(
         &emit.changed,
         import_set_hash,
     ) {
-        cli_error!(heading, e.message, e.hint);
+        let message = super::reconciliation::augment_go_error_with_local_hint(
+            e.message,
+            &prep.project_path,
+            &prep.target_dir,
+            &prep.manifest,
+        );
+        cli_error!(heading, message, e.hint);
         return Err(1);
     }
     Ok(())

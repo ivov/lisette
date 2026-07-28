@@ -64,7 +64,7 @@ fn bash_completions() -> &'static str {
             return 0
             ;;
         add)
-            COMPREPLY=( $(compgen -W "--replace" -- "$cur") )
+            COMPREPLY=( $(compgen -W "--replace --path" -- "$cur") )
             return 0
             ;;
         check)
@@ -154,7 +154,9 @@ _lis() {
                     _arguments '--check[Check formatting without modifying]'
                     ;;
                 add)
-                    _arguments '--replace[Source the dependency from another module]:module@version'
+                    _arguments \
+                        '--replace[Source the dependency from another module]:module@version' \
+                        '--path[Use a local module on disk]:directory:_directories'
                     ;;
                 check)
                     _arguments \
@@ -195,6 +197,7 @@ complete -c lis -n __fish_use_subcommand -a format -d 'Format a project'
 complete -c lis -n __fish_use_subcommand -a test -d 'Run a project\'s tests'
 complete -c lis -n __fish_use_subcommand -a add -d 'Add a third-party Go dependency'
 complete -c lis -n '__fish_seen_subcommand_from add' -l replace -d 'Source the dependency from another module'
+complete -c lis -n '__fish_seen_subcommand_from add' -l path -d 'Use a local module on disk'
 complete -c lis -n __fish_use_subcommand -a sync -d 'Tidy project manifest'
 complete -c lis -n __fish_use_subcommand -a version -d 'Print compiler version'
 complete -c lis -n __fish_use_subcommand -a help -d 'Show help for a command'
