@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Extra format arguments
+   ╭─[test.lis:5:3]
+ 4 │ fn main() {
+ 5 │   fmt.Printf("%d\n", 1, 2, 3)
+   ·   ─────────────┬─────────────
+   ·                ╰── 1 verb, 3 arguments
+ 6 │ }
+   ╰────
+  help: `fmt.Printf` has 1 verb but 3 arguments, so the extra arguments print as `%!(EXTRA ...)` at the end of the output. Add verbs for them or remove them · code: [lint.printf_verb_mismatch]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Missing format arguments
+   ╭─[test.lis:5:3]
+ 4 │ fn main() {
+ 5 │   fmt.Printf("[%*d]\n")
+   ·   ──────────┬──────────
+   ·             ╰── 2 operands, 0 arguments
+ 6 │ }
+   ╰────
+  help: `fmt.Printf` has 2 operands but 0 arguments, so the `*` width prints as `%!(BADWIDTH)`. Add the missing width argument or write a fixed width · code: [lint.printf_verb_mismatch]

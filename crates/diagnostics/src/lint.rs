@@ -1303,6 +1303,97 @@ pub fn redundant_sprintf(span: &Span, namespace: &str, value: &str) -> LisetteDi
         ))
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrintfOperand {
+    Verb(char),
+    StarWidth,
+    StarPrecision,
+}
+
+pub fn printf_verb_mismatch(
+    span: &Span,
+    module: &str,
+    function: &str,
+    operands: &[PrintfOperand],
+    supplied: usize,
+) -> LisetteDiagnostic {
+    let display_module = module.strip_prefix("go:").unwrap_or(module);
+    let only_verbs = operands
+        .iter()
+        .all(|operand| matches!(operand, PrintfOperand::Verb(_)));
+    let operand_word = match (only_verbs, operands.len()) {
+        (true, 1) => "verb",
+        (true, _) => "verbs",
+        (false, 1) => "operand",
+        (false, _) => "operands",
+    };
+    let argument_word = if supplied == 1 {
+        "argument"
+    } else {
+        "arguments"
+    };
+    let counts = format!(
+        "{} {operand_word} but {supplied} {argument_word}",
+        operands.len()
+    );
+    let label = format!(
+        "{} {operand_word}, {supplied} {argument_word}",
+        operands.len()
+    );
+
+    match operands.get(supplied) {
+        Some(unmatched) => {
+            let (corruption, repair) = match unmatched {
+                // A raw control character would break the help across lines.
+                PrintfOperand::Verb(verb) if verb.is_control() => {
+                    let escaped = verb.escape_default();
+                    (
+                        format!("`%{escaped}` prints as `%!{escaped}(MISSING)`"),
+                        "Add the missing argument, remove the verb, or write `%%` for a literal percent sign",
+                    )
+                }
+                PrintfOperand::Verb(verb) => (
+                    format!("`%{verb}` prints as `%!{verb}(MISSING)`"),
+                    "Add the missing argument, remove the verb, or write `%%` for a literal percent sign",
+                ),
+                PrintfOperand::StarWidth => (
+                    "the `*` width prints as `%!(BADWIDTH)`".to_string(),
+                    "Add the missing width argument or write a fixed width",
+                ),
+                PrintfOperand::StarPrecision => (
+                    "the `*` precision prints as `%!(BADPREC)`".to_string(),
+                    "Add the missing precision argument or write a fixed precision",
+                ),
+            };
+            LisetteDiagnostic::warn("Missing format arguments")
+                .with_lint_code("printf_verb_mismatch")
+                .with_span_label(span, label)
+                .with_help(format!(
+                    "`{display_module}.{function}` has {counts}, so {corruption}. {repair}"
+                ))
+        }
+        None => {
+            let (extras, repair) = if supplied == operands.len() + 1 {
+                (
+                    "the extra argument prints",
+                    "Add a verb for it or remove it",
+                )
+            } else {
+                (
+                    "the extra arguments print",
+                    "Add verbs for them or remove them",
+                )
+            };
+            LisetteDiagnostic::warn("Extra format arguments")
+                .with_lint_code("printf_verb_mismatch")
+                .with_span_label(span, label)
+                .with_help(format!(
+                    "`{display_module}.{function}` has {counts}, so {extras} as `%!(EXTRA ...)` at the end of the output. {repair}"
+                ))
+        }
+    }
+}
+
 pub fn manual_replace_all(
     span: &Span,
     namespace: &str,

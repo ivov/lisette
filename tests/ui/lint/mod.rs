@@ -13877,6 +13877,562 @@ fn main() {
 }
 
 #[test]
+fn printf_verb_mismatch_missing_argument() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("%d and %d\n", 1)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_extra_argument() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("hello\n", 1)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_several_extra_arguments() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("%d\n", 1, 2, 3)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_unescaped_percent_reads_as_verb() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("50% off\n")
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_sprintf() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let _ = fmt.Sprintf("%d %d", 1)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_fprintf_skips_writer() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+import "go:os"
+
+fn main() {
+  let _ = fmt.Fprintf(os.Stdout, "%d %d\n", 1)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_errorf_counts_wrap_verb() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let _ = fmt.Errorf("bad %d: %w", 1)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_appendf() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let mut b: Slice<byte> = []
+  b = fmt.Appendf(b, "%d %d", 1)
+  let _ = b
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_log_printf() {
+    assert_lint_snapshot!(
+        r#"
+import "go:log"
+
+fn main() {
+  log.Printf("%d %d", 1)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_raw_string_format() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf(r"%d\t%d", 1)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_aliased_import() {
+    assert_lint_snapshot!(
+        r#"
+import f "go:fmt"
+
+fn main() {
+  f.Printf("%d %d\n", 1)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_matching_count_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("%d and %d\n", 1, 2)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_escaped_percent_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("%d%%\n", 1)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_flags_width_precision_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("%-8s|%+d|%#x|% d|%08.3f\n", "a", 1, 255, 2, 1.5)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_explicit_argument_index_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("%[1]d %[1]d\n", 1)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_star_width_counted_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("%*d\n", 4, 1)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_star_precision_counted_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("%.*f\n", 2, 1.5)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_star_before_percent_counted_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("[%*%]\n", 4)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_star_width_missing_value() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("[%*d]\n", 4)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_star_width_missing_width() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("[%*d]\n")
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_star_precision_missing_precision() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("[%.*f]\n")
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_hex_escaped_percent_counted_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("\x25d\n", 1)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_octal_escaped_percent_counted_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("\045d\n", 1)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_unicode_escaped_percent_counted_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("\u{25}d\n", 1)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_hex_escaped_percent_missing_argument() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("\x25d\n")
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_escape_beside_extra_argument() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("\x41 %d\n", 1, 2)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_high_byte_escape_beside_extra_argument() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("\xff %d\n", 1, 2)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_high_byte_escape_counted_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("\xff %d\n", 1)
+  fmt.Printf("\377 %d\n", 1)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_capital_unicode_escaped_percent_missing_argument() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("\U00000025d\n")
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_capital_unicode_escaped_percent_counted_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("\U00000025d\n", 1)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_control_character_verb() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("[%\n]")
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_multibyte_verb() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("%é\n")
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_directive_without_verb_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("100%")
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_spread_argument_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let xs: Slice<int> = [1, 2]
+  fmt.Printf("%d %d\n", xs...)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_non_literal_format_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let format = "%d %d\n"
+  fmt.Printf(format, 1)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_own_method_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Logger {
+  prefix: string,
+}
+
+impl Logger {
+  fn Printf(self: Logger, _format: string, _n: int) {
+    let _ = self.prefix
+  }
+}
+
+fn main() {
+  let logger = Logger { prefix: "app" }
+  logger.Printf("%d %d\n", 1)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_unformatted_call_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Println("%d", 1)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_fires_in_test_file() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"util\"\n\nfn main() {\n  let _ = util.value()\n}\n",
+    );
+    fs.add_file("util", "util.lis", "pub fn value() -> int { 1 }\n");
+    fs.add_file(
+        "util",
+        "util.test.lis",
+        "import \"go:fmt\"\n\n#[test]\nfn prints() {\n  fmt.Printf(\"%d %d\\n\", 1)\n  assert value() == 1\n}\n",
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .lints()
+            .iter()
+            .any(|d| d.plain_message() == "Missing format arguments"),
+        "the lint must fire in a test file: {:?}",
+        result.lints()
+    );
+}
+
+#[test]
+fn printf_verb_mismatch_fires_despite_type_error() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+
+fn main() {
+  let bad: int = "nope"
+  let _ = bad
+  fmt.Printf("%d %d\n", 1)
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors()
+            .iter()
+            .any(|d| d.plain_message().contains("Type mismatch")),
+        "expected the type mismatch to still be reported: {:?}",
+        result.errors()
+    );
+    assert!(
+        result
+            .lints()
+            .iter()
+            .any(|d| d.plain_message() == "Missing format arguments"),
+        "the lint must not depend on a clean check: {:?}",
+        result.lints()
+    );
+}
+
+#[test]
 fn duplicate_cutset_trim() {
     assert_lint_snapshot!(
         r#"
