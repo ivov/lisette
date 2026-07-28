@@ -24,7 +24,6 @@ fuzz_target!(|data: &[u8]| {
     lisette_semantics::prelude::parse_and_register_prelude(&mut store, &sink);
 
     let mut checker = lisette_semantics::checker::TaskState::with_fresh_allocator();
-    checker.extend_ufcs_methods(lisette_semantics::prelude::compute_prelude_ufcs(&store));
     checker.cursor.module_id = "fuzz".to_string();
     checker.put_prelude_in_scope(&store);
 
