@@ -1648,7 +1648,7 @@ fn main() {
 
 #[test]
 fn manual_replace_all_zero_count_no_warning() {
-    assert_no_lint_warnings!(
+    let warnings = crate::_harness::lint::lint(
         r#"
 import "go:strings"
 
@@ -1656,7 +1656,15 @@ fn main() {
   let s = "hello world"
   let _ = strings.Replace(s, "o", "0", 0)
 }
-"#
+"#,
+    );
+    let fires = warnings
+        .iter()
+        .any(|w| w.code_str() == Some("lint.manual_replace_all"));
+    assert!(
+        !fires,
+        "a zero count is not the replace-all spelling, `replace_count_zero` owns it, got: {:?}",
+        warnings
     );
 }
 
@@ -1705,6 +1713,172 @@ fn main() {
   let _ = e.Replace("a", "b", "c", -1)
 }
 "#
+    );
+}
+
+#[test]
+fn replace_count_zero() {
+    assert_lint_snapshot!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let s = "banana"
+  let _ = strings.Replace(s, "a", "b", 0)
+}
+"#
+    );
+}
+
+#[test]
+fn replace_count_zero_aliased_import() {
+    assert_lint_snapshot!(
+        r#"
+import mystr "go:strings"
+
+fn main() {
+  let s = "banana"
+  let _ = mystr.Replace(s, "a", "b", 0)
+}
+"#
+    );
+}
+
+#[test]
+fn replace_count_zero_parenthesized_count() {
+    assert_lint_snapshot!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let s = "banana"
+  let _ = strings.Replace(s, "a", "b", (0))
+}
+"#
+    );
+}
+
+#[test]
+fn replace_count_zero_positive_count_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let s = "banana"
+  let _ = strings.Replace(s, "a", "b", 2)
+}
+"#
+    );
+}
+
+#[test]
+fn replace_count_zero_named_constant_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+const NONE: int = 0
+
+fn main() {
+  let s = "banana"
+  let _ = strings.Replace(s, "a", "b", NONE)
+}
+"#
+    );
+}
+
+#[test]
+fn replace_count_zero_bytes_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:bytes"
+
+fn main() {
+  let bs = "banana" as Slice<byte>
+  let _ = bytes.Replace(bs, bs, bs, 0)
+}
+"#
+    );
+}
+
+#[test]
+fn replace_count_zero_user_type_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Editor {}
+
+impl Editor {
+  fn Replace(self, s: string, _old: string, _new: string, _n: int) -> string {
+    s
+  }
+}
+
+fn main() {
+  let e = Editor {}
+  let _ = e.Replace("a", "b", "c", 0)
+}
+"#
+    );
+}
+
+#[test]
+fn replace_count_zero_fires_in_test_file() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"util\"\n\nfn main() {\n  let _ = util.value()\n}\n",
+    );
+    fs.add_file("util", "util.lis", "pub fn value() -> int { 1 }\n");
+    fs.add_file(
+        "util",
+        "util.test.lis",
+        "import \"go:strings\"\n\n#[test]\nfn replaces() {\n  assert strings.Replace(\"banana\", \"a\", \"b\", 0) == \"banana\"\n}\n",
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .lints()
+            .iter()
+            .any(|d| d.code_str() == Some("lint.replace_count_zero")),
+        "the lint must also cover `.test.lis` files: {:?}",
+        result.lints()
+    );
+}
+
+#[test]
+fn replace_count_zero_fires_despite_type_error() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:strings"
+
+fn main() {
+  let bad: int = "nope"
+  let _ = bad
+  let _ = strings.Replace("banana", "a", "b", 0)
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors()
+            .iter()
+            .any(|d| d.plain_message().contains("Type mismatch")),
+        "expected the type mismatch to still be reported: {:?}",
+        result.errors()
+    );
+    assert!(
+        result
+            .lints()
+            .iter()
+            .any(|d| d.code_str() == Some("lint.replace_count_zero")),
+        "the lint must not depend on a clean check: {:?}",
+        result.lints()
     );
 }
 
