@@ -1,0 +1,13 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ● Element-by-element append
+   ╭─[test.lis:5:3]
+ 4 │       let mut out = Slice.new<int>()
+ 5 │ ╭─▶   for x in b {
+ 6 │ │       out = out.append(x)
+ 7 │ ├─▶   }
+   · ╰──── can be one append
+ 8 │       let _ = out
+   ╰────
+  help: This loop appends one element per iteration, growing the slice each time. Spread the iterated slice to append all of it at once: `out = out.append(b...)` · code: [lint.manual_extend]

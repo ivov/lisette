@@ -1404,6 +1404,39 @@ pub fn f(o: Outer) -> int {
 }
 
 #[test]
+fn fix_manual_extend() {
+    assert_fix_snapshot!(
+        r#"
+fn main() {
+  let b = [1, 2, 3]
+  let mut out = Slice.new<int>()
+  for x in b {
+    out = out.append(x)
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn manual_extend_with_comment_has_no_fix() {
+    assert_no_fix!(
+        r#"
+fn main() {
+  let b = [1, 2, 3]
+  let mut out = Slice.new<int>()
+  for x in b {
+    // keep every element
+    out = out.append(x)
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
 fn fix_redundant_trim_guard_prefix() {
     assert_fix_snapshot!(
         r#"

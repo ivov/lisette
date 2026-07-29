@@ -565,6 +565,15 @@ pub fn manual_find(span: &Span, receiver: &str, predicate: &str) -> LisetteDiagn
         ))
 }
 
+pub fn manual_extend(span: &Span, replacement: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Element-by-element append")
+        .with_lint_code("manual_extend")
+        .with_span_label(span, "can be one append")
+        .with_help(format!(
+            "This loop appends one element per iteration, growing the slice each time. Spread the iterated slice to append all of it at once: `{replacement}`"
+        ))
+}
+
 pub fn manual_contains(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Manual `contains`")
         .with_lint_code("manual_contains")
