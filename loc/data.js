@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785346559405,
+  "lastUpdate": 1785357532903,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -13758,6 +13758,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "bindgen",
             "value": 6630,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "055001af14ef9cf0cea521dfa10d88f5b89f76c7",
+          "message": "feat: SSA parameter mutability analysis for bindgen (#1149)",
+          "timestamp": "2026-07-29T22:38:25+02:00",
+          "tree_id": "cd45ad1d3db74a6b83e914041477cb36ed8723fe",
+          "url": "https://github.com/ivov/lisette/commit/055001af14ef9cf0cea521dfa10d88f5b89f76c7"
+        },
+        "date": 1785357532098,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 122273,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30186,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 24524,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18032,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13755,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 11774,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6767,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4511,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2764,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1271,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7104,
             "unit": "lines"
           },
           {
