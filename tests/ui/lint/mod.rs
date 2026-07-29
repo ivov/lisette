@@ -17765,6 +17765,385 @@ fn main() {
 }
 
 #[test]
+fn manual_extend() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let b = [1, 2, 3]
+  let mut out = Slice.new<int>()
+  for x in b {
+    out = out.append(x)
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn manual_extend_slice_literal_accumulator() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let b = [3, 4]
+  let mut out = [1, 2]
+  for x in b {
+    out = out.append(x)
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn manual_extend_unrelated_statement_before_loop() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let b = [1, 2, 3]
+  let mut out = Slice.new<int>()
+  let n = b.length()
+  for x in b {
+    out = out.append(x)
+  }
+  let _ = out
+  let _ = n
+}
+"#
+    );
+}
+
+#[test]
+fn manual_extend_comment_in_loop_keeps_warning() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let b = [1, 2, 3]
+  let mut out = Slice.new<int>()
+  for x in b {
+    // keep every element
+    out = out.append(x)
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn manual_extend_map_iteration_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let m = Map.new<string, int>()
+  let mut out = Slice.new<string>()
+  for (k, _) in m {
+    out = out.append(k)
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn manual_extend_range_iteration_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut out = Slice.new<int>()
+  for i in 0..3 {
+    out = out.append(i)
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn manual_extend_array_iteration_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let a: Array<int, 3> = [1, 2, 3]
+  let mut out = Slice.new<int>()
+  for x in a {
+    out = out.append(x)
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn manual_extend_computed_iterable_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let b = [1, 2, 3]
+  let mut out = Slice.new<int>()
+  for x in b.filter(|v| v > 1) {
+    out = out.append(x)
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn manual_extend_transformed_element_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let b = [1, 2, 3]
+  let mut out = Slice.new<int>()
+  for x in b {
+    out = out.append(x * 2)
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn manual_extend_two_body_statements_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let b = [1, 2, 3]
+  let mut out = Slice.new<int>()
+  for x in b {
+    out = out.append(x)
+    out = out.append(x)
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn manual_extend_two_appended_elements_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let b = [1, 2, 3]
+  let mut out = Slice.new<int>()
+  for x in b {
+    out = out.append(x, x)
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn manual_extend_already_spread_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let b = [[1], [2]]
+  let mut out = Slice.new<int>()
+  for x in b {
+    out = out.append(x...)
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn manual_extend_parameter_accumulator_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn extend(mut out: Slice<int>, b: Slice<int>) -> Slice<int> {
+  for x in b {
+    out = out.append(x)
+  }
+  out
+}
+
+fn main() {
+  let _ = extend(Slice.new<int>(), [1, 2])
+}
+"#
+    );
+}
+
+#[test]
+fn manual_extend_accumulator_used_before_loop_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let b = [1, 2, 3]
+  let mut out = Slice.new<int>()
+  let n = out.length()
+  for x in b {
+    out = out.append(x)
+  }
+  let _ = out
+  let _ = n
+}
+"#
+    );
+}
+
+#[test]
+fn manual_extend_go_returned_accumulator_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:bytes"
+
+fn main() {
+  let data = "ab  " as Slice<byte>
+  let mut out = bytes.TrimSpace(data)
+  for x in data {
+    out = out.append(x)
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn manual_extend_widened_element_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+interface Animal {
+  fn sound() -> string
+}
+
+struct Dog {}
+
+impl Dog {
+  fn sound(self) -> string {
+    "woof"
+  }
+}
+
+fn main() {
+  let dogs = [Dog {}]
+  let mut zoo = Slice.new<Animal>()
+  for d in dogs {
+    zoo = zoo.append(d)
+  }
+  let _ = zoo
+}
+"#
+    );
+}
+
+#[test]
+fn manual_extend_iterates_the_accumulator_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut out = [1, 2]
+  for x in out {
+    out = out.append(x)
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn manual_extend_zero_filled_accumulator_no_warning() {
+    let warnings = crate::_harness::lint::lint(
+        r#"
+fn main() {
+  let b = [1, 2, 3]
+  let mut out = Slice.make<int>(2)
+  for x in b {
+    out = out.append(x)
+  }
+  let _ = out
+}
+"#,
+    );
+    let fires = warnings
+        .iter()
+        .any(|w| w.code_str() == Some("lint.manual_extend"));
+    assert!(
+        !fires,
+        "a zero-filled accumulator is `append_to_zero_filled` territory, got: {:?}",
+        warnings
+    );
+}
+
+#[test]
+fn manual_extend_fires_despite_type_error() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {
+  let bad: int = "nope"
+  let _ = bad
+  let b = [1, 2, 3]
+  let mut out = Slice.new<int>()
+  for x in b {
+    out = out.append(x)
+  }
+  let _ = out
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors()
+            .iter()
+            .any(|d| d.plain_message().contains("Type mismatch")),
+        "expected the type mismatch to still be reported: {:?}",
+        result.errors()
+    );
+    assert!(
+        result
+            .lints()
+            .iter()
+            .any(|d| d.code_str() == Some("lint.manual_extend")),
+        "the lint must not depend on a clean check: {:?}",
+        result.lints()
+    );
+}
+
+#[test]
+fn manual_extend_fires_in_test_file() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"util\"\n\nfn main() {\n  let _ = util.value()\n}\n",
+    );
+    fs.add_file("util", "util.lis", "pub fn value() -> int { 1 }\n");
+    fs.add_file(
+        "util",
+        "util.test.lis",
+        "#[test]\nfn extends() {\n  let b = [1, 2]\n  let mut out = Slice.new<int>()\n  for x in b {\n    out = out.append(x)\n  }\n  assert out.length() == 2\n}\n",
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .lints()
+            .iter()
+            .any(|d| d.code_str() == Some("lint.manual_extend")),
+        "the lint must also cover `.test.lis` files: {:?}",
+        result.lints()
+    );
+}
+
+#[test]
 fn unnecessary_first_then_check_is_some() {
     assert_lint_snapshot!(
         r#"

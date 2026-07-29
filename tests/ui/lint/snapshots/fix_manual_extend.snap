@@ -1,0 +1,18 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+fn main() {
+  let b = [1, 2, 3]
+  let mut out = Slice.new<int>()
+  for x in b {
+    out = out.append(x)
+  }
+  let _ = out
+}
+=== fixed ===
+fn main() {
+  let b = [1, 2, 3]
+  let mut out = Slice.new<int>()
+  out = out.append(b...)
+  let _ = out
+}
