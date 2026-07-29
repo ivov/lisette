@@ -2,6 +2,9 @@ pub use token::{Token, TokenKind};
 pub use types::LexResult;
 
 use crate::parse::ParseError;
+use std::borrow::Cow;
+use std::iter::Peekable;
+use std::str::Chars;
 
 mod errors;
 mod token;
@@ -1393,9 +1396,97 @@ pub fn rune_codepoint(text: &str) -> Option<u32> {
     }
 }
 
+/// Decodes a quote-stripped string literal to the bytes it holds at runtime,
+/// covering every escape the lexer takes. `None` for a malformed escape.
+pub fn string_bytes(text: &str, raw: bool) -> Option<Cow<'_, [u8]>> {
+    if raw || !text.contains('\\') {
+        return Some(Cow::Borrowed(text.as_bytes()));
+    }
+
+    let mut decoded = Vec::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch != '\\' {
+            push_char(&mut decoded, ch);
+            continue;
+        }
+        match chars.next()? {
+            'a' => decoded.push(0x07),
+            'b' => decoded.push(0x08),
+            'f' => decoded.push(0x0c),
+            'n' => decoded.push(b'\n'),
+            'r' => decoded.push(b'\r'),
+            't' => decoded.push(b'\t'),
+            'v' => decoded.push(0x0b),
+            '\\' => decoded.push(b'\\'),
+            '"' => decoded.push(b'"'),
+            '\'' => decoded.push(b'\''),
+            'x' => decoded.push(byte_from_hex(&mut chars)?),
+            'u' => push_char(&mut decoded, char_from_braced_hex(&mut chars)?),
+            'U' => push_char(&mut decoded, char_from_eight_hex(&mut chars)?),
+            first @ '0'..='7' => decoded.push(byte_from_octal(&mut chars, first)?),
+            _ => return None,
+        }
+    }
+
+    Some(Cow::Owned(decoded))
+}
+
+fn push_char(decoded: &mut Vec<u8>, ch: char) {
+    let mut buffer = [0u8; 4];
+    decoded.extend_from_slice(ch.encode_utf8(&mut buffer).as_bytes());
+}
+
+fn byte_from_hex(chars: &mut Peekable<Chars<'_>>) -> Option<u8> {
+    let high = chars.next()?.to_digit(16)?;
+    let low = chars.next()?.to_digit(16)?;
+    Some((high * 16 + low) as u8)
+}
+
+fn byte_from_octal(chars: &mut Peekable<Chars<'_>>, first: char) -> Option<u8> {
+    let mut value = first.to_digit(8)?;
+    for _ in 0..2 {
+        let Some(digit) = chars.peek().and_then(|ch| ch.to_digit(8)) else {
+            break;
+        };
+        chars.next();
+        value = value * 8 + digit;
+    }
+    u8::try_from(value).ok()
+}
+
+fn char_from_eight_hex(chars: &mut Peekable<Chars<'_>>) -> Option<char> {
+    let mut value = 0u32;
+    for _ in 0..8 {
+        value = value * 16 + chars.next()?.to_digit(16)?;
+    }
+    char::from_u32(value)
+}
+
+fn char_from_braced_hex(chars: &mut Peekable<Chars<'_>>) -> Option<char> {
+    if chars.next()? != '{' {
+        return None;
+    }
+    let mut value = 0u32;
+    let mut digits = 0;
+    while let Some(digit) = chars.peek().and_then(|ch| ch.to_digit(16)) {
+        chars.next();
+        value = value * 16 + digit;
+        digits += 1;
+        if digits > 6 {
+            return None;
+        }
+    }
+    if digits == 0 || chars.next()? != '}' {
+        return None;
+    }
+    char::from_u32(value)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Lexer, rune_codepoint};
+    use super::{Lexer, rune_codepoint, string_bytes};
 
     #[test]
     fn rune_codepoint_decodes_every_escape_the_lexer_accepts() {
@@ -1426,5 +1517,52 @@ mod tests {
             let inner = &source[1..source.len() - 1];
             assert_eq!(rune_codepoint(inner), Some(expected), "{source}");
         }
+    }
+
+    #[test]
+    fn string_bytes_decodes_every_escape_the_lexer_accepts() {
+        let cases: [(&str, &[u8]); 17] = [
+            ("\"ab\"", b"ab"),
+            ("\"\\a\"", &[7]),
+            ("\"\\b\"", &[8]),
+            ("\"\\f\"", &[12]),
+            ("\"\\n\"", b"\n"),
+            ("\"\\r\"", b"\r"),
+            ("\"\\t\"", b"\t"),
+            ("\"\\v\"", &[11]),
+            ("\"\\\\\"", b"\\"),
+            ("\"\\\"\"", b"\""),
+            ("\"\\x41\"", b"A"),
+            ("\"\\xff\"", &[255]),
+            ("\"\\101\"", b"A"),
+            ("\"\\377\"", &[255]),
+            ("\"\\u{41}\"", b"A"),
+            ("\"\\u{e9}\"", "é".as_bytes()),
+            ("\"\\U0001F600\"", "😀".as_bytes()),
+        ];
+
+        for (source, expected) in cases {
+            let result = Lexer::new(source, 0).lex();
+            assert!(result.errors.is_empty(), "{source} should lex cleanly");
+            let inner = &source[1..source.len() - 1];
+            assert_eq!(
+                string_bytes(inner, false).as_deref(),
+                Some(expected),
+                "{source}"
+            );
+        }
+    }
+
+    #[test]
+    fn string_bytes_keeps_raw_backslashes() {
+        assert_eq!(string_bytes("a\\nb", true).as_deref(), Some(&b"a\\nb"[..]));
+    }
+
+    #[test]
+    fn string_bytes_rejects_malformed_escapes() {
+        assert!(string_bytes("\\q", false).is_none());
+        assert!(string_bytes("\\x4", false).is_none());
+        assert!(string_bytes("\\u0041", false).is_none());
+        assert!(string_bytes("\\400", false).is_none());
     }
 }

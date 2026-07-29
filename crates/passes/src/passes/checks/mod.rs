@@ -4,6 +4,7 @@ pub(crate) mod const_naming;
 pub(crate) mod constant_cast_overflow;
 pub(crate) mod decimal_file_mode;
 pub(crate) mod duplicate_bindings;
+pub(crate) mod duplicate_map_keys;
 pub(crate) mod empty_infinite_loop;
 pub(crate) mod empty_range;
 mod empty_select_default;

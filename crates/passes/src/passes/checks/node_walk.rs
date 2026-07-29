@@ -6,10 +6,10 @@ use crate::passes::walk::{
 
 use super::{
     always_true_disjunction, cast_nan_to_int, const_naming, constant_cast_overflow,
-    decimal_file_mode, duplicate_bindings, empty_infinite_loop, empty_range, enum_variant_value,
-    impossible_comparison, index_out_of_bounds, irrefutable_patterns, map_key, min_max,
-    nan_comparison, newtype, oversized_shift, pub_type_export, receivers, repeated_if_condition,
-    stringer_signature, temp_producing, unchanging_loop_condition,
+    decimal_file_mode, duplicate_bindings, duplicate_map_keys, empty_infinite_loop, empty_range,
+    enum_variant_value, impossible_comparison, index_out_of_bounds, irrefutable_patterns, map_key,
+    min_max, nan_comparison, newtype, oversized_shift, pub_type_export, receivers,
+    repeated_if_condition, stringer_signature, temp_producing, unchanging_loop_condition,
 };
 
 fn run_expression_checks(expression: &Expression, ctx: &mut NodeCtx<'_>, _role: FunctionRole<'_>) {
@@ -59,6 +59,7 @@ fn run_expression_checks(expression: &Expression, ctx: &mut NodeCtx<'_>, _role: 
             ],
         ),
         (map_key::check, &[Let, TypeAlias, Call]),
+        (duplicate_map_keys::check, &[Call]),
         (newtype::check, &[Assignment, Reference]),
         (enum_variant_value::check, &[Identifier, DotAccess]),
         (unchanging_loop_condition::check, &[While]),

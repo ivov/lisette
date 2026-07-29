@@ -23689,3 +23689,245 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn duplicate_map_keys_string() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = Map.from([("a", 1), ("b", 2), ("a", 3)])
+}
+"#
+    );
+}
+
+#[test]
+fn duplicate_map_keys_integer_base_spellings() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = Map.from([(10, "a"), (0xA, "b")])
+}
+"#
+    );
+}
+
+#[test]
+fn duplicate_map_keys_escaped_string_spellings() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = Map.from([("A", 1), ("\x41", 2)])
+}
+"#
+    );
+}
+
+#[test]
+fn duplicate_map_keys_rune() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = Map.from([('a', 1), ('a', 2)])
+}
+"#
+    );
+}
+
+#[test]
+fn duplicate_map_keys_boolean() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = Map.from([(true, 1), (true, 2)])
+}
+"#
+    );
+}
+
+#[test]
+fn duplicate_map_keys_reports_every_later_entry() {
+    let diagnostics = crate::_harness::lint::lint(
+        r#"
+fn main() {
+  let _ = Map.from([("x", 1), ("x", 2), ("x", 3)])
+}
+"#,
+    );
+    assert_eq!(
+        diagnostics
+            .iter()
+            .filter(|d| d.code_str() == Some("infer.duplicate_map_keys"))
+            .count(),
+        2,
+        "each later entry overwrites the first: {diagnostics:?}"
+    );
+}
+
+#[test]
+fn duplicate_map_keys_fires_in_test_file() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"util\"\n\nfn main() {\n  let _ = util.value()\n}\n",
+    );
+    fs.add_file("util", "util.lis", "pub fn value() -> int { 1 }\n");
+    fs.add_file(
+        "util",
+        "util.test.lis",
+        "#[test]\nfn maps() {\n  let m = Map.from([(\"a\", 1), (\"a\", 2)])\n  assert m.length() == 1\n}\n",
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors()
+            .iter()
+            .any(|d| d.plain_message() == "Duplicate map key"),
+        "the check must fire in a test file: {:?}",
+        result.errors()
+    );
+}
+
+#[test]
+fn duplicate_map_keys_fires_despite_type_error() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {
+  let bad: int = "nope"
+  let _ = bad
+  let _ = Map.from([("a", 1), ("a", 2)])
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors()
+            .iter()
+            .any(|d| d.plain_message() == "Duplicate map key"),
+        "the check must fire beside an unrelated type error: {:?}",
+        result.errors()
+    );
+}
+
+#[test]
+fn duplicate_map_keys_distinct_keys_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = Map.from([("a", 1), ("b", 2)])
+}
+"#
+    );
+}
+
+#[test]
+fn duplicate_map_keys_float_keys_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = Map.from([(1.0, "a"), (1.0, "b")])
+}
+"#
+    );
+}
+
+#[test]
+fn duplicate_map_keys_bound_keys_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let key = "a"
+  let _ = Map.from([(key, 1), (key, 2)])
+}
+"#
+    );
+}
+
+#[test]
+fn duplicate_map_keys_named_constant_keys_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+const NAME = "a"
+
+fn main() {
+  let _ = Map.from([(NAME, 1), (NAME, 2)])
+}
+"#
+    );
+}
+
+#[test]
+fn duplicate_map_keys_negated_literal_keys_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = Map.from([(-1, "a"), (-1, "b")])
+}
+"#
+    );
+}
+
+#[test]
+fn duplicate_map_keys_raw_and_escaped_spellings_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = Map.from([(r"\n", 1), ("\n", 2)])
+}
+"#
+    );
+}
+
+#[test]
+fn duplicate_map_keys_bound_slice_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let pairs = [("a", 1), ("a", 2)]
+  let _ = Map.from(pairs)
+}
+"#
+    );
+}
+
+#[test]
+fn duplicate_map_keys_computed_entries_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn pair(key: string) -> (string, int) {
+  (key, 1)
+}
+
+fn main() {
+  let _ = Map.from([pair("a"), pair("a")])
+}
+"#
+    );
+}
+
+#[test]
+fn duplicate_map_keys_user_defined_from_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Config {
+  size: int,
+}
+
+impl Config {
+  fn from(pairs: Slice<(string, int)>) -> Config {
+    Config { size: pairs.length() }
+  }
+}
+
+fn main() {
+  let config = Config.from([("a", 1), ("a", 2)])
+  let _ = config.size
+}
+"#
+    );
+}

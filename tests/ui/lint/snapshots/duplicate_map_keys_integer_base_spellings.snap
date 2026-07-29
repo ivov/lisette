@@ -1,0 +1,13 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ✕ Duplicate map key
+   ╭─[test.lis:3:22]
+ 2 │ fn main() {
+ 3 │   let _ = Map.from([(10, "a"), (0xA, "b")])
+   ·                      ─┬         ─┬─
+   ·                       │          ╰── overwrites the earlier entry
+   ·                       ╰── first entry for this key
+ 4 │ }
+   ╰────
+  help: `Map.from` keeps the last entry for a key, so the earlier entry never reaches the map. Remove one of the two entries · code: [infer.duplicate_map_keys]
