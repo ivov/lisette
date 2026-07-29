@@ -315,7 +315,14 @@ In Lisette, a mutable binding must own its value. Creating one from an existing 
         make a copy or `&a` to take a reference.
 ```
 
-Fresh values (literals, call results, constructed values) bind without ceremony. Immutable `let` bindings remain zero-copy views, as element writes are not permitted on them.
+Fresh values (literals and call results) bind without ceremony. Putting an existing binding inside a new struct, tuple, or list does not count as fresh, since the new value shares that binding's storage:
+
+```rust
+let a = [1, 2, 3]
+let mut pair = (a, 0)   // error: mutating `pair` would implicitly mutate `a`
+```
+
+Immutable `let` bindings remain zero-copy views, as element writes are not permitted on them.
 
 ## Zero values
 
