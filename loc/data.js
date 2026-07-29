@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785343926325,
+  "lastUpdate": 1785344804455,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -13555,6 +13555,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "diagnostics",
             "value": 6749,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4511,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2764,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1271,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 6630,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "46234577dcc796b461d12f5d7b471d289ddead33",
+          "message": "feat: diagnostic for redundant `strings` trim guard (#1147)",
+          "timestamp": "2026-07-29T19:06:19+02:00",
+          "tree_id": "7efada8e0d99d83f1f54d10b6ee74288dcbe2d94",
+          "url": "https://github.com/ivov/lisette/commit/46234577dcc796b461d12f5d7b471d289ddead33"
+        },
+        "date": 1785344802852,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 121799,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30186,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 24524,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18032,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13755,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 11774,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6767,
             "unit": "lines"
           },
           {
