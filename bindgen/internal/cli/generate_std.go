@@ -60,6 +60,7 @@ func GenerateStd(ctx context.Context, outDir, lisetteVersion, goVersion string, 
 			fmt.Fprintf(os.Stderr, "[%s] loaded %d packages in %.1fs\n", target, len(pkgs), time.Since(loadStart).Seconds())
 
 			nilness := convert.NewNilnessAnalysis(pkgs, cfg)
+			mutation := convert.NewMutationAnalysis(nilness, pkgs)
 
 			var generated atomic.Int32
 			total := len(pkgs)
@@ -78,7 +79,7 @@ func GenerateStd(ctx context.Context, outDir, lisetteVersion, goVersion string, 
 					default:
 					}
 
-					result := generateFromPackage(pkg, pkg.PkgPath, lisetteVersion, goVersion, cfg, nilness)
+					result := generateFromPackage(pkg, pkg.PkgPath, lisetteVersion, goVersion, cfg, nilness, mutation)
 
 					resultsMu.Lock()
 					results[pkg.PkgPath] = result.Content

@@ -668,7 +668,7 @@ pub fn Open(path: string, mode: int, perm: uint32) -> Result<int, error>
 /// appending the names to names. It returns the number of
 /// bytes consumed from buf, the number of entries added
 /// to names, and the new names slice.
-pub fn ParseDirent(buf: Slice<byte>, max: int, names: Slice<string>) -> (int, int, Slice<string>)
+pub fn ParseDirent(buf: Slice<byte>, max: int, mut names: Slice<string>) -> (int, int, Slice<string>)
 
 /// ParseRoutingMessage parses b as routing messages and returns the
 /// slice containing the [RoutingMessage] interfaces.

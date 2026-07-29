@@ -202,7 +202,7 @@ pub fn Preorder(root: Node) -> iter.Seq<Node>
 /// stack, and it is surprisingly tricky to do this correctly.)
 pub fn PreorderStack(
   root: Node,
-  stack: Slice<Node>,
+  mut stack: Slice<Node>,
   f: fn(Node, Slice<Node>) -> bool,
 )
 

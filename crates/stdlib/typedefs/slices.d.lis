@@ -15,7 +15,7 @@ pub fn All<E>(s: Slice<E>) -> iter.Seq2<int, E>
 /// returns the extended slice.
 /// If seq is empty, the result preserves the nilness of s.
 #[go(collapsed_type_params, "Slice<E>, E")]
-pub fn AppendSeq<E>(s: Slice<E>, seq: iter.Seq<E>) -> Slice<E>
+pub fn AppendSeq<E>(mut s: Slice<E>, seq: iter.Seq<E>) -> Slice<E>
 
 /// Backward returns an iterator over index-value pairs in the slice,
 /// traversing it backward with descending indices.
@@ -70,14 +70,14 @@ pub fn Collect<E>(seq: iter.Seq<E>) -> Slice<E>
 /// Compact zeroes the elements between the new length and the original length.
 /// The result preserves the nilness of s.
 #[go(collapsed_type_params, "Slice<E>, E")]
-pub fn Compact<E: Comparable>(s: Slice<E>) -> Slice<E>
+pub fn Compact<E: Comparable>(mut s: Slice<E>) -> Slice<E>
 
 /// CompactFunc is like [Compact] but uses an equality function to compare elements.
 /// For runs of elements that compare equal, CompactFunc keeps the first one.
 /// CompactFunc zeroes the elements between the new length and the original length.
 /// The result preserves the nilness of s.
 #[go(collapsed_type_params, "Slice<E>, E")]
-pub fn CompactFunc<E>(s: Slice<E>, eq: fn(E, E) -> bool) -> Slice<E>
+pub fn CompactFunc<E>(mut s: Slice<E>, eq: fn(E, E) -> bool) -> Slice<E>
 
 /// Compare compares the elements of s1 and s2, using [cmp.Compare] on each pair
 /// of elements. The elements are compared sequentially, starting at index 0,
@@ -118,14 +118,14 @@ pub fn ContainsFunc<E>(s: Slice<E>, f: fn(E) -> bool) -> bool
 /// Delete zeroes the elements s[len(s)-(j-i):len(s)].
 /// If the result is empty, it has the same nilness as s.
 #[go(collapsed_type_params, "Slice<E>, E")]
-pub fn Delete<E>(s: Slice<E>, i: int, j: int) -> Slice<E>
+pub fn Delete<E>(mut s: Slice<E>, i: int, j: int) -> Slice<E>
 
 /// DeleteFunc removes any elements from s for which del returns true,
 /// returning the modified slice.
 /// DeleteFunc zeroes the elements between the new length and the original length.
 /// If the result is empty, it has the same nilness as s.
 #[go(collapsed_type_params, "Slice<E>, E")]
-pub fn DeleteFunc<E>(s: Slice<E>, del: fn(E) -> bool) -> Slice<E>
+pub fn DeleteFunc<E>(mut s: Slice<E>, del: fn(E) -> bool) -> Slice<E>
 
 /// Equal reports whether two slices are equal: the same length and all
 /// elements equal. If the lengths are different, Equal returns false.
@@ -171,7 +171,7 @@ pub fn IndexFunc<E>(s: Slice<E>, f: fn(E) -> bool) -> int
 /// This function is O(len(s) + len(v)).
 /// If the result is empty, it has the same nilness as s.
 #[go(collapsed_type_params, "Slice<E>, E")]
-pub fn Insert<E>(s: Slice<E>, i: int, v: VarArgs<E>) -> Slice<E>
+pub fn Insert<E>(mut s: Slice<E>, i: int, v: VarArgs<E>) -> Slice<E>
 
 /// IsSorted reports whether x is sorted in ascending order.
 #[go(collapsed_type_params, "Slice<E>, E")]
@@ -220,16 +220,16 @@ pub fn Repeat<E>(x: Slice<E>, count: int) -> Slice<E>
 /// When len(v) < (j-i), Replace zeroes the elements between the new length and the original length.
 /// If the result is empty, it has the same nilness as s.
 #[go(collapsed_type_params, "Slice<E>, E")]
-pub fn Replace<E>(s: Slice<E>, i: int, j: int, v: VarArgs<E>) -> Slice<E>
+pub fn Replace<E>(mut s: Slice<E>, i: int, j: int, v: VarArgs<E>) -> Slice<E>
 
 /// Reverse reverses the elements of the slice in place.
 #[go(collapsed_type_params, "Slice<E>, E")]
-pub fn Reverse<E>(s: Slice<E>)
+pub fn Reverse<E>(mut s: Slice<E>)
 
 /// Sort sorts a slice of any ordered type in ascending order.
 /// When sorting floating-point numbers, NaNs are ordered before other values.
 #[go(collapsed_type_params, "Slice<E>, E")]
-pub fn Sort<E: cmp.Ordered>(x: Slice<E>)
+pub fn Sort<E: cmp.Ordered>(mut x: Slice<E>)
 
 /// SortFunc sorts the slice x in ascending order as determined by the cmp
 /// function. This sort is not guaranteed to be stable.
@@ -241,12 +241,12 @@ pub fn Sort<E: cmp.Ordered>(x: Slice<E>)
 /// See https://en.wikipedia.org/wiki/Weak_ordering#Strict_weak_orderings.
 /// The function should return 0 for incomparable items.
 #[go(collapsed_type_params, "Slice<E>, E")]
-pub fn SortFunc<E>(x: Slice<E>, cmp: fn(E, E) -> int)
+pub fn SortFunc<E>(mut x: Slice<E>, cmp: fn(E, E) -> int)
 
 /// SortStableFunc sorts the slice x while keeping the original order of equal
 /// elements, using cmp to compare elements in the same way as [SortFunc].
 #[go(collapsed_type_params, "Slice<E>, E")]
-pub fn SortStableFunc<E>(x: Slice<E>, cmp: fn(E, E) -> int)
+pub fn SortStableFunc<E>(mut x: Slice<E>, cmp: fn(E, E) -> int)
 
 /// Sorted collects values from seq into a new slice, sorts the slice,
 /// and returns it.

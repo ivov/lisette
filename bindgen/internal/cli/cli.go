@@ -172,8 +172,8 @@ func ParseTargets(s string) ([]Target, error) {
 	return targets, nil
 }
 
-func generateFromPackage(pkg *packages.Package, displayPath, lisetteVersion, goVersion string, cfg *config.Config, nilness *convert.NilnessAnalysis) GeneratePkgResult {
-	converter := convert.NewConverter(pkg.PkgPath, pkg, cfg, nilness)
+func generateFromPackage(pkg *packages.Package, displayPath, lisetteVersion, goVersion string, cfg *config.Config, nilness *convert.NilnessAnalysis, mutation *convert.MutationAnalysis) GeneratePkgResult {
+	converter := convert.NewConverter(pkg.PkgPath, pkg, cfg, nilness, mutation)
 	exports := extract.ExtractExports(pkg, converter.EmbedIsFaithful)
 	converted := converter.ConvertAll(exports)
 

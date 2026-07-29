@@ -116,7 +116,7 @@ func (c *Converter) convertFunction(result *ConvertResult, symbolExport extract.
 	liftedSpecs, paramOverrides := c.liftReflectionDecodeParams(signature, result.Name, result.TypeParams)
 	result.TypeParams = liftedSpecs
 
-	params, skip := c.convertParams(signature, result.Name, result.Name, paramOverrides, true, substitutions)
+	params, skip := c.convertParams(signature, symbolExport.Obj, result.Name, result.Name, paramOverrides, true, substitutions)
 	if skip != nil {
 		result.SkipReason = skip
 		return
@@ -164,9 +164,10 @@ func (c *Converter) applySentinelInt(result *ConvertResult, qualifiedName string
 	result.SentinelInt = &value
 }
 
-func (c *Converter) convertParams(sig *types.Signature, lookupName, methodName string, paramOverrides map[int]string, directEligible bool, substitutions map[string]string) ([]FunctionParameter, *SkipReason) {
+func (c *Converter) convertParams(sig *types.Signature, obj types.Object, lookupName, methodName string, paramOverrides map[int]string, directEligible bool, substitutions map[string]string) ([]FunctionParameter, *SkipReason) {
 	mutParams := c.cfg.MutatingParams(c.currentPkgPath, lookupName)
 	nilableParams := c.cfg.NilableParams(c.currentPkgPath, lookupName)
+	mutation, _ := c.mutation.Function(obj)
 
 	params := sig.Params()
 	usedNames := collectNamedParams(params)
@@ -202,7 +203,7 @@ func (c *Converter) convertParams(sig *types.Signature, lookupName, methodName s
 		out = append(out, FunctionParameter{
 			Name:    name,
 			Type:    typeStr,
-			Mutable: isMutableParam(mutParams, name, typeStr, methodName),
+			Mutable: isMutableParam(mutation.Mutates(i), mutParams, name, typeStr, methodName),
 		})
 	}
 	return out, nil
@@ -371,7 +372,7 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 	}
 	liftedSpecs, paramOverrides := c.liftReflectionDecodeParams(signature, qualifiedName, methodSpecs)
 
-	params, skip := c.convertParams(signature, qualifiedName, result.Name, paramOverrides, true, nil)
+	params, skip := c.convertParams(signature, symbolExport.Obj, qualifiedName, result.Name, paramOverrides, true, nil)
 	if skip != nil {
 		result.SkipReason = skip
 		return
@@ -1138,14 +1139,15 @@ func describeConstraint(constraint *types.Interface) string {
 	return "complex"
 }
 
-func isMutableParam(mutParams []string, name, typeStr, funcName string) bool {
+// isMutableParam combines the three signals additively rather than ranking them:
+// a missing `mut` corrupts caller data, a spurious one only asks for a `let mut`.
+func isMutableParam(derivedMutates bool, mutParams []string, name, typeStr, funcName string) bool {
 	if !isReferenceType(typeStr) {
 		return false
 	}
-	if mutParams != nil {
-		return slices.Contains(mutParams, name)
-	}
-	return looksLikeMutableParam(name, typeStr, funcName)
+	return slices.Contains(mutParams, name) ||
+		derivedMutates ||
+		looksLikeMutableParam(name, typeStr, funcName)
 }
 
 // looksLikeMutableParam returns true if the parameter is likely written into.
@@ -1830,7 +1832,7 @@ func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeNam
 		}
 
 		qualifiedName := typeName + "." + method.Name()
-		params, skip := c.convertParams(signature, qualifiedName, method.Name(), nil, false, nil)
+		params, skip := c.convertParams(signature, method, qualifiedName, method.Name(), nil, false, nil)
 		if skip != nil {
 			return nil, false
 		}

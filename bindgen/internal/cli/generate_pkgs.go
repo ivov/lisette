@@ -139,6 +139,7 @@ func GeneratePkgs(pkgPaths []string, lisetteVersion, goVersion string, cfg *conf
 		}
 	}
 	nilness := convert.NewNilnessAnalysis(analysisRoots, cfg)
+	mutation := convert.NewMutationAnalysis(nilness, analysisRoots)
 
 	visited := make(map[string]bool)
 	frontier := make([]string, 0, len(pkgPaths))
@@ -179,7 +180,7 @@ func GeneratePkgs(pkgPaths []string, lisetteVersion, goVersion string, cfg *conf
 					stub := generateUnloadableStub(pkgPath, pkg, lisetteVersion, goVersion)
 					wave[i] = waveResult{ok: ManifestOk{Package: pkgPath, Content: stub.Content, Stubbed: true}}
 				} else {
-					result := generateFromPackage(pkg, pkgPath, lisetteVersion, goVersion, cfg, nilness)
+					result := generateFromPackage(pkg, pkgPath, lisetteVersion, goVersion, cfg, nilness, mutation)
 					wave[i] = waveResult{
 						ok:      ManifestOk{Package: pkgPath, Content: result.Content, Stubbed: false},
 						imports: result.ExternalImports,

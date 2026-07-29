@@ -422,7 +422,7 @@ pub fn NewFunc(
 /// by setting missing receivers.
 /// 
 /// Deprecated: Use NewInterfaceType instead which allows arbitrary embedded types.
-pub fn NewInterface(methods: Slice<Ref<Func>>, embeddeds: Slice<Ref<Named>>) -> Ref<Interface>
+pub fn NewInterface(mut methods: Slice<Ref<Func>>, embeddeds: Slice<Ref<Named>>) -> Ref<Interface>
 
 /// NewInterfaceType returns a new interface for the given methods and embedded
 /// types. NewInterfaceType takes ownership of the provided methods and may
@@ -430,7 +430,7 @@ pub fn NewInterface(methods: Slice<Ref<Func>>, embeddeds: Slice<Ref<Named>>) -> 
 /// 
 /// To avoid race conditions, the interface's type set should be computed before
 /// concurrent use of the interface, by explicitly calling Complete.
-pub fn NewInterfaceType(methods: Slice<Ref<Func>>, embeddeds: Slice<Type>) -> Ref<Interface>
+pub fn NewInterfaceType(mut methods: Slice<Ref<Func>>, embeddeds: Slice<Type>) -> Ref<Interface>
 
 /// NewLabel returns a new label.
 pub fn NewLabel(pos: token.Pos, pkg: Ref<Package>, name: string) -> Ref<Label>

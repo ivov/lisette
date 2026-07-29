@@ -1,0 +1,14 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "slices"
+
+func main() {
+	nums := []int{3, 1, 2}
+	slices.Sort(nums)
+	items := []int{1, 1, 2}
+	slices.Reverse(items)
+}

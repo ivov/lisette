@@ -821,7 +821,7 @@ pub fn Openat(dirfd: int, path: string, flags: int, mode: uint32) -> Result<int,
 /// appending the names to names. It returns the number of
 /// bytes consumed from buf, the number of entries added
 /// to names, and the new names slice.
-pub fn ParseDirent(buf: Slice<byte>, max: int, names: Slice<string>) -> (int, int, Slice<string>)
+pub fn ParseDirent(buf: Slice<byte>, max: int, mut names: Slice<string>) -> (int, int, Slice<string>)
 
 /// ParseNetlinkMessage parses b as an array of netlink messages and
 /// returns the slice containing the NetlinkMessage structures.
@@ -849,7 +849,7 @@ pub fn Pause() -> Result<(), error>
 
 pub fn Pipe(mut p: Slice<int>) -> Result<(), error>
 
-pub fn Pipe2(p: Slice<int>, flags: int) -> Result<(), error>
+pub fn Pipe2(mut p: Slice<int>, flags: int) -> Result<(), error>
 
 pub fn PivotRoot(newroot: string, putold: string) -> Result<(), error>
 
@@ -865,9 +865,9 @@ pub fn PtraceGetEventMsg(pid: int) -> Result<uint, error>
 
 pub fn PtraceGetRegs(pid: int, regsout: Ref<PtraceRegs>) -> Result<(), error>
 
-pub fn PtracePeekData(pid: int, addr: uintptr, out: Slice<byte>) -> Result<int, error>
+pub fn PtracePeekData(pid: int, addr: uintptr, mut out: Slice<byte>) -> Result<int, error>
 
-pub fn PtracePeekText(pid: int, addr: uintptr, out: Slice<byte>) -> Result<int, error>
+pub fn PtracePeekText(pid: int, addr: uintptr, mut out: Slice<byte>) -> Result<int, error>
 
 pub fn PtracePokeData(pid: int, addr: uintptr, data: Slice<byte>) -> Result<int, error>
 

@@ -78,7 +78,7 @@ pub fn DecryptPKCS1v15SessionKey(
   random: io.Reader,
   priv: Ref<PrivateKey>,
   ciphertext: Slice<byte>,
-  key: Slice<byte>,
+  mut key: Slice<byte>,
 ) -> Result<(), error>
 
 /// EncryptOAEP encrypts the given message with RSA-OAEP.

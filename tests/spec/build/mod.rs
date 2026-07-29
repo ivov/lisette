@@ -3316,6 +3316,75 @@ fn main() {
 }
 
 #[test]
+fn go_derived_mut_param_rejected_with_immutable_arg() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:slices"
+
+fn main() {
+  let nums = [3, 1, 2];
+  slices.Sort(nums)
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors()
+            .iter()
+            .any(|e| e.code_str() == Some("infer.immutable_arg_to_mut_param")),
+        "Expected immutable_arg_to_mut_param error, got: {:?}",
+        result.errors()
+    );
+}
+
+#[test]
+fn go_derived_mut_param_accepted_with_let_mut() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:slices"
+
+fn main() {
+  let mut nums = [3, 1, 2];
+  slices.Sort(nums)
+  let mut items = [1, 1, 2];
+  slices.Reverse(items)
+}
+"#,
+    );
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+/// `Clone` and `Clip` read their argument, so they stay callable on an
+/// immutable binding.
+#[test]
+fn go_non_mutating_slices_helpers_accept_immutable_arg() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+import "go:slices"
+
+fn main() {
+  let nums = [3, 1, 2];
+  let copied = slices.Clone(nums)
+  let clipped = slices.Clip(nums)
+  fmt.Println(copied, clipped)
+}
+"#,
+    );
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn go_mut_param_selective_only_dst() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
