@@ -1418,6 +1418,21 @@ pub fn manual_replace_all(
         ))
 }
 
+pub fn replace_count_zero(
+    span: &Span,
+    namespace: &str,
+    s: &str,
+    old: &str,
+    new: &str,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Zero replacement count")
+        .with_lint_code("replace_count_zero")
+        .with_span_label(span, "replaces nothing")
+        .with_help(format!(
+            "`{namespace}.Replace` with a count of `0` replaces nothing and returns `{s}` unchanged. Use `{namespace}.ReplaceAll({s}, {old}, {new})` to replace every occurrence, or a positive count to replace that many"
+        ))
+}
+
 pub fn needless_splitn(
     span: &Span,
     member: &str,

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Zero replacement count
+   ╭─[test.lis:6:11]
+ 5 │   let s = "banana"
+ 6 │   let _ = strings.Replace(s, "a", "b", (0))
+   ·           ────────────────┬────────────────
+   ·                           ╰── replaces nothing
+ 7 │ }
+   ╰────
+  help: `strings.Replace` with a count of `0` replaces nothing and returns `s` unchanged. Use `strings.ReplaceAll(s, "a", "b")` to replace every occurrence, or a positive count to replace that many · code: [lint.replace_count_zero]
