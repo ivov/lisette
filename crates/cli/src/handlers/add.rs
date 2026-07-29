@@ -31,10 +31,6 @@ enum DependencySource {
 }
 
 pub fn add(dep_string: Option<&str>, replace: Option<&str>, path: Option<&str>) -> i32 {
-    if let Err(code) = go_cli::require_go() {
-        return code;
-    }
-
     if let Some(path) = path {
         return add_local(path);
     }

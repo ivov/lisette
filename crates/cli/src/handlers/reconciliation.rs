@@ -211,8 +211,6 @@ pub(crate) fn reconcile_declared_replacements(
         return Ok(());
     }
 
-    go_cli::require_go()?;
-
     // Seed every declared dep so MVS picks the versions the real build sees.
     go_cli::invalidate_go_mod_stamp(target_dir);
     let locator = deps::TypedefLocator::new(

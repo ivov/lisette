@@ -32,10 +32,6 @@ pub fn run(
     sourcemap: bool,
     go_flags: Vec<String>,
 ) -> i32 {
-    if let Err(code) = crate::go_cli::require_go() {
-        return code;
-    }
-
     let target = target.unwrap_or_else(|| ".".to_string());
 
     if target.ends_with(".lis") {

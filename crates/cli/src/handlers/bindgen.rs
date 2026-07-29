@@ -7,10 +7,6 @@ use crate::cli_error;
 use crate::command::BindgenTarget;
 
 pub fn bindgen(target: BindgenTarget, verbose: bool) -> i32 {
-    if let Err(code) = crate::go_cli::require_go() {
-        return code;
-    }
-
     match target {
         BindgenTarget::Stdlib { version } => {
             let source_dir = Path::new("bindgen");
@@ -60,11 +56,11 @@ fn bindgen_pkg(target_pkg: &str, output: Option<String>, verbose: bool) -> i32 {
             0
         }
         Err(msg) => {
-            cli_error!(
-                "Failed to generate bindings",
-                msg,
-                "Check Go installation with `go version`"
-            );
+            let (detail, hint) = match crate::go_cli::toolchain_failure() {
+                Some(failure) => (failure.message, failure.hint),
+                None => (msg, "Check Go installation with `go version`"),
+            };
+            cli_error!("Failed to generate bindings", detail, hint);
             1
         }
     }
@@ -129,11 +125,14 @@ fn bindgen_std(source_dir: &Path, version: Option<String>, verbose: bool) -> i32
             1
         }
         Err(e) => {
-            cli_error!(
-                "Failed to generate std bindings",
-                format!("Failed to run bindgen: {}", e),
-                "Check Go installation with `go version`"
-            );
+            let (detail, hint) = match crate::go_cli::toolchain_failure() {
+                Some(failure) => (failure.message, failure.hint),
+                None => (
+                    format!("Failed to run bindgen: {}", e),
+                    "Check Go installation with `go version`",
+                ),
+            };
+            cli_error!("Failed to generate std bindings", detail, hint);
             1
         }
     }

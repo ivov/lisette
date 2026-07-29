@@ -81,11 +81,15 @@ impl<'a> GoWorkspace<'a> {
             .args(args)
             .current_dir(self.root)
             .output()
-            .map_err(|e| format!("Failed to run `{}`: {}", cmd_display, e))?;
+            .map_err(|e| {
+                crate::go_cli::toolchain_failure_message()
+                    .unwrap_or_else(|| format!("Failed to run `{}`: {}", cmd_display, e))
+            })?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(translate_go_error(args, stderr.trim()));
+            return Err(crate::go_cli::toolchain_failure_message()
+                .unwrap_or_else(|| translate_go_error(args, stderr.trim())));
         }
 
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())

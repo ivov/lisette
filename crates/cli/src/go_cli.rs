@@ -24,26 +24,22 @@ pub fn go_command(target: Target) -> Command {
     c
 }
 
-pub fn require_go() -> Result<(), i32> {
+pub fn toolchain_failure() -> Option<GoCliError> {
     match go_status() {
-        GoStatus::Ready => Ok(()),
-        GoStatus::Absent => {
-            crate::cli_error!(
-                "Go is not installed",
-                "`go` is not in PATH",
-                "Install Go from https://go.dev/dl/"
-            );
-            Err(1)
-        }
-        GoStatus::Outdated { found, required } => {
-            crate::cli_error!(
-                "Go version is outdated",
-                format!("Found Go {}, but {} or later is required", found, required),
-                "Upgrade Go at https://go.dev/dl/"
-            );
-            Err(1)
-        }
+        GoStatus::Ready => None,
+        GoStatus::Absent => Some(GoCliError {
+            message: "Go is not installed: `go` is not in PATH".to_string(),
+            hint: "Install Go from https://go.dev/dl/",
+        }),
+        GoStatus::Outdated { found, required } => Some(GoCliError {
+            message: format!("Found Go {}, but {} or later is required", found, required),
+            hint: "Upgrade Go at https://go.dev/dl/",
+        }),
     }
+}
+
+pub fn toolchain_failure_message() -> Option<String> {
+    toolchain_failure().map(|failure| format!("{}. {}", failure.message, failure.hint))
 }
 
 pub fn is_go_present() -> bool {
@@ -417,17 +413,17 @@ pub fn finalize_go_dir(
     import_set_hash: u64,
 ) -> Result<(), GoCliError> {
     if let Err(e) = go_fmt_paths(changed_paths) {
-        return Err(GoCliError {
+        return Err(toolchain_failure().unwrap_or_else(|| GoCliError {
             message: format!("Go format failed: {}", e),
             hint: "Check Go installation with `go version`",
-        });
+        }));
     }
 
     if let Err(e) = ensure_go_sum(dir, target, import_set_hash) {
-        return Err(GoCliError {
+        return Err(toolchain_failure().unwrap_or_else(|| GoCliError {
             message: format!("Failed to resolve Go dependencies: {}", e),
             hint: "Check Go installation and network connectivity",
-        });
+        }));
     }
 
     Ok(())
@@ -591,14 +587,14 @@ pub fn build_binary(
 
     match cmd.status() {
         Ok(status) if status.success() => Ok(()),
-        Ok(_) => Err(GoCliError {
+        Ok(_) => Err(toolchain_failure().unwrap_or_else(|| GoCliError {
             message: "`go build` failed".to_string(),
             hint: "Review the Go compiler output above",
-        }),
-        Err(e) => Err(GoCliError {
+        })),
+        Err(e) => Err(toolchain_failure().unwrap_or_else(|| GoCliError {
             message: format!("Failed to execute `go build`: {}", e),
             hint: "Check Go installation with `go version`",
-        }),
+        })),
     }
 }
 
@@ -616,14 +612,14 @@ pub fn verify_go_packages(
 
     match cmd.status() {
         Ok(status) if status.success() => Ok(()),
-        Ok(_) => Err(GoCliError {
+        Ok(_) => Err(toolchain_failure().unwrap_or_else(|| GoCliError {
             message: "`go build ./...` failed".to_string(),
             hint: "Review the Go compiler output above",
-        }),
-        Err(e) => Err(GoCliError {
+        })),
+        Err(e) => Err(toolchain_failure().unwrap_or_else(|| GoCliError {
             message: format!("Failed to execute `go build`: {}", e),
             hint: "Check Go installation with `go version`",
-        }),
+        })),
     }
 }
 
@@ -689,9 +685,11 @@ fn run_go_test(
         .current_dir(build_dir)
         .stdout(Stdio::piped());
 
-    let spawn_error = || GoCliError {
-        message: "Failed to execute `go test`".to_string(),
-        hint: "Check Go installation with `go version`",
+    let spawn_error = || {
+        toolchain_failure().unwrap_or_else(|| GoCliError {
+            message: "Failed to execute `go test`".to_string(),
+            hint: "Check Go installation with `go version`",
+        })
     };
 
     let mut child = cmd.spawn().map_err(|_| spawn_error())?;

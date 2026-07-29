@@ -151,8 +151,6 @@ pub(super) fn link_project_binary(
 }
 
 fn prepare_project_build(project_path: &Path) -> Result<BuildPrep, i32> {
-    crate::go_cli::require_go()?;
-
     let layout = match validate_project(project_path) {
         Some(layout) => layout,
         None => return Err(1),
