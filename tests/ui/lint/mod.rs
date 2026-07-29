@@ -1883,6 +1883,435 @@ fn main() {
 }
 
 #[test]
+fn redundant_trim_guard() {
+    assert_lint_snapshot!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let mut out = "www.example.com"
+  if strings.HasPrefix(out, "www.") {
+    out = strings.TrimPrefix(out, "www.")
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_trim_guard_suffix() {
+    assert_lint_snapshot!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let mut out = "example.com/"
+  if strings.HasSuffix(out, "/") {
+    out = strings.TrimSuffix(out, "/")
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_trim_guard_bound_affix() {
+    assert_lint_snapshot!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let affix = "www."
+  let mut out = "www.example.com"
+  if strings.HasPrefix(out, affix) {
+    out = strings.TrimPrefix(out, affix)
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_trim_guard_aliased_import() {
+    assert_lint_snapshot!(
+        r#"
+import mystr "go:strings"
+
+fn main() {
+  let mut out = "www.example.com"
+  if mystr.HasPrefix((out), ("www.")) {
+    out = mystr.TrimPrefix(out, "www.")
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_trim_guard_different_target_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let host = "www.example.com"
+  let mut out = host
+  if strings.HasPrefix(host, "www.") {
+    out = strings.TrimPrefix(host, "www.")
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_trim_guard_different_affix_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let mut out = "www.example.com"
+  if strings.HasPrefix(out, "www.") {
+    out = strings.TrimPrefix(out, "http://")
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_trim_guard_crossed_pair_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let mut out = "www.example.com"
+  if strings.HasPrefix(out, "www.") {
+    out = strings.TrimSuffix(out, "www.")
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_trim_guard_with_else_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let mut out = "www.example.com"
+  if strings.HasPrefix(out, "www.") {
+    out = strings.TrimPrefix(out, "www.")
+  } else {
+    out = "none"
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_trim_guard_extra_statement_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+import "go:strings"
+
+fn main() {
+  let mut out = "www.example.com"
+  if strings.HasPrefix(out, "www.") {
+    out = strings.TrimPrefix(out, "www.")
+    fmt.Println(out)
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_trim_guard_negated_condition_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let mut out = "www.example.com"
+  if !strings.HasPrefix(out, "www.") {
+    out = strings.TrimPrefix(out, "www.")
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_trim_guard_compound_condition_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let flag = true
+  let mut out = "www.example.com"
+  if flag && strings.HasPrefix(out, "www.") {
+    out = strings.TrimPrefix(out, "www.")
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_trim_guard_user_type_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Trimmer {}
+
+impl Trimmer {
+  fn HasPrefix(self, s: string, _p: string) -> bool {
+    s.length() > 0
+  }
+
+  fn TrimPrefix(self, s: string, _p: string) -> string {
+    s
+  }
+}
+
+fn main() {
+  let t = Trimmer {}
+  let mut out = "www.example.com"
+  if t.HasPrefix(out, "www.") {
+    out = t.TrimPrefix(out, "www.")
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_trim_guard_field_target_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+struct Site { host: string }
+
+fn main() {
+  let mut site = Site { host: "www.example.com" }
+  if strings.HasPrefix(site.host, "www.") {
+    site.host = strings.TrimPrefix(site.host, "www.")
+  }
+  let _ = site.host
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_trim_guard_named_constant_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+const AFFIX: string = "www."
+
+fn main() {
+  let mut out = "www.example.com"
+  if strings.HasPrefix(out, AFFIX) {
+    out = strings.TrimPrefix(out, AFFIX)
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_trim_guard_comment_in_body_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let mut out = "www.example.com"
+  if strings.HasPrefix(out, "www.") {
+    // strip the leading www
+    out = strings.TrimPrefix(out, "www.")
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_trim_guard_trailing_comment_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let mut out = "www.example.com"
+  if strings.HasPrefix(out, "www.") {
+    out = strings.TrimPrefix(out, "www.") // strip it
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_trim_guard_compound_assignment_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let mut out = "www.example.com"
+  if strings.HasPrefix(out, "www.") {
+    out += strings.TrimPrefix(out, "www.")
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_trim_guard_value_position_no_warning() {
+    let warnings = crate::_harness::lint::lint(
+        r#"
+import "go:strings"
+
+fn main() {
+  let mut out = "www.example.com"
+  let _ = if strings.HasPrefix(out, "www.") {
+    out = strings.TrimPrefix(out, "www.")
+  }
+  let _ = out
+}
+"#,
+    );
+    let fires = warnings
+        .iter()
+        .any(|w| w.code_str() == Some("lint.redundant_trim_guard"));
+    assert!(
+        !fires,
+        "a bare assignment cannot stand where the `if` produces a value, got: {:?}",
+        warnings
+    );
+}
+
+#[test]
+fn redundant_trim_guard_block_tail_no_warning() {
+    let warnings = crate::_harness::lint::lint(
+        r#"
+import "go:strings"
+
+fn trim(host: string) {
+  let mut out = host
+  if strings.HasPrefix(out, "www.") {
+    out = strings.TrimPrefix(out, "www.")
+  }
+}
+
+fn main() {
+  trim("www.example.com")
+}
+"#,
+    );
+    let fires = warnings
+        .iter()
+        .any(|w| w.code_str() == Some("lint.redundant_trim_guard"));
+    assert!(
+        !fires,
+        "the last item of a block is its value, not a statement position, got: {:?}",
+        warnings
+    );
+}
+
+#[test]
+fn redundant_trim_guard_fires_in_test_file() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"util\"\n\nfn main() {\n  let _ = util.value()\n}\n",
+    );
+    fs.add_file("util", "util.lis", "pub fn value() -> int { 1 }\n");
+    fs.add_file(
+        "util",
+        "util.test.lis",
+        "import \"go:strings\"\n\n#[test]\nfn trims() {\n  let mut out = \"www.a\"\n  if strings.HasPrefix(out, \"www.\") {\n    out = strings.TrimPrefix(out, \"www.\")\n  }\n  assert out == \"a\"\n}\n",
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .lints()
+            .iter()
+            .any(|d| d.code_str() == Some("lint.redundant_trim_guard")),
+        "the lint must also cover `.test.lis` files: {:?}",
+        result.lints()
+    );
+}
+
+#[test]
+fn redundant_trim_guard_fires_despite_type_error() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:strings"
+
+fn main() {
+  let bad: int = "nope"
+  let _ = bad
+  let mut out = "www.example.com"
+  if strings.HasPrefix(out, "www.") {
+    out = strings.TrimPrefix(out, "www.")
+  }
+  let _ = out
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors()
+            .iter()
+            .any(|d| d.plain_message().contains("Type mismatch")),
+        "expected the type mismatch to still be reported: {:?}",
+        result.errors()
+    );
+    assert!(
+        result
+            .lints()
+            .iter()
+            .any(|d| d.code_str() == Some("lint.redundant_trim_guard")),
+        "the lint must not depend on a clean check: {:?}",
+        result.lints()
+    );
+}
+
+#[test]
 fn needless_splitn() {
     assert_lint_snapshot!(
         r#"

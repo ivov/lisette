@@ -1,0 +1,18 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+import "go:strings"
+
+fn main() {
+  let mut out = "example.com/"
+  if strings.HasSuffix(out, "/") { out = strings.TrimSuffix(out, "/") }
+  let _ = out
+}
+=== fixed ===
+import "go:strings"
+
+fn main() {
+  let mut out = "example.com/"
+  out = strings.TrimSuffix(out, "/")
+  let _ = out
+}

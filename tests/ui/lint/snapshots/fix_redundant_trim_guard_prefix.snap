@@ -1,0 +1,20 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+import "go:strings"
+
+fn main() {
+  let mut out = "www.example.com"
+  if strings.HasPrefix(out, "www.") {
+    out = strings.TrimPrefix(out, "www.")
+  }
+  let _ = out
+}
+=== fixed ===
+import "go:strings"
+
+fn main() {
+  let mut out = "www.example.com"
+  out = strings.TrimPrefix(out, "www.")
+  let _ = out
+}

@@ -1,0 +1,13 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ● Redundant `strings.HasPrefix` guard
+    ╭─[test.lis:7:3]
+  6 │       let mut out = "www.example.com"
+  7 │ ╭─▶   if strings.HasPrefix(out, affix) {
+  8 │ │       out = strings.TrimPrefix(out, affix)
+  9 │ ├─▶   }
+    · ╰──── can be simpler
+ 10 │       let _ = out
+    ╰────
+  help: `strings.TrimPrefix` already returns the string unchanged when the prefix is absent. Replace the `if` with `out = strings.TrimPrefix(out, affix)` · code: [lint.redundant_trim_guard]

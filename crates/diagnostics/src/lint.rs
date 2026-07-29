@@ -1418,6 +1418,25 @@ pub fn manual_replace_all(
         ))
 }
 
+pub fn redundant_trim_guard(
+    span: &Span,
+    namespace: &str,
+    prefix: bool,
+    replacement: &str,
+) -> LisetteDiagnostic {
+    let (guard, trim, affix) = if prefix {
+        ("HasPrefix", "TrimPrefix", "prefix")
+    } else {
+        ("HasSuffix", "TrimSuffix", "suffix")
+    };
+    LisetteDiagnostic::info(format!("Redundant `{namespace}.{guard}` guard"))
+        .with_lint_code("redundant_trim_guard")
+        .with_span_label(span, "can be simpler")
+        .with_help(format!(
+            "`{namespace}.{trim}` already returns the string unchanged when the {affix} is absent. Replace the `if` with `{replacement}`"
+        ))
+}
+
 pub fn replace_count_zero(
     span: &Span,
     namespace: &str,

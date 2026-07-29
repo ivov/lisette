@@ -1402,3 +1402,35 @@ pub fn f(o: Outer) -> int {
 "#
     );
 }
+
+#[test]
+fn fix_redundant_trim_guard_prefix() {
+    assert_fix_snapshot!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let mut out = "www.example.com"
+  if strings.HasPrefix(out, "www.") {
+    out = strings.TrimPrefix(out, "www.")
+  }
+  let _ = out
+}
+"#
+    );
+}
+
+#[test]
+fn fix_redundant_trim_guard_suffix_on_one_line() {
+    assert_fix_snapshot!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let mut out = "example.com/"
+  if strings.HasSuffix(out, "/") { out = strings.TrimSuffix(out, "/") }
+  let _ = out
+}
+"#
+    );
+}
