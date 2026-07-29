@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785358001629,
+  "lastUpdate": 1785358016507,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -13876,6 +13876,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/a41f25e0f898b7607e1a6594ab3964b0be8fe651"
         },
         "date": 1785358000495,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 122266,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30186,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 24524,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18032,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13755,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 11767,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6767,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4511,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2764,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1271,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7104,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "2fac42b1c93f708afccfb59540b36f9ee950a9d5",
+          "message": "docs: update stale claim about fresh values (#1151)",
+          "timestamp": "2026-07-29T22:46:24+02:00",
+          "tree_id": "f95a88a76e24207fe6b2eb9298338ce430266806",
+          "url": "https://github.com/ivov/lisette/commit/2fac42b1c93f708afccfb59540b36f9ee950a9d5"
+        },
+        "date": 1785358015899,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
