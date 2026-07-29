@@ -46,7 +46,7 @@ From the repo root, the `just rebuild-playground` recipe runs `npm install`, `np
 │       ├── wasm-bridge.ts       # Loads public/wasm/lisette_wasm.js, typed interface
 │       └── executor.ts          # Sends compiled Go to play.golang.org
 ├── wasm/
-│   ├── Cargo.toml               # wasm-bindgen crate; git deps on lisette-* crates
+│   ├── Cargo.toml               # wasm-bindgen crate; path deps on lisette-* crates
 │   └── src/lib.rs               # format / check / compile / complete / hover
 └── public/
     ├── wasm/                    # WASM module — built by `npm run build:wasm`, not committed
@@ -85,4 +85,6 @@ cargo install wasm-pack
 npm run build:wasm
 ```
 
-The crate pulls the Lisette compiler crates from GitHub at build time (`lisette-format`, `lisette-syntax`, `lisette-semantics`, `lisette-emit`, `lisette-diagnostics`). A full rebuild takes a few minutes on first run.
+The crate builds the Lisette compiler crates from this checkout (`lisette-format`, `lisette-syntax`, `lisette-semantics`, `lisette-passes`, `lisette-emit`, `lisette-diagnostics`, `lisette-deps`), so it compiles whatever is in your working tree rather than what is on `main`. A full rebuild takes a few minutes on first run.
+
+Because those are path dependencies, changes to the compiler crates can break this crate, and nothing in CI builds it. If `npm run build:wasm` fails to compile, the bindings in `wasm/src/lib.rs` have drifted from the current crate APIs and need updating before the playground can be rebuilt.

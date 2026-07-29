@@ -14,9 +14,9 @@ use lisette_semantics::inference::{
     AnalyzeInput, CompilePhase, EntryFile, ProjectKind, SemanticConfig,
 };
 use lisette_semantics::facts::{BindingIdAllocator, Facts};
-use lisette_syntax::ast::{Expression, Span, StructSpread};
+use lisette_syntax::ast::{Expression, IdentifierResolution, Span};
 use lisette_syntax::program::{Definition, DefinitionBody};
-use lisette_syntax::types::Type;
+use lisette_syntax::types::{Type, unqualified_name};
 
 // ─── Panic hook ───────────────────────────────────────────────────────────────
 #[wasm_bindgen(start)]
@@ -193,7 +193,7 @@ fn run_analysis(code: &str) -> AnalysisResult {
                 ast_result.errors,
                 "_entry_",
             ),
-            facts: Facts::new(Arc::new(BindingIdAllocator::new())),
+            facts: Facts::new(Arc::new(BindingIdAllocator::default())),
             diagnostics,
             has_parse_errors: true,
         };
@@ -228,10 +228,10 @@ fn run_analysis(code: &str) -> AnalysisResult {
     let sem_result = analyze_output.result;
     let facts = analyze_output.facts;
 
-    for e in &sem_result.errors {
+    for e in sem_result.errors() {
         diagnostics.push(convert_lisette_diag(e, code));
     }
-    for w in &sem_result.lints {
+    for w in sem_result.lints() {
         diagnostics.push(convert_lisette_diag(w, code));
     }
 
@@ -286,21 +286,22 @@ fn run_pipeline(
 
     let sem_result = analyze(input).result;
 
-    for e in &sem_result.errors {
+    for e in sem_result.errors() {
         diagnostics.push(convert_lisette_diag(e, code));
     }
-    for w in &sem_result.lints {
+    for w in sem_result.lints() {
         diagnostics.push(convert_lisette_diag(w, code));
     }
 
-    if matches!(phase, CompilePhase::Check) || !sem_result.errors.is_empty() {
+    if matches!(phase, CompilePhase::Check) || sem_result.failed() {
         return (vec![], diagnostics);
     }
 
-    let emit_input = lisette_diagnostics::SemanticResult::into_emit_input(sem_result);
+    let emit_input = sem_result.into_emit_input();
     let go_files = lisette_emit::Planner::emit(
         &emit_input,
-        "lisette_playground",
+        "",
+        "main",
         lisette_emit::EmitOptions { sourcemap: false, emit_tests: false },
     );
 
@@ -331,110 +332,10 @@ fn find_expression_at<'a>(items: &'a [Expression], offset: u32) -> Option<&'a Ex
 
 /// Find which immediate child of `expression` contains `offset`.
 fn child_containing_offset<'a>(expression: &'a Expression, offset: u32) -> Option<&'a Expression> {
-    let c = |e: &'a Expression| -> Option<&'a Expression> {
-        offset_in_span(offset, &e.get_span()).then_some(e)
-    };
-
-    match expression {
-        Expression::Function { body, .. } | Expression::Lambda { body, .. } => c(body),
-
-        Expression::Block { items, .. }
-        | Expression::TryBlock { items, .. }
-        | Expression::RecoverBlock { items, .. } => items.iter().find_map(c),
-
-        Expression::Let { value, else_block, .. } =>
-            c(value).or_else(|| else_block.as_deref().and_then(c)),
-
-        Expression::Call { expression, args, .. } =>
-            c(expression).or_else(|| args.iter().find_map(c)),
-
-        Expression::If { condition, consequence, alternative, .. } =>
-            c(condition).or_else(|| c(consequence)).or_else(|| c(alternative)),
-
-        Expression::IfLet { scrutinee, consequence, alternative, .. } =>
-            c(scrutinee).or_else(|| c(consequence)).or_else(|| c(alternative)),
-
-        Expression::Match { subject, arms, .. } => c(subject).or_else(|| {
-            arms.iter().find_map(|arm| {
-                arm.guard.as_deref().and_then(c).or_else(|| c(&arm.expression))
-            })
-        }),
-
-        Expression::Tuple { elements, .. } => elements.iter().find_map(c),
-
-        Expression::StructCall { field_assignments, spread, .. } =>
-            field_assignments.iter().find_map(|fa| c(&fa.value))
-                .or_else(|| match spread {
-                    StructSpread::From(e) => c(e),
-                    StructSpread::None | StructSpread::Autofill { .. } => None,
-                }),
-
-        Expression::DotAccess { expression, .. }
-        | Expression::Return { expression, .. }
-        | Expression::Propagate { expression, .. }
-        | Expression::Unary { expression, .. }
-        | Expression::Paren { expression, .. }
-        | Expression::Const { expression, .. }
-        | Expression::Reference { expression, .. }
-        | Expression::Task { expression, .. }
-        | Expression::Defer { expression, .. }
-        | Expression::Assert { expression, .. }
-        | Expression::Cast { expression, .. } => c(expression),
-
-        Expression::Assignment { target, value, .. } => c(target).or_else(|| c(value)),
-        Expression::ImplBlock { methods, .. } => methods.iter().find_map(c),
-        Expression::Binary { left, right, .. } => c(left).or_else(|| c(right)),
-        Expression::Loop { body, .. } => c(body),
-        Expression::While { condition, body, .. } => c(condition).or_else(|| c(body)),
-        Expression::WhileLet { scrutinee, body, .. } => c(scrutinee).or_else(|| c(body)),
-        Expression::For { iterable, body, .. } => c(iterable).or_else(|| c(body)),
-        Expression::Break { value, .. } => value.as_deref().and_then(c),
-        Expression::IndexedAccess { expression, index, .. } => c(expression).or_else(|| c(index)),
-
-        Expression::Select { arms, .. } => arms.iter().find_map(|arm| {
-            use lisette_syntax::ast::SelectArmPattern;
-            match &arm.pattern {
-                SelectArmPattern::Receive { receive_expression, body, .. } =>
-                    c(receive_expression).or_else(|| c(body)),
-                SelectArmPattern::Send { send_expression, body } =>
-                    c(send_expression).or_else(|| c(body)),
-                SelectArmPattern::MatchReceive { receive_expression, arms: match_arms } =>
-                    c(receive_expression).or_else(|| {
-                        match_arms.iter().find_map(|arm| {
-                            arm.guard.as_deref().and_then(c).or_else(|| c(&arm.expression))
-                        })
-                    }),
-                SelectArmPattern::WildCard { body } => c(body),
-            }
-        }),
-
-        Expression::Range { start, end, .. } =>
-            start.as_deref().and_then(c).or_else(|| end.as_deref().and_then(c)),
-
-        Expression::Literal { literal, .. } => {
-            use lisette_syntax::ast::{FormatStringPart, Literal};
-            match literal {
-                Literal::Slice(elements) => elements.iter().find_map(c),
-                Literal::FormatString(parts) => parts.iter().find_map(|p| match p {
-                    FormatStringPart::Expression(e) => c(e),
-                    FormatStringPart::Text(_) => None,
-                }),
-                _ => None,
-            }
-        }
-
-        Expression::Identifier { .. }
-        | Expression::VariableDeclaration { .. }
-        | Expression::RawGo { .. }
-        | Expression::Enum { .. }
-        | Expression::Struct { .. }
-        | Expression::TypeAlias { .. }
-        | Expression::ModuleImport { .. }
-        | Expression::Interface { .. }
-        | Expression::Unit { .. }
-        | Expression::Continue { .. }
-        | Expression::NoOp => None,
-    }
+    expression
+        .children()
+        .into_iter()
+        .find(|child| offset_in_span(offset, &child.get_span()))
 }
 
 /// Find the deepest `Call` expression where `offset` falls in the arg region.
@@ -619,7 +520,7 @@ fn build_dot_completions(
 
     if let Some(module_name) = &module_name {
         // Module-level completions: find all definitions qualified with this module
-        for (qname, def) in &sem_result.definitions {
+        for (qname, def) in &sem_result.emit_input.definitions {
             let qname_str = qname.as_str();
             // Match "module_name.X" definitions
             if let Some(member) = qname_str.strip_prefix(module_name.as_str())
@@ -630,7 +531,7 @@ fn build_dot_completions(
                     items.push(JsCompletionItem {
                         label: member.to_string(),
                         kind: definition_to_completion_kind(def),
-                        detail: Some(format!("{}", def.ty())),
+                        detail: Some(format!("{}", def.ty)),
                         insert_text: None,
                     });
                 }
@@ -645,9 +546,9 @@ fn build_dot_completions(
         let ty = expr.get_type();
         if let Some(tid) = type_name(&ty) {
             // Find struct fields
-            if let Some(def) = sem_result.definitions.get(tid.as_str()) {
+            if let Some(def) = sem_result.emit_input.definitions.get(tid.as_str()) {
                 if let DefinitionBody::Struct { fields, .. } = &def.body {
-                    for field in fields {
+                    for field in fields.iter() {
                         items.push(JsCompletionItem {
                             label: field.name.to_string(),
                             kind: "field",
@@ -660,13 +561,13 @@ fn build_dot_completions(
 
             // Find methods (definitions like "TypeName.methodName")
             let prefix_dot = format!("{}.", tid);
-            for (qname, def) in &sem_result.definitions {
+            for (qname, def) in &sem_result.emit_input.definitions {
                 if let Some(method) = qname.as_str().strip_prefix(&prefix_dot) {
                     if !method.contains('.') {
                         items.push(JsCompletionItem {
                             label: method.to_string(),
-                            kind: if matches!(def.ty(), Type::Function(_)) { "method" } else { "field" },
-                            detail: Some(format!("{}", def.ty())),
+                            kind: if matches!(def.ty, Type::Function(_)) { "method" } else { "field" },
+                            detail: Some(format!("{}", def.ty)),
                             insert_text: None,
                         });
                     }
@@ -674,7 +575,7 @@ fn build_dot_completions(
             }
 
             // For enums, add variants
-            if let Some(def) = sem_result.definitions.get(tid.as_str()) {
+            if let Some(def) = sem_result.emit_input.definitions.get(tid.as_str()) {
                 if let DefinitionBody::Enum { variants, .. } = &def.body {
                     for v in variants {
                         items.push(JsCompletionItem {
@@ -748,7 +649,7 @@ pub fn complete(code: &str, offset: u32) -> String {
         return "[]".to_string();
     }
 
-    let items_refs: Vec<Expression> = result.sem_result.files.values()
+    let items_refs: Vec<Expression> = result.sem_result.emit_input.files.values()
         .flat_map(|f| f.items.clone())
         .collect();
 
@@ -760,7 +661,7 @@ pub fn complete(code: &str, offset: u32) -> String {
 
     // Top-level completions: local definitions in the entry module
     let mut items: Vec<JsCompletionItem> = Vec::new();
-    for (qname, def) in &result.sem_result.definitions {
+    for (qname, def) in &result.sem_result.emit_input.definitions {
         let qname_str = qname.as_str();
         // Only show definitions from the entry module (unqualified or _entry_ prefixed)
         let label = if let Some(rest) = qname_str.strip_prefix("_entry_.") {
@@ -775,7 +676,7 @@ pub fn complete(code: &str, offset: u32) -> String {
         items.push(JsCompletionItem {
             label,
             kind: definition_to_completion_kind(def),
-            detail: Some(format!("{}", def.ty())),
+            detail: Some(format!("{}", def.ty)),
             insert_text: None,
         });
     }
@@ -791,7 +692,7 @@ pub fn hover(code: &str, offset: u32) -> String {
         return String::new();
     }
 
-    let items: Vec<Expression> = result.sem_result.files.values()
+    let items: Vec<Expression> = result.sem_result.emit_input.files.values()
         .flat_map(|f| f.items.clone())
         .collect();
 
@@ -812,9 +713,9 @@ pub fn hover(code: &str, offset: u32) -> String {
 
     // Add doc comment if available
     let mut full_markdown = markdown;
-    if let Expression::Identifier { qualified: Some(qname), .. } = expression {
-        if let Some(def) = result.sem_result.definitions.get(qname.as_str()) {
-            if let Some(doc) = def.doc() {
+    if let Expression::Identifier { resolution: IdentifierResolution::Definition(qname), .. } = expression {
+        if let Some(def) = result.sem_result.emit_input.definitions.get(qname.as_str()) {
+            if let Some(doc) = &def.doc {
                 full_markdown.push_str(&format!("\n\n---\n\n{}", doc));
             }
         }
@@ -857,14 +758,14 @@ pub fn goto_definition(code: &str, offset: u32) -> String {
     }
 
     // Fall back: check if the expression has a qualified name pointing to a definition
-    let items: Vec<Expression> = result.sem_result.files.values()
+    let items: Vec<Expression> = result.sem_result.emit_input.files.values()
         .flat_map(|f| f.items.clone())
         .collect();
 
     if let Some(expression) = find_expression_at(&items, offset) {
-        if let Expression::Identifier { qualified: Some(qname), .. } = expression {
-            if let Some(def) = result.sem_result.definitions.get(qname.as_str()) {
-                if let Some(name_span) = def.name_span() {
+        if let Expression::Identifier { resolution: IdentifierResolution::Definition(qname), .. } = expression {
+            if let Some(def) = result.sem_result.emit_input.definitions.get(qname.as_str()) {
+                if let Some(name_span) = def.name_span {
                     let (sl, sc) = offset_to_line_col(code, name_span.byte_offset as usize);
                     let (el, ec) = offset_to_line_col(code, (name_span.byte_offset + name_span.byte_length) as usize);
                     let def_result = JsDefinitionResult {
@@ -887,7 +788,7 @@ pub fn signature_help(code: &str, offset: u32) -> String {
         return String::new();
     }
 
-    let items: Vec<Expression> = result.sem_result.files.values()
+    let items: Vec<Expression> = result.sem_result.emit_input.files.values()
         .flat_map(|f| f.items.clone())
         .collect();
 
@@ -904,8 +805,15 @@ pub fn signature_help(code: &str, offset: u32) -> String {
         };
         if let Type::Function(f) = callee_ty_inner {
             // Build the signature label
-            let callee_name = callee.callee_name().unwrap_or_else(|| "fn".to_string());
-            let param_strs: Vec<String> = f.params.iter().map(|p| format!("{}", p)).collect();
+            let callee_name = match callee.as_ref() {
+                Expression::Identifier { value, .. } => unqualified_name(value),
+                Expression::DotAccess { member, .. } => member.as_str(),
+                _ => "fn",
+            };
+            let param_strs: Vec<String> = f.params.iter().map(|p| match &p.name {
+                Some(name) => format!("{}: {}", name, p.ty),
+                None => p.ty.to_string(),
+            }).collect();
             let ret_str = format!("{}", f.return_type);
             let ret_part = if ret_str == "()" { String::new() } else { format!(" -> {}", ret_str) };
             let label = format!("{}({}){}", callee_name, param_strs.join(", "), ret_part);
