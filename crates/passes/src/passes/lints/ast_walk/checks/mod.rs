@@ -25,6 +25,7 @@ mod helpers;
 mod identical_if_branches;
 mod identical_match_arms;
 mod ineffective_bit_mask;
+mod infallible_assertion;
 mod integer_division_to_zero;
 mod invisible_in_string;
 mod let_and_return;
@@ -138,6 +139,7 @@ pub use goos_goarch_comparison::check_goos_goarch_comparison;
 pub use identical_if_branches::check_identical_if_branches;
 pub use identical_match_arms::check_identical_match_arms;
 pub use ineffective_bit_mask::check_ineffective_bit_mask;
+pub use infallible_assertion::check_infallible_assertion;
 pub use integer_division_to_zero::check_integer_division_to_zero;
 pub use invisible_in_string::{
     check_invisible_in_string_expression, check_invisible_in_string_pattern,

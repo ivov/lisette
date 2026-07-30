@@ -121,6 +121,7 @@ fn run_file_checks(
         module_id: &module.id,
         source: &file.source,
         is_d_lis: file.is_d_lis(),
+        is_test: file.is_test(),
         sink,
         claimed_spans: Default::default(),
     };

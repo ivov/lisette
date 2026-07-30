@@ -1,4 +1,4 @@
-use diagnostics::{IndexedSource, LisetteDiagnostic};
+use diagnostics::{IndexedSource, LisetteDiagnostic, SemanticResult};
 use miette::{GraphicalReportHandler, GraphicalTheme, ThemeCharacters, ThemeStyles};
 use syntax::ParseError;
 
@@ -30,6 +30,21 @@ pub fn format_diagnostic_for_snapshot(
     let mut output = String::new();
     handler.render_report(&mut output, report.as_ref()).unwrap();
     output
+}
+
+pub fn format_result_diagnostic_for_snapshot(
+    result: &SemanticResult,
+    diagnostic: &LisetteDiagnostic,
+) -> String {
+    let file_id = diagnostic
+        .file_id()
+        .expect("diagnostic must carry a file id");
+    let file = result
+        .emit_input
+        .files
+        .get(&file_id)
+        .expect("diagnostic's file id must be present in the compiled result");
+    format_diagnostic_for_snapshot(diagnostic, &file.source, &file.name)
 }
 
 /// Escapes carriage returns, which insta's YAML literal blocks cannot round-trip.

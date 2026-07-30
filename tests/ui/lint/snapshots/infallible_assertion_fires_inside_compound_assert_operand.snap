@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Infallible assertion
+   ╭─[util.test.lis:4:5]
+ 3 │   assert {
+ 4 │     assert true
+   ·     ─────┬─────
+   ·          ╰── never fails
+ 5 │     true
+   ╰────
+  help: This assertion cannot catch a regression. Write a useful assertion · code: [lint.infallible_assertion]

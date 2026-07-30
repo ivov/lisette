@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Infallible assertion
+   ╭─[util.test.lis:2:3]
+ 1 │ fn helper(t: TestContext) {
+ 2 │   assert true
+   ·   ─────┬─────
+   ·        ╰── never fails
+ 3 │ }
+   ╰────
+  help: This assertion cannot catch a regression. Write a useful assertion · code: [lint.infallible_assertion]

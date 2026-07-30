@@ -27,9 +27,10 @@ use checks::{
     check_equal_operands, check_equatable_if_let, check_excess_parens_on_condition,
     check_exit_after_defer, check_expression_naming, check_float_cmp,
     check_float_equality_without_abs, check_goos_goarch_comparison, check_identical_if_branches,
-    check_identical_match_arms, check_ineffective_bit_mask, check_integer_division_to_zero,
-    check_invisible_in_string_expression, check_invisible_in_string_pattern, check_let_and_return,
-    check_loop_runs_once, check_lost_cancel, check_lost_query_mutation, check_manual_bytes_equal,
+    check_identical_match_arms, check_ineffective_bit_mask, check_infallible_assertion,
+    check_integer_division_to_zero, check_invisible_in_string_expression,
+    check_invisible_in_string_pattern, check_let_and_return, check_loop_runs_once,
+    check_lost_cancel, check_lost_query_mutation, check_manual_bytes_equal,
     check_manual_compound_assignment, check_manual_contains, check_manual_equal_fold,
     check_manual_extend, check_manual_filter, check_manual_find, check_manual_is_empty,
     check_manual_map, check_manual_map_or, check_manual_ok_err, check_manual_ok_or,
@@ -193,6 +194,7 @@ fn run_expression_checks(expression: &Expression, ctx: &mut NodeCtx<'_>, role: F
         (check_redundant_closure_call, &[Call]),
         (check_redundant_else, &[Block]),
         (check_out_of_domain_value, &[Literal, Unary, Call]),
+        (check_infallible_assertion, &[Function, Lambda]),
     );
 }
 
@@ -276,6 +278,7 @@ fn run_module(
             module_id: &module.id,
             source: &file.source,
             is_d_lis: file.is_d_lis(),
+            is_test: file.is_test(),
             sink: &file_sink,
             claimed_spans: Default::default(),
         };

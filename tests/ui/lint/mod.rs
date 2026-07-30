@@ -2,6 +2,7 @@ mod fixes;
 
 use crate::_harness::build::compile_check;
 use crate::_harness::filesystem::MockFileSystem;
+use crate::_harness::formatting::format_result_diagnostic_for_snapshot;
 use crate::{assert_lint_snapshot, assert_no_lint_warnings};
 use semantics::store::ENTRY_MODULE_ID;
 
@@ -24912,4 +24913,287 @@ fn main() {
 }
 "#
     );
+}
+
+#[test]
+fn infallible_assertion_fires_in_test_file() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"util\"\n\nfn main() {\n  let _ = util.value()\n}\n",
+    );
+    fs.add_file("util", "util.lis", "pub fn value() -> int { 1 }\n");
+    fs.add_file(
+        "util",
+        "util.test.lis",
+        "#[test]\nfn checks() {\n  assert true\n}\n",
+    );
+    let result = compile_check(fs);
+    let diagnostic = result
+        .lints()
+        .iter()
+        .find(|d| d.code_str() == Some("lint.infallible_assertion"))
+        .expect("the lint must cover a bare `assert true` in a `.test.lis` file");
+    let output = format_result_diagnostic_for_snapshot(&result, diagnostic);
+    insta::with_settings!({
+        prepend_module_to_snapshot => false,
+        omit_expression => true,
+    }, {
+        insta::assert_snapshot!(output);
+    });
+}
+
+#[test]
+fn infallible_assertion_fires_with_parens() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"util\"\n\nfn main() {\n  let _ = util.value()\n}\n",
+    );
+    fs.add_file("util", "util.lis", "pub fn value() -> int { 1 }\n");
+    fs.add_file(
+        "util",
+        "util.test.lis",
+        "#[test]\nfn checks() {\n  assert (true)\n}\n",
+    );
+    let result = compile_check(fs);
+    let diagnostic = result
+        .lints()
+        .iter()
+        .find(|d| d.code_str() == Some("lint.infallible_assertion"))
+        .expect("a parenthesized `true` literal must still fire");
+    let output = format_result_diagnostic_for_snapshot(&result, diagnostic);
+    insta::with_settings!({
+        prepend_module_to_snapshot => false,
+        omit_expression => true,
+    }, {
+        insta::assert_snapshot!(output);
+    });
+}
+
+#[test]
+fn infallible_assertion_false_no_warning() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"util\"\n\nfn main() {\n  let _ = util.value()\n}\n",
+    );
+    fs.add_file("util", "util.lis", "pub fn value() -> int { 1 }\n");
+    fs.add_file(
+        "util",
+        "util.test.lis",
+        "#[test]\nfn checks() {\n  assert false\n}\n",
+    );
+    let result = compile_check(fs);
+    assert!(
+        !result
+            .lints()
+            .iter()
+            .any(|d| d.code_str() == Some("lint.infallible_assertion")),
+        "`assert false` is a plausible deliberate fail-here marker and must stay silent: {:?}",
+        result.lints()
+    );
+}
+
+#[test]
+fn infallible_assertion_bound_value_no_warning() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"util\"\n\nfn main() {\n  let _ = util.value()\n}\n",
+    );
+    fs.add_file("util", "util.lis", "pub fn value() -> int { 1 }\n");
+    fs.add_file(
+        "util",
+        "util.test.lis",
+        "#[test]\nfn checks() {\n  let ok = true\n  assert ok\n}\n",
+    );
+    let result = compile_check(fs);
+    assert!(
+        !result
+            .lints()
+            .iter()
+            .any(|d| d.code_str() == Some("lint.infallible_assertion")),
+        "the lint must not follow bindings back to a literal: {:?}",
+        result.lints()
+    );
+}
+
+#[test]
+fn infallible_assertion_compound_disjunction_no_warning() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"util\"\n\nfn main() {\n  let _ = util.value()\n}\n",
+    );
+    fs.add_file("util", "util.lis", "pub fn value() -> int { 1 }\n");
+    fs.add_file(
+        "util",
+        "util.test.lis",
+        "#[test]\nfn checks() {\n  let x = 1\n  assert x == 1 || true\n}\n",
+    );
+    let result = compile_check(fs);
+    let lints = result.lints();
+    assert!(
+        lints
+            .iter()
+            .any(|d| d.code_str() == Some("lint.redundant_operation")),
+        "the always-true disjunction must still be caught by `redundant_operation`: {:?}",
+        lints
+    );
+    assert!(
+        !lints
+            .iter()
+            .any(|d| d.code_str() == Some("lint.infallible_assertion")),
+        "a compound expression is not the bare-literal shape this lint owns: {:?}",
+        lints
+    );
+}
+
+#[test]
+fn infallible_assertion_silent_outside_test_file() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "fn helper() {\n  assert true\n}\n\nfn main() {\n  helper()\n}\n",
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors()
+            .iter()
+            .any(|d| d.code_str() == Some("infer.assert_without_test_context")),
+        "a stray `assert` outside a test must still be rejected: {:?}",
+        result.errors()
+    );
+    assert!(
+        !result
+            .lints()
+            .iter()
+            .any(|d| d.code_str() == Some("lint.infallible_assertion")),
+        "a production file must not also raise the lint: {:?}",
+        result.lints()
+    );
+}
+
+#[test]
+fn infallible_assertion_silent_for_non_test_helper_in_test_file() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"util\"\n\nfn main() {\n  let _ = util.value()\n}\n",
+    );
+    fs.add_file("util", "util.lis", "pub fn value() -> int { 1 }\n");
+    fs.add_file("util", "util.test.lis", "fn helper() {\n  assert true\n}\n");
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors()
+            .iter()
+            .any(|d| d.code_str() == Some("infer.assert_without_test_context")),
+        "a non-test helper's stray assert must still be rejected: {:?}",
+        result.errors()
+    );
+    assert!(
+        !result
+            .lints()
+            .iter()
+            .any(|d| d.code_str() == Some("lint.infallible_assertion")),
+        "the lint must not co-fire with a helper lacking test context: {:?}",
+        result.lints()
+    );
+}
+
+#[test]
+fn infallible_assertion_fires_for_test_context_param_helper() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"util\"\n\nfn main() {\n  let _ = util.value()\n}\n",
+    );
+    fs.add_file("util", "util.lis", "pub fn value() -> int { 1 }\n");
+    fs.add_file(
+        "util",
+        "util.test.lis",
+        "fn helper(t: TestContext) {\n  assert true\n}\n",
+    );
+    let result = compile_check(fs);
+    let diagnostic = result
+        .lints()
+        .iter()
+        .find(|d| d.code_str() == Some("lint.infallible_assertion"))
+        .expect("a helper receiving a real `TestContext` grants valid test context too");
+    let output = format_result_diagnostic_for_snapshot(&result, diagnostic);
+    insta::with_settings!({
+        prepend_module_to_snapshot => false,
+        omit_expression => true,
+    }, {
+        insta::assert_snapshot!(output);
+    });
+}
+
+#[test]
+fn infallible_assertion_fires_in_nested_function_inheriting_context() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"util\"\n\nfn main() {\n  let _ = util.value()\n}\n",
+    );
+    fs.add_file("util", "util.lis", "pub fn value() -> int { 1 }\n");
+    fs.add_file(
+        "util",
+        "util.test.lis",
+        "#[test]\nfn outer() {\n  fn inner() {\n    assert true\n  }\n  inner()\n}\n",
+    );
+    let result = compile_check(fs);
+    let diagnostic = result
+        .lints()
+        .iter()
+        .find(|d| d.code_str() == Some("lint.infallible_assertion"))
+        .expect("a nested function inherits the enclosing test's context");
+    let output = format_result_diagnostic_for_snapshot(&result, diagnostic);
+    insta::with_settings!({
+        prepend_module_to_snapshot => false,
+        omit_expression => true,
+    }, {
+        insta::assert_snapshot!(output);
+    });
+}
+
+#[test]
+fn infallible_assertion_fires_inside_compound_assert_operand() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"util\"\n\nfn main() {\n  let _ = util.value()\n}\n",
+    );
+    fs.add_file("util", "util.lis", "pub fn value() -> int { 1 }\n");
+    fs.add_file(
+        "util",
+        "util.test.lis",
+        "#[test]\nfn checks() {\n  assert {\n    assert true\n    true\n  }\n}\n",
+    );
+    let result = compile_check(fs);
+    let diagnostic = result
+        .lints()
+        .iter()
+        .find(|d| d.code_str() == Some("lint.infallible_assertion"))
+        .expect("a nested assert inside a compound operand must still be found");
+    let output = format_result_diagnostic_for_snapshot(&result, diagnostic);
+    insta::with_settings!({
+        prepend_module_to_snapshot => false,
+        omit_expression => true,
+    }, {
+        insta::assert_snapshot!(output);
+    });
 }

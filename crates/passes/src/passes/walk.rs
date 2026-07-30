@@ -13,6 +13,7 @@ pub(crate) struct NodeCtx<'a> {
     pub module_id: &'a str,
     pub source: &'a str,
     pub is_d_lis: bool,
+    pub is_test: bool,
     pub sink: &'a LocalSink,
     /// Spans claimed by enclosing nodes to prevent duplicate diagnostics.
     pub claimed_spans: HashSet<Span>,
