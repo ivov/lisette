@@ -11,9 +11,107 @@ pub fn use_color() -> bool {
 }
 
 pub fn terminal_width() -> usize {
-    terminal_size::terminal_size_of(std::io::stderr())
-        .map(|(w, _)| w.0 as usize)
-        .unwrap_or(100)
+    normalize_terminal_width(platform_terminal_width())
+}
+
+fn normalize_terminal_width(width: Option<u16>) -> usize {
+    width.filter(|width| *width > 0).map_or(100, usize::from)
+}
+
+// Platform implementations adapted from terminal_size 0.4.3:
+// https://github.com/eminence/terminal-size
+// Copyright (c) 2015 The terminal-size Developers.
+// Licensed under MIT
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn platform_terminal_width() -> Option<u16> {
+    use std::os::fd::AsRawFd;
+    use std::os::raw::{c_int, c_ulong};
+
+    #[derive(Default)]
+    #[repr(C)]
+    struct WindowSize {
+        rows: u16,
+        columns: u16,
+        pixel_width: u16,
+        pixel_height: u16,
+    }
+
+    unsafe extern "C" {
+        fn ioctl(fd: c_int, request: c_ulong, ...) -> c_int;
+    }
+
+    #[cfg(target_os = "linux")]
+    const GET_WINDOW_SIZE: c_ulong = 0x5413;
+    #[cfg(target_os = "macos")]
+    const GET_WINDOW_SIZE: c_ulong = 0x4008_7468;
+
+    let mut size = WindowSize::default();
+    let stderr = std::io::stderr();
+    // SAFETY: stderr supplies a live file descriptor for the duration of the
+    // call, and `size` is the C-compatible buffer required by TIOCGWINSZ.
+    let result = unsafe { ioctl(stderr.as_raw_fd(), GET_WINDOW_SIZE, &mut size) };
+    (result == 0).then_some(size.columns)
+}
+
+#[cfg(windows)]
+fn platform_terminal_width() -> Option<u16> {
+    use std::ffi::c_void;
+    use std::os::windows::io::{AsHandle, AsRawHandle};
+
+    #[derive(Clone, Copy, Default)]
+    #[repr(C)]
+    struct Coordinate {
+        x: i16,
+        y: i16,
+    }
+
+    #[derive(Clone, Copy, Default)]
+    #[repr(C)]
+    struct SmallRectangle {
+        left: i16,
+        top: i16,
+        right: i16,
+        bottom: i16,
+    }
+
+    #[derive(Default)]
+    #[repr(C)]
+    struct ConsoleScreenBufferInfo {
+        size: Coordinate,
+        cursor_position: Coordinate,
+        attributes: u16,
+        window: SmallRectangle,
+        maximum_window_size: Coordinate,
+    }
+
+    #[link(name = "Kernel32")]
+    unsafe extern "system" {
+        #[link_name = "GetConsoleScreenBufferInfo"]
+        fn get_console_screen_buffer_info(
+            output: *mut c_void,
+            info: *mut ConsoleScreenBufferInfo,
+        ) -> i32;
+    }
+
+    let stderr = std::io::stderr();
+    let mut info = ConsoleScreenBufferInfo::default();
+    // SAFETY: the borrowed stderr handle remains live for the call, and
+    // `info` exactly matches the Windows CONSOLE_SCREEN_BUFFER_INFO layout.
+    let result = unsafe {
+        get_console_screen_buffer_info(stderr.as_handle().as_raw_handle().cast(), &mut info)
+    };
+    if result == 0 {
+        return None;
+    }
+
+    let width = i32::from(info.window.right) - i32::from(info.window.left) + 1;
+    u16::try_from(width).ok()
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
+fn platform_terminal_width() -> Option<u16> {
+    None
 }
 
 pub fn format_elapsed(elapsed: std::time::Duration) -> String {
@@ -460,4 +558,24 @@ macro_rules! cli_error {
             eprintln!(" · help: {}", hint);
         }
     }};
+}
+
+#[cfg(test)]
+mod terminal_width_tests {
+    use super::normalize_terminal_width;
+
+    #[test]
+    fn uses_detected_width() {
+        assert_eq!(normalize_terminal_width(Some(132)), 132);
+    }
+
+    #[test]
+    fn falls_back_when_detection_fails() {
+        assert_eq!(normalize_terminal_width(None), 100);
+    }
+
+    #[test]
+    fn falls_back_when_terminal_reports_zero() {
+        assert_eq!(normalize_terminal_width(Some(0)), 100);
+    }
 }
