@@ -11,9 +11,10 @@ import (
 	"golang.org/x/tools/go/ssa"
 )
 
-// FunctionMutation is indexed by Go signature parameter, so a receiver is not counted.
+// FunctionMutation is indexed by Go signature parameter; a receiver is reported separately in ReceiverMutates.
 type FunctionMutation struct {
-	Params []bool
+	Params          []bool
+	ReceiverMutates bool
 }
 
 func (m FunctionMutation) Mutates(index int) bool {
@@ -156,7 +157,13 @@ func (a *MutationAnalysis) record(fn *types.Func) {
 	if sig.Recv() != nil {
 		offset = 1
 	}
-	for index := range a.summarize(ssaFn).params {
+	summary := a.summarize(ssaFn)
+	if sig.Recv() != nil {
+		if _, wrote := summary.params[0]; wrote {
+			facts.ReceiverMutates = true
+		}
+	}
+	for index := range summary.params {
 		if signatureIndex := index - offset; signatureIndex >= 0 && signatureIndex < paramCount {
 			facts.Params[signatureIndex] = true
 		}

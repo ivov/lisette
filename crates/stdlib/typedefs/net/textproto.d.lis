@@ -134,10 +134,10 @@ impl Error {
 impl MIMEHeader {
   /// Add adds the key, value pair to the header.
   /// It appends to any existing values associated with key.
-  fn Add(self, key: string, value: string)
+  fn Add(self: Ref<MIMEHeader>, key: string, value: string)
 
   /// Del deletes the values associated with key.
-  fn Del(self, key: string)
+  fn Del(self: Ref<MIMEHeader>, key: string)
 
   /// Get gets the first value associated with the given key.
   /// It is case insensitive; [CanonicalMIMEHeaderKey] is used
@@ -149,7 +149,7 @@ impl MIMEHeader {
   /// Set sets the header entries associated with key to
   /// the single element value. It replaces any existing
   /// values associated with key.
-  fn Set(self, key: string, value: string)
+  fn Set(self: Ref<MIMEHeader>, key: string, value: string)
 
   /// Values returns all values associated with the given key.
   /// It is case insensitive; [CanonicalMIMEHeaderKey] is

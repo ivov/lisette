@@ -347,6 +347,12 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 				TypeParams:   typeParams,
 			}
 		}
+
+		if result.Receiver != nil && !result.Receiver.IsPointer {
+			if mutation, ok := c.mutation.Function(symbolExport.Obj); ok && mutation.ReceiverMutates {
+				result.Receiver.Mutable = true
+			}
+		}
 	}
 
 	// A seal is recorded by identity and receiver only; its params and return are

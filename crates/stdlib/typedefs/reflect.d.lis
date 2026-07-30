@@ -690,7 +690,7 @@ impl Value {
   /// 
   /// It panics if v's Kind is not a [Slice], or if n is negative or too large to
   /// allocate the memory, or if [Value.CanSet] returns false.
-  fn Grow(self, n: int)
+  fn Grow(self: Ref<Value>, n: int)
 
   /// Index returns v's i'th element.
   /// It panics if v's Kind is not [Array], [Slice], or [String] or i is out of range.
@@ -874,57 +874,57 @@ impl Value {
   /// It panics if [Value.CanSet] returns false.
   /// As in Go, x's value must be assignable to v's type and
   /// must not be derived from an unexported field.
-  fn Set(self, x: Value)
+  fn Set(self: Ref<Value>, x: Value)
 
   /// SetBool sets v's underlying value.
   /// It panics if v's Kind is not [Bool] or if [Value.CanSet] returns false.
-  fn SetBool(self, x: bool)
+  fn SetBool(self: Ref<Value>, x: bool)
 
   /// SetBytes sets v's underlying value.
   /// It panics if v's underlying value is not a slice of bytes
   /// or if [Value.CanSet] returns false.
-  fn SetBytes(self, x: Slice<byte>)
+  fn SetBytes(self: Ref<Value>, x: Slice<byte>)
 
   /// SetCap sets v's capacity to n.
   /// It panics if v's Kind is not [Slice], or if n is smaller than the length or
   /// greater than the capacity of the slice,
   /// or if [Value.CanSet] returns false.
-  fn SetCap(self, n: int)
+  fn SetCap(self: Ref<Value>, n: int)
 
   /// SetComplex sets v's underlying value to x.
   /// It panics if v's Kind is not [Complex64] or [Complex128],
   /// or if [Value.CanSet] returns false.
-  fn SetComplex(self, x: complex128)
+  fn SetComplex(self: Ref<Value>, x: complex128)
 
   /// SetFloat sets v's underlying value to x.
   /// It panics if v's Kind is not [Float32] or [Float64],
   /// or if [Value.CanSet] returns false.
-  fn SetFloat(self, x: float64)
+  fn SetFloat(self: Ref<Value>, x: float64)
 
   /// SetInt sets v's underlying value to x.
   /// It panics if v's Kind is not [Int], [Int8], [Int16], [Int32], or [Int64],
   /// or if [Value.CanSet] returns false.
-  fn SetInt(self, x: int64)
+  fn SetInt(self: Ref<Value>, x: int64)
 
   /// SetIterKey assigns to v the key of iter's current map entry.
   /// It is equivalent to v.Set(iter.Key()), but it avoids allocating a new Value.
   /// As in Go, the key must be assignable to v's type and
   /// must not be derived from an unexported field.
   /// It panics if [Value.CanSet] returns false.
-  fn SetIterKey(self, iter: Ref<MapIter>)
+  fn SetIterKey(self: Ref<Value>, iter: Ref<MapIter>)
 
   /// SetIterValue assigns to v the value of iter's current map entry.
   /// It is equivalent to v.Set(iter.Value()), but it avoids allocating a new Value.
   /// As in Go, the value must be assignable to v's type and
   /// must not be derived from an unexported field.
   /// It panics if [Value.CanSet] returns false.
-  fn SetIterValue(self, iter: Ref<MapIter>)
+  fn SetIterValue(self: Ref<Value>, iter: Ref<MapIter>)
 
   /// SetLen sets v's length to n.
   /// It panics if v's Kind is not [Slice], or if n is negative or
   /// greater than the capacity of the slice,
   /// or if [Value.CanSet] returns false.
-  fn SetLen(self, n: int)
+  fn SetLen(self: Ref<Value>, n: int)
 
   /// SetMapIndex sets the element associated with key in the map v to elem.
   /// It panics if v's Kind is not [Map].
@@ -937,20 +937,20 @@ impl Value {
   /// SetPointer sets the [unsafe.Pointer] value v to x.
   /// It panics if v's Kind is not [UnsafePointer]
   /// or if [Value.CanSet] returns false.
-  fn SetPointer(self, x: Unknown)
+  fn SetPointer(self: Ref<Value>, x: Unknown)
 
   /// SetString sets v's underlying value to x.
   /// It panics if v's Kind is not [String] or if [Value.CanSet] returns false.
-  fn SetString(self, x: string)
+  fn SetString(self: Ref<Value>, x: string)
 
   /// SetUint sets v's underlying value to x.
   /// It panics if v's Kind is not [Uint], [Uintptr], [Uint8], [Uint16], [Uint32], or [Uint64],
   /// or if [Value.CanSet] returns false.
-  fn SetUint(self, x: uint64)
+  fn SetUint(self: Ref<Value>, x: uint64)
 
   /// SetZero sets v to be the zero value of v's type.
   /// It panics if [Value.CanSet] returns false.
-  fn SetZero(self)
+  fn SetZero(self: Ref<Value>)
 
   /// Slice returns v[i:j].
   /// It panics if v's Kind is not [Array], [Slice] or [String], or if v is an unaddressable array,

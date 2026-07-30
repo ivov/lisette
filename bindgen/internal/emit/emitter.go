@@ -479,7 +479,7 @@ func (e *Emitter) emitMethodInImpl(result convert.ConvertResult, recvName string
 	}
 
 	var params []string
-	if result.Receiver != nil && result.Receiver.IsPointer {
+	if result.Receiver != nil && (result.Receiver.IsPointer || result.Receiver.Mutable) {
 		typeName := recvName + result.Receiver.TypeParams.UseBlock()
 		params = append(params, fmt.Sprintf("self: Ref<%s>", typeName))
 	} else {

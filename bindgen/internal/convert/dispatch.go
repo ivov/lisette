@@ -71,6 +71,7 @@ type Receiver struct {
 	Name         string
 	Type         string
 	IsPointer    bool
+	Mutable      bool
 	BaseTypeName string
 	TypeParams   TypeParamSpecs // Type parameters of the receiver type (for generic types)
 }

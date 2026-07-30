@@ -268,10 +268,10 @@ impl Userinfo {
 impl Values {
   /// Add adds the value to key. It appends to any existing
   /// values associated with key.
-  fn Add(self, key: string, value: string)
+  fn Add(self: Ref<Values>, key: string, value: string)
 
   /// Del deletes the values associated with key.
-  fn Del(self, key: string)
+  fn Del(self: Ref<Values>, key: string)
 
   /// Encode encodes the values into “URL encoded” form
   /// ("bar=baz&foo=quux") sorted by key.
@@ -288,5 +288,5 @@ impl Values {
 
   /// Set sets the key to value. It replaces any existing
   /// values.
-  fn Set(self, key: string, value: string)
+  fn Set(self: Ref<Values>, key: string, value: string)
 }

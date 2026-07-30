@@ -224,7 +224,7 @@ impl Float64Slice {
   /// Sort is a convenience method: x.Sort() calls Sort(x).
   fn Sort(self)
 
-  fn Swap(self, i: int, j: int)
+  fn Swap(self: Ref<Float64Slice>, i: int, j: int)
 }
 
 impl IntSlice {
@@ -238,7 +238,7 @@ impl IntSlice {
   /// Sort is a convenience method: x.Sort() calls Sort(x).
   fn Sort(self)
 
-  fn Swap(self, i: int, j: int)
+  fn Swap(self: Ref<IntSlice>, i: int, j: int)
 }
 
 impl StringSlice {
@@ -252,5 +252,5 @@ impl StringSlice {
   /// Sort is a convenience method: x.Sort() calls Sort(x).
   fn Sort(self)
 
-  fn Swap(self, i: int, j: int)
+  fn Swap(self: Ref<StringSlice>, i: int, j: int)
 }

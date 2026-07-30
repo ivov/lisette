@@ -406,6 +406,31 @@ func (h *Holder) Absorb(src []int)   { h.items = src }
 	assertMutates(t, verdicts["Absorb"])
 }
 
+func TestMutationReportsReceiverMutates(t *testing.T) {
+	analysis, pkg := analyzeSource(t, `
+type Values map[string][]string
+
+func (v Values) Set(key, value string) { v[key] = []string{value} }
+func (v Values) Get(key string) string { return v[key][0] }
+`)
+	named := pkg.Types.Scope().Lookup("Values").(*types.TypeName).Type().(*types.Named)
+	receiverMutates := map[string]bool{}
+	for i := 0; i < named.NumMethods(); i++ {
+		method := named.Method(i)
+		facts, ok := analysis.Function(method)
+		if !ok {
+			t.Fatalf("no verdict for %q", method.Name())
+		}
+		receiverMutates[method.Name()] = facts.ReceiverMutates
+	}
+	if !receiverMutates["Set"] {
+		t.Errorf("Set: ReceiverMutates = false, want true")
+	}
+	if receiverMutates["Get"] {
+		t.Errorf("Get: ReceiverMutates = true, want false")
+	}
+}
+
 func TestIsMutableParamCombinesSignals(t *testing.T) {
 	cases := []struct {
 		name      string

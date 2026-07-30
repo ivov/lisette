@@ -75,7 +75,7 @@ impl ErrorList {
   /// entry.
   fn Sort(self)
 
-  fn Swap(self, i: int, j: int)
+  fn Swap(self: Ref<ErrorList>, i: int, j: int)
 }
 
 impl Scanner {

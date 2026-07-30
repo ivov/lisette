@@ -1002,7 +1002,7 @@ impl CommentMap {
   /// Update replaces an old node in the comment map with the new node
   /// and returns the new node. Comments that were associated with the
   /// old node are associated with the new node.
-  fn Update(self, old: Node, new: Node) -> Node
+  fn Update(self: Ref<CommentMap>, old: Node, new: Node) -> Node
 }
 
 impl CompositeLit {

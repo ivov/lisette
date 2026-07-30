@@ -1726,7 +1726,7 @@ impl Header {
   /// It appends to any existing values associated with key.
   /// The key is case insensitive; it is canonicalized by
   /// [CanonicalHeaderKey].
-  fn Add(self, key: string, value: string)
+  fn Add(self: Ref<Header>, key: string, value: string)
 
   /// Clone returns a copy of h or nil if h is nil.
   fn Clone(self) -> Header
@@ -1734,7 +1734,7 @@ impl Header {
   /// Del deletes the values associated with key.
   /// The key is case insensitive; it is canonicalized by
   /// [CanonicalHeaderKey].
-  fn Del(self, key: string)
+  fn Del(self: Ref<Header>, key: string)
 
   /// Get gets the first value associated with the given key. If
   /// there are no values associated with the key, Get returns "".
@@ -1749,7 +1749,7 @@ impl Header {
   /// associated with key. The key is case insensitive; it is
   /// canonicalized by [textproto.CanonicalMIMEHeaderKey].
   /// To use non-canonical keys, assign to the map directly.
-  fn Set(self, key: string, value: string)
+  fn Set(self: Ref<Header>, key: string, value: string)
 
   /// Values returns all values associated with the given key.
   /// It is case insensitive; [textproto.CanonicalMIMEHeaderKey] is
