@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785358016507,
+  "lastUpdate": 1785426666040,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -13965,6 +13965,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/2fac42b1c93f708afccfb59540b36f9ee950a9d5"
         },
         "date": 1785358015899,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 122266,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30186,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 24524,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18032,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13755,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 11767,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6767,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 4511,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2764,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1271,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7104,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "525e4145ee2a064c6e46ecba0af6ad21462ff1ac",
+          "message": "perf: reduce binary size 20% by skipping stack unwinding (#1154)",
+          "timestamp": "2026-07-30T17:50:39+02:00",
+          "tree_id": "59099fd3d5c52b4b388d3e604d3a71ae172233ba",
+          "url": "https://github.com/ivov/lisette/commit/525e4145ee2a064c6e46ecba0af6ad21462ff1ac"
+        },
+        "date": 1785426665450,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
