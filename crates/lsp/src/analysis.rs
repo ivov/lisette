@@ -15,7 +15,7 @@ use syntax::types::{CompoundKind, Type};
 
 use crate::position::LineIndex;
 use crate::snapshot::AnalysisSnapshot;
-use crate::state::{AnalysisRequest, SharedState};
+use crate::state::{AnalysisRequest, DocumentState, SharedState};
 
 enum AnalysisError {
     Diagnostics(Vec<Diagnostic>),
@@ -67,6 +67,8 @@ impl SharedState {
 
         let source = self
             .documents
+            .read()
+            .await
             .get(uri)
             .map(|document| document.content().to_string())
             .ok_or_else(Vec::new)?;
@@ -205,9 +207,10 @@ impl SharedState {
     }
 
     async fn run_analysis_cached(&self, uri: &Url) -> Result<Arc<AnalysisSnapshot>, AnalysisError> {
-        let document = self.documents.get(uri).ok_or(AnalysisError::Superseded)?;
+        let documents = self.documents.read().await;
+        let document = documents.get(uri).ok_or(AnalysisError::Superseded)?;
         let request = document.request_analysis();
-        drop(document);
+        drop(documents);
 
         let revision = match request {
             AnalysisRequest::Cached(snapshot) => return Ok(snapshot),
@@ -220,7 +223,7 @@ impl SharedState {
                 .map_err(AnalysisError::Diagnostics)?,
         );
 
-        if let Some(mut document) = self.documents.get_mut(uri)
+        if let Some(document) = self.documents.write().await.get_mut(uri)
             && document.cache_analysis(&revision, Arc::clone(&snapshot))
         {
             return Ok(snapshot);
@@ -255,16 +258,22 @@ impl SharedState {
     }
 
     pub(crate) async fn get_snapshot(&self, uri: &Url) -> Option<Arc<AnalysisSnapshot>> {
-        self.run_analysis_cached(uri).await.ok().or_else(|| {
-            self.documents
+        match self.run_analysis_cached(uri).await {
+            Ok(snapshot) => Some(snapshot),
+            Err(_) => self
+                .documents
+                .read()
+                .await
                 .get(uri)
-                .and_then(|document| document.last_valid_analysis())
-        })
+                .and_then(DocumentState::last_valid_analysis),
+        }
     }
 
-    pub(crate) fn open_document_snapshots(&self) -> Vec<Arc<AnalysisSnapshot>> {
+    pub(crate) async fn open_document_snapshots(&self) -> Vec<Arc<AnalysisSnapshot>> {
         self.documents
-            .iter()
+            .read()
+            .await
+            .values()
             .filter_map(|document| match document.request_analysis() {
                 AnalysisRequest::Cached(snapshot) => Some(snapshot),
                 AnalysisRequest::Required(_) => None,

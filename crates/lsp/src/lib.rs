@@ -131,7 +131,7 @@ impl Backend {
 
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
         let uri = &params.text_document.uri;
-        self.documents.remove(uri);
+        self.documents.write().await.remove(uri);
 
         let overlay_removed = self.project.remove_overlay(uri).await;
 
@@ -147,7 +147,8 @@ impl Backend {
     async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
         let uri = &params.text_document.uri;
         let (source, end_position) = {
-            let Some(doc) = self.documents.get(uri) else {
+            let documents = self.documents.read().await;
+            let Some(doc) = documents.get(uri) else {
                 return Ok(None);
             };
             let end = doc
@@ -576,7 +577,7 @@ impl Backend {
         }
 
         locations.extend(usage_locations(
-            self.open_document_snapshots(),
+            self.open_document_snapshots().await,
             &definition_uri,
             definition_span,
         ));
@@ -845,7 +846,7 @@ impl Backend {
             });
 
         for location in usage_locations(
-            self.open_document_snapshots(),
+            self.open_document_snapshots().await,
             &definition_uri,
             definition_span,
         ) {

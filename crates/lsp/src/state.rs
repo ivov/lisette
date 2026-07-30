@@ -1,8 +1,9 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::protocol::{Client, Url};
-use dashmap::DashMap;
 use deps::BindgenSetup;
+use tokio::sync::RwLock;
 use tokio::task::AbortHandle;
 
 use crate::loader::ProjectState;
@@ -12,7 +13,7 @@ use crate::snapshot::AnalysisSnapshot;
 pub struct SharedState {
     pub(crate) client: Client,
     pub(crate) project: ProjectState,
-    pub(crate) documents: DashMap<Url, DocumentState>,
+    pub(crate) documents: RwLock<HashMap<Url, DocumentState>>,
     pub(crate) bindgen_setup: Option<Arc<dyn BindgenSetup>>,
 }
 
@@ -212,7 +213,7 @@ impl Backend {
             shared_state: Arc::new(SharedState {
                 client,
                 project: ProjectState::new(),
-                documents: DashMap::new(),
+                documents: RwLock::new(HashMap::new()),
                 bindgen_setup,
             }),
         }

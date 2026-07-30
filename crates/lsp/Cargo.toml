@@ -18,8 +18,7 @@ passes = { package = "lisette-passes", version = "=0.10.0", path = "../passes" }
 diagnostics = { package = "lisette-diagnostics", version = "=0.10.0", path = "../diagnostics" }
 deps = { package = "lisette-deps", version = "=0.10.0", path = "../deps" }
 format = { package = "lisette-format", version = "=0.10.0", path = "../format" }
-tokio = { version = "1", features = ["rt", "macros", "sync", "time", "io-util"] }
-dashmap = "5.5"
+tokio = { version = "1", features = ["rt", "sync", "time", "io-util"] }
 miette.workspace = true
 rustc-hash.workspace = true
 serde.workspace = true
@@ -28,6 +27,7 @@ serde_json.workspace = true
 [dev-dependencies]
 stdlib = { package = "lisette-stdlib", path = "../stdlib" }
 tempfile = "3"
+tokio = { version = "1", features = ["macros"] }
 
 [lints]
 workspace = true

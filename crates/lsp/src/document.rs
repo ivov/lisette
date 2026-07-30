@@ -9,11 +9,11 @@ impl SharedState {
     pub(crate) async fn update_document(&self, uri: Url, content: String, version: i32) {
         self.project.update_overlay(&uri, content.clone()).await;
 
-        if let Some(mut document) = self.documents.get_mut(&uri) {
+        let mut documents = self.documents.write().await;
+        if let Some(document) = documents.get_mut(&uri) {
             document.update(content, version);
         } else {
-            self.documents
-                .insert(uri, DocumentState::new(content, version));
+            documents.insert(uri, DocumentState::new(content, version));
         }
     }
 
@@ -26,13 +26,23 @@ impl SharedState {
             return;
         }
 
-        let version = self.documents.get(&uri).map(|document| document.version());
+        let version = self
+            .documents
+            .read()
+            .await
+            .get(&uri)
+            .map(DocumentState::version);
 
         let Some(diagnostics) = self.analyze_and_convert(&uri).await else {
             return;
         };
 
-        let current_version = self.documents.get(&uri).map(|document| document.version());
+        let current_version = self
+            .documents
+            .read()
+            .await
+            .get(&uri)
+            .map(DocumentState::version);
         if version != current_version {
             return; // Discard stale results
         }
@@ -43,18 +53,21 @@ impl SharedState {
     }
 
     pub(crate) async fn recheck_open_documents(self: &Arc<Self>) {
-        let mut uris = Vec::with_capacity(self.documents.len());
-        for mut document in self.documents.iter_mut() {
+        let mut documents = self.documents.write().await;
+        let mut uris = Vec::with_capacity(documents.len());
+        for (uri, document) in documents.iter_mut() {
             document.invalidate_analysis();
-            uris.push(document.key().clone());
+            uris.push(uri.clone());
         }
+        drop(documents);
         for uri in uris {
             self.schedule_diagnostics(uri).await;
         }
     }
 
     async fn schedule_diagnostics(self: &Arc<Self>, uri: Url) {
-        let Some(mut document) = self.documents.get_mut(&uri) else {
+        let mut documents = self.documents.write().await;
+        let Some(document) = documents.get_mut(&uri) else {
             return;
         };
 
@@ -64,7 +77,7 @@ impl SharedState {
             let task_id = tokio::task::id();
             tokio::time::sleep(Duration::from_millis(300)).await;
             state.publish_diagnostics(diagnostics_uri.clone()).await;
-            if let Some(mut document) = state.documents.get_mut(&diagnostics_uri) {
+            if let Some(document) = state.documents.write().await.get_mut(&diagnostics_uri) {
                 document.finish_diagnostics(task_id);
             }
         });
