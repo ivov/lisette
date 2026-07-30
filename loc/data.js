@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785446599938,
+  "lastUpdate": 1785448162619,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -14707,6 +14707,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "cli",
             "value": 11764,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6779,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5417,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2764,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1271,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7117,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "efc10c2a4ecf22d075484e643b0787458645b328",
+          "message": "perf: inline terminal width detection (#1162)",
+          "timestamp": "2026-07-30T23:49:00+02:00",
+          "tree_id": "87ac9d11bad96054dee1f4be1b5298f90b9e58e8",
+          "url": "https://github.com/ivov/lisette/commit/efc10c2a4ecf22d075484e643b0787458645b328"
+        },
+        "date": 1785448161744,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 123496,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30250,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 24582,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18124,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13768,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 11839,
             "unit": "lines"
           },
           {
