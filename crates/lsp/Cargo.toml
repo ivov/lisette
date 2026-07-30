@@ -20,14 +20,13 @@ deps = { package = "lisette-deps", version = "=0.10.0", path = "../deps" }
 format = { package = "lisette-format", version = "=0.10.0", path = "../format" }
 tower = { version = "0.4", default-features = false }
 tower-lsp = "0.20"
-tokio = { version = "1", features = ["full"] }
-dashmap = "6"
+tokio = { version = "1", features = ["rt", "macros", "sync", "time", "io-util"] }
+dashmap = "5.5"
 miette.workspace = true
 rustc-hash.workspace = true
 
 [dev-dependencies]
 bytes = "1"
-deps = { package = "lisette-deps", path = "../deps" }
 futures = "0.3"
 serde.workspace = true
 serde_json.workspace = true

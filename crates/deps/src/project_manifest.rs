@@ -179,8 +179,8 @@ pub fn parse_manifest(project_root: &Path) -> Result<Manifest, String> {
     let content =
         strip_bom_to_str(&bytes).map_err(|e| format!("Invalid `lisette.toml` manifest: {}", e))?;
 
-    let manifest: Manifest =
-        toml::from_str(content).map_err(|e| format!("Invalid `lisette.toml` manifest: {}", e))?;
+    let manifest: Manifest = toml_edit::de::from_str(content)
+        .map_err(|e| format!("Invalid `lisette.toml` manifest: {}", e))?;
     validate_go_dep_paths(&manifest)?;
     Ok(manifest)
 }
