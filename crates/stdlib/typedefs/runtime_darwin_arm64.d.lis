@@ -215,7 +215,7 @@ pub fn GOROOT() -> string
 /// If all other goroutines exit, the program crashes.
 /// 
 /// It crashes if called from a thread not created by the Go runtime.
-pub fn Goexit()
+pub fn Goexit() -> Never
 
 /// GoroutineProfile returns n, the number of records in the active goroutine stack profile.
 /// If len(p) >= n, GoroutineProfile copies the profile into p and returns n, true.

@@ -38,13 +38,13 @@ pub fn New(out: io.Writer, prefix: string, flag: int) -> Ref<Logger>
 pub fn Output(calldepth: int, s: string) -> Result<(), error>
 
 /// Panic is equivalent to [Print] followed by a call to panic().
-pub fn Panic(v: VarArgs<Unknown>)
+pub fn Panic(v: VarArgs<Unknown>) -> Never
 
 /// Panicf is equivalent to [Printf] followed by a call to panic().
-pub fn Panicf(format: string, v: VarArgs<Unknown>)
+pub fn Panicf(format: string, v: VarArgs<Unknown>) -> Never
 
 /// Panicln is equivalent to [Println] followed by a call to panic().
-pub fn Panicln(v: VarArgs<Unknown>)
+pub fn Panicln(v: VarArgs<Unknown>) -> Never
 
 /// Prefix returns the output prefix for the standard logger.
 pub fn Prefix() -> string
@@ -231,13 +231,13 @@ impl Logger {
   fn Output(self: Ref<Logger>, calldepth: int, s: string) -> Result<(), error>
 
   /// Panic is equivalent to l.Print() followed by a call to panic().
-  fn Panic(self: Ref<Logger>, v: VarArgs<Unknown>)
+  fn Panic(self: Ref<Logger>, v: VarArgs<Unknown>) -> Never
 
   /// Panicf is equivalent to l.Printf() followed by a call to panic().
-  fn Panicf(self: Ref<Logger>, format: string, v: VarArgs<Unknown>)
+  fn Panicf(self: Ref<Logger>, format: string, v: VarArgs<Unknown>) -> Never
 
   /// Panicln is equivalent to l.Println() followed by a call to panic().
-  fn Panicln(self: Ref<Logger>, v: VarArgs<Unknown>)
+  fn Panicln(self: Ref<Logger>, v: VarArgs<Unknown>) -> Never
 
   /// Prefix returns the output prefix for the logger.
   fn Prefix(self: Ref<Logger>) -> string

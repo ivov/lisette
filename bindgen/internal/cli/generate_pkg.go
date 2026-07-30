@@ -26,7 +26,8 @@ func GeneratePkg(pkgPath, lisetteVersion, goVersion string, cfg *config.Config) 
 
 	nilness := convert.NewNilnessAnalysis([]*packages.Package{pkg}, cfg)
 	mutation := convert.NewMutationAnalysis(nilness, []*packages.Package{pkg})
-	return generateFromPackage(pkg, pkgPath, lisetteVersion, goVersion, cfg, nilness, mutation), nil
+	divergence := convert.NewDivergenceAnalysis(nilness, []*packages.Package{pkg}, cfg)
+	return generateFromPackage(pkg, pkgPath, lisetteVersion, goVersion, cfg, nilness, mutation, divergence), nil
 }
 
 // generateUnloadableStub returns a header-only typedef with zero exports for

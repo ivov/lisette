@@ -61,6 +61,7 @@ func GenerateStd(ctx context.Context, outDir, lisetteVersion, goVersion string, 
 
 			nilness := convert.NewNilnessAnalysis(pkgs, cfg)
 			mutation := convert.NewMutationAnalysis(nilness, pkgs)
+			divergence := convert.NewDivergenceAnalysis(nilness, pkgs, cfg)
 
 			var generated atomic.Int32
 			total := len(pkgs)
@@ -79,7 +80,7 @@ func GenerateStd(ctx context.Context, outDir, lisetteVersion, goVersion string, 
 					default:
 					}
 
-					result := generateFromPackage(pkg, pkg.PkgPath, lisetteVersion, goVersion, cfg, nilness, mutation)
+					result := generateFromPackage(pkg, pkg.PkgPath, lisetteVersion, goVersion, cfg, nilness, mutation, divergence)
 
 					resultsMu.Lock()
 					results[pkg.PkgPath] = result.Content

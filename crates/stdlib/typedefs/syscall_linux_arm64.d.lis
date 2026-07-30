@@ -635,7 +635,7 @@ pub fn EpollWait(epfd: int, events: Slice<EpollEvent>, msec: int) -> Result<int,
 /// Exec invokes the execve(2) system call.
 pub fn Exec(argv0: string, argv: Slice<string>, envv: Slice<string>) -> Result<(), error>
 
-pub fn Exit(code: int)
+pub fn Exit(code: int) -> Never
 
 pub fn Faccessat(dirfd: int, path: string, mode: uint32, flags: int) -> Result<(), error>
 

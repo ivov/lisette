@@ -611,7 +611,7 @@ pub fn EscapeArg(s: string) -> string
 
 pub fn Exec(argv0: string, argv: Slice<string>, envv: Slice<string>) -> Result<(), error>
 
-pub fn Exit(code: int)
+pub fn Exit(code: int) -> Never
 
 pub fn ExitProcess(exitcode: uint32)
 

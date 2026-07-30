@@ -527,7 +527,7 @@ pub fn Exchangedata(path1: string, path2: string, options: int) -> Result<(), er
 /// Exec invokes the execve(2) system call.
 pub fn Exec(argv0: string, argv: Slice<string>, envv: Slice<string>) -> Result<(), error>
 
-pub fn Exit(code: int)
+pub fn Exit(code: int) -> Never
 
 pub fn Fchdir(fd: int) -> Result<(), error>
 

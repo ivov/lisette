@@ -148,6 +148,7 @@ type Converter struct {
 	cfg                      config.Config
 	nilness                  *NilnessAnalysis             // nil falls back to name heuristics
 	mutation                 *MutationAnalysis            // nil falls back to the curated map and name heuristics
+	divergence               *DivergenceAnalysis          // nil falls back to the curated never_return map
 	uniformPointerTypes      map[string]bool              // lazily computed; types with 10+ single-pointer-return methods
 	manyToOneTypes           map[string]bool              // lazily computed; return types with 10+ free functions
 	majorityPointerTypes     map[string]bool              // lazily computed; types where ≥20 methods return same *T (>90%)
@@ -163,7 +164,7 @@ type Converter struct {
 	synth []syntheticStruct
 }
 
-func NewConverter(pkgPath string, pkg *packages.Package, cfg *config.Config, nilness *NilnessAnalysis, mutation *MutationAnalysis) *Converter {
+func NewConverter(pkgPath string, pkg *packages.Package, cfg *config.Config, nilness *NilnessAnalysis, mutation *MutationAnalysis, divergence *DivergenceAnalysis) *Converter {
 	var effectiveConfig config.Config
 	if cfg != nil {
 		effectiveConfig = *cfg
@@ -175,6 +176,7 @@ func NewConverter(pkgPath string, pkg *packages.Package, cfg *config.Config, nil
 		cfg:            effectiveConfig,
 		nilness:        nilness,
 		mutation:       mutation,
+		divergence:     divergence,
 	}
 }
 
