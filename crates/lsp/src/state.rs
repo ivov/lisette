@@ -1,10 +1,9 @@
 use std::sync::Arc;
 
+use crate::protocol::{Client, Url};
 use dashmap::DashMap;
 use deps::BindgenSetup;
 use tokio::task::AbortHandle;
-use tower_lsp::Client;
-use tower_lsp::lsp_types::Url;
 
 use crate::loader::ProjectState;
 use crate::position::LineIndex;

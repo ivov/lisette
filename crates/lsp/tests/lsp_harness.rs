@@ -1,66 +1,18 @@
-use std::io;
 use std::time::Duration;
 
-use bytes::{BufMut, BytesMut};
-use futures::{SinkExt, StreamExt};
 use serde::Deserialize;
 use serde_json::{Value, json};
-use tokio::io::{DuplexStream, ReadHalf, WriteHalf};
-use tokio_util::codec::{Decoder, Encoder, FramedRead, FramedWrite};
-use tower_lsp::Server;
-use tower_lsp::lsp_types::*;
+use tokio::io::{BufReader, DuplexStream, ReadHalf, WriteHalf};
 
-use lisette_lsp::build_service;
-
-/// LSP message codec implementing Content-Length framing.
-struct LspCodec;
-
-impl Decoder for LspCodec {
-    type Item = Value;
-    type Error = io::Error;
-
-    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        let Some(header_end) = src.windows(4).position(|w| w == b"\r\n\r\n") else {
-            return Ok(None);
-        };
-        let Ok(header) = std::str::from_utf8(&src[..header_end]) else {
-            return Ok(None);
-        };
-        let Some(len) = header
-            .lines()
-            .find_map(|l| l.strip_prefix("Content-Length: ")?.parse().ok())
-        else {
-            return Ok(None);
-        };
-
-        if src.len() < header_end + 4 + len {
-            return Ok(None);
-        }
-
-        let _ = src.split_to(header_end + 4);
-        let body = src.split_to(len);
-        serde_json::from_slice(&body).map(Some).map_err(Into::into)
-    }
-}
-
-impl Encoder<Value> for LspCodec {
-    type Error = io::Error;
-
-    fn encode(&mut self, item: Value, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        let body = serde_json::to_vec(&item)?;
-        dst.put_slice(format!("Content-Length: {}\r\n\r\n", body.len()).as_bytes());
-        dst.put_slice(&body);
-        Ok(())
-    }
-}
+use lisette_lsp::protocol::{self, *};
 
 /// A test client for communicating with the LSP server.
 pub struct TestClient {
-    reader: FramedRead<ReadHalf<DuplexStream>, LspCodec>,
-    writer: FramedWrite<WriteHalf<DuplexStream>, LspCodec>,
+    reader: BufReader<ReadHalf<DuplexStream>>,
+    writer: WriteHalf<DuplexStream>,
     next_id: i64,
     buffered: Vec<Value>,
-    exit_code: tokio::sync::oneshot::Receiver<i32>,
+    exit_code: tokio::task::JoinHandle<i32>,
 }
 
 fn init_test_typedef_home() {
@@ -83,12 +35,11 @@ impl TestClient {
         let (server_read, server_write) = tokio::io::split(server);
         let (client_read, client_write) = tokio::io::split(client);
 
-        let (service, socket, exit_code) = build_service(None);
-        tokio::spawn(Server::new(server_read, server_write, socket).serve(service));
+        let exit_code = tokio::spawn(protocol::serve(server_read, server_write, None));
 
         Self {
-            reader: FramedRead::new(client_read, LspCodec),
-            writer: FramedWrite::new(client_write, LspCodec),
+            reader: BufReader::new(client_read),
+            writer: client_write,
             next_id: 1,
             buffered: Vec::new(),
             exit_code,
@@ -103,13 +54,18 @@ impl TestClient {
         let id = self.next_id;
         self.next_id += 1;
 
-        self.writer
-            .send(json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}))
-            .await
-            .unwrap();
+        protocol::write_message(
+            &mut self.writer,
+            &json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}),
+        )
+        .await
+        .unwrap();
 
         loop {
-            let msg = self.reader.next().await.unwrap().unwrap();
+            let msg = protocol::read_message(&mut self.reader)
+                .await
+                .unwrap()
+                .unwrap();
             if msg.get("id") == Some(&json!(id)) {
                 if let Some(error) = msg.get("error") {
                     return Err(error["message"].as_str().unwrap_or_default().to_owned());
@@ -131,10 +87,12 @@ impl TestClient {
     }
 
     async fn notify(&mut self, method: &str, params: Value) {
-        self.writer
-            .send(json!({"jsonrpc": "2.0", "method": method, "params": params}))
-            .await
-            .unwrap();
+        protocol::write_message(
+            &mut self.writer,
+            &json!({"jsonrpc": "2.0", "method": method, "params": params}),
+        )
+        .await
+        .unwrap();
     }
 
     pub async fn initialize(&mut self) -> InitializeResult {
@@ -169,8 +127,9 @@ impl TestClient {
 
         let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
         loop {
-            match tokio::time::timeout_at(deadline, self.reader.next()).await {
-                Ok(Some(Ok(msg))) => {
+            match tokio::time::timeout_at(deadline, protocol::read_message(&mut self.reader)).await
+            {
+                Ok(Ok(Some(msg))) => {
                     if let Some(result) = as_publish_diagnostics(&msg) {
                         return result.diagnostics;
                     }
@@ -192,8 +151,9 @@ impl TestClient {
 
         let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
         loop {
-            match tokio::time::timeout_at(deadline, self.reader.next()).await {
-                Ok(Some(Ok(msg))) => {
+            match tokio::time::timeout_at(deadline, protocol::read_message(&mut self.reader)).await
+            {
+                Ok(Ok(Some(msg))) => {
                     if let Some(result) = as_publish_diagnostics(&msg) {
                         if result.uri.as_str() == uri {
                             return Some(result.diagnostics);

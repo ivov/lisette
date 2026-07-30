@@ -1,10 +1,10 @@
 mod lsp_harness;
 
+use lisette_lsp::protocol::*;
 use lsp_harness::{
     TestClient, completion_labels, cursor, cursors, definition_location, definition_target_text,
     doc_end, hover_content, inlay_hint_triples, symbol_names,
 };
-use tower_lsp::lsp_types::*;
 
 const TEST_URI: &str = "file:///test.lis";
 
@@ -13068,7 +13068,7 @@ async fn external_test_file_is_analyzed_with_visibility_rules() {
         .expect("diagnostics for private-symbol reference");
     assert!(
         diagnostics.iter().any(|d| d.code
-            == Some(tower_lsp::lsp_types::NumberOrString::String(
+            == Some(NumberOrString::String(
                 "resolve.not_found_in_module".to_string()
             ))),
         "got: {diagnostics:?}"

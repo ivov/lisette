@@ -1,5 +1,5 @@
+use crate::protocol::{Position, Range};
 use syntax::ast::Span;
-use tower_lsp::lsp_types::{Position, Range};
 
 pub(crate) struct LineIndex {
     line_starts: Vec<u32>,

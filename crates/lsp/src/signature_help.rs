@@ -1,4 +1,4 @@
-use tower_lsp::lsp_types::*;
+use crate::protocol::*;
 
 use syntax::ast::Expression;
 use syntax::types::unqualified_name;

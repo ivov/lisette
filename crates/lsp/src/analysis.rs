@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
+use crate::protocol::*;
 use miette::Diagnostic as MietteDiagnostic;
 use rustc_hash::FxHashMap;
-use tower_lsp::lsp_types::*;
 
 use deps::TypedefLocator;
 use diagnostics::LisetteDiagnostic;

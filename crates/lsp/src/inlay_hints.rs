@@ -1,6 +1,6 @@
+use crate::protocol::{InlayHint, InlayHintKind, InlayHintLabel};
 use syntax::ast::{Annotation, Binding, Expression, Pattern, RestPattern, Span};
 use syntax::types::Type;
-use tower_lsp::lsp_types::{InlayHint, InlayHintKind, InlayHintLabel};
 
 use crate::patterns::get_pattern_element_type;
 use crate::position::LineIndex;

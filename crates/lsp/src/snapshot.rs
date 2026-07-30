@@ -1,10 +1,10 @@
 use rustc_hash::FxHashMap as HashMap;
 
+use crate::protocol::{Position, Url};
 use diagnostics::SemanticResult;
 use semantics::facts::Facts;
 use syntax::program::{Definition, File};
 use syntax::types::Symbol;
-use tower_lsp::lsp_types::{Position, Url};
 
 use crate::paths::{ENTRY_MODULE_ID, module_file_to_path};
 use crate::position::LineIndex;

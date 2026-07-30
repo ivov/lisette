@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use tower_lsp::lsp_types::Url;
+use crate::protocol::Url;
 
 use crate::state::{DocumentState, SharedState};
 

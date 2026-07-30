@@ -1,5 +1,5 @@
+use crate::protocol::*;
 use rustc_hash::FxHashSet;
-use tower_lsp::lsp_types::*;
 
 use syntax::ast::{Expression, IdentifierResolution};
 use syntax::attributes::{AttributeInfo, AttributeTarget, attributes_for};

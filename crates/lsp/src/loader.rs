@@ -2,9 +2,9 @@ use rustc_hash::FxHashMap as HashMap;
 use std::fs::{read_dir, read_to_string};
 use std::path::{Path, PathBuf};
 
+use crate::protocol::Url;
 use semantics::loader::{DiscoveredModules, FileContent, Files, Loader};
 use tokio::sync::{RwLock, RwLockMappedWriteGuard, RwLockWriteGuard};
-use tower_lsp::lsp_types::Url;
 
 use crate::paths::{ENTRY_MODULE_ID, module_id_to_dir, uri_to_module_file};
 use crate::project::{ProjectConfig, find_project_root, resolve_standalone_root};

@@ -71,15 +71,11 @@ fn is_go_import(qualified_name: &str) -> bool {
 
 pub(crate) fn rename_error(
     message: impl Into<std::borrow::Cow<'static, str>>,
-) -> tower_lsp::jsonrpc::Error {
-    tower_lsp::jsonrpc::Error {
-        code: tower_lsp::jsonrpc::ErrorCode::InvalidParams,
-        message: message.into(),
-        data: None,
-    }
+) -> crate::protocol::Error {
+    crate::protocol::Error::invalid_params(message)
 }
 
-pub(crate) fn check_rename_guards(qualified_name: &str) -> Result<(), tower_lsp::jsonrpc::Error> {
+pub(crate) fn check_rename_guards(qualified_name: &str) -> Result<(), crate::protocol::Error> {
     if is_prelude_symbol(qualified_name) {
         return Err(rename_error("Cannot rename prelude symbol"));
     }

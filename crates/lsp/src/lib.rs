@@ -9,17 +9,16 @@ mod paths;
 mod patterns;
 mod position;
 mod project;
-mod service;
+pub mod protocol;
 mod signature_help;
 mod snapshot;
 mod state;
 mod traversal;
 mod validation;
 
+use crate::protocol::RpcResult as Result;
+use crate::protocol::*;
 use syntax::ast::IdentifierResolution;
-use tower_lsp::LanguageServer;
-use tower_lsp::jsonrpc::Result;
-use tower_lsp::lsp_types::*;
 
 use crate::analysis::{convert_diagnostic, offset_in_span, type_name};
 use crate::completion::{
@@ -38,11 +37,9 @@ use crate::snapshot::AnalysisSnapshot;
 use crate::traversal::find_expression_at;
 use syntax::program::File;
 
-pub use crate::service::{ProtocolAdapter, build_service};
 pub use crate::state::{Backend, SharedState};
 
-#[tower_lsp::async_trait]
-impl LanguageServer for Backend {
+impl Backend {
     async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
         let workspace_root = params
             .root_uri
@@ -84,7 +81,6 @@ impl LanguageServer for Backend {
                 code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
                 rename_provider: Some(OneOf::Right(RenameOptions {
                     prepare_provider: Some(true),
-                    work_done_progress_options: Default::default(),
                 })),
                 completion_provider: Some(CompletionOptions {
                     // `.` for member access; `#`/`[` to open attribute completions
@@ -96,9 +92,9 @@ impl LanguageServer for Backend {
                     ..Default::default()
                 }),
                 signature_help_provider: Some(SignatureHelpOptions {
+                    work_done_progress: None,
                     trigger_characters: Some(vec!["(".to_string(), ",".to_string()]),
                     retrigger_characters: None,
-                    work_done_progress_options: Default::default(),
                 }),
                 ..Default::default()
             },
@@ -437,7 +433,7 @@ impl LanguageServer for Backend {
         &self,
         params: DocumentSymbolParams,
     ) -> Result<Option<DocumentSymbolResponse>> {
-        use tower_lsp::lsp_types::{DocumentSymbol, SymbolKind};
+        use crate::protocol::{DocumentSymbol, SymbolKind};
 
         let uri = &params.text_document.uri;
 
@@ -907,7 +903,7 @@ impl LanguageServer for Backend {
             let mut changes = std::collections::HashMap::new();
             changes.insert(uri.clone(), text_edits);
 
-            actions.push(CodeActionOrCommand::CodeAction(CodeAction {
+            actions.push(CodeActionOrCommand::CodeAction(Box::new(CodeAction {
                 title: fix.message().to_string(),
                 kind: Some(CodeActionKind::QUICKFIX),
                 diagnostics: Some(vec![lsp_diagnostic]),
@@ -917,7 +913,7 @@ impl LanguageServer for Backend {
                 }),
                 is_preferred: Some(true),
                 ..Default::default()
-            }));
+            })));
         }
 
         if actions.is_empty() {
@@ -1312,7 +1308,7 @@ fn head_extent(text: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::{member_token_range, ranges_overlap};
-    use tower_lsp::lsp_types::{Position, Range};
+    use crate::protocol::{Position, Range};
 
     fn range(sl: u32, sc: u32, el: u32, ec: u32) -> Range {
         Range {

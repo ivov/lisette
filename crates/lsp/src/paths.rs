@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
+use crate::protocol::Url;
 use semantics::loader::is_external_test_module;
-use tower_lsp::lsp_types::Url;
 
 use crate::project::ProjectConfig;
 
