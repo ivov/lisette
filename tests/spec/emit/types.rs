@@ -748,6 +748,45 @@ struct Box<T: Comparable> { value: T }
 }
 
 #[test]
+fn equality_generic_struct_custom_equatable_bound() {
+    let input = r#"
+interface Equatable<T> {
+  fn equals(other: T) -> bool
+}
+
+#[equality]
+struct Box<T: Equatable<T>> { value: T }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_generic_enum_custom_equatable_bound() {
+    let input = r#"
+interface Equatable<T> {
+  fn equals(other: T) -> bool
+}
+
+#[equality]
+enum Pair<T: Equatable<T>> { Both(T, T) }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn equality_generic_struct_slice_of_custom_equatable_bound() {
+    let input = r#"
+interface Equatable<T> {
+  fn equals(other: T) -> bool
+}
+
+#[equality]
+struct Box<T: Equatable<T>> { values: Slice<T> }
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn equality_user_equals_suppresses_synthesis() {
     let input = r#"
 #[equality]

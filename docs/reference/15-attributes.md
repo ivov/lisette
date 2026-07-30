@@ -313,6 +313,38 @@ let b = Fraction { numerator: 2, denominator: 4 }
 a.equals(b) // true
 ```
 
+`#[equality]` works on generic structs and enums, as long as the type parameter is bound by `Comparable` or `Ordered`.
+
+```rs
+#[equality]
+struct Cart<T: Comparable> {
+  items: Slice<T>
+}
+
+let a = Cart { items: [1, 2, 3] }
+let b = Cart { items: [1, 2, 3] }
+
+a.equals(b) // true
+```
+
+The bound can also be a custom interface instead, as long as the interface declares an `equals` method.
+
+```rs
+interface Equatable<T> {
+  fn equals(other: T) -> bool
+}
+
+#[equality]
+struct Batch<T: Equatable<T>> {
+  item: T
+}
+
+let a = Batch { item: Order { id: 1, tags: ["a"] } }
+let b = Batch { item: Order { id: 1, tags: ["a"] } }
+
+a.equals(b) // true
+```
+
 <br>
 
 <table><tr>

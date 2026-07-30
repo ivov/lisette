@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Missing map key bound
+   ╭─[test.lis:7:41]
+ 6 │ #[equality]
+ 7 │ struct Index<T: Equatable<T>> { values: Map<T, int> }
+   ·                                         ─────┬─────
+   ·                                              ╰── `T` reaches this map key without `Comparable`
+   ╰────
+  help: Map keys must be comparable. Add the bound where `T` is declared: `<T: Comparable>` · code: [infer.missing_map_key_bound]

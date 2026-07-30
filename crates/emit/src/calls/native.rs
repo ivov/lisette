@@ -10,7 +10,7 @@ use crate::plan::values::{CaptureBoundary, EvaluationEffect, ValuePlan};
 use crate::statements::assignments::lvalues_match;
 use crate::types::native::NativeGoType;
 use crate::utils::reads_mutable_operand;
-use syntax::ast::{Expression, Literal, UnaryOperator};
+use syntax::ast::{Expression, Generic, Literal, UnaryOperator};
 use syntax::program::{CallKind, DotAccessKind, NativeTypeKind};
 use syntax::types::{CompoundKind, Type, peel_to_range_type};
 
@@ -446,7 +446,7 @@ impl Planner<'_> {
             if receiver_ty.is_slice() || receiver_ty.is_map() {
                 let (setup, receiver, emitted_args, effect, contains_deferred_evaluation) =
                     self.stage_native_dot_access_call(ctx);
-                let body = self.render_equality(&receiver, &emitted_args[0], &receiver_ty);
+                let body = self.render_equality(&receiver, &emitted_args[0], &receiver_ty, &[]);
                 return NativeCallResult::new(setup, body, effect, contains_deferred_evaluation);
             }
         }
@@ -743,7 +743,7 @@ impl Planner<'_> {
                     self.stage_native_identifier_args(ctx);
                 if emitted_args.len() >= 2 {
                     let body =
-                        self.render_equality(&emitted_args[0], &emitted_args[1], &receiver_ty);
+                        self.render_equality(&emitted_args[0], &emitted_args[1], &receiver_ty, &[]);
                     return NativeCallResult::new(
                         setup,
                         body,
@@ -960,7 +960,13 @@ impl Planner<'_> {
         )
     }
 
-    pub(crate) fn render_equality(&mut self, lhs: &str, rhs: &str, ty: &Type) -> String {
+    pub(crate) fn render_equality(
+        &mut self,
+        lhs: &str,
+        rhs: &str,
+        ty: &Type,
+        generics: &[Generic],
+    ) -> String {
         let peeled = self.facts.peel_alias(ty);
         if peeled.is_ref() {
             return format!("{lhs} == {rhs}");
@@ -968,8 +974,8 @@ impl Planner<'_> {
         if peeled.is_slice() {
             self.require_slices();
             return match peeled.inner() {
-                Some(elem) if self.needs_custom_equality(&elem) => {
-                    let eq = self.equality_closure(&elem);
+                Some(elem) if self.needs_custom_equality(&elem, generics) => {
+                    let eq = self.equality_closure(&elem, generics);
                     format!("slices.EqualFunc({lhs}, {rhs}, {eq})")
                 }
                 _ => format!("slices.Equal({lhs}, {rhs})"),
@@ -981,29 +987,29 @@ impl Planner<'_> {
                 .as_compound()
                 .and_then(|(_, args)| args.get(1).cloned());
             return match value {
-                Some(value) if self.needs_custom_equality(&value) => {
-                    let eq = self.equality_closure(&value);
+                Some(value) if self.needs_custom_equality(&value, generics) => {
+                    let eq = self.equality_closure(&value, generics);
                     format!("maps.EqualFunc({lhs}, {rhs}, {eq})")
                 }
                 _ => format!("maps.Equal({lhs}, {rhs})"),
             };
         }
-        if self.type_has_equals(&peeled) {
+        if self.type_has_equals(&peeled, generics) {
             return format!("{lhs}.{}({rhs})", self.equals_method_go_name());
         }
         format!("{lhs} == {rhs}")
     }
 
-    fn equality_closure(&mut self, ty: &Type) -> String {
+    fn equality_closure(&mut self, ty: &Type, generics: &[Generic]) -> String {
         let go_ty = self.go_type_string(ty);
         let a = self.fresh_var(Some("a"));
         let b = self.fresh_var(Some("b"));
-        let body = self.render_equality(&a, &b, ty);
+        let body = self.render_equality(&a, &b, ty, generics);
         format!("func({a} {go_ty}, {b} {go_ty}) bool {{ return {body} }}")
     }
 
-    fn needs_custom_equality(&self, ty: &Type) -> bool {
-        self.is_container(ty) || self.type_has_equals(ty)
+    fn needs_custom_equality(&self, ty: &Type, generics: &[Generic]) -> bool {
+        self.is_container(ty) || self.type_has_equals(ty, generics)
     }
 
     fn is_container(&self, ty: &Type) -> bool {

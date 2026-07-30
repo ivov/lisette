@@ -363,12 +363,13 @@ pub(crate) fn check_not_equatable(
     store: &Store,
     ty: &Type,
     current_module: &str,
+    equatable_param: &dyn Fn(&str) -> bool,
     comparable_param: &dyn Fn(&str) -> bool,
 ) -> Option<&'static str> {
     let resolved = store.deep_resolve_alias(&ty.resolve_in(env));
 
     if let Type::Parameter(name) = &resolved
-        && comparable_param(name)
+        && equatable_param(name)
     {
         return None;
     }
@@ -385,14 +386,26 @@ pub(crate) fn check_not_equatable(
     };
 
     match resolved.as_compound() {
-        Some((CompoundKind::Slice, args)) => {
-            check_not_equatable(env, store, args.first()?, current_module, comparable_param)
-        }
+        Some((CompoundKind::Slice, args)) => check_not_equatable(
+            env,
+            store,
+            args.first()?,
+            current_module,
+            equatable_param,
+            comparable_param,
+        ),
         Some((CompoundKind::Map, args)) => {
             if map_key_not_comparable(env, store, args.first()?, comparable_param) {
                 return Some("a map with a non-comparable key");
             }
-            check_not_equatable(env, store, args.get(1)?, current_module, comparable_param)
+            check_not_equatable(
+                env,
+                store,
+                args.get(1)?,
+                current_module,
+                equatable_param,
+                comparable_param,
+            )
         }
         _ => Some(reason),
     }
@@ -491,6 +504,45 @@ pub(crate) fn param_is_comparable(scopes: &Scopes, env: &TypeEnv, param_name: &s
     found
 }
 
+fn interface_bound_guarantees_equals(store: &Store, bound: &Type, param_name: &str) -> bool {
+    interface_closure_any(store, bound, |current| {
+        let Some(id) = current.get_qualified_id() else {
+            return false;
+        };
+        let Some(interface) = store.get_interface(id) else {
+            return false;
+        };
+        let map = build_substitution_map(
+            &interface.generics,
+            current.get_type_params().unwrap_or_default(),
+        );
+        interface.methods.get("equals").is_some_and(|equals_ty| {
+            substitute(equals_ty, &map).is_equals_bound_signature(param_name)
+        })
+    })
+}
+
+pub(crate) fn param_is_equatable(
+    scopes: &Scopes,
+    env: &TypeEnv,
+    store: &Store,
+    param_name: &str,
+) -> bool {
+    if param_is_comparable(scopes, env, param_name) {
+        return true;
+    }
+    let mut found = false;
+    scopes.for_each_bound_on_param(param_name, |bound_ty| {
+        if found {
+            return;
+        }
+        if interface_bound_guarantees_equals(store, &bound_ty.resolve_in(env), param_name) {
+            found = true;
+        }
+    });
+    found
+}
+
 impl InferCtx<'_> {
     fn is_comparable_with_param_bounds(&self, ty: &Type) -> bool {
         let resolved = ty.resolve_in(&self.env);
@@ -555,14 +607,16 @@ impl InferCtx<'_> {
     }
 
     fn not_equatable_reason(&self, ty: &Type) -> Option<&'static str> {
+        let is_comparable = |name: &str| {
+            self.parameter_satisfies_bound(name, super::super::unify::BuiltinBound::Comparable)
+        };
         check_not_equatable(
             &self.env,
             self.store,
             ty,
             self.cursor.module_id.as_str(),
-            &|name| {
-                self.parameter_satisfies_bound(name, super::super::unify::BuiltinBound::Comparable)
-            },
+            &is_comparable,
+            &is_comparable,
         )
     }
 
@@ -617,17 +671,16 @@ impl InferCtx<'_> {
             if field_resolved.get_qualified_id() == Some(name) {
                 return true;
             }
+            let is_comparable = |name: &str| {
+                self.parameter_satisfies_bound(name, super::super::unify::BuiltinBound::Comparable)
+            };
             check_not_equatable(
                 &self.env,
                 self.store,
                 &substituted,
                 self.cursor.module_id.as_str(),
-                &|name| {
-                    self.parameter_satisfies_bound(
-                        name,
-                        super::super::unify::BuiltinBound::Comparable,
-                    )
-                },
+                &is_comparable,
+                &is_comparable,
             )
             .is_none()
         })

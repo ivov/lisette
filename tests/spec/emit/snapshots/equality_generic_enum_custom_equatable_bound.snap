@@ -1,0 +1,44 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  interface Equatable<T> {
+    fn equals(other: T) -> bool
+  }
+  
+  #[equality]
+  enum Pair<T: Equatable<T>> { Both(T, T) }
+---
+package main
+
+func MakePairBoth[T Equatable[T]](arg0 T, arg1 T) Pair[T] {
+	return Pair[T]{Tag: PairBoth, Both0: arg0, Both1: arg1}
+}
+
+type Equatable[T any] interface {
+	equals(T) bool
+}
+
+type PairTag int
+
+const (
+	PairBoth PairTag = iota
+)
+
+type Pair[T Equatable[T]] struct {
+	Tag   PairTag
+	Both0 T
+	Both1 T
+}
+
+func (p Pair[T]) equals(other Pair[T]) bool {
+	if p.Tag != other.Tag {
+		return false
+	}
+	switch p.Tag {
+	case PairBoth:
+		return p.Both0.equals(other.Both0) && p.Both1.equals(other.Both1)
+	default:
+		return true
+	}
+}

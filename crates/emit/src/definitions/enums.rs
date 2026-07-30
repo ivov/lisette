@@ -122,6 +122,7 @@ impl Planner<'_> {
         let Some(Definition {
             body:
                 DefinitionBody::Enum {
+                    generics: sem_generics,
                     variants: sem_variants,
                     ..
                 },
@@ -130,6 +131,7 @@ impl Planner<'_> {
         else {
             return;
         };
+        let sem_generics = sem_generics.clone();
         let sem_variants = sem_variants.clone();
         let layout = self.enum_layout(enum_id).expect("enum layout should exist");
 
@@ -155,7 +157,7 @@ impl Planner<'_> {
                         lhs = format!("(*{lhs})");
                         rhs = format!("(*{rhs})");
                     }
-                    self.render_equality(&lhs, &rhs, &sem_field.ty)
+                    self.render_equality(&lhs, &rhs, &sem_field.ty, &sem_generics)
                 })
                 .collect();
             cases.push(format!(

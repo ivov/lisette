@@ -68,7 +68,7 @@ impl Planner<'_> {
         };
         self.append_struct_debug_method(&mut result, name, &receiver_generics, &stringer_fields);
         self.append_to_string_method(&mut result, name, &receiver_generics, struct_attrs);
-        self.append_equals_method(&mut result, name, &receiver_generics, fields, struct_attrs);
+        self.append_equals_method(&mut result, name, generics, fields, struct_attrs);
         self.append_embedded_stringer_shadow(
             &mut result,
             name,
@@ -439,22 +439,23 @@ impl Planner<'_> {
         &mut self,
         out: &mut String,
         name: &str,
-        receiver_generics: &str,
+        generics: &[Generic],
         fields: &[StructFieldDefinition],
         attributes: &[Attribute],
     ) {
         if !self.should_synthesize_equals(name) {
             return;
         }
-        let receiver = synthesized_receiver_name(name, receiver_generics);
-        let other = synthesized_local_name("other", &receiver, receiver_generics);
+        let receiver_generics = self.receiver_generics_string(generics);
+        let receiver = synthesized_receiver_name(name, &receiver_generics);
+        let other = synthesized_local_name("other", &receiver, &receiver_generics);
         let comparisons: Vec<String> = fields
             .iter()
             .map(|f| {
                 let go_field = struct_field_go_name(f, attributes);
                 let lhs = format!("{receiver}.{go_field}");
                 let rhs = format!("{other}.{go_field}");
-                self.render_equality(&lhs, &rhs, &f.ty)
+                self.render_equality(&lhs, &rhs, &f.ty, generics)
             })
             .collect();
         let body = if comparisons.is_empty() {

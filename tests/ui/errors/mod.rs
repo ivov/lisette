@@ -12056,6 +12056,25 @@ struct Pair {
 }
 
 #[test]
+fn equality_derivation_terminates_on_transforming_interface_cycle() {
+    let input = r#"
+interface A<T> {
+  embed B<Slice<T>>
+}
+
+interface B<T> {
+  embed A<Slice<T>>
+}
+
+#[equality]
+struct Wrap<T: A<T>> {
+  value: T
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn equality_enum_rejects_function_payload() {
     let input = r#"
 #[equality]
@@ -12657,6 +12676,19 @@ struct Key { tags: Slice<int> }
 
 #[equality]
 struct Index { values: Map<Key, int> }
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn equality_map_key_bound_by_custom_equatable_interface_rejected() {
+    let input = r#"
+interface Equatable<T> {
+  fn equals(other: T) -> bool
+}
+
+#[equality]
+struct Index<T: Equatable<T>> { values: Map<T, int> }
 "#;
     assert_infer_error_snapshot!(input);
 }

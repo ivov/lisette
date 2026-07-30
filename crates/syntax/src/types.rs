@@ -868,6 +868,20 @@ impl Type {
         )
     }
 
+    pub fn is_equals_bound_signature(&self, param_name: &str) -> bool {
+        let func = match self {
+            Type::Forall { body, .. } => body.as_ref(),
+            other => other,
+        };
+        matches!(
+            func,
+            Type::Function(f)
+                if f.params.len() == 1
+                    && f.return_type.is_boolean()
+                    && matches!(&f.params[0].ty, Type::Parameter(name) if name.as_str() == param_name)
+        )
+    }
+
     pub fn equals_receiver_vars(&self, owner_id: &str, arity: usize) -> Option<Vec<EcoString>> {
         if !self.is_equals_signature() {
             return None;

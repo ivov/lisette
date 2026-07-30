@@ -7,10 +7,10 @@ use crate::control_flow::fallible;
 use crate::definitions::enum_layout::{EnumLayout, FieldTypeInfo, FieldTypeMap};
 use crate::definitions::structs::is_raw_function_type;
 use crate::names::go_name;
-use syntax::ast::{Pattern, RestPattern, StructFields};
+use syntax::ast::{Generic, Pattern, RestPattern, StructFields};
 use syntax::containment::enum_payload_pointer_wrapped;
 use syntax::program::{Definition, DefinitionBody};
-use syntax::types::{Type, substitute};
+use syntax::types::{Type, build_substitution_map, substitute};
 
 impl Planner<'_> {
     pub(crate) fn go_name_for_binding(&self, pattern: &Pattern) -> Option<String> {
@@ -106,12 +106,69 @@ impl Planner<'_> {
         self.field_is_public(ty, field) || self.type_uses_exported_members(ty)
     }
 
-    pub(crate) fn type_has_equals(&self, ty: &Type) -> bool {
+    pub(crate) fn type_has_equals(&self, ty: &Type, generics: &[Generic]) -> bool {
         let peeled = self.facts.peel_alias(ty);
+        if let Type::Parameter(name) = &peeled {
+            return self.generic_param_has_equals_bound(generics, name.as_str());
+        }
         let Some(id) = peeled.get_qualified_id() else {
             return false;
         };
         self.facts.usable_equals_from(id)
+    }
+
+    fn generic_param_has_equals_bound(&self, generics: &[Generic], param_name: &str) -> bool {
+        let Some(generic) = generics.iter().find(|g| g.name.as_str() == param_name) else {
+            return false;
+        };
+        let Some(bounds) = generic.resolved_bounds() else {
+            return false;
+        };
+        bounds.into_iter().any(|bound| {
+            self.interface_bound_provides_equals(&self.facts.peel_alias(bound), param_name)
+        })
+    }
+
+    fn interface_bound_provides_equals(&self, bound: &Type, param_name: &str) -> bool {
+        let mut stack = vec![(bound.clone(), Vec::<String>::new())];
+        let mut seen: Vec<Type> = Vec::new();
+        while let Some((current, mut path)) = stack.pop() {
+            if seen.contains(&current) {
+                continue;
+            }
+            seen.push(current.clone());
+            let Type::Nominal { id, .. } = &current else {
+                continue;
+            };
+            if path.iter().any(|seen_id| seen_id == id.as_str()) {
+                continue;
+            }
+            let Some(Definition {
+                body: DefinitionBody::Interface { definition },
+                ..
+            }) = self.facts.definition(id.as_str())
+            else {
+                continue;
+            };
+            path.push(id.to_string());
+            let map = build_substitution_map(
+                &definition.generics,
+                current.get_type_params().unwrap_or_default(),
+            );
+            let provides_equals = definition.methods.get("equals").is_some_and(|equals_ty| {
+                substitute(equals_ty, &map).is_equals_bound_signature(param_name)
+            });
+            if provides_equals {
+                return true;
+            }
+            for parent in &definition.parents {
+                stack.push((
+                    self.facts.peel_alias(&substitute(parent, &map)),
+                    path.clone(),
+                ));
+            }
+        }
+        false
     }
 
     pub(crate) fn has_field(&self, struct_ty: &Type, field_name: &str) -> bool {

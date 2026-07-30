@@ -554,7 +554,7 @@ impl Planner<'_> {
         let recv_ty = recv.get_type();
         let lhs = self.stage_assert_operand(recv, "assertLeft", statements);
         let rhs = self.stage_assert_operand(arg, "assertRight", statements);
-        let condition = self.render_equality(&lhs, &rhs, &recv_ty);
+        let condition = self.render_equality(&lhs, &rhs, &recv_ty, &[]);
         AssertShape {
             condition,
             kind: "labeled",
@@ -631,7 +631,7 @@ impl Planner<'_> {
             return None;
         }
         let recv_ty = self.facts.peel_alias(&recv.get_type());
-        (recv_ty.is_slice() || recv_ty.is_map() || self.type_has_equals(&recv_ty))
+        (recv_ty.is_slice() || recv_ty.is_map() || self.type_has_equals(&recv_ty, &[]))
             .then(|| (recv.unwrap_parens(), &args[0]))
     }
 

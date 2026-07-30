@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  interface Equatable<T> {
+    fn equals(other: T) -> bool
+  }
+  
+  #[equality]
+  struct Box<T: Equatable<T>> { value: T }
+---
+package main
+
+type Equatable[T any] interface {
+	equals(T) bool
+}
+
+type Box[T Equatable[T]] struct {
+	value T
+}
+
+func (b Box[T]) equals(other Box[T]) bool {
+	return b.value.equals(other.value)
+}

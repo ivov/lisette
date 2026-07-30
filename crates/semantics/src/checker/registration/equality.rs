@@ -6,7 +6,9 @@ use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{FunctionParameter, Symbol, Type};
 
 use super::{TaskState, resolved_generic_bounds, wrap_with_impl_generics};
-use crate::checker::infer::expressions::comparison::{check_not_equatable, param_is_comparable};
+use crate::checker::infer::expressions::comparison::{
+    check_not_equatable, param_is_comparable, param_is_equatable,
+};
 use crate::checker::registration::derived_attributes::{
     DerivedAttribute, DerivedAttributeContext, DerivedAttributeTarget,
 };
@@ -200,9 +202,14 @@ impl TaskState {
             this.record_resolved_generic_bounds(&generics);
 
             for (field_name, field_span, field_ty) in &fields {
-                let reason = check_not_equatable(&this.env, store, field_ty, module_id, &|name| {
-                    param_is_comparable(&this.scopes, &this.env, name)
-                });
+                let reason = check_not_equatable(
+                    &this.env,
+                    store,
+                    field_ty,
+                    module_id,
+                    &|name| param_is_equatable(&this.scopes, &this.env, store, name),
+                    &|name| param_is_comparable(&this.scopes, &this.env, name),
+                );
                 if let Some(reason) = reason {
                     this.sink
                         .push(diagnostics::attribute::cannot_derive_equality(

@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  interface Equatable<T> {
+    fn equals(other: T) -> bool
+  }
+  
+  #[equality]
+  struct Box<T: Equatable<T>> { values: Slice<T> }
+---
+package main
+
+import "slices"
+
+type Equatable[T any] interface {
+	equals(T) bool
+}
+
+type Box[T Equatable[T]] struct {
+	values []T
+}
+
+func (b Box[T]) equals(other Box[T]) bool {
+	return slices.EqualFunc(b.values, other.values, func(a_1 T, b_2 T) bool { return a_1.equals(b_2) })
+}
