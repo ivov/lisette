@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ● Needless `continue`
+   ╭─[test.lis:6:7]
+ 5 │       let _ = j
+ 6 │       continue
+   ·       ────┬───
+   ·           ╰── redundant
+ 7 │     }
+   ╰────
+  help: Remove the `continue`. The loop already continues once its body ends · code: [lint.needless_continue]

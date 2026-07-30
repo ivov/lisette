@@ -1,0 +1,15 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+fn main() {
+  for i in 0..10 {
+    let _ = i
+    continue
+  }
+}
+=== fixed ===
+fn main() {
+  for i in 0..10 {
+    let _ = i
+  }
+}

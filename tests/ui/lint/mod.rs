@@ -7854,6 +7854,141 @@ fn main() {
 }
 
 #[test]
+fn needless_continue_for() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  for i in 0..10 {
+    let _ = i
+    continue
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_continue_while() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let mut i = 0
+  while i < 10 {
+    i += 1
+    continue
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_continue_while_let() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let mut opt = Some(1)
+  while let Some(x) = opt {
+    let _ = x
+    opt = None
+    continue
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_continue_loop() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let mut i = 0
+  loop {
+    i += 1
+    if i >= 10 {
+      break
+    }
+    continue
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_continue_comment_keeps_warning() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  for i in 0..10 {
+    let _ = i
+    continue // trailing note
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_continue_nested_loop_fires_on_inner() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  for i in 0..3 {
+    for j in 0..3 {
+      let _ = j
+      continue
+    }
+    let _ = i
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_continue_nested_if_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  for i in 0..10 {
+    let _ = i
+    if i > 5 {
+      continue
+    }
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_continue_fires_in_test_file() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"util\"\n\nfn main() {\n  let _ = util.value()\n}\n",
+    );
+    fs.add_file("util", "util.lis", "pub fn value() -> int { 1 }\n");
+    fs.add_file(
+        "util",
+        "util.test.lis",
+        "#[test]\nfn iterates() {\n  for i in 0..3 {\n    let _ = i\n    continue\n  }\n}\n",
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .lints()
+            .iter()
+            .any(|d| d.code_str() == Some("lint.needless_continue")),
+        "the lint must also cover `.test.lis` files: {:?}",
+        result.lints()
+    );
+}
+
+#[test]
 fn unused_function() {
     assert_lint_snapshot!(
         r#"
@@ -8892,14 +9027,22 @@ fn main() {
 
 #[test]
 fn no_dead_code_when_continue_is_last() {
-    assert_no_lint_warnings!(
+    let warnings = crate::_harness::lint::lint(
         r#"
 fn main() {
   loop {
     continue
   }
 }
-"#
+"#,
+    );
+    let fires = warnings
+        .iter()
+        .any(|w| w.code_str() == Some("lint.dead_code_after_continue"));
+    assert!(
+        !fires,
+        "continue as the last statement must not be flagged as dead code, got: {:?}",
+        warnings
     );
 }
 
