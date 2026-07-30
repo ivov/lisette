@@ -641,6 +641,13 @@ pub fn loop_runs_once(span: &Span) -> LisetteDiagnostic {
         )
 }
 
+pub fn needless_continue(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Needless `continue`")
+        .with_lint_code("needless_continue")
+        .with_span_label(span, "redundant")
+        .with_help("Remove the `continue`. The loop already continues once its body ends")
+}
+
 pub fn unconditional_recursion(span: &Span, name: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Unconditional recursion")
         .with_lint_code("unconditional_recursion")

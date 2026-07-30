@@ -1437,6 +1437,34 @@ fn main() {
 }
 
 #[test]
+fn fix_needless_continue() {
+    assert_fix_snapshot!(
+        r#"
+fn main() {
+  for i in 0..10 {
+    let _ = i
+    continue
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_continue_with_comment_has_no_fix() {
+    assert_no_fix!(
+        r#"
+fn main() {
+  for i in 0..10 {
+    let _ = i
+    continue // trailing note
+  }
+}
+"#
+    );
+}
+
+#[test]
 fn fix_redundant_trim_guard_prefix() {
     assert_fix_snapshot!(
         r#"

@@ -1,7 +1,5 @@
-use std::fs::{self, File};
+use std::fs::{self, File, TryLockError};
 use std::path::Path;
-
-use fs2::FileExt;
 
 use crate::{cli_error, error};
 
@@ -10,17 +8,20 @@ pub fn acquire_mutation_lock(target_dir: &Path) -> Result<File, i32> {
     let lock_path = target_dir.join(".lis-mutate.lock");
     let file = create_lock_file(&lock_path)?;
 
-    if let Err(e) = file.try_lock_exclusive() {
-        if e.kind() == std::io::ErrorKind::WouldBlock {
+    match file.try_lock() {
+        Ok(()) => {}
+        Err(TryLockError::WouldBlock) => {
             cli_error!(
                 "Another manifest mutation is in progress",
                 "A concurrent `lis add` or `lis sync` holds the project lock",
                 "Wait for the other invocation to finish, then retry"
             );
-        } else {
-            error!("failed to acquire lock", format!("{}", e));
+            return Err(1);
         }
-        return Err(1);
+        Err(TryLockError::Error(err)) => {
+            error!("failed to acquire lock", err.to_string());
+            return Err(1);
+        }
     }
 
     Ok(file)
@@ -48,7 +49,7 @@ fn target_lock_inner(target_dir: &Path) -> Result<File, String> {
     let file = File::create(&lock_path)
         .map_err(|e| format!("Failed to create `{}`: {}", lock_path.display(), e))?;
 
-    file.lock_exclusive()
+    file.lock()
         .map_err(|e| format!("Failed to acquire target lock: {}", e))?;
 
     Ok(file)
