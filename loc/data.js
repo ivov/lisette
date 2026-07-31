@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785522519952,
+  "lastUpdate": 1785524607680,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -15340,6 +15340,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "lsp",
             "value": 5411,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2778,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1271,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7329,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e070629f3c450eb4d77bbd0e56147e1190a470e0",
+          "message": "refactor: move entry parsing into analysis (#1169)",
+          "timestamp": "2026-07-31T21:02:59+02:00",
+          "tree_id": "5d5506bc7cf4d5e69a5e55eb1c37eb6ffe5866df",
+          "url": "https://github.com/ivov/lisette/commit/e070629f3c450eb4d77bbd0e56147e1190a470e0"
+        },
+        "date": 1785524606019,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 123437,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30250,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 24877,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18220,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13092,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 11817,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6817,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5401,
             "unit": "lines"
           },
           {
