@@ -5,16 +5,28 @@ use syntax::ast::Span;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ModuleItemId {
     pub name: EcoString,
+    pub file_id: Option<u32>,
 }
 
 impl ModuleItemId {
     pub fn new(name: &str) -> Self {
-        Self { name: name.into() }
+        Self {
+            name: name.into(),
+            file_id: None,
+        }
+    }
+
+    pub fn import(file_id: u32, name: &str) -> Self {
+        Self {
+            name: name.into(),
+            file_id: Some(file_id),
+        }
     }
 
     pub fn equals_method(type_name: &str) -> Self {
         Self {
             name: format!("{type_name}#equals").into(),
+            file_id: None,
         }
     }
 

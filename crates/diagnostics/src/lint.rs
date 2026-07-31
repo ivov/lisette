@@ -1191,6 +1191,13 @@ pub fn unused_import(span: &Span) -> LisetteDiagnostic {
         .with_help("Use or remove this import")
 }
 
+pub fn redundant_import_alias(span: &Span, path: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Redundant import alias")
+        .with_lint_code("redundant_import_alias")
+        .with_span_label(span, "alias matches module name exactly")
+        .with_help(format!("Remove the alias: `import \"{path}\"`"))
+}
+
 pub fn unused_type(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Unused type")
         .with_lint_code("unused_type")

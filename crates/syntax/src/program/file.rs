@@ -40,18 +40,22 @@ impl FileImport {
         match &self.alias {
             Some(ImportAlias::Named(name, _)) => Some(name.to_string()),
             Some(ImportAlias::Blank(_)) => None,
-            None => {
-                if let Some(pkg_name) = go_package_names.get(self.name.as_str()) {
-                    return Some(pkg_name.clone());
-                }
-                let default = match self.name.strip_prefix("go:") {
-                    Some(go_path) => go_import_default_name(go_path),
-                    None => self.name.rsplit('/').next().unwrap_or(&self.name),
-                };
-                Some(default.to_string())
-            }
+            None => Some(unaliased_binding_name(&self.name, go_package_names).to_string()),
         }
     }
+}
+
+pub fn unaliased_binding_name<'a, S: BuildHasher>(
+    path: &'a str,
+    go_package_names: &'a HashMap<String, String, S>,
+) -> &'a str {
+    if let Some(package_name) = go_package_names.get(path) {
+        return package_name;
+    }
+    if path.starts_with("go:") {
+        return go_import_default_name(path);
+    }
+    path.rsplit('/').next().unwrap_or(path)
 }
 
 pub fn go_import_default_name(import_path: &str) -> &str {

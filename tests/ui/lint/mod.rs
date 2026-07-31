@@ -3,6 +3,7 @@ mod fixes;
 use crate::_harness::build::compile_check;
 use crate::_harness::filesystem::MockFileSystem;
 use crate::_harness::formatting::format_result_diagnostic_for_snapshot;
+use crate::_harness::lint::lint;
 use crate::{assert_lint_snapshot, assert_no_lint_warnings};
 use semantics::store::ENTRY_MODULE_ID;
 
@@ -8311,6 +8312,274 @@ fn main() {
 }
 "#
     );
+}
+
+#[test]
+fn redundant_import_alias() {
+    assert_lint_snapshot!(
+        r#"
+import fmt "go:fmt"
+
+fn main() {
+  fmt.Println("hi")
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_import_alias_silent_for_renaming_alias() {
+    assert_no_lint_warnings!(
+        r#"
+import f "go:fmt"
+
+fn main() {
+  f.Println("hi")
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_import_alias_silent_for_unused_import() {
+    let diagnostics = lint(
+        r#"
+import fmt "go:fmt"
+
+fn main() {
+  ()
+}
+"#,
+    );
+    let codes: Vec<&str> = diagnostics
+        .iter()
+        .filter_map(|diagnostic| diagnostic.code_str())
+        .collect();
+    assert!(codes.contains(&"lint.unused_import"), "{codes:?}");
+    assert!(!codes.contains(&"lint.redundant_import_alias"), "{codes:?}");
+}
+
+#[test]
+fn redundant_import_alias_silent_for_go_package_without_typedefs() {
+    assert_no_lint_warnings!(
+        r#"
+import bar "go:example.com/foo/bar"
+
+fn main() {
+  bar.Run()
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_import_alias_on_local_module() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "models",
+        "lib.lis",
+        r#"
+pub struct User {
+  pub name: string,
+}
+"#,
+    );
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import models "models"
+
+fn main() {
+  let _u = models.User { name: "Alice" }
+}
+"#,
+    );
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors().is_empty(),
+        "unexpected errors: {:?}",
+        result.errors()
+    );
+    let codes: Vec<&str> = result.lints().iter().filter_map(|l| l.code_str()).collect();
+    assert!(codes.contains(&"lint.redundant_import_alias"), "{codes:?}");
+}
+
+#[test]
+fn redundant_import_alias_on_nested_module_path() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "routes/admin",
+        "lib.lis",
+        r#"
+pub fn dashboard() -> string {
+  "dashboard"
+}
+"#,
+    );
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import admin "routes/admin"
+
+fn main() {
+  let _page = admin.dashboard()
+}
+"#,
+    );
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors().is_empty(),
+        "unexpected errors: {:?}",
+        result.errors()
+    );
+    let codes: Vec<&str> = result.lints().iter().filter_map(|l| l.code_str()).collect();
+    assert!(codes.contains(&"lint.redundant_import_alias"), "{codes:?}");
+}
+
+#[test]
+fn redundant_import_alias_silent_for_nested_module_renamed_to_its_parent() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "routes/admin",
+        "lib.lis",
+        r#"
+pub fn dashboard() -> string {
+  "dashboard"
+}
+"#,
+    );
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import routes "routes/admin"
+
+fn main() {
+  let _page = routes.dashboard()
+}
+"#,
+    );
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors().is_empty(),
+        "unexpected errors: {:?}",
+        result.errors()
+    );
+    let codes: Vec<&str> = result.lints().iter().filter_map(|l| l.code_str()).collect();
+    assert!(!codes.contains(&"lint.redundant_import_alias"), "{codes:?}");
+}
+
+#[test]
+fn import_unused_in_its_own_file_is_reported_there_not_as_an_alias_advisory() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "models",
+        "lib.lis",
+        r#"
+pub struct User {
+  pub name: string,
+}
+"#,
+    );
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import models "models"
+
+fn main() {
+  let _u = models.User { name: "Alice" }
+}
+"#,
+    );
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "helper.lis",
+        r#"
+import models "models"
+
+pub fn label() -> string {
+  "user"
+}
+"#,
+    );
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors().is_empty(),
+        "unexpected errors: {:?}",
+        result.errors()
+    );
+    let codes: Vec<&str> = result.lints().iter().filter_map(|l| l.code_str()).collect();
+    assert_eq!(
+        codes
+            .iter()
+            .filter(|code| **code == "lint.redundant_import_alias")
+            .count(),
+        1,
+        "{codes:?}"
+    );
+    assert_eq!(
+        codes
+            .iter()
+            .filter(|code| **code == "lint.unused_import")
+            .count(),
+        1,
+        "{codes:?}"
+    );
+}
+
+#[test]
+fn unused_import_is_reported_in_every_file_that_leaves_it_unused() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "models",
+        "lib.lis",
+        r#"
+pub struct User {
+  pub name: string,
+}
+"#,
+    );
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import models "models"
+
+fn main() {
+  ()
+}
+"#,
+    );
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "helper.lis",
+        r#"
+import models "models"
+
+pub fn label() -> string {
+  "user"
+}
+"#,
+    );
+
+    let result = compile_check(fs);
+    let codes: Vec<&str> = result.lints().iter().filter_map(|l| l.code_str()).collect();
+    assert_eq!(
+        codes
+            .iter()
+            .filter(|code| **code == "lint.unused_import")
+            .count(),
+        2,
+        "{codes:?}"
+    );
+    assert!(!codes.contains(&"lint.redundant_import_alias"), "{codes:?}");
 }
 
 #[test]

@@ -17,17 +17,15 @@ pub struct AliasMap<'a> {
 }
 
 impl<'a> AliasMap<'a> {
-    pub fn build(files: &HashMap<u32, File>, store: &'a Store) -> Self {
+    pub fn build(file: &File, store: &'a Store) -> Self {
         let mut aliases = HashMap::default();
 
-        for file in files.values().filter(|file| !file.is_d_lis()) {
-            for import in file.imports() {
-                if matches!(import.alias, Some(ImportAlias::Blank(_))) {
-                    continue;
-                }
-                if let Some(effective) = import.effective_alias(&store.go_package_names) {
-                    aliases.insert(effective.clone(), ModuleItemId::new(&effective));
-                }
+        for import in file.imports() {
+            if matches!(import.alias, Some(ImportAlias::Blank(_))) {
+                continue;
+            }
+            if let Some(effective) = import.effective_alias(&store.go_package_names) {
+                aliases.insert(effective.clone(), ModuleItemId::import(file.id, &effective));
             }
         }
 

@@ -1,0 +1,14 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+import fmt "go:fmt"
+
+fn main() {
+  fmt.Println("hi")
+}
+=== fixed ===
+import "go:fmt"
+
+fn main() {
+  fmt.Println("hi")
+}

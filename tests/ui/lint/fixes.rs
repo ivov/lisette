@@ -1495,3 +1495,16 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn fix_redundant_import_alias() {
+    assert_fix_snapshot!(
+        r#"
+import fmt "go:fmt"
+
+fn main() {
+  fmt.Println("hi")
+}
+"#
+    );
+}

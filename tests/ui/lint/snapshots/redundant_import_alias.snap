@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ● Redundant import alias
+   ╭─[test.lis:2:8]
+ 1 │ 
+ 2 │ import fmt "go:fmt"
+   ·        ─┬─
+   ·         ╰── alias matches module name exactly
+ 3 │ 
+   ╰────
+  help: Remove the alias: `import "go:fmt"` · code: [lint.redundant_import_alias]

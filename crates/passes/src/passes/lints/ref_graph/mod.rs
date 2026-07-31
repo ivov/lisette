@@ -1,4 +1,5 @@
 mod extract;
+mod redundant_import_alias;
 mod reference_graph;
 mod visibility_constraints;
 
@@ -22,6 +23,7 @@ use syntax::program::UnusedInfo;
 use syntax::program::{File, FileImport};
 
 use extract::{AliasMap, is_upper, walk_expression};
+use redundant_import_alias::check_redundant_aliases;
 use reference_graph::{EnumVariantId, ItemKind, ModuleItemId, ReferenceGraph, StructFieldId};
 use syntax::attributes::SERIALIZATION_KEYS;
 use visibility_constraints::check_visibility_constraints;
@@ -107,11 +109,11 @@ fn run_ref_lints(module: &Module, facts: &Facts, store: &Store) -> RefLintResult
     let files = &module.files;
     let equality_index = &store.equality_index;
     let mut diagnostics = Vec::new();
-    let mut unused_import_aliases = HashSet::default();
+    let mut unused_import_spans = HashSet::default();
     let mut unused_definition_spans = Vec::new();
     let mut graph = ReferenceGraph::new();
 
-    collect_items(
+    let imports_per_alias = collect_items(
         files,
         &module.id,
         &store.go_package_names,
@@ -119,8 +121,8 @@ fn run_ref_lints(module: &Module, facts: &Facts, store: &Store) -> RefLintResult
         &mut graph,
     );
 
-    let alias_map = AliasMap::build(files, store);
     for file in files.values().filter(|file| !file.is_d_lis()) {
+        let alias_map = AliasMap::build(file, store);
         for item in &file.items {
             walk_expression(module, item, &mut graph, &alias_map, None);
         }
@@ -139,10 +141,14 @@ fn run_ref_lints(module: &Module, facts: &Facts, store: &Store) -> RefLintResult
         }
     }
 
+    let mut unused_imports_per_alias: HashMap<String, usize> = HashMap::default();
     for item_id in graph.get_unreachable() {
         if let Some(info) = graph.get_item(item_id) {
             if matches!(info.kind, ItemKind::Import { .. }) {
-                unused_import_aliases.insert(item_id.name.to_string());
+                *unused_imports_per_alias
+                    .entry(item_id.name.to_string())
+                    .or_default() += 1;
+                unused_import_spans.insert(info.span);
             }
             if info.kind == ItemKind::Function {
                 unused_definition_spans.push(info.span);
@@ -161,6 +167,15 @@ fn run_ref_lints(module: &Module, facts: &Facts, store: &Store) -> RefLintResult
         }
     }
 
+    // Emit drops an import from every file of the module at once.
+    let unused_import_aliases: HashSet<String> = unused_imports_per_alias
+        .into_iter()
+        .filter(|(alias, unused)| imports_per_alias.get(alias) == Some(unused))
+        .map(|(alias, _)| alias)
+        .collect();
+
+    check_redundant_aliases(files, store, &unused_import_spans, &mut diagnostics);
+
     check_visibility_constraints(module, files, &mut diagnostics);
 
     for span in graph.get_unused_struct_fields() {
@@ -178,13 +193,16 @@ fn run_ref_lints(module: &Module, facts: &Facts, store: &Store) -> RefLintResult
     }
 }
 
+/// Returns how many files import each alias.
 fn collect_items(
     files: &HashMap<u32, File>,
     module_id: &str,
     go_package_names: &HashMap<String, String>,
     equality_index: &EqualityIndex,
     graph: &mut ReferenceGraph,
-) {
+) -> HashMap<String, usize> {
+    let mut imports_per_alias: HashMap<String, usize> = HashMap::default();
+
     for file in files.values().filter(|file| !file.is_d_lis()) {
         for item in &file.items {
             match item {
@@ -206,8 +224,12 @@ fn collect_items(
                     };
 
                     if let Some(effective) = file_import.effective_alias(go_package_names) {
-                        let id = ModuleItemId::new(&effective);
-                        graph.add_import(id, *name_span, *span);
+                        *imports_per_alias.entry(effective.clone()).or_default() += 1;
+                        graph.add_import(
+                            ModuleItemId::import(file.id, &effective),
+                            *name_span,
+                            *span,
+                        );
                     }
                 }
                 Expression::Function {
@@ -326,6 +348,8 @@ fn collect_items(
             }
         }
     }
+
+    imports_per_alias
 }
 
 fn function_is_entry(name: &str, visibility: Visibility, attributes: &[Attribute]) -> bool {
