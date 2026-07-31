@@ -501,7 +501,7 @@ impl InferCtx<'_> {
             }
 
             Pipeline => {
-                panic!("Pipeline operator should have been desugared before type inference")
+                unreachable!("pipeline expressions are lowered before binary inference")
             }
         }
     }

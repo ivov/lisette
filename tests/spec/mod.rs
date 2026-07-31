@@ -1,5 +1,4 @@
 mod build;
-mod desugar;
 mod emit;
 mod format;
 mod graph;

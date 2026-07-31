@@ -15,7 +15,8 @@ pub mod propagate;
 pub mod select;
 pub mod struct_call;
 
-use syntax::ast::{Expression, Span};
+use syntax::ast::{BinaryOperator, CallTypeArguments, Expression, Span};
+use syntax::program::CallKind;
 use syntax::types::Type;
 
 use crate::checker::infer::InferCtx;
@@ -165,6 +166,27 @@ impl InferCtx<'_> {
             } => self.infer_recover_block(items, recover_keyword_span, span, expected_ty),
 
             Expression::Binary {
+                operator: BinaryOperator::Pipeline,
+                left,
+                right,
+                span,
+                ..
+            } => {
+                let lowered = self.lower_pipeline(*left, *right, span);
+                if matches!(
+                    &lowered,
+                    Expression::Unit {
+                        ty: Type::Error,
+                        ..
+                    }
+                ) {
+                    lowered
+                } else {
+                    self.infer_expression_at(lowered, expected_ty, is_subexpression)
+                }
+            }
+
+            Expression::Binary {
                 operator,
                 left,
                 right,
@@ -278,6 +300,125 @@ impl InferCtx<'_> {
             Expression::Break { value, span } => self.infer_break(value, span, is_subexpression),
             Expression::Continue { span } => self.infer_continue(span, is_subexpression),
             Expression::RawGo { text } => Expression::RawGo { text },
+        }
+    }
+
+    fn lower_pipeline(&mut self, left: Expression, right: Expression, span: Span) -> Expression {
+        let mut segments = vec![(right, span)];
+        let mut current = left;
+        while let Expression::Binary {
+            operator: BinaryOperator::Pipeline,
+            left,
+            right,
+            span,
+            ..
+        } = current
+        {
+            segments.push((*right, span));
+            current = *left;
+        }
+
+        let mut lowered = current;
+        while let Some((right, span)) = segments.pop() {
+            if matches!(
+                &lowered,
+                Expression::Unit {
+                    ty: Type::Error,
+                    ..
+                }
+            ) {
+                lowered = Expression::Unit {
+                    ty: Type::Error,
+                    span,
+                };
+                continue;
+            }
+            lowered = self.lower_pipeline_step(lowered, right, span);
+        }
+        lowered
+    }
+
+    fn lower_pipeline_step(
+        &mut self,
+        left: Expression,
+        right: Expression,
+        span: Span,
+    ) -> Expression {
+        let right = Self::unwrap_parens_owned(right);
+        let right = match right {
+            Expression::Binary {
+                operator: BinaryOperator::Pipeline,
+                left,
+                right,
+                span,
+                ..
+            } => self.lower_pipeline(*left, *right, span),
+            other => other,
+        };
+
+        match right {
+            Expression::Identifier { .. } | Expression::DotAccess { .. } => Expression::Call {
+                expression: Box::new(right),
+                args: vec![left],
+                spread: None,
+                type_arguments: CallTypeArguments::none(),
+                ty: Type::uninferred(),
+                span,
+                call_kind: CallKind::Unresolved,
+            },
+            Expression::Call {
+                expression,
+                args,
+                spread,
+                type_arguments,
+                ty,
+                call_kind,
+                ..
+            } => {
+                let mut new_args = Vec::with_capacity(args.len() + 1);
+                new_args.push(left);
+                new_args.extend(args);
+                Expression::Call {
+                    expression,
+                    args: new_args,
+                    spread,
+                    type_arguments,
+                    ty,
+                    span,
+                    call_kind,
+                }
+            }
+            Expression::Propagate {
+                span: propagate_span,
+                ..
+            } => {
+                self.sink
+                    .push(diagnostics::infer::propagate_in_pipeline(propagate_span));
+                Expression::Unit {
+                    ty: Type::Error,
+                    span,
+                }
+            }
+            other => {
+                self.sink.push(diagnostics::infer::invalid_pipeline_target(
+                    other.get_span(),
+                ));
+                Expression::Unit {
+                    ty: Type::Error,
+                    span,
+                }
+            }
+        }
+    }
+
+    fn unwrap_parens_owned(mut expression: Expression) -> Expression {
+        loop {
+            match expression {
+                Expression::Paren {
+                    expression: inner, ..
+                } => expression = *inner,
+                other => return other,
+            }
         }
     }
 

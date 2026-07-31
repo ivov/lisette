@@ -3,7 +3,7 @@ use crate::_harness::filesystem::MockFileSystem;
 use crate::_harness::formatting::{format_diagnostic_for_snapshot, format_diagnostic_standalone};
 use crate::_harness::infer::{infer, infer_module};
 use crate::{
-    assert_desugar_error_snapshot, assert_infer_error_snapshot, assert_lex_error_snapshot,
+    assert_infer_error_snapshot, assert_lex_error_snapshot,
     assert_multimodule_infer_error_snapshot, assert_parse_error_snapshot,
 };
 
@@ -1270,27 +1270,27 @@ fn test() {
 }
 
 #[test]
-fn desugar_propagate_in_pipeline() {
+fn infer_propagate_in_pipeline() {
     let input = "fn test() { x |> validate? |> transform; }";
-    assert_desugar_error_snapshot!(input);
+    assert_infer_error_snapshot!(input);
 }
 
 #[test]
-fn desugar_pipeline_with_literal() {
+fn infer_pipeline_with_literal() {
     let input = "fn test() { x |> 5; }";
-    assert_desugar_error_snapshot!(input);
+    assert_infer_error_snapshot!(input);
 }
 
 #[test]
-fn desugar_pipeline_with_lambda() {
+fn infer_pipeline_with_lambda() {
     let input = "fn test() { x |> |y| y * 2; }";
-    assert_desugar_error_snapshot!(input);
+    assert_infer_error_snapshot!(input);
 }
 
 #[test]
-fn desugar_pipeline_with_binary() {
+fn infer_pipeline_with_binary() {
     let input = "fn test() { x |> 1 + 2; }";
-    assert_desugar_error_snapshot!(input);
+    assert_infer_error_snapshot!(input);
 }
 
 #[test]

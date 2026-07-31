@@ -3,7 +3,6 @@ use semantics::{checker::TaskState, checker::infer::InferCtx};
 use stdlib::{Target, get_go_stdlib_typedef};
 use syntax::{
     ast::Expression,
-    desugar,
     lex::Lexer,
     parse::Parser,
     program::{File, FileImport, UnusedInfo, Visibility},
@@ -30,14 +29,7 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
         panic!("Parsing failed in lint test: {:?}", parse_result.errors);
     }
 
-    let desugar_result = desugar::desugar(parse_result.ast);
-    if !desugar_result.errors.is_empty() {
-        panic!(
-            "Desugaring failed in lint test: {:?}",
-            desugar_result.errors
-        );
-    }
-    let ast = desugar_result.ast;
+    let ast = parse_result.ast;
 
     let mut checker = TaskState::with_fresh_allocator();
     checker.cursor.module_id = TEST_MODULE_ID.to_string();

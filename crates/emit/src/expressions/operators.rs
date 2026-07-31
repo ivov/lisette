@@ -30,7 +30,7 @@ impl Planner<'_> {
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
         if matches!(operator, BinaryOperator::Pipeline) {
-            unreachable!("Pipeline operator should have been desugared by now")
+            unreachable!("pipeline expressions are lowered during inference")
         }
 
         let left = BinaryOperand {

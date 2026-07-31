@@ -8,7 +8,6 @@ use deps::TypedefLocator;
 use diagnostics::LisetteDiagnostic;
 use passes::analyze;
 use semantics::inference::{AnalyzeInput, CompilePhase, EntryFile, ProjectKind, SemanticConfig};
-use syntax::desugar;
 use syntax::lex::Lexer;
 use syntax::parse::Parser;
 use syntax::types::{CompoundKind, Type};
@@ -103,15 +102,9 @@ impl SharedState {
         }
 
         let parse_result = Parser::new(lex_result.tokens, &source).parse();
-        let desugar_result = desugar::desugar(parse_result.ast);
-
-        let has_parse_errors = !parse_result.errors.is_empty() || !desugar_result.errors.is_empty();
-        let parse_errors: Vec<LisetteDiagnostic> = parse_result
-            .errors
-            .into_iter()
-            .chain(desugar_result.errors)
-            .map(Into::into)
-            .collect();
+        let has_parse_errors = !parse_result.errors.is_empty();
+        let parse_errors: Vec<LisetteDiagnostic> =
+            parse_result.errors.into_iter().map(Into::into).collect();
 
         let standalone = config.is_standalone();
         let (locator, manifest_error) = if standalone {
@@ -157,7 +150,7 @@ impl SharedState {
                     source,
                     display_path: filename.clone(),
                     filename,
-                    ast: desugar_result.ast,
+                    ast: parse_result.ast,
                     file_comment: parse_result.file_comment,
                 })
             },

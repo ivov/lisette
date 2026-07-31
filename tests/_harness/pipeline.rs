@@ -5,7 +5,6 @@ use semantics::{checker::TaskState, checker::infer::InferCtx};
 use stdlib::{Target, get_go_stdlib_typedef};
 use syntax::{
     ast::{Expression, FunctionBody},
-    desugar,
     lex::Lexer,
     parse::Parser,
     program::{Definition, EqualityIndex, File, FileImport, MutationInfo, UnusedInfo, Visibility},
@@ -66,13 +65,8 @@ impl TestPipeline {
             panic!("Parsing failed in test: {:?}", parse_result.errors);
         }
 
-        let desugar_result = desugar::desugar(parse_result.ast);
-        if !desugar_result.errors.is_empty() {
-            panic!("Desugaring failed in test: {:?}", desugar_result.errors);
-        }
-
         CompiledTest {
-            ast: desugar_result.ast,
+            ast: parse_result.ast,
             wrapped: self.wrapped,
             e2e_suite_mode: self.e2e_suite_mode,
             extra_go_typedefs: self.extra_go_typedefs,

@@ -13,11 +13,6 @@ fuzz_target!(|data: &[u8]| {
         return;
     }
 
-    let desugar_result = lisette_syntax::desugar::desugar(ast_result.ast);
-    if !desugar_result.errors.is_empty() {
-        return;
-    }
-
     let sink = lisette_diagnostics::LocalSink::new();
     let mut store = lisette_semantics::store::Store::new();
     store.add_module("fuzz");
@@ -29,13 +24,13 @@ fuzz_target!(|data: &[u8]| {
 
     checker.register_types_and_values(
         &mut store,
-        &desugar_result.ast,
+        &ast_result.ast,
         &lisette_syntax::program::Visibility::Private,
     );
     checker.finalize_equality(&mut store);
     checker.check_pending_generic_bounds(&store);
 
-    for expression in desugar_result.ast {
+    for expression in ast_result.ast {
         let type_var = checker.new_type_var();
         let _ =
             InferCtx::new(&mut checker, &store).infer_root_expression(expression, &type_var);

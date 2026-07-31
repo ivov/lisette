@@ -236,7 +236,7 @@ pub(super) fn is_postfix_tight(expression: &Expression) -> bool {
         | Expression::IndexedAccess { .. }
         | Expression::Paren { .. }
         | Expression::Propagate { .. } => true,
-        // A `|>` pipeline desugars to a `Call` with its piped arg before the callee.
+        // A `|>` pipeline lowers to a `Call` with its piped arg before the callee.
         Expression::Call {
             expression: callee,
             args,

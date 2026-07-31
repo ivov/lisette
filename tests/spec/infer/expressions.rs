@@ -465,6 +465,62 @@ fn pipeline_with_partial_application() {
 }
 
 #[test]
+fn pipeline_prepends_value_before_existing_arguments() {
+    infer(
+        r#"{
+    let keep_first = |value: int, label: string| -> int { value };
+    5 |> keep_first("five")
+  }"#,
+    )
+    .assert_type_int();
+}
+
+#[test]
+fn pipeline_with_parenthesized_target() {
+    infer(
+        r#"{
+    let double = |x: int| -> int { x * 2 };
+    5 |> (double)
+  }"#,
+    )
+    .assert_type_int();
+}
+
+#[test]
+fn pipeline_with_parenthesized_pipeline_target() {
+    infer(
+        r#"{
+    let add = |x: int, y: int| -> int { x + y };
+    5 |> (3 |> add)
+  }"#,
+    )
+    .assert_type_int();
+}
+
+#[test]
+fn pipeline_is_absent_from_inferred_ast() {
+    fn contains_pipeline(expression: &syntax::ast::Expression) -> bool {
+        matches!(
+            expression,
+            syntax::ast::Expression::Binary {
+                operator: syntax::ast::BinaryOperator::Pipeline,
+                ..
+            }
+        ) || expression.children().into_iter().any(contains_pipeline)
+    }
+
+    let result = infer(
+        r#"{
+    let double = |x: int| -> int { x * 2 };
+    5 |> double |> double
+  }"#,
+    )
+    .assert_no_errors();
+
+    assert!(!result.ast.iter().any(contains_pipeline));
+}
+
+#[test]
 fn pipeline_chained_with_partial_application() {
     infer(
         r#"{

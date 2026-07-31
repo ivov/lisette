@@ -2454,6 +2454,20 @@ pub fn empty_body_return_mismatch(expected_ty: &Type, span: Span) -> LisetteDiag
         .with_note("An empty function body implicitly returns `()`.")
 }
 
+pub fn propagate_in_pipeline(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Invalid `?` in pipeline")
+        .with_parse_code("propagate_in_pipeline")
+        .with_span_label(&span, "propagate operator used here")
+        .with_help("Extract the `?` operation to a `let` binding: `let result = (... |> func)?`")
+}
+
+pub fn invalid_pipeline_target(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Invalid pipeline")
+        .with_parse_code("invalid_pipeline_target")
+        .with_span_label(&span, "expected function")
+        .with_help("Pipeline only supports functions (not lambdas)")
+}
+
 fn operator_verb(operator: &BinaryOperator) -> &'static str {
     match operator {
         BinaryOperator::Addition => "add",
@@ -2498,7 +2512,7 @@ fn operator_help(op: &BinaryOperator) -> &'static str {
         | BinaryOperator::GreaterThan
         | BinaryOperator::GreaterThanOrEqual => "requires both operands to have the same type",
         BinaryOperator::And | BinaryOperator::Or => "requires both operands to be bool",
-        BinaryOperator::Pipeline => "should have been desugared",
+        BinaryOperator::Pipeline => "is handled before binary inference",
     }
 }
 

@@ -1,8 +1,6 @@
 pub mod ast;
-pub(crate) mod ast_folder;
 pub mod attributes;
 pub mod containment;
-pub mod desugar;
 mod display;
 pub mod go_names;
 pub mod lex;
@@ -58,10 +56,28 @@ pub fn build_ast(source: &str, file_id: u32) -> AstBuildResult {
         };
     }
 
-    let desugar_result = desugar::desugar(parse_result.ast);
-    parse::ParseResult {
-        ast: desugar_result.ast,
-        errors: desugar_result.errors,
-        file_comment: parse_result.file_comment,
+    parse_result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ast::{BinaryOperator, Expression};
+
+    fn contains_pipeline(expression: &Expression) -> bool {
+        matches!(
+            expression,
+            Expression::Binary {
+                operator: BinaryOperator::Pipeline,
+                ..
+            }
+        ) || expression.children().into_iter().any(contains_pipeline)
+    }
+
+    #[test]
+    fn build_ast_preserves_pipeline_expression() {
+        let result = super::build_ast("fn test() { value |> transform }", 0);
+
+        assert!(result.errors.is_empty());
+        assert!(result.ast.iter().any(contains_pipeline));
     }
 }

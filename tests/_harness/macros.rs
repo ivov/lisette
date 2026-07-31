@@ -30,40 +30,6 @@ macro_rules! assert_parse_snapshot {
 }
 
 #[macro_export]
-macro_rules! assert_desugar_snapshot {
-    ($input:expr) => {
-        let lex_result = syntax::lex::Lexer::new($input, 0).lex();
-        assert!(
-            !lex_result.failed(),
-            "Lexer failed: {:?}",
-            lex_result.errors
-        );
-
-        let parse_result = syntax::parse::Parser::new(lex_result.tokens, $input).parse();
-        assert!(
-            !parse_result.failed(),
-            "Parser failed: {:?}",
-            parse_result.errors
-        );
-
-        let desugar_result = syntax::desugar::desugar(parse_result.ast);
-        assert!(
-            desugar_result.errors.is_empty(),
-            "Desugaring failed: {:?}",
-            desugar_result.errors
-        );
-
-        insta::with_settings!({
-            description => $crate::_harness::snapshot_description($input),
-            prepend_module_to_snapshot => false,
-            omit_expression => true,
-        }, {
-            insta::assert_debug_snapshot!(desugar_result.ast);
-        });
-    };
-}
-
-#[macro_export]
 macro_rules! assert_lex_error_snapshot {
     ($source:expr) => {
         use syntax::lex::Lexer;
@@ -105,41 +71,6 @@ macro_rules! assert_parse_error_snapshot {
 
         let output = $crate::_harness::formatting::format_parse_error_for_snapshot(
             &parse_result.errors[0],
-            $source,
-            "test.lis",
-        );
-
-        insta::with_settings!({
-            prepend_module_to_snapshot => false,
-            omit_expression => true,
-        }, {
-            insta::assert_snapshot!(output);
-        });
-    };
-}
-
-#[macro_export]
-macro_rules! assert_desugar_error_snapshot {
-    ($source:expr) => {
-        use syntax::lex::Lexer;
-        use syntax::parse::Parser;
-        use syntax::desugar;
-
-        let lex_result = Lexer::new($source, 0).lex();
-        if lex_result.failed() {
-            panic!("Lexing failed in desugar error test");
-        }
-        let parse_result = Parser::new(lex_result.tokens, $source).parse();
-        if parse_result.failed() {
-            panic!("Parsing failed in desugar error test");
-        }
-        let desugar_result = desugar::desugar(parse_result.ast);
-        if desugar_result.errors.is_empty() {
-            panic!("Expected desugar errors but desugaring succeeded");
-        }
-
-        let output = $crate::_harness::formatting::format_parse_error_for_snapshot(
-            &desugar_result.errors[0],
             $source,
             "test.lis",
         );

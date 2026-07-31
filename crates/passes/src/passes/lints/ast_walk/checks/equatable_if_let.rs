@@ -22,7 +22,7 @@ pub fn check_equatable_if_let(expression: &Expression, ctx: &NodeCtx) {
 
     // The subject text is reused as the left operand, so it must be a primary
     // expression: an identifier or field access never carries an operator looser
-    // than `==`, but a call can (a pipeline `|>` desugars to one).
+    // than `==`, but a call can (a pipeline `|>` lowers to one).
     if !matches!(
         scrutinee.unwrap_parens(),
         Expression::Identifier { .. } | Expression::DotAccess { .. }
