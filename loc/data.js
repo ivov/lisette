@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785516075207,
+  "lastUpdate": 1785516698796,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -15157,6 +15157,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "diagnostics",
             "value": 6785,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5417,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2778,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1271,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7329,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "01986c0258f05c50a39c15ab63b7a9c312c9981d",
+          "message": "refactor: tailor comparable-bound diagnostic to equatable types (#1167)",
+          "timestamp": "2026-07-31T18:51:08+02:00",
+          "tree_id": "3279aad724f78bfac552a6e8b1d06cecc608a29d",
+          "url": "https://github.com/ivov/lisette/commit/01986c0258f05c50a39c15ab63b7a9c312c9981d"
+        },
+        "date": 1785516695813,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 123888,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30250,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 24638,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18200,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13771,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 11844,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6805,
             "unit": "lines"
           },
           {
