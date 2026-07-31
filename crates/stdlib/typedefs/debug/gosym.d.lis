@@ -47,6 +47,7 @@ pub struct Func {
 /// 
 /// For the most part, LineTable's methods should be treated as an internal
 /// detail of the package; callers should use the methods on [Table] instead.
+#[go(hidden_fields)]
 pub struct LineTable {
   pub Data: Slice<byte>,
   pub PC: uint64,
@@ -70,6 +71,7 @@ pub struct Obj {
 }
 
 /// A Sym represents a single symbol table entry.
+#[go(hidden_fields)]
 pub struct Sym {
   pub Value: uint64,
   pub Type: byte,
@@ -81,6 +83,7 @@ pub struct Sym {
 /// Table represents a Go symbol table. It stores all of the
 /// symbols decoded from the program and provides methods to translate
 /// between symbols, names, and addresses.
+#[go(hidden_fields)]
 pub struct Table {
   pub Syms: Slice<Sym>,
   pub Funcs: Slice<Func>,

@@ -283,6 +283,7 @@ pub struct JSONHandler {
 /// It implements [Leveler] as well as a Set method,
 /// and it is safe for use by multiple goroutines.
 /// The zero LevelVar corresponds to [LevelInfo].
+#[go(zero_safe)]
 pub type LevelVar
 
 /// A Leveler provides a [Level] value.
@@ -316,6 +317,7 @@ pub type Logger
 /// Do not modify a Record after handing out a copy to it.
 /// Call [NewRecord] to create a new Record.
 /// Use [Record.Clone] to create a copy with no shared state.
+#[go(hidden_fields)]
 pub struct Record {
   pub Time: time.Time,
   pub Message: string,
@@ -339,6 +341,7 @@ pub struct TextHandler {
 /// A Value can represent any Go value, but unlike type any,
 /// it can represent most small values without an allocation.
 /// The zero Value corresponds to nil.
+#[go(zero_safe)]
 pub type Value
 
 #[go(unexported)]

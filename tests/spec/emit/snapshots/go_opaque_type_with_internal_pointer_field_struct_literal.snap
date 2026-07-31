@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/imports.rs
+description: |
+  
+  import "go:time"
+  
+  fn test() -> bool {
+    let t = time.Time{}
+    t.IsZero()
+  }
+---
+package main
+
+import "time"
+
+func test() bool {
+	t := time.Time{}
+	return t.IsZero()
+}

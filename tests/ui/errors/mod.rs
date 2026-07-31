@@ -2584,6 +2584,98 @@ fn test() {
 }
 
 #[test]
+fn infer_struct_autofill_no_zero_for_go_interface_field() {
+    let input = r#"
+import "go:context"
+
+struct Wrapper { ctx: context.Context }
+
+fn test() {
+  let w = Wrapper { .. };
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_go_struct_autofill_no_zero_for_field() {
+    let input = r#"
+import "go:time"
+
+fn test() {
+  let t = time.Timer { .. };
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_go_opaque_type_no_zero_for_unverified_type() {
+    let input = r#"
+import "go:hash/maphash"
+
+fn test() {
+  let s = maphash.Seed {};
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_go_partially_hidden_struct_no_zero_even_with_visible_field_set() {
+    let input = r#"
+import "go:archive/zip"
+
+fn test() {
+  let f = zip.File {
+    FileHeader: zip.FileHeader { .. },
+  };
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_field_no_zero_names_hidden_go_state() {
+    let input = r#"
+import "go:archive/zip"
+
+struct Wrapper { f: zip.File }
+
+fn test() {
+  let w = Wrapper { .. };
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_uncurated_struct_with_unexported_embed_no_zero() {
+    let input = r#"
+import "go:os"
+
+fn test() {
+  let f = os.File { .. };
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_curated_hidden_fields_struct_still_checks_visible_field_zero() {
+    let input = r#"
+import "go:net"
+
+struct Wrapper { dialer: net.Dialer }
+
+fn test() {
+  let w = Wrapper { .. };
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_struct_autofill_tuple_chain() {
     let input = r#"
 struct Outer { t: (int, Channel<int>) }
@@ -2709,6 +2801,18 @@ fn infer_slice_make_no_zero() {
     let input = r#"
 fn test() {
   let refs = Slice.make<Ref<int>>(4)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_slice_make_no_zero_for_hidden_go_state() {
+    let input = r#"
+import "go:archive/zip"
+
+fn test() {
+  let files = Slice.make<zip.File>(4)
 }
 "#;
     assert_infer_error_snapshot!(input);

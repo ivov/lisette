@@ -60,12 +60,14 @@ pub struct Header {
 /// have the expected length or checksum. Clients should treat data
 /// returned by [Reader.Read] as tentative until they receive the [io.EOF]
 /// marking the end of the data.
+#[go(hidden_fields)]
 pub struct Reader {
   embed Header,
 }
 
 /// A Writer is an [io.WriteCloser].
 /// Writes to a Writer are compressed and written to w.
+#[go(hidden_fields)]
 pub struct Writer {
   embed Header,
 }

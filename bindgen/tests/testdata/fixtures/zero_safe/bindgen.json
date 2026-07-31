@@ -1,0 +1,12 @@
+{
+  "overrides": {
+    "types": {
+      "zero_safe": {
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/zero_safe": [
+          "Verified",
+          "VerifiedPartiallyHidden"
+        ]
+      }
+    }
+  }
+}

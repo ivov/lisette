@@ -267,6 +267,7 @@ pub struct Certificate {
 /// CertificateRequestInfo contains information from a server's
 /// CertificateRequest message, which is used to demand a certificate and proof
 /// of control from a client.
+#[go(hidden_fields)]
 pub struct CertificateRequestInfo {
   pub AcceptableCAs: Slice<Slice<byte>>,
   pub SignatureSchemes: Slice<SignatureScheme>,
@@ -290,6 +291,7 @@ pub struct CipherSuite {
 
 /// ClientHelloInfo contains information from a ClientHello message in order to
 /// guide application logic in the GetCertificate and GetConfigForClient callbacks.
+#[go(hidden_fields)]
 pub struct ClientHelloInfo {
   pub CipherSuites: Slice<uint16>,
   pub ServerName: string,
@@ -322,6 +324,7 @@ pub type ClientSessionState
 /// After one has been passed to a TLS function it must not be
 /// modified. A Config may be reused; the tls package will also not
 /// modify it.
+#[go(hidden_fields)]
 pub struct Config {
   pub Rand: Option<io.Reader>,
   pub Time: Option<fn() -> time.Time>,
@@ -362,6 +365,7 @@ pub struct Config {
 pub type Conn
 
 /// ConnectionState records basic TLS details about the connection.
+#[go(hidden_fields)]
 pub struct ConnectionState {
   pub Version: uint16,
   pub HandshakeComplete: bool,
@@ -441,6 +445,7 @@ pub struct RecordHeaderError {
 }
 
 /// A SessionState is a resumable session.
+#[go(hidden_fields)]
 pub struct SessionState {
   pub Extra: Slice<Slice<byte>>,
   pub EarlyData: bool,

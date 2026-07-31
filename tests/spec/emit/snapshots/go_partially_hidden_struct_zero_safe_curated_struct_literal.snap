@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/imports.rs
+description: |
+  
+  import "go:container/ring"
+  
+  fn test() -> int {
+    let r = ring.Ring { Value: 1, .. }
+    match assert_type<int>(r.Value) {
+      Some(n) => n,
+      None => 0,
+    }
+  }
+---
+package main
+
+import (
+	"container/ring"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func test() int {
+	r := ring.Ring{Value: 1}
+	subject_1 := lisette.AssertType[int](r.Value)
+	if subject_1.Tag == lisette.OptionSome {
+		return subject_1.SomeVal
+	}
+	return 0
+}

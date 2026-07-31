@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/imports.rs
+description: |
+  
+  import "go:archive/zip"
+  
+  fn test(base: zip.File) -> zip.File {
+    zip.File { FileHeader: base.FileHeader, ..base }
+  }
+---
+package main
+
+import "archive/zip"
+
+func test(base zip.File) zip.File {
+	field_1 := base.FileHeader
+	copy_2 := base
+	copy_2.FileHeader = field_1
+	return copy_2
+}

@@ -16,6 +16,7 @@ description: |
     let urls: URLs = [Some(&u), None]
     let cert = x509.Certificate {
       URIs: urls,
+      PublicKey: 0,
       ..,
     }
     let _ = cert
@@ -47,6 +48,9 @@ func main() {
 			unwrapped_2[i_3] = v_4.SomeVal
 		}
 	}
-	cert := x509.Certificate{URIs: unwrapped_2}
+	cert := x509.Certificate{
+		URIs:      unwrapped_2,
+		PublicKey: 0,
+	}
 	_ = cert
 }

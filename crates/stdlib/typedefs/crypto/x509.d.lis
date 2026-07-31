@@ -529,6 +529,7 @@ pub struct CertificateRequest {
 /// ConstraintViolationError results when a requested usage is not permitted by
 /// a certificate. For example: checking a signature when the public key isn't a
 /// certificate signing key.
+#[go(zero_safe)]
 pub type ConstraintViolationError
 
 /// HostnameError results when the set of authorized names doesn't match the
@@ -591,14 +592,17 @@ pub struct SystemRootsError {
   pub Err: error,
 }
 
+#[go(zero_safe)]
 pub type UnhandledCriticalExtension
 
 /// UnknownAuthorityError results when the certificate issuer is unknown
+#[go(hidden_fields)]
 pub struct UnknownAuthorityError {
   pub Cert: Option<Ref<Certificate>>,
 }
 
 /// VerifyOptions contains parameters for Certificate.Verify.
+#[go(hidden_fields)]
 pub struct VerifyOptions {
   pub DNSName: string,
   pub Intermediates: Option<Ref<CertPool>>,

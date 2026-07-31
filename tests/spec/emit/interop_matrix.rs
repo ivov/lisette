@@ -1661,6 +1661,7 @@ fn main() {
   }
   let cert: Cert = x509.Certificate {
     URIs: [Some(&u)],
+    PublicKey: 0,
     ..,
   }
   let urls = cert.URIs
@@ -1688,7 +1689,10 @@ fn main() {
     Host: "example.com",
     ..,
   }
-  let mut cert: Cert = x509.Certificate { .. }
+  let mut cert: Cert = x509.Certificate {
+    PublicKey: 0,
+    ..,
+  }
   let urls: Slice<Option<Ref<url.URL>>> = [Some(&u)]
   cert.URIs = urls
   let _ = cert
@@ -1742,6 +1746,7 @@ fn main() {
   let urls: URLs = [Some(&u), None]
   let cert = x509.Certificate {
     URIs: urls,
+    PublicKey: 0,
     ..,
   }
   let _ = cert

@@ -258,6 +258,12 @@ Bindgen accepts a config file with per-package overrides:
           "Client.Ping": ["rp"],
         },
       },
+
+      // Allow constructing a type at its Go zero value, verified against Go's docs
+      // e.g. `sync.Mutex` documents its zero value as an unlocked mutex
+      "zero_safe": {
+        "sync": ["Mutex", "WaitGroup"],
+      },
     },
   },
 }

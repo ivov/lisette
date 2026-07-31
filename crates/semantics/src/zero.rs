@@ -16,6 +16,15 @@ pub struct NoZero {
     pub leaf_ty: Type,
 }
 
+impl NoZero {
+    pub fn hidden_go_state(&self) -> Option<&str> {
+        match &self.reason {
+            NoZeroReason::HiddenGoState { go_type } => Some(go_type),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum NoZeroReason {
     /// The leaf type itself has no defined zero (e.g., bare `fn`, `Channel<T>`,
@@ -28,6 +37,8 @@ pub enum NoZeroReason {
         field: EcoString,
         owning_module: EcoString,
     },
+    /// A Go type with state Lisette cannot see, named for the diagnostic.
+    HiddenGoState { go_type: EcoString },
 }
 
 /// Predicate: does `ty` have a Lisette-side zero, constructible from `from_module`?
@@ -144,13 +155,6 @@ fn has_zero_nominal(
     original_ty: &Type,
     visited: &mut Vec<Type>,
 ) -> Result<(), NoZero> {
-    // Go-imported nominal: every Go field has a Go zero by language definition.
-    // Accept the whole nominal without recursing into its fields (Go's own
-    // `T{}` zeroing is what the emit will use).
-    if id.as_str().starts_with("go:") {
-        return Ok(());
-    }
-
     let size = type_node_count(original_ty);
     let is_recursion = visited.iter().any(|ancestor| match ancestor {
         Type::Nominal {
@@ -202,15 +206,29 @@ fn has_zero_nominal_fields(
 
     match &def.body {
         DefinitionBody::Struct { fields, .. } => {
+            if def.has_hidden_fields() && !def.is_zero_safe() {
+                return Err(NoZero {
+                    chain: vec![],
+                    reason: NoZeroReason::HiddenGoState {
+                        go_type: go_display_name(id),
+                    },
+                    leaf_ty: original_ty.clone(),
+                });
+            }
             let def_ty = &def.ty;
             let map = build_substitution(def_ty, params);
             let struct_module = store
                 .module_for_qualified_name(id.as_str())
                 .unwrap_or(from_module);
             let struct_is_foreign = struct_module != from_module;
+
+            let is_go_struct = id.as_str().starts_with("go:");
             let struct_name: EcoString = id.last_segment().into();
             for f in fields {
-                if struct_is_foreign && !f.visibility.is_public() {
+                if is_go_struct && curation_covers_embed(def, f) {
+                    continue;
+                }
+                if struct_is_foreign && !f.visibility.is_public() && !is_go_struct {
                     return Err(NoZero {
                         chain: vec![f.name.clone()],
                         reason: NoZeroReason::PrivateField {
@@ -237,6 +255,9 @@ fn has_zero_nominal_fields(
         }
         DefinitionBody::TypeAlias { alias, .. } => {
             if matches!(alias, syntax::program::AliasKind::Opaque(_)) {
+                if def.is_zero_safe() {
+                    return Ok(());
+                }
                 return Err(NoZero {
                     chain: vec![],
                     reason: NoZeroReason::NoZeroForType,
@@ -256,6 +277,22 @@ fn has_zero_nominal_fields(
             leaf_ty: original_ty.clone(),
         }),
     }
+}
+
+/// `go:archive/zip.File` as `archive/zip.File`, so diagnostics name the package.
+fn go_display_name(id: &Symbol) -> EcoString {
+    id.as_str()
+        .strip_prefix(syntax::types::GO_IMPORT_PREFIX)
+        .unwrap_or(id.as_str())
+        .into()
+}
+
+/// An unexported embed is state no caller can reach, so the opt-in covers it.
+pub fn curation_covers_embed(
+    def: &syntax::program::Definition,
+    field: &syntax::ast::StructFieldDefinition,
+) -> bool {
+    def.is_zero_safe() && field.is_embedded() && !field.visibility.is_public()
 }
 
 fn build_substitution(def_ty: &Type, params: &[Type]) -> SubstitutionMap {

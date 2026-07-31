@@ -190,6 +190,90 @@ fn test() {
 }
 
 #[test]
+fn go_opaque_type_with_internal_pointer_field_struct_literal() {
+    let input = r#"
+import "go:time"
+
+fn test() -> bool {
+  let t = time.Time{}
+  t.IsZero()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn go_partially_hidden_struct_zero_safe_curated_struct_literal() {
+    let input = r#"
+import "go:container/ring"
+
+fn test() -> int {
+  let r = ring.Ring { Value: 1, .. }
+  match assert_type<int>(r.Value) {
+    Some(n) => n,
+    None => 0,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn go_partially_hidden_struct_spread_update_needs_no_curation() {
+    let input = r#"
+import "go:archive/zip"
+
+fn test(base: zip.File) -> zip.File {
+  zip.File { FileHeader: base.FileHeader, ..base }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn go_curated_struct_with_unexported_embed_autofills() {
+    let input = r#"
+import "go:runtime"
+
+fn test() {
+  let mut p = runtime.Pinner { .. }
+  p.Unpin()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn go_struct_autofill_writes_omitted_map_field() {
+    let input = r#"
+import "go:encoding/pem"
+
+fn test() -> string {
+  let mut b = pem.Block { Type: "X", .. }
+  b.Headers["key"] = "value"
+  b.Headers["key"]
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn go_struct_autofill_writes_omitted_named_map_field() {
+    let input = r#"
+import "go:net/url"
+
+struct Wrapper { values: url.Values }
+
+fn test() -> string {
+  let mut w = Wrapper { .. }
+  w.values.Add("key", "value")
+  w.values.Get("key")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn go_opaque_type_autofill_spread() {
     let input = r#"
 import "go:sync"
@@ -232,14 +316,14 @@ fn test() -> Wrapper {
 }
 
 #[test]
-fn lisette_struct_with_go_interface_autofills() {
+fn lisette_struct_with_go_interface_field_emits() {
     let input = r#"
 import "go:context"
 
 struct Wrapper { ctx: context.Context }
 
 fn test() -> Wrapper {
-  Wrapper { .. }
+  Wrapper { ctx: context.Background() }
 }
 "#;
     assert_emit_snapshot!(input);

@@ -15,6 +15,7 @@ description: |
     }
     let cert: Cert = x509.Certificate {
       URIs: [Some(&u)],
+      PublicKey: 0,
       ..,
     }
     let urls = cert.URIs
@@ -47,7 +48,10 @@ func main() {
 			unwrapped_2[i_3] = v_4.SomeVal
 		}
 	}
-	cert := x509.Certificate{URIs: unwrapped_2}
+	cert := x509.Certificate{
+		URIs:      unwrapped_2,
+		PublicKey: 0,
+	}
 	raw_5 := cert.URIs
 	src_6 := raw_5
 	wrapped_7 := make([]lisette.Option[*url.URL], len(src_6))

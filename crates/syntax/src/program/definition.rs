@@ -26,6 +26,8 @@ pub enum TypeAttribute {
     /// cannot be soundly embedded.
     HiddenEmbed,
     Serialized,
+    ZeroSafe,
+    HiddenFields,
 }
 
 pub type Attributes = HashSet<TypeAttribute>;
@@ -317,6 +319,16 @@ impl Definition {
     pub fn is_display(&self) -> bool {
         self.attributes()
             .is_some_and(|a| a.contains(&TypeAttribute::Display))
+    }
+
+    pub fn is_zero_safe(&self) -> bool {
+        self.attributes()
+            .is_some_and(|a| a.contains(&TypeAttribute::ZeroSafe))
+    }
+
+    pub fn has_hidden_fields(&self) -> bool {
+        self.attributes()
+            .is_some_and(|a| a.contains(&TypeAttribute::HiddenFields))
     }
 
     pub fn is_closed_domain(&self) -> bool {

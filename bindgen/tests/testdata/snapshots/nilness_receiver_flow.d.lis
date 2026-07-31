@@ -11,6 +11,7 @@ pub fn NewList() -> Ref<List>
 
 pub type List
 
+#[go(hidden_fields)]
 pub struct Node {
   pub Value: int,
 }

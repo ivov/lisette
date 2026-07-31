@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Field has no zero value
+   ╭─[test.lis:7:21]
+ 6 │ fn test() {
+ 7 │   let w = Wrapper { .. };
+   ·                     ─┬
+   ·                      ╰── no zero available
+ 8 │ }
+   ╰────
+  help: Field `f` is `archive/zip.File`, which has Go-side state hidden from Lisette, so it has no zero value. Obtain one from its documented Go constructor and pass it explicitly, or wrap the field type in `Option<T>` · code: [infer.field_no_zero]

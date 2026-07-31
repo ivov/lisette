@@ -138,13 +138,11 @@ impl Planner<'_> {
                     value
                 }
             }
-            StructSpread::Autofill { .. } if !is_go_struct => {
-                self.append_autofills(&mut field_pairs, field_assignments, &ctx);
+            StructSpread::Autofill { .. } => {
+                self.append_autofills(&mut field_pairs, field_assignments, &ctx, is_go_struct);
                 emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx)
             }
-            StructSpread::Autofill { .. } | StructSpread::None => {
-                emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx)
-            }
+            StructSpread::None => emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx),
         };
 
         ValuePlan::computed(
@@ -184,13 +182,14 @@ impl Planner<'_> {
         value
     }
 
-    /// Append zero-value pairs for fields the user did not assign. Slice fields
-    /// are skipped so Go's nil zero-value applies instead of `[]T{}`.
+    /// Zero-fill unassigned fields. Slices keep Go's nil; on a Go struct only
+    /// maps need one, their nil being the sole zero that panics on write.
     fn append_autofills(
         &mut self,
         field_pairs: &mut Vec<(String, String)>,
         field_assignments: &[StructFieldAssignment],
         ctx: &StructCallContext<'_>,
+        is_go_struct: bool,
     ) {
         let assigned: HashSet<&str> = field_assignments.iter().map(|f| f.name.as_str()).collect();
         let Some(unspecified) =
@@ -199,13 +198,26 @@ impl Planner<'_> {
             return;
         };
         for (field_name, field_ty) in unspecified {
-            if field_ty.is_slice() {
-                continue;
-            }
+            let zero = if is_go_struct {
+                match self.go_field_map_zero(ctx.ty, &field_name, &field_ty) {
+                    Some(zero) => zero,
+                    None => continue,
+                }
+            } else {
+                if field_ty.is_slice() {
+                    continue;
+                }
+                self.lisette_zero(&field_ty)
+            };
             let go_field_name = self.resolve_struct_call_field_name(&field_name, ctx);
-            let zero = self.lisette_zero(&field_ty);
             field_pairs.push((go_field_name, zero));
         }
+    }
+
+    /// Empty-map literal in the field's Go type, sound as empty needs no coercion.
+    fn go_field_map_zero(&mut self, owner: &Type, field: &str, field_ty: &Type) -> Option<String> {
+        let layout = self.field_slot_layout(owner, field, field_ty)?;
+        layout_is_map(&layout).then(|| format!("{}{{}}", layout.go_type(self)))
     }
 
     /// Look up unspecified fields of a Lisette-defined struct or enum struct variant,
@@ -267,25 +279,51 @@ impl Planner<'_> {
             return "nil".to_string();
         }
         let go_ty = self.go_type_string(ty);
-        // A newtype is a Go named scalar (`type Duration int64`), so a composite
-        // literal `Duration{}` is invalid; `*new(Duration)` yields its zero.
+        // A newtype over a scalar takes no composite literal; over a map it does.
         let is_newtype = self.facts.definition(id).is_some_and(|d| d.is_newtype());
-        let is_struct_like = !is_newtype
-            && (matches!(
-                self.facts.definition(id).map(|d| &d.body),
-                Some(DefinitionBody::Struct { .. })
-            ) || matches!(
-                self.facts.definition(id).map(|d| &d.body),
-                Some(DefinitionBody::TypeAlias {
-                    alias: syntax::program::AliasKind::Opaque(_),
-                    ..
-                })
-            ));
-        if is_struct_like {
-            format!("{}{{}}", go_ty)
-        } else {
-            format!("*new({})", go_ty)
+        if is_newtype {
+            if self
+                .get_newtype_underlying(ty)
+                .is_some_and(|underlying| underlying.is_map())
+            {
+                return format!("{}{{}}", go_ty);
+            }
+            return format!("*new({})", go_ty);
         }
+        let is_struct = matches!(
+            self.facts.definition(id).map(|d| &d.body),
+            Some(DefinitionBody::Struct { .. })
+        );
+        let is_opaque = matches!(
+            self.facts.definition(id).map(|d| &d.body),
+            Some(DefinitionBody::TypeAlias {
+                alias: syntax::program::AliasKind::Opaque(_),
+                ..
+            })
+        );
+        if !is_struct && !is_opaque {
+            return format!("*new({})", go_ty);
+        }
+        if is_struct
+            && let Some(fields) = self.lookup_unspecified_fields(ty, "", None, &HashSet::default())
+        {
+            let mut pairs: Vec<(String, String)> = Vec::new();
+            for (name, field_ty) in fields {
+                let Some(zero) = self.go_field_map_zero(ty, &name, &field_ty) else {
+                    continue;
+                };
+                let go_field_name = if self.struct_field_is_exported(ty, &name) {
+                    go_name::make_exported(&name)
+                } else if self.field_is_embedded(ty, &name) {
+                    go_name::escape_keyword(&name).into_owned()
+                } else {
+                    go_name::unexported_method_go_name(&name)
+                };
+                pairs.push((go_field_name, zero));
+            }
+            return emit_struct_literal(&go_ty, &pairs, ExpressionContext::value());
+        }
+        format!("{}{{}}", go_ty)
     }
 
     pub(crate) fn lisette_zero(&mut self, ty: &Type) -> String {
@@ -656,6 +694,15 @@ impl Planner<'_> {
             emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx),
             false,
         )
+    }
+}
+
+/// Whether a Go slot layout is a map, seeing through a named map type.
+fn layout_is_map(layout: &ValueLayout) -> bool {
+    match layout {
+        ValueLayout::Map { .. } => true,
+        ValueLayout::Named { underlying, .. } => layout_is_map(underlying),
+        _ => false,
     }
 }
 

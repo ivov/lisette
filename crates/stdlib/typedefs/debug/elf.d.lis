@@ -2945,6 +2945,7 @@ pub struct Chdr32 {
 }
 
 /// ELF64 Compression header.
+#[go(hidden_fields)]
 pub struct Chdr64 {
   pub Type: uint32,
   pub Size: uint64,
@@ -3004,6 +3005,7 @@ pub struct DynamicVersionNeed {
 }
 
 /// A File represents an open ELF file.
+#[go(hidden_fields)]
 pub struct File {
   embed FileHeader,
   pub Sections: Slice<Option<Ref<Section>>>,
@@ -3069,6 +3071,7 @@ pub struct ImportedSymbol {
 
 /// A Prog represents a single ELF program header in an ELF binary.
 #[go(hidden_embed)]
+#[go(hidden_fields)]
 pub struct Prog {
   embed ProgHeader,
   pub ReaderAt: Option<io.ReaderAt>,
@@ -3142,6 +3145,7 @@ pub struct Rela64 {
 
 /// A Section represents a single section in an ELF file.
 #[go(hidden_embed)]
+#[go(hidden_fields)]
 pub struct Section {
   embed SectionHeader,
   pub ReaderAt: Option<io.ReaderAt>,

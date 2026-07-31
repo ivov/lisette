@@ -254,6 +254,7 @@ pub struct PSSOptions {
   pub Hash: crypto.Hash,
 }
 
+#[go(hidden_fields)]
 pub struct PrecomputedValues {
   pub Dp: Option<Ref<big.Int>>,
   pub Dq: Option<Ref<big.Int>>,

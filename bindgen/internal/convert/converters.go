@@ -673,8 +673,11 @@ func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport)
 
 	switch u := underlying.(type) {
 	case *types.Struct:
-		result.Fields = convertStructFields(u, c)
+		fields, hasHidden := convertStructFields(u, c)
+		result.Fields = fields
 		result.HasHiddenEmbed = structHasHiddenEmbed(u, result.Fields)
+		result.HasHiddenFields = hasHidden
+		result.ZeroSafe = c.cfg.IsCuratedZeroSafe(c.currentPkgPath, result.Name)
 
 	case *types.Interface:
 		if isErrorInterface(u) {
@@ -777,12 +780,16 @@ func (c *Converter) convertVariable(result *ConvertResult, exp extract.SymbolExp
 	}
 }
 
-func convertStructFields(s *types.Struct, c *Converter) []StructField {
+// convertStructFields reports whether any real Go field went unrepresented.
+func convertStructFields(s *types.Struct, c *Converter) ([]StructField, bool) {
 	var fields []StructField
+	hasHidden := false
 	for field := range s.Fields() {
 		if !field.Exported() {
 			if field.Embedded() && c.EmbedIsFaithful(field) {
 				fields = append(fields, embeddedStructField(field, c))
+			} else {
+				hasHidden = true
 			}
 			continue
 		}
@@ -796,6 +803,7 @@ func convertStructFields(s *types.Struct, c *Converter) []StructField {
 				Name:       field.Name(),
 				SkipReason: fieldType.SkipReason,
 			})
+			hasHidden = true
 			continue
 		}
 		fields = append(fields, StructField{
@@ -803,7 +811,7 @@ func convertStructFields(s *types.Struct, c *Converter) []StructField {
 			Type: fieldType.LisetteType,
 		})
 	}
-	return fields
+	return fields, hasHidden
 }
 
 // EmbedIsFaithful reports whether bindgen emits field as an `embed`.

@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/imports.rs
+description: |
+  
+  import "go:runtime"
+  
+  fn test() {
+    let mut p = runtime.Pinner { .. }
+    p.Unpin()
+  }
+---
+package main
+
+import "runtime"
+
+func test() {
+	p := runtime.Pinner{}
+	p.Unpin()
+}

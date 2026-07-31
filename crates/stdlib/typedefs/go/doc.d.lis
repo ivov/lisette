@@ -165,6 +165,7 @@ pub struct Note {
 }
 
 /// Package is the documentation for an entire package.
+#[go(hidden_fields)]
 pub struct Package {
   pub Doc: string,
   pub Name: string,
@@ -193,6 +194,7 @@ pub struct Type {
 }
 
 /// Value is the documentation for a (possibly grouped) var or const declaration.
+#[go(hidden_fields)]
 pub struct Value {
   pub Doc: string,
   pub Names: Slice<string>,

@@ -59,6 +59,7 @@ pub fn WriteComparable<T: Comparable>(h: Ref<Hash>, x: T)
 /// A Hash is not safe for concurrent use by multiple goroutines, but a Seed is.
 /// If multiple goroutines must compute the same seeded hash,
 /// each can declare its own Hash and call SetSeed with a common Seed.
+#[go(zero_safe)]
 pub type Hash
 
 /// A Seed is a random value that selects the specific hash function

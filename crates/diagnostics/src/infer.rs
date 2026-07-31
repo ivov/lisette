@@ -944,16 +944,37 @@ pub fn private_field_in_autofill(
         ))
 }
 
+pub enum FieldNoZeroCause<'a> {
+    Type,
+    PrivateField {
+        struct_name: &'a str,
+        field: &'a str,
+        owning_module: &'a str,
+    },
+    HiddenGoState {
+        go_type: &'a str,
+    },
+}
+
 pub fn field_no_zero(
     struct_name: &str,
     field_name: &str,
     field_ty: &Type,
     chain: &[&str],
-    private: Option<(&str, &str, &str)>,
+    cause: FieldNoZeroCause<'_>,
     span: Span,
 ) -> LisetteDiagnostic {
-    let main = match private {
-        Some((priv_struct, priv_field, priv_module)) => format!(
+    let path = if chain.is_empty() {
+        field_name.to_string()
+    } else {
+        format!("{}.{}", field_name, chain.join("."))
+    };
+    let main = match cause {
+        FieldNoZeroCause::PrivateField {
+            struct_name: priv_struct,
+            field: priv_field,
+            owning_module: priv_module,
+        } => format!(
             "`{}` of `{}` cannot be autofilled because `{}.{}` is private to module `{}`. \
              Provide an explicit value for `{}`, or have `{}` expose `{}` as `pub`.",
             field_name,
@@ -965,18 +986,21 @@ pub fn field_no_zero(
             priv_module,
             priv_field
         ),
-        None if chain.is_empty() => format!(
+        FieldNoZeroCause::HiddenGoState { go_type } => format!(
+            "Field `{}` is `{}`, which has Go-side state hidden from Lisette, so it has no \
+             zero value. Obtain one from its documented Go constructor and pass it explicitly, \
+             or wrap the field type in `Option<T>`.",
+            path, go_type
+        ),
+        FieldNoZeroCause::Type if chain.is_empty() => format!(
             "Field `{}` of type `{}` has no zero value. Provide an explicit value, \
              or wrap the field type in `Option<T>`.",
             field_name, field_ty
         ),
-        None => format!(
-            "Field `{}.{}` of type `{}` has no zero value. Provide an explicit value for \
+        FieldNoZeroCause::Type => format!(
+            "Field `{}` of type `{}` has no zero value. Provide an explicit value for \
              `{}`, or wrap the field type in `Option<T>`.",
-            field_name,
-            chain.join("."),
-            field_ty,
-            field_name
+            path, field_ty, field_name
         ),
     };
     LisetteDiagnostic::error("Field has no zero value")
@@ -3783,14 +3807,37 @@ pub fn channel_no_make_constructor(span: Span) -> LisetteDiagnostic {
         .with_help("Use `Channel.new<T>()` for an unbuffered channel, or `Channel.buffered<T>(n)` for a buffered one")
 }
 
-pub fn slice_make_no_zero(element: &dyn std::fmt::Display, span: Span) -> LisetteDiagnostic {
+pub fn slice_make_no_zero(
+    element: &dyn std::fmt::Display,
+    hidden_go_state: Option<&str>,
+    span: Span,
+) -> LisetteDiagnostic {
+    let help = match hidden_go_state {
+        Some(go_type) => format!(
+            "`{go_type}` has Go-side state hidden from Lisette, so it has no zero value. Build \
+             the slice from a list literal of values obtained from its documented Go constructor."
+        ),
+        None => {
+            "Build the slice from a list literal instead, e.g. `let xs = [a, b, c]`".to_string()
+        }
+    };
     LisetteDiagnostic::error(format!("`{element}` has no zero value"))
         .with_infer_code("slice_make_no_zero")
         .with_span_label(
             &span,
             format!("`Slice.make` zero-fills every element, but `{element}` has none"),
         )
-        .with_help("Build the slice from a list literal instead, e.g. `let xs = [a, b, c]`")
+        .with_help(help)
+}
+
+pub fn hidden_state_no_zero(type_name: &dyn std::fmt::Display, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!("`{type_name}` has no zero value"))
+        .with_infer_code("hidden_state_no_zero")
+        .with_span_label(&span, "no zero available")
+        .with_help(format!(
+            "`{type_name}` has Go-side state hidden from Lisette whose zero value is not safe \
+             to use directly. Construct it through its documented Go constructor instead."
+        ))
 }
 
 pub fn array_new_takes_no_arguments(actual: usize, span: Span) -> LisetteDiagnostic {

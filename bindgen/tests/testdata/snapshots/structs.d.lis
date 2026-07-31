@@ -65,6 +65,7 @@ pub struct Handler {
 }
 
 /// Mixed visibility (unexported fields ignored)
+#[go(hidden_fields)]
 pub struct Mixed {
   pub Public: string,
 }

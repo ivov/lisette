@@ -7,7 +7,7 @@ description: |
   struct Wrapper { ctx: context.Context }
   
   fn test() -> Wrapper {
-    Wrapper { .. }
+    Wrapper { ctx: context.Background() }
   }
 ---
 package main
@@ -19,5 +19,5 @@ type Wrapper struct {
 }
 
 func test() Wrapper {
-	return Wrapper{ctx: nil}
+	return Wrapper{ctx: context.Background()}
 }

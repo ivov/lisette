@@ -13,7 +13,10 @@ description: |
       Host: "example.com",
       ..,
     }
-    let mut cert: Cert = x509.Certificate { .. }
+    let mut cert: Cert = x509.Certificate {
+      PublicKey: 0,
+      ..,
+    }
     let urls: Slice<Option<Ref<url.URL>>> = [Some(&u)]
     cert.URIs = urls
     let _ = cert
@@ -34,7 +37,7 @@ func main() {
 		Scheme: "https",
 		Host:   "example.com",
 	}
-	cert := x509.Certificate{}
+	cert := x509.Certificate{PublicKey: 0}
 	urls := []lisette.Option[*url.URL]{lisette.MakeOptionSome(&u)}
 	src_1 := urls
 	unwrapped_2 := make([]*url.URL, len(src_1))

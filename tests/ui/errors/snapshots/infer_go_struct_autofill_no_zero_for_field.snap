@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ `Timer` has no zero value
+   ╭─[test.lis:5:11]
+ 4 │ fn test() {
+ 5 │   let t = time.Timer { .. };
+   ·           ────────┬────────
+   ·                   ╰── no zero available
+ 6 │ }
+   ╰────
+  help: `Timer` has Go-side state hidden from Lisette whose zero value is not safe to use directly. Construct it through its documented Go constructor instead · code: [infer.hidden_state_no_zero]

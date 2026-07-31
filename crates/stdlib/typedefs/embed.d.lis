@@ -15,6 +15,7 @@ import "go:io/fs"
 /// file system interfaces, including net/http, text/template, and html/template.
 /// 
 /// See the package documentation for more details about initializing an FS.
+#[go(zero_safe)]
 pub type FS
 
 impl FS {

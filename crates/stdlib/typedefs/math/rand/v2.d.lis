@@ -119,6 +119,7 @@ pub type ChaCha8
 
 /// A PCG is a PCG generator with 128 bits of internal state.
 /// A zero PCG is equivalent to NewPCG(0, 0).
+#[go(zero_safe)]
 pub type PCG
 
 /// A Rand is a source of random numbers.

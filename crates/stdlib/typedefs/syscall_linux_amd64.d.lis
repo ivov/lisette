@@ -1476,17 +1476,20 @@ pub interface Sockaddr {
   fn sockaddr()
 }
 
+#[go(hidden_fields)]
 pub struct SockaddrInet4 {
   pub Port: int,
   pub Addr: Array<byte, 4>,
 }
 
+#[go(hidden_fields)]
 pub struct SockaddrInet6 {
   pub Port: int,
   pub ZoneId: uint32,
   pub Addr: Array<byte, 16>,
 }
 
+#[go(hidden_fields)]
 pub struct SockaddrLinklayer {
   pub Protocol: uint16,
   pub Ifindex: int,
@@ -1496,6 +1499,7 @@ pub struct SockaddrLinklayer {
   pub Addr: Array<byte, 8>,
 }
 
+#[go(hidden_fields)]
 pub struct SockaddrNetlink {
   pub Family: uint16,
   pub Pad: uint16,
@@ -1503,6 +1507,7 @@ pub struct SockaddrNetlink {
   pub Groups: uint32,
 }
 
+#[go(hidden_fields)]
 pub struct SockaddrUnix {
   pub Name: string,
 }

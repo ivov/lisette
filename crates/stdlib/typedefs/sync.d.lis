@@ -49,6 +49,7 @@ pub fn OnceValues<T1, T2>(f: fn() -> (T1, T2)) -> fn() -> (T1, T2)
 /// [the Go memory model]: https://go.dev/ref/mem
 /// [Roberto Clapis's series on advanced concurrency patterns]: https://blogtitle.github.io/categories/concurrency/
 /// [Bryan Mills's talk on concurrency patterns]: https://drive.google.com/file/d/1nPdvhB0PutEJzdCq5ms6UI58dp50fcAN/view
+#[go(hidden_fields)]
 pub struct Cond {
   pub L: Option<Locker>,
 }
@@ -86,6 +87,7 @@ pub interface Locker {
 /// and [Map.CompareAndDelete] is a write operation when it returns deleted set to true.
 /// 
 /// [the Go memory model]: https://go.dev/ref/mem
+#[go(zero_safe)]
 pub type Map
 
 /// A Mutex is a mutual exclusion lock.
@@ -101,6 +103,7 @@ pub type Map
 /// relation at all.
 /// 
 /// [the Go memory model]: https://go.dev/ref/mem
+#[go(zero_safe)]
 pub type Mutex
 
 /// Once is an object that will perform exactly one action.
@@ -112,6 +115,7 @@ pub type Mutex
 /// the return from any call of once.Do(f).
 /// 
 /// [the Go memory model]: https://go.dev/ref/mem
+#[go(zero_safe)]
 pub type Once
 
 /// A Pool is a set of temporary objects that may be individually saved and
@@ -151,6 +155,7 @@ pub type Once
 /// a call to Get returning that same value x.
 /// 
 /// [the Go memory model]: https://go.dev/ref/mem
+#[go(hidden_fields)]
 pub struct Pool {
   pub New: Option<fn() -> Unknown>,
 }
@@ -178,6 +183,7 @@ pub struct Pool {
 /// the n+1'th call to Lock.
 /// 
 /// [the Go memory model]: https://go.dev/ref/mem
+#[go(zero_safe)]
 pub type RWMutex
 
 /// A WaitGroup is a counting semaphore typically used to wait
@@ -214,6 +220,7 @@ pub type RWMutex
 /// This pattern is common in code that predates [WaitGroup.Go].
 /// 
 /// A WaitGroup must not be copied after first use.
+#[go(zero_safe)]
 pub type WaitGroup
 
 impl Cond {

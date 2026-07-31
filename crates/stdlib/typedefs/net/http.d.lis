@@ -666,6 +666,7 @@ pub interface CookieJar {
 /// [Origin]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Origin
 /// [Cross-Site Request Forgery (CSRF)]: https://developer.mozilla.org/en-US/docs/Web/Security/Attacks/CSRF
 /// [safe methods]: https://developer.mozilla.org/en-US/docs/Glossary/Safe/HTTP
+#[go(zero_safe)]
 pub type CrossOriginProtection
 
 /// A Dir implements [FileSystem] using the native file system restricted to a
@@ -815,6 +816,7 @@ pub struct ProtocolError {
 ///   - HTTP2 is the HTTP/2 protcol over a TLS connection.
 /// 
 ///   - UnencryptedHTTP2 is the HTTP/2 protocol over an unsecured TCP connection.
+#[go(zero_safe)]
 pub type Protocols
 
 /// PushOptions describes options for [Pusher.Push].
@@ -836,6 +838,7 @@ pub interface Pusher {
 /// The field semantics differ slightly between client and server
 /// usage. In addition to the notes on the fields below, see the
 /// documentation for [Request.Write] and [RoundTripper].
+#[go(hidden_fields)]
 pub struct Request {
   pub Method: string,
   pub URL: Option<Ref<url.URL>>,
@@ -1030,6 +1033,8 @@ pub type ServeMux
 
 /// A Server defines parameters for running an HTTP server.
 /// The zero value for Server is a valid configuration.
+#[go(hidden_fields)]
+#[go(zero_safe)]
 pub struct Server {
   pub Addr: string,
   pub Handler: Option<Handler>,
@@ -1083,6 +1088,7 @@ pub struct Server {
 /// "Idempotency-Key" or "X-Idempotency-Key" entry. If the idempotency key
 /// value is a zero-length slice, the request is treated as idempotent but the
 /// header is not sent on the wire.
+#[go(hidden_fields)]
 pub struct Transport {
   pub Proxy: Option<fn(Ref<Request>) -> Result<Ref<url.URL>, error>>,
   pub OnProxyConnectResponse: Option<fn(context.Context, Ref<url.URL>, Ref<Request>, Ref<Response>) -> Result<(), error>>,

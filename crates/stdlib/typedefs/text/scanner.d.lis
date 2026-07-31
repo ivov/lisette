@@ -18,6 +18,7 @@ pub struct Position {
 }
 
 /// A Scanner implements reading of Unicode characters and tokens from an [io.Reader].
+#[go(hidden_fields)]
 pub struct Scanner {
   pub Error: Option<fn(Ref<Scanner>, string) -> ()>,
   pub ErrorCount: int,

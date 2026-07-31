@@ -334,12 +334,14 @@ pub fn TrimSuffix(s: string, suffix: string) -> string
 /// A Builder is used to efficiently build a string using [Builder.Write] methods.
 /// It minimizes memory copying. The zero value is ready to use.
 /// Do not copy a non-zero Builder.
+#[go(zero_safe)]
 pub type Builder
 
 /// A Reader implements the [io.Reader], [io.ReaderAt], [io.ByteReader], [io.ByteScanner],
 /// [io.RuneReader], [io.RuneScanner], [io.Seeker], and [io.WriterTo] interfaces by reading
 /// from a string.
 /// The zero value for Reader operates like a Reader of an empty string.
+#[go(zero_safe)]
 pub type Reader
 
 /// Replacer replaces a list of strings with replacements.

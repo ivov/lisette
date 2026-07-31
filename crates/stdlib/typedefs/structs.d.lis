@@ -13,4 +13,5 @@
 /// 
 /// By convention, HostLayout should be used as the type of a field
 /// named "_", placed at the beginning of the struct type definition.
+#[go(zero_safe)]
 pub type HostLayout

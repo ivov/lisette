@@ -20,7 +20,7 @@ import (
 )
 
 func main() {
-	b := aws.Bucket{}
+	b := aws.Bucket{Annotations: map[string]*string{}}
 	raw_2 := b.Annotations
 	src_3 := raw_2
 	wrapped_4 := make(map[string]lisette.Option[string], len(src_3))

@@ -58,6 +58,7 @@ pub fn LookPath(file: string) -> Partial<string, error>
 /// 
 /// A Cmd cannot be reused after calling its [Cmd.Run], [Cmd.Output] or [Cmd.CombinedOutput]
 /// methods.
+#[go(hidden_fields)]
 pub struct Cmd {
   pub Path: string,
   pub Args: Slice<string>,

@@ -12,12 +12,15 @@ description: |
 ---
 package main
 
-import "net/http"
+import (
+	"crypto/tls"
+	"net/http"
+)
 
 type Wrapper struct {
 	srv http.Server
 }
 
 func test() Wrapper {
-	return Wrapper{srv: http.Server{}}
+	return Wrapper{srv: http.Server{TLSNextProto: map[string]func(*http.Server, *tls.Conn, http.Handler){}}}
 }

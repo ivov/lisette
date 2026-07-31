@@ -56,6 +56,8 @@ type TypeOverrides struct {
 	// finite set, emitting #[go(closed_domain)]. Drives the out_of_domain_value lint.
 	// Curated, never auto-detected; mutually exclusive with bit_flag_set.
 	ClosedDomain map[string][]string `json:"closed_domain"`
+	// Curated per type from Go's docs, never derived from field shape.
+	ZeroSafe map[string][]string `json:"zero_safe"`
 }
 
 // LoadConfig loads bindgen configuration from the given path.
@@ -285,6 +287,13 @@ func (c *Config) IsClosedDomain(pkg, typeName string) bool {
 		return false
 	}
 	return matchField(c.Overrides.Types.ClosedDomain, pkg, typeName, matchExact)
+}
+
+func (c *Config) IsCuratedZeroSafe(pkg, typeName string) bool {
+	if c == nil {
+		return false
+	}
+	return matchField(c.Overrides.Types.ZeroSafe, pkg, typeName, matchExact)
 }
 
 // lookupWithGlob returns all matching names for a package from a map,

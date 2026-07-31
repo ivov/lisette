@@ -32,6 +32,30 @@
       "closed_domain": {
         "time": ["Weekday", "Month"]
       },
+      "zero_safe": {
+        "bytes": ["Buffer", "Reader"],
+        "container/list": ["List"],
+        "container/ring": ["Ring"],
+        "crypto/x509": ["ConstraintViolationError", "UnhandledCriticalExtension"],
+        "debug/pe": ["FormatError"],
+        "embed": ["FS"],
+        "flag": ["FlagSet"],
+        "go/types": ["Config", "MethodSet", "Scope"],
+        "hash/maphash": ["Hash"],
+        "log/slog": ["LevelVar", "Value"],
+        "math/big": ["Float", "Int", "Rat"],
+        "math/rand/v2": ["PCG"],
+        "net": ["Dialer", "Resolver"],
+        "net/http": ["CrossOriginProtection", "Protocols", "Server"],
+        "runtime": ["Pinner"],
+        "runtime/debug": ["CrashOptions"],
+        "strings": ["Builder", "Reader"],
+        "structs": ["HostLayout"],
+        "sync": ["Map", "Mutex", "Once", "RWMutex", "WaitGroup"],
+        "sync/atomic": ["Bool", "Int32", "Int64", "Pointer", "Uint32", "Uint64", "Uintptr", "Value"],
+        "time": ["Time"],
+        "weak": ["Pointer"]
+      },
       "direct_error": {
         "errors": ["New"],
         "fmt": ["Errorf"]

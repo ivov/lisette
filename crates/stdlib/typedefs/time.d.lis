@@ -376,6 +376,7 @@ pub struct ParseError {
 
 /// A Ticker holds a channel that delivers “ticks” of a clock
 /// at intervals.
+#[go(hidden_fields)]
 pub struct Ticker {
   pub C: Receiver<Time>,
 }
@@ -421,12 +422,14 @@ pub struct Ticker {
 /// to t == u, since t.Equal uses the most accurate comparison available and
 /// correctly handles the case when only one of its arguments has a monotonic
 /// clock reading.
+#[go(zero_safe)]
 pub type Time
 
 /// The Timer type represents a single event.
 /// When the Timer expires, the current time will be sent on C,
 /// unless the Timer was created by [AfterFunc].
 /// A Timer must be created with [NewTimer] or AfterFunc.
+#[go(hidden_fields)]
 pub struct Timer {
   pub C: Receiver<Time>,
 }

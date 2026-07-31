@@ -1685,12 +1685,14 @@ pub struct IpMaskString {
 /// 
 /// Use LazyDLL in golang.org/x/sys/windows for a secure way to
 /// load system DLLs.
+#[go(hidden_fields)]
 pub struct LazyDLL {
   pub Name: string,
 }
 
 /// A LazyProc implements access to a procedure inside a [LazyDLL].
 /// It delays the lookup until the [LazyProc.Addr], [LazyProc.Call], or [LazyProc.Find] method is called.
+#[go(hidden_fields)]
 pub struct LazyProc {
   pub Name: string,
 }
@@ -1744,6 +1746,7 @@ pub struct Overlapped {
 pub struct Pointer(Ref<()>)
 
 /// A Proc implements access to a procedure inside a [DLL].
+#[go(hidden_fields)]
 pub struct Proc {
   pub Dll: Option<Ref<DLL>>,
   pub Name: string,
@@ -1863,21 +1866,25 @@ pub interface Sockaddr {
 
 pub struct SockaddrGen(Array<byte, 24>)
 
+#[go(hidden_fields)]
 pub struct SockaddrInet4 {
   pub Port: int,
   pub Addr: Array<byte, 4>,
 }
 
+#[go(hidden_fields)]
 pub struct SockaddrInet6 {
   pub Port: int,
   pub ZoneId: uint32,
   pub Addr: Array<byte, 16>,
 }
 
+#[go(hidden_fields)]
 pub struct SockaddrUnix {
   pub Name: string,
 }
 
+#[go(hidden_fields)]
 pub struct StartupInfo {
   pub Cb: uint32,
   pub Desktop: Option<uint16>,

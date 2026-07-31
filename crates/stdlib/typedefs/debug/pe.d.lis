@@ -30,6 +30,7 @@ pub struct COFFSymbol {
 /// number of relocations + line numbers, as well as COMDAT info. See
 /// https://docs.microsoft.com/en-us/windows/win32/debug/pe-format#auxiliary-format-5-section-definitions
 /// for more on what's going on here.
+#[go(hidden_fields)]
 pub struct COFFSymbolAuxFormat5 {
   pub Size: uint32,
   pub NumRelocs: uint16,
@@ -45,6 +46,7 @@ pub struct DataDirectory {
 }
 
 /// A File represents an open PE file.
+#[go(hidden_fields)]
 pub struct File {
   embed FileHeader,
   pub OptionalHeader: Unknown,
@@ -66,8 +68,10 @@ pub struct FileHeader {
 
 /// FormatError is unused.
 /// The type is retained for compatibility.
+#[go(zero_safe)]
 pub type FormatError
 
+#[go(hidden_fields)]
 pub struct ImportDirectory {
   pub OriginalFirstThunk: uint32,
   pub TimeDateStamp: uint32,
@@ -153,6 +157,7 @@ pub struct Reloc {
 
 /// Section provides access to PE COFF section.
 #[go(hidden_embed)]
+#[go(hidden_fields)]
 pub struct Section {
   embed SectionHeader,
   pub Relocs: Slice<Reloc>,

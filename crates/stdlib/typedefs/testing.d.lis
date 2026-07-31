@@ -123,6 +123,7 @@ pub fn Verbose() -> bool
 /// and dumped to standard output when done. Unlike in tests, benchmark logs
 /// are always printed, so as not to hide output whose existence may be
 /// affecting benchmark results.
+#[go(hidden_fields)]
 pub struct B {
   embed common,
   pub N: int,
@@ -177,6 +178,7 @@ pub struct CoverBlock {
 /// *F methods can only be called before [F.Fuzz]. Once the test is
 /// executing the fuzz target, only [*T] methods can be used. The only *F methods
 /// that are allowed in the [F.Fuzz] function are [F.Failed] and [F.Name].
+#[go(hidden_fields)]
 pub struct F {
   embed common,
 }
@@ -224,6 +226,7 @@ pub type PB
 /// 
 /// The other reporting methods, such as the variations of [T.Log] and [T.Error],
 /// may be called simultaneously from multiple goroutines.
+#[go(hidden_fields)]
 pub struct T {
   embed common,
 }

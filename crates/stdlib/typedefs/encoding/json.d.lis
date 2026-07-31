@@ -308,6 +308,7 @@ pub interface Marshaler {
 
 /// A MarshalerError represents an error from calling a
 /// [Marshaler.MarshalJSON] or [encoding.TextMarshaler.MarshalText] method.
+#[go(hidden_fields)]
 pub struct MarshalerError {
   pub Type: Option<reflect.Type>,
   pub Err: error,
@@ -323,6 +324,7 @@ pub struct RawMessage(Slice<byte>)
 
 /// A SyntaxError is a description of a JSON syntax error.
 /// [Unmarshal] will return a SyntaxError if the JSON can't be parsed.
+#[go(hidden_fields)]
 pub struct SyntaxError {
   pub Offset: int64,
 }

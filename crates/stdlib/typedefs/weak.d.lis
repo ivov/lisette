@@ -53,6 +53,7 @@ pub fn Make<T>(ptr: Ref<T>) -> Pointer<T>
 /// allocation may never become nil if it always exists in the same batch as a
 /// referenced object. Typically, this batching only happens for tiny
 /// (on the order of 16 bytes or less) and pointer-free objects.
+#[go(zero_safe)]
 pub type Pointer<T>
 
 impl<T> Pointer<T> {

@@ -27,6 +27,7 @@ pub fn TaggedReturn() -> Unknown
 pub fn UnexportedReturn() -> Unknown
 
 /// In a named struct each gated anonymous-struct field drops while the rest stay.
+#[go(hidden_fields)]
 pub struct Mix {
   // SKIPPED field "Tagged": anonymous-struct — anonymous struct types are not supported
   // SKIPPED field "Hidden": anonymous-struct — anonymous struct types are not supported

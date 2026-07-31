@@ -85,6 +85,7 @@ pub(crate) fn run(store: &Store, checks: DeferredChecks, sink: &LocalSink) {
         if let Err(no_zero) = semantics::zero::has_zero(store, element_ty, &check.module_id) {
             sink.push(diagnostics::infer::slice_make_no_zero(
                 &no_zero.leaf_ty.stringify(),
+                no_zero.hidden_go_state(),
                 check.span,
             ));
         }

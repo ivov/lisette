@@ -7,12 +7,14 @@
 pub fn New() -> Ref<List>
 
 /// Element is an element of a linked list.
+#[go(hidden_fields)]
 pub struct Element {
   pub Value: Unknown,
 }
 
 /// List represents a doubly linked list.
 /// The zero value for List is an empty list ready to use.
+#[go(zero_safe)]
 pub type List
 
 impl Element {

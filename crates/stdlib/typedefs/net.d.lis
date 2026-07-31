@@ -555,6 +555,8 @@ pub struct DNSError {
 /// is therefore equivalent to just calling the [Dial] function.
 /// 
 /// It is safe to call Dialer's methods concurrently.
+#[go(hidden_fields)]
+#[go(zero_safe)]
 pub struct Dialer {
   pub Timeout: time.Duration,
   pub Deadline: time.Time,
@@ -654,6 +656,7 @@ pub struct KeepAliveConfig {
 }
 
 /// ListenConfig contains options for listening to an address.
+#[go(hidden_fields)]
 pub struct ListenConfig {
   pub Control: Option<fn(string, string, syscall.RawConn) -> Result<(), error>>,
   pub KeepAlive: time.Duration,
@@ -713,6 +716,8 @@ pub struct ParseError {
 /// A Resolver looks up names and numbers.
 /// 
 /// A nil *Resolver is equivalent to a zero Resolver.
+#[go(hidden_fields)]
+#[go(zero_safe)]
 pub struct Resolver {
   pub PreferGo: bool,
   pub StrictErrors: bool,

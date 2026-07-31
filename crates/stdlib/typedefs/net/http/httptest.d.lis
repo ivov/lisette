@@ -65,6 +65,7 @@ pub fn NewUnstartedServer(handler: http.Handler) -> Ref<Server>
 
 /// ResponseRecorder is an implementation of [http.ResponseWriter] that
 /// records its mutations for later inspection in tests.
+#[go(hidden_fields)]
 pub struct ResponseRecorder {
   pub Code: int,
   pub HeaderMap: http.Header,
@@ -74,6 +75,7 @@ pub struct ResponseRecorder {
 
 /// A Server is an HTTP server listening on a system-chosen port on the
 /// local loopback interface, for use in end-to-end HTTP tests.
+#[go(hidden_fields)]
 pub struct Server {
   pub URL: string,
   pub Listener: Option<net.Listener>,

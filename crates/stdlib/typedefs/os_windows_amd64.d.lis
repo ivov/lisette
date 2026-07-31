@@ -537,6 +537,7 @@ pub struct ProcAttr {
 }
 
 /// Process stores the information about a process created by [StartProcess].
+#[go(hidden_fields)]
 pub struct Process {
   pub Pid: int,
 }

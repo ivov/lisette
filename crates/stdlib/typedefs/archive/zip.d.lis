@@ -67,6 +67,7 @@ pub type Decompressor = fn(io.Reader) -> io.ReadCloser
 /// A File is a single file in a ZIP archive.
 /// The file information is in the embedded [FileHeader].
 /// The file content can be accessed by calling [File.Open].
+#[go(hidden_fields)]
 pub struct File {
   embed FileHeader,
 }
@@ -96,11 +97,13 @@ pub struct FileHeader {
 }
 
 /// A ReadCloser is a [Reader] that must be closed when no longer needed.
+#[go(hidden_fields)]
 pub struct ReadCloser {
   embed Reader,
 }
 
 /// A Reader serves content from a ZIP archive.
+#[go(hidden_fields)]
 pub struct Reader {
   pub File: Slice<Option<Ref<File>>>,
   pub Comment: string,

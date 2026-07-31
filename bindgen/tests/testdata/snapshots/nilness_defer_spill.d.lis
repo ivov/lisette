@@ -13,6 +13,7 @@ pub fn ParseLeaky(c: Ref<Config>) -> Result<Option<Ref<Config>>, error>
 
 pub fn WithCleanup(c: Ref<Config>, cleanup: fn() -> ()) -> Ref<Config>
 
+#[go(hidden_fields)]
 pub struct Config {
   pub Name: string,
 }

@@ -33,6 +33,7 @@ pub interface File {
 }
 
 /// A FileHeader describes a file part of a multipart request.
+#[go(hidden_fields)]
 pub struct FileHeader {
   pub Filename: string,
   pub Header: textproto.MIMEHeader,
@@ -50,6 +51,7 @@ pub struct Form {
 }
 
 /// A Part represents a single part in a multipart body.
+#[go(hidden_fields)]
 pub struct Part {
   pub Header: textproto.MIMEHeader,
 }

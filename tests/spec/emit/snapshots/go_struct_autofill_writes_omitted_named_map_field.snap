@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/imports.rs
+description: |
+  
+  import "go:net/url"
+  
+  struct Wrapper { values: url.Values }
+  
+  fn test() -> string {
+    let mut w = Wrapper { .. }
+    w.values.Add("key", "value")
+    w.values.Get("key")
+  }
+---
+package main
+
+import "net/url"
+
+type Wrapper struct {
+	values url.Values
+}
+
+func test() string {
+	w := Wrapper{values: url.Values{}}
+	w.values.Add("key", "value")
+	return w.values.Get("key")
+}

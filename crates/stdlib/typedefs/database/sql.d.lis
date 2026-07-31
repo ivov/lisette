@@ -133,6 +133,7 @@ pub struct DBStats {
 /// 
 /// For a more concise way to create NamedArg values, see
 /// the [Named] function.
+#[go(hidden_fields)]
 pub struct NamedArg {
   pub Name: string,
   pub Value: Unknown,
@@ -238,6 +239,7 @@ pub struct NullTime {
 /// 
 /// 	var outArg string
 /// 	_, err := db.ExecContext(ctx, "ProcName", sql.Named("Arg1", sql.Out{Dest: &outArg}))
+#[go(hidden_fields)]
 pub struct Out {
   pub Dest: Unknown,
   pub In: bool,

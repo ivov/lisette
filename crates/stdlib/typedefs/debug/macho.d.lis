@@ -220,12 +220,14 @@ pub struct FatArchHeader {
 }
 
 /// A FatFile is a Mach-O universal binary that contains at least one architecture.
+#[go(hidden_fields)]
 pub struct FatFile {
   pub Magic: uint32,
   pub Arches: Slice<FatArch>,
 }
 
 /// A File represents an open Mach-O file.
+#[go(hidden_fields)]
 pub struct File {
   embed FileHeader,
   pub ByteOrder: Option<binary.ByteOrder>,
@@ -347,6 +349,7 @@ pub struct RpathCmd {
 }
 
 #[go(hidden_embed)]
+#[go(hidden_fields)]
 pub struct Section {
   embed SectionHeader,
   pub Relocs: Slice<Reloc>,
@@ -398,6 +401,7 @@ pub struct SectionHeader {
 
 /// A Segment represents a Mach-O 32-bit or 64-bit load segment command.
 #[go(hidden_embed)]
+#[go(hidden_fields)]
 pub struct Segment {
   pub LoadBytes: LoadBytes,
   embed SegmentHeader,

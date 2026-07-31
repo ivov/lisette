@@ -219,6 +219,7 @@ pub struct Comment(Slice<byte>)
 
 /// A Decoder represents an XML parser reading a particular input stream.
 /// The parser assumes that its input is encoded in UTF-8.
+#[go(hidden_fields)]
 pub struct Decoder {
   pub Strict: bool,
   pub AutoClose: Slice<string>,

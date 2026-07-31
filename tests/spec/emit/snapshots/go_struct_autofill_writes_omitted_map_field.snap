@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/imports.rs
+description: |
+  
+  import "go:encoding/pem"
+  
+  fn test() -> string {
+    let mut b = pem.Block { Type: "X", .. }
+    b.Headers["key"] = "value"
+    b.Headers["key"]
+  }
+---
+package main
+
+import "encoding/pem"
+
+func test() string {
+	b := pem.Block{
+		Type:    "X",
+		Headers: map[string]string{},
+	}
+	b.Headers["key"] = "value"
+	return b.Headers["key"]
+}

@@ -91,6 +91,7 @@ pub struct Holder {
 /// OnlyGated's anonymous value element appears nowhere else. The field gates (its
 /// map key is a tagged anonymous struct, which is unrepresentable), so the field
 /// drops; the value's element synthesis must not leak a type into the output.
+#[go(hidden_fields)]
 pub struct OnlyGated {
   // SKIPPED field "Items": anonymous-struct — anonymous struct types are not supported
   pub Name: string,

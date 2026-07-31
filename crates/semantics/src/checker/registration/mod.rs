@@ -108,6 +108,18 @@ fn has_hidden_embed_attribute(attributes: &[Attribute]) -> bool {
         .any(|flag| flag == "hidden_embed")
 }
 
+fn has_zero_safe_attribute(attributes: &[Attribute]) -> bool {
+    extract_attribute_flags(attributes, "go")
+        .iter()
+        .any(|flag| flag == "zero_safe")
+}
+
+fn has_hidden_fields_attribute(attributes: &[Attribute]) -> bool {
+    extract_attribute_flags(attributes, "go")
+        .iter()
+        .any(|flag| flag == "hidden_fields")
+}
+
 fn has_unexported_attribute(attributes: &[Attribute]) -> bool {
     extract_attribute_flags(attributes, "go")
         .iter()
@@ -142,6 +154,12 @@ fn collect_struct_attributes(attributes: &[Attribute]) -> Attributes {
     }
     if has_serialization_attribute(attributes) {
         map.insert(TypeAttribute::Serialized);
+    }
+    if has_zero_safe_attribute(attributes) {
+        map.insert(TypeAttribute::ZeroSafe);
+    }
+    if has_hidden_fields_attribute(attributes) {
+        map.insert(TypeAttribute::HiddenFields);
     }
     map
 }
@@ -192,8 +210,10 @@ const KNOWN_GO_HINTS: &[&str] = &[
     "collapsed_type_params",
     "comma_ok",
     "hidden_embed",
+    "hidden_fields",
     "sentinel_minus_one",
     "unexported",
+    "zero_safe",
 ];
 
 fn check_go_hints(attributes: &[Attribute], sink: &diagnostics::LocalSink) {

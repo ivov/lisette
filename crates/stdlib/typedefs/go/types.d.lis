@@ -668,6 +668,7 @@ pub struct BasicInfo(int)
 
 /// A Builtin represents a built-in function.
 /// Builtins don't have a valid type.
+#[go(hidden_fields)]
 pub struct Builtin {
   embed object,
 }
@@ -677,6 +678,7 @@ pub type Chan
 
 /// A Checker maintains the state of the type checker.
 /// It must be created with [NewChecker].
+#[go(hidden_fields)]
 pub struct Checker {
   embed Ref<Info>,
   embed environment,
@@ -684,6 +686,8 @@ pub struct Checker {
 
 /// A Config specifies the configuration for type checking.
 /// The zero value for Config is a ready-to-use default configuration.
+#[go(hidden_fields)]
+#[go(zero_safe)]
 pub struct Config {
   pub Context: Option<Ref<Context>>,
   pub GoVersion: string,
@@ -696,6 +700,7 @@ pub struct Config {
 }
 
 /// A Const represents a declared constant.
+#[go(hidden_fields)]
 pub struct Const {
   embed object,
 }
@@ -712,6 +717,7 @@ pub type Context
 /// A "soft" error is an error that still permits a valid interpretation of a
 /// package (such as "unused variable"); "hard" errors may lead to unpredictable
 /// behavior if ignored.
+#[go(hidden_fields)]
 pub struct Error {
   pub Fset: Option<Ref<token.FileSet>>,
   pub Pos: token.Pos,
@@ -722,6 +728,7 @@ pub struct Error {
 /// A Func represents a declared function, concrete method, or abstract
 /// (interface) method. Its Type() is always a *Signature.
 /// An abstract method may belong to many interfaces due to embedding.
+#[go(hidden_fields)]
 pub struct Func {
   embed object,
 }
@@ -784,6 +791,7 @@ pub type Interface
 
 /// A Label represents a declared label.
 /// Labels don't have a type.
+#[go(hidden_fields)]
 pub struct Label {
   embed object,
 }
@@ -794,6 +802,7 @@ pub type Map
 /// A MethodSet is an ordered set of concrete or abstract (interface) methods;
 /// a method is a [MethodVal] selection, and they are ordered by ascending m.Obj().Id().
 /// The zero value for a MethodSet is a ready-to-use empty method set.
+#[go(zero_safe)]
 pub type MethodSet
 
 /// A Named represents a named (defined) type.
@@ -858,6 +867,7 @@ pub type Package
 
 /// A PkgName represents an imported Go package.
 /// PkgNames don't have a type.
+#[go(hidden_fields)]
 pub struct PkgName {
   embed object,
 }
@@ -881,6 +891,7 @@ pub type Qualifier = fn(Ref<Package>) -> string
 /// (parent) and contained (children) scopes. Objects may be inserted
 /// and looked up by name. The zero value for Scope is a ready-to-use
 /// empty scope.
+#[go(zero_safe)]
 pub type Scope
 
 /// A Selection describes a selector expression x.f.
@@ -957,6 +968,7 @@ pub interface Type {
 
 /// TypeAndValue reports the type and value (for constants)
 /// of the corresponding expression.
+#[go(hidden_fields)]
 pub struct TypeAndValue {
   pub Type: Option<Type>,
   pub Value: Option<constant.Value>,
@@ -987,6 +999,7 @@ pub type TypeParamList
 pub type Union
 
 /// A Variable represents a declared variable (including function parameters and results, and struct fields).
+#[go(hidden_fields)]
 pub struct Var {
   embed object,
 }

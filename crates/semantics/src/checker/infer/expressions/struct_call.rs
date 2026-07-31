@@ -98,6 +98,13 @@ impl InferCtx<'_> {
             let alias_ty = alias_ty.clone();
             let (instantiated_ty, _) = self.instantiate(&alias_ty);
             self.unify(expected_ty, &instantiated_ty, &literal.span);
+            let from_module = self.cursor.module_id.clone();
+            if self.has_zero(&instantiated_ty, &from_module).is_err() {
+                self.sink.push(diagnostics::infer::hidden_state_no_zero(
+                    &instantiated_ty,
+                    literal.span,
+                ));
+            }
             return literal.with_type(instantiated_ty);
         }
 
@@ -316,6 +323,18 @@ impl InferCtx<'_> {
                 .is_some_and(|(prefix, _)| self.imports.namespace(prefix).is_some());
         let is_go_imported = qualified_name.starts_with("go:");
 
+        if is_go_imported
+            && !matches!(new_spread, StructSpread::From(_))
+            && let Some(def) = store.get_definition(&qualified_name)
+            && def.has_hidden_fields()
+            && !def.is_zero_safe()
+        {
+            self.sink.push(diagnostics::infer::hidden_state_no_zero(
+                &struct_call_ty,
+                span,
+            ));
+        }
+
         let (new_field_assignments, matched_fields) = self.infer_structish_fields(
             StructishCtx {
                 field_assignments: &field_assignments,
@@ -340,12 +359,16 @@ impl InferCtx<'_> {
             },
         );
 
-        if let StructSpread::Autofill { span: spread_span } = &new_spread
-            && !is_go_imported
-        {
+        if let StructSpread::Autofill { span: spread_span } = &new_spread {
+            let def = is_go_imported
+                .then(|| store.get_definition(&qualified_name))
+                .flatten();
             self.check_autofill_fields(
                 &struct_name,
-                struct_fields.iter().map(|f| (&f.name, &f.ty)),
+                struct_fields
+                    .iter()
+                    .filter(|f| !def.is_some_and(|d| crate::zero::curation_covers_embed(d, f)))
+                    .map(|f| (&f.name, &f.ty)),
                 &matched_fields,
                 &map,
                 *spread_span,
@@ -640,25 +663,32 @@ impl InferCtx<'_> {
             if matched_fields.contains(name.as_str()) {
                 continue;
             }
-            let resolved = substitute(ty, map);
+            let resolved = substitute(ty, map).resolve_in(&self.env);
             let Err(no_zero) = self.has_zero(&resolved, &from_module) else {
                 continue;
             };
             let chain: Vec<&str> = no_zero.chain.iter().map(EcoString::as_str).collect();
-            let private = match &no_zero.reason {
+            let cause = match &no_zero.reason {
                 NoZeroReason::PrivateField {
-                    struct_name: ps,
-                    field: pf,
-                    owning_module: pm,
-                } => Some((ps.as_str(), pf.as_str(), pm.as_str())),
-                NoZeroReason::NoZeroForType => None,
+                    struct_name,
+                    field,
+                    owning_module,
+                } => diagnostics::infer::FieldNoZeroCause::PrivateField {
+                    struct_name,
+                    field,
+                    owning_module,
+                },
+                NoZeroReason::HiddenGoState { go_type } => {
+                    diagnostics::infer::FieldNoZeroCause::HiddenGoState { go_type }
+                }
+                NoZeroReason::NoZeroForType => diagnostics::infer::FieldNoZeroCause::Type,
             };
             self.sink.push(diagnostics::infer::field_no_zero(
                 owner_name,
                 name,
                 &no_zero.leaf_ty,
                 &chain,
-                private,
+                cause,
                 spread_span,
             ));
         }

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Field has no zero value
+   ╭─[test.lis:5:21]
+ 4 │ fn test() {
+ 5 │   let f = os.File { .. };
+   ·                     ─┬
+   ·                      ╰── no zero available
+ 6 │ }
+   ╰────
+  help: Field `file` of type `Ref<file>` has no zero value. Provide an explicit value, or wrap the field type in `Option<T>` · code: [infer.field_no_zero]

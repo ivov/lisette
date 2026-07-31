@@ -559,6 +559,9 @@ func (e *Emitter) emitStruct(result convert.ConvertResult) {
 		if result.HasHiddenEmbed {
 			e.buf.WriteString("#[go(hidden_embed)]\n")
 		}
+		if result.ZeroSafe {
+			e.buf.WriteString("#[go(zero_safe)]\n")
+		}
 		fmt.Fprintf(&e.buf, "pub type %s%s\n\n", typeName, result.TypeParams.DeclBlock())
 		return
 	}
@@ -572,6 +575,12 @@ func (e *Emitter) emitStruct(result convert.ConvertResult) {
 	}
 	if result.HasHiddenEmbed {
 		sig.WriteString("#[go(hidden_embed)]\n")
+	}
+	if result.HasHiddenFields {
+		sig.WriteString("#[go(hidden_fields)]\n")
+	}
+	if result.ZeroSafe {
+		sig.WriteString("#[go(zero_safe)]\n")
 	}
 	sig.WriteString("pub struct ")
 	sig.WriteString(typeName)
@@ -654,6 +663,9 @@ func (e *Emitter) emitOpaqueType(result convert.ConvertResult) {
 	}
 	if result.HasHiddenEmbed {
 		signature.WriteString("#[go(hidden_embed)]\n")
+	}
+	if result.ZeroSafe {
+		signature.WriteString("#[go(zero_safe)]\n")
 	}
 	signature.WriteString("pub type ")
 	signature.WriteString(result.Name)

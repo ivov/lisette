@@ -8953,7 +8953,7 @@ pub interface Field {
   fn WithWidth(n: int) -> Option<Field>
 }
 
-pub type Input
+pub struct Input {}
 
 impl Input {
   fn Update(self: Ref<Input>) -> Result<(), error>

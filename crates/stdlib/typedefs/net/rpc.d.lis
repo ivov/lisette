@@ -103,6 +103,7 @@ pub interface ClientCodec {
 /// Request is a header written before every RPC call. It is used internally
 /// but documented here as an aid to debugging, such as when analyzing
 /// network traffic.
+#[go(hidden_fields)]
 pub struct Request {
   pub ServiceMethod: string,
   pub Seq: uint64,
@@ -111,6 +112,7 @@ pub struct Request {
 /// Response is a header written before every RPC return. It is used internally
 /// but documented here as an aid to debugging, such as when analyzing
 /// network traffic.
+#[go(hidden_fields)]
 pub struct Response {
   pub ServiceMethod: string,
   pub Seq: uint64,

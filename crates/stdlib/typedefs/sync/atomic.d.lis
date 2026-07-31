@@ -187,36 +187,43 @@ pub fn SwapUintptr(addr: Ref<uintptr>, new: uintptr) -> uintptr
 /// The zero value is false.
 /// 
 /// Bool must not be copied after first use.
+#[go(zero_safe)]
 pub type Bool
 
 /// An Int32 is an atomic int32. The zero value is zero.
 /// 
 /// Int32 must not be copied after first use.
+#[go(zero_safe)]
 pub type Int32
 
 /// An Int64 is an atomic int64. The zero value is zero.
 /// 
 /// Int64 must not be copied after first use.
+#[go(zero_safe)]
 pub type Int64
 
 /// A Pointer is an atomic pointer of type *T. The zero value is a nil *T.
 /// 
 /// Pointer must not be copied after first use.
+#[go(zero_safe)]
 pub type Pointer<T>
 
 /// A Uint32 is an atomic uint32. The zero value is zero.
 /// 
 /// Uint32 must not be copied after first use.
+#[go(zero_safe)]
 pub type Uint32
 
 /// A Uint64 is an atomic uint64. The zero value is zero.
 /// 
 /// Uint64 must not be copied after first use.
+#[go(zero_safe)]
 pub type Uint64
 
 /// A Uintptr is an atomic uintptr. The zero value is zero.
 /// 
 /// Uintptr must not be copied after first use.
+#[go(zero_safe)]
 pub type Uintptr
 
 /// A Value provides an atomic load and store of a consistently typed value.
@@ -224,6 +231,7 @@ pub type Uintptr
 /// Once [Value.Store] has been called, a Value must not be copied.
 /// 
 /// A Value must not be copied after first use.
+#[go(zero_safe)]
 pub type Value
 
 impl Bool {

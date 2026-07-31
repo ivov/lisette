@@ -700,6 +700,7 @@ pub interface Error {
 }
 
 /// Frame is the information returned by [Frames] for each call frame.
+#[go(hidden_fields)]
 pub struct Frame {
   pub PC: uintptr,
   pub Func: Option<Ref<Func>>,
@@ -772,6 +773,7 @@ pub type PanicNilError
 /// A Pinner is a set of Go objects each pinned to a fixed location in memory. The
 /// [Pinner.Pin] method pins one object, while [Pinner.Unpin] unpins all pinned
 /// objects. See their comments for more information.
+#[go(zero_safe)]
 pub struct Pinner {
   embed Ref<pinner>,
 }

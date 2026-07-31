@@ -228,6 +228,7 @@ pub struct BuildSetting {
 
 /// CrashOptions provides options that control the formatting of the
 /// fatal crash message.
+#[go(zero_safe)]
 pub type CrashOptions
 
 /// GCStats collect information about recent garbage collections.
