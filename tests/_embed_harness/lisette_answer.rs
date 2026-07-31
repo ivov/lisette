@@ -6,7 +6,7 @@
 use deps::TypedefLocator;
 use diagnostics::LisetteDiagnostic;
 use passes::analyze;
-use semantics::inference::{AnalyzeInput, CompilePhase, EntryFile, SemanticConfig};
+use semantics::inference::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
 use semantics::loader::MemoryLoader;
 use semantics::store::ENTRY_MODULE_ID;
 
@@ -144,22 +144,18 @@ fn check(source: &str) -> Checked {
     loader.add_file(ENTRY_MODULE_ID, "main.lis", source);
 
     let output = analyze(AnalyzeInput {
-        config: SemanticConfig {
-            run_lints: false,
-            standalone_mode: false,
-            load_siblings: true,
-        },
+        load_siblings: true,
+        scope: AnalysisScope::Directory,
         loader: &loader,
         entry: Some(EntryFile::new(
             source.to_string(),
             "main.lis".to_string(),
             "main.lis".to_string(),
         )),
-        project_root: None,
-        locator: TypedefLocator::default(),
+        locator: &TypedefLocator::default(),
         compile_phase: CompilePhase::Check,
         project_kind: semantics::inference::ProjectKind::Binary,
-        go_module: String::new(),
+        go_module: "",
         disable_cache: true,
     });
 
@@ -169,7 +165,7 @@ fn check(source: &str) -> Checked {
         errors: if parse_failed {
             Vec::new()
         } else {
-            output.result.errors().to_vec()
+            output.errors().to_vec()
         },
     }
 }

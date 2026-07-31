@@ -281,13 +281,12 @@ impl<F: Fn(u32) -> Option<(String, String)>> SourceCache<F> {
 }
 
 fn partition_diagnostics<'a>(
-    errors: &'a [LisetteDiagnostic],
-    lints: &'a [LisetteDiagnostic],
+    diagnostics: &'a [LisetteDiagnostic],
     filter: &Filter,
 ) -> DiagnosticGroups<'a> {
     let mut groups = DiagnosticGroups::default();
 
-    for diagnostic in errors.iter().chain(lints.iter()) {
+    for diagnostic in diagnostics {
         if diagnostic.is_error() {
             if filter.show_errors() {
                 groups.errors.push(diagnostic);
@@ -327,13 +326,12 @@ impl DiagnosticGroups<'_> {
 }
 
 pub fn render_all(
-    errors: &[LisetteDiagnostic],
-    lints: &[LisetteDiagnostic],
+    diagnostics: &[LisetteDiagnostic],
     mut sources: SourceCache<impl Fn(u32) -> Option<(String, String)>>,
     file_count: usize,
     filter: &Filter,
 ) -> Counts {
-    let groups = partition_diagnostics(errors, lints, filter);
+    let groups = partition_diagnostics(diagnostics, filter);
 
     if !groups.is_empty() {
         eprintln!(); // Blank line before first diagnostic
@@ -372,13 +370,12 @@ pub fn unix_line(diagnostic: &LisetteDiagnostic, source: &IndexedSource, filenam
 /// Builds the stdout text (one diagnostic per line, no color, no banner) and the
 /// counts the caller needs for the stderr summary and exit code.
 pub fn render_unix(
-    errors: &[LisetteDiagnostic],
-    lints: &[LisetteDiagnostic],
+    diagnostics: &[LisetteDiagnostic],
     mut sources: SourceCache<impl Fn(u32) -> Option<(String, String)>>,
     file_count: usize,
     filter: &Filter,
 ) -> (String, Counts) {
-    let groups = partition_diagnostics(errors, lints, filter);
+    let groups = partition_diagnostics(diagnostics, filter);
 
     let mut output = String::new();
     for diagnostic in groups
@@ -406,9 +403,12 @@ mod tests {
 
     #[test]
     fn each_severity_lands_in_its_own_bucket() {
-        let errors = vec![LisetteDiagnostic::error("e")];
-        let lints = vec![LisetteDiagnostic::warn("w"), LisetteDiagnostic::info("i")];
-        let groups = partition_diagnostics(&errors, &lints, &show_all());
+        let diagnostics = vec![
+            LisetteDiagnostic::error("e"),
+            LisetteDiagnostic::warn("w"),
+            LisetteDiagnostic::info("i"),
+        ];
+        let groups = partition_diagnostics(&diagnostics, &show_all());
         assert_eq!(
             (
                 groups.errors.len(),
@@ -421,29 +421,25 @@ mod tests {
 
     #[test]
     fn info_hidden_under_errors_only() {
-        let empty: Vec<LisetteDiagnostic> = Vec::new();
-        let lints = vec![LisetteDiagnostic::info("i")];
+        let diagnostics = vec![LisetteDiagnostic::info("i")];
         let filter = Filter::Errors;
-        let groups = partition_diagnostics(&empty, &lints, &filter);
+        let groups = partition_diagnostics(&diagnostics, &filter);
         assert!(groups.info.is_empty());
     }
 
     #[test]
     fn info_hidden_under_warnings_only() {
-        let empty: Vec<LisetteDiagnostic> = Vec::new();
-        let lints = vec![LisetteDiagnostic::info("i")];
+        let diagnostics = vec![LisetteDiagnostic::info("i")];
         let filter = Filter::Warnings;
-        let groups = partition_diagnostics(&empty, &lints, &filter);
+        let groups = partition_diagnostics(&diagnostics, &filter);
         assert!(groups.info.is_empty());
     }
 
     #[test]
     fn unix_counts_and_labels_info_separately() {
-        let empty: Vec<LisetteDiagnostic> = Vec::new();
-        let lints = vec![LisetteDiagnostic::info("advisory")];
+        let diagnostics = vec![LisetteDiagnostic::info("advisory")];
         let (output, counts) = render_unix(
-            &empty,
-            &lints,
+            &diagnostics,
             SourceCache::new(|_| None, "", "f.lis"),
             1,
             &show_all(),

@@ -6,12 +6,11 @@
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
-use lisette_semantics::loader::MemoryLoader;
-use lisette_passes::analyze;
+use lisette_passes::{Analysis, analyze};
 use lisette_semantics::inference::{
-    AnalyzeInput, CompilePhase, EntryFile, ProjectKind, SemanticConfig,
+    AnalysisScope, AnalyzeInput, CompilePhase, EntryFile, ProjectKind,
 };
-use lisette_semantics::facts::Facts;
+use lisette_semantics::loader::MemoryLoader;
 use lisette_syntax::ast::{Expression, IdentifierResolution, Span};
 use lisette_syntax::program::{Definition, DefinitionBody};
 use lisette_syntax::types::{Type, unqualified_name};
@@ -132,33 +131,7 @@ fn convert_lisette_diag(
         col,
         end_line,
         end_col,
-        code: None,
-    }
-}
-
-fn convert_parse_error(e: &lisette_syntax::ParseError, source: &str) -> JsDiagnostic {
-    let message = e.message.clone();
-    let code = if e.code.is_empty() { None } else { Some(e.code.clone()) };
-
-    // `labels` is `Vec<(Span, String)>` – first label is the primary one
-    let (line, col, end_line, end_col) = if let Some((span, _)) = e.labels.first() {
-        let offset = span.byte_offset as usize;
-        let len = span.byte_length as usize;
-        let (l, c) = offset_to_line_col(source, offset);
-        let (el, ec) = offset_to_line_col(source, offset + len);
-        (l, c, Some(el), Some(ec))
-    } else {
-        (1, 1, None, None)
-    };
-
-    JsDiagnostic {
-        severity: "error".to_string(),
-        message,
-        line,
-        col,
-        end_line,
-        end_col,
-        code,
+        code: diag.code_str().map(str::to_string),
     }
 }
 
@@ -169,8 +142,7 @@ const PLAYGROUND_FILE: &str = "playground.lis";
 /// Result of running the analysis pipeline (parse + semantic check).
 #[allow(dead_code)]
 struct AnalysisResult {
-    sem_result: lisette_diagnostics::SemanticResult,
-    facts: Facts,
+    analysis: Analysis,
     diagnostics: Vec<JsDiagnostic>,
     has_parse_errors: bool,
 }
@@ -181,47 +153,31 @@ fn run_analysis(code: &str) -> AnalysisResult {
     loader.add_file("_entry_", PLAYGROUND_FILE, code);
 
     let input = AnalyzeInput {
-        config: SemanticConfig {
-            run_lints: true,
-            standalone_mode: true,
-            load_siblings: false,
-        },
+        load_siblings: false,
+        scope: AnalysisScope::Standalone,
         loader: &loader,
         entry: Some(EntryFile::new(
             code.to_string(),
             PLAYGROUND_FILE.to_string(),
             PLAYGROUND_FILE.to_string(),
         )),
-        project_root: None,
-        locator: lisette_deps::TypedefLocator::default(),
+        locator: &lisette_deps::TypedefLocator::default(),
         compile_phase: CompilePhase::Check,
         project_kind: ProjectKind::Binary,
-        go_module: String::new(),
+        go_module: "",
         disable_cache: false,
     };
 
-    let analyze_output = analyze(input);
-    let has_parse_errors = analyze_output.has_parse_errors();
-    let mut diagnostics: Vec<JsDiagnostic> = analyze_output
-        .parse_errors()
+    let analysis = analyze(input);
+    let has_parse_errors = analysis.has_parse_errors();
+    let diagnostics = analysis
+        .diagnostics()
         .iter()
-        .map(|error| convert_parse_error(error, code))
+        .map(|diagnostic| convert_lisette_diag(diagnostic, code))
         .collect();
-    let sem_result = analyze_output.result;
-    let facts = analyze_output.facts;
-
-    if !has_parse_errors {
-        for e in sem_result.errors() {
-            diagnostics.push(convert_lisette_diag(e, code));
-        }
-        for w in sem_result.lints() {
-            diagnostics.push(convert_lisette_diag(w, code));
-        }
-    }
 
     AnalysisResult {
-        sem_result,
-        facts,
+        analysis,
         diagnostics,
         has_parse_errors,
     }
@@ -235,54 +191,51 @@ fn run_pipeline(
     loader.add_file("_entry_", PLAYGROUND_FILE, code);
 
     let input = AnalyzeInput {
-        config: SemanticConfig {
-            run_lints: true,
-            standalone_mode: true,
-            load_siblings: false,
-        },
+        load_siblings: false,
+        scope: AnalysisScope::Standalone,
         loader: &loader,
         entry: Some(EntryFile::new(
             code.to_string(),
             PLAYGROUND_FILE.to_string(),
             PLAYGROUND_FILE.to_string(),
         )),
-        project_root: None,
-        compile_phase: phase.clone(),
+        compile_phase: phase,
         project_kind: ProjectKind::Binary,
-        locator: lisette_deps::TypedefLocator::default(),
-        go_module: String::new(),
+        locator: &lisette_deps::TypedefLocator::default(),
+        go_module: "",
         disable_cache: false,
     };
 
-    let analyze_output = analyze(input);
-    let mut diagnostics: Vec<JsDiagnostic> = analyze_output
-        .parse_errors()
+    let analysis = analyze(input);
+    let mut diagnostics = analysis
+        .diagnostics()
         .iter()
-        .map(|error| convert_parse_error(error, code))
+        .map(|diagnostic| convert_lisette_diag(diagnostic, code))
         .collect();
-    if analyze_output.has_parse_errors() {
+    if analysis.has_parse_errors() {
         return (Vec::new(), diagnostics);
     }
-    let sem_result = analyze_output.result;
 
-    for e in sem_result.errors() {
-        diagnostics.push(convert_lisette_diag(e, code));
-    }
-    for w in sem_result.lints() {
-        diagnostics.push(convert_lisette_diag(w, code));
-    }
-
-    if matches!(phase, CompilePhase::Check) || sem_result.failed() {
+    if matches!(phase, CompilePhase::Check) || analysis.failed() {
         return (vec![], diagnostics);
     }
 
-    let emit_input = sem_result.into_emit_input();
-    let go_files = lisette_emit::Planner::emit(
-        &emit_input,
+    let go_files = match lisette_emit::Planner::emit(
+        &analysis.emit_input,
         "",
         "main",
         lisette_emit::EmitOptions { sourcemap: false, emit_tests: false },
-    );
+    ) {
+        Ok(files) => files,
+        Err(emit_diagnostics) => {
+            diagnostics.extend(
+                emit_diagnostics
+                    .iter()
+                    .map(|diagnostic| convert_lisette_diag(diagnostic, code)),
+            );
+            Vec::new()
+        }
+    };
 
     (go_files, diagnostics)
 }
@@ -473,7 +426,7 @@ fn type_name(ty: &Type) -> Option<String> {
 /// Build all completions for a dot-access context.
 fn build_dot_completions(
     prefix: &str,
-    sem_result: &lisette_diagnostics::SemanticResult,
+    analysis: &Analysis,
     file_items: &[Expression],
     offset: u32,
 ) -> Vec<JsCompletionItem> {
@@ -499,7 +452,7 @@ fn build_dot_completions(
 
     if let Some(module_name) = &module_name {
         // Module-level completions: find all definitions qualified with this module
-        for (qname, def) in &sem_result.emit_input.definitions {
+        for (qname, def) in &analysis.emit_input.definitions {
             let qname_str = qname.as_str();
             // Match "module_name.X" definitions
             if let Some(member) = qname_str.strip_prefix(module_name.as_str())
@@ -525,7 +478,7 @@ fn build_dot_completions(
         let ty = expr.get_type();
         if let Some(tid) = type_name(&ty) {
             // Find struct fields
-            if let Some(def) = sem_result.emit_input.definitions.get(tid.as_str()) {
+            if let Some(def) = analysis.emit_input.definitions.get(tid.as_str()) {
                 if let DefinitionBody::Struct { fields, .. } = &def.body {
                     for field in fields.iter() {
                         items.push(JsCompletionItem {
@@ -540,7 +493,7 @@ fn build_dot_completions(
 
             // Find methods (definitions like "TypeName.methodName")
             let prefix_dot = format!("{}.", tid);
-            for (qname, def) in &sem_result.emit_input.definitions {
+            for (qname, def) in &analysis.emit_input.definitions {
                 if let Some(method) = qname.as_str().strip_prefix(&prefix_dot) {
                     if !method.contains('.') {
                         items.push(JsCompletionItem {
@@ -554,7 +507,7 @@ fn build_dot_completions(
             }
 
             // For enums, add variants
-            if let Some(def) = sem_result.emit_input.definitions.get(tid.as_str()) {
+            if let Some(def) = analysis.emit_input.definitions.get(tid.as_str()) {
                 if let DefinitionBody::Enum { variants, .. } = &def.body {
                     for v in variants {
                         items.push(JsCompletionItem {
@@ -628,19 +581,19 @@ pub fn complete(code: &str, offset: u32) -> String {
         return "[]".to_string();
     }
 
-    let items_refs: Vec<Expression> = result.sem_result.emit_input.files.values()
+    let items_refs: Vec<Expression> = result.analysis.emit_input.files.values()
         .flat_map(|f| f.items.clone())
         .collect();
 
     // Check for dot-access context
     if let Some(prefix) = get_module_prefix(code, offset as usize) {
-        let items = build_dot_completions(prefix, &result.sem_result, &items_refs, offset);
+        let items = build_dot_completions(prefix, &result.analysis, &items_refs, offset);
         return serde_json::to_string(&items).unwrap_or_else(|_| "[]".to_string());
     }
 
     // Top-level completions: local definitions in the entry module
     let mut items: Vec<JsCompletionItem> = Vec::new();
-    for (qname, def) in &result.sem_result.emit_input.definitions {
+    for (qname, def) in &result.analysis.emit_input.definitions {
         let qname_str = qname.as_str();
         // Only show definitions from the entry module (unqualified or _entry_ prefixed)
         let label = if let Some(rest) = qname_str.strip_prefix("_entry_.") {
@@ -671,7 +624,7 @@ pub fn hover(code: &str, offset: u32) -> String {
         return String::new();
     }
 
-    let items: Vec<Expression> = result.sem_result.emit_input.files.values()
+    let items: Vec<Expression> = result.analysis.emit_input.files.values()
         .flat_map(|f| f.items.clone())
         .collect();
 
@@ -693,7 +646,7 @@ pub fn hover(code: &str, offset: u32) -> String {
     // Add doc comment if available
     let mut full_markdown = markdown;
     if let Expression::Identifier { resolution: IdentifierResolution::Definition(qname), .. } = expression {
-        if let Some(def) = result.sem_result.emit_input.definitions.get(qname.as_str()) {
+        if let Some(def) = result.analysis.emit_input.definitions.get(qname.as_str()) {
             if let Some(doc) = &def.doc {
                 full_markdown.push_str(&format!("\n\n---\n\n{}", doc));
             }
@@ -722,8 +675,8 @@ pub fn goto_definition(code: &str, offset: u32) -> String {
         return String::new();
     }
 
-    // First check facts.usages — direct usage→definition span mapping
-    for usage in &result.facts.usages {
+    // First check the direct usage-to-definition span mapping.
+    for usage in result.analysis.usages() {
         if offset >= usage.usage_span.byte_offset
             && offset < usage.usage_span.byte_offset + usage.usage_span.byte_length
         {
@@ -737,13 +690,13 @@ pub fn goto_definition(code: &str, offset: u32) -> String {
     }
 
     // Fall back: check if the expression has a qualified name pointing to a definition
-    let items: Vec<Expression> = result.sem_result.emit_input.files.values()
+    let items: Vec<Expression> = result.analysis.emit_input.files.values()
         .flat_map(|f| f.items.clone())
         .collect();
 
     if let Some(expression) = find_expression_at(&items, offset) {
         if let Expression::Identifier { resolution: IdentifierResolution::Definition(qname), .. } = expression {
-            if let Some(def) = result.sem_result.emit_input.definitions.get(qname.as_str()) {
+            if let Some(def) = result.analysis.emit_input.definitions.get(qname.as_str()) {
                 if let Some(name_span) = def.name_span {
                     let (sl, sc) = offset_to_line_col(code, name_span.byte_offset as usize);
                     let (el, ec) = offset_to_line_col(code, (name_span.byte_offset + name_span.byte_length) as usize);
@@ -767,7 +720,7 @@ pub fn signature_help(code: &str, offset: u32) -> String {
         return String::new();
     }
 
-    let items: Vec<Expression> = result.sem_result.emit_input.files.values()
+    let items: Vec<Expression> = result.analysis.emit_input.files.values()
         .flat_map(|f| f.items.clone())
         .collect();
 
@@ -830,5 +783,28 @@ mod tests {
     fn warning_diagnostic_converts_to_warning_severity() {
         let diag = lisette_diagnostics::LisetteDiagnostic::warn("w");
         assert_eq!(convert_lisette_diag(&diag, "").severity, "warning");
+    }
+
+    #[test]
+    fn compile_reports_emitter_diagnostics() {
+        let source = r#"
+import FooBar "go:fmt"
+
+pub fn foo_bar() -> int { 1 }
+
+fn main() {
+  let _ = FooBar.Println("x")
+  let _ = foo_bar()
+}
+"#;
+
+        let (files, diagnostics) = run_pipeline(source, CompilePhase::Emit);
+
+        assert!(files.is_empty());
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code.as_deref() == Some("emit.go_name_collision"))
+        );
     }
 }

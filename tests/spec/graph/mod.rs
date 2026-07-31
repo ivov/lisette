@@ -1,11 +1,15 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::LocalSink;
+use semantics::inference::AnalysisScope;
 use semantics::module_graph::kahn::topological_sort;
 use semantics::module_graph::{DependencyGraph, ModuleGraphOptions, Roots, build_module_graph};
 use semantics::store::Store;
 
 use crate::_harness::filesystem::MockFileSystem;
+
+const PROJECT_SCOPE: AnalysisScope = AnalysisScope::Project(std::path::PathBuf::new());
+const STANDALONE_SCOPE: AnalysisScope = AnalysisScope::Standalone;
 
 fn default_resolver() -> deps::TypedefLocator {
     deps::TypedefLocator::default()
@@ -22,13 +26,12 @@ fn graph_options<'a>(
     loader: &'a MockFileSystem,
     sink: &'a LocalSink,
     locator: &'a deps::TypedefLocator,
-    standalone_mode: bool,
+    scope: &'a AnalysisScope,
 ) -> ModuleGraphOptions<'a> {
     ModuleGraphOptions {
         loader: Some(loader),
         sink,
-        standalone_mode,
-        has_project_root: !standalone_mode,
+        scope,
         locator,
         include_tests: true,
     }
@@ -124,7 +127,7 @@ fn test_only_imports_excluded_from_production_edges() {
     let result = build_module_graph(
         &mut store,
         roots("main"),
-        graph_options(&fs, &sink, &default_resolver(), false),
+        graph_options(&fs, &sink, &default_resolver(), &PROJECT_SCOPE),
     );
 
     assert!(
@@ -157,7 +160,7 @@ fn production_import_classification_wins_when_tests_import_the_same_module() {
     let result = build_module_graph(
         &mut store,
         roots("main"),
-        graph_options(&fs, &sink, &default_resolver(), false),
+        graph_options(&fs, &sink, &default_resolver(), &PROJECT_SCOPE),
     );
 
     assert!(
@@ -179,7 +182,7 @@ fn graph_simple_dependency() {
     let result = build_module_graph(
         &mut store,
         roots("main"),
-        graph_options(&fs, &sink, &default_resolver(), false),
+        graph_options(&fs, &sink, &default_resolver(), &PROJECT_SCOPE),
     );
 
     assert!(result.cycles.is_empty());
@@ -204,7 +207,7 @@ fn graph_missing_module() {
     let _result = build_module_graph(
         &mut store,
         roots("main"),
-        graph_options(&fs, &sink, &default_resolver(), false),
+        graph_options(&fs, &sink, &default_resolver(), &PROJECT_SCOPE),
     );
 
     assert!(sink.has_errors());
@@ -223,7 +226,7 @@ fn graph_cycle_detection() {
     let result = build_module_graph(
         &mut store,
         roots("a"),
-        graph_options(&fs, &sink, &default_resolver(), false),
+        graph_options(&fs, &sink, &default_resolver(), &PROJECT_SCOPE),
     );
 
     assert!(!result.cycles.is_empty());
@@ -245,7 +248,7 @@ fn additional_roots_widen_graph_but_not_reachable_set() {
             primary: vec!["main".to_string()],
             additional: vec!["orphan".to_string()],
         },
-        graph_options(&fs, &sink, &default_resolver(), false),
+        graph_options(&fs, &sink, &default_resolver(), &PROJECT_SCOPE),
     );
 
     assert!(result.order.iter().any(|m| m == "orphan"));
@@ -272,7 +275,7 @@ fn empty_additional_leaves_orphan_out_of_graph() {
     let result = build_module_graph(
         &mut store,
         roots("main"),
-        graph_options(&fs, &sink, &default_resolver(), false),
+        graph_options(&fs, &sink, &default_resolver(), &PROJECT_SCOPE),
     );
 
     assert!(!result.order.iter().any(|m| m == "orphan"));
@@ -292,7 +295,7 @@ fn zero_primary_roots_begins_with_additional() {
             primary: vec![],
             additional: vec!["lib".to_string()],
         },
-        graph_options(&fs, &sink, &default_resolver(), false),
+        graph_options(&fs, &sink, &default_resolver(), &PROJECT_SCOPE),
     );
 
     assert!(result.primary_reachable.is_empty());
@@ -302,7 +305,7 @@ fn zero_primary_roots_begins_with_additional() {
 #[test]
 fn check_analyzes_orphan_and_surfaces_its_error() {
     use passes::analyze;
-    use semantics::inference::{AnalyzeInput, CompilePhase, EntryFile, SemanticConfig};
+    use semantics::inference::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
     use semantics::loader::MemoryLoader;
 
     let tmp = tempfile::tempdir().unwrap();
@@ -317,22 +320,18 @@ fn check_analyzes_orphan_and_surfaces_its_error() {
 
     let source = "import \"lib\"\n\nfn main() {\n  let _ = lib.f()\n}\n";
     let output = analyze(AnalyzeInput {
-        config: SemanticConfig {
-            run_lints: true,
-            standalone_mode: false,
-            load_siblings: false,
-        },
+        load_siblings: false,
+        scope: AnalysisScope::Project(tmp.path().to_path_buf()),
         loader: &fs,
         entry: Some(EntryFile::new(
             source.to_string(),
             "main.lis".to_string(),
             "main.lis".to_string(),
         )),
-        project_root: Some(tmp.path().to_path_buf()),
         compile_phase: CompilePhase::Check,
         project_kind: semantics::inference::ProjectKind::Binary,
-        locator: deps::TypedefLocator::default(),
-        go_module: String::new(),
+        locator: &deps::TypedefLocator::default(),
+        go_module: "",
         disable_cache: true,
     });
 
@@ -343,19 +342,18 @@ fn check_analyzes_orphan_and_surfaces_its_error() {
     );
     assert!(
         output
-            .result
             .errors()
             .iter()
             .any(|e| e.code_str() == Some("infer.type_mismatch")),
         "check must analyze the orphan and surface its error: {:?}",
-        output.result.errors()
+        output.errors()
     );
 }
 
 #[test]
 fn check_analyzes_tests_in_declaration_only_module() {
     use passes::analyze;
-    use semantics::inference::{AnalyzeInput, CompilePhase, EntryFile, SemanticConfig};
+    use semantics::inference::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
     use semantics::loader::MemoryLoader;
 
     let tmp = tempfile::tempdir().unwrap();
@@ -370,33 +368,28 @@ fn check_analyzes_tests_in_declaration_only_module() {
 
     let source = "fn main() {}\n";
     let output = analyze(AnalyzeInput {
-        config: SemanticConfig {
-            run_lints: true,
-            standalone_mode: false,
-            load_siblings: false,
-        },
+        load_siblings: false,
+        scope: AnalysisScope::Project(tmp.path().to_path_buf()),
         loader: &fs,
         entry: Some(EntryFile::new(
             source.to_string(),
             "main.lis".to_string(),
             "main.lis".to_string(),
         )),
-        project_root: Some(tmp.path().to_path_buf()),
         compile_phase: CompilePhase::Check,
         project_kind: semantics::inference::ProjectKind::Binary,
-        locator: deps::TypedefLocator::default(),
-        go_module: String::new(),
+        locator: &deps::TypedefLocator::default(),
+        go_module: "",
         disable_cache: true,
     });
 
     assert!(
         output
-            .result
             .errors()
             .iter()
             .any(|e| e.code_str() == Some("infer.type_mismatch")),
         "a test in a declaration-plus-test module must be checked: {:?}",
-        output.result.errors()
+        output.errors()
     );
 }
 
@@ -411,7 +404,7 @@ fn graph_standalone_third_party_go_import_uses_module_not_found() {
     let _result = build_module_graph(
         &mut store,
         roots("main"),
-        graph_options(&fs, &sink, &default_resolver(), true),
+        graph_options(&fs, &sink, &default_resolver(), &STANDALONE_SCOPE),
     );
 
     assert!(sink.has_errors());
@@ -429,7 +422,7 @@ fn graph_project_third_party_go_import_undeclared() {
     let _result = build_module_graph(
         &mut store,
         roots("main"),
-        graph_options(&fs, &sink, &default_resolver(), false),
+        graph_options(&fs, &sink, &default_resolver(), &PROJECT_SCOPE),
     );
 
     assert!(sink.has_errors());
@@ -459,7 +452,7 @@ fn graph_declared_dep_missing_typedef() {
     let _result = build_module_graph(
         &mut store,
         roots("main"),
-        graph_options(&fs, &sink, &resolver, false),
+        graph_options(&fs, &sink, &resolver, &PROJECT_SCOPE),
     );
 
     assert!(sink.has_errors());
@@ -503,7 +496,7 @@ fn graph_subpackage_missing_typedef_points_at_add() {
     let _result = build_module_graph(
         &mut store,
         roots("main"),
-        graph_options(&fs, &sink, &resolver, false),
+        graph_options(&fs, &sink, &resolver, &PROJECT_SCOPE),
     );
 
     assert!(sink.has_errors());
@@ -688,7 +681,7 @@ fn resolver_root_vs_subpackage_typedef_lookup() {
 #[test]
 fn third_party_go_struct_impl_methods_registered() {
     use passes::analyze;
-    use semantics::inference::{AnalyzeInput, CompilePhase, EntryFile, SemanticConfig};
+    use semantics::inference::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
     use semantics::loader::MemoryLoader;
 
     let tmp = tempfile::tempdir().unwrap();
@@ -727,25 +720,20 @@ fn main() {
     let no_loader = MemoryLoader::new();
 
     let result = analyze(AnalyzeInput {
-        config: SemanticConfig {
-            run_lints: false,
-            standalone_mode: false,
-            load_siblings: false,
-        },
+        load_siblings: false,
+        scope: AnalysisScope::Directory,
         loader: &no_loader,
         entry: Some(EntryFile::new(
             source.to_string(),
             "main.lis".to_string(),
             "main.lis".to_string(),
         )),
-        project_root: None,
         compile_phase: CompilePhase::Check,
         project_kind: semantics::inference::ProjectKind::Binary,
-        locator: resolver,
-        go_module: String::new(),
+        locator: &resolver,
+        go_module: "",
         disable_cache: false,
-    })
-    .result;
+    });
 
     let impl_errors: Vec<_> = result
         .errors()
@@ -782,7 +770,7 @@ fn main() {
 #[test]
 fn stdlib_cache_save_load_excludes_third_party() {
     use passes::analyze;
-    use semantics::inference::{AnalyzeInput, CompilePhase, EntryFile, SemanticConfig};
+    use semantics::inference::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
     use semantics::loader::MemoryLoader;
 
     let tmp = tempfile::tempdir().unwrap();
@@ -809,32 +797,27 @@ fn stdlib_cache_save_load_excludes_third_party() {
 import "go:github.com/gorilla/mux"
 
 fn main() {
-    mux.VERSION
+    let _ = mux.VERSION
 }
 "#;
 
     let no_loader = MemoryLoader::new();
 
     let result1 = analyze(AnalyzeInput {
-        config: SemanticConfig {
-            run_lints: false,
-            standalone_mode: false,
-            load_siblings: false,
-        },
+        load_siblings: false,
+        scope: AnalysisScope::Directory,
         loader: &no_loader,
         entry: Some(EntryFile::new(
             source.to_string(),
             "main.lis".to_string(),
             "main.lis".to_string(),
         )),
-        project_root: None,
         compile_phase: CompilePhase::Check,
         project_kind: semantics::inference::ProjectKind::Binary,
-        locator: resolver.clone(),
-        go_module: String::new(),
+        locator: &resolver,
+        go_module: "",
         disable_cache: false,
-    })
-    .result;
+    });
 
     assert!(
         result1.errors().is_empty(),
@@ -843,25 +826,20 @@ fn main() {
     );
 
     let result2 = analyze(AnalyzeInput {
-        config: SemanticConfig {
-            run_lints: false,
-            standalone_mode: false,
-            load_siblings: false,
-        },
+        load_siblings: false,
+        scope: AnalysisScope::Directory,
         loader: &no_loader,
         entry: Some(EntryFile::new(
             source.to_string(),
             "main.lis".to_string(),
             "main.lis".to_string(),
         )),
-        project_root: None,
         compile_phase: CompilePhase::Check,
         project_kind: semantics::inference::ProjectKind::Binary,
-        locator: resolver,
-        go_module: String::new(),
+        locator: &resolver,
+        go_module: "",
         disable_cache: false,
-    })
-    .result;
+    });
 
     assert!(
         result2.errors().is_empty(),

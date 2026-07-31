@@ -234,8 +234,7 @@ fn report_check(
     };
     let counts = if unix {
         let (output, counts) = render::render_unix(
-            &result.errors,
-            &result.lints,
+            &result.diagnostics,
             render::SourceCache::new(get_source, source, filename),
             result.user_file_count,
             &options.filter,
@@ -244,8 +243,7 @@ fn report_check(
         counts
     } else {
         render::render_all(
-            &result.errors,
-            &result.lints,
+            &result.diagnostics,
             render::SourceCache::new(get_source, source, filename),
             result.user_file_count,
             &options.filter,
@@ -325,10 +323,10 @@ fn compile_project_entry(
     let project_root = locator.project_root().map(|p| p.to_path_buf());
     let config = CompileConfig {
         mode: CompileMode::Check,
-        go_module: go_module.to_string(),
-        entry_package_name: "main".to_string(),
+        go_module,
+        entry_package_name: "main",
         scope,
-        locator,
+        locator: &locator,
     };
 
     let fs = match scanned {
@@ -343,7 +341,7 @@ fn compile_project_entry(
         ),
         None => LocalFileSystem::new(dir.to_str().unwrap_or("."), project_root.as_deref()),
     };
-    compile(input, &config, &fs)
+    compile(input, config, &fs)
 }
 
 fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
@@ -415,8 +413,7 @@ fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
         };
         let counts = if unix {
             let (output, counts) = render::render_unix(
-                &compiled.result.errors,
-                &compiled.result.lints,
+                &compiled.result.diagnostics,
                 render::SourceCache::new(get_source, &compiled.source, &compiled.display_path),
                 compiled.result.user_file_count,
                 &options.filter,
@@ -425,8 +422,7 @@ fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
             counts
         } else {
             render::render_all(
-                &compiled.result.errors,
-                &compiled.result.lints,
+                &compiled.result.diagnostics,
                 render::SourceCache::new(get_source, &compiled.source, &compiled.display_path),
                 compiled.result.user_file_count,
                 &options.filter,
@@ -469,7 +465,7 @@ struct FixSummary {
 
 fn apply_result_fixes(result: &CompileResult, summary: &mut FixSummary) {
     let mut by_file: HashMap<u32, Vec<&Fix>> = HashMap::default();
-    for lint in &result.lints {
+    for lint in result.lints() {
         let Some(fix) = lint.fix() else {
             continue;
         };

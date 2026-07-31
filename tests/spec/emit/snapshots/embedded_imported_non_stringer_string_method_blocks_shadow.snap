@@ -10,7 +10,7 @@ description: |
   struct C {
     embed lib.N,
     embed D,
-    pub n: int,
+    pub value: int,
   }
 ---
 package main
@@ -35,5 +35,5 @@ func (d D) toString() string {
 type C struct {
 	lib.N
 	D
-	N int
+	Value int
 }

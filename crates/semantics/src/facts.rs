@@ -30,7 +30,7 @@ impl BindingIdAllocator {
 pub struct Facts {
     allocator: Arc<BindingIdAllocator>,
 
-    // LSP-consumed; reshaping these affects crates/lsp/.
+    // Retained after analysis for editor tooling.
     pub bindings: HashMap<BindingId, BindingFact>,
     pub usages: HashSet<Usage>,
 

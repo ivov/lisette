@@ -119,7 +119,7 @@ impl DocumentAnalysis {
         if !Arc::ptr_eq(&self.revision.0, &revision.0) {
             return false;
         }
-        if snapshot.has_parse_errors {
+        if snapshot.has_parse_errors() {
             self.result = AnalysisResult::Invalid {
                 current: snapshot,
                 last_valid: self.last_valid(),

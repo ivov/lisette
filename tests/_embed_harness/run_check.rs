@@ -5,7 +5,7 @@ use std::process::Command;
 use deps::TypedefLocator;
 use emit::{EmitOptions, Planner};
 use passes::analyze;
-use semantics::inference::{AnalyzeInput, CompilePhase, EntryFile, SemanticConfig};
+use semantics::inference::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
 use semantics::loader::MemoryLoader;
 use semantics::store::ENTRY_MODULE_ID;
 
@@ -182,30 +182,25 @@ fn emit_and_write(
     let mut loader = MemoryLoader::new();
     loader.add_file(ENTRY_MODULE_ID, "main.lis", &lisette);
     let output = analyze(AnalyzeInput {
-        config: SemanticConfig {
-            run_lints: false,
-            standalone_mode: false,
-            load_siblings: true,
-        },
+        load_siblings: true,
+        scope: AnalysisScope::Directory,
         loader: &loader,
         entry: Some(EntryFile::new(
             lisette.clone(),
             "main.lis".to_string(),
             "main.lis".to_string(),
         )),
-        project_root: None,
-        locator: TypedefLocator::default(),
+        locator: &TypedefLocator::default(),
         compile_phase: CompilePhase::Emit,
         project_kind: semantics::inference::ProjectKind::Binary,
-        go_module: module.clone(),
+        go_module: &module,
         disable_cache: true,
     });
     if output.has_parse_errors() {
         return Ok(Emit::NotRunnable(vec!["parse".to_string()]));
     }
-    let result = output.result;
-    if !result.errors().is_empty() {
-        let codes = result
+    if !output.errors().is_empty() {
+        let codes = output
             .errors()
             .iter()
             .filter_map(|e| e.code_str().map(str::to_string))
@@ -214,14 +209,15 @@ fn emit_and_write(
     }
 
     let files = Planner::emit(
-        &result.into_emit_input(),
+        &output.emit_input,
         &module,
         "main",
         EmitOptions {
             sourcemap: false,
             emit_tests: false,
         },
-    );
+    )
+    .map_err(|diagnostics| format!("Emission failed: {diagnostics:?}"))?;
     let dir = work.join("emitted");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     for file in &files {

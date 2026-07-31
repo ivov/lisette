@@ -1,7 +1,6 @@
-use diagnostics::SemanticResult;
 use emit::{EmitOptions, Planner};
-use passes::analyze;
-use semantics::inference::{AnalyzeInput, EntryFile, SemanticConfig};
+use passes::{Analysis, analyze};
+use semantics::inference::{AnalysisScope, AnalyzeInput, EntryFile};
 use semantics::loader::Loader;
 use semantics::store::ENTRY_MODULE_ID;
 
@@ -9,41 +8,37 @@ use super::filesystem::MockFileSystem;
 
 fn compile_with(
     fs: MockFileSystem,
-    config: SemanticConfig,
+    scope: AnalysisScope,
     locator: deps::TypedefLocator,
-) -> SemanticResult {
+) -> Analysis {
     let main_source = fs
         .scan_folder(ENTRY_MODULE_ID)
         .get("main.lis")
         .map(|c| c.source.clone())
         .expect("main.lis must exist");
 
+    let load_siblings = !matches!(&scope, AnalysisScope::Standalone);
     analyze(AnalyzeInput {
-        config,
+        load_siblings,
+        scope,
         loader: &fs,
         entry: Some(EntryFile::new(
             main_source,
             "main.lis".to_string(),
             "main.lis".to_string(),
         )),
-        project_root: None,
-        locator,
+        locator: &locator,
         compile_phase: semantics::inference::CompilePhase::Check,
         project_kind: semantics::inference::ProjectKind::Binary,
-        go_module: String::new(),
+        go_module: "",
         disable_cache: false,
     })
-    .result
 }
 
-pub fn compile_check(fs: MockFileSystem) -> SemanticResult {
+pub fn compile_check(fs: MockFileSystem) -> Analysis {
     compile_with(
         fs,
-        SemanticConfig {
-            run_lints: true,
-            standalone_mode: false,
-            load_siblings: true,
-        },
+        AnalysisScope::Directory,
         deps::TypedefLocator::default(),
     )
 }
@@ -52,7 +47,7 @@ pub fn compile_standalone_entry(
     fs: MockFileSystem,
     entry_name: &str,
     phase: semantics::inference::CompilePhase,
-) -> SemanticResult {
+) -> Analysis {
     let source = fs
         .scan_folder(ENTRY_MODULE_ID)
         .get(entry_name)
@@ -60,50 +55,30 @@ pub fn compile_standalone_entry(
         .unwrap_or_else(|| panic!("entry file `{entry_name}` must exist"));
 
     analyze(AnalyzeInput {
-        config: SemanticConfig {
-            run_lints: true,
-            standalone_mode: true,
-            load_siblings: false,
-        },
+        load_siblings: false,
+        scope: AnalysisScope::Standalone,
         loader: &fs,
         entry: Some(EntryFile::new(
             source,
             entry_name.to_string(),
             entry_name.to_string(),
         )),
-        project_root: None,
-        locator: deps::TypedefLocator::default(),
+        locator: &deps::TypedefLocator::default(),
         compile_phase: phase,
         project_kind: semantics::inference::ProjectKind::Binary,
-        go_module: String::new(),
+        go_module: "",
         disable_cache: true,
     })
-    .result
 }
 
-pub fn compile_check_with_locator(
-    fs: MockFileSystem,
-    locator: deps::TypedefLocator,
-) -> SemanticResult {
-    compile_with(
-        fs,
-        SemanticConfig {
-            run_lints: true,
-            standalone_mode: false,
-            load_siblings: true,
-        },
-        locator,
-    )
+pub fn compile_check_with_locator(fs: MockFileSystem, locator: deps::TypedefLocator) -> Analysis {
+    compile_with(fs, AnalysisScope::Directory, locator)
 }
 
-pub fn compile_check_standalone(fs: MockFileSystem) -> SemanticResult {
+pub fn compile_check_standalone(fs: MockFileSystem) -> Analysis {
     compile_with(
         fs,
-        SemanticConfig {
-            run_lints: true,
-            standalone_mode: true,
-            load_siblings: false,
-        },
+        AnalysisScope::Standalone,
         deps::TypedefLocator::default(),
     )
 }
@@ -125,7 +100,16 @@ pub fn compile_project_files(
     go_module: &str,
     sourcemap: bool,
 ) -> Vec<emit::OutputFile> {
-    compile_project_files_with_tests(fs, go_module, sourcemap, false)
+    try_compile_project_files(fs, go_module, sourcemap)
+        .unwrap_or_else(|diagnostics| panic!("Emission failed: {diagnostics:?}"))
+}
+
+pub fn try_compile_project_files(
+    fs: MockFileSystem,
+    go_module: &str,
+    sourcemap: bool,
+) -> Result<Vec<emit::OutputFile>, Vec<diagnostics::LisetteDiagnostic>> {
+    try_compile_project_files_with_tests(fs, go_module, sourcemap, false)
 }
 
 pub fn compile_project_files_with_tests(
@@ -134,37 +118,41 @@ pub fn compile_project_files_with_tests(
     sourcemap: bool,
     emit_tests: bool,
 ) -> Vec<emit::OutputFile> {
+    try_compile_project_files_with_tests(fs, go_module, sourcemap, emit_tests)
+        .unwrap_or_else(|diagnostics| panic!("Emission failed: {diagnostics:?}"))
+}
+
+pub fn try_compile_project_files_with_tests(
+    fs: MockFileSystem,
+    go_module: &str,
+    sourcemap: bool,
+    emit_tests: bool,
+) -> Result<Vec<emit::OutputFile>, Vec<diagnostics::LisetteDiagnostic>> {
     let main_source = fs
         .scan_folder(ENTRY_MODULE_ID)
         .get("main.lis")
         .map(|c| c.source.clone())
         .expect("main.lis must exist");
 
-    let analyze_output = analyze(AnalyzeInput {
-        config: SemanticConfig {
-            run_lints: true,
-            standalone_mode: false,
-            load_siblings: true,
-        },
+    let analysis = analyze(AnalyzeInput {
+        load_siblings: true,
+        scope: AnalysisScope::Directory,
         loader: &fs,
         entry: Some(EntryFile::new(
             main_source,
             "main.lis".to_string(),
             "main.lis".to_string(),
         )),
-        project_root: None,
-        locator: deps::TypedefLocator::default(),
+        locator: &deps::TypedefLocator::default(),
         compile_phase: if emit_tests {
             semantics::inference::CompilePhase::Test
         } else {
             semantics::inference::CompilePhase::Emit
         },
         project_kind: semantics::inference::ProjectKind::Binary,
-        go_module: go_module.to_string(),
+        go_module,
         disable_cache: true,
     });
-    let analysis = analyze_output.result;
-
     assert!(
         analysis.errors().is_empty(),
         "Expected no errors, got: {:?}",
@@ -172,7 +160,7 @@ pub fn compile_project_files_with_tests(
     );
 
     Planner::emit(
-        &analysis.into_emit_input(),
+        &analysis.emit_input,
         go_module,
         "main",
         EmitOptions {

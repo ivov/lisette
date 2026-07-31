@@ -72,8 +72,7 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
         ModuleGraphOptions {
             loader: Some(&fs),
             sink: &sink,
-            standalone_mode: false,
-            has_project_root: true,
+            scope: &semantics::inference::AnalysisScope::Project(std::path::PathBuf::new()),
             locator: &locator,
             include_tests: true,
         },

@@ -278,8 +278,7 @@ impl Backend {
 
         let find_binding = || {
             snapshot
-                .facts()
-                .bindings
+                .bindings()
                 .values()
                 .find(|b| b.span.file_id == file_id && offset_in_span(offset, &b.span))
                 .map(|b| b.span)
@@ -294,7 +293,7 @@ impl Backend {
             syntax::ast::Expression::Identifier {
                 resolution: IdentifierResolution::Binding(id),
                 ..
-            } => snapshot.facts().bindings.get(id).map(|b| b.span),
+            } => snapshot.bindings().get(id).map(|b| b.span),
 
             syntax::ast::Expression::Identifier {
                 value,
@@ -312,7 +311,7 @@ impl Backend {
                                 resolve_import_span(
                                     first,
                                     file,
-                                    &snapshot.result.emit_input.go_package_names,
+                                    &snapshot.analysis.emit_input.go_package_names,
                                 )
                             })
                             && let Some(source) = snapshot.source(span.file_id)
@@ -405,7 +404,7 @@ impl Backend {
                         resolve_import_span(
                             value,
                             file,
-                            &snapshot.result.emit_input.go_package_names,
+                            &snapshot.analysis.emit_input.go_package_names,
                         )
                     })
                     // A dotted callee like `Array.new` doesn't resolve whole, so
@@ -635,7 +634,7 @@ impl Backend {
                 Ok(None)
             };
 
-        for binding in snapshot.facts().bindings.values() {
+        for binding in snapshot.bindings().values() {
             let span = binding.span;
             if span.file_id == file_id && offset_in_span(offset, &span) {
                 return rename_response(span, &binding.name);
@@ -668,7 +667,7 @@ impl Backend {
                 span,
                 ..
             } => {
-                if let Some(binding) = snapshot.facts().bindings.get(id)
+                if let Some(binding) = snapshot.bindings().get(id)
                     && binding.span.file_id == file_id
                 {
                     rename_response(*span, value)
@@ -880,7 +879,7 @@ impl Backend {
 
         let mut actions: Vec<CodeActionOrCommand> = Vec::new();
 
-        for diagnostic in snapshot.result.lints() {
+        for diagnostic in snapshot.analysis.lints() {
             if diagnostic.file_id() != Some(file_id) {
                 continue;
             }
@@ -1027,7 +1026,7 @@ fn imported_module_completions(
 ) -> Option<Vec<CompletionItem>> {
     let imports = file.imports();
     let imp = imports.iter().find(|imp| {
-        imp.effective_alias(&snapshot.result.emit_input.go_package_names)
+        imp.effective_alias(&snapshot.analysis.emit_input.go_package_names)
             .as_deref()
             == Some(module_name)
     })?;
@@ -1183,7 +1182,7 @@ fn general_completions(
         }
     }
 
-    for binding in snapshot.facts().bindings.values() {
+    for binding in snapshot.bindings().values() {
         if binding.span.file_id == file_id && binding.span.byte_offset < offset {
             items.push(CompletionItem {
                 label: binding.name.clone(),
@@ -1195,7 +1194,7 @@ fn general_completions(
 
     for import in file.imports() {
         let alias = import
-            .effective_alias(&snapshot.result.emit_input.go_package_names)
+            .effective_alias(&snapshot.analysis.emit_input.go_package_names)
             .unwrap_or_else(|| import.name.to_string());
         items.push(CompletionItem {
             label: alias,
@@ -1250,7 +1249,7 @@ fn usage_locations(
             definition_span.byte_offset,
             definition_span.byte_length,
         );
-        for usage in &snapshot.facts().usages {
+        for usage in snapshot.usages() {
             if usage.definition_span == target_span
                 && let Some(source) = snapshot.source(usage.usage_span.file_id)
             {

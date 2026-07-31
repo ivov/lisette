@@ -3,8 +3,6 @@ pub mod imports;
 use std::io::{self, Write};
 use std::process::{Command, Stdio};
 
-use diagnostics::LisetteDiagnostic;
-
 use self::imports::format_import;
 use crate::expressions::top_items::emit_doc;
 
@@ -17,7 +15,6 @@ pub struct OutputFile {
     pub imports: Vec<(String, String)>,
     pub package_name: String,
     pub(crate) file_comment: Option<String>,
-    pub diagnostics: Vec<LisetteDiagnostic>,
 }
 
 impl OutputFile {

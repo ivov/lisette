@@ -1,5 +1,4 @@
 use rustc_hash::FxHashMap as HashMap;
-use std::path::PathBuf;
 
 use deps::TypedefLocator;
 use diagnostics::LisetteDiagnostic;
@@ -7,10 +6,10 @@ use emit::{EmitOptions, OutputFile, Planner};
 
 use passes::analyze;
 use semantics::cache::EmitStamp;
-use semantics::inference::{AnalyzeInput, EntryFile, SemanticConfig};
+use semantics::inference::{AnalyzeInput, EntryFile};
 
 use semantics::inference::CompilePhase;
-pub use semantics::inference::ProjectKind;
+pub use semantics::inference::{AnalysisScope as CompileScope, ProjectKind};
 use semantics::loader::Loader;
 pub use syntax::program::TestIndex;
 
@@ -23,13 +22,13 @@ pub struct SourceInfo {
 /// Per-file source, with key as file_id, for mapping diagnostics back to source text.
 pub type Sources = HashMap<u32, SourceInfo>;
 
-#[derive(Debug, Clone)]
-pub struct CompileConfig {
+#[derive(Debug)]
+pub struct CompileConfig<'a> {
     pub mode: CompileMode,
-    pub go_module: String,
-    pub entry_package_name: String,
+    pub go_module: &'a str,
+    pub entry_package_name: &'a str,
     pub scope: CompileScope,
-    pub locator: TypedefLocator,
+    pub locator: &'a TypedefLocator,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -67,37 +66,6 @@ impl CompileMode {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CompileScope {
-    Standalone,
-    Directory,
-    Project(PathBuf),
-}
-
-impl CompileScope {
-    fn semantic_config(&self) -> SemanticConfig {
-        match self {
-            Self::Standalone => SemanticConfig {
-                run_lints: true,
-                standalone_mode: true,
-                load_siblings: false,
-            },
-            Self::Directory | Self::Project(_) => SemanticConfig {
-                run_lints: true,
-                standalone_mode: false,
-                load_siblings: true,
-            },
-        }
-    }
-
-    fn project_root(&self) -> Option<PathBuf> {
-        match self {
-            Self::Project(root) => Some(root.clone()),
-            Self::Standalone | Self::Directory => None,
-        }
-    }
-}
-
 pub struct CompileEntry<'a> {
     pub source: &'a str,
     pub filename: &'a str,
@@ -112,8 +80,7 @@ pub enum CompileInput<'a> {
 #[derive(Debug)]
 pub struct CompileResult {
     pub output: Vec<OutputFile>,
-    pub errors: Vec<LisetteDiagnostic>,
-    pub lints: Vec<LisetteDiagnostic>,
+    pub diagnostics: Vec<LisetteDiagnostic>,
     pub sources: Sources,
     pub user_file_count: usize,
     pub live_modules: Vec<String>,
@@ -121,7 +88,33 @@ pub struct CompileResult {
     pub test_index: TestIndex,
 }
 
-pub fn compile(input: CompileInput<'_>, config: &CompileConfig, fs: &dyn Loader) -> CompileResult {
+impl CompileResult {
+    pub fn errors(&self) -> &[LisetteDiagnostic] {
+        &self.diagnostics[..self.error_count()]
+    }
+
+    pub fn lints(&self) -> &[LisetteDiagnostic] {
+        &self.diagnostics[self.error_count()..]
+    }
+
+    fn error_count(&self) -> usize {
+        self.diagnostics
+            .partition_point(LisetteDiagnostic::is_error)
+    }
+}
+
+pub fn compile(
+    input: CompileInput<'_>,
+    config: CompileConfig<'_>,
+    fs: &dyn Loader,
+) -> CompileResult {
+    let CompileConfig {
+        mode,
+        go_module,
+        entry_package_name,
+        scope,
+        locator,
+    } = config;
     let (entry_file, project_kind) = match input {
         CompileInput::Binary(entry) => (
             Some(EntryFile::new(
@@ -134,90 +127,82 @@ pub fn compile(input: CompileInput<'_>, config: &CompileConfig, fs: &dyn Loader)
         CompileInput::Library => (None, ProjectKind::Library),
     };
 
-    let disable_cache = config.mode.disables_cache();
-    let emit_tests = config
-        .mode
+    let disable_cache = mode.disables_cache();
+    let emit_tests = mode
         .emit_options()
         .is_some_and(|options| options.emit_tests);
 
-    let analyze_output = analyze(AnalyzeInput {
-        config: config.scope.semantic_config(),
+    let mut analysis = analyze(AnalyzeInput {
+        load_siblings: !matches!(&scope, CompileScope::Standalone),
+        scope,
         loader: fs,
         entry: entry_file,
-        project_root: config.scope.project_root(),
-        compile_phase: config.mode.phase(),
+        compile_phase: mode.phase(),
         project_kind,
-        locator: config.locator.clone(),
-        go_module: config.go_module.clone(),
+        locator,
+        go_module,
         disable_cache,
     });
-    let semantic_result = analyze_output.result;
-    let emit_stamps = analyze_output.emit_stamps;
-    let unreachable_modules = analyze_output.unreachable_modules;
+    let failed = analysis.failed();
+    let emit_result = match mode.emit_options() {
+        Some(options) if !failed => Some(Planner::emit(
+            &analysis.emit_input,
+            go_module,
+            entry_package_name,
+            options,
+        )),
+        _ => None,
+    };
 
-    let user_file_count = semantic_result
-        .emit_input
-        .files
-        .values()
-        .filter(|file| !file.is_d_lis())
-        .count();
-
-    let sources: HashMap<u32, SourceInfo> = semantic_result
-        .emit_input
-        .files
-        .iter()
-        .map(|(file_id, file)| {
-            (
-                *file_id,
-                SourceInfo {
-                    source: file.source.clone(),
-                    filename: file.display_path.clone(),
-                },
-            )
-        })
-        .collect();
-
-    let failed = semantic_result.failed();
-    let mut errors = semantic_result.errors().to_vec();
-    let mut lints = semantic_result.lints().to_vec();
-    let mut live_modules: Vec<String> = semantic_result
-        .emit_input
-        .files
-        .values()
-        .filter(|file| !file.is_d_lis())
-        .map(|file| file.module_id.clone())
-        .collect();
-    live_modules.sort_unstable();
-    live_modules.dedup();
-    let test_index = semantic_result.emit_input.test_index.clone();
-
-    if !unreachable_modules.is_empty() && !emit_tests {
-        lints.push(diagnostics::module_graph::unreachable_modules(
-            &unreachable_modules,
+    let mut diagnostics = analysis.take_diagnostics();
+    if !analysis.unreachable_modules.is_empty() && !emit_tests {
+        diagnostics.push(diagnostics::module_graph::unreachable_modules(
+            &analysis.unreachable_modules,
         ));
     }
 
-    let mut output = match config.mode.emit_options() {
-        Some(options) if !failed => Planner::emit(
-            &semantic_result.into_emit_input(),
-            &config.go_module,
-            &config.entry_package_name,
-            options,
-        ),
-        _ => Vec::new(),
+    let mut sources = Sources::default();
+    let mut live_modules = Vec::new();
+    let mut user_file_count = 0;
+    for (file_id, file) in analysis.emit_input.files {
+        if !file.is_d_lis() {
+            user_file_count += 1;
+            live_modules.push(file.module_id);
+        }
+        sources.insert(
+            file_id,
+            SourceInfo {
+                source: file.source,
+                filename: file.display_path,
+            },
+        );
+    }
+    live_modules.sort_unstable();
+    live_modules.dedup();
+    let test_index = analysis.emit_input.test_index;
+
+    let output = match emit_result {
+        Some(Ok(output)) => output,
+        Some(Err(emit_diagnostics)) => {
+            let mut error_count = diagnostics.partition_point(LisetteDiagnostic::is_error);
+            for diagnostic in emit_diagnostics {
+                if diagnostic.is_error() {
+                    diagnostics.insert(error_count, diagnostic);
+                    error_count += 1;
+                } else {
+                    diagnostics.push(diagnostic);
+                }
+            }
+            Vec::new()
+        }
+        None => Vec::new(),
     };
 
-    for file in &mut output {
-        errors.append(&mut file.diagnostics);
-    }
-    if errors.iter().any(|diagnostic| diagnostic.is_error()) {
-        output.clear();
-    }
+    let emit_stamps = analysis.emit_stamps;
 
     CompileResult {
         output,
-        errors,
-        lints,
+        diagnostics,
         sources,
         user_file_count,
         live_modules,
@@ -240,10 +225,10 @@ mod tests {
         let source = stdfs::read_to_string(&src_main).unwrap();
         let config = CompileConfig {
             mode: CompileMode::Check,
-            go_module: "test".to_string(),
-            entry_package_name: "main".to_string(),
+            go_module: "test",
+            entry_package_name: "main",
             scope: CompileScope::Project(project_dir.to_path_buf()),
-            locator,
+            locator: &locator,
         };
         let working_dir = src_main
             .parent()
@@ -256,14 +241,13 @@ mod tests {
                 filename: "main.lis",
                 display_path: "src/main.lis",
             }),
-            &config,
+            config,
             &fs_loader,
         );
 
         let mut diags: Vec<(bool, Option<String>)> = result
-            .errors
+            .diagnostics
             .iter()
-            .chain(result.lints.iter())
             .map(|d| (d.is_error(), d.code_str().map(|s| s.to_string())))
             .collect();
         diags.sort();
@@ -298,10 +282,10 @@ mod tests {
                 CompilePhase::Emit => CompileMode::Emit { sourcemap: false },
                 CompilePhase::Test => CompileMode::Test,
             },
-            go_module: "test".to_string(),
-            entry_package_name: entry_package_name.to_string(),
+            go_module: "test",
+            entry_package_name,
             scope: CompileScope::Project(root.to_path_buf()),
-            locator,
+            locator: &locator,
         };
         let fs_loader =
             LocalFileSystem::new(source_path.parent().unwrap().to_str().unwrap(), Some(root));
@@ -313,7 +297,7 @@ mod tests {
             }),
             ProjectKind::Library => CompileInput::Library,
         };
-        compile(input, &config, &fs_loader)
+        compile(input, config, &fs_loader)
     }
 
     #[test]
@@ -324,11 +308,7 @@ mod tests {
             CompilePhase::Emit,
             "widget",
         );
-        assert!(
-            !result.errors.iter().any(|d| d.is_error()),
-            "{:?}",
-            result.errors
-        );
+        assert!(result.errors().is_empty(), "{:?}", result.errors());
         assert!(
             result.output.iter().any(|f| f.package_name == "widget"),
             "the entry-package-name fact should reach emitted output, got: {:?}",
@@ -350,7 +330,7 @@ mod tests {
         );
         assert!(
             binary
-                .errors
+                .errors()
                 .iter()
                 .any(|d| d.code_str() == Some("infer.invalid_main_signature")),
             "a binary `main` with parameters must be rejected"
@@ -364,7 +344,7 @@ mod tests {
         );
         assert!(
             !library
-                .errors
+                .errors()
                 .iter()
                 .any(|d| d.code_str() == Some("infer.invalid_main_signature")),
             "a library `main` is an ordinary function, not a binary entrypoint"
@@ -378,7 +358,10 @@ mod tests {
 
         assert_eq!(
             (
-                result.errors.first().and_then(LisetteDiagnostic::code_str),
+                result
+                    .errors()
+                    .first()
+                    .and_then(LisetteDiagnostic::code_str),
                 result.user_file_count,
                 result.sources.get(&0).map(|source| source.source.as_str()),
                 result.output.is_empty(),
@@ -446,25 +429,20 @@ mod tests {
             .expect("temp project path is valid utf-8");
         let fs_loader = LocalFileSystem::new(working_dir, Some(project_dir));
         let result = analyze(AnalyzeInput {
-            config: SemanticConfig {
-                run_lints: true,
-                standalone_mode: false,
-                load_siblings: true,
-            },
+            load_siblings: true,
+            scope: CompileScope::Project(project_dir.to_path_buf()),
             loader: &fs_loader,
             entry: Some(EntryFile::new(
                 source,
                 "main.lis".to_string(),
                 "src/main.lis".to_string(),
             )),
-            project_root: Some(project_dir.to_path_buf()),
             compile_phase: CompilePhase::Check,
             project_kind: ProjectKind::Binary,
-            locator,
-            go_module: "test".to_string(),
+            locator: &locator,
+            go_module: "test",
             disable_cache: false,
-        })
-        .result;
+        });
 
         let mut cached: Vec<String> = result.emit_input.cached_modules.iter().cloned().collect();
         cached.sort();
@@ -548,26 +526,21 @@ mod tests {
             .expect("temp project path is valid utf-8");
         let fs_loader = LocalFileSystem::new(working_dir, Some(project_dir));
         let output = analyze(AnalyzeInput {
-            config: SemanticConfig {
-                run_lints: true,
-                standalone_mode: false,
-                load_siblings: true,
-            },
+            load_siblings: true,
+            scope: CompileScope::Project(project_dir.to_path_buf()),
             loader: &fs_loader,
             entry: Some(EntryFile::new(
                 source,
                 "main.lis".to_string(),
                 "src/main.lis".to_string(),
             )),
-            project_root: Some(project_dir.to_path_buf()),
             compile_phase: CompilePhase::Check,
             project_kind: ProjectKind::Binary,
-            locator,
-            go_module: "test".to_string(),
+            locator: &locator,
+            go_module: "test",
             disable_cache: false,
         });
         let mut names: Vec<String> = output
-            .result
             .emit_input
             .test_index
             .tests()

@@ -39,6 +39,7 @@ use std::sync::Arc;
 use abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
 use abi::catalog::GoAbiCatalog;
 use analyze::facts::{EmitFactsConfig, is_nullable_option};
+use diagnostics::LisetteDiagnostic;
 use names::go_name::GeneratedPackage;
 use names::packages::{PackageRequirements, PackageUse};
 use plan::ModulePlan;
@@ -285,7 +286,7 @@ impl<'a> Planner<'a> {
         go_module: &str,
         entry_package_name: &'a str,
         options: EmitOptions,
-    ) -> Vec<OutputFile> {
+    ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
         let line_indexes: Arc<HashMap<u32, LineIndex>> = Arc::new(if options.sourcemap {
             analysis
                 .files
@@ -335,15 +336,30 @@ impl<'a> Planner<'a> {
             )
         };
 
-        let mut output: Vec<OutputFile> = if work.len() < PARALLEL_THRESHOLD {
-            work.iter().flat_map(emit_one).collect()
-        } else {
-            use rayon::prelude::*;
-            work.par_iter().flat_map_iter(emit_one).collect()
-        };
+        let module_outputs: Vec<Result<Vec<OutputFile>, Vec<LisetteDiagnostic>>> =
+            if work.len() < PARALLEL_THRESHOLD {
+                work.iter().map(emit_one).collect()
+            } else {
+                use rayon::prelude::*;
+                work.par_iter().map(emit_one).collect()
+            };
 
-        output.sort_by(|a, b| a.name.cmp(&b.name));
-        output
+        let mut output = Vec::new();
+        let mut diagnostics = Vec::new();
+        for module_output in module_outputs {
+            match module_output {
+                Ok(mut files) => output.append(&mut files),
+                Err(mut errors) => diagnostics.append(&mut errors),
+            }
+        }
+
+        if diagnostics.is_empty() {
+            output.sort_by(|a, b| a.name.cmp(&b.name));
+            Ok(output)
+        } else {
+            diagnostics.sort_by(LisetteDiagnostic::sort_key);
+            Err(diagnostics)
+        }
     }
 
     pub fn new_for_tests(config: &TestEmitConfig<'a>, source: Option<&str>) -> Self {
@@ -581,18 +597,27 @@ impl<'a> Planner<'a> {
         format!("//line {}:{}:{}\n", source.path, line, col)
     }
 
-    pub fn emit_files(&mut self, files: &[&File], module_id: &str) -> Vec<OutputFile> {
+    pub fn emit_files(
+        &mut self,
+        files: &[&File],
+        module_id: &str,
+    ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
         let plan = self.build_module_plan(files, module_id);
         self.render_module_plan(files, plan)
     }
 
-    fn render_module_plan(&mut self, files: &[&File], plan: ModulePlan) -> Vec<OutputFile> {
+    fn render_module_plan(
+        &mut self,
+        files: &[&File],
+        plan: ModulePlan,
+    ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
         let ModulePlan {
             package_name,
             files: file_plans,
             mut collision_diagnostics,
         } = plan;
         let mut output_files = Vec::new();
+        let mut all_diagnostics = Vec::new();
 
         for (i, (file, file_plan)) in files.iter().zip(file_plans).enumerate() {
             *self.namespace.borrow_mut() = Some(file_plan.namespace);
@@ -625,17 +650,22 @@ impl<'a> Planner<'a> {
             if i == 0 {
                 diagnostics.append(&mut collision_diagnostics);
             }
+            all_diagnostics.append(&mut diagnostics);
             output_files.push(OutputFile {
                 name: file.go_filename(),
                 imports,
                 source: rendered_source,
                 package_name: package_name.clone(),
                 file_comment: file.file_comment.clone(),
-                diagnostics,
             });
         }
 
-        output_files
+        if all_diagnostics.is_empty() {
+            Ok(output_files)
+        } else {
+            all_diagnostics.sort_by(LisetteDiagnostic::sort_key);
+            Err(all_diagnostics)
+        }
     }
 }
 
@@ -653,7 +683,7 @@ fn emit_module<'a>(
     shared_emit_ctx: &SharedEmitContext,
     module_id: &str,
     files: &[&'a File],
-) -> Vec<OutputFile> {
+) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
     let facts = EmitFacts::new(EmitFactsConfig {
         definitions: &analysis.definitions,
         unused: &analysis.unused,
@@ -672,13 +702,14 @@ fn emit_module<'a>(
     });
     let mut planner: Planner<'a> = Planner::new(facts);
 
-    let mut module_output = planner.emit_files(files, module_id);
-
-    if module_id != analysis.entry_module_id.as_str() {
-        for file in &mut module_output {
-            file.name = format!("{}/{}", module_id, file.name);
-        }
-    }
-
-    module_output
+    planner
+        .emit_files(files, module_id)
+        .map(|mut module_output| {
+            if module_id != analysis.entry_module_id.as_str() {
+                for file in &mut module_output {
+                    file.name = format!("{}/{}", module_id, file.name);
+                }
+            }
+            module_output
+        })
 }

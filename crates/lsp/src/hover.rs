@@ -108,7 +108,7 @@ fn resolve_constructor_name_hover(
         let module_name = find_module_by_alias(
             file,
             qualifier,
-            &snapshot.result.emit_input.go_package_names,
+            &snapshot.analysis.emit_input.go_package_names,
         )?;
         let qualified = format!("{}.{}", module_name, simple);
         let definition = snapshot.definitions().get(qualified.as_str())?;
@@ -307,7 +307,7 @@ fn resolve_dot_access_doc(
     };
 
     let module_name =
-        find_module_by_alias(file, alias, &snapshot.result.emit_input.go_package_names)?;
+        find_module_by_alias(file, alias, &snapshot.analysis.emit_input.go_package_names)?;
 
     let qualified = if matches!(expression, Expression::DotAccess { .. }) {
         if let Some(dotted) = expression.as_dotted_path()

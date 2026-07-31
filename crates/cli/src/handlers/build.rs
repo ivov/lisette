@@ -427,15 +427,16 @@ fn compile_project(
     locator: &deps::TypedefLocator,
 ) -> lisette::pipeline::CompileResult {
     let go_module_name = &prep.manifest.project.name;
+    let library_package_name = match prep.kind {
+        ProjectKind::Binary => None,
+        ProjectKind::Library => Some(emit::root_package_name(go_module_name)),
+    };
     let compile_config = CompileConfig {
         mode,
-        go_module: go_module_name.to_string(),
-        entry_package_name: match prep.kind {
-            ProjectKind::Binary => "main".to_string(),
-            ProjectKind::Library => emit::root_package_name(go_module_name),
-        },
+        go_module: go_module_name,
+        entry_package_name: library_package_name.as_deref().unwrap_or("main"),
         scope: CompileScope::Project(prep.project_path.clone()),
-        locator: locator.clone(),
+        locator,
     };
 
     let src_dir = prep.project_path.join("src");
@@ -445,7 +446,7 @@ fn compile_project(
         prep.sources.clone(),
         prep.test_sources.clone(),
     );
-    compile(entry.compile_input(), &compile_config, &local_fs)
+    compile(entry.compile_input(), compile_config, &local_fs)
 }
 
 fn render_diagnostics(
@@ -453,8 +454,7 @@ fn render_diagnostics(
     entry: &EntryPoint,
 ) -> render::Counts {
     render::render_all(
-        &result.errors,
-        &result.lints,
+        &result.diagnostics,
         render::SourceCache::new(
             |file_id| {
                 result

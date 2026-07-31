@@ -52,11 +52,36 @@ pub enum ProjectKind {
     Library,
 }
 
-#[derive(Debug, Clone)]
-pub struct SemanticConfig {
-    pub run_lints: bool,
-    pub standalone_mode: bool,
-    pub load_siblings: bool,
+/// The filesystem context in which analysis runs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AnalysisScope {
+    Standalone,
+    Directory,
+    Project(PathBuf),
+}
+
+impl AnalysisScope {
+    pub(crate) fn is_standalone(&self) -> bool {
+        matches!(self, Self::Standalone)
+    }
+
+    pub(crate) fn has_project_root(&self) -> bool {
+        matches!(self, Self::Project(_))
+    }
+
+    fn project_root(&self) -> Option<&Path> {
+        match self {
+            Self::Project(root) => Some(root),
+            Self::Standalone | Self::Directory => None,
+        }
+    }
+
+    fn into_project_root(self) -> Option<PathBuf> {
+        match self {
+            Self::Project(root) => Some(root),
+            Self::Standalone | Self::Directory => None,
+        }
+    }
 }
 
 pub struct EntryFile {
@@ -104,18 +129,18 @@ pub enum EntryParseStatus {
 }
 
 pub struct AnalyzeInput<'a> {
-    pub config: SemanticConfig,
+    pub load_siblings: bool,
+    pub scope: AnalysisScope,
     pub loader: &'a dyn Loader,
     /// An explicitly supplied file, when the caller has one. Project files not
     /// supplied here are discovered through the loader.
     pub entry: Option<EntryFile>,
-    pub project_root: Option<PathBuf>,
     pub compile_phase: CompilePhase,
     pub project_kind: ProjectKind,
-    pub locator: TypedefLocator,
+    pub locator: &'a TypedefLocator,
     /// Go module path (from `lisette.toml`); folded into the cache emit-artifact
     /// hash so a project rename invalidates Go outputs.
-    pub go_module: String,
+    pub go_module: &'a str,
     /// When true, `analyze` skips both cache load and save. Set by the CLI for
     /// `--sourcemap` Emit so cwd-decorated Go files are not reused across cwds.
     pub disable_cache: bool,
@@ -432,8 +457,7 @@ struct ModuleInferenceInput<'a> {
     cache_disabled: bool,
     prelude_cache: PreludeCacheStatus,
     locator: &'a TypedefLocator,
-    standalone_mode: bool,
-    has_project_root: bool,
+    scope: &'a AnalysisScope,
 }
 
 struct ModuleInferenceOutput {
@@ -497,7 +521,7 @@ fn infer_all_modules(store: &mut Store, mut input: ModuleInferenceInput) -> Modu
                 store,
                 &module_id,
                 input.locator,
-                input.standalone_mode,
+                input.scope.is_standalone(),
                 &mut go_cache,
             );
             continue;
@@ -508,7 +532,7 @@ fn infer_all_modules(store: &mut Store, mut input: ModuleInferenceInput) -> Modu
             .files
             .remove(&module_id)
             .unwrap_or_default();
-        if input.has_project_root
+        if input.scope.has_project_root()
             && store.project_kind == ProjectKind::Library
             && crate::loader::is_external_test_module(&module_id)
         {
@@ -652,7 +676,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
             entry_parse_status: entry.status,
         };
     }
-    if input.config.load_siblings {
+    if input.load_siblings {
         load_sibling_files(
             &mut store,
             &sink,
@@ -663,7 +687,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
     }
 
     let entry_module = store.entry_module_id().to_string();
-    let discovered = if input.project_root.is_some() {
+    let discovered = if input.scope.has_project_root() {
         input.loader.discover_modules()
     } else {
         DiscoveredModules::default()
@@ -682,9 +706,8 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
         ModuleGraphOptions {
             loader: Some(input.loader),
             sink: &sink,
-            standalone_mode: input.config.standalone_mode,
-            has_project_root: input.project_root.is_some(),
-            locator: &input.locator,
+            scope: &input.scope,
+            locator: input.locator,
             include_tests,
         },
     );
@@ -700,12 +723,12 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
     let prelude_cache = load_prelude(&mut store, &sink, cache_disabled);
     parse_and_register_test_prelude(&mut store, &sink);
 
-    let cache_root = if cache_disabled || input.disable_cache {
-        None
+    let cache_enabled = !cache_disabled && !input.disable_cache;
+    let module_cache_root = if cache_enabled {
+        input.scope.project_root()
     } else {
-        input.project_root.clone()
+        None
     };
-    let module_cache_root = cache_root.as_deref();
     let module_output = infer_all_modules(
         &mut store,
         ModuleInferenceInput {
@@ -713,14 +736,18 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
             sink,
             module_cache_root,
             compile_phase: input.compile_phase,
-            go_module: &input.go_module,
+            go_module: input.go_module,
             cache_disabled,
             prelude_cache,
-            locator: &input.locator,
-            standalone_mode: input.config.standalone_mode,
-            has_project_root: input.project_root.is_some(),
+            locator: input.locator,
+            scope: &input.scope,
         },
     );
+    let cache_root = if cache_enabled {
+        input.scope.into_project_root()
+    } else {
+        None
+    };
 
     InferenceOutput {
         store,

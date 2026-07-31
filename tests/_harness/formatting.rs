@@ -1,5 +1,6 @@
-use diagnostics::{IndexedSource, LisetteDiagnostic, SemanticResult};
+use diagnostics::{IndexedSource, LisetteDiagnostic};
 use miette::{GraphicalReportHandler, GraphicalTheme, ThemeCharacters, ThemeStyles};
+use passes::Analysis;
 use syntax::ParseError;
 
 fn snapshot_theme() -> GraphicalTheme {
@@ -33,7 +34,7 @@ pub fn format_diagnostic_for_snapshot(
 }
 
 pub fn format_result_diagnostic_for_snapshot(
-    result: &SemanticResult,
+    result: &Analysis,
     diagnostic: &LisetteDiagnostic,
 ) -> String {
     let file_id = diagnostic

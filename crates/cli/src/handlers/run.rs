@@ -132,12 +132,13 @@ fn run_standalone(file: &str, args: Vec<String>, sourcemap: bool, go_flags: &[St
         }
     };
 
+    let locator = deps::TypedefLocator::default();
     let compile_config = CompileConfig {
         mode: CompileMode::Emit { sourcemap },
-        go_module: "lis-standalone".to_string(),
-        entry_package_name: "main".to_string(),
+        go_module: "lis-standalone",
+        entry_package_name: "main",
         scope: CompileScope::Standalone,
-        locator: deps::TypedefLocator::default(),
+        locator: &locator,
     };
 
     let entry_name = file_path
@@ -154,15 +155,14 @@ fn run_standalone(file: &str, args: Vec<String>, sourcemap: bool, go_flags: &[St
             filename: &entry_name,
             display_path: &entry_display,
         }),
-        &compile_config,
+        compile_config,
         &no_loader,
     );
 
     let filter = Filter::All;
 
     let counts = render::render_all(
-        &result.errors,
-        &result.lints,
+        &result.diagnostics,
         render::SourceCache::new(
             |file_id| {
                 result
@@ -181,7 +181,7 @@ fn run_standalone(file: &str, args: Vec<String>, sourcemap: bool, go_flags: &[St
         return 1;
     }
 
-    if let Err(e) = go_cli::write_go_mod(&temp_dir, "lis-standalone", &compile_config.locator) {
+    if let Err(e) = go_cli::write_go_mod(&temp_dir, "lis-standalone", &locator) {
         cli_error!("Failed to run standalone file", e, "Check file permissions");
         return 1;
     }
@@ -196,7 +196,7 @@ fn run_standalone(file: &str, args: Vec<String>, sourcemap: bool, go_flags: &[St
         }
     };
 
-    let target = compile_config.locator.target();
+    let target = locator.target();
     let import_set_hash = go_cli::compute_import_set_hash(&emit.new_manifest, "lis-standalone");
 
     if let Err(e) = go_cli::finalize_go_dir(&temp_dir, target, &emit.changed, import_set_hash) {

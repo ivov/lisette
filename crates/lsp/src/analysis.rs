@@ -7,7 +7,7 @@ use rustc_hash::FxHashMap;
 use deps::TypedefLocator;
 use diagnostics::LisetteDiagnostic;
 use passes::analyze;
-use semantics::inference::{AnalyzeInput, CompilePhase, EntryFile, ProjectKind, SemanticConfig};
+use semantics::inference::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile, ProjectKind};
 use syntax::types::{CompoundKind, Type};
 
 use crate::position::LineIndex;
@@ -116,11 +116,12 @@ impl SharedState {
             ProjectKind::Library
         };
 
-        let analyze_output = analyze(AnalyzeInput {
-            config: SemanticConfig {
-                run_lints: true,
-                standalone_mode: standalone,
-                load_siblings: true,
+        let mut analysis = analyze(AnalyzeInput {
+            load_siblings: true,
+            scope: if standalone {
+                AnalysisScope::Standalone
+            } else {
+                AnalysisScope::Project(config.root().to_path_buf())
             },
             loader: &loader,
             entry: if external_test {
@@ -128,32 +129,24 @@ impl SharedState {
             } else {
                 Some(EntryFile::recovering(source, filename.clone(), filename))
             },
-            project_root: if standalone {
-                None
-            } else {
-                Some(config.root().to_path_buf())
-            },
             compile_phase: CompilePhase::Check,
             project_kind,
-            locator,
-            go_module: String::new(),
+            locator: &locator,
+            go_module: "",
             disable_cache: external_test,
         });
-        let has_parse_errors = analyze_output.has_parse_errors();
-        let entry_parse_failed = analyze_output.entry_parse_failed();
-        let mut result = analyze_output.result;
-        let facts = analyze_output.facts;
+        let entry_parse_failed = analysis.entry_parse_failed();
 
         if entry_parse_failed {
             let line_index = LineIndex::new(
-                result
+                analysis
                     .emit_input
                     .files
                     .get(&0)
                     .map(|file| file.source.as_str())
                     .unwrap_or_default(),
             );
-            return Err(result
+            return Err(analysis
                 .errors()
                 .iter()
                 .map(|diagnostic| convert_diagnostic(diagnostic, &line_index))
@@ -161,11 +154,11 @@ impl SharedState {
         }
 
         if let Some(msg) = manifest_error {
-            result.push_error(LisetteDiagnostic::error(msg).with_resolve_code("manifest_error"));
+            analysis.push_error(LisetteDiagnostic::error(msg).with_resolve_code("manifest_error"));
         }
 
         if let Some(msg) = bindgen_error {
-            result.push_error(
+            analysis.push_error(
                 LisetteDiagnostic::error(format!(
                     "Could not start bindgen for this project: {}",
                     msg
@@ -177,14 +170,7 @@ impl SharedState {
         // Release the target lock before the lock-free snapshot construction.
         drop(session);
 
-        Ok(AnalysisSnapshot::new(
-            result,
-            facts,
-            has_parse_errors,
-            &config,
-            uri,
-            external_test,
-        ))
+        Ok(AnalysisSnapshot::new(analysis, &config, uri, external_test))
     }
 
     async fn run_analysis_cached(&self, uri: &Url) -> Result<Arc<AnalysisSnapshot>, AnalysisError> {
@@ -226,7 +212,7 @@ impl SharedState {
 
         Some(
             snapshot
-                .result
+                .analysis
                 .diagnostics()
                 .iter()
                 .filter(|d| {

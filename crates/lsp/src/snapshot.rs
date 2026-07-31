@@ -1,8 +1,9 @@
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::protocol::{Position, Url};
-use diagnostics::SemanticResult;
-use semantics::facts::Facts;
+use passes::Analysis;
+use semantics::facts::{BindingFact, Usage};
+use syntax::ast::BindingId;
 use syntax::program::{Definition, File};
 use syntax::types::Symbol;
 
@@ -11,9 +12,7 @@ use crate::position::LineIndex;
 use crate::project::ProjectConfig;
 
 pub(crate) struct AnalysisSnapshot {
-    pub(crate) result: SemanticResult,
-    facts: Facts,
-    pub(crate) has_parse_errors: bool,
+    pub(crate) analysis: Analysis,
     sources: HashMap<u32, SnapshotSource>,
 }
 
@@ -35,9 +34,7 @@ pub(crate) struct SnapshotPosition<'a> {
 
 impl AnalysisSnapshot {
     pub(crate) fn new(
-        result: SemanticResult,
-        facts: Facts,
-        has_parse_errors: bool,
+        analysis: Analysis,
         config: &ProjectConfig,
         analyzed_uri: &Url,
         external_test: bool,
@@ -52,7 +49,7 @@ impl AnalysisSnapshot {
             .as_ref()
             .and_then(|p| p.parent().map(|d| d.to_path_buf()));
 
-        for (file_id, file) in &result.emit_input.files {
+        for (file_id, file) in &analysis.emit_input.files {
             let uri = if !external_test && file.module_id == ENTRY_MODULE_ID {
                 if analyzed_filename.as_deref() == Some(&file.name) {
                     analyzed_uri.clone()
@@ -92,19 +89,14 @@ impl AnalysisSnapshot {
             );
         }
 
-        Self {
-            result,
-            facts,
-            has_parse_errors,
-            sources,
-        }
+        Self { analysis, sources }
     }
 
     pub(crate) fn document(&self, uri: &Url) -> Option<SnapshotDocument<'_>> {
         let (file_id, source) = self.sources.iter().find(|(_, source)| &source.uri == uri)?;
         Some(SnapshotDocument {
             file_id: *file_id,
-            file: self.result.emit_input.files.get(file_id)?,
+            file: self.analysis.emit_input.files.get(file_id)?,
             line_index: &source.line_index,
         })
     }
@@ -121,7 +113,7 @@ impl AnalysisSnapshot {
 
     /// On-disk path of a `go:` typedef file, if `file_id` names one.
     pub(crate) fn typedef_path(&self, file_id: u32) -> Option<&std::path::Path> {
-        self.result
+        self.analysis
             .emit_input
             .files
             .get(&file_id)?
@@ -130,14 +122,22 @@ impl AnalysisSnapshot {
     }
 
     pub(crate) fn files(&self) -> &HashMap<u32, File> {
-        &self.result.emit_input.files
+        &self.analysis.emit_input.files
     }
 
-    pub(crate) fn facts(&self) -> &Facts {
-        &self.facts
+    pub(crate) fn bindings(&self) -> &HashMap<BindingId, BindingFact> {
+        self.analysis.bindings()
+    }
+
+    pub(crate) fn usages(&self) -> &HashSet<Usage> {
+        self.analysis.usages()
     }
 
     pub(crate) fn definitions(&self) -> &HashMap<Symbol, Definition> {
-        &self.result.emit_input.definitions
+        &self.analysis.emit_input.definitions
+    }
+
+    pub(crate) fn has_parse_errors(&self) -> bool {
+        self.analysis.has_parse_errors()
     }
 }

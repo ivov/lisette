@@ -90,7 +90,7 @@ pub(crate) fn resolve_dot_access_definition(
             .or_else(|| {
                 file.imports().into_iter().find_map(|import| {
                     if import
-                        .effective_alias(&snapshot.result.emit_input.go_package_names)
+                        .effective_alias(&snapshot.analysis.emit_input.go_package_names)
                         .is_none()
                     {
                         let qualified = format!("{}.{}", import.name, name);
@@ -137,7 +137,7 @@ pub(crate) fn resolve_dot_access_definition(
         } else if let Some(module_name) = find_module_by_alias(
             file,
             root_identifier,
-            &snapshot.result.emit_input.go_package_names,
+            &snapshot.analysis.emit_input.go_package_names,
         ) {
             let qualified = dotted_path
                 .strip_prefix(root_identifier)
@@ -158,7 +158,7 @@ pub(crate) fn resolve_dot_access_definition(
         if let Some(module_name) = find_module_by_alias(
             file,
             value.as_str(),
-            &snapshot.result.emit_input.go_package_names,
+            &snapshot.analysis.emit_input.go_package_names,
         ) {
             let qualified = format!("{}.{}", module_name, member);
             snapshot
@@ -174,8 +174,7 @@ pub(crate) fn resolve_dot_access_definition(
 
     result.or_else(resolve_by_type).or_else(|| {
         snapshot
-            .facts()
-            .usages
+            .usages()
             .iter()
             .find(|usage| usage.usage_span == dot_access_span)
             .map(|usage| usage.definition_span)
@@ -254,7 +253,7 @@ fn resolve_constructor_name(
 
     if cursor_in_name <= dot_pos {
         let first = &name[..dot_pos];
-        return resolve_import_span(first, file, &snapshot.result.emit_input.go_package_names)
+        return resolve_import_span(first, file, &snapshot.analysis.emit_input.go_package_names)
             .or_else(|| lookup_definition_span(first, file, snapshot));
     }
 
@@ -262,7 +261,7 @@ fn resolve_constructor_name(
     let module_name = find_module_by_alias(
         file,
         qualifier,
-        &snapshot.result.emit_input.go_package_names,
+        &snapshot.analysis.emit_input.go_package_names,
     )?;
 
     let qualified = format!("{}.{}", module_name, simple);
@@ -528,8 +527,7 @@ pub(crate) fn resolve_symbol_definition_span(
     offset: u32,
 ) -> Option<syntax::ast::Span> {
     snapshot
-        .facts()
-        .bindings
+        .bindings()
         .values()
         .find_map(|binding| {
             if binding.span.file_id == file_id && offset_in_span(offset, &binding.span) {
@@ -544,7 +542,7 @@ pub(crate) fn resolve_symbol_definition_span(
                 Expression::Identifier {
                     resolution: IdentifierResolution::Binding(id),
                     ..
-                } => snapshot.facts().bindings.get(id).map(|b| b.span),
+                } => snapshot.bindings().get(id).map(|b| b.span),
 
                 Expression::Identifier {
                     resolution: IdentifierResolution::Definition(qname),

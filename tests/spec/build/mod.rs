@@ -1,6 +1,7 @@
 use crate::_harness::build::{
     compile_check, compile_check_standalone, compile_check_with_locator, compile_project_files,
     compile_project_files_with_tests, compile_standalone_entry, locator_with_go_dep,
+    try_compile_project_files, try_compile_project_files_with_tests,
 };
 use crate::_harness::filesystem::MockFileSystem;
 use crate::_harness::infer::infer;
@@ -6622,11 +6623,13 @@ fn main() {
 }
 
 fn emit_diagnostic_codes(fs: MockFileSystem) -> Vec<String> {
-    compile_project_files(fs, "github.com/user/myproject", false)
-        .iter()
-        .flat_map(|file| file.diagnostics.iter())
-        .filter_map(|diagnostic| diagnostic.code_str().map(str::to_string))
-        .collect()
+    match try_compile_project_files(fs, "github.com/user/myproject", false) {
+        Ok(_) => Vec::new(),
+        Err(diagnostics) => diagnostics
+            .iter()
+            .filter_map(|diagnostic| diagnostic.code_str().map(str::to_string))
+            .collect(),
+    }
 }
 
 #[test]
@@ -6906,10 +6909,10 @@ fn reserved_prefix_alias_cannot_shadow_synthesized_test_handle() {
         "import _lisTest_ctx \"go:fmt\"\n\n#[test]\nfn checks() {\n  _lisTest_ctx.Println(\"x\")\n}",
     );
 
-    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
-    let codes: Vec<_> = outputs
+    let diagnostics = try_compile_project_files_with_tests(fs, "github.com/user/p", false, true)
+        .expect_err("expected emission to reject the reserved prefix");
+    let codes: Vec<_> = diagnostics
         .iter()
-        .flat_map(|f| f.diagnostics.iter())
         .filter_map(|d| d.code_str().map(str::to_string))
         .collect();
     assert!(
@@ -7106,10 +7109,10 @@ fn main() {
     let mut fs = MockFileSystem::new();
     fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
 
-    let files = compile_project_files(fs, "github.com/user/myproject", false);
-    let collision = files
+    let diagnostics = try_compile_project_files(fs, "github.com/user/myproject", false)
+        .expect_err("expected emission to reject the name collision");
+    let collision = diagnostics
         .iter()
-        .flat_map(|file| file.diagnostics.iter())
         .find(|diagnostic| diagnostic.code_str() == Some("emit.go_name_collision"))
         .expect("import alias FooBar collides with the package-block function FooBar");
 
@@ -8806,8 +8809,9 @@ fn colliding_test_wrapper_names_are_reported() {
         "#[test]\nfn foo_bar() {}\n\n#[test]\nfn foo__bar() {}",
     );
 
-    let outputs = compile_project_files_with_tests(fs, "github.com/user/p", false, true);
-    let collided = outputs.iter().flat_map(|f| &f.diagnostics).any(|d| {
+    let diagnostics = try_compile_project_files_with_tests(fs, "github.com/user/p", false, true)
+        .expect_err("expected emission to reject colliding test wrappers");
+    let collided = diagnostics.iter().any(|d| {
         d.code_str()
             .is_some_and(|c| c.contains("go_name_collision"))
     });

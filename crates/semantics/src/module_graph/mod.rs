@@ -7,7 +7,7 @@ use syntax::ast::{ImportAlias, Span};
 use syntax::program::File;
 
 use crate::diagnostics::{GoImportSite, emit_for_declaration_status, emit_for_locator_result};
-use crate::inference::ProjectKind;
+use crate::inference::{AnalysisScope, ProjectKind};
 use crate::loader as semantics_loader;
 use crate::loader::Loader;
 use crate::store::{ENTRY_MODULE_ID, Store};
@@ -166,8 +166,7 @@ pub struct Roots {
 pub struct ModuleGraphOptions<'a> {
     pub loader: Option<&'a dyn Loader>,
     pub sink: &'a LocalSink,
-    pub standalone_mode: bool,
-    pub has_project_root: bool,
+    pub scope: &'a AnalysisScope,
     pub locator: &'a TypedefLocator,
     pub include_tests: bool,
 }
@@ -184,8 +183,7 @@ pub fn build_module_graph(
     let ModuleGraphOptions {
         loader,
         sink,
-        standalone_mode,
-        has_project_root,
+        scope,
         locator,
         include_tests,
     } = options;
@@ -193,8 +191,7 @@ pub fn build_module_graph(
         store,
         loader,
         sink,
-        standalone_mode,
-        has_project_root,
+        scope,
         locator,
         include_tests,
         dependencies: DependencyGraph::default(),
@@ -212,8 +209,7 @@ struct GraphBuilder<'a> {
     store: &'a mut Store,
     loader: Option<&'a dyn Loader>,
     sink: &'a LocalSink,
-    standalone_mode: bool,
-    has_project_root: bool,
+    scope: &'a AnalysisScope,
     locator: &'a TypedefLocator,
     include_tests: bool,
     dependencies: DependencyGraph,
@@ -244,7 +240,7 @@ impl<'a> GraphBuilder<'a> {
                 self.loader,
                 self.sink,
                 self.include_tests,
-                self.has_project_root,
+                self.scope.has_project_root(),
             );
 
             for module_id in &batch {
@@ -275,8 +271,7 @@ impl<'a> GraphBuilder<'a> {
                     file_imports,
                     ImportContext {
                         sink: self.sink,
-                        standalone_mode: self.standalone_mode,
-                        has_project_root: self.has_project_root,
+                        scope: self.scope,
                         root_has_production,
                         importer: module_id,
                         project_kind: self.store.project_kind,
@@ -288,7 +283,7 @@ impl<'a> GraphBuilder<'a> {
                 let module_exists = has_production_file
                     || self.store.has(module_id)
                     || module_id.starts_with("go:")
-                    || (self.has_project_root
+                    || (self.scope.has_project_root()
                         && semantics_loader::is_external_test_module(module_id));
 
                 if !module_exists {
@@ -311,7 +306,7 @@ impl<'a> GraphBuilder<'a> {
                             )
                         } else if is_go_stdlib {
                             diagnostics::module_graph::MissingModuleReason::GoStandardLibrary
-                        } else if self.standalone_mode {
+                        } else if self.scope.is_standalone() {
                             diagnostics::module_graph::MissingModuleReason::Standalone
                         } else {
                             diagnostics::module_graph::MissingModuleReason::NotFound
@@ -508,8 +503,7 @@ struct ResolvedImport {
 #[derive(Clone, Copy)]
 struct ImportContext<'a> {
     sink: &'a LocalSink,
-    standalone_mode: bool,
-    has_project_root: bool,
+    scope: &'a AnalysisScope,
     root_has_production: bool,
     importer: &'a str,
     project_kind: ProjectKind,
@@ -522,8 +516,7 @@ fn process_file_imports(
 ) -> HashMap<ModuleId, ResolvedImport> {
     let ImportContext {
         sink,
-        standalone_mode,
-        has_project_root,
+        scope,
         root_has_production,
         importer,
         project_kind,
@@ -571,14 +564,15 @@ fn process_file_imports(
             continue;
         }
 
-        if has_project_root && semantics_loader::is_external_test_module(&file_import.name) {
+        if scope.has_project_root() && semantics_loader::is_external_test_module(&file_import.name)
+        {
             sink.push(diagnostics::module_graph::cannot_import_external_tests(
                 file_import.name_span,
             ));
             continue;
         }
 
-        if has_project_root && file_import.name == semantics_loader::ROOT_IMPORT {
+        if scope.has_project_root() && file_import.name == semantics_loader::ROOT_IMPORT {
             if let Some(ImportAlias::Blank(span)) = &file_import.alias {
                 sink.push(diagnostics::infer::blank_import_non_go(*span));
             } else {
@@ -625,7 +619,7 @@ fn process_file_imports(
                             go_pkg,
                             name_span: Some(pending.span),
                             target: locator.target(),
-                            standalone_mode,
+                            standalone_mode: scope.is_standalone(),
                             replace_importer: None,
                         },
                         sink,
@@ -640,7 +634,7 @@ fn process_file_imports(
                             go_pkg,
                             name_span: Some(pending.span),
                             target: locator.target(),
-                            standalone_mode,
+                            standalone_mode: scope.is_standalone(),
                             replace_importer: None,
                         },
                         sink,
@@ -703,6 +697,9 @@ mod tests {
     use super::*;
     use syntax::program::FileImport;
 
+    const DIRECTORY_SCOPE: AnalysisScope = AnalysisScope::Directory;
+    const PROJECT_SCOPE: AnalysisScope = AnalysisScope::Project(std::path::PathBuf::new());
+
     fn go_import(is_blank: bool, offset: u32) -> FileImport {
         let span = Span::new(0, offset, 1);
         FileImport {
@@ -719,8 +716,7 @@ mod tests {
             imports,
             ImportContext {
                 sink: &sink,
-                standalone_mode: false,
-                has_project_root: false,
+                scope: &DIRECTORY_SCOPE,
                 root_has_production: false,
                 importer: "caller",
                 project_kind: ProjectKind::Binary,
@@ -763,8 +759,7 @@ mod tests {
                 }],
                 ImportContext {
                     sink: &sink,
-                    standalone_mode: false,
-                    has_project_root: true,
+                    scope: &PROJECT_SCOPE,
                     root_has_production: true,
                     importer: "caller",
                     project_kind: ProjectKind::Binary,
@@ -790,8 +785,7 @@ mod tests {
             }],
             ImportContext {
                 sink: &sink,
-                standalone_mode: false,
-                has_project_root: false,
+                scope: &DIRECTORY_SCOPE,
                 root_has_production: false,
                 importer: "caller",
                 project_kind: ProjectKind::Binary,

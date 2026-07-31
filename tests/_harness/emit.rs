@@ -56,7 +56,9 @@ fn emit_inner(
         go_module_ids: &result.go_module_ids,
     };
     let mut emitter = Planner::new_for_tests(&config, source_for_sourcemap);
-    let emitted_files = emitter.emit_files(&[&file], &result.module_id);
+    let emitted_files = emitter
+        .emit_files(&[&file], &result.module_id)
+        .unwrap_or_else(|diagnostics| panic!("Emission failed: {diagnostics:?}"));
 
     EmitResult {
         files: emitted_files,
