@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785513213722,
+  "lastUpdate": 1785513556422,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -14989,6 +14989,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "format",
             "value": 2764,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1271,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7329,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d1eb0399ea2e860bd6f1d1e6063772428580fd78",
+          "message": "perf: parallelize `lis format` and cut pretty-printer overhead (#1165)",
+          "timestamp": "2026-07-31T17:58:50+02:00",
+          "tree_id": "c6ae14b9ca9baff8200b09443fb640e0f7f016e5",
+          "url": "https://github.com/ivov/lisette/commit/d1eb0399ea2e860bd6f1d1e6063772428580fd78"
+        },
+        "date": 1785513555010,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 123812,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30250,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 24582,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18200,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13771,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 11844,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6785,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5417,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2778,
             "unit": "lines"
           },
           {
