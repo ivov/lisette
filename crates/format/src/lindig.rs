@@ -9,10 +9,19 @@ enum Mode {
     ForcedUnbroken,
 }
 
-fn fits(
+/// For ASCII the byte length is already the grapheme count.
+fn grapheme_count(text: &str) -> isize {
+    if text.is_ascii() {
+        text.len() as isize
+    } else {
+        text.graphemes(true).count() as isize
+    }
+}
+
+fn fits<'a, 'doc>(
     limit: isize,
     mut current_width: isize,
-    mut docs: Vec<(isize, Mode, &Document<'_>)>,
+    docs: &mut Vec<(isize, Mode, &'doc Document<'a>)>,
 ) -> bool {
     loop {
         if current_width > limit {
@@ -50,14 +59,14 @@ fn fits(
             }
 
             Document::Text(s) => {
-                current_width += s.graphemes(true).count() as isize;
+                current_width += grapheme_count(s);
             }
 
             Document::VerbatimText(s) => {
                 if s.contains('\n') {
                     return false;
                 }
-                current_width += s.graphemes(true).count() as isize;
+                current_width += grapheme_count(s);
             }
 
             Document::StrictBreak { unbroken, .. } | Document::FlexBreak { unbroken, .. } => {
@@ -100,13 +109,14 @@ fn write_pending_indent(output: &mut String, pending_indent: &mut Option<isize>)
     }
 }
 
-fn format(
+fn format<'a, 'doc>(
     output: &mut String,
     limit: isize,
     mut width: isize,
-    mut docs: Vec<(isize, Mode, &Document<'_>)>,
+    mut docs: Vec<(isize, Mode, &'doc Document<'a>)>,
 ) {
     let mut pending_indent = None;
+    let mut fits_buffer = Vec::new();
 
     while let Some((indent, mode, document)) = docs.pop() {
         match document {
@@ -118,7 +128,12 @@ fn format(
 
             Document::FlexBreak { broken, unbroken } => {
                 let unbroken_width = width + unbroken.len() as isize;
-                if mode == Mode::Unbroken || fits(limit, unbroken_width, docs.clone()) {
+                let unbroken_fits = mode == Mode::Unbroken || {
+                    fits_buffer.clear();
+                    fits_buffer.extend_from_slice(&docs);
+                    fits(limit, unbroken_width, &mut fits_buffer)
+                };
+                if unbroken_fits {
                     write_pending_indent(output, &mut pending_indent);
                     output.push_str(unbroken);
                     width = unbroken_width;
@@ -148,7 +163,7 @@ fn format(
 
             Document::Text(s) => {
                 write_pending_indent(output, &mut pending_indent);
-                width += s.graphemes(true).count() as isize;
+                width += grapheme_count(s);
                 output.push_str(s);
             }
 
@@ -157,12 +172,12 @@ fn format(
                 let mut segments = s.split('\n');
                 if let Some(first) = segments.next() {
                     output.push_str(first);
-                    width += first.graphemes(true).count() as isize;
+                    width += grapheme_count(first);
                 }
                 for segment in segments {
                     output.push('\n');
                     output.push_str(segment);
-                    width = segment.graphemes(true).count() as isize;
+                    width = grapheme_count(segment);
                 }
             }
 
@@ -185,8 +200,9 @@ fn format(
             }
 
             Document::Group(doc) => {
-                let group_docs = vec![(indent, Mode::Unbroken, doc.as_ref())];
-                if fits(limit, width, group_docs) {
+                fits_buffer.clear();
+                fits_buffer.push((indent, Mode::Unbroken, doc.as_ref()));
+                if fits(limit, width, &mut fits_buffer) {
                     docs.push((indent, Mode::Unbroken, doc));
                 } else {
                     docs.push((indent, Mode::Broken, doc));

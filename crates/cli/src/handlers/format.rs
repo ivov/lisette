@@ -5,8 +5,15 @@ use std::time::Instant;
 
 use format::format_source;
 use lisette::fs::collect_lis_filepaths_recursive;
+use rayon::prelude::*;
 
 use crate::cli_error;
+
+enum Outcome {
+    Unchanged,
+    Changed,
+    Failed { reason: String, hint: &'static str },
+}
 
 pub fn format(path: Option<String>, check: bool) -> i32 {
     let target = path.unwrap_or_else(|| ".".to_string());
@@ -34,67 +41,67 @@ pub fn format(path: Option<String>, check: bool) -> i32 {
     }
 
     let start = Instant::now();
+
+    let outcomes: Vec<Outcome> = filepaths
+        .par_iter()
+        .map(|file| {
+            let source = match fs::read_to_string(file) {
+                Ok(s) => s,
+                Err(e) => {
+                    return Outcome::Failed {
+                        reason: format!("Failed to read `{}`: {}", file.display(), e),
+                        hint: "Check file permissions",
+                    };
+                }
+            };
+
+            let formatted = match format_source(&source) {
+                Ok(f) => f,
+                Err(errors) => {
+                    return Outcome::Failed {
+                        reason: format!(
+                            "Parse error in `{}`: {} error(s)",
+                            file.display(),
+                            errors.len()
+                        ),
+                        hint: "Fix syntax errors first",
+                    };
+                }
+            };
+
+            if source == formatted {
+                return Outcome::Unchanged;
+            }
+
+            if check {
+                return Outcome::Changed;
+            }
+
+            match fs::File::create(file) {
+                Ok(mut f) => match f.write_all(formatted.as_bytes()) {
+                    Ok(()) => Outcome::Changed,
+                    Err(e) => Outcome::Failed {
+                        reason: format!("Failed to write `{}`: {}", file.display(), e),
+                        hint: "Check file permissions",
+                    },
+                },
+                Err(e) => Outcome::Failed {
+                    reason: format!("Failed to open `{}` for writing: {}", file.display(), e),
+                    hint: "Check file permissions",
+                },
+            }
+        })
+        .collect();
+
     let mut changed_files: Vec<std::path::PathBuf> = Vec::new();
     let mut error_count = 0;
 
-    for file in &filepaths {
-        let source = match fs::read_to_string(file) {
-            Ok(s) => s,
-            Err(e) => {
-                cli_error!(
-                    "Failed to format",
-                    format!("Failed to read `{}`: {}", file.display(), e),
-                    "Check file permissions"
-                );
-                error_count += 1;
-                continue;
-            }
-        };
-
-        let formatted = match format_source(&source) {
-            Ok(f) => f,
-            Err(errors) => {
-                cli_error!(
-                    "Failed to format",
-                    format!(
-                        "Parse error in `{}`: {} error(s)",
-                        file.display(),
-                        errors.len()
-                    ),
-                    "Fix syntax errors first"
-                );
-                error_count += 1;
-                continue;
-            }
-        };
-
-        if source == formatted {
-            continue;
-        }
-
-        changed_files.push(file.clone());
-
-        if check {
-            continue;
-        }
-
-        match fs::File::create(file) {
-            Ok(mut f) => {
-                if let Err(e) = f.write_all(formatted.as_bytes()) {
-                    cli_error!(
-                        "Failed to format",
-                        format!("Failed to write `{}`: {}", file.display(), e),
-                        "Check file permissions"
-                    );
-                    error_count += 1;
-                }
-            }
-            Err(e) => {
-                cli_error!(
-                    "Failed to format",
-                    format!("Failed to open `{}` for writing: {}", file.display(), e),
-                    "Check file permissions"
-                );
+    for (file, outcome) in filepaths.iter().zip(outcomes) {
+        match outcome {
+            Outcome::Unchanged => {}
+            Outcome::Changed => changed_files.push(file.clone()),
+            Outcome::Failed { reason, hint } => {
+                cli_error!("Failed to format", reason, hint);
                 error_count += 1;
             }
         }
