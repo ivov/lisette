@@ -4,7 +4,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use diagnostics::LocalSink;
-use syntax::ast::Expression;
+use syntax::ParseError;
+use syntax::lex::Lexer;
+use syntax::parse::{ParseResult, Parser};
 use syntax::program::{File, Module};
 
 use deps::TypedefLocator;
@@ -23,7 +25,7 @@ use crate::facts::Facts;
 use crate::loader::{DiscoveredModules, Loader};
 use crate::module_graph::{DependencyGraph, ModuleGraphOptions, Roots, build_module_graph};
 use crate::prelude::{parse_and_register_prelude, parse_and_register_test_prelude};
-use crate::store::{ENTRY_MODULE_ID, Store};
+use crate::store::{ENTRY_FILE_ID, ENTRY_MODULE_ID, Store};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CompilePhase {
@@ -58,11 +60,47 @@ pub struct SemanticConfig {
 }
 
 pub struct EntryFile {
-    pub source: String,
-    pub filename: String,
-    pub display_path: String,
-    pub ast: Vec<Expression>,
-    pub file_comment: Option<String>,
+    source: String,
+    filename: String,
+    display_path: String,
+    parse_mode: EntryParseMode,
+}
+
+impl EntryFile {
+    /// Creates an entry whose syntax errors stop analysis.
+    pub fn new(source: String, filename: String, display_path: String) -> Self {
+        Self {
+            source,
+            filename,
+            display_path,
+            parse_mode: EntryParseMode::Strict,
+        }
+    }
+
+    /// Creates an entry whose parser errors retain the valid partial AST.
+    /// Lexer errors remain fatal.
+    pub fn recovering(source: String, filename: String, display_path: String) -> Self {
+        Self {
+            source,
+            filename,
+            display_path,
+            parse_mode: EntryParseMode::Recover,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EntryParseMode {
+    Strict,
+    Recover,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum EntryParseStatus {
+    #[default]
+    Clean,
+    Recovered,
+    Failed,
 }
 
 pub struct AnalyzeInput<'a> {
@@ -174,17 +212,39 @@ pub struct InferenceOutput {
     pub cached_modules: HashSet<String>,
     pub cache_root: Option<PathBuf>,
     pub unreachable_modules: Vec<String>,
+    pub entry_parse_errors: Vec<ParseError>,
+    pub entry_parse_status: EntryParseStatus,
 }
 
-/// Registers the entry file (`main.lis`, or the library root), returning its
-/// filename so sibling loading can skip re-loading it.
+struct EntryRegistration {
+    filename: Option<String>,
+    errors: Vec<ParseError>,
+    status: EntryParseStatus,
+}
+
+/// Parses and registers the entry file (`main.lis`, or the library root).
 fn register_entry_file(
     store: &mut Store,
     sink: &LocalSink,
     entry: Option<EntryFile>,
     include_tests: bool,
-) -> Option<String> {
-    entry.map(|entry| {
+) -> EntryRegistration {
+    let Some(entry) = entry else {
+        return EntryRegistration {
+            filename: None,
+            errors: Vec::new(),
+            status: EntryParseStatus::Clean,
+        };
+    };
+
+    let (parse_result, status) = parse_entry_file(&entry.source, entry.parse_mode);
+    let ParseResult {
+        ast,
+        errors,
+        file_comment,
+    } = parse_result;
+
+    if status != EntryParseStatus::Failed {
         if entry.filename.ends_with("_test.lis") {
             sink.push(diagnostics::module_graph::wrong_test_file_suffix(
                 &entry.display_path,
@@ -194,15 +254,55 @@ fn register_entry_file(
                 &entry.display_path,
             ));
         }
-        store.store_entry_file(
-            &entry.filename,
-            &entry.display_path,
-            &entry.source,
-            entry.ast,
-            entry.file_comment,
-        );
-        entry.filename
-    })
+    }
+    store.store_entry_file(
+        &entry.filename,
+        &entry.display_path,
+        &entry.source,
+        ast,
+        file_comment,
+    );
+
+    EntryRegistration {
+        filename: Some(entry.filename),
+        errors,
+        status,
+    }
+}
+
+fn parse_entry_file(source: &str, mode: EntryParseMode) -> (ParseResult, EntryParseStatus) {
+    match mode {
+        EntryParseMode::Strict => {
+            let result = syntax::build_ast(source, ENTRY_FILE_ID);
+            let status = if result.failed() {
+                EntryParseStatus::Failed
+            } else {
+                EntryParseStatus::Clean
+            };
+            (result, status)
+        }
+        EntryParseMode::Recover => {
+            let lex_result = Lexer::new(source, ENTRY_FILE_ID).lex();
+            if lex_result.failed() {
+                return (
+                    ParseResult {
+                        ast: Vec::new(),
+                        errors: lex_result.errors,
+                        file_comment: None,
+                    },
+                    EntryParseStatus::Failed,
+                );
+            }
+
+            let result = Parser::new(lex_result.tokens, source).parse();
+            let status = if result.failed() {
+                EntryParseStatus::Recovered
+            } else {
+                EntryParseStatus::Clean
+            };
+            (result, status)
+        }
+    }
 }
 
 /// Loads every other `.lis` file in the entry module's folder as a sibling file.
@@ -536,13 +636,28 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
     let include_tests = input.compile_phase.includes_tests();
 
     store.init_entry_module();
-    let entry_filename = register_entry_file(&mut store, &sink, input.entry, include_tests);
+    let entry = register_entry_file(&mut store, &sink, input.entry, include_tests);
+    if entry.status == EntryParseStatus::Failed {
+        let checker = TaskState::with_sink(sink);
+        return InferenceOutput {
+            store,
+            facts: checker.facts,
+            sink: checker.sink,
+            has_pre_check_errors: true,
+            compiled_modules: Vec::new(),
+            cached_modules: HashSet::default(),
+            cache_root: None,
+            unreachable_modules: Vec::new(),
+            entry_parse_errors: entry.errors,
+            entry_parse_status: entry.status,
+        };
+    }
     if input.config.load_siblings {
         load_sibling_files(
             &mut store,
             &sink,
             input.loader,
-            entry_filename.as_deref(),
+            entry.filename.as_deref(),
             include_tests,
         );
     }
@@ -616,6 +731,8 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
         cached_modules: module_output.cached_modules,
         cache_root,
         unreachable_modules,
+        entry_parse_errors: entry.errors,
+        entry_parse_status: entry.status,
     }
 }
 
@@ -869,4 +986,48 @@ fn registration_waves(modules: &[String], dependencies: &DependencyGraph) -> Vec
         waves[wave].push(module_id.clone());
     }
     waves
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strict_entry_parsing_rejects_partial_ast() {
+        let (result, status) =
+            parse_entry_file("fn valid() {}\nfn incomplete(", EntryParseMode::Strict);
+
+        assert_eq!(
+            (status, result.ast.is_empty()),
+            (EntryParseStatus::Failed, true)
+        );
+    }
+
+    #[test]
+    fn recovering_entry_parsing_keeps_partial_ast() {
+        let (result, status) =
+            parse_entry_file("fn valid() {}\nfn incomplete(", EntryParseMode::Recover);
+
+        assert_eq!(
+            (status, result.ast.is_empty()),
+            (EntryParseStatus::Recovered, false)
+        );
+    }
+
+    #[test]
+    fn recovering_entry_parsing_still_rejects_lex_errors() {
+        let (result, status) =
+            parse_entry_file("fn main() { \"unterminated }", EntryParseMode::Recover);
+
+        assert_eq!(
+            (
+                status,
+                result
+                    .errors
+                    .first()
+                    .is_some_and(|error| error.code.starts_with("lex.")),
+            ),
+            (EntryParseStatus::Failed, true)
+        );
+    }
 }

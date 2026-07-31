@@ -14,8 +14,6 @@ pub use semantics::inference::ProjectKind;
 use semantics::loader::Loader;
 pub use syntax::program::TestIndex;
 
-const ENTRY_FILE_ID: u32 = 0;
-
 #[derive(Debug, Clone)]
 pub struct SourceInfo {
     pub source: String,
@@ -125,40 +123,14 @@ pub struct CompileResult {
 
 pub fn compile(input: CompileInput<'_>, config: &CompileConfig, fs: &dyn Loader) -> CompileResult {
     let (entry_file, project_kind) = match input {
-        CompileInput::Binary(entry) => {
-            let syntax_result = syntax::build_ast(entry.source, ENTRY_FILE_ID);
-            if syntax_result.failed() {
-                let errors = syntax_result.errors.into_iter().map(Into::into).collect();
-                let mut sources = HashMap::default();
-                sources.insert(
-                    ENTRY_FILE_ID,
-                    SourceInfo {
-                        source: entry.source.to_string(),
-                        filename: entry.display_path.to_string(),
-                    },
-                );
-                return CompileResult {
-                    output: vec![],
-                    errors,
-                    lints: vec![],
-                    sources,
-                    user_file_count: 1,
-                    live_modules: vec![],
-                    emit_stamps: vec![],
-                    test_index: TestIndex::default(),
-                };
-            }
-            (
-                Some(EntryFile {
-                    source: entry.source.to_string(),
-                    filename: entry.filename.to_string(),
-                    display_path: entry.display_path.to_string(),
-                    ast: syntax_result.ast,
-                    file_comment: syntax_result.file_comment,
-                }),
-                ProjectKind::Binary,
-            )
-        }
+        CompileInput::Binary(entry) => (
+            Some(EntryFile::new(
+                entry.source.to_string(),
+                entry.filename.to_string(),
+                entry.display_path.to_string(),
+            )),
+            ProjectKind::Binary,
+        ),
         CompileInput::Library => (None, ProjectKind::Library),
     };
 
@@ -400,6 +372,22 @@ mod tests {
     }
 
     #[test]
+    fn syntax_error_stops_batch_analysis_but_retains_entry_source() {
+        let result =
+            compile_project_source("fn main(", ProjectKind::Binary, CompilePhase::Check, "main");
+
+        assert_eq!(
+            (
+                result.errors.first().and_then(LisetteDiagnostic::code_str),
+                result.user_file_count,
+                result.sources.get(&0).map(|source| source.source.as_str()),
+                result.output.is_empty(),
+            ),
+            (Some("parse.unexpected_token"), 1, Some("fn main("), true)
+        );
+    }
+
+    #[test]
     fn warm_diagnostics_match_cold_for_param_position_leak() {
         let tmp = tempdir().unwrap();
         let root = tmp.path();
@@ -457,7 +445,6 @@ mod tests {
             .and_then(|p| p.to_str())
             .expect("temp project path is valid utf-8");
         let fs_loader = LocalFileSystem::new(working_dir, Some(project_dir));
-        let build_result = syntax::build_ast(&source, ENTRY_FILE_ID);
         let result = analyze(AnalyzeInput {
             config: SemanticConfig {
                 run_lints: true,
@@ -465,13 +452,11 @@ mod tests {
                 load_siblings: true,
             },
             loader: &fs_loader,
-            entry: Some(EntryFile {
+            entry: Some(EntryFile::new(
                 source,
-                filename: "main.lis".to_string(),
-                display_path: "src/main.lis".to_string(),
-                ast: build_result.ast,
-                file_comment: build_result.file_comment,
-            }),
+                "main.lis".to_string(),
+                "src/main.lis".to_string(),
+            )),
             project_root: Some(project_dir.to_path_buf()),
             compile_phase: CompilePhase::Check,
             project_kind: ProjectKind::Binary,
@@ -562,7 +547,6 @@ mod tests {
             .and_then(|p| p.to_str())
             .expect("temp project path is valid utf-8");
         let fs_loader = LocalFileSystem::new(working_dir, Some(project_dir));
-        let build_result = syntax::build_ast(&source, ENTRY_FILE_ID);
         let output = analyze(AnalyzeInput {
             config: SemanticConfig {
                 run_lints: true,
@@ -570,13 +554,11 @@ mod tests {
                 load_siblings: true,
             },
             loader: &fs_loader,
-            entry: Some(EntryFile {
+            entry: Some(EntryFile::new(
                 source,
-                filename: "main.lis".to_string(),
-                display_path: "src/main.lis".to_string(),
-                ast: build_result.ast,
-                file_comment: build_result.file_comment,
-            }),
+                "main.lis".to_string(),
+                "src/main.lis".to_string(),
+            )),
             project_root: Some(project_dir.to_path_buf()),
             compile_phase: CompilePhase::Check,
             project_kind: ProjectKind::Binary,

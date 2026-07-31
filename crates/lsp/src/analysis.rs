@@ -8,8 +8,6 @@ use deps::TypedefLocator;
 use diagnostics::LisetteDiagnostic;
 use passes::analyze;
 use semantics::inference::{AnalyzeInput, CompilePhase, EntryFile, ProjectKind, SemanticConfig};
-use syntax::lex::Lexer;
-use syntax::parse::Parser;
 use syntax::types::{CompoundKind, Type};
 
 use crate::position::LineIndex;
@@ -88,24 +86,6 @@ impl SharedState {
             )]);
         }
 
-        let lex_result = Lexer::new(&source, 0).lex();
-        if lex_result.failed() {
-            let line_index = LineIndex::new(&source);
-            return Err(lex_result
-                .errors
-                .into_iter()
-                .map(|e| {
-                    let diag: LisetteDiagnostic = e.into();
-                    convert_diagnostic(&diag, &line_index)
-                })
-                .collect());
-        }
-
-        let parse_result = Parser::new(lex_result.tokens, &source).parse();
-        let has_parse_errors = !parse_result.errors.is_empty();
-        let parse_errors: Vec<LisetteDiagnostic> =
-            parse_result.errors.into_iter().map(Into::into).collect();
-
         let standalone = config.is_standalone();
         let (locator, manifest_error) = if standalone {
             (TypedefLocator::default(), None)
@@ -138,7 +118,7 @@ impl SharedState {
 
         let analyze_output = analyze(AnalyzeInput {
             config: SemanticConfig {
-                run_lints: !has_parse_errors,
+                run_lints: true,
                 standalone_mode: standalone,
                 load_siblings: true,
             },
@@ -146,13 +126,7 @@ impl SharedState {
             entry: if external_test {
                 None
             } else {
-                Some(EntryFile {
-                    source,
-                    display_path: filename.clone(),
-                    filename,
-                    ast: parse_result.ast,
-                    file_comment: parse_result.file_comment,
-                })
+                Some(EntryFile::recovering(source, filename.clone(), filename))
             },
             project_root: if standalone {
                 None
@@ -165,11 +139,25 @@ impl SharedState {
             go_module: String::new(),
             disable_cache: external_test,
         });
+        let has_parse_errors = analyze_output.has_parse_errors();
+        let entry_parse_failed = analyze_output.entry_parse_failed();
         let mut result = analyze_output.result;
         let facts = analyze_output.facts;
 
-        if has_parse_errors && !external_test {
-            result.prepend_errors(parse_errors);
+        if entry_parse_failed {
+            let line_index = LineIndex::new(
+                result
+                    .emit_input
+                    .files
+                    .get(&0)
+                    .map(|file| file.source.as_str())
+                    .unwrap_or_default(),
+            );
+            return Err(result
+                .errors()
+                .iter()
+                .map(|diagnostic| convert_diagnostic(diagnostic, &line_index))
+                .collect());
         }
 
         if let Some(msg) = manifest_error {

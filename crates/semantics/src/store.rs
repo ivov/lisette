@@ -12,7 +12,7 @@ use syntax::program::{
 use syntax::types::{SimpleKind, SubstitutionMap, Symbol, Type, substitute};
 
 pub use syntax::ENTRY_MODULE_ID;
-const ENTRY_FILE_ID: u32 = 0;
+pub(crate) const ENTRY_FILE_ID: u32 = 0;
 
 #[derive(Debug, Clone)]
 pub struct ClosedMember {

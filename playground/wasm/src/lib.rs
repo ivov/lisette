@@ -6,14 +6,12 @@
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
-use std::sync::Arc;
-
 use lisette_semantics::loader::MemoryLoader;
 use lisette_passes::analyze;
 use lisette_semantics::inference::{
     AnalyzeInput, CompilePhase, EntryFile, ProjectKind, SemanticConfig,
 };
-use lisette_semantics::facts::{BindingIdAllocator, Facts};
+use lisette_semantics::facts::Facts;
 use lisette_syntax::ast::{Expression, IdentifierResolution, Span};
 use lisette_syntax::program::{Definition, DefinitionBody};
 use lisette_syntax::types::{Type, unqualified_name};
@@ -179,26 +177,6 @@ struct AnalysisResult {
 
 /// Run parse + semantic analysis, returning the full result for IDE features.
 fn run_analysis(code: &str) -> AnalysisResult {
-    let ast_result = lisette_syntax::build_ast(code, 0);
-
-    let mut diagnostics: Vec<JsDiagnostic> = ast_result
-        .errors
-        .iter()
-        .map(|e| convert_parse_error(e, code))
-        .collect();
-
-    if ast_result.failed() {
-        return AnalysisResult {
-            sem_result: lisette_diagnostics::SemanticResult::with_parse_errors(
-                ast_result.errors,
-                "_entry_",
-            ),
-            facts: Facts::new(Arc::new(BindingIdAllocator::default())),
-            diagnostics,
-            has_parse_errors: true,
-        };
-    }
-
     let mut loader = MemoryLoader::new();
     loader.add_file("_entry_", PLAYGROUND_FILE, code);
 
@@ -209,13 +187,11 @@ fn run_analysis(code: &str) -> AnalysisResult {
             load_siblings: false,
         },
         loader: &loader,
-        entry: Some(EntryFile {
-            source: code.to_string(),
-            filename: PLAYGROUND_FILE.to_string(),
-            display_path: PLAYGROUND_FILE.to_string(),
-            ast: ast_result.ast,
-            file_comment: ast_result.file_comment,
-        }),
+        entry: Some(EntryFile::new(
+            code.to_string(),
+            PLAYGROUND_FILE.to_string(),
+            PLAYGROUND_FILE.to_string(),
+        )),
         project_root: None,
         locator: lisette_deps::TypedefLocator::default(),
         compile_phase: CompilePhase::Check,
@@ -225,21 +201,29 @@ fn run_analysis(code: &str) -> AnalysisResult {
     };
 
     let analyze_output = analyze(input);
+    let has_parse_errors = analyze_output.has_parse_errors();
+    let mut diagnostics: Vec<JsDiagnostic> = analyze_output
+        .parse_errors()
+        .iter()
+        .map(|error| convert_parse_error(error, code))
+        .collect();
     let sem_result = analyze_output.result;
     let facts = analyze_output.facts;
 
-    for e in sem_result.errors() {
-        diagnostics.push(convert_lisette_diag(e, code));
-    }
-    for w in sem_result.lints() {
-        diagnostics.push(convert_lisette_diag(w, code));
+    if !has_parse_errors {
+        for e in sem_result.errors() {
+            diagnostics.push(convert_lisette_diag(e, code));
+        }
+        for w in sem_result.lints() {
+            diagnostics.push(convert_lisette_diag(w, code));
+        }
     }
 
     AnalysisResult {
         sem_result,
         facts,
         diagnostics,
-        has_parse_errors: false,
+        has_parse_errors,
     }
 }
 
@@ -247,18 +231,6 @@ fn run_pipeline(
     code: &str,
     phase: CompilePhase,
 ) -> (Vec<lisette_emit::OutputFile>, Vec<JsDiagnostic>) {
-    let ast_result = lisette_syntax::build_ast(code, 0);
-
-    let mut diagnostics: Vec<JsDiagnostic> = ast_result
-        .errors
-        .iter()
-        .map(|e| convert_parse_error(e, code))
-        .collect();
-
-    if ast_result.failed() {
-        return (vec![], diagnostics);
-    }
-
     let mut loader = MemoryLoader::new();
     loader.add_file("_entry_", PLAYGROUND_FILE, code);
 
@@ -269,13 +241,11 @@ fn run_pipeline(
             load_siblings: false,
         },
         loader: &loader,
-        entry: Some(EntryFile {
-            source: code.to_string(),
-            filename: PLAYGROUND_FILE.to_string(),
-            display_path: PLAYGROUND_FILE.to_string(),
-            ast: ast_result.ast,
-            file_comment: ast_result.file_comment,
-        }),
+        entry: Some(EntryFile::new(
+            code.to_string(),
+            PLAYGROUND_FILE.to_string(),
+            PLAYGROUND_FILE.to_string(),
+        )),
         project_root: None,
         compile_phase: phase.clone(),
         project_kind: ProjectKind::Binary,
@@ -284,7 +254,16 @@ fn run_pipeline(
         disable_cache: false,
     };
 
-    let sem_result = analyze(input).result;
+    let analyze_output = analyze(input);
+    let mut diagnostics: Vec<JsDiagnostic> = analyze_output
+        .parse_errors()
+        .iter()
+        .map(|error| convert_parse_error(error, code))
+        .collect();
+    if analyze_output.has_parse_errors() {
+        return (Vec::new(), diagnostics);
+    }
+    let sem_result = analyze_output.result;
 
     for e in sem_result.errors() {
         diagnostics.push(convert_lisette_diag(e, code));

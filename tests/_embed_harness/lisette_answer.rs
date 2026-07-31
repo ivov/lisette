@@ -13,8 +13,6 @@ use semantics::store::ENTRY_MODULE_ID;
 use super::render_lis::{QuestionSpans, render_lis_declarations, render_lis_questions};
 use super::scenario::Scenario;
 
-const ENTRY_FILE_ID: u32 = 0;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Outcome {
     Resolves,
@@ -142,14 +140,6 @@ struct Checked {
 
 /// Compile a self-contained Lisette source through the real checker.
 fn check(source: &str) -> Checked {
-    let build = syntax::build_ast(source, ENTRY_FILE_ID);
-    if build.failed() {
-        return Checked {
-            parse_failed: true,
-            errors: vec![],
-        };
-    }
-
     let mut loader = MemoryLoader::new();
     loader.add_file(ENTRY_MODULE_ID, "main.lis", source);
 
@@ -160,13 +150,11 @@ fn check(source: &str) -> Checked {
             load_siblings: true,
         },
         loader: &loader,
-        entry: Some(EntryFile {
-            source: source.to_string(),
-            filename: "main.lis".to_string(),
-            display_path: "main.lis".to_string(),
-            ast: build.ast,
-            file_comment: build.file_comment,
-        }),
+        entry: Some(EntryFile::new(
+            source.to_string(),
+            "main.lis".to_string(),
+            "main.lis".to_string(),
+        )),
         project_root: None,
         locator: TypedefLocator::default(),
         compile_phase: CompilePhase::Check,
@@ -175,9 +163,14 @@ fn check(source: &str) -> Checked {
         disable_cache: true,
     });
 
+    let parse_failed = output.has_parse_errors();
     Checked {
-        parse_failed: false,
-        errors: output.result.errors().to_vec(),
+        parse_failed,
+        errors: if parse_failed {
+            Vec::new()
+        } else {
+            output.result.errors().to_vec()
+        },
     }
 }
 

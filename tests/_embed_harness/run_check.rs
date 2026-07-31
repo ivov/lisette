@@ -18,7 +18,6 @@ use super::scenario::{
     EdgeKind, MemberType, NodeId, NodeKind, Question, Receiver, Scenario, Visibility,
 };
 
-const ENTRY_FILE_ID: u32 = 0;
 const PRELUDE_IMPORT_PATH: &str = "github.com/ivov/lisette/prelude";
 
 #[derive(Debug)]
@@ -180,11 +179,6 @@ fn emit_and_write(
 ) -> Result<Emit, String> {
     let module = format!("lisette/embed_emitted_{}", scenario.name);
     let lisette = render_lis_run(scenario, printed);
-    let build = syntax::build_ast(&lisette, ENTRY_FILE_ID);
-    if build.failed() {
-        return Ok(Emit::NotRunnable(vec!["parse".to_string()]));
-    }
-
     let mut loader = MemoryLoader::new();
     loader.add_file(ENTRY_MODULE_ID, "main.lis", &lisette);
     let output = analyze(AnalyzeInput {
@@ -194,13 +188,11 @@ fn emit_and_write(
             load_siblings: true,
         },
         loader: &loader,
-        entry: Some(EntryFile {
-            source: lisette.clone(),
-            filename: "main.lis".to_string(),
-            display_path: "main.lis".to_string(),
-            ast: build.ast,
-            file_comment: build.file_comment,
-        }),
+        entry: Some(EntryFile::new(
+            lisette.clone(),
+            "main.lis".to_string(),
+            "main.lis".to_string(),
+        )),
         project_root: None,
         locator: TypedefLocator::default(),
         compile_phase: CompilePhase::Emit,
@@ -208,6 +200,9 @@ fn emit_and_write(
         go_module: module.clone(),
         disable_cache: true,
     });
+    if output.has_parse_errors() {
+        return Ok(Emit::NotRunnable(vec!["parse".to_string()]));
+    }
     let result = output.result;
     if !result.errors().is_empty() {
         let codes = result

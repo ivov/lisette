@@ -20,10 +20,26 @@ pub struct AnalyzeOutput {
     pub facts: Facts,
     pub emit_stamps: Vec<EmitStamp>,
     pub unreachable_modules: Vec<String>,
+    entry_parse_errors: Vec<syntax::ParseError>,
+    entry_parse_status: semantics::inference::EntryParseStatus,
+}
+
+impl AnalyzeOutput {
+    pub fn has_parse_errors(&self) -> bool {
+        self.entry_parse_status != semantics::inference::EntryParseStatus::Clean
+    }
+
+    pub fn entry_parse_failed(&self) -> bool {
+        self.entry_parse_status == semantics::inference::EntryParseStatus::Failed
+    }
+
+    pub fn parse_errors(&self) -> &[syntax::ParseError] {
+        &self.entry_parse_errors
+    }
 }
 
 pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
-    let run_lints = input.config.run_lints;
+    let requested_lints = input.config.run_lints;
 
     let InferenceOutput {
         store,
@@ -34,7 +50,11 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
         cached_modules,
         cache_root,
         unreachable_modules,
+        entry_parse_errors,
+        entry_parse_status,
     } = run_inference(input);
+    let run_lints =
+        requested_lints && entry_parse_status == semantics::inference::EntryParseStatus::Clean;
 
     let mut unused = UnusedInfo::default();
     if !has_pre_check_errors {
@@ -51,6 +71,7 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
     // phase ordering, FxHashMap iteration, or parallel inference scheduling.
     let mut all_diagnostics = sink.into_diagnostics();
     all_diagnostics.sort_by(diagnostics::LisetteDiagnostic::sort_key);
+    all_diagnostics.splice(0..0, entry_parse_errors.iter().cloned().map(Into::into));
 
     let emit_stamps: Vec<EmitStamp> = compiled_modules
         .iter()
@@ -143,5 +164,7 @@ pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
         facts,
         emit_stamps,
         unreachable_modules,
+        entry_parse_errors,
+        entry_parse_status,
     }
 }

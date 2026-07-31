@@ -316,7 +316,6 @@ fn check_analyzes_orphan_and_surfaces_its_error() {
     );
 
     let source = "import \"lib\"\n\nfn main() {\n  let _ = lib.f()\n}\n";
-    let build = syntax::build_ast(source, 0);
     let output = analyze(AnalyzeInput {
         config: SemanticConfig {
             run_lints: true,
@@ -324,13 +323,11 @@ fn check_analyzes_orphan_and_surfaces_its_error() {
             load_siblings: false,
         },
         loader: &fs,
-        entry: Some(EntryFile {
-            source: source.to_string(),
-            filename: "main.lis".to_string(),
-            display_path: "main.lis".to_string(),
-            ast: build.ast,
-            file_comment: build.file_comment,
-        }),
+        entry: Some(EntryFile::new(
+            source.to_string(),
+            "main.lis".to_string(),
+            "main.lis".to_string(),
+        )),
         project_root: Some(tmp.path().to_path_buf()),
         compile_phase: CompilePhase::Check,
         project_kind: semantics::inference::ProjectKind::Binary,
@@ -372,7 +369,6 @@ fn check_analyzes_tests_in_declaration_only_module() {
     );
 
     let source = "fn main() {}\n";
-    let build = syntax::build_ast(source, 0);
     let output = analyze(AnalyzeInput {
         config: SemanticConfig {
             run_lints: true,
@@ -380,13 +376,11 @@ fn check_analyzes_tests_in_declaration_only_module() {
             load_siblings: false,
         },
         loader: &fs,
-        entry: Some(EntryFile {
-            source: source.to_string(),
-            filename: "main.lis".to_string(),
-            display_path: "main.lis".to_string(),
-            ast: build.ast,
-            file_comment: build.file_comment,
-        }),
+        entry: Some(EntryFile::new(
+            source.to_string(),
+            "main.lis".to_string(),
+            "main.lis".to_string(),
+        )),
         project_root: Some(tmp.path().to_path_buf()),
         compile_phase: CompilePhase::Check,
         project_kind: semantics::inference::ProjectKind::Binary,
@@ -732,7 +726,6 @@ fn main() {
 
     let no_loader = MemoryLoader::new();
 
-    let build_result = syntax::build_ast(source, 0);
     let result = analyze(AnalyzeInput {
         config: SemanticConfig {
             run_lints: false,
@@ -740,13 +733,11 @@ fn main() {
             load_siblings: false,
         },
         loader: &no_loader,
-        entry: Some(EntryFile {
-            source: source.to_string(),
-            filename: "main.lis".to_string(),
-            display_path: "main.lis".to_string(),
-            ast: build_result.ast,
-            file_comment: build_result.file_comment,
-        }),
+        entry: Some(EntryFile::new(
+            source.to_string(),
+            "main.lis".to_string(),
+            "main.lis".to_string(),
+        )),
         project_root: None,
         compile_phase: CompilePhase::Check,
         project_kind: semantics::inference::ProjectKind::Binary,
@@ -824,8 +815,6 @@ fn main() {
 
     let no_loader = MemoryLoader::new();
 
-    let build_result = syntax::build_ast(source, 0);
-
     let result1 = analyze(AnalyzeInput {
         config: SemanticConfig {
             run_lints: false,
@@ -833,13 +822,11 @@ fn main() {
             load_siblings: false,
         },
         loader: &no_loader,
-        entry: Some(EntryFile {
-            source: source.to_string(),
-            filename: "main.lis".to_string(),
-            display_path: "main.lis".to_string(),
-            ast: build_result.ast.clone(),
-            file_comment: build_result.file_comment.clone(),
-        }),
+        entry: Some(EntryFile::new(
+            source.to_string(),
+            "main.lis".to_string(),
+            "main.lis".to_string(),
+        )),
         project_root: None,
         compile_phase: CompilePhase::Check,
         project_kind: semantics::inference::ProjectKind::Binary,
@@ -862,13 +849,11 @@ fn main() {
             load_siblings: false,
         },
         loader: &no_loader,
-        entry: Some(EntryFile {
-            source: source.to_string(),
-            filename: "main.lis".to_string(),
-            display_path: "main.lis".to_string(),
-            ast: build_result.ast,
-            file_comment: build_result.file_comment,
-        }),
+        entry: Some(EntryFile::new(
+            source.to_string(),
+            "main.lis".to_string(),
+            "main.lis".to_string(),
+        )),
         project_root: None,
         compile_phase: CompilePhase::Check,
         project_kind: semantics::inference::ProjectKind::Binary,

@@ -7,8 +7,6 @@ use semantics::store::ENTRY_MODULE_ID;
 
 use super::filesystem::MockFileSystem;
 
-const ENTRY_FILE_ID: u32 = 0;
-
 fn compile_with(
     fs: MockFileSystem,
     config: SemanticConfig,
@@ -20,21 +18,14 @@ fn compile_with(
         .map(|c| c.source.clone())
         .expect("main.lis must exist");
 
-    let build_result = syntax::build_ast(&main_source, ENTRY_FILE_ID);
-    if build_result.failed() {
-        return SemanticResult::with_parse_errors(build_result.errors, ENTRY_MODULE_ID);
-    }
-
     analyze(AnalyzeInput {
         config,
         loader: &fs,
-        entry: Some(EntryFile {
-            source: main_source,
-            filename: "main.lis".to_string(),
-            display_path: "main.lis".to_string(),
-            ast: build_result.ast,
-            file_comment: build_result.file_comment,
-        }),
+        entry: Some(EntryFile::new(
+            main_source,
+            "main.lis".to_string(),
+            "main.lis".to_string(),
+        )),
         project_root: None,
         locator,
         compile_phase: semantics::inference::CompilePhase::Check,
@@ -68,11 +59,6 @@ pub fn compile_standalone_entry(
         .map(|c| c.source.clone())
         .unwrap_or_else(|| panic!("entry file `{entry_name}` must exist"));
 
-    let build_result = syntax::build_ast(&source, ENTRY_FILE_ID);
-    if build_result.failed() {
-        return SemanticResult::with_parse_errors(build_result.errors, ENTRY_MODULE_ID);
-    }
-
     analyze(AnalyzeInput {
         config: SemanticConfig {
             run_lints: true,
@@ -80,13 +66,11 @@ pub fn compile_standalone_entry(
             load_siblings: false,
         },
         loader: &fs,
-        entry: Some(EntryFile {
+        entry: Some(EntryFile::new(
             source,
-            filename: entry_name.to_string(),
-            display_path: entry_name.to_string(),
-            ast: build_result.ast,
-            file_comment: build_result.file_comment,
-        }),
+            entry_name.to_string(),
+            entry_name.to_string(),
+        )),
         project_root: None,
         locator: deps::TypedefLocator::default(),
         compile_phase: phase,
@@ -156,13 +140,6 @@ pub fn compile_project_files_with_tests(
         .map(|c| c.source.clone())
         .expect("main.lis must exist");
 
-    let build_result = syntax::build_ast(&main_source, ENTRY_FILE_ID);
-    assert!(
-        !build_result.failed(),
-        "Expected no parse errors, got: {:?}",
-        build_result.errors
-    );
-
     let analyze_output = analyze(AnalyzeInput {
         config: SemanticConfig {
             run_lints: true,
@@ -170,13 +147,11 @@ pub fn compile_project_files_with_tests(
             load_siblings: true,
         },
         loader: &fs,
-        entry: Some(EntryFile {
-            source: main_source,
-            filename: "main.lis".to_string(),
-            display_path: "main.lis".to_string(),
-            ast: build_result.ast,
-            file_comment: build_result.file_comment,
-        }),
+        entry: Some(EntryFile::new(
+            main_source,
+            "main.lis".to_string(),
+            "main.lis".to_string(),
+        )),
         project_root: None,
         locator: deps::TypedefLocator::default(),
         compile_phase: if emit_tests {
