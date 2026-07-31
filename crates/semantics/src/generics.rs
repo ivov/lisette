@@ -198,7 +198,24 @@ impl TaskState {
                 .get_qualified_id()
                 .and_then(BuiltinBound::from_qualified_id)
             {
-                self.check_builtin_bound_argument(store, &argument, builtin, obligation.span);
+                let equals_hint = match &obligation.origin {
+                    GenericBoundOrigin::Construction {
+                        name,
+                        has_equals_method: true,
+                        ..
+                    } => Some(diagnostics::infer::EquatableFieldHint {
+                        type_name: name.as_str(),
+                        param_name: obligation.param_name.as_str(),
+                    }),
+                    _ => None,
+                };
+                self.check_builtin_bound_argument(
+                    store,
+                    &argument,
+                    builtin,
+                    obligation.span,
+                    equals_hint,
+                );
             } else {
                 InferCtx::new(self, store).check_concrete_bound(
                     &argument,

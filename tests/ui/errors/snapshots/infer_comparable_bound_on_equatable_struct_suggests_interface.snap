@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Bound not satisfied
+   ╭─[test.lis:6:13]
+ 5 │ fn test() {
+ 6 │   let one = Wrap { value: [1] }
+   ·             ─────────┬─────────
+   ·                      ╰── does not satisfy `Comparable`
+ 7 │ }
+   ╰────
+  help: `Comparable` requires `==`, and slices cannot be compared with `==` in Go. `Wrap` already has its own `equals`, so declare `T`'s bound as an interface holding `fn equals(other: T) -> bool` · code: [infer.not_comparable_bound]

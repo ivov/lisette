@@ -382,6 +382,14 @@ impl Store {
         }
     }
 
+    pub(crate) fn definition_has_equals_method(&self, qualified_id: &str) -> bool {
+        matches!(
+            self.get_definition(qualified_id).map(|d| &d.body),
+            Some(DefinitionBody::Struct { methods, .. } | DefinitionBody::Enum { methods, .. })
+                if methods.contains_key("equals")
+        )
+    }
+
     pub(crate) fn is_interface(&self, ty: &Type) -> bool {
         matches!(ty, Type::Nominal { id, .. } if self.get_interface(id.as_str()).is_some())
     }

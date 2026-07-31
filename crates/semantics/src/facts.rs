@@ -121,6 +121,7 @@ pub enum GenericBoundOrigin {
     Construction {
         name: EcoString,
         enclosing_return_type: Option<Type>,
+        has_equals_method: bool,
     },
     FunctionReference {
         name: EcoString,

@@ -1293,14 +1293,35 @@ pub fn not_orderable_bound(span: Span) -> LisetteDiagnostic {
         )
 }
 
-pub fn not_comparable_bound(span: Span) -> LisetteDiagnostic {
+pub struct EquatableFieldHint<'a> {
+    pub type_name: &'a str,
+    pub param_name: &'a str,
+}
+
+pub fn not_comparable_bound(
+    reason: &str,
+    hint: Option<EquatableFieldHint<'_>>,
+    span: Span,
+) -> LisetteDiagnostic {
+    let help = match hint {
+        Some(EquatableFieldHint {
+            type_name,
+            param_name,
+        }) => format!(
+            "`Comparable` requires `==`, and {reason} cannot be compared with `==` in Go. \
+             `{type_name}` already has its own `equals`, so declare `{param_name}`'s bound as an \
+             interface holding `fn equals(other: {param_name}) -> bool`"
+        ),
+        None => format!(
+            "`Comparable` requires `==`, and {reason} cannot be compared with `==` in Go. \
+             If you own this bound, relax it, or accept the comparison as an explicit argument \
+             instead"
+        ),
+    };
     LisetteDiagnostic::error("Bound not satisfied")
         .with_infer_code("not_comparable_bound")
         .with_span_label(&span, "does not satisfy `Comparable`")
-        .with_help(
-            "The parameter must be `Comparable` but the argument is not comparable. \
-             Relax the bound or pass an argument that satisfies it",
-        )
+        .with_help(help)
 }
 
 pub fn bound_only_in_value_position(name: &str, span: Span) -> LisetteDiagnostic {

@@ -687,6 +687,7 @@ impl TaskState {
             return;
         };
         let generics = definition.body.generics().unwrap_or_default();
+        let has_equals_method = store.definition_has_equals_method(definition_name);
         for applied in apply_bounds(generics, arguments) {
             match applied
                 .required
@@ -694,7 +695,11 @@ impl TaskState {
                 .and_then(BuiltinBound::from_qualified_id)
             {
                 Some(builtin) => {
-                    self.check_builtin_bound_argument(store, &applied.argument, builtin, span)
+                    let hint = has_equals_method.then(|| diagnostics::infer::EquatableFieldHint {
+                        type_name: unqualified_name(definition_name),
+                        param_name: applied.parameter_name.as_str(),
+                    });
+                    self.check_builtin_bound_argument(store, &applied.argument, builtin, span, hint)
                 }
                 None => self.check_interface_type_argument(
                     store,
@@ -741,6 +746,7 @@ impl TaskState {
         argument: &Type,
         required: BuiltinBound,
         span: Span,
+        equals_hint: Option<diagnostics::infer::EquatableFieldHint<'_>>,
     ) {
         let resolved = store.deep_resolve_alias(&argument.resolve_in(&self.env));
         if resolved.is_variable() {
@@ -779,9 +785,12 @@ impl TaskState {
                         required.label(),
                         span,
                     ));
-                } else if reason.is_some() {
-                    self.sink
-                        .push(diagnostics::infer::not_comparable_bound(span));
+                } else if let Some(reason) = reason {
+                    self.sink.push(diagnostics::infer::not_comparable_bound(
+                        reason,
+                        equals_hint,
+                        span,
+                    ));
                 }
             }
             BuiltinBound::Ordered if !store.satisfies_ordered_constraint(&resolved) => {

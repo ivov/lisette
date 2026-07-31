@@ -9143,6 +9143,19 @@ fn test() {
 }
 
 #[test]
+fn infer_comparable_bound_on_equatable_struct_suggests_interface() {
+    let input = r#"
+#[equality]
+struct Wrap<T: Comparable> { value: T }
+
+fn test() {
+  let one = Wrap { value: [1] }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_ordered_bound_rejects_bool() {
     let input = r#"
 import "go:cmp"

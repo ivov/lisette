@@ -12,9 +12,13 @@ impl InferCtx<'_> {
         constructed_ty: &Type,
         span: Span,
     ) {
+        let has_equals_method = constructed_ty
+            .get_qualified_id()
+            .is_some_and(|id| self.store.definition_has_equals_method(id));
         let origin = GenericBoundOrigin::Construction {
             name: unqualified_name(written_name).into(),
             enclosing_return_type: self.scopes.lookup_fn_return_type().cloned(),
+            has_equals_method,
         };
         for bound in type_obligations(self.store, constructed_ty) {
             self.register_generic_bound_obligation(bound, &origin, span);

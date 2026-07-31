@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                           ╰── does not satisfy `Comparable`
  6 │ }
    ╰────
-  help: The parameter must be `Comparable` but the argument is not comparable. Relax the bound or pass an argument that satisfies it · code: [infer.not_comparable_bound]
+  help: `Comparable` requires `==`, and slices cannot be compared with `==` in Go. If you own this bound, relax it, or accept the comparison as an explicit argument instead · code: [infer.not_comparable_bound]

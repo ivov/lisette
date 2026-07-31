@@ -643,7 +643,7 @@ impl InferCtx<'_> {
             return Dispatched::Fallthrough;
         };
 
-        self.check_builtin_bound_argument(store, resolved_generic, builtin, *span);
+        self.check_builtin_bound_argument(store, resolved_generic, builtin, *span, None);
         Dispatched::Handled
     }
 

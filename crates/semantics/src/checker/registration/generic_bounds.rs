@@ -144,7 +144,13 @@ impl TaskState {
                 .get_qualified_id()
                 .and_then(BuiltinBound::from_qualified_id)
             {
-                self.check_builtin_bound_argument(store, &argument, required, declaration_span);
+                self.check_builtin_bound_argument(
+                    store,
+                    &argument,
+                    required,
+                    declaration_span,
+                    None,
+                );
             } else if !argument.contains_error()
                 && !store.contains_unknown(&argument)
                 && !argument.is_variable()
