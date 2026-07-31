@@ -1,7 +1,7 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::{LisetteDiagnostic, LocalSink};
-use semantics::{checker::TaskState, checker::infer::InferCtx, store::Store};
+use semantics::{checker::TaskState, checker::infer::InferCtx};
 use stdlib::{Target, get_go_stdlib_typedef};
 use syntax::{
     ast::{Expression, FunctionBody},
@@ -12,9 +12,7 @@ use syntax::{
     types::Symbol,
 };
 
-use super::init_prelude;
-
-use crate::_harness::register_test_builtins;
+use super::new_test_store;
 
 use super::TEST_MODULE_ID;
 use super::wrap::{TEST_WRAPPER_NAME, wrap};
@@ -91,12 +89,10 @@ pub struct CompiledTest {
 
 impl CompiledTest {
     pub fn run_inference(self) -> InferenceResult {
-        let mut store = Store::new();
+        let mut store = new_test_store();
         store.add_module(TEST_MODULE_ID);
 
         let sink = LocalSink::new();
-
-        init_prelude(&mut store);
 
         let (
             typed_ast,
@@ -109,7 +105,6 @@ impl CompiledTest {
         ) = {
             let mut checker = TaskState::with_fresh_allocator();
             checker.cursor.module_id = TEST_MODULE_ID.to_string();
-            register_test_builtins(&mut store, &mut checker);
             checker.put_prelude_in_scope(&store);
 
             let locator = deps::TypedefLocator::default();

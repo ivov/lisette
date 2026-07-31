@@ -1,5 +1,5 @@
 use diagnostics::{Fix, LisetteDiagnostic, apply_fixes};
-use semantics::{checker::TaskState, checker::infer::InferCtx, store::Store};
+use semantics::{checker::TaskState, checker::infer::InferCtx};
 use stdlib::{Target, get_go_stdlib_typedef};
 use syntax::{
     ast::Expression,
@@ -9,17 +9,13 @@ use syntax::{
     program::{File, FileImport, UnusedInfo, Visibility},
 };
 
-use super::init_prelude;
-
-use crate::_harness::register_test_builtins;
+use super::new_test_store;
 
 use super::TEST_MODULE_ID;
 
 pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
-    let mut store = Store::new();
+    let mut store = new_test_store();
     store.add_module(TEST_MODULE_ID);
-
-    init_prelude(&mut store);
 
     // Parser::new hardcodes file_id=0 in spans, so pin the test file to that id too.
     let file_id = 0u32;
@@ -45,7 +41,6 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
 
     let mut checker = TaskState::with_fresh_allocator();
     checker.cursor.module_id = TEST_MODULE_ID.to_string();
-    register_test_builtins(&mut store, &mut checker);
     checker.put_prelude_in_scope(&store);
 
     let locator = deps::TypedefLocator::default();

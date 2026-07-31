@@ -5,7 +5,6 @@ use semantics::{
     checker::TaskState,
     module_graph::Roots,
     module_graph::{ModuleGraphOptions, build_module_graph},
-    store::Store,
 };
 use stdlib::{Target, get_go_stdlib_typedef};
 use syntax::{
@@ -14,13 +13,11 @@ use syntax::{
     types::{Symbol, Type},
 };
 
-use super::init_prelude;
+use super::new_test_store;
 
 use super::builders::*;
 use super::filesystem::MockFileSystem;
 use super::pipeline::TestPipeline;
-use super::register_test_builtins;
-
 pub fn checker_errors(raw_source: &str, typedefs: &[(&str, &str)]) -> Vec<LisetteDiagnostic> {
     let mut pipeline = TestPipeline::new(raw_source);
     for (name, source) in typedefs {
@@ -57,7 +54,7 @@ pub fn infer_with_go_typedefs(raw_source: &str, typedefs: &[(&str, &str)]) -> In
 }
 
 pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
-    let mut store = Store::new();
+    let mut store = new_test_store();
 
     let sink = LocalSink::new();
 
@@ -90,11 +87,8 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
         };
     }
 
-    init_prelude(&mut store);
-
     let ast = {
         let mut checker = TaskState::with_fresh_allocator();
-        register_test_builtins(&mut store, &mut checker);
         checker.put_prelude_in_scope(&store);
 
         let order = std::mem::take(&mut graph_result.order);

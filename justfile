@@ -24,12 +24,15 @@ grammar:
     npm --prefix editors/tree-sitter-lisette run build
 
 test:
-    cargo test -p tests --test suite
-    cargo test -p lisette-lsp --test lsp
-    cargo test -p tests --test manifest_pins
+    cargo test -p tests --test suite -- --format terse
+    cargo test -p lisette-lsp --test lsp -- --format terse
+    cargo test -p tests --test manifest_pins -- --format terse
 
 test-unit:
-    cargo test --workspace --lib --bins
+    cargo test --workspace --lib --bins -- --format terse
+
+_test-check:
+    cargo test --workspace --lib --bins --test suite --test lsp --test manifest_pins -- --format terse
 
 test-infer:
     cargo test -p tests --test suite infer_tests
@@ -74,7 +77,7 @@ lintfix:
 run file:
     cargo run -p lisette -- {{file}}
 
-check: format-check test test-unit lint
+check: format-check _test-check lint
 
 perf-flamegraph:
     cargo build --profile flamegraph -p lisette

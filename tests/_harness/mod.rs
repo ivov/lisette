@@ -17,20 +17,30 @@ pub use infer::{InferResult, infer, infer_module, infer_with_go_typedefs};
 
 pub const TEST_MODULE_ID: &str = "test";
 
+use std::sync::OnceLock;
+
 use diagnostics::LocalSink;
-use semantics::checker::TaskState;
 use semantics::prelude::{parse_and_register_prelude, parse_and_register_test_prelude};
 use semantics::store::Store;
 use syntax::program::{Definition, DefinitionBody, Visibility};
 use syntax::types::{CompoundKind, FunctionParameter, Type};
 
-pub fn init_prelude(store: &mut Store) {
-    let sink = LocalSink::new();
-    parse_and_register_prelude(store, &sink);
-    parse_and_register_test_prelude(store, &sink);
+pub fn new_test_store() -> Store {
+    static TEMPLATE: OnceLock<Store> = OnceLock::new();
+
+    TEMPLATE
+        .get_or_init(|| {
+            let mut store = Store::new();
+            let sink = LocalSink::new();
+            parse_and_register_prelude(&mut store, &sink);
+            parse_and_register_test_prelude(&mut store, &sink);
+            register_test_builtins(&mut store);
+            store
+        })
+        .clone()
 }
 
-pub fn register_test_builtins(store: &mut Store, _checker: &mut TaskState) {
+fn register_test_builtins(store: &mut Store) {
     let module = store
         .get_module_mut("prelude")
         .expect("prelude module must exist");

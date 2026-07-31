@@ -115,6 +115,19 @@ pub struct Store {
     pub(crate) project_kind: crate::inference::ProjectKind,
 }
 
+impl Clone for Store {
+    fn clone(&self) -> Self {
+        Self {
+            modules: self.modules.clone(),
+            go_package_names: self.go_package_names.clone(),
+            next_file_id: AtomicU32::new(self.next_file_id.load(Ordering::Relaxed)),
+            equality_index: self.equality_index.clone(),
+            test_index: self.test_index.clone(),
+            project_kind: self.project_kind,
+        }
+    }
+}
+
 impl Default for Store {
     fn default() -> Self {
         Self::new()
@@ -647,6 +660,30 @@ fn method_lookup_key(ty: &Type) -> Option<Symbol> {
         // Array methods live on the prelude `Array` impl.
         Type::Array { .. } => Some(Symbol::from_parts("prelude", "Array")),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod clone_tests {
+    use super::*;
+
+    #[test]
+    fn clone_has_an_independent_file_id_counter() {
+        let store = Store::new();
+        let cloned = store.clone();
+
+        assert_eq!(store.new_file_id(), cloned.new_file_id());
+    }
+
+    #[test]
+    fn clone_detaches_a_module_before_mutation() {
+        let mut store = Store::new();
+        store.add_module("m");
+        let mut cloned = store.clone();
+
+        cloned.store_file(File::new_cached("m", "cloned.lis", "", "", 42));
+
+        assert!(store.get_file(42).is_none());
     }
 }
 
