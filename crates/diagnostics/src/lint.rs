@@ -77,6 +77,30 @@ pub fn written_but_not_read(span: &Span, name: &str) -> LisetteDiagnostic {
         )
 }
 
+pub fn shadowed_capture(
+    span: &Span,
+    outer_span: &Span,
+    name: &str,
+    is_parameter: bool,
+    is_struct_field: bool,
+) -> LisetteDiagnostic {
+    let rename = if is_struct_field {
+        format!("Rename this binding to `{}: <new name>`", name)
+    } else if is_parameter {
+        "Rename this parameter".to_string()
+    } else {
+        "Rename this binding".to_string()
+    };
+    LisetteDiagnostic::warn("Shadowed capture")
+        .with_lint_code("shadowed_capture")
+        .with_span_primary_label(span, "shadows a binding this lambda could capture")
+        .with_span_label(outer_span, "outer binding declared here")
+        .with_help(format!(
+            "{} so the outer `{}` stays readable inside the lambda",
+            rename, name
+        ))
+}
+
 pub fn dead_code(span: &Span, cause: DeadCodeCause) -> LisetteDiagnostic {
     let (code, msg) = match cause {
         DeadCodeCause::Return => ("dead_code_after_return", "Unreachable code after return"),
@@ -918,7 +942,7 @@ pub fn manual_option_zip(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Manual `zip`")
         .with_lint_code("manual_option_zip")
         .with_span_label(span, "can be simpler")
-        .with_help("Replace `a.and_then(|a| b.map(|b| (a, b)))` with `a.zip(b)`")
+        .with_help("Replace `a.and_then(|x| b.map(|y| (x, y)))` with `a.zip(b)`")
 }
 
 pub fn unnecessary_lazy_evaluations(span: &Span, lazy: &str, eager: &str) -> LisetteDiagnostic {

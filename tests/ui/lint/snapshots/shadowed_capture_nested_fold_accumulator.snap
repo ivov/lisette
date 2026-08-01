@@ -1,0 +1,13 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Shadowed capture
+   ╭─[test.lis:5:51]
+ 4 │   let inner = [4, 5, 6]
+ 5 │   let _ = outer.fold(0, |acc, x| inner.fold(acc, |acc, y| acc + x * y))
+   ·                          ─┬─                      ─┬─
+   ·                           │                        ╰── shadows a binding this lambda could capture
+   ·                           ╰── outer binding declared here
+ 6 │ }
+   ╰────
+  help: Rename this parameter so the outer `acc` stays readable inside the lambda · code: [lint.shadowed_capture]

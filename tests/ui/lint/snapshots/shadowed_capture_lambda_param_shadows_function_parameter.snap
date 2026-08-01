@@ -1,0 +1,15 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Shadowed capture
+   ╭─[test.lis:3:19]
+ 1 │ 
+ 2 │ fn tally(total: int, xs: Slice<int>) -> int {
+   ·          ──┬──
+   ·            ╰── outer binding declared here
+ 3 │   xs.fold(total, |total, x| total + x)
+   ·                   ──┬──
+   ·                     ╰── shadows a binding this lambda could capture
+ 4 │ }
+   ╰────
+  help: Rename this parameter so the outer `total` stays readable inside the lambda · code: [lint.shadowed_capture]

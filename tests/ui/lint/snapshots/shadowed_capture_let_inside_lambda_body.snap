@@ -1,0 +1,17 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Shadowed capture
+   ╭─[test.lis:6:9]
+ 2 │ fn main() {
+ 3 │   let scale = 2
+   ·       ──┬──
+   ·         ╰── outer binding declared here
+ 4 │   let xs = [scale, 4, 6]
+ 5 │   let _ = xs.map(|x| {
+ 6 │     let scale = x * 10
+   ·         ──┬──
+   ·           ╰── shadows a binding this lambda could capture
+ 7 │     scale + 1
+   ╰────
+  help: Rename this binding so the outer `scale` stays readable inside the lambda · code: [lint.shadowed_capture]

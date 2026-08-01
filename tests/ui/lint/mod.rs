@@ -21766,7 +21766,7 @@ fn manual_option_zip_fires() {
 fn main() {
   let a: Option<int> = Some(1)
   let b: Option<int> = Some(2)
-  let _ = a.and_then(|a| b.map(|b| (a, b)))
+  let _ = a.and_then(|x| b.map(|y| (x, y)))
 }
 "#
     );
@@ -21779,7 +21779,7 @@ fn manual_option_zip_reversed_arguments_no_warning() {
 fn main() {
   let a: Option<int> = Some(1)
   let b: Option<int> = Some(2)
-  let _ = a.and_then(|a| b.map(|b| (b, a)))
+  let _ = a.and_then(|x| b.map(|y| (y, x)))
 }
 "#
     );
@@ -21795,7 +21795,7 @@ fn makeb() -> Option<int> {
 
 fn main() {
   let a: Option<int> = Some(1)
-  let _ = a.and_then(|a| makeb().map(|b| (a, b)))
+  let _ = a.and_then(|x| makeb().map(|y| (x, y)))
 }
 "#
     );
@@ -21807,7 +21807,7 @@ fn manual_option_zip_captured_second_no_warning() {
         r#"
 fn main() {
   let a: Option<Option<int>> = Some(Some(1))
-  let _ = a.and_then(|a| a.map(|b| (a, b)))
+  let _ = a.and_then(|x| x.map(|y| (x, y)))
 }
 "#
     );
@@ -25608,4 +25608,190 @@ fn infallible_assertion_fires_inside_compound_assert_operand() {
     }, {
         insta::assert_snapshot!(output);
     });
+}
+
+#[test]
+fn shadowed_capture_lambda_param_shadows_outer_let() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let total = 10
+  let xs = [1, 2, 3]
+  let _ = xs.fold(total, |total, x| total + x)
+}
+"#
+    );
+}
+
+#[test]
+fn shadowed_capture_lambda_param_shadows_function_parameter() {
+    assert_lint_snapshot!(
+        r#"
+fn tally(total: int, xs: Slice<int>) -> int {
+  xs.fold(total, |total, x| total + x)
+}
+
+fn main() {
+  let _ = tally(0, [1, 2, 3])
+}
+"#
+    );
+}
+
+#[test]
+fn shadowed_capture_nested_fold_accumulator() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let outer = [1, 2, 3]
+  let inner = [4, 5, 6]
+  let _ = outer.fold(0, |acc, x| inner.fold(acc, |acc, y| acc + x * y))
+}
+"#
+    );
+}
+
+#[test]
+fn shadowed_capture_let_inside_lambda_body() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let scale = 2
+  let xs = [scale, 4, 6]
+  let _ = xs.map(|x| {
+    let scale = x * 10
+    scale + 1
+  })
+}
+"#
+    );
+}
+
+#[test]
+fn shadowed_capture_silent_for_block_shadowing() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let config = 1
+  if config > 0 {
+    let config = 2
+    let _ = config
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn shadowed_capture_silent_for_match_arm_shadowing() {
+    assert_no_lint_warnings!(
+        r#"
+enum Shape {
+  Circle(int),
+  Square(int),
+}
+
+fn main() {
+  let size = 2
+  let shape = Shape.Circle(size)
+  let _ = match shape {
+    Shape.Circle(size) => size * 2,
+    Shape.Square(size) => size + 1,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn shadowed_capture_silent_for_same_scope_rebinding() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let used = 1
+  let used = used * 2
+  let _ = used
+}
+"#
+    );
+}
+
+#[test]
+fn shadowed_capture_silent_for_underscore_prefixed_name() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _total = 10
+  let xs = [1, 2, 3]
+  let _ = xs.map(|_total| _total + 1)
+}
+"#
+    );
+}
+
+#[test]
+fn shadowed_capture_silent_for_top_level_function_name() {
+    assert_no_lint_warnings!(
+        r#"
+fn helper(x: int) -> int {
+  x
+}
+
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = xs.map(|helper| helper + 1)
+  let _ = helper(1)
+}
+"#
+    );
+}
+
+#[test]
+fn shadowed_capture_does_not_double_report_an_import_alias() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("util", "util.lis", "pub fn value() -> int { 1 }\n");
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"util\"\n\nfn main() {\n  let xs = [1, 2, 3]\n  let _ = xs.map(|util| util + 1)\n  let _ = util.value()\n}\n",
+    );
+    let result = compile_check(fs);
+    assert!(
+        !result
+            .lints()
+            .iter()
+            .any(|d| d.code_str() == Some("lint.shadowed_capture")),
+        "an import alias is not a capturable binding: {:?}",
+        result.lints()
+    );
+}
+
+#[test]
+fn shadowed_capture_silenced_by_allow_attribute() {
+    assert_no_lint_warnings!(
+        r#"
+#[allow(shadowed_capture)]
+fn main() {
+  let total = 10
+  let xs = [1, 2, 3]
+  let _ = xs.fold(total, |total, x| total + x)
+}
+"#
+    );
+}
+
+#[test]
+fn shadowed_capture_silent_for_bare_block_shadowing() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let total = 1
+  {
+    let total = 2
+    let _ = total
+  }
+  let _ = total
+}
+"#
+    );
 }

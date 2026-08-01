@@ -193,9 +193,20 @@ impl InferCtx<'_> {
     ) {
         self.check_binding_shadows_import(&name, span, origin.is_typedef());
 
-        let binding_id = self.facts.add_binding(name.clone(), span, kind, origin);
+        let shadows = self.shadowed_capture_span(&name);
+        let binding_id = self
+            .facts
+            .add_binding(name.clone(), span, kind, origin, shadows);
         let scope = self.scopes.current_mut();
         scope.insert_binding(name, ty, binding_id, kind.is_mutable());
+    }
+
+    fn shadowed_capture_span(&self, name: &str) -> Option<Span> {
+        if name.starts_with('_') {
+            return None;
+        }
+        let shadowed = self.scopes.shadowed_capturable_binding(name)?;
+        self.facts.binding_span(shadowed)
     }
 
     fn infer_array_pattern(

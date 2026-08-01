@@ -1,4 +1,4 @@
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::LisetteDiagnostic;
 use diagnostics::LocalSink;
@@ -77,6 +77,7 @@ pub(crate) fn run(
         &erroring_functions,
         &mut diagnostics,
     );
+    collect_shadowed_captures(store, facts, &mut diagnostics);
     collect_dead_code(facts, &mut diagnostics);
     diagnostics.extend(pattern_lints);
     collect_overused_references(facts, &mut diagnostics);
@@ -193,6 +194,38 @@ fn collect_bindings(
             out.push(diagnostics::lint::written_but_not_read(&b.span, &b.name));
         }
     }
+}
+
+fn collect_shadowed_captures(store: &Store, facts: &Facts, out: &mut Vec<LisetteDiagnostic>) {
+    let produced: Vec<LisetteDiagnostic> = facts
+        .bindings
+        .values()
+        .filter_map(|b| {
+            let outer = b.shadows?;
+            Some(diagnostics::lint::shadowed_capture(
+                &b.span,
+                &outer,
+                &b.name,
+                b.kind.is_param(),
+                b.origin.is_struct_field(),
+            ))
+        })
+        .collect();
+    if produced.is_empty() {
+        return;
+    }
+    let reported: HashSet<u32> = produced
+        .iter()
+        .filter_map(LisetteDiagnostic::file_id)
+        .collect();
+    let allows: Vec<_> = store
+        .modules
+        .values()
+        .flat_map(|module| module.source_files())
+        .filter(|file| reported.contains(&file.id))
+        .flat_map(|file| super::suppression::collect_function_allows(&file.items))
+        .collect();
+    out.extend(super::suppression::filter_allowed(produced, &allows));
 }
 
 fn collect_dead_code(facts: &Facts, out: &mut Vec<LisetteDiagnostic>) {

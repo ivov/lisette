@@ -264,6 +264,7 @@ impl InferCtx<'_> {
     ) -> Expression {
         let store = self.store;
         let (new_params, base_fn_ty, new_body) = self.with_scope(|this| {
+            this.scopes.mark_lambda_scope();
             let resolved_expected = expected_ty.resolve_in(&this.env);
             let expected_function = store.resolve_to_function_type(&resolved_expected);
             let expected_params = expected_function

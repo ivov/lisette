@@ -211,6 +211,7 @@ impl Facts {
         span: Span,
         kind: BindingKind,
         origin: BindingOrigin,
+        shadows: Option<Span>,
     ) -> BindingId {
         let id = self.allocator.reserve();
         self.bindings.insert(
@@ -222,9 +223,14 @@ impl Facts {
                 used: false,
                 mutation: None,
                 origin,
+                shadows,
             },
         );
         id
+    }
+
+    pub(crate) fn binding_span(&self, id: BindingId) -> Option<Span> {
+        self.bindings.get(&id).map(|fact| fact.span)
     }
 
     pub(crate) fn mark_used(&mut self, id: BindingId) {
@@ -397,6 +403,7 @@ pub struct BindingFact {
     pub used: bool,
     pub mutation: Option<BindingMutation>,
     pub origin: BindingOrigin,
+    pub shadows: Option<Span>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -478,6 +485,7 @@ mod tests {
                 in_typedef: false,
                 shorthand_field: false,
             },
+            None,
         );
         let b_id = b.add_binding(
             "b".into(),
@@ -487,6 +495,7 @@ mod tests {
                 in_typedef: false,
                 shorthand_field: false,
             },
+            None,
         );
         assert_ne!(a_id, b_id);
 
@@ -508,6 +517,7 @@ mod tests {
                 in_typedef: false,
                 shorthand_field: false,
             },
+            None,
         );
 
         facts.mark_alias_mutated(id);

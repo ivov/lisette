@@ -148,6 +148,7 @@ pub struct Scope {
     values: HashMap<String, ScopedValue>,
     generics: Option<GenericContext>,
     pub(crate) fn_return_type: Option<Type>,
+    is_lambda: bool,
     deferred_map_key_checks: Vec<DeferredMapKeyCheck>,
     propagation_context: PropagationContext,
     impl_receiver_type: Option<Type>,
@@ -166,6 +167,7 @@ impl Scope {
             values: HashMap::default(),
             generics: None,
             fn_return_type: None,
+            is_lambda: false,
             deferred_map_key_checks: Vec::new(),
             propagation_context: PropagationContext::None,
             impl_receiver_type: None,
@@ -282,6 +284,24 @@ impl Scopes {
             ScopedValueKind::Binding { id, .. } => Some(id),
             ScopedValueKind::Value | ScopedValueKind::Const => None,
         }
+    }
+
+    pub(crate) fn mark_lambda_scope(&mut self) {
+        self.current_mut().is_lambda = true;
+    }
+
+    pub(crate) fn shadowed_capturable_binding(&self, name: &str) -> Option<BindingId> {
+        let mut crossed_lambda = false;
+        for scope in self.stack.iter().rev() {
+            if let Some(value) = scope.values.get(name) {
+                return match value.kind {
+                    ScopedValueKind::Binding { id, .. } if crossed_lambda => Some(id),
+                    _ => None,
+                };
+            }
+            crossed_lambda |= scope.is_lambda;
+        }
+        None
     }
 
     /// Whether resolving `name` crosses a function scope, meaning captured.

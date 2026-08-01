@@ -1,0 +1,16 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Shadowed capture
+   ╭─[test.lis:5:27]
+ 2 │ fn main() {
+ 3 │   let total = 10
+   ·       ──┬──
+   ·         ╰── outer binding declared here
+ 4 │   let xs = [1, 2, 3]
+ 5 │   let _ = xs.fold(total, |total, x| total + x)
+   ·                           ──┬──
+   ·                             ╰── shadows a binding this lambda could capture
+ 6 │ }
+   ╰────
+  help: Rename this parameter so the outer `total` stays readable inside the lambda · code: [lint.shadowed_capture]
