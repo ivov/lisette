@@ -966,3 +966,46 @@ fn wrap_err_unavailable_on_non_error_result() {
     )
     .assert_type_mismatch();
 }
+
+#[test]
+fn bare_error_where_result_expected_suggests_err() {
+    infer(
+        r#"
+    struct MyErr { msg: string }
+
+    impl MyErr {
+      fn Error(self) -> string { self.msg }
+    }
+
+    fn run() -> Result<int, error> {
+      let e: error = MyErr { msg: "boom" }
+      e
+    }
+        "#,
+    )
+    .assert_error_contains("Wrap the value: `Err(...)`");
+}
+
+#[test]
+fn bare_error_value_where_result_expected_suggests_err() {
+    infer(
+        r#"
+    fn run() -> Result<int, string> {
+      "boom"
+    }
+        "#,
+    )
+    .assert_error_contains("Wrap the value: `Err(...)`");
+}
+
+#[test]
+fn bare_ok_value_where_result_expected_still_suggests_ok() {
+    infer(
+        r#"
+    fn run() -> Result<int, string> {
+      42
+    }
+        "#,
+    )
+    .assert_error_contains("Wrap the value: `Ok(...)`");
+}

@@ -1,3 +1,4 @@
+import "go:errors"
 import "go:fmt"
 import "go:strconv"
 import "go:strings"
@@ -7,9 +8,11 @@ import "display"
 import "models"
 import "store"
 
-pub fn add(args: Slice<string>) -> Result<(), string> {
+pub fn add(args: Slice<string>) -> Result<(), error> {
   let Some(title) = args.get(2) else {
-    return Err("usage: add <title> [--priority low|medium|high] [--tags a,b,c]")
+    return Err(errors.New(
+      "usage: add <title> [--priority low|medium|high] [--tags a,b,c]",
+    ))
   }
 
   let mut priority = models.Priority.Medium
@@ -20,19 +23,19 @@ pub fn add(args: Slice<string>) -> Result<(), string> {
     match args[i] {
       "--priority" => {
         let Some(val) = args.get(i + 1) else {
-          return Err("--priority requires a value")
+          return Err(errors.New("--priority requires a value"))
         }
         priority = models.parse_priority(val)?
         i += 2
       },
       "--tags" => {
         let Some(val) = args.get(i + 1) else {
-          return Err("--tags requires a value")
+          return Err(errors.New("--tags requires a value"))
         }
         tags = strings.Split(val, ",")
         i += 2
       },
-      other => return Err(f"unknown flag: '{other}'"),
+      other => return Err(errors.New(f"unknown flag: '{other}'")),
     }
   }
 
@@ -46,9 +49,9 @@ pub fn add(args: Slice<string>) -> Result<(), string> {
   Ok(())
 }
 
-pub fn done(args: Slice<string>) -> Result<(), string> {
+pub fn done(args: Slice<string>) -> Result<(), error> {
   let Some(id_str) = args.get(2) else {
-    return Err("usage: done <id>")
+    return Err(errors.New("usage: done <id>"))
   }
   let id = parse_id(id_str)?
 
@@ -60,12 +63,12 @@ pub fn done(args: Slice<string>) -> Result<(), string> {
   Ok(())
 }
 
-pub fn cancel(args: Slice<string>) -> Result<(), string> {
+pub fn cancel(args: Slice<string>) -> Result<(), error> {
   let Some(id_str) = args.get(2) else {
-    return Err("usage: cancel <id> <reason>")
+    return Err(errors.New("usage: cancel <id> <reason>"))
   }
   let Some(reason) = args.get(3) else {
-    return Err("usage: cancel <id> <reason>")
+    return Err(errors.New("usage: cancel <id> <reason>"))
   }
   let id = parse_id(id_str)?
 
@@ -77,7 +80,7 @@ pub fn cancel(args: Slice<string>) -> Result<(), string> {
   Ok(())
 }
 
-pub fn list() -> Result<(), string> {
+pub fn list() -> Result<(), error> {
   let items = store.load()?
   let pending = items.filter(|t| t.status == models.Status.Pending)
   let done = items.filter(|t| t.status == models.Status.Done)
@@ -89,13 +92,13 @@ pub fn list() -> Result<(), string> {
   Ok(())
 }
 
-pub fn stats() -> Result<(), string> {
+pub fn stats() -> Result<(), error> {
   let items = store.load()?
   display.print_stats(items)
   Ok(())
 }
 
-pub fn watch() -> Result<(), string> {
+pub fn watch() -> Result<(), error> {
   let ch = Channel.new<bool>()
 
   task {
@@ -115,9 +118,6 @@ pub fn watch() -> Result<(), string> {
   Ok(())
 }
 
-fn parse_id(s: string) -> Result<int, string> {
-  match strconv.Atoi(s) {
-    Ok(id) => Ok(id),
-    Err(_) => Err(f"'{s}' is not a valid task ID"),
-  }
+fn parse_id(s: string) -> Result<int, error> {
+  strconv.Atoi(s).wrap_err(f"'{s}' is not a valid task ID")
 }

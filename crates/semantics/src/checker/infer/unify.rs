@@ -749,6 +749,10 @@ impl InferCtx<'_> {
             return "Wrap the value: `Ok(...)`".to_string();
         }
 
+        if result_error_help_applies(expected, actual) {
+            return "Wrap the value: `Err(...)`".to_string();
+        }
+
         if actual.wraps("Result", expected) {
             return "Unwrap the inner value with `?` or using `match`".to_string();
         }
@@ -888,6 +892,14 @@ impl InferCtx<'_> {
         }
         absorbed
     }
+}
+
+fn result_error_help_applies(expected: &Type, actual: &Type) -> bool {
+    expected.get_name().is_some_and(|name| name == "Result")
+        && expected
+            .get_type_params()
+            .and_then(|params| params.get(1))
+            .is_some_and(|error_type| error_type == actual)
 }
 
 fn array_to_slice_help_applies(expected: &Type, actual: &Type) -> bool {

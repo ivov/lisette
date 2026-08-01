@@ -45,7 +45,7 @@ Language features shown:
 | Enums, `#[json]` serialization                    | `models/props.lis`                         |
 | Structs, impl blocks, associated functions        | `models/task.lis`                          |
 | Pattern matching (`match`, `let...else`)          | `main.lis`, `store/store.lis`              |
-| Error handling (`Result`, `?`)                    | `commands/commands.lis`                    |
+| Error handling (`Result`, `?`, `wrap_err`)        | `store/store.lis`, `commands/commands.lis` |
 | Closures, slice methods (`filter`, `map`, `fold`) | `store/store.lis`, `commands/commands.lis` |
 | Go interop (`go:` imports, `as` casting)          | `store/store.lis`                          |
 | Mutability (`let mut`, `&`)                       | `commands/commands.lis`                    |

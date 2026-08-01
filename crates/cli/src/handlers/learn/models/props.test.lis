@@ -12,8 +12,8 @@ fn parse_priority_accepts_known_levels() {
 
 #[test]
 fn parse_priority_rejects_unknown() {
-  let assert Err(message) = parse_priority("urgent")
-  assert message.contains("unknown priority")
+  let assert Err(err) = parse_priority("urgent")
+  assert err.Error().contains("unknown priority")
 }
 
 #[test]

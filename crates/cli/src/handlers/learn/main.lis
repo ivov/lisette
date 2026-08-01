@@ -1,3 +1,4 @@
+import "go:errors"
 import "go:fmt"
 import "go:os"
 
@@ -17,11 +18,11 @@ fn main() {
     "list" => commands.list(),
     "stats" => commands.stats(),
     "watch" => commands.watch(),
-    other => Err(f"unknown command: '{other}'"),
+    other => Err(errors.New(f"unknown command: '{other}'")),
   }
 
-  if let Err(msg) = result {
-    fmt.Println(f"Error: {msg}")
+  if let Err(err) = result {
+    fmt.Println(f"Error: {err}")
     os.Exit(1)
   }
 }
