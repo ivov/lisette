@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+    ╭─[test.lis:16:8]
+ 15 │   let cats: Map<string, Cat> = Map.new()
+ 16 │   take(cats)
+    ·        ──┬─
+    ·          ╰── expected `Map<string, Animal>`, found `Map<string, Cat>`
+ 17 │ }
+    ╰────
+  help: Copy the entries into a new `Map<string, Animal>`, widening each value: `widened[key] = value as Animal` · code: [infer.type_mismatch]

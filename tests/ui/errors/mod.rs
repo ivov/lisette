@@ -2095,6 +2095,117 @@ fn unwrap(e: error) -> FooError { e }
 }
 
 #[test]
+fn infer_slice_of_concrete_where_slice_of_interface_expected() {
+    let input = r#"
+interface Animal {
+  fn speak() -> string
+}
+
+struct Cat {}
+
+impl Cat {
+  fn speak(self) -> string { "meow" }
+}
+
+fn take(animals: Slice<Animal>) -> int { animals.length() }
+
+fn test() -> int {
+  let cats: Slice<Cat> = [Cat {}]
+  take(cats)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_option_of_concrete_where_option_of_interface_expected() {
+    let input = r#"
+interface Animal {
+  fn speak() -> string
+}
+
+struct Cat {}
+
+impl Cat {
+  fn speak(self) -> string { "meow" }
+}
+
+fn take(animal: Option<Animal>) -> bool { animal.is_some() }
+
+fn test() -> bool {
+  let cat: Option<Cat> = Some(Cat {})
+  take(cat)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_result_with_concrete_error_where_error_interface_expected() {
+    let input = r#"
+struct FooError {}
+
+impl FooError {
+  fn Error(self) -> string { "foo failed" }
+}
+
+fn take(outcome: Result<int, error>) -> bool { outcome.is_ok() }
+
+fn test() -> bool {
+  let outcome: Result<int, FooError> = Ok(1)
+  take(outcome)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_map_of_concrete_values_where_map_of_interface_values_expected() {
+    let input = r#"
+interface Animal {
+  fn speak() -> string
+}
+
+struct Cat {}
+
+impl Cat {
+  fn speak(self) -> string { "meow" }
+}
+
+fn take(animals: Map<string, Animal>) -> int { animals.length() }
+
+fn test() -> int {
+  let cats: Map<string, Cat> = Map.new()
+  take(cats)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_slice_of_interface_where_slice_of_concrete_expected() {
+    let input = r#"
+interface Animal {
+  fn speak() -> string
+}
+
+struct Cat {}
+
+impl Cat {
+  fn speak(self) -> string { "meow" }
+}
+
+fn take(cats: Slice<Cat>) -> int { cats.length() }
+
+fn test() -> int {
+  let animals: Slice<Animal> = [Cat {}]
+  take(animals)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_called_function_when_function_alias_expected() {
     let input = r#"
 type Cmd = fn() -> int

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+    ╭─[test.lis:16:8]
+ 15 │   let animals: Slice<Animal> = [Cat {}]
+ 16 │   take(animals)
+    ·        ───┬───
+    ·           ╰── expected `Slice<Cat>`, found `Slice<Animal>`
+ 17 │ }
+    ╰────
+  help: Change the type annotation to `Slice<Animal>` or convert the value to `Slice<Cat>` · code: [infer.type_mismatch]

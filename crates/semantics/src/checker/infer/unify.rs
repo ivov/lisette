@@ -58,6 +58,59 @@ enum ClosureAdapter {
     Narrows,
 }
 
+/// A built-in container that holds values which can be widened into an interface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WideningContainer {
+    Slice,
+    Option,
+    Result,
+    Partial,
+    Map,
+}
+
+/// What a container has to widen, and how.
+#[derive(Debug, Clone, Copy)]
+enum Widening {
+    /// `map` over every element.
+    Elements,
+    /// `map` over the single held value.
+    Value,
+    /// `map_err` over the held error.
+    Error,
+    /// No method does it, so the entries are copied over by hand.
+    Entries,
+}
+
+impl WideningContainer {
+    fn of(ty: &Type) -> Option<Self> {
+        if ty.is_slice() {
+            Some(Self::Slice)
+        } else if ty.is_option() {
+            Some(Self::Option)
+        } else if ty.is_result() {
+            Some(Self::Result)
+        } else if ty.is_partial() {
+            Some(Self::Partial)
+        } else if ty.is_map() {
+            Some(Self::Map)
+        } else {
+            None
+        }
+    }
+
+    /// How the type argument at `position` is widened, if it can be.
+    fn widening(self, position: usize) -> Option<Widening> {
+        match self {
+            Self::Slice => Some(Widening::Elements),
+            Self::Option => Some(Widening::Value),
+            Self::Result | Self::Partial if position == 0 => Some(Widening::Value),
+            Self::Result | Self::Partial => Some(Widening::Error),
+            Self::Map if position == 1 => Some(Widening::Entries),
+            Self::Map => None,
+        }
+    }
+}
+
 impl InferCtx<'_> {
     /// Make two types equal. Returns `false` when they do not match.
     ///
@@ -825,10 +878,57 @@ impl InferCtx<'_> {
             None => {}
         }
 
+        if let Some(widening) = self.container_widening_help(expected, actual) {
+            return widening;
+        }
+
         format!(
             "Change the type annotation to `{}` or convert the value to `{}`",
             actual, expected
         )
+    }
+
+    fn container_widening_help(&self, expected: &Type, actual: &Type) -> Option<String> {
+        let container = WideningContainer::of(expected)?;
+        if WideningContainer::of(actual) != Some(container) {
+            return None;
+        }
+
+        let (expected_args, actual_args) = (expected.get_type_params()?, actual.get_type_params()?);
+        if expected_args.len() != actual_args.len() {
+            return None;
+        }
+
+        let mut differing = expected_args
+            .iter()
+            .zip(actual_args)
+            .enumerate()
+            .filter(|(_, (expected_arg, actual_arg))| expected_arg != actual_arg);
+        let (position, (expected_element, actual_element)) = differing.next()?;
+        if differing.next().is_some() {
+            return None;
+        }
+
+        if !self.store.is_interface(expected_element) || !self.widens_into_interface(actual_element)
+        {
+            return None;
+        }
+
+        let cast = format!("|value| value as {expected_element}");
+        Some(match container.widening(position)? {
+            Widening::Elements => format!("Use `.map({cast})` to widen each element"),
+            Widening::Value => format!("Use `.map({cast})` to widen the value"),
+            Widening::Error => format!("Use `.map_err({cast})` to widen the error"),
+            Widening::Entries => format!(
+                "Copy the entries into a new `{expected}`, widening each value: `widened[key] = value as {expected_element}`"
+            ),
+        })
+    }
+
+    fn widens_into_interface(&self, ty: &Type) -> bool {
+        !matches!(ty, Type::Parameter(_))
+            && !self.store.is_interface(ty)
+            && !self.store.resolves_to_unknown(ty)
     }
 
     fn closure_adapter(&self, expected: &Type, actual: &Type) -> Option<ClosureAdapter> {
