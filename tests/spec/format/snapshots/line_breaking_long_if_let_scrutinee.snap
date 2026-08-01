@@ -1,0 +1,11 @@
+---
+source: tests/spec/format/mod.rs
+description: "fn test() -> int { if let Some(v) = first_value + second_value + third_value + fourth_value + fifth_value { v } else { 0 } }"
+---
+fn test() -> int {
+  if let Some(v) = first_value + second_value + third_value + fourth_value + fifth_value {
+    v
+  } else {
+    0
+  }
+}

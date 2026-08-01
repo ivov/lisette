@@ -1,0 +1,16 @@
+---
+source: tests/spec/format/mod.rs
+description: "fn test() -> int { if some_function(first_argument, second_argument, third_argument, fourth_argument) { 1 } else { 2 } }"
+---
+fn test() -> int {
+  if some_function(
+    first_argument,
+    second_argument,
+    third_argument,
+    fourth_argument,
+  ) {
+    1
+  } else {
+    2
+  }
+}

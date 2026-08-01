@@ -1,0 +1,9 @@
+---
+source: tests/spec/format/mod.rs
+description: "fn test(n: int) { while n > 10 && n < 100 && n % 2 == 0 && n != 42 && n != 7 && n > 0 && n < 9999 { n = n + 1 } }"
+---
+fn test(n: int) {
+  while n > 10 && n < 100 && n % 2 == 0 && n != 42 && n != 7 && n > 0 && n < 9999 {
+    n = n + 1
+  }
+}

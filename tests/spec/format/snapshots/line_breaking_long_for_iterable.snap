@@ -1,0 +1,9 @@
+---
+source: tests/spec/format/mod.rs
+description: "fn test() { for x in first_sequence + second_sequence + third_sequence + fourth_sequence_here { print(x) } }"
+---
+fn test() {
+  for x in first_sequence + second_sequence + third_sequence + fourth_sequence_here {
+    print(x)
+  }
+}

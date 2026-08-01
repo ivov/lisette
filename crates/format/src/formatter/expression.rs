@@ -360,7 +360,7 @@ impl<'a> Formatter<'a> {
         alternative: Option<&'a Expression>,
     ) -> Document<'a> {
         let if_doc = Document::str("if ")
-            .append(self.expression(condition))
+            .append(self.header_expression(condition))
             .append(" ")
             .append(self.as_inline_block(consequence));
 
@@ -387,7 +387,7 @@ impl<'a> Formatter<'a> {
         let if_let_doc = Document::str("if let ")
             .append(self.pattern(pattern))
             .append(" = ")
-            .append(self.expression(scrutinee))
+            .append(self.header_expression(scrutinee))
             .append(" ")
             .append(self.as_inline_block(consequence));
 
@@ -468,7 +468,7 @@ impl<'a> Formatter<'a> {
     ) -> Document<'a> {
         let entries = self.match_arm_entries(arms);
 
-        let header = Document::str("match ").append(self.expression(subject));
+        let header = Document::str("match ").append(self.header_expression(subject));
         let body = self.join_sibling_body(entries, span.end());
         Self::braced_body(header, body)
     }
@@ -479,7 +479,7 @@ impl<'a> Formatter<'a> {
 
     fn while_(&mut self, condition: &'a Expression, body: &'a Expression) -> Document<'a> {
         Document::str("while ")
-            .append(self.expression(condition))
+            .append(self.header_expression(condition))
             .append(" ")
             .append(self.as_block(body))
     }
@@ -493,7 +493,7 @@ impl<'a> Formatter<'a> {
         Document::str("while let ")
             .append(self.pattern(pattern))
             .append(" = ")
-            .append(self.expression(scrutinee))
+            .append(self.header_expression(scrutinee))
             .append(" ")
             .append(self.as_block(body))
     }
@@ -507,7 +507,7 @@ impl<'a> Formatter<'a> {
         Document::str("for ")
             .append(self.binding(binding))
             .append(" in ")
-            .append(self.expression(iterable))
+            .append(self.header_expression(iterable))
             .append(" ")
             .append(self.as_block(body))
     }
@@ -518,13 +518,23 @@ impl<'a> Formatter<'a> {
         left_operand: &'a Expression,
         right_operand: &'a Expression,
     ) -> Document<'a> {
-        use BinaryOperator::*;
-
-        if matches!(operator, Pipeline) {
+        if matches!(operator, BinaryOperator::Pipeline) {
             return self.pipeline(left_operand, right_operand);
         }
 
-        let operator_string = match operator {
+        self.expression(left_operand)
+            .append(" ")
+            .append(Self::binary_operator_symbol(operator))
+            .append(strict_break("", " "))
+            .append(self.expression(right_operand))
+            .group()
+            .measure_flat()
+    }
+
+    fn binary_operator_symbol(operator: &BinaryOperator) -> &'static str {
+        use BinaryOperator::*;
+
+        match operator {
             Addition => "+",
             Subtraction => "-",
             Multiplication => "*",
@@ -545,15 +555,37 @@ impl<'a> Formatter<'a> {
             And => "&&",
             Or => "||",
             Pipeline => unreachable!(),
+        }
+    }
+
+    fn header_expression(&mut self, expression: &'a Expression) -> Document<'a> {
+        let Expression::Binary {
+            operator,
+            left,
+            right,
+            ..
+        } = expression
+        else {
+            return self.expression(expression);
         };
 
-        self.expression(left_operand)
+        if matches!(operator, BinaryOperator::Pipeline) {
+            return self.expression(expression);
+        }
+
+        let start = expression.get_span().byte_offset;
+        let comments = self.comments.take_comments_before(start);
+
+        let doc = self
+            .header_expression(left)
             .append(" ")
-            .append(operator_string)
-            .append(strict_break("", " "))
-            .append(self.expression(right_operand))
+            .append(Self::binary_operator_symbol(operator))
+            .append(" ")
+            .append(self.header_expression(right))
             .group()
-            .measure_flat()
+            .measure_flat();
+
+        prepend_comments(doc, comments)
     }
 
     fn pipeline(&mut self, left: &'a Expression, right: &'a Expression) -> Document<'a> {

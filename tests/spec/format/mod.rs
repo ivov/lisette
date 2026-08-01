@@ -635,6 +635,55 @@ fn line_breaking_long_binary_chain() {
 }
 
 #[test]
+fn line_breaking_long_if_condition() {
+    assert_format_snapshot!(
+        "fn check(n: int, label: string) -> string { if n > 10 && n < 100 && label != \"\" && n % 2 == 0 && n != 42 && n != 7 && n > 0 { return \"yes\" } \"no\" }"
+    );
+}
+
+#[test]
+fn line_breaking_long_while_condition() {
+    assert_format_snapshot!(
+        "fn test(n: int) { while n > 10 && n < 100 && n % 2 == 0 && n != 42 && n != 7 && n > 0 && n < 9999 { n = n + 1 } }"
+    );
+}
+
+#[test]
+fn line_breaking_long_else_if_condition() {
+    assert_format_snapshot!(
+        "fn test(n: int, m: int) -> string { if n == 1 { \"one\" } else if n > 10 && n < 100 && m != 42 && n % 2 == 0 && m != 7 && n > 0 && m > 3 { \"two\" } else { \"three\" } }"
+    );
+}
+
+#[test]
+fn line_breaking_long_if_let_scrutinee() {
+    assert_format_snapshot!(
+        "fn test() -> int { if let Some(v) = first_value + second_value + third_value + fourth_value + fifth_value { v } else { 0 } }"
+    );
+}
+
+#[test]
+fn line_breaking_long_match_subject() {
+    assert_format_snapshot!(
+        "fn test(n: int) -> string { match n > 10 && n < 100 && n % 2 == 0 && n != 42 && n != 7 && n > 0 && n < 9999 { true => \"t\", false => \"f\" } }"
+    );
+}
+
+#[test]
+fn line_breaking_long_for_iterable() {
+    assert_format_snapshot!(
+        "fn test() { for x in first_sequence + second_sequence + third_sequence + fourth_sequence_here { print(x) } }"
+    );
+}
+
+#[test]
+fn line_breaking_long_if_condition_call_still_breaks() {
+    assert_format_snapshot!(
+        "fn test() -> int { if some_function(first_argument, second_argument, third_argument, fourth_argument) { 1 } else { 2 } }"
+    );
+}
+
+#[test]
 fn line_breaking_long_slice() {
     assert_format_snapshot!(
         "fn test() { [first_element, second_element, third_element, fourth_element, fifth_element, sixth_element] }"
