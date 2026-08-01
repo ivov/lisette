@@ -1012,6 +1012,28 @@ impl Generic {
         }
     }
 
+    /// Constructs a generic whose bound annotations have already been resolved.
+    ///
+    /// This is primarily used when restoring semantic data from a cache: the
+    /// annotation remains available for diagnostics and emission, while the
+    /// resolved type remains the canonical semantic meaning of the bound.
+    pub fn resolved(
+        name: impl Into<EcoString>,
+        bounds: impl IntoIterator<Item = (Annotation, Type)>,
+        span: Span,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            bounds: GenericBounds::Resolved(
+                bounds
+                    .into_iter()
+                    .map(|(annotation, ty)| ResolvedGenericBound { annotation, ty })
+                    .collect(),
+            ),
+            span,
+        }
+    }
+
     pub fn bounds(&self) -> impl Iterator<Item = &Annotation> + Clone {
         let unresolved = match &self.bounds {
             GenericBounds::Unresolved(bounds) => Some(bounds.as_slice()),

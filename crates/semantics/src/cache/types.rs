@@ -3,7 +3,8 @@ use rustc_hash::FxHashMap as HashMap;
 use ecow::EcoString;
 use serde::{Deserialize, Serialize};
 use syntax::ast::{
-    Annotation, AttributeArg, Generic, Span, StructFields, Visibility as FieldVisibility,
+    Annotation, AttributeArg, FunctionAnnotationParameter, Generic, Span, StructFields,
+    Visibility as FieldVisibility,
 };
 use syntax::program::{
     AliasKind, Attributes, Definition, DefinitionBody, Interface, MethodSignatures, Module,
@@ -42,23 +43,164 @@ impl CachedSpan {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CachedGeneric {
     name: EcoString,
-    bounds: Vec<Annotation>,
+    bounds: Vec<CachedGenericBound>,
     span: CachedSpan,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct CachedGenericBound {
+    annotation: CachedAnnotation,
+    ty: Type,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+enum CachedAnnotation {
+    Constructor {
+        name: EcoString,
+        params: Vec<Self>,
+        span: CachedSpan,
+    },
+    Function {
+        params: Vec<CachedFunctionAnnotationParameter>,
+        return_type: Box<Self>,
+        span: CachedSpan,
+    },
+    Tuple {
+        elements: Vec<Self>,
+        span: CachedSpan,
+    },
+    Unknown,
+    Opaque {
+        span: CachedSpan,
+    },
+    Constant {
+        value: u64,
+        text: Option<String>,
+        span: CachedSpan,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct CachedFunctionAnnotationParameter {
+    annotation: CachedAnnotation,
+    mutable: bool,
+}
+
+impl CachedAnnotation {
+    fn from_annotation(annotation: &Annotation, file_id_to_index: &HashMap<u32, u32>) -> Self {
+        match annotation {
+            Annotation::Constructor { name, params, span } => Self::Constructor {
+                name: name.clone(),
+                params: params
+                    .iter()
+                    .map(|annotation| Self::from_annotation(annotation, file_id_to_index))
+                    .collect(),
+                span: CachedSpan::from_span(span, file_id_to_index),
+            },
+            Annotation::Function {
+                params,
+                return_type,
+                span,
+            } => Self::Function {
+                params: params
+                    .iter()
+                    .map(|param| CachedFunctionAnnotationParameter {
+                        annotation: Self::from_annotation(&param.annotation, file_id_to_index),
+                        mutable: param.mutable,
+                    })
+                    .collect(),
+                return_type: Box::new(Self::from_annotation(return_type, file_id_to_index)),
+                span: CachedSpan::from_span(span, file_id_to_index),
+            },
+            Annotation::Tuple { elements, span } => Self::Tuple {
+                elements: elements
+                    .iter()
+                    .map(|annotation| Self::from_annotation(annotation, file_id_to_index))
+                    .collect(),
+                span: CachedSpan::from_span(span, file_id_to_index),
+            },
+            Annotation::Unknown => Self::Unknown,
+            Annotation::Opaque { span } => Self::Opaque {
+                span: CachedSpan::from_span(span, file_id_to_index),
+            },
+            Annotation::Constant { value, text, span } => Self::Constant {
+                value: *value,
+                text: text.clone(),
+                span: CachedSpan::from_span(span, file_id_to_index),
+            },
+        }
+    }
+
+    fn to_annotation(&self, file_ids: &[u32]) -> Annotation {
+        match self {
+            Self::Constructor { name, params, span } => Annotation::Constructor {
+                name: name.clone(),
+                params: params
+                    .iter()
+                    .map(|annotation| annotation.to_annotation(file_ids))
+                    .collect(),
+                span: span.to_span(file_ids),
+            },
+            Self::Function {
+                params,
+                return_type,
+                span,
+            } => Annotation::Function {
+                params: params
+                    .iter()
+                    .map(|param| FunctionAnnotationParameter {
+                        annotation: param.annotation.to_annotation(file_ids),
+                        mutable: param.mutable,
+                    })
+                    .collect(),
+                return_type: Box::new(return_type.to_annotation(file_ids)),
+                span: span.to_span(file_ids),
+            },
+            Self::Tuple { elements, span } => Annotation::Tuple {
+                elements: elements
+                    .iter()
+                    .map(|annotation| annotation.to_annotation(file_ids))
+                    .collect(),
+                span: span.to_span(file_ids),
+            },
+            Self::Unknown => Annotation::Unknown,
+            Self::Opaque { span } => Annotation::Opaque {
+                span: span.to_span(file_ids),
+            },
+            Self::Constant { value, text, span } => Annotation::Constant {
+                value: *value,
+                text: text.clone(),
+                span: span.to_span(file_ids),
+            },
+        }
+    }
 }
 
 impl CachedGeneric {
     fn from_generic(generic: &Generic, file_id_to_index: &HashMap<u32, u32>) -> Self {
+        let resolved = generic
+            .resolved_bounds()
+            .expect("generic bounds must be resolved before caching");
         Self {
             name: generic.name.clone(),
-            bounds: generic.bounds().cloned().collect(),
+            bounds: generic
+                .bounds()
+                .zip(resolved)
+                .map(|(annotation, ty)| CachedGenericBound {
+                    annotation: CachedAnnotation::from_annotation(annotation, file_id_to_index),
+                    ty: ty.clone(),
+                })
+                .collect(),
             span: CachedSpan::from_span(&generic.span, file_id_to_index),
         }
     }
 
     fn to_generic(&self, file_ids: &[u32]) -> Generic {
-        Generic::new(
+        Generic::resolved(
             self.name.clone(),
-            self.bounds.clone(),
+            self.bounds
+                .iter()
+                .map(|bound| (bound.annotation.to_annotation(file_ids), bound.ty.clone())),
             self.span.to_span(file_ids),
         )
     }
@@ -339,6 +481,7 @@ impl CachedInterface {
 /// `Definition` shape: common fields up top, variant-specific data in `body`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CachedDefinition {
+    visibility: Visibility,
     ty: Type,
     name_span: Option<CachedSpan>,
     doc: Option<String>,
@@ -391,8 +534,7 @@ pub enum CachedAliasKind {
 }
 
 impl CachedDefinition {
-    /// Create a CachedDefinition from a Definition.
-    /// Only call this for public definitions that should be cached.
+    /// Create a cached production definition from its in-memory form.
     pub(crate) fn from_definition(
         definition: &Definition,
         file_id_to_index: &HashMap<u32, u32>,
@@ -492,6 +634,7 @@ impl CachedDefinition {
             },
         };
         CachedDefinition {
+            visibility: definition.visibility.clone(),
             ty: ty.clone(),
             name_span: name_span.map(|s| CachedSpan::from_span(&s, file_id_to_index)),
             doc: doc.clone(),
@@ -581,7 +724,7 @@ impl CachedDefinition {
             },
         };
         Definition {
-            visibility: Visibility::Public,
+            visibility: self.visibility.clone(),
             ty: self.ty.clone(),
             name_span: self.name_span.as_ref().map(|s| s.to_span(file_ids)),
             doc: self.doc.clone(),

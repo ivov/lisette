@@ -34,6 +34,7 @@ fn graph_options<'a>(
         scope,
         locator,
         include_tests: true,
+        project_kind: semantics::inference::ProjectKind::Binary,
     }
 }
 

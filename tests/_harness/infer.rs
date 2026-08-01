@@ -60,8 +60,7 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
 
     let locator = deps::TypedefLocator::default();
     let discovered = fs.discover_modules();
-    let mut additional = discovered.internal_test_roots;
-    additional.extend(discovered.external_test_roots);
+    let additional = discovered.test_roots().cloned().collect();
     let roots = Roots {
         primary: vec![module_name.to_string()],
         additional,
@@ -75,6 +74,7 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
             scope: &semantics::inference::AnalysisScope::Project(std::path::PathBuf::new()),
             locator: &locator,
             include_tests: true,
+            project_kind: semantics::inference::ProjectKind::Binary,
         },
     );
 

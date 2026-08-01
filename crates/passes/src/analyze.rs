@@ -83,10 +83,11 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
         cached_modules,
         cache_root,
         unreachable_modules,
-        entry_parse_errors,
-        entry_parse_status,
+        entry_parse,
     } = run_inference(input);
-    let run_lints = entry_parse_status == semantics::inference::EntryParseStatus::Clean;
+    let run_lints = entry_parse.is_clean();
+    let entry_parse_status = entry_parse.status();
+    let entry_parse_errors = entry_parse.into_errors();
 
     let mut unused = UnusedInfo::default();
     if !has_pre_check_errors {
@@ -106,7 +107,7 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
     // phase ordering, FxHashMap iteration, or parallel inference scheduling.
     let mut all_diagnostics = sink.into_diagnostics();
     all_diagnostics.sort_by(diagnostics::LisetteDiagnostic::sort_key);
-    all_diagnostics.splice(0..0, entry_parse_errors.iter().cloned().map(Into::into));
+    all_diagnostics.splice(0..0, entry_parse_errors.into_iter().map(Into::into));
 
     let emit_stamps: Vec<EmitStamp> = compiled_modules
         .iter()

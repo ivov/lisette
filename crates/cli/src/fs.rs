@@ -431,9 +431,14 @@ impl Loader for LocalFileSystem {
         let Some((root, _)) = self.search_paths.first() else {
             return DiscoveredModules::default();
         };
-        let mut with_test: HashSet<PathBuf> = HashSet::default();
-        let mut with_test_root_file: HashSet<PathBuf> = HashSet::default();
-        let mut with_production_module: HashSet<PathBuf> = HashSet::default();
+        #[derive(Default)]
+        struct Contents {
+            has_test: bool,
+            has_test_root_file: bool,
+            has_production: bool,
+        }
+
+        let mut contents_by_dir: HashMap<PathBuf, Contents> = HashMap::new();
         let walked;
         let sources = match &self.scanned_sources {
             Some(sources) => sources.as_slice(),
@@ -449,30 +454,33 @@ impl Loader for LocalFileSystem {
             let Some(dir) = path.parent() else {
                 continue;
             };
+            let contents = contents_by_dir.entry(dir.to_path_buf()).or_default();
             if name.ends_with(".test.lis") {
-                with_test.insert(dir.to_path_buf());
+                contents.has_test = true;
             } else {
-                with_test_root_file.insert(dir.to_path_buf());
+                contents.has_test_root_file = true;
                 if semantics::loader::is_production_module_file(name) {
-                    with_production_module.insert(dir.to_path_buf());
+                    contents.has_production = true;
                 }
             }
         }
         let dir_to_id = |dir: &Path| dir.strip_prefix(root).ok().map(module_id_from_rel);
-        let production_modules = with_production_module
-            .iter()
-            .filter_map(|d| dir_to_id(d))
-            .collect();
-        let internal_test_roots = with_test
-            .iter()
-            .filter(|dir| with_test_root_file.contains(*dir))
-            .filter_map(|d| dir_to_id(d))
-            .collect();
-        DiscoveredModules {
-            production_modules,
-            internal_test_roots,
-            external_test_roots: self.discover_external_test_roots(),
+        let mut discovered = DiscoveredModules::default();
+        for (dir, contents) in contents_by_dir {
+            let Some(module_id) = dir_to_id(&dir) else {
+                continue;
+            };
+            let has_internal_tests = contents.has_test && contents.has_test_root_file;
+            if contents.has_production {
+                discovered.add_production(module_id, has_internal_tests);
+            } else if has_internal_tests {
+                discovered.add_internal_test_root(module_id);
+            }
         }
+        for module_id in self.discover_external_test_roots() {
+            discovered.add_external_test_root(module_id);
+        }
+        discovered
     }
 }
 
@@ -891,7 +899,7 @@ mod tests {
         let fs = LocalFileSystem::new(root.to_str().unwrap(), None);
         let discovered = fs.discover_modules();
 
-        let mut production = discovered.production_modules;
+        let mut production = discovered.production_modules().cloned().collect::<Vec<_>>();
         production.sort();
         assert_eq!(
             production,
@@ -899,7 +907,10 @@ mod tests {
             "production modules are non-test, non-declaration dirs"
         );
 
-        let mut internal_test_roots = discovered.internal_test_roots;
+        let mut internal_test_roots = discovered
+            .internal_test_roots()
+            .cloned()
+            .collect::<Vec<_>>();
         internal_test_roots.sort();
         assert_eq!(
             internal_test_roots,
@@ -927,7 +938,11 @@ mod tests {
         stdfs::create_dir_all(&empty).unwrap();
 
         let fs = LocalFileSystem::new(src.to_str().unwrap(), Some(tmp.path()));
-        let mut external = fs.discover_modules().external_test_roots;
+        let discovered = fs.discover_modules();
+        let mut external = discovered
+            .external_test_roots()
+            .cloned()
+            .collect::<Vec<_>>();
         external.sort();
         assert_eq!(
             external,

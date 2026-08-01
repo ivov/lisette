@@ -25,9 +25,9 @@ impl<'a> InferCtx<'a> {
     }
 
     pub(crate) fn without_enclosing_loop<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
-        let depth = self.scopes.reset_loop_depth();
+        let loops = self.scopes.take_loops();
         let result = f(self);
-        self.scopes.restore_loop_depth(depth);
+        self.scopes.restore_loops(loops);
         result
     }
 

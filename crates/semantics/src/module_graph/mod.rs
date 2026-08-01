@@ -28,6 +28,16 @@ enum DependencyKind {
     TestOnly,
 }
 
+impl DependencyKind {
+    fn merge(self, other: Self) -> Self {
+        if self == Self::Production || other == Self::Production {
+            Self::Production
+        } else {
+            Self::TestOnly
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ImportUse {
     LinkOnly,
@@ -169,6 +179,7 @@ pub struct ModuleGraphOptions<'a> {
     pub scope: &'a AnalysisScope,
     pub locator: &'a TypedefLocator,
     pub include_tests: bool,
+    pub project_kind: ProjectKind,
 }
 
 pub fn build_module_graph(
@@ -186,6 +197,7 @@ pub fn build_module_graph(
         scope,
         locator,
         include_tests,
+        project_kind,
     } = options;
     let mut builder = GraphBuilder {
         store,
@@ -194,6 +206,7 @@ pub fn build_module_graph(
         scope,
         locator,
         include_tests,
+        project_kind,
         dependencies: DependencyGraph::default(),
         visited: HashSet::default(),
         files: HashMap::default(),
@@ -212,6 +225,7 @@ struct GraphBuilder<'a> {
     scope: &'a AnalysisScope,
     locator: &'a TypedefLocator,
     include_tests: bool,
+    project_kind: ProjectKind,
     dependencies: DependencyGraph,
     visited: HashSet<ModuleId>,
     files: HashMap<ModuleId, Vec<File>>,
@@ -245,20 +259,13 @@ impl<'a> GraphBuilder<'a> {
 
             for module_id in &batch {
                 let module_files = parsed.remove(module_id).unwrap_or_default();
-                let file_imports: Vec<_> = if !module_files.is_empty() {
-                    module_files.iter().flat_map(|f| f.imports()).collect()
+                let file_imports = if !module_files.is_empty() {
+                    classify_file_imports(&module_files)
                 } else if let Some(module) = self.store.get_module(module_id) {
-                    module.all_imports()
+                    classify_file_imports(module.files.values())
                 } else {
                     Vec::new()
                 };
-                let has_parsed_files = !module_files.is_empty();
-                let production_import_names: HashSet<String> = module_files
-                    .iter()
-                    .filter(|f| !f.is_test())
-                    .flat_map(|f| f.imports())
-                    .map(|import| import.name.to_string())
-                    .collect();
                 let root_has_production = self
                     .files
                     .get(ENTRY_MODULE_ID)
@@ -274,7 +281,7 @@ impl<'a> GraphBuilder<'a> {
                         scope: self.scope,
                         root_has_production,
                         importer: module_id,
-                        project_kind: self.store.project_kind,
+                        project_kind: self.project_kind,
                         locator: self.locator,
                     },
                 );
@@ -329,38 +336,10 @@ impl<'a> GraphBuilder<'a> {
                         .or_insert(resolved.span);
                 }
 
-                let dependencies: HashMap<ModuleId, Dependency> = if has_parsed_files {
-                    imports
-                        .into_iter()
-                        .map(|(import, resolved)| {
-                            let kind = if production_import_names.contains(import.as_str()) {
-                                DependencyKind::Production
-                            } else {
-                                DependencyKind::TestOnly
-                            };
-                            (
-                                import,
-                                Dependency {
-                                    kind,
-                                    usage: resolved.usage,
-                                },
-                            )
-                        })
-                        .collect()
-                } else {
-                    imports
-                        .into_iter()
-                        .map(|(import, resolved)| {
-                            (
-                                import,
-                                Dependency {
-                                    kind: DependencyKind::Production,
-                                    usage: resolved.usage,
-                                },
-                            )
-                        })
-                        .collect()
-                };
+                let dependencies = imports
+                    .into_iter()
+                    .map(|(module_id, resolved)| (module_id, resolved.dependency))
+                    .collect();
                 self.dependencies.insert(module_id.clone(), dependencies);
             }
         }
@@ -377,6 +356,28 @@ impl<'a> GraphBuilder<'a> {
             primary_reachable,
         }
     }
+}
+
+#[derive(Clone)]
+struct ClassifiedImport {
+    import: syntax::program::FileImport,
+    kind: DependencyKind,
+}
+
+fn classify_file_imports<'a>(files: impl IntoIterator<Item = &'a File>) -> Vec<ClassifiedImport> {
+    files
+        .into_iter()
+        .flat_map(|file| {
+            let kind = if file.is_test() {
+                DependencyKind::TestOnly
+            } else {
+                DependencyKind::Production
+            };
+            file.imports()
+                .into_iter()
+                .map(move |import| ClassifiedImport { import, kind })
+        })
+        .collect()
 }
 
 struct ParseJob {
@@ -497,7 +498,14 @@ fn parse_one(job: ParseJob) -> (File, Vec<syntax::ParseError>) {
 #[derive(Clone, Copy)]
 struct ResolvedImport {
     span: Span,
-    usage: ImportUse,
+    dependency: Dependency,
+}
+
+impl ResolvedImport {
+    fn merge(&mut self, dependency: Dependency) {
+        self.dependency.kind = self.dependency.kind.merge(dependency.kind);
+        self.dependency.usage = self.dependency.usage.merge(dependency.usage);
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -511,7 +519,7 @@ struct ImportContext<'a> {
 }
 
 fn process_file_imports(
-    file_imports: Vec<syntax::program::FileImport>,
+    file_imports: Vec<ClassifiedImport>,
     ctx: ImportContext<'_>,
 ) -> HashMap<ModuleId, ResolvedImport> {
     let ImportContext {
@@ -524,7 +532,8 @@ fn process_file_imports(
     } = ctx;
     let mut imports = HashMap::default();
     let mut pending_go_imports: HashMap<&str, ResolvedImport> = HashMap::default();
-    for file_import in &file_imports {
+    for classified in &file_imports {
+        let file_import = &classified.import;
         if !file_import.name.starts_with("go:") {
             continue;
         }
@@ -535,14 +544,23 @@ fn process_file_imports(
         };
         pending_go_imports
             .entry(&file_import.name)
-            .and_modify(|pending| pending.usage = pending.usage.merge(usage))
+            .and_modify(|pending| {
+                pending.merge(Dependency {
+                    kind: classified.kind,
+                    usage,
+                });
+            })
             .or_insert(ResolvedImport {
                 span: file_import.name_span,
-                usage,
+                dependency: Dependency {
+                    kind: classified.kind,
+                    usage,
+                },
             });
     }
 
-    for file_import in &file_imports {
+    for classified in &file_imports {
+        let file_import = &classified.import;
         if file_import.name == "prelude" {
             sink.push(diagnostics::module_graph::cannot_import_prelude(
                 file_import.span,
@@ -585,10 +603,17 @@ fn process_file_imports(
                         );
                     }
                     Some(entry) => {
-                        imports.entry(entry.to_string()).or_insert(ResolvedImport {
-                            span: file_import.name_span,
+                        let dependency = Dependency {
+                            kind: classified.kind,
                             usage: ImportUse::Referenced,
-                        });
+                        };
+                        imports
+                            .entry(entry.to_string())
+                            .and_modify(|resolved: &mut ResolvedImport| resolved.merge(dependency))
+                            .or_insert(ResolvedImport {
+                                span: file_import.name_span,
+                                dependency,
+                            });
                     }
                     None if project_kind == ProjectKind::Binary => {
                         sink.push(diagnostics::module_graph::cannot_import_root_in_binary(
@@ -609,7 +634,7 @@ fn process_file_imports(
             let Some(pending) = pending_go_imports.remove(file_import.name.as_str()) else {
                 continue;
             };
-            let ok = match pending.usage {
+            let ok = match pending.dependency.usage {
                 ImportUse::Referenced => {
                     let result = locator.find_typedef_content(go_pkg);
                     emit_for_locator_result(
@@ -646,7 +671,7 @@ fn process_file_imports(
                     file_import.name.to_string(),
                     ResolvedImport {
                         span: pending.span,
-                        usage: pending.usage,
+                        dependency: pending.dependency,
                     },
                 );
             }
@@ -681,11 +706,16 @@ fn process_file_imports(
             continue;
         }
 
+        let dependency = Dependency {
+            kind: classified.kind,
+            usage: ImportUse::Referenced,
+        };
         imports
             .entry(file_import.name.to_string())
+            .and_modify(|resolved: &mut ResolvedImport| resolved.merge(dependency))
             .or_insert(ResolvedImport {
                 span: file_import.name_span,
-                usage: ImportUse::Referenced,
+                dependency,
             });
     }
 
@@ -710,10 +740,17 @@ mod tests {
         }
     }
 
+    fn classified(imports: Vec<FileImport>, kind: DependencyKind) -> Vec<ClassifiedImport> {
+        imports
+            .into_iter()
+            .map(|import| ClassifiedImport { import, kind })
+            .collect()
+    }
+
     fn is_link_only(imports: Vec<FileImport>) -> bool {
         let sink = LocalSink::new();
         let resolved = process_file_imports(
-            imports,
+            classified(imports, DependencyKind::Production),
             ImportContext {
                 sink: &sink,
                 scope: &DIRECTORY_SCOPE,
@@ -727,7 +764,7 @@ mod tests {
         assert!(!sink.has_errors());
         resolved
             .get("go:fmt")
-            .is_some_and(|resolved| resolved.usage == ImportUse::LinkOnly)
+            .is_some_and(|resolved| resolved.dependency.usage == ImportUse::LinkOnly)
     }
 
     #[test]
@@ -751,12 +788,15 @@ mod tests {
             let span = Span::new(0, 0, 1);
             let sink = LocalSink::new();
             let resolved = process_file_imports(
-                vec![FileImport {
-                    name: name.into(),
-                    name_span: span,
-                    alias: None,
-                    span,
-                }],
+                classified(
+                    vec![FileImport {
+                        name: name.into(),
+                        name_span: span,
+                        alias: None,
+                        span,
+                    }],
+                    DependencyKind::TestOnly,
+                ),
                 ImportContext {
                     sink: &sink,
                     scope: &PROJECT_SCOPE,
@@ -777,12 +817,15 @@ mod tests {
         let span = Span::new(0, 0, 1);
         let sink = LocalSink::new();
         let resolved = process_file_imports(
-            vec![FileImport {
-                name: "tests".into(),
-                name_span: span,
-                alias: None,
-                span,
-            }],
+            classified(
+                vec![FileImport {
+                    name: "tests".into(),
+                    name_span: span,
+                    alias: None,
+                    span,
+                }],
+                DependencyKind::Production,
+            ),
             ImportContext {
                 sink: &sink,
                 scope: &DIRECTORY_SCOPE,

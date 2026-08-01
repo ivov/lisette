@@ -1,4 +1,5 @@
 use crate::checker::EnvResolve;
+use crate::checker::scopes::LoopContext;
 use crate::facts::{BranchArm, BranchSubsumption};
 use syntax::ast::BindingKind;
 use syntax::ast::{Binding, Expression, IfLetAlternative, MatchArm, Pattern, Span};
@@ -21,19 +22,20 @@ enum IterSeqKind {
 
 enum MatchArmsKind {
     Match,
-    IfLet { without_else: bool },
+    IfLet,
+    IfLetWithoutElse,
 }
 
 impl MatchArmsKind {
     fn binding_kind(&self) -> BindingKind {
         match self {
             MatchArmsKind::Match => BindingKind::MatchArm,
-            MatchArmsKind::IfLet { .. } => BindingKind::IfLet,
+            MatchArmsKind::IfLet | MatchArmsKind::IfLetWithoutElse => BindingKind::IfLet,
         }
     }
 
     fn is_if_let_without_else(&self) -> bool {
-        matches!(self, MatchArmsKind::IfLet { without_else: true })
+        matches!(self, MatchArmsKind::IfLetWithoutElse)
     }
 }
 
@@ -192,34 +194,13 @@ impl InferCtx<'_> {
         }
     }
 
-    fn infer_in_loop_context<F>(&mut self, f: F) -> Expression
+    fn infer_in_loop_context<F>(&mut self, context: LoopContext, f: F) -> Expression
     where
         F: FnOnce(&mut Self) -> Expression,
     {
-        self.scopes.increment_loop_depth();
+        self.scopes.enter_loop(context);
         let result = f(self);
-        self.scopes.decrement_loop_depth();
-        result
-    }
-
-    /// Like `infer_in_loop_context`, but clears `loop_break_type` so that
-    /// `break value` is rejected. Used for `while`, `while let`, and `for`
-    /// (only `loop` supports `break value`).
-    fn infer_in_non_value_loop_context<F>(&mut self, f: F) -> Expression
-    where
-        F: FnOnce(&mut Self) -> Expression,
-    {
-        self.with_loop_break_type(None, |this| this.infer_in_loop_context(f))
-    }
-
-    fn with_loop_break_type<T>(
-        &mut self,
-        break_type: Option<Type>,
-        f: impl FnOnce(&mut Self) -> T,
-    ) -> T {
-        let previous = self.scopes.replace_loop_break_type(break_type);
-        let result = f(self);
-        self.scopes.replace_loop_break_type(previous);
+        self.scopes.exit_loop();
         result
     }
 
@@ -365,7 +346,11 @@ impl InferCtx<'_> {
                 else_span,
             } => (*expression, Some(else_span)),
         };
-        let is_if_let_without_else = else_span.is_none();
+        let kind = if else_span.is_none() {
+            MatchArmsKind::IfLetWithoutElse
+        } else {
+            MatchArmsKind::IfLet
+        };
         let arms = vec![
             MatchArm {
                 pattern,
@@ -381,15 +366,8 @@ impl InferCtx<'_> {
             },
         ];
 
-        let (new_scrutinee, mut new_arms, result_ty) = self.infer_match_arms(
-            scrutinee,
-            arms,
-            MatchArmsKind::IfLet {
-                without_else: is_if_let_without_else,
-            },
-            span,
-            expected_ty,
-        );
+        let (new_scrutinee, mut new_arms, result_ty) =
+            self.infer_match_arms(scrutinee, arms, kind, span, expected_ty);
 
         let wildcard_arm = new_arms.pop().expect("if-let has an else arm");
         let pattern_arm = new_arms.pop().expect("if-let has a pattern arm");
@@ -504,8 +482,8 @@ impl InferCtx<'_> {
     ) -> Expression {
         let break_ty = self.new_type_var();
 
-        let new_body = self.with_loop_break_type(Some(break_ty.clone()), |this| {
-            this.infer_in_loop_context(|this| this.infer_expression(*body, &Type::ignored()))
+        let new_body = self.infer_in_loop_context(LoopContext::Value(break_ty.clone()), |this| {
+            this.infer_expression(*body, &Type::ignored())
         });
 
         let loop_type = if new_body.contains_break() {
@@ -540,8 +518,9 @@ impl InferCtx<'_> {
                 .push(diagnostics::infer::propagate_in_condition(span));
         }
 
-        let new_body =
-            self.infer_in_non_value_loop_context(|s| s.infer_expression(*body, &Type::ignored()));
+        let new_body = self.infer_in_loop_context(LoopContext::Statement, |s| {
+            s.infer_expression(*body, &Type::ignored())
+        });
 
         Expression::While {
             condition: new_condition.into(),
@@ -574,8 +553,9 @@ impl InferCtx<'_> {
                 scrutinee_ty.resolve_in(&this.env),
                 BindingKind::WhileLet,
             );
-            let new_body = this
-                .infer_in_non_value_loop_context(|s| s.infer_expression(*body, &Type::ignored()));
+            let new_body = this.infer_in_loop_context(LoopContext::Statement, |s| {
+                s.infer_expression(*body, &Type::ignored())
+            });
             (new_pattern, new_body)
         });
 
@@ -637,8 +617,9 @@ impl InferCtx<'_> {
                 }
             }
 
-            let new_body = this
-                .infer_in_non_value_loop_context(|s| s.infer_expression(*body, &Type::ignored()));
+            let new_body = this.infer_in_loop_context(LoopContext::Statement, |s| {
+                s.infer_expression(*body, &Type::ignored())
+            });
             (new_binding, new_body)
         });
 

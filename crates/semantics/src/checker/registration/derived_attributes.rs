@@ -42,12 +42,7 @@ pub(crate) struct DerivedAttributeContext {
     pub(crate) is_d_lis: bool,
 }
 
-struct DerivedAttributes {
-    context: DerivedAttributeContext,
-    candidates: Vec<DerivedAttribute>,
-}
-
-pub(crate) struct PendingEqualityAttributes {
+pub(crate) struct DerivedAttributes {
     pub(crate) context: DerivedAttributeContext,
     pub(crate) candidates: Vec<DerivedAttribute>,
 }
@@ -116,11 +111,10 @@ impl TaskState {
             .filter(|candidate| candidate.kind == DerivedAttributeKind::Equality)
             .collect();
         if !equality.is_empty() {
-            self.pending_equality_attributes
-                .push(PendingEqualityAttributes {
-                    context,
-                    candidates: equality,
-                });
+            self.pending_equality_attributes.push(DerivedAttributes {
+                context,
+                candidates: equality,
+            });
         }
     }
 }

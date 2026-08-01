@@ -111,8 +111,6 @@ pub struct Store {
     next_file_id: AtomicU32,
     pub equality_index: EqualityIndex,
     pub test_index: TestIndex,
-    /// Read during inference to gate the binary-only `main` signature check.
-    pub(crate) project_kind: crate::inference::ProjectKind,
 }
 
 impl Clone for Store {
@@ -123,7 +121,6 @@ impl Clone for Store {
             next_file_id: AtomicU32::new(self.next_file_id.load(Ordering::Relaxed)),
             equality_index: self.equality_index.clone(),
             test_index: self.test_index.clone(),
-            project_kind: self.project_kind,
         }
     }
 }
@@ -152,7 +149,6 @@ impl Store {
             next_file_id: AtomicU32::new(2), // 0 = entrypoint, 1 = prelude
             equality_index: Default::default(),
             test_index: Default::default(),
-            project_kind: Default::default(),
         }
     }
 
@@ -264,7 +260,6 @@ impl Store {
             next_file_id: AtomicU32::new(self.next_file_id.load(Ordering::Relaxed)),
             equality_index: EqualityIndex::default(),
             test_index: TestIndex::default(),
-            project_kind: self.project_kind,
         }
     }
 

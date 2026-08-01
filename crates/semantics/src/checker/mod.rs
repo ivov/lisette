@@ -13,7 +13,7 @@ use crate::facts::{BindingIdAllocator, Facts};
 use crate::store::Store;
 use diagnostics::LocalSink;
 use ecow::EcoString;
-use registration::derived_attributes::PendingEqualityAttributes;
+use registration::derived_attributes::DerivedAttributes;
 use scopes::Scopes;
 use syntax::ast::{Annotation, Expression, Generic, ImportAlias, Span};
 use syntax::program::{
@@ -166,7 +166,7 @@ struct InferredFile {
 pub(crate) struct TaskOutput {
     facts: Facts,
     inferred_files: Vec<InferredFile>,
-    pending_equality_attributes: Vec<PendingEqualityAttributes>,
+    pending_equality_attributes: Vec<DerivedAttributes>,
     pending_generic_bound_checks: Vec<(Type, Type, Span)>,
     pending_interface_bound_checks: Vec<(Type, Type, Span)>,
     sink: LocalSink,
@@ -175,11 +175,16 @@ pub(crate) struct TaskOutput {
 /// A consistent read-only snapshot from which parallel checker tasks start.
 pub(crate) struct TaskSeed {
     binding_ids: Arc<BindingIdAllocator>,
+    project_kind: crate::inference::ProjectKind,
 }
 
 impl TaskSeed {
     pub(crate) fn spawn(&self) -> TaskState {
-        TaskState::new(self.binding_ids.clone(), LocalSink::new())
+        TaskState::new(
+            self.binding_ids.clone(),
+            LocalSink::new(),
+            self.project_kind,
+        )
     }
 }
 
@@ -191,6 +196,7 @@ pub struct TaskState {
     imports: ImportState,
     pub sink: LocalSink,
     pub facts: Facts,
+    pub(crate) project_kind: crate::inference::ProjectKind,
     /// Recursion guard for interface satisfaction. Prevents
     /// `collect_interface_violations` from diverging when a bound on `T`
     /// transitively requires checking `T` against the same interface.
@@ -198,7 +204,7 @@ pub struct TaskState {
     /// Typed ASTs produced by inference, keyed by their canonical stored file.
     inferred_files: Vec<InferredFile>,
     /// Equality synthesis waits until registration has completed every type definition.
-    pub(crate) pending_equality_attributes: Vec<PendingEqualityAttributes>,
+    pub(crate) pending_equality_attributes: Vec<DerivedAttributes>,
     pub(crate) pending_generic_bound_checks: Vec<(Type, Type, Span)>,
     /// Interface bounds on concrete type arguments named in annotations. Drained
     /// once after inference, since body annotations register during it.
@@ -206,7 +212,11 @@ pub struct TaskState {
 }
 
 impl TaskState {
-    fn new(binding_ids: Arc<BindingIdAllocator>, sink: LocalSink) -> Self {
+    fn new(
+        binding_ids: Arc<BindingIdAllocator>,
+        sink: LocalSink,
+        project_kind: crate::inference::ProjectKind,
+    ) -> Self {
         Self {
             env: TypeEnv::new(),
             scopes: Scopes::new(),
@@ -214,6 +224,7 @@ impl TaskState {
             imports: ImportState::new(),
             sink,
             facts: Facts::new(binding_ids),
+            project_kind,
             satisfying_stack: rustc_hash::FxHashSet::default(),
             inferred_files: Vec::new(),
             pending_equality_attributes: Vec::new(),
@@ -223,11 +234,15 @@ impl TaskState {
     }
 
     pub fn with_fresh_allocator() -> Self {
-        Self::new(Arc::new(BindingIdAllocator::new()), LocalSink::new())
+        Self::new(
+            Arc::new(BindingIdAllocator::new()),
+            LocalSink::new(),
+            crate::inference::ProjectKind::Binary,
+        )
     }
 
-    pub(crate) fn with_sink(sink: LocalSink) -> Self {
-        Self::new(Arc::new(BindingIdAllocator::new()), sink)
+    pub(crate) fn with_sink(sink: LocalSink, project_kind: crate::inference::ProjectKind) -> Self {
+        Self::new(Arc::new(BindingIdAllocator::new()), sink, project_kind)
     }
 
     pub(crate) fn with_scope<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
@@ -240,6 +255,7 @@ impl TaskState {
     pub(crate) fn worker_seed(&self) -> TaskSeed {
         TaskSeed {
             binding_ids: self.facts.allocator(),
+            project_kind: self.project_kind,
         }
     }
 
@@ -251,6 +267,7 @@ impl TaskState {
             imports: _,
             sink,
             facts,
+            project_kind: _,
             satisfying_stack: _,
             inferred_files,
             pending_equality_attributes,

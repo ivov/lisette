@@ -213,11 +213,12 @@ impl Loader for AnalysisLoader {
     }
 
     fn discover_modules(&self) -> DiscoveredModules {
-        DiscoveredModules {
-            production_modules: vec![ENTRY_MODULE_ID.to_string()],
-            internal_test_roots: Vec::new(),
-            external_test_roots: self.external_test_root.iter().cloned().collect(),
+        let mut discovered = DiscoveredModules::default();
+        discovered.add_production(ENTRY_MODULE_ID.to_string(), false);
+        if let Some(module_id) = &self.external_test_root {
+            discovered.add_external_test_root(module_id.clone());
         }
+        discovered
     }
 }
 

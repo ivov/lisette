@@ -12,11 +12,11 @@ use syntax::program::{File, Module};
 use deps::TypedefLocator;
 
 use crate::cache::{
-    CachedModuleBuild, CompiledModule, ModuleInterface, build_cached_module,
-    compute_emit_artifact_hash, compute_module_hash, get_dependency_module_hashes,
+    CompiledModule, ModuleInterface, build_cached_module, compute_emit_artifact_hash,
+    compute_module_hash, get_dependency_module_hashes,
     go_stdlib::{self, load_cached_go_module},
     hash_module_source_pair, hash_module_source_pair_refs, is_cache_disabled,
-    prelude as prelude_cache, restore_cached_generic_bounds, try_load_cache,
+    prelude as prelude_cache, try_load_cache,
 };
 use crate::checker::infer::{FileInferenceInput, InferCtx};
 use crate::checker::{TaskOutput, TaskState};
@@ -75,13 +75,6 @@ impl AnalysisScope {
             Self::Standalone | Self::Directory => None,
         }
     }
-
-    fn into_project_root(self) -> Option<PathBuf> {
-        match self {
-            Self::Project(root) => Some(root),
-            Self::Standalone | Self::Directory => None,
-        }
-    }
 }
 
 pub struct EntryFile {
@@ -128,6 +121,37 @@ pub enum EntryParseStatus {
     Failed,
 }
 
+pub enum EntryParseOutcome {
+    Clean,
+    Recovered(Vec<ParseError>),
+    Failed(Vec<ParseError>),
+}
+
+impl EntryParseOutcome {
+    pub fn is_clean(&self) -> bool {
+        matches!(self, Self::Clean)
+    }
+
+    pub fn is_failed(&self) -> bool {
+        matches!(self, Self::Failed(_))
+    }
+
+    pub fn status(&self) -> EntryParseStatus {
+        match self {
+            Self::Clean => EntryParseStatus::Clean,
+            Self::Recovered(_) => EntryParseStatus::Recovered,
+            Self::Failed(_) => EntryParseStatus::Failed,
+        }
+    }
+
+    pub fn into_errors(self) -> Vec<ParseError> {
+        match self {
+            Self::Clean => Vec::new(),
+            Self::Recovered(errors) | Self::Failed(errors) => errors,
+        }
+    }
+}
+
 pub struct AnalyzeInput<'a> {
     pub load_siblings: bool,
     pub scope: AnalysisScope,
@@ -156,7 +180,6 @@ struct CacheCandidate {
 
 enum PendingModule {
     Entry {
-        module_id: String,
         topo_rank: usize,
     },
     Compiled {
@@ -168,7 +191,7 @@ enum PendingModule {
 impl PendingModule {
     fn module_id(&self) -> &str {
         match self {
-            Self::Entry { module_id, .. } => module_id,
+            Self::Entry { .. } => ENTRY_MODULE_ID,
             Self::Compiled { module, .. } => &module.module_id,
         }
     }
@@ -192,19 +215,14 @@ struct RegistrationOutput {
 }
 
 enum LazyGoStdlibCache {
-    Disabled,
     Unloaded,
     Missing,
     Loaded(go_stdlib::GoStdlibCache),
 }
 
 impl LazyGoStdlibCache {
-    fn new(disabled: bool) -> Self {
-        if disabled {
-            Self::Disabled
-        } else {
-            Self::Unloaded
-        }
+    fn new() -> Self {
+        Self::Unloaded
     }
 
     fn get_or_load(&mut self, target: stdlib::Target) -> Option<&go_stdlib::GoStdlibCache> {
@@ -216,14 +234,14 @@ impl LazyGoStdlibCache {
         }
         match self {
             Self::Loaded(cache) => Some(cache),
-            Self::Disabled | Self::Unloaded | Self::Missing => None,
+            Self::Unloaded | Self::Missing => None,
         }
     }
 
-    fn into_module_ids(self) -> Option<HashSet<String>> {
+    fn module_ids(&self) -> Option<HashSet<String>> {
         match self {
             Self::Loaded(cache) => Some(cache.modules.keys().cloned().collect()),
-            Self::Disabled | Self::Unloaded | Self::Missing => None,
+            Self::Unloaded | Self::Missing => None,
         }
     }
 }
@@ -237,14 +255,18 @@ pub struct InferenceOutput {
     pub cached_modules: HashSet<String>,
     pub cache_root: Option<PathBuf>,
     pub unreachable_modules: Vec<String>,
-    pub entry_parse_errors: Vec<ParseError>,
-    pub entry_parse_status: EntryParseStatus,
+    pub entry_parse: EntryParseOutcome,
 }
 
 struct EntryRegistration {
     filename: Option<String>,
-    errors: Vec<ParseError>,
-    status: EntryParseStatus,
+    parse: EntryParseOutcome,
+}
+
+struct ParsedEntry {
+    ast: Vec<syntax::ast::Expression>,
+    file_comment: Option<String>,
+    outcome: EntryParseOutcome,
 }
 
 /// Parses and registers the entry file (`main.lis`, or the library root).
@@ -257,19 +279,17 @@ fn register_entry_file(
     let Some(entry) = entry else {
         return EntryRegistration {
             filename: None,
-            errors: Vec::new(),
-            status: EntryParseStatus::Clean,
+            parse: EntryParseOutcome::Clean,
         };
     };
 
-    let (parse_result, status) = parse_entry_file(&entry.source, entry.parse_mode);
-    let ParseResult {
+    let ParsedEntry {
         ast,
-        errors,
         file_comment,
-    } = parse_result;
+        outcome,
+    } = parse_entry_file(&entry.source, entry.parse_mode);
 
-    if status != EntryParseStatus::Failed {
+    if !outcome.is_failed() {
         if entry.filename.ends_with("_test.lis") {
             sink.push(diagnostics::module_graph::wrong_test_file_suffix(
                 &entry.display_path,
@@ -290,42 +310,54 @@ fn register_entry_file(
 
     EntryRegistration {
         filename: Some(entry.filename),
-        errors,
-        status,
+        parse: outcome,
     }
 }
 
-fn parse_entry_file(source: &str, mode: EntryParseMode) -> (ParseResult, EntryParseStatus) {
+fn parse_entry_file(source: &str, mode: EntryParseMode) -> ParsedEntry {
     match mode {
         EntryParseMode::Strict => {
-            let result = syntax::build_ast(source, ENTRY_FILE_ID);
-            let status = if result.failed() {
-                EntryParseStatus::Failed
+            let ParseResult {
+                ast,
+                errors,
+                file_comment,
+            } = syntax::build_ast(source, ENTRY_FILE_ID);
+            let outcome = if errors.is_empty() {
+                EntryParseOutcome::Clean
             } else {
-                EntryParseStatus::Clean
+                EntryParseOutcome::Failed(errors)
             };
-            (result, status)
+            ParsedEntry {
+                ast,
+                file_comment,
+                outcome,
+            }
         }
         EntryParseMode::Recover => {
             let lex_result = Lexer::new(source, ENTRY_FILE_ID).lex();
             if lex_result.failed() {
-                return (
-                    ParseResult {
-                        ast: Vec::new(),
-                        errors: lex_result.errors,
-                        file_comment: None,
-                    },
-                    EntryParseStatus::Failed,
-                );
+                return ParsedEntry {
+                    ast: Vec::new(),
+                    file_comment: None,
+                    outcome: EntryParseOutcome::Failed(lex_result.errors),
+                };
             }
 
-            let result = Parser::new(lex_result.tokens, source).parse();
-            let status = if result.failed() {
-                EntryParseStatus::Recovered
+            let ParseResult {
+                ast,
+                errors,
+                file_comment,
+            } = Parser::new(lex_result.tokens, source).parse();
+            let outcome = if errors.is_empty() {
+                EntryParseOutcome::Clean
             } else {
-                EntryParseStatus::Clean
+                EntryParseOutcome::Recovered(errors)
             };
-            (result, status)
+            ParsedEntry {
+                ast,
+                file_comment,
+                outcome,
+            }
         }
     }
 }
@@ -380,12 +412,11 @@ fn compute_roots(
     match project_kind {
         ProjectKind::Binary => {
             let mut additional = match compile_phase {
-                CompilePhase::Check => discovered.production_modules.clone(),
+                CompilePhase::Check => discovered.production_modules().cloned().collect(),
                 CompilePhase::Emit | CompilePhase::Test => Vec::new(),
             };
             if include_test_roots {
-                additional.extend(discovered.internal_test_roots.iter().cloned());
-                additional.extend(discovered.external_test_roots.iter().cloned());
+                additional.extend(discovered.test_roots().cloned());
             }
             Roots {
                 primary: vec![entry_module],
@@ -395,12 +426,11 @@ fn compute_roots(
         ProjectKind::Library => {
             let mut additional = Vec::new();
             if include_test_roots {
-                additional.extend(discovered.internal_test_roots.iter().cloned());
-                additional.extend(discovered.external_test_roots.iter().cloned());
+                additional.extend(discovered.test_roots().cloned());
             }
             additional.push(entry_module);
             Roots {
-                primary: discovered.production_modules.clone(),
+                primary: discovered.production_modules().cloned().collect(),
                 additional,
             }
         }
@@ -413,8 +443,7 @@ fn find_unreachable_modules(
     graph_result: &crate::module_graph::ModuleGraphResult,
 ) -> Vec<String> {
     let mut unreachable: Vec<String> = discovered
-        .production_modules
-        .iter()
+        .production_modules()
         .filter(|m| !graph_result.primary_reachable.contains(m.as_str()))
         .cloned()
         .collect();
@@ -423,41 +452,95 @@ fn find_unreachable_modules(
 }
 
 #[derive(Clone, Copy)]
-enum PreludeCacheStatus {
-    Disabled,
+enum PreludeCacheState {
     Hit,
     Miss,
 }
 
+enum CacheState<'a> {
+    Disabled,
+    Enabled {
+        module_root: Option<&'a Path>,
+        prelude: PreludeCacheState,
+        go_stdlib: LazyGoStdlibCache,
+    },
+}
+
+impl<'a> CacheState<'a> {
+    fn is_disabled(&self) -> bool {
+        matches!(self, Self::Disabled)
+    }
+
+    fn module_root(&self) -> Option<&'a Path> {
+        match self {
+            Self::Disabled => None,
+            Self::Enabled { module_root, .. } => *module_root,
+        }
+    }
+
+    fn should_save_prelude(&self) -> bool {
+        matches!(
+            self,
+            Self::Enabled {
+                prelude: PreludeCacheState::Miss,
+                ..
+            }
+        )
+    }
+
+    fn go_stdlib_mut(&mut self) -> Option<&mut LazyGoStdlibCache> {
+        match self {
+            Self::Disabled => None,
+            Self::Enabled { go_stdlib, .. } => Some(go_stdlib),
+        }
+    }
+
+    fn go_module_ids(&self) -> Option<HashSet<String>> {
+        match self {
+            Self::Disabled => None,
+            Self::Enabled { go_stdlib, .. } => go_stdlib.module_ids(),
+        }
+    }
+}
+
 /// Loads the prelude from cache when possible, else parses and registers it fresh.
-fn load_prelude(store: &mut Store, sink: &LocalSink, cache_disabled: bool) -> PreludeCacheStatus {
+fn load_prelude<'a>(
+    store: &mut Store,
+    sink: &LocalSink,
+    cache_disabled: bool,
+    module_root: Option<&'a Path>,
+) -> CacheState<'a> {
     if cache_disabled {
         parse_and_register_prelude(store, sink);
-        return PreludeCacheStatus::Disabled;
+        return CacheState::Disabled;
     }
 
     let hit = prelude_cache::try_load_prelude_cache().is_some_and(|cached| {
         prelude_cache::register_cached_prelude(store, cached);
         true
     });
-    if hit {
-        PreludeCacheStatus::Hit
+    let prelude = if hit {
+        PreludeCacheState::Hit
     } else {
         parse_and_register_prelude(store, sink);
-        PreludeCacheStatus::Miss
+        PreludeCacheState::Miss
+    };
+    CacheState::Enabled {
+        module_root,
+        prelude,
+        go_stdlib: LazyGoStdlibCache::new(),
     }
 }
 
 struct ModuleInferenceInput<'a> {
     graph_result: crate::module_graph::ModuleGraphResult,
     sink: LocalSink,
-    module_cache_root: Option<&'a Path>,
     compile_phase: CompilePhase,
     go_module: &'a str,
-    cache_disabled: bool,
-    prelude_cache: PreludeCacheStatus,
+    cache: CacheState<'a>,
     locator: &'a TypedefLocator,
     scope: &'a AnalysisScope,
+    project_kind: ProjectKind,
 }
 
 struct ModuleInferenceOutput {
@@ -471,14 +554,12 @@ struct ModuleInferenceOutput {
 /// or pending registration, then registers and infers whatever was not
 /// served from cache.
 fn infer_all_modules(store: &mut Store, mut input: ModuleInferenceInput) -> ModuleInferenceOutput {
-    let mut checker = TaskState::with_sink(input.sink);
+    let mut checker = TaskState::with_sink(input.sink, input.project_kind);
 
     let mut module_hashes: HashMap<String, u64> = HashMap::default();
     let mut cached_modules: HashSet<String> = HashSet::default();
     let order = std::mem::take(&mut input.graph_result.order);
     let dependencies = &input.graph_result.dependencies;
-
-    let mut go_cache = LazyGoStdlibCache::new(input.cache_disabled);
 
     let mut to_infer: Vec<PendingModule> = Vec::new();
     let mut candidates: Vec<CacheCandidate> = Vec::new();
@@ -522,7 +603,7 @@ fn infer_all_modules(store: &mut Store, mut input: ModuleInferenceInput) -> Modu
                 &module_id,
                 input.locator,
                 input.scope.is_standalone(),
-                &mut go_cache,
+                input.cache.go_stdlib_mut(),
             );
             continue;
         }
@@ -533,7 +614,7 @@ fn infer_all_modules(store: &mut Store, mut input: ModuleInferenceInput) -> Modu
             .remove(&module_id)
             .unwrap_or_default();
         if input.scope.has_project_root()
-            && store.project_kind == ProjectKind::Library
+            && input.project_kind == ProjectKind::Library
             && crate::loader::is_external_test_module(&module_id)
         {
             for file in &mut files {
@@ -564,7 +645,7 @@ fn infer_all_modules(store: &mut Store, mut input: ModuleInferenceInput) -> Modu
             dep_hashes,
         });
 
-        match (input.module_cache_root, compiled) {
+        match (input.cache.module_root(), compiled) {
             (Some(_), Some(compiled)) => candidates.push(CacheCandidate {
                 compiled,
                 files,
@@ -574,19 +655,16 @@ fn infer_all_modules(store: &mut Store, mut input: ModuleInferenceInput) -> Modu
                 store.store_module(&module_id, files);
                 let pending = match compiled {
                     Some(module) => PendingModule::Compiled { module, topo_rank },
-                    None => PendingModule::Entry {
-                        module_id,
-                        topo_rank,
-                    },
+                    None => PendingModule::Entry { topo_rank },
                 };
                 to_infer.push(pending);
             }
         }
     }
 
-    let go_cache_module_ids = go_cache.into_module_ids();
+    let go_cache_module_ids = input.cache.go_module_ids();
 
-    let cache_load = match input.module_cache_root {
+    let cache_load = match input.cache.module_root() {
         Some(root) => {
             load_cache_candidates(&mut checker, store, candidates, root, input.compile_phase)
         }
@@ -601,14 +679,12 @@ fn infer_all_modules(store: &mut Store, mut input: ModuleInferenceInput) -> Modu
     for pending in &to_infer {
         checker.predeclare_module_types(store, pending.module_id());
     }
-    restore_cached_generic_bounds(store, &checker.sink, &cached_modules);
-
     to_infer.sort_by_key(PendingModule::topo_rank);
     let mut compiled_modules = Vec::new();
     let to_infer: Vec<String> = to_infer
         .into_iter()
         .map(|pending| match pending {
-            PendingModule::Entry { module_id, .. } => module_id,
+            PendingModule::Entry { .. } => ENTRY_MODULE_ID.to_string(),
             PendingModule::Compiled { module, .. } => {
                 let module_id = module.module_id.clone();
                 compiled_modules.push(module);
@@ -620,7 +696,7 @@ fn infer_all_modules(store: &mut Store, mut input: ModuleInferenceInput) -> Modu
     register_modules(&mut checker, store, &to_infer, dependencies);
     infer_modules(&mut checker, store, &to_infer);
 
-    if !input.cache_disabled {
+    if !input.cache.is_disabled() {
         let all_go_modules: Vec<String> = store
             .modules
             .keys()
@@ -638,7 +714,7 @@ fn infer_all_modules(store: &mut Store, mut input: ModuleInferenceInput) -> Modu
         }
     }
 
-    if matches!(input.prelude_cache, PreludeCacheStatus::Miss) {
+    if input.cache.should_save_prelude() {
         prelude_cache::save_prelude_cache(store);
     }
 
@@ -654,15 +730,13 @@ fn infer_all_modules(store: &mut Store, mut input: ModuleInferenceInput) -> Modu
 /// post-inference passes consume. Internal, unstable API.
 pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
     let mut store = Store::new();
-    store.project_kind = input.project_kind;
-
     let sink = LocalSink::new();
     let include_tests = input.compile_phase.includes_tests();
 
     store.init_entry_module();
     let entry = register_entry_file(&mut store, &sink, input.entry, include_tests);
-    if entry.status == EntryParseStatus::Failed {
-        let checker = TaskState::with_sink(sink);
+    if entry.parse.is_failed() {
+        let checker = TaskState::with_sink(sink, input.project_kind);
         return InferenceOutput {
             store,
             facts: checker.facts,
@@ -672,8 +746,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
             cached_modules: HashSet::default(),
             cache_root: None,
             unreachable_modules: Vec::new(),
-            entry_parse_errors: entry.errors,
-            entry_parse_status: entry.status,
+            entry_parse: entry.parse,
         };
     }
     if input.load_siblings {
@@ -707,6 +780,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
             loader: Some(input.loader),
             sink: &sink,
             scope: &input.scope,
+            project_kind: input.project_kind,
             locator: input.locator,
             include_tests,
         },
@@ -719,35 +793,29 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
 
     let has_pre_check_errors = sink.has_errors();
 
-    let cache_disabled = is_cache_disabled();
-    let prelude_cache = load_prelude(&mut store, &sink, cache_disabled);
+    let cache_disabled = input.disable_cache || is_cache_disabled();
+    let cache = load_prelude(
+        &mut store,
+        &sink,
+        cache_disabled,
+        input.scope.project_root(),
+    );
     parse_and_register_test_prelude(&mut store, &sink);
 
-    let cache_enabled = !cache_disabled && !input.disable_cache;
-    let module_cache_root = if cache_enabled {
-        input.scope.project_root()
-    } else {
-        None
-    };
+    let cache_root = cache.module_root().map(Path::to_path_buf);
     let module_output = infer_all_modules(
         &mut store,
         ModuleInferenceInput {
             graph_result,
             sink,
-            module_cache_root,
             compile_phase: input.compile_phase,
             go_module: input.go_module,
-            cache_disabled,
-            prelude_cache,
+            cache,
             locator: input.locator,
             scope: &input.scope,
+            project_kind: input.project_kind,
         },
     );
-    let cache_root = if cache_enabled {
-        input.scope.into_project_root()
-    } else {
-        None
-    };
 
     InferenceOutput {
         store,
@@ -758,8 +826,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
         cached_modules: module_output.cached_modules,
         cache_root,
         unreachable_modules,
-        entry_parse_errors: entry.errors,
-        entry_parse_status: entry.status,
+        entry_parse: entry.parse,
     }
 }
 
@@ -770,11 +837,11 @@ fn register_go_module(
     module_id: &str,
     locator: &TypedefLocator,
     standalone_mode: bool,
-    go_cache: &mut LazyGoStdlibCache,
+    go_cache: Option<&mut LazyGoStdlibCache>,
 ) {
     let go_pkg = module_id.strip_prefix("go:").unwrap_or(module_id);
     if deps::is_stdlib(go_pkg)
-        && let Some(cache) = go_cache.get_or_load(locator.target())
+        && let Some(cache) = go_cache.and_then(|cache| cache.get_or_load(locator.target()))
     {
         load_cached_go_module(store, module_id, cache, locator.target());
         if store.has(module_id) {
@@ -870,15 +937,15 @@ fn load_cache_candidates(
             &root_base,
         )
     };
-    let built: Vec<CachedModuleBuild> = if build_jobs.len() < PARALLEL_THRESHOLD {
+    let built: Vec<Module> = if build_jobs.len() < PARALLEL_THRESHOLD {
         build_jobs.into_iter().map(build).collect()
     } else {
         build_jobs.into_par_iter().map(build).collect()
     };
 
-    for build in built {
-        let module_id = build.module.id.clone();
-        store.insert_prebuilt_module(build.module);
+    for module in built {
+        let module_id = module.id.clone();
+        store.insert_prebuilt_module(module);
         checker.collect_cached_module_tests(store, &module_id);
         result.cached.insert(module_id);
     }
@@ -1021,40 +1088,28 @@ mod tests {
 
     #[test]
     fn strict_entry_parsing_rejects_partial_ast() {
-        let (result, status) =
-            parse_entry_file("fn valid() {}\nfn incomplete(", EntryParseMode::Strict);
+        let parsed = parse_entry_file("fn valid() {}\nfn incomplete(", EntryParseMode::Strict);
 
-        assert_eq!(
-            (status, result.ast.is_empty()),
-            (EntryParseStatus::Failed, true)
-        );
+        assert!(parsed.ast.is_empty() && matches!(parsed.outcome, EntryParseOutcome::Failed(_)));
     }
 
     #[test]
     fn recovering_entry_parsing_keeps_partial_ast() {
-        let (result, status) =
-            parse_entry_file("fn valid() {}\nfn incomplete(", EntryParseMode::Recover);
+        let parsed = parse_entry_file("fn valid() {}\nfn incomplete(", EntryParseMode::Recover);
 
-        assert_eq!(
-            (status, result.ast.is_empty()),
-            (EntryParseStatus::Recovered, false)
+        assert!(
+            !parsed.ast.is_empty() && matches!(parsed.outcome, EntryParseOutcome::Recovered(_))
         );
     }
 
     #[test]
     fn recovering_entry_parsing_still_rejects_lex_errors() {
-        let (result, status) =
-            parse_entry_file("fn main() { \"unterminated }", EntryParseMode::Recover);
+        let parsed = parse_entry_file("fn main() { \"unterminated }", EntryParseMode::Recover);
 
-        assert_eq!(
-            (
-                status,
-                result
-                    .errors
-                    .first()
-                    .is_some_and(|error| error.code.starts_with("lex.")),
-            ),
-            (EntryParseStatus::Failed, true)
-        );
+        assert!(matches!(
+            parsed.outcome,
+            EntryParseOutcome::Failed(errors)
+                if errors.first().is_some_and(|error| error.code.starts_with("lex."))
+        ));
     }
 }

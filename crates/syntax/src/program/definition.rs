@@ -396,6 +396,7 @@ fn is_ufcs_method_type(method_ty: &Type, base_generics_count: usize) -> bool {
 pub type MethodSignatures = HashMap<EcoString, Type>;
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Visibility {
     Public,
     Private,

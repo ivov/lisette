@@ -1,7 +1,7 @@
 use rustc_hash::FxHashMap as HashMap;
 
 use super::definition::{Definition, Visibility};
-use super::file::{File, FileImport};
+use super::file::File;
 use crate::types::Symbol;
 
 pub type ModuleId = String;
@@ -58,10 +58,6 @@ impl Module {
 
     pub fn is_typedef(&self, file_id: u32) -> bool {
         self.files.get(&file_id).is_some_and(File::is_d_lis)
-    }
-
-    pub fn all_imports(&self) -> Vec<FileImport> {
-        self.files.values().flat_map(|f| f.imports()).collect()
     }
 
     pub fn is_internal(&self) -> bool {

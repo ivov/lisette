@@ -1,10 +1,7 @@
-mod bounds;
 mod disk;
 pub mod go_stdlib;
 pub mod prelude;
 pub mod types;
-
-pub(crate) use bounds::restore_cached_generic_bounds;
 
 use crate::path::DisplayPathBase;
 use rustc_hash::FxHashMap as HashMap;
@@ -312,7 +309,7 @@ pub fn save_module_cache(
                 source: f.source.clone(),
             })
             .collect(),
-        definitions: extract_public_definitions(store, &compiled.module_id, &file_id_to_index),
+        definitions: extract_cached_definitions(store, &compiled.module_id, &file_id_to_index),
         emit_stamp: None,
     };
 
@@ -320,7 +317,7 @@ pub fn save_module_cache(
     disk::write(&path, &interface)
 }
 
-fn extract_public_definitions(
+fn extract_cached_definitions(
     store: &Store,
     module_id: &str,
     file_id_to_index: &HashMap<u32, u32>,
@@ -332,7 +329,6 @@ fn extract_public_definitions(
     module
         .definitions
         .iter()
-        .filter(|(_, definition)| definition.visibility.is_public())
         .filter(|(_, definition)| !store.is_test_definition(definition))
         .map(|(name, definition)| {
             (
@@ -343,17 +339,13 @@ fn extract_public_definitions(
         .collect()
 }
 
-pub(crate) struct CachedModuleBuild {
-    pub module: Module,
-}
-
 pub(crate) fn build_cached_module(
     module_id: String,
     file_id_base: u32,
     cached: ModuleInterface,
     src_base: &DisplayPathBase,
     root_base: &DisplayPathBase,
-) -> CachedModuleBuild {
+) -> Module {
     let mut module = Module::new(&module_id);
     let mut file_ids: Vec<u32> = Vec::with_capacity(cached.files.len());
 
@@ -377,7 +369,7 @@ pub(crate) fn build_cached_module(
         cached_definition.install_into(&mut module, qualified_name.into(), &file_ids);
     }
 
-    CachedModuleBuild { module }
+    module
 }
 
 fn cached_file_display_path(
@@ -439,7 +431,42 @@ pub(crate) fn is_cache_disabled() -> bool {
 mod tests {
     use super::*;
     use rustc_hash::FxHashSet as HashSet;
+    use syntax::ast::{Annotation, Generic, Span, StructFields};
+    use syntax::program::{Attributes, Definition, DefinitionBody, Visibility};
     use syntax::types::{FunctionParameter, Symbol, Type};
+
+    fn generic_struct_definition(visibility: Visibility, file_id: u32) -> Definition {
+        let bound_span = Span::new(file_id, 12, 5);
+        Definition {
+            visibility,
+            ty: Type::Nominal {
+                id: Symbol::from_raw("module.Box"),
+                params: vec![Type::Parameter("T".into())],
+            },
+            name_span: Some(Span::new(file_id, 0, 3)),
+            doc: None,
+            body: DefinitionBody::Struct {
+                generics: vec![Generic::resolved(
+                    "T",
+                    [(
+                        Annotation::Constructor {
+                            name: "Comparable".into(),
+                            params: Vec::new(),
+                            span: bound_span,
+                        },
+                        Type::Nominal {
+                            id: Symbol::from_raw("prelude.Comparable"),
+                            params: Vec::new(),
+                        },
+                    )],
+                    Span::new(file_id, 4, 13),
+                )],
+                fields: StructFields::Record(Vec::new()),
+                methods: Default::default(),
+                attributes: Attributes::default(),
+            },
+        }
+    }
 
     #[test]
     fn test_hash_module_sources_deterministic() {
@@ -639,14 +666,10 @@ mod tests {
             &DisplayPathBase::new(Path::new("/project")),
         );
 
-        assert!(built.module.definitions["mymod.MAX"].is_const());
-        assert!(built.module.definitions["mymod.DECL"].is_const());
-        assert!(
-            built.module.definitions["mymod.DECL"]
-                .const_value()
-                .is_none()
-        );
-        assert!(!built.module.definitions["mymod.counter"].is_const());
+        assert!(built.definitions["mymod.MAX"].is_const());
+        assert!(built.definitions["mymod.DECL"].is_const());
+        assert!(built.definitions["mymod.DECL"].const_value().is_none());
+        assert!(!built.definitions["mymod.counter"].is_const());
     }
 
     #[test]
@@ -702,6 +725,39 @@ mod tests {
         let restored: CachedDefinition = bincode::deserialize(&bytes).unwrap();
 
         assert!(restored.to_definition(&[]).is_serialized());
+    }
+
+    #[test]
+    fn cached_definition_preserves_visibility_and_resolved_generic_bounds() {
+        let original_file_id = 17;
+        let restored_file_id = 91;
+        let definition = generic_struct_definition(Visibility::Private, original_file_id);
+        let file_map = [(original_file_id, 0)].into_iter().collect();
+
+        let cached = CachedDefinition::from_definition(&definition, &file_map);
+        let restored = cached.to_definition(&[restored_file_id]);
+        let generics = restored.body.generics().unwrap();
+        let generic = &generics[0];
+
+        assert_eq!(
+            (
+                restored.visibility,
+                restored.name_span.unwrap().file_id,
+                generic.span.file_id,
+                generic.bounds().next().unwrap().get_span().file_id,
+                generic.resolved_bounds().unwrap().next().cloned(),
+            ),
+            (
+                Visibility::Private,
+                restored_file_id,
+                restored_file_id,
+                restored_file_id,
+                Some(Type::Nominal {
+                    id: Symbol::from_raw("prelude.Comparable"),
+                    params: Vec::new(),
+                }),
+            )
+        );
     }
 
     #[test]

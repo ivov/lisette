@@ -132,14 +132,14 @@ impl InferCtx<'_> {
     }
 
     pub(crate) fn check_break_in_defer_block(&mut self, span: Span) {
-        if self.scopes.is_inside_defer_block() && self.scopes.defer_block_loop_depth() == 0 {
+        if self.scopes.is_inside_defer_block() && self.scopes.loop_depth() == 0 {
             self.sink
                 .push(diagnostics::infer::break_in_defer_block(span));
         }
     }
 
     pub(crate) fn check_continue_in_defer_block(&mut self, span: Span) {
-        if self.scopes.is_inside_defer_block() && self.scopes.defer_block_loop_depth() == 0 {
+        if self.scopes.is_inside_defer_block() && self.scopes.loop_depth() == 0 {
             self.sink
                 .push(diagnostics::infer::continue_in_defer_block(span));
         }

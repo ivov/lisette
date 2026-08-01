@@ -192,12 +192,7 @@ fn resolve_in_entries(store: &Store, entries: &[Entry], outer: &Type, name: &str
 
 struct Candidate {
     declaring_type: Symbol,
-    detail: CandidateDetail,
-}
-
-enum CandidateDetail {
-    Field { ty: Type, visibility: Visibility },
-    Method { ty: Type },
+    kind: MemberKind,
 }
 
 /// The field or method a type declares under `name`. A method shadows a
@@ -210,7 +205,7 @@ fn entry_candidate(store: &Store, ty: &Type, name: &str) -> Option<Candidate> {
         let method_ty = methods.get(name)?.clone();
         return Some(Candidate {
             declaring_type: Symbol::from_raw(id),
-            detail: CandidateDetail::Method { ty: method_ty },
+            kind: MemberKind::Method { ty: method_ty },
         });
     }
 
@@ -219,7 +214,7 @@ fn entry_candidate(store: &Store, ty: &Type, name: &str) -> Option<Candidate> {
     {
         return Some(Candidate {
             declaring_type: Symbol::from_raw(id),
-            detail: CandidateDetail::Method {
+            kind: MemberKind::Method {
                 ty: instantiate_method(store, ty, method_ty),
             },
         });
@@ -231,7 +226,7 @@ fn entry_candidate(store: &Store, ty: &Type, name: &str) -> Option<Candidate> {
     {
         return Some(Candidate {
             declaring_type: Symbol::from_raw(id),
-            detail: CandidateDetail::Field {
+            kind: MemberKind::Field {
                 ty: instantiate_field(store, ty, &field.ty),
                 visibility: field.visibility,
             },
@@ -242,12 +237,12 @@ fn entry_candidate(store: &Store, ty: &Type, name: &str) -> Option<Candidate> {
 }
 
 fn build_member(outer: &Type, entry: &Entry, candidate: &Candidate) -> ResolvedMember {
-    let kind = match &candidate.detail {
-        CandidateDetail::Field { ty, visibility } => MemberKind::Field {
+    let kind = match &candidate.kind {
+        MemberKind::Field { ty, visibility } => MemberKind::Field {
             ty: ty.clone(),
             visibility: *visibility,
         },
-        CandidateDetail::Method { ty } => {
+        MemberKind::Method { ty } => {
             // Only promoted methods are re-pointed; a depth-0 receiver is already
             // the outer type, and rewriting it would break generics. A promoted
             // method stays pointer-only when its receiver is a pointer and no

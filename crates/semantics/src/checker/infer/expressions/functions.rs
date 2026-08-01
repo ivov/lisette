@@ -155,7 +155,7 @@ impl InferCtx<'_> {
         }
 
         if name == "main"
-            && store.project_kind == ProjectKind::Binary
+            && self.project_kind == ProjectKind::Binary
             && self.cursor.module_id == ENTRY_MODULE_ID
             && (!params.is_empty() || return_annotation != Annotation::Unknown)
         {

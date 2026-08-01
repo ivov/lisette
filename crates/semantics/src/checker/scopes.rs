@@ -8,9 +8,6 @@ use syntax::types::{Symbol, Type};
 pub struct DepthCounter(usize);
 
 impl DepthCounter {
-    fn get(&self) -> usize {
-        self.0
-    }
     pub(crate) fn increment(&mut self) {
         self.0 += 1;
     }
@@ -22,14 +19,6 @@ impl DepthCounter {
     }
     pub(crate) fn is_active(&self) -> bool {
         self.0 > 0
-    }
-    fn reset(&mut self) -> usize {
-        let prev = self.0;
-        self.0 = 0;
-        prev
-    }
-    fn restore(&mut self, depth: usize) {
-        self.0 = depth;
     }
 }
 
@@ -88,6 +77,12 @@ pub struct RecoverBlockContext {
     pub(crate) entry_loop_depth: usize,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) enum LoopContext {
+    Statement,
+    Value(Type),
+}
+
 #[derive(Debug, Clone, Default)]
 enum PropagationContext {
     #[default]
@@ -113,8 +108,7 @@ enum TestContext {
 /// Traversal state inherited by nested lexical scopes and restored on pop.
 #[derive(Debug, Clone, Default)]
 struct InheritedContext {
-    loop_break_type: Option<Type>,
-    loop_depth: DepthCounter,
+    loops: Vec<LoopContext>,
     defer_block_depth: DepthCounter,
     negation_depth: DepthCounter,
     invariant_depth: DepthCounter,
@@ -139,8 +133,13 @@ struct ScopedValue {
 
 #[derive(Debug, Clone, Default)]
 struct GenericContext {
-    type_params: HashMap<String, usize>,
-    trait_bounds: HashMap<Symbol, Vec<Type>>,
+    parameters: HashMap<String, GenericParameter>,
+}
+
+#[derive(Debug, Clone)]
+struct GenericParameter {
+    index: usize,
+    bounds: Option<(Symbol, Vec<Type>)>,
 }
 
 #[derive(Debug, Clone)]
@@ -307,32 +306,41 @@ impl Scopes {
 
     /// Look up a type parameter by walking the scope stack from top to bottom.
     pub(crate) fn lookup_type_param(&self, name: &str) -> Option<usize> {
-        for scope in self.stack.iter().rev() {
-            if let Some(idx) = scope
+        self.stack.iter().rev().find_map(|scope| {
+            scope
                 .generics
-                .as_ref()
-                .and_then(|generics| generics.type_params.get(name))
-            {
-                return Some(*idx);
-            }
-        }
-        None
+                .as_ref()?
+                .parameters
+                .get(name)
+                .map(|parameter| parameter.index)
+        })
     }
 
     pub(crate) fn insert_type_param(&mut self, name: String, index: usize) {
-        self.current_mut()
-            .generics_mut()
-            .type_params
-            .insert(name, index);
+        self.current_mut().generics_mut().parameters.insert(
+            name,
+            GenericParameter {
+                index,
+                bounds: None,
+            },
+        );
     }
 
     pub(crate) fn insert_trait_bound(&mut self, parameter: Symbol, bound: Type) {
-        let bounds = self
+        let name = parameter.last_segment().to_string();
+        let generic = self
             .current_mut()
             .generics_mut()
-            .trait_bounds
-            .entry(parameter)
-            .or_default();
+            .parameters
+            .get_mut(&name)
+            .expect("a generic parameter must be in scope before recording its bounds");
+        let (existing_parameter, bounds) = generic
+            .bounds
+            .get_or_insert_with(|| (parameter.clone(), Vec::new()));
+        assert_eq!(
+            existing_parameter, &parameter,
+            "one generic parameter cannot have multiple qualified identities"
+        );
         if !bounds.contains(&bound) {
             bounds.push(bound);
         }
@@ -430,10 +438,12 @@ impl Scopes {
         for scope in &self.stack {
             if let Some(generics) = &scope.generics {
                 all_bounds.retain(|parameter, _| {
-                    !generics.type_params.contains_key(parameter.last_segment())
+                    !generics.parameters.contains_key(parameter.last_segment())
                 });
-                for (key, value) in &generics.trait_bounds {
-                    all_bounds.insert(key.clone(), value.clone());
+                for parameter in generics.parameters.values() {
+                    if let Some((qualified, bounds)) = &parameter.bounds {
+                        all_bounds.insert(qualified.clone(), bounds.clone());
+                    }
                 }
             }
         }
@@ -442,23 +452,18 @@ impl Scopes {
 
     pub(crate) fn for_each_bound_on_param<F: FnMut(&Type)>(&self, param_name: &str, mut visit: F) {
         for scope in self.stack.iter().rev() {
-            let introduces = scope
+            if let Some(parameter) = scope
                 .generics
                 .as_ref()
-                .is_some_and(|generics| generics.type_params.contains_key(param_name));
-            if !introduces {
-                continue;
-            }
-            if let Some(generics) = &scope.generics {
-                for (key, types) in &generics.trait_bounds {
-                    if key.last_segment() == param_name {
-                        for ty in types {
-                            visit(ty);
-                        }
+                .and_then(|generics| generics.parameters.get(param_name))
+            {
+                if let Some((_, bounds)) = &parameter.bounds {
+                    for bound in bounds {
+                        visit(bound);
                     }
                 }
+                return;
             }
-            return;
         }
     }
 
@@ -483,28 +488,31 @@ impl Scopes {
         }
     }
 
-    pub(crate) fn increment_loop_depth(&mut self) {
-        self.current_mut().inherited.loop_depth.increment();
+    pub(crate) fn enter_loop(&mut self, context: LoopContext) {
+        self.current_mut().inherited.loops.push(context);
     }
 
-    pub(crate) fn decrement_loop_depth(&mut self) {
-        self.current_mut().inherited.loop_depth.decrement();
+    pub(crate) fn exit_loop(&mut self) {
+        self.current_mut()
+            .inherited
+            .loops
+            .pop()
+            .expect("a loop must be entered before it is exited");
     }
 
     pub(crate) fn is_inside_loop(&self) -> bool {
-        self.current().inherited.loop_depth.is_active()
+        !self.current().inherited.loops.is_empty()
     }
 
     pub(crate) fn loop_depth(&self) -> usize {
-        self.current().inherited.loop_depth.get()
-    }
-
-    pub(crate) fn replace_loop_break_type(&mut self, ty: Option<Type>) -> Option<Type> {
-        std::mem::replace(&mut self.current_mut().inherited.loop_break_type, ty)
+        self.current().inherited.loops.len()
     }
 
     pub(crate) fn loop_break_type(&self) -> Option<&Type> {
-        self.current().inherited.loop_break_type.as_ref()
+        match self.current().inherited.loops.last() {
+            Some(LoopContext::Value(ty)) => Some(ty),
+            Some(LoopContext::Statement) | None => None,
+        }
     }
 
     pub(crate) fn increment_defer_block_depth(&mut self) {
@@ -519,10 +527,6 @@ impl Scopes {
         self.current().inherited.defer_block_depth.is_active()
     }
 
-    pub(crate) fn defer_block_loop_depth(&self) -> usize {
-        self.current().inherited.loop_depth.get()
-    }
-
     pub(crate) fn increment_negation_depth(&mut self) {
         self.current_mut().inherited.negation_depth.increment();
     }
@@ -535,12 +539,12 @@ impl Scopes {
         self.current().inherited.negation_depth.is_active()
     }
 
-    pub(crate) fn reset_loop_depth(&mut self) -> usize {
-        self.current_mut().inherited.loop_depth.reset()
+    pub(crate) fn take_loops(&mut self) -> Vec<LoopContext> {
+        std::mem::take(&mut self.current_mut().inherited.loops)
     }
 
-    pub(crate) fn restore_loop_depth(&mut self, depth: usize) {
-        self.current_mut().inherited.loop_depth.restore(depth);
+    pub(crate) fn restore_loops(&mut self, loops: Vec<LoopContext>) {
+        self.current_mut().inherited.loops = loops;
     }
 
     pub(crate) fn replace_use_context(&mut self, context: UseContext) -> UseContext {
