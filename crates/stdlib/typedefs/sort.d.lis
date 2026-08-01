@@ -222,8 +222,10 @@ impl Float64Slice {
   fn Search(self, x: float64) -> int
 
   /// Sort is a convenience method: x.Sort() calls Sort(x).
-  fn Sort(self)
+  #[go(value_method_set)]
+  fn Sort(self: Ref<Float64Slice>)
 
+  #[go(value_method_set)]
   fn Swap(self: Ref<Float64Slice>, i: int, j: int)
 }
 
@@ -236,8 +238,10 @@ impl IntSlice {
   fn Search(self, x: int) -> int
 
   /// Sort is a convenience method: x.Sort() calls Sort(x).
-  fn Sort(self)
+  #[go(value_method_set)]
+  fn Sort(self: Ref<IntSlice>)
 
+  #[go(value_method_set)]
   fn Swap(self: Ref<IntSlice>, i: int, j: int)
 }
 
@@ -250,7 +254,9 @@ impl StringSlice {
   fn Search(self, x: string) -> int
 
   /// Sort is a convenience method: x.Sort() calls Sort(x).
-  fn Sort(self)
+  #[go(value_method_set)]
+  fn Sort(self: Ref<StringSlice>)
 
+  #[go(value_method_set)]
   fn Swap(self: Ref<StringSlice>, i: int, j: int)
 }

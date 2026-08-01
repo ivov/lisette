@@ -690,6 +690,7 @@ impl Value {
   /// 
   /// It panics if v's Kind is not a [Slice], or if n is negative or too large to
   /// allocate the memory, or if [Value.CanSet] returns false.
+  #[go(value_method_set)]
   fn Grow(self: Ref<Value>, n: int)
 
   /// Index returns v's i'th element.
@@ -874,36 +875,43 @@ impl Value {
   /// It panics if [Value.CanSet] returns false.
   /// As in Go, x's value must be assignable to v's type and
   /// must not be derived from an unexported field.
+  #[go(value_method_set)]
   fn Set(self: Ref<Value>, x: Value)
 
   /// SetBool sets v's underlying value.
   /// It panics if v's Kind is not [Bool] or if [Value.CanSet] returns false.
+  #[go(value_method_set)]
   fn SetBool(self: Ref<Value>, x: bool)
 
   /// SetBytes sets v's underlying value.
   /// It panics if v's underlying value is not a slice of bytes
   /// or if [Value.CanSet] returns false.
+  #[go(value_method_set)]
   fn SetBytes(self: Ref<Value>, x: Slice<byte>)
 
   /// SetCap sets v's capacity to n.
   /// It panics if v's Kind is not [Slice], or if n is smaller than the length or
   /// greater than the capacity of the slice,
   /// or if [Value.CanSet] returns false.
+  #[go(value_method_set)]
   fn SetCap(self: Ref<Value>, n: int)
 
   /// SetComplex sets v's underlying value to x.
   /// It panics if v's Kind is not [Complex64] or [Complex128],
   /// or if [Value.CanSet] returns false.
+  #[go(value_method_set)]
   fn SetComplex(self: Ref<Value>, x: complex128)
 
   /// SetFloat sets v's underlying value to x.
   /// It panics if v's Kind is not [Float32] or [Float64],
   /// or if [Value.CanSet] returns false.
+  #[go(value_method_set)]
   fn SetFloat(self: Ref<Value>, x: float64)
 
   /// SetInt sets v's underlying value to x.
   /// It panics if v's Kind is not [Int], [Int8], [Int16], [Int32], or [Int64],
   /// or if [Value.CanSet] returns false.
+  #[go(value_method_set)]
   fn SetInt(self: Ref<Value>, x: int64)
 
   /// SetIterKey assigns to v the key of iter's current map entry.
@@ -911,6 +919,7 @@ impl Value {
   /// As in Go, the key must be assignable to v's type and
   /// must not be derived from an unexported field.
   /// It panics if [Value.CanSet] returns false.
+  #[go(value_method_set)]
   fn SetIterKey(self: Ref<Value>, iter: Ref<MapIter>)
 
   /// SetIterValue assigns to v the value of iter's current map entry.
@@ -918,12 +927,14 @@ impl Value {
   /// As in Go, the value must be assignable to v's type and
   /// must not be derived from an unexported field.
   /// It panics if [Value.CanSet] returns false.
+  #[go(value_method_set)]
   fn SetIterValue(self: Ref<Value>, iter: Ref<MapIter>)
 
   /// SetLen sets v's length to n.
   /// It panics if v's Kind is not [Slice], or if n is negative or
   /// greater than the capacity of the slice,
   /// or if [Value.CanSet] returns false.
+  #[go(value_method_set)]
   fn SetLen(self: Ref<Value>, n: int)
 
   /// SetMapIndex sets the element associated with key in the map v to elem.
@@ -937,19 +948,23 @@ impl Value {
   /// SetPointer sets the [unsafe.Pointer] value v to x.
   /// It panics if v's Kind is not [UnsafePointer]
   /// or if [Value.CanSet] returns false.
+  #[go(value_method_set)]
   fn SetPointer(self: Ref<Value>, x: Unknown)
 
   /// SetString sets v's underlying value to x.
   /// It panics if v's Kind is not [String] or if [Value.CanSet] returns false.
+  #[go(value_method_set)]
   fn SetString(self: Ref<Value>, x: string)
 
   /// SetUint sets v's underlying value to x.
   /// It panics if v's Kind is not [Uint], [Uintptr], [Uint8], [Uint16], [Uint32], or [Uint64],
   /// or if [Value.CanSet] returns false.
+  #[go(value_method_set)]
   fn SetUint(self: Ref<Value>, x: uint64)
 
   /// SetZero sets v to be the zero value of v's type.
   /// It panics if [Value.CanSet] returns false.
+  #[go(value_method_set)]
   fn SetZero(self: Ref<Value>)
 
   /// Slice returns v[i:j].

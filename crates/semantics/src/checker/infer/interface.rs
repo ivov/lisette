@@ -61,6 +61,30 @@ fn method_comma_ok(store: &Store, type_id: &str, method: &str) -> bool {
 }
 
 impl InferCtx<'_> {
+    fn method_in_value_method_set(&self, receiver: &Type, method: &str) -> bool {
+        let store = self.store;
+        let resolved = store.deep_resolve_alias(&receiver.strip_refs().resolve_in(&self.env));
+        let Some(id) = resolved.get_qualified_id() else {
+            return false;
+        };
+        let owner = if store.get_definition(&format!("{id}.{method}")).is_some() {
+            id.to_string()
+        } else {
+            match crate::checker::promotion::resolve_selector(store, &resolved, method) {
+                crate::checker::promotion::Resolution::Found(member) => {
+                    member.declaring_type.to_string()
+                }
+                _ => return false,
+            }
+        };
+        if !owner.starts_with(GO_IMPORT_PREFIX) {
+            return false;
+        }
+        store
+            .get_definition(&format!("{owner}.{method}"))
+            .is_some_and(|def| def.go_hints().iter().any(|h| h == "value_method_set"))
+    }
+
     pub(crate) fn check_concrete_bound(&mut self, ty: &Type, bound: &Type, span: &Span) {
         let bound = self.store.deep_resolve_alias(bound);
         let Type::Nominal { id, params, .. } = bound else {
@@ -306,6 +330,7 @@ impl InferCtx<'_> {
                 };
                 if let Type::Function(f) = func
                     && f.params.first().is_some_and(|param| param.ty.is_ref())
+                    && !self.method_in_value_method_set(check.receiver, impl_name)
                 {
                     check.found.push(impl_name.to_string());
                 }

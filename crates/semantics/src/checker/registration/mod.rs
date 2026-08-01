@@ -213,6 +213,7 @@ const KNOWN_GO_HINTS: &[&str] = &[
     "hidden_fields",
     "sentinel_minus_one",
     "unexported",
+    "value_method_set",
     "zero_safe",
 ];
 

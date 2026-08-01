@@ -290,8 +290,12 @@ func (a *MutationAnalysis) recordCallWrites(fn *ssa.Function, common *ssa.CallCo
 		}
 		return
 	}
-	// A dynamic call has no body to consult, and a bodiless callee summarizes as
-	// writing nothing. Assuming otherwise for either was measured and rejected.
+	if common.IsInvoke() {
+		if isReceiverMutationAxiom(common.Method) {
+			markRoots(fn, common.Value, summary)
+		}
+		return
+	}
 	callee := common.StaticCallee()
 	if callee == nil {
 		return
@@ -302,6 +306,13 @@ func (a *MutationAnalysis) recordCallWrites(fn *ssa.Function, common *ssa.CallCo
 			resumeWalk(fn, common.Args[index], summary, mode)
 		}
 	}
+}
+
+func isReceiverMutationAxiom(method *types.Func) bool {
+	if method == nil || method.Pkg() == nil {
+		return false
+	}
+	return method.Pkg().Path() == "sort" && qualifiedFunctionName(method) == "Interface.Swap"
 }
 
 func markRoots(fn *ssa.Function, value ssa.Value, summary *mutationSummary) {

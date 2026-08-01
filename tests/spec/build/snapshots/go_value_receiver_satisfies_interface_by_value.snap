@@ -1,0 +1,20 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"sort"
+)
+
+func sortIt(i sort.Interface) {
+	sort.Sort(i)
+}
+
+func main() {
+	s := sort.IntSlice([]int{3, 1, 2})
+	sortIt(s)
+	fmt.Println(s)
+}

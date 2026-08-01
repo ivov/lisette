@@ -3435,6 +3435,207 @@ fn main() {
 }
 
 #[test]
+fn go_value_receiver_satisfies_interface_by_value() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+import "go:sort"
+
+fn sort_it(i: sort.Interface) {
+  sort.Sort(i)
+}
+
+fn main() {
+  let s = sort.IntSlice([3, 1, 2])
+  sort_it(s)
+  fmt.Println(s)
+}
+"#,
+    );
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn go_pointer_receiver_still_needs_ref_for_interface() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:bytes"
+import "go:io"
+
+fn write_to(w: io.Writer) {
+  let _ = w
+}
+
+fn main() {
+  let b = bytes.Buffer {}
+  write_to(b)
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors()
+            .iter()
+            .any(|e| e.code_str() == Some("infer.interface_not_implemented")),
+        "Expected interface_not_implemented error, got: {:?}",
+        result.errors()
+    );
+}
+
+#[test]
+fn go_promoted_value_receiver_satisfies_interface_by_value() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+import "go:sort"
+
+struct Ranking {
+  embed sort.IntSlice,
+}
+
+fn sort_it(i: sort.Interface) {
+  sort.Sort(i)
+}
+
+fn main() {
+  let r = Ranking { IntSlice: sort.IntSlice([3, 1, 2]) }
+  sort_it(r)
+  fmt.Println(r.IntSlice)
+}
+"#,
+    );
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn go_promoted_pointer_receiver_still_needs_ref_for_interface() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:bytes"
+import "go:io"
+
+struct Sink {
+  embed bytes.Buffer,
+}
+
+fn write_to(w: io.Writer) {
+  let _ = w
+}
+
+fn main() {
+  let s = Sink { Buffer: bytes.Buffer {} }
+  write_to(s)
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors()
+            .iter()
+            .any(|e| e.code_str() == Some("infer.interface_not_implemented")),
+        "Expected interface_not_implemented error, got: {:?}",
+        result.errors()
+    );
+}
+
+#[test]
+fn value_method_set_hint_ignored_outside_go_typedefs() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub struct Counter { pub n: int }
+
+impl Counter {
+  #[go(value_method_set)]
+  fn bump(self: Ref<Counter>) { self.n += 1 }
+}
+
+interface Bumper {
+  fn bump()
+}
+
+fn use_it(b: Bumper) { b.bump() }
+
+fn main() {
+  let mut c = Counter { n: 0 }
+  use_it(c)
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors()
+            .iter()
+            .any(|e| e.code_str() == Some("infer.interface_not_implemented")),
+        "Expected interface_not_implemented error, got: {:?}",
+        result.errors()
+    );
+}
+
+#[test]
+fn go_delegated_receiver_mutation_rejected_with_immutable_binding() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:sort"
+
+fn main() {
+  let s = sort.IntSlice([3, 1, 2])
+  s.Sort()
+}
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        result
+            .errors()
+            .iter()
+            .any(|e| e.code_str() == Some("infer.immutable")),
+        "Expected immutable error, got: {:?}",
+        result.errors()
+    );
+}
+
+#[test]
+fn go_delegated_receiver_mutation_accepted_with_let_mut() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+import "go:sort"
+
+fn main() {
+  let mut s = sort.IntSlice([3, 1, 2])
+  s.Sort()
+  fmt.Println(s)
+}
+"#,
+    );
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn unused_method_with_go_import_not_emitted() {
     let mut fs = MockFileSystem::new();
     fs.add_file(

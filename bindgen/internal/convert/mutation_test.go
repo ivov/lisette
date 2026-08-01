@@ -406,6 +406,28 @@ func (h *Holder) Absorb(src []int)   { h.items = src }
 	assertMutates(t, verdicts["Absorb"])
 }
 
+func receiverMutations(t *testing.T, analysis *MutationAnalysis, pkg *packages.Package, typeName string) map[string]bool {
+	t.Helper()
+	named := pkg.Types.Scope().Lookup(typeName).(*types.TypeName).Type().(*types.Named)
+	out := map[string]bool{}
+	for i := 0; i < named.NumMethods(); i++ {
+		method := named.Method(i)
+		facts, ok := analysis.Function(method)
+		if !ok {
+			t.Fatalf("no verdict for %q", method.Name())
+		}
+		out[method.Name()] = facts.ReceiverMutates
+	}
+	return out
+}
+
+func assertReceiverMutates(t *testing.T, mutates map[string]bool, method string, want bool) {
+	t.Helper()
+	if mutates[method] != want {
+		t.Errorf("%s: ReceiverMutates = %v, want %v", method, mutates[method], want)
+	}
+}
+
 func TestMutationReportsReceiverMutates(t *testing.T) {
 	analysis, pkg := analyzeSource(t, `
 type Values map[string][]string
@@ -413,22 +435,43 @@ type Values map[string][]string
 func (v Values) Set(key, value string) { v[key] = []string{value} }
 func (v Values) Get(key string) string { return v[key][0] }
 `)
-	named := pkg.Types.Scope().Lookup("Values").(*types.TypeName).Type().(*types.Named)
-	receiverMutates := map[string]bool{}
-	for i := 0; i < named.NumMethods(); i++ {
-		method := named.Method(i)
-		facts, ok := analysis.Function(method)
-		if !ok {
-			t.Fatalf("no verdict for %q", method.Name())
-		}
-		receiverMutates[method.Name()] = facts.ReceiverMutates
-	}
-	if !receiverMutates["Set"] {
-		t.Errorf("Set: ReceiverMutates = false, want true")
-	}
-	if receiverMutates["Get"] {
-		t.Errorf("Get: ReceiverMutates = true, want false")
-	}
+	mutates := receiverMutations(t, analysis, pkg, "Values")
+	assertReceiverMutates(t, mutates, "Set", true)
+	assertReceiverMutates(t, mutates, "Get", false)
+}
+
+func TestMutationSeesSortInterfaceDelegation(t *testing.T) {
+	analysis, pkg := analyzeSource(t, `
+import "sort"
+
+type Numbers []int
+
+func (x Numbers) Len() int           { return len(x) }
+func (x Numbers) Less(i, j int) bool { return x[i] < x[j] }
+func (x Numbers) Swap(i, j int)      { x[i], x[j] = x[j], x[i] }
+func (x Numbers) Sort()              { sort.Sort(x) }
+func (x Numbers) Stable()            { sort.Stable(x) }
+func (x Numbers) Sorted() bool       { return sort.IsSorted(x) }
+`)
+	mutates := receiverMutations(t, analysis, pkg, "Numbers")
+	assertReceiverMutates(t, mutates, "Sort", true)
+	assertReceiverMutates(t, mutates, "Stable", true)
+	assertReceiverMutates(t, mutates, "Sorted", false)
+	assertReceiverMutates(t, mutates, "Len", false)
+}
+
+func TestMutationKeepsUncuratedDispatchOpaque(t *testing.T) {
+	analysis, pkg := analyzeSource(t, `
+type Sink interface{ Absorb([]int) }
+
+type Batch []int
+
+func (b Batch) Drain(s Sink) { s.Absorb(b) }
+
+func Forward(s Sink, xs []int) { s.Absorb(xs) }
+`)
+	assertReceiverMutates(t, receiverMutations(t, analysis, pkg, "Batch"), "Drain", false)
+	assertMutates(t, mutatedParams(t, analysis, pkg, "Forward"))
 }
 
 func TestIsMutableParamCombinesSignals(t *testing.T) {

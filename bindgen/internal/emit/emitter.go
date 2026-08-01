@@ -457,6 +457,9 @@ func (e *Emitter) emitMethodInImpl(result convert.ConvertResult, recvName string
 	if result.CommaOk {
 		e.buf.WriteString("  #[go(comma_ok)]\n")
 	}
+	if result.Receiver != nil && result.Receiver.Mutable && !result.Receiver.IsPointer {
+		e.buf.WriteString("  #[go(value_method_set)]\n")
+	}
 	if result.SentinelInt != nil {
 		e.buf.WriteString("  " + sentinelFlag(*result.SentinelInt) + "\n")
 	}

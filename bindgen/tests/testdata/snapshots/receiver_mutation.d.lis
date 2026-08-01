@@ -8,6 +8,8 @@ pub type Buffer
 
 pub type Counter
 
+pub struct Numbers(Slice<int>)
+
 pub struct Values(Map<string, Slice<string>>)
 
 impl Buffer {
@@ -19,7 +21,18 @@ impl Counter {
   fn Value(self) -> int
 }
 
+impl Numbers {
+  fn Len(self) -> int
+  fn Less(self, i: int, j: int) -> bool
+  #[go(value_method_set)]
+  fn Sort(self: Ref<Numbers>)
+  fn Sorted(self) -> bool
+  #[go(value_method_set)]
+  fn Swap(self: Ref<Numbers>, i: int, j: int)
+}
+
 impl Values {
   fn Get(self, key: string) -> string
+  #[go(value_method_set)]
   fn Set(self: Ref<Values>, key: string, value: string)
 }

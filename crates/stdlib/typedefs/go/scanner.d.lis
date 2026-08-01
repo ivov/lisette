@@ -74,8 +74,10 @@ impl ErrorList {
   /// Sort sorts an [ErrorList]. *[Error] entries are sorted by position,
   /// other errors are sorted by error message, and before any *[Error]
   /// entry.
-  fn Sort(self)
+  #[go(value_method_set)]
+  fn Sort(self: Ref<ErrorList>)
 
+  #[go(value_method_set)]
   fn Swap(self: Ref<ErrorList>, i: int, j: int)
 }
 

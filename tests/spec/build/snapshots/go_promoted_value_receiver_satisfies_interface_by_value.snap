@@ -1,0 +1,24 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"sort"
+)
+
+type Ranking struct {
+	sort.IntSlice
+}
+
+func sortIt(i sort.Interface) {
+	sort.Sort(i)
+}
+
+func main() {
+	r := Ranking{IntSlice: sort.IntSlice([]int{3, 1, 2})}
+	sortIt(r)
+	fmt.Println(r.IntSlice)
+}
