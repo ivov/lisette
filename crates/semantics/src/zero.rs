@@ -44,12 +44,10 @@ pub enum NoZeroReason {
 /// Predicate: does `ty` have a Lisette-side zero, constructible from `from_module`?
 /// Returns `Err(NoZero)` with a chain of field accesses to the offending leaf when
 /// no zero is available; `Ok(())` otherwise.
-#[allow(clippy::result_large_err)]
 pub fn has_zero(store: &Store, ty: &Type, from_module: &str) -> Result<(), NoZero> {
     has_zero_seen(store, ty, from_module, &mut Vec::new())
 }
 
-#[allow(clippy::result_large_err)]
 fn has_zero_seen(
     store: &Store,
     ty: &Type,
@@ -146,7 +144,6 @@ fn has_zero_seen(
 
 const MAX_ZERO_DEPTH: usize = 256;
 
-#[allow(clippy::result_large_err)]
 fn has_zero_nominal(
     store: &Store,
     id: &Symbol,
@@ -186,7 +183,6 @@ fn type_node_count(ty: &Type) -> usize {
         .sum::<usize>()
 }
 
-#[allow(clippy::result_large_err)]
 fn has_zero_nominal_fields(
     store: &Store,
     id: &Symbol,

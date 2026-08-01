@@ -71,6 +71,10 @@ format-check:
 lint:
     cargo clippy --all-targets -- -D warnings
 
+lint-satellites:
+    cd playground/wasm && cargo fmt -- --check && cargo clippy --all-targets -- -D warnings
+    cd editors/zed && cargo fmt -- --check && cargo clippy --all-targets -- -D warnings
+
 lintfix:
     cargo clippy --fix --allow-dirty --allow-staged
 

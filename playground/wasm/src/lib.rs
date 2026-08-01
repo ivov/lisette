@@ -7,10 +7,8 @@ use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
 use lisette_passes::{Analysis, analyze};
-use lisette_semantics::inference::{
-    AnalysisScope, AnalyzeInput, CompilePhase, EntryFile, ProjectKind,
-};
 use lisette_semantics::loader::MemoryLoader;
+use lisette_semantics::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile, ProjectKind};
 use lisette_syntax::ast::{Expression, IdentifierResolution, Span};
 use lisette_syntax::program::{Definition, DefinitionBody};
 use lisette_syntax::types::{Type, unqualified_name};
@@ -224,7 +222,10 @@ fn run_pipeline(
         &analysis.emit_input,
         "",
         "main",
-        lisette_emit::EmitOptions { sourcemap: false, emit_tests: false },
+        lisette_emit::EmitOptions {
+            sourcemap: false,
+            emit_tests: false,
+        },
     ) {
         Ok(files) => files,
         Err(emit_diagnostics) => {
@@ -247,7 +248,7 @@ fn offset_in_span(offset: u32, span: &Span) -> bool {
 }
 
 /// Find the deepest expression containing the byte offset.
-fn find_expression_at<'a>(items: &'a [Expression], offset: u32) -> Option<&'a Expression> {
+fn find_expression_at(items: &[Expression], offset: u32) -> Option<&Expression> {
     items.iter().find_map(|item| {
         if !offset_in_span(offset, &item.get_span()) {
             return None;
@@ -263,7 +264,7 @@ fn find_expression_at<'a>(items: &'a [Expression], offset: u32) -> Option<&'a Ex
 }
 
 /// Find which immediate child of `expression` contains `offset`.
-fn child_containing_offset<'a>(expression: &'a Expression, offset: u32) -> Option<&'a Expression> {
+fn child_containing_offset(expression: &Expression, offset: u32) -> Option<&Expression> {
     expression
         .children()
         .into_iter()
@@ -271,7 +272,7 @@ fn child_containing_offset<'a>(expression: &'a Expression, offset: u32) -> Optio
 }
 
 /// Find the deepest `Call` expression where `offset` falls in the arg region.
-fn find_enclosing_call<'a>(items: &'a [Expression], offset: u32) -> Option<&'a Expression> {
+fn find_enclosing_call(items: &[Expression], offset: u32) -> Option<&Expression> {
     items.iter().find_map(|item| {
         if !offset_in_span(offset, &item.get_span()) {
             return None;
@@ -313,8 +314,13 @@ fn get_hover_type_and_span(expression: &Expression, offset: u32) -> (Type, Span)
                 }
             }
         }
-        Expression::StructCall { field_assignments, .. } => {
-            if let Some(fa) = field_assignments.iter().find(|fa| offset_in_span(offset, &fa.name_span)) {
+        Expression::StructCall {
+            field_assignments, ..
+        } => {
+            if let Some(fa) = field_assignments
+                .iter()
+                .find(|fa| offset_in_span(offset, &fa.name_span))
+            {
                 return (fa.value.get_type(), fa.name_span);
             }
         }
@@ -338,25 +344,51 @@ fn format_hover_markdown(expression: &Expression, ty: &Type, source: &str, span:
     let hovering_whole_expr = *span == expr_span;
     if hovering_whole_expr {
         match expression {
-            Expression::Function { name, params, return_type, .. } => {
-                let params_str: Vec<String> = params.iter().map(|p| {
-                    let pname = extract_word(source, p.pattern.get_span());
-                    let pty = format!("{}", p.ty);
-                    format!("{}: {}", pname, pty)
-                }).collect();
+            Expression::Function {
+                name,
+                params,
+                return_type,
+                ..
+            } => {
+                let params_str: Vec<String> = params
+                    .iter()
+                    .map(|p| {
+                        let pname = extract_word(source, p.pattern.get_span());
+                        let pty = format!("{}", p.ty);
+                        format!("{}: {}", pname, pty)
+                    })
+                    .collect();
                 let ret = format!("{}", return_type);
-                let ret_part = if ret == "()" { String::new() } else { format!(" -> {}", ret) };
-                return format!("```lisette\nfn {}({}){}\n```", name, params_str.join(", "), ret_part);
+                let ret_part = if ret == "()" {
+                    String::new()
+                } else {
+                    format!(" -> {}", ret)
+                };
+                return format!(
+                    "```lisette\nfn {}({}){}\n```",
+                    name,
+                    params_str.join(", "),
+                    ret_part
+                );
             }
             Expression::Struct { name, fields, .. } => {
-                let fields_str: Vec<String> = fields.iter().map(|f| {
-                    format!("  {}: {}", f.name, f.ty)
-                }).collect();
-                return format!("```lisette\nstruct {} {{\n{}\n}}\n```", name, fields_str.join(",\n"));
+                let fields_str: Vec<String> = fields
+                    .iter()
+                    .map(|f| format!("  {}: {}", f.name, f.ty))
+                    .collect();
+                return format!(
+                    "```lisette\nstruct {} {{\n{}\n}}\n```",
+                    name,
+                    fields_str.join(",\n")
+                );
             }
             Expression::Enum { name, variants, .. } => {
                 let vars: Vec<String> = variants.iter().map(|v| format!("  {}", v.name)).collect();
-                return format!("```lisette\nenum {} {{\n{}\n}}\n```", name, vars.join(",\n"));
+                return format!(
+                    "```lisette\nenum {} {{\n{}\n}}\n```",
+                    name,
+                    vars.join(",\n")
+                );
             }
             _ => {}
         }
@@ -364,7 +396,12 @@ fn format_hover_markdown(expression: &Expression, ty: &Type, source: &str, span:
 
     // For identifiers, variables, parameters — show "name: Type"
     let word = extract_word(source, *span);
-    if !word.is_empty() && word.chars().next().map_or(false, |c| c.is_alphabetic() || c == '_') {
+    if !word.is_empty()
+        && word
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_alphabetic() || c == '_')
+    {
         return format!("```lisette\n{}: {}\n```", word, type_str);
     }
 
@@ -385,7 +422,7 @@ fn extract_word(source: &str, span: Span) -> String {
 // ─── Completion helpers ──────────────────────────────────────────────────────
 
 /// Detect if the cursor is after a dot on a module prefix or value.
-fn get_module_prefix<'a>(source: &'a str, offset: usize) -> Option<&'a str> {
+fn get_module_prefix(source: &str, offset: usize) -> Option<&str> {
     if offset == 0 || offset > source.len() {
         return None;
     }
@@ -397,9 +434,16 @@ fn get_module_prefix<'a>(source: &'a str, offset: usize) -> Option<&'a str> {
     }
     let before_dot = &trimmed[..trimmed.len() - 1].trim_end();
     // Extract the identifier before the dot
-    let start = before_dot.rfind(|c: char| !c.is_alphanumeric() && c != '_').map(|i| i + 1).unwrap_or(0);
+    let start = before_dot
+        .rfind(|c: char| !c.is_alphanumeric() && c != '_')
+        .map(|i| i + 1)
+        .unwrap_or(0);
     let prefix = &before_dot[start..];
-    if prefix.is_empty() { None } else { Some(prefix) }
+    if prefix.is_empty() {
+        None
+    } else {
+        Some(prefix)
+    }
 }
 
 fn definition_to_completion_kind(def: &Definition) -> &'static str {
@@ -409,7 +453,11 @@ fn definition_to_completion_kind(def: &Definition) -> &'static str {
         DefinitionBody::Interface { .. } => "type",
         DefinitionBody::TypeAlias { .. } => "type",
         DefinitionBody::Value { .. } => {
-            if matches!(&def.ty, Type::Function(_)) { "function" } else { "variable" }
+            if matches!(&def.ty, Type::Function(_)) {
+                "function"
+            } else {
+                "variable"
+            }
         }
     }
 }
@@ -437,8 +485,13 @@ fn build_dot_completions(
         if let Expression::ModuleImport { name, alias, .. } = item {
             let effective_alias = match alias {
                 Some(lisette_syntax::ast::ImportAlias::Named(a, _)) => a.to_string(),
-                _ => name.strip_prefix("go:").unwrap_or(name)
-                    .split('/').next_back().unwrap_or(name).to_string(),
+                _ => name
+                    .strip_prefix("go:")
+                    .unwrap_or(name)
+                    .split('/')
+                    .next_back()
+                    .unwrap_or(name)
+                    .to_string(),
             };
             if effective_alias == prefix {
                 Some(name.to_string())
@@ -455,7 +508,8 @@ fn build_dot_completions(
         for (qname, def) in &analysis.emit_input.definitions {
             let qname_str = qname.as_str();
             // Match "module_name.X" definitions
-            if let Some(member) = qname_str.strip_prefix(module_name.as_str())
+            if let Some(member) = qname_str
+                .strip_prefix(module_name.as_str())
                 .and_then(|rest| rest.strip_prefix('.'))
             {
                 // Skip nested members (e.g. "module.Type.method")
@@ -478,45 +532,49 @@ fn build_dot_completions(
         let ty = expr.get_type();
         if let Some(tid) = type_name(&ty) {
             // Find struct fields
-            if let Some(def) = analysis.emit_input.definitions.get(tid.as_str()) {
-                if let DefinitionBody::Struct { fields, .. } = &def.body {
-                    for field in fields.iter() {
-                        items.push(JsCompletionItem {
-                            label: field.name.to_string(),
-                            kind: "field",
-                            detail: Some(format!("{}", field.ty)),
-                            insert_text: None,
-                        });
-                    }
+            if let Some(def) = analysis.emit_input.definitions.get(tid.as_str())
+                && let DefinitionBody::Struct { fields, .. } = &def.body
+            {
+                for field in fields.iter() {
+                    items.push(JsCompletionItem {
+                        label: field.name.to_string(),
+                        kind: "field",
+                        detail: Some(format!("{}", field.ty)),
+                        insert_text: None,
+                    });
                 }
             }
 
             // Find methods (definitions like "TypeName.methodName")
             let prefix_dot = format!("{}.", tid);
             for (qname, def) in &analysis.emit_input.definitions {
-                if let Some(method) = qname.as_str().strip_prefix(&prefix_dot) {
-                    if !method.contains('.') {
-                        items.push(JsCompletionItem {
-                            label: method.to_string(),
-                            kind: if matches!(def.ty, Type::Function(_)) { "method" } else { "field" },
-                            detail: Some(format!("{}", def.ty)),
-                            insert_text: None,
-                        });
-                    }
+                if let Some(method) = qname.as_str().strip_prefix(&prefix_dot)
+                    && !method.contains('.')
+                {
+                    items.push(JsCompletionItem {
+                        label: method.to_string(),
+                        kind: if matches!(def.ty, Type::Function(_)) {
+                            "method"
+                        } else {
+                            "field"
+                        },
+                        detail: Some(format!("{}", def.ty)),
+                        insert_text: None,
+                    });
                 }
             }
 
             // For enums, add variants
-            if let Some(def) = analysis.emit_input.definitions.get(tid.as_str()) {
-                if let DefinitionBody::Enum { variants, .. } = &def.body {
-                    for v in variants {
-                        items.push(JsCompletionItem {
-                            label: v.name.to_string(),
-                            kind: "enum",
-                            detail: None,
-                            insert_text: None,
-                        });
-                    }
+            if let Some(def) = analysis.emit_input.definitions.get(tid.as_str())
+                && let DefinitionBody::Enum { variants, .. } = &def.body
+            {
+                for v in variants {
+                    items.push(JsCompletionItem {
+                        label: v.name.to_string(),
+                        kind: "enum",
+                        detail: None,
+                        insert_text: None,
+                    });
                 }
             }
         }
@@ -581,7 +639,11 @@ pub fn complete(code: &str, offset: u32) -> String {
         return "[]".to_string();
     }
 
-    let items_refs: Vec<Expression> = result.analysis.emit_input.files.values()
+    let items_refs: Vec<Expression> = result
+        .analysis
+        .emit_input
+        .files
+        .values()
         .flat_map(|f| f.items.clone())
         .collect();
 
@@ -597,7 +659,9 @@ pub fn complete(code: &str, offset: u32) -> String {
         let qname_str = qname.as_str();
         // Only show definitions from the entry module (unqualified or _entry_ prefixed)
         let label = if let Some(rest) = qname_str.strip_prefix("_entry_.") {
-            if rest.contains('.') { continue; } // skip methods
+            if rest.contains('.') {
+                continue;
+            } // skip methods
             rest.to_string()
         } else if !qname_str.contains('.') {
             qname_str.to_string()
@@ -624,7 +688,11 @@ pub fn hover(code: &str, offset: u32) -> String {
         return String::new();
     }
 
-    let items: Vec<Expression> = result.analysis.emit_input.files.values()
+    let items: Vec<Expression> = result
+        .analysis
+        .emit_input
+        .files
+        .values()
         .flat_map(|f| f.items.clone())
         .collect();
 
@@ -645,12 +713,14 @@ pub fn hover(code: &str, offset: u32) -> String {
 
     // Add doc comment if available
     let mut full_markdown = markdown;
-    if let Expression::Identifier { resolution: IdentifierResolution::Definition(qname), .. } = expression {
-        if let Some(def) = result.analysis.emit_input.definitions.get(qname.as_str()) {
-            if let Some(doc) = &def.doc {
-                full_markdown.push_str(&format!("\n\n---\n\n{}", doc));
-            }
-        }
+    if let Expression::Identifier {
+        resolution: IdentifierResolution::Definition(qname),
+        ..
+    } = expression
+        && let Some(def) = result.analysis.emit_input.definitions.get(qname.as_str())
+        && let Some(doc) = &def.doc
+    {
+        full_markdown.push_str(&format!("\n\n---\n\n{}", doc));
     }
 
     let (sl, sc) = offset_to_line_col(code, span.byte_offset as usize);
@@ -681,32 +751,49 @@ pub fn goto_definition(code: &str, offset: u32) -> String {
             && offset < usage.usage_span.byte_offset + usage.usage_span.byte_length
         {
             let (sl, sc) = offset_to_line_col(code, usage.definition_span.byte_offset as usize);
-            let (el, ec) = offset_to_line_col(code, (usage.definition_span.byte_offset + usage.definition_span.byte_length) as usize);
+            let (el, ec) = offset_to_line_col(
+                code,
+                (usage.definition_span.byte_offset + usage.definition_span.byte_length) as usize,
+            );
             let def_result = JsDefinitionResult {
-                line: sl, col: sc, end_line: el, end_col: ec,
+                line: sl,
+                col: sc,
+                end_line: el,
+                end_col: ec,
             };
             return serde_json::to_string(&def_result).unwrap_or_else(|_| String::new());
         }
     }
 
     // Fall back: check if the expression has a qualified name pointing to a definition
-    let items: Vec<Expression> = result.analysis.emit_input.files.values()
+    let items: Vec<Expression> = result
+        .analysis
+        .emit_input
+        .files
+        .values()
         .flat_map(|f| f.items.clone())
         .collect();
 
-    if let Some(expression) = find_expression_at(&items, offset) {
-        if let Expression::Identifier { resolution: IdentifierResolution::Definition(qname), .. } = expression {
-            if let Some(def) = result.analysis.emit_input.definitions.get(qname.as_str()) {
-                if let Some(name_span) = def.name_span {
-                    let (sl, sc) = offset_to_line_col(code, name_span.byte_offset as usize);
-                    let (el, ec) = offset_to_line_col(code, (name_span.byte_offset + name_span.byte_length) as usize);
-                    let def_result = JsDefinitionResult {
-                        line: sl, col: sc, end_line: el, end_col: ec,
-                    };
-                    return serde_json::to_string(&def_result).unwrap_or_else(|_| String::new());
-                }
-            }
-        }
+    if let Some(expression) = find_expression_at(&items, offset)
+        && let Expression::Identifier {
+            resolution: IdentifierResolution::Definition(qname),
+            ..
+        } = expression
+        && let Some(def) = result.analysis.emit_input.definitions.get(qname.as_str())
+        && let Some(name_span) = def.name_span
+    {
+        let (sl, sc) = offset_to_line_col(code, name_span.byte_offset as usize);
+        let (el, ec) = offset_to_line_col(
+            code,
+            (name_span.byte_offset + name_span.byte_length) as usize,
+        );
+        let def_result = JsDefinitionResult {
+            line: sl,
+            col: sc,
+            end_line: el,
+            end_col: ec,
+        };
+        return serde_json::to_string(&def_result).unwrap_or_else(|_| String::new());
     }
 
     String::new()
@@ -720,7 +807,11 @@ pub fn signature_help(code: &str, offset: u32) -> String {
         return String::new();
     }
 
-    let items: Vec<Expression> = result.analysis.emit_input.files.values()
+    let items: Vec<Expression> = result
+        .analysis
+        .emit_input
+        .files
+        .values()
         .flat_map(|f| f.items.clone())
         .collect();
 
@@ -729,7 +820,12 @@ pub fn signature_help(code: &str, offset: u32) -> String {
         None => return String::new(),
     };
 
-    if let Expression::Call { expression: callee, args, .. } = call_expr {
+    if let Expression::Call {
+        expression: callee,
+        args,
+        ..
+    } = call_expr
+    {
         let callee_ty = callee.get_type();
         let callee_ty_inner = match &callee_ty {
             Type::Forall { body, .. } => body.as_ref(),
@@ -742,19 +838,30 @@ pub fn signature_help(code: &str, offset: u32) -> String {
                 Expression::DotAccess { member, .. } => member.as_str(),
                 _ => "fn",
             };
-            let param_strs: Vec<String> = f.params.iter().map(|p| match &p.name {
-                Some(name) => format!("{}: {}", name, p.ty),
-                None => p.ty.to_string(),
-            }).collect();
+            let param_strs: Vec<String> = f
+                .params
+                .iter()
+                .map(|p| match &p.name {
+                    Some(name) => format!("{}: {}", name, p.ty),
+                    None => p.ty.to_string(),
+                })
+                .collect();
             let ret_str = format!("{}", f.return_type);
-            let ret_part = if ret_str == "()" { String::new() } else { format!(" -> {}", ret_str) };
+            let ret_part = if ret_str == "()" {
+                String::new()
+            } else {
+                format!(" -> {}", ret_str)
+            };
             let label = format!("{}({}){}", callee_name, param_strs.join(", "), ret_part);
 
             // Determine active parameter by counting args whose spans end before offset
-            let active = args.iter().filter(|a| {
-                let s = a.get_span();
-                s.byte_offset + s.byte_length <= offset
-            }).count() as u32;
+            let active = args
+                .iter()
+                .filter(|a| {
+                    let s = a.get_span();
+                    s.byte_offset + s.byte_length <= offset
+                })
+                .count() as u32;
 
             let sig = JsSignatureHelp {
                 label,

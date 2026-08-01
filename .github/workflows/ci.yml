@@ -73,6 +73,7 @@ jobs:
         with:
           just: 'true'
       - run: just lint
+      - run: just lint-satellites
 
   golangci-lint:
     name: Golangci-lint

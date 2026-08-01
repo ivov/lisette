@@ -694,7 +694,6 @@ impl InferCtx<'_> {
         }
     }
 
-    #[allow(clippy::result_large_err)]
     pub(crate) fn has_zero(&self, ty: &Type, from_module: &str) -> Result<(), NoZero> {
         let store = self.store;
         crate::zero::has_zero(store, ty, from_module)

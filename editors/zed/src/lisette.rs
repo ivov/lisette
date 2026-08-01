@@ -15,7 +15,10 @@ impl zed::Extension for LisetteExtension {
         worktree: &zed::Worktree,
     ) -> Result<zed::Command> {
         let (command, args) = match LspSettings::for_worktree("lisette-lsp", worktree) {
-            Ok(settings) => match settings.binary.and_then(|b| b.path.map(|p| (p, b.arguments))) {
+            Ok(settings) => match settings
+                .binary
+                .and_then(|b| b.path.map(|p| (p, b.arguments)))
+            {
                 Some((path, args)) => (
                     path,
                     args.unwrap_or_else(|| DEFAULT_ARGS.iter().map(|s| s.to_string()).collect()),

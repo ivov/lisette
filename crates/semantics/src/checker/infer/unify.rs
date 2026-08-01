@@ -41,7 +41,7 @@ pub enum UnifyError {
     TypeMismatch,
     InfiniteType,
     ArityMismatch,
-    #[allow(clippy::box_collection)] // Intentional: shrinks Result<(), UnifyError> on hot path
+    #[expect(clippy::box_collection)] // Intentional: shrinks Result<(), UnifyError> on hot path
     Multiple(Box<Vec<UnifyError>>),
     AlreadyReported,
 }

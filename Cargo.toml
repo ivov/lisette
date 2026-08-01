@@ -27,6 +27,8 @@ description = "Little language inspired by Rust that compiles to Go"
 
 [workspace.lints.clippy]
 too_many_arguments = "forbid"
+result_large_err = "forbid"
+large_enum_variant = "forbid"
 
 [workspace.dependencies]
 serde = { version = "1.0", features = ["derive"] }

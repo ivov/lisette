@@ -519,7 +519,6 @@ impl Backend {
                 _ => return None,
             };
 
-            #[allow(deprecated)]
             Some(DocumentSymbol {
                 name: name.to_string(),
                 detail,

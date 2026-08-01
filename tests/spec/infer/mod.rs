@@ -1,8 +1,7 @@
-#[allow(unused_imports)]
 pub use crate::_harness::{
     InferResult, MockFileSystem, array_type, bool_type, byte_type, con_type, float_type,
     float32_type, fun_type, infer, infer_module, infer_with_go_typedefs, int_type, int8_type,
-    int16_type, ref_type, rune_type, slice_type, string_type, tuple_type, unit_type,
+    int16_type, ref_type, slice_type, string_type, tuple_type, unit_type,
 };
 
 mod arrays;
