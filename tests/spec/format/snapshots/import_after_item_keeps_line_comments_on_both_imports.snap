@@ -1,0 +1,11 @@
+---
+source: tests/spec/format/mod.rs
+description: |-
+  import "go:os" // for Exit
+  fn f() {}
+  import "go:fmt" // why
+---
+import "go:fmt" // why
+import "go:os" // for Exit
+
+fn f() {}

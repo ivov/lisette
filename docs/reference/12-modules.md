@@ -33,6 +33,8 @@ import "models"
 import "routes"
 ```
 
+Imports must come before every other top-level item in a file. Only comments may precede them.
+
 The path is relative to the project root. For nested modules:
 
 ```rust

@@ -8,6 +8,7 @@ use std::ops::{Deref, DerefMut};
 
 pub(crate) const MAX_TUPLE_ARITY: usize = 5;
 pub const TUPLE_FIELDS: &[&str] = &["First", "Second", "Third", "Fourth", "Fifth"];
+pub const IMPORT_AFTER_ITEM_CODE: &str = "parse.import_after_item";
 const MAX_DEPTH: u32 = 64;
 const MAX_ERRORS: usize = 50;
 const MAX_LOOKAHEAD: usize = 256;
@@ -35,6 +36,7 @@ pub struct ParseResult {
     pub ast: Vec<ast::Expression>,
     pub errors: Vec<ParseError>,
     pub file_comment: Option<std::string::String>,
+    pub truncated: bool,
 }
 
 impl ParseResult {
@@ -91,6 +93,7 @@ impl<'source> Parser<'source> {
                 ast: vec![],
                 errors: lex_result.errors,
                 file_comment: None,
+                truncated: true,
             };
         }
 
@@ -115,6 +118,7 @@ impl<'source> Parser<'source> {
 
     pub fn parse(mut self) -> ParseResult {
         let mut top_items = vec![];
+        let mut seen_non_import = false;
 
         let file_comment = self.collect_file_comments();
         self.skip_comments();
@@ -123,6 +127,16 @@ impl<'source> Parser<'source> {
             let position = self.position();
             let item = self.parse_top_item();
             if !matches!(item, ast::Expression::Unit { .. }) {
+                if let ast::Expression::ModuleImport {
+                    span, name_span, ..
+                } = &item
+                {
+                    if seen_non_import {
+                        self.error_import_after_item(*span, *name_span);
+                    }
+                } else {
+                    seen_non_import = true;
+                }
                 top_items.push(item);
             }
             self.advance_if(Semicolon);
@@ -131,10 +145,13 @@ impl<'source> Parser<'source> {
             }
         }
 
+        let truncated = !self.at_eof();
+
         ParseResult {
             ast: top_items,
             errors: self.errors,
             file_comment,
+            truncated,
         }
     }
 
@@ -1030,6 +1047,21 @@ impl<'source> Parser<'source> {
         self.errors.push(error);
     }
 
+    fn error_import_after_item(&mut self, statement: Span, path: Span) {
+        let span = Span::new(
+            statement.file_id,
+            statement.byte_offset,
+            path.end() - statement.byte_offset,
+        );
+        let error = ParseError::new("Misplaced import", span, "not allowed here")
+            .with_parse_code("import_after_item")
+            .with_help(
+                "Imports must come before every other top-level item. Move this import to the top of the file, or run `lis format` to hoist it",
+            );
+
+        self.errors.push(error);
+    }
+
     fn error_misplaced_attribute(&mut self, span: Span) {
         let error = ParseError::new(
             "Attribute not supported on target",
@@ -1267,6 +1299,102 @@ impl<'source> TokenStream<'source> {
             }
             _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod import_order_tests {
+    use super::IMPORT_AFTER_ITEM_CODE;
+    use crate::build_ast;
+
+    fn codes(source: &str) -> Vec<std::string::String> {
+        build_ast(source, 0)
+            .errors
+            .iter()
+            .map(|error| error.code.clone())
+            .collect()
+    }
+
+    #[test]
+    fn imports_before_every_other_item_are_allowed() {
+        for source in [
+            "import \"go:fmt\"\nimport _ \"go:os\"\nimport alias \"go:io\"\nfn f() {}",
+            "//! header\n\nimport \"go:fmt\"\n\nfn f() {}",
+            "// note\nimport \"go:fmt\"\n\n/// docs\nfn f() {}",
+            "import \"go:fmt\"\n\n#[test]\nfn f(t: T) {}",
+            "import \"go:fmt\"",
+        ] {
+            assert!(codes(source).is_empty(), "for source: {source:?}");
+        }
+    }
+
+    #[test]
+    fn import_after_a_definition_is_rejected() {
+        for source in [
+            "fn f() {}\nimport \"go:fmt\"",
+            "struct S {}\nimport _ \"go:fmt\"",
+            "const N: int = 1\nimport alias \"go:fmt\"",
+            "type T = int\nimport \"go:fmt\"",
+            "import \"go:os\"\nfn f() {}\nimport \"go:fmt\"",
+        ] {
+            assert_eq!(
+                codes(source),
+                [IMPORT_AFTER_ITEM_CODE],
+                "for source: {source:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn every_misplaced_import_is_reported() {
+        let source = "fn f() {}\nimport \"go:fmt\"\nimport \"go:os\"";
+        assert_eq!(
+            codes(source),
+            [IMPORT_AFTER_ITEM_CODE, IMPORT_AFTER_ITEM_CODE]
+        );
+    }
+
+    #[test]
+    fn a_misplaced_import_still_reaches_the_ast() {
+        let result = super::Parser::lex_and_parse_file("fn f() {}\nimport \"go:fmt\"", 0);
+        assert!(matches!(
+            result.ast.last(),
+            Some(crate::ast::Expression::ModuleImport { .. })
+        ));
+    }
+
+    #[test]
+    fn a_parse_stopped_by_the_error_cap_is_truncated() {
+        let mut source = String::from("fn f() {}\n");
+        for index in 0..60 {
+            source.push_str(&format!("import \"go:pkg{index}\"\n"));
+        }
+        source.push_str("fn last() {}\n");
+
+        let result = super::Parser::lex_and_parse_file(&source, 0);
+        assert!(result.truncated);
+        assert!(!result.ast.iter().any(|item| matches!(
+            item,
+            crate::ast::Expression::Function { name, .. } if name == "last"
+        )));
+    }
+
+    #[test]
+    fn a_parse_that_reaches_the_end_is_not_truncated() {
+        let result = super::Parser::lex_and_parse_file("fn f() {}\nimport \"go:fmt\"", 0);
+        assert!(!result.truncated);
+    }
+
+    #[test]
+    fn an_import_inside_a_block_keeps_its_own_error() {
+        let source = "fn f() {\n  import \"go:fmt\"\n}";
+        assert_eq!(codes(source), ["parse.syntax_error"]);
+    }
+
+    #[test]
+    fn comments_between_imports_do_not_count_as_items() {
+        let source = "import \"go:fmt\"\n// note\n\n// another note\nimport \"go:os\"\nfn f() {}";
+        assert!(codes(source).is_empty());
     }
 }
 

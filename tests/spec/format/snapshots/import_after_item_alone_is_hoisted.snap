@@ -1,0 +1,10 @@
+---
+source: tests/spec/format/mod.rs
+description: |-
+  fn main() {}
+  
+  import alias "go:fmt"
+---
+import alias "go:fmt"
+
+fn main() {}

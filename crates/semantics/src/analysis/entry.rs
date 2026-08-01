@@ -63,6 +63,7 @@ fn parse_entry_file(source: &str, mode: EntryParseMode) -> ParsedEntry {
                 ast,
                 errors,
                 file_comment,
+                ..
             } = syntax::build_ast(source, ENTRY_FILE_ID);
             let outcome = if errors.is_empty() {
                 EntryParseOutcome::Clean
@@ -89,6 +90,7 @@ fn parse_entry_file(source: &str, mode: EntryParseMode) -> ParsedEntry {
                 ast,
                 errors,
                 file_comment,
+                ..
             } = Parser::new(lex_result.tokens, source).parse();
             let outcome = if errors.is_empty() {
                 EntryParseOutcome::Clean

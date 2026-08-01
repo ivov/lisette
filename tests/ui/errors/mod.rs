@@ -1048,6 +1048,24 @@ impl Foo {
 }
 
 #[test]
+fn parse_import_after_item() {
+    let input = r#"
+import "go:os"
+
+fn main() {}
+
+import "go:fmt"
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_import_after_item_with_line_comment() {
+    let input = "fn main() {}\n\nimport \"go:fmt\" // why";
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
 fn parse_misplaced_file_comment_after_import() {
     let input = r#"
 import "some_module"

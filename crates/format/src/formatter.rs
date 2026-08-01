@@ -15,6 +15,11 @@ struct Import<'a> {
     expression: &'a Expression,
     name: &'a str,
     alias: Option<&'a ImportAlias>,
+    hoisted: bool,
+    end: u32,
+    next_item: u32,
+    leading: Option<Document<'a>>,
+    trailing: Option<Document<'a>>,
 }
 
 impl Import<'_> {
@@ -42,12 +47,25 @@ impl<'a> Formatter<'a> {
     pub(crate) fn module(&mut self, top_level_items: &'a [Expression]) -> Document<'a> {
         let mut imports = Vec::new();
         let mut rest = Vec::new();
-        for expression in top_level_items {
-            if let Expression::ModuleImport { name, alias, .. } = expression {
+        for (index, expression) in top_level_items.iter().enumerate() {
+            if let Expression::ModuleImport {
+                name,
+                alias,
+                name_span,
+                ..
+            } = expression
+            {
                 imports.push(Import {
                     expression,
                     name,
                     alias: alias.as_ref(),
+                    hoisted: !rest.is_empty(),
+                    end: name_span.end(),
+                    next_item: top_level_items
+                        .get(index + 1)
+                        .map_or(u32::MAX, Self::item_leading_edge),
+                    leading: None,
+                    trailing: None,
                 });
             } else {
                 rest.push(expression);
@@ -119,17 +137,7 @@ impl<'a> Formatter<'a> {
             return Document::Sequence(vec![]);
         }
 
-        let mut leading_comments: Option<Document<'a>> = None;
-        let mut leading_has_blank_line = false;
-
-        for (i, import) in imports.iter().enumerate() {
-            let start = import.expression.get_span().byte_offset;
-            let comments = self.comments.take_comments_and_blank_lines_before(start);
-            if i == 0 && comments.document.is_some() {
-                leading_comments = comments.document;
-                leading_has_blank_line = comments.has_blank_line;
-            }
-        }
+        let header = self.take_import_comments(&mut imports);
 
         imports.sort_by(|left, right| {
             (!left.is_go(), left.sort_path(), left.name).cmp(&(
@@ -149,21 +157,67 @@ impl<'a> Formatter<'a> {
                 import_docs.push(Document::Newline);
             }
             previous_is_go = Some(import.is_go());
-            import_docs.push(self.definition(import.expression));
+            if let Some(leading) = import.leading {
+                import_docs.push(leading.force_break());
+                import_docs.push(Document::Newline);
+            }
+            import_docs.push(Self::import_line(import.name, import.alias));
+            if let Some(trailing) = import.trailing {
+                import_docs.push(Document::str(" "));
+                import_docs.push(trailing);
+            }
         }
         let imports_doc = concat(import_docs);
 
-        match leading_comments {
-            Some(c) => {
-                let separator = if leading_has_blank_line {
-                    concat([Document::Newline, Document::Newline])
-                } else {
-                    Document::Newline
-                };
-                c.force_break().append(separator).append(imports_doc)
-            }
+        match header {
+            Some(header) => header
+                .force_break()
+                .append(concat([Document::Newline, Document::Newline]))
+                .append(imports_doc),
             None => imports_doc,
         }
+    }
+
+    fn take_import_comments(&mut self, imports: &mut [Import<'a>]) -> Option<Document<'a>> {
+        for import in imports.iter_mut() {
+            import.trailing = self
+                .comments
+                .take_trailing_comments_after(import.end, import.next_item);
+        }
+
+        let mut header = None;
+
+        if !imports[0].hoisted {
+            let leading = self
+                .comments
+                .take_leading_comments_before(imports[0].expression.get_span().byte_offset);
+            header = leading.header;
+            imports[0].leading = leading.attached;
+        }
+
+        for import in imports.iter_mut().skip(1) {
+            if import.hoisted {
+                continue;
+            }
+            let start = import.expression.get_span().byte_offset;
+            import.leading = self.comments.take_comments_before(start);
+        }
+
+        header
+    }
+
+    fn import_line(name: &str, alias: Option<&ImportAlias>) -> Document<'a> {
+        let alias_doc = match alias {
+            Some(ImportAlias::Named(alias, _)) => Document::string(alias.to_string()).append(" "),
+            Some(ImportAlias::Blank(_)) => Document::str("_ "),
+            None => Document::str(""),
+        };
+
+        Document::str("import ")
+            .append(alias_doc)
+            .append("\"")
+            .append(Document::string(name.to_string()))
+            .append("\"")
     }
 
     fn definition(&mut self, expression: &'a Expression) -> Document<'a> {
@@ -268,20 +322,7 @@ impl<'a> Formatter<'a> {
             ),
 
             Expression::ModuleImport { name, alias, .. } => {
-                let alias_doc = match alias {
-                    Some(ImportAlias::Named(a, _)) => Document::string(a.to_string()).append(" "),
-                    Some(ImportAlias::Blank(_)) => Document::str("_ "),
-                    None => Document::str(""),
-                };
-
-                (
-                    Visibility::Private,
-                    Document::str("import ")
-                        .append(alias_doc)
-                        .append("\"")
-                        .append(Document::string(name.to_string()))
-                        .append("\""),
-                )
+                (Visibility::Private, Self::import_line(name, alias.as_ref()))
             }
 
             _ => (Visibility::Private, self.expression(expression)),

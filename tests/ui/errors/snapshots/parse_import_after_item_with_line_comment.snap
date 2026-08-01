@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Misplaced import
+   ╭─[test.lis:3:1]
+ 2 │ 
+ 3 │ import "go:fmt" // why
+   · ───────┬───────
+   ·        ╰── not allowed here
+   ╰────
+  help: Imports must come before every other top-level item. Move this import to the top of the file, or run `lis format` to hoist it · code: [parse.import_after_item]

@@ -7,7 +7,7 @@ pub(crate) use formatter::Formatter;
 use comments::Comments;
 use syntax::ParseError;
 use syntax::lex::Lexer;
-use syntax::parse::Parser;
+use syntax::parse::{IMPORT_AFTER_ITEM_CODE, Parser};
 
 const MAX_LINE_WIDTH: isize = 80;
 const INDENT_WIDTH: isize = 2;
@@ -20,7 +20,13 @@ pub fn format_source(source: &str) -> Result<String, Vec<ParseError>> {
 
     let comments = Comments::from_lexed(&lex_result.tokens, lex_result.blank_lines, source);
     let parse_result = Parser::new(lex_result.tokens, source).parse();
-    if parse_result.failed() {
+
+    if parse_result.truncated
+        || parse_result
+            .errors
+            .iter()
+            .any(|error| error.code != IMPORT_AFTER_ITEM_CODE)
+    {
         return Err(parse_result.errors);
     }
 

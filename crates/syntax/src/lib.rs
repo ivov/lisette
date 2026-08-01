@@ -44,6 +44,7 @@ pub fn build_ast(source: &str, file_id: u32) -> AstBuildResult {
                 .with_parse_code("file_too_large"),
             ],
             file_comment: None,
+            truncated: true,
         };
     }
 
@@ -53,6 +54,7 @@ pub fn build_ast(source: &str, file_id: u32) -> AstBuildResult {
             ast: vec![],
             errors: parse_result.errors,
             file_comment: None,
+            truncated: true,
         };
     }
 

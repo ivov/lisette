@@ -1,0 +1,10 @@
+---
+source: tests/spec/format/mod.rs
+description: |-
+  import "go:a"; import "go:b" // b
+  fn main() {}
+---
+import "go:a"
+import "go:b" // b
+
+fn main() {}

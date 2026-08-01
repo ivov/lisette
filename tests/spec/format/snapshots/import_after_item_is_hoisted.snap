@@ -1,0 +1,20 @@
+---
+source: tests/spec/format/mod.rs
+description: |-
+  // leading note
+  import "go:os"
+  
+  // section note
+  fn main() {}
+  
+  // note before late import
+  import "go:fmt"
+---
+import "go:fmt"
+// leading note
+import "go:os"
+
+// section note
+fn main() {}
+
+// note before late import

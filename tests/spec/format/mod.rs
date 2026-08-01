@@ -544,6 +544,52 @@ fn import_user_grouping_overridden() {
 }
 
 #[test]
+fn import_comment_between_imports() {
+    assert_format_snapshot!(
+        "// http helpers\nimport \"go:net/http\"\n// json helpers\nimport \"go:encoding/json\"\n\nfn main() {}"
+    );
+}
+
+#[test]
+fn import_comment_on_import_line() {
+    assert_format_snapshot!(
+        "import \"go:os\" // needed for Exit\nimport \"go:fmt\"\n\nfn main() {}"
+    );
+}
+
+#[test]
+fn import_after_item_is_hoisted() {
+    assert_format_snapshot!(
+        "// leading note\nimport \"go:os\"\n\n// section note\nfn main() {}\n\n// note before late import\nimport \"go:fmt\""
+    );
+}
+
+#[test]
+fn import_after_item_alone_is_hoisted() {
+    assert_format_snapshot!("fn main() {}\n\nimport alias \"go:fmt\"");
+}
+
+#[test]
+fn import_after_item_keeps_its_line_comment() {
+    assert_format_snapshot!("fn main() {}\n\nimport \"go:fmt\" // why");
+}
+
+#[test]
+fn import_line_comment_stays_with_its_own_import() {
+    assert_format_snapshot!("import \"go:a\"; import \"go:b\" // b\nfn main() {}");
+}
+
+#[test]
+fn import_split_across_lines_keeps_its_line_comment() {
+    assert_format_snapshot!("import\n  \"go:fmt\" // why\nfn main() {}");
+}
+
+#[test]
+fn import_after_item_keeps_line_comments_on_both_imports() {
+    assert_format_snapshot!("import \"go:os\" // for Exit\nfn f() {}\nimport \"go:fmt\" // why");
+}
+
+#[test]
 fn import_only_local() {
     assert_format_snapshot!("import \"display\"\nimport \"commands\"\nimport \"store\"");
 }

@@ -42,6 +42,11 @@ pub(crate) struct SplitComments<'a> {
     pub(crate) has_blank_before_leading: bool,
 }
 
+pub(crate) struct LeadingComments<'a> {
+    pub(crate) header: Option<Document<'a>>,
+    pub(crate) attached: Option<Document<'a>>,
+}
+
 impl<'a> SplitComments<'a> {
     pub(crate) fn leading(document: Option<Document<'a>>) -> Self {
         Self {
@@ -156,6 +161,46 @@ impl<'a> Comments<'a> {
     pub fn take_split_by_newline_after(&mut self, anchor: u32, before: u32) -> SplitComments<'a> {
         let source = self.source;
         self.take_split_before(before, |start| Self::newline_between(source, anchor, start))
+    }
+
+    pub(crate) fn take_leading_comments_before(&mut self, position: u32) -> LeadingComments<'a> {
+        let events = self.take_line_trivia_before(position);
+        let split = events
+            .iter()
+            .rposition(|event| matches!(event, LineTrivia::BlankLine(_)))
+            .map_or(0, |index| index + 1);
+        let (header, attached) = events.split_at(split);
+        let header_end = header
+            .iter()
+            .rposition(|event| matches!(event, LineTrivia::Comment(_)))
+            .map_or(0, |index| index + 1);
+
+        LeadingComments {
+            header: line_trivia_to_document(&header[..header_end]),
+            attached: line_trivia_to_document(attached),
+        }
+    }
+
+    pub(crate) fn take_trailing_comments_after(
+        &mut self,
+        from: u32,
+        bound: u32,
+    ) -> Option<Document<'a>> {
+        let limit = bound.min(self.line_end(from));
+        let pending = &self.line_trivia[self.line_cursor..];
+        let start = self.line_cursor + pending.partition_point(|event| event.start() < from);
+        let end = start + self.line_trivia[start..].partition_point(|event| event.start() < limit);
+
+        let taken: Vec<LineTrivia<'a>> = self.line_trivia.drain(start..end).collect();
+        line_trivia_to_document(&taken)
+    }
+
+    fn line_end(&self, from: u32) -> u32 {
+        let start = (from as usize).min(self.source.len());
+        match self.source[start..].find('\n') {
+            Some(offset) => (start + offset) as u32,
+            None => self.source.len() as u32,
+        }
     }
 
     pub fn take_comments_before(&mut self, position: u32) -> Option<Document<'a>> {
