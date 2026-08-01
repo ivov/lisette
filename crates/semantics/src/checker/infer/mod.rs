@@ -13,7 +13,8 @@ pub(crate) use unify::BuiltinBound;
 use rustc_hash::FxHashMap as HashMap;
 
 use super::freeze::FreezeFolder;
-use super::{FileContext, InferredFile, TaskState};
+use super::state::InferredFile;
+use super::{FileContext, TaskState};
 use crate::store::Store;
 use syntax::ast::{Expression, Span};
 use syntax::program::FileImport;

@@ -1,7 +1,7 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::LocalSink;
-use semantics::inference::AnalysisScope;
+use semantics::AnalysisScope;
 use semantics::module_graph::kahn::topological_sort;
 use semantics::module_graph::{DependencyGraph, ModuleGraphOptions, Roots, build_module_graph};
 use semantics::store::Store;
@@ -34,7 +34,7 @@ fn graph_options<'a>(
         scope,
         locator,
         include_tests: true,
-        project_kind: semantics::inference::ProjectKind::Binary,
+        project_kind: semantics::ProjectKind::Binary,
     }
 }
 
@@ -306,8 +306,8 @@ fn zero_primary_roots_begins_with_additional() {
 #[test]
 fn check_analyzes_orphan_and_surfaces_its_error() {
     use passes::analyze;
-    use semantics::inference::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
     use semantics::loader::MemoryLoader;
+    use semantics::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
 
     let tmp = tempfile::tempdir().unwrap();
 
@@ -330,7 +330,7 @@ fn check_analyzes_orphan_and_surfaces_its_error() {
             "main.lis".to_string(),
         )),
         compile_phase: CompilePhase::Check,
-        project_kind: semantics::inference::ProjectKind::Binary,
+        project_kind: semantics::ProjectKind::Binary,
         locator: &deps::TypedefLocator::default(),
         go_module: "",
         disable_cache: true,
@@ -354,8 +354,8 @@ fn check_analyzes_orphan_and_surfaces_its_error() {
 #[test]
 fn check_analyzes_tests_in_declaration_only_module() {
     use passes::analyze;
-    use semantics::inference::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
     use semantics::loader::MemoryLoader;
+    use semantics::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
 
     let tmp = tempfile::tempdir().unwrap();
 
@@ -378,7 +378,7 @@ fn check_analyzes_tests_in_declaration_only_module() {
             "main.lis".to_string(),
         )),
         compile_phase: CompilePhase::Check,
-        project_kind: semantics::inference::ProjectKind::Binary,
+        project_kind: semantics::ProjectKind::Binary,
         locator: &deps::TypedefLocator::default(),
         go_module: "",
         disable_cache: true,
@@ -682,8 +682,8 @@ fn resolver_root_vs_subpackage_typedef_lookup() {
 #[test]
 fn third_party_go_struct_impl_methods_registered() {
     use passes::analyze;
-    use semantics::inference::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
     use semantics::loader::MemoryLoader;
+    use semantics::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
 
     let tmp = tempfile::tempdir().unwrap();
     let project_root = tmp.path();
@@ -730,7 +730,7 @@ fn main() {
             "main.lis".to_string(),
         )),
         compile_phase: CompilePhase::Check,
-        project_kind: semantics::inference::ProjectKind::Binary,
+        project_kind: semantics::ProjectKind::Binary,
         locator: &resolver,
         go_module: "",
         disable_cache: false,
@@ -771,8 +771,8 @@ fn main() {
 #[test]
 fn stdlib_cache_save_load_excludes_third_party() {
     use passes::analyze;
-    use semantics::inference::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
     use semantics::loader::MemoryLoader;
+    use semantics::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
 
     let tmp = tempfile::tempdir().unwrap();
     let project_root = tmp.path();
@@ -814,7 +814,7 @@ fn main() {
             "main.lis".to_string(),
         )),
         compile_phase: CompilePhase::Check,
-        project_kind: semantics::inference::ProjectKind::Binary,
+        project_kind: semantics::ProjectKind::Binary,
         locator: &resolver,
         go_module: "",
         disable_cache: false,
@@ -836,7 +836,7 @@ fn main() {
             "main.lis".to_string(),
         )),
         compile_phase: CompilePhase::Check,
-        project_kind: semantics::inference::ProjectKind::Binary,
+        project_kind: semantics::ProjectKind::Binary,
         locator: &resolver,
         go_module: "",
         disable_cache: false,

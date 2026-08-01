@@ -6,9 +6,9 @@
 use deps::TypedefLocator;
 use diagnostics::LisetteDiagnostic;
 use passes::analyze;
-use semantics::inference::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
 use semantics::loader::MemoryLoader;
 use semantics::store::ENTRY_MODULE_ID;
+use semantics::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
 
 use super::render_lis::{QuestionSpans, render_lis_declarations, render_lis_questions};
 use super::scenario::Scenario;
@@ -154,7 +154,7 @@ fn check(source: &str) -> Checked {
         )),
         locator: &TypedefLocator::default(),
         compile_phase: CompilePhase::Check,
-        project_kind: semantics::inference::ProjectKind::Binary,
+        project_kind: semantics::ProjectKind::Binary,
         go_module: "",
         disable_cache: true,
     });

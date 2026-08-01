@@ -6,11 +6,11 @@ use diagnostics::LisetteDiagnostic;
 use syntax::ast::BindingId;
 use syntax::program::{EmitInput, MutationInfo, UnusedInfo};
 
+use semantics::AnalyzeInput;
 use semantics::cache::{EmitStamp, save_module_cache};
 use semantics::facts::{BindingFact, Usage};
-use semantics::inference::AnalyzeInput;
-use semantics::inference::{InferenceOutput, PARALLEL_THRESHOLD, run_inference};
 use semantics::store::ENTRY_MODULE_ID;
+use semantics::{InferenceOutput, PARALLEL_THRESHOLD, run_inference};
 
 use crate::passes;
 
@@ -21,7 +21,7 @@ pub struct Analysis {
     bindings: HashMap<BindingId, BindingFact>,
     usages: HashSet<Usage>,
     diagnostics: Vec<LisetteDiagnostic>,
-    entry_parse_status: semantics::inference::EntryParseStatus,
+    entry_parse_status: semantics::EntryParseStatus,
 }
 
 impl Analysis {
@@ -65,11 +65,11 @@ impl Analysis {
     }
 
     pub fn has_parse_errors(&self) -> bool {
-        self.entry_parse_status != semantics::inference::EntryParseStatus::Clean
+        self.entry_parse_status != semantics::EntryParseStatus::Clean
     }
 
     pub fn entry_parse_failed(&self) -> bool {
-        self.entry_parse_status == semantics::inference::EntryParseStatus::Failed
+        self.entry_parse_status == semantics::EntryParseStatus::Failed
     }
 }
 
@@ -213,8 +213,8 @@ fn order_diagnostics_by_severity(diagnostics: Vec<LisetteDiagnostic>) -> Vec<Lis
 mod tests {
     use super::*;
 
-    use semantics::inference::{AnalysisScope, CompilePhase, EntryFile, ProjectKind};
     use semantics::loader::MemoryLoader;
+    use semantics::{AnalysisScope, CompilePhase, EntryFile, ProjectKind};
 
     #[test]
     fn analysis_classifies_diagnostics_by_severity() {

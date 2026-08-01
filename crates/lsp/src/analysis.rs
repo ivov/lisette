@@ -7,7 +7,7 @@ use rustc_hash::FxHashMap;
 use deps::TypedefLocator;
 use diagnostics::LisetteDiagnostic;
 use passes::analyze;
-use semantics::inference::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile, ProjectKind};
+use semantics::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile, ProjectKind};
 use syntax::types::{CompoundKind, Type};
 
 use crate::position::LineIndex;

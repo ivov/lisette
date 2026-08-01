@@ -6,11 +6,11 @@ use emit::{EmitOptions, OutputFile, Planner};
 
 use passes::analyze;
 use semantics::cache::EmitStamp;
-use semantics::inference::{AnalyzeInput, EntryFile};
+use semantics::{AnalyzeInput, EntryFile};
 
-use semantics::inference::CompilePhase;
-pub use semantics::inference::{AnalysisScope as CompileScope, ProjectKind};
+use semantics::CompilePhase;
 use semantics::loader::Loader;
+pub use semantics::{AnalysisScope as CompileScope, ProjectKind};
 pub use syntax::program::TestIndex;
 
 #[derive(Debug, Clone)]
@@ -215,7 +215,7 @@ pub fn compile(
 mod tests {
     use super::*;
     use crate::fs::LocalFileSystem;
-    use semantics::inference::PARALLEL_THRESHOLD;
+    use semantics::PARALLEL_THRESHOLD;
     use std::fs as stdfs;
     use tempfile::tempdir;
 

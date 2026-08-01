@@ -8,7 +8,7 @@ use syntax::types::Type;
 use super::super::addressability::{
     check_is_non_addressable, check_non_addressable_assignment_target,
 };
-use super::functions::phantom_type_params;
+use super::calls::phantom_type_params;
 use super::operators::InferredOperand;
 use crate::checker::infer::InferCtx;
 

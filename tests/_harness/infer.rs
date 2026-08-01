@@ -71,10 +71,10 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
         ModuleGraphOptions {
             loader: Some(&fs),
             sink: &sink,
-            scope: &semantics::inference::AnalysisScope::Project(std::path::PathBuf::new()),
+            scope: &semantics::AnalysisScope::Project(std::path::PathBuf::new()),
             locator: &locator,
             include_tests: true,
-            project_kind: semantics::inference::ProjectKind::Binary,
+            project_kind: semantics::ProjectKind::Binary,
         },
     );
 

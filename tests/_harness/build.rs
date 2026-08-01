@@ -1,8 +1,8 @@
 use emit::{EmitOptions, Planner};
 use passes::{Analysis, analyze};
-use semantics::inference::{AnalysisScope, AnalyzeInput, EntryFile};
 use semantics::loader::Loader;
 use semantics::store::ENTRY_MODULE_ID;
+use semantics::{AnalysisScope, AnalyzeInput, EntryFile};
 
 use super::filesystem::MockFileSystem;
 
@@ -28,8 +28,8 @@ fn compile_with(
             "main.lis".to_string(),
         )),
         locator: &locator,
-        compile_phase: semantics::inference::CompilePhase::Check,
-        project_kind: semantics::inference::ProjectKind::Binary,
+        compile_phase: semantics::CompilePhase::Check,
+        project_kind: semantics::ProjectKind::Binary,
         go_module: "",
         disable_cache: false,
     })
@@ -46,7 +46,7 @@ pub fn compile_check(fs: MockFileSystem) -> Analysis {
 pub fn compile_standalone_entry(
     fs: MockFileSystem,
     entry_name: &str,
-    phase: semantics::inference::CompilePhase,
+    phase: semantics::CompilePhase,
 ) -> Analysis {
     let source = fs
         .scan_folder(ENTRY_MODULE_ID)
@@ -65,7 +65,7 @@ pub fn compile_standalone_entry(
         )),
         locator: &deps::TypedefLocator::default(),
         compile_phase: phase,
-        project_kind: semantics::inference::ProjectKind::Binary,
+        project_kind: semantics::ProjectKind::Binary,
         go_module: "",
         disable_cache: true,
     })
@@ -145,11 +145,11 @@ pub fn try_compile_project_files_with_tests(
         )),
         locator: &deps::TypedefLocator::default(),
         compile_phase: if emit_tests {
-            semantics::inference::CompilePhase::Test
+            semantics::CompilePhase::Test
         } else {
-            semantics::inference::CompilePhase::Emit
+            semantics::CompilePhase::Emit
         },
-        project_kind: semantics::inference::ProjectKind::Binary,
+        project_kind: semantics::ProjectKind::Binary,
         go_module,
         disable_cache: true,
     });

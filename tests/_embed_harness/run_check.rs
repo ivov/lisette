@@ -5,9 +5,9 @@ use std::process::Command;
 use deps::TypedefLocator;
 use emit::{EmitOptions, Planner};
 use passes::analyze;
-use semantics::inference::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
 use semantics::loader::MemoryLoader;
 use semantics::store::ENTRY_MODULE_ID;
+use semantics::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
 
 use super::PrintedQuestion;
 use super::go_answerer::{GoAnswer, GoAnswers};
@@ -192,7 +192,7 @@ fn emit_and_write(
         )),
         locator: &TypedefLocator::default(),
         compile_phase: CompilePhase::Emit,
-        project_kind: semantics::inference::ProjectKind::Binary,
+        project_kind: semantics::ProjectKind::Binary,
         go_module: &module,
         disable_cache: true,
     });

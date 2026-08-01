@@ -1,5 +1,8 @@
 pub mod aliasing;
 pub mod bindings;
+mod branches;
+mod call_effects;
+pub mod calls;
 pub mod comparison;
 pub mod control_flow;
 pub mod definitions;
@@ -8,10 +11,13 @@ pub mod functions;
 pub mod impl_blocks;
 pub mod indexed_access;
 pub mod literals;
+mod loops;
+mod method_access;
 pub mod operators;
 pub mod patterns;
 pub mod primitives;
 pub mod propagate;
+mod qualified_path;
 pub mod select;
 pub mod struct_call;
 

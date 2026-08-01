@@ -6,8 +6,8 @@ use deps::TypedefLocator;
 use syntax::ast::{ImportAlias, Span};
 use syntax::program::File;
 
+use crate::analysis::{AnalysisScope, ProjectKind};
 use crate::diagnostics::{GoImportSite, emit_for_declaration_status, emit_for_locator_result};
-use crate::inference::{AnalysisScope, ProjectKind};
 use crate::loader as semantics_loader;
 use crate::loader::Loader;
 use crate::store::{ENTRY_MODULE_ID, Store};
