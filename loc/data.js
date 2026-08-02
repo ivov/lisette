@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785672017630,
+  "lastUpdate": 1785675407170,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -16774,6 +16774,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "deps",
             "value": 1271,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7404,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e779916aaa1070d507e8e30c158622a64aff4607",
+          "message": "fix: unify single-file dispatch across commands (#1185)",
+          "timestamp": "2026-08-02T14:56:21+02:00",
+          "tree_id": "ba5f1557ebcda4089e709164ad3b32a2225cbd8d",
+          "url": "https://github.com/ivov/lisette/commit/e779916aaa1070d507e8e30c158622a64aff4607"
+        },
+        "date": 1785675405729,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 124640,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30326,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 25373,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18476,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13130,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 11933,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6848,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5370,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2883,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1286,
             "unit": "lines"
           },
           {
