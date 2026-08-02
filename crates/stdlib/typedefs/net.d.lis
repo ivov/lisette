@@ -557,7 +557,6 @@ pub struct DNSError {
 /// 
 /// It is safe to call Dialer's methods concurrently.
 #[go(hidden_fields)]
-#[go(zero_safe)]
 pub struct Dialer {
   pub Timeout: time.Duration,
   pub Deadline: time.Time,
@@ -720,7 +719,6 @@ pub struct ParseError {
 /// 
 /// A nil *Resolver is equivalent to a zero Resolver.
 #[go(hidden_fields)]
-#[go(zero_safe)]
 pub struct Resolver {
   pub PreferGo: bool,
   pub StrictErrors: bool,

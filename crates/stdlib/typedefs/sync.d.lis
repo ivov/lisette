@@ -50,6 +50,7 @@ pub fn OnceValues<T1, T2>(f: fn() -> (T1, T2)) -> fn() -> (T1, T2)
 /// [Roberto Clapis's series on advanced concurrency patterns]: https://blogtitle.github.io/categories/concurrency/
 /// [Bryan Mills's talk on concurrency patterns]: https://drive.google.com/file/d/1nPdvhB0PutEJzdCq5ms6UI58dp50fcAN/view
 #[go(hidden_fields)]
+#[go(zero_unsafe)]
 pub struct Cond {
   pub L: Option<Locker>,
 }

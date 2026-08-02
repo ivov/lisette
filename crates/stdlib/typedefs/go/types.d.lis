@@ -679,6 +679,7 @@ pub type Chan
 /// A Checker maintains the state of the type checker.
 /// It must be created with [NewChecker].
 #[go(hidden_fields)]
+#[go(zero_unsafe)]
 pub struct Checker {
   embed Ref<Info>,
   embed environment,
@@ -687,7 +688,6 @@ pub struct Checker {
 /// A Config specifies the configuration for type checking.
 /// The zero value for Config is a ready-to-use default configuration.
 #[go(hidden_fields)]
-#[go(zero_safe)]
 pub struct Config {
   pub Context: Option<Ref<Context>>,
   pub GoVersion: string,

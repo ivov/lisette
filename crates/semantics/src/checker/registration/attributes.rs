@@ -12,6 +12,7 @@ const KNOWN_GO_HINTS: &[&str] = &[
     "unexported",
     "value_method_set",
     "zero_safe",
+    "zero_unsafe",
 ];
 
 pub(crate) fn extract_package_directive(source: &str) -> Option<String> {
@@ -94,6 +95,12 @@ pub(super) fn has_zero_safe_attribute(attributes: &[Attribute]) -> bool {
         .any(|flag| flag == "zero_safe")
 }
 
+pub(super) fn has_zero_unsafe_attribute(attributes: &[Attribute]) -> bool {
+    extract_attribute_flags(attributes, "go")
+        .iter()
+        .any(|flag| flag == "zero_unsafe")
+}
+
 pub(super) fn has_hidden_fields_attribute(attributes: &[Attribute]) -> bool {
     extract_attribute_flags(attributes, "go")
         .iter()
@@ -137,6 +144,9 @@ pub(super) fn collect_struct_attributes(attributes: &[Attribute]) -> Attributes 
     }
     if has_zero_safe_attribute(attributes) {
         map.insert(TypeAttribute::ZeroSafe);
+    }
+    if has_zero_unsafe_attribute(attributes) {
+        map.insert(TypeAttribute::ZeroUnsafe);
     }
     if has_hidden_fields_attribute(attributes) {
         map.insert(TypeAttribute::HiddenFields);

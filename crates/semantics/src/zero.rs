@@ -37,7 +37,7 @@ pub enum NoZeroReason {
         field: EcoString,
         owning_module: EcoString,
     },
-    /// A Go type with state Lisette cannot see, named for the diagnostic.
+    /// A Go type curated as broken at its zero value, named for the diagnostic.
     HiddenGoState { go_type: EcoString },
 }
 
@@ -202,7 +202,8 @@ fn has_zero_nominal_fields(
 
     match &def.body {
         DefinitionBody::Struct { fields, .. } => {
-            if def.has_hidden_fields() && !def.is_zero_safe() {
+            let is_go_struct = id.as_str().starts_with("go:");
+            if is_go_struct && go_struct_denies_zero(def, fields) {
                 return Err(NoZero {
                     chain: vec![],
                     reason: NoZeroReason::HiddenGoState {
@@ -218,10 +219,9 @@ fn has_zero_nominal_fields(
                 .unwrap_or(from_module);
             let struct_is_foreign = struct_module != from_module;
 
-            let is_go_struct = id.as_str().starts_with("go:");
             let struct_name: EcoString = id.last_segment().into();
             for f in fields {
-                if is_go_struct && curation_covers_embed(def, f) {
+                if is_go_struct && hidden_embed_field(f) {
                     continue;
                 }
                 if struct_is_foreign && !f.visibility.is_public() && !is_go_struct {
@@ -283,12 +283,29 @@ fn go_display_name(id: &Symbol) -> EcoString {
         .into()
 }
 
-/// An unexported embed is state no caller can reach, so the opt-in covers it.
-pub fn curation_covers_embed(
+/// Zero-construction verdict for a Go-imported struct. A struct with visible
+/// fields is designed for literal construction, so its hidden state is
+/// presumed zero-safe (matching Go's own struct literals) unless curated
+/// `zero_unsafe`. A struct whose only content is hidden state is opaque to
+/// callers, so it stays refused unless curated `zero_safe`.
+pub fn go_struct_denies_zero(
     def: &syntax::program::Definition,
-    field: &syntax::ast::StructFieldDefinition,
+    fields: &syntax::ast::StructFields,
 ) -> bool {
-    def.is_zero_safe() && field.is_embedded() && !field.visibility.is_public()
+    if def.is_zero_unsafe() {
+        return true;
+    }
+    if def.is_zero_safe() {
+        return false;
+    }
+    let has_hidden_state = def.has_hidden_fields() || fields.iter().any(hidden_embed_field);
+    has_hidden_state && !fields.iter().any(|f| f.visibility.is_public())
+}
+
+/// An unexported embed is hidden Go state like any dropped private field, so
+/// the struct-level verdict covers it and per-field zero checks skip it.
+pub fn hidden_embed_field(field: &syntax::ast::StructFieldDefinition) -> bool {
+    field.is_embedded() && !field.visibility.is_public()
 }
 
 fn build_substitution(def_ty: &Type, params: &[Type]) -> SubstitutionMap {

@@ -290,6 +290,7 @@ pub struct TextNode {
 
 /// Tree is the representation of a single parsed template.
 #[go(hidden_fields)]
+#[go(zero_unsafe)]
 pub struct Tree {
   pub Name: string,
   pub ParseName: string,

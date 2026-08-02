@@ -73,6 +73,7 @@ pub interface Auth {
 
 /// A Client represents a client connection to an SMTP server.
 #[go(hidden_fields)]
+#[go(zero_unsafe)]
 pub struct Client {
   pub Text: Option<Ref<textproto.Conn>>,
 }

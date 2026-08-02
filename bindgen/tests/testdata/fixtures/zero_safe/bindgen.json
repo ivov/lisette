@@ -6,6 +6,11 @@
           "Verified",
           "VerifiedPartiallyHidden"
         ]
+      },
+      "zero_unsafe": {
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/zero_safe": [
+          "BrokenPartiallyHidden"
+        ]
       }
     }
   }

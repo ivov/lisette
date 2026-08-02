@@ -32,6 +32,7 @@ pub struct FileHeader {
 /// A Section represents a single section in a Plan 9 a.out file.
 #[go(hidden_embed)]
 #[go(hidden_fields)]
+#[go(zero_unsafe)]
 pub struct Section {
   embed SectionHeader,
   pub ReaderAt: Option<io.ReaderAt>,

@@ -2801,7 +2801,7 @@ fn test() {
 }
 
 #[test]
-fn infer_curated_hidden_fields_struct_still_checks_visible_field_zero() {
+fn infer_hidden_fields_struct_still_checks_visible_field_zero() {
     let input = r#"
 import "go:net"
 

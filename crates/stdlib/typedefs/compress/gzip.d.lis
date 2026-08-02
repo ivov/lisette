@@ -61,6 +61,7 @@ pub struct Header {
 /// returned by [Reader.Read] as tentative until they receive the [io.EOF]
 /// marking the end of the data.
 #[go(hidden_fields)]
+#[go(zero_unsafe)]
 pub struct Reader {
   embed Header,
 }
@@ -68,6 +69,7 @@ pub struct Reader {
 /// A Writer is an [io.WriteCloser].
 /// Writes to a Writer are compressed and written to w.
 #[go(hidden_fields)]
+#[go(zero_unsafe)]
 pub struct Writer {
   embed Header,
 }

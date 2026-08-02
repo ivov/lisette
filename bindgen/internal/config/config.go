@@ -57,7 +57,11 @@ type TypeOverrides struct {
 	// Curated, never auto-detected; mutually exclusive with bit_flag_set.
 	ClosedDomain map[string][]string `json:"closed_domain"`
 	// Curated per type from Go's docs, never derived from field shape.
-	ZeroSafe map[string][]string `json:"zero_safe"`
+	// ZeroSafe admits zero construction of types with no visible fields,
+	// which are refused by default. ZeroUnsafe denies it for structs with
+	// visible fields, which are admitted by default.
+	ZeroSafe   map[string][]string `json:"zero_safe"`
+	ZeroUnsafe map[string][]string `json:"zero_unsafe"`
 }
 
 // LoadConfig loads bindgen configuration from the given path.
@@ -294,6 +298,13 @@ func (c *Config) IsCuratedZeroSafe(pkg, typeName string) bool {
 		return false
 	}
 	return matchField(c.Overrides.Types.ZeroSafe, pkg, typeName, matchExact)
+}
+
+func (c *Config) IsCuratedZeroUnsafe(pkg, typeName string) bool {
+	if c == nil {
+		return false
+	}
+	return matchField(c.Overrides.Types.ZeroUnsafe, pkg, typeName, matchExact)
 }
 
 // lookupWithGlob returns all matching names for a package from a map,

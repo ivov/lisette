@@ -253,10 +253,20 @@ Bindgen accepts a config file with per-package overrides:
         },
       },
 
-      // Allow constructing a type at its Go zero value, verified against Go's docs
+      // Allow constructing a type at its Go zero value, verified against Go's docs.
+      // Applies to types with no visible fields, which are refused by default
       // e.g. `sync.Mutex` documents its zero value as an unlocked mutex
       "zero_safe": {
         "sync": ["Mutex", "WaitGroup"],
+      },
+
+      // Deny constructing a struct by literal, forcing its Go constructor.
+      // Applies to structs with visible fields, which are admitted by default.
+      // Use for types whose zero value panics, verified against Go's docs or
+      // by probing the zero value
+      // e.g. a zero `csv.Writer` panics on `Write` (nil internal writer)
+      "zero_unsafe": {
+        "encoding/csv": ["Reader", "Writer"],
       },
     },
   },

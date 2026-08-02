@@ -1035,7 +1035,6 @@ pub type ServeMux
 /// A Server defines parameters for running an HTTP server.
 /// The zero value for Server is a valid configuration.
 #[go(hidden_fields)]
-#[go(zero_safe)]
 pub struct Server {
   pub Addr: string,
   pub Handler: Option<Handler>,

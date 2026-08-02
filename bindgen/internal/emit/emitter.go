@@ -601,6 +601,9 @@ func (e *Emitter) emitStruct(result convert.ConvertResult) {
 	if result.ZeroSafe {
 		sig.WriteString("#[go(zero_safe)]\n")
 	}
+	if result.ZeroUnsafe {
+		sig.WriteString("#[go(zero_unsafe)]\n")
+	}
 	sig.WriteString("pub struct ")
 	sig.WriteString(typeName)
 	sig.WriteString(result.TypeParams.DeclBlock())

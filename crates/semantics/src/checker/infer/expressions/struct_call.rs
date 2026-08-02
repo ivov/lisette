@@ -326,8 +326,7 @@ impl InferCtx<'_> {
         if is_go_imported
             && !matches!(new_spread, StructSpread::From(_))
             && let Some(def) = store.get_definition(&qualified_name)
-            && def.has_hidden_fields()
-            && !def.is_zero_safe()
+            && crate::zero::go_struct_denies_zero(def, &struct_fields)
         {
             self.sink.push(diagnostics::infer::hidden_state_no_zero(
                 &struct_call_ty,
@@ -361,14 +360,11 @@ impl InferCtx<'_> {
         );
 
         if let StructSpread::Autofill { span: spread_span } = &new_spread {
-            let def = is_go_imported
-                .then(|| store.get_definition(&qualified_name))
-                .flatten();
             self.check_autofill_fields(
                 &struct_name,
                 struct_fields
                     .iter()
-                    .filter(|f| !def.is_some_and(|d| crate::zero::curation_covers_embed(d, f)))
+                    .filter(|f| !(is_go_imported && crate::zero::hidden_embed_field(f)))
                     .map(|f| (&f.name, &f.ty)),
                 &matched_fields,
                 &map,

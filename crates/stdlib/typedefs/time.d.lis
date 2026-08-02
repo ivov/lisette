@@ -377,6 +377,7 @@ pub struct ParseError {
 /// A Ticker holds a channel that delivers “ticks” of a clock
 /// at intervals.
 #[go(hidden_fields)]
+#[go(zero_unsafe)]
 pub struct Ticker {
   pub C: Receiver<Time>,
 }
@@ -430,6 +431,7 @@ pub type Time
 /// unless the Timer was created by [AfterFunc].
 /// A Timer must be created with [NewTimer] or AfterFunc.
 #[go(hidden_fields)]
+#[go(zero_unsafe)]
 pub struct Timer {
   pub C: Receiver<Time>,
 }

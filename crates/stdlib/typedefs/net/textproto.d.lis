@@ -45,6 +45,7 @@ pub fn TrimString(s: string) -> string
 /// These embedded types carry methods with them;
 /// see the documentation of those types for details.
 #[go(hidden_fields)]
+#[go(zero_unsafe)]
 pub struct Conn {
   embed Reader,
   embed Writer,
@@ -87,6 +88,7 @@ pub struct ProtocolError(string)
 /// A Reader implements convenience methods for reading requests
 /// or responses from a text protocol network connection.
 #[go(hidden_fields)]
+#[go(zero_unsafe)]
 pub struct Reader {
   pub R: Option<Ref<bufio.Reader>>,
 }
@@ -94,6 +96,7 @@ pub struct Reader {
 /// A Writer implements convenience methods for writing
 /// requests or responses to a text protocol network connection.
 #[go(hidden_fields)]
+#[go(zero_unsafe)]
 pub struct Writer {
   pub W: Option<Ref<bufio.Writer>>,
 }

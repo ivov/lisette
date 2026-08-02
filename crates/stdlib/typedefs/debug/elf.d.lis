@@ -3072,6 +3072,7 @@ pub struct ImportedSymbol {
 /// A Prog represents a single ELF program header in an ELF binary.
 #[go(hidden_embed)]
 #[go(hidden_fields)]
+#[go(zero_unsafe)]
 pub struct Prog {
   embed ProgHeader,
   pub ReaderAt: Option<io.ReaderAt>,

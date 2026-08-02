@@ -309,6 +309,7 @@ pub interface Marshaler {
 /// A MarshalerError represents an error from calling a
 /// [Marshaler.MarshalJSON] or [encoding.TextMarshaler.MarshalText] method.
 #[go(hidden_fields)]
+#[go(zero_unsafe)]
 pub struct MarshalerError {
   pub Type: Option<reflect.Type>,
   pub Err: error,

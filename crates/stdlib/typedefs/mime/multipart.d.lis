@@ -53,6 +53,7 @@ pub struct Form {
 
 /// A Part represents a single part in a multipart body.
 #[go(hidden_fields)]
+#[go(zero_unsafe)]
 pub struct Part {
   pub Header: textproto.MIMEHeader,
 }

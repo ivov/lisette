@@ -685,6 +685,7 @@ func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport)
 		result.HasHiddenEmbed = structHasHiddenEmbed(u, result.Fields)
 		result.HasHiddenFields = hasHidden
 		result.ZeroSafe = c.cfg.IsCuratedZeroSafe(c.currentPkgPath, result.Name)
+		result.ZeroUnsafe = c.cfg.IsCuratedZeroUnsafe(c.currentPkgPath, result.Name)
 
 	case *types.Interface:
 		if isErrorInterface(u) {

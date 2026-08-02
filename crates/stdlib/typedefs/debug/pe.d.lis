@@ -158,6 +158,7 @@ pub struct Reloc {
 /// Section provides access to PE COFF section.
 #[go(hidden_embed)]
 #[go(hidden_fields)]
+#[go(zero_unsafe)]
 pub struct Section {
   embed SectionHeader,
   pub Relocs: Slice<Reloc>,

@@ -27,6 +27,9 @@ pub enum TypeAttribute {
     HiddenEmbed,
     Serialized,
     ZeroSafe,
+    /// Go type whose zero value is documented broken, so it must come from
+    /// its constructor.
+    ZeroUnsafe,
     HiddenFields,
 }
 
@@ -324,6 +327,11 @@ impl Definition {
     pub fn is_zero_safe(&self) -> bool {
         self.attributes()
             .is_some_and(|a| a.contains(&TypeAttribute::ZeroSafe))
+    }
+
+    pub fn is_zero_unsafe(&self) -> bool {
+        self.attributes()
+            .is_some_and(|a| a.contains(&TypeAttribute::ZeroUnsafe))
     }
 
     pub fn has_hidden_fields(&self) -> bool {

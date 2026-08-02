@@ -30,6 +30,7 @@ pub struct ParseError {
 /// including in multiline field values, so that the returned data does
 /// not depend on which line-ending convention an input file uses.
 #[go(hidden_fields)]
+#[go(zero_unsafe)]
 pub struct Reader {
   pub Comma: rune,
   pub Comment: rune,
@@ -58,6 +59,7 @@ pub struct Reader {
 /// the underlying [io.Writer].  Any errors that occurred should
 /// be checked by calling the [Writer.Error] method.
 #[go(hidden_fields)]
+#[go(zero_unsafe)]
 pub struct Writer {
   pub Comma: rune,
   pub UseCRLF: bool,

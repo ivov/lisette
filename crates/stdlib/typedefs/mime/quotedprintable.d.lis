@@ -16,6 +16,7 @@ pub type Reader
 
 /// A Writer is a quoted-printable writer that implements [io.WriteCloser].
 #[go(hidden_fields)]
+#[go(zero_unsafe)]
 pub struct Writer {
   pub Binary: bool,
 }

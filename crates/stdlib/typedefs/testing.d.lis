@@ -124,6 +124,7 @@ pub fn Verbose() -> bool
 /// are always printed, so as not to hide output whose existence may be
 /// affecting benchmark results.
 #[go(hidden_fields)]
+#[go(zero_unsafe)]
 pub struct B {
   embed common,
   pub N: int,
@@ -179,6 +180,7 @@ pub struct CoverBlock {
 /// executing the fuzz target, only [*T] methods can be used. The only *F methods
 /// that are allowed in the [F.Fuzz] function are [F.Failed] and [F.Name].
 #[go(hidden_fields)]
+#[go(zero_unsafe)]
 pub struct F {
   embed common,
 }
@@ -227,6 +229,7 @@ pub type PB
 /// The other reporting methods, such as the variations of [T.Log] and [T.Error],
 /// may be called simultaneously from multiple goroutines.
 #[go(hidden_fields)]
+#[go(zero_unsafe)]
 pub struct T {
   embed common,
 }

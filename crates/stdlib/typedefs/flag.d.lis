@@ -211,7 +211,6 @@ pub struct Flag {
 /// [Flag] names must be unique within a FlagSet. An attempt to define a flag whose
 /// name is already in use will cause a panic.
 #[go(hidden_fields)]
-#[go(zero_safe)]
 pub struct FlagSet {
   pub Usage: Option<fn() -> ()>,
 }

@@ -68,6 +68,7 @@ pub type Decompressor = fn(io.Reader) -> io.ReadCloser
 /// The file information is in the embedded [FileHeader].
 /// The file content can be accessed by calling [File.Open].
 #[go(hidden_fields)]
+#[go(zero_unsafe)]
 pub struct File {
   embed FileHeader,
 }

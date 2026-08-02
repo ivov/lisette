@@ -12,7 +12,6 @@ pub fn New(n: int) -> Option<Ref<Ring>>
 /// as nil Ring pointers. The zero value for a Ring is a one-element
 /// ring with a nil Value.
 #[go(hidden_fields)]
-#[go(zero_safe)]
 pub struct Ring {
   pub Value: Unknown,
 }

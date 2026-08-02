@@ -203,7 +203,7 @@ fn test() -> bool {
 }
 
 #[test]
-fn go_partially_hidden_struct_zero_safe_curated_struct_literal() {
+fn go_partially_hidden_struct_autofill_struct_literal() {
     let input = r#"
 import "go:container/ring"
 
@@ -231,7 +231,7 @@ fn test(base: zip.File) -> zip.File {
 }
 
 #[test]
-fn go_curated_struct_with_unexported_embed_autofills() {
+fn go_struct_with_unexported_embed_autofills() {
     let input = r#"
 import "go:runtime"
 

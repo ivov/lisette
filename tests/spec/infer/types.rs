@@ -8095,6 +8095,144 @@ fn main() {}
 }
 
 #[test]
+fn go_partially_hidden_struct_autofill_admitted() {
+    let typedef = r#"
+#[go(hidden_fields)]
+pub struct Command {
+  pub Use: string,
+  pub Short: string,
+}
+"#;
+    let input = r#"
+import "go:example.com/cli"
+fn make_command(use: string) -> cli.Command {
+  cli.Command { Use: use, .. }
+}
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/cli", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn go_stdlib_zero_unsafe_struct_literal_rejected() {
+    infer(
+        r#"
+import "go:encoding/csv"
+
+fn test() {
+  let mut w = csv.Writer { Comma: ',', .. }
+  let _ = w.Write(["a", "b"])
+}
+"#,
+    )
+    .assert_infer_code("hidden_state_no_zero");
+}
+
+#[test]
+fn go_zero_unsafe_struct_literal_rejected() {
+    let typedef = r#"
+#[go(hidden_fields)]
+#[go(zero_unsafe)]
+pub struct Broken {
+  pub Name: string,
+}
+"#;
+    let input = r#"
+import "go:example.com/res"
+fn make_broken() -> res.Broken {
+  res.Broken { Name: "x", .. }
+}
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/res", typedef)])
+        .assert_infer_code("hidden_state_no_zero");
+}
+
+#[test]
+fn go_zero_unsafe_field_blocks_wrapper_autofill() {
+    let typedef = r#"
+#[go(hidden_fields)]
+#[go(zero_unsafe)]
+pub struct Broken {
+  pub Name: string,
+}
+"#;
+    let input = r#"
+import "go:example.com/res"
+struct Wrapper { b: res.Broken }
+fn make_wrapper() -> Wrapper {
+  Wrapper { .. }
+}
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/res", typedef)])
+        .assert_infer_code("field_no_zero");
+}
+
+#[test]
+fn go_struct_with_unexported_embed_autofill_admitted() {
+    let typedef = r#"
+#[go(unexported)]
+pub type inner
+
+pub struct Outer {
+  embed inner,
+  pub Name: string,
+}
+"#;
+    let input = r#"
+import "go:example.com/lib"
+fn make_outer() -> lib.Outer {
+  lib.Outer { Name: "x", .. }
+}
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn go_struct_with_only_hidden_embed_needs_curation() {
+    let typedef = r#"
+#[go(unexported)]
+pub type inner
+
+pub struct Handle {
+  embed inner,
+}
+"#;
+    let input = r#"
+import "go:example.com/lib"
+fn make_handle() -> lib.Handle {
+  lib.Handle { .. }
+}
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)])
+        .assert_infer_code("hidden_state_no_zero");
+}
+
+#[test]
+fn go_struct_with_only_hidden_embed_admitted_when_zero_safe() {
+    let typedef = r#"
+#[go(unexported)]
+pub type inner
+
+#[go(zero_safe)]
+pub struct Handle {
+  embed inner,
+}
+"#;
+    let input = r#"
+import "go:example.com/lib"
+fn make_handle() -> lib.Handle {
+  lib.Handle { .. }
+}
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/lib", typedef)]).assert_no_errors();
+}
+
+#[test]
 fn satisfy_comma_ok_interface_via_promoted_method_rejected() {
     let typedef = r#"
 pub interface Lookup {

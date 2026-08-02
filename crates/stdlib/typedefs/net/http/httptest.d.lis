@@ -76,6 +76,7 @@ pub struct ResponseRecorder {
 /// A Server is an HTTP server listening on a system-chosen port on the
 /// local loopback interface, for use in end-to-end HTTP tests.
 #[go(hidden_fields)]
+#[go(zero_unsafe)]
 pub struct Server {
   pub URL: string,
   pub Listener: Option<net.Listener>,

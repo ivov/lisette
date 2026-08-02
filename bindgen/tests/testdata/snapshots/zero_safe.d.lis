@@ -3,6 +3,12 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
+#[go(hidden_fields)]
+#[go(zero_unsafe)]
+pub struct BrokenPartiallyHidden {
+  pub Label: string,
+}
+
 pub type Counter
 
 pub type Handle
@@ -19,6 +25,10 @@ pub type Verified
 #[go(zero_safe)]
 pub struct VerifiedPartiallyHidden {
   pub Label: string,
+}
+
+impl BrokenPartiallyHidden {
+  fn Get(self: Ref<BrokenPartiallyHidden>) -> int
 }
 
 impl Counter {

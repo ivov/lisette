@@ -1,12 +1,12 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Field has no zero value
-   ╭─[test.lis:5:21]
+  ✕ `File` has no zero value
+   ╭─[test.lis:5:11]
  4 │ fn test() {
  5 │   let f = os.File { .. };
-   ·                     ─┬
-   ·                      ╰── no zero available
+   ·           ───────┬──────
+   ·                  ╰── no zero available
  6 │ }
    ╰────
-  help: Field `file` of type `Ref<file>` has no zero value. Provide an explicit value, or wrap the field type in `Option<T>` · code: [infer.field_no_zero]
+  help: `File` has Go-side state hidden from Lisette whose zero value is not safe to use directly. Construct it through its documented Go constructor instead · code: [infer.hidden_state_no_zero]

@@ -53,8 +53,12 @@ type ConvertResult struct {
 	HasHiddenEmbed bool
 	SealId         string // non-empty for an unexported seal method: its seal identity
 	UnexportedType bool   // a Go unexported type emitted only as a faithful embed target
-	// Vouches for what a caller cannot reach: opaque, dropped, or embedded.
+	// Vouches for the zero value of a type with no visible fields, which is
+	// refused by default.
 	ZeroSafe bool
+	// Denies the zero value of a struct with visible fields, which is
+	// presumed usable by default.
+	ZeroUnsafe bool
 	// A real Go field went unrepresented in Fields.
 	HasHiddenFields bool
 }
