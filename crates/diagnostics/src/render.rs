@@ -174,20 +174,22 @@ fn nocolor_handler() -> GraphicalReportHandler {
     GraphicalReportHandler::new_themed(theme).with_wrap_lines(false)
 }
 
-fn render(
+fn graphical_report(
     handler: &GraphicalReportHandler,
     diagnostic: &LisetteDiagnostic,
-    source: &IndexedSource,
-    filename: &str,
+    source: Option<(&IndexedSource, &str)>,
     use_color: bool,
-) {
-    let report = diagnostic.clone().into_rendered(use_color);
-    let report = miette::Report::new(report)
-        .with_source_code(miette::NamedSource::new(filename, source.clone()));
+) -> Option<String> {
+    let report = miette::Report::new(diagnostic.clone().into_rendered(use_color));
+    let report = match source {
+        Some((source, filename)) => {
+            report.with_source_code(miette::NamedSource::new(filename, source.clone()))
+        }
+        None => report,
+    };
     let mut output = String::new();
-    if handler.render_report(&mut output, report.as_ref()).is_ok() {
-        eprintln!("{}", output);
-    }
+    handler.render_report(&mut output, report.as_ref()).ok()?;
+    Some(output)
 }
 
 pub fn render_to_string(
@@ -235,8 +237,10 @@ fn render_group<F: Fn(u32) -> Option<(String, String)>>(
         nocolor_handler()
     };
     for diagnostic in diagnostics {
-        let (src, name) = sources.get(diagnostic.file_id());
-        render(&handler, diagnostic, &src, &name, use_color);
+        let source = sources.get(diagnostic.file_id());
+        if let Some(output) = graphical_report(&handler, diagnostic, source, use_color) {
+            eprintln!("{}", output);
+        }
     }
 }
 
@@ -247,37 +251,27 @@ pub struct Counts {
     pub info: usize,
 }
 
-/// Resolves a `file_id` to its source, falling back to the entry file.
+/// Resolves the file a diagnostic's spans are measured against.
 pub struct SourceCache<F> {
     get_source: F,
-    default_source: IndexedSource,
-    default_filename: String,
-    cache: FxHashMap<u32, (IndexedSource, String)>,
+    cache: FxHashMap<u32, Option<(IndexedSource, String)>>,
 }
 
 impl<F: Fn(u32) -> Option<(String, String)>> SourceCache<F> {
-    pub fn new(get_source: F, default_source: &str, default_filename: &str) -> Self {
+    pub fn new(get_source: F) -> Self {
         Self {
             get_source,
-            default_source: IndexedSource::new(default_source),
-            default_filename: default_filename.to_string(),
             cache: FxHashMap::default(),
         }
     }
 
-    fn get(&mut self, file_id: Option<u32>) -> (IndexedSource, String) {
-        let Some(fid) = file_id else {
-            return (self.default_source.clone(), self.default_filename.clone());
-        };
-        let default_source = &self.default_source;
-        let default_filename = &self.default_filename;
+    fn get(&mut self, file_id: Option<u32>) -> Option<(&IndexedSource, &str)> {
+        let file_id = file_id?;
         let get_source = &self.get_source;
-        let entry = self.cache.entry(fid).or_insert_with(|| {
-            get_source(fid)
-                .map(|(src, name)| (IndexedSource::new(&src), name))
-                .unwrap_or_else(|| (default_source.clone(), default_filename.clone()))
+        let entry = self.cache.entry(file_id).or_insert_with(|| {
+            get_source(file_id).map(|(source, name)| (IndexedSource::new(&source), name))
         });
-        (entry.0.clone(), entry.1.clone())
+        entry.as_ref().map(|(source, name)| (source, name.as_str()))
     }
 }
 
@@ -390,9 +384,11 @@ fn flatten_to_one_line(text: &str) -> Cow<'_, str> {
 }
 
 /// Renders one diagnostic as `file:line:col: severity: message: label · help [code flags]`.
-pub fn unix_line(diagnostic: &LisetteDiagnostic, source: &IndexedSource, filename: &str) -> String {
+pub fn unix_line(diagnostic: &LisetteDiagnostic, source: Option<(&IndexedSource, &str)>) -> String {
     let mut line = String::new();
-    if let Some(offset) = diagnostic.location_offset() {
+    if let Some((source, filename)) = source
+        && let Some(offset) = diagnostic.location_offset()
+    {
         let (lineno, column) = source.line_col(offset);
         line.push_str(&format!(
             "{}:{}:{}: ",
@@ -445,8 +441,7 @@ pub fn render_unix(
         .chain(&groups.warnings)
         .chain(&groups.info)
     {
-        let (src, name) = sources.get(diagnostic.file_id());
-        output.push_str(&unix_line(diagnostic, &src, &name));
+        output.push_str(&unix_line(diagnostic, sources.get(diagnostic.file_id())));
         output.push('\n');
     }
 
@@ -457,9 +452,27 @@ pub fn render_unix(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use syntax::ast::Span;
+
+    const ENTRY_SOURCE: &str = "fn main() {\n  let x = 1;\n  let y = 2;\n}\n";
 
     fn show_all() -> Filter {
         Filter::All
+    }
+
+    fn entry_only(file_id: u32) -> Option<(String, String)> {
+        (file_id == 0).then(|| (ENTRY_SOURCE.to_string(), "src/main.lis".to_string()))
+    }
+
+    fn points_into(file_id: u32) -> LisetteDiagnostic {
+        LisetteDiagnostic::error("Points into another file")
+            .with_span_primary_label(&Span::new(file_id, 32, 6), "over here")
+    }
+
+    fn graphical_output(diagnostic: &LisetteDiagnostic) -> String {
+        let mut sources = SourceCache::new(entry_only);
+        let source = sources.get(diagnostic.file_id());
+        graphical_report(&nocolor_handler(), diagnostic, source, false).expect("rendering succeeds")
     }
 
     #[test]
@@ -497,14 +510,50 @@ mod tests {
     }
 
     #[test]
-    fn unix_counts_and_labels_info_separately() {
-        let diagnostics = vec![LisetteDiagnostic::info("advisory")];
-        let (output, counts) = render_unix(
-            &diagnostics,
-            SourceCache::new(|_| None, "", "f.lis"),
+    fn unix_omits_the_location_of_an_unresolved_file() {
+        let (output, _) = render_unix(
+            &[points_into(7)],
+            SourceCache::new(entry_only),
             1,
             &show_all(),
         );
+        assert_eq!(output, "error: Points into another file: over here\n");
+    }
+
+    #[test]
+    fn unix_locates_a_resolved_file() {
+        let (output, _) = render_unix(
+            &[points_into(0)],
+            SourceCache::new(entry_only),
+            1,
+            &show_all(),
+        );
+        assert_eq!(
+            output,
+            "src/main.lis:3:8: error: Points into another file: over here\n"
+        );
+    }
+
+    #[test]
+    fn graphical_omits_the_source_frame_of_an_unresolved_file() {
+        let output = graphical_output(&points_into(7));
+        assert!(output.contains("Points into another file"));
+        assert!(!output.contains("src/main.lis"));
+        assert!(!output.contains("let y = 2"));
+    }
+
+    #[test]
+    fn graphical_draws_the_source_frame_of_a_resolved_file() {
+        let output = graphical_output(&points_into(0));
+        assert!(output.contains("src/main.lis"));
+        assert!(output.contains("let y = 2"));
+    }
+
+    #[test]
+    fn unix_counts_and_labels_info_separately() {
+        let diagnostics = vec![LisetteDiagnostic::info("advisory")];
+        let (output, counts) =
+            render_unix(&diagnostics, SourceCache::new(|_| None), 1, &show_all());
         assert_eq!(counts.errors, 0);
         assert_eq!(counts.warnings, 0);
         assert_eq!(counts.info, 1);

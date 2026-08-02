@@ -3295,6 +3295,31 @@ fn main() {
 }
 
 #[test]
+fn double_newtype_option_return_stays_nil_encoded() {
+    let input = r#"
+struct Handle(Ref<int>)
+struct Alias(Handle)
+struct Table(Map<string, int>)
+struct Index(Table)
+
+fn handle(present: bool, n: Ref<int>) -> Option<Alias> {
+  if present { Some(Alias(Handle(n))) } else { None }
+}
+
+fn index(present: bool) -> Option<Index> {
+  if present { Some(Index(Table(Map.new<string, int>()))) } else { None }
+}
+
+fn main() {
+  let n = 1
+  let _ = handle(true, &n)
+  let _ = index(false)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn double_newtype_direct_assignment() {
     let input = r#"
 struct A(int)

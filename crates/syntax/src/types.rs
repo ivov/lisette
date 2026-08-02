@@ -1533,37 +1533,19 @@ where
     )
 }
 
+/// True when the Go representation carries `nil`, so an `Option` over it
+/// encodes `None` as `nil` instead of a tag.
 pub fn is_nilable_go_type<'a>(ty: &Type, lookup: impl Fn(&str) -> Option<&'a Definition>) -> bool {
-    let is_interface = |id: &str| matches!(lookup(id), Some(d) if matches!(d.body, DefinitionBody::Interface { .. }));
-    resolves_to_pointer(ty, &lookup)
-        || resolves_to_interface(ty, &lookup, is_interface)
-        || resolves_to_function(ty, &lookup)
-}
-
-fn resolves_to_pointer<'d, F: Fn(&str) -> Option<&'d Definition>>(ty: &Type, lookup: &F) -> bool {
-    let as_pointer = |ty: &Type| {
-        ty.is_ref()
-            || underlying_type(ty, lookup)
-                .as_ref()
-                .is_some_and(Type::is_ref)
-    };
-    as_pointer(ty) || as_pointer(&peel_alias(ty, lookup))
-}
-
-fn resolves_to_interface<'d, F, FI>(ty: &Type, lookup: &F, is_interface: FI) -> bool
-where
-    F: Fn(&str) -> Option<&'d Definition>,
-    FI: Fn(&str) -> bool,
-{
-    matches!(peel_alias(ty, lookup), Type::Nominal { id, .. } if is_interface(id.as_str()))
-}
-
-fn resolves_to_function<'d, F: Fn(&str) -> Option<&'d Definition>>(ty: &Type, lookup: &F) -> bool {
-    let as_function = |ty: &Type| {
-        matches!(ty, Type::Function(_))
-            || matches!(underlying_type(ty, lookup), Some(Type::Function(_)))
-    };
-    as_function(ty) || as_function(&peel_alias(ty, lookup))
+    let core = peel_underlying(ty, &lookup);
+    if let Type::Nominal { id, .. } = &core {
+        return matches!(lookup(id.as_str()), Some(d) if matches!(d.body, DefinitionBody::Interface { .. }));
+    }
+    core.is_ref()
+        || matches!(core, Type::Function(_))
+        || core.is_map()
+        || core.is_channel()
+        || core.is_native(CompoundKind::Sender)
+        || core.is_receiver()
 }
 
 /// Walk an alias chain by id alone (for example during Go-name resolution).

@@ -1737,7 +1737,7 @@ impl Header {
   fn Add(self: Ref<Header>, key: string, value: string)
 
   /// Clone returns a copy of h or nil if h is nil.
-  fn Clone(self) -> Header
+  fn Clone(self) -> Option<Header>
 
   /// Del deletes the values associated with key.
   /// The key is case insensitive; it is canonicalized by

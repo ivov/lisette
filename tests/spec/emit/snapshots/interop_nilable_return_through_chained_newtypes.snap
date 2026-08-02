@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/reg"
+  
+  fn main() {
+    match reg.Lookup() {
+      Some(idx) => { let _ = idx },
+      None => { let _ = 0 },
+    }
+  }
+---
+package main
+
+import (
+	"example.com/reg"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	raw_2 := reg.Lookup()
+	option_3 := lisette.OptionFromNilable[reg.Index](raw_2, raw_2 == nil)
+	if option_3.Tag == lisette.OptionSome {
+		_ = option_3.SomeVal
+	} else {
+	}
+}

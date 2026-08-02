@@ -186,7 +186,7 @@ impl Planner<'_> {
         let mut prologue = Vec::new();
         let iter_raw = self.capture_operand_into(&mut prologue, iterable);
         let iterable_ty = iterable.get_type();
-        let iter_expression = if iterable_ty.is_ref() {
+        let mut iter_expression = if iterable_ty.is_ref() {
             format!("*{}", iter_raw)
         } else {
             iter_raw
@@ -194,6 +194,10 @@ impl Planner<'_> {
         let is_channel = self
             .native_shape(&iterable_ty)
             .is_some_and(|s| matches!(s.kind, NativeGoType::Channel | NativeGoType::Receiver));
+        if is_channel {
+            self.require_stdlib();
+            iter_expression = format!("lisette.ChannelRange({})", iter_expression);
+        }
         let single_var = is_channel || self.iter_seq_arity(&iterable_ty) == Some(1);
         (prologue, iter_expression, single_var)
     }

@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/reg"
+  
+  fn main() {
+    match reg.Lookup("a") {
+      Some(m) => { let _ = m.length() },
+      None => { let _ = 0 },
+    }
+  }
+---
+package main
+
+import (
+	"example.com/reg"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	ret_2, ret_3 := reg.Lookup("a")
+	var option_4 lisette.Option[map[string]int]
+	if ret_3 && ret_2 != nil {
+		option_4 = lisette.MakeOptionSome[map[string]int](ret_2)
+	} else {
+		option_4 = lisette.MakeOptionNone[map[string]int]()
+	}
+	if option_4.Tag == lisette.OptionSome {
+		_ = len(option_4.SomeVal)
+	} else {
+	}
+}

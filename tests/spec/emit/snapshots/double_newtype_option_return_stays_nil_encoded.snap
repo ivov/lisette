@@ -1,0 +1,52 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct Handle(Ref<int>)
+  struct Alias(Handle)
+  struct Table(Map<string, int>)
+  struct Index(Table)
+  
+  fn handle(present: bool, n: Ref<int>) -> Option<Alias> {
+    if present { Some(Alias(Handle(n))) } else { None }
+  }
+  
+  fn index(present: bool) -> Option<Index> {
+    if present { Some(Index(Table(Map.new<string, int>()))) } else { None }
+  }
+  
+  fn main() {
+    let n = 1
+    let _ = handle(true, &n)
+    let _ = index(false)
+  }
+---
+package main
+
+type Handle *int
+
+type Alias Handle
+
+type Table map[string]int
+
+type Index Table
+
+func handle(present bool, n *int) Alias {
+	if present {
+		return Alias(Handle(n))
+	}
+	return nil
+}
+
+func index(present bool) Index {
+	if present {
+		return Index(Table(make(map[string]int)))
+	}
+	return nil
+}
+
+func main() {
+	n := 1
+	handle(true, &n)
+	index(false)
+}

@@ -249,6 +249,12 @@ func (c *Converter) resolveNilability(result *ConvertResult, sig *types.Signatur
 	}
 	isSinglePointerReturn := isSingleNilableReturn && isSinglePointerResult(sig)
 
+	witnessNilable := false
+	if !isSingleNilableReturn && isSingleDemotableResult(sig) {
+		facts, ok := c.nilness.Function(d.obj)
+		witnessNilable = ok && facts.HasBody && facts.Single == ReturnHasNilPath
+	}
+
 	forceNonNilable := false
 	if isSingleNilableReturn {
 		if facts, ok := c.nilness.Function(d.obj); ok && facts.HasBody {
@@ -277,7 +283,8 @@ func (c *Converter) resolveNilability(result *ConvertResult, sig *types.Signatur
 		forceNilable = c.cfg.ShouldWrapNilableReturn(k.pkgPath, k.name)
 	}
 
-	if (isSingleNilableReturn && !forceNonNilable) || (forceNilable && !returnType.NilableReturnApplied) {
+	if ((isSingleNilableReturn || witnessNilable) && !forceNonNilable) ||
+		(forceNilable && !returnType.NilableReturnApplied) {
 		result.ReturnType = optionOf(result.ReturnType)
 	}
 }
@@ -1014,6 +1021,12 @@ func isSinglePointerResult(sig *types.Signature) bool {
 func isSingleNilableResult(sig *types.Signature) bool {
 	results := sig.Results()
 	return results.Len() == 1 && isNilableGoType(results.At(0).Type())
+}
+
+// isSingleDemotableResult reports whether sig has exactly one demotable result.
+func isSingleDemotableResult(sig *types.Signature) bool {
+	results := sig.Results()
+	return results.Len() == 1 && isDemotableGoType(results.At(0).Type())
 }
 
 func sliceToVarArgs(typeStr string) string {

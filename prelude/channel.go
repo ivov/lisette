@@ -1,6 +1,9 @@
 package lisette
 
 func ChannelSend[T any](ch chan T, value T) (sent bool) {
+	if ch == nil {
+		return false
+	}
 	defer func() {
 		if r := recover(); r != nil {
 			if err, ok := r.(error); ok && err.Error() == "send on closed channel" {
@@ -15,6 +18,9 @@ func ChannelSend[T any](ch chan T, value T) (sent bool) {
 }
 
 func ChannelClose[T any](ch chan T) {
+	if ch == nil {
+		return
+	}
 	defer func() {
 		if r := recover(); r != nil {
 			if err, ok := r.(error); ok && err.Error() == "close of closed channel" {
@@ -27,6 +33,9 @@ func ChannelClose[T any](ch chan T) {
 }
 
 func SenderSend[T any](ch chan<- T, value T) (sent bool) {
+	if ch == nil {
+		return false
+	}
 	defer func() {
 		if r := recover(); r != nil {
 			if err, ok := r.(error); ok && err.Error() == "send on closed channel" {
@@ -41,6 +50,9 @@ func SenderSend[T any](ch chan<- T, value T) (sent bool) {
 }
 
 func SenderClose[T any](ch chan<- T) {
+	if ch == nil {
+		return
+	}
 	defer func() {
 		if r := recover(); r != nil {
 			if err, ok := r.(error); ok && err.Error() == "close of closed channel" {
@@ -53,6 +65,9 @@ func SenderClose[T any](ch chan<- T) {
 }
 
 func ChannelReceive[T any](ch chan T) Option[T] {
+	if ch == nil {
+		return Option[T]{Tag: OptionNone}
+	}
 	v, ok := <-ch
 	if ok {
 		return Option[T]{Tag: OptionSome, SomeVal: v}
@@ -61,11 +76,23 @@ func ChannelReceive[T any](ch chan T) Option[T] {
 }
 
 func ReceiverReceive[T any](ch <-chan T) Option[T] {
+	if ch == nil {
+		return Option[T]{Tag: OptionNone}
+	}
 	v, ok := <-ch
 	if ok {
 		return Option[T]{Tag: OptionSome, SomeVal: v}
 	}
 	return Option[T]{Tag: OptionNone}
+}
+
+func ChannelRange[T any](ch <-chan T) <-chan T {
+	if ch != nil {
+		return ch
+	}
+	closed := make(chan T)
+	close(closed)
+	return closed
 }
 
 func ChannelSplit[T any](ch chan T) Tuple2[chan<- T, <-chan T] {

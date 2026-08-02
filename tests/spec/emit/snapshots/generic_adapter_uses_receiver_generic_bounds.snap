@@ -78,6 +78,12 @@ type _lisAdapter_Bar_Box_0[K comparable] struct {
 }
 
 func (a _lisAdapter_Bar_Box_0[K]) get() lisette.Option[map[K]int] {
-	option_1 := lisette.OptionFromCommaOk[map[K]int](a.inner.get())
-	return option_1
+	ret_1, ret_2 := a.inner.get()
+	var option_3 lisette.Option[map[K]int]
+	if ret_2 && ret_1 != nil {
+		option_3 = lisette.MakeOptionSome[map[K]int](ret_1)
+	} else {
+		option_3 = lisette.MakeOptionNone[map[K]int]()
+	}
+	return option_3
 }

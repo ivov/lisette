@@ -83,6 +83,49 @@ func TestChannelSplitSendReceive(t *testing.T) {
 	}
 }
 
+func TestNilChannelReadsAsClosed(t *testing.T) {
+	var ch chan int
+	if ChannelReceive(ch).IsSome() {
+		t.Fatal("expected None receiving from a nil channel")
+	}
+	if ReceiverReceive[int](ch).IsSome() {
+		t.Fatal("expected None receiving from a nil receiver")
+	}
+	if ChannelSend(ch, 42) {
+		t.Fatal("expected send on a nil channel to return false")
+	}
+	if SenderSend[int](ch, 42) {
+		t.Fatal("expected send on a nil sender to return false")
+	}
+	ChannelClose(ch)
+	SenderClose[int](ch)
+}
+
+func TestChannelRangeOverNilEndsImmediately(t *testing.T) {
+	var ch chan int
+	count := 0
+	for range ChannelRange[int](ch) {
+		count++
+	}
+	if count != 0 {
+		t.Fatalf("expected no iterations over a nil channel, got %d", count)
+	}
+}
+
+func TestChannelRangePassesLiveChannelThrough(t *testing.T) {
+	ch := make(chan int, 2)
+	ch <- 1
+	ch <- 2
+	close(ch)
+	var got []int
+	for v := range ChannelRange[int](ch) {
+		got = append(got, v)
+	}
+	if len(got) != 2 || got[0] != 1 || got[1] != 2 {
+		t.Fatalf("expected [1 2], got %v", got)
+	}
+}
+
 func TestSendOnClosedChannelPanicText(t *testing.T) {
 	ch := make(chan int)
 	close(ch)
