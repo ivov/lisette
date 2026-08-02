@@ -12,7 +12,7 @@ repository.workspace = true
 doctest = false
 
 [dependencies]
-stdlib = { package = "lisette-stdlib", version = "=0.11.0", path = "../stdlib" }
+stdlib = { package = "lisette-stdlib", version = "=0.11.1", path = "../stdlib" }
 toml_edit = { version = "0.22", features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
 

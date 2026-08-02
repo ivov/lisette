@@ -12,12 +12,12 @@ repository.workspace = true
 doctest = false
 
 [dependencies]
-syntax = { package = "lisette-syntax", version = "=0.11.0", path = "../syntax" }
-semantics = { package = "lisette-semantics", version = "=0.11.0", path = "../semantics" }
-passes = { package = "lisette-passes", version = "=0.11.0", path = "../passes" }
-diagnostics = { package = "lisette-diagnostics", version = "=0.11.0", path = "../diagnostics" }
-deps = { package = "lisette-deps", version = "=0.11.0", path = "../deps" }
-format = { package = "lisette-format", version = "=0.11.0", path = "../format" }
+syntax = { package = "lisette-syntax", version = "=0.11.1", path = "../syntax" }
+semantics = { package = "lisette-semantics", version = "=0.11.1", path = "../semantics" }
+passes = { package = "lisette-passes", version = "=0.11.1", path = "../passes" }
+diagnostics = { package = "lisette-diagnostics", version = "=0.11.1", path = "../diagnostics" }
+deps = { package = "lisette-deps", version = "=0.11.1", path = "../deps" }
+format = { package = "lisette-format", version = "=0.11.1", path = "../format" }
 rustc-hash.workspace = true
 serde.workspace = true
 serde_json.workspace = true
