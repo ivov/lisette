@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785667605609,
+  "lastUpdate": 1785668129471,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -16517,6 +16517,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "bindgen",
             "value": 7372,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 890,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0f2859fedcef737267f0fee1dc10296ce9c1fb0a",
+          "message": "fix: stop exempting `defer` and `task` from discard lints (#1182)",
+          "timestamp": "2026-08-02T12:55:05+02:00",
+          "tree_id": "b110b06bb00b48b0fb6564dd045b69e4800bd5af",
+          "url": "https://github.com/ivov/lisette/commit/0f2859fedcef737267f0fee1dc10296ce9c1fb0a"
+        },
+        "date": 1785668127761,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 124466,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30322,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 25356,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18476,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13145,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 11816,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6846,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5382,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2883,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1271,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7384,
             "unit": "lines"
           },
           {
