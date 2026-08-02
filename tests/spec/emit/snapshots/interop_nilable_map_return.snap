@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/reg"
+  
+  fn main() {
+    match reg.Registry(true) {
+      Some(m) => { let _ = m.length() },
+      None => { let _ = 0 },
+    }
+  }
+---
+package main
+
+import (
+	"example.com/reg"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	raw_2 := reg.Registry(true)
+	option_3 := lisette.OptionFromNilable[map[string]int](raw_2, raw_2 == nil)
+	if option_3.Tag == lisette.OptionSome {
+		_ = len(option_3.SomeVal)
+	} else {
+	}
+}

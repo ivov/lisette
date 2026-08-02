@@ -160,7 +160,7 @@ func (a *NilnessAnalysis) analyze(fn *ssa.Function, nilableParams []string) Func
 	results := body.Signature.Results()
 	anyNilable := false
 	for v := range results.Variables() {
-		if isNilableGoType(v.Type()) {
+		if isDemotableGoType(v.Type()) {
 			anyNilable = true
 			break
 		}

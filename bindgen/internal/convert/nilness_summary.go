@@ -136,7 +136,7 @@ func (a *NilnessAnalysis) applyCalleePin(fn *ssa.Function, s *nilnessSummary) {
 		return
 	}
 	sig, ok := obj.Type().(*types.Signature)
-	if !ok || !isSingleNilableResult(sig) {
+	if !ok || !isSingleDemotableResult(sig) {
 		return
 	}
 	if a.cfg.IsNonNilableReturn(obj.Pkg().Path(), qualifiedFunctionName(obj)) {

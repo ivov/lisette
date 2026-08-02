@@ -13,7 +13,7 @@ func TakeAlias(s AliasString) AliasIntSlice {
 
 // Function returning alias
 func GetMap() AliasStringMap {
-	return nil
+	return AliasStringMap{}
 }
 
 // Type definitions (new distinct types)

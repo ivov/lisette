@@ -156,7 +156,7 @@ func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]b
 	// (T, bool) -> Option<T> when bool indicates presence/success
 	if isBoolType(last.Type()) {
 		if shouldConvertToOption(last.Name(), conv, qualifiedName) {
-			nilable := results.Len() == 2 && isNilableGoType(results.At(0).Type())
+			nilable := results.Len() == 2 && isDemotableGoType(results.At(0).Type())
 			inner := collectReturnTypes(results, 0, results.Len()-1, seen, conv, qualifiedName, substitutions, nil)
 			innerType := inner.LisetteType
 			if inner.SkipReason != nil {
@@ -199,7 +199,7 @@ func nilWitnessDemotions(conv *Converter, obj types.Object, results *types.Tuple
 	}
 	var demoted map[int]bool
 	for i := start; i < end && i < len(witnesses); i++ {
-		if witnesses[i] && isNilableGoType(results.At(i).Type()) {
+		if witnesses[i] && isDemotableGoType(results.At(i).Type()) {
 			if demoted == nil {
 				demoted = make(map[int]bool)
 			}

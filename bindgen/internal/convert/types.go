@@ -47,6 +47,18 @@ func convertParamType(t types.Type, name string, nilable []string, conv *Convert
 	return toLisetteWithSubstitutions(t, conv, substitutions)
 }
 
+// isDemotableGoType reports whether a proven nil path demotes t to Option.
+func isDemotableGoType(t types.Type) bool {
+	if isNilableGoType(t) {
+		return true
+	}
+	switch types.Unalias(t).Underlying().(type) {
+	case *types.Map, *types.Chan:
+		return true
+	}
+	return false
+}
+
 // isNilableGoType reports whether t is a Go-nilable type (pointer or non-empty non-error interface).
 func isNilableGoType(t types.Type) bool {
 	t = types.Unalias(t)

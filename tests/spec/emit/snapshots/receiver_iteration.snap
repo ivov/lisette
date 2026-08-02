@@ -12,10 +12,12 @@ description: |
 ---
 package main
 
+import lisette "github.com/ivov/lisette/prelude"
+
 func process(_ int) {}
 
 func test(rx <-chan int) {
-	for v := range rx {
+	for v := range lisette.ChannelRange(rx) {
 		process(v)
 	}
 }

@@ -334,7 +334,7 @@ pub fn Sleep(d: Duration)
 /// tickers, even if they haven't been stopped.
 /// The Stop method is no longer necessary to help the garbage collector.
 /// There is no longer any reason to prefer NewTicker when Tick will do.
-pub fn Tick(d: Duration) -> Receiver<Time>
+pub fn Tick(d: Duration) -> Option<Receiver<Time>>
 
 /// Unix returns the local Time corresponding to the given Unix time,
 /// sec seconds and nsec nanoseconds since January 1, 1970 UTC.

@@ -13,11 +13,13 @@ description: |
 ---
 package main
 
+import lisette "github.com/ivov/lisette/prelude"
+
 func process(_ int) {}
 
 func test() {
 	ch := make(chan int)
-	for v := range ch {
+	for v := range lisette.ChannelRange(ch) {
 		process(v)
 	}
 }

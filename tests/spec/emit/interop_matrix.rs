@@ -2694,3 +2694,80 @@ impl<K: Comparable, V> Cache<K, V> {
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/ttl", typedef)]);
 }
+
+#[test]
+fn interop_nilable_map_return() {
+    let input = r#"
+import "go:example.com/reg"
+
+fn main() {
+  match reg.Registry(true) {
+    Some(m) => { let _ = m.length() },
+    None => { let _ = 0 },
+  }
+}
+"#;
+    let typedef = r#"
+pub fn Registry(enabled: bool) -> Option<Map<string, int>>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/reg", typedef)]);
+}
+
+#[test]
+fn interop_nilable_channel_return() {
+    let input = r#"
+import "go:example.com/reg"
+
+fn main() {
+  match reg.Events() {
+    Some(ch) => { let _ = ch.receive() },
+    None => { let _ = 0 },
+  }
+}
+"#;
+    let typedef = r#"
+pub fn Events() -> Option<Channel<int>>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/reg", typedef)]);
+}
+
+#[test]
+fn interop_comma_ok_map_return_keeps_bool() {
+    let input = r#"
+import "go:example.com/reg"
+
+fn main() {
+  match reg.Lookup("a") {
+    Some(m) => { let _ = m.length() },
+    None => { let _ = 0 },
+  }
+}
+"#;
+    let typedef = r#"
+#[go(comma_ok)]
+pub fn Lookup(key: string) -> Option<Map<string, int>>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/reg", typedef)]);
+}
+
+#[test]
+fn interop_nilable_return_through_chained_newtypes() {
+    let input = r#"
+import "go:example.com/reg"
+
+fn main() {
+  match reg.Lookup() {
+    Some(idx) => { let _ = idx },
+    None => { let _ = 0 },
+  }
+}
+"#;
+    let typedef = r#"
+pub struct Table(Map<string, int>)
+
+pub struct Index(Table)
+
+pub fn Lookup() -> Option<Index>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/reg", typedef)]);
+}

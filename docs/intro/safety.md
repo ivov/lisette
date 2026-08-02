@@ -73,7 +73,7 @@ match FindHandler("api") {
 
 📚 See [`13-go-interop.md`](../reference/13-go-interop.md#typed-nil-at-the-boundary)
 
-### Safe access for maps, slices, and arrays
+### Safe maps, slices, and arrays
 
 Go zero-values a missing key in a map, and panics on out-of-bounds index access in a slice:
 
@@ -97,6 +97,18 @@ match users.get("bob") {
 match items.get(0) {
   Some(item) => fmt.Println(item),
   None => fmt.Println("item not found"),
+}
+```
+
+A map coming from Go can also be `nil` outright, which panics on write. Where Lisette can prove that, it wraps the map in an `Option`:
+
+```rust
+// Go:  `func (h Header) Clone() Header`
+// Lis: `fn Clone(self) -> Option<Header>`
+
+match request.Header.Clone() {
+  Some(headers) => forward(headers),
+  None => fmt.Println("no headers to forward"),
 }
 ```
 
@@ -493,7 +505,20 @@ ch.send(42)  // returns `false`, no panic
 ch.close()   // no-op, no panic
 ```
 
-See [`14-concurrency.md`](../reference/14-concurrency.md)
+📚 See [`14-concurrency.md`](../reference/14-concurrency.md)
+
+### Deadlock-safe `nil` channels
+
+In Go, sending to or receiving from a `nil` channel blocks forever.
+
+```go
+var ch chan int
+v := <-ch   // fatal error: all goroutines are asleep - deadlock!
+```
+
+Lisette wraps the nilable channels it can identify at the Go boundary in an `Option`. Any it cannot wrap behave as closed.
+
+Inside a `select`, a `nil` channel keeps its Go meaning: that arm is never ready.
 
 ### Type-safe channels
 
