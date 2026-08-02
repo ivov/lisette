@@ -124,12 +124,14 @@ pub fn wrong_test_file_suffix(display_path: &str) -> LisetteDiagnostic {
         display_path
     ))
     .with_resolve_code("wrong_test_file_suffix")
+    .with_file_location(display_path)
     .with_help(help)
 }
 
 pub fn non_test_file_under_tests(display_path: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::error(format!("`{}` is not a test file", display_path))
         .with_resolve_code("non_test_file_under_tests")
+        .with_file_location(display_path)
         .with_help("Files under `tests/` must use the `.test.lis` suffix. Rename this file or move it into `src/`")
 }
 
@@ -139,6 +141,7 @@ pub fn cannot_emit_test_file(display_path: &str) -> LisetteDiagnostic {
         display_path
     ))
     .with_resolve_code("cannot_emit_test_file")
+    .with_file_location(display_path)
     .with_help("Test files are not entry points. Use `lis check` to type-check this file.")
 }
 
@@ -288,79 +291,14 @@ pub fn bindgen_failed(
     ))
 }
 
-pub fn unreachable_modules(module_ids: &[String]) -> LisetteDiagnostic {
-    let list = module_ids.join("` · `");
-    let (message, help) = if module_ids.len() == 1 {
-        (
-            format!("Unreachable module: `{list}`"),
-            "This module is never imported. Use or remove it.",
-        )
-    } else {
-        (
-            format!("Unreachable modules: `{list}`"),
-            "These modules are never imported. Use or remove them.",
-        )
-    };
-    LisetteDiagnostic::warn(message).with_help(help)
+pub fn unreachable_module(module_id: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn(format!("Unreachable module: `{}`", module_id))
+        .with_resolve_code("unreachable_module")
+        .with_help("This module is never imported. Use or remove it.")
 }
 
 pub fn import_cycle(path: &[String]) -> LisetteDiagnostic {
-    let modules: Vec<_> = path[..path.len() - 1].to_vec();
-
-    let is_self_import = modules.len() == 1;
-
-    let chain = if is_self_import {
-        format!("{} -> {}", modules[0], modules[0])
-    } else {
-        modules.join(" -> ")
-    };
-
-    let first_module = &modules[0];
-    let first_end = first_module.len();
-    let first_center = first_module.len() / 2;
-
-    let last_module = if is_self_import {
-        &modules[0]
-    } else {
-        modules.last().expect("cycle must have at least one module")
-    };
-    let last_start = chain.len() - last_module.len();
-    let last_end = chain.len();
-    let last_center = last_start + last_module.len() / 2;
-
-    let mut underline = String::new();
-    for i in 0..chain.len() {
-        if i < first_end {
-            if i == first_center {
-                underline.push('┬');
-            } else {
-                underline.push('─');
-            }
-        } else if i >= last_start && i < last_end {
-            if i == last_center {
-                underline.push('┬');
-            } else {
-                underline.push('─');
-            }
-        } else {
-            underline.push(' ');
-        }
-    }
-
-    let mut connect_line = String::new();
-    for i in 0..=last_center {
-        if i < first_center {
-            connect_line.push(' ');
-        } else if i == first_center {
-            connect_line.push('╰');
-        } else if i < last_center {
-            connect_line.push('─');
-        } else {
-            connect_line.push('╯');
-        }
-    }
-
-    let art = format!("{}\n{}\n{}", chain, underline, connect_line);
+    let is_self_import = path.len() == 2;
 
     let help = if is_self_import {
         "Remove the self-import"
@@ -368,7 +306,7 @@ pub fn import_cycle(path: &[String]) -> LisetteDiagnostic {
         "To break the cycle, remove one of the imports or extract common dependencies into a separate module"
     };
 
-    LisetteDiagnostic::error(format!("Import cycle detected\n\n{}", art))
+    LisetteDiagnostic::error(format!("Import cycle detected: {}", path.join(" -> ")))
         .with_resolve_code("import_cycle")
         .with_help(help)
 }
@@ -378,21 +316,36 @@ mod tests {
     use super::*;
 
     #[test]
-    fn unreachable_modules_singular_is_a_spanless_warning() {
-        let diagnostic = unreachable_modules(&["orphan".to_string()]);
+    fn unreachable_module_names_one_module_and_carries_a_code() {
+        let diagnostic = unreachable_module("orphan");
         assert!(diagnostic.is_warning());
         assert_eq!(diagnostic.plain_message(), "Unreachable module: `orphan`");
-        assert_eq!(diagnostic.file_id(), None);
-        assert_eq!(diagnostic.code_str(), None);
+        assert_eq!(diagnostic.code_str(), Some("resolve.unreachable_module"));
     }
 
     #[test]
-    fn unreachable_modules_plural_joins_ids() {
-        let diagnostic = unreachable_modules(&["alpha".to_string(), "beta".to_string()]);
-        assert!(diagnostic.is_warning());
+    fn import_cycle_names_the_whole_chain_on_one_line() {
+        let cycle = ["alpha".to_string(), "beta".to_string(), "alpha".to_string()];
+
+        let diagnostic = import_cycle(&cycle);
+
         assert_eq!(
             diagnostic.plain_message(),
-            "Unreachable modules: `alpha` · `beta`"
+            "Import cycle detected: alpha -> beta -> alpha"
         );
+        assert!(!diagnostic.plain_message().contains('\n'));
+    }
+
+    #[test]
+    fn import_cycle_calls_out_a_self_import() {
+        let cycle = ["alpha".to_string(), "alpha".to_string()];
+
+        let diagnostic = import_cycle(&cycle);
+
+        assert_eq!(
+            diagnostic.plain_message(),
+            "Import cycle detected: alpha -> alpha"
+        );
+        assert_eq!(diagnostic.plain_help(), Some("Remove the self-import"));
     }
 }

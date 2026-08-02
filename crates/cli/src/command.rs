@@ -440,6 +440,16 @@ fn parse_check(mut arguments: impl Iterator<Item = String>) -> Result<Command, P
         });
     }
 
+    if fix && format == OutputFormat::Unix {
+        return Err(ParseError::UnexpectedArgument {
+            message: "`--fix` and `--output unix` cannot be used together".to_string(),
+            reason:
+                "`--fix` reports what it rewrote, not which diagnostics remain, so it has no per-diagnostic lines to emit"
+                    .to_string(),
+            hint: "Run `lis check --fix` first, then `lis check --output unix`".to_string(),
+        });
+    }
+
     Ok(Command::Check {
         path,
         filter,

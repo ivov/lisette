@@ -1,9 +1,5 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Import cycle detected
-  │
-  │ module_a -> module_b -> module_c
-  │ ────┬───                ────┬───
-  │     ╰───────────────────────╯
+  ✕ Import cycle detected: module_a -> module_b -> module_c -> module_a
   help: To break the cycle, remove one of the imports or extract common dependencies into a separate module · code: [resolve.import_cycle]

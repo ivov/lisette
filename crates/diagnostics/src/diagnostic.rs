@@ -95,6 +95,15 @@ fn strip_period(s: &str, strip: bool) -> &str {
     }
 }
 
+fn combine_help_and_note(help: Option<&str>, note: Option<&str>, has_code: bool) -> Option<String> {
+    match (help, note) {
+        (Some(help), Some(note)) => Some(format!("{} {}", help, strip_period(note, has_code))),
+        (Some(help), None) => Some(strip_period(help, has_code).to_string()),
+        (None, Some(note)) => Some(strip_period(note, has_code).to_string()),
+        (None, None) => None,
+    }
+}
+
 #[derive(Debug, Clone)]
 struct Label {
     span: Span,
@@ -195,6 +204,7 @@ pub struct LisetteDiagnostic {
     severity: Severity,
     code: Option<String>,
     fix: Option<crate::Fix>,
+    file_location: Option<String>,
 }
 
 impl fmt::Display for LisetteDiagnostic {
@@ -239,12 +249,7 @@ impl fmt::Display for HelpText<'_> {
         let use_color = self.use_color;
         let has_code = self.diagnostic_code.is_some();
 
-        let combined = match (self.help, self.note) {
-            (Some(h), Some(n)) => format!("{} {}", h, strip_period(n, has_code)),
-            (Some(h), None) => strip_period(h, has_code).to_string(),
-            (None, Some(n)) => strip_period(n, has_code).to_string(),
-            (None, None) => String::new(),
-        };
+        let combined = combine_help_and_note(self.help, self.note, has_code).unwrap_or_default();
 
         if !combined.is_empty() {
             if use_color {
@@ -319,6 +324,14 @@ impl LisetteDiagnostic {
         self.note.as_deref()
     }
 
+    pub fn help_and_note(&self) -> Option<String> {
+        combine_help_and_note(
+            self.help.as_deref(),
+            self.note.as_deref(),
+            self.code.is_some(),
+        )
+    }
+
     fn new(message: impl Into<String>, severity: Severity) -> Self {
         Self {
             message: message.into(),
@@ -328,6 +341,7 @@ impl LisetteDiagnostic {
             severity,
             code: None,
             fix: None,
+            file_location: None,
         }
     }
 
@@ -480,14 +494,34 @@ impl LisetteDiagnostic {
             .collect()
     }
 
-    pub fn location_offset(&self) -> Option<usize> {
+    fn location_label(&self) -> Option<&Label> {
         let file_id = self.file_id()?;
         self.labels
             .iter()
             .filter(|label| label.span.file_id == file_id)
             .find(|label| label.primary)
             .or_else(|| self.labels.first())
+    }
+
+    pub fn location_offset(&self) -> Option<usize> {
+        self.location_label()
             .map(|label| label.span.byte_offset as usize)
+    }
+
+    pub fn with_file_location(mut self, display_path: impl Into<String>) -> Self {
+        self.file_location = Some(display_path.into());
+        self
+    }
+
+    pub fn file_location(&self) -> Option<&str> {
+        self.file_location.as_deref()
+    }
+
+    pub fn located_label(&self) -> Option<&str> {
+        self.location_label()
+            .map(|label| label.text.as_str())
+            .filter(|text| !text.is_empty())
+            .or_else(|| self.plain_label())
     }
 
     pub(crate) fn severity_word(&self) -> &'static str {

@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::time::Duration;
 
 use rustc_hash::FxHashMap;
@@ -351,19 +352,79 @@ pub fn render_all(
     groups.counts(file_count)
 }
 
-/// Renders one diagnostic as `file:line:col: severity: message [code]`.
+fn breaks_line(character: char) -> bool {
+    matches!(character, '\n' | '\r' | '\u{b}' | '\u{c}')
+}
+
+fn flatten_to_one_line(text: &str) -> Cow<'_, str> {
+    if !text.contains(breaks_line) {
+        return Cow::Borrowed(text);
+    }
+
+    let mut flattened = String::with_capacity(text.len());
+    let mut chars = text.char_indices().peekable();
+    while let Some((start, character)) = chars.next() {
+        if !character.is_whitespace() {
+            flattened.push(character);
+            continue;
+        }
+
+        let mut end = start + character.len_utf8();
+        while let Some(&(index, next)) = chars.peek() {
+            if !next.is_whitespace() {
+                break;
+            }
+            end = index + next.len_utf8();
+            chars.next();
+        }
+
+        let run = &text[start..end];
+        if run.contains(breaks_line) {
+            flattened.push(' ');
+        } else {
+            flattened.push_str(run);
+        }
+    }
+
+    Cow::Owned(flattened.trim().to_string())
+}
+
+/// Renders one diagnostic as `file:line:col: severity: message: label · help [code flags]`.
 pub fn unix_line(diagnostic: &LisetteDiagnostic, source: &IndexedSource, filename: &str) -> String {
     let mut line = String::new();
     if let Some(offset) = diagnostic.location_offset() {
-        let (lineno, col) = source.line_col(offset);
-        line.push_str(&format!("{}:{}:{}: ", filename, lineno, col));
+        let (lineno, column) = source.line_col(offset);
+        line.push_str(&format!(
+            "{}:{}:{}: ",
+            flatten_to_one_line(filename),
+            lineno,
+            column
+        ));
+    } else if let Some(path) = diagnostic.file_location() {
+        line.push_str(&format!("{}:1:1: ", flatten_to_one_line(path)));
     }
+
     line.push_str(diagnostic.severity_word());
     line.push_str(": ");
-    line.push_str(diagnostic.plain_message());
+    line.push_str(&flatten_to_one_line(diagnostic.plain_message()));
+
+    if let Some(label) = diagnostic.located_label() {
+        line.push_str(": ");
+        line.push_str(&flatten_to_one_line(label));
+    }
+
+    if let Some(help) = diagnostic.help_and_note() {
+        line.push_str(" · ");
+        line.push_str(&flatten_to_one_line(&help));
+    }
+
     if let Some(code) = diagnostic.code_str() {
         line.push_str(&format!(" [{}]", code));
     }
+    if diagnostic.fix().is_some() {
+        line.push_str(" [autofixable]");
+    }
+
     line
 }
 

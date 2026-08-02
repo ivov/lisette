@@ -1,4 +1,4 @@
 ---
 source: tests/ui/unix.rs
 ---
-src/main.lis:2:11: error: Unclosed block [parse.unclosed_block]
+src/main.lis:2:11: error: Unclosed block: opening brace here · Add a closing `}` [parse.unclosed_block]

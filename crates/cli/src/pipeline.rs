@@ -155,10 +155,10 @@ pub fn compile(
     };
 
     let mut diagnostics = analysis.take_diagnostics();
-    if !analysis.unreachable_modules.is_empty() && !emit_tests {
-        diagnostics.push(diagnostics::module_graph::unreachable_modules(
-            &analysis.unreachable_modules,
-        ));
+    if !emit_tests {
+        for module_id in &analysis.unreachable_modules {
+            diagnostics.push(diagnostics::module_graph::unreachable_module(module_id));
+        }
     }
 
     let mut sources = Sources::default();

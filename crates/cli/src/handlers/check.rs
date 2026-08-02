@@ -289,7 +289,7 @@ fn compile_single_file(
         .unwrap_or("main.lis")
         .to_string();
     let entry_display =
-        lisette::fs::relative_to_cwd(file_path).unwrap_or_else(|| entry_name.clone());
+        lisette::fs::relative_to_cwd(file_path).unwrap_or_else(|| file_path.display().to_string());
     let working_dir = file_path.parent().unwrap_or_else(|| Path::new("."));
 
     let result = compile_project_entry(
