@@ -2,6 +2,22 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.11.1](https://github.com/ivov/lisette/compare/lisette-v0.11.0...lisette-v0.11.1) - 2026-08-02
+
+### Fixes
+
+- fix: allow autofill of Go structs with hidden fields by default [#1198](https://github.com/ivov/lisette/pull/1198) [`0ab5f68`](https://github.com/ivov/lisette/commit/0ab5f68607a27d304b14ba8504462577b629c320)
+
+### Internals
+
+- chore: version releases by commits, not internal crate APIs [#1196](https://github.com/ivov/lisette/pull/1196) [`4255d9d`](https://github.com/ivov/lisette/commit/4255d9d919e7dc370e1796e2ca51f3158a6de2f1)
+- refactor: shed `tokio` [#1195](https://github.com/ivov/lisette/pull/1195) [`8a0ad45`](https://github.com/ivov/lisette/commit/8a0ad453596f4bf3f93245b3292747cc977244a6)
+- refactor: simplify `passes` crate data flow [#1194](https://github.com/ivov/lisette/pull/1194) [`169e59c`](https://github.com/ivov/lisette/commit/169e59cbb9cfb93bdbe8f3e73e82b5091b9f1262)
+- chore: restore lowercase commit subject enforcement [#1190](https://github.com/ivov/lisette/pull/1190) [`178666a`](https://github.com/ivov/lisette/commit/178666ab1382446535d844a633b8ad34aab302ae)
+- chore: upgrade Rust toolchain to 1.97 [#1189](https://github.com/ivov/lisette/pull/1189) [`4b6dd29`](https://github.com/ivov/lisette/commit/4b6dd29b28ecccd74ca470dfd0fc478c4b42fb61)
+- refactor: take over diagnostic rendering [#1188](https://github.com/ivov/lisette/pull/1188) [`fbc5f3a`](https://github.com/ivov/lisette/commit/fbc5f3a13c080ed8386c1f58e2a880786dfbb5d2)
+
+
 ## [0.11.0](https://github.com/ivov/lisette/compare/lisette-v0.10.0...lisette-v0.11.0) - 2026-08-02
 
 ### Features
