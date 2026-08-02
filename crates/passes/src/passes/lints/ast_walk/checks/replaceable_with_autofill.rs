@@ -41,11 +41,11 @@ pub fn check_replaceable_with_autofill(expression: &Expression, ctx: &NodeCtx) {
     if !unspecified.is_empty() {
         return;
     }
-    if !rewrite_would_typecheck(ctx.store, ty, name, field_assignments, ctx.module_id) {
+    if !rewrite_would_typecheck(ctx.store, ty, name, field_assignments, ctx.module_id()) {
         return;
     }
 
-    let kept = render_kept_fields(ctx.source, field_assignments);
+    let kept = render_kept_fields(ctx.source(), field_assignments);
     let owner_span = Span::new(span.file_id, span.byte_offset, name.len() as u32);
     let replacement = if kept.is_empty() {
         format!("{name} {{ .. }}")
@@ -53,7 +53,7 @@ pub fn check_replaceable_with_autofill(expression: &Expression, ctx: &NodeCtx) {
         format!("{name} {{ {kept}, .. }}")
     };
     let mut diagnostic = diagnostics::lint::replaceable_with_autofill(&owner_span, &kept, name);
-    if !replacement_drops_comment(ctx.source, *span, &replacement) {
+    if !replacement_drops_comment(ctx.source(), *span, &replacement) {
         diagnostic = diagnostic.with_fix(Fix::new(
             format!("Replace with `{replacement}`"),
             Edit::replacement(*span, replacement),

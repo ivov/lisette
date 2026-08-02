@@ -55,8 +55,8 @@ pub fn check_redundant_sprintf(expression: &Expression, ctx: &NodeCtx) {
     }
 
     let (Some(namespace_text), Some(value_text)) = (
-        span_text(ctx.source, namespace),
-        span_text(ctx.source, value),
+        span_text(ctx.source(), namespace),
+        span_text(ctx.source(), value),
     ) else {
         return;
     };

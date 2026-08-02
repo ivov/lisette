@@ -65,11 +65,11 @@ pub fn check_unnecessary_lazy_evaluations(expression: &Expression, ctx: &NodeCtx
         diagnostics::lint::unnecessary_lazy_evaluations(&lazy_argument.get_span(), lazy, eager);
     let rest_texts: Option<Vec<&str>> = args[1..]
         .iter()
-        .map(|arg| span_text(ctx.source, arg))
+        .map(|arg| span_text(ctx.source(), arg))
         .collect();
     if let (Some(receiver_text), Some(constant_text), Some(rest_texts)) = (
-        span_text(ctx.source, receiver),
-        span_text(ctx.source, constant),
+        span_text(ctx.source(), receiver),
+        span_text(ctx.source(), constant),
         rest_texts,
     ) {
         let mut call_args = constant_text.to_string();

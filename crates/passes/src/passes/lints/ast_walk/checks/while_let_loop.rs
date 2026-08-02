@@ -47,9 +47,9 @@ pub fn check_while_let_loop(expression: &Expression, ctx: &NodeCtx) {
 
     let pattern_span = first.pattern.get_span();
     let (Some(pattern_text), Some(subject_text)) = (
-        ctx.source
+        ctx.source()
             .get(pattern_span.byte_offset as usize..pattern_span.end() as usize),
-        span_text(ctx.source, subject),
+        span_text(ctx.source(), subject),
     ) else {
         return;
     };

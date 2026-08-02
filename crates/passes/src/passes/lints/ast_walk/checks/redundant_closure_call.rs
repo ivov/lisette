@@ -1,4 +1,4 @@
-use crate::passes::walk::NodeCtx;
+use crate::passes::walk::{ClaimKind, NodeCtx};
 use diagnostics::{Edit, Fix};
 use syntax::ast::Expression;
 
@@ -42,12 +42,12 @@ pub fn check_redundant_closure_call(expression: &Expression, ctx: &mut NodeCtx) 
     }
 
     // Claim the closure so `redundant_closure` does not also advise on it.
-    ctx.claimed_spans.insert(*lambda_span);
+    ctx.claim(ClaimKind::RedundantClosure, *lambda_span);
 
     let mut diagnostic = diagnostics::lint::redundant_closure_call(span);
     if return_annotation.is_unknown()
         && let Some(inner) = inlinable_value(body)
-        && let Some(text) = span_text(ctx.source, inner)
+        && let Some(text) = span_text(ctx.source(), inner)
     {
         diagnostic = diagnostic.with_fix(Fix::new(
             format!("Replace with `{text}`"),

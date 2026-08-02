@@ -143,13 +143,11 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
             .collect();
 
         if !checker.failed() {
-            let mut unused = syntax::program::UnusedInfo::default();
             passes::run(
                 &store,
-                &mut checker.facts,
+                &checker.facts,
                 &checker.sink,
-                &mut unused,
-                false,
+                passes::LintMode::Skip,
             );
         }
 

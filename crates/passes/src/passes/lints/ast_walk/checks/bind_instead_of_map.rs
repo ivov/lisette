@@ -44,8 +44,8 @@ pub fn check_bind_instead_of_map(expression: &Expression, ctx: &NodeCtx) {
     if !lambda_is_annotated(closure)
         && reads_as_method_call(receiver, args)
         && let (Some(receiver_text), Some(wrapped_text)) = (
-            span_text(ctx.source, receiver),
-            span_text(ctx.source, wrapped),
+            span_text(ctx.source(), receiver),
+            span_text(ctx.source(), wrapped),
         )
     {
         let replacement = format!(

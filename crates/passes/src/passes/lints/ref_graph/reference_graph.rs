@@ -3,30 +3,31 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::Span;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ModuleItemId {
-    pub name: EcoString,
-    pub file_id: Option<u32>,
+pub enum ModuleItemId {
+    Definition(EcoString),
+    Import { file_id: u32, alias: EcoString },
 }
 
 impl ModuleItemId {
     pub fn new(name: &str) -> Self {
-        Self {
-            name: name.into(),
-            file_id: None,
-        }
+        Self::Definition(name.into())
     }
 
     pub fn import(file_id: u32, name: &str) -> Self {
-        Self {
-            name: name.into(),
-            file_id: Some(file_id),
+        Self::Import {
+            file_id,
+            alias: name.into(),
         }
     }
 
     pub fn equals_method(type_name: &str) -> Self {
-        Self {
-            name: format!("{type_name}#equals").into(),
-            file_id: None,
+        Self::Definition(format!("{type_name}#equals").into())
+    }
+
+    fn import_alias(&self) -> Option<&str> {
+        match self {
+            Self::Import { alias, .. } => Some(alias),
+            Self::Definition(_) => None,
         }
     }
 
@@ -72,10 +73,8 @@ impl EnumVariantId {
 #[derive(Debug, Default)]
 pub struct ReferenceGraph {
     edges: HashMap<ModuleItemId, HashSet<ModuleItemId>>,
-    entrypoints: HashSet<ModuleItemId>,
     items: HashMap<ModuleItemId, ItemInfo>,
-    unused_struct_fields: HashMap<StructFieldId, Span>,
-    unused_enum_variants: HashMap<EnumVariantId, Span>,
+    unused_members: HashMap<MemberId, Span>,
 }
 
 impl ReferenceGraph {
@@ -84,10 +83,14 @@ impl ReferenceGraph {
     }
 
     pub fn add_item(&mut self, id: ModuleItemId, span: Span, kind: ItemKind, is_entry_point: bool) {
-        self.items.insert(id.clone(), ItemInfo { span, kind });
-        if is_entry_point {
-            self.entrypoints.insert(id);
-        }
+        self.items.insert(
+            id,
+            ItemInfo {
+                span,
+                kind,
+                is_entry_point,
+            },
+        );
     }
 
     pub fn add_import(&mut self, id: ModuleItemId, span: Span, statement_span: Span) {
@@ -96,6 +99,7 @@ impl ReferenceGraph {
             ItemInfo {
                 span,
                 kind: ItemKind::Import { statement_span },
+                is_entry_point: false,
             },
         );
     }
@@ -105,12 +109,19 @@ impl ReferenceGraph {
     }
 
     pub fn mark_as_used(&mut self, id: ModuleItemId) {
-        self.entrypoints.insert(id);
+        if let Some(item) = self.items.get_mut(&id) {
+            item.is_entry_point = true;
+        }
     }
 
-    pub fn compute_reachable(&self) -> HashSet<ModuleItemId> {
+    pub fn analyze(&self) -> ReferenceUsage<'_> {
         let mut reachable = HashSet::default();
-        let mut worklist: Vec<ModuleItemId> = self.entrypoints.iter().cloned().collect();
+        let mut worklist: Vec<ModuleItemId> = self
+            .items
+            .iter()
+            .filter(|(_, item)| item.is_entry_point)
+            .map(|(id, _)| id.clone())
+            .collect();
 
         while let Some(item) = worklist.pop() {
             if reachable.contains(&item) {
@@ -127,44 +138,86 @@ impl ReferenceGraph {
             }
         }
 
-        reachable
-    }
-
-    pub fn get_unreachable(&self) -> Vec<&ModuleItemId> {
-        let reachable = self.compute_reachable();
-        self.items
-            .keys()
-            .filter(|id| !reachable.contains(*id))
-            .collect()
-    }
-
-    pub fn get_item(&self, id: &ModuleItemId) -> Option<&ItemInfo> {
-        self.items.get(id)
+        ReferenceUsage {
+            graph: self,
+            reachable,
+        }
     }
 
     pub fn add_struct_field(&mut self, id: StructFieldId, span: Span) {
-        self.unused_struct_fields.insert(id, span);
+        self.unused_members.insert(MemberId::StructField(id), span);
     }
 
     pub fn mark_struct_field_used(&mut self, id: StructFieldId) {
-        self.unused_struct_fields.remove(&id);
+        self.unused_members.remove(&MemberId::StructField(id));
     }
 
     pub fn add_enum_variant(&mut self, id: EnumVariantId, span: Span) {
-        self.unused_enum_variants.insert(id, span);
+        self.unused_members.insert(MemberId::EnumVariant(id), span);
     }
 
     pub fn mark_enum_variant_used(&mut self, id: EnumVariantId) {
-        self.unused_enum_variants.remove(&id);
+        self.unused_members.remove(&MemberId::EnumVariant(id));
     }
 
-    pub fn get_unused_struct_fields(&self) -> impl Iterator<Item = &Span> {
-        self.unused_struct_fields.values()
+    pub fn unused_members(&self) -> impl Iterator<Item = (MemberKind, &Span)> {
+        self.unused_members
+            .iter()
+            .map(|(id, span)| (id.kind(), span))
+    }
+}
+
+pub struct ReferenceUsage<'a> {
+    graph: &'a ReferenceGraph,
+    reachable: HashSet<ModuleItemId>,
+}
+
+impl<'a> ReferenceUsage<'a> {
+    pub fn unreachable_items(&self) -> impl Iterator<Item = (&ModuleItemId, &ItemInfo)> {
+        self.graph
+            .items
+            .iter()
+            .filter(|(id, _)| !self.reachable.contains(*id))
     }
 
-    pub fn get_unused_enum_variants(&self) -> impl Iterator<Item = &Span> {
-        self.unused_enum_variants.values()
+    pub fn unused_import_aliases(&self) -> HashSet<String> {
+        let mut aliases = HashMap::default();
+        for (id, item) in &self.graph.items {
+            if let Some(alias) = id.import_alias() {
+                debug_assert!(matches!(item.kind, ItemKind::Import { .. }));
+                aliases
+                    .entry(alias)
+                    .and_modify(|all_unused| *all_unused &= !self.reachable.contains(id))
+                    .or_insert_with(|| !self.reachable.contains(id));
+            }
+        }
+        aliases
+            .into_iter()
+            .filter(|(_, all_unused)| *all_unused)
+            .map(|(alias, _)| alias.to_string())
+            .collect()
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum MemberId {
+    StructField(StructFieldId),
+    EnumVariant(EnumVariantId),
+}
+
+impl MemberId {
+    fn kind(&self) -> MemberKind {
+        match self {
+            Self::StructField(_) => MemberKind::StructField,
+            Self::EnumVariant(_) => MemberKind::EnumVariant,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MemberKind {
+    StructField,
+    EnumVariant,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -179,6 +232,7 @@ pub enum ItemKind {
 pub struct ItemInfo {
     pub span: Span,
     pub kind: ItemKind,
+    is_entry_point: bool,
 }
 
 #[cfg(test)]
@@ -198,7 +252,19 @@ mod tests {
         graph.add_item(child.clone(), span(1), ItemKind::Function, false);
         graph.add_reference(&root, child);
 
-        assert!(graph.get_unreachable().is_empty());
+        assert!(graph.analyze().unreachable_items().next().is_none());
+    }
+
+    #[test]
+    fn import_alias_is_unused_only_when_unused_in_every_file() {
+        let mut graph = ReferenceGraph::new();
+        let used = ModuleItemId::import(0, "dep");
+        let unused = ModuleItemId::import(1, "dep");
+        graph.add_import(used.clone(), span(0), span(0));
+        graph.add_import(unused, span(1), span(1));
+        graph.mark_as_used(used);
+
+        assert!(graph.analyze().unused_import_aliases().is_empty());
     }
 
     #[test]
@@ -212,12 +278,6 @@ mod tests {
         graph.mark_struct_field_used(field);
         graph.mark_enum_variant_used(variant);
 
-        assert_eq!(
-            (
-                graph.get_unused_struct_fields().count(),
-                graph.get_unused_enum_variants().count(),
-            ),
-            (0, 0)
-        );
+        assert_eq!(graph.unused_members().count(), 0);
     }
 }

@@ -26,7 +26,7 @@ pub fn check_redundant_fstring_conversion(expression: &Expression, ctx: &NodeCtx
         let Some((method, arg)) = redundant_conversion(call) else {
             continue;
         };
-        let Some(arg_text) = span_text(ctx.source, arg) else {
+        let Some(arg_text) = span_text(ctx.source(), arg) else {
             continue;
         };
         ctx.sink.push(

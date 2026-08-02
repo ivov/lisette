@@ -43,8 +43,8 @@ pub fn check_needless_bool_assign(expression: &Expression, ctx: &NodeCtx) {
 
     let condition = condition.unwrap_parens();
     let (Some(target), Some(condition_text)) = (
-        span_text(ctx.source, then_target),
-        span_text(ctx.source, condition),
+        span_text(ctx.source(), then_target),
+        span_text(ctx.source(), condition),
     ) else {
         return;
     };

@@ -28,7 +28,7 @@ pub fn check_map_identity(expression: &Expression, ctx: &NodeCtx) {
     }
 
     let mut diagnostic = diagnostics::lint::map_identity(span);
-    if let Some(text) = span_text(ctx.source, receiver) {
+    if let Some(text) = span_text(ctx.source(), receiver) {
         diagnostic = diagnostic.with_fix(Fix::new(
             "Remove identity map",
             Edit::replacement(*span, text),

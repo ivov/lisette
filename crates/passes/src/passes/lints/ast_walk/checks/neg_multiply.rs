@@ -19,7 +19,7 @@ pub fn check_neg_multiply(expression: &Expression, ctx: &NodeCtx) {
     // Skip the lowered `a *= -1` (operator `*=`), whose span is the assignment's,
     // so a `-a` suggestion would drop the assignment. A genuine `a * -1` has no `=`.
     let gap = (left.get_span().end() as usize)..(right.get_span().byte_offset as usize);
-    if ctx.source.get(gap).is_some_and(|text| text.contains('=')) {
+    if ctx.source().get(gap).is_some_and(|text| text.contains('=')) {
         return;
     }
 
@@ -54,7 +54,7 @@ pub fn check_neg_multiply(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
-    let Some(text) = span_text(ctx.source, operand) else {
+    let Some(text) = span_text(ctx.source(), operand) else {
         return;
     };
 

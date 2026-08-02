@@ -4,7 +4,7 @@ use syntax::program::{CallKind, DotAccessKind};
 use syntax::types::Type;
 
 use super::helpers::lambda_is_annotated;
-use crate::passes::walk::NodeCtx;
+use crate::passes::walk::{ClaimKind, NodeCtx};
 use semantics::facts::Facts;
 
 pub fn check_redundant_closure(expression: &Expression, ctx: &NodeCtx) {
@@ -21,7 +21,7 @@ pub fn check_redundant_closure(expression: &Expression, ctx: &NodeCtx) {
 
     // An immediately-invoked closure is owned by `redundant_closure_call`, which
     // claims this span when it removes the wrapper.
-    if ctx.claimed_spans.contains(span) {
+    if ctx.is_claimed(ClaimKind::RedundantClosure, span) {
         return;
     }
 

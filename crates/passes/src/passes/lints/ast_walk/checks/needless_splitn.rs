@@ -44,10 +44,10 @@ pub fn check_needless_splitn(expression: &Expression, ctx: &NodeCtx) {
     }
 
     let (Some(namespace_text), Some(s_text), Some(sep_text), Some(count_text)) = (
-        span_text(ctx.source, namespace),
-        span_text(ctx.source, s),
-        span_text(ctx.source, sep),
-        span_text(ctx.source, count),
+        span_text(ctx.source(), namespace),
+        span_text(ctx.source(), s),
+        span_text(ctx.source(), sep),
+        span_text(ctx.source(), count),
     ) else {
         return;
     };

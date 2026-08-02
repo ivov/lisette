@@ -40,7 +40,7 @@ pub fn check_unnecessary_min_or_max(expression: &Expression, ctx: &NodeCtx) {
 
     let span = expression.get_span();
     let mut diagnostic = diagnostics::lint::unnecessary_min_or_max(&span, op);
-    if let Some(text) = span_text(ctx.source, survivor) {
+    if let Some(text) = span_text(ctx.source(), survivor) {
         let replacement = as_tight_operand(text, survivor);
         diagnostic = diagnostic.with_fix(Fix::new(
             format!("Replace with `{replacement}`"),

@@ -2,9 +2,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use semantics::checker::promotion::{self, MemberKind, Resolution};
 use semantics::store::Store;
-use syntax::ast::{
-    Annotation, Attribute, Expression, ImportAlias, Pattern, SelectArm, StructSpread,
-};
+use syntax::ast::{Annotation, Attribute, Expression, Pattern, SelectArm, Span, StructSpread};
 use syntax::program::File;
 use syntax::program::{DefinitionBody, DotAccessKind, EqualityIndex, Module};
 use syntax::types::{CompoundKind, Symbol, Type, unqualified_name};
@@ -12,8 +10,14 @@ use syntax::types::{CompoundKind, Symbol, Type, unqualified_name};
 use super::reference_graph::{EnumVariantId, ModuleItemId, ReferenceGraph, StructFieldId};
 
 pub struct AliasMap<'a> {
-    aliases: HashMap<String, ModuleItemId>,
+    aliases: HashMap<String, ImportSpans>,
+    file_id: u32,
     store: &'a Store,
+}
+
+struct ImportSpans {
+    name: Span,
+    statement: Span,
 }
 
 impl<'a> AliasMap<'a> {
@@ -21,15 +25,22 @@ impl<'a> AliasMap<'a> {
         let mut aliases = HashMap::default();
 
         for import in file.imports() {
-            if matches!(import.alias, Some(ImportAlias::Blank(_))) {
-                continue;
-            }
             if let Some(effective) = import.effective_alias(&store.go_package_names) {
-                aliases.insert(effective.clone(), ModuleItemId::import(file.id, &effective));
+                aliases.insert(
+                    effective,
+                    ImportSpans {
+                        name: import.name_span,
+                        statement: import.span,
+                    },
+                );
             }
         }
 
-        Self { aliases, store }
+        Self {
+            aliases,
+            file_id: file.id,
+            store,
+        }
     }
 
     fn resolve(&self, module: &Module, name: &str) -> Option<ModuleItemId> {
@@ -37,11 +48,19 @@ impl<'a> AliasMap<'a> {
         if module.definitions.contains_key(qualified_name.as_str()) {
             return Some(ModuleItemId::new(name));
         }
-        self.aliases.get(name).cloned()
+        self.aliases
+            .contains_key(name)
+            .then(|| ModuleItemId::import(self.file_id, name))
     }
 
     fn is_import_alias(&self, name: &str) -> bool {
         self.aliases.contains_key(name)
+    }
+
+    pub(super) fn imports(&self) -> impl Iterator<Item = (&str, Span, Span)> {
+        self.aliases
+            .iter()
+            .map(|(alias, spans)| (alias.as_str(), spans.name, spans.statement))
     }
 }
 

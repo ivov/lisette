@@ -40,7 +40,7 @@ pub fn check_redundant_else(expression: &Expression, ctx: &NodeCtx) {
 
         let consequence_span = consequence.get_span();
         let Some(else_offset) = else_keyword_offset(
-            ctx.source,
+            ctx.source(),
             consequence_span.end(),
             alternative.get_span().byte_offset,
         ) else {
@@ -50,7 +50,7 @@ pub fn check_redundant_else(expression: &Expression, ctx: &NodeCtx) {
         let else_span = Span::new(consequence_span.file_id, else_offset, 4);
         let mut diagnostic = diagnostics::lint::redundant_else(&else_span);
         if let Some(fix) = denest_fix(
-            ctx.source,
+            ctx.source(),
             if_span,
             consequence_span,
             alternative,

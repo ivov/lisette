@@ -181,7 +181,7 @@ fn local_binding(expression: &Expression) -> Option<Local<'_>> {
 fn report(span: Span, accumulator: &str, iterable: &str, ctx: &NodeCtx) {
     let replacement = format!("{accumulator} = {accumulator}.append({iterable}...)");
     let mut diagnostic = diagnostics::lint::manual_extend(&span, &replacement);
-    if !replacement_drops_comment(ctx.source, span, &replacement) {
+    if !replacement_drops_comment(ctx.source(), span, &replacement) {
         diagnostic = diagnostic.with_fix(Fix::new(
             format!("Replace with `{replacement}`"),
             Edit::replacement(span, replacement),

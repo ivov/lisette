@@ -53,9 +53,9 @@ pub fn check_equatable_if_let(expression: &Expression, ctx: &NodeCtx) {
 
     let pattern_span = pattern.get_span();
     let (Some(pattern_text), Some(subject_text)) = (
-        ctx.source
+        ctx.source()
             .get(pattern_span.byte_offset as usize..pattern_span.end() as usize),
-        span_text(ctx.source, scrutinee),
+        span_text(ctx.source(), scrutinee),
     ) else {
         return;
     };
@@ -69,7 +69,7 @@ pub fn check_equatable_if_let(expression: &Expression, ctx: &NodeCtx) {
     let replacement = format!("if {subject_text} == {pattern_text}");
     let mut diagnostic =
         diagnostics::lint::equatable_if_let(&if_keyword_span, pattern_text, subject_text);
-    if !replacement_drops_comment(ctx.source, condition_span, &replacement) {
+    if !replacement_drops_comment(ctx.source(), condition_span, &replacement) {
         diagnostic = diagnostic.with_fix(Fix::new(
             format!("Replace with `{replacement}`"),
             Edit::replacement(condition_span, replacement),

@@ -4,7 +4,7 @@ use crate::passes::lints::ast_walk::casing::{is_screaming_snake_case, to_screami
 use crate::passes::walk::NodeCtx;
 
 pub(crate) fn check(expression: &Expression, ctx: &NodeCtx) {
-    if ctx.is_d_lis {
+    if ctx.is_d_lis() {
         return;
     }
     let Expression::Const {

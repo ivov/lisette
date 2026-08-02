@@ -83,9 +83,9 @@ fn fire_if_redundant(statement: &Expression, ctx: &NodeCtx) {
     }
 
     let (Some(namespace), Some(replacement), Some(guarded)) = (
-        span_text(ctx.source, trim.namespace),
-        span_text(ctx.source, assignment),
-        span_text(ctx.source, statement),
+        span_text(ctx.source(), trim.namespace),
+        span_text(ctx.source(), assignment),
+        span_text(ctx.source(), statement),
     ) else {
         return;
     };

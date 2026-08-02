@@ -32,9 +32,9 @@ pub fn check_manual_bytes_equal(expression: &Expression, ctx: &NodeCtx) {
     };
 
     let (Some(namespace_text), Some(left_text), Some(right_text)) = (
-        span_text(ctx.source, namespace),
-        span_text(ctx.source, left_arg),
-        span_text(ctx.source, right_arg),
+        span_text(ctx.source(), namespace),
+        span_text(ctx.source(), left_arg),
+        span_text(ctx.source(), right_arg),
     ) else {
         return;
     };

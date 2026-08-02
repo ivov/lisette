@@ -93,7 +93,7 @@ fn flag_needless(value: &Expression, ctx: &NodeCtx) {
 
     let span = value.get_span();
     let mut diagnostic = diagnostics::lint::needless_question_mark(&span, wrapper);
-    if let Some(inner_text) = span_text(ctx.source, inner) {
+    if let Some(inner_text) = span_text(ctx.source(), inner) {
         diagnostic = diagnostic.with_fix(Fix::new(
             format!("Replace with `{inner_text}`"),
             Edit::replacement(span, inner_text),

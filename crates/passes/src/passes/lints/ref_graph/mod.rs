@@ -4,7 +4,7 @@ mod reference_graph;
 mod visibility_constraints;
 
 use rayon::prelude::*;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::FxHashSet as HashSet;
 use std::sync::Arc;
 
 use crate::passes::PARALLEL_THRESHOLD;
@@ -14,17 +14,17 @@ use diagnostics::LocalSink;
 use diagnostics::{Edit, Fix};
 use semantics::facts::Facts;
 use semantics::store::Store;
-use syntax::ast::{
-    Attribute, AttributeArg, Expression, ImportAlias, Span, StructFieldDefinition, Visibility,
-};
+use syntax::ast::{Attribute, AttributeArg, Expression, Span, StructFieldDefinition, Visibility};
 use syntax::program::EqualityIndex;
+use syntax::program::File;
 use syntax::program::Module;
 use syntax::program::UnusedInfo;
-use syntax::program::{File, FileImport};
 
 use extract::{AliasMap, is_upper, walk_expression};
 use redundant_import_alias::check_redundant_aliases;
-use reference_graph::{EnumVariantId, ItemKind, ModuleItemId, ReferenceGraph, StructFieldId};
+use reference_graph::{
+    EnumVariantId, ItemKind, MemberKind, ModuleItemId, ReferenceGraph, StructFieldId,
+};
 use syntax::attributes::SERIALIZATION_KEYS;
 use visibility_constraints::check_visibility_constraints;
 
@@ -113,18 +113,16 @@ fn run_ref_lints(module: &Module, facts: &Facts, store: &Store) -> RefLintResult
     let mut unused_definition_spans = Vec::new();
     let mut graph = ReferenceGraph::new();
 
-    let imports_per_alias = collect_items(
-        files,
-        &module.id,
-        &store.go_package_names,
-        equality_index,
-        &mut graph,
-    );
+    let files_with_aliases: Vec<_> = files
+        .values()
+        .filter(|file| !file.is_d_lis())
+        .map(|file| (file, AliasMap::build(file, store)))
+        .collect();
+    collect_items(&files_with_aliases, &module.id, equality_index, &mut graph);
 
-    for file in files.values().filter(|file| !file.is_d_lis()) {
-        let alias_map = AliasMap::build(file, store);
+    for (file, alias_map) in &files_with_aliases {
         for item in &file.items {
-            walk_expression(module, item, &mut graph, &alias_map, None);
+            walk_expression(module, item, &mut graph, alias_map, None);
         }
     }
 
@@ -141,49 +139,39 @@ fn run_ref_lints(module: &Module, facts: &Facts, store: &Store) -> RefLintResult
         }
     }
 
-    let mut unused_imports_per_alias: HashMap<String, usize> = HashMap::default();
-    for item_id in graph.get_unreachable() {
-        if let Some(info) = graph.get_item(item_id) {
-            if matches!(info.kind, ItemKind::Import { .. }) {
-                *unused_imports_per_alias
-                    .entry(item_id.name.to_string())
-                    .or_default() += 1;
-                unused_import_spans.insert(info.span);
-            }
-            if info.kind == ItemKind::Function {
-                unused_definition_spans.push(info.span);
-            }
-            let mut diagnostic = create_unused_diagnostic(info.kind, &info.span);
-            if let ItemKind::Import { statement_span } = info.kind
-                && let Some(file) = files.get(&statement_span.file_id)
-            {
-                let deletion = statement_deletion(&file.source, statement_span);
-                diagnostic = diagnostic.with_fix(Fix::new(
-                    "Remove the unused import",
-                    Edit::deletion(deletion),
-                ));
-            }
-            diagnostics.push(diagnostic);
+    let usage = graph.analyze();
+    for (_, info) in usage.unreachable_items() {
+        if matches!(info.kind, ItemKind::Import { .. }) {
+            unused_import_spans.insert(info.span);
         }
+        if info.kind == ItemKind::Function {
+            unused_definition_spans.push(info.span);
+        }
+        let mut diagnostic = create_unused_diagnostic(info.kind, &info.span);
+        if let ItemKind::Import { statement_span } = info.kind
+            && let Some(file) = files.get(&statement_span.file_id)
+        {
+            let deletion = statement_deletion(&file.source, statement_span);
+            diagnostic = diagnostic.with_fix(Fix::new(
+                "Remove the unused import",
+                Edit::deletion(deletion),
+            ));
+        }
+        diagnostics.push(diagnostic);
     }
 
     // Emit drops an import from every file of the module at once.
-    let unused_import_aliases: HashSet<String> = unused_imports_per_alias
-        .into_iter()
-        .filter(|(alias, unused)| imports_per_alias.get(alias) == Some(unused))
-        .map(|(alias, _)| alias)
-        .collect();
+    let unused_import_aliases = usage.unused_import_aliases();
 
     check_redundant_aliases(files, store, &unused_import_spans, &mut diagnostics);
 
     check_visibility_constraints(module, files, &mut diagnostics);
 
-    for span in graph.get_unused_struct_fields() {
-        diagnostics.push(diagnostics::lint::unused_field(span));
-    }
-
-    for span in graph.get_unused_enum_variants() {
-        diagnostics.push(diagnostics::lint::unused_variant(span));
+    for (kind, span) in graph.unused_members() {
+        diagnostics.push(match kind {
+            MemberKind::StructField => diagnostics::lint::unused_field(span),
+            MemberKind::EnumVariant => diagnostics::lint::unused_variant(span),
+        });
     }
 
     RefLintResult {
@@ -193,45 +181,23 @@ fn run_ref_lints(module: &Module, facts: &Facts, store: &Store) -> RefLintResult
     }
 }
 
-/// Returns how many files import each alias.
 fn collect_items(
-    files: &HashMap<u32, File>,
+    files: &[(&File, AliasMap<'_>)],
     module_id: &str,
-    go_package_names: &HashMap<String, String>,
     equality_index: &EqualityIndex,
     graph: &mut ReferenceGraph,
-) -> HashMap<String, usize> {
-    let mut imports_per_alias: HashMap<String, usize> = HashMap::default();
-
-    for file in files.values().filter(|file| !file.is_d_lis()) {
+) {
+    for (file, aliases) in files {
+        for (alias, name_span, statement_span) in aliases.imports() {
+            graph.add_import(
+                ModuleItemId::import(file.id, alias),
+                name_span,
+                statement_span,
+            );
+        }
         for item in &file.items {
             match item {
-                Expression::ModuleImport {
-                    name,
-                    alias,
-                    name_span,
-                    span,
-                } => {
-                    if matches!(alias, Some(ImportAlias::Blank(_))) {
-                        continue;
-                    }
-
-                    let file_import = FileImport {
-                        name: name.clone(),
-                        name_span: *name_span,
-                        alias: alias.clone(),
-                        span: *span,
-                    };
-
-                    if let Some(effective) = file_import.effective_alias(go_package_names) {
-                        *imports_per_alias.entry(effective.clone()).or_default() += 1;
-                        graph.add_import(
-                            ModuleItemId::import(file.id, &effective),
-                            *name_span,
-                            *span,
-                        );
-                    }
-                }
+                Expression::ModuleImport { .. } => {}
                 Expression::Function {
                     name,
                     name_span,
@@ -348,8 +314,6 @@ fn collect_items(
             }
         }
     }
-
-    imports_per_alias
 }
 
 fn function_is_entry(name: &str, visibility: Visibility, attributes: &[Attribute]) -> bool {

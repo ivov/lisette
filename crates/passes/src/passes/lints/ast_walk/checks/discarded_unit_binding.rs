@@ -35,7 +35,7 @@ pub fn check_discarded_unit_binding(expression: &Expression, ctx: &NodeCtx) {
         // `let _ = ()` has nothing to keep as a statement.
         Expression::Unit { .. } => (
             "Remove the discard",
-            Edit::deletion(statement_deletion(ctx.source, *span)),
+            Edit::deletion(statement_deletion(ctx.source(), *span)),
         ),
         _ => {
             let value_span = value.get_span();

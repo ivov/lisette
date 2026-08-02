@@ -272,17 +272,7 @@ fn run_module(
 ) {
     for (file_id, file) in module.source_file_entries() {
         let file_sink = LocalSink::new();
-        let mut ctx = NodeCtx {
-            store,
-            facts,
-            files: &module.files,
-            module_id: &module.id,
-            source: &file.source,
-            is_d_lis: file.is_d_lis(),
-            is_test: file.is_test(),
-            sink: &file_sink,
-            claimed_spans: Default::default(),
-        };
+        let mut ctx = NodeCtx::new(store, facts, module, file, &file_sink);
         walk_nodes(
             &file.items,
             &mut ctx,

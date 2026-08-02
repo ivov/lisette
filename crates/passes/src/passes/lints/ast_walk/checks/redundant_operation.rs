@@ -56,7 +56,7 @@ pub fn check_redundant_operation(expression: &Expression, ctx: &NodeCtx) {
         );
     } else {
         let mut diagnostic = diagnostics::lint::redundant_operation(span, None);
-        if let Some(text) = span_text(ctx.source, other_source) {
+        if let Some(text) = span_text(ctx.source(), other_source) {
             diagnostic = diagnostic.with_fix(Fix::new(
                 format!("Replace with `{text}`"),
                 Edit::replacement(*span, text),

@@ -6,7 +6,7 @@ use semantics::generics::bound_display_name;
 use semantics::store::Store;
 use syntax::types::{CompoundKind, TypeVarId};
 
-pub(crate) fn run(store: &Store, checks: DeferredChecks, sink: &LocalSink) {
+pub(crate) fn run(store: &Store, checks: &DeferredChecks, sink: &LocalSink) {
     let mut reported_vars: HashSet<(String, TypeVarId)> = HashSet::default();
     let mut collected = Vec::new();
     let mut report_vars = |ty: &syntax::types::Type, module_id: &str| {
@@ -14,13 +14,13 @@ pub(crate) fn run(store: &Store, checks: DeferredChecks, sink: &LocalSink) {
         ty.collect_unbound_variables(&mut collected);
         reported_vars.extend(collected.iter().map(|v| (module_id.to_string(), *v)));
     };
-    for check in checks.generic_calls {
+    for check in &checks.generic_calls {
         if check.ty.has_unbound_variables() {
             sink.push(diagnostics::infer::cannot_infer_type_argument(check.span));
             report_vars(&check.ty, &check.module_id);
         }
     }
-    for obligation in checks.generic_bounds {
+    for obligation in &checks.generic_bounds {
         if obligation.argument.has_unbound_variables() {
             let required_name = bound_display_name(store, &obligation.required);
             let diagnostic = match &obligation.origin {
@@ -45,7 +45,7 @@ pub(crate) fn run(store: &Store, checks: DeferredChecks, sink: &LocalSink) {
             report_vars(&obligation.argument, &obligation.module_id);
         }
     }
-    for check in checks.empty_collections {
+    for check in &checks.empty_collections {
         if check.ty.has_unbound_variables() {
             sink.push(diagnostics::infer::uninferred_binding(
                 &check.name,
@@ -55,7 +55,7 @@ pub(crate) fn run(store: &Store, checks: DeferredChecks, sink: &LocalSink) {
         }
     }
     let mut reported_literal_spans = HashSet::default();
-    for check in checks.empty_literals {
+    for check in &checks.empty_literals {
         if !check.ty.has_unbound_variables() {
             continue;
         }
@@ -71,7 +71,7 @@ pub(crate) fn run(store: &Store, checks: DeferredChecks, sink: &LocalSink) {
             sink.push(diagnostics::infer::empty_slice_no_element_type(check.span));
         }
     }
-    for check in checks.slice_makes {
+    for check in &checks.slice_makes {
         let slice_ty = store.peel_alias(&check.ty);
         let Some((CompoundKind::Slice, args)) = slice_ty.as_compound() else {
             continue;
@@ -90,7 +90,7 @@ pub(crate) fn run(store: &Store, checks: DeferredChecks, sink: &LocalSink) {
             ));
         }
     }
-    for check in checks.statement_tails {
+    for check in &checks.statement_tails {
         if !check.expected_ty.is_unit()
             && !check.expected_ty.is_variable()
             && !check.expected_ty.is_ignored()
@@ -134,7 +134,7 @@ mod tests {
             module_id: literal_module.to_string(),
         });
         let sink = LocalSink::new();
-        run(&Store::new(), checks, &sink);
+        run(&Store::new(), &checks, &sink);
         sink.into_diagnostics()
             .iter()
             .filter_map(|d| d.code_str().map(str::to_string))

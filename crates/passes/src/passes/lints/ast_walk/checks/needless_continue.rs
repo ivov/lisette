@@ -22,10 +22,10 @@ pub fn check_needless_continue(expression: &Expression, ctx: &NodeCtx) {
     let keyword = Span::new(span.file_id, span.byte_offset, "continue".len() as u32);
 
     let mut diagnostic = diagnostics::lint::needless_continue(&keyword);
-    if !same_line_comment_follows(ctx.source, keyword) {
+    if !same_line_comment_follows(ctx.source(), keyword) {
         diagnostic = diagnostic.with_fix(Fix::new(
             "Remove the redundant `continue`",
-            Edit::deletion(statement_deletion(ctx.source, keyword)),
+            Edit::deletion(statement_deletion(ctx.source(), keyword)),
         ));
     }
     ctx.sink.push(diagnostic);

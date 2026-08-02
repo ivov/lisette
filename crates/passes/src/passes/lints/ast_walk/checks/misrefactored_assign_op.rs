@@ -49,9 +49,10 @@ pub fn check_misrefactored_assign_op(expression: &Expression, ctx: &NodeCtx) {
     let Some(symbol) = compound.compound_assignment_symbol() else {
         return;
     };
-    let (Some(target_text), Some(other_text)) =
-        (span_text(ctx.source, target), span_text(ctx.source, other))
-    else {
+    let (Some(target_text), Some(other_text)) = (
+        span_text(ctx.source(), target),
+        span_text(ctx.source(), other),
+    ) else {
         return;
     };
 

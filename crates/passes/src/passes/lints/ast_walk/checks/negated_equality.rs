@@ -33,7 +33,10 @@ pub fn check_negated_equality(expression: &Expression, ctx: &NodeCtx) {
 
     let mut diagnostic = diagnostics::lint::negated_equality(span, is_equal);
 
-    if let (Some(lhs), Some(rhs)) = (span_text(ctx.source, left), span_text(ctx.source, right)) {
+    if let (Some(lhs), Some(rhs)) = (
+        span_text(ctx.source(), left),
+        span_text(ctx.source(), right),
+    ) {
         let replacement = format!("{lhs} {flipped} {rhs}");
         diagnostic = diagnostic.with_fix(Fix::new(
             format!("Replace with `{replacement}`"),

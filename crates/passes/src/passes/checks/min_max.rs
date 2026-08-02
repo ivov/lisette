@@ -1,11 +1,11 @@
 use crate::passes::comparison::{MinMaxOp, prelude_min_max, signed_integer_literal};
-use crate::passes::walk::NodeCtx;
+use crate::passes::walk::{ClaimKind, NodeCtx};
 use syntax::ast::Expression;
 use syntax::types::SimpleKind;
 
 pub(crate) fn check(expression: &Expression, ctx: &mut NodeCtx) {
     let span = expression.get_span();
-    if ctx.claimed_spans.contains(&span) {
+    if ctx.is_claimed(ClaimKind::MinMax, &span) {
         return;
     }
 
@@ -55,7 +55,7 @@ pub(crate) fn check(expression: &Expression, ctx: &mut NodeCtx) {
         return;
     }
 
-    ctx.claimed_spans.insert(nested.get_span());
+    ctx.claim(ClaimKind::MinMax, nested.get_span());
     ctx.sink
         .push(diagnostics::infer::min_max(&span, outer_constant));
 }

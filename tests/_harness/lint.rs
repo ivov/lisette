@@ -5,7 +5,7 @@ use syntax::{
     ast::Expression,
     lex::Lexer,
     parse::Parser,
-    program::{File, FileImport, UnusedInfo, Visibility},
+    program::{File, FileImport, Visibility},
 };
 
 use super::new_test_store;
@@ -103,8 +103,7 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     store.store_file(typed_file);
     let inference_checkpoint = checker.sink.checkpoint();
 
-    let mut unused = UnusedInfo::default();
-    passes::run(&store, &mut checker.facts, &checker.sink, &mut unused, true);
+    passes::run(&store, &checker.facts, &checker.sink, passes::LintMode::Run);
 
     // Deferred inference errors surface during passes::run, mixed in with
     // the error-severity lint diagnostics the tests assert on.

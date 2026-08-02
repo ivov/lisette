@@ -3,7 +3,7 @@ use crate::passes::walk::NodeCtx;
 use syntax::ast::Expression;
 
 pub fn check_enum_variant_names(expression: &Expression, ctx: &NodeCtx) {
-    if ctx.is_d_lis {
+    if ctx.is_d_lis() {
         return;
     }
 

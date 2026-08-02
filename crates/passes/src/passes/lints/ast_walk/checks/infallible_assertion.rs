@@ -6,7 +6,7 @@ use super::helpers::bool_literal;
 const TEST_CONTEXT_QUALIFIED_ID: &str = "**test_prelude.TestContext";
 
 pub fn check_infallible_assertion(expression: &Expression, ctx: &NodeCtx) {
-    if !ctx.is_test || !establishes_test_context(expression) {
+    if !ctx.is_test() || !establishes_test_context(expression) {
         return;
     }
     for child in expression.children() {

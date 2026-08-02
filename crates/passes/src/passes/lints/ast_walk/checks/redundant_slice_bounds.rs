@@ -55,12 +55,12 @@ pub fn check_redundant_slice_bounds(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
-    let Some(receiver_text) = span_text(ctx.source, receiver) else {
+    let Some(receiver_text) = span_text(ctx.source(), receiver) else {
         return;
     };
 
     let replacement = if drop_start {
-        let Some(end_text) = end.as_deref().and_then(|end| span_text(ctx.source, end)) else {
+        let Some(end_text) = end.as_deref().and_then(|end| span_text(ctx.source(), end)) else {
             return;
         };
         let separator = if *inclusive { "..=" } else { ".." };
@@ -68,7 +68,7 @@ pub fn check_redundant_slice_bounds(expression: &Expression, ctx: &NodeCtx) {
     } else {
         let Some(start_text) = start
             .as_deref()
-            .and_then(|start| span_text(ctx.source, start))
+            .and_then(|start| span_text(ctx.source(), start))
         else {
             return;
         };

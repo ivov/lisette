@@ -82,8 +82,8 @@ pub fn check_manual_option_zip(expression: &Expression, ctx: &NodeCtx) {
         && !lambda_is_annotated(inner_closure)
         && reads_as_method_call(outer_receiver, outer_args)
         && let (Some(receiver_text), Some(other_text)) = (
-            span_text(ctx.source, outer_receiver),
-            span_text(ctx.source, inner_receiver),
+            span_text(ctx.source(), outer_receiver),
+            span_text(ctx.source(), inner_receiver),
         )
     {
         let replacement = format!(

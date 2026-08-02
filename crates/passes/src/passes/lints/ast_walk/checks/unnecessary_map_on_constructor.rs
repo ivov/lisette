@@ -65,8 +65,8 @@ fn push_map_on_constructor(
     if !matches!(mapper.unwrap_parens(), Expression::Lambda { .. })
         && reads_as_method_call(receiver, std::slice::from_ref(mapper))
         && let (Some(mapper_text), Some(payload_text)) = (
-            span_text(ctx.source, mapper),
-            span_text(ctx.source, payload),
+            span_text(ctx.source(), mapper),
+            span_text(ctx.source(), payload),
         )
     {
         let replacement = format!(

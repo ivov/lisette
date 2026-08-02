@@ -1,4 +1,4 @@
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::FxHashSet as HashSet;
 
 use diagnostics::LisetteDiagnostic;
 use diagnostics::LocalSink;
@@ -64,16 +64,14 @@ pub(crate) fn run(
     facts: &Facts,
     pattern_lints: Vec<LisetteDiagnostic>,
     mut diagnostics: Vec<LisetteDiagnostic>,
-    unused: &mut UnusedInfo,
     sink: &LocalSink,
-) {
-    let sources = source_by_file(store);
-
+) -> UnusedInfo {
+    let mut unused = UnusedInfo::default();
     let erroring_functions = erroring_function_spans(facts, sink);
     collect_bindings(
+        store,
         facts,
-        unused,
-        &sources,
+        &mut unused,
         &erroring_functions,
         &mut diagnostics,
     );
@@ -82,24 +80,15 @@ pub(crate) fn run(
     diagnostics.extend(pattern_lints);
     collect_overused_references(facts, &mut diagnostics);
     collect_always_failing_try_blocks(facts, &mut diagnostics);
-    collect_expression_only_fstrings(facts, &sources, &mut diagnostics);
+    collect_expression_only_fstrings(store, facts, &mut diagnostics);
 
     diagnostics.sort_by(LisetteDiagnostic::sort_key);
     sink.extend(diagnostics);
+    unused
 }
 
-fn source_by_file(store: &Store) -> HashMap<u32, &str> {
-    let mut sources = HashMap::default();
-    for module in store.modules.values() {
-        for (file_id, file) in module.source_file_entries() {
-            sources.insert(*file_id, file.source.as_str());
-        }
-    }
-    sources
-}
-
-fn mut_keyword_deletion(sources: &HashMap<u32, &str>, name: Span) -> Option<Span> {
-    let source = sources.get(&name.file_id)?;
+fn mut_keyword_deletion(store: &Store, name: Span) -> Option<Span> {
+    let source = &store.get_file(name.file_id)?.source;
     let name_start = name.byte_offset as usize;
     let before = source.get(..name_start)?.trim_end();
     let mut_start = before.strip_suffix("mut")?.len();
@@ -117,8 +106,8 @@ fn mut_keyword_deletion(sources: &HashMap<u32, &str>, name: Span) -> Option<Span
     ))
 }
 
-fn fstring_inner<'a>(sources: &HashMap<u32, &'a str>, span: Span) -> Option<&'a str> {
-    let source = sources.get(&span.file_id)?;
+fn fstring_inner(store: &Store, span: Span) -> Option<&str> {
+    let source = &store.get_file(span.file_id)?.source;
     let text = source.get(span.byte_offset as usize..span.end() as usize)?;
     let inner = text.strip_prefix("f\"")?.strip_suffix('"')?.trim();
     Some(inner.strip_prefix('{')?.strip_suffix('}')?.trim())
@@ -152,9 +141,9 @@ fn within_any(function_spans: &[Span], span: Span) -> bool {
 }
 
 fn collect_bindings(
+    store: &Store,
     facts: &Facts,
     unused: &mut UnusedInfo,
-    sources: &HashMap<u32, &str>,
     erroring_functions: &[Span],
     out: &mut Vec<LisetteDiagnostic>,
 ) {
@@ -183,7 +172,7 @@ fn collect_bindings(
 
         if b.kind.is_mutable() && b.mutation.is_none() && !within_any(erroring_functions, b.span) {
             let mut diagnostic = diagnostics::lint::unused_mut(&b.span);
-            if let Some(deletion) = mut_keyword_deletion(sources, b.span) {
+            if let Some(deletion) = mut_keyword_deletion(store, b.span) {
                 diagnostic =
                     diagnostic.with_fix(Fix::new("Remove `mut`", Edit::deletion(deletion)));
             }
@@ -254,13 +243,13 @@ fn collect_always_failing_try_blocks(facts: &Facts, out: &mut Vec<LisetteDiagnos
 }
 
 fn collect_expression_only_fstrings(
+    store: &Store,
     facts: &Facts,
-    sources: &HashMap<u32, &str>,
     out: &mut Vec<LisetteDiagnostic>,
 ) {
     for fact in &facts.expression_only_fstrings {
         let mut diagnostic = diagnostics::lint::expression_only_fstring(&fact.span);
-        if let Some(inner) = fstring_inner(sources, fact.span) {
+        if let Some(inner) = fstring_inner(store, fact.span) {
             let replacement = if fact.needs_parens {
                 format!("({inner})")
             } else {

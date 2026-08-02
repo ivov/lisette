@@ -6,7 +6,7 @@ use syntax::ast::{Expression, Span};
 use syntax::program::{CallKind, Definition, NativeTypeKind};
 use syntax::types::{CompoundKind, Symbol, Type};
 
-use crate::passes::walk::NodeCtx;
+use crate::passes::walk::{ClaimKind, NodeCtx};
 
 pub(crate) fn check(expression: &Expression, ctx: &mut NodeCtx) {
     match expression {
@@ -18,7 +18,7 @@ pub(crate) fn check(expression: &Expression, ctx: &mut NodeCtx) {
                     ..
                 } = value.unwrap_parens()
             {
-                ctx.claimed_spans.insert(*span);
+                ctx.claim(ClaimKind::MapKey, *span);
             }
         }
         Expression::Call {
@@ -27,7 +27,7 @@ pub(crate) fn check(expression: &Expression, ctx: &mut NodeCtx) {
             span,
             ..
         } => {
-            if ctx.claimed_spans.contains(span) {
+            if ctx.is_claimed(ClaimKind::MapKey, span) {
                 return;
             }
             report_bad_map_key(ctx.store, ty, *span, ctx.sink, &mut HashSet::default());

@@ -63,8 +63,8 @@ pub fn check_manual_contains(expression: &Expression, ctx: &NodeCtx) {
     if !lambda_is_annotated(closure)
         && reads_as_method_call(receiver, args)
         && let (Some(receiver_text), Some(value_text)) = (
-            span_text(ctx.source, receiver),
-            span_text(ctx.source, value),
+            span_text(ctx.source(), receiver),
+            span_text(ctx.source(), value),
         )
     {
         let replacement = format!(

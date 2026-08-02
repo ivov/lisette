@@ -198,13 +198,11 @@ impl CompiledTest {
                     items: typed_ast.clone(),
                     file_comment: None,
                 });
-                let mut harness_unused = UnusedInfo::default();
                 passes::run(
                     &store,
-                    &mut checker.facts,
+                    &checker.facts,
                     &checker.sink,
-                    &mut harness_unused,
-                    false,
+                    passes::LintMode::Skip,
                 );
             }
 

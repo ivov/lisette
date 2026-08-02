@@ -15,6 +15,12 @@ pub(crate) mod walk;
 
 pub use lints::Lint;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LintMode {
+    Skip,
+    Run,
+}
+
 pub(crate) const PARALLEL_THRESHOLD: usize = 4;
 
 pub(crate) fn source_file_work(store: &semantics::store::Store) -> Vec<(&Module, &File)> {
@@ -44,39 +50,36 @@ pub(crate) fn is_trivial_expression(expression: &Expression) -> bool {
     }
 }
 
-pub fn run(
-    store: &Store,
-    facts: &mut Facts,
-    sink: &LocalSink,
-    unused: &mut UnusedInfo,
-    run_lints: bool,
-) {
-    let facts_ref: &Facts = facts;
+pub fn run(store: &Store, facts: &Facts, sink: &LocalSink, lint_mode: LintMode) -> UnusedInfo {
     let ((checks_diagnostics, pattern_lints), lint_outputs) = rayon::join(
-        || checks::run_all(store, facts_ref, run_lints),
-        || {
-            run_lints.then(|| {
+        || checks::run_all(store, facts, lint_mode),
+        || match lint_mode {
+            LintMode::Skip => None,
+            LintMode::Run => {
                 let (produced_facts, (ast_walk_diagnostics, ref_graph_output)) = rayon::join(
                     || diagnostic_producers::run_all(store),
                     || {
                         rayon::join(
-                            || lints::ast_walk::run(store, facts_ref),
-                            || lints::ref_graph::run(store, facts_ref),
+                            || lints::ast_walk::run(store, facts),
+                            || lints::ref_graph::run(store, facts),
                         )
                     },
                 );
-                (produced_facts, ast_walk_diagnostics, ref_graph_output)
-            })
+                Some((produced_facts, ast_walk_diagnostics, ref_graph_output))
+            }
         },
     );
 
     sink.extend(checks_diagnostics);
-    deferred::run(store, facts.take_deferred_checks(), sink);
+    deferred::run(store, facts.deferred_checks(), sink);
     if let Some((produced_facts, ast_walk_diagnostics, ref_graph_output)) = lint_outputs {
-        lints::from_facts::run(store, facts, pattern_lints, produced_facts, unused, sink);
+        let mut unused = lints::from_facts::run(store, facts, pattern_lints, produced_facts, sink);
         let (ref_graph_diagnostics, ref_graph_unused) = ref_graph_output;
         sink.extend(ast_walk_diagnostics);
         sink.extend(ref_graph_diagnostics);
         unused.merge(ref_graph_unused);
+        unused
+    } else {
+        UnusedInfo::default()
     }
 }

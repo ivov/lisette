@@ -2,7 +2,7 @@ use syntax::ast::{Expression, Literal, Span, UnaryOperator};
 use syntax::program::CallKind;
 use syntax::types::{SimpleKind, Type};
 
-use crate::passes::walk::NodeCtx;
+use crate::passes::walk::{ClaimKind, NodeCtx};
 use semantics::store::{ClosedDomain, ClosedMember, DomainValue, Store};
 
 /// Flags an out-of-domain literal targeting a `#[go(closed_domain)]` named
@@ -18,7 +18,7 @@ use semantics::store::{ClosedDomain, ClosedMember, DomainValue, Store};
 /// The explicit `as` conversion (`7 as time.Weekday`) is the escape hatch and
 /// does not warn.
 ///
-/// `ctx.claimed_spans` collects the spans of magnitude literals owned by a parent
+/// Claims collect the spans of magnitude literals owned by a parent
 /// negation. The visitor walks parents before children, so the negation arm
 /// claims its magnitude before the literal arm reaches it; this stops `-1` from
 /// being judged on the magnitude `1` alone.
@@ -28,7 +28,7 @@ pub fn check_out_of_domain_value(expression: &Expression, ctx: &mut NodeCtx) {
             let Some(domain) = closed_domain_of(ty, ctx.store) else {
                 return;
             };
-            if ctx.claimed_spans.contains(span) {
+            if ctx.is_claimed(ClaimKind::OutOfDomain, span) {
                 return;
             }
             let Some(value) = DomainValue::from_literal(literal, domain.base()) else {
@@ -51,7 +51,7 @@ pub fn check_out_of_domain_value(expression: &Expression, ctx: &mut NodeCtx) {
             let Some((value, magnitude_span)) = negative_value(inner, domain.base()) else {
                 return;
             };
-            ctx.claimed_spans.insert(magnitude_span);
+            ctx.claim(ClaimKind::OutOfDomain, magnitude_span);
             if !is_member(&domain, &value) {
                 emit(*span, &domain, ctx);
             }

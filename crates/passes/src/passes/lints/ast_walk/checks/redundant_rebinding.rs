@@ -73,7 +73,7 @@ pub fn check_redundant_rebinding(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
-    let deletion = statement_deletion(ctx.source, *span);
+    let deletion = statement_deletion(ctx.source(), *span);
     ctx.sink.push(
         diagnostics::lint::redundant_rebinding(span, identifier).with_fix(Fix::new(
             "Remove the redundant rebinding",

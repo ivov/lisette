@@ -39,9 +39,10 @@ pub fn check_manual_time_since(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
-    let (Some(namespace_text), Some(arg_text)) =
-        (span_text(ctx.source, namespace), span_text(ctx.source, arg))
-    else {
+    let (Some(namespace_text), Some(arg_text)) = (
+        span_text(ctx.source(), namespace),
+        span_text(ctx.source(), arg),
+    ) else {
         return;
     };
 

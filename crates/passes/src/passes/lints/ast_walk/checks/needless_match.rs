@@ -42,7 +42,7 @@ pub fn check_needless_match(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
-    let Some(subject_text) = span_text(ctx.source, subject) else {
+    let Some(subject_text) = span_text(ctx.source(), subject) else {
         return;
     };
 

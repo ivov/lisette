@@ -39,10 +39,10 @@ pub fn check_replace_count_zero(expression: &Expression, ctx: &NodeCtx) {
     }
 
     let (Some(namespace_text), Some(s_text), Some(old_text), Some(new_text)) = (
-        span_text(ctx.source, namespace),
-        span_text(ctx.source, s),
-        span_text(ctx.source, old),
-        span_text(ctx.source, new),
+        span_text(ctx.source(), namespace),
+        span_text(ctx.source(), s),
+        span_text(ctx.source(), old),
+        span_text(ctx.source(), new),
     ) else {
         return;
     };

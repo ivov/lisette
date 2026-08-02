@@ -19,7 +19,7 @@ pub fn check_single_arm_select(expression: &Expression, ctx: &NodeCtx) {
         return;
     };
 
-    let Some(receive_text) = span_text(ctx.source, receive_expression) else {
+    let Some(receive_text) = span_text(ctx.source(), receive_expression) else {
         return;
     };
 

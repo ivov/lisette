@@ -71,8 +71,11 @@ pub fn check_or_fn_call(expression: &Expression, ctx: &NodeCtx) {
     } else {
         "||"
     };
-    let arg_texts: Option<Vec<&str>> = args.iter().map(|arg| span_text(ctx.source, arg)).collect();
-    if let Some(receiver_text) = span_text(ctx.source, receiver)
+    let arg_texts: Option<Vec<&str>> = args
+        .iter()
+        .map(|arg| span_text(ctx.source(), arg))
+        .collect();
+    if let Some(receiver_text) = span_text(ctx.source(), receiver)
         && let Some(arg_texts) = arg_texts
         && let [first, rest @ ..] = arg_texts.as_slice()
     {

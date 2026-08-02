@@ -76,7 +76,7 @@ impl Analysis {
 pub fn analyze(input: AnalyzeInput) -> Analysis {
     let InferenceOutput {
         store,
-        mut facts,
+        facts,
         sink,
         has_pre_check_errors,
         compiled_modules,
@@ -85,23 +85,27 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
         unreachable_modules,
         entry_parse,
     } = run_inference(input);
-    let run_lints = entry_parse.is_clean();
+    let lint_mode = if entry_parse.is_clean() {
+        passes::LintMode::Run
+    } else {
+        passes::LintMode::Skip
+    };
     let entry_parse_status = entry_parse.status();
     let entry_parse_errors = entry_parse.into_errors();
 
-    let mut unused = UnusedInfo::default();
-    if !has_pre_check_errors {
-        passes::run(&store, &mut facts, &sink, &mut unused, run_lints);
-    }
+    let unused = if has_pre_check_errors {
+        UnusedInfo::default()
+    } else {
+        passes::run(&store, &facts, &sink, lint_mode)
+    };
     let mut mutations = MutationInfo::default();
     for (&binding_id, b) in facts.bindings.iter() {
         if let Some(mutation) = b.mutation {
             mutations.record(binding_id, mutation);
         }
     }
-    let bindings = std::mem::take(&mut facts.bindings);
-    let usages = std::mem::take(&mut facts.usages);
-    drop(facts);
+    let bindings = facts.bindings;
+    let usages = facts.usages;
 
     // Canonicalize diagnostic order so the output is stable regardless of
     // phase ordering, FxHashMap iteration, or parallel inference scheduling.

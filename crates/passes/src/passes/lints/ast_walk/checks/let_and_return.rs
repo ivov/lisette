@@ -51,7 +51,7 @@ pub fn check_let_and_return(expression: &Expression, ctx: &NodeCtx) {
     }
 
     let mut diagnostic = diagnostics::lint::let_and_return(span);
-    if let Some(value_text) = span_text(ctx.source, bound_value) {
+    if let Some(value_text) = span_text(ctx.source(), bound_value) {
         let edit_span = span.merge(tail.get_span());
         diagnostic = diagnostic.with_fix(Fix::new(
             format!("Replace with `{value_text}`"),

@@ -201,8 +201,8 @@ impl Facts {
         self.allocator.clone()
     }
 
-    pub fn take_deferred_checks(&mut self) -> DeferredChecks {
-        std::mem::take(&mut self.deferred)
+    pub fn deferred_checks(&self) -> &DeferredChecks {
+        &self.deferred
     }
 
     pub(crate) fn add_binding(

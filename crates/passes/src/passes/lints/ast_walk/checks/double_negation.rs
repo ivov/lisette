@@ -42,7 +42,7 @@ pub fn check_double_negation(expression: &Expression, ctx: &NodeCtx) {
     let is_bool = *operator == UnaryOperator::Not;
     let mut diagnostic = diagnostics::lint::double_negation(&operators_span, is_bool);
 
-    if let Some(text) = span_text(ctx.source, inner_operand) {
+    if let Some(text) = span_text(ctx.source(), inner_operand) {
         diagnostic = diagnostic.with_fix(Fix::new(
             "Remove double negation",
             Edit::replacement(*outer_span, text),

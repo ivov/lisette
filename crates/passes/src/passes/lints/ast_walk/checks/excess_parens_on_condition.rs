@@ -18,7 +18,7 @@ pub fn check_excess_parens_on_condition(expression: &Expression, ctx: &NodeCtx) 
     } = condition
     {
         let mut diagnostic = diagnostics::lint::unnecessary_parens(span, keyword);
-        if let Some(inner) = span_text(ctx.source, expression) {
+        if let Some(inner) = span_text(ctx.source(), expression) {
             diagnostic = diagnostic.with_fix(Fix::new(
                 "Remove redundant parentheses",
                 Edit::replacement(*span, inner),

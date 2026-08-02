@@ -1,9 +1,7 @@
 use crate::passes::walk::NodeCtx;
-use rustc_hash::FxHashMap as HashMap;
-use syntax::ast::{BinaryOperator, Expression, Span};
-use syntax::program::File;
+use syntax::ast::{BinaryOperator, Expression};
 
-use super::helpers::{expressions_equivalent, is_side_effect_free};
+use super::helpers::{expressions_equivalent, is_side_effect_free, span_text};
 
 pub fn check_duplicate_logical_operand(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Binary {
@@ -34,7 +32,7 @@ pub fn check_duplicate_logical_operand(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
-    let Some(operand_text) = source_text(left.get_span(), ctx.files) else {
+    let Some(operand_text) = span_text(ctx.source(), left) else {
         return;
     };
 
@@ -42,10 +40,4 @@ pub fn check_duplicate_logical_operand(expression: &Expression, ctx: &NodeCtx) {
         span,
         operand_text,
     ));
-}
-
-fn source_text(span: Span, files: &HashMap<u32, File>) -> Option<&str> {
-    let file = files.get(&span.file_id)?;
-    file.source
-        .get(span.byte_offset as usize..span.end() as usize)
 }

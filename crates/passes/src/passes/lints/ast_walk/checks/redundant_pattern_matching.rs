@@ -59,7 +59,7 @@ pub fn check_redundant_pattern_matching(expression: &Expression, ctx: &NodeCtx) 
     let match_keyword_span = Span::new(span.file_id, span.byte_offset, 5);
     let mut diagnostic =
         diagnostics::lint::redundant_pattern_matching(&match_keyword_span, predicate);
-    if let Some(subject_text) = span_text(ctx.source, subject) {
+    if let Some(subject_text) = span_text(ctx.source(), subject) {
         let replacement = format!("{}.{predicate}()", as_tight_operand(subject_text, subject));
         diagnostic = diagnostic.with_fix(Fix::new(
             format!("Replace with `{replacement}`"),

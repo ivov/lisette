@@ -62,7 +62,7 @@ fn check_arm(arm: &MatchArm, ctx: &NodeCtx) {
         return;
     }
 
-    let Some(literal_text) = span_text(ctx.source, literal) else {
+    let Some(literal_text) = span_text(ctx.source(), literal) else {
         return;
     };
 

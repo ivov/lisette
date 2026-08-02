@@ -55,9 +55,9 @@ pub fn check_match_same_arms(expression: &Expression, ctx: &NodeCtx) {
         let earlier_span = earlier.pattern.get_span();
         let later_span = later.pattern.get_span();
         let (Some(earlier_text), Some(later_text)) = (
-            ctx.source
+            ctx.source()
                 .get(earlier_span.byte_offset as usize..earlier_span.end() as usize),
-            ctx.source
+            ctx.source()
                 .get(later_span.byte_offset as usize..later_span.end() as usize),
         ) else {
             continue;
@@ -65,7 +65,7 @@ pub fn check_match_same_arms(expression: &Expression, ctx: &NodeCtx) {
 
         let merged = format!("{earlier_text} | {later_text}");
         let arm_span = later_span.merge(later.expression.get_span());
-        let deletion = match_arm_deletion(ctx.source, arm_span);
+        let deletion = match_arm_deletion(ctx.source(), arm_span);
         ctx.sink.push(
             diagnostics::lint::match_same_arms(&later_span, earlier_text).with_fix(Fix::multi(
                 format!("Merge into `{merged}`"),

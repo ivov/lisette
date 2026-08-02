@@ -39,9 +39,9 @@ pub fn check_unnecessary_bool(expression: &Expression, ctx: &NodeCtx) {
 
     let mut diagnostic = diagnostics::lint::unnecessary_bool(span, then_value);
     let replacement = if then_value {
-        span_text(ctx.source, condition).map(|text| as_tight_operand(text, condition))
+        span_text(ctx.source(), condition).map(|text| as_tight_operand(text, condition))
     } else {
-        negated_condition(ctx.source, condition, ctx)
+        negated_condition(ctx.source(), condition, ctx)
     };
     if let Some(replacement) = replacement {
         diagnostic = diagnostic.with_fix(Fix::new(

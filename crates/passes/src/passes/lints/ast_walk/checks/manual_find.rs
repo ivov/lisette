@@ -26,8 +26,8 @@ pub fn check_manual_find(expression: &Expression, ctx: &NodeCtx) {
     }
 
     let (Some(receiver_text), Some(predicate_text)) = (
-        span_text(ctx.source, receiver),
-        span_text(ctx.source, predicate),
+        span_text(ctx.source(), receiver),
+        span_text(ctx.source(), predicate),
     ) else {
         return;
     };

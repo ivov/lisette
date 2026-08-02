@@ -1,4 +1,4 @@
-use crate::passes::walk::NodeCtx;
+use crate::passes::walk::{ClaimKind, NodeCtx};
 use syntax::ast::{Expression, MatchArm, Pattern, Span};
 use syntax::types::{Type, unqualified_name};
 
@@ -21,7 +21,7 @@ pub fn check_match_as_if_let(expression: &Expression, ctx: &NodeCtx) {
     }
 
     let match_keyword_span = Span::new(span.file_id, span.byte_offset, 5);
-    if ctx.claimed_spans.contains(&match_keyword_span) {
+    if ctx.is_claimed(ClaimKind::CollapsibleMatch, &match_keyword_span) {
         return;
     }
 
@@ -45,7 +45,7 @@ pub fn check_match_as_if_let(expression: &Expression, ctx: &NodeCtx) {
 
     let pattern_span = meaningful.pattern.get_span();
     let Some(pattern_text) = ctx
-        .source
+        .source()
         .get(pattern_span.byte_offset as usize..pattern_span.end() as usize)
     else {
         return;

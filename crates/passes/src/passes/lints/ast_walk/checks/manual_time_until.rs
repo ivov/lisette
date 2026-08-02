@@ -46,8 +46,8 @@ pub fn check_manual_time_until(expression: &Expression, ctx: &NodeCtx) {
     }
 
     let (Some(namespace_text), Some(receiver_text)) = (
-        span_text(ctx.source, namespace),
-        span_text(ctx.source, receiver),
+        span_text(ctx.source(), namespace),
+        span_text(ctx.source(), receiver),
     ) else {
         return;
     };

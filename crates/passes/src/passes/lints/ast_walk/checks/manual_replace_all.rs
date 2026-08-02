@@ -40,10 +40,10 @@ pub fn check_manual_replace_all(expression: &Expression, ctx: &NodeCtx) {
     }
 
     let (Some(namespace_text), Some(s_text), Some(old_text), Some(new_text)) = (
-        span_text(ctx.source, namespace),
-        span_text(ctx.source, s),
-        span_text(ctx.source, old),
-        span_text(ctx.source, new),
+        span_text(ctx.source(), namespace),
+        span_text(ctx.source(), s),
+        span_text(ctx.source(), old),
+        span_text(ctx.source(), new),
     ) else {
         return;
     };

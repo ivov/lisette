@@ -46,8 +46,8 @@ pub fn check_double_comparison(expression: &Expression, ctx: &NodeCtx) {
 
     let mut diagnostic = diagnostics::lint::double_comparison(span, combined);
     if let (Some(lhs), Some(rhs)) = (
-        span_text(ctx.source, left_lhs),
-        span_text(ctx.source, left_rhs),
+        span_text(ctx.source(), left_lhs),
+        span_text(ctx.source(), left_rhs),
     ) {
         let replacement = format!("{lhs} {combined} {rhs}");
         diagnostic = diagnostic.with_fix(Fix::new(

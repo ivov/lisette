@@ -1,7 +1,7 @@
 use diagnostics::LocalSink;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::{Expression, Pattern, SelectArm, Span};
-use syntax::program::File;
+use syntax::program::{File, Module};
 
 use semantics::facts::Facts;
 use semantics::store::Store;
@@ -9,14 +9,64 @@ use semantics::store::Store;
 pub(crate) struct NodeCtx<'a> {
     pub store: &'a Store,
     pub facts: &'a Facts,
-    pub files: &'a HashMap<u32, File>,
-    pub module_id: &'a str,
-    pub source: &'a str,
-    pub is_d_lis: bool,
-    pub is_test: bool,
+    module: &'a Module,
+    file: &'a File,
     pub sink: &'a LocalSink,
-    /// Spans claimed by enclosing nodes to prevent duplicate diagnostics.
-    pub claimed_spans: HashSet<Span>,
+    claimed_spans: HashSet<(ClaimKind, Span)>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum ClaimKind {
+    AlwaysTrueDisjunction,
+    CollapsibleMatch,
+    ImpossibleComparison,
+    MapKey,
+    MinMax,
+    OutOfDomain,
+    RedundantClosure,
+}
+
+impl<'a> NodeCtx<'a> {
+    pub fn new(
+        store: &'a Store,
+        facts: &'a Facts,
+        module: &'a Module,
+        file: &'a File,
+        sink: &'a LocalSink,
+    ) -> Self {
+        Self {
+            store,
+            facts,
+            module,
+            file,
+            sink,
+            claimed_spans: HashSet::default(),
+        }
+    }
+
+    pub fn module_id(&self) -> &str {
+        &self.module.id
+    }
+
+    pub fn source(&self) -> &str {
+        &self.file.source
+    }
+
+    pub fn is_d_lis(&self) -> bool {
+        self.file.is_d_lis()
+    }
+
+    pub fn is_test(&self) -> bool {
+        self.file.is_test()
+    }
+
+    pub fn is_claimed(&self, kind: ClaimKind, span: &Span) -> bool {
+        self.claimed_spans.contains(&(kind, *span))
+    }
+
+    pub fn claim(&mut self, kind: ClaimKind, span: Span) {
+        self.claimed_spans.insert((kind, span));
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -234,5 +284,25 @@ fn visit_pattern<C, F: FnMut(&Pattern, PatternRole, &mut C)>(
         Pattern::AsBinding { pattern, .. } => {
             visit_pattern(pattern, role, ctx, visitor);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn claims_only_suppress_their_own_diagnostic_family() {
+        let store = Store::new();
+        let facts = Facts::new(Default::default());
+        let module = Module::new("main");
+        let file = File::new_cached("main", "main.lis", "main.lis", "", 0);
+        let sink = LocalSink::new();
+        let mut ctx = NodeCtx::new(&store, &facts, &module, &file, &sink);
+        let span = Span::new(0, 0, 1);
+
+        ctx.claim(ClaimKind::MinMax, span);
+
+        assert!(!ctx.is_claimed(ClaimKind::MapKey, &span));
     }
 }

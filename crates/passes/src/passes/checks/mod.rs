@@ -42,12 +42,12 @@ use crate::passes::walk::NodeCtx;
 use semantics::facts::Facts;
 use semantics::store::Store;
 
-use super::{PARALLEL_THRESHOLD, source_file_work};
+use super::{LintMode, PARALLEL_THRESHOLD, source_file_work};
 
 pub(crate) fn run_all(
     store: &Store,
     facts: &Facts,
-    run_lints: bool,
+    lint_mode: LintMode,
 ) -> (Vec<LisetteDiagnostic>, Vec<LisetteDiagnostic>) {
     let sink = LocalSink::new();
     let pattern_lint_sink = LocalSink::new();
@@ -69,7 +69,10 @@ pub(crate) fn run_all(
             store,
             or_spans,
             &sink,
-            run_lints.then_some(&pattern_lint_sink),
+            match lint_mode {
+                LintMode::Skip => None,
+                LintMode::Run => Some(&pattern_lint_sink),
+            },
         );
         for (module, file) in &work {
             run_file_checks(module, file, store, facts, &mut pattern_ctx);
@@ -89,7 +92,10 @@ pub(crate) fn run_all(
                 store,
                 or_spans,
                 &local_sink,
-                run_lints.then_some(&local_pattern_lint_sink),
+                match lint_mode {
+                    LintMode::Skip => None,
+                    LintMode::Run => Some(&local_pattern_lint_sink),
+                },
             );
             run_file_checks(module, file, store, facts, &mut pattern_ctx);
             drop(pattern_ctx);
@@ -114,17 +120,7 @@ fn run_file_checks(
     pattern_ctx: &mut pattern_analysis::Context,
 ) {
     let sink = pattern_ctx.sink();
-    let mut ctx = NodeCtx {
-        store,
-        facts,
-        files: &module.files,
-        module_id: &module.id,
-        source: &file.source,
-        is_d_lis: file.is_d_lis(),
-        is_test: file.is_test(),
-        sink,
-        claimed_spans: Default::default(),
-    };
+    let mut ctx = NodeCtx::new(store, facts, module, file, sink);
     node_walk::run(&file.items, &mut ctx);
     interpolation_stringer::run(&file.items, store, sink);
 

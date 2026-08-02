@@ -2,7 +2,7 @@ use crate::passes::comparison::{
     Bound, expressions_equivalent, flip_comparison, in_scope_comparison, is_side_effect_free,
     is_skippable_boolean, signed_integer_literal, tighter,
 };
-use crate::passes::walk::NodeCtx;
+use crate::passes::walk::{ClaimKind, NodeCtx};
 use syntax::ast::{BinaryOperator, Expression, Span};
 
 pub(crate) fn check(expression: &Expression, ctx: &mut NodeCtx) {
@@ -16,7 +16,7 @@ pub(crate) fn check(expression: &Expression, ctx: &mut NodeCtx) {
     };
 
     // A nested `&&` is covered by the outermost chain that encloses it.
-    if ctx.claimed_spans.contains(root_span) {
+    if ctx.is_claimed(ClaimKind::ImpossibleComparison, root_span) {
         return;
     }
 
@@ -78,7 +78,7 @@ fn collect_conjuncts<'a>(
             ..
         } => {
             if span != root_span {
-                ctx.claimed_spans.insert(*span);
+                ctx.claim(ClaimKind::ImpossibleComparison, *span);
             }
             collect_conjuncts(left, root_span, conjuncts, ctx);
             collect_conjuncts(right, root_span, conjuncts, ctx);

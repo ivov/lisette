@@ -5,7 +5,7 @@ use syntax::ast::{Annotation, Expression};
 use super::helpers::first_param_is_self;
 
 pub fn check_self_named_constructors(expression: &Expression, ctx: &NodeCtx) {
-    if ctx.is_d_lis {
+    if ctx.is_d_lis() {
         return;
     }
 

@@ -1,4 +1,4 @@
-use crate::passes::walk::NodeCtx;
+use crate::passes::walk::{ClaimKind, NodeCtx};
 use diagnostics::{Edit, Fix};
 use syntax::ast::{Expression, MatchArm, Pattern, Span};
 
@@ -105,16 +105,22 @@ pub fn check_collapsible_match(expression: &Expression, ctx: &mut NodeCtx) {
 
     // Claim both nodes so `match_as_if_let` does not also advise on a node the
     // merge removes.
-    ctx.claimed_spans.insert(Span::new(
-        outer.span.file_id,
-        outer.span.byte_offset,
-        outer.keyword_len,
-    ));
-    ctx.claimed_spans.insert(Span::new(
-        inner.span.file_id,
-        inner.span.byte_offset,
-        inner.keyword_len,
-    ));
+    ctx.claim(
+        ClaimKind::CollapsibleMatch,
+        Span::new(
+            outer.span.file_id,
+            outer.span.byte_offset,
+            outer.keyword_len,
+        ),
+    );
+    ctx.claim(
+        ClaimKind::CollapsibleMatch,
+        Span::new(
+            inner.span.file_id,
+            inner.span.byte_offset,
+            inner.keyword_len,
+        ),
+    );
 
     let inner_keyword_span = Span::new(
         inner.span.file_id,
@@ -123,7 +129,7 @@ pub fn check_collapsible_match(expression: &Expression, ctx: &mut NodeCtx) {
     );
     let mut diagnostic = diagnostics::lint::collapsible_match(&inner_keyword_span);
     if matches!(expression, Expression::Match { .. })
-        && let Some(fix) = merge_fix(ctx.source, &outer, &inner)
+        && let Some(fix) = merge_fix(ctx.source(), &outer, &inner)
     {
         diagnostic = diagnostic.with_fix(fix);
     }

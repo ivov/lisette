@@ -12,7 +12,7 @@ pub fn check_expression_naming<'a>(
     role: FunctionRole<'a>,
 ) {
     let sink = ctx.sink;
-    let is_d_lis = ctx.is_d_lis;
+    let is_d_lis = ctx.is_d_lis();
     match expression {
         Expression::Struct {
             name,
@@ -140,7 +140,7 @@ pub fn check_expression_naming<'a>(
 }
 
 pub fn check_pattern_naming(pattern: &Pattern, ctx: &NodeCtx, role: PatternRole) {
-    if ctx.is_d_lis {
+    if ctx.is_d_lis() {
         return;
     }
     let (name, span) = match pattern {
@@ -188,7 +188,7 @@ fn go_method_name_exempt(
     if let Some(type_name) = impl_type
         && ctx
             .facts
-            .method_spelling_pinned_by_interface(ctx.module_id, name, type_name)
+            .method_spelling_pinned_by_interface(ctx.module_id(), name, type_name)
     {
         return true;
     }

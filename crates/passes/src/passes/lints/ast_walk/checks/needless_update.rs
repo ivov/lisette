@@ -41,12 +41,12 @@ pub fn check_needless_update(expression: &Expression, ctx: &NodeCtx) {
     }
 
     let base_span = base.get_span();
-    let span = spread_span(ctx.source, base_span);
+    let span = spread_span(ctx.source(), base_span);
     let base_text = ctx
-        .source
+        .source()
         .get(base_span.byte_offset as usize..base_span.end() as usize)
         .unwrap_or("");
-    let deletion = list_item_deletion(ctx.source, span);
+    let deletion = list_item_deletion(ctx.source(), span);
     ctx.sink.push(
         diagnostics::lint::needless_update(&span, base_text).with_fix(Fix::new(
             "Remove the redundant `..` update",
