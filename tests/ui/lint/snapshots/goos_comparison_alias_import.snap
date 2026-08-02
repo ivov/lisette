@@ -6,7 +6,7 @@ source: tests/ui/lint/mod.rs
  3 │ fn main() {
  4 │   let _ = r.GOOS == "win"
    ·           ───────┬───────
-   ·                  ╰── always false
+   ·                  ╰── `runtime.GOOS` never holds this value
  5 │ }
    ╰────
   help: `runtime.GOOS` only ever holds a known operating system, and this is not one. Did you mean a valid value such as `linux`, `darwin`, or `windows`? · code: [lint.goos_goarch_comparison]

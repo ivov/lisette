@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  4 │ fn main() {
  5 │   let q = shapes.Point { y: 10, .. };
    ·                                 ─┬
-   ·                                  ╰── private
+   ·                                  ╰── `x` is private to `shapes`
  6 │ }
    ╰────
   help: `x` of `shapes.Point` cannot be autofilled because `x` is private to module `shapes`. Provide an explicit value, or have `shapes` expose `x` as `pub` or offer a constructor · code: [resolve.private_field_autofill]

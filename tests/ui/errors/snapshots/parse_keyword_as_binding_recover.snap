@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  2 │ fn main() {
  3 │   let recover = 1
    ·       ───┬───
-   ·          ╰── reserved keyword
+   ·          ╰── cannot be used as a binding name
  4 │ }
    ╰────
   help: Rename this binding. `recover` is a keyword reserved for catching panics · code: [parse.keyword_as_binding]

@@ -6,7 +6,7 @@ source: tests/ui/lint/mod.rs
  2 │ fn first(x: Option<int>) -> Option<int> {
  3 │   let v = match x {
    ·           ──┬──
-   ·             ╰── verbose
+   ·             ╰── re-returns the failure by hand
  4 │     Some(v) => v,
    ╰────
   help: Use `?` to propagate the failure concisely · code: [lint.verbose_failure_propagation]

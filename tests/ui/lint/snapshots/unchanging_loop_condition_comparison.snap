@@ -6,7 +6,7 @@ source: tests/ui/lint/mod.rs
  3 │   let n = 5;
  4 │   while n < 10 {
    ·         ───┬──
-   ·            ╰── never changes
+   ·            ╰── the loop either never runs or never ends
  5 │     let _ = n
    ╰────
-  help: Nothing in the loop body changes this condition, so the loop either never runs or never terminates. Did you forget to update a variable, or mean to `break` out of the loop? · code: [infer.unchanging_loop_condition]
+  help: Nothing in the loop body changes this condition. Did you forget to update a variable, or mean to `break` out of the loop? · code: [infer.unchanging_loop_condition]

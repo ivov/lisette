@@ -6,6 +6,6 @@ source: tests/ui/errors/mod.rs
  1 │ 
  2 │ struct Foo<T: Undefined> {}
    ·               ────┬────
-   ·                   ╰── type not found in scope
+   ·                   ╰── not declared or imported
    ╰────
   help: Define or import this type · code: [resolve.type_not_found]

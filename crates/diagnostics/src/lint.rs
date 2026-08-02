@@ -361,7 +361,7 @@ pub fn unsigned_comparison(span: &Span, always_true: bool) -> LisetteDiagnostic 
 
     LisetteDiagnostic::warn(format!("Comparison is always {result}"))
         .with_lint_code("unsigned_comparison")
-        .with_span_label(span, format!("always {result}"))
+        .with_span_label(span, "an unsigned integer is never negative")
         .with_help(
             "An unsigned integer is never negative, so this comparison always has the same result. Did you mean to compare against a different value?",
         )
@@ -372,7 +372,7 @@ pub fn type_limit_comparison(span: &Span, always_true: bool) -> LisetteDiagnosti
 
     LisetteDiagnostic::warn(format!("Comparison is always {result}"))
         .with_lint_code("type_limit_comparison")
-        .with_span_label(span, format!("always `{result}`"))
+        .with_span_label(span, "compares against the limit of the value's type")
         .with_help(format!(
             "This compares against the limit of the value's type, so this comparison is always `{result}`. Did you mean to compare against a different value?"
         ))
@@ -381,9 +381,9 @@ pub fn type_limit_comparison(span: &Span, always_true: bool) -> LisetteDiagnosti
 pub fn redundant_comparison(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Redundant comparison")
         .with_lint_code("redundant_comparison")
-        .with_span_label(span, "redundant")
+        .with_span_label(span, "already implied by the other comparison")
         .with_help(
-            "This comparison is already implied by the other, so the expression is equivalent to the other side alone",
+            "Drop this comparison, since the expression is equivalent to the other side alone",
         )
 }
 
@@ -459,7 +459,7 @@ pub fn non_negative_comparison(span: &Span, always_true: bool) -> LisetteDiagnos
 
     LisetteDiagnostic::warn(format!("Comparison is always {result}"))
         .with_lint_code("non_negative_comparison")
-        .with_span_label(span, format!("always {result}"))
+        .with_span_label(span, "a length is never negative")
         .with_help(
             "A length is never negative, so this comparison always has the same result. Did you mean to compare against a different value?",
         )
@@ -476,7 +476,7 @@ pub fn goos_goarch_comparison(
 
     LisetteDiagnostic::warn(format!("Comparison is always {result}"))
         .with_lint_code("goos_goarch_comparison")
-        .with_span_label(span, format!("always {result}"))
+        .with_span_label(span, format!("`runtime.{const_name}` never holds this value"))
         .with_help(format!(
             "`runtime.{const_name}` only ever holds a known {kind}, and this is not one. Did you mean a valid value such as {examples}?"
         ))
@@ -486,11 +486,11 @@ pub fn redundant_operation(span: &Span, always: Option<&str>) -> LisetteDiagnost
     match always {
         Some(value) => LisetteDiagnostic::info(format!("Operation always evaluates to `{value}`"))
             .with_lint_code("redundant_operation")
-            .with_span_label(span, format!("always `{value}`"))
+            .with_span_label(span, "the other operand cannot change the result")
             .with_help(format!("Simplify this operation to `{value}`")),
         None => LisetteDiagnostic::info("Operation has no effect")
             .with_lint_code("redundant_operation")
-            .with_span_label(span, "has no effect")
+            .with_span_label(span, "one operand leaves the other unchanged")
             .with_help("Simplify this operation to its other operand"),
     }
 }
@@ -507,7 +507,7 @@ pub fn unnecessary_min_or_max(span: &Span, op: &str) -> LisetteDiagnostic {
 pub fn integer_division_to_zero(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Integer division is always `0`")
         .with_lint_code("integer_division_to_zero")
-        .with_span_label(span, "always `0`")
+        .with_span_label(span, "the numerator is smaller in magnitude")
         .with_help(
             "Dividing these integer literals truncates to `0` because the numerator is smaller in magnitude than the denominator. Did you mean floating-point division?",
         )
@@ -516,7 +516,7 @@ pub fn integer_division_to_zero(span: &Span) -> LisetteDiagnostic {
 pub fn verbose_failure_propagation(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Verbose failure propagation")
         .with_lint_code("verbose_failure_propagation")
-        .with_span_label(span, "verbose")
+        .with_span_label(span, "re-returns the failure by hand")
         .with_help("Use `?` to propagate the failure concisely")
 }
 
@@ -786,7 +786,7 @@ pub fn match_same_arms(span: &Span, earlier: &str) -> LisetteDiagnostic {
 pub fn redundant_guards(span: &Span, binding: &str, literal: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Redundant guard")
         .with_lint_code("redundant_guards")
-        .with_span_label(span, "redundant guard")
+        .with_span_label(span, "the pattern can test this directly")
         .with_help(format!(
             "Replace `{binding}` with `{literal}` in the pattern and drop the guard"
         ))
@@ -1083,7 +1083,7 @@ pub fn uninterpolated_fstring(span: &Span) -> LisetteDiagnostic {
 pub fn nested_fstring(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Nested f-string")
         .with_lint_code("nested_fstring")
-        .with_span_label(span, "nested f-string")
+        .with_span_label(span, "already inside an f-string")
         .with_help(
             "Move the inner f-string's text and interpolations into the surrounding f-string",
         )
@@ -1259,7 +1259,7 @@ pub fn private_type_in_public_api(
     ));
 
     if let Some(s) = span {
-        diagnostic = diagnostic.with_span_label(s, "private");
+        diagnostic = diagnostic.with_span_label(s, format!("exposed by `{}`", public_definition));
     }
 
     diagnostic
@@ -1561,7 +1561,7 @@ pub fn waitgroup_add_in_task(span: &Span) -> LisetteDiagnostic {
 pub fn deprecated_api(span: &Span, message: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Use of deprecated API")
         .with_lint_code("deprecated")
-        .with_span_label(span, "deprecated")
+        .with_span_label(span, "not intended for new code")
         .with_help(message)
 }
 

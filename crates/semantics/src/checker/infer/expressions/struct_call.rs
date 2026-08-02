@@ -352,6 +352,7 @@ impl InferCtx<'_> {
                     checker.sink.push(diagnostics::infer::private_field_access(
                         &assignment.name,
                         &struct_name,
+                        struct_module,
                         assignment.name_span,
                     ));
                 }
@@ -396,6 +397,7 @@ impl InferCtx<'_> {
                         _ => diagnostics::infer::private_field_in_spread(
                             &field.name,
                             &struct_name,
+                            owning_module,
                             spread_span,
                         ),
                     };

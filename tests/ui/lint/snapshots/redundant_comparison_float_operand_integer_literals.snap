@@ -6,7 +6,7 @@ source: tests/ui/lint/mod.rs
  3 │   let f: float64 = 1.0
  4 │   let _ = f < 5 || f < 10
    ·           ──┬──
-   ·             ╰── redundant
+   ·             ╰── already implied by the other comparison
  5 │ }
    ╰────
-  help: This comparison is already implied by the other, so the expression is equivalent to the other side alone · code: [lint.redundant_comparison]
+  help: Drop this comparison, since the expression is equivalent to the other side alone · code: [lint.redundant_comparison]

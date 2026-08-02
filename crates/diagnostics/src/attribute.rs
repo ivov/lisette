@@ -4,7 +4,7 @@ use syntax::ast::Span;
 pub fn unknown_go_hint(attribute_span: &Span, hint: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::error(format!("Unknown go hint `{}`", hint))
         .with_attribute_code("unknown")
-        .with_span_label(attribute_span, "unknown")
+        .with_span_label(attribute_span, "not one of the hints `lis add` emits")
         .with_help(
             "The hint in this attribute is not recognized. Regenerate this typedef by re-running `lis add`",
         )
@@ -26,7 +26,7 @@ pub fn field_attribute_without_struct_attribute(
 pub fn duplicate_tag_key(span: &Span, key: &str, first_span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Duplicate tag")
         .with_attribute_code("duplicate_tag")
-        .with_span_label(span, "duplicate")
+        .with_span_label(span, format!("`{}` is already set", key))
         .with_span_label(first_span, "first occurrence")
         .with_help(format!(
             "Remove one of the `{}` attributes - each tag key may appear only once per field",
@@ -37,7 +37,7 @@ pub fn duplicate_tag_key(span: &Span, key: &str, first_span: &Span) -> LisetteDi
 pub fn conflicting_case_transforms(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Conflicting case transforms")
         .with_attribute_code("conflicting_case_transforms")
-        .with_span_label(span, "conflicting")
+        .with_span_label(span, "only one case transform per tag")
         .with_help("Choose either `snake_case` or `camel_case`, not both")
 }
 
@@ -59,7 +59,7 @@ pub fn iterate_generic_enum(attribute_span: &Span) -> LisetteDiagnostic {
 pub fn iterate_not_an_enum(attribute_span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("`#[iterate]` not on enum")
         .with_attribute_code("iterate_not_an_enum")
-        .with_span_label(attribute_span, "not on an enum")
+        .with_span_label(attribute_span, "no variants to iterate here")
         .with_help("Only an enum can be marked `#[iterate]`")
 }
 
@@ -73,7 +73,7 @@ pub fn iterate_in_typedef(attribute_span: &Span) -> LisetteDiagnostic {
 pub fn display_not_a_struct_or_enum(attribute_span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("`#[display]` not on a struct or enum")
         .with_attribute_code("display_not_a_struct_or_enum")
-        .with_span_label(attribute_span, "not on a struct or enum")
+        .with_span_label(attribute_span, "no fields or variants to print here")
         .with_help("Only a struct or enum can be marked `#[display]`")
 }
 
@@ -110,7 +110,7 @@ pub fn display_specialized_to_string(attribute_span: &Span) -> LisetteDiagnostic
 pub fn equality_not_a_struct_or_enum(attribute_span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("`#[equality]` not on a struct or enum")
         .with_attribute_code("equality_not_a_struct_or_enum")
-        .with_span_label(attribute_span, "not on a struct or enum")
+        .with_span_label(attribute_span, "no fields or variants to compare here")
         .with_help("Only a struct or enum can be marked `#[equality]`")
 }
 

@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  2 │ fn test(items: Slice<int>) -> int {
  3 │   cap(items)
    ·   ─┬─
-   ·    ╰── name not found in scope
+   ·    ╰── not a Lisette builtin
  4 │ }
    ╰────
-  help: Lisette has no `cap` builtin. Use the `.capacity()` method instead, e.g. `items.capacity()` · code: [resolve.name_not_found]
+  help: Lisette has no `cap` builtin. Use `items.capacity()` · code: [resolve.name_not_found]

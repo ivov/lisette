@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  2 │ fn test(items: Slice<int>) -> int {
  3 │   len(items)
    ·   ─┬─
-   ·    ╰── name not found in scope
+   ·    ╰── not a Lisette builtin
  4 │ }
    ╰────
-  help: Lisette has no `len` builtin. Use the `.length()` method instead, e.g. `items.length()` · code: [resolve.name_not_found]
+  help: Lisette has no `len` builtin. Use `items.length()` · code: [resolve.name_not_found]

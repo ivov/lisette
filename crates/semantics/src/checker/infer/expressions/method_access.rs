@@ -197,6 +197,9 @@ impl InferCtx<'_> {
                 self.sink.push(diagnostics::infer::private_method_access(
                     args.member_name,
                     declaring,
+                    store
+                        .module_for_qualified_name(declaring)
+                        .unwrap_or(declaring),
                     *args.span,
                 ));
             }
@@ -512,6 +515,7 @@ impl InferCtx<'_> {
             self.sink.push(diagnostics::infer::private_method_access(
                 args.member_name,
                 type_simple_name,
+                store.module_for_qualified_name(&id).unwrap_or(&id),
                 *args.span,
             ));
         }

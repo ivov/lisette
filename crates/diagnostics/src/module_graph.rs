@@ -33,7 +33,7 @@ pub fn module_not_found(
 
     LisetteDiagnostic::error("Module not found")
         .with_resolve_code("module_not_found")
-        .with_span_label(&span, "not found")
+        .with_span_label(&span, "not a module in this project")
         .with_help(help)
 }
 

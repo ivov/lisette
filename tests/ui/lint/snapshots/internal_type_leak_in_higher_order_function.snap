@@ -6,7 +6,7 @@ source: tests/ui/lint/mod.rs
  5 │ 
  6 │ pub fn make_handler(seed: int) -> fn() -> PrivateOutput {
    ·                                           ──────┬──────
-   ·                                                 ╰── private
+   ·                                                 ╰── exposed by `make_handler`
  7 │   || PrivateOutput { _result: seed }
    ╰────
   help: `PrivateOutput` is private but exposed by `make_handler`, which is public. Add `pub` to the private type or remove it from the public API · code: [lint.internal_type_leak]

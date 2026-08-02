@@ -250,9 +250,13 @@ impl<'source> Lexer<'source> {
 
     pub(super) fn error_empty_rune_literal(&mut self, offset: usize) {
         let span = self.span(offset as u32, 2);
-        let error = ParseError::new("Empty rune literal", span, "empty rune")
-            .with_lex_code("empty_rune")
-            .with_help("Add a rune between the single quotes");
+        let error = ParseError::new(
+            "Empty rune literal",
+            span,
+            "must hold exactly one character",
+        )
+        .with_lex_code("empty_rune")
+        .with_help("Add a rune between the single quotes");
         self.errors.push(error);
     }
 
@@ -355,7 +359,7 @@ impl<'source> Lexer<'source> {
         let help = "Remove this character";
 
         let span = self.span(offset as u32, ch.len_utf8() as u32);
-        let error = ParseError::new("Unexpected character", span, "unexpected character")
+        let error = ParseError::new("Unexpected character", span, "not part of any token")
             .with_lex_code("unexpected_char")
             .with_help(help);
         self.errors.push(error);

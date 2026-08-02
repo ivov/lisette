@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  6 │   match p {
  7 │     shapes.Point { x, y } => x + y,
    ·                    ┬
-   ·                    ╰── private
+   ·                    ╰── private to `shapes`
  8 │   }
    ╰────
   help: Cannot access private field `x` of struct `shapes.Point`. Mark the field as `pub` · code: [resolve.private_field_access]

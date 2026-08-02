@@ -6,7 +6,7 @@ source: tests/ui/lint/mod.rs
  4 │   let r = &xs
  5 │   let _ = r.length() < 0
    ·           ───────┬──────
-   ·                  ╰── always false
+   ·                  ╰── a length is never negative
  6 │ }
    ╰────
   help: A length is never negative, so this comparison always has the same result. Did you mean to compare against a different value? · code: [lint.non_negative_comparison]

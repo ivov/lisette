@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  4 │ impl Widget {
  5 │   #[iterate]
    ·   ─────┬────
-   ·        ╰── not on an enum
+   ·        ╰── no variants to iterate here
  6 │   fn build() -> int {
    ╰────
   help: Only an enum can be marked `#[iterate]` · code: [attribute.iterate_not_an_enum]

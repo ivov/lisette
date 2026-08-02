@@ -5,6 +5,6 @@ source: tests/ui/errors/mod.rs
    ╭─[test.lis:1:9]
  1 │ let x = ''
    ·         ─┬
-   ·          ╰── empty rune
+   ·          ╰── must hold exactly one character
    ╰────
   help: Add a rune between the single quotes · code: [lex.empty_rune]

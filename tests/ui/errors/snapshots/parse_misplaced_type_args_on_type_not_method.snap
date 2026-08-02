@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  2 │ fn main() {
  3 │   let x = Slice<int>.new()
    ·                 ─┬─
-   ·                  ╰── misplaced
+   ·                  ╰── belongs on `new`
  4 │ }
    ╰────
   help: Set the type argument on the method: `Slice.new<int>()` · code: [parse.syntax_error]

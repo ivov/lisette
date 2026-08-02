@@ -1066,7 +1066,7 @@ impl<'source> Parser<'source> {
         let error = ParseError::new(
             "Attribute not supported on target",
             span,
-            "not supported on target",
+            "nothing here can carry an attribute",
         )
         .with_parse_code("misplaced_attribute")
         .with_help("Remove the attribute, or move it onto an enum, struct, or function");

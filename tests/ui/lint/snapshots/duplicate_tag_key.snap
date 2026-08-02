@@ -9,7 +9,7 @@ source: tests/ui/lint/mod.rs
    ·            ╰── first occurrence
  5 │   #[json(skip)]
    ·   ──────┬──────
-   ·         ╰── duplicate
+   ·         ╰── `json` is already set
  6 │   name: string,
    ╰────
   help: Remove one of the `json` attributes - each tag key may appear only once per field · code: [attribute.duplicate_tag]

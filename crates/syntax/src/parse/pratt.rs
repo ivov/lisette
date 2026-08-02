@@ -289,7 +289,7 @@ impl<'source> Parser<'source> {
                         (last_span.byte_offset + last_span.byte_length)
                             .saturating_sub(first_span.byte_offset),
                     );
-                    let error = ParseError::new(title, span, "misplaced")
+                    let error = ParseError::new(title, span, format!("belongs on `{}`", method))
                         .with_parse_code("syntax_error")
                         .with_help(help);
                     self.errors.push(error);

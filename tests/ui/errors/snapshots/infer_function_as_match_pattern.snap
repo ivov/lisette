@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
   9 │   match s {
  10 │     Pretend => 0,
     ·     ───┬───
-    ·        ╰── not found
+    ·        ╰── no variant `Pretend` on `Status`
  11 │     _ => 1,
     ╰────
   help: Available variants for `Status` are `Active` and `Inactive` · code: [resolve.variant_not_found]

@@ -314,6 +314,7 @@ impl InferCtx<'_> {
             self.sink.push(diagnostics::infer::private_field_access(
                 args.member_name,
                 qualified_name,
+                struct_module,
                 *args.span,
             ));
         }
@@ -374,6 +375,7 @@ impl InferCtx<'_> {
             self.sink.push(diagnostics::infer::private_field_access(
                 args.member_name,
                 qualified_name.as_str(),
+                declaring_module,
                 *args.span,
             ));
         }

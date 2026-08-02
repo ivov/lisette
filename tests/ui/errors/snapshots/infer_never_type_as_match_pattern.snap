@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  5 │   match s {
  6 │     Never => {}
    ·     ──┬──
-   ·       ╰── not found
+   ·       ╰── no variant `Never` on `Status`
  7 │   }
    ╰────
   help: Available variants for `Status` are `Active` and `Inactive` · code: [resolve.variant_not_found]

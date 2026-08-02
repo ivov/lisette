@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  3 │   let mut x = 0;
  4 │   while let y = x {
    ·             ┬
-   ·             ╰── always matches
+   ·             ╰── matches every value, so the loop never ends
  5 │     x = x + 1;
    ╰────
   help: Use `loop` with `let` binding instead · code: [infer.irrefutable_while_let]

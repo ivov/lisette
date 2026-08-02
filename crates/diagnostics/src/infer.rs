@@ -186,7 +186,7 @@ pub fn type_not_found(type_name: &str, annotation_span: Span) -> LisetteDiagnost
     if looks_like_type_param {
         return LisetteDiagnostic::error("Undeclared type parameter")
             .with_resolve_code("type_not_found")
-            .with_span_label(&name_span, "undeclared")
+            .with_span_label(&name_span, "looks like a type parameter")
             .with_help(format!(
                 "Declare the type parameter, e.g. `impl<{t}>` or `fn foo<{t}>`",
                 t = simple_name
@@ -195,7 +195,7 @@ pub fn type_not_found(type_name: &str, annotation_span: Span) -> LisetteDiagnost
 
     let diagnostic = LisetteDiagnostic::error("Type not found")
         .with_resolve_code("type_not_found")
-        .with_span_label(&name_span, "type not found in scope");
+        .with_span_label(&name_span, "not declared or imported");
 
     match foreign_type_alias(simple_name) {
         Some(suggestion) => diagnostic.with_help(format!("Did you mean `{}`?", suggestion)),
@@ -266,7 +266,7 @@ pub fn undeclared_impl_type_param(
 
     LisetteDiagnostic::error("Undeclared type parameter")
         .with_resolve_code("type_not_found")
-        .with_span_label(&name_span, "undeclared")
+        .with_span_label(&name_span, "not declared by this `impl`")
         .with_help(format!(
             "Declare the type parameter: `impl<{t}> {r}<{t}>`",
             t = type_name,
@@ -353,7 +353,7 @@ pub fn name_not_found(
     if let Some(hint) = go_builtin_hint(variable_name) {
         return LisetteDiagnostic::error("Name not found")
             .with_resolve_code("name_not_found")
-            .with_span_label(&span, "name not found in scope")
+            .with_span_label(&span, "not a Lisette builtin")
             .with_help(hint);
     }
 
@@ -374,7 +374,7 @@ pub fn name_not_found(
     {
         return LisetteDiagnostic::error("Undeclared test handle")
             .with_resolve_code("undeclared_test_handle")
-            .with_span_label(&span, "undeclared")
+            .with_span_label(&span, format!("`{function}` declares no `t` parameter"))
             .with_help(format!(
                 "Declare a `t` parameter to receive the test handle: `fn {function}(t)`"
             ));
@@ -382,12 +382,12 @@ pub fn name_not_found(
 
     let mut diagnostic = LisetteDiagnostic::error("Name not found")
         .with_resolve_code("name_not_found")
-        .with_span_label(&span, "name not found in scope");
+        .with_span_label(&span, "not declared or imported");
 
     if let Some(suggestion) = suggestion {
         diagnostic = diagnostic.with_help(format!("Did you mean `{}`?", suggestion));
     } else {
-        diagnostic = diagnostic.with_help(format!("Define or import `{}`.", variable_name));
+        diagnostic = diagnostic.with_help(format!("Define or import `{}`", variable_name));
     }
 
     diagnostic
@@ -538,14 +538,17 @@ pub fn disallowed_mutation(
     } else if is_pattern_binding {
         LisetteDiagnostic::error("Immutable variable")
             .with_infer_code("immutable")
-            .with_span_label(&span, "cannot mutate an immutable variable")
+            .with_span_label(&span, "patterns cannot bind with `mut`")
             .with_help(format!(
-                "Pattern bindings are immutable; rebind with `let mut {variable_name} = {variable_name}` to mutate"
+                "Rebind with `let mut {variable_name} = {variable_name}`, then mutate that"
             ))
     } else {
         LisetteDiagnostic::error("Immutable variable")
             .with_infer_code("immutable")
-            .with_span_label(&span, "cannot mutate an immutable variable")
+            .with_span_label(
+                &span,
+                format!("`{variable_name}` was declared without `mut`"),
+            )
             .with_help(format!(
                 "Declare using `let mut {variable_name}` to make the variable mutable"
             ))
@@ -628,48 +631,76 @@ pub fn uppercase_binding(span: Span, name: &str) -> LisetteDiagnostic {
 pub fn enum_variant_constructor_not_found(
     span: Span,
     enum_info: Option<(&str, &[String])>,
-    variant_name: &str,
+    written_path: &str,
     bare_allowed: bool,
 ) -> LisetteDiagnostic {
-    let help = if let Some((enum_name, variants)) = enum_info {
+    let variant_name = written_path.rsplit('.').next().unwrap_or(written_path);
+    let qualifier = written_path
+        .rsplit_once('.')
+        .map(|(qualifier, _)| qualifier);
+
+    let (label, help) = if let Some((enum_name, variants)) = enum_info {
         if variants.iter().any(|v| v == variant_name) {
-            if bare_allowed {
-                format!("Use `{}` to match this variant", variant_name)
-            } else {
-                format!("Use `{}.{}` to match this variant", enum_name, variant_name)
-            }
-        } else if let Some(closest) = variants
-            .iter()
-            .filter_map(|v| {
-                let d = levenshtein_distance(variant_name, v);
-                (d <= 2).then_some((v, d))
-            })
-            .min_by_key(|(_, d)| *d)
-            .map(|(v, _)| v)
-        {
-            if bare_allowed {
-                format!("Did you mean `{}`?", closest)
-            } else {
-                format!("Did you mean `{}.{}`?", enum_name, closest)
+            // A written qualifier can be unbound or can be another enum that is in scope, so
+            // the fact covering both is the enum's own path.
+            let qualified = format!("{}.{}", enum_name, variant_name);
+            match (qualifier, bare_allowed) {
+                (Some(_), true) => (
+                    format!("the enum is `{}`", enum_name),
+                    format!("Use `{}`, or just `{}`", qualified, variant_name),
+                ),
+                (Some(_), false) => (
+                    format!("the enum is `{}`", enum_name),
+                    format!("Use `{}` to match this variant", qualified),
+                ),
+                (None, false) => (
+                    "bare variants work only in match arms".to_string(),
+                    format!("Use `{}` to match this variant", qualified),
+                ),
+                (None, true) => (
+                    format!("the enum is `{}`", enum_name),
+                    format!("Use `{}` to match this variant", variant_name),
+                ),
             }
         } else {
-            let variants_fmt = if bare_allowed {
-                format_list(variants, |v| format!("`{}`", v))
+            let label = format!("no variant `{}` on `{}`", variant_name, enum_name);
+            let help = if let Some(closest) = variants
+                .iter()
+                .filter_map(|v| {
+                    let d = levenshtein_distance(variant_name, v);
+                    (d <= 2).then_some((v, d))
+                })
+                .min_by_key(|(_, d)| *d)
+                .map(|(v, _)| v)
+            {
+                if bare_allowed {
+                    format!("Did you mean `{}`?", closest)
+                } else {
+                    format!("Did you mean `{}.{}`?", enum_name, closest)
+                }
             } else {
-                format_list(variants, |v| format!("`{}.{}`", enum_name, v))
+                let variants_fmt = if bare_allowed {
+                    format_list(variants, |v| format!("`{}`", v))
+                } else {
+                    format_list(variants, |v| format!("`{}.{}`", enum_name, v))
+                };
+                format!(
+                    "Available variants for `{}` are {}",
+                    enum_name, variants_fmt
+                )
             };
-            format!(
-                "Available variants for `{}` are {}",
-                enum_name, variants_fmt
-            )
+            (label, help)
         }
     } else {
-        "Check that the variant is defined in the enum and spelled correctly".to_string()
+        (
+            "not a variant of any enum in scope".to_string(),
+            "Check that the variant is defined in the enum and spelled correctly".to_string(),
+        )
     };
 
     LisetteDiagnostic::error("Variant not found")
         .with_resolve_code("variant_not_found")
-        .with_span_label(&span, "not found")
+        .with_span_label(&span, label)
         .with_help(help)
 }
 
@@ -849,7 +880,7 @@ pub fn struct_not_found(identifier: &str, span: Span) -> LisetteDiagnostic {
 
     LisetteDiagnostic::error("Struct not found")
         .with_resolve_code("struct_not_found")
-        .with_span_label(&name_span, "struct not found in scope")
+        .with_span_label(&name_span, "not declared or imported")
         .with_help("Define or import this struct")
 }
 
@@ -893,22 +924,32 @@ pub fn pattern_missing_fields(missing: &[String], span: Span) -> LisetteDiagnost
         ))
 }
 
-pub fn private_field_access(field_name: &str, struct_name: &str, span: Span) -> LisetteDiagnostic {
+pub fn private_field_access(
+    field_name: &str,
+    struct_name: &str,
+    owning_module: &str,
+    span: Span,
+) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Private field")
         .with_resolve_code("private_field_access")
-        .with_span_label(&span, "private")
+        .with_span_label(&span, format!("private to `{}`", owning_module))
         .with_help(format!(
-            "Cannot access private field `{}` of struct `{}`. Mark the field as `pub`.",
+            "Cannot access private field `{}` of struct `{}`. Mark the field as `pub`",
             field_name, struct_name
         ))
 }
 
-pub fn private_method_access(method_name: &str, type_name: &str, span: Span) -> LisetteDiagnostic {
+pub fn private_method_access(
+    method_name: &str,
+    type_name: &str,
+    owning_module: &str,
+    span: Span,
+) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Private method")
         .with_resolve_code("private_method_access")
-        .with_span_label(&span, "private")
+        .with_span_label(&span, format!("private to `{}`", owning_module))
         .with_help(format!(
-            "Cannot access private method `{}` of type `{}`. Mark the method as `pub`.",
+            "Cannot access private method `{}` of type `{}`. Mark the method as `pub`",
             method_name, type_name
         ))
 }
@@ -916,13 +957,17 @@ pub fn private_method_access(method_name: &str, type_name: &str, span: Span) -> 
 pub fn private_field_in_spread(
     field_name: &str,
     struct_name: &str,
+    owning_module: &str,
     span: Span,
 ) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Private field")
         .with_resolve_code("private_field_spread")
-        .with_span_label(&span, "private")
+        .with_span_label(
+            &span,
+            format!("`{}` is private to `{}`", field_name, owning_module),
+        )
         .with_help(format!(
-            "Cannot spread `{}` because field `{}` is private. Mark the field as `pub`.",
+            "Cannot spread `{}` because field `{}` is private. Mark the field as `pub`",
             struct_name, field_name
         ))
 }
@@ -935,7 +980,10 @@ pub fn private_field_in_autofill(
 ) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Private field")
         .with_resolve_code("private_field_autofill")
-        .with_span_label(&span, "private")
+        .with_span_label(
+            &span,
+            format!("`{}` is private to `{}`", field_name, owning_module),
+        )
         .with_help(format!(
             "`{}` of `{}` cannot be autofilled because `{}` is private to module `{}`. \
              Provide an explicit value, or have `{}` expose `{}` as `pub` or offer a \
@@ -1683,7 +1731,7 @@ pub fn try_return_type_mismatch(expected: &str, actual_ty: &Type, span: Span) ->
 pub fn try_block_empty(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Empty `try` block")
         .with_infer_code("try_block_empty")
-        .with_span_label(&span, "empty")
+        .with_span_label(&span, "no expressions to propagate from")
         .with_help("Ensure the `try` block contains at least one expression")
 }
 
@@ -1750,7 +1798,7 @@ pub fn continue_in_try_block(span: Span) -> LisetteDiagnostic {
 pub fn recover_block_empty(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Empty `recover` block")
         .with_infer_code("recover_block_empty")
-        .with_span_label(&span, "empty")
+        .with_span_label(&span, "no expressions that could panic")
         .with_help("Ensure the `recover` block contains at least one expression that may panic")
 }
 
@@ -2782,16 +2830,16 @@ pub fn repeated_if_condition(span: &Span) -> LisetteDiagnostic {
 pub fn unchanging_loop_condition(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Loop condition never changes")
         .with_infer_code("unchanging_loop_condition")
-        .with_span_label(span, "never changes")
+        .with_span_label(span, "the loop either never runs or never ends")
         .with_help(
-            "Nothing in the loop body changes this condition, so the loop either never runs or never terminates. Did you forget to update a variable, or mean to `break` out of the loop?",
+            "Nothing in the loop body changes this condition. Did you forget to update a variable, or mean to `break` out of the loop?",
         )
 }
 
 pub fn index_out_of_bounds(span: &Span, index_text: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Index out of bounds")
         .with_infer_code("index_out_of_bounds")
-        .with_span_label(span, "out of bounds")
+        .with_span_label(span, format!("no element at `{index_text}`"))
         .with_help(format!("Indexing at `{index_text}` will panic at runtime"))
 }
 
@@ -3035,32 +3083,20 @@ pub fn cannot_negate_unsigned(target_ty: &str, span: Span) -> LisetteDiagnostic 
 
 fn go_builtin_hint(name: &str) -> Option<&'static str> {
     match name {
-        "len" => Some(
-            "Lisette has no `len` builtin. Use the `.length()` method instead, e.g. `items.length()`.",
-        ),
-        "cap" => Some(
-            "Lisette has no `cap` builtin. Use the `.capacity()` method instead, e.g. `items.capacity()`.",
-        ),
+        "len" => Some("Lisette has no `len` builtin. Use `items.length()`"),
+        "cap" => Some("Lisette has no `cap` builtin. Use `items.capacity()`"),
         "make" => Some(
-            "Lisette has no `make` builtin. Use `Slice.new<T>()`, `Map.new<K, V>()`, or `Channel.new<T>()`.",
+            "Lisette has no `make` builtin. Use `Slice.new<T>()`, `Map.new<K, V>()`, or `Channel.new<T>()`",
         ),
-        "append" => Some(
-            "Lisette has no `append` builtin. Use the `.append()` method instead, e.g. `items.append(1)`.",
-        ),
-        "close" => Some(
-            "Lisette has no `close` builtin. Use the `.close()` method instead, e.g. `ch.close()`.",
-        ),
-        "copy" => Some(
-            "Lisette has no `copy` builtin. Use the `.copy_from()` method instead, e.g. `dst.copy_from(src)`.",
-        ),
-        "delete" => Some(
-            "Lisette has no `delete` builtin. Use the `.delete()` method instead, e.g. `map.delete(key)`.",
-        ),
-        "new" => Some(
-            "Lisette has no `new` builtin. Use constructor methods instead, e.g. `MyStruct { field: value }` or `MyType.new()`.",
-        ),
+        "append" => Some("Lisette has no `append` builtin. Use `items.append(1)`"),
+        "close" => Some("Lisette has no `close` builtin. Use `ch.close()`"),
+        "copy" => Some("Lisette has no `copy` builtin. Use `dst.copy_from(src)`"),
+        "delete" => Some("Lisette has no `delete` builtin. Use `map.delete(key)`"),
+        "new" => {
+            Some("Lisette has no `new` builtin. Use `MyStruct { field: value }` or `MyType.new()`")
+        }
         "print" | "println" | "printf" => Some(
-            "Lisette has no `print` builtin. Use `fmt.Println`, `fmt.Printf`, etc. after `import \"go:fmt\"`.",
+            "Lisette has no `print` builtin. Use `fmt.Println`, `fmt.Printf`, etc. after `import \"go:fmt\"`",
         ),
         _ => None,
     }
@@ -3381,7 +3417,7 @@ pub fn impl_bound_strengthens_type(type_name: &str, span: Span) -> LisetteDiagno
 pub fn impl_on_type_alias(_type_name: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Cannot implement methods on type alias")
         .with_infer_code("impl_on_type_alias")
-        .with_span_label(&span, "type alias")
+        .with_span_label(&span, "not a distinct type")
         .with_help(
             "A type alias cannot carry its own methods. Either add methods to the underlying \
              type directly or define a tuple struct instead",

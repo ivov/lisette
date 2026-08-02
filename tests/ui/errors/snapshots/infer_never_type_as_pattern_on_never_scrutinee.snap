@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  7 │   match diverge() {
  8 │     Never => {}
    ·     ──┬──
-   ·       ╰── not found
+   ·       ╰── not a variant of any enum in scope
  9 │   }
    ╰────
   help: Check that the variant is defined in the enum and spelled correctly · code: [resolve.variant_not_found]

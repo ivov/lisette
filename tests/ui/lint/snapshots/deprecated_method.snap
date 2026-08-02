@@ -6,7 +6,7 @@ source: tests/ui/lint/mod.rs
  12 │   let c = Cache {}
  13 │   let _ = c.warm()
     ·           ───┬──
-    ·              ╰── deprecated
+    ·              ╰── not intended for new code
  14 │ }
     ╰────
   help: Use the new method instead · code: [lint.deprecated]

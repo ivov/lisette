@@ -29,7 +29,7 @@ fn join_and(items: &[String]) -> String {
 pub fn irrefutable_while_let(pattern_span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Pattern always matches")
         .with_infer_code("irrefutable_while_let")
-        .with_span_label(&pattern_span, "always matches")
+        .with_span_label(&pattern_span, "matches every value, so the loop never ends")
         .with_help("Use `loop` with `let` binding instead")
 }
 

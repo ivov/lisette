@@ -5,6 +5,6 @@ source: tests/ui/errors/mod.rs
    ╭─[test.lis:1:12]
  1 │ let x = 42 ~ invalid
    ·            ┬
-   ·            ╰── unexpected character
+   ·            ╰── not part of any token
    ╰────
   help: Remove this character · code: [lex.unexpected_char]

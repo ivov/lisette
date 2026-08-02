@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  2 │ fn test() {
  3 │   let p = UnknownStruct { x: 1, y: 2 };
    ·           ──────┬──────
-   ·                 ╰── struct not found in scope
+   ·                 ╰── not declared or imported
  4 │ }
    ╰────
   help: Define or import this struct · code: [resolve.struct_not_found]

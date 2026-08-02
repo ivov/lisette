@@ -1642,7 +1642,7 @@ impl<'source> Parser<'source> {
                 .with_parse_code("expected_let")
                 .with_help("Use `let` to declare a variable: `let x = 0`")
         } else {
-            ParseError::new("Reserved keyword", span, "reserved keyword")
+            ParseError::new("Reserved keyword", span, "cannot be used as an identifier")
                 .with_parse_code("keyword_as_identifier")
                 .with_help(format!("Rename `{}`", keyword))
         };

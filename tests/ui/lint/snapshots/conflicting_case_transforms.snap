@@ -6,7 +6,7 @@ source: tests/ui/lint/mod.rs
  1 │ 
  2 │ #[json(snake_case, camel_case)]
    · ───────────────┬───────────────
-   ·                ╰── conflicting
+   ·                ╰── only one case transform per tag
  3 │ pub struct User {
    ╰────
   help: Choose either `snake_case` or `camel_case`, not both · code: [attribute.conflicting_case_transforms]

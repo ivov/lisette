@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  2 │ struct Config {
  3 │   #[iterate]
    ·   ─────┬────
-   ·        ╰── not on an enum
+   ·        ╰── no variants to iterate here
  4 │   value: int,
    ╰────
   help: Only an enum can be marked `#[iterate]` · code: [attribute.iterate_not_an_enum]

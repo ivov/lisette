@@ -6,7 +6,7 @@ source: tests/ui/lint/mod.rs
  5 │   let c = Counter(5)
  6 │   let _ = c < 0
    ·           ──┬──
-   ·             ╰── always false
+   ·             ╰── an unsigned integer is never negative
  7 │ }
    ╰────
   help: An unsigned integer is never negative, so this comparison always has the same result. Did you mean to compare against a different value? · code: [lint.unsigned_comparison]

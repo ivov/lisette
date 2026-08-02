@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  3 │   let x = 10;
  4 │   x = 20;
    ·   ───┬──
-   ·      ╰── cannot mutate an immutable variable
+   ·      ╰── `x` was declared without `mut`
  5 │ }
    ╰────
   help: Declare using `let mut x` to make the variable mutable · code: [infer.immutable]

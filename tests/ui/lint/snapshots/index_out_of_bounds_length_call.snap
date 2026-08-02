@@ -6,7 +6,7 @@ source: tests/ui/lint/mod.rs
  3 │   let xs = [10, 20]
  4 │   let _ = xs[xs.length()]
    ·             ──────┬──────
-   ·                   ╰── out of bounds
+   ·                   ╰── no element at `xs.length()`
  5 │ }
    ╰────
   help: Indexing at `xs.length()` will panic at runtime · code: [infer.index_out_of_bounds]

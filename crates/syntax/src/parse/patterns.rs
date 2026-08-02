@@ -97,9 +97,10 @@ impl<'source> Parser<'source> {
                 }
                 _ => format!("Rename binding `{}`", keyword),
             };
-            let error = ParseError::new("Reserved keyword", span, "reserved keyword")
-                .with_parse_code("keyword_as_binding")
-                .with_help(help);
+            let error =
+                ParseError::new("Reserved keyword", span, "cannot be used as a binding name")
+                    .with_parse_code("keyword_as_binding")
+                    .with_help(help);
             self.errors.push(error);
             self.next();
             return Pattern::Identifier {

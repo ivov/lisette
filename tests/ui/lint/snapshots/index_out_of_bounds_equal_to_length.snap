@@ -6,7 +6,7 @@ source: tests/ui/lint/mod.rs
  2 │ fn main() {
  3 │   let _ = [10, 20, 30][3]
    ·                       ─┬─
-   ·                        ╰── out of bounds
+   ·                        ╰── no element at `3`
  4 │ }
    ╰────
   help: Indexing at `3` will panic at runtime · code: [infer.index_out_of_bounds]

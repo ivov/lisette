@@ -5,6 +5,6 @@ source: tests/ui/errors/mod.rs
    ╭─[mod.lis:1:8]
  1 │ import "inner"
    ·        ───┬───
-   ·           ╰── not found
+   ·           ╰── not a module in this project
    ╰────
   help: Check the module path and ensure the file exists · code: [resolve.module_not_found]

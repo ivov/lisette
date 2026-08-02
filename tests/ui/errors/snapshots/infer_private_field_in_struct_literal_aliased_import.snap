@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  4 │ fn main() {
  5 │   let p = s.Point { x: 1, y: 2 };
    ·                     ┬
-   ·                     ╰── private
+   ·                     ╰── private to `shapes`
  6 │ }
    ╰────
   help: Cannot access private field `x` of struct `s.Point`. Mark the field as `pub` · code: [resolve.private_field_access]

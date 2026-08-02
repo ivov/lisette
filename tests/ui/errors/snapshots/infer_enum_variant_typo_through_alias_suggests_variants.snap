@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
   8 │     Green => 2,
   9 │     Bluu => 3,
     ·     ──┬─
-    ·       ╰── not found
+    ·       ╰── no variant `Bluu` on `Palette`
  10 │   }
     ╰────
   help: Did you mean `Blue`? · code: [resolve.variant_not_found]

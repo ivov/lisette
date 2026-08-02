@@ -6,7 +6,7 @@ source: tests/ui/lint/mod.rs
  7 │ fn main() {
  8 │   let _ = legacy()
    ·           ───┬──
-   ·              ╰── deprecated
+   ·              ╰── not intended for new code
  9 │ }
    ╰────
   help: Use the new API instead · code: [lint.deprecated]

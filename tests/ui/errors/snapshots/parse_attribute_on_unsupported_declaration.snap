@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  1 │ 
  2 │ #[iterate]
    · ─────┬────
-   ·      ╰── not supported on target
+   ·      ╰── nothing here can carry an attribute
  3 │ interface Service {
    ╰────
   help: Remove the attribute, or move it onto an enum, struct, or function · code: [parse.misplaced_attribute]

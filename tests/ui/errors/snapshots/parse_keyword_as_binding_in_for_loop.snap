@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  3 │   let items = [1, 2, 3];
  4 │   for type in items {
    ·       ──┬─
-   ·         ╰── reserved keyword
+   ·         ╰── cannot be used as a binding name
  5 │     items
    ╰────
   help: Rename this binding. `type` is a keyword reserved for declaring named types · code: [parse.keyword_as_binding]

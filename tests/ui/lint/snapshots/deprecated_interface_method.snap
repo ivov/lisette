@@ -6,7 +6,7 @@ source: tests/ui/lint/mod.rs
  15 │ fn read(s: Store) -> int {
  16 │   s.old_get()
     ·   ────┬────
-    ·       ╰── deprecated
+    ·       ╰── not intended for new code
  17 │ }
     ╰────
   help: Use `fetch` instead · code: [lint.deprecated]

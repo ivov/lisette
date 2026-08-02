@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  2 │ fn forgot_the_handle() {
  3 │   t.skip("not ready")
    ·   ┬
-   ·   ╰── undeclared
+   ·   ╰── `forgot_the_handle` declares no `t` parameter
  4 │ }
    ╰────
   help: Declare a `t` parameter to receive the test handle: `fn forgot_the_handle(t)` · code: [resolve.undeclared_test_handle]

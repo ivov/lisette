@@ -543,7 +543,7 @@ impl InferCtx<'_> {
                 .push(diagnostics::infer::enum_variant_constructor_not_found(
                     span,
                     enum_info.as_ref().map(|(n, v)| (n.as_str(), v.as_slice())),
-                    unqualified_name(identifier),
+                    identifier,
                     kind.is_match_arm(),
                 ));
         }
@@ -709,6 +709,7 @@ impl InferCtx<'_> {
                             self.sink.push(diagnostics::infer::private_field_access(
                                 &field.name,
                                 &qualified_name,
+                                struct_module,
                                 field.value.get_span(),
                             ));
                         }

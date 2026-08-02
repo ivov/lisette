@@ -6,7 +6,7 @@ source: tests/ui/lint/mod.rs
  19 │   let s = Server { Logger: Logger { prefix: "[api]" }, port: 8080 }
  20 │   let _ = s.old_log()
     ·           ────┬────
-    ·               ╰── deprecated
+    ·               ╰── not intended for new code
  21 │ }
     ╰────
   help: Use the new method instead · code: [lint.deprecated]

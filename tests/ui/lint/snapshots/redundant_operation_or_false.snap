@@ -6,7 +6,7 @@ source: tests/ui/lint/mod.rs
  3 │   let b = true
  4 │   let _ = b || false
    ·           ─────┬────
-   ·                ╰── has no effect
+   ·                ╰── one operand leaves the other unchanged
  5 │ }
    ╰────
   help: Simplify this operation to its other operand · code: [lint.redundant_operation]

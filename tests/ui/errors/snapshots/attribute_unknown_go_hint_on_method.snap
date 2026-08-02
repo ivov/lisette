@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  6 │ impl Widget {
  7 │   #[go(array_return)]
    ·   ─────────┬─────────
-   ·            ╰── unknown
+   ·            ╰── not one of the hints `lis add` emits
  8 │   fn Bytes(self) -> Slice<byte>
    ╰────
   help: The hint in this attribute is not recognized. Regenerate this typedef by re-running `lis add` · code: [attribute.unknown]

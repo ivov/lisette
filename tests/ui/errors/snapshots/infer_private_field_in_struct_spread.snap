@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  5 │   let p = shapes.make_point();
  6 │   let q = shapes.Point { y: 10, ..p };
    ·                                   ┬
-   ·                                   ╰── private
+   ·                                   ╰── `x` is private to `shapes`
  7 │ }
    ╰────
   help: Cannot spread `shapes.Point` because field `x` is private. Mark the field as `pub` · code: [resolve.private_field_spread]

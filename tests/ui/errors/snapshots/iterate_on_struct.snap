@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  1 │ 
  2 │ #[iterate]
    · ─────┬────
-   ·      ╰── not on an enum
+   ·      ╰── no variants to iterate here
  3 │ struct Point { x: int, y: int }
    ╰────
   help: Only an enum can be marked `#[iterate]` · code: [attribute.iterate_not_an_enum]

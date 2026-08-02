@@ -6,7 +6,7 @@ source: tests/ui/lint/mod.rs
  3 │   match o {
  4 │     Some(x) if x == "hi" => 1,
    ·                ────┬────
-   ·                    ╰── redundant guard
+   ·                    ╰── the pattern can test this directly
  5 │     _ => 0,
    ╰────
   help: Replace `x` with `"hi"` in the pattern and drop the guard · code: [lint.redundant_guards]

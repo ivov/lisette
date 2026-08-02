@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  11 │   if let Some(Counter { n, .. } as c) = opt {
  12 │     c.bump();
     ·     ───┬──
-    ·        ╰── cannot mutate an immutable variable
+    ·        ╰── patterns cannot bind with `mut`
  13 │     let _ = n;
     ╰────
-  help: Pattern bindings are immutable; rebind with `let mut c = c` to mutate · code: [infer.immutable]
+  help: Rebind with `let mut c = c`, then mutate that · code: [infer.immutable]

@@ -6,6 +6,6 @@ source: tests/ui/errors/mod.rs
  1 │ 
  2 │ fn walk_dir(root: string, fn: string) {}
    ·                           ─┬
-   ·                            ╰── reserved keyword
+   ·                            ╰── cannot be used as a binding name
    ╰────
   help: Rename binding `fn` · code: [parse.keyword_as_binding]

@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  1 │ 
  2 │ #[go(array_return)]
    · ─────────┬─────────
-   ·          ╰── unknown
+   ·          ╰── not one of the hints `lis add` emits
  3 │ pub type Handle
    ╰────
   help: The hint in this attribute is not recognized. Regenerate this typedef by re-running `lis add` · code: [attribute.unknown]

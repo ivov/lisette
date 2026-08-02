@@ -6,7 +6,7 @@ source: tests/ui/lint/mod.rs
  3 │   let c: int8 = 5
  4 │   let _ = c >= -128
    ·           ────┬────
-   ·               ╰── always `true`
+   ·               ╰── compares against the limit of the value's type
  5 │ }
    ╰────
   help: This compares against the limit of the value's type, so this comparison is always `true`. Did you mean to compare against a different value? · code: [lint.type_limit_comparison]

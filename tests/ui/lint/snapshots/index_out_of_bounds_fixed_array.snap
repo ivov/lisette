@@ -6,7 +6,7 @@ source: tests/ui/lint/mod.rs
  2 │ fn at(xs: Array<int, 3>) -> int {
  3 │   xs[3]
    ·     ─┬─
-   ·      ╰── out of bounds
+   ·      ╰── no element at `3`
  4 │ }
    ╰────
   help: Indexing at `3` will panic at runtime · code: [infer.index_out_of_bounds]
