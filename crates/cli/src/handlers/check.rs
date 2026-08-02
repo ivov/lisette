@@ -26,12 +26,6 @@ struct CheckOptions {
     action: CheckAction,
 }
 
-struct CompiledFile {
-    result: CompileResult,
-    source: String,
-    display_path: String,
-}
-
 struct ScannedSources {
     sources: Vec<PathBuf>,
     test_sources: Vec<PathBuf>,
@@ -182,7 +176,7 @@ fn check_project(project_path: &Path, options: &CheckOptions) -> i32 {
                 &go_module,
                 Some(scanned),
             );
-            report_check(&result, "", "", options, start)
+            report_check(&result, options, start)
         }
     };
     drop(target_lock);
@@ -198,26 +192,14 @@ fn check_single_file(
     scanned: Option<ScannedSources>,
 ) -> i32 {
     let start = Instant::now();
-    let compiled = match compile_single_file(file_path, scope, locator, go_module, scanned) {
-        Ok(compiled) => compiled,
+    let result = match compile_single_file(file_path, scope, locator, go_module, scanned) {
+        Ok(result) => result,
         Err(ReadFailure) => return 1,
     };
-    report_check(
-        &compiled.result,
-        &compiled.source,
-        &compiled.display_path,
-        options,
-        start,
-    )
+    report_check(&result, options, start)
 }
 
-fn report_check(
-    result: &CompileResult,
-    source: &str,
-    filename: &str,
-    options: &CheckOptions,
-    start: Instant,
-) -> i32 {
+fn report_check(result: &CompileResult, options: &CheckOptions, start: Instant) -> i32 {
     let unix = matches!(options.format, OutputFormat::Unix);
     if options.fixes() {
         let mut summary = FixSummary::default();
@@ -235,7 +217,7 @@ fn report_check(
     let counts = if unix {
         let (output, counts) = render::render_unix(
             &result.diagnostics,
-            render::SourceCache::new(get_source, source, filename),
+            render::SourceCache::new(get_source),
             result.user_file_count,
             &options.filter,
         );
@@ -244,7 +226,7 @@ fn report_check(
     } else {
         render::render_all(
             &result.diagnostics,
-            render::SourceCache::new(get_source, source, filename),
+            render::SourceCache::new(get_source),
             result.user_file_count,
             &options.filter,
         )
@@ -270,7 +252,7 @@ fn compile_single_file(
     locator: TypedefLocator,
     go_module: &str,
     scanned: Option<ScannedSources>,
-) -> Result<CompiledFile, ReadFailure> {
+) -> Result<CompileResult, ReadFailure> {
     let source = match fs::read_to_string(file_path) {
         Ok(s) => s,
         Err(e) => {
@@ -292,7 +274,7 @@ fn compile_single_file(
         lisette::fs::relative_to_cwd(file_path).unwrap_or_else(|| file_path.display().to_string());
     let working_dir = file_path.parent().unwrap_or_else(|| Path::new("."));
 
-    let result = compile_project_entry(
+    Ok(compile_project_entry(
         working_dir,
         CompileInput::Binary(CompileEntry {
             source: &source,
@@ -303,13 +285,7 @@ fn compile_single_file(
         locator,
         go_module,
         scanned,
-    );
-
-    Ok(CompiledFile {
-        result,
-        source,
-        display_path: entry_display,
-    })
+    ))
 }
 
 fn compile_project_entry(
@@ -400,38 +376,37 @@ fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
         };
 
         if options.fixes() {
-            apply_result_fixes(&compiled.result, &mut fix_summary);
+            apply_result_fixes(&compiled, &mut fix_summary);
             continue;
         }
 
         let get_source = |file_id: u32| {
             compiled
-                .result
                 .sources
                 .get(&file_id)
                 .map(|info| (info.source.clone(), info.filename.clone()))
         };
         let counts = if unix {
             let (output, counts) = render::render_unix(
-                &compiled.result.diagnostics,
-                render::SourceCache::new(get_source, &compiled.source, &compiled.display_path),
-                compiled.result.user_file_count,
+                &compiled.diagnostics,
+                render::SourceCache::new(get_source),
+                compiled.user_file_count,
                 &options.filter,
             );
             print!("{}", output);
             counts
         } else {
             render::render_all(
-                &compiled.result.diagnostics,
-                render::SourceCache::new(get_source, &compiled.source, &compiled.display_path),
-                compiled.result.user_file_count,
+                &compiled.diagnostics,
+                render::SourceCache::new(get_source),
+                compiled.user_file_count,
                 &options.filter,
             )
         };
         total_errors += counts.errors;
         total_warnings += counts.warnings;
         total_info += counts.info;
-        total_files += compiled.result.user_file_count;
+        total_files += compiled.user_file_count;
     }
 
     let elapsed = start.elapsed();

@@ -163,16 +163,12 @@ fn run_standalone(file: &str, args: Vec<String>, sourcemap: bool, go_flags: &[St
 
     let counts = render::render_all(
         &result.diagnostics,
-        render::SourceCache::new(
-            |file_id| {
-                result
-                    .sources
-                    .get(&file_id)
-                    .map(|info| (info.source.clone(), info.filename.clone()))
-            },
-            &source,
-            &entry_display,
-        ),
+        render::SourceCache::new(|file_id| {
+            result
+                .sources
+                .get(&file_id)
+                .map(|info| (info.source.clone(), info.filename.clone()))
+        }),
         result.user_file_count,
         &filter,
     );

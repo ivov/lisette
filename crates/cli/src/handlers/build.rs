@@ -286,7 +286,7 @@ pub(super) fn build_locked(
     let entry = EntryPoint::resolve(prep)?;
 
     let result = compile_project(prep, mode, &entry, &locator);
-    let counts = render_diagnostics(&result, &entry);
+    let counts = render_diagnostics(&result);
     if counts.errors > 0 {
         return Err(1);
     }
@@ -346,20 +346,6 @@ impl EntryPoint {
                 display_path: display,
             }),
             Self::Library => CompileInput::Library,
-        }
-    }
-
-    fn source(&self) -> &str {
-        match self {
-            Self::Binary { source, .. } => source,
-            Self::Library => "",
-        }
-    }
-
-    fn display(&self) -> &str {
-        match self {
-            Self::Binary { display, .. } => display,
-            Self::Library => "",
         }
     }
 }
@@ -449,22 +435,15 @@ fn compile_project(
     compile(entry.compile_input(), compile_config, &local_fs)
 }
 
-fn render_diagnostics(
-    result: &lisette::pipeline::CompileResult,
-    entry: &EntryPoint,
-) -> render::Counts {
+fn render_diagnostics(result: &lisette::pipeline::CompileResult) -> render::Counts {
     render::render_all(
         &result.diagnostics,
-        render::SourceCache::new(
-            |file_id| {
-                result
-                    .sources
-                    .get(&file_id)
-                    .map(|info| (info.source.clone(), info.filename.clone()))
-            },
-            entry.source(),
-            entry.display(),
-        ),
+        render::SourceCache::new(|file_id| {
+            result
+                .sources
+                .get(&file_id)
+                .map(|info| (info.source.clone(), info.filename.clone()))
+        }),
         result.user_file_count,
         &Filter::All,
     )

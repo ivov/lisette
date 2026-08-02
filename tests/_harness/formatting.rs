@@ -63,7 +63,7 @@ pub fn format_diagnostic_unix(
     source: &str,
     filename: &str,
 ) -> String {
-    diagnostics::render::unix_line(diagnostic, &IndexedSource::new(source), filename)
+    diagnostics::render::unix_line(diagnostic, Some((&IndexedSource::new(source), filename)))
 }
 
 pub fn format_parse_error_unix(error: &ParseError, source: &str, filename: &str) -> String {

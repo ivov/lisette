@@ -96,7 +96,9 @@ fn test() {
 
     let (output, counts) = render::render_unix(
         &result.errors,
-        render::SourceCache::new(|_| None, source, "src/main.lis"),
+        render::SourceCache::new(|file_id| {
+            (file_id == 0).then(|| (source.to_string(), "src/main.lis".to_string()))
+        }),
         1,
         &unfiltered(),
     );
