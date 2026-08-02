@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785697628695,
+  "lastUpdate": 1785701117564,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -17852,6 +17852,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "bindgen",
             "value": 7404,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0ab5f68607a27d304b14ba8504462577b629c320",
+          "message": "fix: allow autofill of Go structs with hidden fields by default (#1198)",
+          "timestamp": "2026-08-02T22:04:49+02:00",
+          "tree_id": "c627456540cdf09f206c5c8217f308ed9200cd7d",
+          "url": "https://github.com/ivov/lisette/commit/0ab5f68607a27d304b14ba8504462577b629c320"
+        },
+        "date": 1785701116831,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 125675,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30326,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 25503,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18536,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13310,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 11925,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 7517,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5362,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2883,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1286,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7416,
             "unit": "lines"
           },
           {
