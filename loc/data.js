@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785689850559,
+  "lastUpdate": 1785689943087,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -17199,6 +17199,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "cli",
             "value": 11933,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 7517,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5368,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2883,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1286,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7404,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4b6dd29b28ecccd74ca470dfd0fc478c4b42fb61",
+          "message": "chore: upgrade Rust toolchain to 1.97 (#1189)",
+          "timestamp": "2026-08-02T18:58:37+02:00",
+          "tree_id": "d27c5b932b446d119f95c99cd553097db2802e4c",
+          "url": "https://github.com/ivov/lisette/commit/4b6dd29b28ecccd74ca470dfd0fc478c4b42fb61"
+        },
+        "date": 1785689941047,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 125584,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30326,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 25488,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18464,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13305,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 11932,
             "unit": "lines"
           },
           {
