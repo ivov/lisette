@@ -23,15 +23,16 @@ use crate::cache::{
     CompiledModule, ModuleInterface, build_cached_module, compute_emit_artifact_hash,
     compute_module_hash, get_dependency_module_hashes,
     go_stdlib::{self, load_cached_go_module},
-    hash_module_source_pair, hash_module_source_pair_refs, is_cache_disabled,
-    prelude as prelude_cache, try_load_cache,
+    hash_module_source_pair, is_cache_disabled, prelude as prelude_cache, try_load_cache,
 };
 use crate::checker::infer::{FileInferenceInput, InferCtx};
 use crate::checker::{TaskOutput, TaskState};
 use crate::diagnostics::{GoImportSite, emit_for_locator_result};
 use crate::facts::Facts;
 use crate::loader::{DiscoveredModules, Loader};
-use crate::module_graph::{DependencyGraph, ModuleGraphOptions, Roots, build_module_graph};
+use crate::module_graph::{
+    DependencyGraph, ModuleGraphOptions, Roots, ScannedFile, build_module_graph,
+};
 use crate::prelude::{parse_and_register_prelude, parse_and_register_test_prelude};
 use crate::store::{ENTRY_FILE_ID, ENTRY_MODULE_ID, Store};
 
@@ -370,7 +371,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
     }
     let unreachable_modules = find_unreachable_modules(&discovered, &graph_result);
 
-    let has_pre_check_errors = sink.has_errors();
+    let has_graph_errors = sink.has_errors();
 
     let cache_disabled = input.disable_cache || is_cache_disabled();
     let cache = load_prelude(
@@ -400,7 +401,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
         store,
         facts: module_output.facts,
         sink: module_output.sink,
-        has_pre_check_errors,
+        has_pre_check_errors: has_graph_errors || module_output.has_parse_errors,
         compiled_modules: module_output.compiled_modules,
         cached_modules: module_output.cached_modules,
         cache_root,

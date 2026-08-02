@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Misplaced `pub`
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ pub import "go:fmt"
+   · ─┬─
+   ·  ╰── not allowed here
+ 3 │ 
+   ╰────
+  help: An import is always private to the file that declares it. Remove `pub` · code: [parse.pub_import]

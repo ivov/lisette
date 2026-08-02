@@ -1066,6 +1066,16 @@ fn parse_import_after_item_with_line_comment() {
 }
 
 #[test]
+fn parse_public_import() {
+    let input = r#"
+pub import "go:fmt"
+
+fn main() {}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
 fn parse_misplaced_file_comment_after_import() {
     let input = r#"
 import "some_module"

@@ -156,11 +156,47 @@ impl From<HashMap<ModuleId, HashSet<ModuleId>>> for DependencyGraph {
     }
 }
 
+/// A module file read and scanned for imports, but not yet parsed.
+#[derive(Debug)]
+pub struct ScannedFile {
+    pub module_id: ModuleId,
+    pub file_id: u32,
+    pub name: String,
+    pub display_path: String,
+    pub source: String,
+    pub imports: Vec<syntax::program::FileImport>,
+}
+
+impl ScannedFile {
+    pub fn is_d_lis(&self) -> bool {
+        self.name.ends_with(".d.lis")
+    }
+
+    pub fn is_test(&self) -> bool {
+        syntax::program::is_test_file(&self.name)
+    }
+
+    pub fn parse(self) -> (File, Vec<syntax::ParseError>) {
+        let result = syntax::build_ast(&self.source, self.file_id);
+        let file = File {
+            id: self.file_id,
+            module_id: self.module_id,
+            name: self.name,
+            display_path: self.display_path,
+            source_path: None,
+            source: self.source,
+            items: result.ast,
+            file_comment: result.file_comment,
+        };
+        (file, result.errors)
+    }
+}
+
 #[derive(Debug)]
 pub struct ModuleGraphResult {
     pub order: Vec<ModuleId>,
     pub cycles: Vec<Vec<ModuleId>>,
-    pub files: HashMap<ModuleId, Vec<File>>,
+    pub files: HashMap<ModuleId, Vec<ScannedFile>>,
     pub dependencies: DependencyGraph,
     /// Reachable from the primary roots, snapshotted before `additional` runs.
     pub primary_reachable: HashSet<ModuleId>,
@@ -228,7 +264,7 @@ struct GraphBuilder<'a> {
     project_kind: ProjectKind,
     dependencies: DependencyGraph,
     visited: HashSet<ModuleId>,
-    files: HashMap<ModuleId, Vec<File>>,
+    files: HashMap<ModuleId, Vec<ScannedFile>>,
     import_spans: HashMap<ModuleId, Span>,
 }
 
@@ -248,7 +284,7 @@ impl<'a> GraphBuilder<'a> {
 
             batch.sort();
 
-            let mut parsed = batch_parse_modules(
+            let mut scanned = batch_scan_modules(
                 &batch,
                 self.store,
                 self.loader,
@@ -258,9 +294,9 @@ impl<'a> GraphBuilder<'a> {
             );
 
             for module_id in &batch {
-                let module_files = parsed.remove(module_id).unwrap_or_default();
+                let module_files = scanned.remove(module_id).unwrap_or_default();
                 let file_imports = if !module_files.is_empty() {
-                    classify_file_imports(&module_files)
+                    classify_scanned_imports(&module_files)
                 } else if let Some(module) = self.store.get_module(module_id) {
                     classify_file_imports(module.files.values())
                 } else {
@@ -364,15 +400,19 @@ struct ClassifiedImport {
     kind: DependencyKind,
 }
 
+fn dependency_kind(is_test: bool) -> DependencyKind {
+    if is_test {
+        DependencyKind::TestOnly
+    } else {
+        DependencyKind::Production
+    }
+}
+
 fn classify_file_imports<'a>(files: impl IntoIterator<Item = &'a File>) -> Vec<ClassifiedImport> {
     files
         .into_iter()
         .flat_map(|file| {
-            let kind = if file.is_test() {
-                DependencyKind::TestOnly
-            } else {
-                DependencyKind::Production
-            };
+            let kind = dependency_kind(file.is_test());
             file.imports()
                 .into_iter()
                 .map(move |import| ClassifiedImport { import, kind })
@@ -380,7 +420,20 @@ fn classify_file_imports<'a>(files: impl IntoIterator<Item = &'a File>) -> Vec<C
         .collect()
 }
 
-struct ParseJob {
+fn classify_scanned_imports(files: &[ScannedFile]) -> Vec<ClassifiedImport> {
+    files
+        .iter()
+        .flat_map(|file| {
+            let kind = dependency_kind(file.is_test());
+            file.imports.iter().map(move |import| ClassifiedImport {
+                import: import.clone(),
+                kind,
+            })
+        })
+        .collect()
+}
+
+struct ScanJob {
     module_id: ModuleId,
     file_id: u32,
     filename: String,
@@ -388,34 +441,38 @@ struct ParseJob {
     source: String,
 }
 
-fn batch_parse_modules(
+/// Reads and scans every file of the given modules. The parse waits for the cache.
+fn batch_scan_modules(
     modules: &[ModuleId],
     store: &Store,
     loader: Option<&dyn Loader>,
     sink: &LocalSink,
     include_tests: bool,
     has_project_root: bool,
-) -> HashMap<ModuleId, Vec<File>> {
+) -> HashMap<ModuleId, Vec<ScannedFile>> {
     let Some(fs) = loader else {
         return HashMap::default();
     };
 
     const PARALLEL_THRESHOLD: usize = 4;
 
-    let to_scan: Vec<&ModuleId> = modules.iter().filter(|m| !store.has(m)).collect();
-    let scanned: Vec<(&ModuleId, Vec<(String, semantics_loader::FileContent)>)> =
-        if to_scan.len() < PARALLEL_THRESHOLD {
-            to_scan.into_iter().map(|m| (m, scan_one(fs, m))).collect()
+    let to_read: Vec<&ModuleId> = modules.iter().filter(|m| !store.has(m)).collect();
+    let folders: Vec<(&ModuleId, Vec<(String, semantics_loader::FileContent)>)> =
+        if to_read.len() < PARALLEL_THRESHOLD {
+            to_read
+                .into_iter()
+                .map(|m| (m, read_folder(fs, m)))
+                .collect()
         } else {
             use rayon::prelude::*;
-            to_scan
+            to_read
                 .into_par_iter()
-                .map(|m| (m, scan_one(fs, m)))
+                .map(|m| (m, read_folder(fs, m)))
                 .collect()
         };
 
-    let mut jobs: Vec<ParseJob> = Vec::new();
-    for (module_id, entries) in scanned {
+    let mut jobs: Vec<ScanJob> = Vec::new();
+    for (module_id, entries) in folders {
         let is_external_test =
             has_project_root && semantics_loader::is_external_test_module(module_id);
         for (filename, content) in entries {
@@ -445,7 +502,7 @@ fn batch_parse_modules(
                 continue;
             }
             let file_id = store.new_file_id();
-            jobs.push(ParseJob {
+            jobs.push(ScanJob {
                 module_id: module_id.clone(),
                 file_id,
                 filename,
@@ -455,16 +512,15 @@ fn batch_parse_modules(
         }
     }
 
-    let parsed: Vec<(File, Vec<syntax::ParseError>)> = if jobs.len() < PARALLEL_THRESHOLD {
-        jobs.into_iter().map(parse_one).collect()
+    let scanned: Vec<ScannedFile> = if jobs.len() < PARALLEL_THRESHOLD {
+        jobs.into_iter().map(scan_one).collect()
     } else {
         use rayon::prelude::*;
-        jobs.into_par_iter().map(parse_one).collect()
+        jobs.into_par_iter().map(scan_one).collect()
     };
 
-    let mut grouped: HashMap<ModuleId, Vec<File>> = HashMap::default();
-    for (file, errors) in parsed {
-        sink.extend_parse_errors(errors);
+    let mut grouped: HashMap<ModuleId, Vec<ScannedFile>> = HashMap::default();
+    for file in scanned {
         grouped
             .entry(file.module_id.clone())
             .or_default()
@@ -473,26 +529,22 @@ fn batch_parse_modules(
     grouped
 }
 
-fn scan_one(fs: &dyn Loader, module_id: &str) -> Vec<(String, semantics_loader::FileContent)> {
+fn read_folder(fs: &dyn Loader, module_id: &str) -> Vec<(String, semantics_loader::FileContent)> {
     let mut entries: Vec<(String, semantics_loader::FileContent)> =
         fs.scan_folder(module_id).into_iter().collect();
     entries.sort_by(|a, b| a.0.cmp(&b.0));
     entries
 }
 
-fn parse_one(job: ParseJob) -> (File, Vec<syntax::ParseError>) {
-    let result = syntax::build_ast(&job.source, job.file_id);
-    let file = File {
-        id: job.file_id,
+fn scan_one(job: ScanJob) -> ScannedFile {
+    ScannedFile {
+        imports: syntax::imports::scan_imports(&job.source, job.file_id),
         module_id: job.module_id,
+        file_id: job.file_id,
         name: job.filename,
         display_path: job.display_path,
-        source_path: None,
         source: job.source,
-        items: result.ast,
-        file_comment: result.file_comment,
-    };
-    (file, result.errors)
+    }
 }
 
 #[derive(Clone, Copy)]

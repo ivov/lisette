@@ -78,6 +78,22 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
         },
     );
 
+    let mut parsed: HashMap<String, Vec<syntax::program::File>> = graph_result
+        .files
+        .drain()
+        .map(|(module_id, files)| {
+            let files = files
+                .into_iter()
+                .map(|file| {
+                    let (file, errors) = file.parse();
+                    sink.extend_parse_errors(errors);
+                    file
+                })
+                .collect();
+            (module_id, files)
+        })
+        .collect();
+
     if sink.has_errors() {
         return InferResult {
             ast: vec![],
@@ -102,7 +118,7 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
                 continue;
             }
 
-            let files = graph_result.files.remove(&module_id).unwrap_or_default();
+            let files = parsed.remove(&module_id).unwrap_or_default();
 
             store.store_module(&module_id, files);
             checker.register_module(&mut store, &module_id);

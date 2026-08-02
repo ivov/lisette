@@ -45,6 +45,10 @@ impl FileImport {
     }
 }
 
+pub fn is_test_file(name: &str) -> bool {
+    name.ends_with(".test.lis")
+}
+
 pub fn unaliased_binding_name<'a, S: BuildHasher>(
     path: &'a str,
     go_package_names: &'a HashMap<String, String, S>,
@@ -103,7 +107,7 @@ impl File {
 
     /// A test file (`*.test.lis`).
     pub fn is_test(&self) -> bool {
-        self.name.ends_with(".test.lis")
+        is_test_file(&self.name)
     }
 
     pub fn imports(&self) -> Vec<FileImport> {

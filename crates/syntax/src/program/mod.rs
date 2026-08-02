@@ -11,7 +11,7 @@ pub use definition::{
 pub use emit_input::{
     BindingMutation, EmitInput, EqualityIndex, MutationInfo, TestFunction, TestIndex, UnusedInfo,
 };
-pub use file::{File, FileImport, go_import_default_name, unaliased_binding_name};
+pub use file::{File, FileImport, go_import_default_name, is_test_file, unaliased_binding_name};
 pub use module::{Module, ModuleId};
 pub use resolution::{
     CallKind, ChannelOperation, DotAccessKind, DotAccessResolution, NativeTypeKind,

@@ -30,3 +30,10 @@ path = "fuzz_targets/infer.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "scan_imports"
+path = "fuzz_targets/scan_imports.rs"
+test = false
+doc = false
+bench = false

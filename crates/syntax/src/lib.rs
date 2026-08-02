@@ -3,6 +3,7 @@ pub mod attributes;
 pub mod containment;
 mod display;
 pub mod go_names;
+pub mod imports;
 pub mod lex;
 pub mod parse;
 pub mod program;

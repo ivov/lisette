@@ -417,6 +417,84 @@ mod tests {
         );
     }
 
+    #[test]
+    fn a_dependency_edit_invalidates_its_dependents_on_a_warm_build() {
+        let tmp = tempdir().unwrap();
+        let root = tmp.path();
+        stdfs::create_dir_all(root.join("src").join("top")).unwrap();
+        stdfs::create_dir_all(root.join("src").join("dep")).unwrap();
+        stdfs::write(
+            root.join("lisette.toml"),
+            "[project]\nname = \"github.com/test/edges\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        stdfs::write(
+            root.join("src").join("main.lis"),
+            "import \"top\"\n\nfn main() {\n  let _ = top.value()\n}\n",
+        )
+        .unwrap();
+        stdfs::write(
+            root.join("src").join("top").join("top.lis"),
+            "import \"dep\"\n\npub fn value() -> int {\n  dep.number()\n}\n",
+        )
+        .unwrap();
+        stdfs::write(
+            root.join("src").join("dep").join("dep.lis"),
+            "pub fn number() -> int { 1 }\n",
+        )
+        .unwrap();
+
+        let cold = check_diagnostics(root);
+        assert!(cold.is_empty(), "fixture must be clean; got: {cold:?}");
+        assert!(
+            root.join("target/.lisette/cache/top.cache").exists(),
+            "top must be cached for this test to be meaningful"
+        );
+
+        stdfs::write(
+            root.join("src").join("dep").join("dep.lis"),
+            "pub fn number() -> string { \"one\" }\n",
+        )
+        .unwrap();
+
+        let warm = check_diagnostics(root);
+        assert!(
+            warm.iter().any(|(is_error, _)| *is_error),
+            "editing `dep` must invalidate `top`, whose edge comes from the scanner; got: {warm:?}"
+        );
+    }
+
+    #[test]
+    fn a_module_whose_body_fails_to_parse_still_reports_its_syntax_error() {
+        let tmp = tempdir().unwrap();
+        let root = tmp.path();
+        stdfs::create_dir_all(root.join("src").join("broken")).unwrap();
+        stdfs::write(
+            root.join("lisette.toml"),
+            "[project]\nname = \"github.com/test/broken\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        stdfs::write(
+            root.join("src").join("main.lis"),
+            "import \"broken\"\n\nfn main() {\n  let _ = broken.value()\n}\n",
+        )
+        .unwrap();
+        stdfs::write(
+            root.join("src").join("broken").join("broken.lis"),
+            "import \"go:fmt\"\n\npub fn value() -> int {\n",
+        )
+        .unwrap();
+
+        let diagnostics = check_diagnostics(root);
+
+        assert!(
+            diagnostics.iter().any(
+                |(is_error, code)| *is_error && code.as_deref() == Some("parse.unclosed_block")
+            ),
+            "a readable prologue must not hide a broken body; got: {diagnostics:?}"
+        );
+    }
+
     fn analyze_cache_state(
         project_dir: &std::path::Path,
     ) -> (Vec<String>, Vec<(bool, Option<String>)>) {

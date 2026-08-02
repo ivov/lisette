@@ -8,9 +8,19 @@ permissions:
   issues: write
 
 jobs:
-  fuzz-parse:
+  fuzz:
     if: github.repository == 'ivov/lisette'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: parse
+            recipe: fuzz-parse
+          - target: infer
+            recipe: fuzz-infer
+          - target: scan_imports
+            recipe: fuzz-scan-imports
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
 
@@ -31,32 +41,34 @@ jobs:
         if: steps.cache-cargo-fuzz.outputs.cache-hit != 'true'
         run: cargo install cargo-fuzz --version 0.13.1 --locked
 
-      - name: Restore fuzz-parse corpus
+      - name: Restore corpus
         uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # ratchet:actions/cache/restore@v5
         with:
-          path: fuzz/corpus/parse
-          key: fuzz-corpus-parse
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}
+          restore-keys: |
+            fuzz-corpus-${{ matrix.target }}-
 
       - uses: extractions/setup-just@f8a3cce218d9f83db3a2ecd90e41ac3de6cdfd9b # ratchet:extractions/setup-just@v3
 
-      - name: Minimize fuzz-parse corpus
-        run: cargo +nightly fuzz cmin parse -- -rss_limit_mb=2048
+      - name: Minimize corpus
+        run: cargo +nightly fuzz cmin ${{ matrix.target }} -- -rss_limit_mb=2048
 
-      - name: Fuzz parse
-        run: just fuzz-parse
+      - name: Fuzz ${{ matrix.target }}
+        run: just ${{ matrix.recipe }}
 
-      - name: Save fuzz-parse corpus
+      - name: Save corpus
         if: always()
         uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # ratchet:actions/cache/save@v5
         with:
-          path: fuzz/corpus/parse
-          key: fuzz-corpus-parse-${{ github.run_id }}
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
 
       - name: Upload crash artifacts
         if: failure() && hashFiles('fuzz/artifacts/**') != ''
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # ratchet:actions/upload-artifact@v6
         with:
-          name: fuzz-crash-parse
+          name: fuzz-crash-${{ matrix.target }}
           path: fuzz/artifacts/
 
       - name: Create issue on crash
@@ -64,11 +76,11 @@ jobs:
         run: |
           gh issue create \
             --repo ivov/lisette \
-            --title "fuzz-parse crash (run ${{ github.run_id }})" \
-            --body "The \`fuzz-parse\` target crashed in a scheduled fuzz run.
+            --title "fuzz-${{ matrix.target }} crash (run ${{ github.run_id }})" \
+            --body "The \`${{ matrix.target }}\` target crashed in a scheduled fuzz run.
 
           **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          **Artifact:** \`fuzz-crash-parse\` (attached to the run)"
+          **Artifact:** \`fuzz-crash-${{ matrix.target }}\` (attached to the run)"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -77,84 +89,8 @@ jobs:
         run: |
           gh issue create \
             --repo ivov/lisette \
-            --title "fuzz-parse job failed (run ${{ github.run_id }})" \
-            --body "The \`fuzz-parse\` job failed in a scheduled fuzz run. The usual cause is the target no longer building against current \`crates/\`.
-
-          **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  fuzz-infer:
-    if: github.repository == 'ivov/lisette'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
-
-      - uses: dtolnay/rust-toolchain@5b842231ba77f5c045dba54ac5560fed2db780e2 # ratchet:dtolnay/rust-toolchain@nightly
-
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # ratchet:Swatinem/rust-cache@v2
-        with:
-          workspaces: fuzz -> target
-
-      - name: Cache cargo-fuzz binary
-        id: cache-cargo-fuzz
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # ratchet:actions/cache@v5
-        with:
-          path: ~/.cargo/bin/cargo-fuzz
-          key: cargo-fuzz-0.13.1
-
-      - name: Install cargo-fuzz
-        if: steps.cache-cargo-fuzz.outputs.cache-hit != 'true'
-        run: cargo install cargo-fuzz --version 0.13.1 --locked
-
-      - name: Restore fuzz-infer corpus
-        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # ratchet:actions/cache/restore@v5
-        with:
-          path: fuzz/corpus/infer
-          key: fuzz-corpus-infer
-
-      - uses: extractions/setup-just@f8a3cce218d9f83db3a2ecd90e41ac3de6cdfd9b # ratchet:extractions/setup-just@v3
-
-      - name: Minimize fuzz-infer corpus
-        run: cargo +nightly fuzz cmin infer -- -rss_limit_mb=2048
-
-      - name: Fuzz infer
-        run: just fuzz-infer
-
-      - name: Save fuzz-infer corpus
-        if: always()
-        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # ratchet:actions/cache/save@v5
-        with:
-          path: fuzz/corpus/infer
-          key: fuzz-corpus-infer-${{ github.run_id }}
-
-      - name: Upload crash artifacts
-        if: failure() && hashFiles('fuzz/artifacts/**') != ''
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # ratchet:actions/upload-artifact@v6
-        with:
-          name: fuzz-crash-infer
-          path: fuzz/artifacts/
-
-      - name: Create issue on crash
-        if: failure() && hashFiles('fuzz/artifacts/**') != ''
-        run: |
-          gh issue create \
-            --repo ivov/lisette \
-            --title "fuzz-infer crash (run ${{ github.run_id }})" \
-            --body "The \`fuzz-infer\` target crashed in a scheduled fuzz run.
-
-          **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          **Artifact:** \`fuzz-crash-infer\` (attached to the run)"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create issue on job failure
-        if: failure() && hashFiles('fuzz/artifacts/**') == ''
-        run: |
-          gh issue create \
-            --repo ivov/lisette \
-            --title "fuzz-infer job failed (run ${{ github.run_id }})" \
-            --body "The \`fuzz-infer\` job failed in a scheduled fuzz run. The usual cause is the target no longer building against current \`crates/\`.
+            --title "fuzz-${{ matrix.target }} job failed (run ${{ github.run_id }})" \
+            --body "The \`${{ matrix.target }}\` job failed in a scheduled fuzz run. The usual cause is the target no longer building against current \`crates/\`.
 
           **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
         env:

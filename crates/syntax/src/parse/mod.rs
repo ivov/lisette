@@ -170,13 +170,21 @@ impl<'source> Parser<'source> {
             self.next();
         }
 
-        if is_public && self.is(Impl) {
-            let token = pub_token.unwrap();
+        if let Some(token) = pub_token {
             let span = ast::Span::new(self.file_id, token.byte_offset, token.byte_length);
-            let error = ParseError::new("Misplaced `pub`", span, "not allowed here")
-                .with_parse_code("syntax_error")
-                .with_help("Place `pub` on individual methods inside the `impl` block instead");
-            self.errors.push(error);
+            match self.current_token().kind {
+                Impl => self.error_misplaced_pub(
+                    span,
+                    "syntax_error",
+                    "Place `pub` on individual methods inside the `impl` block instead",
+                ),
+                Import => self.error_misplaced_pub(
+                    span,
+                    "pub_import",
+                    "An import is always private to the file that declares it. Remove `pub`",
+                ),
+                _ => {}
+            }
         }
 
         let is_documentable = matches!(
@@ -1062,6 +1070,14 @@ impl<'source> Parser<'source> {
         self.errors.push(error);
     }
 
+    fn error_misplaced_pub(&mut self, span: Span, code: &str, help: &str) {
+        let error = ParseError::new("Misplaced `pub`", span, "not allowed here")
+            .with_parse_code(code)
+            .with_help(help);
+
+        self.errors.push(error);
+    }
+
     fn error_misplaced_attribute(&mut self, span: Span) {
         let error = ParseError::new(
             "Attribute not supported on target",
@@ -1323,6 +1339,37 @@ mod import_order_tests {
             "// note\nimport \"go:fmt\"\n\n/// docs\nfn f() {}",
             "import \"go:fmt\"\n\n#[test]\nfn f(t: T) {}",
             "import \"go:fmt\"",
+        ] {
+            assert!(codes(source).is_empty(), "for source: {source:?}");
+        }
+    }
+
+    #[test]
+    fn a_public_import_is_rejected() {
+        for source in [
+            "pub import \"go:fmt\"",
+            "pub import _ \"go:fmt\"",
+            "pub import alias \"go:fmt\"",
+            "pub // note\nimport \"go:fmt\"",
+            "import \"go:os\"\npub import \"go:fmt\"\nfn f() {}",
+        ] {
+            assert_eq!(
+                codes(source),
+                ["parse.pub_import"],
+                "for source: {source:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn visibility_on_definitions_is_untouched() {
+        for source in [
+            "pub fn f() {}",
+            "pub struct S {}",
+            "pub enum E { A }",
+            "pub const N: int = 1",
+            "pub type T = int",
+            "pub interface I {}",
         ] {
             assert!(codes(source).is_empty(), "for source: {source:?}");
         }

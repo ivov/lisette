@@ -2,6 +2,7 @@ mod build;
 mod emit;
 mod format;
 mod graph;
+mod imports;
 pub mod infer;
 mod lex;
 mod parse;

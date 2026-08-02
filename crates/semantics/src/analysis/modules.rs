@@ -4,8 +4,52 @@ use rustc_hash::FxHashMap as HashMap;
 
 struct CacheCandidate {
     compiled: CompiledModule,
-    files: Vec<File>,
+    files: Vec<ScannedFile>,
+    rewrite_root_import: bool,
     topo_rank: usize,
+}
+
+struct UnparsedModule {
+    module_id: String,
+    files: Vec<ScannedFile>,
+    rewrite_root_import: bool,
+    pending: PendingModule,
+}
+
+struct ParsedModule {
+    module_id: String,
+    files: Vec<File>,
+    errors: Vec<ParseError>,
+    pending: PendingModule,
+}
+
+impl UnparsedModule {
+    fn parse(self) -> ParsedModule {
+        let Self {
+            module_id,
+            files: scanned,
+            rewrite_root_import,
+            pending,
+        } = self;
+
+        let mut files = Vec::with_capacity(scanned.len());
+        let mut errors = Vec::new();
+        for scanned_file in scanned {
+            let (mut file, file_errors) = scanned_file.parse();
+            if rewrite_root_import {
+                file.rewrite_import(crate::loader::ROOT_IMPORT, ENTRY_MODULE_ID);
+            }
+            files.push(file);
+            errors.extend(file_errors);
+        }
+
+        ParsedModule {
+            module_id,
+            files,
+            errors,
+            pending,
+        }
+    }
 }
 
 enum PendingModule {
@@ -60,6 +104,7 @@ pub(super) struct ModuleInferenceOutput {
     pub(super) cached_modules: HashSet<String>,
     pub(super) compiled_modules: Vec<CompiledModule>,
     pub(super) sink: LocalSink,
+    pub(super) has_parse_errors: bool,
 }
 
 /// Classifies every topo-ordered module as a `go:` import, a cache candidate,
@@ -78,6 +123,7 @@ pub(super) fn infer_all_modules(
 
     let mut to_infer: Vec<PendingModule> = Vec::new();
     let mut candidates: Vec<CacheCandidate> = Vec::new();
+    let mut unparsed: Vec<UnparsedModule> = Vec::new();
 
     let mut source_hashes: HashMap<String, (u64, u64)> =
         if input.graph_result.files.len() < PARALLEL_THRESHOLD {
@@ -85,14 +131,14 @@ pub(super) fn infer_all_modules(
                 .graph_result
                 .files
                 .iter()
-                .map(|(id, files)| (id.clone(), hash_module_source_pair(files)))
+                .map(|(id, files)| (id.clone(), hash_module_source_pair(scanned_sources(files))))
                 .collect()
         } else {
             input
                 .graph_result
                 .files
                 .par_iter()
-                .map(|(id, files)| (id.clone(), hash_module_source_pair(files)))
+                .map(|(id, files)| (id.clone(), hash_module_source_pair(scanned_sources(files))))
                 .collect()
         };
 
@@ -101,9 +147,12 @@ pub(super) fn infer_all_modules(
         .map(|module| module.files.values().collect())
         .unwrap_or_default();
     if !entry_files.is_empty() {
+        let sources = entry_files
+            .iter()
+            .map(|file| (file.name.as_str(), file.source.as_str()));
         source_hashes.insert(
             ENTRY_MODULE_ID.to_string(),
-            hash_module_source_pair_refs(&entry_files),
+            hash_module_source_pair(sources),
         );
     }
 
@@ -123,24 +172,19 @@ pub(super) fn infer_all_modules(
             continue;
         }
 
-        let mut files = input
+        let files = input
             .graph_result
             .files
             .remove(&module_id)
             .unwrap_or_default();
-        if input.scope.has_project_root()
+        let rewrite_root_import = input.scope.has_project_root()
             && input.project_kind == ProjectKind::Library
-            && crate::loader::is_external_test_module(&module_id)
-        {
-            for file in &mut files {
-                file.rewrite_import(crate::loader::ROOT_IMPORT, ENTRY_MODULE_ID);
-            }
-        }
+            && crate::loader::is_external_test_module(&module_id);
         // Production-only hash drives dependents/emit; all-files hash drives own validity.
         let (production_hash, full_hash) = source_hashes
             .get(&module_id)
             .copied()
-            .unwrap_or_else(|| hash_module_source_pair(&files));
+            .unwrap_or_else(|| hash_module_source_pair(scanned_sources(&files)));
 
         let dep_hashes =
             get_dependency_module_hashes(dependencies.dependencies(&module_id), &module_hashes);
@@ -164,15 +208,20 @@ pub(super) fn infer_all_modules(
             (Some(_), Some(compiled)) => candidates.push(CacheCandidate {
                 compiled,
                 files,
+                rewrite_root_import,
                 topo_rank,
             }),
             (None, compiled) | (Some(_), compiled @ None) => {
-                store.store_module(&module_id, files);
                 let pending = match compiled {
                     Some(module) => PendingModule::Compiled { module, topo_rank },
                     None => PendingModule::Entry { topo_rank },
                 };
-                to_infer.push(pending);
+                unparsed.push(UnparsedModule {
+                    module_id,
+                    files,
+                    rewrite_root_import,
+                    pending,
+                });
             }
         }
     }
@@ -189,7 +238,9 @@ pub(super) fn infer_all_modules(
         }
     };
     cached_modules.extend(cache_load.cached);
-    to_infer.extend(cache_load.to_infer);
+    unparsed.extend(cache_load.missed);
+
+    let has_parse_errors = parse_and_store_modules(&mut checker, store, unparsed, &mut to_infer);
 
     for pending in &to_infer {
         checker.predeclare_module_types(store, pending.module_id());
@@ -238,7 +289,41 @@ pub(super) fn infer_all_modules(
         cached_modules,
         compiled_modules,
         sink: checker.sink,
+        has_parse_errors,
     }
+}
+
+fn scanned_sources(files: &[ScannedFile]) -> impl Iterator<Item = (&str, &str)> + Clone {
+    files
+        .iter()
+        .map(|file| (file.name.as_str(), file.source.as_str()))
+}
+
+/// Parses everything the cache did not serve, in one batch.
+fn parse_and_store_modules(
+    checker: &mut TaskState,
+    store: &mut Store,
+    unparsed: Vec<UnparsedModule>,
+    to_infer: &mut Vec<PendingModule>,
+) -> bool {
+    let file_count: usize = unparsed.iter().map(|module| module.files.len()).sum();
+    let parsed: Vec<ParsedModule> = if file_count < PARALLEL_THRESHOLD {
+        unparsed.into_iter().map(UnparsedModule::parse).collect()
+    } else {
+        unparsed
+            .into_par_iter()
+            .map(UnparsedModule::parse)
+            .collect()
+    };
+
+    let mut has_parse_errors = false;
+    for module in parsed {
+        has_parse_errors |= !module.errors.is_empty();
+        checker.sink.extend_parse_errors(module.errors);
+        store.store_module(&module.module_id, module.files);
+        to_infer.push(module.pending);
+    }
+    has_parse_errors
 }
 
 /// Registers one `go:` module, reusing the stdlib cache when it covers the package.
@@ -290,10 +375,10 @@ fn register_go_module(
 #[derive(Default)]
 struct CacheLoad {
     cached: HashSet<String>,
-    to_infer: Vec<PendingModule>,
+    missed: Vec<UnparsedModule>,
 }
 
-/// Merges cache hits into the store and returns the misses to register.
+/// Merges cache hits into the store and returns the misses, still unparsed.
 fn load_cache_candidates(
     checker: &mut TaskState,
     store: &mut Store,
@@ -321,11 +406,14 @@ fn load_cache_candidates(
     let mut build_jobs: Vec<CacheBuildJob> = Vec::new();
     for (candidate, interface) in candidates.into_iter().zip(loaded) {
         let Some(interface) = interface else {
-            let module_id = candidate.compiled.module_id.clone();
-            store.store_module(&module_id, candidate.files);
-            result.to_infer.push(PendingModule::Compiled {
-                module: candidate.compiled,
-                topo_rank: candidate.topo_rank,
+            result.missed.push(UnparsedModule {
+                module_id: candidate.compiled.module_id.clone(),
+                files: candidate.files,
+                rewrite_root_import: candidate.rewrite_root_import,
+                pending: PendingModule::Compiled {
+                    module: candidate.compiled,
+                    topo_rank: candidate.topo_rank,
+                },
             });
             continue;
         };

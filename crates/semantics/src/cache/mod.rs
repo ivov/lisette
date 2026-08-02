@@ -11,7 +11,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use syntax::program::{File, Module};
+use syntax::program::{File, Module, is_test_file};
 
 use crate::loader::is_external_test_module;
 use crate::store::{ENTRY_MODULE_ID, Store};
@@ -126,11 +126,15 @@ pub fn compute_emit_artifact_hash(production_hash: u64, go_module: &str) -> u64 
     hasher.finish()
 }
 
-/// Hashes a module's sources: the production-only hash drives dependents and
-/// the emit artifact, the all-files hash drives the module's own validity.
-pub(crate) fn hash_module_source_pair(files: &[File]) -> (u64, u64) {
-    let production_hash = hash_module_sources(files.iter().filter(|f| !f.is_test()));
-    let full_hash = if files.iter().any(|f| f.is_test()) {
+/// Hashes a module's sources, given each file's name and source: the
+/// production-only hash drives dependents and the emit artifact, the all-files
+/// hash drives the module's own validity.
+pub(crate) fn hash_module_source_pair<'a>(
+    files: impl Iterator<Item = (&'a str, &'a str)> + Clone,
+) -> (u64, u64) {
+    let production_hash =
+        hash_module_sources(files.clone().filter(|(name, _)| !is_test_file(name)));
+    let full_hash = if files.clone().any(|(name, _)| is_test_file(name)) {
         hash_module_sources(files)
     } else {
         production_hash
@@ -138,25 +142,15 @@ pub(crate) fn hash_module_source_pair(files: &[File]) -> (u64, u64) {
     (production_hash, full_hash)
 }
 
-pub(crate) fn hash_module_source_pair_refs(files: &[&File]) -> (u64, u64) {
-    let production_hash = hash_module_sources(files.iter().copied().filter(|f| !f.is_test()));
-    let full_hash = if files.iter().any(|f| f.is_test()) {
-        hash_module_sources(files.iter().copied())
-    } else {
-        production_hash
-    };
-    (production_hash, full_hash)
-}
-
-fn hash_module_sources<'a>(files: impl IntoIterator<Item = &'a File>) -> u64 {
+fn hash_module_sources<'a>(files: impl Iterator<Item = (&'a str, &'a str)>) -> u64 {
     let mut hasher = FnvHasher::new();
 
-    let mut sorted: Vec<&File> = files.into_iter().collect();
-    sorted.sort_by_key(|f| &f.name);
+    let mut sorted: Vec<(&str, &str)> = files.collect();
+    sorted.sort_by_key(|(name, _)| *name);
 
-    for file in sorted {
-        file.name.hash(&mut hasher);
-        file.source.hash(&mut hasher);
+    for (name, source) in sorted {
+        name.hash(&mut hasher);
+        source.hash(&mut hasher);
     }
 
     hasher.finish()
@@ -470,42 +464,31 @@ mod tests {
 
     #[test]
     fn test_hash_module_sources_deterministic() {
-        let file1 = File::new_cached("mod", "a.lis", "a.lis", "fn foo() {}", 1);
-        let file2 = File::new_cached("mod", "b.lis", "b.lis", "fn bar() {}", 2);
+        let first = ("a.lis", "fn foo() {}");
+        let second = ("b.lis", "fn bar() {}");
 
-        let hash1 = hash_module_sources(&[file1.clone(), file2.clone()]);
-        let hash2 = hash_module_sources(&[file2.clone(), file1.clone()]);
-
-        assert_eq!(hash1, hash2);
+        assert_eq!(
+            hash_module_sources([first, second].into_iter()),
+            hash_module_sources([second, first].into_iter())
+        );
     }
 
     #[test]
     fn test_hash_module_sources_content_sensitive() {
-        let file1 = File::new_cached("mod", "a.lis", "a.lis", "fn foo() {}", 1);
-        let file2 = File::new_cached("mod", "a.lis", "a.lis", "fn bar() {}", 1);
-
-        let hash1 = hash_module_sources(&[file1]);
-        let hash2 = hash_module_sources(&[file2]);
-
-        assert_ne!(hash1, hash2);
+        assert_ne!(
+            hash_module_sources([("a.lis", "fn foo() {}")].into_iter()),
+            hash_module_sources([("a.lis", "fn bar() {}")].into_iter())
+        );
     }
 
     #[test]
     fn production_hash_ignores_test_edits_but_full_hash_does_not() {
-        let prod = File::new_cached("math", "core.lis", "core.lis", "pub fn add() {}", 1);
-        let test_a = File::new_cached("math", "core.test.lis", "core.test.lis", "fn t() {}", 2);
-        let test_b = File::new_cached(
-            "math",
-            "core.test.lis",
-            "core.test.lis",
-            "fn t() { add() }",
-            2,
-        );
+        let production = ("core.lis", "pub fn add() {}");
+        let test_a = ("core.test.lis", "fn t() {}");
+        let test_b = ("core.test.lis", "fn t() { add() }");
 
-        let production_a =
-            hash_module_sources([&prod, &test_a].into_iter().filter(|f| !f.is_test()));
-        let production_b =
-            hash_module_sources([&prod, &test_b].into_iter().filter(|f| !f.is_test()));
+        let (production_a, full_a) = hash_module_source_pair([production, test_a].into_iter());
+        let (production_b, full_b) = hash_module_source_pair([production, test_b].into_iter());
         assert_eq!(
             production_a, production_b,
             "editing a test file must not change the production hash"
@@ -518,8 +501,6 @@ mod tests {
             "the hash propagated to dependents must be invariant to test edits"
         );
 
-        let full_a = hash_module_sources([&prod, &test_a]);
-        let full_b = hash_module_sources([&prod, &test_b]);
         assert_ne!(
             full_a, full_b,
             "editing a test file must change the module's own full hash"
@@ -862,11 +843,11 @@ mod tests {
             "pub fn x() -> int { 1 }",
             1,
         );
+        let sources = |file: &File| {
+            hash_module_sources([(file.name.as_str(), file.source.as_str())].into_iter())
+        };
 
-        assert_eq!(
-            hash_module_sources(&[cli_file]),
-            hash_module_sources(&[lsp_file]),
-        );
+        assert_eq!(sources(&cli_file), sources(&lsp_file));
     }
 
     #[test]
