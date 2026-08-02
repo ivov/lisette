@@ -1,10 +1,10 @@
 use rustc_hash::FxHashMap as HashMap;
 use std::fs::{read_dir, read_to_string};
 use std::path::{Path, PathBuf};
+use std::sync::{PoisonError, RwLock, RwLockWriteGuard};
 
 use crate::protocol::Url;
 use semantics::loader::{DiscoveredModules, FileContent, Files, Loader};
-use tokio::sync::{RwLock, RwLockMappedWriteGuard, RwLockWriteGuard};
 
 use crate::paths::{ENTRY_MODULE_ID, module_id_to_dir, uri_to_module_file};
 use crate::project::{ProjectConfig, find_project_root, resolve_standalone_root};
@@ -27,26 +27,26 @@ impl ProjectState {
         }
     }
 
-    pub(crate) async fn initialize(&self, config: ProjectConfig) {
-        *self.loader.write().await = Some(OverlayLoader::new(config));
+    pub(crate) fn initialize(&self, config: ProjectConfig) {
+        *self.loader.write().unwrap_or_else(PoisonError::into_inner) =
+            Some(OverlayLoader::new(config));
     }
 
-    async fn loader_for(&self, uri: &Url) -> Option<RwLockMappedWriteGuard<'_, OverlayLoader>> {
-        let mut loader = self.loader.write().await;
+    fn loader_for(&self, uri: &Url) -> Option<RwLockWriteGuard<'_, Option<OverlayLoader>>> {
+        let mut loader = self.loader.write().unwrap_or_else(PoisonError::into_inner);
         if loader.is_none() {
             let path = uri.to_file_path().ok()?;
             let config = find_project_root(&path).unwrap_or_else(|| resolve_standalone_root(&path));
             *loader = Some(OverlayLoader::new(config));
         }
-        Some(RwLockWriteGuard::map(loader, |loader| {
-            loader.as_mut().expect("loader was initialized above")
-        }))
+        Some(loader)
     }
 
-    pub(crate) async fn update_overlay(&self, uri: &Url, content: String) {
-        let Some(mut project) = self.loader_for(uri).await else {
+    pub(crate) fn update_overlay(&self, uri: &Url, content: String) {
+        let Some(mut guard) = self.loader_for(uri) else {
             return;
         };
+        let project = guard.as_mut().expect("loader_for initializes the loader");
         let Some((module_id, filename, external_test)) = uri_to_module_file(&project.config, uri)
         else {
             return;
@@ -54,8 +54,8 @@ impl ProjectState {
         project.set_overlay(external_test, &module_id, &filename, content);
     }
 
-    pub(crate) async fn remove_overlay(&self, uri: &Url) -> bool {
-        let mut project = self.loader.write().await;
+    pub(crate) fn remove_overlay(&self, uri: &Url) -> bool {
+        let mut project = self.loader.write().unwrap_or_else(PoisonError::into_inner);
         let Some(project) = project.as_mut() else {
             return false;
         };
@@ -67,8 +67,9 @@ impl ProjectState {
         true
     }
 
-    pub(crate) async fn for_analysis(&self, uri: &Url) -> Option<ProjectAnalysis> {
-        let project = self.loader_for(uri).await?;
+    pub(crate) fn for_analysis(&self, uri: &Url) -> Option<ProjectAnalysis> {
+        let guard = self.loader_for(uri)?;
+        let project = guard.as_ref().expect("loader_for initializes the loader");
         let (module_id, filename, external_test) = uri_to_module_file(&project.config, uri)?;
 
         let (entry_module_path, external_test_root) = if external_test {
@@ -230,8 +231,8 @@ mod tests {
 
     use super::*;
 
-    #[tokio::test]
-    async fn project_state_owns_config_and_overlay_lifecycle() {
+    #[test]
+    fn project_state_owns_config_and_overlay_lifecycle() {
         let temp = tempdir().unwrap();
         let first_root = temp.path().join("first");
         let second_root = temp.path().join("second");
@@ -245,19 +246,17 @@ mod tests {
         let second_uri = Url::from_file_path(&second_path).unwrap();
 
         let project = ProjectState::new();
-        project
-            .update_overlay(&first_uri, "memory".to_string())
-            .await;
+        project.update_overlay(&first_uri, "memory".to_string());
 
-        let analysis = project.for_analysis(&first_uri).await.unwrap();
+        let analysis = project.for_analysis(&first_uri).unwrap();
         assert_eq!(
             analysis.loader.scan_folder(ENTRY_MODULE_ID)["main.lis"].source,
             "memory"
         );
-        assert!(project.for_analysis(&second_uri).await.is_none());
+        assert!(project.for_analysis(&second_uri).is_none());
 
-        assert!(project.remove_overlay(&first_uri).await);
-        let analysis = project.for_analysis(&first_uri).await.unwrap();
+        assert!(project.remove_overlay(&first_uri));
+        let analysis = project.for_analysis(&first_uri).unwrap();
         assert_eq!(
             analysis.loader.scan_folder(ENTRY_MODULE_ID)["main.lis"].source,
             "disk"

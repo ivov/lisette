@@ -2,17 +2,15 @@ mod types;
 mod uri;
 
 use std::borrow::Cow;
-use std::io;
+use std::io::{self, BufRead, BufReader, Read, Write};
 use std::sync::Arc;
+use std::sync::mpsc;
+use std::thread;
 
 use deps::BindgenSetup;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
-use tokio::io::{
-    AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader,
-};
-use tokio::sync::mpsc;
 
 use crate::state::Backend;
 
@@ -57,11 +55,11 @@ impl Error {
 
 #[derive(Clone)]
 pub(crate) struct Client {
-    sender: mpsc::UnboundedSender<Value>,
+    sender: mpsc::Sender<Value>,
 }
 
 impl Client {
-    pub(crate) async fn publish_diagnostics(
+    pub(crate) fn publish_diagnostics(
         &self,
         uri: Url,
         diagnostics: Vec<Diagnostic>,
@@ -77,7 +75,7 @@ impl Client {
         );
     }
 
-    pub(crate) async fn log_message(&self, kind: MessageType, message: impl Into<String>) {
+    pub(crate) fn log_message(&self, kind: MessageType, message: impl Into<String>) {
         #[derive(Serialize)]
         struct Params {
             #[serde(rename = "type")]
@@ -106,29 +104,29 @@ impl Client {
     }
 }
 
-pub async fn serve<R, W>(reader: R, writer: W, bindgen_setup: Option<Arc<dyn BindgenSetup>>) -> i32
+pub fn serve<R, W>(reader: R, writer: W, bindgen_setup: Option<Arc<dyn BindgenSetup>>) -> i32
 where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Send + Unpin + 'static,
+    R: Read,
+    W: Write + Send + 'static,
 {
-    let (sender, mut outbound) = mpsc::unbounded_channel();
+    let (sender, outbound) = mpsc::channel();
     let client = Client {
         sender: sender.clone(),
     };
     let backend = Backend::new(client, bindgen_setup);
 
-    let writer_task = tokio::spawn(async move {
+    let writer_thread = thread::spawn(move || -> io::Result<()> {
         let mut writer = writer;
-        while let Some(message) = outbound.recv().await {
-            write_message(&mut writer, &message).await?;
+        while let Ok(message) = outbound.recv() {
+            write_message(&mut writer, &message)?;
         }
-        writer.flush().await
+        writer.flush()
     });
 
     let mut reader = BufReader::new(reader);
     let mut shutdown_received = false;
     let exit_code = loop {
-        let message = match read_message(&mut reader).await {
+        let message = match read_message(&mut reader) {
             Ok(Some(message)) => message,
             Ok(None) => break 0,
             Err(_) => break 1,
@@ -147,7 +145,7 @@ where
             break if shutdown_received { 0 } else { 1 };
         }
 
-        let response = dispatch(&backend, method, params).await;
+        let response = dispatch(&backend, method, params);
         if method == "shutdown" && response.is_ok() {
             shutdown_received = true;
         }
@@ -168,11 +166,11 @@ where
 
     drop(backend);
     drop(sender);
-    let _ = writer_task.await;
+    let _ = writer_thread.join();
     exit_code
 }
 
-fn send_error(sender: &mpsc::UnboundedSender<Value>, id: Value, error: Error) {
+fn send_error(sender: &mpsc::Sender<Value>, id: Value, error: Error) {
     let mut body = json!({
         "code": error.code,
         "message": error.message,
@@ -187,17 +185,17 @@ fn send_error(sender: &mpsc::UnboundedSender<Value>, id: Value, error: Error) {
     }));
 }
 
-async fn dispatch(backend: &Backend, method: &str, params: Value) -> RpcResult<Value> {
+fn dispatch(backend: &Backend, method: &str, params: Value) -> RpcResult<Value> {
     macro_rules! request {
         ($handler:ident, $params:ty) => {{
             let params = parse_params::<$params>(params)?;
-            to_value(backend.$handler(params).await?)
+            to_value(backend.$handler(params)?)
         }};
     }
     macro_rules! notification {
         ($handler:ident, $params:ty) => {{
             let params = parse_params::<$params>(params)?;
-            backend.$handler(params).await;
+            backend.$handler(params);
             Ok(Value::Null)
         }};
     }
@@ -220,7 +218,7 @@ async fn dispatch(backend: &Backend, method: &str, params: Value) -> RpcResult<V
         "textDocument/codeAction" => request!(code_action, CodeActionParams),
         "textDocument/completion" => request!(completion, CompletionParams),
         "textDocument/signatureHelp" => request!(signature_help, SignatureHelpParams),
-        "shutdown" => to_value(backend.shutdown().await?),
+        "shutdown" => to_value(backend.shutdown()?),
         "$/cancelRequest" => Ok(Value::Null),
         _ => Err(Error::method_not_found(method)),
     }
@@ -239,13 +237,13 @@ fn to_value(value: impl Serialize) -> RpcResult<Value> {
 }
 
 #[doc(hidden)]
-pub async fn read_message(reader: &mut (impl AsyncBufRead + Unpin)) -> io::Result<Option<Value>> {
+pub fn read_message(reader: &mut impl BufRead) -> io::Result<Option<Value>> {
     let mut content_length = None;
     let mut line = String::new();
 
     loop {
         line.clear();
-        if reader.read_line(&mut line).await? == 0 {
+        if reader.read_line(&mut line)? == 0 {
             return Ok(None);
         }
         let header = line.trim_end_matches(['\r', '\n']);
@@ -262,41 +260,34 @@ pub async fn read_message(reader: &mut (impl AsyncBufRead + Unpin)) -> io::Resul
     let length = content_length
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "missing Content-Length"))?;
     let mut body = vec![0; length];
-    reader.read_exact(&mut body).await?;
+    reader.read_exact(&mut body)?;
     serde_json::from_slice(&body)
         .map(Some)
         .map_err(io::Error::other)
 }
 
 #[doc(hidden)]
-pub async fn write_message(
-    writer: &mut (impl AsyncWrite + Unpin),
-    message: &Value,
-) -> io::Result<()> {
+pub fn write_message(writer: &mut impl Write, message: &Value) -> io::Result<()> {
     let body = serde_json::to_vec(message).map_err(io::Error::other)?;
-    writer
-        .write_all(format!("Content-Length: {}\r\n\r\n", body.len()).as_bytes())
-        .await?;
-    writer.write_all(&body).await?;
-    writer.flush().await
+    writer.write_all(format!("Content-Length: {}\r\n\r\n", body.len()).as_bytes())?;
+    writer.write_all(&body)?;
+    writer.flush()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn framing_round_trip() {
-        let (client, server) = tokio::io::duplex(1024);
-        let (client_read, _) = tokio::io::split(client);
-        let (_, mut server_write) = tokio::io::split(server);
+    #[test]
+    fn framing_round_trip() {
+        let (reader, mut writer) = io::pipe().unwrap();
         let message = json!({"jsonrpc": "2.0", "id": 1, "method": "shutdown"});
         let expected = message.clone();
 
-        let writer = tokio::spawn(async move { write_message(&mut server_write, &message).await });
-        let mut reader = BufReader::new(client_read);
+        let writer_thread = thread::spawn(move || write_message(&mut writer, &message));
+        let mut reader = BufReader::new(reader);
 
-        assert_eq!(read_message(&mut reader).await.unwrap(), Some(expected));
-        writer.await.unwrap().unwrap();
+        assert_eq!(read_message(&mut reader).unwrap(), Some(expected));
+        writer_thread.join().unwrap().unwrap();
     }
 }

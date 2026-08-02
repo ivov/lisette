@@ -8,10 +8,10 @@ use lsp_harness::{
 
 const TEST_URI: &str = "file:///test.lis";
 
-#[tokio::test]
-async fn initialize_returns_capabilities() {
-    let mut client = TestClient::new().await;
-    let result = client.initialize().await;
+#[test]
+fn initialize_returns_capabilities() {
+    let mut client = TestClient::new();
+    let result = client.initialize();
 
     assert!(result.capabilities.hover_provider.is_some());
     assert!(result.capabilities.definition_provider.is_some());
@@ -23,85 +23,77 @@ async fn initialize_returns_capabilities() {
     assert!(result.capabilities.document_symbol_provider.is_some());
     assert!(result.capabilities.inlay_hint_provider.is_some());
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_shows_function_type() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(TEST_URI, "fn add(x: int, y: int) -> int { x + y }")
-        .await;
+#[test]
+fn hover_shows_function_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn add(x: int, y: int) -> int { x + y }");
 
-    let hover = client.hover(TEST_URI, 0, 3).await;
+    let hover = client.hover(TEST_URI, 0, 3);
     assert!(hover.is_some());
 
     let content = hover_content(&hover.unwrap());
     assert!(content.contains("int"));
     assert!(content.contains("->"));
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_shows_variable_type() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "fn main() { let x = 42; x }").await;
+#[test]
+fn hover_shows_variable_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { let x = 42; x }");
 
-    let hover = client.hover(TEST_URI, 0, 16).await;
+    let hover = client.hover(TEST_URI, 0, 16);
     assert!(hover.is_some());
 
     let content = hover_content(&hover.unwrap());
     assert!(content.contains("int"));
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_shows_string_type() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(TEST_URI, r#"fn main() { let s = "hello"; s }"#)
-        .await;
+#[test]
+fn hover_shows_string_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, r#"fn main() { let s = "hello"; s }"#);
 
-    let hover = client.hover(TEST_URI, 0, 16).await;
+    let hover = client.hover(TEST_URI, 0, 16);
     assert!(hover.is_some());
 
     let content = hover_content(&hover.unwrap());
     assert!(content.contains("string"));
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_on_tuple_binding_shows_element_type() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(TEST_URI, r#"fn main() { let (a, b) = (1, "hi"); b }"#)
-        .await;
+#[test]
+fn hover_on_tuple_binding_shows_element_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, r#"fn main() { let (a, b) = (1, "hi"); b }"#);
 
-    let hover = client.hover(TEST_URI, 0, 20).await;
+    let hover = client.hover(TEST_URI, 0, 20);
     assert!(hover.is_some());
 
     let content = hover_content(&hover.unwrap());
     assert!(content.contains("string"));
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_local_binding() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(TEST_URI, "fn main() {\n  let x = 1\n  x + 1\n}")
-        .await;
+#[test]
+fn goto_definition_local_binding() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() {\n  let x = 1\n  x + 1\n}");
 
-    let response = client.goto_definition(TEST_URI, 2, 2).await;
+    let response = client.goto_definition(TEST_URI, 2, 2);
     assert!(response.is_some());
 
     let response = response.unwrap();
@@ -111,18 +103,16 @@ async fn goto_definition_local_binding() {
     let loc = loc.unwrap();
     assert_eq!(loc.range.start.line, 1);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_function_call() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(TEST_URI, "fn foo() { 1 }\nfn main() { foo() }")
-        .await;
+#[test]
+fn goto_definition_function_call() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn foo() { 1 }\nfn main() { foo() }");
 
-    let response = client.goto_definition(TEST_URI, 1, 12).await;
+    let response = client.goto_definition(TEST_URI, 1, 12);
     assert!(response.is_some());
 
     let response = response.unwrap();
@@ -132,16 +122,16 @@ async fn goto_definition_function_call() {
     let loc = loc.unwrap();
     assert_eq!(loc.range.start.line, 0);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_function_parameter() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "fn add(x: int) { x + 1 }").await;
+#[test]
+fn goto_definition_function_parameter() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn add(x: int) { x + 1 }");
 
-    let response = client.goto_definition(TEST_URI, 0, 17).await;
+    let response = client.goto_definition(TEST_URI, 0, 17);
     assert!(response.is_some());
 
     let response = response.unwrap();
@@ -152,7 +142,7 @@ async fn goto_definition_function_parameter() {
     assert_eq!(loc.range.start.line, 0);
     assert!(loc.range.start.character < 10);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
 const EMBED_SRC: &str = r#"struct Base {
@@ -171,127 +161,118 @@ fn use_field(w: Wrapper) -> int {
   w.id
 }"#;
 
-#[tokio::test]
-async fn goto_definition_promoted_method() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, EMBED_SRC).await;
+#[test]
+fn goto_definition_promoted_method() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, EMBED_SRC);
 
-    let response = client.goto_definition(TEST_URI, 10, 6).await;
+    let response = client.goto_definition(TEST_URI, 10, 6);
     let loc = definition_location(&response.expect("response")).expect("location");
     assert_eq!(loc.range.start.line, 4);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_promoted_field() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, EMBED_SRC).await;
+#[test]
+fn goto_definition_promoted_field() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, EMBED_SRC);
 
-    let response = client.goto_definition(TEST_URI, 13, 4).await;
+    let response = client.goto_definition(TEST_URI, 13, 4);
     let loc = definition_location(&response.expect("response")).expect("location");
     assert_eq!(loc.range.start.line, 1);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_on_explicit_type_arg_call_shows_substituted_signature() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn hover_on_explicit_type_arg_call_shows_substituted_signature() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) =
         cursor("fn f<T>(xs: VarArgs<T>) {}\n\nfn main() {\n  ~f<Option<int>>()\n}");
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let hover = client
-        .hover(TEST_URI, line, character)
-        .await
-        .expect("hover");
+    let hover = client.hover(TEST_URI, line, character).expect("hover");
     let content = hover_content(&hover);
     assert!(
         content.contains("VarArgs<Option<int>>"),
         "expected substituted signature, got: {content}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_promoted_method_shows_type() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, EMBED_SRC).await;
+#[test]
+fn hover_promoted_method_shows_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, EMBED_SRC);
 
-    let hover = client.hover(TEST_URI, 10, 6).await.expect("hover");
+    let hover = client.hover(TEST_URI, 10, 6).expect("hover");
     assert!(
         hover_content(&hover).contains("string"),
         "hover content: {}",
         hover_content(&hover)
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn references_finds_all_usages() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(TEST_URI, "fn foo() { 1 }\nfn main() { foo(); foo() }")
-        .await;
+#[test]
+fn references_finds_all_usages() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn foo() { 1 }\nfn main() { foo(); foo() }");
 
-    let refs = client.references(TEST_URI, 0, 3, true).await;
+    let refs = client.references(TEST_URI, 0, 3, true);
     assert!(refs.is_some());
 
     let locations = refs.unwrap();
     assert_eq!(locations.len(), 3);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn references_excludes_declaration_when_flag_false() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(TEST_URI, "fn foo() { 1 }\nfn main() { foo(); foo() }")
-        .await;
+#[test]
+fn references_excludes_declaration_when_flag_false() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn foo() { 1 }\nfn main() { foo(); foo() }");
 
-    let refs = client.references(TEST_URI, 0, 3, false).await;
+    let refs = client.references(TEST_URI, 0, 3, false);
     assert!(refs.is_some());
 
     let locations = refs.unwrap();
     assert_eq!(locations.len(), 2);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn references_local_variable() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(TEST_URI, "fn main() {\n  let x = 1\n  x + x\n}")
-        .await;
+#[test]
+fn references_local_variable() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() {\n  let x = 1\n  x + x\n}");
 
-    let refs = client.references(TEST_URI, 1, 6, true).await;
+    let refs = client.references(TEST_URI, 1, 6, true);
     assert!(refs.is_some());
 
     let locations = refs.unwrap();
     assert_eq!(locations.len(), 3);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_includes_keywords() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "").await;
+#[test]
+fn completion_includes_keywords() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "");
 
-    let response = client.completion(TEST_URI, 0, 0).await;
+    let response = client.completion(TEST_URI, 0, 0);
     assert!(response.is_some());
 
     let labels = completion_labels(&response.unwrap());
@@ -304,16 +285,16 @@ async fn completion_includes_keywords() {
     assert!(labels.iter().any(|l| l == "var"));
     assert!(labels.iter().any(|l| l == "self"));
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_includes_prelude_types() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "").await;
+#[test]
+fn completion_includes_prelude_types() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "");
 
-    let response = client.completion(TEST_URI, 0, 0).await;
+    let response = client.completion(TEST_URI, 0, 0);
     assert!(response.is_some());
 
     let labels = completion_labels(&response.unwrap());
@@ -324,108 +305,100 @@ async fn completion_includes_prelude_types() {
     assert!(labels.iter().any(|l| l == "Result"));
     assert!(labels.iter().any(|l| l == "Array"));
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_includes_synthesized_to_string() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_includes_synthesized_to_string() {
+    let mut client = TestClient::new();
+    client.initialize();
     client
         .open(
             TEST_URI,
             "#[display]\nstruct Point { x: int, y: int }\n\nfn main() {\n  let p = Point { x: 1, y: 2 }\n  p.\n}",
         )
-        .await;
+        ;
 
-    let response = client.completion(TEST_URI, 5, 4).await;
+    let response = client.completion(TEST_URI, 5, 4);
     let labels = completion_labels(&response.unwrap());
     assert!(
         labels.iter().any(|l| l == "to_string"),
         "expected synthesized `to_string` in instance completions; got: {labels:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_includes_local_bindings() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(TEST_URI, "fn main() {\n  let myvar = 1\n  m\n}")
-        .await;
+#[test]
+fn completion_includes_local_bindings() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() {\n  let myvar = 1\n  m\n}");
 
-    let response = client.completion(TEST_URI, 2, 3).await;
+    let response = client.completion(TEST_URI, 2, 3);
     assert!(response.is_some());
 
     let labels = completion_labels(&response.unwrap());
     assert!(labels.iter().any(|l| l == "myvar"));
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_includes_defined_functions() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(TEST_URI, "fn helper() { 1 }\nfn main() { h }")
-        .await;
+#[test]
+fn completion_includes_defined_functions() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn helper() { 1 }\nfn main() { h }");
 
-    let response = client.completion(TEST_URI, 1, 13).await;
+    let response = client.completion(TEST_URI, 1, 13);
     assert!(response.is_some());
 
     let labels = completion_labels(&response.unwrap());
     assert!(labels.iter().any(|l| l == "helper"));
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn signature_help_shows_function_params() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "fn add(x: int, y: int) -> int { x + y }\nfn main() { add(1, 2) }",
-        )
-        .await;
+#[test]
+fn signature_help_shows_function_params() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "fn add(x: int, y: int) -> int { x + y }\nfn main() { add(1, 2) }",
+    );
 
-    let help = client.signature_help(TEST_URI, 1, 17).await;
+    let help = client.signature_help(TEST_URI, 1, 17);
     assert!(help.is_some());
 
     let sig = &help.unwrap().signatures[0];
     assert!(sig.label.contains("add"));
     assert!(sig.label.contains("int"));
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn signature_help_shows_param_names() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "fn add(x: int, y: int) -> int { x + y }\nfn main() { add(1, 2) }",
-        )
-        .await;
+#[test]
+fn signature_help_shows_param_names() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "fn add(x: int, y: int) -> int { x + y }\nfn main() { add(1, 2) }",
+    );
 
-    let help = client.signature_help(TEST_URI, 1, 17).await;
+    let help = client.signature_help(TEST_URI, 1, 17);
     let sig = &help.unwrap().signatures[0];
     assert!(sig.label.contains("x: int"), "label was {}", sig.label);
     assert!(sig.label.contains("y: int"), "label was {}", sig.label);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn signature_help_method_strips_receiver_name() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn signature_help_method_strips_receiver_name() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "\
 struct Point { x: int, y: int }
 impl Point {
@@ -435,9 +408,9 @@ fn main() {
   let p = Point { x: 1, y: 2 }
   p.translate(1, 2)
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let help = client.signature_help(TEST_URI, 6, 14).await;
+    let help = client.signature_help(TEST_URI, 6, 14);
     let sig = &help.unwrap().signatures[0];
     assert!(sig.label.contains("dx: int"), "label was {}", sig.label);
     assert!(sig.label.contains("dy: int"), "label was {}", sig.label);
@@ -447,32 +420,32 @@ fn main() {
         sig.label
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn signature_help_generic_function_shows_param_names() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn signature_help_generic_function_shows_param_names() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "\
 fn pick<T>(first: T, second: T) -> T { first }
 fn main() {
   let _ = pick(1, 2)
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let help = client.signature_help(TEST_URI, 2, 15).await;
+    let help = client.signature_help(TEST_URI, 2, 15);
     let sig = &help.unwrap().signatures[0];
     assert!(sig.label.contains("first:"), "label was {}", sig.label);
     assert!(sig.label.contains("second:"), "label was {}", sig.label);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn signature_help_interface_method_shows_param_names() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn signature_help_interface_method_shows_param_names() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "\
 interface Account {
   fn withdraw(amount: int) -> int
@@ -480,9 +453,9 @@ interface Account {
 fn process(a: Account) -> int {
   a.withdraw(50)
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let help = client.signature_help(TEST_URI, 4, 13).await;
+    let help = client.signature_help(TEST_URI, 4, 13);
     let sig = &help.unwrap().signatures[0];
     assert!(sig.label.contains("amount: int"), "label was {}", sig.label);
     assert!(
@@ -491,70 +464,64 @@ fn process(a: Account) -> int {
         sig.label
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn signature_help_inferred_closure_param_keeps_name() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn signature_help_inferred_closure_param_keeps_name() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "\
 fn main() {
   let inc = |x| -> int { x + 1 }
   let _ = inc(5)
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let help = client.signature_help(TEST_URI, 2, 14).await;
+    let help = client.signature_help(TEST_URI, 2, 14);
     let sig = &help.unwrap().signatures[0];
     assert!(sig.label.contains("x: int"), "label was {}", sig.label);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn signature_help_active_parameter() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "fn add(x: int, y: int) -> int { x + y }\nfn main() { add(1, 2) }",
-        )
-        .await;
+#[test]
+fn signature_help_active_parameter() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "fn add(x: int, y: int) -> int { x + y }\nfn main() { add(1, 2) }",
+    );
 
-    let help = client.signature_help(TEST_URI, 1, 19).await;
+    let help = client.signature_help(TEST_URI, 1, 19);
     assert!(help.is_some());
 
     let sig_help = help.unwrap();
     assert_eq!(sig_help.active_parameter, Some(1));
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn prepare_rename_local_variable() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(TEST_URI, "fn main() {\n  let foo = 1\n  foo + 1\n}")
-        .await;
+#[test]
+fn prepare_rename_local_variable() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() {\n  let foo = 1\n  foo + 1\n}");
 
-    let response = client.prepare_rename(TEST_URI, 1, 6).await;
+    let response = client.prepare_rename(TEST_URI, 1, 6);
     assert!(response.is_some());
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn rename_local_variable() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(TEST_URI, "fn main() {\n  let foo = 1\n  foo + 1\n}")
-        .await;
+#[test]
+fn rename_local_variable() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() {\n  let foo = 1\n  foo + 1\n}");
 
-    let edit = client.rename(TEST_URI, 1, 6, "bar").await;
+    let edit = client.rename(TEST_URI, 1, 6, "bar");
     assert!(edit.is_some());
 
     let workspace_edit = edit.unwrap();
@@ -567,31 +534,28 @@ async fn rename_local_variable() {
         assert_eq!(edit.new_text, "bar");
     }
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn code_action_capability_advertised() {
-    let mut client = TestClient::new().await;
-    let result = client.initialize().await;
+#[test]
+fn code_action_capability_advertised() {
+    let mut client = TestClient::new();
+    let result = client.initialize();
     assert!(result.capabilities.code_action_provider.is_some());
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn code_action_offers_quick_fix() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "fn main() {\n  let x = true\n  let _ = x == true\n}",
-        )
-        .await;
+#[test]
+fn code_action_offers_quick_fix() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "fn main() {\n  let x = true\n  let _ = x == true\n}",
+    );
 
     let actions = client
         .code_action(TEST_URI, (2, 12), (2, 12))
-        .await
         .expect("expected code actions");
 
     let CodeActionOrCommand::CodeAction(action) = &actions[0] else {
@@ -612,54 +576,45 @@ async fn code_action_offers_quick_fix() {
     assert_eq!(edits.len(), 1);
     assert_eq!(edits[0].new_text, "x");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn code_action_absent_away_from_diagnostic() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "fn main() {\n  let x = true\n  let _ = x == true\n}",
-        )
-        .await;
+#[test]
+fn code_action_absent_away_from_diagnostic() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "fn main() {\n  let x = true\n  let _ = x == true\n}",
+    );
 
-    let actions = client.code_action(TEST_URI, (0, 0), (0, 0)).await;
+    let actions = client.code_action(TEST_URI, (0, 0), (0, 0));
     assert!(actions.is_none() || actions.unwrap().is_empty());
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn rename_rejects_keywords() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(TEST_URI, "fn main() {\n  let foo = 1\n  foo + 1\n}")
-        .await;
+#[test]
+fn rename_rejects_keywords() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() {\n  let foo = 1\n  foo + 1\n}");
 
     for keyword in ["fn", "assert"] {
-        let error = client
-            .try_rename(TEST_URI, 1, 6, keyword)
-            .await
-            .unwrap_err();
+        let error = client.try_rename(TEST_URI, 1, 6, keyword).unwrap_err();
         assert_eq!(error, format!("'{keyword}' is a reserved keyword"));
     }
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn rename_function() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(TEST_URI, "fn foo() { 1 }\nfn main() { foo(); foo() }")
-        .await;
+#[test]
+fn rename_function() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn foo() { 1 }\nfn main() { foo(); foo() }");
 
-    let edit = client.rename(TEST_URI, 0, 3, "bar").await;
+    let edit = client.rename(TEST_URI, 0, 3, "bar");
     assert!(edit.is_some());
 
     let workspace_edit = edit.unwrap();
@@ -668,16 +623,16 @@ async fn rename_function() {
 
     assert_eq!(file_edits.len(), 3);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn formatting_reformats_code() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "fn foo(){1}").await;
+#[test]
+fn formatting_reformats_code() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn foo(){1}");
 
-    let edits = client.formatting(TEST_URI).await;
+    let edits = client.formatting(TEST_URI);
     assert!(edits.is_some());
 
     let text_edits = edits.unwrap();
@@ -687,214 +642,200 @@ async fn formatting_reformats_code() {
     assert!(new_text.contains("fn foo()"));
     assert!(new_text.contains("{ 1 }") || new_text.contains("{\n"));
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn formatting_returns_none_on_parse_error() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "fn foo(").await;
+#[test]
+fn formatting_returns_none_on_parse_error() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn foo(");
 
-    let edits = client.formatting(TEST_URI).await;
+    let edits = client.formatting(TEST_URI);
     assert!(edits.is_none());
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn formatting_applies_edits() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "fn  foo()  { 1 }").await;
+#[test]
+fn formatting_applies_edits() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn  foo()  { 1 }");
 
-    let edits = client.formatting(TEST_URI).await;
+    let edits = client.formatting(TEST_URI);
     assert!(edits.is_some());
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn document_symbols_lists_functions() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            r#"fn foo() { 1 }
+#[test]
+fn document_symbols_lists_functions() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        r#"fn foo() { 1 }
 fn bar() { 2 }"#,
-        )
-        .await;
+    );
 
-    let response = client.document_symbol(TEST_URI).await;
+    let response = client.document_symbol(TEST_URI);
     assert!(response.is_some());
 
     let names = symbol_names(&response.unwrap());
     assert!(names.iter().any(|n| n == "foo"));
     assert!(names.iter().any(|n| n == "bar"));
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn document_symbols_lists_structs() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(TEST_URI, r#"struct Point { x: int, y: int }"#)
-        .await;
+#[test]
+fn document_symbols_lists_structs() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, r#"struct Point { x: int, y: int }"#);
 
-    let response = client.document_symbol(TEST_URI).await;
+    let response = client.document_symbol(TEST_URI);
     assert!(response.is_some());
 
     let names = symbol_names(&response.unwrap());
     assert!(names.iter().any(|n| n == "Point"));
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn document_symbols_lists_enums() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(TEST_URI, r#"enum Color { Red, Green, Blue }"#)
-        .await;
+#[test]
+fn document_symbols_lists_enums() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, r#"enum Color { Red, Green, Blue }"#);
 
-    let response = client.document_symbol(TEST_URI).await;
+    let response = client.document_symbol(TEST_URI);
     assert!(response.is_some());
 
     let names = symbol_names(&response.unwrap());
     assert!(names.iter().any(|n| n == "Color"));
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn document_symbols_lists_constants() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "const PI = 3.14").await;
+#[test]
+fn document_symbols_lists_constants() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "const PI = 3.14");
 
-    let response = client.document_symbol(TEST_URI).await;
+    let response = client.document_symbol(TEST_URI);
     assert!(response.is_some());
 
     let names = symbol_names(&response.unwrap());
     assert!(names.iter().any(|n| n == "PI"));
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_updates_after_document_change() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn hover_updates_after_document_change() {
+    let mut client = TestClient::new();
+    client.initialize();
 
-    client.open(TEST_URI, "fn main() { let x = 42; x }").await;
-    let hover1 = client.hover(TEST_URI, 0, 16).await;
+    client.open(TEST_URI, "fn main() { let x = 42; x }");
+    let hover1 = client.hover(TEST_URI, 0, 16);
     assert!(hover1.is_some(), "hover1 should return something");
     let content1 = hover_content(&hover1.unwrap());
     assert!(content1.contains("int"));
 
-    client
-        .change(TEST_URI, r#"fn main() { let x = "hello"; x }"#, 2)
-        .await;
-    let hover2 = client.hover(TEST_URI, 0, 16).await;
+    client.change(TEST_URI, r#"fn main() { let x = "hello"; x }"#, 2);
+    let hover2 = client.hover(TEST_URI, 0, 16);
     assert!(hover2.is_some(), "hover2 should return something");
     let content2 = hover_content(&hover2.unwrap());
     assert!(content2.contains("string"));
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_on_function_name_works() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "fn main() { 1 }").await;
+#[test]
+fn hover_on_function_name_works() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { 1 }");
 
-    let hover = client.hover(TEST_URI, 0, 4).await;
+    let hover = client.hover(TEST_URI, 0, 4);
     assert!(hover.is_some());
 
     let content = hover_content(&hover.unwrap());
     assert!(content.contains("fn"));
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_on_type_alias_name_shows_target() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "type K = int").await;
+#[test]
+fn hover_on_type_alias_name_shows_target() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "type K = int");
 
-    let hover = client.hover(TEST_URI, 0, 5).await;
+    let hover = client.hover(TEST_URI, 0, 5);
     let content = hover_content(&hover.expect("hover on K"));
     assert!(content.contains("int"), "got: {content}");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_on_struct_name_shows_type() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(TEST_URI, "struct Point { x: int, y: int }")
-        .await;
+#[test]
+fn hover_on_struct_name_shows_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "struct Point { x: int, y: int }");
 
-    let hover = client.hover(TEST_URI, 0, 9).await;
+    let hover = client.hover(TEST_URI, 0, 9);
     let content = hover_content(&hover.expect("hover on Point"));
     assert!(content.contains("Point"), "got: {content}");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_on_enum_name_shows_type() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(TEST_URI, "enum Color { Red, Green, Blue }")
-        .await;
+#[test]
+fn hover_on_enum_name_shows_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "enum Color { Red, Green, Blue }");
 
-    let hover = client.hover(TEST_URI, 0, 7).await;
+    let hover = client.hover(TEST_URI, 0, 7);
     let content = hover_content(&hover.expect("hover on Color"));
     assert!(content.contains("Color"), "got: {content}");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_on_interface_name_shows_type() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(TEST_URI, "interface Foo { fn bar() -> int }")
-        .await;
+#[test]
+fn hover_on_interface_name_shows_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "interface Foo { fn bar() -> int }");
 
-    let hover = client.hover(TEST_URI, 0, 12).await;
+    let hover = client.hover(TEST_URI, 0, 12);
     let content = hover_content(&hover.expect("hover on Foo"));
     assert!(content.contains("Foo"), "got: {content}");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_on_alias_target_primitive() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "type K = int").await;
+#[test]
+fn hover_on_alias_target_primitive() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "type K = int");
 
-    let hover = client.hover(TEST_URI, 0, 10).await;
+    let hover = client.hover(TEST_URI, 0, 10);
     let content = hover_content(&hover.expect("hover on int"));
     assert!(content.contains("int"), "got: {content}");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_on_alias_target_qualified() {
+#[test]
+fn hover_on_alias_target_qualified() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("lisette.toml"), "").unwrap();
@@ -911,86 +852,84 @@ async fn hover_on_alias_target_qualified() {
         cursor("import \"response\"\n\ntype Code = response.C~ode\n");
     std::fs::write(src.join("main.lis"), &main_content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
     let main_uri = Url::from_file_path(src.join("main.lis"))
         .unwrap()
         .to_string();
-    client.open(&main_uri, &main_content).await;
+    client.open(&main_uri, &main_content);
 
-    let hover = client.hover(&main_uri, line, character).await;
+    let hover = client.hover(&main_uri, line, character);
     let content = hover_content(&hover.expect("hover on response.Code"));
     assert!(content.contains("Code"), "got: {content}");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_on_alias_target_in_function_type() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn hover_on_alias_target_in_function_type() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, positions) = cursors("type Handler = fn(i~nt) -> s~tring");
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let hover_param = client.hover(TEST_URI, positions[0].0, positions[0].1).await;
+    let hover_param = client.hover(TEST_URI, positions[0].0, positions[0].1);
     let content = hover_content(&hover_param.expect("hover on int"));
     assert!(content.contains("int"), "got: {content}");
 
-    let hover_ret = client.hover(TEST_URI, positions[1].0, positions[1].1).await;
+    let hover_ret = client.hover(TEST_URI, positions[1].0, positions[1].1);
     let content = hover_content(&hover_ret.expect("hover on string"));
     assert!(content.contains("string"), "got: {content}");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_on_alias_target_in_tuple_type() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "type Pair = (int, string)").await;
+#[test]
+fn hover_on_alias_target_in_tuple_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "type Pair = (int, string)");
 
-    let hover = client.hover(TEST_URI, 0, 19).await;
+    let hover = client.hover(TEST_URI, 0, 19);
     let content = hover_content(&hover.expect("hover on string in tuple"));
     assert!(content.contains("string"), "got: {content}");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_on_alias_target_generic_arg() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "type Ints = Slice<int>").await;
+#[test]
+fn hover_on_alias_target_generic_arg() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "type Ints = Slice<int>");
 
-    let hover = client.hover(TEST_URI, 0, 19).await;
+    let hover = client.hover(TEST_URI, 0, 19);
     let content = hover_content(&hover.expect("hover on int inside Slice<int>"));
     assert!(content.contains("int"), "got: {content}");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_on_alias_target_generic_head() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "type Ints = Slice<int>").await;
+#[test]
+fn hover_on_alias_target_generic_head() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "type Ints = Slice<int>");
 
-    let hover = client.hover(TEST_URI, 0, 13).await;
+    let hover = client.hover(TEST_URI, 0, 13);
     let content = hover_content(&hover.expect("hover on Slice head"));
     assert!(content.contains("Slice"), "got: {content}");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_on_function_return_annotation() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(TEST_URI, "fn make() -> string { \"hi\" }")
-        .await;
+#[test]
+fn hover_on_function_return_annotation() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn make() -> string { \"hi\" }");
 
-    let hover = client.hover(TEST_URI, 0, 14).await;
+    let hover = client.hover(TEST_URI, 0, 14);
     let content = hover_content(&hover.expect("hover on string return type"));
     assert!(content.contains("string"), "got: {content}");
     assert!(
@@ -998,18 +937,16 @@ async fn hover_on_function_return_annotation() {
         "should be type only, got: {content}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_on_function_param_annotation() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(TEST_URI, "fn add(x: int) -> string { \"hi\" }")
-        .await;
+#[test]
+fn hover_on_function_param_annotation() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn add(x: int) -> string { \"hi\" }");
 
-    let hover = client.hover(TEST_URI, 0, 11).await;
+    let hover = client.hover(TEST_URI, 0, 11);
     let content = hover_content(&hover.expect("hover on int param type"));
     assert!(content.contains("int"), "got: {content}");
     assert!(
@@ -1017,11 +954,11 @@ async fn hover_on_function_param_annotation() {
         "should not leak return type, got: {content}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_on_function_qualified_return_annotation() {
+#[test]
+fn hover_on_function_qualified_return_annotation() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("lisette.toml"), "").unwrap();
@@ -1039,14 +976,14 @@ async fn hover_on_function_qualified_return_annotation() {
     );
     std::fs::write(src.join("main.lis"), &main_content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
     let main_uri = Url::from_file_path(src.join("main.lis"))
         .unwrap()
         .to_string();
-    client.open(&main_uri, &main_content).await;
+    client.open(&main_uri, &main_content);
 
-    let hover = client.hover(&main_uri, line, character).await;
+    let hover = client.hover(&main_uri, line, character);
     let content = hover_content(&hover.expect("hover on http.HandlerFunc"));
     assert!(content.contains("HandlerFunc"), "got: {content}");
     assert!(
@@ -1054,21 +991,19 @@ async fn hover_on_function_qualified_return_annotation() {
         "should be type only, not full signature, got: {content}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_on_param_annotation_excludes_function_doc() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "/// Adds two ints\nfn add(x: int) -> string { \"hi\" }",
-        )
-        .await;
+#[test]
+fn hover_on_param_annotation_excludes_function_doc() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "/// Adds two ints\nfn add(x: int) -> string { \"hi\" }",
+    );
 
-    let hover = client.hover(TEST_URI, 1, 11).await;
+    let hover = client.hover(TEST_URI, 1, 11);
     let content = hover_content(&hover.expect("hover on int param type"));
     assert!(content.contains("int"), "got: {content}");
     assert!(
@@ -1076,51 +1011,49 @@ async fn hover_on_param_annotation_excludes_function_doc() {
         "function doc leaked into param-type hover, got: {content}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_on_function_name_includes_doc() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "/// Adds two ints\nfn add(x: int) -> string { \"hi\" }",
-        )
-        .await;
+#[test]
+fn hover_on_function_name_includes_doc() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "/// Adds two ints\nfn add(x: int) -> string { \"hi\" }",
+    );
 
-    let hover = client.hover(TEST_URI, 1, 3).await;
+    let hover = client.hover(TEST_URI, 1, 3);
     let content = hover_content(&hover.expect("hover on function name"));
     assert!(content.contains("Adds two ints"), "got: {content}");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_on_literal_returns_none() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "fn main() { 42 }").await;
+#[test]
+fn goto_definition_on_literal_returns_none() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { 42 }");
 
-    let response = client.goto_definition(TEST_URI, 0, 12).await;
+    let response = client.goto_definition(TEST_URI, 0, 12);
     assert!(response.is_none());
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_on_stdlib_go_function_navigates_to_typedef() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_on_stdlib_go_function_navigates_to_typedef() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let (source, line, character) =
         cursor("import \"go:fmt\"\n\nfn main() {\n  fmt.~Println(\"hello\")\n}");
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
     // The LSP writes the whole stdlib typedef set to disk at startup, so
     // go-to-definition navigates into the generated `.d.lis` file.
-    let response = client.goto_definition(TEST_URI, line, character).await;
+    let response = client.goto_definition(TEST_URI, line, character);
     let location = definition_location(
         &response.expect("go-to-definition on stdlib go: function should return a location"),
     )
@@ -1135,11 +1068,11 @@ async fn goto_definition_on_stdlib_go_function_navigates_to_typedef() {
         "should land on the `Println` definition"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_on_third_party_go_function_navigates_to_cache() {
+#[test]
+fn goto_definition_on_third_party_go_function_navigates_to_cache() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
 
@@ -1174,13 +1107,13 @@ async fn goto_definition_on_third_party_go_function_navigates_to_cache() {
     let main_path = src.join("main.lis");
     std::fs::write(&main_path, &main_content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
-    client.open(&main_uri, &main_content).await;
+    client.open(&main_uri, &main_content);
 
-    let response = client.goto_definition(&main_uri, line, character).await;
+    let response = client.goto_definition(&main_uri, line, character);
     let location = definition_location(
         &response.expect("go-to-definition on third-party go: function should return a location"),
     )
@@ -1189,32 +1122,32 @@ async fn goto_definition_on_third_party_go_function_navigates_to_cache() {
     let typedef_uri = Url::from_file_path(&typedef_path).unwrap();
     assert_eq!(location.uri, typedef_uri);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_empty_file() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "").await;
+#[test]
+fn completion_empty_file() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "");
 
-    let response = client.completion(TEST_URI, 0, 0).await;
+    let response = client.completion(TEST_URI, 0, 0);
     assert!(response.is_some());
 
     let labels = completion_labels(&response.unwrap());
     assert!(!labels.is_empty());
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_attribute_on_struct() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_attribute_on_struct() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor("#[~\nstruct Point { x: int, y: int }\n");
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let response = client.completion(TEST_URI, line, character).await;
+    let response = client.completion(TEST_URI, line, character);
     let labels = completion_labels(&response.expect("attribute completions"));
 
     assert!(labels.contains(&"json".to_string()));
@@ -1224,35 +1157,33 @@ async fn completion_attribute_on_struct() {
     assert!(!labels.contains(&"iterate".to_string()));
     assert!(!labels.iter().any(|l| l == "fn" || l == "let" || l == "int"));
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_attribute_on_struct_field() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_attribute_on_struct_field() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor("struct Point {\n  #[~\n  x: int\n}\n");
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let response = client.completion(TEST_URI, line, character).await;
+    let response = client.completion(TEST_URI, line, character);
     let labels = completion_labels(&response.expect("attribute completions"));
 
     assert!(labels.contains(&"json".to_string()));
     assert!(labels.contains(&"tag".to_string()));
     assert!(!labels.contains(&"display".to_string()));
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_attribute_on_enum() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(TEST_URI, "#[\nenum Direction { North, South }\n")
-        .await;
+#[test]
+fn completion_attribute_on_enum() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "#[\nenum Direction { North, South }\n");
 
-    let response = client.completion(TEST_URI, 0, 2).await;
+    let response = client.completion(TEST_URI, 0, 2);
     let labels = completion_labels(&response.expect("attribute completions"));
 
     assert!(labels.contains(&"iterate".to_string()));
@@ -1261,109 +1192,101 @@ async fn completion_attribute_on_enum() {
     assert!(labels.contains(&"allow".to_string()));
     assert!(!labels.contains(&"tag".to_string()));
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_attribute_before_interface_is_empty() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_attribute_before_interface_is_empty() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor("#[~\ninterface Service {\n  fn run()\n}\n");
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
     // Attributes are rejected on interfaces, so offer nothing rather than a
     // union that would immediately parse as misplaced.
-    let response = client.completion(TEST_URI, line, character).await;
+    let response = client.completion(TEST_URI, line, character);
     let labels = completion_labels(&response.expect("attribute completions"));
     assert!(labels.is_empty(), "expected no completions, got {labels:?}");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_struct_call() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "struct Point { x: int, y: int }\nfn main() { Point { x: 1, y: 2 } }",
-        )
-        .await;
+#[test]
+fn goto_definition_struct_call() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "struct Point { x: int, y: int }\nfn main() { Point { x: 1, y: 2 } }",
+    );
 
-    let response = client.goto_definition(TEST_URI, 1, 12).await;
+    let response = client.goto_definition(TEST_URI, 1, 12);
     assert!(response.is_some());
 
     let loc = definition_location(&response.unwrap()).unwrap();
     assert_eq!(loc.range.start.line, 0);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_type_in_parameter() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "struct Point { x: int, y: int }\nfn foo(p: Point) -> int { 1 }",
-        )
-        .await;
+#[test]
+fn goto_definition_type_in_parameter() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "struct Point { x: int, y: int }\nfn foo(p: Point) -> int { 1 }",
+    );
 
-    let response = client.goto_definition(TEST_URI, 1, 10).await;
+    let response = client.goto_definition(TEST_URI, 1, 10);
     assert!(response.is_some());
 
     let loc = definition_location(&response.unwrap()).unwrap();
     assert_eq!(loc.range.start.line, 0);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_type_in_return_type() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "struct Point { x: int, y: int }\nfn foo() -> Point { Point { x: 1, y: 2 } }",
-        )
-        .await;
+#[test]
+fn goto_definition_type_in_return_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "struct Point { x: int, y: int }\nfn foo() -> Point { Point { x: 1, y: 2 } }",
+    );
 
-    let response = client.goto_definition(TEST_URI, 1, 12).await;
+    let response = client.goto_definition(TEST_URI, 1, 12);
     assert!(response.is_some());
 
     let loc = definition_location(&response.unwrap()).unwrap();
     assert_eq!(loc.range.start.line, 0);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_from_struct_call_usage() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "struct Point { x: int, y: int }\nfn main() {\n  let p = Point { x: 1, y: 2 }\n  p\n}",
-        )
-        .await;
+#[test]
+fn goto_definition_from_struct_call_usage() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "struct Point { x: int, y: int }\nfn main() {\n  let p = Point { x: 1, y: 2 }\n  p\n}",
+    );
 
-    let response = client.goto_definition(TEST_URI, 2, 10).await;
+    let response = client.goto_definition(TEST_URI, 2, 10);
     assert!(response.is_some());
 
     let loc = definition_location(&response.unwrap()).unwrap();
     assert_eq!(loc.range.start.line, 0);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_dot_on_local_variable() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_dot_on_local_variable() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 struct Point { x: int, y: int }
@@ -1374,9 +1297,9 @@ fn main() {
   let p = Point { x: 1, y: 2 }
   p.dist()
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.completion(TEST_URI, 6, 4).await;
+    let response = client.completion(TEST_URI, 6, 4);
     assert!(response.is_some());
 
     let labels = completion_labels(&response.unwrap());
@@ -1389,13 +1312,13 @@ fn main() {
         "should include 'x' field, got: {labels:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_struct_literal_offers_fields() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_struct_literal_offers_fields() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let (source, line, character) = cursor(
         "\
@@ -1407,9 +1330,9 @@ fn main() {
   let s = Point { ~ }
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let response = client.completion(TEST_URI, line, character).await;
+    let response = client.completion(TEST_URI, line, character);
     let labels = completion_labels(&response.expect("struct literal field completions"));
 
     assert!(labels.contains(&"x".to_string()), "got: {labels:?}");
@@ -1421,13 +1344,13 @@ fn main() {
         "got: {labels:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_struct_literal_value_position_offers_no_fields() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_struct_literal_value_position_offers_no_fields() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let (source, line, character) = cursor(
         "\
@@ -1436,22 +1359,22 @@ fn main() {
   let s = Point { x:~ 1 }
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let response = client.completion(TEST_URI, line, character).await;
+    let response = client.completion(TEST_URI, line, character);
     let labels = completion_labels(&response.expect("completions"));
 
     // A value position is not a field-name position: no fields, fall through to general completions.
     assert!(!labels.contains(&"y".to_string()), "got: {labels:?}");
     assert!(labels.iter().any(|l| l == "let"), "got: {labels:?}");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_struct_literal_nested_resolves_inner_struct() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_struct_literal_nested_resolves_inner_struct() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let (source, line, character) = cursor(
         "\
@@ -1461,9 +1384,9 @@ fn main() {
   let s = Outer { inner: Inner { ~ } }
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let response = client.completion(TEST_URI, line, character).await;
+    let response = client.completion(TEST_URI, line, character);
     let labels = completion_labels(&response.expect("nested struct literal field completions"));
 
     // The inner literal offers Inner's fields, not Outer's.
@@ -1471,13 +1394,13 @@ fn main() {
     assert!(labels.contains(&"b".to_string()), "got: {labels:?}");
     assert!(!labels.contains(&"inner".to_string()), "got: {labels:?}");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_struct_literal_ignores_comma_in_comment() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_struct_literal_ignores_comma_in_comment() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     // A comma inside a comment is not a field separator: the field name detection
     // is token-based, so it must not treat this as a field-name position.
@@ -1489,21 +1412,21 @@ fn main() {
   ~}
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let response = client.completion(TEST_URI, line, character).await;
+    let response = client.completion(TEST_URI, line, character);
     let labels = completion_labels(&response.expect("completions"));
 
     assert!(!labels.contains(&"x".to_string()), "got: {labels:?}");
     assert!(!labels.contains(&"y".to_string()), "got: {labels:?}");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_struct_literal_omits_assigned_fields() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_struct_literal_omits_assigned_fields() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let (source, line, character) = cursor(
         "\
@@ -1512,20 +1435,20 @@ fn main() {
   let s = Point { x: 1, ~ }
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let response = client.completion(TEST_URI, line, character).await;
+    let response = client.completion(TEST_URI, line, character);
     let labels = completion_labels(&response.expect("struct literal field completions"));
 
     assert!(labels.contains(&"y".to_string()), "got: {labels:?}");
     assert!(!labels.contains(&"x".to_string()), "got: {labels:?}");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_struct_literal_respects_field_visibility() {
-    let mut client = TestClient::new().await;
+#[test]
+fn completion_struct_literal_respects_field_visibility() {
+    let mut client = TestClient::new();
 
     let root = tempfile::tempdir().unwrap();
     let root_path = root.path();
@@ -1546,7 +1469,7 @@ async fn completion_struct_literal_respects_field_visibility() {
         cursor("import \"shapes\"\nfn main() {\n  let b = shapes.Box { ~ }\n}\n");
     std::fs::write(root_path.join("src/main/main.lis"), &main_source).unwrap();
 
-    client.initialize_with_root(root_path).await;
+    client.initialize_with_root(root_path);
 
     let shapes_uri = format!(
         "file://{}",
@@ -1554,15 +1477,13 @@ async fn completion_struct_literal_respects_field_visibility() {
     );
     let main_uri = format!("file://{}", root_path.join("src/main/main.lis").display());
 
-    client
-        .open(
-            &shapes_uri,
-            &std::fs::read_to_string(root_path.join("src/shapes/shapes.lis")).unwrap(),
-        )
-        .await;
-    client.open(&main_uri, &main_source).await;
+    client.open(
+        &shapes_uri,
+        &std::fs::read_to_string(root_path.join("src/shapes/shapes.lis")).unwrap(),
+    );
+    client.open(&main_uri, &main_source);
 
-    let response = client.completion(&main_uri, line, character).await;
+    let response = client.completion(&main_uri, line, character);
     let labels = completion_labels(&response.expect("struct literal field completions"));
 
     assert!(
@@ -1574,22 +1495,22 @@ async fn completion_struct_literal_respects_field_visibility() {
         "private field, got: {labels:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_struct_literal_enum_variant_offers_variant_fields() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_struct_literal_enum_variant_offers_variant_fields() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 enum Action { Move { x: int, y: int }, Stop }
 fn main() {
   let a = Action.Move {  }
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.completion(TEST_URI, 2, 23).await;
+    let response = client.completion(TEST_URI, 2, 23);
     let labels = completion_labels(&response.expect("enum variant field completions"));
 
     assert!(labels.contains(&"x".to_string()), "got: {labels:?}");
@@ -1597,22 +1518,22 @@ fn main() {
     assert!(!labels.contains(&"Stop".to_string()), "got: {labels:?}");
     assert!(!labels.contains(&"Move".to_string()), "got: {labels:?}");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_struct_literal_keeps_field_being_typed() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_struct_literal_keeps_field_being_typed() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 struct Point { x: int, y: int }
 fn main() {
   let s = Point { x }
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.completion(TEST_URI, 2, 19).await;
+    let response = client.completion(TEST_URI, 2, 19);
     let labels = completion_labels(&response.expect("struct literal field completions"));
 
     assert!(
@@ -1621,55 +1542,55 @@ fn main() {
     );
     assert!(labels.contains(&"y".to_string()), "got: {labels:?}");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_struct_literal_unclosed_brace_offers_fields() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_struct_literal_unclosed_brace_offers_fields() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 struct Point { x: int, y: int }
 fn main() {
   let s = Point {
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.completion(TEST_URI, 2, 18).await;
+    let response = client.completion(TEST_URI, 2, 18);
     let labels = completion_labels(&response.expect("struct literal field completions"));
 
     assert!(labels.contains(&"x".to_string()), "got: {labels:?}");
     assert!(labels.contains(&"y".to_string()), "got: {labels:?}");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_struct_literal_no_space_after_brace_offers_fields() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_struct_literal_no_space_after_brace_offers_fields() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 struct Point { x: int, y: int }
 fn main() {
   let s = Point {}
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.completion(TEST_URI, 2, 17).await;
+    let response = client.completion(TEST_URI, 2, 17);
     let labels = completion_labels(&response.expect("struct literal field completions"));
 
     assert!(labels.contains(&"x".to_string()), "got: {labels:?}");
     assert!(labels.contains(&"y".to_string()), "got: {labels:?}");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_struct_literal_after_spread_offers_no_fields() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_struct_literal_after_spread_offers_no_fields() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 struct Point { x: int, y: int }
@@ -1677,22 +1598,22 @@ fn main() {
   let base = Point { x: 1, y: 2 }
   let s = Point { ..base,  }
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.completion(TEST_URI, 3, 26).await;
+    let response = client.completion(TEST_URI, 3, 26);
     let labels = completion_labels(&response.expect("completions"));
 
     assert!(!labels.contains(&"x".to_string()), "got: {labels:?}");
     assert!(!labels.contains(&"y".to_string()), "got: {labels:?}");
     assert!(labels.iter().any(|l| l == "let"), "got: {labels:?}");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_struct_literal_before_spread_offers_fields() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_struct_literal_before_spread_offers_fields() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 struct Point { x: int, y: int }
@@ -1700,21 +1621,21 @@ fn main() {
   let base = Point { x: 1, y: 2 }
   let s = Point { x: 1, ..base }
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.completion(TEST_URI, 3, 23).await;
+    let response = client.completion(TEST_URI, 3, 23);
     let labels = completion_labels(&response.expect("struct literal field completions"));
 
     assert!(labels.contains(&"y".to_string()), "got: {labels:?}");
     assert!(!labels.contains(&"x".to_string()), "got: {labels:?}");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_dot_on_for_loop_variable() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_dot_on_for_loop_variable() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 struct Shape { side: int }
@@ -1727,9 +1648,9 @@ fn main() {
     shape.area()
   }
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.completion(TEST_URI, 7, 10).await;
+    let response = client.completion(TEST_URI, 7, 10);
     assert!(response.is_some());
 
     let labels = completion_labels(&response.unwrap());
@@ -1742,13 +1663,13 @@ fn main() {
         "should include 'side' field for element type, got: {labels:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_dot_after_indexed_access() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_dot_after_indexed_access() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 struct Item { name: string }
@@ -1759,9 +1680,9 @@ fn main() {
   let items = [Item { name: \"a\" }]
   items[0].label()
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.completion(TEST_URI, 6, 11).await;
+    let response = client.completion(TEST_URI, 6, 11);
     assert!(response.is_some());
 
     let labels = completion_labels(&response.unwrap());
@@ -1778,13 +1699,13 @@ fn main() {
         "should not include Slice methods like 'length', got: {labels:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_dot_after_array_indexed_access() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_dot_after_array_indexed_access() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 struct Item { name: string }
@@ -1795,9 +1716,9 @@ fn main() {
   let items: Array<Item, 1> = [Item { name: \"a\" }]
   items[0].
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.completion(TEST_URI, 6, 11).await;
+    let response = client.completion(TEST_URI, 6, 11);
     let labels = completion_labels(&response.expect("completion response"));
 
     assert!(
@@ -1807,22 +1728,22 @@ fn main() {
         "should include element members, got: {labels:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_dot_on_slice_variable() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_dot_on_slice_variable() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 fn main() {
   let names = [\"Lisette\", \"Lilian\", \"Lisa\"]
   names.length()
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.completion(TEST_URI, 2, 8).await;
+    let response = client.completion(TEST_URI, 2, 8);
     assert!(response.is_some());
 
     let labels = completion_labels(&response.unwrap());
@@ -1835,22 +1756,22 @@ fn main() {
         "should include 'is_empty' from prelude Slice, got: {labels:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_dot_on_array_variable() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_dot_on_array_variable() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 fn main() {
   let xs: Array<int, 3> = [1, 2, 3]
   xs.length()
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.completion(TEST_URI, 2, 5).await;
+    let response = client.completion(TEST_URI, 2, 5);
     assert!(response.is_some());
 
     let labels = completion_labels(&response.unwrap());
@@ -1859,21 +1780,21 @@ fn main() {
         "array value dot should offer 'length', got: {labels:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_array_type_dot_offers_new() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_array_type_dot_offers_new() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 fn main() {
   let _ = Array.
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.completion(TEST_URI, 1, 16).await;
+    let response = client.completion(TEST_URI, 1, 16);
     assert!(response.is_some());
 
     let labels = completion_labels(&response.unwrap());
@@ -1882,21 +1803,21 @@ fn main() {
         "Array type dot should offer 'new', got: {labels:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_dot_on_ref_to_array() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_dot_on_ref_to_array() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 fn use_ref(r: Ref<Array<int, 3>>) {
   r.length()
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.completion(TEST_URI, 1, 4).await;
+    let response = client.completion(TEST_URI, 1, 4);
     assert!(response.is_some());
 
     let labels = completion_labels(&response.unwrap());
@@ -1905,22 +1826,22 @@ fn use_ref(r: Ref<Array<int, 3>>) {
         "ref-to-array dot should offer 'length', got: {labels:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_dot_on_string_variable() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_dot_on_string_variable() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 fn main() {
   let s = \"hello\"
   s.length()
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.completion(TEST_URI, 2, 4).await;
+    let response = client.completion(TEST_URI, 2, 4);
     assert!(response.is_some());
 
     let labels = completion_labels(&response.unwrap());
@@ -1933,13 +1854,13 @@ fn main() {
         "should include 'contains' from prelude string, got: {labels:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_no_globals_after_dot() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_no_globals_after_dot() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 struct Point { x: int, y: int }
@@ -1947,9 +1868,9 @@ fn main() {
   let p = Point { x: 1, y: 2 }
   p.x
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.completion(TEST_URI, 3, 4).await;
+    let response = client.completion(TEST_URI, 3, 4);
     assert!(response.is_some());
 
     let labels = completion_labels(&response.unwrap());
@@ -1966,13 +1887,13 @@ fn main() {
         "should not include keyword 'if' after dot, got: {labels:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn crash_resilience_broken_syntax() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn crash_resilience_broken_syntax() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let broken_inputs = [
         "fn",
@@ -2024,16 +1945,16 @@ async fn crash_resilience_broken_syntax() {
     ];
 
     for (i, input) in broken_inputs.iter().enumerate() {
-        client.open(TEST_URI, input).await;
+        client.open(TEST_URI, input);
 
-        let _hover = client.hover(TEST_URI, 0, 0).await;
-        let _completion = client.completion(TEST_URI, 0, 0).await;
+        let _hover = client.hover(TEST_URI, 0, 0);
+        let _completion = client.completion(TEST_URI, 0, 0);
 
-        client.change(TEST_URI, input, (i as i32) + 2).await;
+        client.change(TEST_URI, input, (i as i32) + 2);
     }
 
-    client.open(TEST_URI, "fn main() { let x = 42; x }").await;
-    let hover = client.hover(TEST_URI, 0, 16).await;
+    client.open(TEST_URI, "fn main() { let x = 42; x }");
+    let hover = client.hover(TEST_URI, 0, 16);
     assert!(
         hover.is_some(),
         "server should still respond after broken inputs"
@@ -2044,22 +1965,22 @@ async fn crash_resilience_broken_syntax() {
         "server should still produce correct results"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_enum_dot_shows_variants() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_enum_dot_shows_variants() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 enum Color { Red, Green, Blue }
 fn main() {
   let c = Color.Red
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.completion(TEST_URI, 2, 16).await;
+    let response = client.completion(TEST_URI, 2, 16);
     assert!(response.is_some(), "should return completions for enum dot");
 
     let labels = completion_labels(&response.unwrap());
@@ -2076,22 +1997,22 @@ fn main() {
         "should include 'Blue' variant, got: {labels:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_type_dot_via_alias_to_concrete_map_shows_methods() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_type_dot_via_alias_to_concrete_map_shows_methods() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 type M = Map<string, int>
 fn main() {
   let _ = M.
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.completion(TEST_URI, 2, 12).await;
+    let response = client.completion(TEST_URI, 2, 12);
     assert!(response.is_some());
 
     let labels = completion_labels(&response.unwrap());
@@ -2100,22 +2021,22 @@ fn main() {
         "should include 'new' via alias to Map<string, int>, got: {labels:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_type_dot_via_alias_to_concrete_slice_shows_methods() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_type_dot_via_alias_to_concrete_slice_shows_methods() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 type Buf = Slice<byte>
 fn main() {
   let _ = Buf.
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.completion(TEST_URI, 2, 14).await;
+    let response = client.completion(TEST_URI, 2, 14);
     assert!(response.is_some());
 
     let labels = completion_labels(&response.unwrap());
@@ -2124,13 +2045,13 @@ fn main() {
         "should include 'new' via alias to Slice<byte>, got: {labels:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_enum_dot_via_type_alias_shows_variants() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_enum_dot_via_type_alias_shows_variants() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 enum Kind { Int, String }
@@ -2138,9 +2059,9 @@ type K = Kind
 fn main() {
   let o = K.
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.completion(TEST_URI, 3, 12).await;
+    let response = client.completion(TEST_URI, 3, 12);
     assert!(
         response.is_some(),
         "should return completions for type-alias dot"
@@ -2156,13 +2077,13 @@ fn main() {
         "should include 'String' variant via alias, got: {labels:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_enum_dot_shows_tuple_variants() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_enum_dot_shows_tuple_variants() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 enum Shape {
@@ -2172,9 +2093,9 @@ enum Shape {
 fn main() {
   let s = Shape.Circle(1.0)
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.completion(TEST_URI, 5, 16).await;
+    let response = client.completion(TEST_URI, 5, 16);
     assert!(response.is_some(), "should return completions for enum dot");
 
     let labels = completion_labels(&response.unwrap());
@@ -2187,22 +2108,22 @@ fn main() {
         "should include 'Rectangle' variant, got: {labels:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_enum_variant_shows_type() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn hover_enum_variant_shows_type() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 enum Color { Red, Green, Blue }
 fn main() {
   let c = Color.Red
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let hover = client.hover(TEST_URI, 2, 6).await;
+    let hover = client.hover(TEST_URI, 2, 6);
     assert!(hover.is_some());
 
     let content = hover_content(&hover.unwrap());
@@ -2211,13 +2132,13 @@ fn main() {
         "should show Color type, got: {content}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_match_arm_binding_shows_type() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn hover_match_arm_binding_shows_type() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 fn main() {
@@ -2227,9 +2148,9 @@ fn main() {
     None => 0,
   }
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let hover = client.hover(TEST_URI, 3, 9).await;
+    let hover = client.hover(TEST_URI, 3, 9);
     assert!(
         hover.is_some(),
         "hover on match arm binding should return something"
@@ -2241,13 +2162,13 @@ fn main() {
         "match arm binding should show inner type 'int', got: {content}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_match_option_binding_shows_inner_type() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn hover_match_option_binding_shows_inner_type() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 fn main() {
@@ -2257,9 +2178,9 @@ fn main() {
     None => \"\",
   }
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let hover = client.hover(TEST_URI, 3, 9).await;
+    let hover = client.hover(TEST_URI, 3, 9);
     assert!(
         hover.is_some(),
         "hover on match arm binding should return something"
@@ -2271,13 +2192,13 @@ fn main() {
         "match arm binding should show inner type 'string', got: {content}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_if_let_does_not_crash() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn hover_if_let_does_not_crash() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 fn main() {
@@ -2286,23 +2207,23 @@ fn main() {
     val
   }
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let _hover = client.hover(TEST_URI, 2, 15).await;
+    let _hover = client.hover(TEST_URI, 2, 15);
 
-    let hover = client.hover(TEST_URI, 0, 4).await;
+    let hover = client.hover(TEST_URI, 0, 4);
     assert!(
         hover.is_some(),
         "server should still respond after if-let hover"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_match_struct_destructuring_shows_type() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn hover_match_struct_destructuring_shows_type() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 struct Point { x: int, y: int }
@@ -2312,9 +2233,9 @@ fn main() {
     Point { x, y } => x + y,
   }
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let hover = client.hover(TEST_URI, 4, 12).await;
+    let hover = client.hover(TEST_URI, 4, 12);
     assert!(
         hover.is_some(),
         "hover on destructured field should return something"
@@ -2326,13 +2247,13 @@ fn main() {
         "destructured field should show type 'int', got: {content}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_match_arm_enum_variant_shows_enum_type() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn hover_match_arm_enum_variant_shows_enum_type() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let (source, positions) = cursors(
         "\
@@ -2346,9 +2267,9 @@ fn main() {
   }
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let hover = client.hover(TEST_URI, positions[0].0, positions[0].1).await;
+    let hover = client.hover(TEST_URI, positions[0].0, positions[0].1);
     assert!(
         hover.is_some(),
         "hover on match arm enum variant should return something"
@@ -2359,7 +2280,7 @@ fn main() {
         "match arm enum variant should show enum type 'Color', not the match expression's return type, got: {content}"
     );
 
-    let hover = client.hover(TEST_URI, positions[1].0, positions[1].1).await;
+    let hover = client.hover(TEST_URI, positions[1].0, positions[1].1);
     assert!(
         hover.is_some(),
         "hover on match arm enum variant with payload should return something"
@@ -2370,13 +2291,13 @@ fn main() {
         "match arm enum variant with payload should show enum type 'Color', got: {content}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_match_arm_literal_pattern_shows_type() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn hover_match_arm_literal_pattern_shows_type() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let (source, positions) = cursors(
         "\
@@ -2389,9 +2310,9 @@ fn main() {
   }
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let hover = client.hover(TEST_URI, positions[0].0, positions[0].1).await;
+    let hover = client.hover(TEST_URI, positions[0].0, positions[0].1);
     assert!(
         hover.is_some(),
         "hover on literal pattern should return something"
@@ -2402,7 +2323,7 @@ fn main() {
         "literal pattern should show 'int', got: {content}"
     );
 
-    let hover = client.hover(TEST_URI, positions[1].0, positions[1].1).await;
+    let hover = client.hover(TEST_URI, positions[1].0, positions[1].1);
     assert!(
         hover.is_some(),
         "hover on wildcard pattern should return something"
@@ -2413,19 +2334,17 @@ fn main() {
         "wildcard pattern should show 'int', got: {content}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn diagnostics_type_error() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn diagnostics_type_error() {
+    let mut client = TestClient::new();
+    client.initialize();
 
-    client
-        .open(TEST_URI, "fn main() { let x: int = \"hello\" }")
-        .await;
+    client.open(TEST_URI, "fn main() { let x: int = \"hello\" }");
 
-    let diagnostics = client.await_diagnostics().await;
+    let diagnostics = client.await_diagnostics();
     assert!(
         !diagnostics.is_empty(),
         "type error should produce diagnostics"
@@ -2438,17 +2357,17 @@ async fn diagnostics_type_error() {
         "should contain an error diagnostic, got: {diagnostics:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn diagnostics_valid_code_is_clean() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn diagnostics_valid_code_is_clean() {
+    let mut client = TestClient::new();
+    client.initialize();
 
-    client.open(TEST_URI, "fn main() { let x = 42 }").await;
+    client.open(TEST_URI, "fn main() { let x = 42 }");
 
-    let diagnostics = client.await_diagnostics().await;
+    let diagnostics = client.await_diagnostics();
 
     let errors: Vec<_> = diagnostics
         .iter()
@@ -2459,43 +2378,39 @@ async fn diagnostics_valid_code_is_clean() {
         "valid code should produce no error diagnostics, got: {errors:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn diagnostics_parse_error() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn diagnostics_parse_error() {
+    let mut client = TestClient::new();
+    client.initialize();
 
-    client.open(TEST_URI, "fn foo(").await;
+    client.open(TEST_URI, "fn foo(");
 
-    let diagnostics = client.await_diagnostics().await;
+    let diagnostics = client.await_diagnostics();
     assert!(
         !diagnostics.is_empty(),
         "parse error should produce diagnostics"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn diagnostics_update_after_fix() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn diagnostics_update_after_fix() {
+    let mut client = TestClient::new();
+    client.initialize();
 
-    client
-        .open(TEST_URI, "fn main() { let x: int = \"hello\" }")
-        .await;
-    let diagnostics = client.await_diagnostics().await;
+    client.open(TEST_URI, "fn main() { let x: int = \"hello\" }");
+    let diagnostics = client.await_diagnostics();
     assert!(
         !diagnostics.is_empty(),
         "should have diagnostics for type error"
     );
 
-    client
-        .change(TEST_URI, "fn main() { let x: int = 42 }", 2)
-        .await;
-    let diagnostics = client.await_diagnostics().await;
+    client.change(TEST_URI, "fn main() { let x: int = 42 }", 2);
+    let diagnostics = client.await_diagnostics();
 
     let errors: Vec<_> = diagnostics
         .iter()
@@ -2506,11 +2421,11 @@ async fn diagnostics_update_after_fix() {
         "after fixing the error, should have no error diagnostics, got: {errors:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn cross_module_goto_definition() {
+#[test]
+fn cross_module_goto_definition() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
 
@@ -2526,29 +2441,29 @@ async fn cross_module_goto_definition() {
     std::fs::create_dir_all(&utils_dir).unwrap();
     std::fs::write(utils_dir.join("utils.lis"), "pub fn helper() -> int { 42 }").unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let main_path = src.join("main.lis");
     let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
-    client.open(&main_uri, main_content).await;
+    client.open(&main_uri, main_content);
 
-    let hover = client.hover(&main_uri, 2, 14).await;
+    let hover = client.hover(&main_uri, 2, 14);
     let _ = hover;
 
-    let completion = client.completion(&main_uri, 2, 0).await;
+    let completion = client.completion(&main_uri, 2, 0);
     assert!(
         completion.is_some(),
         "server should still respond with cross-module code"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn go_import_hover_on_function() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn go_import_hover_on_function() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 import \"go:fmt\"
@@ -2556,24 +2471,24 @@ import \"go:fmt\"
 fn main() {
   fmt.Println(\"hello\")
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let hover = client.hover(TEST_URI, 3, 6).await;
+    let hover = client.hover(TEST_URI, 3, 6);
     let _ = hover;
 
-    let completion = client.completion(TEST_URI, 3, 6).await;
+    let completion = client.completion(TEST_URI, 3, 6);
     assert!(
         completion.is_some(),
         "server should still respond after go: import"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn go_import_completion_on_module() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn go_import_completion_on_module() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 import \"go:strings\"
@@ -2581,60 +2496,56 @@ import \"go:strings\"
 fn main() {
   strings.Contains(\"hello\", \"ell\")
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.completion(TEST_URI, 3, 10).await;
+    let response = client.completion(TEST_URI, 3, 10);
     let _ = response;
 
-    let hover = client.hover(TEST_URI, 0, 0).await;
+    let hover = client.hover(TEST_URI, 0, 0);
     let _ = hover;
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-async fn stress_test_input(source: &str) -> bool {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, source).await;
+fn stress_test_input(source: &str) -> bool {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, source);
 
-    let _hover = client.hover(TEST_URI, 0, 0).await;
-    let _completion = client.completion(TEST_URI, 0, 0).await;
-    let _def = client.goto_definition(TEST_URI, 0, 0).await;
-    let _refs = client.references(TEST_URI, 0, 0, true).await;
-    let _sig = client.signature_help(TEST_URI, 0, 0).await;
-    let _fmt = client.formatting(TEST_URI).await;
-    let _sym = client.document_symbol(TEST_URI).await;
-    let _inlay = client.inlay_hint(TEST_URI, (0, 0), doc_end(source)).await;
+    let _hover = client.hover(TEST_URI, 0, 0);
+    let _completion = client.completion(TEST_URI, 0, 0);
+    let _def = client.goto_definition(TEST_URI, 0, 0);
+    let _refs = client.references(TEST_URI, 0, 0, true);
+    let _sig = client.signature_help(TEST_URI, 0, 0);
+    let _fmt = client.formatting(TEST_URI);
+    let _sym = client.document_symbol(TEST_URI);
+    let _inlay = client.inlay_hint(TEST_URI, (0, 0), doc_end(source));
 
-    client.change(TEST_URI, "fn main() { 1 }", 2).await;
-    let hover = client.hover(TEST_URI, 0, 4).await;
+    client.change(TEST_URI, "fn main() { 1 }", 2);
+    let hover = client.hover(TEST_URI, 0, 4);
     let alive = hover.is_some();
 
-    client.shutdown().await;
+    client.shutdown();
     alive
 }
 
-#[tokio::test]
-async fn stress_match_wrong_variant_count() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_match_wrong_variant_count() {
+    assert!(stress_test_input(
+        "\
 enum Pair { A(int, int) }
 fn main() {
   match Pair.A(1, 2) {
     Pair.A(x) => x,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_match_nonexistent_variant() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_match_nonexistent_variant() {
+    assert!(stress_test_input(
+        "\
 enum Color { Red, Green }
 fn main() {
   match Color.Red {
@@ -2642,16 +2553,13 @@ fn main() {
     _ => 2,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_match_struct_as_enum() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_match_struct_as_enum() {
+    assert!(stress_test_input(
+        "\
 struct Point { x: int }
 fn main() {
   let p = Point { x: 1 }
@@ -2660,16 +2568,13 @@ fn main() {
     _ => 0,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_match_function_as_pattern() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_match_function_as_pattern() {
+    assert!(stress_test_input(
+        "\
 fn foo() -> int { 1 }
 fn main() {
   match 1 {
@@ -2677,16 +2582,13 @@ fn main() {
     _ => 0,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_match_deeply_nested_patterns() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_match_deeply_nested_patterns() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   let x: Option<Option<Option<int>>> = Some(Some(Some(42)))
   match x {
@@ -2696,16 +2598,13 @@ fn main() {
     None => 0,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_match_literal_patterns() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_match_literal_patterns() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   match 42 {
     0 => \"zero\",
@@ -2713,16 +2612,13 @@ fn main() {
     _ => \"other\",
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_match_string_literal_pattern() {
-    assert!(
-        stress_test_input(
-            r#"
+#[test]
+fn stress_match_string_literal_pattern() {
+    assert!(stress_test_input(
+        r#"
 fn main() {
   match "hello" {
     "hello" => 1,
@@ -2730,31 +2626,25 @@ fn main() {
     _ => 0,
   }
 }"#
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_match_tuple_destructuring() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_match_tuple_destructuring() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   match (1, \"hello\", true) {
     (a, b, c) => a,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_match_or_pattern() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_match_or_pattern() {
+    assert!(stress_test_input(
+        "\
 enum Color { Red, Green, Blue }
 fn main() {
   match Color.Red {
@@ -2762,32 +2652,26 @@ fn main() {
     Color.Blue => 2,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_match_guard() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_match_guard() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   match 42 {
     x if x > 0 => \"positive\",
     _ => \"non-positive\",
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_match_enum_with_wrong_type() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_match_enum_with_wrong_type() {
+    assert!(stress_test_input(
+        "\
 enum A { X }
 enum B { Y }
 fn main() {
@@ -2796,16 +2680,13 @@ fn main() {
     _ => 0,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_match_result_nested() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_match_result_nested() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   let r: Result<Option<int>, string> = Ok(Some(42))
   match r {
@@ -2814,16 +2695,13 @@ fn main() {
     Err(msg) => -1,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_nested_loops_with_errors() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_nested_loops_with_errors() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   for x in [1, 2, 3] {
     for y in [\"a\", \"b\"] {
@@ -2832,16 +2710,13 @@ fn main() {
     }
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_while_let_with_type_error() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_while_let_with_type_error() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   let mut opt: Option<int> = Some(1)
   while let Some(x) = opt {
@@ -2849,31 +2724,25 @@ fn main() {
     opt = None
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_for_loop_wrong_iterable() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_for_loop_wrong_iterable() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   for x in 42 {
     x
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_nested_while_with_break() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_nested_while_with_break() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   while true {
     while true {
@@ -2885,16 +2754,13 @@ fn main() {
     break
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_loop_with_match_inside() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_loop_with_match_inside() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   let mut x = Some(1)
   while let Some(val) = x {
@@ -2904,226 +2770,178 @@ fn main() {
     }
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_dot_on_int() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_dot_on_int() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   let x = 42
   x.foo()
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_dot_on_string() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_dot_on_string() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   let x = \"hello\"
   x.nonexistent()
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_chained_dots_on_error() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_chained_dots_on_error() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   let x = undefined_var
   x.foo.bar.baz()
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_dot_on_function_result() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_dot_on_function_result() {
+    assert!(stress_test_input(
+        "\
 fn foo() -> int { 1 }
 fn main() {
   foo().nonexistent()
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_dot_on_tuple() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_dot_on_tuple() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   let t = (1, 2, 3)
   t.nonexistent()
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_method_on_generic() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_method_on_generic() {
+    assert!(stress_test_input(
+        "\
 fn apply<T>(x: T) -> T {
   x.something()
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_pipeline_operator() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_pipeline_operator() {
+    assert!(stress_test_input(
+        "\
 fn double(x: int) -> int { x * 2 }
 fn main() {
   let result = 5 |> double
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_pipeline_chained() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_pipeline_chained() {
+    assert!(stress_test_input(
+        "\
 fn add1(x: int) -> int { x + 1 }
 fn double(x: int) -> int { x * 2 }
 fn main() {
   let result = 1 |> add1 |> double |> add1
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_pipeline_with_args() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_pipeline_with_args() {
+    assert!(stress_test_input(
+        "\
 fn add(x: int, y: int) -> int { x + y }
 fn main() {
   let result = 5 |> add(3)
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_name_shadow_struct_with_function() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_name_shadow_struct_with_function() {
+    assert!(stress_test_input(
+        "\
 fn Point() -> int { 1 }
 struct Point { x: int }
 fn main() {
   let p = Point { x: 1 }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_type_alias_to_primitive() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_type_alias_to_primitive() {
+    assert!(stress_test_input(
+        "\
 type MyInt = int
 fn main() {
   let x: MyInt = 42
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_type_alias_to_generic() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_type_alias_to_generic() {
+    assert!(stress_test_input(
+        "\
 type OptInt = Option<int>
 fn main() {
   let x: OptInt = Some(42)
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_recursive_type_alias() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_recursive_type_alias() {
+    assert!(stress_test_input(
+        "\
 type Tree = Option<(int, Tree, Tree)>
 fn main() {
   let t: Tree = None
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_impl_on_nonexistent_type() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_impl_on_nonexistent_type() {
+    assert!(stress_test_input(
+        "\
 impl Nonexistent {
   pub fn foo(self) -> int { 1 }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_impl_wrong_self_type() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_impl_wrong_self_type() {
+    assert!(stress_test_input(
+        "\
 struct Foo { x: int }
 impl Foo {
   pub fn bar(self) -> string { self.x }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_interface_implementation_mismatch() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_interface_implementation_mismatch() {
+    assert!(stress_test_input(
+        "\
 interface Printable {
   fn to_string() -> string
 }
@@ -3135,75 +2953,60 @@ fn print(p: Printable) -> string { p.to_string() }
 fn main() {
   print(Foo { x: 1 })
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_empty_interface() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_empty_interface() {
+    assert!(stress_test_input(
+        "\
 interface Empty {}
 struct Foo {}
 fn take(e: Empty) { }
 fn main() {
   take(Foo {})
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_generic_instantiation_mismatch() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_generic_instantiation_mismatch() {
+    assert!(stress_test_input(
+        "\
 fn identity<T>(x: T) -> T { x }
 fn main() {
   let x: string = identity(42)
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_generic_struct_wrong_params() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_generic_struct_wrong_params() {
+    assert!(stress_test_input(
+        "\
 struct Pair<A, B> { first: A, second: B }
 fn main() {
   let p: Pair<int> = Pair { first: 1, second: 2 }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_higher_order_generics() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_higher_order_generics() {
+    assert!(stress_test_input(
+        "\
 fn apply<A, B>(f: fn(A) -> B, x: A) -> B { f(x) }
 fn main() {
   let result = apply(fn(x: int) -> string { \"hello\" }, 42)
   let y: int = result
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_deeply_nested_if() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_deeply_nested_if() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   if true {
     if true {
@@ -3221,79 +3024,64 @@ fn main() {
     } else { 0 }
   } else { 0 }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_mutual_recursion() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_mutual_recursion() {
+    assert!(stress_test_input(
+        "\
 fn is_even(n: int) -> bool {
   if n == 0 { true } else { is_odd(n - 1) }
 }
 fn is_odd(n: int) -> bool {
   if n == 0 { false } else { is_even(n - 1) }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_closure_capture() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_closure_capture() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   let x = 42
   let f = fn() -> int { x }
   let g = fn() -> int { f() }
   g()
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_slice_operations_chain() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_slice_operations_chain() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   let s = [1, 2, 3, 4, 5]
   let t = s[1..3]
   let u = t[0]
   let v: string = u
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_map_operations() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_map_operations() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   let m = { \"a\": 1, \"b\": 2 }
   let v = m[\"a\"]
   let x: string = v
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_enum_struct_variant() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_enum_struct_variant() {
+    assert!(stress_test_input(
+        "\
 enum Shape {
   Circle { radius: float },
   Rectangle { width: float, height: float },
@@ -3304,16 +3092,13 @@ fn area(s: Shape) -> float {
     Shape.Rectangle { width, height } => width * height,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_enum_method_on_variant() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_enum_method_on_variant() {
+    assert!(stress_test_input(
+        "\
 enum List {
   Cons(int, List),
   Nil,
@@ -3326,46 +3111,37 @@ impl List {
     }
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_conflicting_type_annotations() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_conflicting_type_annotations() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   let x: int = \"hello\"
   let y: string = 42
   let z: bool = 3.14
   let w: float = true
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_function_type_mismatch() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_function_type_mismatch() {
+    assert!(stress_test_input(
+        "\
 fn foo(f: fn(int) -> string) -> string { f(1) }
 fn main() {
   foo(fn(x: string) -> int { 1 })
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_return_type_mismatch() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_return_type_mismatch() {
+    assert!(stress_test_input(
+        "\
 fn foo() -> int {
   if true {
     \"hello\"
@@ -3373,41 +3149,32 @@ fn foo() -> int {
     42
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_option_result_confusion() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_option_result_confusion() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   let x: Option<int> = Ok(42)
   let y: Result<int, string> = Some(42)
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_multiple_errors_same_line() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_multiple_errors_same_line() {
+    assert!(stress_test_input(
+        "\
 fn main() { let x: int = \"a\"; let y: string = 1; let z: bool = 3.14 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_undefined_everywhere() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_undefined_everywhere() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   let x = undefined1
   let y = undefined2 + undefined3
@@ -3417,53 +3184,42 @@ fn main() {
     _ => undefined7,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_self_outside_impl() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_self_outside_impl() {
+    assert!(stress_test_input(
+        "\
 fn foo() -> int { self.x }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_break_outside_loop() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_break_outside_loop() {
+    assert!(stress_test_input(
+        "\
 fn main() { break }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_continue_outside_loop() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_continue_outside_loop() {
+    assert!(stress_test_input(
+        "\
 fn main() { continue }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_return_outside_function() {
-    assert!(stress_test_input("return 42").await);
+#[test]
+fn stress_return_outside_function() {
+    assert!(stress_test_input("return 42"));
 }
 
-#[tokio::test]
-async fn stress_hover_every_position_complex_code() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_hover_every_position_complex_code() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 struct Point { x: int, y: int }
@@ -3479,30 +3235,30 @@ fn main() {
     _ => 0,
   }
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
     let line_count = source.lines().count() as u32;
     for line in 0..line_count {
         let line_len = source.lines().nth(line as usize).unwrap_or("").len() as u32;
         for ch in 0..line_len {
-            let _ = client.hover(TEST_URI, line, ch).await;
+            let _ = client.hover(TEST_URI, line, ch);
         }
     }
 
-    client.change(TEST_URI, "fn main() { 1 }", 2).await;
-    let hover = client.hover(TEST_URI, 0, 4).await;
+    client.change(TEST_URI, "fn main() { 1 }", 2);
+    let hover = client.hover(TEST_URI, 0, 4);
     assert!(
         hover.is_some(),
         "server must survive exhaustive hover sweep"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_completion_every_position_complex_code() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_completion_every_position_complex_code() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 struct Foo { val: int }
@@ -3513,30 +3269,30 @@ fn main() {
   let f = Foo { val: 42 }
   f.get()
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
     let line_count = source.lines().count() as u32;
     for line in 0..line_count {
         let line_len = source.lines().nth(line as usize).unwrap_or("").len() as u32;
         for ch in 0..=line_len {
-            let _ = client.completion(TEST_URI, line, ch).await;
+            let _ = client.completion(TEST_URI, line, ch);
         }
     }
 
-    client.change(TEST_URI, "fn main() { 1 }", 2).await;
-    let hover = client.hover(TEST_URI, 0, 4).await;
+    client.change(TEST_URI, "fn main() { 1 }", 2);
+    let hover = client.hover(TEST_URI, 0, 4);
     assert!(
         hover.is_some(),
         "server must survive exhaustive completion sweep"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_goto_def_every_position() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_goto_def_every_position() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 enum Shape { Circle(float), Rect(float, float) }
@@ -3546,47 +3302,43 @@ fn area(s: Shape) -> float {
     Shape.Rect(w, h) => w * h,
   }
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
     let line_count = source.lines().count() as u32;
     for line in 0..line_count {
         let line_len = source.lines().nth(line as usize).unwrap_or("").len() as u32;
         for ch in 0..line_len {
-            let _ = client.goto_definition(TEST_URI, line, ch).await;
+            let _ = client.goto_definition(TEST_URI, line, ch);
         }
     }
 
-    client.change(TEST_URI, "fn main() { 1 }", 2).await;
-    let hover = client.hover(TEST_URI, 0, 4).await;
+    client.change(TEST_URI, "fn main() { 1 }", 2);
+    let hover = client.hover(TEST_URI, 0, 4);
     assert!(
         hover.is_some(),
         "server must survive exhaustive goto-def sweep"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_match_type_param_as_pattern() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_match_type_param_as_pattern() {
+    assert!(stress_test_input(
+        "\
 fn check<T>(x: T) -> int {
   match x {
     T(val) => 1,
     _ => 0,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_match_type_alias_as_pattern() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_match_type_alias_as_pattern() {
+    assert!(stress_test_input(
+        "\
 type Num = int
 fn main() {
   match 42 {
@@ -3594,76 +3346,61 @@ fn main() {
     _ => 0,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_match_on_generic_value() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_match_on_generic_value() {
+    assert!(stress_test_input(
+        "\
 fn check<T>(x: T) -> T {
   match x {
     val => val,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_name_shadow_type_alias_with_function() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_name_shadow_type_alias_with_function() {
+    assert!(stress_test_input(
+        "\
 fn MyType() -> int { 1 }
 type MyType = int
 fn main() {
   let x: MyType = 42
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_name_shadow_enum_with_function() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_name_shadow_enum_with_function() {
+    assert!(stress_test_input(
+        "\
 fn Color() -> int { 1 }
 enum Color { Red, Green }
 fn main() {
   let c = Color.Red
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_name_shadow_struct_with_const() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_name_shadow_struct_with_const() {
+    assert!(stress_test_input(
+        "\
 const Point = 42
 struct Point { x: int }
 fn main() {
   let p = Point { x: 1 }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_nested_or_patterns() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_nested_or_patterns() {
+    assert!(stress_test_input(
+        "\
 enum Tree { Leaf(int), Node(Tree, Tree) }
 fn sum(t: Tree) -> int {
   match t {
@@ -3671,32 +3408,26 @@ fn sum(t: Tree) -> int {
     Tree.Node(l, r) => sum(l) + sum(r),
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_slice_pattern() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_slice_pattern() {
+    assert!(stress_test_input(
+        "\
 fn first(xs: [int]) -> int {
   match xs {
     [x, ..rest] => x,
     [] => 0,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_struct_pattern_wrong_fields() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_struct_pattern_wrong_fields() {
+    assert!(stress_test_input(
+        "\
 struct Point { x: int, y: int }
 fn main() {
   let p = Point { x: 1, y: 2 }
@@ -3704,32 +3435,26 @@ fn main() {
     Point { z, w } => z + w,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_match_on_boolean() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_match_on_boolean() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   match true {
     true => 1,
     false => 0,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_recursive_enum_match() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_recursive_enum_match() {
+    assert!(stress_test_input(
+        "\
 enum Expr {
   Num(int),
   Add(Expr, Expr),
@@ -3742,86 +3467,68 @@ fn eval(e: Expr) -> int {
     Expr.Mul(a, b) => eval(a) * eval(b),
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_struct_call_missing_field() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_struct_call_missing_field() {
+    assert!(stress_test_input(
+        "\
 struct Point { x: int, y: int }
 fn main() {
   let p = Point { x: 1 }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_struct_call_extra_field() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_struct_call_extra_field() {
+    assert!(stress_test_input(
+        "\
 struct Point { x: int, y: int }
 fn main() {
   let p = Point { x: 1, y: 2, z: 3 }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_struct_call_wrong_field_type() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_struct_call_wrong_field_type() {
+    assert!(stress_test_input(
+        "\
 struct Point { x: int, y: int }
 fn main() {
   let p = Point { x: \"hello\", y: true }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_dot_on_option() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_dot_on_option() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   let x: Option<int> = Some(42)
   x.nonexistent()
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_dot_on_result() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_dot_on_result() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   let x: Result<int, string> = Ok(42)
   x.nonexistent()
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_dot_chain_method_on_wrong_type() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_dot_chain_method_on_wrong_type() {
+    assert!(stress_test_input(
+        "\
 struct Foo { x: int }
 impl Foo {
   pub fn get(self) -> int { self.x }
@@ -3830,89 +3537,71 @@ fn main() {
   let f = Foo { x: 1 }
   f.get().nonexistent().another()
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_dot_on_enum_variant() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_dot_on_enum_variant() {
+    assert!(stress_test_input(
+        "\
 enum Color { Red, Green, Blue }
 fn main() {
   Color.Red.something()
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_propagate_in_non_result() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_propagate_in_non_result() {
+    assert!(stress_test_input(
+        "\
 fn main() -> int {
   let x = 42
   x?
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_propagate_nested() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_propagate_nested() {
+    assert!(stress_test_input(
+        "\
 fn foo() -> Result<int, string> {
   let a: Result<Result<int, string>, string> = Ok(Ok(42))
   let b = a??
   Ok(b)
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_mut_reassign_wrong_type() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_mut_reassign_wrong_type() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   let mut x = 42
   x = \"hello\"
   x = true
   x = [1, 2, 3]
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_immutable_reassign() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_immutable_reassign() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   let x = 42
   x = 100
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_all_expression_types() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_all_expression_types() {
+    assert!(stress_test_input(
+        "\
 struct Foo { x: int }
 enum Bar { A(int), B }
 interface Baz {
@@ -3958,15 +3647,13 @@ fn main() {
   let r = f[0]
   let s = f[0..2]
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_rapid_changes() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_rapid_changes() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     for i in 0..20 {
         let source = if i % 2 == 0 {
@@ -3974,53 +3661,52 @@ async fn stress_rapid_changes() {
         } else {
             "fn main() { let x: int = \"wrong\" }"
         };
-        client.change(TEST_URI, source, i + 1).await;
+        client.change(TEST_URI, source, i + 1);
     }
 
-    client.change(TEST_URI, "fn main() { 1 }", 100).await;
-    let hover = client.hover(TEST_URI, 0, 4).await;
+    client.change(TEST_URI, "fn main() { 1 }", 100);
+    let hover = client.hover(TEST_URI, 0, 4);
     assert!(hover.is_some(), "server must survive rapid changes");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_very_long_line() {
+#[test]
+fn stress_very_long_line() {
     let mut expr = "1".to_string();
     for _ in 0..500 {
         expr = format!("{} + 1", expr);
     }
     let source = format!("fn main() {{ {} }}", expr);
 
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, &source).await;
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, &source);
 
-    client.change(TEST_URI, "fn main() { 1 }", 2).await;
-    let hover = client.hover(TEST_URI, 0, 4).await;
+    client.change(TEST_URI, "fn main() { 1 }", 2);
+    let hover = client.hover(TEST_URI, 0, 4);
     assert!(
         hover.is_some(),
         "server must survive deeply nested expressions"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_many_definitions() {
+#[test]
+fn stress_many_definitions() {
     let mut source = String::new();
     for i in 0..100 {
         source.push_str(&format!("fn f{}() -> int {{ {} }}\n", i, i));
     }
     source.push_str("fn main() { f0() + f99() }");
-    assert!(stress_test_input(&source).await);
+    assert!(stress_test_input(&source));
 }
 
-#[tokio::test]
-async fn stress_deeply_nested_generics() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_deeply_nested_generics() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   let x: Option<Option<Option<Option<Option<int>>>>> = Some(Some(Some(Some(Some(42)))))
   match x {
@@ -4028,65 +3714,53 @@ fn main() {
     _ => 0,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_empty_function_body() {
-    assert!(stress_test_input("fn main() {}").await);
+#[test]
+fn stress_empty_function_body() {
+    assert!(stress_test_input("fn main() {}"));
 }
 
-#[tokio::test]
-async fn stress_empty_struct() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_empty_struct() {
+    assert!(stress_test_input(
+        "\
 struct Empty {}
 fn main() {
   let e = Empty {}
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_empty_enum() {
-    assert!(stress_test_input("enum Nothing {}").await);
+#[test]
+fn stress_empty_enum() {
+    assert!(stress_test_input("enum Nothing {}"));
 }
 
-#[tokio::test]
-async fn stress_empty_impl() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_empty_impl() {
+    assert!(stress_test_input(
+        "\
 struct Foo { x: int }
 impl Foo {}"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_empty_match() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_empty_match() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   match 42 {}
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_multiple_impl_blocks() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_multiple_impl_blocks() {
+    assert!(stress_test_input(
+        "\
 struct Foo { x: int }
 impl Foo {
   pub fn get_x(self) -> int { self.x }
@@ -4098,32 +3772,26 @@ fn main() {
   let f = Foo { x: 5 }
   f.get_x() + f.double()
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_bounded_generic() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_bounded_generic() {
+    assert!(stress_test_input(
+        "\
 interface Printable {
   fn to_str() -> string
 }
 fn print<T: Printable>(x: T) -> string {
   x.to_str()
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_bounded_generic_mismatch() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_bounded_generic_mismatch() {
+    assert!(stress_test_input(
+        "\
 interface Printable {
   fn to_str() -> string
 }
@@ -4133,26 +3801,23 @@ fn print<T: Printable>(x: T) -> string {
 fn main() {
   print(42)
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_import_self_reference() {
-    assert!(stress_test_input(r#"import "self""#).await);
+#[test]
+fn stress_import_self_reference() {
+    assert!(stress_test_input(r#"import "self""#));
 }
 
-#[tokio::test]
-async fn stress_import_empty_string() {
-    assert!(stress_test_input(r#"import """#).await);
+#[test]
+fn stress_import_empty_string() {
+    assert!(stress_test_input(r#"import """#));
 }
 
-#[tokio::test]
-async fn stress_multiple_go_imports() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_multiple_go_imports() {
+    assert!(stress_test_input(
+        "\
 import \"go:fmt\"
 import \"go:strings\"
 import \"go:strconv\"
@@ -4160,30 +3825,24 @@ import \"go:strconv\"
 fn main() {
   fmt.Println(strings.Contains(\"hello\", \"ell\"))
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_closure_type_mismatch() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_closure_type_mismatch() {
+    assert!(stress_test_input(
+        "\
 fn apply(f: fn(int) -> int, x: int) -> int { f(x) }
 fn main() {
   apply(fn(x: string) -> string { x }, 42)
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_higher_order_closure() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_higher_order_closure() {
+    assert!(stress_test_input(
+        "\
 fn compose(f: fn(int) -> int, g: fn(int) -> int) -> fn(int) -> int {
   fn(x: int) -> int { f(g(x)) }
 }
@@ -4193,57 +3852,45 @@ fn main() {
   let f = compose(double, inc)
   f(5)
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_select_syntax() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_select_syntax() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   select {
     _ => 1,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_only_comments() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_only_comments() {
+    assert!(stress_test_input(
+        "\
 /* block comment */
 "
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_comment_in_expression() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_comment_in_expression() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   let x = 1 + /* middle of expr */ 2
   x
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_unicode_strings() {
-    assert!(
-        stress_test_input(
-            r#"
+#[test]
+fn stress_unicode_strings() {
+    assert!(stress_test_input(
+        r#"
 fn main() {
   let x = "こんにちは世界"
   let y = "🎉🎊🎈"
@@ -4251,16 +3898,13 @@ fn main() {
   x
 }
 "#
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_numeric_edge_cases() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_numeric_edge_cases() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   let a = -42
   let b = 0
@@ -4270,16 +3914,13 @@ fn main() {
   let f = 1e10
   a + b + c
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_cascading_errors() {
-    assert!(
-        stress_test_input(
-            "\
+#[test]
+fn stress_cascading_errors() {
+    assert!(stress_test_input(
+        "\
 fn main() {
   let x = unknown1
   let y = x.method()
@@ -4290,109 +3931,100 @@ fn main() {
     None => unknown4,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-async fn stress_test_all_positions(source: &str) -> bool {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, source).await;
+fn stress_test_all_positions(source: &str) -> bool {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, source);
 
     let lines: Vec<&str> = source.lines().collect();
     for line in 0..lines.len() as u32 {
         let line_len = lines[line as usize].len() as u32;
         for col in [0, line_len / 2, line_len.saturating_sub(1), line_len] {
-            let _hover = client.hover(TEST_URI, line, col).await;
-            let _def = client.goto_definition(TEST_URI, line, col).await;
-            let _comp = client.completion(TEST_URI, line, col).await;
-            let _sig = client.signature_help(TEST_URI, line, col).await;
-            let _refs = client.references(TEST_URI, line, col, true).await;
-            let _rename = client.try_prepare_rename(TEST_URI, line, col).await;
-            let _inlay = client
-                .inlay_hint(TEST_URI, (line, col), doc_end(source))
-                .await;
+            let _hover = client.hover(TEST_URI, line, col);
+            let _def = client.goto_definition(TEST_URI, line, col);
+            let _comp = client.completion(TEST_URI, line, col);
+            let _sig = client.signature_help(TEST_URI, line, col);
+            let _refs = client.references(TEST_URI, line, col, true);
+            let _rename = client.try_prepare_rename(TEST_URI, line, col);
+            let _inlay = client.inlay_hint(TEST_URI, (line, col), doc_end(source));
         }
     }
 
-    client.change(TEST_URI, "fn main() { 1 }", 2).await;
-    let hover = client.hover(TEST_URI, 0, 4).await;
+    client.change(TEST_URI, "fn main() { 1 }", 2);
+    let hover = client.hover(TEST_URI, 0, 4);
     let alive = hover.is_some();
 
-    client.shutdown().await;
+    client.shutdown();
     alive
 }
 
-#[tokio::test]
-async fn stress_completion_after_dot_on_broken_expr() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "fn main() { 1. }").await;
-    let _comp = client.completion(TEST_URI, 0, 15).await;
+#[test]
+fn stress_completion_after_dot_on_broken_expr() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { 1. }");
+    let _comp = client.completion(TEST_URI, 0, 15);
 
-    client.change(TEST_URI, "fn main() { \"hello\". }", 2).await;
-    let _comp = client.completion(TEST_URI, 0, 21).await;
+    client.change(TEST_URI, "fn main() { \"hello\". }", 2);
+    let _comp = client.completion(TEST_URI, 0, 21);
 
-    client.change(TEST_URI, "fn main() { true. }", 2).await;
-    let _comp = client.completion(TEST_URI, 0, 18).await;
+    client.change(TEST_URI, "fn main() { true. }", 2);
+    let _comp = client.completion(TEST_URI, 0, 18);
 
-    client.change(TEST_URI, "fn main() { (1, 2). }", 2).await;
-    let _comp = client.completion(TEST_URI, 0, 20).await;
+    client.change(TEST_URI, "fn main() { (1, 2). }", 2);
+    let _comp = client.completion(TEST_URI, 0, 20);
 
-    client.change(TEST_URI, "fn main() { 1 }", 3).await;
-    let hover = client.hover(TEST_URI, 0, 4).await;
+    client.change(TEST_URI, "fn main() { 1 }", 3);
+    let hover = client.hover(TEST_URI, 0, 4);
     assert!(hover.is_some());
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_completion_after_indexed_access() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(TEST_URI, "fn main() { let xs = [1, 2]; xs[0]. }")
-        .await;
-    let _comp = client.completion(TEST_URI, 0, 36).await;
+#[test]
+fn stress_completion_after_indexed_access() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { let xs = [1, 2]; xs[0]. }");
+    let _comp = client.completion(TEST_URI, 0, 36);
 
-    client
-        .change(TEST_URI, "fn main() { let xs = [1]; xs[0]. }", 2)
-        .await;
-    let _comp = client.completion(TEST_URI, 0, 33).await;
+    client.change(TEST_URI, "fn main() { let xs = [1]; xs[0]. }", 2);
+    let _comp = client.completion(TEST_URI, 0, 33);
 
-    client.change(TEST_URI, "fn main() { 1 }", 3).await;
-    let hover = client.hover(TEST_URI, 0, 4).await;
+    client.change(TEST_URI, "fn main() { 1 }", 3);
+    let hover = client.hover(TEST_URI, 0, 4);
     assert!(hover.is_some());
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_hover_at_end_of_file() {
+#[test]
+fn stress_hover_at_end_of_file() {
     let source = "fn main() { let x = 42 }";
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, source).await;
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, source);
 
-    let _hover = client.hover(TEST_URI, 0, source.len() as u32).await;
-    let _hover = client.hover(TEST_URI, 0, source.len() as u32 + 100).await;
-    let _hover = client.hover(TEST_URI, 100, 0).await;
-    let _hover = client.hover(TEST_URI, 100, 100).await;
+    let _hover = client.hover(TEST_URI, 0, source.len() as u32);
+    let _hover = client.hover(TEST_URI, 0, source.len() as u32 + 100);
+    let _hover = client.hover(TEST_URI, 100, 0);
+    let _hover = client.hover(TEST_URI, 100, 100);
 
-    let hover = client.hover(TEST_URI, 0, 4).await;
+    let hover = client.hover(TEST_URI, 0, 4);
     assert!(hover.is_some());
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_all_handlers_at_every_position_simple() {
-    assert!(stress_test_all_positions("fn main() { let x = 42; x + 1 }").await);
+#[test]
+fn stress_all_handlers_at_every_position_simple() {
+    assert!(stress_test_all_positions("fn main() { let x = 42; x + 1 }"));
 }
 
-#[tokio::test]
-async fn stress_all_handlers_at_every_position_method_call() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_all_handlers_at_every_position_method_call() {
+    assert!(stress_test_all_positions(
+        "\
 struct Foo { x: int }
 impl Foo {
   pub fn get(self) -> int { self.x }
@@ -4401,16 +4033,13 @@ fn main() {
   let f = Foo { x: 1 }
   f.get()
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_all_handlers_at_every_position_enum_match() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_all_handlers_at_every_position_enum_match() {
+    assert!(stress_test_all_positions(
+        "\
 enum Shape {
   Circle(float64),
   Rect(float64, float64),
@@ -4421,16 +4050,13 @@ fn area(s: Shape) -> float64 {
     Shape.Rect(w, h) => w * h,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_all_handlers_at_every_position_broken_code() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_all_handlers_at_every_position_broken_code() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let x: int = \"wrong\"
   let y = x.nonexistent()
@@ -4439,46 +4065,40 @@ fn main() {
     Some(v) => v,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_impl_block_on_unknown_type() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_impl_block_on_unknown_type() {
+    assert!(stress_test_all_positions(
+        "\
 impl UnknownType {
   pub fn method(self) -> int { 1 }
 }
 fn main() { 1 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_impl_block_wrong_self_type() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_impl_block_wrong_self_type() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let x = 1
   x.nonexistent_method()
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_type_alias_cycle() {
-    assert!(stress_test_all_positions("type A = A\nfn main() { let x: A = 1 }").await);
+#[test]
+fn stress_type_alias_cycle() {
+    assert!(stress_test_all_positions(
+        "type A = A\nfn main() { let x: A = 1 }"
+    ));
 }
 
-#[tokio::test]
-async fn stress_deeply_nested_closures() {
+#[test]
+fn stress_deeply_nested_closures() {
     let mut source = String::from("fn main() { let f = ");
     for _ in 0..15 {
         source.push_str("fn(x: int) -> int { ");
@@ -4488,11 +4108,11 @@ async fn stress_deeply_nested_closures() {
         source.push_str(" }");
     }
     source.push_str(" }");
-    assert!(stress_test_input(&source).await);
+    assert!(stress_test_input(&source));
 }
 
-#[tokio::test]
-async fn stress_deeply_nested_blocks() {
+#[test]
+fn stress_deeply_nested_blocks() {
     let mut source = String::from("fn main() -> int { ");
     for _ in 0..15 {
         source.push_str("{ ");
@@ -4502,11 +4122,11 @@ async fn stress_deeply_nested_blocks() {
         source.push_str(" }");
     }
     source.push_str(" }");
-    assert!(stress_test_input(&source).await);
+    assert!(stress_test_input(&source));
 }
 
-#[tokio::test]
-async fn stress_deeply_nested_if_else() {
+#[test]
+fn stress_deeply_nested_if_else() {
     let mut source = String::from("fn main() -> int { ");
     for i in 0..5 {
         source.push_str(&format!("if {} > 0 {{ ", i));
@@ -4516,382 +4136,319 @@ async fn stress_deeply_nested_if_else() {
         source.push_str(" } else { 0 }");
     }
     source.push_str(" }");
-    assert!(stress_test_input(&source).await);
+    assert!(stress_test_input(&source));
 }
 
-#[tokio::test]
-async fn stress_many_match_arms() {
+#[test]
+fn stress_many_match_arms() {
     let mut source = String::from("fn main() -> int {\n  match 0 {\n");
     for i in 0..100 {
         source.push_str(&format!("    {} => {},\n", i, i * 2));
     }
     source.push_str("    _ => 0,\n  }\n}");
-    assert!(stress_test_input(&source).await);
+    assert!(stress_test_input(&source));
 }
 
-#[tokio::test]
-async fn stress_signature_help_on_broken_call() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "fn foo(a: int, b: string) -> int { a }\nfn main() { foo( }",
-        )
-        .await;
-    let sig = client.signature_help(TEST_URI, 1, 17).await;
+#[test]
+fn stress_signature_help_on_broken_call() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "fn foo(a: int, b: string) -> int { a }\nfn main() { foo( }",
+    );
+    let sig = client.signature_help(TEST_URI, 1, 17);
     assert!(sig.is_some());
 
-    client
-        .change(TEST_URI, "fn main() { unknown_fn( }", 2)
-        .await;
-    let _sig = client.signature_help(TEST_URI, 0, 24).await;
+    client.change(TEST_URI, "fn main() { unknown_fn( }", 2);
+    let _sig = client.signature_help(TEST_URI, 0, 24);
 
-    client.change(TEST_URI, "fn main() { 1 }", 3).await;
-    let hover = client.hover(TEST_URI, 0, 4).await;
+    client.change(TEST_URI, "fn main() { 1 }", 3);
+    let hover = client.hover(TEST_URI, 0, 4);
     assert!(hover.is_some());
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_rename_on_non_renamable() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(TEST_URI, "fn main() { let x = 42; x + 1 }")
-        .await;
+#[test]
+fn stress_rename_on_non_renamable() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { let x = 42; x + 1 }");
 
-    let prep = client.prepare_rename(TEST_URI, 0, 28).await;
+    let prep = client.prepare_rename(TEST_URI, 0, 28);
     assert!(prep.is_none());
 
-    let prep = client.prepare_rename(TEST_URI, 0, 11).await;
+    let prep = client.prepare_rename(TEST_URI, 0, 11);
     assert!(prep.is_none());
 
-    let prep = client.prepare_rename(TEST_URI, 100, 100).await;
+    let prep = client.prepare_rename(TEST_URI, 100, 100);
     assert!(prep.is_none());
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_goto_def_on_dot_access_chain() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_goto_def_on_dot_access_chain() {
+    assert!(stress_test_all_positions(
+        "\
 struct A { b: B }
 struct B { c: int }
 fn main() {
   let a = A { b: B { c: 1 } }
   a.b.c
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_or_pattern_with_type_mismatch() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_or_pattern_with_type_mismatch() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let x: Result<int, string> = Ok(1)
   match x {
     Ok(n) | Err(n) => n,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_match_on_unit_type() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_match_on_unit_type() {
+    assert!(stress_test_all_positions(
+        "\
 fn foo() {}
 fn main() {
   match foo() {
     _ => 1,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_recursive_function() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_recursive_function() {
+    assert!(stress_test_all_positions(
+        "\
 fn fib(n: int) -> int {
   if n <= 1 { n }
   else { fib(n - 1) + fib(n - 2) }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_generic_function_wrong_args() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_generic_function_wrong_args() {
+    assert!(stress_test_all_positions(
+        "\
 fn identity<T>(x: T) -> T { x }
 fn main() {
   let x: int = identity(\"hello\")
   let y: string = identity(42)
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_empty_source() {
-    assert!(stress_test_input("").await);
+#[test]
+fn stress_empty_source() {
+    assert!(stress_test_input(""));
 }
 
-#[tokio::test]
-async fn stress_whitespace_only() {
-    assert!(stress_test_input("   \n\n  \n").await);
+#[test]
+fn stress_whitespace_only() {
+    assert!(stress_test_input("   \n\n  \n"));
 }
 
-#[tokio::test]
-async fn stress_single_character() {
-    assert!(stress_test_input("x").await);
+#[test]
+fn stress_single_character() {
+    assert!(stress_test_input("x"));
 }
 
-#[tokio::test]
-async fn stress_just_keywords() {
-    assert!(stress_test_input("fn if let match enum struct impl").await);
+#[test]
+fn stress_just_keywords() {
+    assert!(stress_test_input("fn if let match enum struct impl"));
 }
 
-#[tokio::test]
-async fn stress_unclosed_string_multiline() {
-    assert!(stress_test_input("fn main() {\n  let x = \"hello\n  let y = 1\n}").await);
+#[test]
+fn stress_unclosed_string_multiline() {
+    assert!(stress_test_input(
+        "fn main() {\n  let x = \"hello\n  let y = 1\n}"
+    ));
 }
 
-#[tokio::test]
-async fn stress_many_type_errors_same_line() {
-    assert!(
-        stress_test_input(
-            "fn main() { let a: int = \"x\"; let b: string = 1; let c: bool = 3.14; let d: float64 = true }"
-        )
-        .await
-    );
+#[test]
+fn stress_many_type_errors_same_line() {
+    assert!(stress_test_input(
+        "fn main() { let a: int = \"x\"; let b: string = 1; let c: bool = 3.14; let d: float64 = true }"
+    ));
 }
 
-#[tokio::test]
-async fn stress_interface_with_generic_constraint() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_interface_with_generic_constraint() {
+    assert!(stress_test_all_positions(
+        "\
 interface Printable {
   fn to_str() -> string
 }
 fn print<T: Printable>(x: T) -> string { x.to_str() }
 fn main() { print(42) }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_while_let_wrong_pattern() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_while_let_wrong_pattern() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let mut x: Option<int> = Some(1)
   while let Some(a, b) = x {
     x = None
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_for_loop_non_iterable_type() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_for_loop_non_iterable_type() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   for x in 42 {
     x
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_index_on_non_indexable() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_index_on_non_indexable() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let x = 42
   x[0]
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_let_else_with_wrong_pattern() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_let_else_with_wrong_pattern() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let x = 42
   let Some(y) = x else { return }
   y
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_multiple_semicolons() {
-    assert!(stress_test_input("fn main() { ;;; let x = 1;;; x;;; }").await);
+#[test]
+fn stress_multiple_semicolons() {
+    assert!(stress_test_input("fn main() { ;;; let x = 1;;; x;;; }"));
 }
 
-#[tokio::test]
-async fn stress_nested_struct_literal() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_nested_struct_literal() {
+    assert!(stress_test_all_positions(
+        "\
 struct Inner { x: int }
 struct Outer { inner: Inner, y: string }
 fn main() {
   let o = Outer { inner: Inner { x: 1 }, y: \"hello\" }
   o.inner.x
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_closure_as_argument() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_closure_as_argument() {
+    assert!(stress_test_all_positions(
+        "\
 fn apply(f: fn(int) -> int, x: int) -> int { f(x) }
 fn main() {
   apply(fn(x: int) -> int { x + 1 }, 42)
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_tuple_destructuring_mismatch() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_tuple_destructuring_mismatch() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let (a, b, c) = (1, 2)
   let (x,) = (1, 2, 3)
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_self_outside_impl_with_method_call() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_self_outside_impl_with_method_call() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   self.method()
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_return_in_top_level() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_return_in_top_level() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   return 1
   return \"hello\"
   return
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_break_continue_outside_loop() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_break_continue_outside_loop() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   break
   continue
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_duplicate_field_names() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_duplicate_field_names() {
+    assert!(stress_test_all_positions(
+        "\
 struct Foo { x: int, x: string }
 fn main() { Foo { x: 1, x: \"hello\" } }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_duplicate_function_names() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_duplicate_function_names() {
+    assert!(stress_test_all_positions(
+        "\
 fn foo() -> int { 1 }
 fn foo() -> string { \"hello\" }
 fn main() { foo() }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_completion_on_self_in_impl() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+#[test]
+fn stress_completion_on_self_in_impl() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
 struct Foo { x: int, y: string }
 impl Foo {
   pub fn method(self) -> int { self. }
 }",
-        )
-        .await;
+    );
 
-    let comp = client.completion(TEST_URI, 2, 36).await;
+    let comp = client.completion(TEST_URI, 2, 36);
     assert!(comp.is_some());
     if let Some(CompletionResponse::Array(items)) = comp {
         let labels: Vec<_> = items.iter().map(|i| i.label.as_str()).collect();
@@ -4899,14 +4456,13 @@ impl Foo {
         assert!(labels.contains(&"y"));
     }
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_hover_on_pattern_bindings() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_hover_on_pattern_bindings() {
+    assert!(stress_test_all_positions(
+        "\
 enum Expr {
   Num(int),
   Add(Expr, Expr),
@@ -4917,15 +4473,13 @@ fn eval(e: Expr) -> int {
     Expr.Add(a, b) => eval(a) + eval(b),
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_rapid_open_close_cycle() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_rapid_open_close_cycle() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     for i in 0..20 {
         let source = if i % 2 == 0 {
@@ -4933,69 +4487,60 @@ async fn stress_rapid_open_close_cycle() {
         } else {
             "fn main() { let x: int = \"wrong\" }"
         };
-        client.open(TEST_URI, source).await;
-        let _hover = client.hover(TEST_URI, 0, 4).await;
+        client.open(TEST_URI, source);
+        let _hover = client.hover(TEST_URI, 0, 4);
     }
 
-    let hover = client.hover(TEST_URI, 0, 4).await;
+    let hover = client.hover(TEST_URI, 0, 4);
     assert!(hover.is_some());
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_propagate_outside_result_function() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_propagate_outside_result_function() {
+    assert!(stress_test_all_positions(
+        "\
 fn fallible() -> Result<int, string> { Ok(1) }
 fn main() {
   let x = fallible()?
   x
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_cast_wrong_types() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_cast_wrong_types() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let x = \"hello\" as int
   let y = true as float64
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_range_expressions() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_range_expressions() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let xs = [1, 2, 3, 4, 5]
   xs[1..3]
   xs[..2]
   xs[3..]
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_very_long_identifier() {
+#[test]
+fn stress_very_long_identifier() {
     let long_name: String = "a".repeat(1000);
     let source = format!("fn main() {{ let {} = 42; {} }}", long_name, long_name);
-    assert!(stress_test_input(&source).await);
+    assert!(stress_test_input(&source));
 }
 
-#[tokio::test]
-async fn stress_many_parameters() {
+#[test]
+fn stress_many_parameters() {
     let params: String = (0..50)
         .map(|i| format!("x{}: int", i))
         .collect::<Vec<_>>()
@@ -5008,14 +4553,13 @@ async fn stress_many_parameters() {
         "fn big({}) -> int {{ x0 }}\nfn main() {{ big({}) }}",
         params, args
     );
-    assert!(stress_test_input(&source).await);
+    assert!(stress_test_input(&source));
 }
 
-#[tokio::test]
-async fn stress_chained_method_calls() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_chained_method_calls() {
+    assert!(stress_test_all_positions(
+        "\
 struct Builder { val: int }
 impl Builder {
   pub fn new() -> Builder { Builder { val: 0 } }
@@ -5025,16 +4569,13 @@ impl Builder {
 fn main() {
   Builder.new().set(1).set(2).set(3).build()
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_nested_generic_types() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_nested_generic_types() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let x: Option<Option<Option<int>>> = Some(Some(Some(42)))
   let y: Result<Option<int>, string> = Ok(Some(1))
@@ -5043,48 +4584,39 @@ fn main() {
     _ => 0,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_enum_variant_same_name_as_type() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_enum_variant_same_name_as_type() {
+    assert!(stress_test_all_positions(
+        "\
 struct Foo { x: int }
 enum Bar { Foo(int), Other }
 fn main() {
   let f = Foo { x: 1 }
   let b = Bar.Foo(2)
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_mutual_type_reference() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_mutual_type_reference() {
+    assert!(stress_test_all_positions(
+        "\
 struct A { b: Option<B> }
 struct B { a: Option<A> }
 fn main() {
   let a = A { b: Some(B { a: None }) }
   a.b
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_if_let_chain() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_if_let_chain() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let x: Option<int> = Some(1)
   let y: Option<string> = Some(\"hi\")
@@ -5094,13 +4626,11 @@ fn main() {
     }
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_deeply_nested_dot_access_chain() {
+#[test]
+fn stress_deeply_nested_dot_access_chain() {
     let mut source = String::from(
         "struct S { s: S, v: int }\nfn main() {\n  let x = S { s: S { v: 0, s: S { v: 0, s: S { v: 1 } } }, v: 0 }\n  x",
     );
@@ -5108,11 +4638,11 @@ async fn stress_deeply_nested_dot_access_chain() {
         source.push_str(".s");
     }
     source.push_str(".v\n}");
-    assert!(stress_test_all_positions(&source).await);
+    assert!(stress_test_all_positions(&source));
 }
 
-#[tokio::test]
-async fn stress_deeply_nested_call_expressions() {
+#[test]
+fn stress_deeply_nested_call_expressions() {
     let mut source = String::from("fn f(x: int) -> int { x }\nfn main() { ");
     for _ in 0..15 {
         source.push_str("f(");
@@ -5122,11 +4652,11 @@ async fn stress_deeply_nested_call_expressions() {
         source.push(')');
     }
     source.push_str(" }");
-    assert!(stress_test_all_positions(&source).await);
+    assert!(stress_test_all_positions(&source));
 }
 
-#[tokio::test]
-async fn stress_deeply_nested_right_spine_binary() {
+#[test]
+fn stress_deeply_nested_right_spine_binary() {
     let mut source = String::from("fn main() { 1 + ");
     for _ in 0..8 {
         source.push_str("(1 + ");
@@ -5136,11 +4666,11 @@ async fn stress_deeply_nested_right_spine_binary() {
         source.push(')');
     }
     source.push_str(" }");
-    assert!(stress_test_all_positions(&source).await);
+    assert!(stress_test_all_positions(&source));
 }
 
-#[tokio::test]
-async fn stress_deeply_nested_parens() {
+#[test]
+fn stress_deeply_nested_parens() {
     let mut source = String::from("fn main() { ");
     for _ in 0..15 {
         source.push('(');
@@ -5150,77 +4680,76 @@ async fn stress_deeply_nested_parens() {
         source.push(')');
     }
     source.push_str(" }");
-    assert!(stress_test_all_positions(&source).await);
+    assert!(stress_test_all_positions(&source));
 }
 
-#[tokio::test]
-async fn stress_deeply_nested_unary() {
+#[test]
+fn stress_deeply_nested_unary() {
     let mut source = String::from("fn main() { ");
     for _ in 0..8 {
         source.push_str("!!");
     }
     source.push_str("true }");
-    assert!(stress_test_all_positions(&source).await);
+    assert!(stress_test_all_positions(&source));
 }
-#[tokio::test]
-async fn stress_completion_offset_zero() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "x.").await;
-    let _comp = client.completion(TEST_URI, 0, 0).await;
-    let _comp = client.completion(TEST_URI, 0, 1).await;
-    let _comp = client.completion(TEST_URI, 0, 2).await;
+#[test]
+fn stress_completion_offset_zero() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "x.");
+    let _comp = client.completion(TEST_URI, 0, 0);
+    let _comp = client.completion(TEST_URI, 0, 1);
+    let _comp = client.completion(TEST_URI, 0, 2);
 
-    client.change(TEST_URI, ".", 2).await;
-    let _comp = client.completion(TEST_URI, 0, 0).await;
-    let _comp = client.completion(TEST_URI, 0, 1).await;
+    client.change(TEST_URI, ".", 2);
+    let _comp = client.completion(TEST_URI, 0, 0);
+    let _comp = client.completion(TEST_URI, 0, 1);
 
-    client.change(TEST_URI, "", 3).await;
-    let _comp = client.completion(TEST_URI, 0, 0).await;
+    client.change(TEST_URI, "", 3);
+    let _comp = client.completion(TEST_URI, 0, 0);
 
-    client.change(TEST_URI, "fn main() { 1 }", 4).await;
-    let hover = client.hover(TEST_URI, 0, 4).await;
+    client.change(TEST_URI, "fn main() { 1 }", 4);
+    let hover = client.hover(TEST_URI, 0, 4);
     assert!(hover.is_some());
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_completion_after_indexed_access_short_source() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "].").await;
-    let _comp = client.completion(TEST_URI, 0, 2).await;
+#[test]
+fn stress_completion_after_indexed_access_short_source() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "].");
+    let _comp = client.completion(TEST_URI, 0, 2);
 
-    client.change(TEST_URI, "a].", 2).await;
-    let _comp = client.completion(TEST_URI, 0, 3).await;
+    client.change(TEST_URI, "a].", 2);
+    let _comp = client.completion(TEST_URI, 0, 3);
 
-    client.change(TEST_URI, "fn main() { 1 }", 3).await;
-    let hover = client.hover(TEST_URI, 0, 4).await;
+    client.change(TEST_URI, "fn main() { 1 }", 3);
+    let hover = client.hover(TEST_URI, 0, 4);
     assert!(hover.is_some());
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_completion_on_enum_with_many_variants() {
+#[test]
+fn stress_completion_on_enum_with_many_variants() {
     let mut source = String::from("enum Color {\n");
     for i in 0..50 {
         source.push_str(&format!("  V{}(int),\n", i));
     }
     source.push_str("}\nfn main() { Color. }");
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, &source).await;
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, &source);
     let line = source.lines().count() as u32 - 1;
-    let comp = client.completion(TEST_URI, line, 20).await;
+    let comp = client.completion(TEST_URI, line, 20);
     assert!(comp.is_some());
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_completion_on_multiple_impl_blocks() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_completion_on_multiple_impl_blocks() {
+    assert!(stress_test_all_positions(
+        "\
 struct Foo { x: int }
 impl Foo {
   pub fn get_x(self) -> int { self.x }
@@ -5233,15 +4762,12 @@ fn main() {
   f.get_x()
   f.doubled()
 }"
-        )
-        .await
-    );
+    ));
 }
-#[tokio::test]
-async fn stress_select_expression() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_select_expression() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let ch1 = make(Channel<int>, 1)
   let ch2 = make(Channel<string>, 1)
@@ -5251,16 +4777,13 @@ fn main() {
     _ => 42,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_try_recover_blocks() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_try_recover_blocks() {
+    assert!(stress_test_all_positions(
+        "\
 fn fallible() -> Result<int, string> { Ok(1) }
 fn main() -> Result<int, string> {
   let x = try {
@@ -5270,16 +4793,13 @@ fn main() -> Result<int, string> {
   }
   x
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_defer_and_task() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_defer_and_task() {
+    assert!(stress_test_all_positions(
+        "\
 fn cleanup() {}
 fn work() -> int { 42 }
 fn main() {
@@ -5287,44 +4807,35 @@ fn main() {
   task work()
   1
 }"
-        )
-        .await
-    );
+    ));
 }
-#[tokio::test]
-async fn stress_format_string_with_expressions() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_format_string_with_expressions() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let x = 42
   let s = \"hello\"
   let result = \"${s} world ${x + 1} and ${if x > 0 { \"yes\" } else { \"no\" }}\"
   result
 }"
-        )
-        .await
-    );
+    ));
 }
-#[tokio::test]
-async fn stress_const_expressions() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_const_expressions() {
+    assert!(stress_test_all_positions(
+        "\
 const PI: float64 = 3.14159
 const NAME: string = \"lisette\"
 const MAX: int = 100
 fn main() { PI + 1.0 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_chained_type_aliases() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_chained_type_aliases() {
+    assert!(stress_test_all_positions(
+        "\
 type A = int
 type B = A
 type C = B
@@ -5332,16 +4843,13 @@ fn main() {
   let x: C = 42
   x + 1
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_enum_match_positions() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_enum_match_positions() {
+    assert!(stress_test_all_positions(
+        "\
 enum Direction {
   North,
   South,
@@ -5357,15 +4865,12 @@ fn main() {
     Direction.West => 3,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
-#[tokio::test]
-async fn stress_deeply_nested_patterns() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_deeply_nested_patterns() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let x: Option<Option<Option<int>>> = Some(Some(Some(42)))
   match x {
@@ -5375,16 +4880,13 @@ fn main() {
     None => 0,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_struct_pattern_in_match() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_struct_pattern_in_match() {
+    assert!(stress_test_all_positions(
+        "\
 struct Point { x: int, y: int }
 fn classify(p: Point) -> string {
   match p {
@@ -5394,16 +4896,13 @@ fn classify(p: Point) -> string {
     Point { x, y } => \"other\",
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_slice_pattern_in_match() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_slice_pattern_in_match() {
+    assert!(stress_test_all_positions(
+        "\
 fn describe(xs: Slice<int>) -> string {
   match xs {
     [] => \"empty\",
@@ -5412,16 +4911,13 @@ fn describe(xs: Slice<int>) -> string {
     [first, ..rest] => \"many\",
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_match_with_guards() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_match_with_guards() {
+    assert!(stress_test_all_positions(
+        "\
 fn classify(x: int) -> string {
   match x {
     n if n < 0 => \"negative\",
@@ -5430,31 +4926,25 @@ fn classify(x: int) -> string {
     n => \"small\",
   }
 }"
-        )
-        .await
-    );
+    ));
 }
-#[tokio::test]
-async fn stress_hover_on_for_loop_binding() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_hover_on_for_loop_binding() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let xs = [1, 2, 3]
   for x in xs {
     x + 1
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_hover_on_while_let_binding() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_hover_on_while_let_binding() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let mut opt: Option<int> = Some(42)
   while let Some(v) = opt {
@@ -5462,44 +4952,35 @@ fn main() {
     v
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_hover_on_lambda_params() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_hover_on_lambda_params() {
+    assert!(stress_test_all_positions(
+        "\
 fn apply(f: fn(int, string) -> bool, x: int, s: string) -> bool { f(x, s) }
 fn main() {
   apply(fn(a: int, b: string) -> bool { a > 0 }, 1, \"hi\")
 }"
-        )
-        .await
-    );
+    ));
 }
-#[tokio::test]
-async fn stress_goto_def_on_struct_constructor() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_goto_def_on_struct_constructor() {
+    assert!(stress_test_all_positions(
+        "\
 struct Config { width: int, height: int, title: string }
 fn main() {
   let c = Config { width: 800, height: 600, title: \"hello\" }
   c.width
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_goto_def_on_enum_variant() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_goto_def_on_enum_variant() {
+    assert!(stress_test_all_positions(
+        "\
 enum Token {
   Number(int),
   Ident(string),
@@ -5513,39 +4994,33 @@ fn main() {
     Token.Plus => 0,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
-#[tokio::test]
-async fn stress_references_on_widely_used_binding() {
+#[test]
+fn stress_references_on_widely_used_binding() {
     let mut source = String::from("fn main() {\n  let counter = 0\n");
     for i in 0..50 {
         source.push_str(&format!("  let x{} = counter + {}\n", i, i));
     }
     source.push_str("  counter\n}");
-    assert!(stress_test_all_positions(&source).await);
+    assert!(stress_test_all_positions(&source));
 }
-#[tokio::test]
-async fn stress_signature_help_nested_calls() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_signature_help_nested_calls() {
+    assert!(stress_test_all_positions(
+        "\
 fn add(a: int, b: int) -> int { a + b }
 fn mul(a: int, b: int) -> int { a * b }
 fn main() {
   add(mul(1, 2), mul(3, add(4, 5)))
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_signature_help_method_call() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_signature_help_method_call() {
+    assert!(stress_test_all_positions(
+        "\
 struct Vec2 { x: float64, y: float64 }
 impl Vec2 {
   pub fn add(self, other: Vec2) -> Vec2 {
@@ -5559,80 +5034,74 @@ fn main() {
   let v = Vec2 { x: 1.0, y: 2.0 }
   v.add(v.scale(2.0))
 }"
-        )
-        .await
+    ));
+}
+#[test]
+fn stress_completion_after_unicode() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "struct S { x: int }\nfn main() {\n  let s = S { x: 1 }\n  s.\n}",
     );
-}
-#[tokio::test]
-async fn stress_completion_after_unicode() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "struct S { x: int }\nfn main() {\n  let s = S { x: 1 }\n  s.\n}",
-        )
-        .await;
-    let _comp = client.completion(TEST_URI, 3, 4).await;
+    let _comp = client.completion(TEST_URI, 3, 4);
 
-    client.change(TEST_URI, "fn main() { 1 }", 2).await;
-    let hover = client.hover(TEST_URI, 0, 4).await;
+    client.change(TEST_URI, "fn main() { 1 }", 2);
+    let hover = client.hover(TEST_URI, 0, 4);
     assert!(hover.is_some());
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_hover_at_multibyte_boundaries() {
+#[test]
+fn stress_hover_at_multibyte_boundaries() {
     let source = "fn main() { let x = 42; x }";
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, source).await;
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, source);
 
     for col in 0..source.len() as u32 + 5 {
-        let _hover = client.hover(TEST_URI, 0, col).await;
+        let _hover = client.hover(TEST_URI, 0, col);
     }
 
-    let hover = client.hover(TEST_URI, 0, 4).await;
+    let hover = client.hover(TEST_URI, 0, 4);
     assert!(hover.is_some());
-    client.shutdown().await;
+    client.shutdown();
 }
-#[tokio::test]
-async fn stress_rename_enum_variant() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "enum Color { Red, Green, Blue }\nfn main() { Color.Red }",
-        )
-        .await;
+#[test]
+fn stress_rename_enum_variant() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "enum Color { Red, Green, Blue }\nfn main() { Color.Red }",
+    );
 
-    let prep = client.prepare_rename(TEST_URI, 0, 14).await;
+    let prep = client.prepare_rename(TEST_URI, 0, 14);
     assert!(prep.is_some());
 
-    let _prep = client.prepare_rename(TEST_URI, 1, 19).await;
+    let _prep = client.prepare_rename(TEST_URI, 1, 19);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_rename_with_many_usages() {
+#[test]
+fn stress_rename_with_many_usages() {
     let mut source = String::from("fn main() {\n  let counter = 0\n");
     for _ in 0..30 {
         source.push_str("  let _ = counter + 1\n");
     }
     source.push('}');
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, &source).await;
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, &source);
 
-    let prep = client.prepare_rename(TEST_URI, 1, 7).await;
+    let prep = client.prepare_rename(TEST_URI, 1, 7);
     assert!(prep.is_some());
 
-    client.shutdown().await;
+    client.shutdown();
 }
-#[tokio::test]
-async fn stress_formatting_deeply_nested() {
+#[test]
+fn stress_formatting_deeply_nested() {
     let mut source = String::from("fn main() { ");
     for _ in 0..7 {
         source.push_str("if true { ");
@@ -5642,20 +5111,20 @@ async fn stress_formatting_deeply_nested() {
         source.push_str(" } else { 0 }");
     }
     source.push_str(" }");
-    assert!(stress_test_input(&source).await);
+    assert!(stress_test_input(&source));
 }
 
-#[tokio::test]
-async fn stress_formatting_long_function_signature() {
+#[test]
+fn stress_formatting_long_function_signature() {
     let params: String = (0..20)
         .map(|i| format!("param_{}: int", i))
         .collect::<Vec<_>>()
         .join(", ");
     let source = format!("fn long_function({}) -> int {{ param_0 }}", params);
-    assert!(stress_test_input(&source).await);
+    assert!(stress_test_input(&source));
 }
-#[tokio::test]
-async fn stress_document_symbols_many_items() {
+#[test]
+fn stress_document_symbols_many_items() {
     let mut source = String::new();
     for i in 0..50 {
         source.push_str(&format!("fn func_{}() -> int {{ {} }}\n", i, i));
@@ -5668,20 +5137,20 @@ async fn stress_document_symbols_many_items() {
     }
     source.push_str("fn main() { 1 }");
 
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, &source).await;
-    let symbols = client.document_symbol(TEST_URI).await;
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, &source);
+    let symbols = client.document_symbol(TEST_URI);
     assert!(symbols.is_some());
 
-    let hover = client.hover(TEST_URI, 0, 4).await;
+    let hover = client.hover(TEST_URI, 0, 4);
     assert!(hover.is_some());
-    client.shutdown().await;
+    client.shutdown();
 }
-#[tokio::test]
-async fn stress_rapid_type_changes() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_rapid_type_changes() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let sources = [
         "fn main() { let x: int = 1; x }",
@@ -5697,65 +5166,60 @@ async fn stress_rapid_type_changes() {
     ];
 
     for (i, src) in sources.iter().enumerate() {
-        client.change(TEST_URI, src, i as i32 + 1).await;
-        let _hover = client.hover(TEST_URI, 0, 4).await;
-        let _comp = client.completion(TEST_URI, 0, 4).await;
+        client.change(TEST_URI, src, i as i32 + 1);
+        let _hover = client.hover(TEST_URI, 0, 4);
+        let _comp = client.completion(TEST_URI, 0, 4);
     }
 
-    client
-        .change(TEST_URI, "fn main() { 1 }", sources.len() as i32 + 1)
-        .await;
-    let hover = client.hover(TEST_URI, 0, 4).await;
+    client.change(TEST_URI, "fn main() { 1 }", sources.len() as i32 + 1);
+    let hover = client.hover(TEST_URI, 0, 4);
     assert!(hover.is_some());
-    client.shutdown().await;
+    client.shutdown();
 }
-#[tokio::test]
-async fn stress_trailing_newlines() {
-    assert!(stress_test_input("fn main() { 1 }\n\n\n\n\n\n\n\n\n\n").await);
+#[test]
+fn stress_trailing_newlines() {
+    assert!(stress_test_input("fn main() { 1 }\n\n\n\n\n\n\n\n\n\n"));
 }
 
-#[tokio::test]
-async fn stress_very_long_string_literal() {
+#[test]
+fn stress_very_long_string_literal() {
     let long_string: String = "a".repeat(10000);
     let source = format!("fn main() {{ let s = \"{}\"; s }}", long_string);
-    assert!(stress_test_input(&source).await);
+    assert!(stress_test_input(&source));
 }
 
-#[tokio::test]
-async fn stress_many_let_bindings() {
+#[test]
+fn stress_many_let_bindings() {
     let mut source = String::from("fn main() {\n");
     for i in 0..100 {
         source.push_str(&format!("  let v{} = {}\n", i, i));
     }
     source.push_str("  v99\n}");
-    assert!(stress_test_all_positions(&source).await);
+    assert!(stress_test_all_positions(&source));
 }
-#[tokio::test]
-async fn stress_valid_then_broken_then_valid() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_valid_then_broken_then_valid() {
+    let mut client = TestClient::new();
+    client.initialize();
 
-    client.open(TEST_URI, "fn main() { let x = 42; x }").await;
-    let hover1 = client.hover(TEST_URI, 0, 4).await;
+    client.open(TEST_URI, "fn main() { let x = 42; x }");
+    let hover1 = client.hover(TEST_URI, 0, 4);
     assert!(hover1.is_some());
 
-    client.change(TEST_URI, "fn {{{{{", 2).await;
-    let _hover = client.hover(TEST_URI, 0, 0).await;
-    let _comp = client.completion(TEST_URI, 0, 0).await;
+    client.change(TEST_URI, "fn {{{{{", 2);
+    let _hover = client.hover(TEST_URI, 0, 0);
+    let _comp = client.completion(TEST_URI, 0, 0);
 
-    client
-        .change(TEST_URI, "fn main() { let y = \"hello\"; y }", 3)
-        .await;
-    let hover3 = client.hover(TEST_URI, 0, 4).await;
+    client.change(TEST_URI, "fn main() { let y = \"hello\"; y }", 3);
+    let hover3 = client.hover(TEST_URI, 0, 4);
     assert!(hover3.is_some());
 
-    client.shutdown().await;
+    client.shutdown();
 }
-#[tokio::test]
-async fn stress_compound_assignments() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_compound_assignments() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let mut x = 0
   x += 1
@@ -5763,47 +5227,38 @@ fn main() {
   x *= 3
   x
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_mutable_struct_field_assignment() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_mutable_struct_field_assignment() {
+    assert!(stress_test_all_positions(
+        "\
 struct Counter { count: int }
 fn main() {
   let mut c = Counter { count: 0 }
   c.count += 1
   c.count
 }"
-        )
-        .await
-    );
+    ));
 }
-#[tokio::test]
-async fn stress_loop_with_break_value() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_loop_with_break_value() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() -> int {
   let result = loop {
     break 42
   }
   result
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_nested_loops_with_break_continue() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_nested_loops_with_break_continue() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   for i in [1, 2, 3] {
     for j in [4, 5, 6] {
@@ -5813,30 +5268,24 @@ fn main() {
     }
   }
 }"
-        )
-        .await
-    );
+    ));
 }
-#[tokio::test]
-async fn stress_struct_spread() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_struct_spread() {
+    assert!(stress_test_all_positions(
+        "\
 struct Config { width: int, height: int, debug: bool }
 fn main() {
   let base = Config { width: 800, height: 600, debug: false }
   let custom = Config { width: 1024, ..base }
   custom.height
 }"
-        )
-        .await
-    );
+    ));
 }
-#[tokio::test]
-async fn stress_recursive_enum() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_recursive_enum() {
+    assert!(stress_test_all_positions(
+        "\
 enum List {
   Cons(int, List),
   Nil,
@@ -5848,15 +5297,12 @@ fn sum(l: List) -> int {
   }
 }
 fn main() { sum(List.Cons(1, List.Cons(2, List.Nil))) }"
-        )
-        .await
-    );
+    ));
 }
-#[tokio::test]
-async fn stress_interface_multiple_methods() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_interface_multiple_methods() {
+    assert!(stress_test_all_positions(
+        "\
 interface Shape {
   fn area() -> float64
   fn perimeter() -> float64
@@ -5870,15 +5316,12 @@ impl Circle {
 }
 fn describe<T: Shape>(s: T) -> string { s.name() }
 fn main() { describe(Circle { radius: 1.0 }) }"
-        )
-        .await
-    );
+    ));
 }
-#[tokio::test]
-async fn stress_expressions_as_values_in_calls() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_expressions_as_values_in_calls() {
+    assert!(stress_test_all_positions(
+        "\
 fn add(a: int, b: int) -> int { a + b }
 fn main() {
   add(
@@ -5889,46 +5332,37 @@ fn main() {
     }
   )
 }"
-        )
-        .await
-    );
+    ));
 }
-#[tokio::test]
-async fn stress_cast_expression() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_cast_expression() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let x: int = 42
   let y = x as float64
   let z = y as int
   z
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_reference_expressions() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_reference_expressions() {
+    assert!(stress_test_all_positions(
+        "\
 fn takes_ref(r: &int) -> int { *r }
 fn main() {
   let x = 42
   let r = &x
   takes_ref(r)
 }"
-        )
-        .await
-    );
+    ));
 }
-#[tokio::test]
-async fn stress_generic_function_hover() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_generic_function_hover() {
+    assert!(stress_test_all_positions(
+        "\
 fn identity<T>(x: T) -> T { x }
 fn pair<A, B>(a: A, b: B) -> (A, B) { (a, b) }
 fn main() {
@@ -5937,16 +5371,13 @@ fn main() {
   let p = pair(x, y)
   p
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_nested_option_result() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_nested_option_result() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let a: Option<Result<int, string>> = Some(Ok(42))
   let b: Result<Option<int>, string> = Ok(Some(10))
@@ -5956,16 +5387,13 @@ fn main() {
     None => 0,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_nested_match_in_match() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_nested_match_in_match() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let x: Option<int> = Some(42)
   let y: Option<int> = Some(10)
@@ -5980,16 +5408,13 @@ fn main() {
     },
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_shadowed_variable_hover() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_shadowed_variable_hover() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let x = 42
   let y = x + 1
@@ -5997,16 +5422,13 @@ fn main() {
   let z = x
   z
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_chained_method_calls_long() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_chained_method_calls_long() {
+    assert!(stress_test_all_positions(
+        "\
 struct Builder { count: int }
 impl Builder {
   fn inc(self) -> Builder { Builder { count: self.count + 1 } }
@@ -6016,16 +5438,13 @@ fn main() {
   let b = Builder { count: 0 }
   b.inc().inc().inc().inc().inc().build()
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_let_else_pattern() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_let_else_pattern() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let x: Option<int> = Some(42)
   let Some(value) = x else {
@@ -6033,16 +5452,13 @@ fn main() {
   }
   value
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_while_let_loop() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_while_let_loop() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let mut x: Option<int> = Some(5)
   while let Some(n) = x {
@@ -6053,16 +5469,13 @@ fn main() {
     }
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_multiple_return_types() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_multiple_return_types() {
+    assert!(stress_test_all_positions(
+        "\
 fn classify(n: int) -> string {
   if n < 0 {
     return \"negative\"
@@ -6073,32 +5486,26 @@ fn classify(n: int) -> string {
     _ => \"other\",
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_tuple_destructuring() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_tuple_destructuring() {
+    assert!(stress_test_all_positions(
+        "\
 fn swap(a: int, b: int) -> (int, int) { (b, a) }
 fn main() {
   let (x, y) = swap(1, 2)
   let (a, b) = (x + y, x - y)
   a + b
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_enum_with_methods() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_enum_with_methods() {
+    assert!(stress_test_all_positions(
+        "\
 enum Shape {
   Circle(float64),
   Rect(float64, float64),
@@ -6115,72 +5522,59 @@ fn main() {
   let s = Shape.Circle(5.0)
   s.area()
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_closure_as_parameter() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_closure_as_parameter() {
+    assert!(stress_test_all_positions(
+        "\
 fn apply(f: fn(int) -> int, x: int) -> int { f(x) }
 fn main() {
   let double = |x: int| -> int { x * 2 }
   let result = apply(double, 21)
   apply(|x: int| -> int { x + 1 }, result)
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_multiline_string_positions() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_multiline_string_positions() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let s = \"line one
 line two
 line three\"
   s
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_all_handlers_on_single_char_source() {
-    assert!(stress_test_all_positions("fn main() { 1 }").await);
+#[test]
+fn stress_all_handlers_on_single_char_source() {
+    assert!(stress_test_all_positions("fn main() { 1 }"));
 }
 
-#[tokio::test]
-async fn stress_completion_on_partially_typed() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(TEST_URI, "fn main() {\n  let value = 42\n  val\n}")
-        .await;
-    let _comp = client.completion(TEST_URI, 2, 5).await;
-    client
-        .change(TEST_URI, "fn main() {\n  let value = 42\n  value\n}", 2)
-        .await;
-    let hover = client.hover(TEST_URI, 2, 3).await;
+#[test]
+fn stress_completion_on_partially_typed() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() {\n  let value = 42\n  val\n}");
+    let _comp = client.completion(TEST_URI, 2, 5);
+    client.change(TEST_URI, "fn main() {\n  let value = 42\n  value\n}", 2);
+    let hover = client.hover(TEST_URI, 2, 3);
     assert!(hover.is_some());
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_goto_def_on_pattern_binding() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+#[test]
+fn stress_goto_def_on_pattern_binding() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
 fn main() {
   let x: Option<int> = Some(42)
   match x {
@@ -6188,58 +5582,50 @@ fn main() {
     None => 0,
   }
 }",
-        )
-        .await;
-    let _def = client.goto_definition(TEST_URI, 3, 19).await;
-    client.shutdown().await;
+    );
+    let _def = client.goto_definition(TEST_URI, 3, 19);
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_hover_on_impl_method_self() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+#[test]
+fn stress_hover_on_impl_method_self() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
 struct Point { x: int, y: int }
 impl Point {
   fn sum(self) -> int { self.x + self.y }
 }",
-        )
-        .await;
-    let _hover = client.hover(TEST_URI, 2, 24).await;
-    let _hover2 = client.hover(TEST_URI, 2, 34).await;
-    client.shutdown().await;
+    );
+    let _hover = client.hover(TEST_URI, 2, 24);
+    let _hover2 = client.hover(TEST_URI, 2, 34);
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_rapid_changes_with_errors() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "fn main() { 1 }").await;
+#[test]
+fn stress_rapid_changes_with_errors() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { 1 }");
     for i in 0..10 {
         if i % 2 == 0 {
-            client
-                .change(TEST_URI, "fn main() { let x: int = \"wrong\" }", i + 2)
-                .await;
+            client.change(TEST_URI, "fn main() { let x: int = \"wrong\" }", i + 2);
         } else {
-            client
-                .change(TEST_URI, "fn main() { let x = 42; x }", i + 2)
-                .await;
+            client.change(TEST_URI, "fn main() { let x = 42; x }", i + 2);
         }
-        let _hover = client.hover(TEST_URI, 0, 20).await;
+        let _hover = client.hover(TEST_URI, 0, 20);
     }
-    let hover = client.hover(TEST_URI, 0, 4).await;
+    let hover = client.hover(TEST_URI, 0, 4);
     assert!(hover.is_some());
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_or_pattern_in_match() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_or_pattern_in_match() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let x: Option<int> = Some(3)
   match x {
@@ -6247,123 +5633,104 @@ fn main() {
     Some(_) | None => false,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_pipeline_chain() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_pipeline_chain() {
+    assert!(stress_test_all_positions(
+        "\
 fn double(x: int) -> int { x * 2 }
 fn add(x: int, y: int) -> int { x + y }
 fn main() {
   let result = 5 |> double |> add(10)
   result
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_multibyte_utf8_identifiers() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_multibyte_utf8_identifiers() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let café = 42
   let naïve = café + 1
   naïve
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_multibyte_utf8_in_strings() {
-    assert!(
-        stress_test_all_positions(
-            r#"
+#[test]
+fn stress_multibyte_utf8_in_strings() {
+    assert!(stress_test_all_positions(
+        r#"
 fn main() {
   let s = "héllo wörld 日本語"
   let t = "αβγδ"
   s
 }"#
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_single_newline() {
-    assert!(stress_test_input("\n").await);
+#[test]
+fn stress_single_newline() {
+    assert!(stress_test_input("\n"));
 }
 
-#[tokio::test]
-async fn stress_self_dot_outside_impl() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_self_dot_outside_impl() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let self_val = 1
   self_val
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_completion_self_dot_no_impl() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+#[test]
+fn stress_completion_self_dot_no_impl() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
 fn main() {
   self.
 }",
-        )
-        .await;
-    let comp = client.completion(TEST_URI, 1, 7).await;
+    );
+    let comp = client.completion(TEST_URI, 1, 7);
     assert!(
         comp.is_none() || matches!(comp, Some(CompletionResponse::Array(ref v)) if v.is_empty())
     );
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_import_only_file_document_symbols() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+#[test]
+fn stress_import_only_file_document_symbols() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
 import foo
 import bar
 ",
-        )
-        .await;
-    let _symbols = client.document_symbol(TEST_URI).await;
+    );
+    let _symbols = client.document_symbol(TEST_URI);
 
-    let _hover = client.hover(TEST_URI, 0, 7).await;
-    let _def = client.goto_definition(TEST_URI, 0, 7).await;
-    let _comp = client.completion(TEST_URI, 0, 10).await;
+    let _hover = client.hover(TEST_URI, 0, 7);
+    let _def = client.goto_definition(TEST_URI, 0, 7);
+    let _comp = client.completion(TEST_URI, 0, 10);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_hover_on_match_pattern_bindings() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_hover_on_match_pattern_bindings() {
+    assert!(stress_test_all_positions(
+        "\
 enum Shape {
   Circle(float64),
   Rect(float64, float64),
@@ -6374,16 +5741,13 @@ fn area(s: Shape) -> float64 {
     Shape.Rect(w, h) => w * h,
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_hover_on_if_let_pattern() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_hover_on_if_let_pattern() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let x: Option<int> = Some(42)
   if let Some(val) = x {
@@ -6392,135 +5756,119 @@ fn main() {
     0
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_nested_calls_signature_help() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+#[test]
+fn stress_nested_calls_signature_help() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
 fn add(x: int, y: int) -> int { x + y }
 fn mul(x: int, y: int) -> int { x * y }
 fn main() {
   add(mul(1, 2), mul(3, 4))
 }",
-        )
-        .await;
+    );
 
-    let sig = client.signature_help(TEST_URI, 3, 6).await;
+    let sig = client.signature_help(TEST_URI, 3, 6);
     assert!(sig.is_some());
 
-    let sig_inner = client.signature_help(TEST_URI, 3, 10).await;
+    let sig_inner = client.signature_help(TEST_URI, 3, 10);
     assert!(sig_inner.is_some());
 
-    let sig_second = client.signature_help(TEST_URI, 3, 17).await;
+    let sig_second = client.signature_help(TEST_URI, 3, 17);
     assert!(sig_second.is_some());
 
-    let sig_outer_second = client.signature_help(TEST_URI, 3, 22).await;
+    let sig_outer_second = client.signature_help(TEST_URI, 3, 22);
     assert!(sig_outer_second.is_some());
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_format_string_interpolation_positions() {
-    assert!(
-        stress_test_all_positions(
-            r#"
+#[test]
+fn stress_format_string_interpolation_positions() {
+    assert!(stress_test_all_positions(
+        r#"
 fn main() {
   let name = "world"
   let x = 42
   let msg = "hello ${name}, num=${x + 1}"
   msg
 }"#
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_range_expression_not_dot() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_range_expression_not_dot() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let r = 0..10
   for i in 0..5 {
     i
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_prepare_rename_on_various_positions() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "fn main() { let x = 1; x }").await;
+#[test]
+fn stress_prepare_rename_on_various_positions() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { let x = 1; x }");
 
-    let _rename_fn_keyword = client.prepare_rename(TEST_URI, 0, 0).await;
-    let rename_main = client.prepare_rename(TEST_URI, 0, 3).await;
+    let _rename_fn_keyword = client.prepare_rename(TEST_URI, 0, 0);
+    let rename_main = client.prepare_rename(TEST_URI, 0, 3);
     assert!(rename_main.is_some());
-    let _rename_let = client.prepare_rename(TEST_URI, 0, 12).await;
-    let rename_x = client.prepare_rename(TEST_URI, 0, 16).await;
+    let _rename_let = client.prepare_rename(TEST_URI, 0, 12);
+    let rename_x = client.prepare_rename(TEST_URI, 0, 16);
     assert!(rename_x.is_some());
-    let _rename_eq = client.prepare_rename(TEST_URI, 0, 18).await;
-    let _rename_literal = client.prepare_rename(TEST_URI, 0, 20).await;
-    let _rename_usage = client.prepare_rename(TEST_URI, 0, 24).await;
+    let _rename_eq = client.prepare_rename(TEST_URI, 0, 18);
+    let _rename_literal = client.prepare_rename(TEST_URI, 0, 20);
+    let _rename_usage = client.prepare_rename(TEST_URI, 0, 24);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_references_no_usages() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+#[test]
+fn stress_references_no_usages() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
 fn unused_fn() -> int { 1 }
 fn main() { 42 }",
-        )
-        .await;
+    );
 
-    let refs = client.references(TEST_URI, 0, 3, true).await;
+    let refs = client.references(TEST_URI, 0, 3, true);
     assert!(refs.is_some());
     let locs = refs.unwrap();
     assert!(locs.len() <= 1);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_type_alias_hover() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_type_alias_hover() {
+    assert!(stress_test_all_positions(
+        "\
 type Ints = Slice<int>
 fn sum(xs: Ints) -> int { 0 }
 fn main() {
   let xs: Ints = [1, 2, 3]
   sum(xs)
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_impl_block_all_positions() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_impl_block_all_positions() {
+    assert!(stress_test_all_positions(
+        "\
 struct Counter { count: int }
 impl Counter {
   pub fn new() -> Counter { Counter { count: 0 } }
@@ -6532,46 +5880,37 @@ fn main() {
   let c2 = c.inc()
   c2.get()
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_lambda_in_call_arg() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_lambda_in_call_arg() {
+    assert!(stress_test_all_positions(
+        "\
 fn apply(f: fn(int) -> int, x: int) -> int { f(x) }
 fn main() {
   apply(fn(x) { x + 1 }, 5)
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_nested_struct_calls() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_nested_struct_calls() {
+    assert!(stress_test_all_positions(
+        "\
 struct Inner { val: int }
 struct Outer { inner: Inner }
 fn main() {
   let o = Outer { inner: Inner { val: 42 } }
   o.inner.val
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_tuple_index_access() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_tuple_index_access() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let t = (1, \"hello\", true)
   let a = t.0
@@ -6579,147 +5918,135 @@ fn main() {
   let c = t.2
   a
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_propagate_operator() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_propagate_operator() {
+    assert!(stress_test_all_positions(
+        "\
 fn inner() -> Result<int, string> { Ok(1) }
 fn outer() -> Result<int, string> {
   let x = inner()?
   Ok(x + 1)
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_indexed_access_completion() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+#[test]
+fn stress_indexed_access_completion() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
 struct Item { name: string }
 fn main() {
   let items: Slice<Item> = []
   items[0].
 }",
-        )
-        .await;
-    let comp = client.completion(TEST_URI, 3, 11).await;
+    );
+    let comp = client.completion(TEST_URI, 3, 11);
     assert!(comp.is_some());
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_completion_on_number_dot() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "fn main() { 42. }").await;
-    let _comp = client.completion(TEST_URI, 0, 16).await;
+#[test]
+fn stress_completion_on_number_dot() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { 42. }");
+    let _comp = client.completion(TEST_URI, 0, 16);
 
-    client.change(TEST_URI, "fn main() { 3.14 }", 2).await;
-    let _comp2 = client.completion(TEST_URI, 0, 15).await;
+    client.change(TEST_URI, "fn main() { 3.14 }", 2);
+    let _comp2 = client.completion(TEST_URI, 0, 15);
 
-    client.change(TEST_URI, "fn main() { 1 }", 3).await;
-    let hover = client.hover(TEST_URI, 0, 4).await;
+    client.change(TEST_URI, "fn main() { 1 }", 3);
+    let hover = client.hover(TEST_URI, 0, 4);
     assert!(hover.is_some());
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_all_handlers_at_eof() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_all_handlers_at_eof() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "fn main() { 42 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
     let eof_col = source.len() as u32;
-    let _hover = client.hover(TEST_URI, 0, eof_col).await;
-    let _def = client.goto_definition(TEST_URI, 0, eof_col).await;
-    let _comp = client.completion(TEST_URI, 0, eof_col).await;
-    let _sig = client.signature_help(TEST_URI, 0, eof_col).await;
-    let _refs = client.references(TEST_URI, 0, eof_col, true).await;
-    let _rename = client.prepare_rename(TEST_URI, 0, eof_col).await;
-    let _inlay = client.inlay_hint(TEST_URI, (0, 0), (0, eof_col)).await;
+    let _hover = client.hover(TEST_URI, 0, eof_col);
+    let _def = client.goto_definition(TEST_URI, 0, eof_col);
+    let _comp = client.completion(TEST_URI, 0, eof_col);
+    let _sig = client.signature_help(TEST_URI, 0, eof_col);
+    let _refs = client.references(TEST_URI, 0, eof_col, true);
+    let _rename = client.prepare_rename(TEST_URI, 0, eof_col);
+    let _inlay = client.inlay_hint(TEST_URI, (0, 0), (0, eof_col));
 
-    let _hover_past = client.hover(TEST_URI, 0, eof_col + 10).await;
-    let _hover_line_past = client.hover(TEST_URI, 5, 0).await;
-    let _inlay_past = client.inlay_hint(TEST_URI, (5, 0), (6, 0)).await;
+    let _hover_past = client.hover(TEST_URI, 0, eof_col + 10);
+    let _hover_line_past = client.hover(TEST_URI, 5, 0);
+    let _inlay_past = client.inlay_hint(TEST_URI, (5, 0), (6, 0));
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_all_handlers_at_position_zero() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+#[test]
+fn stress_all_handlers_at_position_zero() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
 struct Foo { x: int }
 enum Bar { A, B }
 interface Baz { fn do_thing() -> int }
 fn main() { 1 }",
-        )
-        .await;
+    );
 
-    let _hover = client.hover(TEST_URI, 0, 0).await;
-    let _def = client.goto_definition(TEST_URI, 0, 0).await;
-    let _comp = client.completion(TEST_URI, 0, 0).await;
-    let _sig = client.signature_help(TEST_URI, 0, 0).await;
-    let _refs = client.references(TEST_URI, 0, 0, true).await;
-    let _rename = client.prepare_rename(TEST_URI, 0, 0).await;
-    let _fmt = client.formatting(TEST_URI).await;
-    let _sym = client.document_symbol(TEST_URI).await;
+    let _hover = client.hover(TEST_URI, 0, 0);
+    let _def = client.goto_definition(TEST_URI, 0, 0);
+    let _comp = client.completion(TEST_URI, 0, 0);
+    let _sig = client.signature_help(TEST_URI, 0, 0);
+    let _refs = client.references(TEST_URI, 0, 0, true);
+    let _rename = client.prepare_rename(TEST_URI, 0, 0);
+    let _fmt = client.formatting(TEST_URI);
+    let _sym = client.document_symbol(TEST_URI);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_formatting_already_formatted() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+#[test]
+fn stress_formatting_already_formatted() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
 fn main() {
   let x = 1
   x + 1
 }
 ",
-        )
-        .await;
-    let edits = client.formatting(TEST_URI).await;
+    );
+    let edits = client.formatting(TEST_URI);
     assert!(edits.is_none() || matches!(&edits, Some(v) if v.is_empty()));
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_formatting_with_parse_errors() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "fn main() { let x = ; ; ; }").await;
-    let edits = client.formatting(TEST_URI).await;
+#[test]
+fn stress_formatting_with_parse_errors() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { let x = ; ; ; }");
+    let edits = client.formatting(TEST_URI);
     assert!(edits.is_none());
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_multiple_impl_blocks_all_positions() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_multiple_impl_blocks_all_positions() {
+    assert!(stress_test_all_positions(
+        "\
 struct Vec2 { x: float64, y: float64 }
 impl Vec2 {
   pub fn new(x: float64, y: float64) -> Vec2 { Vec2 { x: x, y: y } }
@@ -6738,16 +6065,13 @@ fn main() {
   let v2 = v.scale(2.0)
   v2.len()
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_generic_enum_with_methods() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_generic_enum_with_methods() {
+    assert!(stress_test_all_positions(
+        "\
 enum Tree<T> {
   Leaf(T),
   Node(Tree<T>, Tree<T>),
@@ -6764,16 +6088,13 @@ fn main() {
   let t = Tree.Leaf(42)
   t.is_leaf()
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_break_continue_in_loops() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_break_continue_in_loops() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let mut sum = 0
   for i in [1, 2, 3, 4, 5] {
@@ -6783,16 +6104,13 @@ fn main() {
   }
   sum
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_loop_with_conditional_break() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_loop_with_conditional_break() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let mut i = 0
   let result = loop {
@@ -6801,16 +6119,13 @@ fn main() {
   }
   result
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_binary_operators_all() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_binary_operators_all() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let a = 1 + 2
   let b = 3 - 1
@@ -6827,16 +6142,13 @@ fn main() {
   let m = 2 >= 1
   a + b + c + d + e
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_unary_operators() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_unary_operators() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let a = !true
   let b = !false
@@ -6844,55 +6156,47 @@ fn main() {
   let d = -3.14
   a
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_many_params_signature_help() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+#[test]
+fn stress_many_params_signature_help() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
 fn many(a: int, b: string, c: bool, d: float64, e: int) -> int { a }
 fn main() {
   many(1, \"hi\", true, 3.14, 5)
 }",
-        )
-        .await;
+    );
 
     for col in [7, 10, 16, 22, 28] {
-        let sig = client.signature_help(TEST_URI, 2, col).await;
+        let sig = client.signature_help(TEST_URI, 2, col);
         assert!(sig.is_some());
     }
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_goto_def_on_struct_field_in_pattern() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_goto_def_on_struct_field_in_pattern() {
+    assert!(stress_test_all_positions(
+        "\
 struct Pair { first: int, second: string }
 fn main() {
   let p = Pair { first: 1, second: \"hi\" }
   let Pair { first, second } = p
   first
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_hover_on_enum_variant_constructor() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_hover_on_enum_variant_constructor() {
+    assert!(stress_test_all_positions(
+        "\
 enum Expr {
   Num(int),
   Add(Expr, Expr),
@@ -6907,13 +6211,11 @@ fn main() {
   let e = Expr.Add(Expr.Num(1), Expr.Num(2))
   eval(e)
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_cross_module_hover_on_imported_function() {
+#[test]
+fn stress_cross_module_hover_on_imported_function() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("lisette.toml"), "").unwrap();
@@ -6940,16 +6242,14 @@ fn main() {
     )
     .unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let main_path = src.join("main.lis");
     let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
-    client.open(&main_uri, &main_content).await;
+    client.open(&main_uri, &main_content);
 
-    let hover = client
-        .hover(&main_uri, positions[1].0, positions[1].1)
-        .await;
+    let hover = client.hover(&main_uri, positions[1].0, positions[1].1);
     assert!(
         hover.is_some(),
         "hover on cross-module function should work"
@@ -6957,21 +6257,17 @@ fn main() {
     let content = hover_content(&hover.unwrap());
     assert!(content.contains("int"), "should show return type");
 
-    let completion = client
-        .completion(&main_uri, positions[0].0, positions[0].1)
-        .await;
+    let completion = client.completion(&main_uri, positions[0].0, positions[0].1);
     let _ = completion;
 
-    let refs = client
-        .references(&main_uri, positions[1].0, positions[1].1, true)
-        .await;
+    let refs = client.references(&main_uri, positions[1].0, positions[1].1, true);
     let _ = refs; // no crash
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_cross_module_completion_on_struct_methods() {
+#[test]
+fn stress_cross_module_completion_on_struct_methods() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("lisette.toml"), "").unwrap();
@@ -7002,36 +6298,30 @@ fn main() {
     );
     std::fs::write(src.join("main.lis"), &main_content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let main_path = src.join("main.lis");
     let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
-    client.open(&main_uri, &main_content).await;
+    client.open(&main_uri, &main_content);
 
-    let hover = client
-        .hover(&main_uri, positions[0].0, positions[0].1)
-        .await;
+    let hover = client.hover(&main_uri, positions[0].0, positions[0].1);
     assert!(
         hover.is_some(),
         "hover on struct instance should show Circle type"
     );
 
-    let def = client
-        .goto_definition(&main_uri, positions[1].0, positions[1].1)
-        .await;
+    let def = client.goto_definition(&main_uri, positions[1].0, positions[1].1);
     let _ = def; // just ensure no crash
 
-    let sig = client
-        .signature_help(&main_uri, positions[2].0, positions[2].1)
-        .await;
+    let sig = client.signature_help(&main_uri, positions[2].0, positions[2].1);
     let _ = sig; // no crash
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_cross_module_enum_variant_completion() {
+#[test]
+fn stress_cross_module_enum_variant_completion() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("lisette.toml"), "").unwrap();
@@ -7061,25 +6351,25 @@ fn main() {
 }";
     std::fs::write(src.join("main.lis"), main_content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let main_path = src.join("main.lis");
     let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
-    client.open(&main_uri, main_content).await;
+    client.open(&main_uri, main_content);
 
     for col in [0, 10, 20, 25] {
-        let _ = client.hover(&main_uri, 3, col).await;
-        let _ = client.completion(&main_uri, 3, col).await;
-        let _ = client.goto_definition(&main_uri, 3, col).await;
-        let _ = client.prepare_rename(&main_uri, 3, col).await;
+        let _ = client.hover(&main_uri, 3, col);
+        let _ = client.completion(&main_uri, 3, col);
+        let _ = client.goto_definition(&main_uri, 3, col);
+        let _ = client.prepare_rename(&main_uri, 3, col);
     }
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_cross_module_rename_local_binding() {
+#[test]
+fn stress_cross_module_rename_local_binding() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("lisette.toml"), "").unwrap();
@@ -7106,62 +6396,59 @@ fn main() {
     );
     std::fs::write(src.join("main.lis"), &main_content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let main_path = src.join("main.lis");
     let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
-    client.open(&main_uri, &main_content).await;
+    client.open(&main_uri, &main_content);
 
-    let edit = client.rename(&main_uri, line, character, "message").await;
+    let edit = client.rename(&main_uri, line, character, "message");
     assert!(edit.is_some(), "rename should produce workspace edit");
     let changes = edit.unwrap().changes.unwrap();
     let file_edits = changes.get(&Url::parse(&main_uri).unwrap()).unwrap();
     assert!(file_edits.len() >= 2, "should rename definition and usage");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_rename_empty_name() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "fn main() { let x = 1; x }").await;
+#[test]
+fn stress_rename_empty_name() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { let x = 1; x }");
 
-    let error = client.try_rename(TEST_URI, 0, 16, "").await.unwrap_err();
+    let error = client.try_rename(TEST_URI, 0, 16, "").unwrap_err();
     assert_eq!(error, "Identifier cannot be empty");
 
-    let hover = client.hover(TEST_URI, 0, 4).await;
+    let hover = client.hover(TEST_URI, 0, 4);
     assert!(hover.is_some());
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_rename_to_keyword() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "fn main() { let x = 1; x }").await;
+#[test]
+fn stress_rename_to_keyword() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { let x = 1; x }");
 
     for keyword in ["fn", "let", "match"] {
-        let error = client
-            .try_rename(TEST_URI, 0, 16, keyword)
-            .await
-            .unwrap_err();
+        let error = client.try_rename(TEST_URI, 0, 16, keyword).unwrap_err();
         assert_eq!(error, format!("'{keyword}' is a reserved keyword"));
     }
 
-    let hover = client.hover(TEST_URI, 0, 4).await;
+    let hover = client.hover(TEST_URI, 0, 4);
     assert!(hover.is_some());
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_rename_to_special_characters() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "fn main() { let x = 1; x }").await;
+#[test]
+fn stress_rename_to_special_characters() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { let x = 1; x }");
 
     for (name, expected) in [
         (
@@ -7185,25 +6472,23 @@ async fn stress_rename_to_special_characters() {
             "Identifier must start with a letter or underscore, not '@'",
         ),
     ] {
-        let error = client.try_rename(TEST_URI, 0, 16, name).await.unwrap_err();
+        let error = client.try_rename(TEST_URI, 0, 16, name).unwrap_err();
         assert_eq!(error, expected);
     }
 
-    let hover = client.hover(TEST_URI, 0, 4).await;
+    let hover = client.hover(TEST_URI, 0, 4);
     assert!(hover.is_some());
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_diagnostics_contain_error_code() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(TEST_URI, "fn main() { let x: int = \"hello\"; x }")
-        .await;
+#[test]
+fn stress_diagnostics_contain_error_code() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { let x: int = \"hello\"; x }");
 
-    let diags = client.await_diagnostics().await;
+    let diags = client.await_diagnostics();
     assert!(!diags.is_empty(), "should have type error diagnostics");
     assert!(
         diags
@@ -7218,80 +6503,72 @@ async fn stress_diagnostics_contain_error_code() {
         "source should be lisette"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_diagnostics_multiple_errors() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+#[test]
+fn stress_diagnostics_multiple_errors() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
 fn main() {
   let x: int = \"hello\"
   let y: string = 42
   x + y
 }",
-        )
-        .await;
+    );
 
-    let diags = client.await_diagnostics().await;
+    let diags = client.await_diagnostics();
     assert!(
         diags.len() >= 2,
         "should have multiple type errors, got {}",
         diags.len()
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_diagnostics_warning_lint() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+#[test]
+fn stress_diagnostics_warning_lint() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
 fn unused_function() -> int { 42 }
 fn main() { 1 }",
-        )
-        .await;
+    );
 
-    let diags = client.await_diagnostics().await;
+    let diags = client.await_diagnostics();
     // May have warning for unused function
     let _ = diags;
 
     // Server still alive
-    let hover = client.hover(TEST_URI, 1, 4).await;
+    let hover = client.hover(TEST_URI, 1, 4);
     assert!(hover.is_some());
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_go_import_all_handlers() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_go_import_all_handlers() {
+    assert!(stress_test_all_positions(
+        "\
 import \"go:strings\"
 
 fn main() {
   let s = strings.Contains(\"hello world\", \"world\")
   s
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_go_import_multiple_packages() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_go_import_multiple_packages() {
+    assert!(stress_test_all_positions(
+        "\
 import \"go:fmt\"
 import \"go:strings\"
 
@@ -7299,15 +6576,13 @@ fn main() {
   let s = strings.HasPrefix(\"hello\", \"he\")
   fmt.Println(s)
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_go_import_completion_after_dot() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_go_import_completion_after_dot() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor(
         "\
 import \"go:strings\"
@@ -7316,66 +6591,62 @@ fn main() {
   strings.~
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let completion = client.completion(TEST_URI, line, character).await;
+    let completion = client.completion(TEST_URI, line, character);
     let _ = completion; // should return completions from Go strings package, not crash
 
     for col in 0..11 {
-        let _ = client.hover(TEST_URI, 3, col).await;
-        let _ = client.goto_definition(TEST_URI, 3, col).await;
-        let _ = client.prepare_rename(TEST_URI, 3, col).await;
+        let _ = client.hover(TEST_URI, 3, col);
+        let _ = client.goto_definition(TEST_URI, 3, col);
+        let _ = client.prepare_rename(TEST_URI, 3, col);
     }
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_multiple_files_open() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_multiple_files_open() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let uri1 = "file:///test1.lis";
     let uri2 = "file:///test2.lis";
     let uri3 = "file:///test3.lis";
 
-    client
-        .open(uri1, "fn add(a: int, b: int) -> int { a + b }")
-        .await;
-    client
-        .open(uri2, "fn greet(name: string) -> string { name }")
-        .await;
-    client.open(uri3, "fn main() { 42 }").await;
+    client.open(uri1, "fn add(a: int, b: int) -> int { a + b }");
+    client.open(uri2, "fn greet(name: string) -> string { name }");
+    client.open(uri3, "fn main() { 42 }");
 
-    let h1 = client.hover(uri1, 0, 3).await;
-    let h2 = client.hover(uri2, 0, 3).await;
-    let h3 = client.hover(uri3, 0, 3).await;
+    let h1 = client.hover(uri1, 0, 3);
+    let h2 = client.hover(uri2, 0, 3);
+    let h3 = client.hover(uri3, 0, 3);
     assert!(h1.is_some());
     assert!(h2.is_some());
     assert!(h3.is_some());
 
-    let c1 = client.completion(uri1, 0, 0).await;
-    let c2 = client.completion(uri2, 0, 0).await;
+    let c1 = client.completion(uri1, 0, 0);
+    let c2 = client.completion(uri2, 0, 0);
     assert!(c1.is_some());
     assert!(c2.is_some());
 
-    client.change(uri2, "fn greet() -> int { 1 }", 2).await;
-    let h1_after = client.hover(uri1, 0, 3).await;
+    client.change(uri2, "fn greet() -> int { 1 }", 2);
+    let h1_after = client.hover(uri1, 0, 3);
     assert!(
         h1_after.is_some(),
         "other file should still work after change"
     );
 
-    let h2_after = client.hover(uri2, 0, 3).await;
+    let h2_after = client.hover(uri2, 0, 3);
     assert!(h2_after.is_some(), "changed file should still work");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_goto_def_on_type_annotation() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_goto_def_on_type_annotation() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor(
         "\
 struct Point { x: int, y: int }
@@ -7385,42 +6656,42 @@ fn main() {
   distance(p)
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let def = client.goto_definition(TEST_URI, line, character).await;
+    let def = client.goto_definition(TEST_URI, line, character);
     assert!(
         def.is_some(),
         "should resolve type annotation to struct definition"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_goto_def_on_return_type_annotation() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_goto_def_on_return_type_annotation() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor(
         "\
 struct Result2 { value: int }
 fn make() -> Re~sult2 { Result2 { value: 1 } }
 fn main() { make() }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let def = client.goto_definition(TEST_URI, line, character).await;
+    let def = client.goto_definition(TEST_URI, line, character);
     assert!(
         def.is_some(),
         "should resolve return type annotation to struct definition"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_completion_on_self_in_impl_with_fields() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_completion_on_self_in_impl_with_fields() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor(
         "\
 struct Player { name: string, score: int }
@@ -7430,9 +6701,9 @@ impl Player {
   }
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let completion = client.completion(TEST_URI, line, character).await;
+    let completion = client.completion(TEST_URI, line, character);
     assert!(completion.is_some());
     let labels = completion_labels(&completion.unwrap());
     assert!(
@@ -7446,13 +6717,13 @@ impl Player {
         labels
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_completion_chained_dot() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_completion_chained_dot() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor(
         "\
 struct Wrapper { inner: Inner }
@@ -7462,22 +6733,21 @@ fn main() {
   w.inner.~
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let completion = client.completion(TEST_URI, line, character).await;
+    let completion = client.completion(TEST_URI, line, character);
     let _ = completion; // should provide completions for Inner type (field: value), no crash
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_document_symbols_all_kinds() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+#[test]
+fn stress_document_symbols_all_kinds() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
 struct MyStruct { x: int }
 enum MyEnum { A, B }
 interface MyInterface { fn method() -> int }
@@ -7486,10 +6756,9 @@ const MY_CONST: int = 42
 var my_var: int
 fn my_function() -> int { 1 }
 fn main() { 1 }",
-        )
-        .await;
+    );
 
-    let symbols = client.document_symbol(TEST_URI).await;
+    let symbols = client.document_symbol(TEST_URI);
     assert!(symbols.is_some());
     let names = symbol_names(&symbols.unwrap());
     assert!(names.contains(&"MyStruct".to_string()));
@@ -7501,13 +6770,13 @@ fn main() { 1 }",
     assert!(names.contains(&"my_function".to_string()));
     assert!(names.contains(&"main".to_string()));
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_signature_help_on_method_with_self() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_signature_help_on_method_with_self() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor(
         "\
 struct Counter { count: int }
@@ -7521,9 +6790,9 @@ fn main() {
   c.increment(5~)
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let sig = client.signature_help(TEST_URI, line, character).await;
+    let sig = client.signature_help(TEST_URI, line, character);
     assert!(sig.is_some());
     let sig = sig.unwrap();
     let label = &sig.signatures[0].label;
@@ -7533,147 +6802,136 @@ fn main() {
         label
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_signature_help_generic_function() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+#[test]
+fn stress_signature_help_generic_function() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
 fn identity<T>(x: T) -> T { x }
 fn main() {
   identity(42)
 }",
-        )
-        .await;
+    );
 
-    let sig = client.signature_help(TEST_URI, 2, 11).await;
+    let sig = client.signature_help(TEST_URI, 2, 11);
     assert!(sig.is_some());
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_alternating_valid_invalid_changes() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_alternating_valid_invalid_changes() {
+    let mut client = TestClient::new();
+    client.initialize();
 
-    client.open(TEST_URI, "fn main() { 42 }").await;
-    let h1 = client.hover(TEST_URI, 0, 4).await;
+    client.open(TEST_URI, "fn main() { 42 }");
+    let h1 = client.hover(TEST_URI, 0, 4);
     assert!(h1.is_some());
 
-    client
-        .change(TEST_URI, "fn main() { let x: int = \"bad\"", 2)
-        .await;
-    let _ = client.hover(TEST_URI, 0, 4).await;
-    let _ = client.completion(TEST_URI, 0, 0).await;
+    client.change(TEST_URI, "fn main() { let x: int = \"bad\"", 2);
+    let _ = client.hover(TEST_URI, 0, 4);
+    let _ = client.completion(TEST_URI, 0, 0);
 
-    client
-        .change(TEST_URI, "fn main() { let x = 42; x }", 3)
-        .await;
-    let h3 = client.hover(TEST_URI, 0, 4).await;
+    client.change(TEST_URI, "fn main() { let x = 42; x }", 3);
+    let h3 = client.hover(TEST_URI, 0, 4);
     assert!(h3.is_some());
 
-    client.change(TEST_URI, "}{}{}{", 4).await;
-    let _ = client.hover(TEST_URI, 0, 0).await;
-    let _ = client.completion(TEST_URI, 0, 0).await;
+    client.change(TEST_URI, "}{}{}{", 4);
+    let _ = client.hover(TEST_URI, 0, 0);
+    let _ = client.completion(TEST_URI, 0, 0);
 
-    client.change(TEST_URI, "fn main() { 1 }", 5).await;
-    let h5 = client.hover(TEST_URI, 0, 4).await;
+    client.change(TEST_URI, "fn main() { 1 }", 5);
+    let h5 = client.hover(TEST_URI, 0, 4);
     assert!(h5.is_some(), "server should recover from broken state");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_rapid_completion_requests() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+#[test]
+fn stress_rapid_completion_requests() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
 struct Foo { a: int, b: string, c: bool }
 fn main() {
   let f = Foo { a: 1, b: \"hi\", c: true }
   f.
 }",
-        )
-        .await;
+    );
 
     for _ in 0..10 {
-        let _ = client.completion(TEST_URI, 3, 4).await;
+        let _ = client.completion(TEST_URI, 3, 4);
     }
 
-    client
-        .change(
-            TEST_URI,
-            "\
+    client.change(
+        TEST_URI,
+        "\
 struct Foo { a: int, b: string, c: bool }
 fn main() {
   let f = Foo { a: 1, b: \"hi\", c: true }
   f.a
 }",
-            2,
-        )
-        .await;
-    let hover = client.hover(TEST_URI, 1, 3).await;
+        2,
+    );
+    let hover = client.hover(TEST_URI, 1, 3);
     assert!(
         hover.is_some(),
         "hover should recover after fixing broken code"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_hover_at_every_byte_boundary() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_hover_at_every_byte_boundary() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "fn f(x: int) -> int { x + 1 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
     for col in 0..source.len() as u32 {
-        let _ = client.hover(TEST_URI, 0, col).await;
-        let _ = client.goto_definition(TEST_URI, 0, col).await;
+        let _ = client.hover(TEST_URI, 0, col);
+        let _ = client.goto_definition(TEST_URI, 0, col);
     }
 
-    let _ = client.hover(TEST_URI, 0, source.len() as u32 + 10).await;
-    let _ = client.hover(TEST_URI, 100, 0).await;
+    let _ = client.hover(TEST_URI, 0, source.len() as u32 + 10);
+    let _ = client.hover(TEST_URI, 100, 0);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_all_handlers_past_end_of_source() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "fn main() { 1 }").await;
+#[test]
+fn stress_all_handlers_past_end_of_source() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { 1 }");
 
-    let _ = client.hover(TEST_URI, 999, 999).await;
-    let _ = client.completion(TEST_URI, 999, 999).await;
-    let _ = client.goto_definition(TEST_URI, 999, 999).await;
-    let _ = client.references(TEST_URI, 999, 999, true).await;
-    let _ = client.signature_help(TEST_URI, 999, 999).await;
-    let _ = client.prepare_rename(TEST_URI, 999, 999).await;
-    let _ = client.rename(TEST_URI, 999, 999, "foo").await;
-    let _ = client.inlay_hint(TEST_URI, (999, 999), (1000, 0)).await;
+    let _ = client.hover(TEST_URI, 999, 999);
+    let _ = client.completion(TEST_URI, 999, 999);
+    let _ = client.goto_definition(TEST_URI, 999, 999);
+    let _ = client.references(TEST_URI, 999, 999, true);
+    let _ = client.signature_help(TEST_URI, 999, 999);
+    let _ = client.prepare_rename(TEST_URI, 999, 999);
+    let _ = client.rename(TEST_URI, 999, 999, "foo");
+    let _ = client.inlay_hint(TEST_URI, (999, 999), (1000, 0));
 
-    let hover = client.hover(TEST_URI, 0, 4).await;
+    let hover = client.hover(TEST_URI, 0, 4);
     assert!(hover.is_some());
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_while_let_with_option_chain() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_while_let_with_option_chain() {
+    assert!(stress_test_all_positions(
+        "\
 fn next_val(n: int) -> Option<int> {
   if n > 0 { Some(n - 1) } else { None }
 }
@@ -7683,16 +6941,13 @@ fn main() {
     current = next_val(val)
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_if_let_chain_all_positions() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_if_let_chain_all_positions() {
+    assert!(stress_test_all_positions(
+        "\
 fn main() {
   let a: Option<int> = Some(1)
   let b: Option<int> = Some(2)
@@ -7702,16 +6957,13 @@ fn main() {
     } else { 0 }
   } else { 0 }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_nested_match_with_guards_all_positions() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_nested_match_with_guards_all_positions() {
+    assert!(stress_test_all_positions(
+        "\
 enum Shape {
   Circle(float64),
   Rect(float64, float64),
@@ -7724,15 +6976,13 @@ fn describe(s: Shape) -> string {
     Shape.Rect(_, _) => \"rectangle\",
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_enum_match_all_handlers() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_enum_match_all_handlers() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, positions) = cursors(
         "\
 enum D~irection {
@@ -7751,32 +7001,29 @@ fn main() {
   }
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let hover = client.hover(TEST_URI, positions[1].0, positions[1].1).await;
+    let hover = client.hover(TEST_URI, positions[1].0, positions[1].1);
     let _ = hover;
 
     // No completion assertion, just checks the handler does not crash.
-    let _ = client.completion(TEST_URI, 7, 19).await;
+    let _ = client.completion(TEST_URI, 7, 19);
 
-    let rename = client
-        .prepare_rename(TEST_URI, positions[0].0, positions[0].1)
-        .await;
+    let rename = client.prepare_rename(TEST_URI, positions[0].0, positions[0].1);
     assert!(rename.is_some());
 
-    let symbols = client.document_symbol(TEST_URI).await;
+    let symbols = client.document_symbol(TEST_URI);
     assert!(symbols.is_some());
     let names = symbol_names(&symbols.unwrap());
     assert!(names.contains(&"Direction".to_string()));
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_interface_generic_impl_all_positions() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_interface_generic_impl_all_positions() {
+    assert!(stress_test_all_positions(
+        "\
 interface Printable {
   fn to_string() -> string
 }
@@ -7791,16 +7038,13 @@ fn main() {
   let n = Name { value: \"Alice\" }
   print_it(n)
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_nested_struct_destructuring() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_nested_struct_destructuring() {
+    assert!(stress_test_all_positions(
+        "\
 struct Inner { value: int }
 struct Outer { inner: Inner, name: string }
 fn main() {
@@ -7808,16 +7052,13 @@ fn main() {
   let Outer { inner: Inner { value }, name } = o
   value + len(name)
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_try_recover_with_match() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_try_recover_with_match() {
+    assert!(stress_test_all_positions(
+        "\
 fn might_fail(n: int) -> Result<int, string> {
   if n > 0 { Ok(n) } else { Err(\"negative\") }
 }
@@ -7832,16 +7073,13 @@ fn main() -> Result<int, string> {
     Err(e) => Err(e),
   }
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_generic_option_map_slice() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_generic_option_map_slice() {
+    assert!(stress_test_all_positions(
+        "\
 fn first<T>(items: Slice<T>) -> Option<T> {
   if len(items) > 0 { Some(items[0]) } else { None }
 }
@@ -7850,13 +7088,11 @@ fn main() {
   let result: Option<int> = first(nums)
   result
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_cross_module_import_alias() {
+#[test]
+fn stress_cross_module_import_alias() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("lisette.toml"), "").unwrap();
@@ -7882,36 +7118,29 @@ fn main() {
     );
     std::fs::write(src.join("main.lis"), &main_content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let main_path = src.join("main.lis");
     let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
-    client.open(&main_uri, &main_content).await;
+    client.open(&main_uri, &main_content);
 
-    let hover = client
-        .hover(&main_uri, positions[1].0, positions[1].1)
-        .await;
+    let hover = client.hover(&main_uri, positions[1].0, positions[1].1);
     let _ = hover;
 
-    let completion = client
-        .completion(&main_uri, positions[0].0, positions[0].1)
-        .await;
+    let completion = client.completion(&main_uri, positions[0].0, positions[0].1);
     let _ = completion;
 
-    let def = client
-        .goto_definition(&main_uri, positions[1].0, positions[1].1)
-        .await;
+    let def = client.goto_definition(&main_uri, positions[1].0, positions[1].1);
     let _ = def;
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_const_var_all_handlers() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_const_var_all_handlers() {
+    assert!(stress_test_all_positions(
+        "\
 const MAX: int = 100
 const MIN: int = 0
 var counter: int = 0
@@ -7920,38 +7149,34 @@ fn main() {
   counter = counter + 1
   range + counter
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_formatting_complex_match() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+#[test]
+fn stress_formatting_complex_match() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
 enum Tree { Leaf(int), Node(Tree,Tree) }
 fn sum(t:Tree)->int{match t{Tree.Leaf(n)=>n,Tree.Node(l,r)=>sum(l)+sum(r)}}
 fn main(){sum(Tree.Node(Tree.Leaf(1),Tree.Leaf(2)))}",
-        )
-        .await;
+    );
 
-    let edits = client.formatting(TEST_URI).await;
+    let edits = client.formatting(TEST_URI);
     assert!(
         edits.is_some(),
         "formatter should produce edits for compressed code"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_hover_on_all_literal_types() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_hover_on_all_literal_types() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, positions) = cursors(
         "\
 fn main() {
@@ -7965,13 +7190,13 @@ fn main() {
   a
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
     for (pos, expected) in positions
         .iter()
         .zip(["int", "float64", "bool", "string", "rune"])
     {
-        let hover = client.hover(TEST_URI, pos.0, pos.1).await;
+        let hover = client.hover(TEST_URI, pos.0, pos.1);
         assert!(hover.is_some(), "hover on line {} should work", pos.0);
         let content = hover_content(&hover.unwrap());
         assert!(
@@ -7983,70 +7208,66 @@ fn main() {
         );
     }
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_falls_back_to_last_valid_snapshot() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn hover_falls_back_to_last_valid_snapshot() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     // Start with valid code: this populates last_valid_snapshot.
-    client.open(TEST_URI, "fn main() { let x = 42; x }").await;
-    let hover = client.hover(TEST_URI, 0, 3).await;
+    client.open(TEST_URI, "fn main() { let x = 42; x }");
+    let hover = client.hover(TEST_URI, 0, 3);
     assert!(hover.is_some(), "hover should work on valid code");
 
     // Break the code with a lex error: run_analysis returns Err.
-    client
-        .change(TEST_URI, "fn main() { let x = 42; x.", 2)
-        .await;
+    client.change(TEST_URI, "fn main() { let x = 42; x.", 2);
 
-    let hover = client.hover(TEST_URI, 0, 3).await;
+    let hover = client.hover(TEST_URI, 0, 3);
     assert!(
         hover.is_some(),
         "hover should fall back to last valid snapshot during parse errors"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
 /// Tests that completion after a dot following a multi-byte character
 /// does not panic in get_module_prefix (rfind + 1 byte offset issue).
-#[tokio::test]
-async fn stress_completion_after_multibyte_identifier() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_completion_after_multibyte_identifier() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     // CJK character (3 bytes each in UTF-8) used as separator before an identifier
     // This tests that `get_module_prefix` handles multi-byte chars correctly
     // when doing `rfind(|c| ...).map(|i| i + 1)`: i+1 could be mid-char
-    client
-        .open(
-            TEST_URI,
-            "\
+    client.open(
+        TEST_URI,
+        "\
 struct S { value: int }
 fn main() {
   let s = S { value: 1 }
   s.value
 }",
-        )
-        .await;
+    );
 
     for col in 0..10 {
-        let _ = client.hover(TEST_URI, 3, col).await;
-        let _ = client.completion(TEST_URI, 3, col).await;
-        let _ = client.goto_definition(TEST_URI, 3, col).await;
+        let _ = client.hover(TEST_URI, 3, col);
+        let _ = client.completion(TEST_URI, 3, col);
+        let _ = client.goto_definition(TEST_URI, 3, col);
     }
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
 /// Specifically test that completion does not panic when a multi-byte
 /// character appears right before an identifier followed by a dot.
-#[tokio::test]
-async fn stress_completion_multibyte_before_dot() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_completion_multibyte_before_dot() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     // `let x = 1; 名.`: multi-byte char right before dot
     // The get_module_prefix rfind will find the multi-byte char as the non-ident boundary,
@@ -8054,60 +7275,54 @@ async fn stress_completion_multibyte_before_dot() {
     // However, Lisette identifiers can only be ASCII, so this should not happen in practice
     // because the lexer would not produce a multi-byte identifier. But the LSP should
     // handle it gracefully without panic.
-    client
-        .open(TEST_URI, "fn main() {\n  let x = 1\n  x\n}")
-        .await;
+    client.open(TEST_URI, "fn main() {\n  let x = 1\n  x\n}");
 
     for line in 0..4 {
         for col in 0..20 {
-            let _ = client.hover(TEST_URI, line, col).await;
-            let _ = client.completion(TEST_URI, line, col).await;
+            let _ = client.hover(TEST_URI, line, col);
+            let _ = client.completion(TEST_URI, line, col);
         }
     }
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_completion_dot_after_emoji_string() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_completion_dot_after_emoji_string() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     // String containing emoji (4-byte UTF-8) followed by code
-    client
-        .open(
-            TEST_URI,
-            "\
+    client.open(
+        TEST_URI,
+        "\
 struct S { x: int }
 fn main() {
   let s = \"🎉\"
   let obj = S { x: 1 }
   obj.x
 }",
-        )
-        .await;
+    );
 
     for col in 0..8 {
-        let _ = client.hover(TEST_URI, 4, col).await;
-        let _ = client.completion(TEST_URI, 4, col).await;
+        let _ = client.hover(TEST_URI, 4, col);
+        let _ = client.completion(TEST_URI, 4, col);
     }
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_snapshot_cache_invalidation() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_snapshot_cache_invalidation() {
+    let mut client = TestClient::new();
+    client.initialize();
 
-    client.open(TEST_URI, "fn main() { 42 }").await;
-    let h1 = client.hover(TEST_URI, 0, 4).await;
+    client.open(TEST_URI, "fn main() { 42 }");
+    let h1 = client.hover(TEST_URI, 0, 4);
     assert!(h1.is_some());
 
-    client
-        .change(TEST_URI, "fn greet() -> string { \"hi\" }", 2)
-        .await;
-    let h2 = client.hover(TEST_URI, 0, 4).await;
+    client.change(TEST_URI, "fn greet() -> string { \"hi\" }", 2);
+    let h2 = client.hover(TEST_URI, 0, 4);
     assert!(h2.is_some());
     let content = hover_content(&h2.unwrap());
     assert!(
@@ -8116,8 +7331,8 @@ async fn stress_snapshot_cache_invalidation() {
         content
     );
 
-    client.change(TEST_URI, "fn main() -> int { 42 }", 3).await;
-    let h3 = client.hover(TEST_URI, 0, 4).await;
+    client.change(TEST_URI, "fn main() -> int { 42 }", 3);
+    let h3 = client.hover(TEST_URI, 0, 4);
     assert!(h3.is_some());
     let content = hover_content(&h3.unwrap());
     assert!(
@@ -8126,53 +7341,51 @@ async fn stress_snapshot_cache_invalidation() {
         content
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_rename_struct_with_usages() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_rename_struct_with_usages() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor(
         "\
 struct F~oo { x: int }
 fn make() -> Foo { Foo { x: 1 } }
 fn main() { let f: Foo = make(); f }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let prep = client.prepare_rename(TEST_URI, line, character).await;
+    let prep = client.prepare_rename(TEST_URI, line, character);
     assert!(prep.is_some());
 
     // Rename currently only renames the definition itself, not type annotation
     // usages. This is a known limitation of the usage tracking system.
-    let edit = client.rename(TEST_URI, line, character, "Bar").await;
+    let edit = client.rename(TEST_URI, line, character, "Bar");
     assert!(edit.is_some());
     let changes = edit.unwrap().changes.unwrap();
     let edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
     assert!(!edits.is_empty(), "should rename at least the definition");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_rename_function_with_usages() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+#[test]
+fn stress_rename_function_with_usages() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
 fn helper() -> int { 42 }
 fn main() {
   let a = helper()
   let b = helper()
   a + b
 }",
-        )
-        .await;
+    );
 
-    let edit = client.rename(TEST_URI, 0, 4, "compute").await;
+    let edit = client.rename(TEST_URI, 0, 4, "compute");
     assert!(edit.is_some());
     let changes = edit.unwrap().changes.unwrap();
     let edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
@@ -8182,14 +7395,13 @@ fn main() {
         edits.len()
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_hover_on_if_match_block_values() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_hover_on_if_match_block_values() {
+    assert!(stress_test_all_positions(
+        "\
 fn classify(n: int) -> string {
   let label = if n > 100 {
     \"big\"
@@ -8205,49 +7417,41 @@ fn classify(n: int) -> string {
   }
   result
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_open_change_query_close_cycle() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_open_change_query_close_cycle() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let uri1 = "file:///cycle1.lis";
     let uri2 = "file:///cycle2.lis";
 
     for i in 0..5i32 {
-        client
-            .open(uri1, &format!("fn f{i}() -> int {{ {i} }}"))
-            .await;
-        client
-            .open(uri2, &format!("fn g{i}() -> string {{ \"v{i}\" }}"))
-            .await;
+        client.open(uri1, &format!("fn f{i}() -> int {{ {i} }}"));
+        client.open(uri2, &format!("fn g{i}() -> string {{ \"v{i}\" }}"));
 
-        let _ = client.hover(uri1, 0, 3).await;
-        let _ = client.completion(uri2, 0, 0).await;
+        let _ = client.hover(uri1, 0, 3);
+        let _ = client.completion(uri2, 0, 0);
 
-        client
-            .change(
-                uri1,
-                &format!("fn f{i}(x: int) -> int {{ x + {i} }}"),
-                i + 2,
-            )
-            .await;
+        client.change(
+            uri1,
+            &format!("fn f{i}(x: int) -> int {{ x + {i} }}"),
+            i + 2,
+        );
 
-        let _ = client.hover(uri1, 0, 3).await;
-        let _ = client.document_symbol(uri2).await;
+        let _ = client.hover(uri1, 0, 3);
+        let _ = client.document_symbol(uri2);
     }
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_large_struct_completion() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_large_struct_completion() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let mut fields = String::new();
     for i in 0..20 {
@@ -8269,25 +7473,25 @@ fn main() {{
             .join(", ")
     );
 
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
     // Completion after `b.` should include all 20 fields
     let lines: Vec<&str> = source.lines().collect();
     let dot_line = lines.len() as u32 - 2; // `  b.field_0` line
-    let _ = client.completion(TEST_URI, dot_line, 4).await;
+    let _ = client.completion(TEST_URI, dot_line, 4);
 
     for col in [0, 5, 10, 20, 30, 40, 50] {
-        let _ = client.hover(TEST_URI, 0, col).await;
-        let _ = client.goto_definition(TEST_URI, 0, col).await;
+        let _ = client.hover(TEST_URI, 0, col);
+        let _ = client.goto_definition(TEST_URI, 0, col);
     }
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_incremental_method_chain_typing() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_incremental_method_chain_typing() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let stages = [
         "struct S { x: int }\nfn main() {\n  let s = S { x: 1 }\n  s\n}",
@@ -8295,25 +7499,25 @@ async fn stress_incremental_method_chain_typing() {
         "struct S { x: int }\nfn main() {\n  let s = S { x: 1 }\n  s.x\n}",
     ];
 
-    client.open(TEST_URI, stages[0]).await;
+    client.open(TEST_URI, stages[0]);
 
     for (i, stage) in stages[1..].iter().enumerate() {
-        client.change(TEST_URI, stage, (i + 2) as i32).await;
-        let _ = client.hover(TEST_URI, 3, 3).await;
-        let _ = client.completion(TEST_URI, 3, 3).await;
-        let _ = client.goto_definition(TEST_URI, 3, 3).await;
+        client.change(TEST_URI, stage, (i + 2) as i32);
+        let _ = client.hover(TEST_URI, 3, 3);
+        let _ = client.completion(TEST_URI, 3, 3);
+        let _ = client.goto_definition(TEST_URI, 3, 3);
     }
 
-    let hover = client.hover(TEST_URI, 3, 4).await;
+    let hover = client.hover(TEST_URI, 3, 4);
     assert!(hover.is_some(), "final state should have working hover");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_incremental_function_typing() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_incremental_function_typing() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let stages = [
         "fn",
@@ -8326,23 +7530,23 @@ async fn stress_incremental_function_typing() {
         "fn main() { 42 }",
     ];
 
-    client.open(TEST_URI, stages[0]).await;
+    client.open(TEST_URI, stages[0]);
     for (i, stage) in stages[1..].iter().enumerate() {
-        client.change(TEST_URI, stage, (i + 2) as i32).await;
-        let _ = client.hover(TEST_URI, 0, 0).await;
-        let _ = client.completion(TEST_URI, 0, 0).await;
+        client.change(TEST_URI, stage, (i + 2) as i32);
+        let _ = client.hover(TEST_URI, 0, 0);
+        let _ = client.completion(TEST_URI, 0, 0);
     }
 
-    let hover = client.hover(TEST_URI, 0, 4).await;
+    let hover = client.hover(TEST_URI, 0, 4);
     assert!(hover.is_some());
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_hover_on_self_in_impl() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_hover_on_self_in_impl() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, positions) = cursors(
         "\
 struct Point { x: int, y: int }
@@ -8357,27 +7561,19 @@ fn main() {
   p.~shift(~1)
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let _ = client.hover(TEST_URI, positions[1].0, positions[1].1).await;
+    let _ = client.hover(TEST_URI, positions[1].0, positions[1].1);
 
-    let _ = client.hover(TEST_URI, positions[0].0, positions[0].1).await;
+    let _ = client.hover(TEST_URI, positions[0].0, positions[0].1);
 
-    let _ = client
-        .completion(TEST_URI, positions[2].0, positions[2].1)
-        .await;
+    let _ = client.completion(TEST_URI, positions[2].0, positions[2].1);
 
-    let _ = client
-        .goto_definition(TEST_URI, positions[3].0, positions[3].1)
-        .await;
+    let _ = client.goto_definition(TEST_URI, positions[3].0, positions[3].1);
 
-    let _ = client
-        .goto_definition(TEST_URI, positions[4].0, positions[4].1)
-        .await;
+    let _ = client.goto_definition(TEST_URI, positions[4].0, positions[4].1);
 
-    let sig = client
-        .signature_help(TEST_URI, positions[5].0, positions[5].1)
-        .await;
+    let sig = client.signature_help(TEST_URI, positions[5].0, positions[5].1);
     assert!(sig.is_some(), "signature help should return a result");
     let label = &sig.unwrap().signatures[0].label;
     assert!(
@@ -8386,13 +7582,13 @@ fn main() {
         label
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_completion_in_match_pattern() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_completion_in_match_pattern() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor(
         "\
 enum Shape {
@@ -8406,21 +7602,21 @@ fn main() {
   }
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let _ = client.completion(TEST_URI, line, character).await;
+    let _ = client.completion(TEST_URI, line, character);
 
     for col in 0..12 {
-        let _ = client.hover(TEST_URI, 7, col).await;
-        let _ = client.goto_definition(TEST_URI, 7, col).await;
-        let _ = client.prepare_rename(TEST_URI, 7, col).await;
+        let _ = client.hover(TEST_URI, 7, col);
+        let _ = client.goto_definition(TEST_URI, 7, col);
+        let _ = client.prepare_rename(TEST_URI, 7, col);
     }
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_cross_module_enum_variant_goto_def() {
+#[test]
+fn stress_cross_module_enum_variant_goto_def() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("lisette.toml"), "").unwrap();
@@ -8459,38 +7655,30 @@ fn main() {
     );
     std::fs::write(src.join("main.lis"), &main_content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let main_path = src.join("main.lis");
     let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
-    client.open(&main_uri, &main_content).await;
+    client.open(&main_uri, &main_content);
 
-    let _ = client
-        .goto_definition(&main_uri, positions[0].0, positions[0].1)
-        .await;
+    let _ = client.goto_definition(&main_uri, positions[0].0, positions[0].1);
 
-    let _ = client
-        .goto_definition(&main_uri, positions[1].0, positions[1].1)
-        .await;
+    let _ = client.goto_definition(&main_uri, positions[1].0, positions[1].1);
 
-    let _ = client
-        .goto_definition(&main_uri, positions[2].0, positions[2].1)
-        .await;
+    let _ = client.goto_definition(&main_uri, positions[2].0, positions[2].1);
 
     for col in [10, 14, 16, 20, 22, 24] {
-        let _ = client.hover(&main_uri, 3, col).await;
+        let _ = client.hover(&main_uri, 3, col);
     }
 
-    let _ = client
-        .signature_help(&main_uri, positions[3].0, positions[3].1)
-        .await;
+    let _ = client.signature_help(&main_uri, positions[3].0, positions[3].1);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_const_pattern_resolves_exact_module() {
+#[test]
+fn goto_definition_const_pattern_resolves_exact_module() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("lisette.toml"), "").unwrap();
@@ -8530,14 +7718,14 @@ fn classify(d: b.Workday) -> int {
 }";
     std::fs::write(src.join("main.lis"), main_content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let main_path = src.join("main.lis");
     let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
-    client.open(&main_uri, main_content).await;
+    client.open(&main_uri, main_content);
 
-    let response = client.goto_definition(&main_uri, 5, 8).await;
+    let response = client.goto_definition(&main_uri, 5, 8);
     let loc = response.as_ref().and_then(definition_location);
     assert!(
         loc.is_some(),
@@ -8548,13 +7736,13 @@ fn classify(d: b.Workday) -> int {
         "const pattern must resolve to the matched module, not a same-named const elsewhere"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_references_on_struct_field() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_references_on_struct_field() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, positions) = cursors(
         "\
 struct Config { wi~dth: int, height: int }
@@ -8566,31 +7754,23 @@ fn main() {
   area(c)
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let _ = client
-        .references(TEST_URI, positions[0].0, positions[0].1, true)
-        .await;
+    let _ = client.references(TEST_URI, positions[0].0, positions[0].1, true);
 
-    let _ = client
-        .references(TEST_URI, positions[2].0, positions[2].1, true)
-        .await;
+    let _ = client.references(TEST_URI, positions[2].0, positions[2].1, true);
 
-    let _ = client
-        .references(TEST_URI, positions[1].0, positions[1].1, true)
-        .await;
+    let _ = client.references(TEST_URI, positions[1].0, positions[1].1, true);
 
-    let _ = client
-        .goto_definition(TEST_URI, positions[1].0, positions[1].1)
-        .await;
+    let _ = client.goto_definition(TEST_URI, positions[1].0, positions[1].1);
 
-    let _ = client.hover(TEST_URI, positions[1].0, positions[1].1).await;
+    let _ = client.hover(TEST_URI, positions[1].0, positions[1].1);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_handlers_on_import_statement() {
+#[test]
+fn stress_handlers_on_import_statement() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("lisette.toml"), "").unwrap();
@@ -8614,27 +7794,27 @@ fn main() {
 }";
     std::fs::write(src.join("main.lis"), main_content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let main_path = src.join("main.lis");
     let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
-    client.open(&main_uri, main_content).await;
+    client.open(&main_uri, main_content);
 
     for col in 0..16 {
-        let _ = client.hover(&main_uri, 0, col).await;
-        let _ = client.goto_definition(&main_uri, 0, col).await;
-        let _ = client.completion(&main_uri, 0, col).await;
-        let _ = client.prepare_rename(&main_uri, 0, col).await;
+        let _ = client.hover(&main_uri, 0, col);
+        let _ = client.goto_definition(&main_uri, 0, col);
+        let _ = client.completion(&main_uri, 0, col);
+        let _ = client.prepare_rename(&main_uri, 0, col);
     }
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_hover_on_for_loop_components() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_hover_on_for_loop_components() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, positions) = cursors(
         "\
 fn main() {
@@ -8644,9 +7824,9 @@ fn main() {
   }
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let hover = client.hover(TEST_URI, positions[0].0, positions[0].1).await;
+    let hover = client.hover(TEST_URI, positions[0].0, positions[0].1);
     assert!(hover.is_some());
     let content = hover_content(&hover.unwrap());
     assert!(
@@ -8655,10 +7835,10 @@ fn main() {
         content
     );
 
-    let hover = client.hover(TEST_URI, positions[1].0, positions[1].1).await;
+    let hover = client.hover(TEST_URI, positions[1].0, positions[1].1);
     assert!(hover.is_some());
 
-    let hover = client.hover(TEST_URI, positions[2].0, positions[2].1).await;
+    let hover = client.hover(TEST_URI, positions[2].0, positions[2].1);
     assert!(hover.is_some());
     let content = hover_content(&hover.unwrap());
     assert!(
@@ -8667,50 +7847,46 @@ fn main() {
         content
     );
 
-    let def = client
-        .goto_definition(TEST_URI, positions[2].0, positions[2].1)
-        .await;
+    let def = client.goto_definition(TEST_URI, positions[2].0, positions[2].1);
     assert!(
         def.is_some(),
         "goto def on item in loop body should resolve to the for binding"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_pipeline_completion() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+#[test]
+fn stress_pipeline_completion() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
 fn double(x: int) -> int { x * 2 }
 fn add_one(x: int) -> int { x + 1 }
 fn main() {
   let result = 5 |> double |> add_one
   result
 }",
-        )
-        .await;
+    );
 
     let line = "  let result = 5 |> double |> add_one";
     for col in 0..line.len() as u32 {
-        let _ = client.hover(TEST_URI, 3, col).await;
-        let _ = client.completion(TEST_URI, 3, col).await;
-        let _ = client.goto_definition(TEST_URI, 3, col).await;
+        let _ = client.hover(TEST_URI, 3, col);
+        let _ = client.completion(TEST_URI, 3, col);
+        let _ = client.goto_definition(TEST_URI, 3, col);
     }
 
     for col in [18, 22, 30, 35] {
-        let _ = client.signature_help(TEST_URI, 3, col).await;
+        let _ = client.signature_help(TEST_URI, 3, col);
     }
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_cross_module_type_error_diagnostics() {
+#[test]
+fn stress_cross_module_type_error_diagnostics() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("lisette.toml"), "").unwrap();
@@ -8731,31 +7907,31 @@ fn main() {
 }";
     std::fs::write(src.join("main.lis"), main_content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let main_path = src.join("main.lis");
     let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
-    client.open(&main_uri, main_content).await;
+    client.open(&main_uri, main_content);
 
-    let diags = client.await_diagnostics().await;
+    let diags = client.await_diagnostics();
     assert!(
         !diags.is_empty(),
         "should have type error for assigning int to string"
     );
 
-    let _ = client.hover(&main_uri, 3, 20).await;
-    let comp = client.completion(&main_uri, 3, 0).await;
+    let _ = client.hover(&main_uri, 3, 20);
+    let comp = client.completion(&main_uri, 3, 0);
     assert!(
         comp.is_some(),
         "completion should still work despite diagnostics"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_cross_module_sibling_files() {
+#[test]
+fn stress_cross_module_sibling_files() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("lisette.toml"), "").unwrap();
@@ -8791,38 +7967,28 @@ fn main() {
     );
     std::fs::write(src.join("main.lis"), &main_content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let main_path = src.join("main.lis");
     let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
-    client.open(&main_uri, &main_content).await;
+    client.open(&main_uri, &main_content);
 
-    let _ = client
-        .hover(&main_uri, positions[1].0, positions[1].1)
-        .await;
-    let _ = client
-        .hover(&main_uri, positions[2].0, positions[2].1)
-        .await;
+    let _ = client.hover(&main_uri, positions[1].0, positions[1].1);
+    let _ = client.hover(&main_uri, positions[2].0, positions[2].1);
 
-    let _ = client
-        .completion(&main_uri, positions[0].0, positions[0].1)
-        .await;
+    let _ = client.completion(&main_uri, positions[0].0, positions[0].1);
 
-    let _ = client
-        .goto_definition(&main_uri, positions[3].0, positions[3].1)
-        .await;
-    let _ = client
-        .goto_definition(&main_uri, positions[4].0, positions[4].1)
-        .await;
+    let _ = client.goto_definition(&main_uri, positions[3].0, positions[3].1);
+    let _ = client.goto_definition(&main_uri, positions[4].0, positions[4].1);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_hover_on_generic_params() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_hover_on_generic_params() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor(
         "\
 fn identity<T~>(x: T) -> T { x }
@@ -8832,80 +7998,76 @@ fn main() {
   pair(1, \"hello\")
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let _ = client.hover(TEST_URI, line, character).await;
+    let _ = client.hover(TEST_URI, line, character);
 
-    let hover = client.hover(TEST_URI, 3, 2).await;
+    let hover = client.hover(TEST_URI, 3, 2);
     assert!(hover.is_some(), "hover on call should show inferred type");
 
-    let hover = client.hover(TEST_URI, 4, 2).await;
+    let hover = client.hover(TEST_URI, 4, 2);
     assert!(hover.is_some(), "hover on call should show inferred type");
 
-    let sig = client.signature_help(TEST_URI, 3, 11).await;
+    let sig = client.signature_help(TEST_URI, 3, 11);
     assert!(sig.is_some());
 
-    let sig = client.signature_help(TEST_URI, 4, 6).await;
+    let sig = client.signature_help(TEST_URI, 4, 6);
     assert!(sig.is_some());
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_all_handlers_fall_back_during_lex_error() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_all_handlers_fall_back_during_lex_error() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     // Establish valid snapshot
-    client
-        .open(
-            TEST_URI,
-            "\
+    client.open(
+        TEST_URI,
+        "\
 struct Point { x: int, y: int }
 fn distance(p: Point) -> int { p.x + p.y }
 fn main() {
   let p = Point { x: 3, y: 4 }
   distance(p)
 }",
-        )
-        .await;
+    );
 
-    let hover = client.hover(TEST_URI, 1, 3).await;
+    let hover = client.hover(TEST_URI, 1, 3);
     assert!(hover.is_some());
 
     // Break with a lex error
-    client
-        .change(
-            TEST_URI,
-            "\
+    client.change(
+        TEST_URI,
+        "\
 struct Point { x: int, y: int }
 fn distance(p: Point) -> int { p.x + p.y }
 fn main() {
   let p = Point { x: 3, y: 4 }
   distance(p)
   let broken = \"unclosed",
-            2,
-        )
-        .await;
+        2,
+    );
 
     // All handlers should fall back to last valid snapshot
-    let hover = client.hover(TEST_URI, 1, 3).await;
+    let hover = client.hover(TEST_URI, 1, 3);
     assert!(
         hover.is_some(),
         "hover should work via last_valid_snapshot during lex error"
     );
 
-    let comp = client.completion(TEST_URI, 0, 0).await;
+    let comp = client.completion(TEST_URI, 0, 0);
     assert!(comp.is_some(), "completion should work via fallback");
 
-    let _ = client.goto_definition(TEST_URI, 4, 2).await;
-    let _ = client.references(TEST_URI, 1, 3, true).await;
-    let _ = client.signature_help(TEST_URI, 4, 11).await;
+    let _ = client.goto_definition(TEST_URI, 4, 2);
+    let _ = client.references(TEST_URI, 1, 3, true);
+    let _ = client.signature_help(TEST_URI, 4, 11);
 
-    let syms = client.document_symbol(TEST_URI).await;
+    let syms = client.document_symbol(TEST_URI);
     assert!(syms.is_some(), "document symbols should work via fallback");
 
-    let inlay = client.inlay_hint(TEST_URI, (0, 0), (5, 1)).await;
+    let inlay = client.inlay_hint(TEST_URI, (0, 0), (5, 1));
     assert!(
         inlay.is_some(),
         "inlay hints should work via last_valid_snapshot during lex error"
@@ -8915,15 +8077,15 @@ fn main() {
         "fallback inlay hints should reflect the last valid snapshot"
     );
 
-    let _ = client.formatting(TEST_URI).await;
+    let _ = client.formatting(TEST_URI);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_completion_on_map_indexed_access() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_completion_on_map_indexed_access() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, positions) = cursors(
         "\
 struct Item { name: string, count: int }
@@ -8932,22 +8094,18 @@ fn main() {
   items[0].~n~ame
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let _ = client
-        .completion(TEST_URI, positions[0].0, positions[0].1)
-        .await;
+    let _ = client.completion(TEST_URI, positions[0].0, positions[0].1);
 
-    let _ = client.hover(TEST_URI, positions[1].0, positions[1].1).await;
-    let _ = client
-        .goto_definition(TEST_URI, positions[1].0, positions[1].1)
-        .await;
+    let _ = client.hover(TEST_URI, positions[1].0, positions[1].1);
+    let _ = client.goto_definition(TEST_URI, positions[1].0, positions[1].1);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_cross_module_multiple_imports() {
+#[test]
+fn stress_cross_module_multiple_imports() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("lisette.toml"), "").unwrap();
@@ -8975,27 +8133,26 @@ fn main() {
 }";
     std::fs::write(src.join("main.lis"), main_content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let main_path = src.join("main.lis");
     let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
-    client.open(&main_uri, main_content).await;
+    client.open(&main_uri, main_content);
 
     for col in [4, 14, 24] {
-        let _ = client.hover(&main_uri, 5, col).await;
-        let _ = client.goto_definition(&main_uri, 5, col).await;
-        let _ = client.completion(&main_uri, 5, col).await;
+        let _ = client.hover(&main_uri, 5, col);
+        let _ = client.goto_definition(&main_uri, 5, col);
+        let _ = client.completion(&main_uri, 5, col);
     }
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_enum_struct_variant_match_all_positions() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_enum_struct_variant_match_all_positions() {
+    assert!(stress_test_all_positions(
+        "\
 enum Event {
   Click { x: int, y: int },
   Scroll(int),
@@ -9012,16 +8169,13 @@ fn main() {
   let e = Event.Click { x: 10, y: 20 }
   handle(e)
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_bounded_generic_function_all_positions() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_bounded_generic_function_all_positions() {
+    assert!(stress_test_all_positions(
+        "\
 interface Summable {
   fn sum() -> int
 }
@@ -9040,19 +8194,16 @@ fn main() {
   let pairs = [Pair { a: 1, b: 2 }, Pair { a: 3, b: 4 }]
   total(pairs)
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_empty_constructs_all_handlers() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "\
+#[test]
+fn stress_empty_constructs_all_handlers() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "\
 struct Empty {}
 enum SingleVariant { Only }
 interface NoMethods {}
@@ -9061,10 +8212,9 @@ fn main() {
   let e = Empty {}
   noop()
 }",
-        )
-        .await;
+    );
 
-    let syms = client.document_symbol(TEST_URI).await;
+    let syms = client.document_symbol(TEST_URI);
     assert!(syms.is_some());
     let names = symbol_names(&syms.unwrap());
     assert!(names.contains(&"Empty".to_string()));
@@ -9074,45 +8224,41 @@ fn main() {
 
     for line in 0..8 {
         for col in [0, 5, 10, 15, 20] {
-            let _ = client.hover(TEST_URI, line, col).await;
-            let _ = client.completion(TEST_URI, line, col).await;
+            let _ = client.hover(TEST_URI, line, col);
+            let _ = client.completion(TEST_URI, line, col);
         }
     }
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_diagnostics_after_rapid_edits() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_diagnostics_after_rapid_edits() {
+    let mut client = TestClient::new();
+    client.initialize();
 
-    client.open(TEST_URI, "fn main() { 42 }").await;
-    let _ = client.await_diagnostics().await;
+    client.open(TEST_URI, "fn main() { 42 }");
+    let _ = client.await_diagnostics();
 
     for i in 2..7i32 {
-        client
-            .change(TEST_URI, &format!("fn main() {{ {} }}", i), i)
-            .await;
+        client.change(TEST_URI, &format!("fn main() {{ {} }}", i), i);
     }
 
-    client
-        .change(TEST_URI, "fn main() { let x: int = \"bad\"; x }", 7)
-        .await;
+    client.change(TEST_URI, "fn main() { let x: int = \"bad\"; x }", 7);
 
-    let diags = client.await_diagnostics().await;
+    let diags = client.await_diagnostics();
     assert!(
         !diags.is_empty(),
         "should eventually get diagnostics for type error"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_hover_on_expression_values() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_hover_on_expression_values() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, positions) = cursors(
         "\
 fn main() {
@@ -9128,9 +8274,9 @@ fn main() {
   a + c
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let hover = client.hover(TEST_URI, positions[0].0, positions[0].1).await;
+    let hover = client.hover(TEST_URI, positions[0].0, positions[0].1);
     assert!(hover.is_some());
     let content = hover_content(&hover.unwrap());
     assert!(
@@ -9139,7 +8285,7 @@ fn main() {
         content
     );
 
-    let hover = client.hover(TEST_URI, positions[1].0, positions[1].1).await;
+    let hover = client.hover(TEST_URI, positions[1].0, positions[1].1);
     assert!(hover.is_some());
     let content = hover_content(&hover.unwrap());
     assert!(
@@ -9148,7 +8294,7 @@ fn main() {
         content
     );
 
-    let hover = client.hover(TEST_URI, positions[2].0, positions[2].1).await;
+    let hover = client.hover(TEST_URI, positions[2].0, positions[2].1);
     assert!(hover.is_some());
     let content = hover_content(&hover.unwrap());
     assert!(
@@ -9157,14 +8303,13 @@ fn main() {
         content
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_closure_capture_all_positions() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_closure_capture_all_positions() {
+    assert!(stress_test_all_positions(
+        "\
 fn apply(f: fn(int) -> int, x: int) -> int { f(x) }
 fn main() {
   let offset = 10
@@ -9172,16 +8317,13 @@ fn main() {
   let result = apply(add_offset, 5)
   result
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_or_pattern_let_else_all_positions() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_or_pattern_let_else_all_positions() {
+    assert!(stress_test_all_positions(
+        "\
 enum Token {
   Num(int),
   Plus,
@@ -9191,15 +8333,13 @@ fn value(t: Token) -> int {
   let Token.Num(n) | Token.Plus = t else { return 0 }
   n
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_deep_field_access_chain() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn stress_deep_field_access_chain() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor(
         "\
 struct A { b: B }
@@ -9210,22 +8350,22 @@ fn main() {
   ~a.b.c.value
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let hover = client.hover(TEST_URI, line, character).await;
+    let hover = client.hover(TEST_URI, line, character);
     assert!(hover.is_some());
 
     for col in [2, 4, 6, 8] {
-        let _ = client.hover(TEST_URI, 5, col).await;
-        let _ = client.goto_definition(TEST_URI, 5, col).await;
-        let _ = client.completion(TEST_URI, 5, col).await;
+        let _ = client.hover(TEST_URI, 5, col);
+        let _ = client.goto_definition(TEST_URI, 5, col);
+        let _ = client.completion(TEST_URI, 5, col);
     }
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_cross_module_rename_function() {
+#[test]
+fn stress_cross_module_rename_function() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("lisette.toml"), "").unwrap();
@@ -9249,25 +8389,24 @@ fn main() {
     );
     std::fs::write(src.join("main.lis"), &main_content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let main_path = src.join("main.lis");
     let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
-    client.open(&main_uri, &main_content).await;
+    client.open(&main_uri, &main_content);
 
-    let _ = client.prepare_rename(&main_uri, line, character).await;
-    let _ = client.rename(&main_uri, line, character, "calculate").await;
-    let _ = client.references(&main_uri, line, character, true).await;
+    let _ = client.prepare_rename(&main_uri, line, character);
+    let _ = client.rename(&main_uri, line, character, "calculate");
+    let _ = client.references(&main_uri, line, character, true);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn stress_format_string_complex() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_format_string_complex() {
+    assert!(stress_test_all_positions(
+        "\
 struct Point { x: int, y: int }
 fn main() {
   let p = Point { x: 1, y: 2 }
@@ -9275,16 +8414,13 @@ fn main() {
   let nested = f\"Result: {if true { 1 } else { 2 }}\"
   msg
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn stress_var_mutation_all_positions() {
-    assert!(
-        stress_test_all_positions(
-            "\
+#[test]
+fn stress_var_mutation_all_positions() {
+    assert!(stress_test_all_positions(
+        "\
 var counter: int = 0
 fn increment() {
   counter = counter + 1
@@ -9294,15 +8430,13 @@ fn main() {
   increment()
   counter
 }"
-        )
-        .await
-    );
+    ));
 }
 
-#[tokio::test]
-async fn goto_definition_method_call_via_dot_access() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_method_call_via_dot_access() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor(
         "\
 struct User { pub name: string }
@@ -9314,9 +8448,9 @@ fn main() {
   u.~greet()
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let response = client.goto_definition(TEST_URI, line, character).await;
+    let response = client.goto_definition(TEST_URI, line, character);
     assert!(
         response.is_some(),
         "goto_definition on method call should resolve"
@@ -9328,13 +8462,13 @@ fn main() {
         "should jump to the method definition (`pub fn greet`)"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_variable_in_dot_access() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_variable_in_dot_access() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor(
         "\
 struct Point { pub x: int }
@@ -9346,9 +8480,9 @@ fn main() {
   ~p.translate()
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let response = client.goto_definition(TEST_URI, line, character).await;
+    let response = client.goto_definition(TEST_URI, line, character);
     assert!(
         response.is_some(),
         "goto_definition on variable in dot access should resolve"
@@ -9357,18 +8491,18 @@ fn main() {
     let loc = definition_location(&response.unwrap()).unwrap();
     assert_eq!(loc.range.start.line, 5, "should jump to `let p = ...`");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_type_in_let_annotation() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_type_in_let_annotation() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) =
         cursor("type UserID = int\nfn main() {\n  let x: ~UserID = 42\n}");
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let response = client.goto_definition(TEST_URI, line, character).await;
+    let response = client.goto_definition(TEST_URI, line, character);
     assert!(
         response.is_some(),
         "goto_definition on type in let annotation should resolve"
@@ -9377,13 +8511,13 @@ async fn goto_definition_type_in_let_annotation() {
     let loc = definition_location(&response.unwrap()).unwrap();
     assert_eq!(loc.range.start.line, 0);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_type_in_static_call() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_type_in_static_call() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor(
         "\
 struct Point { pub x: int }
@@ -9394,9 +8528,9 @@ fn main() {
   ~Point.origin()
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let response = client.goto_definition(TEST_URI, line, character).await;
+    let response = client.goto_definition(TEST_URI, line, character);
     assert!(
         response.is_some(),
         "goto_definition on type name in static call should resolve"
@@ -9405,18 +8539,18 @@ fn main() {
     let loc = definition_location(&response.unwrap()).unwrap();
     assert_eq!(loc.range.start.line, 0);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_import_alias() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_import_alias() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) =
         cursor("import \"go:fmt\"\nfn main() {\n  ~fmt.Println(\"hi\")\n}");
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let response = client.goto_definition(TEST_URI, line, character).await;
+    let response = client.goto_definition(TEST_URI, line, character);
     assert!(
         response.is_some(),
         "goto_definition on import alias should resolve"
@@ -9428,30 +8562,30 @@ async fn goto_definition_import_alias() {
         "should jump to the import statement"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_pipe_operator() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_pipe_operator() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) =
         cursor("fn add(a: int, b: int) -> int { a + b }\nfn main() {\n  5 |> ~add(3)\n}");
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let response = client.goto_definition(TEST_URI, line, character).await;
+    let response = client.goto_definition(TEST_URI, line, character);
     assert!(response.is_some(), "goto_definition in pipe should resolve");
 
     let loc = definition_location(&response.unwrap()).unwrap();
     assert_eq!(loc.range.start.line, 0);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn find_references_struct_name() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn find_references_struct_name() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor(
         "\
 struct ~Point { pub x: int, pub y: int }
@@ -9463,9 +8597,9 @@ fn main() {
   p.x
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let refs = client.references(TEST_URI, line, character, true).await;
+    let refs = client.references(TEST_URI, line, character, true);
     assert!(refs.is_some(), "find references for struct should succeed");
 
     let locations = refs.unwrap();
@@ -9475,13 +8609,13 @@ fn main() {
         locations.len()
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn rename_enum_variant_preserves_qualifier() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn rename_enum_variant_preserves_qualifier() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor(
         "\
 enum Color { ~Red, Green, Blue }
@@ -9494,9 +8628,9 @@ fn main() {
   }
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let edit = client.rename(TEST_URI, line, character, "Crimson").await;
+    let edit = client.rename(TEST_URI, line, character, "Crimson");
     assert!(edit.is_some(), "rename enum variant should succeed");
 
     let edit = edit.unwrap();
@@ -9520,13 +8654,13 @@ fn main() {
         );
     }
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn rename_bare_tuple_variant_preserves_payload() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn rename_bare_tuple_variant_preserves_payload() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "\
 enum Color { Red(int), Green, Blue }
 fn main() {
@@ -9536,9 +8670,9 @@ fn main() {
     _ => 0,
   }
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let edit = client.rename(TEST_URI, 0, 13, "Crimson").await.unwrap();
+    let edit = client.rename(TEST_URI, 0, 13, "Crimson").unwrap();
     let changes = edit.changes.unwrap();
     let edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
 
@@ -9558,13 +8692,13 @@ fn main() {
     assert_eq!(arm.range.start.character, 4);
     assert_eq!(arm.range.end.character, 7);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn rename_bare_struct_variant_preserves_payload() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn rename_bare_struct_variant_preserves_payload() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "\
 enum Shape { Move { x: int, y: int }, Stay }
 fn main() {
@@ -9574,9 +8708,9 @@ fn main() {
     Stay => 0,
   }
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let edit = client.rename(TEST_URI, 0, 13, "Shift").await.unwrap();
+    let edit = client.rename(TEST_URI, 0, 13, "Shift").unwrap();
     let changes = edit.changes.unwrap();
     let edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
 
@@ -9607,13 +8741,13 @@ fn main() {
     assert_eq!(arm.range.start.character, 4);
     assert_eq!(arm.range.end.character, 8);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn rename_enum_variant_updates_bare_match_arms() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn rename_enum_variant_updates_bare_match_arms() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "\
 enum Color { Red, Green, Blue }
 fn main() {
@@ -9624,9 +8758,9 @@ fn main() {
     Blue => 3,
   }
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let edit = client.rename(TEST_URI, 0, 13, "Crimson").await;
+    let edit = client.rename(TEST_URI, 0, 13, "Crimson");
     assert!(edit.is_some(), "rename enum variant should succeed");
 
     let edit = edit.unwrap();
@@ -9645,13 +8779,13 @@ fn main() {
         "rename should update the bare match arm on line 4"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_bare_struct_variant() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_bare_struct_variant() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "\
 enum Shape { Move { x: int, y: int }, Stay }
 fn main() {
@@ -9661,9 +8795,9 @@ fn main() {
     Stay => 0,
   }
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.goto_definition(TEST_URI, 4, 5).await;
+    let response = client.goto_definition(TEST_URI, 4, 5);
     assert!(
         response.is_some(),
         "goto-def on a bare struct variant should resolve"
@@ -9674,13 +8808,13 @@ fn main() {
         "should jump to the variant definition"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn references_bare_tuple_variant_excludes_payload() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn references_bare_tuple_variant_excludes_payload() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "\
 enum Color { Red(int), Green }
 fn main() {
@@ -9690,9 +8824,9 @@ fn main() {
     _ => 0,
   }
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let refs = client.references(TEST_URI, 0, 13, true).await.unwrap();
+    let refs = client.references(TEST_URI, 0, 13, true).unwrap();
 
     let arm = refs
         .iter()
@@ -9701,13 +8835,13 @@ fn main() {
     assert_eq!(arm.range.start.character, 4);
     assert_eq!(arm.range.end.character, 7);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_struct_variant_field_label_is_not_the_variant() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_struct_variant_field_label_is_not_the_variant() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "\
 enum Shape { Move { x: int, y: int }, Stay }
 fn main() {
@@ -9717,9 +8851,9 @@ fn main() {
     Stay => 0,
   }
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.goto_definition(TEST_URI, 4, 11).await;
+    let response = client.goto_definition(TEST_URI, 4, 11);
     let on_variant_def = response
         .and_then(|r| definition_location(&r))
         .is_some_and(|loc| loc.range.start.line == 0);
@@ -9728,13 +8862,13 @@ fn main() {
         "a field label must not resolve to the variant definition"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn rename_variant_with_whitespace_in_qualifier_targets_the_variant_token() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn rename_variant_with_whitespace_in_qualifier_targets_the_variant_token() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "\
 enum Color { Red, Green, Blue }
 fn main() {
@@ -9744,9 +8878,9 @@ fn main() {
     _ => 0,
   }
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let edit = client.rename(TEST_URI, 0, 13, "Crimson").await.unwrap();
+    let edit = client.rename(TEST_URI, 0, 13, "Crimson").unwrap();
     let changes = edit.changes.unwrap();
     let edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
     for e in edits {
@@ -9765,13 +8899,13 @@ fn main() {
     assert_eq!(arm.range.start.character, 12);
     assert_eq!(arm.range.end.character, 15);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn rename_outer_variant_with_dotted_payload_targets_outer_name() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn rename_outer_variant_with_dotted_payload_targets_outer_name() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "\
 enum Color { Red, Green }
 enum Holder { Wrap(Color), Empty }
@@ -9783,11 +8917,10 @@ fn main() {
     _ => 2,
   }
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
     let edit = client
         .rename(TEST_URI, 1, 14, "Bag")
-        .await
         .expect("rename Wrap should succeed");
     let changes = edit.changes.unwrap();
     let edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
@@ -9808,13 +8941,13 @@ fn main() {
     assert_eq!(arm.range.start.character, 4);
     assert_eq!(arm.range.end.character, 8);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_qualified_struct_variant_field_label_is_not_the_variant() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_qualified_struct_variant_field_label_is_not_the_variant() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "\
 enum Shape { Move { x: int, y: int }, Stay }
 fn main() {
@@ -9824,9 +8957,9 @@ fn main() {
     Shape.Stay => 0,
   }
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.goto_definition(TEST_URI, 4, 17).await;
+    let response = client.goto_definition(TEST_URI, 4, 17);
     let on_variant_def = response
         .and_then(|r| definition_location(&r))
         .is_some_and(|loc| loc.range.start.line == 0);
@@ -9835,13 +8968,13 @@ fn main() {
         "a field label in a qualified struct-variant pattern must not resolve to the variant"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_bare_variant_inside_struct_variant_field() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_bare_variant_inside_struct_variant_field() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "\
 enum Color { Red, Green }
 enum Shape { Tag { color: Color }, Stay }
@@ -9853,11 +8986,10 @@ fn main() {
     _ => 2,
   }
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
     let response = client
         .goto_definition(TEST_URI, 5, 17)
-        .await
         .expect("nested bare variant in a struct-variant field should resolve");
     let loc = definition_location(&response).expect("location");
     assert_eq!(
@@ -9867,13 +8999,13 @@ fn main() {
     assert_eq!(loc.range.start.character, 13);
     assert_eq!(loc.range.end.character, 16);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_explicit_binding_in_struct_variant_field_does_not_shadow_binding() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_explicit_binding_in_struct_variant_field_does_not_shadow_binding() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "\
 enum Shape { Move { x: int, y: int }, Stay }
 fn main() {
@@ -9883,9 +9015,9 @@ fn main() {
     Stay => 0,
   }
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.goto_definition(TEST_URI, 4, 14).await;
+    let response = client.goto_definition(TEST_URI, 4, 14);
     if let Some(r) = response
         && let Some(loc) = definition_location(&r)
     {
@@ -9895,13 +9027,13 @@ fn main() {
         );
     }
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_qualifier_in_struct_variant_pattern_does_not_jump_to_variant() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_qualifier_in_struct_variant_pattern_does_not_jump_to_variant() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "\
 enum Shape { Move { x: int, y: int }, Stay }
 fn main() {
@@ -9911,9 +9043,9 @@ fn main() {
     Stay => 0,
   }
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let r1 = client.goto_definition(TEST_URI, 4, 5).await;
+    let r1 = client.goto_definition(TEST_URI, 4, 5);
     let on_variant = r1
         .and_then(|r| definition_location(&r))
         .is_some_and(|loc| loc.range.start.line == 0 && loc.range.start.character == 13);
@@ -9922,19 +9054,19 @@ fn main() {
         "cursor on `Shape` (qualifier) must not resolve to the variant `Move`"
     );
 
-    let r2 = client.goto_definition(TEST_URI, 4, 14).await;
+    let r2 = client.goto_definition(TEST_URI, 4, 14);
     assert!(
         r2.is_none(),
         "cursor on trailing whitespace must not resolve to anything"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_explicit_same_name_field_does_not_resolve_as_shorthand() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_explicit_same_name_field_does_not_resolve_as_shorthand() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "\
 enum Shape { Move { x: int, y: int }, Stay }
 fn main() {
@@ -9944,9 +9076,9 @@ fn main() {
     Stay => 0,
   }
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let r = client.goto_definition(TEST_URI, 4, 14).await;
+    let r = client.goto_definition(TEST_URI, 4, 14);
     let on_field_decl = r
         .and_then(|r| definition_location(&r))
         .is_some_and(|loc| loc.range.start.line == 0 && loc.range.start.character == 20);
@@ -9955,13 +9087,13 @@ fn main() {
         "binding `x` in explicit `x: x` must not resolve to the field declaration"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_chained_pipe_operator() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_chained_pipe_operator() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, positions) = cursors(
         "\
 fn add(a: int, b: int) -> int { a + b }
@@ -9970,11 +9102,9 @@ fn main() {
   let result = 5 |> ~add(3) |> ~multiply(2)
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let response = client
-        .goto_definition(TEST_URI, positions[0].0, positions[0].1)
-        .await;
+    let response = client.goto_definition(TEST_URI, positions[0].0, positions[0].1);
     assert!(
         response.is_some(),
         "goto_definition on add in chained pipe should resolve"
@@ -9982,9 +9112,7 @@ fn main() {
     let loc = definition_location(&response.unwrap()).unwrap();
     assert_eq!(loc.range.start.line, 0, "should jump to add definition");
 
-    let response = client
-        .goto_definition(TEST_URI, positions[1].0, positions[1].1)
-        .await;
+    let response = client.goto_definition(TEST_URI, positions[1].0, positions[1].1);
     assert!(
         response.is_some(),
         "goto_definition on multiply in chained pipe should resolve"
@@ -9995,13 +9123,13 @@ fn main() {
         "should jump to multiply definition"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn rename_struct_updates_type_annotations() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn rename_struct_updates_type_annotations() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor(
         "\
 pub struct ~Point { pub x: int, pub y: int }
@@ -10017,9 +9145,9 @@ fn main() {
   let p: Point = Point.new(1, 2)
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let edit = client.rename(TEST_URI, line, character, "Vec2").await;
+    let edit = client.rename(TEST_URI, line, character, "Vec2");
     assert!(edit.is_some(), "rename struct should succeed");
 
     let edit = edit.unwrap();
@@ -10047,13 +9175,13 @@ fn main() {
         );
     }
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn find_references_struct_includes_type_annotations() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn find_references_struct_includes_type_annotations() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor(
         "\
 pub struct ~Point { pub x: int, pub y: int }
@@ -10066,9 +9194,9 @@ fn main() {
   let p: Point = Point.origin()
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let refs = client.references(TEST_URI, line, character, true).await;
+    let refs = client.references(TEST_URI, line, character, true);
     assert!(refs.is_some(), "find references for struct should succeed");
 
     let locations = refs.unwrap();
@@ -10089,13 +9217,13 @@ fn main() {
         );
     }
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn rename_struct_updates_static_method_calls() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn rename_struct_updates_static_method_calls() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor(
         "\
 pub struct ~Point { pub x: int, pub y: int }
@@ -10112,9 +9240,9 @@ fn main() {
   let o = Point.origin()
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let edit = client.rename(TEST_URI, line, character, "Vec2").await;
+    let edit = client.rename(TEST_URI, line, character, "Vec2");
     assert!(edit.is_some(), "rename struct should succeed");
 
     let edit = edit.unwrap();
@@ -10138,19 +9266,19 @@ fn main() {
         positions
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_stdlib_member_navigates_to_typedef() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_stdlib_member_navigates_to_typedef() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) =
         cursor("import \"go:fmt\"\nfn main() {\n  fmt.~Println(\"hello\")\n}");
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
     // The LSP builds the stdlib typedefs at startup, so this navigates into the generated `.d.lis` file.
-    let response = client.goto_definition(TEST_URI, line, character).await;
+    let response = client.goto_definition(TEST_URI, line, character);
     let location = definition_location(
         &response.expect("go-to-definition on stdlib member should return a location"),
     )
@@ -10165,18 +9293,18 @@ async fn goto_definition_stdlib_member_navigates_to_typedef() {
         "should land on the `Println` definition"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_on_prelude_type_navigates_to_typedef() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_on_prelude_type_navigates_to_typedef() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "fn get() -> Option<int> {\n  none\n}\nfn main() {\n  let x = get()\n}";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.goto_definition(TEST_URI, 0, 13).await;
+    let response = client.goto_definition(TEST_URI, 0, 13);
     let location = definition_location(
         &response.expect("go-to-definition on prelude type should return a location"),
     )
@@ -10191,37 +9319,37 @@ async fn goto_definition_on_prelude_type_navigates_to_typedef() {
         "should land on the `Option` definition"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn opening_prelude_typedef_publishes_no_diagnostics() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn opening_prelude_typedef_publishes_no_diagnostics() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let path = deps::prelude_typedef_path().expect("prelude typedef path");
     let content = std::fs::read_to_string(&path).expect("prelude cache file should exist");
     let uri = Url::from_file_path(&path).expect("path to uri").to_string();
 
-    client.open(&uri, &content).await;
-    let diagnostics = client.await_diagnostics().await;
+    client.open(&uri, &content);
+    let diagnostics = client.await_diagnostics();
     assert!(
         diagnostics.is_empty(),
         "opening the generated prelude typedef must report no diagnostics, got: {diagnostics:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_on_prelude_method_navigates_to_typedef() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_on_prelude_method_navigates_to_typedef() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "fn main() {\n  let s = \"hello\"\n  let n = s.length()\n}";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.goto_definition(TEST_URI, 2, 12).await;
+    let response = client.goto_definition(TEST_URI, 2, 12);
     let location = definition_location(
         &response.expect("go-to-definition on prelude method should return a location"),
     )
@@ -10236,18 +9364,18 @@ async fn goto_definition_on_prelude_method_navigates_to_typedef() {
         "should land on the `length` method definition"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_on_prelude_function_navigates_to_typedef() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_on_prelude_function_navigates_to_typedef() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "fn main() {\n  panic(\"boom\")\n}";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.goto_definition(TEST_URI, 1, 3).await;
+    let response = client.goto_definition(TEST_URI, 1, 3);
     let location = definition_location(
         &response.expect("go-to-definition on prelude function should return a location"),
     )
@@ -10262,13 +9390,13 @@ async fn goto_definition_on_prelude_function_navigates_to_typedef() {
         "should land on the `panic` definition"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_through_propagate_operator() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_through_propagate_operator() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let (source, line, character) = cursor(
         "\
@@ -10278,9 +9406,9 @@ fn main() -> Result<(), string> {
   Ok(())
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let response = client.goto_definition(TEST_URI, line, character).await;
+    let response = client.goto_definition(TEST_URI, line, character);
     assert!(
         response.is_some(),
         "goto_definition on function call inside propagate should resolve"
@@ -10289,13 +9417,13 @@ fn main() -> Result<(), string> {
     let loc = definition_location(&response.unwrap()).unwrap();
     assert_eq!(loc.range.start.line, 0, "should jump to the fn definition");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_same_module_function_call() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_same_module_function_call() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let (source, line, character) = cursor(
         "\
@@ -10304,9 +9432,9 @@ fn main() {
   let x = ~helper()
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let response = client.goto_definition(TEST_URI, line, character).await;
+    let response = client.goto_definition(TEST_URI, line, character);
     assert!(
         response.is_some(),
         "goto_definition on same-module function call should resolve"
@@ -10318,11 +9446,11 @@ fn main() {
         "should jump to helper's definition"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn references_cross_module_finds_call_sites() {
+#[test]
+fn references_cross_module_finds_call_sites() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
 
@@ -10339,8 +9467,8 @@ async fn references_cross_module_finds_call_sites() {
     let utils_content = "pub fn helper() -> int { 42 }";
     std::fs::write(utils_dir.join("utils.lis"), utils_content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let main_uri = Url::from_file_path(src.join("main.lis"))
         .unwrap()
@@ -10349,10 +9477,10 @@ async fn references_cross_module_finds_call_sites() {
         .unwrap()
         .to_string();
 
-    client.open(&main_uri, main_content).await;
-    client.open(&utils_uri, utils_content).await;
+    client.open(&main_uri, main_content);
+    client.open(&utils_uri, utils_content);
 
-    let refs = client.references(&utils_uri, 0, 7, true).await;
+    let refs = client.references(&utils_uri, 0, 7, true);
     assert!(
         refs.is_some(),
         "references on pub fn should find cross-module call sites"
@@ -10375,11 +9503,11 @@ async fn references_cross_module_finds_call_sites() {
         main_refs.len()
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_struct_field_cross_module() {
+#[test]
+fn goto_definition_struct_field_cross_module() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
 
@@ -10399,8 +9527,8 @@ async fn goto_definition_struct_field_cross_module() {
     );
     std::fs::write(src.join("main.lis"), &main_content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let main_uri = Url::from_file_path(src.join("main.lis"))
         .unwrap()
@@ -10409,10 +9537,10 @@ async fn goto_definition_struct_field_cross_module() {
         .unwrap()
         .to_string();
 
-    client.open(&models_uri, models_content).await;
-    client.open(&main_uri, &main_content).await;
+    client.open(&models_uri, models_content);
+    client.open(&main_uri, &main_content);
 
-    let response = client.goto_definition(&main_uri, line, character).await;
+    let response = client.goto_definition(&main_uri, line, character);
     assert!(
         response.is_some(),
         "goto_definition on cross-module struct field should resolve"
@@ -10429,13 +9557,13 @@ async fn goto_definition_struct_field_cross_module() {
         "should jump to 'id' field declaration (line 1: `pub id: int,`)"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_struct_field_access() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_struct_field_access() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, positions) = cursors(
         "\
 struct Task {
@@ -10448,11 +9576,9 @@ fn main() {
   let y = t.t~itle
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let response = client
-        .goto_definition(TEST_URI, positions[0].0, positions[0].1)
-        .await;
+    let response = client.goto_definition(TEST_URI, positions[0].0, positions[0].1);
     assert!(
         response.is_some(),
         "goto_definition on struct field access should resolve"
@@ -10463,9 +9589,7 @@ fn main() {
         "should jump to 'id' field declaration"
     );
 
-    let response = client
-        .goto_definition(TEST_URI, positions[1].0, positions[1].1)
-        .await;
+    let response = client.goto_definition(TEST_URI, positions[1].0, positions[1].1);
     assert!(
         response.is_some(),
         "goto_definition on struct field 'title' should resolve"
@@ -10476,19 +9600,19 @@ fn main() {
         "should jump to 'title' field declaration"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_enum_variant_in_match_pattern() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_enum_variant_in_match_pattern() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor(
         "enum Color { Red, Green, Blue }\nfn describe(c: Color) -> string {\n  match c {\n    Color.~Red => \"red\",\n    Color.Green => \"green\",\n    Color.Blue => \"blue\",\n  }\n}",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let response = client.goto_definition(TEST_URI, line, character).await;
+    let response = client.goto_definition(TEST_URI, line, character);
     assert!(
         response.is_some(),
         "goto_definition on enum variant in match pattern should resolve"
@@ -10499,19 +9623,19 @@ async fn goto_definition_enum_variant_in_match_pattern() {
         "should jump to Red variant declaration"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_enum_variant_with_payload_in_match() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_enum_variant_with_payload_in_match() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor(
         "enum Msg { Text(string), Num(int) }\nfn handle(m: Msg) -> string {\n  match m {\n    Msg.~Text(s) => s,\n    Msg.Num(n) => \"num\",\n  }\n}",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let response = client.goto_definition(TEST_URI, line, character).await;
+    let response = client.goto_definition(TEST_URI, line, character);
     assert!(
         response.is_some(),
         "goto_definition on enum variant with payload should resolve"
@@ -10522,19 +9646,19 @@ async fn goto_definition_enum_variant_with_payload_in_match() {
         "should jump to Text variant declaration"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_match_arm_payload_binding_type() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn hover_match_arm_payload_binding_type() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor(
         "enum Wrapper { Val(string) }\nfn extract(w: Wrapper) -> string {\n  match w {\n    Wrapper.Val(~inner) => inner,\n  }\n}",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let hover = client.hover(TEST_URI, line, character).await;
+    let hover = client.hover(TEST_URI, line, character);
     assert!(hover.is_some(), "hover on match arm binding should work");
     let content = hover_content(&hover.unwrap());
     assert!(
@@ -10542,19 +9666,19 @@ async fn hover_match_arm_payload_binding_type() {
         "should show payload type 'string', got: {content}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn signature_help_has_parameter_info() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn signature_help_has_parameter_info() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor(
         "fn greet(name: string, age: int) -> string { name }\nfn main() { greet(\"~hi\", 1) }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let help = client.signature_help(TEST_URI, line, character).await;
+    let help = client.signature_help(TEST_URI, line, character);
     assert!(help.is_some(), "signature help should be returned");
 
     let sig = &help.unwrap().signatures[0];
@@ -10565,13 +9689,13 @@ async fn signature_help_has_parameter_info() {
     let params = sig.parameters.as_ref().unwrap();
     assert_eq!(params.len(), 2, "should have 2 parameters");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn signature_help_method_call_does_not_double_strip_self() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn signature_help_method_call_does_not_double_strip_self() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, positions) = cursors(
         "\
 struct Point { x: int, y: int }
@@ -10591,11 +9715,9 @@ fn main() {
   let dist = p.distance_sq(~moved)
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let help = client
-        .signature_help(TEST_URI, positions[0].0, positions[0].1)
-        .await;
+    let help = client.signature_help(TEST_URI, positions[0].0, positions[0].1);
     assert!(help.is_some(), "translate sig help should exist");
     let sig = &help.unwrap().signatures[0];
     let params = sig.parameters.as_ref().expect("should have params");
@@ -10605,9 +9727,7 @@ fn main() {
         "translate should show 2 params (dx, dy) after self stripped"
     );
 
-    let help = client
-        .signature_help(TEST_URI, positions[1].0, positions[1].1)
-        .await;
+    let help = client.signature_help(TEST_URI, positions[1].0, positions[1].1);
     assert!(help.is_some(), "distance_sq sig help should exist");
     let sig = &help.unwrap().signatures[0];
     let params = sig.parameters.as_ref().expect("should have params");
@@ -10617,13 +9737,13 @@ fn main() {
         "distance_sq should show 1 param (other) after self stripped"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_enum_variant_in_tuple_match_pattern() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_enum_variant_in_tuple_match_pattern() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor(
         "\
 enum Shape {
@@ -10638,9 +9758,9 @@ fn match_pair(a: Shape, b: Shape) -> string {
   }
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let response = client.goto_definition(TEST_URI, line, character).await;
+    let response = client.goto_definition(TEST_URI, line, character);
     assert!(
         response.is_some(),
         "goto-def on Circle in tuple pattern should resolve"
@@ -10648,13 +9768,13 @@ fn match_pair(a: Shape, b: Shape) -> string {
     let loc = definition_location(&response.unwrap()).unwrap();
     assert_eq!(loc.range.start.line, 1, "Circle is defined on line 1");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_chained_method_call() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_chained_method_call() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor(
         "\
 struct Canvas { shapes: Slice<int>, name: string }
@@ -10670,9 +9790,9 @@ fn main() {
   let c = Canvas.new(\"test\").~add(1).add(2)
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let response = client.goto_definition(TEST_URI, line, character).await;
+    let response = client.goto_definition(TEST_URI, line, character);
     assert!(
         response.is_some(),
         "goto-def on chained .add() should resolve"
@@ -10680,13 +9800,13 @@ fn main() {
     let loc = definition_location(&response.unwrap()).unwrap();
     assert_eq!(loc.range.start.line, 5, "add is defined on line 5");
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_on_function_parameter_dot_access() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_on_function_parameter_dot_access() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor(
         "\
 struct Point { pub x: int, pub y: int }
@@ -10699,9 +9819,9 @@ fn process(p: Point) -> int {
   p.~x
 }",
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let response = client.completion(TEST_URI, line, character).await;
+    let response = client.completion(TEST_URI, line, character);
     assert!(
         response.is_some(),
         "completion after param dot should return results"
@@ -10718,20 +9838,19 @@ fn process(p: Point) -> int {
         labels
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_on_if_let_binding_dot_access() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_on_if_let_binding_dot_access() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     const TEST_URI: &str = "file:///test.lis";
 
-    client
-        .open(
-            TEST_URI,
-            "struct Line {
+    client.open(
+        TEST_URI,
+        "struct Line {
   start: int,
   end: int,
 }
@@ -10745,10 +9864,9 @@ fn process(maybe: Option<Line>) -> int {
     0
   }
 }",
-        )
-        .await;
+    );
 
-    let response = client.completion(TEST_URI, 9, 9).await;
+    let response = client.completion(TEST_URI, 9, 9);
     assert!(
         response.is_some(),
         "completion after if-let binding dot should return results"
@@ -10765,12 +9883,12 @@ fn process(maybe: Option<Line>) -> int {
         labels
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_on_cross_module_enum_dot_access() {
-    let mut client = TestClient::new().await;
+#[test]
+fn completion_on_cross_module_enum_dot_access() {
+    let mut client = TestClient::new();
 
     let root = tempfile::tempdir().unwrap();
     let root_path = root.path();
@@ -10793,7 +9911,7 @@ async fn completion_on_cross_module_enum_dot_access() {
     )
     .unwrap();
 
-    client.initialize_with_root(root_path).await;
+    client.initialize_with_root(root_path);
 
     let colors_uri = format!(
         "file://{}",
@@ -10801,20 +9919,16 @@ async fn completion_on_cross_module_enum_dot_access() {
     );
     let main_uri = format!("file://{}", root_path.join("src/main/main.lis").display());
 
-    client
-        .open(
-            &colors_uri,
-            &std::fs::read_to_string(root_path.join("src/colors/colors.lis")).unwrap(),
-        )
-        .await;
-    client
-        .open(
-            &main_uri,
-            &std::fs::read_to_string(root_path.join("src/main/main.lis")).unwrap(),
-        )
-        .await;
+    client.open(
+        &colors_uri,
+        &std::fs::read_to_string(root_path.join("src/colors/colors.lis")).unwrap(),
+    );
+    client.open(
+        &main_uri,
+        &std::fs::read_to_string(root_path.join("src/main/main.lis")).unwrap(),
+    );
 
-    let response = client.completion(&main_uri, 2, 23).await;
+    let response = client.completion(&main_uri, 2, 23);
     assert!(
         response.is_some(),
         "completion after cross-module enum dot should return results"
@@ -10831,12 +9945,12 @@ async fn completion_on_cross_module_enum_dot_access() {
         labels
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_dot_on_alias_to_cross_module_enum_shows_variants() {
-    let mut client = TestClient::new().await;
+#[test]
+fn completion_dot_on_alias_to_cross_module_enum_shows_variants() {
+    let mut client = TestClient::new();
 
     let root = tempfile::tempdir().unwrap();
     let root_path = root.path();
@@ -10859,25 +9973,21 @@ async fn completion_dot_on_alias_to_cross_module_enum_shows_variants() {
     )
     .unwrap();
 
-    client.initialize_with_root(root_path).await;
+    client.initialize_with_root(root_path);
 
     let utils_uri = format!("file://{}", root_path.join("src/utils/utils.lis").display());
     let main_uri = format!("file://{}", root_path.join("src/main/main.lis").display());
 
-    client
-        .open(
-            &utils_uri,
-            &std::fs::read_to_string(root_path.join("src/utils/utils.lis")).unwrap(),
-        )
-        .await;
-    client
-        .open(
-            &main_uri,
-            &std::fs::read_to_string(root_path.join("src/main/main.lis")).unwrap(),
-        )
-        .await;
+    client.open(
+        &utils_uri,
+        &std::fs::read_to_string(root_path.join("src/utils/utils.lis")).unwrap(),
+    );
+    client.open(
+        &main_uri,
+        &std::fs::read_to_string(root_path.join("src/main/main.lis")).unwrap(),
+    );
 
-    let response = client.completion(&main_uri, 3, 12).await;
+    let response = client.completion(&main_uri, 3, 12);
     assert!(
         response.is_some(),
         "completion after alias dot should return results"
@@ -10892,12 +10002,12 @@ async fn completion_dot_on_alias_to_cross_module_enum_shows_variants() {
         "should include 'String' via alias to cross-module enum, got: {labels:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_dot_on_alias_to_cross_module_enum_hides_private_static_methods() {
-    let mut client = TestClient::new().await;
+#[test]
+fn completion_dot_on_alias_to_cross_module_enum_hides_private_static_methods() {
+    let mut client = TestClient::new();
 
     let root = tempfile::tempdir().unwrap();
     let root_path = root.path();
@@ -10924,25 +10034,21 @@ impl Kind {\n\
     )
     .unwrap();
 
-    client.initialize_with_root(root_path).await;
+    client.initialize_with_root(root_path);
 
     let utils_uri = format!("file://{}", root_path.join("src/utils/utils.lis").display());
     let main_uri = format!("file://{}", root_path.join("src/main/main.lis").display());
 
-    client
-        .open(
-            &utils_uri,
-            &std::fs::read_to_string(root_path.join("src/utils/utils.lis")).unwrap(),
-        )
-        .await;
-    client
-        .open(
-            &main_uri,
-            &std::fs::read_to_string(root_path.join("src/main/main.lis")).unwrap(),
-        )
-        .await;
+    client.open(
+        &utils_uri,
+        &std::fs::read_to_string(root_path.join("src/utils/utils.lis")).unwrap(),
+    );
+    client.open(
+        &main_uri,
+        &std::fs::read_to_string(root_path.join("src/main/main.lis")).unwrap(),
+    );
 
-    let response = client.completion(&main_uri, 3, 12).await;
+    let response = client.completion(&main_uri, 3, 12);
     assert!(response.is_some());
 
     let labels = completion_labels(&response.unwrap());
@@ -10955,17 +10061,16 @@ impl Kind {\n\
         "should NOT include 'private_static' from cross-module aliased type, got: {labels:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_after_underscore_prefixed_variable_dot() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            r#"struct Point { x: int, y: int }
+#[test]
+fn completion_after_underscore_prefixed_variable_dot() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        r#"struct Point { x: int, y: int }
 impl Point {
   fn new(x: int, y: int) -> Point { Point { x: x, y: y } }
 }
@@ -10973,10 +10078,9 @@ fn main() -> int {
   let _p = Point.new(1, 2)
   _p.x
 }"#,
-        )
-        .await;
+    );
 
-    let response = client.completion(TEST_URI, 6, 5).await;
+    let response = client.completion(TEST_URI, 6, 5);
     assert!(
         response.is_some(),
         "completion after _p. should return results"
@@ -10988,17 +10092,16 @@ fn main() -> int {
         labels
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_after_chained_field_access_dot() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            r#"struct Point { x: int, y: int }
+#[test]
+fn completion_after_chained_field_access_dot() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        r#"struct Point { x: int, y: int }
 struct Rect { origin: Point, width: int, height: int }
 impl Rect {
   fn new(x: int, y: int, w: int, h: int) -> Rect {
@@ -11009,10 +10112,9 @@ fn main() -> int {
   let r = Rect.new(0, 0, 10, 20)
   r.origin.x
 }"#,
-        )
-        .await;
+    );
 
-    let response = client.completion(TEST_URI, 9, 11).await;
+    let response = client.completion(TEST_URI, 9, 11);
     assert!(
         response.is_some(),
         "completion after r.origin. should return results"
@@ -11029,17 +10131,16 @@ fn main() -> int {
         labels
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_after_let_else_binding_dot() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            r#"struct Point { x: int, y: int }
+#[test]
+fn completion_after_let_else_binding_dot() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        r#"struct Point { x: int, y: int }
 fn main() -> int {
   let o: Option<Point> = Some(Point { x: 1, y: 2 })
   let Some(pt) = o else {
@@ -11047,10 +10148,9 @@ fn main() -> int {
   }
   pt.x
 }"#,
-        )
-        .await;
+    );
 
-    let response = client.completion(TEST_URI, 6, 5).await;
+    let response = client.completion(TEST_URI, 6, 5);
     assert!(
         response.is_some(),
         "completion after pt. in let-else body should return results"
@@ -11067,17 +10167,16 @@ fn main() -> int {
         labels
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_after_method_call_return_dot() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            r#"struct Point { x: int, y: int }
+#[test]
+fn completion_after_method_call_return_dot() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        r#"struct Point { x: int, y: int }
 struct Rect { origin: Point, width: int, height: int }
 impl Rect {
   fn center(self) -> Point {
@@ -11088,10 +10187,9 @@ fn main() -> int {
   let r = Rect { origin: Point { x: 0, y: 0 }, width: 10, height: 20 }
   r.center().x
 }"#,
-        )
-        .await;
+    );
 
-    let response = client.completion(TEST_URI, 9, 13).await;
+    let response = client.completion(TEST_URI, 9, 13);
     assert!(
         response.is_some(),
         "completion after r.center(). should return results"
@@ -11108,13 +10206,13 @@ fn main() -> int {
         labels
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn prepare_rename_on_dot_access_method() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn prepare_rename_on_dot_access_method() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor(
         r#"struct Rect { width: int, height: int }
 impl Rect {
@@ -11125,61 +10223,57 @@ fn main() -> int {
   r.~area()
 }"#,
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let response = client.prepare_rename(TEST_URI, line, character).await;
+    let response = client.prepare_rename(TEST_URI, line, character);
     assert!(
         response.is_some(),
         "prepare_rename on method via dot access should return a result"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn prepare_rename_on_prelude_method_is_refused() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "fn main() {\n  let s = \"hello\"\n  let n = s.length()\n}",
-        )
-        .await;
+#[test]
+fn prepare_rename_on_prelude_method_is_refused() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "fn main() {\n  let s = \"hello\"\n  let n = s.length()\n}",
+    );
 
-    let response = client.prepare_rename(TEST_URI, 2, 12).await;
+    let response = client.prepare_rename(TEST_URI, 2, 12);
     assert!(
         response.is_none(),
         "prepare_rename on a prelude method must be refused, got {response:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn rename_on_prelude_method_is_refused() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "fn main() {\n  let s = \"hello\"\n  let n = s.length()\n}",
-        )
-        .await;
+#[test]
+fn rename_on_prelude_method_is_refused() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "fn main() {\n  let s = \"hello\"\n  let n = s.length()\n}",
+    );
 
-    let edit = client.rename(TEST_URI, 2, 12, "len").await;
+    let edit = client.rename(TEST_URI, 2, 12, "len");
     assert!(
         edit.is_none(),
         "rename on a prelude method must be refused, got {edit:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn prepare_rename_on_dot_access_field() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn prepare_rename_on_dot_access_field() {
+    let mut client = TestClient::new();
+    client.initialize();
     let (source, line, character) = cursor(
         r#"struct Point { x: int, y: int }
 struct Rect { origin: Point, width: int }
@@ -11188,26 +10282,25 @@ fn main() -> int {
   r.origin.~x
 }"#,
     );
-    client.open(TEST_URI, &source).await;
+    client.open(TEST_URI, &source);
 
-    let response = client.prepare_rename(TEST_URI, line, character).await;
+    let response = client.prepare_rename(TEST_URI, line, character);
     assert!(
         response.is_some(),
         "prepare_rename on field via chained dot access should return a result"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn rename_on_dot_access_field_finds_usages() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn rename_on_dot_access_field_finds_usages() {
+    let mut client = TestClient::new();
+    client.initialize();
 
-    client
-        .open(
-            TEST_URI,
-            r#"struct Point { x: int, y: int }
+    client.open(
+        TEST_URI,
+        r#"struct Point { x: int, y: int }
 impl Point {
   fn new(x: int, y: int) -> Point { Point { x: x, y: y } }
 }
@@ -11217,10 +10310,9 @@ fn main() {
   let b = p.x
   a + b
 }"#,
-        )
-        .await;
+    );
 
-    let edits = client.rename(TEST_URI, 6, 12, "horizontal").await;
+    let edits = client.rename(TEST_URI, 6, 12, "horizontal");
     let edits = edits.expect("rename on field via dot access should return edits");
     let changes = edits.changes.expect("rename should have changes");
 
@@ -11236,18 +10328,17 @@ fn main() {
         all_edits.len()
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn references_on_dot_access_field_finds_usages() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn references_on_dot_access_field_finds_usages() {
+    let mut client = TestClient::new();
+    client.initialize();
 
-    client
-        .open(
-            TEST_URI,
-            r#"struct Point { x: int, y: int }
+    client.open(
+        TEST_URI,
+        r#"struct Point { x: int, y: int }
 impl Point {
   fn new(x: int, y: int) -> Point { Point { x: x, y: y } }
 }
@@ -11257,10 +10348,9 @@ fn main() {
   let b = p.x
   a + b
 }"#,
-        )
-        .await;
+    );
 
-    let refs = client.references(TEST_URI, 6, 12, true).await;
+    let refs = client.references(TEST_URI, 6, 12, true);
     let refs = refs.expect("references on field via dot access should return results");
 
     assert!(
@@ -11269,18 +10359,17 @@ fn main() {
         refs.len()
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn references_on_enum_variant_in_match_pattern() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn references_on_enum_variant_in_match_pattern() {
+    let mut client = TestClient::new();
+    client.initialize();
 
-    client
-        .open(
-            TEST_URI,
-            r#"enum Shape { Circle(int), Square(int) }
+    client.open(
+        TEST_URI,
+        r#"enum Shape { Circle(int), Square(int) }
 fn area(s: Shape) -> int {
   match s {
     Shape.Circle(r) => r * r,
@@ -11290,10 +10379,9 @@ fn area(s: Shape) -> int {
 fn main() {
   let _ = area(Shape.Circle(5))
 }"#,
-        )
-        .await;
+    );
 
-    let refs = client.references(TEST_URI, 3, 10, true).await;
+    let refs = client.references(TEST_URI, 3, 10, true);
     let refs = refs.expect("references on enum variant in match pattern should return results");
 
     assert!(
@@ -11302,18 +10390,17 @@ fn main() {
         refs.len()
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn references_on_type_in_annotation() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn references_on_type_in_annotation() {
+    let mut client = TestClient::new();
+    client.initialize();
 
-    client
-        .open(
-            TEST_URI,
-            r#"struct Point { x: int, y: int }
+    client.open(
+        TEST_URI,
+        r#"struct Point { x: int, y: int }
 impl Point {
   fn new(x: int, y: int) -> Point { Point { x: x, y: y } }
 }
@@ -11324,10 +10411,9 @@ fn main() {
   let p: Point = Point.new(1, 2)
   let _ = use_point(p)
 }"#,
-        )
-        .await;
+    );
 
-    let refs = client.references(TEST_URI, 8, 10, true).await;
+    let refs = client.references(TEST_URI, 8, 10, true);
     let refs = refs.expect("references on type in annotation should return results");
 
     assert!(
@@ -11336,45 +10422,42 @@ fn main() {
         refs.len()
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn prepare_rename_on_enum_variant_in_match_pattern() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn prepare_rename_on_enum_variant_in_match_pattern() {
+    let mut client = TestClient::new();
+    client.initialize();
 
-    client
-        .open(
-            TEST_URI,
-            r#"enum Status { Active(int), Inactive }
+    client.open(
+        TEST_URI,
+        r#"enum Status { Active(int), Inactive }
 fn check(s: Status) -> int {
   match s {
     Status.Active(code) => code,
     Status.Inactive => 0,
   }
 }"#,
-        )
-        .await;
+    );
 
-    let pr = client.prepare_rename(TEST_URI, 3, 11).await;
+    let pr = client.prepare_rename(TEST_URI, 3, 11);
     assert!(
         pr.is_some(),
         "prepare_rename on enum variant in match pattern should return a result"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn prepare_rename_on_type_in_annotation() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn prepare_rename_on_type_in_annotation() {
+    let mut client = TestClient::new();
+    client.initialize();
 
-    client
-        .open(
-            TEST_URI,
-            r#"struct Point { x: int, y: int }
+    client.open(
+        TEST_URI,
+        r#"struct Point { x: int, y: int }
 impl Point {
   fn new(x: int, y: int) -> Point { Point { x: x, y: y } }
 }
@@ -11382,91 +10465,82 @@ fn main() {
   let p: Point = Point.new(1, 2)
   p.x
 }"#,
-        )
-        .await;
+    );
 
-    let pr = client.prepare_rename(TEST_URI, 5, 9).await;
+    let pr = client.prepare_rename(TEST_URI, 5, 9);
     assert!(
         pr.is_some(),
         "prepare_rename on type name in annotation should return a result"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_struct_call_field() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "struct Point { x: int, y: int }\nfn main() {\n  let p = Point { x: 1, y: 2 }\n  p.x\n}",
-        )
-        .await;
+#[test]
+fn goto_definition_struct_call_field() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "struct Point { x: int, y: int }\nfn main() {\n  let p = Point { x: 1, y: 2 }\n  p.x\n}",
+    );
 
-    let response = client.goto_definition(TEST_URI, 2, 18).await;
+    let response = client.goto_definition(TEST_URI, 2, 18);
     assert!(response.is_some());
 
     let loc = definition_location(&response.unwrap()).unwrap();
     assert_eq!(loc.range.start.line, 0);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_struct_call_field() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "struct Point { x: int, y: int }\nfn main() { Point { x: 1, y: 2 } }",
-        )
-        .await;
+#[test]
+fn hover_struct_call_field() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "struct Point { x: int, y: int }\nfn main() { Point { x: 1, y: 2 } }",
+    );
 
-    let hover = client.hover(TEST_URI, 1, 20).await;
+    let hover = client.hover(TEST_URI, 1, 20);
     let content = hover_content(&hover.unwrap());
     assert!(
         content.contains("int"),
         "hover on field name in struct literal should show field type, got: {content}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn prepare_rename_struct_call_field() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "struct Point { x: int, y: int }\nfn main() {\n  let p = Point { x: 1, y: 2 }\n  p.x\n}",
-        )
-        .await;
+#[test]
+fn prepare_rename_struct_call_field() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "struct Point { x: int, y: int }\nfn main() {\n  let p = Point { x: 1, y: 2 }\n  p.x\n}",
+    );
 
-    let pr = client.prepare_rename(TEST_URI, 2, 18).await;
+    let pr = client.prepare_rename(TEST_URI, 2, 18);
     assert!(
         pr.is_some(),
         "prepare_rename on field name in struct literal should return a result"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn references_struct_call_field() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "struct Point { x: int, y: int }\nfn main() {\n  let p = Point { x: 1, y: 2 }\n  p.x\n}",
-        )
-        .await;
+#[test]
+fn references_struct_call_field() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "struct Point { x: int, y: int }\nfn main() {\n  let p = Point { x: 1, y: 2 }\n  p.x\n}",
+    );
 
-    let refs = client.references(TEST_URI, 2, 18, true).await;
+    let refs = client.references(TEST_URI, 2, 18, true);
     assert!(refs.is_some());
 
     let locations = refs.unwrap();
@@ -11476,164 +10550,160 @@ async fn references_struct_call_field() {
         "references on struct literal field should include field definition (line 0), got: {lines:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_for_loop_binding() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "fn main() {\n  let items = [1, 2, 3]\n  for item in items {\n    item\n  }\n}",
-        )
-        .await;
+#[test]
+fn goto_definition_for_loop_binding() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "fn main() {\n  let items = [1, 2, 3]\n  for item in items {\n    item\n  }\n}",
+    );
 
-    let response = client.goto_definition(TEST_URI, 2, 6).await;
+    let response = client.goto_definition(TEST_URI, 2, 6);
     assert!(
         response.is_some(),
         "goto-def on for-loop binding should return a result"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_match_slice_pattern_binding() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_match_slice_pattern_binding() {
+    let mut client = TestClient::new();
+    client.initialize();
     client
         .open(
             TEST_URI,
             "fn main() {\n  let items = [1, 2, 3]\n  match items {\n    [first, ..rest] => first,\n    _ => 0,\n  }\n}",
         )
-        .await;
+        ;
 
-    let response = client.goto_definition(TEST_URI, 3, 5).await;
+    let response = client.goto_definition(TEST_URI, 3, 5);
     assert!(
         response.is_some(),
         "goto-def on 'first' in match slice pattern should return a result"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_if_let_slice_pattern_binding() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_if_let_slice_pattern_binding() {
+    let mut client = TestClient::new();
+    client.initialize();
     client
         .open(
             TEST_URI,
             "fn main() {\n  let items = [1, 2, 3]\n  if let [head, ..tail] = items {\n    head\n  } else {\n    0\n  }\n}",
         )
-        .await;
+        ;
 
-    let response = client.goto_definition(TEST_URI, 2, 10).await;
+    let response = client.goto_definition(TEST_URI, 2, 10);
     assert!(
         response.is_some(),
         "goto-def on 'head' in if-let slice pattern should return a result"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_enum_variant_payload_binding() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_enum_variant_payload_binding() {
+    let mut client = TestClient::new();
+    client.initialize();
     client
         .open(
             TEST_URI,
             "fn main() {\n  let val = Some(42)\n  match val {\n    Some(n) => n,\n    None => 0,\n  }\n}",
         )
-        .await;
+        ;
 
-    let response = client.goto_definition(TEST_URI, 3, 9).await;
+    let response = client.goto_definition(TEST_URI, 3, 9);
     assert!(
         response.is_some(),
         "goto-def on 'n' in Some(n) pattern should return a result"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_while_let_enum_payload_binding() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_while_let_enum_payload_binding() {
+    let mut client = TestClient::new();
+    client.initialize();
     client
         .open(
             TEST_URI,
             "fn main() {\n  let items = [Some(1), None]\n  let mut i = 0\n  while let Some(val) = items[i] {\n    val\n    i += 1\n  }\n}",
         )
-        .await;
+        ;
 
-    let response = client.goto_definition(TEST_URI, 3, 17).await;
+    let response = client.goto_definition(TEST_URI, 3, 17);
     assert!(
         response.is_some(),
         "goto-def on 'val' in while-let Some(val) pattern should return a result"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_enum_variant_in_definition() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "enum Color {\n  Red,\n  Green,\n  Blue,\n}\n\nfn main() {\n  let c = Color.Red\n}",
-        )
-        .await;
+#[test]
+fn goto_definition_enum_variant_in_definition() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "enum Color {\n  Red,\n  Green,\n  Blue,\n}\n\nfn main() {\n  let c = Color.Red\n}",
+    );
 
-    let response = client.goto_definition(TEST_URI, 1, 2).await;
+    let response = client.goto_definition(TEST_URI, 1, 2);
     assert!(
         response.is_some(),
         "goto-def on 'Red' in enum definition should return a result"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_enum_variant_with_payload_in_definition() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_enum_variant_with_payload_in_definition() {
+    let mut client = TestClient::new();
+    client.initialize();
     client
         .open(
             TEST_URI,
             "enum Shape {\n  Circle(int),\n  Rectangle(int, int),\n}\n\nfn main() {\n  let s = Shape.Circle(5)\n}",
         )
-        .await;
+        ;
 
-    let response = client.goto_definition(TEST_URI, 1, 2).await;
+    let response = client.goto_definition(TEST_URI, 1, 2);
     assert!(
         response.is_some(),
         "goto-def on 'Circle' in enum definition should return a result"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn rename_struct_field_from_definition() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn rename_struct_field_from_definition() {
+    let mut client = TestClient::new();
+    client.initialize();
     client
         .open(
             TEST_URI,
             "struct Config {\n  pub width: int,\n  pub height: int,\n}\n\nfn create(w: int, h: int) -> Config {\n  Config { width: w, height: h }\n}\n\nfn main() {\n  let c = create(10, 20)\n  c.width + c.height\n}",
         )
-        .await;
+        ;
 
-    let prep = client.prepare_rename(TEST_URI, 1, 6).await;
+    let prep = client.prepare_rename(TEST_URI, 1, 6);
     assert!(prep.is_some());
 
-    let edit = client.rename(TEST_URI, 1, 6, "w").await;
+    let edit = client.rename(TEST_URI, 1, 6, "w");
     assert!(edit.is_some());
     let changes = edit.unwrap().changes.unwrap();
     let file_edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
@@ -11650,31 +10720,31 @@ async fn rename_struct_field_from_definition() {
         file_edits.len()
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_struct_field_in_definition() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_struct_field_in_definition() {
+    let mut client = TestClient::new();
+    client.initialize();
     client
         .open(
             TEST_URI,
             "struct Point {\n  pub x: int,\n  pub y: int,\n}\n\nfn main() {\n  let p = Point { x: 1, y: 2 }\n  p.x\n}",
         )
-        .await;
+        ;
 
-    let response = client.goto_definition(TEST_URI, 1, 6).await;
+    let response = client.goto_definition(TEST_URI, 1, 6);
     assert!(
         response.is_some(),
         "goto-def on 'x' in struct field definition should return a result"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_type_alias_rhs_with_shadowing_lhs_name() {
+#[test]
+fn goto_definition_type_alias_rhs_with_shadowing_lhs_name() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
 
@@ -11691,8 +10761,8 @@ async fn goto_definition_type_alias_rhs_with_shadowing_lhs_name() {
     let routes_content = "import \"server/response\"\n\ntype Code = response.Code\n";
     std::fs::write(server_dir.join("routes.lis"), routes_content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let response_uri = Url::from_file_path(response_dir.join("response.lis"))
         .unwrap()
@@ -11701,29 +10771,27 @@ async fn goto_definition_type_alias_rhs_with_shadowing_lhs_name() {
         .unwrap()
         .to_string();
 
-    client.open(&response_uri, response_content).await;
-    client.open(&routes_uri, routes_content).await;
+    client.open(&response_uri, response_content);
+    client.open(&routes_uri, routes_content);
 
-    let lhs =
-        definition_location(&client.goto_definition(&routes_uri, 2, 6).await.unwrap()).unwrap();
+    let lhs = definition_location(&client.goto_definition(&routes_uri, 2, 6).unwrap()).unwrap();
     assert_eq!(lhs.uri.as_str(), routes_uri);
     assert_eq!(lhs.range.start.line, 2);
 
     let qualifier =
-        definition_location(&client.goto_definition(&routes_uri, 2, 14).await.unwrap()).unwrap();
+        definition_location(&client.goto_definition(&routes_uri, 2, 14).unwrap()).unwrap();
     assert_eq!(qualifier.uri.as_str(), routes_uri);
     assert_eq!(qualifier.range.start.line, 0);
 
-    let rhs =
-        definition_location(&client.goto_definition(&routes_uri, 2, 23).await.unwrap()).unwrap();
+    let rhs = definition_location(&client.goto_definition(&routes_uri, 2, 23).unwrap()).unwrap();
     assert_eq!(rhs.uri.as_str(), response_uri);
     assert_eq!(rhs.range.start.line, 0);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_type_alias_inside_generic_param() {
+#[test]
+fn goto_definition_type_alias_inside_generic_param() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
 
@@ -11740,8 +10808,8 @@ async fn goto_definition_type_alias_inside_generic_param() {
     let routes_content = "import \"server/response\"\n\ntype Codes = Slice<response.Code>\n";
     std::fs::write(server_dir.join("routes.lis"), routes_content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let response_uri = Url::from_file_path(response_dir.join("response.lis"))
         .unwrap()
@@ -11750,22 +10818,21 @@ async fn goto_definition_type_alias_inside_generic_param() {
         .unwrap()
         .to_string();
 
-    client.open(&response_uri, response_content).await;
-    client.open(&routes_uri, routes_content).await;
+    client.open(&response_uri, response_content);
+    client.open(&routes_uri, routes_content);
 
     let qualifier =
-        definition_location(&client.goto_definition(&routes_uri, 2, 22).await.unwrap()).unwrap();
+        definition_location(&client.goto_definition(&routes_uri, 2, 22).unwrap()).unwrap();
     assert_eq!(qualifier.uri.as_str(), routes_uri);
 
-    let inner =
-        definition_location(&client.goto_definition(&routes_uri, 2, 30).await.unwrap()).unwrap();
+    let inner = definition_location(&client.goto_definition(&routes_uri, 2, 30).unwrap()).unwrap();
     assert_eq!(inner.uri.as_str(), response_uri);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_type_alias_inside_function_annotation() {
+#[test]
+fn goto_definition_type_alias_inside_function_annotation() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
 
@@ -11783,8 +10850,8 @@ async fn goto_definition_type_alias_inside_function_annotation() {
         "import \"server/response\"\n\ntype Handler = fn(response.Code) -> response.Code\n";
     std::fs::write(server_dir.join("routes.lis"), routes_content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let response_uri = Url::from_file_path(response_dir.join("response.lis"))
         .unwrap()
@@ -11793,22 +10860,20 @@ async fn goto_definition_type_alias_inside_function_annotation() {
         .unwrap()
         .to_string();
 
-    client.open(&response_uri, response_content).await;
-    client.open(&routes_uri, routes_content).await;
+    client.open(&response_uri, response_content);
+    client.open(&routes_uri, routes_content);
 
-    let param =
-        definition_location(&client.goto_definition(&routes_uri, 2, 28).await.unwrap()).unwrap();
+    let param = definition_location(&client.goto_definition(&routes_uri, 2, 28).unwrap()).unwrap();
     assert_eq!(param.uri.as_str(), response_uri);
 
-    let ret =
-        definition_location(&client.goto_definition(&routes_uri, 2, 46).await.unwrap()).unwrap();
+    let ret = definition_location(&client.goto_definition(&routes_uri, 2, 46).unwrap()).unwrap();
     assert_eq!(ret.uri.as_str(), response_uri);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_type_alias_inside_tuple_annotation() {
+#[test]
+fn goto_definition_type_alias_inside_tuple_annotation() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
 
@@ -11825,8 +10890,8 @@ async fn goto_definition_type_alias_inside_tuple_annotation() {
     let routes_content = "import \"server/response\"\n\ntype Pair = (response.Code, int)\n";
     std::fs::write(server_dir.join("routes.lis"), routes_content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let response_uri = Url::from_file_path(response_dir.join("response.lis"))
         .unwrap()
@@ -11835,47 +10900,46 @@ async fn goto_definition_type_alias_inside_tuple_annotation() {
         .unwrap()
         .to_string();
 
-    client.open(&response_uri, response_content).await;
-    client.open(&routes_uri, routes_content).await;
+    client.open(&response_uri, response_content);
+    client.open(&routes_uri, routes_content);
 
     let qualifier =
-        definition_location(&client.goto_definition(&routes_uri, 2, 15).await.unwrap()).unwrap();
+        definition_location(&client.goto_definition(&routes_uri, 2, 15).unwrap()).unwrap();
     assert_eq!(qualifier.uri.as_str(), routes_uri);
 
-    let inner =
-        definition_location(&client.goto_definition(&routes_uri, 2, 23).await.unwrap()).unwrap();
+    let inner = definition_location(&client.goto_definition(&routes_uri, 2, 23).unwrap()).unwrap();
     assert_eq!(inner.uri.as_str(), response_uri);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_type_alias_rhs_same_module() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_type_alias_rhs_same_module() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "struct Bar { x: int }\ntype Foo = Bar\n";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let rhs = definition_location(&client.goto_definition(TEST_URI, 1, 12).await.unwrap()).unwrap();
+    let rhs = definition_location(&client.goto_definition(TEST_URI, 1, 12).unwrap()).unwrap();
     assert_eq!(rhs.uri.as_str(), TEST_URI);
     assert_eq!(rhs.range.start.line, 0);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_struct_field_in_definition() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn hover_struct_field_in_definition() {
+    let mut client = TestClient::new();
+    client.initialize();
     client
         .open(
             TEST_URI,
             "struct Point {\n  pub x: int,\n  pub y: string,\n}\n\nfn main() {\n  let p = Point { x: 1, y: \"hi\" }\n}",
         )
-        .await;
+        ;
 
-    let hover = client.hover(TEST_URI, 2, 6).await;
+    let hover = client.hover(TEST_URI, 2, 6);
     assert!(
         hover.is_some(),
         "hover on 'y' in struct field definition should return a result"
@@ -11886,21 +10950,21 @@ async fn hover_struct_field_in_definition() {
         "hover should show string type, got: {content}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_struct_pattern_field() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_struct_pattern_field() {
+    let mut client = TestClient::new();
+    client.initialize();
     client
         .open(
             TEST_URI,
             "struct Point {\n  pub x: int,\n  pub y: int,\n}\n\nfn main() {\n  let p = Point { x: 1, y: 2 }\n  match p {\n    Point { x, y } => x + y,\n  }\n}",
         )
-        .await;
+        ;
 
-    let response = client.goto_definition(TEST_URI, 8, 12).await;
+    let response = client.goto_definition(TEST_URI, 8, 12);
     assert!(
         response.is_some(),
         "goto-def on 'x' in struct pattern should return a result"
@@ -11913,11 +10977,11 @@ async fn goto_definition_struct_pattern_field() {
         "goto-def should land on field definition line 1"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_struct_name_in_aliased_struct_call() {
+#[test]
+fn goto_definition_struct_name_in_aliased_struct_call() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(
@@ -11939,25 +11003,25 @@ async fn goto_definition_struct_name_in_aliased_struct_call() {
     let main_content = "import s \"shapes\"\n\nfn main() {\n  let r = s.Rect { width: 10, height: 20 }\n  r.width\n}\n";
     std::fs::write(src.join("main.lis"), main_content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let main_uri = Url::from_file_path(src.join("main.lis"))
         .unwrap()
         .to_string();
-    client.open(&main_uri, main_content).await;
+    client.open(&main_uri, main_content);
 
-    let response = client.goto_definition(&main_uri, 3, 14).await;
+    let response = client.goto_definition(&main_uri, 3, 14);
     assert!(
         response.is_some(),
         "goto-def on 'Rect' in aliased struct call s.Rect should return a result"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn rename_struct_from_aliased_struct_call() {
+#[test]
+fn rename_struct_from_aliased_struct_call() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(
@@ -11979,15 +11043,15 @@ async fn rename_struct_from_aliased_struct_call() {
     let main_content = "import s \"shapes\"\n\nfn main() {\n  let r = s.Rect { width: 10, height: 20 }\n  r.width\n}\n";
     std::fs::write(src.join("main.lis"), main_content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let main_uri = Url::from_file_path(src.join("main.lis"))
         .unwrap()
         .to_string();
-    client.open(&main_uri, main_content).await;
+    client.open(&main_uri, main_content);
 
-    let result = client.rename(&main_uri, 3, 14, "Box").await;
+    let result = client.rename(&main_uri, 3, 14, "Box");
     assert!(
         result.is_some(),
         "rename 'Rect' from aliased struct call s.Rect should return edits"
@@ -11998,21 +11062,21 @@ async fn rename_struct_from_aliased_struct_call() {
         "rename should produce changes across files"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_type_alias_in_struct_call() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_type_alias_in_struct_call() {
+    let mut client = TestClient::new();
+    client.initialize();
     client
         .open(
             TEST_URI,
             "struct Point {\n  pub x: int,\n  pub y: int,\n}\n\ntype Alias = Point\n\nfn main() {\n  let p = Alias { x: 1, y: 2 }\n  p.x\n}",
         )
-        .await;
+        ;
 
-    let response = client.goto_definition(TEST_URI, 8, 12).await;
+    let response = client.goto_definition(TEST_URI, 8, 12);
     assert!(
         response.is_some(),
         "goto-def on 'Alias' in struct call should return a result"
@@ -12023,21 +11087,21 @@ async fn goto_definition_type_alias_in_struct_call() {
         "goto-def should land on type alias definition, not the underlying struct"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn goto_definition_field_in_aliased_struct_call() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn goto_definition_field_in_aliased_struct_call() {
+    let mut client = TestClient::new();
+    client.initialize();
     client
         .open(
             TEST_URI,
             "struct Point {\n  pub x: int,\n  pub y: int,\n}\n\ntype Alias = Point\n\nfn main() {\n  let p = Alias { x: 1, y: 2 }\n}",
         )
-        .await;
+        ;
 
-    let response = client.goto_definition(TEST_URI, 8, 18).await;
+    let response = client.goto_definition(TEST_URI, 8, 18);
     assert!(
         response.is_some(),
         "goto-def on field `x` in aliased struct call should find the underlying struct field"
@@ -12048,11 +11112,11 @@ async fn goto_definition_field_in_aliased_struct_call() {
         "goto-def should land on `pub x: int` in the struct definition"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn diagnostics_invalid_manifest_surfaces_error() {
+#[test]
+fn diagnostics_invalid_manifest_surfaces_error() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
 
@@ -12065,15 +11129,15 @@ async fn diagnostics_invalid_manifest_surfaces_error() {
     let content = "fn main() { 1 }";
     std::fs::write(src.join("main.lis"), content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let main_uri = Url::from_file_path(src.join("main.lis"))
         .unwrap()
         .to_string();
-    client.open(&main_uri, content).await;
+    client.open(&main_uri, content);
 
-    let diagnostics = client.await_diagnostics().await;
+    let diagnostics = client.await_diagnostics();
 
     let has_manifest_error = diagnostics.iter().any(|d| {
         d.severity == Some(DiagnosticSeverity::ERROR)
@@ -12087,11 +11151,11 @@ async fn diagnostics_invalid_manifest_surfaces_error() {
         "invalid lisette.toml should produce a manifest_error diagnostic, got: {diagnostics:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn diagnostics_toolchain_mismatch_surfaces_error() {
+#[test]
+fn diagnostics_toolchain_mismatch_surfaces_error() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
 
@@ -12108,15 +11172,15 @@ async fn diagnostics_toolchain_mismatch_surfaces_error() {
     let content = "fn main() { 1 }";
     std::fs::write(src.join("main.lis"), content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let main_uri = Url::from_file_path(src.join("main.lis"))
         .unwrap()
         .to_string();
-    client.open(&main_uri, content).await;
+    client.open(&main_uri, content);
 
-    let diagnostics = client.await_diagnostics().await;
+    let diagnostics = client.await_diagnostics();
 
     let has_toolchain_error = diagnostics.iter().any(|d| {
         d.severity == Some(DiagnosticSeverity::ERROR) && d.message.contains("Toolchain mismatch")
@@ -12127,13 +11191,13 @@ async fn diagnostics_toolchain_mismatch_surfaces_error() {
         "toolchain version mismatch should produce a diagnostic, got: {diagnostics:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_dot_on_ref_variable() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_dot_on_ref_variable() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 struct Point { x: int, y: int }
@@ -12144,9 +11208,9 @@ fn main() {
   let p = &Point { x: 1, y: 2 }
   p.dist()
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.completion(TEST_URI, 6, 4).await;
+    let response = client.completion(TEST_URI, 6, 4);
     assert!(response.is_some());
 
     let labels = completion_labels(&response.unwrap());
@@ -12159,18 +11223,18 @@ fn main() {
         "should include 'x' field through ref, got: {labels:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_includes_interface_methods() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_includes_interface_methods() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "interface Example { fn example() -> string }\nfn test(ex: Example) { ex. }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.completion(TEST_URI, 1, 26).await;
+    let response = client.completion(TEST_URI, 1, 26);
     assert!(response.is_some());
     let labels = completion_labels(&response.unwrap());
     assert!(
@@ -12178,13 +11242,13 @@ async fn completion_includes_interface_methods() {
         "should include interface method 'example', got: {labels:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn completion_includes_inherited_interface_methods() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn completion_includes_inherited_interface_methods() {
+    let mut client = TestClient::new();
+    client.initialize();
 
     let source = "\
 interface Reader { fn read() -> string }
@@ -12193,9 +11257,9 @@ embed Reader
 fn write() -> string
 }
 fn use_rw(rw: ReadWriter) { rw. }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let response = client.completion(TEST_URI, 5, 31).await;
+    let response = client.completion(TEST_URI, 5, 31);
     assert!(response.is_some());
     let labels = completion_labels(&response.unwrap());
     assert!(
@@ -12207,19 +11271,18 @@ fn use_rw(rw: ReadWriter) { rw. }";
         "should include inherited method 'read', got: {labels:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn inlay_hint_shows_let_type() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn inlay_hint_shows_let_type() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "fn main() { let x = 42; x }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
     let hints = client
         .inlay_hint(TEST_URI, (0, 0), doc_end(source))
-        .await
         .unwrap();
 
     assert_eq!(
@@ -12227,19 +11290,18 @@ async fn inlay_hint_shows_let_type() {
         vec![(0, 17, ": int".to_string())]
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn inlay_hint_shows_parameter_names() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn inlay_hint_shows_parameter_names() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "fn add(x: int, y: int) -> int { x + y }\nfn main() { add(1, 2) }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
     let hints = client
         .inlay_hint(TEST_URI, (0, 0), doc_end(source))
-        .await
         .unwrap();
 
     assert_eq!(
@@ -12247,31 +11309,30 @@ async fn inlay_hint_shows_parameter_names() {
         vec![(1, 16, "x:".to_string()), (1, 19, "y:".to_string())]
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn inlay_hint_suppresses_matching_argument_name() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn inlay_hint_suppresses_matching_argument_name() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source =
         "fn add(x: int, y: int) -> int { x + y }\nfn wrap(x: int, y: int) -> int { add(x, y) }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
     let hints = client
         .inlay_hint(TEST_URI, (0, 0), doc_end(source))
-        .await
         .unwrap();
 
     assert_eq!(inlay_hint_triples(&hints), vec![]);
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn inlay_hint_method_call_omits_receiver() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn inlay_hint_method_call_omits_receiver() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "\
 struct Point { x: int, y: int }
 impl Point {
@@ -12280,11 +11341,10 @@ impl Point {
 fn run(p: Point) -> int {
   p.translate(10, 20)
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
     let hints = client
         .inlay_hint(TEST_URI, (0, 0), doc_end(source))
-        .await
         .unwrap();
 
     assert_eq!(
@@ -12292,23 +11352,22 @@ fn run(p: Point) -> int {
         vec![(5, 14, "dx:".to_string()), (5, 18, "dy:".to_string())]
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn inlay_hint_variadic_labels_first_arg_only() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn inlay_hint_variadic_labels_first_arg_only() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "\
 fn log_all(prefix: string, vals: VarArgs<int>) -> int { prefix.length() }
 fn main() {
   let _ = log_all(\"tag\", 1, 2, 3)
 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
     let hints = client
         .inlay_hint(TEST_URI, (0, 0), doc_end(source))
-        .await
         .unwrap();
 
     // The fixed `prefix` is labeled, and the variadic `vals` labels only its first arg.
@@ -12317,19 +11376,18 @@ fn main() {
         vec![(2, 18, "prefix:".to_string()), (2, 25, "vals:".to_string())]
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn inlay_hint_renders_collection_type() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn inlay_hint_renders_collection_type() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "fn main() { let xs = [1, 2, 3]; xs.length() }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
     let hints = client
         .inlay_hint(TEST_URI, (0, 0), doc_end(source))
-        .await
         .unwrap();
 
     assert_eq!(
@@ -12337,19 +11395,18 @@ async fn inlay_hint_renders_collection_type() {
         vec![(0, 18, ": Slice<int>".to_string())]
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn inlay_hint_skips_annotated_let() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn inlay_hint_skips_annotated_let() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "fn main() { let x: int = 42; x }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
     let hints = client
         .inlay_hint(TEST_URI, (0, 0), doc_end(source))
-        .await
         .unwrap();
 
     assert!(
@@ -12357,19 +11414,18 @@ async fn inlay_hint_skips_annotated_let() {
         "annotated let should have no hint: {hints:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn inlay_hint_skips_destructuring_let() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn inlay_hint_skips_destructuring_let() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "fn main() { let (a, b) = (1, 2); a + b }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
     let hints = client
         .inlay_hint(TEST_URI, (0, 0), doc_end(source))
-        .await
         .unwrap();
 
     assert!(
@@ -12377,96 +11433,89 @@ async fn inlay_hint_skips_destructuring_let() {
         "destructuring let is out of v1 scope: {hints:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn inlay_hint_respects_requested_range() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client
-        .open(
-            TEST_URI,
-            "fn main() {\n    let a = 1\n    let b = 2\n    a + b\n}",
-        )
-        .await;
+#[test]
+fn inlay_hint_respects_requested_range() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "fn main() {\n    let a = 1\n    let b = 2\n    a + b\n}",
+    );
 
-    let hints = client.inlay_hint(TEST_URI, (2, 0), (3, 0)).await.unwrap();
+    let hints = client.inlay_hint(TEST_URI, (2, 0), (3, 0)).unwrap();
 
     assert_eq!(
         inlay_hint_triples(&hints),
         vec![(2, 9, ": int".to_string())]
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn inlay_hint_range_end_is_exclusive() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "fn main() { let x = 42; x }").await;
+#[test]
+fn inlay_hint_range_end_is_exclusive() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { let x = 42; x }");
 
-    let at_boundary = client.inlay_hint(TEST_URI, (0, 0), (0, 17)).await.unwrap();
+    let at_boundary = client.inlay_hint(TEST_URI, (0, 0), (0, 17)).unwrap();
     assert!(
         at_boundary.is_empty(),
         "insertion point at the exclusive range end must not be returned: {at_boundary:?}"
     );
 
-    let past_boundary = client.inlay_hint(TEST_URI, (0, 0), (0, 18)).await.unwrap();
+    let past_boundary = client.inlay_hint(TEST_URI, (0, 0), (0, 18)).unwrap();
     assert_eq!(
         inlay_hint_triples(&past_boundary),
         vec![(0, 17, ": int".to_string())]
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn inlay_hint_range_past_eof_is_empty() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(TEST_URI, "fn main() { let x = 42; x }").await;
+#[test]
+fn inlay_hint_range_past_eof_is_empty() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "fn main() { let x = 42; x }");
 
-    let hints = client
-        .inlay_hint(TEST_URI, (999, 999), (1000, 0))
-        .await
-        .unwrap();
+    let hints = client.inlay_hint(TEST_URI, (999, 999), (1000, 0)).unwrap();
 
     assert!(
         hints.is_empty(),
         "a range entirely past EOF must not scan the whole file: {hints:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn inlay_hint_for_loop_variable() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn inlay_hint_for_loop_variable() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "fn main() { for i in 0..3 { i } }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
     let hints = client
         .inlay_hint(TEST_URI, (0, 0), doc_end(source))
-        .await
         .unwrap();
     assert_eq!(
         inlay_hint_triples(&hints),
         vec![(0, 17, ": int".to_string())]
     );
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn inlay_hint_match_tuple_binding() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn inlay_hint_match_tuple_binding() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "fn pick(p: (int, string)) -> int { match p { (a, b) => a } }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
     let hints = client
         .inlay_hint(TEST_URI, (0, 0), doc_end(source))
-        .await
         .unwrap();
     assert_eq!(
         inlay_hint_triples(&hints),
@@ -12475,70 +11524,66 @@ async fn inlay_hint_match_tuple_binding() {
             (0, 50, ": string".to_string())
         ]
     );
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn inlay_hint_match_enum_payload() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn inlay_hint_match_enum_payload() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source =
         "fn m(o: Option<int>) -> int { match o { Option.Some(n) => n, Option.None => 0 } }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
     let hints = client
         .inlay_hint(TEST_URI, (0, 0), doc_end(source))
-        .await
         .unwrap();
     assert_eq!(
         inlay_hint_triples(&hints),
         vec![(0, 53, ": int".to_string())]
     );
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn inlay_hint_if_let_binding() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn inlay_hint_if_let_binding() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "fn u(o: Option<int>) -> int { if let Some(x) = o { x } else { 0 } }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
     let hints = client
         .inlay_hint(TEST_URI, (0, 0), doc_end(source))
-        .await
         .unwrap();
     assert_eq!(
         inlay_hint_triples(&hints),
         vec![(0, 43, ": int".to_string())]
     );
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn inlay_hint_while_let_binding() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn inlay_hint_while_let_binding() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "fn drain(o: Option<int>) -> int { let mut c: Option<int> = o; while let Some(x) = c { c = Option.None } 0 }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
     let hints = client
         .inlay_hint(TEST_URI, (0, 0), doc_end(source))
-        .await
         .unwrap();
     assert_eq!(
         inlay_hint_triples(&hints),
         vec![(0, 78, ": int".to_string())]
     );
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn inlay_hint_lambda_param_and_return() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn inlay_hint_lambda_param_and_return() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "fn main() { (|x| x + 1)(5) }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
     let hints = client
         .inlay_hint(TEST_URI, (0, 0), doc_end(source))
-        .await
         .unwrap();
     assert_eq!(
         inlay_hint_triples(&hints),
@@ -12548,35 +11593,33 @@ async fn inlay_hint_lambda_param_and_return() {
             (0, 17, "-> int".to_string())
         ]
     );
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn inlay_hint_lambda_skips_annotated_param() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn inlay_hint_lambda_skips_annotated_param() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "fn main() { (|x: int| x + 1)(5) }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
     let hints = client
         .inlay_hint(TEST_URI, (0, 0), doc_end(source))
-        .await
         .unwrap();
     assert_eq!(
         inlay_hint_triples(&hints),
         vec![(0, 29, "x:".to_string()), (0, 22, "-> int".to_string())]
     );
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn inlay_hint_curried_lambda_skips_outer_return() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn inlay_hint_curried_lambda_skips_outer_return() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source = "fn main() { ((|x| |y| x + y)(1))(2) }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
     let hints = client
         .inlay_hint(TEST_URI, (0, 0), doc_end(source))
-        .await
         .unwrap();
     assert_eq!(
         inlay_hint_triples(&hints),
@@ -12588,54 +11631,52 @@ async fn inlay_hint_curried_lambda_skips_outer_return() {
             (0, 22, "-> int".to_string())
         ]
     );
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn hover_match_tuple_binding_shows_element_type() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn hover_match_tuple_binding_shows_element_type() {
+    let mut client = TestClient::new();
+    client.initialize();
     // A tuple pattern in a match arm carries a typed pattern; `a` must resolve to its
     // element type `int`, not the whole `(int, string)`.
     let source = "fn pick(p: (int, string)) -> int { match p { (a, b) => a } }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
 
-    let hover = client.hover(TEST_URI, 0, 46).await;
+    let hover = client.hover(TEST_URI, 0, 46);
     let content = hover_content(&hover.unwrap());
     assert!(content.contains("int"));
     assert!(!content.contains("string"));
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn inlay_hint_parameter_position_for_index_arg() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn inlay_hint_parameter_position_for_index_arg() {
+    let mut client = TestClient::new();
+    client.initialize();
     // Regression: param-name hints anchor at the start of `items[..]`, not the `[`.
     let source = "fn add(x: int, y: int) -> int { x + y }\nfn s(items: Slice<int>) -> int { add(items[0], items[1]) }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
     let hints = client
         .inlay_hint(TEST_URI, (0, 0), doc_end(source))
-        .await
         .unwrap();
     assert_eq!(
         inlay_hint_triples(&hints),
         vec![(1, 37, "x:".to_string()), (1, 47, "y:".to_string())]
     );
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn inlay_hint_match_slice_prefix_and_rest() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn inlay_hint_match_slice_prefix_and_rest() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source =
         "fn head(items: Slice<int>) -> int { match items { [] => 0, [first, ..rest] => first } }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
     let hints = client
         .inlay_hint(TEST_URI, (0, 0), doc_end(source))
-        .await
         .unwrap();
     // `first` binds the element type; `rest` binds the remaining slice.
     assert_eq!(
@@ -12645,19 +11686,18 @@ async fn inlay_hint_match_slice_prefix_and_rest() {
             (0, 73, ": Slice<int>".to_string())
         ]
     );
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn inlay_hint_nested_array_rest_binds_sub_array() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn inlay_hint_nested_array_rest_binds_sub_array() {
+    let mut client = TestClient::new();
+    client.initialize();
     let source =
         "fn f(m: Array<Array<int, 3>, 1>) -> int { match m { [[first, ..rest]] => first[0] } }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
     let hints = client
         .inlay_hint(TEST_URI, (0, 0), doc_end(source))
-        .await
         .unwrap();
     let labels: Vec<String> = inlay_hint_triples(&hints)
         .into_iter()
@@ -12667,20 +11707,19 @@ async fn inlay_hint_nested_array_rest_binds_sub_array() {
         labels.contains(&": Array<int, 2>".to_string()),
         "nested array rest should bind Array<int, 2>, got {labels:?}"
     );
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn inlay_hint_lambda_return_over_index_body() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+#[test]
+fn inlay_hint_lambda_return_over_index_body() {
+    let mut client = TestClient::new();
+    client.initialize();
     // The `-> int` return hint anchors at the body's left edge (`ys`), not the `[`.
     let source =
         "fn ap(f: fn(Slice<int>) -> int) -> int { f([1, 2]) }\nfn d() -> int { ap(|ys| ys[0]) }";
-    client.open(TEST_URI, source).await;
+    client.open(TEST_URI, source);
     let hints = client
         .inlay_hint(TEST_URI, (0, 0), doc_end(source))
-        .await
         .unwrap();
     assert_eq!(
         inlay_hint_triples(&hints),
@@ -12690,11 +11729,11 @@ async fn inlay_hint_lambda_return_over_index_body() {
             (1, 24, "-> int".to_string())
         ]
     );
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn opening_prelude_source_reports_no_foreign_type_errors() {
+#[test]
+fn opening_prelude_source_reports_no_foreign_type_errors() {
     let dir = tempfile::tempdir().unwrap();
     let prelude_src = std::fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -12705,10 +11744,10 @@ async fn opening_prelude_source_reports_no_foreign_type_errors() {
     std::fs::write(&path, &prelude_src).unwrap();
     let uri = Url::from_file_path(&path).unwrap().to_string();
 
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.open(&uri, &prelude_src).await;
-    let diagnostics = client.await_diagnostics().await;
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(&uri, &prelude_src);
+    let diagnostics = client.await_diagnostics();
 
     let offenders: Vec<&str> = diagnostics
         .iter()
@@ -12719,11 +11758,11 @@ async fn opening_prelude_source_reports_no_foreign_type_errors() {
         offenders.is_empty(),
         "opening the prelude source must not flag its own impls as foreign: {offenders:?}"
     );
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn editing_a_file_refreshes_diagnostics_in_dependent_open_files() {
+#[test]
+fn editing_a_file_refreshes_diagnostics_in_dependent_open_files() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(
@@ -12739,8 +11778,8 @@ async fn editing_a_file_refreshes_diagnostics_in_dependent_open_files() {
     std::fs::write(src.join("foo.lis"), foo_content).unwrap();
     std::fs::write(src.join("main.lis"), main_content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
     let foo_uri = Url::from_file_path(src.join("foo.lis"))
         .unwrap()
         .to_string();
@@ -12748,12 +11787,11 @@ async fn editing_a_file_refreshes_diagnostics_in_dependent_open_files() {
         .unwrap()
         .to_string();
 
-    client.open(&foo_uri, foo_content).await;
-    client.open(&main_uri, main_content).await;
+    client.open(&foo_uri, foo_content);
+    client.open(&main_uri, main_content);
 
     let initial = client
         .await_diagnostics_for(&main_uri)
-        .await
         .expect("main.lis should publish diagnostics on open");
     let initial_errors: Vec<_> = initial
         .iter()
@@ -12765,11 +11803,10 @@ async fn editing_a_file_refreshes_diagnostics_in_dependent_open_files() {
     );
 
     let renamed_foo = "pub struct Foo {}\n\nimpl Foo {\n  pub fn floo(self) {}\n}\n";
-    client.change(&foo_uri, renamed_foo, 2).await;
+    client.change(&foo_uri, renamed_foo, 2);
 
     let refreshed = client
         .await_diagnostics_for(&main_uri)
-        .await
         .expect("editing foo.lis should refresh diagnostics for the dependent main.lis");
     assert!(
         refreshed
@@ -12778,11 +11815,11 @@ async fn editing_a_file_refreshes_diagnostics_in_dependent_open_files() {
         "main.lis should now report the renamed member, got: {refreshed:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn closing_an_unsaved_file_refreshes_dependent_open_files() {
+#[test]
+fn closing_an_unsaved_file_refreshes_dependent_open_files() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(
@@ -12798,8 +11835,8 @@ async fn closing_an_unsaved_file_refreshes_dependent_open_files() {
     std::fs::write(src.join("foo.lis"), foo_content).unwrap();
     std::fs::write(src.join("main.lis"), main_content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
     let foo_uri = Url::from_file_path(src.join("foo.lis"))
         .unwrap()
         .to_string();
@@ -12807,15 +11844,14 @@ async fn closing_an_unsaved_file_refreshes_dependent_open_files() {
         .unwrap()
         .to_string();
 
-    client.open(&foo_uri, foo_content).await;
-    client.open(&main_uri, main_content).await;
-    client.await_diagnostics_for(&main_uri).await;
+    client.open(&foo_uri, foo_content);
+    client.open(&main_uri, main_content);
+    client.await_diagnostics_for(&main_uri);
 
     let renamed_foo = "pub struct Foo {}\n\nimpl Foo {\n  pub fn floo(self) {}\n}\n";
-    client.change(&foo_uri, renamed_foo, 2).await;
+    client.change(&foo_uri, renamed_foo, 2);
     let broken = client
         .await_diagnostics_for(&main_uri)
-        .await
         .expect("editing foo.lis should break main.lis");
     assert!(
         broken
@@ -12824,10 +11860,9 @@ async fn closing_an_unsaved_file_refreshes_dependent_open_files() {
         "main.lis should have an error against the unsaved rename, got: {broken:?}"
     );
 
-    client.close(&foo_uri).await;
+    client.close(&foo_uri);
     let restored = client
         .await_diagnostics_for(&main_uri)
-        .await
         .expect("closing the unsaved foo.lis should refresh main.lis against on-disk content");
     let errors: Vec<_> = restored
         .iter()
@@ -12838,28 +11873,28 @@ async fn closing_an_unsaved_file_refreshes_dependent_open_files() {
         "reverting foo.lis to disk should clear main.lis errors, got: {errors:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn exit_after_shutdown_signals_clean_exit() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.shutdown().await;
-    client.exit().await;
-    assert_eq!(client.await_exit_code().await, 0);
+#[test]
+fn exit_after_shutdown_signals_clean_exit() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.shutdown();
+    client.exit();
+    assert_eq!(client.await_exit_code(), 0);
 }
 
-#[tokio::test]
-async fn exit_without_shutdown_signals_error_exit() {
-    let mut client = TestClient::new().await;
-    client.initialize().await;
-    client.exit().await;
-    assert_eq!(client.await_exit_code().await, 1);
+#[test]
+fn exit_without_shutdown_signals_error_exit() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.exit();
+    assert_eq!(client.await_exit_code(), 1);
 }
 
-#[tokio::test]
-async fn library_root_file_analyzes_cleanly() {
+#[test]
+fn library_root_file_analyzes_cleanly() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(
@@ -12872,14 +11907,14 @@ async fn library_root_file_analyzes_cleanly() {
     let content = "pub fn origin() -> int { 0 }";
     std::fs::write(src.join("geo.lis"), content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
     let uri = Url::from_file_path(src.join("geo.lis"))
         .unwrap()
         .to_string();
-    client.open(&uri, content).await;
+    client.open(&uri, content);
 
-    let diags = client.await_diagnostics().await;
+    let diags = client.await_diagnostics();
     let errors: Vec<_> = diags
         .iter()
         .filter(|d| d.severity == Some(DiagnosticSeverity::ERROR))
@@ -12889,13 +11924,13 @@ async fn library_root_file_analyzes_cleanly() {
         "library root file should be clean: {errors:?}"
     );
 
-    let hover = client.hover(&uri, 0, 8).await;
+    let hover = client.hover(&uri, 0, 8);
     assert!(hover.is_some(), "hover should work in a library");
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn library_cross_module_goto_definition_works() {
+#[test]
+fn library_cross_module_goto_definition_works() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(
@@ -12914,14 +11949,14 @@ async fn library_cross_module_goto_definition_works() {
     let calc = "import \"math\"\n\npub fn quad(n: int) -> int {\n  math.double(n) * 2\n}";
     std::fs::write(src.join("calc/calc.lis"), calc).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
     let uri = Url::from_file_path(src.join("calc/calc.lis"))
         .unwrap()
         .to_string();
-    client.open(&uri, calc).await;
+    client.open(&uri, calc);
 
-    let diags = client.await_diagnostics().await;
+    let diags = client.await_diagnostics();
     let errors: Vec<_> = diags
         .iter()
         .filter(|d| d.severity == Some(DiagnosticSeverity::ERROR))
@@ -12931,13 +11966,13 @@ async fn library_cross_module_goto_definition_works() {
         "cross-module library import should resolve: {errors:?}"
     );
 
-    let goto = client.goto_definition(&uri, 3, 8).await;
+    let goto = client.goto_definition(&uri, 3, 8);
     assert!(goto.is_some(), "goto across library modules should work");
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn library_main_function_is_not_flagged() {
+#[test]
+fn library_main_function_is_not_flagged() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(
@@ -12950,14 +11985,14 @@ async fn library_main_function_is_not_flagged() {
     let content = "pub fn main(x: int) -> int { x }";
     std::fs::write(src.join("lib.lis"), content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
     let uri = Url::from_file_path(src.join("lib.lis"))
         .unwrap()
         .to_string();
-    client.open(&uri, content).await;
+    client.open(&uri, content);
 
-    let diags = client.await_diagnostics().await;
+    let diags = client.await_diagnostics();
     let bad: Vec<_> = diags
         .iter()
         .filter(|d| {
@@ -12971,11 +12006,11 @@ async fn library_main_function_is_not_flagged() {
         bad.is_empty(),
         "a library `main` is an ordinary function, should not be flagged: {bad:?}"
     );
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn creating_main_lis_flips_a_library_to_a_binary() {
+#[test]
+fn creating_main_lis_flips_a_library_to_a_binary() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(
@@ -12988,12 +12023,12 @@ async fn creating_main_lis_flips_a_library_to_a_binary() {
     let content = "pub fn main(x: int) -> int { x }";
     std::fs::write(src.join("flip.lis"), content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
     let uri = Url::from_file_path(src.join("flip.lis"))
         .unwrap()
         .to_string();
-    client.open(&uri, content).await;
+    client.open(&uri, content);
 
     let is_main_signature = |d: &Diagnostic| {
         d.code
@@ -13002,26 +12037,26 @@ async fn creating_main_lis_flips_a_library_to_a_binary() {
             ))
     };
 
-    let diags = client.await_diagnostics().await;
+    let diags = client.await_diagnostics();
     assert!(
         !diags.iter().any(is_main_signature),
         "library `main` should not be flagged: {diags:?}"
     );
 
     std::fs::write(src.join("main.lis"), "fn main() {}").unwrap();
-    client.change(&uri, content, 2).await;
+    client.change(&uri, content, 2);
 
-    let diags = client.await_diagnostics().await;
+    let diags = client.await_diagnostics();
     assert!(
         diags.iter().any(is_main_signature),
         "after `src/main.lis` appears the project is a binary: {diags:?}"
     );
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn external_test_file_is_analyzed_with_visibility_rules() {
-    let mut client = TestClient::new().await;
+#[test]
+fn external_test_file_is_analyzed_with_visibility_rules() {
+    let mut client = TestClient::new();
 
     let root = tempfile::tempdir().unwrap();
     let root_path = root.path();
@@ -13050,21 +12085,19 @@ async fn external_test_file_is_analyzed_with_visibility_rules() {
         "import \"geometry\"\n\n#[test]\nfn peeks() {\n  assert geometry.hidden() == 4\n}\n";
     std::fs::write(root_path.join("tests/peek.test.lis"), peek_source).unwrap();
 
-    client.initialize_with_root(root_path).await;
+    client.initialize_with_root(root_path);
 
     let ok_uri = format!("file://{}", root_path.join("tests/ok.test.lis").display());
-    client.open(&ok_uri, ok_source).await;
+    client.open(&ok_uri, ok_source);
     let diagnostics = client
         .await_diagnostics_for(&ok_uri)
-        .await
         .expect("diagnostics for valid external test");
     assert!(diagnostics.is_empty(), "got: {diagnostics:?}");
 
     let peek_uri = format!("file://{}", root_path.join("tests/peek.test.lis").display());
-    client.open(&peek_uri, peek_source).await;
+    client.open(&peek_uri, peek_source);
     let diagnostics = client
         .await_diagnostics_for(&peek_uri)
-        .await
         .expect("diagnostics for private-symbol reference");
     assert!(
         diagnostics.iter().any(|d| d.code
@@ -13074,7 +12107,7 @@ async fn external_test_file_is_analyzed_with_visibility_rules() {
         "got: {diagnostics:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
 fn geo_library_project() -> (tempfile::TempDir, std::path::PathBuf) {
@@ -13095,28 +12128,28 @@ fn geo_library_project() -> (tempfile::TempDir, std::path::PathBuf) {
     (dir, root)
 }
 
-#[tokio::test]
-async fn external_test_root_import_resolves() {
+#[test]
+fn external_test_root_import_resolves() {
     let (_dir, root) = geo_library_project();
     let content = "import \"root\"\n\n#[test]\nfn value() {\n  let p = root.Point { x: 1, y: 2 }\n  assert p.x == 1\n  assert root.distance(2, 9) == 7\n}\n";
     let test_path = root.join("tests/api.test.lis");
     std::fs::write(&test_path, content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(&root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(&root);
 
     let uri = Url::from_file_path(&test_path).unwrap().to_string();
-    client.open(&uri, content).await;
+    client.open(&uri, content);
 
-    let diags = client.await_diagnostics_for(&uri).await.unwrap_or_default();
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
     assert!(
         diags.is_empty(),
         "valid root import must not error in the editor: {diags:?}"
     );
 
     let broken = content.replace("root.distance(2, 9)", "root.missing(2, 9)");
-    client.change(&uri, &broken, 2).await;
-    let diags = client.await_diagnostics_for(&uri).await.unwrap_or_default();
+    client.change(&uri, &broken, 2);
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
     assert!(
         diags.iter().any(
             |d| d.message.contains("missing") || d.message.to_lowercase().contains("not found")
@@ -13124,11 +12157,11 @@ async fn external_test_root_import_resolves() {
         "a genuine reference error through `root` is still reported: {diags:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn external_test_root_import_in_binary_reports_error() {
+#[test]
+fn external_test_root_import_in_binary_reports_error() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("lisette.toml"), "").unwrap();
@@ -13143,13 +12176,13 @@ async fn external_test_root_import_in_binary_reports_error() {
     let test_path = tests.join("api.test.lis");
     std::fs::write(&test_path, content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let uri = Url::from_file_path(&test_path).unwrap().to_string();
-    client.open(&uri, content).await;
+    client.open(&uri, content);
 
-    let diags = client.await_diagnostics_for(&uri).await.unwrap_or_default();
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
     assert!(
         diags
             .iter()
@@ -13157,24 +12190,24 @@ async fn external_test_root_import_in_binary_reports_error() {
         "a binary root import must report the rejection in the editor: {diags:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn external_test_goto_definition_into_root_resolves_to_src() {
+#[test]
+fn external_test_goto_definition_into_root_resolves_to_src() {
     let (_dir, root) = geo_library_project();
     let content = "import \"root\"\n\n#[test]\nfn value() {\n  let p = root.Point { x: 1, y: 2 }\n  assert p.x == 1\n  assert root.distance(2, 9) == 7\n}\n";
     let test_path = root.join("tests/api.test.lis");
     std::fs::write(&test_path, content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(&root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(&root);
 
     let uri = Url::from_file_path(&test_path).unwrap().to_string();
-    client.open(&uri, content).await;
-    let _ = client.await_diagnostics_for(&uri).await;
+    client.open(&uri, content);
+    let _ = client.await_diagnostics_for(&uri);
 
-    let def = client.goto_definition(&uri, 6, 16).await;
+    let def = client.goto_definition(&uri, 6, 16);
     let loc = def
         .as_ref()
         .and_then(definition_location)
@@ -13189,71 +12222,71 @@ async fn external_test_goto_definition_into_root_resolves_to_src() {
         "the jump should land on `distance`"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn external_test_hover_survives_reanalysis() {
+#[test]
+fn external_test_hover_survives_reanalysis() {
     let (_dir, root) = geo_library_project();
     let content = "import \"root\"\n\n#[test]\nfn value() {\n  let total = root.distance(2, 9)\n  assert total == 7\n}\n";
     let test_path = root.join("tests/api.test.lis");
     std::fs::write(&test_path, content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(&root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(&root);
 
     let uri = Url::from_file_path(&test_path).unwrap().to_string();
-    client.open(&uri, content).await;
-    let _ = client.await_diagnostics_for(&uri).await;
+    client.open(&uri, content);
+    let _ = client.await_diagnostics_for(&uri);
 
-    client.change(&uri, content, 2).await;
-    let _ = client.await_diagnostics_for(&uri).await;
+    client.change(&uri, content, 2);
+    let _ = client.await_diagnostics_for(&uri);
 
-    let hover = client.hover(&uri, 4, 6).await;
+    let hover = client.hover(&uri, 4, 6);
     assert!(
         hover.is_some(),
         "hover on a local binding must survive re-analysis (no empty-AST cache reload)"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn external_test_non_test_file_is_flagged() {
+#[test]
+fn external_test_non_test_file_is_flagged() {
     let (_dir, root) = geo_library_project();
     let content = "pub fn helper() -> int { 1 }\n";
     let helper_path = root.join("tests/helper.lis");
     std::fs::write(&helper_path, content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(&root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(&root);
 
     let uri = Url::from_file_path(&helper_path).unwrap().to_string();
-    client.open(&uri, content).await;
+    client.open(&uri, content);
 
-    let diags = client.await_diagnostics_for(&uri).await.unwrap_or_default();
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
     assert!(
         diags.iter().any(|d| d.message.contains("not a test file")),
         "a non-test file under tests/ must be flagged in the editor: {diags:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn external_test_misnamed_suffix_is_flagged() {
+#[test]
+fn external_test_misnamed_suffix_is_flagged() {
     let (_dir, root) = geo_library_project();
     let content = "#[test]\nfn t() {}\n";
     let misnamed = root.join("tests/api_test.lis");
     std::fs::write(&misnamed, content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(&root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(&root);
 
     let uri = Url::from_file_path(&misnamed).unwrap().to_string();
-    client.open(&uri, content).await;
+    client.open(&uri, content);
 
-    let diags = client.await_diagnostics_for(&uri).await.unwrap_or_default();
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
     assert!(
         diags
             .iter()
@@ -13261,11 +12294,11 @@ async fn external_test_misnamed_suffix_is_flagged() {
         "a `_test.lis` file must be flagged in the editor even though the graph drops it: {diags:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn external_test_root_import_in_subpackage_only_library_is_rejected() {
+#[test]
+fn external_test_root_import_in_subpackage_only_library_is_rejected() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(
@@ -13284,38 +12317,37 @@ async fn external_test_root_import_in_subpackage_only_library_is_rejected() {
     let test_path = tests.join("api.test.lis");
     std::fs::write(&test_path, content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let uri = Url::from_file_path(&test_path).unwrap().to_string();
-    client.open(&uri, content).await;
+    client.open(&uri, content);
 
-    let diags = client.await_diagnostics_for(&uri).await.unwrap_or_default();
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
     assert!(
         diags.iter().any(|d| d.message.contains("no root package")),
         "a subpackage-only library has no importable root, even in the editor: {diags:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn external_test_root_namespace_hover_shows_root() {
+#[test]
+fn external_test_root_namespace_hover_shows_root() {
     let (_dir, root) = geo_library_project();
     let content = "import \"root\"\n\n#[test]\nfn t() {\n  assert root.distance(2, 9) == 11\n}\n";
     let test_path = root.join("tests/api.test.lis");
     std::fs::write(&test_path, content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(&root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(&root);
 
     let uri = Url::from_file_path(&test_path).unwrap().to_string();
-    client.open(&uri, content).await;
-    let _ = client.await_diagnostics_for(&uri).await;
+    client.open(&uri, content);
+    let _ = client.await_diagnostics_for(&uri);
 
     let hover = client
         .hover(&uri, 4, 9)
-        .await
         .expect("hover on the root namespace should resolve");
     let text = hover_content(&hover);
     assert!(
@@ -13327,11 +12359,11 @@ async fn external_test_root_namespace_hover_shows_root() {
         "namespace hover should show the source spelling `root`: {text}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn external_test_invalid_sibling_is_rejected() {
+#[test]
+fn external_test_invalid_sibling_is_rejected() {
     let (_dir, root) = geo_library_project();
     let content = "import \"root\"\n\n#[test]\nfn t() {\n  assert true\n}\n";
     let test_path = root.join("tests/api.test.lis");
@@ -13342,23 +12374,23 @@ async fn external_test_invalid_sibling_is_rejected() {
     )
     .unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(&root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(&root);
 
     let uri = Url::from_file_path(&test_path).unwrap().to_string();
-    client.open(&uri, content).await;
+    client.open(&uri, content);
 
-    let diags = client.await_diagnostics_for(&uri).await.unwrap_or_default();
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
     assert!(
         diags.iter().any(|d| d.message.contains("not a test file")),
         "an invalid sibling under tests/ must be rejected while a valid test is open: {diags:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn src_tests_file_is_not_misclassified_as_external() {
+#[test]
+fn src_tests_file_is_not_misclassified_as_external() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(
@@ -13373,13 +12405,13 @@ async fn src_tests_file_is_not_misclassified_as_external() {
     let file_path = src_tests.join("helper.lis");
     std::fs::write(&file_path, content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let uri = Url::from_file_path(&file_path).unwrap().to_string();
-    client.open(&uri, content).await;
+    client.open(&uri, content);
 
-    let diags = client.await_diagnostics_for(&uri).await.unwrap_or_default();
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
     assert!(
         diags.iter().any(|d| d.message.contains("missing_symbol")),
         "a file under src/tests/ must be analyzed in place, not routed to the external tests/ dir: {diags:?}"
@@ -13389,11 +12421,11 @@ async fn src_tests_file_is_not_misclassified_as_external() {
         "a src/tests/ file must not be treated as an external test: {diags:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn src_tests_siblings_load_from_src_directory() {
+#[test]
+fn src_tests_siblings_load_from_src_directory() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(
@@ -13413,23 +12445,23 @@ async fn src_tests_siblings_load_from_src_directory() {
     let file_path = src_tests.join("caller.lis");
     std::fs::write(&file_path, content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let uri = Url::from_file_path(&file_path).unwrap().to_string();
-    client.open(&uri, content).await;
+    client.open(&uri, content);
 
-    let diags = client.await_diagnostics_for(&uri).await.unwrap_or_default();
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
     assert!(
         !diags.iter().any(|d| d.message.contains("from_sibling")),
         "a src/tests/ file must resolve siblings from src/tests/, not the external tests/ dir: {diags:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn src_tests_overlay_does_not_collide_with_external_tests() {
+#[test]
+fn src_tests_overlay_does_not_collide_with_external_tests() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(
@@ -13454,43 +12486,40 @@ async fn src_tests_overlay_does_not_collide_with_external_tests() {
     let api_content = "import \"root\"\n\n#[test]\nfn t() {\n  assert from_src_tests() == 1\n}\n";
     std::fs::write(&api, api_content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
 
     let src_uri = Url::from_file_path(&src_helper).unwrap().to_string();
-    client.open(&src_uri, src_helper_content).await;
-    let _ = client.await_diagnostics_for(&src_uri).await;
+    client.open(&src_uri, src_helper_content);
+    let _ = client.await_diagnostics_for(&src_uri);
 
     let api_uri = Url::from_file_path(&api).unwrap().to_string();
-    client.open(&api_uri, api_content).await;
+    client.open(&api_uri, api_content);
 
-    let diags = client
-        .await_diagnostics_for(&api_uri)
-        .await
-        .unwrap_or_default();
+    let diags = client.await_diagnostics_for(&api_uri).unwrap_or_default();
     assert!(
         diags.iter().any(|d| d.message.contains("from_src_tests")),
         "a src/tests overlay must not leak into the external tests module: {diags:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn external_test_inlay_hint_does_not_leak_entry() {
+#[test]
+fn external_test_inlay_hint_does_not_leak_entry() {
     let (_dir, root) = geo_library_project();
     let content = "import \"root\"\n\n#[test]\nfn t() {\n  let x = root\n  assert true\n}\n";
     let test_path = root.join("tests/api.test.lis");
     std::fs::write(&test_path, content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize_with_root(&root).await;
+    let mut client = TestClient::new();
+    client.initialize_with_root(&root);
 
     let uri = Url::from_file_path(&test_path).unwrap().to_string();
-    client.open(&uri, content).await;
-    let _ = client.await_diagnostics_for(&uri).await;
+    client.open(&uri, content);
+    let _ = client.await_diagnostics_for(&uri);
 
-    if let Some(hints) = client.inlay_hint(&uri, (0, 0), doc_end(content)).await {
+    if let Some(hints) = client.inlay_hint(&uri, (0, 0), doc_end(content)) {
         for (_, _, label) in inlay_hint_triples(&hints) {
             assert!(
                 !label.contains("_entry_"),
@@ -13499,11 +12528,11 @@ async fn external_test_inlay_hint_does_not_leak_entry() {
         }
     }
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn a_file_opened_without_a_workspace_root_resolves_its_own_project() {
+#[test]
+fn a_file_opened_without_a_workspace_root_resolves_its_own_project() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("proj");
     let src = root.join("src");
@@ -13521,14 +12550,14 @@ async fn a_file_opened_without_a_workspace_root_resolves_its_own_project() {
     let content = "import \"util\"\n\nfn main() {\n  let _ = util.greet()\n}\n";
     std::fs::write(src.join("main.lis"), content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+    let mut client = TestClient::new();
+    client.initialize();
     let uri = Url::from_file_path(src.join("main.lis"))
         .unwrap()
         .to_string();
-    client.open(&uri, content).await;
+    client.open(&uri, content);
 
-    let diagnostics = client.await_diagnostics_for(&uri).await.unwrap_or_default();
+    let diagnostics = client.await_diagnostics_for(&uri).unwrap_or_default();
     assert!(
         diagnostics
             .iter()
@@ -13536,22 +12565,22 @@ async fn a_file_opened_without_a_workspace_root_resolves_its_own_project() {
         "the ancestor walk must find the project from the file alone: {diagnostics:?}"
     );
 
-    client.shutdown().await;
+    client.shutdown();
 }
 
-#[tokio::test]
-async fn a_file_with_no_project_above_it_is_told_how_to_make_one() {
+#[test]
+fn a_file_with_no_project_above_it_is_told_how_to_make_one() {
     let dir = tempfile::tempdir().unwrap();
     let loose = dir.path().join("loose.lis");
     let content = "import \"nowhere\"\n\nfn main() {}\n";
     std::fs::write(&loose, content).unwrap();
 
-    let mut client = TestClient::new().await;
-    client.initialize().await;
+    let mut client = TestClient::new();
+    client.initialize();
     let uri = Url::from_file_path(&loose).unwrap().to_string();
-    client.open(&uri, content).await;
+    client.open(&uri, content);
 
-    let diagnostics = client.await_diagnostics_for(&uri).await.unwrap_or_default();
+    let diagnostics = client.await_diagnostics_for(&uri).unwrap_or_default();
     let missing = diagnostics
         .iter()
         .find(|d| {
@@ -13563,5 +12592,5 @@ async fn a_file_with_no_project_above_it_is_told_how_to_make_one() {
         .unwrap_or_else(|| panic!("expected an unresolved import: {diagnostics:?}"));
     assert!(missing.message.contains("lis new"), "got: {missing:?}");
 
-    client.shutdown().await;
+    client.shutdown();
 }

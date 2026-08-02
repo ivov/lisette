@@ -54,17 +54,15 @@ pub(crate) fn find_module_by_alias(
 }
 
 impl SharedState {
-    async fn run_analysis(&self, uri: &Url) -> Result<AnalysisSnapshot, Vec<Diagnostic>> {
-        let project = self.project.for_analysis(uri).await.ok_or_else(Vec::new)?;
+    fn run_analysis(&self, uri: &Url) -> Result<AnalysisSnapshot, Vec<Diagnostic>> {
+        let project = self.project.for_analysis(uri).ok_or_else(Vec::new)?;
         let config = project.config;
         let filename = project.filename;
         let loader = project.loader;
         let external_test = project.external_test;
 
         let source = self
-            .documents
-            .read()
-            .await
+            .documents()
             .get(uri)
             .map(|document| document.content().to_string())
             .ok_or_else(Vec::new)?;
@@ -174,8 +172,8 @@ impl SharedState {
         Ok(AnalysisSnapshot::new(analysis, &config, uri, external_test))
     }
 
-    async fn run_analysis_cached(&self, uri: &Url) -> Result<Arc<AnalysisSnapshot>, AnalysisError> {
-        let documents = self.documents.read().await;
+    fn run_analysis_cached(&self, uri: &Url) -> Result<Arc<AnalysisSnapshot>, AnalysisError> {
+        let documents = self.documents();
         let document = documents.get(uri).ok_or(AnalysisError::Superseded)?;
         let request = document.request_analysis();
         drop(documents);
@@ -185,13 +183,9 @@ impl SharedState {
             AnalysisRequest::Required(revision) => revision,
         };
 
-        let snapshot = Arc::new(
-            self.run_analysis(uri)
-                .await
-                .map_err(AnalysisError::Diagnostics)?,
-        );
+        let snapshot = Arc::new(self.run_analysis(uri).map_err(AnalysisError::Diagnostics)?);
 
-        if let Some(document) = self.documents.write().await.get_mut(uri)
+        if let Some(document) = self.documents_mut().get_mut(uri)
             && document.cache_analysis(&revision, Arc::clone(&snapshot))
         {
             return Ok(snapshot);
@@ -200,8 +194,8 @@ impl SharedState {
         Err(AnalysisError::Superseded)
     }
 
-    pub(crate) async fn analyze_and_convert(&self, uri: &Url) -> Option<Vec<Diagnostic>> {
-        let snapshot = match self.run_analysis_cached(uri).await {
+    pub(crate) fn analyze_and_convert(&self, uri: &Url) -> Option<Vec<Diagnostic>> {
+        let snapshot = match self.run_analysis_cached(uri) {
             Ok(s) => s,
             Err(AnalysisError::Diagnostics(diagnostics)) => return Some(diagnostics),
             Err(AnalysisError::Superseded) => return None,
@@ -225,22 +219,18 @@ impl SharedState {
         )
     }
 
-    pub(crate) async fn get_snapshot(&self, uri: &Url) -> Option<Arc<AnalysisSnapshot>> {
-        match self.run_analysis_cached(uri).await {
+    pub(crate) fn get_snapshot(&self, uri: &Url) -> Option<Arc<AnalysisSnapshot>> {
+        match self.run_analysis_cached(uri) {
             Ok(snapshot) => Some(snapshot),
             Err(_) => self
-                .documents
-                .read()
-                .await
+                .documents()
                 .get(uri)
                 .and_then(DocumentState::last_valid_analysis),
         }
     }
 
-    pub(crate) async fn open_document_snapshots(&self) -> Vec<Arc<AnalysisSnapshot>> {
-        self.documents
-            .read()
-            .await
+    pub(crate) fn open_document_snapshots(&self) -> Vec<Arc<AnalysisSnapshot>> {
+        self.documents()
             .values()
             .filter_map(|document| match document.request_analysis() {
                 AnalysisRequest::Cached(snapshot) => Some(snapshot),

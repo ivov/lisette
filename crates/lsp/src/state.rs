@@ -1,10 +1,9 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::protocol::{Client, Url};
 use deps::BindgenSetup;
-use tokio::sync::RwLock;
-use tokio::task::AbortHandle;
 
 use crate::loader::ProjectState;
 use crate::position::LineIndex;
@@ -13,8 +12,47 @@ use crate::snapshot::AnalysisSnapshot;
 pub struct SharedState {
     pub(crate) client: Client,
     pub(crate) project: ProjectState,
-    pub(crate) documents: RwLock<HashMap<Url, DocumentState>>,
+    documents: RwLock<HashMap<Url, DocumentState>>,
     pub(crate) bindgen_setup: Option<Arc<dyn BindgenSetup>>,
+}
+
+impl SharedState {
+    pub(crate) fn documents(&self) -> RwLockReadGuard<'_, HashMap<Url, DocumentState>> {
+        self.documents
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+
+    pub(crate) fn documents_mut(&self) -> RwLockWriteGuard<'_, HashMap<Url, DocumentState>> {
+        self.documents
+            .write()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+}
+
+/// Identity of one scheduled diagnostics run: cancelling it makes the
+/// debounce thread return without publishing.
+#[derive(Clone)]
+pub(crate) struct CancellationToken(Arc<AtomicBool>);
+
+impl CancellationToken {
+    pub(crate) fn new() -> Self {
+        Self(Arc::new(AtomicBool::new(false)))
+    }
+
+    pub(crate) fn cancel(&self) {
+        self.0.store(true, Ordering::Relaxed);
+    }
+
+    pub(crate) fn is_cancelled(&self) -> bool {
+        self.0.load(Ordering::Relaxed)
+    }
+}
+
+impl PartialEq for CancellationToken {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
 }
 
 pub struct Backend {
@@ -32,7 +70,7 @@ pub(crate) struct DocumentState {
     line_index: LineIndex,
     version: i32,
     analysis: DocumentAnalysis,
-    pending_diagnostics: Option<AbortHandle>,
+    pending_diagnostics: Option<CancellationToken>,
 }
 
 struct DocumentAnalysis {
@@ -180,22 +218,18 @@ impl DocumentState {
     }
 
     pub(crate) fn abort_pending_diagnostics(&mut self) {
-        if let Some(handle) = self.pending_diagnostics.take() {
-            handle.abort();
+        if let Some(token) = self.pending_diagnostics.take() {
+            token.cancel();
         }
     }
 
-    pub(crate) fn set_pending_diagnostics(&mut self, handle: AbortHandle) {
+    pub(crate) fn set_pending_diagnostics(&mut self, token: CancellationToken) {
         self.abort_pending_diagnostics();
-        self.pending_diagnostics = Some(handle);
+        self.pending_diagnostics = Some(token);
     }
 
-    pub(crate) fn finish_diagnostics(&mut self, task_id: tokio::task::Id) {
-        if self
-            .pending_diagnostics
-            .as_ref()
-            .is_some_and(|handle| handle.id() == task_id)
-        {
+    pub(crate) fn finish_diagnostics(&mut self, token: &CancellationToken) {
+        if self.pending_diagnostics.as_ref() == Some(token) {
             self.pending_diagnostics = None;
         }
     }
@@ -224,38 +258,28 @@ impl Backend {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn dropping_document_aborts_pending_diagnostics() {
-        let task = tokio::spawn(std::future::pending::<()>());
+    #[test]
+    fn dropping_document_cancels_pending_diagnostics() {
+        let token = CancellationToken::new();
         let mut document = DocumentState::new(String::new(), 1);
-        document.set_pending_diagnostics(task.abort_handle());
+        document.set_pending_diagnostics(token.clone());
 
         drop(document);
 
-        assert!(
-            task.await
-                .expect_err("task should be aborted")
-                .is_cancelled()
-        );
+        assert!(token.is_cancelled());
     }
 
-    #[tokio::test]
-    async fn replacing_pending_diagnostics_aborts_previous_task() {
-        let old_task = tokio::spawn(std::future::pending::<()>());
-        let new_task = tokio::spawn(std::future::pending::<()>());
+    #[test]
+    fn replacing_pending_diagnostics_cancels_previous_run() {
+        let old_token = CancellationToken::new();
+        let new_token = CancellationToken::new();
         let mut document = DocumentState::new(String::new(), 1);
-        document.set_pending_diagnostics(old_task.abort_handle());
+        document.set_pending_diagnostics(old_token.clone());
 
-        document.set_pending_diagnostics(new_task.abort_handle());
+        document.set_pending_diagnostics(new_token.clone());
 
-        assert!(
-            old_task
-                .await
-                .expect_err("old task should be aborted")
-                .is_cancelled()
-        );
-        drop(document);
-        let _ = new_task.await;
+        assert!(old_token.is_cancelled());
+        assert!(!new_token.is_cancelled());
     }
 
     #[test]

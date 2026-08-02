@@ -29,7 +29,6 @@ emit = { package = "lisette-emit", version = "=0.11.0", path = "../emit" }
 stdlib = { package = "lisette-stdlib", version = "=0.11.0", path = "../stdlib" }
 deps = { package = "lisette-deps", version = "=0.11.0", path = "../deps" }
 lsp = { package = "lisette-lsp", version = "=0.11.0", path = "../lsp" }
-tokio = { version = "1", features = ["rt-multi-thread", "io-std"] }
 owo-colors.workspace = true
 rustc-hash.workspace = true
 rayon.workspace = true

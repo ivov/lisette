@@ -1,18 +1,26 @@
-use std::time::Duration;
+use std::io::{BufReader, PipeWriter};
+use std::sync::mpsc;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 use serde_json::{Value, json};
-use tokio::io::{BufReader, DuplexStream, ReadHalf, WriteHalf};
 
 use lisette_lsp::protocol::{self, *};
 
 /// A test client for communicating with the LSP server.
 pub struct TestClient {
-    reader: BufReader<ReadHalf<DuplexStream>>,
-    writer: WriteHalf<DuplexStream>,
+    incoming: mpsc::Receiver<Value>,
+    writer: PipeWriter,
     next_id: i64,
     buffered: Vec<Value>,
-    exit_code: tokio::task::JoinHandle<i32>,
+    exit_code: thread::JoinHandle<i32>,
+}
+
+impl Default for TestClient {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 fn init_test_typedef_home() {
@@ -28,17 +36,26 @@ fn init_test_typedef_home() {
 
 impl TestClient {
     /// Spawn a new LSP server and return a connected client.
-    pub async fn new() -> Self {
+    pub fn new() -> Self {
         init_test_typedef_home();
 
-        let (client, server) = tokio::io::duplex(64 * 1024);
-        let (server_read, server_write) = tokio::io::split(server);
-        let (client_read, client_write) = tokio::io::split(client);
+        let (server_read, client_write) = std::io::pipe().expect("create client-to-server pipe");
+        let (client_read, server_write) = std::io::pipe().expect("create server-to-client pipe");
 
-        let exit_code = tokio::spawn(protocol::serve(server_read, server_write, None));
+        let exit_code = thread::spawn(move || protocol::serve(server_read, server_write, None));
+
+        let (sender, incoming) = mpsc::channel();
+        thread::spawn(move || {
+            let mut reader = BufReader::new(client_read);
+            while let Ok(Some(message)) = protocol::read_message(&mut reader) {
+                if sender.send(message).is_err() {
+                    break;
+                }
+            }
+        });
 
         Self {
-            reader: BufReader::new(client_read),
+            incoming,
             writer: client_write,
             next_id: 1,
             buffered: Vec::new(),
@@ -46,7 +63,7 @@ impl TestClient {
         }
     }
 
-    async fn try_request<T: for<'de> Deserialize<'de>>(
+    fn try_request<T: for<'de> Deserialize<'de>>(
         &mut self,
         method: &str,
         params: Value,
@@ -58,14 +75,13 @@ impl TestClient {
             &mut self.writer,
             &json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}),
         )
-        .await
         .unwrap();
 
         loop {
-            let msg = protocol::read_message(&mut self.reader)
-                .await
-                .unwrap()
-                .unwrap();
+            let msg = self
+                .incoming
+                .recv()
+                .expect("server closed the connection before responding");
             if msg.get("id") == Some(&json!(id)) {
                 if let Some(error) = msg.get("error") {
                     return Err(error["message"].as_str().unwrap_or_default().to_owned());
@@ -79,67 +95,62 @@ impl TestClient {
         }
     }
 
-    async fn request<T: for<'de> Deserialize<'de>>(&mut self, method: &str, params: Value) -> T {
-        match self.try_request(method, params).await {
+    fn request<T: for<'de> Deserialize<'de>>(&mut self, method: &str, params: Value) -> T {
+        match self.try_request(method, params) {
             Ok(result) => result,
             Err(error) => panic!("{method} request failed: {error}"),
         }
     }
 
-    async fn notify(&mut self, method: &str, params: Value) {
+    fn notify(&mut self, method: &str, params: Value) {
         protocol::write_message(
             &mut self.writer,
             &json!({"jsonrpc": "2.0", "method": method, "params": params}),
         )
-        .await
         .unwrap();
     }
 
-    pub async fn initialize(&mut self) -> InitializeResult {
-        let result = self
-            .request(
-                "initialize",
-                json!({"processId": null, "capabilities": {}, "rootUri": null}),
-            )
-            .await;
-        self.notify("initialized", json!({})).await;
+    pub fn initialize(&mut self) -> InitializeResult {
+        let result = self.request(
+            "initialize",
+            json!({"processId": null, "capabilities": {}, "rootUri": null}),
+        );
+        self.notify("initialized", json!({}));
         result
     }
 
-    pub async fn initialize_with_root(&mut self, root: &std::path::Path) -> InitializeResult {
+    pub fn initialize_with_root(&mut self, root: &std::path::Path) -> InitializeResult {
         let root_uri = Url::from_file_path(root).unwrap().to_string();
-        let result = self
-            .request(
-                "initialize",
-                json!({"processId": null, "capabilities": {}, "rootUri": root_uri}),
-            )
-            .await;
-        self.notify("initialized", json!({})).await;
+        let result = self.request(
+            "initialize",
+            json!({"processId": null, "capabilities": {}, "rootUri": root_uri}),
+        );
+        self.notify("initialized", json!({}));
         result
     }
 
-    pub async fn await_diagnostics(&mut self) -> Vec<Diagnostic> {
+    pub fn await_diagnostics(&mut self) -> Vec<Diagnostic> {
         for msg in self.buffered.drain(..) {
             if let Some(result) = as_publish_diagnostics(&msg) {
                 return result.diagnostics;
             }
         }
 
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + Duration::from_secs(5);
         loop {
-            match tokio::time::timeout_at(deadline, protocol::read_message(&mut self.reader)).await
-            {
-                Ok(Ok(Some(msg))) => {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            match self.incoming.recv_timeout(remaining) {
+                Ok(msg) => {
                     if let Some(result) = as_publish_diagnostics(&msg) {
                         return result.diagnostics;
                     }
                 }
-                _ => return Vec::new(),
+                Err(_) => return Vec::new(),
             }
         }
     }
 
-    pub async fn await_diagnostics_for(&mut self, uri: &str) -> Option<Vec<Diagnostic>> {
+    pub fn await_diagnostics_for(&mut self, uri: &str) -> Option<Vec<Diagnostic>> {
         let matches = |msg: &Value| {
             as_publish_diagnostics(msg).is_some_and(|result| result.uri.as_str() == uri)
         };
@@ -149,11 +160,11 @@ impl TestClient {
             return as_publish_diagnostics(&msg).map(|result| result.diagnostics);
         }
 
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + Duration::from_secs(5);
         loop {
-            match tokio::time::timeout_at(deadline, protocol::read_message(&mut self.reader)).await
-            {
-                Ok(Ok(Some(msg))) => {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            match self.incoming.recv_timeout(remaining) {
+                Ok(msg) => {
                     if let Some(result) = as_publish_diagnostics(&msg) {
                         if result.uri.as_str() == uri {
                             return Some(result.diagnostics);
@@ -161,48 +172,38 @@ impl TestClient {
                         self.buffered.push(msg);
                     }
                 }
-                _ => return None,
+                Err(_) => return None,
             }
         }
     }
 
-    pub async fn open(&mut self, uri: &str, content: &str) {
+    pub fn open(&mut self, uri: &str, content: &str) {
         self.notify(
             "textDocument/didOpen",
             json!({
                 "textDocument": {"uri": uri, "languageId": "lisette", "version": 1, "text": content}
             }),
-        )
-        .await;
-        self.wait_for_server().await;
+        );
     }
 
-    pub async fn change(&mut self, uri: &str, content: &str, version: i32) {
+    pub fn change(&mut self, uri: &str, content: &str, version: i32) {
         self.notify(
             "textDocument/didChange",
             json!({
                 "textDocument": {"uri": uri, "version": version},
                 "contentChanges": [{"text": content}]
             }),
-        )
-        .await;
-        self.wait_for_server().await;
+        );
     }
 
-    pub async fn close(&mut self, uri: &str) {
+    pub fn close(&mut self, uri: &str) {
         self.notify(
             "textDocument/didClose",
             json!({"textDocument": {"uri": uri}}),
-        )
-        .await;
-        self.wait_for_server().await;
+        );
     }
 
-    async fn wait_for_server(&mut self) {
-        tokio::task::yield_now().await;
-    }
-
-    pub async fn hover(&mut self, uri: &str, line: u32, character: u32) -> Option<Hover> {
+    pub fn hover(&mut self, uri: &str, line: u32, character: u32) -> Option<Hover> {
         self.request(
             "textDocument/hover",
             json!({
@@ -210,10 +211,9 @@ impl TestClient {
                 "position": {"line": line, "character": character}
             }),
         )
-        .await
     }
 
-    pub async fn goto_definition(
+    pub fn goto_definition(
         &mut self,
         uri: &str,
         line: u32,
@@ -226,10 +226,9 @@ impl TestClient {
                 "position": {"line": line, "character": character}
             }),
         )
-        .await
     }
 
-    pub async fn references(
+    pub fn references(
         &mut self,
         uri: &str,
         line: u32,
@@ -244,10 +243,9 @@ impl TestClient {
                 "context": {"includeDeclaration": include_declaration}
             }),
         )
-        .await
     }
 
-    pub async fn completion(
+    pub fn completion(
         &mut self,
         uri: &str,
         line: u32,
@@ -260,10 +258,9 @@ impl TestClient {
                 "position": {"line": line, "character": character}
             }),
         )
-        .await
     }
 
-    pub async fn signature_help(
+    pub fn signature_help(
         &mut self,
         uri: &str,
         line: u32,
@@ -276,10 +273,9 @@ impl TestClient {
                 "position": {"line": line, "character": character}
             }),
         )
-        .await
     }
 
-    pub async fn inlay_hint(
+    pub fn inlay_hint(
         &mut self,
         uri: &str,
         start: (u32, u32),
@@ -295,10 +291,9 @@ impl TestClient {
                 }
             }),
         )
-        .await
     }
 
-    pub async fn try_prepare_rename(
+    pub fn try_prepare_rename(
         &mut self,
         uri: &str,
         line: u32,
@@ -311,21 +306,19 @@ impl TestClient {
                 "position": {"line": line, "character": character}
             }),
         )
-        .await
     }
 
-    pub async fn prepare_rename(
+    pub fn prepare_rename(
         &mut self,
         uri: &str,
         line: u32,
         character: u32,
     ) -> Option<PrepareRenameResponse> {
         self.try_prepare_rename(uri, line, character)
-            .await
             .expect("prepareRename request failed")
     }
 
-    pub async fn try_rename(
+    pub fn try_rename(
         &mut self,
         uri: &str,
         line: u32,
@@ -340,10 +333,9 @@ impl TestClient {
                 "newName": new_name
             }),
         )
-        .await
     }
 
-    pub async fn rename(
+    pub fn rename(
         &mut self,
         uri: &str,
         line: u32,
@@ -351,11 +343,10 @@ impl TestClient {
         new_name: &str,
     ) -> Option<WorkspaceEdit> {
         self.try_rename(uri, line, character, new_name)
-            .await
             .expect("rename request failed")
     }
 
-    pub async fn code_action(
+    pub fn code_action(
         &mut self,
         uri: &str,
         start: (u32, u32),
@@ -372,10 +363,9 @@ impl TestClient {
                 "context": {"diagnostics": []}
             }),
         )
-        .await
     }
 
-    pub async fn formatting(&mut self, uri: &str) -> Option<Vec<TextEdit>> {
+    pub fn formatting(&mut self, uri: &str) -> Option<Vec<TextEdit>> {
         self.request(
             "textDocument/formatting",
             json!({
@@ -383,27 +373,25 @@ impl TestClient {
                 "options": {"tabSize": 4, "insertSpaces": true}
             }),
         )
-        .await
     }
 
-    pub async fn document_symbol(&mut self, uri: &str) -> Option<DocumentSymbolResponse> {
+    pub fn document_symbol(&mut self, uri: &str) -> Option<DocumentSymbolResponse> {
         self.request(
             "textDocument/documentSymbol",
             json!({"textDocument": {"uri": uri}}),
         )
-        .await
     }
 
-    pub async fn shutdown(&mut self) {
-        let _: Value = self.request("shutdown", json!(null)).await;
+    pub fn shutdown(&mut self) {
+        let _: Value = self.request("shutdown", json!(null));
     }
 
-    pub async fn exit(&mut self) {
-        self.notify("exit", json!(null)).await;
+    pub fn exit(&mut self) {
+        self.notify("exit", json!(null));
     }
 
-    pub async fn await_exit_code(self) -> i32 {
-        self.exit_code.await.unwrap()
+    pub fn await_exit_code(self) -> i32 {
+        self.exit_code.join().expect("server thread panicked")
     }
 }
 

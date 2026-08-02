@@ -40,7 +40,7 @@ use syntax::program::File;
 pub use crate::state::{Backend, SharedState};
 
 impl Backend {
-    async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
+    fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
         let workspace_root = params
             .root_uri
             .and_then(|uri| uri.to_file_path().ok())
@@ -57,15 +57,12 @@ impl Backend {
         if let Some(root) = workspace_root
             && let Some(config) = find_project_root(&root)
         {
-            self.project.initialize(config).await;
+            self.project.initialize(config);
         }
 
-        // Off the async executor: the first run for a version writes the full stdlib.
-        let _ = tokio::task::spawn_blocking(|| {
-            deps::ensure_stdlib_extracted(deps::Target::host());
-            deps::ensure_prelude_extracted();
-        })
-        .await;
+        // The first run for a version writes the full stdlib.
+        deps::ensure_stdlib_extracted(deps::Target::host());
+        deps::ensure_prelude_extracted();
 
         Ok(InitializeResult {
             capabilities: ServerCapabilities {
@@ -102,52 +99,47 @@ impl Backend {
         })
     }
 
-    async fn initialized(&self, _: InitializedParams) {
+    fn initialized(&self, _: InitializedParams) {
         self.client
-            .log_message(MessageType::INFO, "Lisette LSP initialized")
-            .await;
+            .log_message(MessageType::INFO, "Lisette LSP initialized");
     }
 
-    async fn did_open(&self, params: DidOpenTextDocumentParams) {
+    fn did_open(&self, params: DidOpenTextDocumentParams) {
         let uri = params.text_document.uri;
         let content = params.text_document.text;
-        self.update_document(uri.clone(), content, params.text_document.version)
-            .await;
-        self.publish_diagnostics(uri).await;
+        self.update_document(uri.clone(), content, params.text_document.version);
+        self.publish_diagnostics(uri);
     }
 
-    async fn did_change(&self, params: DidChangeTextDocumentParams) {
+    fn did_change(&self, params: DidChangeTextDocumentParams) {
         let uri = params.text_document.uri;
         if let Some(change) = params.content_changes.into_iter().last() {
-            self.update_document(uri, change.text, params.text_document.version)
-                .await;
-            self.shared_state.recheck_open_documents().await;
+            self.update_document(uri, change.text, params.text_document.version);
+            self.shared_state.recheck_open_documents();
         }
     }
 
-    async fn did_save(&self, params: DidSaveTextDocumentParams) {
-        self.publish_diagnostics(params.text_document.uri).await;
+    fn did_save(&self, params: DidSaveTextDocumentParams) {
+        self.publish_diagnostics(params.text_document.uri);
     }
 
-    async fn did_close(&self, params: DidCloseTextDocumentParams) {
+    fn did_close(&self, params: DidCloseTextDocumentParams) {
         let uri = &params.text_document.uri;
-        self.documents.write().await.remove(uri);
+        self.documents_mut().remove(uri);
 
-        let overlay_removed = self.project.remove_overlay(uri).await;
+        let overlay_removed = self.project.remove_overlay(uri);
 
-        self.client
-            .publish_diagnostics(uri.clone(), vec![], None)
-            .await;
+        self.client.publish_diagnostics(uri.clone(), vec![], None);
 
         if overlay_removed {
-            self.shared_state.recheck_open_documents().await;
+            self.shared_state.recheck_open_documents();
         }
     }
 
-    async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
+    fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
         let uri = &params.text_document.uri;
         let (source, end_position) = {
-            let documents = self.documents.read().await;
+            let documents = self.documents();
             let Some(doc) = documents.get(uri) else {
                 return Ok(None);
             };
@@ -161,8 +153,7 @@ impl Backend {
             Ok(formatted) => formatted,
             Err(_parse_errors) => {
                 self.client
-                    .log_message(MessageType::WARNING, "Cannot format: file has parse errors")
-                    .await;
+                    .log_message(MessageType::WARNING, "Cannot format: file has parse errors");
                 return Ok(None);
             }
         };
@@ -183,11 +174,11 @@ impl Backend {
         }]))
     }
 
-    async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
+    fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
         let uri = &params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
 
-        let Some(snapshot) = self.get_snapshot(uri).await else {
+        let Some(snapshot) = self.get_snapshot(uri) else {
             return Ok(None);
         };
         let Some(cursor) = snapshot.position(uri, position) else {
@@ -227,10 +218,10 @@ impl Backend {
         }))
     }
 
-    async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
+    fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
         let uri = &params.text_document.uri;
 
-        let Some(snapshot) = self.get_snapshot(uri).await else {
+        let Some(snapshot) = self.get_snapshot(uri) else {
             return Ok(None);
         };
         let Some(document) = snapshot.document(uri) else {
@@ -255,14 +246,14 @@ impl Backend {
         )))
     }
 
-    async fn goto_definition(
+    fn goto_definition(
         &self,
         params: GotoDefinitionParams,
     ) -> Result<Option<GotoDefinitionResponse>> {
         let uri = &params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
 
-        let Some(snapshot) = self.get_snapshot(uri).await else {
+        let Some(snapshot) = self.get_snapshot(uri) else {
             return Ok(None);
         };
         let Some(cursor) = snapshot.position(uri, position) else {
@@ -429,7 +420,7 @@ impl Backend {
             .map(GotoDefinitionResponse::Scalar))
     }
 
-    async fn document_symbol(
+    fn document_symbol(
         &self,
         params: DocumentSymbolParams,
     ) -> Result<Option<DocumentSymbolResponse>> {
@@ -437,7 +428,7 @@ impl Backend {
 
         let uri = &params.text_document.uri;
 
-        let Some(snapshot) = self.get_snapshot(uri).await else {
+        let Some(snapshot) = self.get_snapshot(uri) else {
             return Ok(None);
         };
         let Some(document) = snapshot.document(uri) else {
@@ -540,11 +531,11 @@ impl Backend {
         Ok(Some(DocumentSymbolResponse::Nested(symbols)))
     }
 
-    async fn references(&self, params: ReferenceParams) -> Result<Option<Vec<Location>>> {
+    fn references(&self, params: ReferenceParams) -> Result<Option<Vec<Location>>> {
         let uri = &params.text_document_position.text_document.uri;
         let position = params.text_document_position.position;
 
-        let Some(snapshot) = self.get_snapshot(uri).await else {
+        let Some(snapshot) = self.get_snapshot(uri) else {
             return Ok(None);
         };
         let Some(cursor) = snapshot.position(uri, position) else {
@@ -575,7 +566,7 @@ impl Backend {
         }
 
         locations.extend(usage_locations(
-            self.open_document_snapshots().await,
+            self.open_document_snapshots(),
             &definition_uri,
             definition_span,
         ));
@@ -596,14 +587,14 @@ impl Backend {
         }
     }
 
-    async fn prepare_rename(
+    fn prepare_rename(
         &self,
         params: TextDocumentPositionParams,
     ) -> Result<Option<PrepareRenameResponse>> {
         let uri = &params.text_document.uri;
         let position = params.position;
 
-        let Some(snapshot) = self.get_snapshot(uri).await else {
+        let Some(snapshot) = self.get_snapshot(uri) else {
             return Ok(None);
         };
         let Some(cursor) = snapshot.position(uri, position) else {
@@ -791,14 +782,14 @@ impl Backend {
         }
     }
 
-    async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {
+    fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {
         let uri = &params.text_document_position.text_document.uri;
         let position = params.text_document_position.position;
         let new_name = params.new_name;
 
         validation::validate_rename(&new_name).map_err(validation::rename_error)?;
 
-        let Some(snapshot) = self.get_snapshot(uri).await else {
+        let Some(snapshot) = self.get_snapshot(uri) else {
             return Ok(None);
         };
         let Some(cursor) = snapshot.position(uri, position) else {
@@ -844,7 +835,7 @@ impl Backend {
             });
 
         for location in usage_locations(
-            self.open_document_snapshots().await,
+            self.open_document_snapshots(),
             &definition_uri,
             definition_span,
         ) {
@@ -864,10 +855,10 @@ impl Backend {
         }))
     }
 
-    async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
+    fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
         let uri = &params.text_document.uri;
 
-        let Some(snapshot) = self.get_snapshot(uri).await else {
+        let Some(snapshot) = self.get_snapshot(uri) else {
             return Ok(None);
         };
         let Some(document) = snapshot.document(uri) else {
@@ -922,11 +913,11 @@ impl Backend {
         Ok(Some(actions))
     }
 
-    async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
+    fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         let uri = &params.text_document_position.text_document.uri;
         let position = params.text_document_position.position;
 
-        let Some(snapshot) = self.get_snapshot(uri).await else {
+        let Some(snapshot) = self.get_snapshot(uri) else {
             return Ok(None);
         };
         let Some(cursor) = snapshot.position(uri, position) else {
@@ -972,11 +963,11 @@ impl Backend {
         ))))
     }
 
-    async fn signature_help(&self, params: SignatureHelpParams) -> Result<Option<SignatureHelp>> {
+    fn signature_help(&self, params: SignatureHelpParams) -> Result<Option<SignatureHelp>> {
         let uri = &params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
 
-        let Some(snapshot) = self.get_snapshot(uri).await else {
+        let Some(snapshot) = self.get_snapshot(uri) else {
             return Ok(None);
         };
         let Some(cursor) = snapshot.position(uri, position) else {
@@ -988,7 +979,7 @@ impl Backend {
         Ok(signature_help::handle(&file.items, offset))
     }
 
-    async fn shutdown(&self) -> Result<()> {
+    fn shutdown(&self) -> Result<()> {
         Ok(())
     }
 }
