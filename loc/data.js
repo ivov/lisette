@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785678472551,
+  "lastUpdate": 1785678625409,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -16927,6 +16927,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "syntax",
             "value": 13135,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 11933,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 6881,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5370,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2883,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1286,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7404,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "98b7d0cb4aeab3520564b6d2a35d6604106ac6a3",
+          "message": "perf: scan imports instead of parsing cache-hit modules (#1187)",
+          "timestamp": "2026-08-02T15:50:03+02:00",
+          "tree_id": "3d292d42c0534764928d5f6c031a55a8cf8254a8",
+          "url": "https://github.com/ivov/lisette/commit/98b7d0cb4aeab3520564b6d2a35d6604106ac6a3"
+        },
+        "date": 1785678624162,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 124975,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30326,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 25500,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18476,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13305,
             "unit": "lines"
           },
           {
