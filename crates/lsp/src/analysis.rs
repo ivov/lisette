@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use crate::protocol::*;
-use miette::Diagnostic as MietteDiagnostic;
 use rustc_hash::FxHashMap;
 
 use deps::TypedefLocator;
@@ -253,9 +252,8 @@ impl SharedState {
 
 pub(crate) fn convert_diagnostic(d: &LisetteDiagnostic, index: &LineIndex) -> Diagnostic {
     let range = d
-        .labels()
-        .and_then(|labels| labels.into_iter().next())
-        .map(|label| index.offset_len_to_range(label.offset(), label.len()))
+        .first_label_span()
+        .map(|(offset, length)| index.offset_len_to_range(offset, length))
         .unwrap_or_default();
 
     Diagnostic {

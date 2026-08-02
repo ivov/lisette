@@ -103,7 +103,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "lisette-deps"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "lisette-stdlib",
  "serde",
@@ -112,17 +112,17 @@ dependencies = [
 
 [[package]]
 name = "lisette-diagnostics"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "lisette-syntax",
- "miette",
  "owo-colors",
  "rustc-hash",
+ "unicode-width",
 ]
 
 [[package]]
 name = "lisette-emit"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "ecow",
  "lisette-diagnostics",
@@ -133,7 +133,7 @@ dependencies = [
 
 [[package]]
 name = "lisette-format"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "lisette-syntax",
  "unicode-segmentation",
@@ -141,7 +141,7 @@ dependencies = [
 
 [[package]]
 name = "lisette-passes"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "ecow",
  "lisette-diagnostics",
@@ -153,7 +153,7 @@ dependencies = [
 
 [[package]]
 name = "lisette-semantics"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "bincode",
  "ecow",
@@ -168,11 +168,11 @@ dependencies = [
 
 [[package]]
 name = "lisette-stdlib"
-version = "0.10.0"
+version = "0.11.0"
 
 [[package]]
 name = "lisette-syntax"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "ecow",
  "rustc-hash",
@@ -202,18 +202,6 @@ name = "memchr"
 version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
-
-[[package]]
-name = "miette"
-version = "7.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f98efec8807c63c752b5bd61f862c165c115b0a35685bdcfd9238c7aeb592b7"
-dependencies = [
- "cfg-if",
- "owo-colors",
- "textwrap",
- "unicode-width 0.1.14",
-]
 
 [[package]]
 name = "once_cell"
@@ -341,16 +329,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "textwrap"
-version = "0.16.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c13547615a44dc9c452a8a534638acdf07120d4b6847c8178705da06306a3057"
-dependencies = [
- "unicode-linebreak",
- "unicode-width 0.2.2",
-]
-
-[[package]]
 name = "toml_datetime"
 version = "0.6.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -386,22 +364,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
 
 [[package]]
-name = "unicode-linebreak"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b09c83c3c29d37506a3e260c08c03743a6bb66a9cd432c6934ab501a190571f"
-
-[[package]]
 name = "unicode-segmentation"
 version = "1.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9629274872b2bfaf8d66f5f15725007f635594914870f65218920345aa11aa8c"
-
-[[package]]
-name = "unicode-width"
-version = "0.1.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7dd6e30e90baa6f72411720665d41d89b9a3d039dc45b8faea1ddd07f617f6af"
 
 [[package]]
 name = "unicode-width"

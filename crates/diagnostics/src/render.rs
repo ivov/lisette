@@ -1,11 +1,12 @@
 use std::borrow::Cow;
+use std::fmt;
 use std::time::Duration;
 
 use rustc_hash::FxHashMap;
 
 use crate::LisetteDiagnostic;
 use crate::diagnostic::IndexedSource;
-use miette::{GraphicalReportHandler, GraphicalTheme, ThemeCharacters, ThemeStyles};
+use crate::graphical::{self, FrameReport, FrameTheme};
 use owo_colors::{OwoColorize, Style};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -119,77 +120,71 @@ pub fn print_summary(
     }
 }
 
-fn color_handler(highlight: Style) -> GraphicalReportHandler {
-    let theme = GraphicalTheme {
-        characters: ThemeCharacters {
-            error: "✕".into(),
-            warning: "▲".into(),
-            advice: "●".into(),
-            ..ThemeCharacters::unicode()
-        },
-        styles: ThemeStyles {
-            error: Style::new().red(),
-            warning: Style::new().yellow(),
-            advice: Style::new().blue(),
-            link: Style::new(),
-            help: Style::new().dimmed(),
-            highlights: vec![highlight],
-            ..ThemeStyles::ansi()
-        },
+fn frame_theme(diagnostic: &LisetteDiagnostic, use_color: bool) -> FrameTheme {
+    let icon = if diagnostic.is_error() {
+        "✕"
+    } else if diagnostic.is_info() {
+        "●"
+    } else {
+        "▲"
     };
-    GraphicalReportHandler::new_themed(theme).with_wrap_lines(false)
+    if !use_color {
+        return FrameTheme {
+            icon,
+            severity: Style::new(),
+            highlight: Style::new(),
+            line_number: Style::new(),
+            location: Style::new(),
+            help: Style::new(),
+        };
+    }
+    let severity = if diagnostic.is_error() {
+        Style::new().red()
+    } else if diagnostic.is_info() {
+        Style::new().blue()
+    } else {
+        Style::new().yellow()
+    };
+    FrameTheme {
+        icon,
+        severity,
+        highlight: severity,
+        line_number: Style::new().dimmed(),
+        location: Style::new(),
+        help: Style::new().dimmed(),
+    }
 }
 
-fn accent_handler(accent: Style) -> GraphicalReportHandler {
-    let theme = GraphicalTheme {
-        characters: ThemeCharacters {
-            error: "✕".into(),
-            warning: "▲".into(),
-            advice: "●".into(),
-            ..ThemeCharacters::unicode()
-        },
-        styles: ThemeStyles {
-            error: Style::new().red(),
-            warning: Style::new().yellow(),
-            advice: accent,
-            link: Style::new(),
-            help: Style::new().dimmed(),
-            highlights: vec![accent],
-            ..ThemeStyles::ansi()
-        },
-    };
-    GraphicalReportHandler::new_themed(theme).with_wrap_lines(false)
-}
-
-fn nocolor_handler() -> GraphicalReportHandler {
-    let theme = GraphicalTheme {
-        characters: ThemeCharacters {
-            error: "✕".into(),
-            warning: "▲".into(),
-            advice: "●".into(),
-            ..ThemeCharacters::unicode()
-        },
-        styles: ThemeStyles::none(),
-    };
-    GraphicalReportHandler::new_themed(theme).with_wrap_lines(false)
-}
-
-fn graphical_report(
-    handler: &GraphicalReportHandler,
+fn write_graphical_report(
+    output: &mut String,
     diagnostic: &LisetteDiagnostic,
     source: Option<(&IndexedSource, &str)>,
     use_color: bool,
-) -> Option<String> {
-    let report = miette::Report::new(diagnostic.clone().into_rendered(use_color));
-    let report = match source {
-        Some((source, filename)) => {
-            report.with_source_code(miette::NamedSource::new(filename, source.clone()))
-        }
-        None => report,
-    };
+    context_lines: usize,
+) -> fmt::Result {
+    let labels = diagnostic.frame_labels(use_color);
+    let help = diagnostic.styled_help_text(use_color);
+    graphical::render_report(
+        output,
+        &FrameReport {
+            message: &diagnostic.styled_message(use_color),
+            labels: &labels,
+            help: help.as_deref(),
+        },
+        source,
+        &frame_theme(diagnostic, use_color),
+        context_lines,
+    )
+}
+
+fn graphical_report(
+    diagnostic: &LisetteDiagnostic,
+    source: Option<(&IndexedSource, &str)>,
+    use_color: bool,
+) -> String {
     let mut output = String::new();
-    handler.render_report(&mut output, report.as_ref()).ok()?;
-    Some(output)
+    let _ = write_graphical_report(&mut output, diagnostic, source, use_color, 1);
+    output
 }
 
 pub fn render_to_string(
@@ -199,48 +194,32 @@ pub fn render_to_string(
     use_color: bool,
     context_lines: usize,
 ) -> String {
-    let accent = if diagnostic.is_error() {
-        Style::new().red()
-    } else if diagnostic.is_info() {
-        Style::new().blue()
-    } else {
-        Style::new().yellow()
-    };
-    let handler = if use_color {
-        accent_handler(accent)
-    } else {
-        nocolor_handler()
-    }
-    .with_context_lines(context_lines);
-    let report = diagnostic.clone().into_rendered(use_color);
-    let report = miette::Report::new(report).with_source_code(miette::NamedSource::new(
-        filename,
-        IndexedSource::new(source),
-    ));
+    let source = IndexedSource::new(source);
     let mut output = String::new();
-    let _ = handler.render_report(&mut output, report.as_ref());
+    let _ = write_graphical_report(
+        &mut output,
+        diagnostic,
+        Some((&source, filename)),
+        use_color,
+        context_lines,
+    );
+    output
+}
+
+pub fn render_standalone(diagnostic: &LisetteDiagnostic) -> String {
+    let mut output = String::new();
+    let _ = write_graphical_report(&mut output, diagnostic, None, false, 1);
     output
 }
 
 fn render_group<F: Fn(u32) -> Option<(String, String)>>(
     diagnostics: &[&LisetteDiagnostic],
-    highlight: Style,
     use_color: bool,
     sources: &mut SourceCache<F>,
 ) {
-    if diagnostics.is_empty() {
-        return;
-    }
-    let handler = if use_color {
-        color_handler(highlight)
-    } else {
-        nocolor_handler()
-    };
     for diagnostic in diagnostics {
         let source = sources.get(diagnostic.file_id());
-        if let Some(output) = graphical_report(&handler, diagnostic, source, use_color) {
-            eprintln!("{}", output);
-        }
+        eprintln!("{}", graphical_report(diagnostic, source, use_color));
     }
 }
 
@@ -334,14 +313,9 @@ pub fn render_all(
 
     let use_color = std::env::var("NO_COLOR").is_err();
 
-    render_group(&groups.errors, Style::new().red(), use_color, &mut sources);
-    render_group(
-        &groups.warnings,
-        Style::new().yellow(),
-        use_color,
-        &mut sources,
-    );
-    render_group(&groups.info, Style::new().blue(), use_color, &mut sources);
+    render_group(&groups.errors, use_color, &mut sources);
+    render_group(&groups.warnings, use_color, &mut sources);
+    render_group(&groups.info, use_color, &mut sources);
 
     groups.counts(file_count)
 }
@@ -472,7 +446,7 @@ mod tests {
     fn graphical_output(diagnostic: &LisetteDiagnostic) -> String {
         let mut sources = SourceCache::new(entry_only);
         let source = sources.get(diagnostic.file_id());
-        graphical_report(&nocolor_handler(), diagnostic, source, false).expect("rendering succeeds")
+        graphical_report(diagnostic, source, false)
     }
 
     #[test]
@@ -507,6 +481,45 @@ mod tests {
         let filter = Filter::Warnings;
         let groups = partition_diagnostics(&diagnostics, &filter);
         assert!(groups.info.is_empty());
+    }
+
+    fn hundred_line_source() -> String {
+        let mut source = String::new();
+        for i in 1..=100 {
+            source.push_str(&format!("line number {}\n", i));
+        }
+        source
+    }
+
+    fn line_offset(source: &str, line: usize) -> u32 {
+        source
+            .lines()
+            .take(line - 1)
+            .map(|line| line.len() as u32 + 1)
+            .sum()
+    }
+
+    #[test]
+    fn distant_labels_render_separate_frames() {
+        let source = hundred_line_source();
+        let diagnostic = LisetteDiagnostic::warn("Two places")
+            .with_span_primary_label(&Span::new(0, line_offset(&source, 50), 4), "first")
+            .with_span_label(&Span::new(0, line_offset(&source, 80), 4), "second");
+        let output = render_to_string(&diagnostic, &source, "src/main.lis", false, 1);
+        assert_eq!(output.matches("╭─[").count(), 2);
+        assert!(!output.contains("line number 65"));
+    }
+
+    #[test]
+    fn touching_labels_share_one_frame() {
+        let source = hundred_line_source();
+        let diagnostic = LisetteDiagnostic::warn("Two neighbors")
+            .with_span_primary_label(&Span::new(0, line_offset(&source, 50), 4), "first")
+            .with_span_label(&Span::new(0, line_offset(&source, 52), 4), "second");
+        let output = render_to_string(&diagnostic, &source, "src/main.lis", false, 1);
+        assert_eq!(output.matches("╭─[").count(), 1);
+        assert!(output.contains("first"));
+        assert!(output.contains("second"));
     }
 
     #[test]

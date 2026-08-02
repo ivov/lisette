@@ -1,10 +1,17 @@
-use miette::{Diagnostic, LabeledSpan, Severity};
 use owo_colors::OwoColorize;
 use std::fmt;
 use std::sync::Arc;
 
+use crate::graphical::FrameLabel;
 use syntax::ParseError;
 use syntax::ast::Span;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Severity {
+    Error,
+    Warning,
+    Advice,
+}
 
 /// Source text with a precomputed line-offset index for O(log n) span lookups.
 #[derive(Clone, Debug)]
@@ -28,62 +35,23 @@ impl IndexedSource {
     }
 
     pub(crate) fn line_col(&self, offset: usize) -> (usize, usize) {
-        let line = match self.line_starts.binary_search(&offset) {
-            Ok(exact) => exact,
-            Err(idx) => idx.saturating_sub(1),
-        };
+        let line = self.line_index_of_offset(offset);
         (line + 1, offset - self.line_starts[line] + 1)
     }
-}
 
-impl miette::SourceCode for IndexedSource {
-    fn read_span<'a>(
-        &'a self,
-        span: &miette::SourceSpan,
-        context_lines_before: usize,
-        context_lines_after: usize,
-    ) -> Result<Box<dyn miette::SpanContents<'a> + 'a>, miette::MietteError> {
-        let src = self.source.as_ref();
-        let offset = span.offset();
-        let len = span.len();
+    pub(crate) fn text(&self) -> &str {
+        &self.source
+    }
 
-        if offset + len > src.len() {
-            return Err(miette::MietteError::OutOfBounds);
+    pub(crate) fn line_starts(&self) -> &[usize] {
+        &self.line_starts
+    }
+
+    pub(crate) fn line_index_of_offset(&self, offset: usize) -> usize {
+        match self.line_starts.binary_search(&offset) {
+            Ok(exact) => exact,
+            Err(index) => index.saturating_sub(1),
         }
-
-        let span_line = match self.line_starts.binary_search(&offset) {
-            Ok(exact) => exact,
-            Err(idx) => idx.saturating_sub(1),
-        };
-
-        let start_line = span_line.saturating_sub(context_lines_before);
-        let start_offset = self.line_starts[start_line];
-        let start_column = if context_lines_before == 0 {
-            offset - self.line_starts[span_line]
-        } else {
-            0
-        };
-
-        let span_end = offset + len.saturating_sub(1);
-        let end_line = match self.line_starts.binary_search(&span_end) {
-            Ok(exact) => exact,
-            Err(idx) => idx.saturating_sub(1),
-        };
-
-        let last_line = (end_line + context_lines_after).min(self.line_starts.len() - 1);
-        let end_offset = if last_line + 1 < self.line_starts.len() {
-            self.line_starts[last_line + 1].min(src.len())
-        } else {
-            src.len()
-        };
-
-        Ok(Box::new(miette::MietteSpanContents::new(
-            &src.as_bytes()[start_offset..end_offset],
-            (start_offset, end_offset - start_offset).into(),
-            start_line,
-            start_column,
-            last_line + 1,
-        )))
     }
 }
 
@@ -110,22 +78,6 @@ struct Label {
     text: String,
     primary: bool,
 }
-
-impl Label {
-    fn to_miette(&self, text: String) -> LabeledSpan {
-        let source_span = miette::SourceSpan::new(
-            (self.span.byte_offset as usize).into(),
-            self.span.byte_length as usize,
-        );
-        if self.primary {
-            LabeledSpan::new_primary_with_span(Some(text), source_span)
-        } else {
-            LabeledSpan::new_with_span(Some(text), source_span)
-        }
-    }
-}
-
-pub use miette::Report;
 
 impl From<ParseError> for LisetteDiagnostic {
     fn from(err: ParseError) -> Self {
@@ -209,29 +161,7 @@ pub struct LisetteDiagnostic {
 
 impl fmt::Display for LisetteDiagnostic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.fmt_message(f, false)
-    }
-}
-
-impl LisetteDiagnostic {
-    fn fmt_message(&self, f: &mut fmt::Formatter<'_>, use_color: bool) -> fmt::Result {
-        if use_color {
-            let styled_message = match self.severity {
-                Severity::Error => {
-                    format_with_backticks(&self.message, true, |s| format!("{}", s.red().bold()))
-                }
-                Severity::Warning => {
-                    format_with_backticks(&self.message, true, |s| format!("{}", s.yellow().bold()))
-                }
-                Severity::Advice => {
-                    format_with_backticks(&self.message, true, |s| format!("{}", s.blue().bold()))
-                }
-            };
-            write!(f, "{}", styled_message)?;
-        } else {
-            f.write_str(&self.message)?;
-        }
-        Ok(())
+        f.write_str(&self.message)
     }
 }
 
@@ -273,34 +203,6 @@ impl fmt::Display for HelpText<'_> {
         }
 
         Ok(())
-    }
-}
-
-impl Diagnostic for LisetteDiagnostic {
-    fn severity(&self) -> Option<Severity> {
-        Some(self.severity)
-    }
-
-    fn help<'a>(&'a self) -> Option<Box<dyn fmt::Display + 'a>> {
-        let diagnostic_code = self.code.as_deref();
-
-        if self.help.is_none() && self.note.is_none() && diagnostic_code.is_none() {
-            return None;
-        }
-        Some(Box::new(HelpText {
-            help: self.help.as_deref(),
-            note: self.note.as_deref(),
-            diagnostic_code,
-            use_color: false,
-        }))
-    }
-
-    fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
-        Some(Box::new(self.formatted_labels(false).into_iter()))
-    }
-
-    fn code<'a>(&'a self) -> Option<Box<dyn fmt::Display + 'a>> {
-        None // rendered with the help text instead
     }
 }
 
@@ -440,18 +342,39 @@ impl LisetteDiagnostic {
         self
     }
 
-    pub fn with_source_code(self, source: IndexedSource, filename: String) -> miette::Report {
-        miette::Report::new(self).with_source_code(miette::NamedSource::new(filename, source))
-    }
-
-    pub(crate) fn into_rendered(self, use_color: bool) -> RenderedDiagnostic {
-        RenderedDiagnostic {
-            diagnostic: self,
-            use_color,
+    pub(crate) fn styled_message(&self, use_color: bool) -> String {
+        if !use_color {
+            return self.message.clone();
+        }
+        match self.severity {
+            Severity::Error => {
+                format_with_backticks(&self.message, true, |s| format!("{}", s.red().bold()))
+            }
+            Severity::Warning => {
+                format_with_backticks(&self.message, true, |s| format!("{}", s.yellow().bold()))
+            }
+            Severity::Advice => {
+                format_with_backticks(&self.message, true, |s| format!("{}", s.blue().bold()))
+            }
         }
     }
 
-    fn formatted_labels(&self, use_color: bool) -> Vec<LabeledSpan> {
+    pub(crate) fn styled_help_text(&self, use_color: bool) -> Option<String> {
+        if self.help.is_none() && self.note.is_none() && self.code.is_none() {
+            return None;
+        }
+        Some(
+            HelpText {
+                help: self.help.as_deref(),
+                note: self.note.as_deref(),
+                diagnostic_code: self.code.as_deref(),
+                use_color,
+            }
+            .to_string(),
+        )
+    }
+
+    pub(crate) fn frame_labels(&self, use_color: bool) -> Vec<FrameLabel> {
         let file_id = self.file_id();
         self.labels
             .iter()
@@ -467,9 +390,24 @@ impl LisetteDiagnostic {
                 } else {
                     label.text.clone()
                 };
-                label.to_miette(formatted)
+                FrameLabel::new(
+                    label.span.byte_offset as usize,
+                    label.span.byte_length as usize,
+                    formatted,
+                    label.primary,
+                )
             })
             .collect()
+    }
+
+    /// Byte offset and length of the first label, which anchors the diagnostic.
+    pub fn first_label_span(&self) -> Option<(usize, usize)> {
+        self.labels.first().map(|label| {
+            (
+                label.span.byte_offset as usize,
+                label.span.byte_length as usize,
+            )
+        })
     }
 
     pub fn code_str(&self) -> Option<&str> {
@@ -558,48 +496,6 @@ impl LisetteDiagnostic {
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct RenderedDiagnostic {
-    diagnostic: LisetteDiagnostic,
-    use_color: bool,
-}
-
-impl fmt::Display for RenderedDiagnostic {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.diagnostic.fmt_message(f, self.use_color)
-    }
-}
-
-impl std::error::Error for RenderedDiagnostic {}
-
-impl Diagnostic for RenderedDiagnostic {
-    fn severity(&self) -> Option<Severity> {
-        Some(self.diagnostic.severity)
-    }
-
-    fn help<'a>(&'a self) -> Option<Box<dyn fmt::Display + 'a>> {
-        let diagnostic_code = self.diagnostic.code.as_deref();
-        if self.diagnostic.help.is_none()
-            && self.diagnostic.note.is_none()
-            && diagnostic_code.is_none()
-        {
-            return None;
-        }
-        Some(Box::new(HelpText {
-            help: self.diagnostic.help.as_deref(),
-            note: self.diagnostic.note.as_deref(),
-            diagnostic_code,
-            use_color: self.use_color,
-        }))
-    }
-
-    fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
-        Some(Box::new(
-            self.diagnostic.formatted_labels(self.use_color).into_iter(),
-        ))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -630,6 +526,6 @@ mod tests {
 
         assert_eq!(diagnostic.file_id(), Some(3));
         assert_eq!(diagnostic.label_points(), vec![(3, 4), (7, 8)]);
-        assert_eq!(diagnostic.formatted_labels(false).len(), 1);
+        assert_eq!(diagnostic.frame_labels(false).len(), 1);
     }
 }

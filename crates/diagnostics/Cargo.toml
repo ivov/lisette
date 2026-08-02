@@ -13,9 +13,9 @@ doctest = false
 
 [dependencies]
 syntax = { package = "lisette-syntax", version = "=0.11.0", path = "../syntax" }
-miette.workspace = true
 owo-colors.workspace = true
 rustc-hash.workspace = true
+unicode-width = "0.2"
 
 [lints]
 workspace = true
