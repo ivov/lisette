@@ -119,7 +119,9 @@ impl SharedState {
         let mut analysis = analyze(AnalyzeInput {
             load_siblings: true,
             scope: if standalone {
-                AnalysisScope::Standalone
+                AnalysisScope::Standalone {
+                    inside_project: false,
+                }
             } else {
                 AnalysisScope::Project(config.root().to_path_buf())
             },

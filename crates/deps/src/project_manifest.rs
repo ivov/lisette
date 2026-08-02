@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashSet};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 use serde::de::{self, Deserializer, MapAccess, Visitor};
@@ -168,6 +168,24 @@ impl Manifest {
             .as_ref()
             .map(|d| d.go.clone())
             .unwrap_or_default()
+    }
+}
+
+/// Walks upward from `start`, a file or a directory, for the nearest project root.
+pub fn find_project_root(start: &Path) -> Option<PathBuf> {
+    let mut current = if start.is_file() {
+        start.parent()?.to_path_buf()
+    } else {
+        start.to_path_buf()
+    };
+
+    loop {
+        if current.join("lisette.toml").is_file() {
+            return Some(current);
+        }
+        if !current.pop() {
+            return None;
+        }
     }
 }
 
@@ -570,6 +588,33 @@ mod tests {
 
     fn manifest_text(dir: &TempDir) -> String {
         std::fs::read_to_string(dir.path().join("lisette.toml")).unwrap()
+    }
+
+    #[test]
+    fn project_root_is_found_from_a_file_a_directory_or_not_at_all() {
+        let dir = project_with("[project]\nname = \"demo\"\nversion = \"0.1.0\"\n");
+        let root = dir.path().canonicalize().unwrap();
+        let nested = root.join("src/util");
+        std::fs::create_dir_all(&nested).unwrap();
+        let file = nested.join("util.lis");
+        std::fs::write(&file, "pub fn f() {}\n").unwrap();
+
+        assert_eq!(find_project_root(&file).as_deref(), Some(root.as_path()));
+        assert_eq!(find_project_root(&nested).as_deref(), Some(root.as_path()));
+        assert_eq!(find_project_root(&root).as_deref(), Some(root.as_path()));
+
+        let outside = tempfile::tempdir().unwrap();
+        let orphan = outside.path().join("loose.lis");
+        std::fs::write(&orphan, "fn main() {}\n").unwrap();
+        assert_eq!(find_project_root(&orphan), None);
+    }
+
+    #[test]
+    fn a_directory_named_like_the_manifest_is_not_a_project_root() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("lisette.toml")).unwrap();
+
+        assert_eq!(find_project_root(dir.path()), None);
     }
 
     #[test]

@@ -1291,3 +1291,237 @@ fn lis_test_does_not_emit_production_orphan_or_its_dependency() {
         "the orphan's unique Go dependency must not leak into emitted output:\n{combined}"
     );
 }
+
+#[test]
+fn check_and_run_agree_on_a_named_file() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let dir = scratch.path();
+    fs::write(
+        dir.join("main.lis"),
+        "import \"go:fmt\"\n\nfn main() {\n  fmt.Println(greet())\n}\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("greet.lis"),
+        "fn greet() -> string {\n  \"hi\"\n}\n",
+    )
+    .unwrap();
+
+    let check_file = lis(&dir.join("main.lis"), "check");
+    let run_file = lis(&dir.join("main.lis"), "run");
+    let check_dir = lis(dir, "check");
+
+    for (label, output) in [
+        ("check <file>", &check_file),
+        ("run <file>", &run_file),
+        ("check <dir>", &check_dir),
+    ] {
+        let combined = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(!output.status.success(), "{label} passed:\n{combined}");
+        assert!(
+            combined.contains("Name not found"),
+            "{label} missed the sibling call:\n{combined}"
+        );
+    }
+}
+
+#[test]
+fn a_directory_of_single_file_programs_checks_clean() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let dir = scratch.path();
+    for (name, text) in [("a.lis", "script a"), ("b.lis", "script b")] {
+        fs::write(
+            dir.join(name),
+            format!("import \"go:fmt\"\n\nfn main() {{\n  fmt.Println(\"{text}\")\n}}\n"),
+        )
+        .unwrap();
+    }
+
+    let output = lis(dir, "check");
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        output.status.success(),
+        "unrelated single-file programs must not collide:\n{combined}"
+    );
+
+    if !go_available() {
+        eprintln!("skipping the run half of a_directory_of_single_file_programs_checks_clean");
+        return;
+    }
+    for (name, text) in [("a.lis", "script a"), ("b.lis", "script b")] {
+        let output = lis(&dir.join(name), "run");
+        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), text);
+    }
+}
+
+fn scaffold_util_project(root: &Path) -> PathBuf {
+    let project = root.join("proj");
+    fs::create_dir_all(project.join("src/util")).unwrap();
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"demoproj\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        "import \"go:fmt\"\nimport \"util\"\n\nfn main() {\n  fmt.Println(util.greet())\n}\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/util/util.lis"),
+        "pub fn greet() -> string {\n  \"hi from util\"\n}\n",
+    )
+    .unwrap();
+    project
+}
+
+#[test]
+fn a_project_source_file_is_checked_as_its_project() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scaffold_util_project(scratch.path());
+
+    let output = lis(&project.join("src/main.lis"), "check");
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    assert!(
+        output.status.success(),
+        "a project entrypoint must resolve its own modules:\n{combined}"
+    );
+    assert!(
+        combined.contains("2 files"),
+        "the whole project should have been checked:\n{combined}"
+    );
+    assert!(
+        !combined.contains("lis new"),
+        "a file inside a project must never be told to create one:\n{combined}"
+    );
+}
+
+#[test]
+fn running_a_project_module_names_the_project() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scaffold_util_project(scratch.path());
+
+    let output = lis(&project.join("src/util/util.lis"), "run");
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    assert!(!output.status.success(), "a module is not a program");
+    assert!(combined.contains("demoproj"), "{combined}");
+    assert!(combined.contains("main"), "{combined}");
+    assert!(!combined.contains("lis new"), "{combined}");
+}
+
+#[test]
+fn a_file_beside_a_project_is_not_told_to_create_one() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scaffold_util_project(scratch.path());
+    fs::write(
+        project.join("play.lis"),
+        "import \"util\"\n\nfn main() {\n  let _ = util.greet()\n}\n",
+    )
+    .unwrap();
+
+    let output = lis(&project.join("play.lis"), "check");
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    assert!(!output.status.success(), "a lone file resolves no modules");
+    assert!(combined.contains("Module not found"), "{combined}");
+    assert!(!combined.contains("lis new"), "{combined}");
+}
+
+#[test]
+fn a_tree_walk_checks_a_nested_project_as_a_project() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scaffold_util_project(scratch.path());
+    fs::write(
+        scratch.path().join("loose.lis"),
+        "import \"go:fmt\"\n\nfn main() {\n  fmt.Println(\"loose\")\n}\n",
+    )
+    .unwrap();
+
+    for target in [scratch.path(), &project.join("src")] {
+        let output = lis(target, "check");
+        let combined = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            output.status.success(),
+            "project files under {} must resolve their own modules:\n{combined}",
+            target.display()
+        );
+    }
+}
+
+#[test]
+fn a_non_lisette_file_under_src_is_not_a_project_target() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scaffold_util_project(scratch.path());
+    fs::write(project.join("src/README.md"), "not lisette\n").unwrap();
+
+    let output = lis(&project.join("src/README.md"), "build");
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    assert!(
+        !output.status.success(),
+        "naming a non-`.lis` file must not build its directory's project:\n{combined}"
+    );
+    assert!(combined.contains("Not a project directory"), "{combined}");
+}
+
+#[test]
+fn a_tree_walk_reports_a_nested_project_with_no_sources() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("decl");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"declonly\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(project.join("src/api.d.lis"), "pub fn helper() -> int\n").unwrap();
+
+    let walked = lis(scratch.path(), "check");
+    let direct = lis(&project, "check");
+
+    for (label, output) in [("tree walk", &walked), ("direct", &direct)] {
+        let combined = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            !output.status.success(),
+            "{label} must not pass a project with no production sources:\n{combined}"
+        );
+        assert!(
+            combined.contains("No Lisette sources"),
+            "{label}: {combined}"
+        );
+    }
+}

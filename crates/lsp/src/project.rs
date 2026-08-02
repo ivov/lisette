@@ -26,24 +26,7 @@ impl ProjectConfig {
 }
 
 pub(crate) fn find_project_root(start_path: &Path) -> Option<ProjectConfig> {
-    let mut current = if start_path.is_file() {
-        start_path.parent()?.to_path_buf()
-    } else {
-        start_path.to_path_buf()
-    };
-
-    loop {
-        let manifest = current.join("lisette.toml");
-        if manifest.exists() {
-            return Some(ProjectConfig::Workspace(current));
-        }
-
-        if !current.pop() {
-            break;
-        }
-    }
-
-    None
+    deps::find_project_root(start_path).map(ProjectConfig::Workspace)
 }
 
 pub(crate) fn resolve_standalone_root(file_path: &Path) -> ProjectConfig {

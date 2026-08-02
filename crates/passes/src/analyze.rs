@@ -240,7 +240,9 @@ mod tests {
 
         let analysis = analyze(AnalyzeInput {
             load_siblings: false,
-            scope: AnalysisScope::Standalone,
+            scope: AnalysisScope::Standalone {
+                inside_project: false,
+            },
             loader: &loader,
             entry: Some(EntryFile::new(
                 source.to_string(),

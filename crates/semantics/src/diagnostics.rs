@@ -1,3 +1,4 @@
+use crate::analysis::StandaloneUnit;
 use deps::{BindgenFailure, DeclarationStatus, TypedefLocatorResult};
 use diagnostics::LocalSink;
 use stdlib::Target;
@@ -16,7 +17,7 @@ pub(crate) struct GoImportSite<'a> {
     pub(crate) go_pkg: &'a str,
     pub(crate) name_span: Option<Span>,
     pub(crate) target: Target,
-    pub(crate) standalone_mode: bool,
+    pub(crate) standalone: Option<StandaloneUnit>,
     /// Set when reached through a replaced module's typedef, so the hint names
     /// the right reconciliation command.
     pub(crate) replace_importer: Option<ReplaceImporter<'a>>,
@@ -32,21 +33,21 @@ pub(crate) fn emit_for_locator_result(
         go_pkg,
         name_span,
         target,
-        standalone_mode,
+        standalone,
         replace_importer,
     } = *site;
     let span = name_span.unwrap_or_else(|| Span::new(0, 0, 0));
     match result {
         TypedefLocatorResult::Found { .. } => return true,
         TypedefLocatorResult::UnknownStdlib => {
-            emit_unknown_stdlib(import_name, go_pkg, span, target, standalone_mode, sink);
+            emit_unknown_stdlib(import_name, go_pkg, span, target, standalone, sink);
         }
         TypedefLocatorResult::UndeclaredImport => {
             emit_undeclared(
                 import_name,
                 go_pkg,
                 span,
-                standalone_mode,
+                standalone,
                 replace_importer,
                 sink,
             );
@@ -113,7 +114,7 @@ pub(crate) fn emit_for_declaration_status(
         go_pkg,
         name_span,
         target,
-        standalone_mode,
+        standalone,
         ..
     } = *site;
     let span = name_span.unwrap_or_else(|| Span::new(0, 0, 0));
@@ -123,11 +124,11 @@ pub(crate) fn emit_for_declaration_status(
         | DeclarationStatus::DeclaredReplacement { .. }
         | DeclarationStatus::DeclaredLocal { .. } => true,
         DeclarationStatus::UnknownStdlib => {
-            emit_unknown_stdlib(import_name, go_pkg, span, target, standalone_mode, sink);
+            emit_unknown_stdlib(import_name, go_pkg, span, target, standalone, sink);
             false
         }
         DeclarationStatus::UndeclaredImport => {
-            emit_undeclared(import_name, go_pkg, span, standalone_mode, None, sink);
+            emit_undeclared(import_name, go_pkg, span, standalone, None, sink);
             false
         }
         DeclarationStatus::InternalPackage { module } => {
@@ -144,7 +145,7 @@ fn emit_unknown_stdlib(
     go_pkg: &str,
     span: Span,
     target: Target,
-    standalone_mode: bool,
+    standalone: Option<StandaloneUnit>,
     sink: &LocalSink,
 ) {
     if let Some(targets) = stdlib::get_go_stdlib_package_targets(go_pkg) {
@@ -158,10 +159,11 @@ fn emit_unknown_stdlib(
         sink.push(diagnostics::module_graph::module_not_found(
             import_name,
             span,
-            if standalone_mode {
-                diagnostics::module_graph::MissingModuleReason::Standalone
-            } else {
-                diagnostics::module_graph::MissingModuleReason::NotFound
+            match standalone {
+                Some(unit) => diagnostics::module_graph::MissingModuleReason::Standalone {
+                    inside_project: unit.inside_project,
+                },
+                None => diagnostics::module_graph::MissingModuleReason::NotFound,
             },
         ));
     }
@@ -171,15 +173,17 @@ fn emit_undeclared(
     import_name: &str,
     go_pkg: &str,
     span: Span,
-    standalone_mode: bool,
+    standalone: Option<StandaloneUnit>,
     replace_importer: Option<ReplaceImporter>,
     sink: &LocalSink,
 ) {
-    if standalone_mode {
+    if let Some(unit) = standalone {
         sink.push(diagnostics::module_graph::module_not_found(
             import_name,
             span,
-            diagnostics::module_graph::MissingModuleReason::Standalone,
+            diagnostics::module_graph::MissingModuleReason::Standalone {
+                inside_project: unit.inside_project,
+            },
         ));
     } else if let Some(ReplaceImporter::Module(replaced_module)) = replace_importer {
         sink.push(diagnostics::module_graph::undeclared_go_import_via_replace(

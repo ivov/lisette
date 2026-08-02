@@ -17,7 +17,7 @@ fn compile_with(
         .map(|c| c.source.clone())
         .expect("main.lis must exist");
 
-    let load_siblings = !matches!(&scope, AnalysisScope::Standalone);
+    let load_siblings = !matches!(&scope, AnalysisScope::Standalone { .. });
     analyze(AnalyzeInput {
         load_siblings,
         scope,
@@ -56,7 +56,9 @@ pub fn compile_standalone_entry(
 
     analyze(AnalyzeInput {
         load_siblings: false,
-        scope: AnalysisScope::Standalone,
+        scope: AnalysisScope::Standalone {
+            inside_project: false,
+        },
         loader: &fs,
         entry: Some(EntryFile::new(
             source,
@@ -78,7 +80,9 @@ pub fn compile_check_with_locator(fs: MockFileSystem, locator: deps::TypedefLoca
 pub fn compile_check_standalone(fs: MockFileSystem) -> Analysis {
     compile_with(
         fs,
-        AnalysisScope::Standalone,
+        AnalysisScope::Standalone {
+            inside_project: false,
+        },
         deps::TypedefLocator::default(),
     )
 }

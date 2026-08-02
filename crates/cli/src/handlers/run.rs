@@ -6,6 +6,7 @@ use std::process::Command;
 
 use crate::cli_error;
 use crate::go_cli;
+use crate::handlers::project::FileTarget;
 use diagnostics::render::{self, Filter};
 use lisette::pipeline::{
     CompileConfig, CompileEntry, CompileInput, CompileMode, CompileScope, ProjectKind, compile,
@@ -33,17 +34,64 @@ pub fn run(
     go_flags: Vec<String>,
 ) -> i32 {
     let target = target.unwrap_or_else(|| ".".to_string());
+    let target_path = Path::new(&target);
 
-    if target.ends_with(".lis") {
-        run_standalone(&target, args, sourcemap, &go_flags)
-    } else {
-        run_project(&target, args, sourcemap, &go_flags)
+    if !target.ends_with(".lis") {
+        return run_project(target_path, args, sourcemap, &go_flags);
+    }
+
+    if !target_path.is_file() {
+        cli_error!(
+            "Failed to run standalone file",
+            format!("File `{}` does not exist", target),
+            "Check the file path and try again"
+        );
+        return 1;
+    }
+
+    match super::project::resolve_file_target(target_path) {
+        FileTarget::ProjectEntry { root } => run_project(&root, args, sourcemap, &go_flags),
+        FileTarget::ProjectModule { root } => not_an_entrypoint(target_path, &root),
+        FileTarget::Standalone { inside_project } => {
+            run_standalone(&target, args, sourcemap, &go_flags, inside_project)
+        }
     }
 }
 
-fn run_project(path: &str, args: Vec<String>, sourcemap: bool, go_flags: &[String]) -> i32 {
-    let project_path = Path::new(path);
+fn not_an_entrypoint(file_path: &Path, root: &Path) -> i32 {
+    let file =
+        lisette::fs::relative_to_cwd(file_path).unwrap_or_else(|| file_path.display().to_string());
+    let project = super::project::project_label(root);
+    let project_path = root.display();
 
+    if root.join("src").join("main.lis").is_file() {
+        cli_error!(
+            "Nothing to run",
+            format!(
+                "`{}` is a module of project `{}`, not its `main`",
+                file, project
+            ),
+            format!("Run `lis run {}` to run the project", project_path)
+        );
+    } else {
+        cli_error!(
+            "Nothing to run",
+            format!(
+                "`{}` belongs to `{}`, which is a library, as it has no `src/main.lis` entrypoint",
+                file, project
+            ),
+            "If not meant to be a library, convert it to a binary by adding `src/main.lis`"
+        );
+    }
+    1
+}
+
+fn run_project(
+    project_path: &Path,
+    args: Vec<String>,
+    sourcemap: bool,
+    go_flags: &[String],
+) -> i32 {
     let project = match super::build::LockedProject::acquire(project_path) {
         Ok(project) => project,
         Err(code) => return code,
@@ -78,17 +126,14 @@ fn run_project(path: &str, args: Vec<String>, sourcemap: bool, go_flags: &[Strin
     exec_binary(&output_path, &args, heading)
 }
 
-fn run_standalone(file: &str, args: Vec<String>, sourcemap: bool, go_flags: &[String]) -> i32 {
+fn run_standalone(
+    file: &str,
+    args: Vec<String>,
+    sourcemap: bool,
+    go_flags: &[String],
+    inside_project: bool,
+) -> i32 {
     let file_path = Path::new(file);
-
-    if !file_path.exists() {
-        cli_error!(
-            "Failed to run standalone file",
-            format!("File `{}` does not exist", file),
-            "Check the file path and try again"
-        );
-        return 1;
-    }
 
     let source = match fs::read_to_string(file_path) {
         Ok(s) => s,
@@ -137,7 +182,7 @@ fn run_standalone(file: &str, args: Vec<String>, sourcemap: bool, go_flags: &[St
         mode: CompileMode::Emit { sourcemap },
         go_module: "lis-standalone",
         entry_package_name: "main",
-        scope: CompileScope::Standalone,
+        scope: CompileScope::Standalone { inside_project },
         locator: &locator,
     };
 

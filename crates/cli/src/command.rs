@@ -112,10 +112,35 @@ fn parse_path_and_sourcemap(
         match arg.as_str() {
             "--sourcemap" => sourcemap = true,
             s if s.starts_with('-') => return Err(ParseError::UnknownFlag(s.to_string())),
-            s => path = Some(s.to_string()),
+            s => set_target(
+                &mut path,
+                s.to_string(),
+                "emit",
+                "Run `lis emit` once per path",
+            )?,
         }
     }
     Ok((path, sourcemap))
+}
+
+fn set_target(
+    target: &mut Option<String>,
+    value: String,
+    command: &'static str,
+    hint: &'static str,
+) -> Result<(), ParseError> {
+    if let Some(first) = target {
+        return Err(ParseError::UnexpectedArgument {
+            message: format!("unexpected argument `{}`", value),
+            reason: format!(
+                "`lis {}` takes one path, and `{}` was already given",
+                command, first
+            ),
+            hint: hint.to_string(),
+        });
+    }
+    *target = Some(value);
+    Ok(())
 }
 
 /// Matches `arg` against a value-taking flag in both its `--flag value` and
@@ -303,7 +328,7 @@ fn parse_build(mut arguments: impl Iterator<Item = String>) -> Result<Command, P
         } else if arg.starts_with('-') {
             return Err(ParseError::UnknownFlag(arg));
         } else {
-            path = Some(arg);
+            set_target(&mut path, arg, "build", "Run `lis build` once per path")?;
         }
     }
 
@@ -339,7 +364,12 @@ fn parse_run(mut arguments: impl Iterator<Item = String>) -> Result<Command, Par
         } else if arg.starts_with('-') {
             return Err(ParseError::UnknownFlag(arg));
         } else {
-            target = Some(arg);
+            set_target(
+                &mut target,
+                arg,
+                "run",
+                "Pass one target; arguments for the program go after `--`",
+            )?;
         }
     }
 
@@ -374,7 +404,12 @@ fn parse_format(arguments: impl Iterator<Item = String>) -> Result<Command, Pars
             s if s.starts_with('-') => {
                 return Err(ParseError::UnknownFlag(s.to_string()));
             }
-            s => path = Some(s.to_string()),
+            s => set_target(
+                &mut path,
+                s.to_string(),
+                "format",
+                "Run `lis format` once per path",
+            )?,
         }
     }
 
@@ -416,7 +451,7 @@ fn parse_check(mut arguments: impl Iterator<Item = String>) -> Result<Command, P
         } else if arg.starts_with('-') {
             return Err(ParseError::UnknownFlag(arg));
         } else {
-            path = Some(arg);
+            set_target(&mut path, arg, "check", "Run `lis check` once per path")?;
         }
     }
 
@@ -489,7 +524,7 @@ fn parse_test(mut arguments: impl Iterator<Item = String>) -> Result<Command, Pa
         } else if arg.starts_with('-') {
             return Err(ParseError::UnknownFlag(arg));
         } else {
-            path = Some(arg);
+            set_target(&mut path, arg, "test", "Run `lis test` once per path")?;
         }
     }
 
@@ -1111,6 +1146,34 @@ mod tests {
                 "expected {args:?} to be rejected"
             );
         }
+    }
+
+    #[test]
+    fn a_second_positional_target_names_both_paths() {
+        for args in [
+            vec!["lis", "run", "a.lis", "b.lis"],
+            vec!["lis", "check", "a.lis", "b.lis"],
+            vec!["lis", "build", "one", "two"],
+            vec!["lis", "emit", "one", "two"],
+            vec!["lis", "format", "one", "two"],
+            vec!["lis", "test", "one", "two"],
+        ] {
+            let Err(ParseError::UnexpectedArgument {
+                message, reason, ..
+            }) = parse(&args)
+            else {
+                panic!("expected {args:?} to be rejected");
+            };
+            assert!(message.contains(args[3]), "{message}");
+            assert!(reason.contains(args[2]), "{reason}");
+        }
+    }
+
+    #[test]
+    fn program_arguments_after_a_separator_are_not_targets() {
+        let (target, args, _) = run_parts(&["lis", "run", "a.lis", "--", "b.lis"]);
+        assert_eq!(target.as_deref(), Some("a.lis"));
+        assert_eq!(args, vec!["b.lis"]);
     }
 
     #[test]

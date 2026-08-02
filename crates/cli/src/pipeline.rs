@@ -133,7 +133,7 @@ pub fn compile(
         .is_some_and(|options| options.emit_tests);
 
     let mut analysis = analyze(AnalyzeInput {
-        load_siblings: !matches!(&scope, CompileScope::Standalone),
+        load_siblings: !matches!(&scope, CompileScope::Standalone { .. }),
         scope,
         loader: fs,
         entry: entry_file,

@@ -35,7 +35,7 @@ fn typedef_home() -> Option<PathBuf> {
 
 pub use project_manifest::{
     GoDependency, Manifest, ReplacementSource, ResolveReport, TrimmedVia, check_no_subpackage_deps,
-    check_toolchain_version, parse_manifest, remove_go_dep, resolve_empty_via,
+    check_toolchain_version, find_project_root, parse_manifest, remove_go_dep, resolve_empty_via,
     trim_dead_via_parents, upsert_go_dependency, validate_project_name,
 };
 pub use typedef_locator::{

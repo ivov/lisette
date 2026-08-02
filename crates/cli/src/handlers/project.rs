@@ -1,3 +1,4 @@
+use std::ffi::OsStr;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
@@ -95,12 +96,67 @@ fn validate_manifest(manifest: &deps::Manifest) -> Result<(), i32> {
 }
 
 fn find_project_root() -> Option<PathBuf> {
-    let cwd = std::env::current_dir().ok()?;
-    let mut current: &Path = &cwd;
-    loop {
-        if current.join("lisette.toml").is_file() {
-            return Some(current.to_path_buf());
-        }
-        current = current.parent()?;
+    deps::find_project_root(&std::env::current_dir().ok()?)
+}
+
+/// The compilation unit a named `.lis` file belongs to.
+pub(crate) enum FileTarget {
+    /// One file alone, `inside_project` when a project sits above it.
+    Standalone {
+        inside_project: bool,
+    },
+    ProjectEntry {
+        root: PathBuf,
+    },
+    ProjectModule {
+        root: PathBuf,
+    },
+}
+
+/// Resolves the unit `file`, which must exist, is compiled as.
+pub(crate) fn resolve_file_target(file: &Path) -> FileTarget {
+    if file.extension() != Some(OsStr::new("lis")) {
+        return FileTarget::Standalone {
+            inside_project: false,
+        };
     }
+
+    let absolute = file.canonicalize().unwrap_or_else(|_| file.to_path_buf());
+
+    let Some(root) = deps::find_project_root(&absolute) else {
+        return FileTarget::Standalone {
+            inside_project: false,
+        };
+    };
+
+    let outside = FileTarget::Standalone {
+        inside_project: true,
+    };
+    let Ok(relative) = absolute.strip_prefix(&root) else {
+        return outside;
+    };
+    // The walk needs absolute paths to climb, but every message shows a root.
+    let root = lisette::fs::relative_to_cwd(&root)
+        .map(PathBuf::from)
+        .unwrap_or(root);
+    let mut components = relative.components();
+    match components.next().and_then(|c| c.as_os_str().to_str()) {
+        Some("src") => {
+            if relative == Path::new("src/main.lis") {
+                FileTarget::ProjectEntry { root }
+            } else {
+                FileTarget::ProjectModule { root }
+            }
+        }
+        Some(semantics::loader::EXTERNAL_TESTS_DIR) => FileTarget::ProjectModule { root },
+        _ => outside,
+    }
+}
+
+pub(crate) fn project_label(root: &Path) -> String {
+    deps::parse_manifest(root)
+        .map(|manifest| manifest.project.name)
+        .unwrap_or_else(|_| {
+            lisette::fs::relative_to_cwd(root).unwrap_or_else(|| root.display().to_string())
+        })
 }

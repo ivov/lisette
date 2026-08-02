@@ -63,14 +63,22 @@ pub enum ProjectKind {
 /// The filesystem context in which analysis runs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AnalysisScope {
-    Standalone,
+    /// One file, with nothing beside it, possibly under a project it is not part of.
+    Standalone {
+        inside_project: bool,
+    },
     Directory,
     Project(PathBuf),
 }
 
 impl AnalysisScope {
-    pub(crate) fn is_standalone(&self) -> bool {
-        matches!(self, Self::Standalone)
+    pub(crate) fn standalone_unit(&self) -> Option<StandaloneUnit> {
+        match self {
+            Self::Standalone { inside_project } => Some(StandaloneUnit {
+                inside_project: *inside_project,
+            }),
+            Self::Directory | Self::Project(_) => None,
+        }
     }
 
     pub(crate) fn has_project_root(&self) -> bool {
@@ -80,9 +88,14 @@ impl AnalysisScope {
     fn project_root(&self) -> Option<&Path> {
         match self {
             Self::Project(root) => Some(root),
-            Self::Standalone | Self::Directory => None,
+            Self::Standalone { .. } | Self::Directory => None,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct StandaloneUnit {
+    pub(crate) inside_project: bool,
 }
 
 pub struct EntryFile {

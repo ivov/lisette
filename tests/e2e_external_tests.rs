@@ -187,7 +187,7 @@ fn loose_directory_tests_import_is_not_reserved_but_unresolved() {
 }
 
 #[test]
-fn loose_directory_tests_folder_is_importable() {
+fn loose_directory_tests_folder_is_unresolved_not_reserved() {
     let dir = tempfile::tempdir().unwrap();
     let loose = dir.path();
     fs::write(
@@ -201,8 +201,13 @@ fn loose_directory_tests_folder_is_importable() {
     let check = lis(loose, &["check"]);
     let out = combined(&check);
     assert!(
-        check.status.success(),
-        "a real `tests/` sub-directory outside a project is an ordinary module: {out}"
+        !check.status.success(),
+        "a lone file resolves no sibling module, `tests/` included: {out}"
+    );
+    assert!(out.contains("Module not found"), "got: {out}");
+    assert!(
+        !out.contains("reserved"),
+        "the `tests` reservation must not apply outside a project: {out}"
     );
 }
 

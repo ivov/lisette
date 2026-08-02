@@ -13501,3 +13501,67 @@ async fn external_test_inlay_hint_does_not_leak_entry() {
 
     client.shutdown().await;
 }
+
+#[tokio::test]
+async fn a_file_opened_without_a_workspace_root_resolves_its_own_project() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("proj");
+    let src = root.join("src");
+    std::fs::create_dir_all(src.join("util")).unwrap();
+    std::fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"demo\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        src.join("util/util.lis"),
+        "pub fn greet() -> string {\n  \"hi\"\n}\n",
+    )
+    .unwrap();
+    let content = "import \"util\"\n\nfn main() {\n  let _ = util.greet()\n}\n";
+    std::fs::write(src.join("main.lis"), content).unwrap();
+
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let uri = Url::from_file_path(src.join("main.lis"))
+        .unwrap()
+        .to_string();
+    client.open(&uri, content).await;
+
+    let diagnostics = client.await_diagnostics_for(&uri).await.unwrap_or_default();
+    assert!(
+        diagnostics
+            .iter()
+            .all(|d| !d.message.contains("Module not")),
+        "the ancestor walk must find the project from the file alone: {diagnostics:?}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn a_file_with_no_project_above_it_is_told_how_to_make_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let loose = dir.path().join("loose.lis");
+    let content = "import \"nowhere\"\n\nfn main() {}\n";
+    std::fs::write(&loose, content).unwrap();
+
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let uri = Url::from_file_path(&loose).unwrap().to_string();
+    client.open(&uri, content).await;
+
+    let diagnostics = client.await_diagnostics_for(&uri).await.unwrap_or_default();
+    let missing = diagnostics
+        .iter()
+        .find(|d| {
+            d.code
+                == Some(NumberOrString::String(
+                    "resolve.module_not_found".to_string(),
+                ))
+        })
+        .unwrap_or_else(|| panic!("expected an unresolved import: {diagnostics:?}"));
+    assert!(missing.message.contains("lis new"), "got: {missing:?}");
+
+    client.shutdown().await;
+}

@@ -117,7 +117,7 @@ pub(super) fn infer_all_modules(
                 store,
                 &module_id,
                 input.locator,
-                input.scope.is_standalone(),
+                input.scope.standalone_unit(),
                 input.cache.go_stdlib_mut(),
             );
             continue;
@@ -247,7 +247,7 @@ fn register_go_module(
     store: &mut Store,
     module_id: &str,
     locator: &TypedefLocator,
-    standalone_mode: bool,
+    standalone: Option<StandaloneUnit>,
     go_cache: Option<&mut LazyGoStdlibCache>,
 ) {
     let go_pkg = module_id.strip_prefix("go:").unwrap_or(module_id);
@@ -278,7 +278,7 @@ fn register_go_module(
                     go_pkg,
                     name_span: None,
                     target: locator.target(),
-                    standalone_mode,
+                    standalone,
                     replace_importer: None,
                 },
                 &checker.sink,

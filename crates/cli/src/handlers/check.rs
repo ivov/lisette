@@ -14,9 +14,12 @@ use lisette::pipeline::{
     ProjectKind, compile,
 };
 
+use semantics::loader::{Loader, MemoryLoader};
+
 use crate::cli_error;
 use crate::command::CheckAction;
 use crate::handlers::build::ProjectLayout;
+use crate::handlers::project::FileTarget;
 use crate::lock::acquire_target_lock;
 use crate::workspace::{GoWorkspace, WorkspaceBindgen, warm_typedefs};
 
@@ -79,14 +82,7 @@ pub fn check(
     };
 
     if !target_path.is_dir() {
-        return check_single_file(
-            target_path,
-            &options,
-            CompileScope::Standalone,
-            TypedefLocator::default(),
-            "main",
-            None,
-        );
+        return check_file(target_path, &options);
     }
 
     if target_path.join("lisette.toml").exists() {
@@ -94,6 +90,22 @@ pub fn check(
     }
 
     check_loose_dir(target_path, &options)
+}
+
+fn check_file(file_path: &Path, options: &CheckOptions) -> i32 {
+    match super::project::resolve_file_target(file_path) {
+        FileTarget::ProjectEntry { root } | FileTarget::ProjectModule { root } => {
+            check_project(&root, options)
+        }
+        FileTarget::Standalone { inside_project } => check_single_file(
+            file_path,
+            options,
+            CompileScope::Standalone { inside_project },
+            TypedefLocator::default(),
+            "main",
+            None,
+        ),
+    }
 }
 
 fn check_project(project_path: &Path, options: &CheckOptions) -> i32 {
@@ -290,20 +302,18 @@ fn compile_single_file(
         .to_string();
     let entry_display =
         lisette::fs::relative_to_cwd(file_path).unwrap_or_else(|| file_path.display().to_string());
-    let working_dir = file_path.parent().unwrap_or_else(|| Path::new("."));
 
-    let result = compile_project_entry(
-        working_dir,
-        CompileInput::Binary(CompileEntry {
-            source: &source,
-            filename: &entry_name,
-            display_path: &entry_display,
-        }),
-        scope,
-        locator,
-        go_module,
-        scanned,
-    );
+    let input = CompileInput::Binary(CompileEntry {
+        source: &source,
+        filename: &entry_name,
+        display_path: &entry_display,
+    });
+    let result = if matches!(scope, CompileScope::Standalone { .. }) {
+        compile_entry(input, scope, &locator, go_module, &MemoryLoader::new())
+    } else {
+        let working_dir = file_path.parent().unwrap_or_else(|| Path::new("."));
+        compile_project_entry(working_dir, input, scope, locator, go_module, scanned)
+    };
 
     Ok(CompiledFile {
         result,
@@ -321,13 +331,6 @@ fn compile_project_entry(
     scanned: Option<ScannedSources>,
 ) -> CompileResult {
     let project_root = locator.project_root().map(|p| p.to_path_buf());
-    let config = CompileConfig {
-        mode: CompileMode::Check,
-        go_module,
-        entry_package_name: "main",
-        scope,
-        locator: &locator,
-    };
 
     let fs = match scanned {
         Some(ScannedSources {
@@ -341,7 +344,24 @@ fn compile_project_entry(
         ),
         None => LocalFileSystem::new(dir.to_str().unwrap_or("."), project_root.as_deref()),
     };
-    compile(input, config, &fs)
+    compile_entry(input, scope, &locator, go_module, &fs)
+}
+
+fn compile_entry(
+    input: CompileInput<'_>,
+    scope: CompileScope,
+    locator: &TypedefLocator,
+    go_module: &str,
+    loader: &dyn Loader,
+) -> CompileResult {
+    let config = CompileConfig {
+        mode: CompileMode::Check,
+        go_module,
+        entry_package_name: "main",
+        scope,
+        locator,
+    };
+    compile(input, config, loader)
 }
 
 fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
@@ -357,13 +377,26 @@ fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
         return 1;
     }
 
-    let mut dirs: HashMap<PathBuf, Vec<PathBuf>> = HashMap::default();
-    for file_path in &files {
-        if let Some(parent) = file_path.parent() {
-            dirs.entry(parent.to_path_buf())
-                .or_default()
-                .push(file_path.clone());
+    let mut projects: Vec<PathBuf> = Vec::new();
+    let mut loose: Vec<(&PathBuf, bool)> = Vec::new();
+    for file in &files {
+        match super::project::resolve_file_target(file) {
+            FileTarget::ProjectEntry { root } | FileTarget::ProjectModule { root } => {
+                if !projects.contains(&root) {
+                    projects.push(root);
+                }
+            }
+            FileTarget::Standalone { .. } if file.to_string_lossy().ends_with(".d.lis") => {}
+            FileTarget::Standalone { inside_project } => loose.push((file, inside_project)),
         }
+    }
+
+    let mut project_code = 0;
+    for root in &projects {
+        project_code |= check_project(root, options);
+    }
+    if loose.is_empty() && !projects.is_empty() {
+        return project_code;
     }
 
     let mut total_errors = 0;
@@ -377,25 +410,15 @@ fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
 
     let mut fix_summary = FixSummary::default();
 
-    for dir_files in dirs.values() {
-        let mut compiled = None;
-        let mut dir_read_failures = 0;
-        for file in dir_files {
-            if let Ok(result) = compile_single_file(
-                file,
-                CompileScope::Directory,
-                TypedefLocator::default(),
-                "main",
-                None,
-            ) {
-                compiled = Some(result);
-                break;
-            }
-            dir_read_failures += 1;
-        }
-
-        let Some(compiled) = compiled else {
-            read_failures += dir_read_failures;
+    for (file, inside_project) in loose {
+        let Ok(compiled) = compile_single_file(
+            file,
+            CompileScope::Standalone { inside_project },
+            TypedefLocator::default(),
+            "main",
+            None,
+        ) else {
+            read_failures += 1;
             continue;
         };
 
@@ -438,7 +461,7 @@ fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
 
     if options.fixes() {
         print_fix_summary(&fix_summary, elapsed);
-        return i32::from(fix_summary.write_failures > 0);
+        return project_code | i32::from(fix_summary.write_failures > 0);
     }
 
     let all_errors = total_errors + read_failures;
@@ -449,7 +472,7 @@ fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
         render::print_summary(total_files, elapsed, all_errors, total_warnings, total_info);
     }
 
-    exit_code(all_errors, total_warnings, options.deny_warnings())
+    project_code | exit_code(all_errors, total_warnings, options.deny_warnings())
 }
 
 fn exit_code(errors: usize, warnings: usize, deny_warnings: bool) -> i32 {

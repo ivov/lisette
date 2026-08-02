@@ -5,6 +5,7 @@ use std::time::Instant;
 
 use crate::cli_error;
 use crate::go_cli;
+use crate::handlers::project::FileTarget;
 use crate::lock::acquire_target_lock;
 use crate::output::{format_elapsed, print_warning, use_color};
 use crate::workspace::{GoWorkspace, WorkspaceBindgen, warm_typedefs};
@@ -109,10 +110,18 @@ pub(super) fn with_locked_project(
     path: Option<String>,
     f: impl FnOnce(&LockedProject) -> i32,
 ) -> i32 {
-    let project_root = path.unwrap_or_else(|| ".".to_string());
-    let project_path = Path::new(&project_root);
+    let target = path.unwrap_or_else(|| ".".to_string());
+    let target_path = Path::new(&target);
 
-    let project = match LockedProject::acquire(project_path) {
+    let owning_project = target_path
+        .is_file()
+        .then(|| match super::project::resolve_file_target(target_path) {
+            FileTarget::ProjectEntry { root } | FileTarget::ProjectModule { root } => Some(root),
+            FileTarget::Standalone { .. } => None,
+        })
+        .flatten();
+
+    let project = match LockedProject::acquire(owning_project.as_deref().unwrap_or(target_path)) {
         Ok(project) => project,
         Err(code) => return code,
     };

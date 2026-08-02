@@ -313,8 +313,10 @@ impl<'a> GraphBuilder<'a> {
                             )
                         } else if is_go_stdlib {
                             diagnostics::module_graph::MissingModuleReason::GoStandardLibrary
-                        } else if self.scope.is_standalone() {
-                            diagnostics::module_graph::MissingModuleReason::Standalone
+                        } else if let Some(unit) = self.scope.standalone_unit() {
+                            diagnostics::module_graph::MissingModuleReason::Standalone {
+                                inside_project: unit.inside_project,
+                            }
                         } else {
                             diagnostics::module_graph::MissingModuleReason::NotFound
                         };
@@ -644,7 +646,7 @@ fn process_file_imports(
                             go_pkg,
                             name_span: Some(pending.span),
                             target: locator.target(),
-                            standalone_mode: scope.is_standalone(),
+                            standalone: scope.standalone_unit(),
                             replace_importer: None,
                         },
                         sink,
@@ -659,7 +661,7 @@ fn process_file_imports(
                             go_pkg,
                             name_span: Some(pending.span),
                             target: locator.target(),
-                            standalone_mode: scope.is_standalone(),
+                            standalone: scope.standalone_unit(),
                             replace_importer: None,
                         },
                         sink,

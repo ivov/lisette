@@ -9,7 +9,9 @@ use semantics::store::Store;
 use crate::_harness::filesystem::MockFileSystem;
 
 const PROJECT_SCOPE: AnalysisScope = AnalysisScope::Project(std::path::PathBuf::new());
-const STANDALONE_SCOPE: AnalysisScope = AnalysisScope::Standalone;
+const STANDALONE_SCOPE: AnalysisScope = AnalysisScope::Standalone {
+    inside_project: false,
+};
 
 fn default_resolver() -> deps::TypedefLocator {
     deps::TypedefLocator::default()
