@@ -555,13 +555,11 @@ impl InferCtx<'_> {
                         self.sink.push(diagnostic);
                     }
                 }
-                DefinitionBody::Interface { .. } => {
-                    if !is_callee_context && !is_dot_access_base {
-                        self.sink.push(diagnostics::infer::type_used_as_value(
-                            &display_name,
-                            *args.span,
-                        ));
-                    }
+                DefinitionBody::Interface { .. } if !is_callee_context && !is_dot_access_base => {
+                    self.sink.push(diagnostics::infer::type_used_as_value(
+                        &display_name,
+                        *args.span,
+                    ));
                 }
                 _ => {}
             }

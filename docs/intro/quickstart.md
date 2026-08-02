@@ -14,7 +14,7 @@ brew install lisette
 # via mise
 mise use -g lisette
 
-# from source (requires Rust 1.94+)
+# from source (requires Rust 1.97+)
 cargo install lisette
 ```
 

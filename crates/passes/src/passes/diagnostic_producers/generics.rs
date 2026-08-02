@@ -24,33 +24,31 @@ fn visit_expression(expression: &Expression, diagnostics: &mut Vec<LisetteDiagno
             return_type,
             body,
             ..
-        } => {
-            if !generics.is_empty() {
-                let mut still_missing: HashSet<EcoString> =
-                    generics.iter().map(|g| g.name.clone()).collect();
-                if let Some(body) = body.definition() {
-                    body_remove_found_type_names(body, &mut still_missing);
-                }
-                let found_in_body: HashSet<EcoString> = generics
-                    .iter()
-                    .map(|g| g.name.clone())
-                    .filter(|name| !still_missing.contains(name))
-                    .collect();
-                check_unused_type_parameters(
-                    generics,
-                    params,
-                    return_type,
-                    &found_in_body,
-                    diagnostics,
-                );
-                check_type_params_only_in_bound(
-                    generics,
-                    params,
-                    return_type,
-                    &found_in_body,
-                    diagnostics,
-                );
+        } if !generics.is_empty() => {
+            let mut still_missing: HashSet<EcoString> =
+                generics.iter().map(|g| g.name.clone()).collect();
+            if let Some(body) = body.definition() {
+                body_remove_found_type_names(body, &mut still_missing);
             }
+            let found_in_body: HashSet<EcoString> = generics
+                .iter()
+                .map(|g| g.name.clone())
+                .filter(|name| !still_missing.contains(name))
+                .collect();
+            check_unused_type_parameters(
+                generics,
+                params,
+                return_type,
+                &found_in_body,
+                diagnostics,
+            );
+            check_type_params_only_in_bound(
+                generics,
+                params,
+                return_type,
+                &found_in_body,
+                diagnostics,
+            );
         }
         _ => {}
     }

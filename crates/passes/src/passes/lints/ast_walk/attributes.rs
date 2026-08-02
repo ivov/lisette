@@ -164,14 +164,12 @@ fn check_unknown_tag_options(attribute: &Attribute, sink: &LocalSink) {
                     sink.push(diagnostics::lint::unknown_tag_option(&attribute.span, flag));
                 }
             }
-            AttributeArg::NegatedFlag(flag) => {
-                // Only omitempty can be negated
-                if flag != "omitempty" {
-                    sink.push(diagnostics::lint::unknown_tag_option(
-                        &attribute.span,
-                        &format!("!{}", flag),
-                    ));
-                }
+            // Only omitempty can be negated
+            AttributeArg::NegatedFlag(flag) if flag != "omitempty" => {
+                sink.push(diagnostics::lint::unknown_tag_option(
+                    &attribute.span,
+                    &format!("!{}", flag),
+                ));
             }
             // String and Raw args are valid (name override and raw values)
             _ => {}

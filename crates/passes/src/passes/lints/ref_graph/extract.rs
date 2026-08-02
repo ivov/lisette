@@ -885,12 +885,11 @@ pub(super) fn equals_targets(
                 equals_targets(value, module, store, index, out);
             }
         }
-        Type::Nominal { id, .. } => {
+        Type::Nominal { id, .. }
             if id.as_str().starts_with(&format!("{}.", module.id))
-                && index.usable_from(id.as_str(), &module.id)
-            {
-                out.push(ModuleItemId::equals_method(unqualified_name(id)));
-            }
+                && index.usable_from(id.as_str(), &module.id) =>
+        {
+            out.push(ModuleItemId::equals_method(unqualified_name(id)));
         }
         _ => {}
     }

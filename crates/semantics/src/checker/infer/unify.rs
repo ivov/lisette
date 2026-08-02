@@ -199,27 +199,23 @@ impl InferCtx<'_> {
             (Type::Simple(k1), Type::Simple(k2)) if simple_kinds_are_go_aliases(*k1, *k2) => Ok(()),
 
             (Nominal { id, .. }, other)
-                if other.is_structural_alias_body() && store.underlying_type(&r1).is_some() =>
+                if other.is_structural_alias_body()
+                    && let Some(u) = store.underlying_type(&r1) =>
             {
                 if matches!(other, Type::Simple(_)) && store.is_nominal_defined_type(id.as_str()) {
                     Err(UnifyError::TypeMismatch)
                 } else {
-                    let u = store
-                        .underlying_type(&r1)
-                        .expect("guard checked underlying");
                     self.try_unify(&u, &r2, span)
                 }
             }
 
             (other, Nominal { id, .. })
-                if other.is_structural_alias_body() && store.underlying_type(&r2).is_some() =>
+                if other.is_structural_alias_body()
+                    && let Some(u) = store.underlying_type(&r2) =>
             {
                 if matches!(other, Type::Simple(_)) && store.is_nominal_defined_type(id.as_str()) {
                     Err(UnifyError::TypeMismatch)
                 } else {
-                    let u = store
-                        .underlying_type(&r2)
-                        .expect("guard checked underlying");
                     self.try_unify(&r1, &u, span)
                 }
             }
@@ -284,17 +280,11 @@ impl InferCtx<'_> {
                 actual @ (Type::Simple(_) | Type::Compound { .. } | Type::Array { .. }),
             ) => self.try_satisfy_interface(actual, id, params, span),
 
-            (Nominal { .. }, Function(_)) if store.underlying_type(&r1).is_some() => {
-                let u = store
-                    .underlying_type(&r1)
-                    .expect("guard checked underlying");
+            (Nominal { .. }, Function(_)) if let Some(u) = store.underlying_type(&r1) => {
                 self.try_unify(&u, &r2, span)
             }
 
-            (Function(_), Nominal { .. }) if store.underlying_type(&r2).is_some() => {
-                let u = store
-                    .underlying_type(&r2)
-                    .expect("guard checked underlying");
+            (Function(_), Nominal { .. }) if let Some(u) = store.underlying_type(&r2) => {
                 self.try_unify(&r1, &u, span)
             }
 

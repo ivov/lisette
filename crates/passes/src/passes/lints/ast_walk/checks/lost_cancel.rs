@@ -38,15 +38,15 @@ fn check_slot(pattern: &Pattern, ty: &Type, ctx: &NodeCtx) {
         Pattern::WildCard { span } if contains_cancel_func(ty, ctx) => {
             ctx.sink.push(diagnostics::lint::lost_cancel(span));
         }
-        Pattern::Identifier { span, .. } if contains_cancel_func(ty, ctx) => {
-            if ctx
-                .facts
-                .bindings
-                .values()
-                .any(|binding| binding.span == *span && !binding.used)
-            {
-                ctx.sink.push(diagnostics::lint::lost_cancel(span));
-            }
+        Pattern::Identifier { span, .. }
+            if contains_cancel_func(ty, ctx)
+                && ctx
+                    .facts
+                    .bindings
+                    .values()
+                    .any(|binding| binding.span == *span && !binding.used) =>
+        {
+            ctx.sink.push(diagnostics::lint::lost_cancel(span));
         }
         _ => {}
     }

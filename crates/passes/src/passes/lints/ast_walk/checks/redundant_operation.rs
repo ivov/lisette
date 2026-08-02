@@ -148,15 +148,9 @@ fn classify(
                 return None;
             }
         }
-        ShiftLeft | ShiftRight => {
-            // `0 << n` is not folded to `0`: a negative `n` panics at runtime,
-            // so the result is not unconditionally `0`.
-            if is_zero_literal(right) {
-                (Side::Left, Outcome::Identity)
-            } else {
-                return None;
-            }
-        }
+        // `0 << n` is not folded to `0`: a negative `n` panics at runtime,
+        // so the result is not unconditionally `0`.
+        ShiftLeft | ShiftRight if is_zero_literal(right) => (Side::Left, Outcome::Identity),
         _ => return None,
     };
 
@@ -178,10 +172,9 @@ fn classify_boolean(
     let is_and = matches!(operator, BinaryOperator::And);
     let (side, outcome) = if let Some(value) = bool_literal(right) {
         (Side::Left, boolean_outcome(value, is_and))
-    } else if let Some(value) = bool_literal(left) {
-        (Side::Right, boolean_outcome(value, is_and))
     } else {
-        return None;
+        let value = bool_literal(left)?;
+        (Side::Right, boolean_outcome(value, is_and))
     };
     let other = match side {
         Side::Left => left,

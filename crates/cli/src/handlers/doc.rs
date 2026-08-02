@@ -1566,14 +1566,13 @@ fn has_go_module_matches(module_cache: &GoModuleCache, query_lower: &str) -> boo
                     return true;
                 }
             }
-            CachedDefinitionBody::Interface { definition, .. } => {
+            CachedDefinitionBody::Interface { definition, .. }
                 if definition
                     .methods
                     .keys()
-                    .any(|m| m.to_lowercase().contains(query_lower))
-                {
-                    return true;
-                }
+                    .any(|m| m.to_lowercase().contains(query_lower)) =>
+            {
+                return true;
             }
             _ => {}
         }
