@@ -157,6 +157,7 @@ pub interface ByteWriter {
 /// The behavior of Close after the first call is undefined.
 /// Specific implementations may document their own behavior.
 pub interface Closer {
+  #[allow(unused_result)]
   fn Close() -> Result<(), error>
 }
 
@@ -182,6 +183,7 @@ pub type PipeWriter
 
 /// ReadCloser is the interface that groups the basic Read and Close methods.
 pub interface ReadCloser {
+  #[allow(unused_result)]
   fn Close() -> Result<(), error>
   fn Read(mut p: Slice<byte>) -> Partial<int, error>
 }
@@ -189,6 +191,7 @@ pub interface ReadCloser {
 /// ReadSeekCloser is the interface that groups the basic Read, Seek and Close
 /// methods.
 pub interface ReadSeekCloser {
+  #[allow(unused_result)]
   fn Close() -> Result<(), error>
   fn Read(mut p: Slice<byte>) -> Partial<int, error>
   fn Seek(offset: int64, whence: int) -> Result<int64, error>
@@ -202,6 +205,7 @@ pub interface ReadSeeker {
 
 /// ReadWriteCloser is the interface that groups the basic Read, Write and Close methods.
 pub interface ReadWriteCloser {
+  #[allow(unused_result)]
   fn Close() -> Result<(), error>
   fn Read(mut p: Slice<byte>) -> Partial<int, error>
   fn Write(p: Slice<byte>) -> Partial<int, error>
@@ -348,6 +352,7 @@ pub interface StringWriter {
 
 /// WriteCloser is the interface that groups the basic Write and Close methods.
 pub interface WriteCloser {
+  #[allow(unused_result)]
   fn Close() -> Result<(), error>
   fn Write(p: Slice<byte>) -> Partial<int, error>
 }

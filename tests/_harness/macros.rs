@@ -238,6 +238,22 @@ macro_rules! assert_no_lint_warnings {
 }
 
 #[macro_export]
+macro_rules! assert_diagnostic_count {
+    ($source:expr, $expected:expr) => {
+        let diagnostics = $crate::_harness::lint::lint($source);
+        if diagnostics.len() != $expected {
+            let rendered: Vec<String> = diagnostics.iter().map(|d| format!("{:?}", d)).collect();
+            panic!(
+                "Expected {} diagnostics but got {}:\n{}",
+                $expected,
+                diagnostics.len(),
+                rendered.join("\n")
+            );
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! assert_build_snapshot {
     ($fs:expr, $go_module:expr) => {
         let output = $crate::_harness::build::compile_project($fs, $go_module);

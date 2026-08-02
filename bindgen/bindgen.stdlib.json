@@ -3,8 +3,13 @@
     "lints": {
       "allow_unused_result": {
         "bytes": ["Buffer.WriteByte", "Buffer.WriteRune", "Buffer.WriteString"],
+        "crypto/tls": ["Conn.CloseWrite"],
+        "database/sql": ["Tx.Rollback"],
+        "database/sql/driver": ["Tx.Rollback"],
         "fmt": ["Print", "Printf", "Println", "Fprint", "Fprintf", "Fprintln"],
-        "strings": ["Builder.WriteByte", "Builder.WriteRune", "Builder.WriteString"]
+        "net": ["TCPConn.CloseRead", "TCPConn.CloseWrite", "UnixConn.CloseRead", "UnixConn.CloseWrite"],
+        "strings": ["Builder.WriteByte", "Builder.WriteRune", "Builder.WriteString"],
+        "syscall": ["Close"]
       },
       "deny_unused_value": {
         "go/types": ["TypeParam.Underlying"],

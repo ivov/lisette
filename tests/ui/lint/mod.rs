@@ -4,7 +4,7 @@ use crate::_harness::build::compile_check;
 use crate::_harness::filesystem::MockFileSystem;
 use crate::_harness::formatting::format_result_diagnostic_for_snapshot;
 use crate::_harness::lint::lint;
-use crate::{assert_lint_snapshot, assert_no_lint_warnings};
+use crate::{assert_diagnostic_count, assert_lint_snapshot, assert_no_lint_warnings};
 use semantics::store::ENTRY_MODULE_ID;
 
 #[test]
@@ -648,6 +648,565 @@ fn unsafe_call() -> Result<int, string> {
 fn main() {
   safe_call();
   unsafe_call();
+  ()
+}
+"#
+    );
+}
+
+#[test]
+fn unused_result_under_defer() {
+    assert_lint_snapshot!(
+        r#"
+fn commit() -> Result<int, string> {
+  Ok(42)
+}
+
+fn main() {
+  defer commit()
+  ()
+}
+"#
+    );
+}
+
+#[test]
+fn unused_value_under_defer() {
+    assert_lint_snapshot!(
+        r#"
+fn count() -> int {
+  42
+}
+
+fn main() {
+  defer count()
+  ()
+}
+"#
+    );
+}
+
+#[test]
+fn unused_result_under_defer_block_tail() {
+    assert_lint_snapshot!(
+        r#"
+fn commit() -> Result<int, string> {
+  Ok(42)
+}
+
+fn main() {
+  defer {
+    commit()
+  }
+  ()
+}
+"#
+    );
+}
+
+#[test]
+fn unused_result_under_defer_conditional_tail() {
+    assert_lint_snapshot!(
+        r#"
+fn commit() -> Result<int, string> {
+  Ok(42)
+}
+
+fn main() {
+  defer {
+    if true {
+      commit()
+    }
+  }
+  ()
+}
+"#
+    );
+}
+
+#[test]
+fn defer_conditional_tail_reports_once() {
+    assert_diagnostic_count!(
+        r#"
+fn commit() -> Result<int, string> {
+  Ok(42)
+}
+
+fn main() {
+  defer {
+    if true {
+      commit()
+    }
+  }
+  ()
+}
+"#,
+        1
+    );
+}
+
+#[test]
+fn unused_result_under_task() {
+    assert_lint_snapshot!(
+        r#"
+fn commit() -> Result<int, string> {
+  Ok(42)
+}
+
+fn main() {
+  task commit()
+  ()
+}
+"#
+    );
+}
+
+#[test]
+fn task_conditional_tail_reports_once() {
+    assert_diagnostic_count!(
+        r#"
+fn commit() -> Result<int, string> {
+  Ok(42)
+}
+
+fn main() {
+  task {
+    if true {
+      commit()
+    }
+  }
+  ()
+}
+"#,
+        1
+    );
+}
+
+#[test]
+fn defer_deeply_nested_conditional_tail_reports_once() {
+    assert_diagnostic_count!(
+        r#"
+fn commit() -> Result<int, string> {
+  Ok(42)
+}
+
+fn main() {
+  defer {
+    if true {
+      let _ = 1
+      if true {
+        commit()
+      }
+    }
+  }
+  ()
+}
+"#,
+        1
+    );
+}
+
+#[test]
+fn nested_conditional_in_statement_position_reports_once() {
+    assert_diagnostic_count!(
+        r#"
+fn commit() -> Result<int, string> {
+  Ok(42)
+}
+
+fn value() -> int {
+  if true {
+    let _ = 1
+    if true {
+      commit()
+    }
+  }
+  5
+}
+
+fn main() {
+  let _ = value()
+}
+"#,
+        1
+    );
+}
+
+#[test]
+fn nested_conditional_in_loop_body_reports_once() {
+    assert_diagnostic_count!(
+        r#"
+fn commit() -> Result<int, string> {
+  Ok(42)
+}
+
+fn main() {
+  for _i in 0..3 {
+    if true {
+      let _ = 1
+      if true {
+        commit()
+      }
+    }
+  }
+  ()
+}
+"#,
+        1
+    );
+}
+
+#[test]
+fn unused_result_in_unit_block_initializer() {
+    assert_lint_snapshot!(
+        r#"
+fn commit() -> Result<int, string> {
+  Ok(42)
+}
+
+fn main() {
+  let _x = {
+    if true {
+      commit()
+    }
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn unit_block_initializer_reports_once() {
+    assert_diagnostic_count!(
+        r#"
+fn commit() -> Result<int, string> {
+  Ok(42)
+}
+
+fn main() {
+  let _x = {
+    if true {
+      commit()
+    }
+  }
+}
+"#,
+        1
+    );
+}
+
+#[test]
+fn unused_result_in_match_subject_block() {
+    assert_lint_snapshot!(
+        r#"
+fn commit() -> Result<int, string> {
+  Ok(42)
+}
+
+fn main() {
+  match {
+    if true {
+      commit()
+    }
+  } {
+    _ => (),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn match_subject_block_reports_once() {
+    assert_diagnostic_count!(
+        r#"
+fn commit() -> Result<int, string> {
+  Ok(42)
+}
+
+fn main() {
+  match {
+    if true {
+      commit()
+    }
+  } {
+    _ => (),
+  }
+}
+"#,
+        1
+    );
+}
+
+#[test]
+fn paren_block_statement_reports_once() {
+    assert_diagnostic_count!(
+        r#"
+fn commit() -> Result<int, string> {
+  Ok(42)
+}
+
+fn main() {
+  ({
+    if true {
+      commit()
+    }
+  })
+  ()
+}
+"#,
+        1
+    );
+}
+
+#[test]
+fn paren_block_in_loop_reports_once() {
+    assert_diagnostic_count!(
+        r#"
+fn commit() -> Result<int, string> {
+  Ok(42)
+}
+
+fn main() {
+  for _i in 0..3 {
+    ({
+      if true {
+        commit()
+      }
+    })
+  }
+  ()
+}
+"#,
+        1
+    );
+}
+
+#[test]
+fn paren_block_tail_reports_once() {
+    assert_diagnostic_count!(
+        r#"
+fn commit() -> Result<int, string> {
+  Ok(42)
+}
+
+fn main() {
+  ({
+    if true {
+      commit()
+    }
+  })
+}
+"#,
+        1
+    );
+}
+
+#[test]
+fn discarded_loop_break_block_reports_once() {
+    assert_diagnostic_count!(
+        r#"
+fn commit() -> Result<int, string> {
+  Ok(42)
+}
+
+fn main() {
+  loop {
+    if true {
+      break {
+        if true {
+          commit()
+        }
+      }
+    }
+  }
+  ()
+}
+"#,
+        1
+    );
+}
+
+#[test]
+fn kept_loop_break_block_reports_once() {
+    assert_diagnostic_count!(
+        r#"
+fn commit() -> Result<int, string> {
+  Ok(42)
+}
+
+fn main() {
+  let _x = loop {
+    if true {
+      break {
+        if true {
+          commit()
+        }
+      }
+    }
+  }
+}
+"#,
+        1
+    );
+}
+
+#[test]
+fn kept_loop_break_value_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn commit() -> Result<int, string> {
+  Ok(42)
+}
+
+fn main() {
+  let x = loop {
+    if true {
+      break commit()
+    }
+  }
+  let _ = x
+}
+"#
+    );
+}
+
+#[test]
+fn unused_result_in_unit_if_initializer() {
+    assert_lint_snapshot!(
+        r#"
+fn commit() -> Result<int, string> {
+  Ok(42)
+}
+
+fn main() {
+  let _x = if true {
+    commit()
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn unit_if_initializer_reports_once() {
+    assert_diagnostic_count!(
+        r#"
+fn commit() -> Result<int, string> {
+  Ok(42)
+}
+
+fn main() {
+  let _x = if true {
+    commit()
+  }
+}
+"#,
+        1
+    );
+}
+
+#[test]
+fn unit_if_let_initializer_reports_once() {
+    assert_diagnostic_count!(
+        r#"
+fn commit() -> Result<int, string> {
+  Ok(42)
+}
+
+fn main() {
+  let _x = if let Some(_v) = Some(1) {
+    commit()
+  }
+}
+"#,
+        1
+    );
+}
+
+#[test]
+fn if_else_initializer_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn commit() -> Result<int, string> {
+  Ok(42)
+}
+
+fn main() {
+  let x = if true {
+    commit()
+  } else {
+    Ok(0)
+  }
+  let _ = x
+}
+"#
+    );
+}
+
+#[test]
+fn kept_block_initializer_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn commit() -> Result<int, string> {
+  Ok(42)
+}
+
+fn main() {
+  let x = {
+    commit()
+  }
+  let _ = x
+}
+"#
+    );
+}
+
+#[test]
+fn allow_unused_result_suppresses_lint_under_defer() {
+    assert_no_lint_warnings!(
+        r#"
+#[allow(unused_result)]
+fn cleanup() -> Result<int, string> {
+  Ok(42)
+}
+
+fn main() {
+  defer cleanup()
+  ()
+}
+"#
+    );
+}
+
+#[test]
+fn discarded_result_under_defer_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn commit() -> Result<int, string> {
+  Ok(42)
+}
+
+fn main() {
+  defer {
+    let _ = commit()
+  }
+  ()
+}
+"#
+    );
+}
+
+#[test]
+fn unit_call_under_defer_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn cleanup() {
+  ()
+}
+
+fn main() {
+  defer cleanup()
   ()
 }
 "#
@@ -24390,12 +24949,12 @@ fn main() {
 fn unconditional_recursion_after_defer() {
     assert_lint_snapshot!(
         r#"
-fn cleanup(n: int) -> int {
-  n + 1
+fn cleanup() {
+  ()
 }
 
 fn descend(n: int) -> int {
-  defer cleanup(n)
+  defer cleanup()
   descend(n - 1)
 }
 
@@ -24410,12 +24969,12 @@ fn main() {
 fn unconditional_recursion_after_task() {
     assert_lint_snapshot!(
         r#"
-fn cleanup(n: int) -> int {
-  n + 1
+fn cleanup() {
+  ()
 }
 
 fn descend(n: int) -> int {
-  task cleanup(n)
+  task cleanup()
   descend(n - 1)
 }
 
@@ -24881,8 +25440,8 @@ fn main() {
 fn unconditional_recursion_self_call_in_task_argument() {
     assert_lint_snapshot!(
         r#"
-fn consume(n: int) -> int {
-  n
+fn consume(n: int) {
+  let _ = n
 }
 
 fn spawn_wrap(n: int) -> int {
@@ -24901,13 +25460,13 @@ fn main() {
 fn unconditional_recursion_deferred_self_call_no_warning() {
     assert_no_lint_warnings!(
         r#"
-fn descend(n: int) -> int {
+fn descend(n: int) {
   defer descend(n)
-  0
+  ()
 }
 
 fn main() {
-  let _ = descend(3)
+  descend(3)
 }
 "#
     );
@@ -24917,7 +25476,7 @@ fn main() {
 fn unconditional_recursion_deferred_self_call_then_infinite_loop_no_warning() {
     assert_no_lint_warnings!(
         r#"
-fn descend(n: int) -> int {
+fn descend(n: int) {
   defer descend(n)
   loop {
     let _ = n
@@ -24925,7 +25484,7 @@ fn descend(n: int) -> int {
 }
 
 fn main() {
-  let _ = descend(3)
+  descend(3)
 }
 "#
     );

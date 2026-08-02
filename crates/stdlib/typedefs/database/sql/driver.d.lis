@@ -28,6 +28,7 @@ pub interface ColumnConverter {
 /// Conn is assumed to be stateful.
 pub interface Conn {
   fn Begin() -> Result<Tx, error>
+  #[allow(unused_result)]
   fn Close() -> Result<(), error>
   fn Prepare(query: string) -> Result<Stmt, error>
 }
@@ -196,6 +197,7 @@ pub interface Result {
 
 /// Rows is an iterator over an executed query's results.
 pub interface Rows {
+  #[allow(unused_result)]
   fn Close() -> Result<(), error>
   fn Columns() -> Slice<string>
   fn Next(mut dest: Slice<Value>) -> Result<(), error>
@@ -211,6 +213,7 @@ pub struct RowsAffected(int64)
 /// "DECIMAL", "SMALLINT", "INT", "BIGINT", "BOOL", "[]BIGINT", "JSONB", "XML",
 /// "TIMESTAMP".
 pub interface RowsColumnTypeDatabaseTypeName {
+  #[allow(unused_result)]
   fn Close() -> Result<(), error>
   fn ColumnTypeDatabaseTypeName(index: int) -> string
   fn Columns() -> Slice<string>
@@ -230,6 +233,7 @@ pub interface RowsColumnTypeDatabaseTypeName {
 /// 	int           (0, false)
 /// 	bytea(30)     (30, true)
 pub interface RowsColumnTypeLength {
+  #[allow(unused_result)]
   fn Close() -> Result<(), error>
   fn ColumnTypeLength(index: int) -> Option<int64>
   fn Columns() -> Slice<string>
@@ -241,6 +245,7 @@ pub interface RowsColumnTypeLength {
 /// to be not nullable.
 /// If the column nullability is unknown, ok should be false.
 pub interface RowsColumnTypeNullable {
+  #[allow(unused_result)]
   fn Close() -> Result<(), error>
   fn ColumnTypeNullable(index: int) -> Option<bool>
   fn Columns() -> Slice<string>
@@ -255,6 +260,7 @@ pub interface RowsColumnTypeNullable {
 /// 	int               (0, 0, false)
 /// 	decimal           (math.MaxInt64, math.MaxInt64, true)
 pub interface RowsColumnTypePrecisionScale {
+  #[allow(unused_result)]
   fn Close() -> Result<(), error>
   fn ColumnTypePrecisionScale(index: int) -> Option<(int64, int64)>
   fn Columns() -> Slice<string>
@@ -265,6 +271,7 @@ pub interface RowsColumnTypePrecisionScale {
 /// the value type that can be used to scan types into. For example, the database
 /// column type "bigint" this should return "[reflect.TypeOf](int64(0))".
 pub interface RowsColumnTypeScanType {
+  #[allow(unused_result)]
   fn Close() -> Result<(), error>
   fn ColumnTypeScanType(index: int) -> Option<reflect.Type>
   fn Columns() -> Slice<string>
@@ -274,6 +281,7 @@ pub interface RowsColumnTypeScanType {
 /// RowsNextResultSet extends the [Rows] interface by providing a way to signal
 /// the driver to advance to the next result set.
 pub interface RowsNextResultSet {
+  #[allow(unused_result)]
   fn Close() -> Result<(), error>
   fn Columns() -> Slice<string>
   fn HasNextResultSet() -> bool
@@ -290,6 +298,7 @@ pub interface SessionResetter {
 /// Stmt is a prepared statement. It is bound to a [Conn] and not
 /// used by multiple goroutines concurrently.
 pub interface Stmt {
+  #[allow(unused_result)]
   fn Close() -> Result<(), error>
   fn Exec(args: Slice<Value>) -> Result<Result, error>
   fn NumInput() -> int
@@ -309,6 +318,7 @@ pub interface StmtQueryContext {
 /// Tx is a transaction.
 pub interface Tx {
   fn Commit() -> Result<(), error>
+  #[allow(unused_result)]
   fn Rollback() -> Result<(), error>
 }
 

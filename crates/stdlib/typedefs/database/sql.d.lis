@@ -913,6 +913,7 @@ impl Tx {
   ) -> Ref<Row>
 
   /// Rollback aborts the transaction.
+  #[allow(unused_result)]
   fn Rollback(self: Ref<Tx>) -> Result<(), error>
 
   /// Stmt returns a transaction-specific prepared statement from

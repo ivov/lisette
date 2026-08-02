@@ -521,6 +521,7 @@ pub struct Buffers(Slice<Slice<byte>>)
 /// 
 /// Multiple goroutines may invoke methods on a Conn simultaneously.
 pub interface Conn {
+  #[allow(unused_result)]
   fn Close() -> Result<(), error>
   fn LocalAddr() -> Option<Addr>
   fn Read(mut b: Slice<byte>) -> Partial<int, error>
@@ -669,6 +670,7 @@ pub struct ListenConfig {
 pub interface Listener {
   fn Accept() -> Result<Conn, error>
   fn Addr() -> Option<Addr>
+  #[allow(unused_result)]
   fn Close() -> Result<(), error>
 }
 
@@ -698,6 +700,7 @@ pub struct OpError {
 /// 
 /// Multiple goroutines may invoke methods on a PacketConn simultaneously.
 pub interface PacketConn {
+  #[allow(unused_result)]
   fn Close() -> Result<(), error>
   fn LocalAddr() -> Option<Addr>
   fn ReadFrom(mut p: Slice<byte>) -> Result<(int, Addr), error>
@@ -1317,10 +1320,12 @@ impl TCPAddr {
 impl TCPConn {
   /// CloseRead shuts down the reading side of the TCP connection.
   /// Most callers should just use Close.
+  #[allow(unused_result)]
   fn CloseRead(self: Ref<TCPConn>) -> Result<(), error>
 
   /// CloseWrite shuts down the writing side of the TCP connection.
   /// Most callers should just use Close.
+  #[allow(unused_result)]
   fn CloseWrite(self: Ref<TCPConn>) -> Result<(), error>
 
   /// MultipathTCP reports whether the ongoing connection is using MPTCP.
@@ -1520,10 +1525,12 @@ impl UnixAddr {
 impl UnixConn {
   /// CloseRead shuts down the reading side of the Unix domain connection.
   /// Most callers should just use [UnixConn.Close].
+  #[allow(unused_result)]
   fn CloseRead(self: Ref<UnixConn>) -> Result<(), error>
 
   /// CloseWrite shuts down the writing side of the Unix domain connection.
   /// Most callers should just use [UnixConn.Close].
+  #[allow(unused_result)]
   fn CloseWrite(self: Ref<UnixConn>) -> Result<(), error>
 
   /// ReadFrom implements the [PacketConn].ReadFrom method.

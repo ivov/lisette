@@ -1,5 +1,5 @@
 use diagnostics::{LisetteDiagnostic, UnusedExpressionKind};
-use syntax::ast::{Annotation, Expression, SelectArm, Span, UnaryOperator};
+use syntax::ast::{Annotation, Expression, MatchArm, SelectArm, Span, UnaryOperator};
 use syntax::program::{CallKind, NativeTypeKind};
 use syntax::types::{Symbol, Type};
 
@@ -18,13 +18,26 @@ pub(crate) fn run(
     facts: &mut Vec<LisetteDiagnostic>,
 ) {
     for item in typed_ast {
-        visit_expression(item, None, module_id, store, facts);
+        visit_expression(item, TailUse::Kept, module_id, store, facts);
     }
+}
+
+/// Who reports a block's tail value.
+#[derive(Clone, Copy)]
+enum TailUse<'a> {
+    /// Measured against a declared return type.
+    Declared(&'a TailContext<'a>),
+    /// Flows out, so reported only if the block's own type drops it.
+    Kept,
+    /// Dropped whatever its type, and unreported so far.
+    Dropped,
+    /// Already reported by an enclosing discarded walk.
+    Walked,
 }
 
 fn visit_expression(
     expression: &Expression,
-    tail_ctx: Option<&TailContext<'_>>,
+    tail_use: TailUse<'_>,
     module_id: &str,
     store: &Store,
     facts: &mut Vec<LisetteDiagnostic>,
@@ -33,8 +46,8 @@ fn visit_expression(
         Expression::Block { items, ty, .. }
         | Expression::TryBlock { items, ty, .. }
         | Expression::RecoverBlock { items, ty, .. } => {
-            let tail_is_discarded = tail_ctx.is_some() || discards_value(ty);
-            visit_block_items(items, tail_is_discarded, tail_ctx, module_id, store, facts);
+            visit_block_items(items, ty, tail_use, module_id, store, facts);
+            return;
         }
         Expression::Function {
             body,
@@ -46,7 +59,7 @@ fn visit_expression(
                 return;
             };
             let ctx = tail_context_for_function(body, return_type, return_annotation);
-            visit_expression(body, ctx.as_ref(), module_id, store, facts);
+            visit_expression(body, declared_or_kept(&ctx), module_id, store, facts);
             return;
         }
         Expression::Lambda {
@@ -59,17 +72,19 @@ fn visit_expression(
             let body_ty = body.get_type();
             let ctx = tail_context_for_lambda(ty, *span, return_annotation, &body_ty);
 
-            if ctx.is_some() && !matches!(body.as_ref(), Expression::Block { .. }) {
-                descend_discarded(
-                    body,
-                    &DiscardMode::Tail(ctx.as_ref().into()),
-                    module_id,
-                    store,
-                    facts,
-                );
-            }
+            let body_use = match &ctx {
+                // A block reports its own tail, so descending here would duplicate.
+                Some(ctx) if matches!(body.as_ref(), Expression::Block { .. }) => {
+                    TailUse::Declared(ctx)
+                }
+                Some(ctx) => {
+                    descend_discarded(body, &DiscardMode::Tail(ctx), module_id, store, facts);
+                    TailUse::Walked
+                }
+                None => TailUse::Kept,
+            };
 
-            visit_expression(body, ctx.as_ref(), module_id, store, facts);
+            visit_expression(body, body_use, module_id, store, facts);
             return;
         }
         Expression::For {
@@ -87,19 +102,147 @@ fn visit_expression(
             body,
             ..
         } => {
-            visit_expression(pre_child, None, module_id, store, facts);
-            visit_loop_body(body, module_id, store, facts);
+            visit_expression(pre_child, TailUse::Kept, module_id, store, facts);
+            visit_loop_body(body, tail_use, module_id, store, facts);
             return;
         }
         Expression::Loop { body, .. } => {
-            visit_loop_body(body, module_id, store, facts);
+            visit_loop_body(body, tail_use, module_id, store, facts);
+            return;
+        }
+        // Walked by `visit_break_values` instead, under the loop's use.
+        Expression::Break { .. } => return,
+        Expression::Defer {
+            expression: wrapped,
+            ..
+        }
+        | Expression::Task {
+            expression: wrapped,
+            ..
+        } => {
+            visit_discarded_expression(wrapped, module_id, store, facts);
+            return;
+        }
+        // `descend_discarded` unwraps parens, so a walked spine passes through.
+        Expression::Paren {
+            expression: inner, ..
+        } => {
+            visit_expression(inner, tail_use, module_id, store, facts);
+            return;
+        }
+        // Branches carry the value and are what `descend_discarded` walks.
+        // Subjects, conditions and guards are inputs nothing has walked.
+        Expression::If {
+            condition,
+            consequence,
+            alternative,
+            ty,
+            ..
+        } => {
+            visit_expression(condition, TailUse::Kept, module_id, store, facts);
+            let branch_use = branch_use(tail_use, ty);
+            visit_expression(consequence, branch_use, module_id, store, facts);
+            if let Some(alternative) = alternative {
+                visit_expression(alternative, branch_use, module_id, store, facts);
+            }
+            return;
+        }
+        Expression::IfLet {
+            scrutinee,
+            consequence,
+            alternative,
+            ty,
+            ..
+        } => {
+            visit_expression(scrutinee, TailUse::Kept, module_id, store, facts);
+            let branch_use = branch_use(tail_use, ty);
+            visit_expression(consequence, branch_use, module_id, store, facts);
+            if let Some(alternative) = alternative.expression() {
+                visit_expression(alternative, branch_use, module_id, store, facts);
+            }
+            return;
+        }
+        Expression::Match { subject, arms, .. } => {
+            visit_expression(subject, TailUse::Kept, module_id, store, facts);
+            visit_match_arms(arms, tail_use, module_id, store, facts);
+            return;
+        }
+        Expression::Select { arms, .. } => {
+            for arm in arms {
+                match arm {
+                    SelectArm::Receive {
+                        receive_expression,
+                        body,
+                        ..
+                    }
+                    | SelectArm::Send {
+                        send_expression: receive_expression,
+                        body,
+                    } => {
+                        visit_expression(
+                            receive_expression,
+                            TailUse::Kept,
+                            module_id,
+                            store,
+                            facts,
+                        );
+                        visit_expression(body, tail_use, module_id, store, facts);
+                    }
+                    SelectArm::MatchReceive {
+                        receive_expression,
+                        arms,
+                    } => {
+                        visit_expression(
+                            receive_expression,
+                            TailUse::Kept,
+                            module_id,
+                            store,
+                            facts,
+                        );
+                        visit_match_arms(arms, tail_use, module_id, store, facts);
+                    }
+                    SelectArm::WildCard { body } => {
+                        visit_expression(body, tail_use, module_id, store, facts);
+                    }
+                }
+            }
             return;
         }
         _ => {}
     }
 
     for child in expression.children() {
-        visit_expression(child, None, module_id, store, facts);
+        visit_expression(child, TailUse::Kept, module_id, store, facts);
+    }
+}
+
+fn visit_match_arms(
+    arms: &[MatchArm],
+    tail_use: TailUse<'_>,
+    module_id: &str,
+    store: &Store,
+    facts: &mut Vec<LisetteDiagnostic>,
+) {
+    for arm in arms {
+        if let Some(guard) = &arm.guard {
+            visit_expression(guard, TailUse::Kept, module_id, store, facts);
+        }
+        visit_expression(&arm.expression, tail_use, module_id, store, facts);
+    }
+}
+
+/// An `if` with no `else` yields unit while its branch still carries a value.
+fn branch_use<'a>(tail_use: TailUse<'a>, conditional_ty: &Type) -> TailUse<'a> {
+    match tail_use {
+        TailUse::Kept if discards_value(conditional_ty) => TailUse::Dropped,
+        other => other,
+    }
+}
+
+fn declared_or_kept<'a>(ctx: &'a Option<TailContext<'a>>) -> TailUse<'a> {
+    match ctx {
+        Some(ctx) => TailUse::Declared(ctx),
+        None => TailUse::Kept,
     }
 }
 
@@ -144,25 +287,93 @@ fn tail_context_for_lambda<'a>(
 
 fn visit_loop_body(
     body: &Expression,
+    loop_use: TailUse<'_>,
     module_id: &str,
     store: &Store,
     facts: &mut Vec<LisetteDiagnostic>,
 ) {
-    let items = match body {
+    visit_break_values(body, loop_use, module_id, store, facts);
+
+    match body {
         Expression::Block { items, .. }
         | Expression::TryBlock { items, .. }
-        | Expression::RecoverBlock { items, .. } => items,
-        _ => {
-            visit_expression(body, None, module_id, store, facts);
-            return;
+        | Expression::RecoverBlock { items, .. } => {
+            visit_discarded_items(items, module_id, store, facts);
         }
-    };
+        _ => visit_expression(body, TailUse::Kept, module_id, store, facts),
+    }
+}
 
-    for item in items {
-        if !is_statement_only(item) {
-            descend_discarded(item, &DiscardMode::NonTail, module_id, store, facts);
+/// A `break` value belongs to the loop, not the body spine that leads to it.
+fn visit_break_values(
+    expression: &Expression,
+    loop_use: TailUse<'_>,
+    module_id: &str,
+    store: &Store,
+    facts: &mut Vec<LisetteDiagnostic>,
+) {
+    match expression {
+        Expression::Break {
+            value: Some(value), ..
+        } => {
+            visit_expression(value, loop_use, module_id, store, facts);
         }
-        visit_expression(item, None, module_id, store, facts);
+        Expression::Loop { .. }
+        | Expression::While { .. }
+        | Expression::WhileLet { .. }
+        | Expression::For { .. }
+        | Expression::Function { .. }
+        | Expression::Lambda { .. }
+        | Expression::Task { .. }
+        | Expression::Defer { .. } => {}
+        _ => {
+            for child in expression.children() {
+                visit_break_values(child, loop_use, module_id, store, facts);
+            }
+        }
+    }
+}
+
+/// Unlike a loop body, a bare wrapped expression is itself a discarded value.
+fn visit_discarded_expression(
+    expression: &Expression,
+    module_id: &str,
+    store: &Store,
+    facts: &mut Vec<LisetteDiagnostic>,
+) {
+    match expression {
+        Expression::Block { items, .. }
+        | Expression::TryBlock { items, .. }
+        | Expression::RecoverBlock { items, .. } => {
+            visit_discarded_items(items, module_id, store, facts);
+        }
+        _ => {
+            descend_discarded(expression, &DiscardMode::NonTail, module_id, store, facts);
+            visit_expression(expression, TailUse::Walked, module_id, store, facts);
+        }
+    }
+}
+
+fn visit_discarded_items(
+    items: &[Expression],
+    module_id: &str,
+    store: &Store,
+    facts: &mut Vec<LisetteDiagnostic>,
+) {
+    for item in items {
+        let walked = if is_statement_only(item) {
+            false
+        } else {
+            descend_discarded(item, &DiscardMode::NonTail, module_id, store, facts);
+            true
+        };
+
+        let item_use = if walked {
+            TailUse::Walked
+        } else {
+            TailUse::Kept
+        };
+        visit_expression(item, item_use, module_id, store, facts);
     }
 }
 
@@ -173,51 +384,50 @@ fn signature_marker_span(span: Span) -> Span {
 
 fn visit_block_items(
     items: &[Expression],
-    tail_is_discarded: bool,
-    tail_ctx: Option<&TailContext<'_>>,
+    block_ty: &Type,
+    tail_use: TailUse<'_>,
     module_id: &str,
     store: &Store,
     facts: &mut Vec<LisetteDiagnostic>,
 ) {
     let len = items.len();
     for (i, item) in items.iter().enumerate() {
-        let is_last = i == len - 1;
-        let is_statement_only = is_statement_only(item);
-
-        if !is_statement_only && !is_last {
+        let walked = if is_statement_only(item) {
+            false
+        } else if i != len - 1 {
             descend_discarded(item, &DiscardMode::NonTail, module_id, store, facts);
-        }
+            true
+        } else {
+            match tail_use {
+                TailUse::Declared(ctx) => {
+                    descend_discarded(item, &DiscardMode::Tail(ctx), module_id, store, facts);
+                    true
+                }
+                TailUse::Dropped => {
+                    descend_discarded(item, &DiscardMode::NonTail, module_id, store, facts);
+                    true
+                }
+                TailUse::Kept if discards_value(block_ty) => {
+                    descend_discarded(item, &DiscardMode::NonTail, module_id, store, facts);
+                    true
+                }
+                TailUse::Kept => false,
+                TailUse::Walked => true,
+            }
+        };
 
-        if is_last && !is_statement_only && tail_is_discarded {
-            descend_discarded(
-                item,
-                &DiscardMode::Tail(tail_ctx.into()),
-                module_id,
-                store,
-                facts,
-            );
-        }
+        let item_use = if walked {
+            TailUse::Walked
+        } else {
+            TailUse::Kept
+        };
+        visit_expression(item, item_use, module_id, store, facts);
     }
 }
 
 enum DiscardMode<'a> {
-    Tail(TailExpectation<'a>),
+    Tail(&'a TailContext<'a>),
     NonTail,
-}
-
-#[derive(Clone, Copy)]
-enum TailExpectation<'a> {
-    Declared(&'a TailContext<'a>),
-    Inferred,
-}
-
-impl<'a> From<Option<&'a TailContext<'a>>> for TailExpectation<'a> {
-    fn from(context: Option<&'a TailContext<'a>>) -> Self {
-        match context {
-            Some(context) => Self::Declared(context),
-            None => Self::Inferred,
-        }
-    }
 }
 
 fn descend_discarded(
@@ -296,7 +506,7 @@ fn descend_discarded(
         | Expression::For { .. } => {}
         unwrapped => match mode {
             DiscardMode::Tail(tail_ctx) => {
-                check_discarded_tail(expression, *tail_ctx, module_id, store, facts)
+                check_discarded_tail(expression, tail_ctx, module_id, store, facts)
             }
             DiscardMode::NonTail => emit_unused_at_leaf(unwrapped, module_id, store, facts),
         },
@@ -381,7 +591,7 @@ fn lvalue_slice_growth_kind(expression: &Expression) -> Option<UnusedExpressionK
 
 fn check_discarded_tail(
     item: &Expression,
-    expectation: TailExpectation<'_>,
+    expected: &TailContext<'_>,
     module_id: &str,
     store: &Store,
     facts: &mut Vec<LisetteDiagnostic>,
@@ -412,16 +622,11 @@ fn check_discarded_tail(
         return;
     }
 
-    let (expected_span, expected_ty) = match expectation {
-        TailExpectation::Declared(ctx) => (ctx.expected_span, ctx.expected_ty.to_string()),
-        TailExpectation::Inferred => (item.get_span(), reported_ty.to_string()),
-    };
-
     facts.push(diagnostics::infer::mismatched_tail_value(
         &item.get_span(),
         &reported_ty.to_string(),
-        &expected_span,
-        &expected_ty,
+        &expected.expected_span,
+        &expected.expected_ty.to_string(),
     ));
 }
 

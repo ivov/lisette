@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Unused expression value
+   ╭─[test.lis:7:9]
+ 6 │ fn main() {
+ 7 │   defer count()
+   ·         ───┬───
+   ·            ╰── this value is discarded
+ 8 │   ()
+   ╰────
+  help: Use the value, or ignore with `let _ = ...` · code: [lint.unused_value]

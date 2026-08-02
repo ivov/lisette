@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ `Result` is silently discarded
+   ╭─[test.lis:7:9]
+ 6 │ fn main() {
+ 7 │   defer commit()
+   ·         ────┬───
+   ·             ╰── failure will go unnoticed
+ 8 │   ()
+   ╰────
+  help: Handle this `Result` with `?` or `match`, or explicitly discard it with `let _ = ...` · code: [lint.unused_result]

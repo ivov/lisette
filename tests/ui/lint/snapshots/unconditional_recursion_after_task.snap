@@ -3,7 +3,7 @@ source: tests/ui/lint/mod.rs
 ---
   ▲ Unconditional recursion
    ╭─[test.lis:8:3]
- 7 │   task cleanup(n)
+ 7 │   task cleanup()
  8 │   descend(n - 1)
    ·   ───────┬──────
    ·          ╰── recurses on every path

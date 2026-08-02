@@ -442,6 +442,7 @@ pub fn Chown(path: string, uid: int, gid: int) -> Result<(), error>
 
 pub fn Clearenv()
 
+#[allow(unused_result)]
 pub fn Close(fd: Handle) -> Result<(), error>
 
 pub fn CloseHandle(handle: Handle) -> Result<(), error>

@@ -420,11 +420,8 @@ func allowDiscardLint(returnType string) string {
 	return "unused_result"
 }
 
-// shouldAllowUnusedResult returns true if the function/method should be annotated
-// with a discard-suppression attribute. Checks config first, then applies
-// signature-based heuristics for common Go interface methods:
-//   - Close() error
-//   - Flush() error
+// shouldAllowUnusedResult reports whether a function or method should carry a
+// discard-suppression attribute, taking config over the signature heuristic.
 func (e *Emitter) shouldAllowUnusedResult(qualifiedName, methodName string, result convert.ConvertResult) bool {
 	if e.cfg.ShouldAllowUnusedResult(e.pkgPath, qualifiedName) {
 		return true
@@ -435,9 +432,25 @@ func (e *Emitter) shouldAllowUnusedResult(qualifiedName, methodName string, resu
 		name = result.Name
 	}
 
+	return isConventionalDiscard(name, len(result.Params), result.ReturnType)
+}
+
+// shouldAllowUnusedResultOnMethod is the same for an interface method, which
+// has no receiver to qualify itself with.
+func (e *Emitter) shouldAllowUnusedResultOnMethod(interfaceName string, m convert.InterfaceMethod) bool {
+	if e.cfg.ShouldAllowUnusedResult(e.pkgPath, interfaceName+"."+m.Name) {
+		return true
+	}
+
+	return isConventionalDiscard(m.Name, len(m.Params), m.ReturnType)
+}
+
+// isConventionalDiscard reports whether Go leaves this cleanup method's error
+// unchecked by convention.
+func isConventionalDiscard(name string, paramCount int, returnType string) bool {
 	switch name {
 	case "Close", "Flush":
-		return len(result.Params) == 0 && result.ReturnType == "Result<(), error>"
+		return paramCount == 0 && returnType == "Result<(), error>"
 	}
 
 	return false
@@ -529,6 +542,9 @@ func (e *Emitter) emitInterface(result convert.ConvertResult) {
 			}
 			if m.BuilderMethod {
 				signature.WriteString("  #[allow(unused_value)]\n")
+			}
+			if e.shouldAllowUnusedResultOnMethod(result.Name, m) {
+				fmt.Fprintf(&signature, "  #[allow(%s)]\n", allowDiscardLint(m.ReturnType))
 			}
 			signature.WriteString(formatSignature("  fn ", m.Name, "",
 				formatParams(m.Params), m.HasReturn(), m.ReturnType))

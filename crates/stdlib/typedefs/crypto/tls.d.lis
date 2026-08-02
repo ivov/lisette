@@ -747,6 +747,7 @@ impl Conn {
   /// CloseWrite shuts down the writing side of the connection. It should only be
   /// called once the handshake has completed and does not call CloseWrite on the
   /// underlying connection. Most callers should just use [Conn.Close].
+  #[allow(unused_result)]
   fn CloseWrite(self: Ref<Conn>) -> Result<(), error>
 
   /// ConnectionState returns basic TLS details about the connection.

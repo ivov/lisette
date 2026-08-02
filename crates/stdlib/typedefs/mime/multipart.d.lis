@@ -26,6 +26,7 @@ pub fn NewWriter(w: io.Writer) -> Ref<Writer>
 /// Its contents may be either stored in memory or on disk.
 /// If stored on disk, the File's underlying concrete type will be an *os.File.
 pub interface File {
+  #[allow(unused_result)]
   fn Close() -> Result<(), error>
   fn Read(mut p: Slice<byte>) -> Partial<int, error>
   fn ReadAt(mut p: Slice<byte>, off: int64) -> Partial<int, error>

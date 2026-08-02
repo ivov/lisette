@@ -599,6 +599,7 @@ pub fn Chroot(path: string) -> Result<(), error>
 
 pub fn Clearenv()
 
+#[allow(unused_result)]
 pub fn Close(fd: int) -> Result<(), error>
 
 pub fn CloseOnExec(fd: int)

@@ -90,6 +90,7 @@ pub struct Project {
 
 /// Interface embedding
 pub interface ReadWriteCloser {
+  #[allow(unused_result)]
   fn Close() -> Result<(), error>
   fn Read(mut p: Slice<byte>) -> Partial<int, error>
   fn Write(p: Slice<byte>) -> Partial<int, error>
