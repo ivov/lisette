@@ -2,6 +2,69 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.11.0](https://github.com/ivov/lisette/compare/lisette-v0.10.0...lisette-v0.11.0) - 2026-08-02
+
+### Features
+
+- feat: expand `lis check --output unix` [#1181](https://github.com/ivov/lisette/pull/1181) [`59561fe`](https://github.com/ivov/lisette/commit/59561fe12c41e37c8cc88ca8081032f58c55a6b5)
+- feat: diagnostic for shadowed lambda captures [#1173](https://github.com/ivov/lisette/pull/1173) [`75967cf`](https://github.com/ivov/lisette/commit/75967cfe4348469686d26b5acd20db133b5e723d)
+- feat: diagnostic for redundant import alias [#1164](https://github.com/ivov/lisette/pull/1164) [`7a2bcc7`](https://github.com/ivov/lisette/commit/7a2bcc71002bc7ee4e04b088f71b82a9e69c6a6e)
+- feat: SSA divergence analysis for bindgen [#1163](https://github.com/ivov/lisette/pull/1163) [`90c0d38`](https://github.com/ivov/lisette/commit/90c0d3884e665332633f3b97a5151ff186e4c2f2)
+- feat: diagnostic for infallible test assertions [#1157](https://github.com/ivov/lisette/pull/1157) [`7d742d9`](https://github.com/ivov/lisette/commit/7d742d968bbc9a4292d461ff768414ba4ea6d0e2)
+- feat: diagnostic for needless `continue` [#1156](https://github.com/ivov/lisette/pull/1156) [`8f73e6a`](https://github.com/ivov/lisette/commit/8f73e6a05273026adf58ed30a54537bab3e4a18c)
+- feat: SSA parameter mutability analysis for bindgen [#1149](https://github.com/ivov/lisette/pull/1149) [`055001a`](https://github.com/ivov/lisette/commit/055001af14ef9cf0cea521dfa10d88f5b89f76c7)
+- feat: diagnostic for redundant `strings` trim guard [#1147](https://github.com/ivov/lisette/pull/1147) [`4623457`](https://github.com/ivov/lisette/commit/46234577dcc796b461d12f5d7b471d289ddead33)
+- feat: diagnostic for manual slice extend [#1146](https://github.com/ivov/lisette/pull/1146) [`27cb3bd`](https://github.com/ivov/lisette/commit/27cb3bd1cdf27462bbd024e9304bd825eeb8273d)
+- feat: diagnostic for duplicate map keys [#1145](https://github.com/ivov/lisette/pull/1145) [`d1fedd0`](https://github.com/ivov/lisette/commit/d1fedd04290d74f058dd5f5ff8eca32313b85dd4)
+- feat: diagnostic for zero-count `strings.Replace` [#1144](https://github.com/ivov/lisette/pull/1144) [`0085e4d`](https://github.com/ivov/lisette/commit/0085e4d6c5959c76412ba2c34b0e3b4c62d4044a)
+- feat: `lis add --path` for local interop [#1142](https://github.com/ivov/lisette/pull/1142) [`4138d3d`](https://github.com/ivov/lisette/commit/4138d3d28b4b0c1151ad3965f5424d6efb86952f)
+- feat: diagnostic for `fmt.Printf` arity mismatch [#1141](https://github.com/ivov/lisette/pull/1141) [`8c0f9e1`](https://github.com/ivov/lisette/commit/8c0f9e126130ed35887dc523be43ee6284a788d7)
+- feat: diagnostic for unconditional recursion [#1140](https://github.com/ivov/lisette/pull/1140) [`0b4229e`](https://github.com/ivov/lisette/commit/0b4229e0c02828db74ca7b7e220d619b61537b55)
+- feat: diagnostic for constant cast overflow [#1139](https://github.com/ivov/lisette/pull/1139) [`ae97090`](https://github.com/ivov/lisette/commit/ae97090c504cd63218f9fe7d30aea5f32782ea3c)
+- feat: diagnostic for always-true disjunction [#1137](https://github.com/ivov/lisette/pull/1137) [`17fdc60`](https://github.com/ivov/lisette/commit/17fdc6080f1d6add09b49d7ba68853d5983ff084)
+- feat: SSA nilability analysis for bindgen [#1133](https://github.com/ivov/lisette/pull/1133) [`0bd658e`](https://github.com/ivov/lisette/commit/0bd658e29df39cc41a73c25e47adc99d6cda477e)
+
+### Fixes
+
+- fix: unify single-file dispatch across commands [#1185](https://github.com/ivov/lisette/pull/1185) [`e779916`](https://github.com/ivov/lisette/commit/e779916aaa1070d507e8e30c158622a64aff4607)
+- fix: extend SSA nilability derivation to maps and channels [#1183](https://github.com/ivov/lisette/pull/1183) [`b25d797`](https://github.com/ivov/lisette/commit/b25d7973376759ad91b58c80d02424894da0d062)
+- fix: stop exempting `defer` and `task` from discard lints [#1182](https://github.com/ivov/lisette/pull/1182) [`0f2859f`](https://github.com/ivov/lisette/commit/0f2859fedcef737267f0fee1dc10296ce9c1fb0a)
+- fix: enforce import placement at the top of the file [#1178](https://github.com/ivov/lisette/pull/1178) [`1f096b5`](https://github.com/ivov/lisette/commit/1f096b5c8f2e539788a4ee12661ef553c52fd235)
+- fix: adjust formatting for long control-flow headers [#1174](https://github.com/ivov/lisette/pull/1174) [`c15cca5`](https://github.com/ivov/lisette/commit/c15cca5ffdc79cb65c483a2e7c3f034f9f6e8772)
+- fix: extend SSA mutation derivation to interface dispatch [#1172](https://github.com/ivov/lisette/pull/1172) [`aacc2ff`](https://github.com/ivov/lisette/commit/aacc2ff7ce8a33029c4a3fcaed2da6e82bc5ee6a)
+- fix: reject Go types whose zero value is unsafe [#1171](https://github.com/ivov/lisette/pull/1171) [`39ab76c`](https://github.com/ivov/lisette/commit/39ab76cabaaeb17103e627750e5c9c96f7f3f8e7)
+- fix: derive equality for generics bound by custom interfaces [#1160](https://github.com/ivov/lisette/pull/1160) [`a21935b`](https://github.com/ivov/lisette/commit/a21935b484a6ef353ee0a7c3d7a2bc1ca2ed4af0)
+- fix: extend SSA mutation derivation to value receivers [#1158](https://github.com/ivov/lisette/pull/1158) [`ca2f669`](https://github.com/ivov/lisette/commit/ca2f669a6f642ea828f1dde96c0276e231a5bbab)
+- fix: inconsistent escape sequence lexing [#1143](https://github.com/ivov/lisette/pull/1143) [`5fe7420`](https://github.com/ivov/lisette/commit/5fe7420ab14e11340a2bf90d223a315dd2304839)
+
+### Internals
+
+- perf: scan imports instead of parsing cache-hit modules [#1187](https://github.com/ivov/lisette/pull/1187) [`98b7d0c`](https://github.com/ivov/lisette/commit/98b7d0cb4aeab3520564b6d2a35d6604106ac6a3)
+- refactor: reword diagnostic labels that restate their titles [#1186](https://github.com/ivov/lisette/pull/1186) [`49fa955`](https://github.com/ivov/lisette/commit/49fa955367602100fae2ba180940e02bc9790634)
+- refactor: drop the source-cache fallback to a default file [#1184](https://github.com/ivov/lisette/pull/1184) [`c18f0cb`](https://github.com/ivov/lisette/commit/c18f0cbac533f8fef7a2b5e68ea888724ae7cbfa)
+- refactor: tailor type-mismatch diagnostic to container widening [#1180](https://github.com/ivov/lisette/pull/1180) [`3021a2d`](https://github.com/ivov/lisette/commit/3021a2d12150980c754c62e86cb629848815aef9)
+- chore: use `error` and `wrap_err` in `lis learn` project [#1179](https://github.com/ivov/lisette/pull/1179) [`91be43b`](https://github.com/ivov/lisette/commit/91be43bd99f9e62db7ecdce3f9db68dc01c7356a)
+- chore: clean up clippy exemptions and extend lint coverage [#1177](https://github.com/ivov/lisette/pull/1177) [`55f823a`](https://github.com/ivov/lisette/commit/55f823ac9aabcebd8438cab045a6be6b68e4dbd3)
+- refactor: reorganize `semantics` crate into smaller modules [#1176](https://github.com/ivov/lisette/pull/1176) [`8e956c8`](https://github.com/ivov/lisette/commit/8e956c8eced484f8afdedfcf232b1da379f66414)
+- refactor: simplify semantic state and module discovery [#1175](https://github.com/ivov/lisette/pull/1175) [`84a2318`](https://github.com/ivov/lisette/commit/84a23185a656bf83c682502a30917752499c09f7)
+- refactor: simplify pipeline boundaries [#1170](https://github.com/ivov/lisette/pull/1170) [`f3de2dc`](https://github.com/ivov/lisette/commit/f3de2dc91894ebd2cb4cea2e802be7f122d784f8)
+- refactor: move entry parsing into analysis [#1169](https://github.com/ivov/lisette/pull/1169) [`e070629`](https://github.com/ivov/lisette/commit/e070629f3c450eb4d77bbd0e56147e1190a470e0)
+- refactor: remove desugaring phase [#1168](https://github.com/ivov/lisette/pull/1168) [`9415bff`](https://github.com/ivov/lisette/commit/9415bff3e6746047548c995c2329b16800363fff)
+- refactor: tailor comparable-bound diagnostic to equatable types [#1167](https://github.com/ivov/lisette/pull/1167) [`01986c0`](https://github.com/ivov/lisette/commit/01986c0258f05c50a39c15ab63b7a9c312c9981d)
+- test: reuse prelude setup across tests [#1166](https://github.com/ivov/lisette/pull/1166) [`cf36674`](https://github.com/ivov/lisette/commit/cf366740b59f31eb03aafcd20011b00d87c22281)
+- perf: parallelize `lis format` and cut pretty-printer overhead [#1165](https://github.com/ivov/lisette/pull/1165) [`d1eb039`](https://github.com/ivov/lisette/commit/d1eb0399ea2e860bd6f1d1e6063772428580fd78)
+- perf: inline terminal width detection [#1162](https://github.com/ivov/lisette/pull/1162) [`efc10c2`](https://github.com/ivov/lisette/commit/efc10c2a4ecf22d075484e643b0787458645b328)
+- perf: shed more dependencies [#1161](https://github.com/ivov/lisette/pull/1161) [`682d0d4`](https://github.com/ivov/lisette/commit/682d0d4e73505cb297d84cad656118f52a758251)
+- perf: replace `tower-lsp` with hand-rolled LSP protocol [#1159](https://github.com/ivov/lisette/pull/1159) [`b6feb50`](https://github.com/ivov/lisette/commit/b6feb5009bcdfde1566d4db09a92263677834eb6)
+- perf: reduce dependencies [#1155](https://github.com/ivov/lisette/pull/1155) [`9f57693`](https://github.com/ivov/lisette/commit/9f5769345cd787393f36be94290fd1bcabaadb35)
+- perf: reduce binary size 20% by skipping stack unwinding [#1154](https://github.com/ivov/lisette/pull/1154) [`525e414`](https://github.com/ivov/lisette/commit/525e4145ee2a064c6e46ecba0af6ad21462ff1ac)
+- docs: update stale claim about fresh values [#1151](https://github.com/ivov/lisette/pull/1151) [`2fac42b`](https://github.com/ivov/lisette/commit/2fac42b1c93f708afccfb59540b36f9ee950a9d5)
+- perf: remove eager Go version check [#1150](https://github.com/ivov/lisette/pull/1150) [`a41f25e`](https://github.com/ivov/lisette/commit/a41f25e0f898b7607e1a6594ab3964b0be8fe651)
+- chore: rebuild playground [#1148](https://github.com/ivov/lisette/pull/1148) [`14b7cc6`](https://github.com/ivov/lisette/commit/14b7cc6da70512fec6dcb08a81ab0eb7f108cbfe)
+- ci: report fuzz crashes and job failures separately [#1138](https://github.com/ivov/lisette/pull/1138) [`2853f11`](https://github.com/ivov/lisette/commit/2853f1124fcf14467fda0379b090939cd0eeaf58)
+- refactor: derive semantics facts on demand [#1135](https://github.com/ivov/lisette/pull/1135) [`9d03836`](https://github.com/ivov/lisette/commit/9d038362530ef7512f3d2dcc89478d2b17ce7688)
+
+
 ## [0.10.0](https://github.com/ivov/lisette/compare/lisette-v0.9.0...lisette-v0.10.0) - 2026-07-26
 
 ### Features
