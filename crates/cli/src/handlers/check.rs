@@ -91,10 +91,10 @@ fn check_file(file_path: &Path, options: &CheckOptions) -> i32 {
         FileTarget::ProjectEntry { root } | FileTarget::ProjectModule { root } => {
             check_project(&root, options)
         }
-        FileTarget::Standalone { inside_project } => check_single_file(
+        FileTarget::Script { inside_project } => check_single_file(
             file_path,
             options,
-            CompileScope::Standalone { inside_project },
+            CompileScope::Script { inside_project },
             TypedefLocator::default(),
             "main",
             None,
@@ -290,7 +290,7 @@ fn compile_single_file(
         filename: &entry_name,
         display_path: &entry_display,
     });
-    if matches!(scope, CompileScope::Standalone { .. }) {
+    if matches!(scope, CompileScope::Script { .. }) {
         return Ok(compile_entry(
             input,
             scope,
@@ -375,8 +375,8 @@ fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
                     projects.push(root);
                 }
             }
-            FileTarget::Standalone { .. } if file.to_string_lossy().ends_with(".d.lis") => {}
-            FileTarget::Standalone { inside_project } => loose.push((file, inside_project)),
+            FileTarget::Script { .. } if file.to_string_lossy().ends_with(".d.lis") => {}
+            FileTarget::Script { inside_project } => loose.push((file, inside_project)),
         }
     }
 
@@ -402,7 +402,7 @@ fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
     for (file, inside_project) in loose {
         let Ok(compiled) = compile_single_file(
             file,
-            CompileScope::Standalone { inside_project },
+            CompileScope::Script { inside_project },
             TypedefLocator::default(),
             "main",
             None,

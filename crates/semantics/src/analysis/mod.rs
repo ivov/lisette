@@ -65,7 +65,7 @@ pub enum ProjectKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AnalysisScope {
     /// One file, with nothing beside it, possibly under a project it is not part of.
-    Standalone {
+    Script {
         inside_project: bool,
     },
     Directory,
@@ -73,9 +73,9 @@ pub enum AnalysisScope {
 }
 
 impl AnalysisScope {
-    pub(crate) fn standalone_unit(&self) -> Option<StandaloneUnit> {
+    pub(crate) fn script_unit(&self) -> Option<ScriptUnit> {
         match self {
-            Self::Standalone { inside_project } => Some(StandaloneUnit {
+            Self::Script { inside_project } => Some(ScriptUnit {
                 inside_project: *inside_project,
             }),
             Self::Directory | Self::Project(_) => None,
@@ -89,13 +89,13 @@ impl AnalysisScope {
     fn project_root(&self) -> Option<&Path> {
         match self {
             Self::Project(root) => Some(root),
-            Self::Standalone { .. } | Self::Directory => None,
+            Self::Script { .. } | Self::Directory => None,
         }
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct StandaloneUnit {
+pub(crate) struct ScriptUnit {
     pub(crate) inside_project: bool,
 }
 

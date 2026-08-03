@@ -83,8 +83,8 @@ impl SharedState {
             )]);
         }
 
-        let standalone = config.is_standalone();
-        let (locator, manifest_error) = if standalone {
+        let script = config.is_script();
+        let (locator, manifest_error) = if script {
             (TypedefLocator::default(), None)
         } else {
             match TypedefLocator::from_project(config.root()) {
@@ -93,7 +93,7 @@ impl SharedState {
             }
         };
 
-        let (locator, session, bindgen_error) = if standalone || manifest_error.is_some() {
+        let (locator, session, bindgen_error) = if script || manifest_error.is_some() {
             (locator, None, None)
         } else if let Some(setup) = self.bindgen_setup.as_ref() {
             match setup.for_project(config.root(), locator.target()) {
@@ -107,7 +107,7 @@ impl SharedState {
             (locator, None, None)
         };
 
-        let project_kind = if standalone || config.root().join("src/main.lis").exists() {
+        let project_kind = if script || config.root().join("src/main.lis").exists() {
             ProjectKind::Binary
         } else {
             ProjectKind::Library
@@ -115,8 +115,8 @@ impl SharedState {
 
         let mut analysis = analyze(AnalyzeInput {
             load_siblings: true,
-            scope: if standalone {
-                AnalysisScope::Standalone {
+            scope: if script {
+                AnalysisScope::Script {
                     inside_project: false,
                 }
             } else {

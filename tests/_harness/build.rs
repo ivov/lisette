@@ -17,7 +17,7 @@ fn compile_with(
         .map(|c| c.source.clone())
         .expect("main.lis must exist");
 
-    let load_siblings = !matches!(&scope, AnalysisScope::Standalone { .. });
+    let load_siblings = !matches!(&scope, AnalysisScope::Script { .. });
     analyze(AnalyzeInput {
         load_siblings,
         scope,
@@ -43,7 +43,7 @@ pub fn compile_check(fs: MockFileSystem) -> Analysis {
     )
 }
 
-pub fn compile_standalone_entry(
+pub fn compile_script_entry(
     fs: MockFileSystem,
     entry_name: &str,
     phase: semantics::CompilePhase,
@@ -56,7 +56,7 @@ pub fn compile_standalone_entry(
 
     analyze(AnalyzeInput {
         load_siblings: false,
-        scope: AnalysisScope::Standalone {
+        scope: AnalysisScope::Script {
             inside_project: false,
         },
         loader: &fs,
@@ -77,10 +77,10 @@ pub fn compile_check_with_locator(fs: MockFileSystem, locator: deps::TypedefLoca
     compile_with(fs, AnalysisScope::Directory, locator)
 }
 
-pub fn compile_check_standalone(fs: MockFileSystem) -> Analysis {
+pub fn compile_check_script(fs: MockFileSystem) -> Analysis {
     compile_with(
         fs,
-        AnalysisScope::Standalone {
+        AnalysisScope::Script {
             inside_project: false,
         },
         deps::TypedefLocator::default(),

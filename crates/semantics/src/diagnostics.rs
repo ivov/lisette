@@ -1,4 +1,4 @@
-use crate::analysis::StandaloneUnit;
+use crate::analysis::ScriptUnit;
 use deps::{BindgenFailure, DeclarationStatus, TypedefLocatorResult};
 use diagnostics::LocalSink;
 use stdlib::Target;
@@ -17,7 +17,7 @@ pub(crate) struct GoImportSite<'a> {
     pub(crate) go_pkg: &'a str,
     pub(crate) name_span: Option<Span>,
     pub(crate) target: Target,
-    pub(crate) standalone: Option<StandaloneUnit>,
+    pub(crate) script: Option<ScriptUnit>,
     /// Set when reached through a replaced module's typedef, so the hint names
     /// the right reconciliation command.
     pub(crate) replace_importer: Option<ReplaceImporter<'a>>,
@@ -33,24 +33,17 @@ pub(crate) fn emit_for_locator_result(
         go_pkg,
         name_span,
         target,
-        standalone,
+        script,
         replace_importer,
     } = *site;
     let span = name_span.unwrap_or_else(|| Span::new(0, 0, 0));
     match result {
         TypedefLocatorResult::Found { .. } => return true,
         TypedefLocatorResult::UnknownStdlib => {
-            emit_unknown_stdlib(import_name, go_pkg, span, target, standalone, sink);
+            emit_unknown_stdlib(import_name, go_pkg, span, target, script, sink);
         }
         TypedefLocatorResult::UndeclaredImport => {
-            emit_undeclared(
-                import_name,
-                go_pkg,
-                span,
-                standalone,
-                replace_importer,
-                sink,
-            );
+            emit_undeclared(import_name, go_pkg, span, script, replace_importer, sink);
         }
         TypedefLocatorResult::InternalPackage { module } => {
             sink.push(diagnostics::module_graph::internal_go_package(
@@ -114,7 +107,7 @@ pub(crate) fn emit_for_declaration_status(
         go_pkg,
         name_span,
         target,
-        standalone,
+        script,
         ..
     } = *site;
     let span = name_span.unwrap_or_else(|| Span::new(0, 0, 0));
@@ -124,11 +117,11 @@ pub(crate) fn emit_for_declaration_status(
         | DeclarationStatus::DeclaredReplacement { .. }
         | DeclarationStatus::DeclaredLocal { .. } => true,
         DeclarationStatus::UnknownStdlib => {
-            emit_unknown_stdlib(import_name, go_pkg, span, target, standalone, sink);
+            emit_unknown_stdlib(import_name, go_pkg, span, target, script, sink);
             false
         }
         DeclarationStatus::UndeclaredImport => {
-            emit_undeclared(import_name, go_pkg, span, standalone, None, sink);
+            emit_undeclared(import_name, go_pkg, span, script, None, sink);
             false
         }
         DeclarationStatus::InternalPackage { module } => {
@@ -145,7 +138,7 @@ fn emit_unknown_stdlib(
     go_pkg: &str,
     span: Span,
     target: Target,
-    standalone: Option<StandaloneUnit>,
+    script: Option<ScriptUnit>,
     sink: &LocalSink,
 ) {
     if let Some(targets) = stdlib::get_go_stdlib_package_targets(go_pkg) {
@@ -159,8 +152,8 @@ fn emit_unknown_stdlib(
         sink.push(diagnostics::module_graph::module_not_found(
             import_name,
             span,
-            match standalone {
-                Some(unit) => diagnostics::module_graph::MissingModuleReason::Standalone {
+            match script {
+                Some(unit) => diagnostics::module_graph::MissingModuleReason::Script {
                     inside_project: unit.inside_project,
                 },
                 None => diagnostics::module_graph::MissingModuleReason::NotFound,
@@ -173,15 +166,15 @@ fn emit_undeclared(
     import_name: &str,
     go_pkg: &str,
     span: Span,
-    standalone: Option<StandaloneUnit>,
+    script: Option<ScriptUnit>,
     replace_importer: Option<ReplaceImporter>,
     sink: &LocalSink,
 ) {
-    if let Some(unit) = standalone {
+    if let Some(unit) = script {
         sink.push(diagnostics::module_graph::module_not_found(
             import_name,
             span,
-            diagnostics::module_graph::MissingModuleReason::Standalone {
+            diagnostics::module_graph::MissingModuleReason::Script {
                 inside_project: unit.inside_project,
             },
         ));

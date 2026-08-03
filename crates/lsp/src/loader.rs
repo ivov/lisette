@@ -7,7 +7,7 @@ use crate::protocol::Url;
 use semantics::loader::{DiscoveredModules, FileContent, Files, Loader};
 
 use crate::paths::{ENTRY_MODULE_ID, module_id_to_dir, uri_to_module_file};
-use crate::project::{ProjectConfig, find_project_root, resolve_standalone_root};
+use crate::project::{ProjectConfig, find_project_root, resolve_script_root};
 
 pub(crate) struct ProjectState {
     loader: RwLock<Option<OverlayLoader>>,
@@ -36,7 +36,7 @@ impl ProjectState {
         let mut loader = self.loader.write().unwrap_or_else(PoisonError::into_inner);
         if loader.is_none() {
             let path = uri.to_file_path().ok()?;
-            let config = find_project_root(&path).unwrap_or_else(|| resolve_standalone_root(&path));
+            let config = find_project_root(&path).unwrap_or_else(|| resolve_script_root(&path));
             *loader = Some(OverlayLoader::new(config));
         }
         Some(loader)

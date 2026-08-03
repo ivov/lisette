@@ -152,7 +152,7 @@ fn run_analysis(code: &str) -> AnalysisResult {
 
     let input = AnalyzeInput {
         load_siblings: false,
-        scope: AnalysisScope::Standalone {
+        scope: AnalysisScope::Script {
             inside_project: false,
         },
         loader: &loader,
@@ -192,7 +192,7 @@ fn run_pipeline(
 
     let input = AnalyzeInput {
         load_siblings: false,
-        scope: AnalysisScope::Standalone {
+        scope: AnalysisScope::Script {
             inside_project: false,
         },
         loader: &loader,

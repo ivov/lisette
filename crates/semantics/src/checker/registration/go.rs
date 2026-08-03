@@ -91,7 +91,7 @@ impl TaskState {
                                 go_pkg,
                                 name_span: Some(import.name_span),
                                 target: locator.target(),
-                                standalone: None,
+                                script: None,
                                 replace_importer,
                             },
                             &self.sink,

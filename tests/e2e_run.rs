@@ -1033,20 +1033,20 @@ fn single_file_check_ignores_unrelated_test_modules() {
     let scratch = tempfile::tempdir().expect("create temp dir");
     let dir = scratch.path();
     fs::create_dir_all(dir.join("sub")).unwrap();
-    fs::write(dir.join("standalone.lis"), "pub fn hi() -> int { 1 }\n").unwrap();
+    fs::write(dir.join("script.lis"), "pub fn hi() -> int { 1 }\n").unwrap();
     fs::write(
         dir.join("sub/broken.test.lis"),
         "#[test]\nfn bad() { let _: int = \"type error\" }\n",
     )
     .unwrap();
 
-    let output = lis(&dir.join("standalone.lis"), "check");
+    let output = lis(&dir.join("script.lis"), "check");
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(
         output.status.success(),
-        "a standalone single-file check must not pull in an unrelated test module:\nstdout: {stdout}\nstderr: {stderr}"
+        "a single-file script check must not pull in an unrelated test module:\nstdout: {stdout}\nstderr: {stderr}"
     );
 }
 

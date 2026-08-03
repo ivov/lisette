@@ -42,7 +42,7 @@ pub fn run(
 
     if !target_path.is_file() {
         cli_error!(
-            "Failed to run standalone file",
+            "Failed to run script",
             format!("File `{}` does not exist", target),
             "Check the file path and try again"
         );
@@ -52,8 +52,8 @@ pub fn run(
     match super::project::resolve_file_target(target_path) {
         FileTarget::ProjectEntry { root } => run_project(&root, args, sourcemap, &go_flags),
         FileTarget::ProjectModule { root } => not_an_entrypoint(target_path, &root),
-        FileTarget::Standalone { inside_project } => {
-            run_standalone(&target, args, sourcemap, &go_flags, inside_project)
+        FileTarget::Script { inside_project } => {
+            run_script(&target, args, sourcemap, &go_flags, inside_project)
         }
     }
 }
@@ -126,7 +126,7 @@ fn run_project(
     exec_binary(&output_path, &args, heading)
 }
 
-fn run_standalone(
+fn run_script(
     file: &str,
     args: Vec<String>,
     sourcemap: bool,
@@ -139,7 +139,7 @@ fn run_standalone(
         Ok(s) => s,
         Err(e) => {
             cli_error!(
-                "Failed to run standalone file",
+                "Failed to run script",
                 format!("Failed to read `{}`: {}", file, e),
                 "Check file permissions"
             );
@@ -153,11 +153,11 @@ fn run_standalone(
     let mut hasher = DefaultHasher::new();
     absolute_path.hash(&mut hasher);
     let hash = hasher.finish();
-    let temp_dir = std::env::temp_dir().join(format!("lis-run-{:x}", hash));
+    let temp_dir = std::env::temp_dir().join(format!("lis-script-{:x}", hash));
 
     if let Err(e) = fs::create_dir_all(&temp_dir) {
         cli_error!(
-            "Failed to run standalone file",
+            "Failed to run script",
             format!("Failed to create temporary directory: {}", e),
             "Check permissions on temp directory"
         );
@@ -169,7 +169,7 @@ fn run_standalone(
         Ok(p) => p,
         Err(e) => {
             cli_error!(
-                "Failed to run standalone file",
+                "Failed to run script",
                 format!("Failed to resolve temporary directory: {}", e),
                 "Check permissions on temp directory"
             );
@@ -180,9 +180,9 @@ fn run_standalone(
     let locator = deps::TypedefLocator::default();
     let compile_config = CompileConfig {
         mode: CompileMode::Emit { sourcemap },
-        go_module: "lis-standalone",
+        go_module: "lis-script",
         entry_package_name: "main",
-        scope: CompileScope::Standalone { inside_project },
+        scope: CompileScope::Script { inside_project },
         locator: &locator,
     };
 
@@ -222,12 +222,12 @@ fn run_standalone(
         return 1;
     }
 
-    if let Err(e) = go_cli::write_go_mod(&temp_dir, "lis-standalone", &locator) {
-        cli_error!("Failed to run standalone file", e, "Check file permissions");
+    if let Err(e) = go_cli::write_go_mod(&temp_dir, "lis-script", &locator) {
+        cli_error!("Failed to run script", e, "Check file permissions");
         return 1;
     }
 
-    let heading = "Failed to run standalone file";
+    let heading = "Failed to run script";
 
     let emit = match go_cli::write_go_outputs(&temp_dir, &result.output) {
         Ok(emit) => emit,
@@ -238,7 +238,7 @@ fn run_standalone(
     };
 
     let target = locator.target();
-    let import_set_hash = go_cli::compute_import_set_hash(&emit.new_manifest, "lis-standalone");
+    let import_set_hash = go_cli::compute_import_set_hash(&emit.new_manifest, "lis-script");
 
     if let Err(e) = go_cli::finalize_go_dir(&temp_dir, target, &emit.changed, import_set_hash) {
         cli_error!(heading, e.message, e.hint);

@@ -244,7 +244,7 @@ mod tests {
 
         let analysis = analyze(AnalyzeInput {
             load_siblings: false,
-            scope: AnalysisScope::Standalone {
+            scope: AnalysisScope::Script {
                 inside_project: false,
             },
             loader: &loader,

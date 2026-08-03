@@ -1,6 +1,6 @@
 use crate::_harness::build::{
-    compile_check, compile_check_standalone, compile_check_with_locator, compile_project_files,
-    compile_project_files_with_tests, compile_standalone_entry, locator_with_go_dep,
+    compile_check, compile_check_script, compile_check_with_locator, compile_project_files,
+    compile_project_files_with_tests, compile_script_entry, locator_with_go_dep,
     try_compile_project_files, try_compile_project_files_with_tests,
 };
 use crate::_harness::filesystem::MockFileSystem;
@@ -4384,7 +4384,7 @@ fn main() {
 }
 
 #[test]
-fn standalone_check_ignores_sibling_files() {
+fn script_check_ignores_sibling_files() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -4411,10 +4411,10 @@ fn main() {
 "#,
     );
 
-    let result = compile_check_standalone(fs);
+    let result = compile_check_script(fs);
     assert!(
         result.errors().is_empty(),
-        "Expected no errors in standalone check, got: {:?}",
+        "Expected no errors in script check, got: {:?}",
         result.errors()
     );
 }
@@ -8185,7 +8185,7 @@ fn underscore_test_suffix_rejected_as_entry_file() {
         "fn helper() -> int { 1 }",
     );
 
-    let result = compile_standalone_entry(fs, "helpers_test.lis", CompilePhase::Check);
+    let result = compile_script_entry(fs, "helpers_test.lis", CompilePhase::Check);
 
     assert!(
         result.errors().iter().any(|d| d
@@ -8205,7 +8205,7 @@ fn test_file_rejected_as_emit_entry() {
     let mut fs = MockFileSystem::new();
     fs.add_file(ENTRY_MODULE_ID, "demo.test.lis", "fn main() {}");
 
-    let result = compile_standalone_entry(fs, "demo.test.lis", CompilePhase::Emit);
+    let result = compile_script_entry(fs, "demo.test.lis", CompilePhase::Emit);
 
     assert!(
         result.errors().iter().any(|d| d
@@ -8225,7 +8225,7 @@ fn test_file_allowed_as_check_entry() {
     let mut fs = MockFileSystem::new();
     fs.add_file(ENTRY_MODULE_ID, "demo.test.lis", "fn helper() -> int { 1 }");
 
-    let result = compile_standalone_entry(fs, "demo.test.lis", CompilePhase::Check);
+    let result = compile_script_entry(fs, "demo.test.lis", CompilePhase::Check);
 
     assert!(
         !result

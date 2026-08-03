@@ -117,7 +117,7 @@ pub(super) fn with_locked_project(
         .is_file()
         .then(|| match super::project::resolve_file_target(target_path) {
             FileTarget::ProjectEntry { root } | FileTarget::ProjectModule { root } => Some(root),
-            FileTarget::Standalone { .. } => None,
+            FileTarget::Script { .. } => None,
         })
         .flatten();
 
@@ -921,7 +921,7 @@ fn validate_project(project_path: &Path) -> Option<ProjectLayout> {
                 "Path `{}` is a file, not a project directory",
                 project_path.display()
             ),
-            "`lis build <path/to/dir>` to build a project, or use `lis run <path/to/file>` to run a single file standalone"
+            "`lis build <path/to/dir>` to build a project, or use `lis run <path/to/file>` to run a single file as a script"
         );
         return None;
     }

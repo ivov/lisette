@@ -118,7 +118,7 @@ Flags:
 Examples:
     `lis run`                                  Run project in current dir
     `lis run` {~/projects/demo:g}                  Run project in specific dir
-    `lis run` {calculate.lis:g}                    Run a standalone script
+    `lis run` {calculate.lis:g}                    Run a script
     `lis run` {greet.lis:g} `--` {john:g}                Pass argument to script
     `lis run` {--go-flags:b} {\"-ldflags='-s -w'\":g}    Pass linker flags to `go build`",
         ),

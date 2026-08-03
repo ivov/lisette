@@ -15,7 +15,7 @@ pub(crate) fn module_id_from_components(rel: &Path) -> String {
 }
 
 pub(crate) fn module_id_to_dir(config: &ProjectConfig, module_id: &str) -> PathBuf {
-    if !config.is_standalone() && is_external_test_module(module_id) {
+    if !config.is_script() && is_external_test_module(module_id) {
         return config.root().join(module_id);
     }
     let source_root = config.source_root();
@@ -37,7 +37,7 @@ pub(crate) fn module_file_to_path(
 fn path_to_module_file(config: &ProjectConfig, file_path: &Path) -> Option<(String, String, bool)> {
     let filename = file_path.file_name()?.to_str()?.to_string();
 
-    if !config.is_standalone()
+    if !config.is_script()
         && let Ok(relative) = file_path.strip_prefix(config.root())
         && let Some(dir) = relative.parent()
     {
@@ -91,11 +91,11 @@ mod tests {
     }
 
     #[test]
-    fn standalone_subdirectory_maps_to_named_module() {
-        let config = ProjectConfig::Standalone(PathBuf::from("standalone"));
+    fn script_subdirectory_maps_to_named_module() {
+        let config = ProjectConfig::Script(PathBuf::from("script"));
 
         assert_eq!(
-            path_to_module_file(&config, Path::new("standalone/math/vector.lis")),
+            path_to_module_file(&config, Path::new("script/math/vector.lis")),
             Some(("math".to_string(), "vector.lis".to_string(), false))
         );
     }

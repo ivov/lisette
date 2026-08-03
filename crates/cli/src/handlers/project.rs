@@ -102,7 +102,7 @@ fn find_project_root() -> Option<PathBuf> {
 /// The compilation unit a named `.lis` file belongs to.
 pub(crate) enum FileTarget {
     /// One file alone, `inside_project` when a project sits above it.
-    Standalone {
+    Script {
         inside_project: bool,
     },
     ProjectEntry {
@@ -116,7 +116,7 @@ pub(crate) enum FileTarget {
 /// Resolves the unit `file`, which must exist, is compiled as.
 pub(crate) fn resolve_file_target(file: &Path) -> FileTarget {
     if file.extension() != Some(OsStr::new("lis")) {
-        return FileTarget::Standalone {
+        return FileTarget::Script {
             inside_project: false,
         };
     }
@@ -124,12 +124,12 @@ pub(crate) fn resolve_file_target(file: &Path) -> FileTarget {
     let absolute = file.canonicalize().unwrap_or_else(|_| file.to_path_buf());
 
     let Some(root) = deps::find_project_root(&absolute) else {
-        return FileTarget::Standalone {
+        return FileTarget::Script {
             inside_project: false,
         };
     };
 
-    let outside = FileTarget::Standalone {
+    let outside = FileTarget::Script {
         inside_project: true,
     };
     let Ok(relative) = absolute.strip_prefix(&root) else {

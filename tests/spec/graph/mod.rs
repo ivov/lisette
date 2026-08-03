@@ -9,7 +9,7 @@ use semantics::store::Store;
 use crate::_harness::filesystem::MockFileSystem;
 
 const PROJECT_SCOPE: AnalysisScope = AnalysisScope::Project(std::path::PathBuf::new());
-const STANDALONE_SCOPE: AnalysisScope = AnalysisScope::Standalone {
+const SCRIPT_SCOPE: AnalysisScope = AnalysisScope::Script {
     inside_project: false,
 };
 
@@ -397,7 +397,7 @@ fn check_analyzes_tests_in_declaration_only_module() {
 }
 
 #[test]
-fn graph_standalone_third_party_go_import_uses_module_not_found() {
+fn graph_script_third_party_go_import_uses_module_not_found() {
     let mut fs = MockFileSystem::new();
     fs.add_file("main", "main.lis", r#"import "go:github.com/gorilla/mux""#);
 
@@ -407,7 +407,7 @@ fn graph_standalone_third_party_go_import_uses_module_not_found() {
     let _result = build_module_graph(
         &mut store,
         roots("main"),
-        graph_options(&fs, &sink, &default_resolver(), &STANDALONE_SCOPE),
+        graph_options(&fs, &sink, &default_resolver(), &SCRIPT_SCOPE),
     );
 
     assert!(sink.has_errors());

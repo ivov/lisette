@@ -4,7 +4,7 @@ use syntax::ast::Span;
 pub enum MissingModuleReason {
     NotFound,
     GoStandardLibrary,
-    Standalone { inside_project: bool },
+    Script { inside_project: bool },
     UnnecessarySrcPrefix(String),
 }
 
@@ -22,13 +22,13 @@ pub fn module_not_found(
             "No `{}` module found in your local project. Did you mean `import \"go:{}\"` from Go's stdlib?",
             module_name, module_name
         ),
-        MissingModuleReason::Standalone {
+        MissingModuleReason::Script {
             inside_project: false,
         } => {
             "A file compiled on its own may import only from the Go standard library. To import modules normally, use `lis new` to create a project."
                 .to_string()
         }
-        MissingModuleReason::Standalone {
+        MissingModuleReason::Script {
             inside_project: true,
         } => {
             "A file compiled on its own may import only from the Go standard library. This file sits inside a project but outside its `src/`, so it is not part of it. Move it under `src/` to import the project's modules."
