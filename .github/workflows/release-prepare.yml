@@ -37,6 +37,52 @@ jobs:
         with:
           tool: git-cliff@2.13.1
 
+      - name: Bump version if breaking label
+        if: ${{ steps.release-plz.outputs.pr != '' && steps.release-plz.outputs.pr != '{}' }}
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+          PR_JSON: ${{ steps.release-plz.outputs.pr }}
+        run: |
+          set -euo pipefail
+          LAST_TAG=$(git tag --list 'lisette-v*' --sort=-v:refname | head -1)
+          WANT_MINOR=false
+          for sha in $(gh pr list --state merged --label breaking --limit 100 --json mergeCommit --jq '.[].mergeCommit.oid'); do
+            if git merge-base --is-ancestor "$LAST_TAG" "$sha" && git merge-base --is-ancestor "$sha" origin/main; then
+              WANT_MINOR=true
+            fi
+          done
+          if [ "$WANT_MINOR" = "false" ]; then
+            echo "No unreleased breaking-labeled PRs"
+            exit 0
+          fi
+
+          IFS=. read -r MAJOR MINOR _ <<< "${LAST_TAG#lisette-v}"
+          if [ "$MAJOR" -eq 0 ]; then
+            TARGET="0.$((MINOR + 1)).0"
+          else
+            TARGET="$((MAJOR + 1)).0.0"
+          fi
+          BRANCH=$(echo "$PR_JSON" | jq -er '.head_branch')
+          PR_NUM=$(echo "$PR_JSON" | jq -er '.number')
+          git fetch origin "$BRANCH"
+          git checkout "$BRANCH"
+          CURRENT=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          if [ "$(printf '%s\n%s\n' "$TARGET" "$CURRENT" | sort -V | head -1)" = "$TARGET" ]; then
+            echo "Version already $CURRENT, at or above target $TARGET"
+            git checkout -
+            exit 0
+          fi
+
+          git grep -l "\"=${CURRENT}\"" -- '*.toml' | xargs sed -i "s/\"=${CURRENT}\"/\"=${TARGET}\"/g"
+          sed -i "s/^version = \"${CURRENT}\"/version = \"${TARGET}\"/" Cargo.toml
+          cargo update --workspace
+          git -c "user.name=github-actions[bot]" \
+              -c "user.email=41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -am "chore: bump to ${TARGET} for breaking-labeled changes"
+          git push origin "HEAD:${BRANCH}"
+          gh pr edit "$PR_NUM" --title "chore: release v${TARGET}"
+          git checkout -
+
       - name: Regenerate changelog with full-repo scope
         if: ${{ steps.release-plz.outputs.pr != '' && steps.release-plz.outputs.pr != '{}' }}
         env:

@@ -10,6 +10,12 @@ body = '''
 ### {{ group | striptags | trim }}
 {% for commit in commits | sort(attribute="author.timestamp") | reverse %}
 {%- set subject = commit.raw_message | split(pat="\n") | first | trim -%}
+{%- if commit.remote.pr_labels is defined and commit.remote.pr_labels is containing("breaking") and subject is matching("^[a-z]+(\([^)]*\))?: ") -%}
+{%- set parts = subject | split(pat=": ") -%}
+{%- set breaking_type = parts | first -%}
+{%- set breaking_rest = parts | slice(start=1) | join(sep=": ") -%}
+{%- set subject = breaking_type ~ "!: " ~ breaking_rest -%}
+{%- endif -%}
 {%- set sha = commit.id | truncate(length=7, end="") -%}
 {%- if subject is matching("\(\[#\d+\]\([^)]*\)\)$") -%}
 {%- set head = subject | split(pat=" ([#") | slice(end=-1) | join(sep=" ([#") -%}
@@ -32,6 +38,7 @@ commit_preprocessors = [
 ]
 commit_parsers = [
   { message = "^chore: bump stdlib typedefs", skip = true },
+  { message = "^chore: bump to .* for breaking-labeled changes", skip = true },
   { message = "^chore: release", skip = true },
   { message = "^feat", group = "<!-- 0 -->Features" },
   { message = "^fix", group = "<!-- 1 -->Fixes" },
@@ -40,3 +47,7 @@ commit_parsers = [
 include_paths = ["**"]
 tag_pattern = "lisette-v[0-9]*"
 sort_commits = "newest"
+
+[remote.github]
+owner = "ivov"
+repo = "lisette"
