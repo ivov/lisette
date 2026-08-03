@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785784967994,
+  "lastUpdate": 1785785759961,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -18059,6 +18059,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/c55b6a6bcc616ffb3d17a7413dc642abcaa6d68d"
         },
         "date": 1785784965919,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 125668,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30326,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 25496,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18536,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13310,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 11925,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 7517,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5362,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2883,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1286,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7416,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0a7fe2b72e5803efc084a523a578131e2fb26907",
+          "message": "ci: mark breaking release via PR label (#1201)",
+          "timestamp": "2026-08-03T21:35:36+02:00",
+          "tree_id": "cd3dbaa858b73dcbb358ca43b9d6c274085655e7",
+          "url": "https://github.com/ivov/lisette/commit/0a7fe2b72e5803efc084a523a578131e2fb26907"
+        },
+        "date": 1785785759025,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
