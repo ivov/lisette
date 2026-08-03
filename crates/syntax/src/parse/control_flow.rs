@@ -40,7 +40,7 @@ impl<'source> Parser<'source> {
             ty: Type::uninferred(),
             subject: subject.into(),
             arms,
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -103,7 +103,7 @@ impl<'source> Parser<'source> {
                 condition: condition.into(),
                 consequence: consequence.into(),
                 alternative,
-                span: parser.span_from_tokens(start),
+                span: parser.span_from_offset(start.byte_offset),
             }
         }) {
             return result;
@@ -147,7 +147,7 @@ impl<'source> Parser<'source> {
             consequence: consequence.into(),
             alternative,
             ty: Type::uninferred(),
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -159,7 +159,7 @@ impl<'source> Parser<'source> {
         let expression = match self.current_token().kind {
             Semicolon | RightCurlyBrace => Expression::Unit {
                 ty: Type::uninferred(),
-                span: self.span_from_tokens(start),
+                span: self.span_from_offset(start.byte_offset),
             },
             _ => self.parse_expression(),
         };
@@ -173,7 +173,7 @@ impl<'source> Parser<'source> {
         Expression::Return {
             expression: expression.into(),
             ty: Type::uninferred(),
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -237,7 +237,7 @@ impl<'source> Parser<'source> {
         Expression::Assert {
             expression: expression.into(),
             ty: Type::uninferred(),
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -257,7 +257,7 @@ impl<'source> Parser<'source> {
             binding: Box::new(binding),
             iterable: iterable.into(),
             body: body.into(),
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -276,7 +276,7 @@ impl<'source> Parser<'source> {
         Expression::While {
             condition: condition.into(),
             body: body.into(),
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -292,7 +292,7 @@ impl<'source> Parser<'source> {
             pattern,
             scrutinee: scrutinee.into(),
             body: body.into(),
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -305,7 +305,7 @@ impl<'source> Parser<'source> {
         Expression::Loop {
             body: body.into(),
             ty: Type::uninferred(),
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -321,7 +321,7 @@ impl<'source> Parser<'source> {
 
         Expression::Break {
             value,
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -331,7 +331,7 @@ impl<'source> Parser<'source> {
         self.next();
 
         Expression::Continue {
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 }

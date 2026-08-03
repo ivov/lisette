@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Missing call parens
+   ╭─[test.lis:3:16]
+ 2 │ fn test() {
+ 3 │   let buffer = Array.new<byte, 0x80>
+   ·                ──────────┬──────────
+   ·                          ╰── expected `()` after type arguments
+ 4 │   buffer.length()
+   ╰────
+  help: Add parens to call it: `Array.new<byte, 0x80>()` · code: [parse.call_missing_parens]

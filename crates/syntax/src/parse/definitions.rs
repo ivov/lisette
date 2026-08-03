@@ -91,7 +91,7 @@ impl<'source> Parser<'source> {
         Some(Attribute {
             name: name.to_string(),
             args,
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         })
     }
 
@@ -248,7 +248,7 @@ impl<'source> Parser<'source> {
             generics,
             variants,
             visibility: Visibility::Private,
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -452,7 +452,7 @@ impl<'source> Parser<'source> {
             generics,
             fields: StructFields::Record(fields),
             visibility: Visibility::Private,
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -469,7 +469,7 @@ impl<'source> Parser<'source> {
 
             let field_start = self.current_token();
             let annotation = self.parse_annotation();
-            let field_span = self.span_from_tokens(field_start);
+            let field_span = self.span_from_offset(field_start.byte_offset);
 
             fields.push(StructFieldDefinition {
                 doc: None,
@@ -503,7 +503,7 @@ impl<'source> Parser<'source> {
             generics,
             fields: StructFields::Tuple(fields),
             visibility: Visibility::Private,
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -571,7 +571,7 @@ impl<'source> Parser<'source> {
         self.ensure(Identifier);
 
         let annotation = self.parse_annotation();
-        let span = self.span_from_tokens(start);
+        let span = self.span_from_offset(start.byte_offset);
 
         let Some(name) = Self::embedded_field_name(&annotation) else {
             self.track_error_at(
@@ -651,7 +651,7 @@ impl<'source> Parser<'source> {
             expression,
             visibility: Visibility::Private,
             ty: Type::uninferred(),
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -682,7 +682,7 @@ impl<'source> Parser<'source> {
             annotation,
             visibility: Visibility::Private,
             ty: Type::uninferred(),
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -692,7 +692,7 @@ impl<'source> Parser<'source> {
 
         Expression::Unit {
             ty: Type::uninferred(),
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -768,7 +768,7 @@ impl<'source> Parser<'source> {
             receiver_name,
             generics,
             ty: Type::uninferred(),
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -864,7 +864,7 @@ impl<'source> Parser<'source> {
             parents,
             method_signatures,
             visibility: Visibility::Private,
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -880,7 +880,7 @@ impl<'source> Parser<'source> {
 
         let parent_start = self.current_token();
         let annotation = self.parse_annotation();
-        let parent_span = self.span_from_tokens(parent_start);
+        let parent_span = self.span_from_offset(parent_start.byte_offset);
 
         if let Annotation::Constructor { name, .. } = &annotation {
             if let Some((_, first_span)) = seen_parents.iter().find(|(n, _)| n == name.as_str()) {

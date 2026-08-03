@@ -54,7 +54,7 @@ impl<'source> Parser<'source> {
                         span: error_span,
                     };
                 }
-                let span = self.span_from_tokens(start);
+                let span = self.span_from_offset(start.byte_offset);
                 self.track_error("unexpected `[` in type", "Use `Slice<T>` for slice types.");
                 Annotation::Constructor {
                     name: "".into(),
@@ -109,7 +109,7 @@ impl<'source> Parser<'source> {
             return Annotation::Constructor {
                 name,
                 params: type_params,
-                span: self.span_from_tokens(start),
+                span: self.span_from_offset(start.byte_offset),
             };
         }
 
@@ -120,7 +120,7 @@ impl<'source> Parser<'source> {
         Annotation::Constructor {
             name,
             params: vec![],
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -179,7 +179,7 @@ impl<'source> Parser<'source> {
         Annotation::Constructor {
             name,
             params: type_params,
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -208,7 +208,7 @@ impl<'source> Parser<'source> {
             self.next();
         }
         self.track_error_at(
-            self.span_from_tokens(start),
+            self.span_from_offset(start.byte_offset),
             "Array size must be an integer literal",
             "Array sizes are whole numbers, e.g. `Array<string, 3>`",
         );
@@ -238,7 +238,7 @@ impl<'source> Parser<'source> {
         Annotation::Function {
             params,
             return_type: return_type.into(),
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -257,7 +257,7 @@ impl<'source> Parser<'source> {
 
         self.ensure(RightParen);
 
-        let span = self.span_from_tokens(start);
+        let span = self.span_from_offset(start.byte_offset);
 
         if annotations.is_empty() {
             return Annotation::unit();
@@ -303,7 +303,7 @@ impl<'source> Parser<'source> {
         let start = self.current_token();
         let name = self.read_identifier();
         let bounds = self.parse_generic_bounds();
-        Generic::new(name, bounds, self.span_from_tokens(start))
+        Generic::new(name, bounds, self.span_from_offset(start.byte_offset))
     }
 
     fn parse_generic_bounds(&mut self) -> Vec<Annotation> {
@@ -367,7 +367,7 @@ impl<'source> Parser<'source> {
         if self.is(LeftAngleBracket) {
             let generics_start = self.current_token();
             let generics = self.parse_generics(); // consume and discard
-            let generics_span = self.span_from_tokens(generics_start);
+            let generics_span = self.span_from_offset(generics_start.byte_offset);
             self.error_interface_method_with_type_parameters(generics_span, generics.len());
         }
 
@@ -383,7 +383,7 @@ impl<'source> Parser<'source> {
             visibility: Visibility::Private,
             body: FunctionBody::Declaration,
             ty: Type::uninferred(),
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -405,7 +405,7 @@ impl<'source> Parser<'source> {
             self.parse_annotation()
         } else {
             Annotation::Opaque {
-                span: self.span_from_tokens(start),
+                span: self.span_from_offset(start.byte_offset),
             }
         };
 
@@ -418,7 +418,7 @@ impl<'source> Parser<'source> {
             annotation,
             ty: Type::uninferred(),
             visibility: Visibility::Private,
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 }

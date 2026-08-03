@@ -101,6 +101,67 @@ fn test() {
 }
 
 #[test]
+fn parse_call_missing_parens_array_new() {
+    let input = r#"
+fn test() {
+  let buffer = Array.new<byte, 0x80>
+  buffer.length()
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_call_missing_parens_single_type_arg() {
+    let input = r#"
+fn test() {
+  let xs = Slice.new<int>
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_call_missing_parens_nested_type_arg() {
+    let input = r#"
+fn test() {
+  let m = Map.new<string, Slice<int>>
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_call_missing_parens_fn_type_arg() {
+    let input = r#"
+fn test() {
+  let m = Map.new<string, fn(int, int) -> int>
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_call_missing_parens_tuple_type_arg() {
+    let input = r#"
+fn test() {
+  let m = Map.new<string, (int, int)>
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_call_missing_parens_trailing_comment() {
+    let input = r#"
+fn test() {
+  let xs = Slice.new<int> // make a slice
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
 fn parse_go_make_unbuffered_channel() {
     let input = r#"
 fn test() {
@@ -3168,6 +3229,16 @@ fn infer_type_mismatch_int_string() {
     let input = r#"
 fn test() {
   let x: int = "hello";
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_type_mismatch_span_stops_before_trailing_comment() {
+    let input = r#"
+fn test() {
+  let xs: string = Slice.new<int>() // trailing note
 }
 "#;
     assert_infer_error_snapshot!(input);
@@ -8258,6 +8329,16 @@ fn identity<T>(x: T) -> T { x }
 
 fn test() {
   let x = identity::<int>(5);
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_rust_turbofish_with_method() {
+    let input = r#"
+fn test() {
+  let xs = Slice::<int>::new()
 }
 "#;
     assert_parse_error_snapshot!(input);

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Missing call parens
+   ╭─[test.lis:3:11]
+ 2 │ fn test() {
+ 3 │   let m = Map.new<string, fn(int, int) -> int>
+   ·           ──────────────────┬─────────────────
+   ·                             ╰── expected `()` after type arguments
+ 4 │ }
+   ╰────
+  help: Add parens to call it: `Map.new<string, fn(int, int) -> int>()` · code: [parse.call_missing_parens]

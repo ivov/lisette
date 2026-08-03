@@ -2954,6 +2954,25 @@ fn test() { Map.new<string, fn(int, int) -> int>(); }
 }
 
 #[test]
+fn comparison_args_are_not_type_args() {
+    let input = r#"
+fn test() { take(a < b, c > d); }
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
+fn comparison_ending_statement_is_not_type_args() {
+    let input = r#"
+fn test() {
+  let ok = a < b
+  side()
+}
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
 fn slice_pattern_empty() {
     let input = r#"
 fn test(items: Slice<int>) {

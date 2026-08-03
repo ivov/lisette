@@ -26,7 +26,7 @@ impl<'source> Parser<'source> {
 
         Pattern::Or {
             patterns,
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -51,7 +51,7 @@ impl<'source> Parser<'source> {
                         pattern: Box::new(result),
                         name,
                         name_span,
-                        span: parser.span_from_tokens(start),
+                        span: parser.span_from_offset(start.byte_offset),
                     };
                 }
             }
@@ -124,7 +124,7 @@ impl<'source> Parser<'source> {
                 );
                 self.next();
                 Pattern::WildCard {
-                    span: self.span_from_tokens(start),
+                    span: self.span_from_offset(start.byte_offset),
                 }
             }
 
@@ -139,7 +139,7 @@ impl<'source> Parser<'source> {
             _ => {
                 self.unexpected_token("pattern");
                 Pattern::WildCard {
-                    span: self.span_from_tokens(start),
+                    span: self.span_from_offset(start.byte_offset),
                 }
             }
         }
@@ -159,7 +159,7 @@ impl<'source> Parser<'source> {
                 else {
                     return int_pattern;
                 };
-                let span = self.span_from_tokens(start);
+                let span = self.span_from_offset(start.byte_offset);
                 if value > i64::MIN.unsigned_abs() {
                     self.track_error_at(
                         span,
@@ -182,7 +182,7 @@ impl<'source> Parser<'source> {
                 }
             }
             Float => {
-                let span = self.span_from_tokens(start);
+                let span = self.span_from_offset(start.byte_offset);
                 self.track_error_at(
                     span,
                     "not allowed",
@@ -190,7 +190,7 @@ impl<'source> Parser<'source> {
                 );
                 self.next();
                 Pattern::WildCard {
-                    span: self.span_from_tokens(start),
+                    span: self.span_from_offset(start.byte_offset),
                 }
             }
             _ => {
@@ -199,7 +199,7 @@ impl<'source> Parser<'source> {
                     "Negative patterns require a number, e.g., `-5`",
                 );
                 Pattern::WildCard {
-                    span: self.span_from_tokens(start),
+                    span: self.span_from_offset(start.byte_offset),
                 }
             }
         }
@@ -244,7 +244,7 @@ impl<'source> Parser<'source> {
         Pattern::Literal {
             literal,
             ty: Type::uninferred(),
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -253,7 +253,7 @@ impl<'source> Parser<'source> {
         let float_text = start.text.to_string();
         self.next();
 
-        let span = self.span_from_tokens(start);
+        let span = self.span_from_offset(start.byte_offset);
         self.error_float_pattern_not_allowed(span, &float_text);
 
         Pattern::WildCard { span }
@@ -267,7 +267,7 @@ impl<'source> Parser<'source> {
         Pattern::Literal {
             literal: Literal::Boolean(b),
             ty: Type::uninferred(),
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -297,7 +297,7 @@ impl<'source> Parser<'source> {
         Pattern::Literal {
             literal: Literal::String { value, raw },
             ty: Type::uninferred(),
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -314,7 +314,7 @@ impl<'source> Parser<'source> {
         Pattern::Literal {
             literal: Literal::Char(char_str),
             ty: Type::uninferred(),
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -325,7 +325,7 @@ impl<'source> Parser<'source> {
         if self.advance_if(RightParen) {
             return Pattern::Unit {
                 ty: Type::uninferred(),
-                span: self.span_from_tokens(start),
+                span: self.span_from_offset(start.byte_offset),
             };
         }
 
@@ -352,7 +352,7 @@ impl<'source> Parser<'source> {
 
         self.ensure(RightParen);
 
-        let span = self.span_from_tokens(start);
+        let span = self.span_from_offset(start.byte_offset);
 
         if elements.len() > MAX_TUPLE_ARITY {
             self.error_tuple_arity(elements.len(), span);
@@ -385,7 +385,7 @@ impl<'source> Parser<'source> {
             if rest.is_present() {
                 let suffix_start = self.current_token();
                 self.parse_pattern();
-                let suffix_span = self.span_from_tokens(suffix_start);
+                let suffix_span = self.span_from_offset(suffix_start.byte_offset);
                 let error = ParseError::new("Invalid pattern", suffix_span, "not supported")
                     .with_parse_code("suffix_slice_pattern")
                     .with_help("Use `[first, ..rest]` instead of `[..rest, last]`.")
@@ -400,7 +400,7 @@ impl<'source> Parser<'source> {
         }
 
         self.ensure(RightSquareBracket);
-        let span = self.span_from_tokens(start);
+        let span = self.span_from_offset(start.byte_offset);
 
         Pattern::Slice {
             prefix: elements,
@@ -451,7 +451,7 @@ impl<'source> Parser<'source> {
             LeftCurlyBrace => self.parse_struct_pattern(full_name, start),
             LeftParen => self.parse_enum_variant_pattern(full_name, start),
             _ => {
-                let span = self.span_from_tokens(start);
+                let span = self.span_from_offset(start.byte_offset);
                 if full_name == "_" {
                     Pattern::WildCard { span }
                 } else if full_name.contains('.') || self.is_uppercase(&full_name) {
@@ -519,7 +519,7 @@ impl<'source> Parser<'source> {
 
             let field_start = self.current_token();
             let field_name = self.read_identifier();
-            let field_name_span = self.span_from_tokens(field_start);
+            let field_name_span = self.span_from_offset(field_start.byte_offset);
 
             if let Some((_, first_span)) = seen_fields.iter().find(|(n, _)| n == &field_name) {
                 self.error_duplicate_field_in_pattern(&field_name, *first_span, field_name_span);
@@ -556,7 +556,7 @@ impl<'source> Parser<'source> {
             rest,
             resolution: RecordPatternResolution::Unresolved,
             ty: Type::uninferred(),
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -588,7 +588,7 @@ impl<'source> Parser<'source> {
             rest,
             resolution: ConstructorPatternResolution::Unresolved,
             ty: Type::uninferred(),
-            span: self.span_from_tokens(start),
+            span: self.span_from_offset(start.byte_offset),
         }
     }
 
@@ -632,7 +632,7 @@ impl<'source> Parser<'source> {
             let name = start.text.to_string();
             self.next();
 
-            let span = self.span_from_tokens(start);
+            let span = self.span_from_offset(start.byte_offset);
             self.error_uppercase_binding(span);
 
             return Binding {
@@ -737,7 +737,9 @@ impl<'source> Parser<'source> {
                     span: self.span_from_token(name_token),
                 });
             }
-            return Some(RestPattern::Discard(self.span_from_tokens(rest_start)));
+            return Some(RestPattern::Discard(
+                self.span_from_offset(rest_start.byte_offset),
+            ));
         }
 
         if self.is(Identifier) {
