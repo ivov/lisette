@@ -283,7 +283,7 @@ pub fn write_go_mod(
 ) -> std::io::Result<()> {
     let abs = prelude_path.canonicalize()?;
     let content = format!(
-        "package {GO_MODULE}\n\ngo {go_version}\n\nrequire {PRELUDE_IMPORT_PATH} v0.0.0\n\nreplace {PRELUDE_IMPORT_PATH} => {}\n",
+        "module {GO_MODULE}\n\ngo {go_version}\n\nrequire {PRELUDE_IMPORT_PATH} v0.0.0\n\nreplace {PRELUDE_IMPORT_PATH} => {}\n",
         abs.display()
     );
     fs::write(target_dir.join("go.mod"), content)

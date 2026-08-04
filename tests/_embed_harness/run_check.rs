@@ -254,9 +254,9 @@ fn go_run(dir: &GoDir) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
-fn write_go_mod(dir: &Path, package: &str, with_prelude: bool) -> Result<(), String> {
+fn write_go_mod(dir: &Path, module: &str, with_prelude: bool) -> Result<(), String> {
     let go_version = go_version();
-    let mut content = format!("package {package}\n\ngo {go_version}\n");
+    let mut content = format!("module {module}\n\ngo {go_version}\n");
     if with_prelude {
         let prelude = prelude_dir()
             .canonicalize()
