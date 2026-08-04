@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::process::Command;
 
 use tempfile::TempDir;
@@ -6,27 +7,25 @@ fn go_available() -> bool {
     Command::new("go").arg("version").output().is_ok()
 }
 
+fn lis(repo: &Path, cwd: &Path) -> Command {
+    let mut command = Command::new("cargo");
+    command
+        .args(["run", "-p", "lisette", "--quiet", "--manifest-path"])
+        .arg(repo.join("Cargo.toml"))
+        .arg("--")
+        .current_dir(cwd)
+        .env("NO_COLOR", "1");
+    command
+}
+
 #[test]
 fn e2e_learn() {
-    let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap();
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
 
-    let build = Command::new("cargo")
-        .args(["build", "-p", "lisette", "--quiet"])
-        .current_dir(repo)
-        .env("NO_COLOR", "1")
-        .status()
-        .expect("failed to build lisette");
-    assert!(build.success(), "cargo build -p lisette failed");
-
-    let lis = repo.join("target/debug/lis");
     let temp = TempDir::new().expect("failed to create temp dir");
 
-    let learn = Command::new(&lis)
+    let learn = lis(repo, temp.path())
         .arg("learn")
-        .current_dir(temp.path())
-        .env("NO_COLOR", "1")
         .output()
         .expect("failed to run lis learn");
     assert!(
@@ -41,10 +40,9 @@ fn e2e_learn() {
         "lis learn did not scaffold the expected src/ layout"
     );
 
-    let check = Command::new(&lis)
+    let check = lis(repo, repo)
         .args(["check", "--output", "unix"])
         .arg(&project)
-        .env("NO_COLOR", "1")
         .output()
         .expect("failed to run lis check");
     let check_stdout = String::from_utf8_lossy(&check.stdout);
@@ -55,10 +53,9 @@ fn e2e_learn() {
         String::from_utf8_lossy(&check.stderr)
     );
 
-    let format = Command::new(&lis)
+    let format = lis(repo, repo)
         .args(["format", "--check"])
         .arg(&project)
-        .env("NO_COLOR", "1")
         .output()
         .expect("failed to run lis format --check");
     assert!(
@@ -73,10 +70,9 @@ fn e2e_learn() {
         return;
     }
 
-    let test = Command::new(&lis)
+    let test = lis(repo, repo)
         .arg("test")
         .arg(&project)
-        .env("NO_COLOR", "1")
         .output()
         .expect("failed to run lis test");
     let test_output = format!(
