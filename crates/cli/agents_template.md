@@ -69,18 +69,18 @@ my_project/
 ├── AGENTS.md
 └── src/
     ├── main.lis         // entry point
-    └── models/          // module named "models"
+    └── models/          // package named "models"
         └── user.lis
 ```
 
-All `.lis` files go in `src/`. Subdirectories are modules, imported by path: `import "models"`.
+All `.lis` files go in `src/`. Subdirectories are packages, imported by path: `import "models"`.
 
 ## Go interop
 
 ```
 import "go:fmt"          // Go stdlib — always prefix with go:
 import "go:net/http"     // nested packages too
-import "models"          // Lisette module — no prefix
+import "models"          // Lisette package, no prefix
 ```
 
 NEVER convert Go function names to snake_case. Keep PascalCase:

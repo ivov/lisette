@@ -416,7 +416,7 @@ impl InferCtx<'_> {
     }
 
     fn record_generic_call_check(&mut self, ty: Type, span: Span, target: DeferredCallCheckTarget) {
-        let module_id = self.cursor.module_id.clone();
+        let package_id = self.cursor.package_id.clone();
         match target {
             DeferredCallCheckTarget::GenericCall => {
                 self.facts
@@ -425,7 +425,7 @@ impl InferCtx<'_> {
                     .push(crate::facts::GenericCallCheck {
                         ty,
                         span,
-                        module_id,
+                        package_id,
                     });
             }
             DeferredCallCheckTarget::SliceMake => {
@@ -435,7 +435,7 @@ impl InferCtx<'_> {
                     .push(crate::facts::SliceMakeCheck {
                         ty,
                         span,
-                        module_id,
+                        package_id,
                     });
             }
         }
@@ -547,8 +547,8 @@ impl InferCtx<'_> {
         let array_ty = match resolved {
             Some((elem, len)) => {
                 let array_ty = self.type_array(len, elem);
-                let from_module = self.cursor.module_id.clone();
-                if let Err(no_zero) = self.has_zero(&array_ty, &from_module) {
+                let from_package = self.cursor.package_id.clone();
+                if let Err(no_zero) = self.has_zero(&array_ty, &from_package) {
                     self.sink.push(diagnostics::infer::array_new_no_zero(
                         &no_zero.leaf_ty.stringify(),
                         span,
@@ -620,8 +620,8 @@ impl InferCtx<'_> {
                     }
                 }
 
-                if let Some(module_id) = stripped.as_import_namespace() {
-                    let qualified = Symbol::from_parts(module_id, member);
+                if let Some(package_id) = stripped.as_import_namespace() {
+                    let qualified = Symbol::from_parts(package_id, member);
                     if let Some(definition) = store.get_definition(&qualified) {
                         return definition.ty.clone();
                     }
@@ -727,7 +727,7 @@ impl InferCtx<'_> {
             // Only strip the receiver param for instance methods (which have `self`).
             // Instance methods: `as_instance_method` already stripped `self` from
             // the callee type, so the Forall body has one more param than the callee.
-            // Static methods and module free functions: no `self`, param counts match.
+            // Static methods and package free functions: no `self`, param counts match.
             let callee_params = callee_expression
                 .get_type()
                 .resolve_in(&self.env)

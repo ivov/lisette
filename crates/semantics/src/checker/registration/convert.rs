@@ -13,7 +13,7 @@ use syntax::types::{
 use crate::checker::TaskState;
 use crate::checker::scopes::DeferredMapKeyCheck;
 use crate::generics::apply_bounds;
-use crate::prelude::PRELUDE_MODULE_ID;
+use crate::prelude::PRELUDE_PACKAGE_ID;
 use crate::store::Store;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -394,7 +394,7 @@ impl TaskState {
         span: &Span,
         mode: ConvertMode,
     ) -> Type {
-        if params.len() == 1 && self.cursor.module_id == PRELUDE_MODULE_ID {
+        if params.len() == 1 && self.cursor.package_id == PRELUDE_PACKAGE_ID {
             let element = self.convert_to_type_mode(store, &params[0], span, mode.nested());
             return Type::Nominal {
                 id: Symbol::from_parts("prelude", "Array"),

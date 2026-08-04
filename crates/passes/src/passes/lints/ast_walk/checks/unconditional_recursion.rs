@@ -11,9 +11,9 @@ pub fn check_unconditional_recursion(expression: &Expression, ctx: &NodeCtx, rol
         return;
     };
     let target = match role {
-        FunctionRole::Free => Symbol::from_parts(ctx.module_id(), name),
+        FunctionRole::Free => Symbol::from_parts(ctx.package_id(), name),
         FunctionRole::ImplMethod { type_name } => {
-            Symbol::from_parts(ctx.module_id(), type_name).with_segment(name)
+            Symbol::from_parts(ctx.package_id(), type_name).with_segment(name)
         }
         FunctionRole::InterfaceMethod { .. } => return,
     };

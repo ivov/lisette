@@ -4,9 +4,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{PoisonError, RwLock, RwLockWriteGuard};
 
 use crate::protocol::Url;
-use semantics::loader::{DiscoveredModules, FileContent, Files, Loader};
+use semantics::loader::{DiscoveredPackages, FileContent, Files, Loader};
 
-use crate::paths::{ENTRY_MODULE_ID, module_id_to_dir, uri_to_module_file};
+use crate::paths::{ENTRY_PACKAGE_ID, package_id_to_dir, uri_to_package_file};
 use crate::project::{ProjectConfig, find_project_root, resolve_script_root};
 
 pub(crate) struct ProjectState {
@@ -47,11 +47,11 @@ impl ProjectState {
             return;
         };
         let project = guard.as_mut().expect("loader_for initializes the loader");
-        let Some((module_id, filename, external_test)) = uri_to_module_file(&project.config, uri)
+        let Some((package_id, filename, external_test)) = uri_to_package_file(&project.config, uri)
         else {
             return;
         };
-        project.set_overlay(external_test, &module_id, &filename, content);
+        project.set_overlay(external_test, &package_id, &filename, content);
     }
 
     pub(crate) fn remove_overlay(&self, uri: &Url) -> bool {
@@ -59,30 +59,30 @@ impl ProjectState {
         let Some(project) = project.as_mut() else {
             return false;
         };
-        let Some((module_id, filename, external_test)) = uri_to_module_file(&project.config, uri)
+        let Some((package_id, filename, external_test)) = uri_to_package_file(&project.config, uri)
         else {
             return false;
         };
-        project.remove_overlay(external_test, &module_id, &filename);
+        project.remove_overlay(external_test, &package_id, &filename);
         true
     }
 
     pub(crate) fn for_analysis(&self, uri: &Url) -> Option<ProjectAnalysis> {
         let guard = self.loader_for(uri)?;
         let project = guard.as_ref().expect("loader_for initializes the loader");
-        let (module_id, filename, external_test) = uri_to_module_file(&project.config, uri)?;
+        let (package_id, filename, external_test) = uri_to_package_file(&project.config, uri)?;
 
-        let (entry_module_path, external_test_root) = if external_test {
+        let (entry_package_path, external_test_root) = if external_test {
             (
-                module_id_to_dir(&project.config, ENTRY_MODULE_ID),
-                Some(module_id),
+                package_id_to_dir(&project.config, ENTRY_PACKAGE_ID),
+                Some(package_id),
             )
         } else {
             let dir = uri
                 .to_file_path()
                 .ok()
                 .and_then(|path| path.parent().map(Path::to_path_buf))
-                .unwrap_or_else(|| module_id_to_dir(&project.config, &module_id));
+                .unwrap_or_else(|| package_id_to_dir(&project.config, &package_id));
             (dir, None)
         };
 
@@ -90,7 +90,7 @@ impl ProjectState {
             config: project.config.clone(),
             filename,
             external_test,
-            loader: project.for_analysis(entry_module_path, external_test_root),
+            loader: project.for_analysis(entry_package_path, external_test_root),
         })
     }
 }
@@ -111,30 +111,30 @@ impl OverlayLoader {
     pub(crate) fn set_overlay(
         &mut self,
         external_test: bool,
-        module_id: &str,
+        package_id: &str,
         filename: &str,
         content: String,
     ) {
         self.overlays.insert(
-            (external_test, module_id.to_string(), filename.to_string()),
+            (external_test, package_id.to_string(), filename.to_string()),
             content,
         );
     }
 
-    pub(crate) fn remove_overlay(&mut self, external_test: bool, module_id: &str, filename: &str) {
+    pub(crate) fn remove_overlay(&mut self, external_test: bool, package_id: &str, filename: &str) {
         self.overlays
-            .remove(&(external_test, module_id.to_string(), filename.to_string()));
+            .remove(&(external_test, package_id.to_string(), filename.to_string()));
     }
 
     pub(crate) fn for_analysis(
         &self,
-        entry_module_path: PathBuf,
+        entry_package_path: PathBuf,
         external_test_root: Option<String>,
     ) -> AnalysisLoader {
         AnalysisLoader {
             config: self.config.clone(),
             overlays: self.overlays.clone(),
-            entry_module_path,
+            entry_package_path,
             external_test_root,
         }
     }
@@ -143,23 +143,23 @@ impl OverlayLoader {
 pub(crate) struct AnalysisLoader {
     config: ProjectConfig,
     overlays: HashMap<(bool, String, String), String>,
-    entry_module_path: PathBuf,
+    entry_package_path: PathBuf,
     external_test_root: Option<String>,
 }
 
 impl AnalysisLoader {
-    fn module_path(&self, module_id: &str) -> PathBuf {
-        if module_id == ENTRY_MODULE_ID {
-            self.entry_module_path.clone()
+    fn package_path(&self, package_id: &str) -> PathBuf {
+        if package_id == ENTRY_PACKAGE_ID {
+            self.entry_package_path.clone()
         } else {
-            module_id_to_dir(&self.config, module_id)
+            package_id_to_dir(&self.config, package_id)
         }
     }
 
-    fn derive_module_id(&self, path: &Path) -> Option<String> {
+    fn derive_package_id(&self, path: &Path) -> Option<String> {
         let source_root = self.config.source_root();
         if path == source_root {
-            Some(ENTRY_MODULE_ID.to_string())
+            Some(ENTRY_PACKAGE_ID.to_string())
         } else {
             path.strip_prefix(source_root)
                 .ok()
@@ -170,8 +170,8 @@ impl AnalysisLoader {
 }
 
 impl Loader for AnalysisLoader {
-    fn scan_folder(&self, module_id: &str) -> Files {
-        let folder_path = self.module_path(module_id);
+    fn scan_folder(&self, package_id: &str) -> Files {
+        let folder_path = self.package_path(package_id);
         let mut files = HashMap::default();
 
         if let Ok(entries) = read_dir(&folder_path) {
@@ -189,19 +189,19 @@ impl Loader for AnalysisLoader {
             }
         }
 
-        let overlay_key = if module_id == ENTRY_MODULE_ID {
-            self.derive_module_id(&self.entry_module_path)
+        let overlay_key = if package_id == ENTRY_PACKAGE_ID {
+            self.derive_package_id(&self.entry_package_path)
                 .map(|id| (false, id))
         } else {
-            let external = self.external_test_root.as_deref() == Some(module_id);
-            Some((external, module_id.to_string()))
+            let external = self.external_test_root.as_deref() == Some(package_id);
+            Some((external, package_id.to_string()))
         };
 
-        if let Some((external_test, overlay_module)) = overlay_key {
-            for ((_, _, filename), content) in self
-                .overlays
-                .iter()
-                .filter(|((ext, module, _), _)| *ext == external_test && module == &overlay_module)
+        if let Some((external_test, overlay_package)) = overlay_key {
+            for ((_, _, filename), content) in
+                self.overlays.iter().filter(|((ext, package, _), _)| {
+                    *ext == external_test && package == &overlay_package
+                })
             {
                 files.insert(
                     filename.clone(),
@@ -213,11 +213,11 @@ impl Loader for AnalysisLoader {
         files
     }
 
-    fn discover_modules(&self) -> DiscoveredModules {
-        let mut discovered = DiscoveredModules::default();
-        discovered.add_production(ENTRY_MODULE_ID.to_string(), false);
-        if let Some(module_id) = &self.external_test_root {
-            discovered.add_external_test_root(module_id.clone());
+    fn discover_packages(&self) -> DiscoveredPackages {
+        let mut discovered = DiscoveredPackages::default();
+        discovered.add_production(ENTRY_PACKAGE_ID.to_string(), false);
+        if let Some(package_id) = &self.external_test_root {
+            discovered.add_external_test_root(package_id.clone());
         }
         discovered
     }
@@ -250,7 +250,7 @@ mod tests {
 
         let analysis = project.for_analysis(&first_uri).unwrap();
         assert_eq!(
-            analysis.loader.scan_folder(ENTRY_MODULE_ID)["main.lis"].source,
+            analysis.loader.scan_folder(ENTRY_PACKAGE_ID)["main.lis"].source,
             "memory"
         );
         assert!(project.for_analysis(&second_uri).is_none());
@@ -258,7 +258,7 @@ mod tests {
         assert!(project.remove_overlay(&first_uri));
         let analysis = project.for_analysis(&first_uri).unwrap();
         assert_eq!(
-            analysis.loader.scan_folder(ENTRY_MODULE_ID)["main.lis"].source,
+            analysis.loader.scan_folder(ENTRY_PACKAGE_ID)["main.lis"].source,
             "disk"
         );
     }

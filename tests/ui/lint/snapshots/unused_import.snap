@@ -4,9 +4,9 @@ source: tests/ui/lint/mod.rs
   ▲ Unused import
    ╭─[test.lis:2:8]
  1 │ 
- 2 │ import "some/module"
-   ·        ──────┬──────
-   ·              ╰── never used
+ 2 │ import "some/package"
+   ·        ───────┬──────
+   ·               ╰── never used
  3 │ 
    ╰────
   help: Use or remove this import · code: [lint.unused_import]

@@ -276,12 +276,12 @@ impl InferCtx<'_> {
 
             Expression::Select { arms, span, .. } => self.infer_select(arms, span, expected_ty),
 
-            Expression::ModuleImport {
+            Expression::PackageImport {
                 name,
                 name_span,
                 alias,
                 span,
-            } => Expression::ModuleImport {
+            } => Expression::PackageImport {
                 name,
                 name_span,
                 alias,

@@ -7,9 +7,9 @@ use std::{
 };
 
 use semantics::cache::cache_file_name;
-use semantics::loader::{DiscoveredModules, FileContent, Files, Loader};
+use semantics::loader::{DiscoveredPackages, FileContent, Files, Loader};
 use semantics::path::DisplayPathBase;
-use semantics::store::ENTRY_MODULE_ID;
+use semantics::store::ENTRY_PACKAGE_ID;
 
 pub use semantics::path::relative_to_cwd;
 
@@ -45,7 +45,7 @@ impl LocalFileSystem {
         }
     }
 
-    /// Build a loader rooted at `src_dir` whose module discovery reuses `sources`
+    /// Build a loader rooted at `src_dir` whose package discovery reuses `sources`
     /// (the `.lis` files under that directory) and `test_sources` (the `.lis`
     /// files under the project's `tests/` directory).
     pub fn with_scanned_sources(
@@ -86,7 +86,7 @@ impl LocalFileSystem {
         }
         dirs.iter()
             .filter_map(|dir| dir.strip_prefix(project_root).ok())
-            .map(module_id_from_rel)
+            .map(package_id_from_rel)
             .collect()
     }
 
@@ -116,21 +116,21 @@ impl LocalFileSystem {
 }
 
 fn to_fs_path(folder_name: &str) -> &str {
-    if folder_name == ENTRY_MODULE_ID {
+    if folder_name == ENTRY_PACKAGE_ID {
         ""
     } else {
         folder_name
     }
 }
 
-/// Removes stale Go output from `target/`: stale files within live modules, and the
-/// emitted directories of modules that left the dep graph. `emitted` is the manifest
+/// Removes stale Go output from `target/`: stale files within live packages, and the
+/// emitted directories of packages that left the dep graph. `emitted` is the manifest
 /// of lisette-written `.go` files, so unrelated content (e.g. `vendor/`) is untouched.
 pub fn prune_orphan_go_files(
     target_dir: &Path,
     produced: &[&str],
     emitted: &[&str],
-    live_modules: &[String],
+    live_packages: &[String],
 ) -> io::Result<()> {
     let mut produced_by_dir: HashMap<&Path, HashSet<&OsStr>> = HashMap::new();
     for rel in produced {
@@ -167,20 +167,20 @@ pub fn prune_orphan_go_files(
         }
     }
 
-    let (live_dirs, ancestor_dirs) = live_module_dirs(live_modules);
-    for dir in emitted_module_dirs(emitted) {
+    let (live_dirs, ancestor_dirs) = live_package_dirs(live_packages);
+    for dir in emitted_package_dirs(emitted) {
         if live_dirs.contains(&dir) {
             continue;
         }
         let path = target_dir.join(&dir);
-        // A dir with a live submodule keeps its dir and sheds only `.go`. A leaf goes entirely.
+        // A dir with a live subpackage keeps its dir and sheds only `.go`. A leaf goes entirely.
         if ancestor_dirs.contains(&dir) {
             remove_direct_go_files(&path)?;
         } else {
             remove_dir_all_if_present(&path)?;
         }
     }
-    prune_orphan_caches(target_dir, live_modules)?;
+    prune_orphan_caches(target_dir, live_packages)?;
 
     Ok(())
 }
@@ -219,8 +219,8 @@ pub fn prune_stale_root_go(target_dir: &Path, produced: &[&str]) -> io::Result<(
     Ok(())
 }
 
-/// Directories lisette emitted Go output into (root entry-module files excluded).
-fn emitted_module_dirs(emitted: &[&str]) -> HashSet<String> {
+/// Directories lisette emitted Go output into (root entry-package files excluded).
+fn emitted_package_dirs(emitted: &[&str]) -> HashSet<String> {
     let mut dirs = HashSet::new();
     for file in emitted {
         if let Some(parent) = Path::new(file).parent().and_then(|p| p.to_str())
@@ -232,15 +232,15 @@ fn emitted_module_dirs(emitted: &[&str]) -> HashSet<String> {
     dirs
 }
 
-/// Returns (live module dirs, ancestor-only dirs); a dir that is itself live wins.
-fn live_module_dirs(live_modules: &[String]) -> (HashSet<String>, HashSet<String>) {
+/// Returns (live package dirs, ancestor-only dirs); a dir that is itself live wins.
+fn live_package_dirs(live_packages: &[String]) -> (HashSet<String>, HashSet<String>) {
     let mut live = HashSet::new();
     let mut ancestors = HashSet::new();
-    for module in live_modules {
-        if module == ENTRY_MODULE_ID {
+    for package in live_packages {
+        if package == ENTRY_PACKAGE_ID {
             continue;
         }
-        let segments: Vec<&str> = module.split('/').filter(|s| !s.is_empty()).collect();
+        let segments: Vec<&str> = package.split('/').filter(|s| !s.is_empty()).collect();
         let mut prefix = String::new();
         for (i, segment) in segments.iter().enumerate() {
             if !prefix.is_empty() {
@@ -290,12 +290,12 @@ fn remove_dir_all_if_present(dir: &Path) -> io::Result<()> {
     }
 }
 
-/// Removes interface caches in `target/.lisette/cache/` for modules no longer in the graph.
-fn prune_orphan_caches(target_dir: &Path, live_modules: &[String]) -> io::Result<()> {
+/// Removes interface caches in `target/.lisette/cache/` for packages no longer in the graph.
+fn prune_orphan_caches(target_dir: &Path, live_packages: &[String]) -> io::Result<()> {
     let cache_dir = target_dir.join(".lisette").join("cache");
-    let live: HashSet<String> = live_modules
+    let live: HashSet<String> = live_packages
         .iter()
-        .filter(|id| id.as_str() != ENTRY_MODULE_ID)
+        .filter(|id| id.as_str() != ENTRY_PACKAGE_ID)
         .map(|id| cache_file_name(id))
         .collect();
 
@@ -404,7 +404,7 @@ fn entry_is_dir(entry: &std::fs::DirEntry, path: &Path) -> bool {
 
 impl Loader for LocalFileSystem {
     fn scan_folder(&self, folder_name: &str) -> Files {
-        if semantics::loader::is_external_test_module(folder_name)
+        if semantics::loader::is_external_test_package(folder_name)
             && let Some((project_root, display_base)) = &self.project_root
         {
             return self.collect_files(&project_root.join(folder_name), folder_name, display_base);
@@ -427,9 +427,9 @@ impl Loader for LocalFileSystem {
         HashMap::default()
     }
 
-    fn discover_modules(&self) -> DiscoveredModules {
+    fn discover_packages(&self) -> DiscoveredPackages {
         let Some((root, _)) = self.search_paths.first() else {
-            return DiscoveredModules::default();
+            return DiscoveredPackages::default();
         };
         #[derive(Default)]
         struct Contents {
@@ -459,38 +459,38 @@ impl Loader for LocalFileSystem {
                 contents.has_test = true;
             } else {
                 contents.has_test_root_file = true;
-                if semantics::loader::is_production_module_file(name) {
+                if semantics::loader::is_production_package_file(name) {
                     contents.has_production = true;
                 }
             }
         }
-        let dir_to_id = |dir: &Path| dir.strip_prefix(root).ok().map(module_id_from_rel);
-        let mut discovered = DiscoveredModules::default();
+        let dir_to_id = |dir: &Path| dir.strip_prefix(root).ok().map(package_id_from_rel);
+        let mut discovered = DiscoveredPackages::default();
         for (dir, contents) in contents_by_dir {
-            let Some(module_id) = dir_to_id(&dir) else {
+            let Some(package_id) = dir_to_id(&dir) else {
                 continue;
             };
             let has_internal_tests = contents.has_test && contents.has_test_root_file;
             if contents.has_production {
-                discovered.add_production(module_id, has_internal_tests);
+                discovered.add_production(package_id, has_internal_tests);
             } else if has_internal_tests {
-                discovered.add_internal_test_root(module_id);
+                discovered.add_internal_test_root(package_id);
             }
         }
-        for module_id in self.discover_external_test_roots() {
-            discovered.add_external_test_root(module_id);
+        for package_id in self.discover_external_test_roots() {
+            discovered.add_external_test_root(package_id);
         }
         discovered
     }
 }
 
-fn module_id_from_rel(rel: &Path) -> String {
+fn package_id_from_rel(rel: &Path) -> String {
     let joined: Vec<&str> = rel
         .components()
         .filter_map(|component| component.as_os_str().to_str())
         .collect();
     if joined.is_empty() {
-        ENTRY_MODULE_ID.to_string()
+        ENTRY_PACKAGE_ID.to_string()
     } else {
         joined.join("/")
     }
@@ -644,7 +644,7 @@ mod tests {
     }
 
     #[test]
-    fn prunes_removed_module_directory() {
+    fn prunes_removed_package_directory() {
         let tmp = tempfile::tempdir().unwrap();
         write_file(tmp.path(), "main.go", "package main\n");
         stdfs::create_dir_all(tmp.path().join("greet")).unwrap();
@@ -664,7 +664,7 @@ mod tests {
     }
 
     #[test]
-    fn keeps_live_module_directory_even_when_not_produced() {
+    fn keeps_live_package_directory_even_when_not_produced() {
         let tmp = tempfile::tempdir().unwrap();
         write_file(tmp.path(), "main.go", "package main\n");
         stdfs::create_dir_all(tmp.path().join("greet")).unwrap();
@@ -682,7 +682,7 @@ mod tests {
     }
 
     #[test]
-    fn keeps_nested_live_module_and_prunes_sibling() {
+    fn keeps_nested_live_package_and_prunes_sibling() {
         let tmp = tempfile::tempdir().unwrap();
         write_file(tmp.path(), "main.go", "package main\n");
         stdfs::create_dir_all(tmp.path().join("deep/nested/mod")).unwrap();
@@ -707,7 +707,7 @@ mod tests {
     }
 
     #[test]
-    fn prunes_orphan_parent_module_keeping_live_child() {
+    fn prunes_orphan_parent_package_keeping_live_child() {
         let tmp = tempfile::tempdir().unwrap();
         write_file(tmp.path(), "main.go", "package main\n");
         stdfs::create_dir_all(tmp.path().join("deep/nested/mod")).unwrap();
@@ -731,7 +731,7 @@ mod tests {
     }
 
     #[test]
-    fn keeps_parent_module_that_is_also_live() {
+    fn keeps_parent_package_that_is_also_live() {
         let tmp = tempfile::tempdir().unwrap();
         write_file(tmp.path(), "main.go", "package main\n");
         stdfs::create_dir_all(tmp.path().join("deep/nested/mod")).unwrap();
@@ -767,7 +767,7 @@ mod tests {
     }
 
     #[test]
-    fn departed_module_dir_is_removed_with_its_generated_files() {
+    fn departed_package_dir_is_removed_with_its_generated_files() {
         let tmp = tempfile::tempdir().unwrap();
         write_file(tmp.path(), "main.go", "package main\n");
         stdfs::create_dir_all(tmp.path().join("greet")).unwrap();
@@ -816,7 +816,7 @@ mod tests {
     }
 
     #[test]
-    fn departed_cache_module_dir_is_removed_wholesale() {
+    fn departed_cache_package_dir_is_removed_wholesale() {
         let tmp = tempfile::tempdir().unwrap();
         write_file(tmp.path(), "main.go", "package main\n");
         stdfs::create_dir_all(tmp.path().join("cache")).unwrap();
@@ -832,12 +832,12 @@ mod tests {
 
         assert!(
             !tmp.path().join("cache").exists(),
-            "`cache` is an ordinary module dir now and departs wholesale"
+            "`cache` is an ordinary package dir now and departs wholesale"
         );
     }
 
     #[test]
-    fn live_cache_module_go_is_kept() {
+    fn live_cache_package_go_is_kept() {
         let tmp = tempfile::tempdir().unwrap();
         write_file(tmp.path(), "main.go", "package main\n");
         stdfs::create_dir_all(tmp.path().join("cache")).unwrap();
@@ -875,7 +875,7 @@ mod tests {
     }
 
     #[test]
-    fn discover_modules_separates_production_and_test_roots() {
+    fn discover_packages_separates_production_and_test_roots() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
 
@@ -897,14 +897,17 @@ mod tests {
         write_file(&decl_only, "epsilon.d.lis", "pub fn ext() -> int\n");
 
         let fs = LocalFileSystem::new(root.to_str().unwrap(), None);
-        let discovered = fs.discover_modules();
+        let discovered = fs.discover_packages();
 
-        let mut production = discovered.production_modules().cloned().collect::<Vec<_>>();
+        let mut production = discovered
+            .production_packages()
+            .cloned()
+            .collect::<Vec<_>>();
         production.sort();
         assert_eq!(
             production,
             vec!["alpha/beta".to_string(), "delta".to_string()],
-            "production modules are non-test, non-declaration dirs"
+            "production packages are non-test, non-declaration dirs"
         );
 
         let mut internal_test_roots = discovered
@@ -920,7 +923,7 @@ mod tests {
     }
 
     #[test]
-    fn discover_modules_finds_external_test_roots() {
+    fn discover_packages_finds_external_test_roots() {
         let tmp = tempfile::tempdir().unwrap();
         let src = tmp.path().join("src");
         stdfs::create_dir_all(&src).unwrap();
@@ -938,7 +941,7 @@ mod tests {
         stdfs::create_dir_all(&empty).unwrap();
 
         let fs = LocalFileSystem::new(src.to_str().unwrap(), Some(tmp.path()));
-        let discovered = fs.discover_modules();
+        let discovered = fs.discover_packages();
         let mut external = discovered
             .external_test_roots()
             .cloned()
@@ -947,7 +950,7 @@ mod tests {
         assert_eq!(
             external,
             vec!["tests".to_string(), "tests/integration".to_string()],
-            "every tests/ dir holding a .test.lis is an external test module"
+            "every tests/ dir holding a .test.lis is an external test package"
         );
     }
 

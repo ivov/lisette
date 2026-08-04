@@ -25,9 +25,9 @@ fn counts_for_internal_test_root(name: &str) -> bool {
     name.ends_with(".lis") && !name.ends_with(".test.lis")
 }
 
-/// The predicate module discovery roots on. Shared so callers that pre-scan
-/// `src/` cannot disagree with the graph about what a production module is.
-pub fn is_production_module_file(name: &str) -> bool {
+/// The predicate package discovery roots on. Shared so callers that pre-scan
+/// `src/` cannot disagree with the graph about what a production package is.
+pub fn is_production_package_file(name: &str) -> bool {
     name.ends_with(".lis") && !name.ends_with(".test.lis") && !name.ends_with(".d.lis")
 }
 
@@ -35,18 +35,18 @@ pub const EXTERNAL_TESTS_DIR: &str = "tests";
 
 pub use syntax::ROOT_IMPORT;
 
-pub fn is_external_test_module(module_id: &str) -> bool {
-    module_id == EXTERNAL_TESTS_DIR
-        || module_id
+pub fn is_external_test_package(package_id: &str) -> bool {
+    package_id == EXTERNAL_TESTS_DIR
+        || package_id
             .strip_prefix(EXTERNAL_TESTS_DIR)
             .is_some_and(|rest| rest.starts_with('/'))
 }
 
-pub fn import_display_name(module_id: &str) -> &str {
-    if module_id == crate::store::ENTRY_MODULE_ID {
+pub fn import_display_name(package_id: &str) -> &str {
+    if package_id == crate::store::ENTRY_PACKAGE_ID {
         ROOT_IMPORT
     } else {
-        module_id
+        package_id
     }
 }
 
@@ -66,104 +66,106 @@ pub fn external_test_file_issue(name: &str) -> Option<ExternalTestFileIssue> {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum DiscoveredModuleKind {
+enum DiscoveredPackageKind {
     Production { has_internal_tests: bool },
     InternalTests,
     ExternalTests,
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct DiscoveredModules {
-    modules: HashMap<String, DiscoveredModuleKind>,
+pub struct DiscoveredPackages {
+    packages: HashMap<String, DiscoveredPackageKind>,
 }
 
-impl DiscoveredModules {
-    pub fn add_production(&mut self, module_id: String, has_internal_tests: bool) {
+impl DiscoveredPackages {
+    pub fn add_production(&mut self, package_id: String, has_internal_tests: bool) {
         self.add(
-            module_id,
-            DiscoveredModuleKind::Production { has_internal_tests },
+            package_id,
+            DiscoveredPackageKind::Production { has_internal_tests },
         );
     }
 
-    pub fn add_internal_test_root(&mut self, module_id: String) {
-        self.add(module_id, DiscoveredModuleKind::InternalTests);
+    pub fn add_internal_test_root(&mut self, package_id: String) {
+        self.add(package_id, DiscoveredPackageKind::InternalTests);
     }
 
-    pub fn add_external_test_root(&mut self, module_id: String) {
-        self.add(module_id, DiscoveredModuleKind::ExternalTests);
+    pub fn add_external_test_root(&mut self, package_id: String) {
+        self.add(package_id, DiscoveredPackageKind::ExternalTests);
     }
 
-    fn add(&mut self, module_id: String, incoming: DiscoveredModuleKind) {
-        self.modules
-            .entry(module_id)
+    fn add(&mut self, package_id: String, incoming: DiscoveredPackageKind) {
+        self.packages
+            .entry(package_id)
             .and_modify(|existing| {
                 *existing = match (*existing, incoming) {
                     (
-                        DiscoveredModuleKind::Production {
+                        DiscoveredPackageKind::Production {
                             has_internal_tests: left,
                         },
-                        DiscoveredModuleKind::Production {
+                        DiscoveredPackageKind::Production {
                             has_internal_tests: right,
                         },
-                    ) => DiscoveredModuleKind::Production {
+                    ) => DiscoveredPackageKind::Production {
                         has_internal_tests: left || right,
                     },
                     (
-                        DiscoveredModuleKind::Production { .. },
-                        DiscoveredModuleKind::InternalTests,
+                        DiscoveredPackageKind::Production { .. },
+                        DiscoveredPackageKind::InternalTests,
                     )
                     | (
-                        DiscoveredModuleKind::InternalTests,
-                        DiscoveredModuleKind::Production { .. },
-                    ) => DiscoveredModuleKind::Production {
+                        DiscoveredPackageKind::InternalTests,
+                        DiscoveredPackageKind::Production { .. },
+                    ) => DiscoveredPackageKind::Production {
                         has_internal_tests: true,
                     },
-                    (DiscoveredModuleKind::InternalTests, DiscoveredModuleKind::InternalTests) => {
-                        DiscoveredModuleKind::InternalTests
-                    }
-                    (DiscoveredModuleKind::ExternalTests, DiscoveredModuleKind::ExternalTests) => {
-                        DiscoveredModuleKind::ExternalTests
-                    }
-                    _ => panic!("a module cannot be both internal and external"),
+                    (
+                        DiscoveredPackageKind::InternalTests,
+                        DiscoveredPackageKind::InternalTests,
+                    ) => DiscoveredPackageKind::InternalTests,
+                    (
+                        DiscoveredPackageKind::ExternalTests,
+                        DiscoveredPackageKind::ExternalTests,
+                    ) => DiscoveredPackageKind::ExternalTests,
+                    _ => panic!("a package cannot be both internal and external"),
                 };
             })
             .or_insert(incoming);
     }
 
-    pub fn production_modules(&self) -> impl Iterator<Item = &String> {
-        self.modules.iter().filter_map(|(module_id, kind)| {
-            matches!(kind, DiscoveredModuleKind::Production { .. }).then_some(module_id)
+    pub fn production_packages(&self) -> impl Iterator<Item = &String> {
+        self.packages.iter().filter_map(|(package_id, kind)| {
+            matches!(kind, DiscoveredPackageKind::Production { .. }).then_some(package_id)
         })
     }
 
     pub fn internal_test_roots(&self) -> impl Iterator<Item = &String> {
-        self.modules.iter().filter_map(|(module_id, kind)| {
+        self.packages.iter().filter_map(|(package_id, kind)| {
             matches!(
                 kind,
-                DiscoveredModuleKind::Production {
+                DiscoveredPackageKind::Production {
                     has_internal_tests: true
-                } | DiscoveredModuleKind::InternalTests
+                } | DiscoveredPackageKind::InternalTests
             )
-            .then_some(module_id)
+            .then_some(package_id)
         })
     }
 
     pub fn external_test_roots(&self) -> impl Iterator<Item = &String> {
-        self.modules.iter().filter_map(|(module_id, kind)| {
-            matches!(kind, DiscoveredModuleKind::ExternalTests).then_some(module_id)
+        self.packages.iter().filter_map(|(package_id, kind)| {
+            matches!(kind, DiscoveredPackageKind::ExternalTests).then_some(package_id)
         })
     }
 
     pub fn test_roots(&self) -> impl Iterator<Item = &String> {
-        self.modules.iter().filter_map(|(module_id, kind)| {
+        self.packages.iter().filter_map(|(package_id, kind)| {
             matches!(
                 kind,
-                DiscoveredModuleKind::Production {
+                DiscoveredPackageKind::Production {
                     has_internal_tests: true
-                } | DiscoveredModuleKind::InternalTests
-                    | DiscoveredModuleKind::ExternalTests
+                } | DiscoveredPackageKind::InternalTests
+                    | DiscoveredPackageKind::ExternalTests
             )
-            .then_some(module_id)
+            .then_some(package_id)
         })
     }
 }
@@ -172,8 +174,8 @@ pub trait Loader: Sync {
     /// Scans a folder and returns all `.lis` files keyed by bare filename.
     fn scan_folder(&self, folder: &str) -> Files;
 
-    fn discover_modules(&self) -> DiscoveredModules {
-        DiscoveredModules::default()
+    fn discover_packages(&self) -> DiscoveredPackages {
+        DiscoveredPackages::default()
     }
 }
 
@@ -219,24 +221,24 @@ impl Loader for MemoryLoader {
         self.folders.get(folder).cloned().unwrap_or_default()
     }
 
-    fn discover_modules(&self) -> DiscoveredModules {
-        let mut discovered = DiscoveredModules::default();
-        for (module_id, files) in &self.folders {
+    fn discover_packages(&self) -> DiscoveredPackages {
+        let mut discovered = DiscoveredPackages::default();
+        for (package_id, files) in &self.folders {
             let has_tests = files.keys().any(|name| name.ends_with(".test.lis"));
-            if is_external_test_module(module_id) {
+            if is_external_test_package(package_id) {
                 if has_tests {
-                    discovered.add_external_test_root(module_id.clone());
+                    discovered.add_external_test_root(package_id.clone());
                 }
                 continue;
             }
 
-            let has_production = files.keys().any(|name| is_production_module_file(name));
+            let has_production = files.keys().any(|name| is_production_package_file(name));
             let is_internal_test_root =
                 has_tests && files.keys().any(|name| counts_for_internal_test_root(name));
             if has_production {
-                discovered.add_production(module_id.clone(), is_internal_test_root);
+                discovered.add_production(package_id.clone(), is_internal_test_root);
             } else if is_internal_test_root {
-                discovered.add_internal_test_root(module_id.clone());
+                discovered.add_internal_test_root(package_id.clone());
             }
         }
         discovered
@@ -249,11 +251,11 @@ mod tests {
 
     #[test]
     fn external_test_namespace_matches_exact_prefix_only() {
-        assert!(is_external_test_module("tests"));
-        assert!(is_external_test_module("tests/integration"));
-        assert!(!is_external_test_module("testsuite"));
-        assert!(!is_external_test_module("tests_helper"));
-        assert!(!is_external_test_module("math/tests"));
+        assert!(is_external_test_package("tests"));
+        assert!(is_external_test_package("tests/integration"));
+        assert!(!is_external_test_package("testsuite"));
+        assert!(!is_external_test_package("tests_helper"));
+        assert!(!is_external_test_package("math/tests"));
     }
 
     #[test]
@@ -263,9 +265,12 @@ mod tests {
         loader.add_file("tests", "arithmetic.test.lis", "#[test]\nfn t() {}");
         loader.add_file("tests/flows", "flow.test.lis", "#[test]\nfn t() {}");
 
-        let discovered = loader.discover_modules();
+        let discovered = loader.discover_packages();
         assert_eq!(
-            discovered.production_modules().cloned().collect::<Vec<_>>(),
+            discovered
+                .production_packages()
+                .cloned()
+                .collect::<Vec<_>>(),
             vec!["math".to_string()]
         );
         assert_eq!(discovered.internal_test_roots().count(), 0);

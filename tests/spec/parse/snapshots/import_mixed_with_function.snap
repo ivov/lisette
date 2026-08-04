@@ -12,7 +12,7 @@ description: |
   import "logging"
 ---
 [
-    ModuleImport {
+    PackageImport {
         name: "go:io",
         name_span: Span {
             file_id: 0,
@@ -26,7 +26,7 @@ description: |
             byte_length: 14,
         },
     },
-    ModuleImport {
+    PackageImport {
         name: "network",
         name_span: Span {
             file_id: 0,
@@ -78,7 +78,7 @@ description: |
             byte_length: 35,
         },
     },
-    ModuleImport {
+    PackageImport {
         name: "logging",
         name_span: Span {
             file_id: 0,

@@ -130,5 +130,5 @@ loudest(cats)  // T = Cat, returns Cat
 
 <table><tr>
 <td>← <a href="10-methods.md"><code>10-methods.md</code></a></td>
-<td align="right"><a href="12-modules.md"><code>12-modules.md</code></a> →</td>
+<td align="right"><a href="12-packages.md"><code>12-packages.md</code></a> →</td>
 </tr></table>

@@ -7,10 +7,10 @@ use crate::_harness::filesystem::MockFileSystem;
 use crate::_harness::infer::infer;
 use crate::assert_build_snapshot;
 use semantics::CompilePhase;
-use semantics::store::ENTRY_MODULE_ID;
+use semantics::store::ENTRY_PACKAGE_ID;
 
 #[test]
-fn cross_module_generic_constructor_type_args() {
+fn cross_package_generic_constructor_type_args() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -30,7 +30,7 @@ impl<T> Box<T> {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -47,7 +47,7 @@ fn main() {
 }
 
 #[test]
-fn aliased_local_module_survives_go_import_name_clash() {
+fn aliased_local_package_survives_go_import_name_clash() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -65,7 +65,7 @@ impl Foo {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:net/http"
@@ -90,7 +90,7 @@ fn main() {
 }
 
 #[test]
-fn cast_shift_imported_module_const_count_needs_no_pin() {
+fn cast_shift_imported_package_const_count_needs_no_pin() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -102,7 +102,7 @@ pub const SHIFT = 60 + 8
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -118,7 +118,7 @@ fn main() {
 }
 
 #[test]
-fn display_cross_module_to_string_exported() {
+fn display_cross_package_to_string_exported() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -134,7 +134,7 @@ pub struct Point {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -151,7 +151,7 @@ fn main() {
 }
 
 #[test]
-fn embedded_cross_module_json_string_field_blocks_shadow() {
+fn embedded_cross_package_json_string_field_blocks_shadow() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -174,7 +174,7 @@ pub fn make(p: string, n: int) -> Inner {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -196,7 +196,7 @@ fn main() {
 }
 
 #[test]
-fn display_cross_module_satisfies_local_interface() {
+fn display_cross_package_satisfies_local_interface() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -212,7 +212,7 @@ pub struct Point {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -240,7 +240,7 @@ fn main() {
 fn go_name_collision_user_to_string_wrong_signature() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 #[display]
@@ -272,7 +272,7 @@ fn main() {
 fn embedded_display_beside_string_field_needs_no_shadow() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 #[display]
@@ -304,7 +304,7 @@ fn user_function_returning_result_no_type_args() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -331,7 +331,7 @@ fn go_option_call_wrapped() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:go/doc/comment"
@@ -352,7 +352,7 @@ fn go_result_ref_nil_guard() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:os"
@@ -373,7 +373,7 @@ fn go_single_pointer_option_wrapped() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:flag"
@@ -394,7 +394,7 @@ fn go_method_single_pointer_option_wrapped() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:container/list"
@@ -417,7 +417,7 @@ fn go_method_result_wrapped() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:bufio"
@@ -443,7 +443,7 @@ fn go_partial_wrap_nil_guards_nilable_ok() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:go/parser"
@@ -467,7 +467,7 @@ fn go_partial_wrap_nil_guards_nilable_collection() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:io"
@@ -493,7 +493,7 @@ fn go_method_option_comma_ok_wrapped() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:context"
@@ -515,7 +515,7 @@ fn go_nullable_comma_ok_nil_check() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:runtime/debug"
@@ -532,7 +532,7 @@ fn main() {
 }
 
 #[test]
-fn multimodule_type_alias_field_access() {
+fn multipackage_type_alias_field_access() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -546,7 +546,7 @@ pub type Coordinate = Point
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "geo"
@@ -566,11 +566,11 @@ fn main() {
 }
 
 #[test]
-fn multimodule_basic() {
+fn multipackage_basic() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "utils"
@@ -595,7 +595,7 @@ pub fn add(a: int, b: int) -> int {
 }
 
 #[test]
-fn multimodule_tuple_struct_field_access() {
+fn multipackage_tuple_struct_field_access() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -609,7 +609,7 @@ pub struct Pair<A, B>(A, B)
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "types"
@@ -635,7 +635,7 @@ fn main() {
 }
 
 #[test]
-fn multimodule_generic_tuple_struct_method() {
+fn multipackage_generic_tuple_struct_method() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -653,7 +653,7 @@ impl<T> Wrapper<T> {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "types"
@@ -669,7 +669,7 @@ fn main() {
 }
 
 #[test]
-fn multimodule_ufcs_method() {
+fn multipackage_ufcs_method() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -687,7 +687,7 @@ impl<T> Box<T> {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "types"
@@ -718,7 +718,7 @@ pub fn add(a: int, b: int) -> int {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "math"
@@ -754,7 +754,7 @@ fn main() {
 }
 
 #[test]
-fn multimodule_pipeline_in_dependency() {
+fn multipackage_pipeline_in_dependency() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -772,7 +772,7 @@ pub fn quadruple(x: int) -> int {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "utils"
@@ -787,7 +787,7 @@ fn main() {
 }
 
 #[test]
-fn multimodule_if_let_in_dependency() {
+fn multipackage_if_let_in_dependency() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -805,7 +805,7 @@ pub fn unwrap_or_default(opt: Option<int>) -> int {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "utils"
@@ -820,11 +820,11 @@ fn main() {
 }
 
 #[test]
-fn entry_module_enum_qualified_variant_pattern() {
+fn entry_package_enum_qualified_variant_pattern() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 enum Color {
@@ -857,7 +857,7 @@ fn main() {
 }
 
 #[test]
-fn pattern_analysis_runs_on_dependency_modules() {
+fn pattern_analysis_runs_on_dependency_packages() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -881,7 +881,7 @@ pub fn status_code(s: Status) -> int {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "utils"
@@ -907,7 +907,7 @@ fn main() {
 }
 
 #[test]
-fn linting_runs_on_dependency_modules() {
+fn linting_runs_on_dependency_packages() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -922,7 +922,7 @@ pub fn compute() -> int {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "utils"
@@ -948,13 +948,13 @@ fn main() {
 
     assert!(
         has_unused_warning,
-        "Expected unused variable warning in dependency module, got lints: {:?}",
+        "Expected unused variable warning in dependency package, got lints: {:?}",
         result.lints()
     );
 }
 
 #[test]
-fn no_duplicate_fact_lints_in_multifile_module() {
+fn no_duplicate_fact_lints_in_multifile_package() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -977,7 +977,7 @@ pub fn helper() -> int { 1 }
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "utils"
@@ -1016,7 +1016,7 @@ fn unused_variables_prefixed_in_go_output() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 fn process(unused_param: int, used_param: int) -> int {
@@ -1035,7 +1035,7 @@ fn main() {
 }
 
 #[test]
-fn multimodule_enum_constructors_not_leaked() {
+fn multipackage_enum_constructors_not_leaked() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1049,7 +1049,7 @@ pub fn add(a: int, b: int) -> int {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "utils"
@@ -1071,7 +1071,7 @@ fn main() {
 }
 
 #[test]
-fn multimodule_cross_module_enum_usage() {
+fn multipackage_cross_package_enum_usage() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1090,7 +1090,7 @@ pub enum ShapeKind {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "shapes"
@@ -1114,7 +1114,7 @@ fn main() {
 }
 
 #[test]
-fn multimodule_intra_module_function_call() {
+fn multipackage_intra_package_function_call() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1132,7 +1132,7 @@ pub fn double_square(x: float64) -> float64 {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "math_utils"
@@ -1147,7 +1147,7 @@ fn main() {
 }
 
 #[test]
-fn multimodule_static_method_call() {
+fn multipackage_static_method_call() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1172,7 +1172,7 @@ impl Point {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "shapes"
@@ -1208,7 +1208,7 @@ impl Service {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "api"
@@ -1236,7 +1236,7 @@ fn main() {
 }
 
 #[test]
-fn multimodule_import_between_local_modules() {
+fn multipackage_import_between_local_packages() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1269,7 +1269,7 @@ impl Point {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "shapes"
@@ -1286,11 +1286,11 @@ fn main() {
 }
 
 #[test]
-fn multimodule_deep_nested_path() {
+fn multipackage_deep_nested_path() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        "nested/deep/module",
+        "nested/deep/package",
         "mod.lis",
         r#"
 pub fn foo() -> int {
@@ -1300,13 +1300,13 @@ pub fn foo() -> int {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
-import "nested/deep/module"
+import "nested/deep/package"
 
 fn main() {
-  let _ = module.foo()
+  let _ = package.foo()
 }
 "#,
     );
@@ -1315,7 +1315,7 @@ fn main() {
 }
 
 #[test]
-fn multimodule_type_alias_struct_literal() {
+fn multipackage_type_alias_struct_literal() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1339,7 +1339,7 @@ pub type PublicSecret = internal.Secret
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "api"
@@ -1355,7 +1355,7 @@ fn main() {
 }
 
 #[test]
-fn multimodule_generic_type_alias() {
+fn multipackage_generic_type_alias() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1379,7 +1379,7 @@ pub type Container<T> = types.Box<T>
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "utils"
@@ -1395,7 +1395,7 @@ fn main() {
 }
 
 #[test]
-fn multimodule_type_alias_enum_all_variants() {
+fn multipackage_type_alias_enum_all_variants() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1421,7 +1421,7 @@ pub type UIEvent = events.Event
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "api"
@@ -1441,7 +1441,7 @@ fn main() {
 }
 
 #[test]
-fn multimodule_type_alias_enum_pattern_matching() {
+fn multipackage_type_alias_enum_pattern_matching() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1467,7 +1467,7 @@ pub type UIEvent = events.Event
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "api"
@@ -1489,7 +1489,7 @@ fn main() {
 }
 
 #[test]
-fn entry_module_type_alias_cross_module_enum_variant() {
+fn entry_package_type_alias_cross_package_enum_variant() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1504,7 +1504,7 @@ pub enum Color {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "palette"
@@ -1522,11 +1522,11 @@ fn main() {
 }
 
 #[test]
-fn entry_module_named_primitive_alias_const_patterns() {
+fn entry_package_named_primitive_alias_const_patterns() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -1552,7 +1552,7 @@ fn main() {
 }
 
 #[test]
-fn multimodule_enum_static_method() {
+fn multipackage_enum_static_method() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1574,7 +1574,7 @@ impl Color {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "shapes"
@@ -1594,7 +1594,7 @@ fn iterate_enum_named_go_keyword() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 #[iterate]
@@ -1617,7 +1617,7 @@ fn iterate_enum_export_name_consistency() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 #[iterate]
@@ -1641,7 +1641,7 @@ fn main() {
 }
 
 #[test]
-fn multimodule_iterate_enum() {
+fn multipackage_iterate_enum() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1658,7 +1658,7 @@ pub enum BuildPhase {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "phases"
@@ -1697,7 +1697,7 @@ impl StringBuilder {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "builder"
@@ -1718,7 +1718,7 @@ fn go_struct_literal_none_unwrap() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:runtime/debug"
@@ -1744,7 +1744,7 @@ fn go_struct_field_assignment_unwrap() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:runtime/debug"
@@ -1777,7 +1777,7 @@ fn go_map_nullable_value_unwrap_preserves_none_keys() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:go/ast"
@@ -1807,7 +1807,7 @@ fn main() {
 }
 
 #[test]
-fn same_module_cross_file_method_casing() {
+fn same_package_cross_file_method_casing() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1855,7 +1855,7 @@ pub fn test_local_static() -> float64 {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "shapes"
@@ -1870,7 +1870,7 @@ fn main() {
 }
 
 #[test]
-fn cross_module_static_method_call() {
+fn cross_package_static_method_call() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1895,7 +1895,7 @@ impl Point {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "geometry"
@@ -1916,7 +1916,7 @@ fn go_function_value_result_wrapping() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -1943,7 +1943,7 @@ fn go_cross_package_type_alias_imports() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -1981,7 +1981,7 @@ fn get_value(key: string) -> Unknown
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "store"
@@ -2005,7 +2005,7 @@ fn go_type_same_name_as_prelude_uses_go_methods() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -2026,7 +2026,7 @@ fn main() {
 }
 
 #[test]
-fn cross_module_type_in_function_signature() {
+fn cross_package_type_in_function_signature() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -2057,7 +2057,7 @@ pub fn create_item(name: string, value: int) -> models.Item {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -2078,7 +2078,7 @@ fn main() {
 }
 
 #[test]
-fn cross_module_interface_method_call() {
+fn cross_package_interface_method_call() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -2100,7 +2100,7 @@ impl Item {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -2118,11 +2118,11 @@ fn main() {}
 }
 
 #[test]
-fn same_module_pub_interface_method_call() {
+fn same_package_pub_interface_method_call() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -2145,7 +2145,7 @@ fn main() {
 }
 
 #[test]
-fn nested_module_type_qualifier() {
+fn nested_package_type_qualifier() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -2159,7 +2159,7 @@ pub struct Item {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -2176,7 +2176,7 @@ fn main() {
 }
 
 #[test]
-fn cross_module_nested_generic_static_method() {
+fn cross_package_nested_generic_static_method() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -2193,7 +2193,7 @@ impl<T> Box<T> {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -2214,7 +2214,7 @@ fn go_three_value_return_tuple() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:strings"
@@ -2231,7 +2231,7 @@ fn main() {
 }
 
 #[test]
-fn cross_module_enum_variant_non_t_payload() {
+fn cross_package_enum_variant_non_t_payload() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -2246,7 +2246,7 @@ pub enum Result2<T> {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -2271,7 +2271,7 @@ fn main() {
 }
 
 #[test]
-fn pub_interface_method_accessible_cross_module() {
+fn pub_interface_method_accessible_cross_package() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -2295,7 +2295,7 @@ impl Person {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "types"
@@ -2315,7 +2315,7 @@ fn main() {
 }
 
 #[test]
-fn import_alias_local_module() {
+fn import_alias_local_package() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -2329,7 +2329,7 @@ pub fn add(a: int, b: int) -> int {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import u "utils"
@@ -2348,7 +2348,7 @@ fn multiple_json_attributes_merge() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:encoding/json"
@@ -2375,7 +2375,7 @@ fn bare_error_return_wrapped_as_result() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:encoding/json"
@@ -2409,7 +2409,7 @@ fn covariant_generics_assignment_rejected() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 interface Describable {
@@ -2446,7 +2446,7 @@ fn main() {
 }
 
 #[test]
-fn nested_submodule_type_reference() {
+fn nested_subpackage_type_reference() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -2477,7 +2477,7 @@ pub fn first_item(c: Container) -> sub.Item {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -2496,7 +2496,7 @@ fn main() {
 }
 
 #[test]
-fn cross_module_generic_return_only_string_vs_int() {
+fn cross_package_generic_return_only_string_vs_int() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -2527,7 +2527,7 @@ pub fn validate_non_empty(field: string, val: string) -> ValidationResult<string
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -2546,7 +2546,7 @@ fn main() {
 }
 
 #[test]
-fn cross_module_generic_free_function_turbofish() {
+fn cross_package_generic_free_function_turbofish() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -2562,7 +2562,7 @@ pub fn ok2<T, E>(value: T) -> Result2<T, E> {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -2582,7 +2582,7 @@ fn main() {
 }
 
 #[test]
-fn cross_module_interface_impl_in_main() {
+fn cross_package_interface_impl_in_main() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -2600,7 +2600,7 @@ pub fn print_all<T: Printable>(items: Slice<T>) -> string {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -2622,7 +2622,7 @@ fn main() {
 }
 
 #[test]
-fn cross_module_generic_static_method_turbofish() {
+fn cross_package_generic_static_method_turbofish() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -2638,7 +2638,7 @@ impl<T> Box<T> {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -2666,7 +2666,7 @@ fn shadowing_prelude_types_is_forbidden() {
     ] {
         let mut fs = MockFileSystem::new();
         fs.add_file("lib", "lib.lis", definition);
-        fs.add_file(ENTRY_MODULE_ID, "main.lis", "import \"lib\"\nfn main() {}");
+        fs.add_file(ENTRY_PACKAGE_ID, "main.lis", "import \"lib\"\nfn main() {}");
 
         let result = compile_check(fs);
         assert!(
@@ -2682,11 +2682,11 @@ fn shadowing_prelude_types_is_forbidden() {
 }
 
 #[test]
-fn module_named_after_go_builtin_is_sanitized() {
+fn package_named_after_go_builtin_is_sanitized() {
     let mut fs = MockFileSystem::new();
     fs.add_file("panic", "panic.lis", "pub fn helper() -> int { 0 }");
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import user_panic "panic"
@@ -2717,7 +2717,7 @@ fn shadowing_prelude_functions_is_forbidden() {
     ] {
         let mut fs = MockFileSystem::new();
         fs.add_file("lib", "lib.lis", definition);
-        fs.add_file(ENTRY_MODULE_ID, "main.lis", "import \"lib\"\nfn main() {}");
+        fs.add_file(ENTRY_PACKAGE_ID, "main.lis", "import \"lib\"\nfn main() {}");
 
         let result = compile_check(fs);
         assert!(
@@ -2748,7 +2748,7 @@ impl Point {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import L "lib"
@@ -2763,7 +2763,7 @@ fn main() {
 }
 
 #[test]
-fn nested_module_static_method_call() {
+fn nested_package_static_method_call() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -2784,7 +2784,7 @@ impl User {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "models/user"
@@ -2803,7 +2803,7 @@ fn multiple_bounded_impl_blocks_use_declared_constraints() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -2868,7 +2868,7 @@ fn bounded_and_unbounded_impl_blocks_share_declared_constraint() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -2915,7 +2915,7 @@ fn main() {
 }
 
 #[test]
-fn cross_module_bounded_impl_tracks_imports() {
+fn cross_package_bounded_impl_tracks_imports() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -2947,7 +2947,7 @@ impl<T: ifaces.Showable> Box<T> {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -3039,7 +3039,7 @@ pub fn describe_tagged_pair<A: traits.Showable, B: traits.Showable>(tp: types.Ta
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -3073,7 +3073,7 @@ fn main() {
 fn slice_map_with_different_output_type() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -3116,7 +3116,7 @@ fn test() {
 fn generic_interface_embedding_type_substitution() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -3163,7 +3163,7 @@ fn match_on_unknown_type_rejected() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:context"
@@ -3193,7 +3193,7 @@ fn main() {
 }
 
 #[test]
-fn cross_module_interface_method_casing() {
+fn cross_package_interface_method_casing() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -3213,7 +3213,7 @@ impl User {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -3238,11 +3238,11 @@ fn main() {
 }
 
 #[test]
-fn multi_file_module_sibling_visibility() {
+fn multi_file_package_sibling_visibility() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "point.lis",
         r#"
 struct Point {
@@ -3259,7 +3259,7 @@ impl Point {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 fn main() {
@@ -3276,7 +3276,7 @@ fn main() {
 fn go_mut_param_accepted_with_let_mut() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:sort"
@@ -3294,7 +3294,7 @@ fn main() {
 fn go_mut_param_rejected_with_immutable_arg() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:sort"
@@ -3320,7 +3320,7 @@ fn main() {
 fn go_derived_mut_param_rejected_with_immutable_arg() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:slices"
@@ -3346,7 +3346,7 @@ fn main() {
 fn go_derived_mut_param_accepted_with_let_mut() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:slices"
@@ -3368,7 +3368,7 @@ fn main() {
 fn go_non_mutating_slices_helpers_accept_immutable_arg() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -3389,7 +3389,7 @@ fn main() {
 fn go_mut_param_selective_only_dst() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:encoding/hex"
@@ -3408,7 +3408,7 @@ fn main() {
 fn go_mut_param_not_bypassed_via_higher_order() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:sort"
@@ -3438,7 +3438,7 @@ fn main() {
 fn go_value_receiver_satisfies_interface_by_value() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -3462,7 +3462,7 @@ fn main() {
 fn go_pointer_receiver_still_needs_ref_for_interface() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:bytes"
@@ -3493,7 +3493,7 @@ fn main() {
 fn go_promoted_value_receiver_satisfies_interface_by_value() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -3521,7 +3521,7 @@ fn main() {
 fn go_promoted_pointer_receiver_still_needs_ref_for_interface() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:bytes"
@@ -3556,7 +3556,7 @@ fn main() {
 fn value_method_set_hint_ignored_outside_go_typedefs() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 pub struct Counter { pub n: int }
@@ -3593,7 +3593,7 @@ fn main() {
 fn go_delegated_receiver_mutation_rejected_with_immutable_binding() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:sort"
@@ -3619,7 +3619,7 @@ fn main() {
 fn go_delegated_receiver_mutation_accepted_with_let_mut() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -3639,7 +3639,7 @@ fn main() {
 fn unused_method_with_go_import_not_emitted() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -3666,7 +3666,7 @@ fn main() {
 }
 
 #[test]
-fn module_alias_used_in_type_references() {
+fn package_alias_used_in_type_references() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -3684,7 +3684,7 @@ pub fn new(name: string) -> User {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -3702,7 +3702,7 @@ fn main() {
 }
 
 #[test]
-fn multimodule_nested_path_enum_construction() {
+fn multipackage_nested_path_enum_construction() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -3717,7 +3717,7 @@ pub enum Event {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -3734,7 +3734,7 @@ fn main() {
 }
 
 #[test]
-fn cross_module_ufcs_uses_import_alias() {
+fn cross_package_ufcs_uses_import_alias() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -3752,7 +3752,7 @@ impl<T> Box<T> {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import L "lib"
@@ -3770,7 +3770,7 @@ fn main() {
 }
 
 #[test]
-fn cross_module_enum_construction_uses_import_alias() {
+fn cross_package_enum_construction_uses_import_alias() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -3785,7 +3785,7 @@ pub enum Color {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -3806,7 +3806,7 @@ fn go_struct_nullable_field_raw_temp_var_no_collision() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:runtime/debug"
@@ -3835,7 +3835,7 @@ fn go_option_unwrap_temp_var_no_collision() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:net/http"
@@ -3860,7 +3860,7 @@ fn adapted_numeric_literal_through_generic_constructor_compiles() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -3878,7 +3878,7 @@ fn main() {
 }
 
 #[test]
-fn cross_module_generic_function_value_instantiated() {
+fn cross_package_generic_function_value_instantiated() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -3892,7 +3892,7 @@ pub fn id<T>(x: T) -> T {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "lib"
@@ -3909,7 +3909,7 @@ fn main() {
 }
 
 #[test]
-fn cross_module_generic_static_method_value_instantiated() {
+fn cross_package_generic_static_method_value_instantiated() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -3929,7 +3929,7 @@ impl<T> Box<T> {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "lib"
@@ -3946,7 +3946,7 @@ fn main() {
 }
 
 #[test]
-fn cross_module_instance_method_value() {
+fn cross_package_instance_method_value() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -3967,7 +3967,7 @@ impl Point {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "lib"
@@ -3985,7 +3985,7 @@ fn main() {
 }
 
 #[test]
-fn cross_module_pointer_receiver_method_value() {
+fn cross_package_pointer_receiver_method_value() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -4005,7 +4005,7 @@ impl Counter {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "lib"
@@ -4023,7 +4023,7 @@ fn main() {
 }
 
 #[test]
-fn cross_module_generic_instance_method_value() {
+fn cross_package_generic_instance_method_value() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -4043,7 +4043,7 @@ impl<T> Box<T> {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "lib"
@@ -4061,7 +4061,7 @@ fn main() {
 }
 
 #[test]
-fn cross_module_instance_method_value_as_callback() {
+fn cross_package_instance_method_value_as_callback() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -4082,7 +4082,7 @@ impl Point {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "lib"
@@ -4103,7 +4103,7 @@ fn main() {
 }
 
 #[test]
-fn module_name_go_keyword() {
+fn package_name_go_keyword() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -4115,7 +4115,7 @@ pub fn foo() -> int { 1 }
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import t "type"
@@ -4130,7 +4130,7 @@ fn main() {
 }
 
 #[test]
-fn module_name_go_builtin() {
+fn package_name_go_builtin() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -4142,7 +4142,7 @@ pub fn hello() -> string { "hello" }
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "print"
@@ -4157,7 +4157,7 @@ fn main() {
 }
 
 #[test]
-fn module_name_non_identifier_chars() {
+fn package_name_non_identifier_chars() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -4169,7 +4169,7 @@ pub fn id(x: int) -> int { x }
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import fb "foo-bar"
@@ -4184,7 +4184,7 @@ fn main() {
 }
 
 #[test]
-fn cross_module_return_only_type_args_via_alias() {
+fn cross_package_return_only_type_args_via_alias() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -4198,7 +4198,7 @@ pub fn make<T>() -> T {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import L "lib"
@@ -4214,7 +4214,7 @@ fn main() {
 }
 
 #[test]
-fn local_alias_cross_module_enum_struct_variant_tag() {
+fn local_alias_cross_package_enum_struct_variant_tag() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -4228,7 +4228,7 @@ pub enum Event {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "lib"
@@ -4260,7 +4260,7 @@ pub enum Event {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import L "lib"
@@ -4278,7 +4278,7 @@ fn main() {
 }
 
 #[test]
-fn impl_bounds_with_module_alias_import_path() {
+fn impl_bounds_with_package_alias_import_path() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -4292,7 +4292,7 @@ pub interface Printable {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import I "ifaces"
@@ -4322,7 +4322,7 @@ fn main() {
 }
 
 #[test]
-fn cross_module_type_alias_remote_static_method() {
+fn cross_package_type_alias_remote_static_method() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -4340,7 +4340,7 @@ pub type Alias = Box
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "lib"
@@ -4356,7 +4356,7 @@ fn main() {
 }
 
 #[test]
-fn cross_module_type_alias_native_type_import_dropped() {
+fn cross_package_type_alias_native_type_import_dropped() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -4368,7 +4368,7 @@ pub type Alias = Slice<int>
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "lib"
@@ -4388,7 +4388,7 @@ fn script_check_ignores_sibling_files() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 fn main() {
@@ -4399,7 +4399,7 @@ fn main() {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "other.lis",
         r#"
 struct Point { x: int, y: int }
@@ -4442,7 +4442,7 @@ fn foo(e: Enum) {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "mod"
@@ -4464,7 +4464,7 @@ import "mod"
 }
 
 #[test]
-fn cross_module_type_alias_as_qualifier() {
+fn cross_package_type_alias_as_qualifier() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -4480,7 +4480,7 @@ pub enum Color {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "types"
@@ -4510,10 +4510,10 @@ fn main() {
 fn impl_block_in_separate_file_from_struct() {
     let mut fs = MockFileSystem::new();
 
-    fs.add_file(ENTRY_MODULE_ID, "main.lis", "fn main() {}");
-    fs.add_file(ENTRY_MODULE_ID, "a.lis", "pub struct Foo {}");
+    fs.add_file(ENTRY_PACKAGE_ID, "main.lis", "fn main() {}");
+    fs.add_file(ENTRY_PACKAGE_ID, "a.lis", "pub struct Foo {}");
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "z.lis",
         r#"
 impl Foo {
@@ -4539,7 +4539,7 @@ fn relative_import_path_is_rejected() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"import "./sub"
 
@@ -4552,7 +4552,13 @@ fn main() {}
     assert_eq!(result.errors().len(), 1);
     assert_eq!(
         result.errors()[0].code_str(),
-        Some("resolve.invalid_module_path")
+        Some("resolve.invalid_package_path")
+    );
+    let rendered = result.errors()[0].plain_help().unwrap_or_default();
+    assert!(
+        rendered.contains("Relative-path syntax"),
+        "expected relative-path help, got: {}",
+        rendered
     );
 }
 
@@ -4560,7 +4566,7 @@ fn main() {}
 fn declared_go_dep_without_prefix_suggests_go_prefix() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"import "github.com/gin-gonic/gin"
 
@@ -4589,7 +4595,7 @@ fn main() {}
 fn declared_go_dep_subpackage_without_prefix_suggests_go_prefix() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"import "github.com/gin-gonic/gin/render"
 
@@ -4618,7 +4624,7 @@ fn main() {}
 fn declared_go_dep_blank_without_prefix_preserves_blank_in_suggestion() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"import _ "github.com/gin-gonic/gin"
 
@@ -4644,11 +4650,11 @@ fn main() {}
 }
 
 #[test]
-fn blank_import_of_project_module_emits_single_diagnostic() {
+fn blank_import_of_project_package_emits_single_diagnostic() {
     let mut fs = MockFileSystem::new();
     fs.add_file("utils", "lib.lis", "pub fn helper() -> int { 42 }\n");
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"import _ "utils"
 
@@ -4671,10 +4677,10 @@ fn main() {}
 }
 
 #[test]
-fn undeclared_dotted_blank_import_reports_both_path_and_blank() {
+fn undeclared_go_shaped_blank_import_preserves_blank_in_suggestion() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"import _ "github.com/some/other"
 
@@ -4687,19 +4693,17 @@ fn main() {}
         locator_with_go_dep("github.com/gin-gonic/gin", "v1.12.0"),
     );
     let codes: Vec<_> = result.errors().iter().map(|e| e.code_str()).collect();
-    assert!(
-        codes.contains(&Some("resolve.invalid_module_path")),
-        "expected invalid_module_path, got: {:?}",
+    assert_eq!(
+        codes,
+        vec![Some("resolve.invalid_package_path")],
+        "expected only invalid_package_path, got: {:?}",
         codes
     );
-    let blank_count = codes
-        .iter()
-        .filter(|c| **c == Some("resolve.blank_import_non_go"))
-        .count();
-    assert_eq!(
-        blank_count, 1,
-        "expected exactly one blank_import_non_go, got codes: {:?}",
-        codes
+    let rendered = result.errors()[0].plain_help().unwrap_or_default();
+    assert!(
+        rendered.contains("import _ \"go:github.com/some/other\""),
+        "expected blank-preserving suggestion, got: {}",
+        rendered
     );
 }
 
@@ -4707,7 +4711,7 @@ fn main() {}
 fn undeclared_dotted_path_keeps_generic_diagnostic() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"import "github.com/some/other"
 
@@ -4722,12 +4726,23 @@ fn main() {}
     assert_eq!(result.errors().len(), 1);
     assert_eq!(
         result.errors()[0].code_str(),
-        Some("resolve.invalid_module_path")
+        Some("resolve.invalid_package_path")
+    );
+    let rendered = result.errors()[0].plain_help().unwrap_or_default();
+    assert!(
+        rendered.contains("import \"go:github.com/some/other\""),
+        "expected go: import suggestion, got: {}",
+        rendered
+    );
+    assert!(
+        rendered.contains("lis add some/other"),
+        "expected lis add suggestion, got: {}",
+        rendered
     );
 }
 
 #[test]
-fn multi_file_module_bootstrap_imports() {
+fn multi_file_package_bootstrap_imports() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -4794,7 +4809,7 @@ pub fn make_something() -> foo.Foo {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "foo"
@@ -4813,7 +4828,7 @@ fn main() {
 }
 
 #[test]
-fn multi_file_module_bootstrap_imports_stdlib() {
+fn multi_file_package_bootstrap_imports_stdlib() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -4851,7 +4866,7 @@ pub fn ping() -> int { 1 }
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "foo"
@@ -4905,7 +4920,7 @@ pub enum MyEnum {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "types"
@@ -4924,7 +4939,7 @@ fn user_file_named_bootstrap_does_not_collide() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 fn main() {
@@ -4937,7 +4952,7 @@ enum A {
 "#,
     );
 
-    fs.add_file(ENTRY_MODULE_ID, "bootstrap.lis", "");
+    fs.add_file(ENTRY_PACKAGE_ID, "bootstrap.lis", "");
 
     assert_build_snapshot!(fs, "github.com/user/myproject");
 }
@@ -4947,7 +4962,7 @@ fn go_exported_impl_method_kept_when_only_reached_via_fmt_stringer() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -4975,7 +4990,7 @@ fn go_exported_impl_method_kept_when_only_reached_via_go_stringer() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -5003,7 +5018,7 @@ fn go_exported_impl_method_kept_when_only_reached_via_error_interface() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -5031,7 +5046,7 @@ fn go_exported_impl_method_kept_even_when_never_called() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 struct Widget { name: string }
@@ -5056,7 +5071,7 @@ fn lisette_cased_stringer_method_promotes_to_go_exported() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -5084,7 +5099,7 @@ fn lisette_cased_error_method_promotes_to_go_exported() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -5112,7 +5127,7 @@ fn lisette_cased_go_stringer_method_promotes_to_go_exported() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -5140,7 +5155,7 @@ fn user_marshal_json_lowers_to_go_abi_shape() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:encoding/json"
@@ -5172,7 +5187,7 @@ fn user_close_lowers_to_bare_error() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 struct Resource {}
@@ -5198,7 +5213,7 @@ fn non_error_err_slot_stays_tagged() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 struct MyError { msg: string }
@@ -5228,7 +5243,7 @@ fn nested_result_inner_stays_tagged() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 fn outer() -> Result<Result<int, error>, error> {
@@ -5252,7 +5267,7 @@ fn aliased_result_return_lowers() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 type R = Result<int, error>
@@ -5277,7 +5292,7 @@ fn aliased_error_err_slot_lowers() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 type MyErr = error
@@ -5300,7 +5315,7 @@ fn lowered_result_fn_arg_adapts_to_tagged_generic_param() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 pub interface Face {}
@@ -5327,7 +5342,7 @@ fn lowered_pointer_err_fn_arg_adapts_to_tagged_generic_param() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:strconv"
@@ -5354,7 +5369,7 @@ fn lowered_result_lambda_arg_adapts_to_tagged_generic_param() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 pub interface Face {}
@@ -5377,7 +5392,7 @@ fn lowered_partial_fn_arg_adapts_to_tagged_generic_param() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 pub interface Face {}
@@ -5404,7 +5419,7 @@ fn lowered_result_fn_arg_adapts_through_variadic_generic_param() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 pub interface Face {}
@@ -5431,7 +5446,7 @@ fn spread_slice_into_variadic_generic_param_adapts_each_element() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 pub interface Face {}
@@ -5459,7 +5474,7 @@ fn nullable_option_fn_arg_adapts_to_comma_ok_generic_param() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 pub interface Face {}
@@ -5486,7 +5501,7 @@ fn bound_result_from_generic_callee_keeps_tagged_return() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 pub interface Face {}
@@ -5514,7 +5529,7 @@ fn bound_option_from_generic_callee_keeps_tagged_return() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 pub interface Face {}
@@ -5538,7 +5553,7 @@ fn main() {
 }
 
 #[test]
-fn cross_module_result_fn_arg_adapts_to_tagged_generic_param() {
+fn cross_package_result_fn_arg_adapts_to_tagged_generic_param() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -5558,7 +5573,7 @@ pub fn resolve<T, R, E>(a: T, f: fn(T) -> Result<R, E>) -> Result<R, E> {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "resolver"
@@ -5578,7 +5593,7 @@ fn bound_result_from_generic_method_keeps_tagged_return() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 pub interface Face {}
@@ -5610,7 +5625,7 @@ fn bound_partial_from_generic_method_keeps_tagged_return() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 pub interface Face {}
@@ -5642,7 +5657,7 @@ fn option_fn_arg_adapts_to_comma_ok_generic_method_param() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 pub interface Face {}
@@ -5674,7 +5689,7 @@ fn comma_ok_fn_arg_emits_lowered_for_generic_method_param() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 pub struct Holder { pub n: int }
@@ -5700,7 +5715,7 @@ fn spread_slice_into_variadic_generic_method_param_adapts_each_element() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 pub interface Face {}
@@ -5733,7 +5748,7 @@ fn fused_match_arm_bindings_dont_leak() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -5761,7 +5776,7 @@ fn user_text_marshaler_skips_adapter() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:encoding"
@@ -5789,7 +5804,7 @@ fn tuple_with_nilable_option_slot_lowers_recursively() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 type Cmd = fn() -> int
@@ -5820,7 +5835,7 @@ fn user_alias_to_function_is_nilable_in_option_return() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -5853,7 +5868,7 @@ fn user_read_lowers_partial_to_io_reader() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:io"
@@ -5886,7 +5901,7 @@ fn non_go_err_result_keeps_tagged_form() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 struct LoadError { msg: string }
@@ -5921,7 +5936,7 @@ fn struct_satisfies_inherited_methods_via_lowering() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:io"
@@ -5956,7 +5971,7 @@ fn non_tail_tuple_branch_widens_temp_to_match_assignment() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:io"
@@ -5998,7 +6013,7 @@ fn comma_ok_hint_on_iface_method_synthesizes_adapter_bridge() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:crypto/tls"
@@ -6029,7 +6044,7 @@ fn adapter_declarations_drain_to_the_file_that_synthesizes_them() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "types.lis",
         r#"
 struct Entry { value: int }
@@ -6056,7 +6071,7 @@ impl Second {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "first.lis",
         r#"
 fn adapt_first() {
@@ -6066,7 +6081,7 @@ fn adapt_first() {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 fn main() {
@@ -6084,7 +6099,7 @@ fn inherited_comma_ok_hint_propagates_to_child_iface_cast() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 struct Entry { name: string }
@@ -6125,7 +6140,7 @@ fn user_iface_method_comma_ok_hint_applied_in_emission() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 struct Entry { name: string }
@@ -6160,7 +6175,7 @@ fn user_iface_adapter_uses_exported_go_method_name_for_snake_case() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 pub struct Entry { name: string }
@@ -6195,7 +6210,7 @@ fn generic_struct_adapter_substitutes_and_deduplicates_per_instantiation() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 pub struct Entry<T> {
@@ -6237,7 +6252,7 @@ fn generic_adapter_uses_validated_receiver_context() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 struct Keyed<K: Comparable> {
@@ -6282,7 +6297,7 @@ fn generic_adapter_instantiates_renamed_impl_parameters() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 interface Box<T> {
@@ -6315,7 +6330,7 @@ fn generic_adapter_freshens_method_names_against_type_parameters() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 interface Box<T> {
@@ -6352,7 +6367,7 @@ fn adapter_type_name_freshens_against_active_scope() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 interface Box<T> {
@@ -6401,7 +6416,7 @@ fn receiver_generic_ref_parameter_keeps_pointer_shape() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 interface Marker {
@@ -6444,7 +6459,7 @@ fn result_with_pointer_error_lowers_to_native_tuple() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:strconv"
@@ -6467,7 +6482,7 @@ fn strings_index_lowers_sentinel_to_option() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:strings"
@@ -6493,13 +6508,13 @@ fn go_import_collision_flags_shared_last_segment() {
     use rustc_hash::FxHashMap as HashMap;
 
     let go_package_names: HashMap<String, String> = HashMap::default();
-    let go_module_ids: rustc_hash::FxHashSet<String> =
+    let go_package_ids: rustc_hash::FxHashSet<String> =
         ["go:database/sql", "go:entgo.io/ent/dialect/sql"]
             .iter()
             .map(|s| s.to_string())
             .collect();
-    let mut builder = emit::imports::ImportBuilder::new(&go_package_names, &go_module_ids);
-    builder.extend_with_modules(
+    let mut builder = emit::imports::ImportBuilder::new(&go_package_names, &go_package_ids);
+    builder.extend_with_packages(
         &["database/sql", "entgo.io/ent/dialect/sql"]
             .iter()
             .map(|s| s.to_string())
@@ -6526,14 +6541,14 @@ fn go_import_collision_silent_when_aliases_differ() {
         "go:entgo.io/ent/dialect/sql".to_string(),
         "entsql".to_string(),
     );
-    let go_module_ids: rustc_hash::FxHashSet<String> =
+    let go_package_ids: rustc_hash::FxHashSet<String> =
         ["go:database/sql", "go:entgo.io/ent/dialect/sql"]
             .iter()
             .map(|s| s.to_string())
             .collect();
 
-    let mut builder = emit::imports::ImportBuilder::new(&go_package_names, &go_module_ids);
-    builder.extend_with_modules(
+    let mut builder = emit::imports::ImportBuilder::new(&go_package_names, &go_package_ids);
+    builder.extend_with_packages(
         &["database/sql", "entgo.io/ent/dialect/sql"]
             .iter()
             .map(|s| s.to_string())
@@ -6549,17 +6564,17 @@ fn go_import_collision_silent_when_aliases_differ() {
 }
 
 #[test]
-fn go_import_collision_silent_for_distinct_versioned_modules() {
+fn go_import_collision_silent_for_distinct_versioned_packages() {
     use rustc_hash::FxHashMap as HashMap;
 
     let go_package_names: HashMap<String, String> = HashMap::default();
-    let go_module_ids: rustc_hash::FxHashSet<String> =
+    let go_package_ids: rustc_hash::FxHashSet<String> =
         ["go:github.com/pion/sdp/v3", "go:github.com/pion/dtls/v3"]
             .iter()
             .map(|s| s.to_string())
             .collect();
-    let mut builder = emit::imports::ImportBuilder::new(&go_package_names, &go_module_ids);
-    builder.extend_with_modules(
+    let mut builder = emit::imports::ImportBuilder::new(&go_package_names, &go_package_ids);
+    builder.extend_with_packages(
         &["github.com/pion/sdp/v3", "github.com/pion/dtls/v3"]
             .iter()
             .map(|s| s.to_string())
@@ -6569,19 +6584,19 @@ fn go_import_collision_silent_for_distinct_versioned_modules() {
     let (_imports, diagnostics) = builder.build();
     assert!(
         diagnostics.is_empty(),
-        "distinct `/v3` modules must not collide, got: {:?}",
+        "distinct `/v3` packages must not collide, got: {:?}",
         diagnostics.iter().map(|d| d.code_str()).collect::<Vec<_>>()
     );
 }
 
 #[test]
-fn go_import_collision_flags_local_modules_sharing_last_segment() {
+fn go_import_collision_flags_local_packages_sharing_last_segment() {
     use rustc_hash::FxHashMap as HashMap;
 
     let go_package_names: HashMap<String, String> = HashMap::default();
-    let go_module_ids: rustc_hash::FxHashSet<String> = rustc_hash::FxHashSet::default();
-    let mut builder = emit::imports::ImportBuilder::new(&go_package_names, &go_module_ids);
-    builder.extend_with_modules(
+    let go_package_ids: rustc_hash::FxHashSet<String> = rustc_hash::FxHashSet::default();
+    let mut builder = emit::imports::ImportBuilder::new(&go_package_names, &go_package_ids);
+    builder.extend_with_packages(
         &["myproject/api/v2", "myproject/admin/v2"]
             .iter()
             .map(|s| s.to_string())
@@ -6592,22 +6607,22 @@ fn go_import_collision_flags_local_modules_sharing_last_segment() {
     assert_eq!(
         diagnostics.len(),
         1,
-        "local modules both packaging as `v2` must collide, got: {:?}",
+        "local packages both packaging as `v2` must collide, got: {:?}",
         diagnostics.iter().map(|d| d.code_str()).collect::<Vec<_>>()
     );
 }
 
 #[test]
-fn go_import_under_project_module_resolves_by_package_not_version() {
+fn go_import_under_project_package_resolves_by_package_not_version() {
     use rustc_hash::FxHashMap as HashMap;
 
     let go_package_names: HashMap<String, String> = HashMap::default();
-    let go_module_ids: rustc_hash::FxHashSet<String> = ["go:myproject/plugins/v2"]
+    let go_package_ids: rustc_hash::FxHashSet<String> = ["go:myproject/plugins/v2"]
         .iter()
         .map(|s| s.to_string())
         .collect();
-    let mut builder = emit::imports::ImportBuilder::new(&go_package_names, &go_module_ids);
-    builder.extend_with_modules(
+    let mut builder = emit::imports::ImportBuilder::new(&go_package_names, &go_package_ids);
+    builder.extend_with_packages(
         &["myproject/plugins/v2", "myproject/api/v2"]
             .iter()
             .map(|s| s.to_string())
@@ -6617,7 +6632,7 @@ fn go_import_under_project_module_resolves_by_package_not_version() {
     let (_imports, diagnostics) = builder.build();
     assert!(
         diagnostics.is_empty(),
-        "a go: import under the project module must resolve by package name, got: {:?}",
+        "a go: import under the project package must resolve by package name, got: {:?}",
         diagnostics.iter().map(|d| d.code_str()).collect::<Vec<_>>()
     );
 }
@@ -6627,7 +6642,7 @@ fn write_only_mut_param_keeps_name_in_codegen_via_reassignment() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 fn reassign_only(mut items: Slice<int>) {
@@ -6649,7 +6664,7 @@ fn write_only_mut_local_emits_blank_identifier_to_avoid_unused_var_error() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 fn main() {
@@ -6667,7 +6682,7 @@ fn write_only_mut_param_keeps_name_in_codegen_via_index_write() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 fn index_write(mut items: Slice<int>) {
@@ -6695,7 +6710,7 @@ fn emit_returns_files_alphabetically_sorted_through_rayon_path() {
     fs.add_file("delta", "delta.lis", "pub fn entry() -> int { 4 }\n");
     fs.add_file("echo", "echo.lis", "pub fn entry() -> int { 5 }\n");
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "alpha"
@@ -6727,7 +6742,7 @@ fn main() {
 }
 
 #[test]
-fn cross_module_pub_const_screaming_snake_preserves_underscores() {
+fn cross_package_pub_const_screaming_snake_preserves_underscores() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -6739,7 +6754,7 @@ pub const MAX_RETRIES: int = 3
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "config"
@@ -6754,11 +6769,11 @@ fn main() {
 }
 
 #[test]
-fn same_module_pub_const_use_matches_definition() {
+fn same_package_pub_const_use_matches_definition() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 pub const MAX_RETRIES: int = 3
@@ -6776,10 +6791,10 @@ fn main() {
 }
 
 #[test]
-fn module_file_diagnostic_source_uses_relative_path() {
+fn package_file_diagnostic_source_uses_relative_path() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         "import \"greet\"
 
@@ -6808,7 +6823,7 @@ fn main() {
         .collect();
     assert!(
         displays.contains(&"src/greet/greet.lis"),
-        "module file must carry its relative path on display_path; got: {displays:?}"
+        "package file must carry its relative path on display_path; got: {displays:?}"
     );
 
     let names: Vec<&str> = result
@@ -6819,7 +6834,7 @@ fn main() {
         .collect();
     assert!(
         names.contains(&"greet.lis"),
-        "module file must keep bare identity name; got: {names:?}"
+        "package file must keep bare identity name; got: {names:?}"
     );
 }
 
@@ -6837,7 +6852,7 @@ fn emit_diagnostic_codes(fs: MockFileSystem) -> Vec<String> {
 fn go_name_collision_generic_params_escape_to_same_name() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 fn f<int, int_>(x: int, y: int_) -> int {
@@ -6862,7 +6877,7 @@ fn main() {
 fn go_name_collision_impl_and_method_generics_escape_to_same_name() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 struct Box<T> {
@@ -6893,7 +6908,7 @@ fn main() {
 fn go_name_collision_public_private_function() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 pub fn foo_bar() -> int {
@@ -6922,7 +6937,7 @@ fn main() {
 fn go_name_collision_type_vs_function() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 struct FooBar {}
@@ -6949,7 +6964,7 @@ fn main() {
 fn go_name_collision_function_vs_generated_constructor() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 pub enum Token {
@@ -6977,7 +6992,7 @@ fn main() {
 fn go_name_collision_struct_vs_generated_tag_type() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 enum Status {
@@ -7004,7 +7019,7 @@ fn main() {
 fn go_name_collision_silent_for_distinct_names() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 struct User {
@@ -7032,7 +7047,7 @@ fn main() {
 fn reserved_go_prefix_rejects_adapter_namespace() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 struct _lisAdapter_Foo {
@@ -7057,7 +7072,7 @@ fn main() {
 fn reserved_go_prefix_rejects_test_handle_namespace() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 fn _lisTest_helper() -> int { 1 }
@@ -7079,7 +7094,7 @@ fn main() {
 fn reserved_go_prefix_rejects_import_alias() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         "import _lisAdapter_fmt \"go:fmt\"\n\nfn main() {\n  _lisAdapter_fmt.Println(\"x\")\n}",
     );
@@ -7095,7 +7110,7 @@ fn reserved_go_prefix_rejects_import_alias() {
 fn reserved_prefix_alias_cannot_shadow_synthesized_test_handle() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
     );
@@ -7126,7 +7141,7 @@ fn reserved_prefix_alias_cannot_shadow_synthesized_test_handle() {
 fn go_name_collision_silent_for_unused_function() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 pub fn foo_bar() -> int {
@@ -7154,7 +7169,7 @@ fn main() {
 fn go_name_collision_impl_free_function_vs_function() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 pub struct Foo {
@@ -7189,7 +7204,7 @@ fn main() {
 fn go_name_collision_struct_field_vs_method() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 pub struct User {
@@ -7220,7 +7235,7 @@ fn main() {
 fn go_name_collision_field_vs_generated_stringer() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 #[display]
@@ -7246,7 +7261,7 @@ fn main() {
 fn go_name_collision_member_vs_synthesized_to_string() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 #[display]
@@ -7272,7 +7287,7 @@ fn main() {
 fn go_name_collision_interface_methods() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 pub interface Shape {
@@ -7308,7 +7323,7 @@ fn main() {
 }
 "#;
     let mut fs = MockFileSystem::new();
-    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+    fs.add_file(ENTRY_PACKAGE_ID, "main.lis", source);
 
     let diagnostics = try_compile_project_files(fs, "github.com/user/myproject", false)
         .expect_err("expected emission to reject the name collision");
@@ -7329,7 +7344,7 @@ fn main() {
 fn go_name_collision_tuple_field_vs_method() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 pub struct Pair(int, int)
@@ -7358,7 +7373,7 @@ fn main() {
 fn go_name_collision_enum_field_vs_method() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 enum Shape {
@@ -7388,7 +7403,7 @@ fn main() {
 fn go_name_collision_silent_for_newtype() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 pub struct Meters(int)
@@ -7414,7 +7429,7 @@ fn main() {
 }
 
 #[test]
-fn cross_module_enum_and_namespace_alias() {
+fn cross_package_enum_and_namespace_alias() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -7428,7 +7443,7 @@ pub enum Color {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -7444,7 +7459,7 @@ fn main() {
 }
 
 #[test]
-fn ufcs_method_resolves_across_modules_on_parallel_path() {
+fn ufcs_method_resolves_across_packages_on_parallel_path() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -7465,7 +7480,7 @@ impl<T> Box<T> {
     fs.add_file("filler_c", "c.lis", "pub fn ping() -> int { 3 }\n");
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "lib"
@@ -7497,7 +7512,7 @@ fn main() {
 fn go_name_collision_enum_variant_fields_casing() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 enum Event {
@@ -7521,7 +7536,7 @@ fn main() {
 fn enum_payload_coalescing_across_variants_not_flagged() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 enum E {
@@ -7547,7 +7562,7 @@ fn main() {
 fn reserved_go_qualifier_rejects_type_named_after_generated_import() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 struct fmt {
@@ -7573,7 +7588,7 @@ fn main() {
 fn reserved_go_qualifier_rejects_type_parameter() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 fn pick<fmt>(x: fmt) -> fmt {
@@ -7599,7 +7614,7 @@ fn main() {
 fn generated_fmt_import_coexists_with_private_fmt_function() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 #[display]
@@ -7625,7 +7640,7 @@ fn main() {
 fn prelude_alias_coexists_with_private_lisette_function() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 fn lisette() -> int {
@@ -7647,7 +7662,7 @@ fn main() {
 fn generated_import_qualifier_locals_renamed() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 fn show(fmt: int) -> string {
@@ -7671,7 +7686,7 @@ fn main() {
 fn json_enum_coexists_with_private_json_function() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 #[json]
@@ -7697,7 +7712,7 @@ fn main() {
 fn user_fmt_alias_preserved_alongside_generated_import() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import f "go:fmt"
@@ -7721,7 +7736,7 @@ fn main() {
 fn user_json_alias_preserved_alongside_generated_import() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import js "go:encoding/json"
@@ -7746,7 +7761,7 @@ fn main() {
 fn user_strings_alias_preserved_alongside_generated_import() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import s "go:strings"
@@ -7766,7 +7781,7 @@ fn cross_file_inferred_go_type_emits_matching_import() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "helper.lis",
         r#"
 import t "go:time"
@@ -7778,7 +7793,7 @@ pub fn count(xs: Slice<t.Duration>) -> int {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -7807,7 +7822,7 @@ pub struct Box<T> {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "maker.lis",
         r#"
 import u "util"
@@ -7819,7 +7834,7 @@ pub fn count(xs: Slice<u.Box<string>>) -> int {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -7858,7 +7873,7 @@ pub interface Renderable {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "a.lis",
         r#"
 import s "iface_a"
@@ -7876,7 +7891,7 @@ impl<T: s.Drawable> BoxA<T> {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "b.lis",
         r#"
 import s "iface_b"
@@ -7894,7 +7909,7 @@ impl<T: s.Renderable> BoxB<T> {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 fn main() {}
@@ -7905,7 +7920,7 @@ fn main() {}
 }
 
 #[test]
-fn same_alias_for_different_modules_resolves_per_file() {
+fn same_alias_for_different_packages_resolves_per_file() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -7929,7 +7944,7 @@ pub struct Gadget {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "a.lis",
         r#"
 import p "pkg_a"
@@ -7941,7 +7956,7 @@ pub fn make_thing() -> p.Thing {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "b.lis",
         r#"
 import p "pkg_b"
@@ -7953,7 +7968,7 @@ pub fn make_gadget() -> p.Gadget {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 fn main() {
@@ -7971,7 +7986,7 @@ fn same_go_path_keeps_each_files_own_alias() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "a.lis",
         r#"
 import x "go:time"
@@ -7983,7 +7998,7 @@ pub fn from_a(d: x.Duration) -> x.Duration {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "b.lis",
         r#"
 import y "go:time"
@@ -7995,7 +8010,7 @@ pub fn from_b(d: y.Duration) -> y.Duration {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 fn main() {}
@@ -8009,7 +8024,7 @@ fn main() {}
 fn generated_fmt_requirement_reuses_unaliased_source_import() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -8026,7 +8041,7 @@ fn main() {
 }
 
 #[test]
-fn builtin_named_module_qualifier_consistent_in_match() {
+fn builtin_named_package_qualifier_consistent_in_match() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -8047,7 +8062,7 @@ pub fn pick() -> Level {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -8075,7 +8090,7 @@ fn main() {
 fn build_excludes_test_files_from_emit() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "math"
@@ -8109,7 +8124,7 @@ fn main() {
 fn test_impl_on_production_type_rejected_under_parallel_registration() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "math"
@@ -8142,7 +8157,7 @@ fn main() {
         result.errors().iter().any(|d| d
             .code_str()
             .is_some_and(|c| c.contains("test_impl_on_production_type"))),
-        "the test-impl restriction must fire even when modules register in parallel, got: {:?}",
+        "the test-impl restriction must fire even when packages register in parallel, got: {:?}",
         result.errors()
     );
 }
@@ -8151,12 +8166,12 @@ fn main() {
 fn private_test_interface_does_not_flag_production_method() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         "struct Circle {\n  radius: float64,\n}\n\nimpl Circle {\n  pub fn area(self) -> float64 { self.radius }\n}\n\nfn main() {}",
     );
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "shapes.test.lis",
         "interface Shape {\n  fn area() -> float64\n}",
     );
@@ -8180,7 +8195,7 @@ fn private_test_interface_does_not_flag_production_method() {
 fn underscore_test_suffix_rejected_as_entry_file() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "helpers_test.lis",
         "fn helper() -> int { 1 }",
     );
@@ -8203,7 +8218,7 @@ fn underscore_test_suffix_rejected_as_entry_file() {
 #[test]
 fn test_file_rejected_as_emit_entry() {
     let mut fs = MockFileSystem::new();
-    fs.add_file(ENTRY_MODULE_ID, "demo.test.lis", "fn main() {}");
+    fs.add_file(ENTRY_PACKAGE_ID, "demo.test.lis", "fn main() {}");
 
     let result = compile_script_entry(fs, "demo.test.lis", CompilePhase::Emit);
 
@@ -8223,7 +8238,11 @@ fn test_file_rejected_as_emit_entry() {
 #[test]
 fn test_file_allowed_as_check_entry() {
     let mut fs = MockFileSystem::new();
-    fs.add_file(ENTRY_MODULE_ID, "demo.test.lis", "fn helper() -> int { 1 }");
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "demo.test.lis",
+        "fn helper() -> int { 1 }",
+    );
 
     let result = compile_script_entry(fs, "demo.test.lis", CompilePhase::Check);
 
@@ -8247,7 +8266,7 @@ fn test_file_allowed_as_check_entry() {
 fn test_index_records_test_functions() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
     );
@@ -8297,7 +8316,7 @@ fn test_index_records_test_functions() {
 fn test_index_complete_under_parallel_registration() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         "import \"m1\"\nimport \"m2\"\nimport \"m3\"\nimport \"m4\"\n\nfn main() {\n  let _ = m1.v() + m2.v() + m3.v() + m4.v()\n}",
     );
@@ -8316,7 +8335,7 @@ fn test_index_complete_under_parallel_registration() {
     assert_eq!(
         result.emit_input.test_index.tests().len(),
         4,
-        "every module's test must be recorded under parallel registration, got: {:?}",
+        "every package's test must be recorded under parallel registration, got: {:?}",
         result.emit_input.test_index.tests()
     );
 }
@@ -8324,7 +8343,7 @@ fn test_index_complete_under_parallel_registration() {
 fn math_test_project() -> MockFileSystem {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
     );
@@ -8341,7 +8360,7 @@ fn math_test_project() -> MockFileSystem {
 fn test_with_context_emits_testkit_wrapper() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
     );
@@ -8407,7 +8426,7 @@ fn test_emit_produces_go_test_function() {
 fn test_wrapper_handle_does_not_shadow_function_named_t() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
     );
@@ -8439,7 +8458,7 @@ fn test_wrapper_handle_does_not_shadow_function_named_t() {
 fn synthesized_test_handle_does_not_shadow_user_function() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
     );
@@ -8475,7 +8494,7 @@ fn synthesized_test_handle_does_not_shadow_user_function() {
 fn assert_lowers_to_decomposed_failure_call() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
     );
@@ -8523,9 +8542,9 @@ fn assert_lowers_to_decomposed_failure_call() {
 #[test]
 fn test_log_in_value_position_keeps_span_arguments() {
     let mut fs = MockFileSystem::new();
-    fs.add_file(ENTRY_MODULE_ID, "main.lis", "fn main() {}");
+    fs.add_file(ENTRY_PACKAGE_ID, "main.lis", "fn main() {}");
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.test.lis",
         "#[test]\nfn logs(t: TestContext) {\n  let _ = t.log(5)\n  assert true\n}",
     );
@@ -8546,9 +8565,9 @@ fn test_log_in_value_position_keeps_span_arguments() {
 #[test]
 fn user_debug_string_suppresses_synthesized_one() {
     let mut fs = MockFileSystem::new();
-    fs.add_file(ENTRY_MODULE_ID, "main.lis", "fn main() {}");
+    fs.add_file(ENTRY_PACKAGE_ID, "main.lis", "fn main() {}");
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.test.lis",
         "pub struct Point { pub x: int }\n\
          impl Point {\n  pub fn debug_string(self) -> string { \"custom\" }\n}\n\
@@ -8576,9 +8595,9 @@ fn user_debug_string_suppresses_synthesized_one() {
 #[test]
 fn private_debug_string_does_not_suppress_synthesis() {
     let mut fs = MockFileSystem::new();
-    fs.add_file(ENTRY_MODULE_ID, "main.lis", "fn main() {}");
+    fs.add_file(ENTRY_PACKAGE_ID, "main.lis", "fn main() {}");
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.test.lis",
         "pub struct Point { pub x: int }\n\
          impl Point {\n  fn debug_string(self) -> string { \"priv\" }\n}\n\
@@ -8602,9 +8621,9 @@ fn private_debug_string_does_not_suppress_synthesis() {
 #[test]
 fn exact_debug_string_is_recognized_as_override() {
     let mut fs = MockFileSystem::new();
-    fs.add_file(ENTRY_MODULE_ID, "main.lis", "fn main() {}");
+    fs.add_file(ENTRY_PACKAGE_ID, "main.lis", "fn main() {}");
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.test.lis",
         "pub struct Point { pub x: int }\n\
          impl Point {\n  pub fn DebugString(self) -> string { \"exact\" }\n}\n\
@@ -8633,7 +8652,7 @@ fn exact_debug_string_is_recognized_as_override() {
 fn bare_test_handle_uses_param_as_handle() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
     );
@@ -8669,7 +8688,7 @@ fn bare_test_handle_uses_param_as_handle() {
 fn test_skip_lowers_to_testkit_skip() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
     );
@@ -8701,7 +8720,7 @@ fn test_skip_lowers_to_testkit_skip() {
 fn assert_equals_lowers_to_labeled_failure() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
     );
@@ -8737,7 +8756,7 @@ fn assert_equals_lowers_to_labeled_failure() {
 fn assert_in_test_context_helper_emits_without_panic() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
     );
@@ -8768,7 +8787,7 @@ fn assert_in_test_context_helper_emits_without_panic() {
 fn assert_relation_applies_numeric_alias_cast() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
     );
@@ -8799,7 +8818,7 @@ fn assert_relation_applies_numeric_alias_cast() {
 fn assert_relation_types_untyped_literal_operand() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
     );
@@ -8830,7 +8849,7 @@ fn assert_relation_types_untyped_literal_operand() {
 fn assert_with_discarded_test_param_emits_synthesized_handle() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
     );
@@ -8861,7 +8880,7 @@ fn assert_with_discarded_test_param_emits_synthesized_handle() {
 fn assert_in_discarded_subtest_targets_subtest_handle() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
     );
@@ -8892,7 +8911,7 @@ fn assert_in_discarded_subtest_targets_subtest_handle() {
 fn subtest_closure_defers_recover_on_its_handle() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
     );
@@ -8924,7 +8943,7 @@ fn subtest_closure_defers_recover_on_its_handle() {
 fn discarded_subtest_handle_is_named_so_recover_can_target_it() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
     );
@@ -8960,7 +8979,7 @@ fn discarded_subtest_handle_is_named_so_recover_can_target_it() {
 fn let_assert_lowers_to_failure_on_mismatch() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
     );
@@ -8995,7 +9014,7 @@ fn let_assert_lowers_to_failure_on_mismatch() {
 fn colliding_test_wrapper_names_are_reported() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
     );
@@ -9042,7 +9061,7 @@ fn fixed_size_array_lowers() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:fmt"
@@ -9101,7 +9120,7 @@ pub fn double(n: int) -> int {
     fs.add_file("util", "plain.lis", "pub fn id(n: int) -> int { n }\n");
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"//! Entry point header.
 
@@ -9122,7 +9141,7 @@ fn file_comment_bare_lines_keep_gaps() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"//! Copyright 2026 Acme Corp.
 //!
@@ -9144,7 +9163,7 @@ fn file_comment_in_test_file() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
     );
@@ -9184,7 +9203,7 @@ fn file_comment_edge_bare_lines_survive() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"//!
 //! Copyright 2026 Acme Corp.
@@ -9206,7 +9225,7 @@ fn snake_case_impl_satisfies_comma_ok_go_iface_via_adapter() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:crypto/tls"
@@ -9237,7 +9256,7 @@ fn snake_case_impl_satisfies_pascal_case_lisette_iface() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 pub interface Runner {
@@ -9266,7 +9285,7 @@ fn snake_case_enum_impl_satisfies_comma_ok_go_iface_via_adapter() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:crypto/tls"
@@ -9296,7 +9315,7 @@ fn snake_case_alias_typed_value_gets_comma_ok_adapter() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 import "go:crypto/tls"
@@ -9325,7 +9344,7 @@ fn adapter_dedups_parent_methods_sharing_go_selector() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
 pub struct Entry { pub name: string }

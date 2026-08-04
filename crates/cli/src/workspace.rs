@@ -987,7 +987,7 @@ pub(crate) fn extract_go_imports(typedef: &str) -> Vec<String> {
         .ast
         .iter()
         .filter_map(|expr| match expr {
-            Expression::ModuleImport { name, alias, .. } => {
+            Expression::PackageImport { name, alias, .. } => {
                 if matches!(alias, Some(ImportAlias::Blank(_))) {
                     return None;
                 }

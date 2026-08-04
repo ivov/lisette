@@ -9,12 +9,12 @@ use syntax::ast::Expression;
 
 use semantics::store::Store;
 
-pub(crate) fn run_module(module_id: &str, store: &Store, sink: &LocalSink) {
-    let Some(module) = store.get_module(module_id) else {
+pub(crate) fn run_package(package_id: &str, store: &Store, sink: &LocalSink) {
+    let Some(package) = store.get_package(package_id) else {
         return;
     };
 
-    let json_enums: HashSet<&str> = module
+    let json_enums: HashSet<&str> = package
         .source_files()
         .flat_map(|file| file.items.iter())
         .filter_map(|item| match item {
@@ -29,7 +29,7 @@ pub(crate) fn run_module(module_id: &str, store: &Store, sink: &LocalSink) {
         return;
     }
 
-    for item in module.source_files().flat_map(|file| file.items.iter()) {
+    for item in package.source_files().flat_map(|file| file.items.iter()) {
         let Expression::ImplBlock { ty, methods, .. } = item else {
             continue;
         };

@@ -1381,7 +1381,7 @@ impl Counter {
 #[test]
 fn import_basic() {
     let input = r#"
-import "my_module"
+import "my_package"
 "#;
     assert_parse_snapshot!(input);
 }

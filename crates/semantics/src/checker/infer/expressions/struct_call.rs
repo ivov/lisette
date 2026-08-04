@@ -98,8 +98,8 @@ impl InferCtx<'_> {
             let alias_ty = alias_ty.clone();
             let (instantiated_ty, _) = self.instantiate(&alias_ty);
             self.unify(expected_ty, &instantiated_ty, &literal.span);
-            let from_module = self.cursor.module_id.clone();
-            if self.has_zero(&instantiated_ty, &from_module).is_err() {
+            let from_package = self.cursor.package_id.clone();
+            if self.has_zero(&instantiated_ty, &from_package).is_err() {
                 self.sink.push(diagnostics::infer::hidden_state_no_zero(
                     &instantiated_ty,
                     literal.span,
@@ -314,10 +314,10 @@ impl InferCtx<'_> {
 
         let new_spread = self.infer_struct_spread(spread, &struct_call_ty);
 
-        let struct_module = store
-            .module_for_qualified_name(&qualified_name)
+        let struct_package = store
+            .package_for_qualified_name(&qualified_name)
             .unwrap_or(&qualified_name);
-        let is_cross_module = struct_module != self.cursor.module_id
+        let is_cross_package = struct_package != self.cursor.package_id
             || struct_name
                 .split_once('.')
                 .is_some_and(|(prefix, _)| self.imports.namespace(prefix).is_some());
@@ -347,11 +347,11 @@ impl InferCtx<'_> {
             },
             |checker, assignment| {
                 let def = struct_fields.iter().find(|f| f.name == assignment.name)?;
-                if is_cross_module && !def.visibility.is_public() {
+                if is_cross_package && !def.visibility.is_public() {
                     checker.sink.push(diagnostics::infer::private_field_access(
                         &assignment.name,
                         &struct_name,
-                        struct_module,
+                        struct_package,
                         assignment.name_span,
                     ));
                 }
@@ -373,11 +373,11 @@ impl InferCtx<'_> {
         }
 
         if let Some(spread_span) = new_spread.span()
-            && is_cross_module
+            && is_cross_package
             && !is_go_imported
         {
-            let owning_module = store
-                .module_for_qualified_name(&qualified_name)
+            let owning_package = store
+                .package_for_qualified_name(&qualified_name)
                 .unwrap_or(&qualified_name);
             for field in &struct_fields {
                 if !matched_fields.contains(&field.name) && !field.visibility.is_public() {
@@ -386,14 +386,14 @@ impl InferCtx<'_> {
                             diagnostics::infer::private_field_in_autofill(
                                 &field.name,
                                 &struct_name,
-                                owning_module,
+                                owning_package,
                                 spread_span,
                             )
                         }
                         _ => diagnostics::infer::private_field_in_spread(
                             &field.name,
                             &struct_name,
-                            owning_module,
+                            owning_package,
                             spread_span,
                         ),
                     };
@@ -656,13 +656,13 @@ impl InferCtx<'_> {
         map: &SubstitutionMap,
         spread_span: Span,
     ) {
-        let from_module = self.cursor.module_id.clone();
+        let from_package = self.cursor.package_id.clone();
         for (name, ty) in fields {
             if matched_fields.contains(name.as_str()) {
                 continue;
             }
             let resolved = substitute(ty, map).resolve_in(&self.env);
-            let Err(no_zero) = self.has_zero(&resolved, &from_module) else {
+            let Err(no_zero) = self.has_zero(&resolved, &from_package) else {
                 continue;
             };
             let chain: Vec<&str> = no_zero.chain.iter().map(EcoString::as_str).collect();
@@ -670,11 +670,11 @@ impl InferCtx<'_> {
                 NoZeroReason::PrivateField {
                     struct_name,
                     field,
-                    owning_module,
+                    owning_package,
                 } => diagnostics::infer::FieldNoZeroCause::PrivateField {
                     struct_name,
                     field,
-                    owning_module,
+                    owning_package,
                 },
                 NoZeroReason::HiddenGoState { go_type } => {
                     diagnostics::infer::FieldNoZeroCause::HiddenGoState { go_type }
@@ -692,9 +692,9 @@ impl InferCtx<'_> {
         }
     }
 
-    pub(crate) fn has_zero(&self, ty: &Type, from_module: &str) -> Result<(), NoZero> {
+    pub(crate) fn has_zero(&self, ty: &Type, from_package: &str) -> Result<(), NoZero> {
         let store = self.store;
-        crate::zero::has_zero(store, ty, from_module)
+        crate::zero::has_zero(store, ty, from_package)
     }
 }
 

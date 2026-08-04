@@ -852,12 +852,12 @@ impl InferCtx<'_> {
     fn record_conformance_use(&mut self, ty: &Type, impl_method_name: &str, spelling_pinned: bool) {
         let store = self.store;
         if let Type::Nominal { id, .. } = ty.strip_refs().resolve_in(&self.env)
-            && let Some(module) = store.module_for_qualified_name(id.as_str())
-            && let Some(type_name) = id.as_str().get(module.len() + 1..)
+            && let Some(package) = store.package_for_qualified_name(id.as_str())
+            && let Some(type_name) = id.as_str().get(package.len() + 1..)
             && !type_name.contains('.')
         {
             self.facts.mark_method_used_for_interface(
-                module.to_string(),
+                package.to_string(),
                 impl_method_name.to_string(),
                 type_name.to_string(),
                 spelling_pinned,

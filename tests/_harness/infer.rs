@@ -3,8 +3,8 @@ use rustc_hash::FxHashMap as HashMap;
 use semantics::loader::Loader;
 use semantics::{
     checker::TaskState,
-    module_graph::Roots,
-    module_graph::{ModuleGraphOptions, build_module_graph},
+    package_graph::Roots,
+    package_graph::{PackageGraphOptions, build_package_graph},
 };
 use stdlib::{Target, get_go_stdlib_typedef};
 use syntax::{
@@ -53,22 +53,22 @@ pub fn infer_with_go_typedefs(raw_source: &str, typedefs: &[(&str, &str)]) -> In
     }
 }
 
-pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
+pub fn infer_package(package_name: &str, fs: MockFileSystem) -> InferResult {
     let mut store = new_test_store();
 
     let sink = LocalSink::new();
 
     let locator = deps::TypedefLocator::default();
-    let discovered = fs.discover_modules();
+    let discovered = fs.discover_packages();
     let additional = discovered.test_roots().cloned().collect();
     let roots = Roots {
-        primary: vec![module_name.to_string()],
+        primary: vec![package_name.to_string()],
         additional,
     };
-    let mut graph_result = build_module_graph(
+    let mut graph_result = build_package_graph(
         &mut store,
         roots,
-        ModuleGraphOptions {
+        PackageGraphOptions {
             loader: Some(&fs),
             sink: &sink,
             scope: &semantics::AnalysisScope::Project(std::path::PathBuf::new()),
@@ -81,7 +81,7 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
     let mut parsed: HashMap<String, Vec<syntax::program::File>> = graph_result
         .files
         .drain()
-        .map(|(module_id, files)| {
+        .map(|(package_id, files)| {
             let files = files
                 .into_iter()
                 .map(|file| {
@@ -90,7 +90,7 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
                     file
                 })
                 .collect();
-            (module_id, files)
+            (package_id, files)
         })
         .collect();
 
@@ -108,36 +108,40 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
 
         let order = std::mem::take(&mut graph_result.order);
         let mut to_infer: Vec<String> = Vec::new();
-        for module_id in order {
-            if let Some(go_pkg) = module_id.strip_prefix("go:") {
+        for package_id in order {
+            if let Some(go_pkg) = package_id.strip_prefix("go:") {
                 if let Some(typedef) = get_go_stdlib_typedef(go_pkg, Target::host()) {
-                    checker.parse_and_register_go_module(
-                        &mut store, &module_id, typedef, None, &locator,
+                    checker.parse_and_register_go_package(
+                        &mut store,
+                        &package_id,
+                        typedef,
+                        None,
+                        &locator,
                     );
                 }
                 continue;
             }
 
-            let files = parsed.remove(&module_id).unwrap_or_default();
+            let files = parsed.remove(&package_id).unwrap_or_default();
 
-            store.store_module(&module_id, files);
-            checker.register_module(&mut store, &module_id);
+            store.store_package(&package_id, files);
+            checker.register_package(&mut store, &package_id);
 
-            to_infer.push(module_id);
+            to_infer.push(package_id);
         }
 
         checker.finalize_equality(&mut store);
         checker.check_pending_generic_bounds(&store);
         checker.finalize_tests(&mut store);
 
-        for module_id in &to_infer {
-            checker.infer_module(&mut store, module_id);
+        for package_id in &to_infer {
+            checker.infer_package(&mut store, package_id);
         }
 
         checker.check_post_inference_bounds(&store);
 
-        let module = store.get_module(module_name).unwrap();
-        let ast: Vec<_> = module
+        let package = store.get_package(package_name).unwrap();
+        let ast: Vec<_> = package
             .source_files()
             .flat_map(|f| f.items.clone())
             .collect();
@@ -156,9 +160,9 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
     };
 
     let definitions = store
-        .modules
+        .packages
         .values()
-        .flat_map(|module| module.definitions.iter())
+        .flat_map(|package| package.definitions.iter())
         .map(|(name, definition)| (name.clone(), definition.clone()))
         .collect();
 

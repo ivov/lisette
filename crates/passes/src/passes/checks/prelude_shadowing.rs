@@ -4,18 +4,18 @@ use syntax::ast::Expression;
 use semantics::store::Store;
 
 pub(crate) fn run(typed_ast: &[Expression], store: &Store, sink: &LocalSink) {
-    let Some(prelude_module) = store.get_module("prelude") else {
+    let Some(prelude_package) = store.get_package("prelude") else {
         return;
     };
     for item in typed_ast {
-        check_top_level_function(item, prelude_module, sink);
-        visit_expression(item, prelude_module, sink);
+        check_top_level_function(item, prelude_package, sink);
+        visit_expression(item, prelude_package, sink);
     }
 }
 
 fn check_top_level_function(
     item: &Expression,
-    prelude_module: &syntax::program::Module,
+    prelude_package: &syntax::program::Package,
     sink: &LocalSink,
 ) {
     if let Expression::Function {
@@ -23,7 +23,7 @@ fn check_top_level_function(
     } = item
     {
         let qualified = format!("prelude.{}", name);
-        if prelude_module.definitions.contains_key(qualified.as_str()) {
+        if prelude_package.definitions.contains_key(qualified.as_str()) {
             sink.push(diagnostics::infer::prelude_function_shadowed(
                 name, *name_span,
             ));
@@ -33,7 +33,7 @@ fn check_top_level_function(
 
 fn visit_expression(
     expression: &Expression,
-    prelude_module: &syntax::program::Module,
+    prelude_package: &syntax::program::Package,
     sink: &LocalSink,
 ) {
     match expression {
@@ -52,7 +52,7 @@ fn visit_expression(
             // Prelude-defined types (Slice, Map, …) plus inline builtins like
             // `Array` that have no prelude definition but are still reserved.
             let qualified = format!("prelude.{}", name);
-            if prelude_module.definitions.contains_key(qualified.as_str())
+            if prelude_package.definitions.contains_key(qualified.as_str())
                 || syntax::program::NativeTypeKind::from_name(name).is_some()
             {
                 sink.push(diagnostics::infer::prelude_type_shadowed(name, *name_span));
@@ -62,6 +62,6 @@ fn visit_expression(
     }
 
     for child in expression.children() {
-        visit_expression(child, prelude_module, sink);
+        visit_expression(child, prelude_package, sink);
     }
 }

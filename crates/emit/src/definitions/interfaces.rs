@@ -12,7 +12,7 @@ impl Planner<'_> {
         generics: &[Generic],
         is_public: bool,
     ) -> String {
-        if self.facts.is_current_module(go_name::PRELUDE_MODULE) {
+        if self.facts.is_current_package(go_name::PRELUDE_PACKAGE) {
             return format!("type {} struct{{}}", name);
         }
 

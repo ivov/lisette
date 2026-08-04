@@ -103,7 +103,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "lisette-deps"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "lisette-stdlib",
  "serde",
@@ -112,7 +112,7 @@ dependencies = [
 
 [[package]]
 name = "lisette-diagnostics"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "lisette-syntax",
  "owo-colors",
@@ -122,7 +122,7 @@ dependencies = [
 
 [[package]]
 name = "lisette-emit"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "ecow",
  "lisette-diagnostics",
@@ -133,7 +133,7 @@ dependencies = [
 
 [[package]]
 name = "lisette-format"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "lisette-syntax",
  "unicode-segmentation",
@@ -141,7 +141,7 @@ dependencies = [
 
 [[package]]
 name = "lisette-passes"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "ecow",
  "lisette-diagnostics",
@@ -153,7 +153,7 @@ dependencies = [
 
 [[package]]
 name = "lisette-semantics"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "bincode",
  "ecow",
@@ -168,11 +168,11 @@ dependencies = [
 
 [[package]]
 name = "lisette-stdlib"
-version = "0.11.0"
+version = "0.11.1"
 
 [[package]]
 name = "lisette-syntax"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "ecow",
  "rustc-hash",

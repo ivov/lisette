@@ -5,12 +5,12 @@ use super::*;
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum FileContext<'a> {
     Standard {
-        module_id: &'a str,
+        package_id: &'a str,
         file_id: u32,
         imports: &'a [FileImport],
     },
     ImportedTypedef {
-        module_id: &'a str,
+        package_id: &'a str,
         file_id: u32,
         imports: &'a [FileImport],
     },
@@ -24,21 +24,23 @@ impl<'a> FileContext<'a> {
     fn parts(self) -> (&'a str, u32, &'a [FileImport]) {
         match self {
             Self::Standard {
-                module_id,
+                package_id,
                 file_id,
                 imports,
             }
             | Self::ImportedTypedef {
-                module_id,
+                package_id,
                 file_id,
                 imports,
-            } => (module_id, file_id, imports),
+            } => (package_id, file_id, imports),
             Self::Prelude => (
-                crate::prelude::PRELUDE_MODULE_ID,
+                crate::prelude::PRELUDE_PACKAGE_ID,
                 crate::prelude::PRELUDE_FILE_ID,
                 &[],
             ),
-            Self::TestPrelude { file_id } => (crate::prelude::TEST_PRELUDE_MODULE_ID, file_id, &[]),
+            Self::TestPrelude { file_id } => {
+                (crate::prelude::TEST_PRELUDE_PACKAGE_ID, file_id, &[])
+            }
         }
     }
 }
@@ -50,18 +52,18 @@ struct SavedFileContext {
 }
 
 impl TaskState {
-    pub(super) fn with_module_cursor<T>(
+    pub(super) fn with_package_cursor<T>(
         &mut self,
-        module_id: &str,
+        package_id: &str,
         f: impl FnOnce(&mut Self) -> T,
     ) -> T {
-        if self.cursor.module_id == module_id {
+        if self.cursor.package_id == package_id {
             return f(self);
         }
 
-        let previous_module_id = std::mem::replace(&mut self.cursor.module_id, module_id.into());
+        let previous_package_id = std::mem::replace(&mut self.cursor.package_id, package_id.into());
         let result = f(self);
-        self.cursor.module_id = previous_module_id;
+        self.cursor.package_id = previous_package_id;
         result
     }
 
@@ -90,12 +92,12 @@ impl TaskState {
     }
 
     fn enter_file_context(&mut self, store: &Store, context: FileContext<'_>) -> SavedFileContext {
-        let (module_id, file_id, imports) = context.parts();
+        let (package_id, file_id, imports) = context.parts();
         let saved = SavedFileContext {
             cursor: std::mem::replace(
                 &mut self.cursor,
                 Cursor {
-                    module_id: module_id.into(),
+                    package_id: package_id.into(),
                     file_id: Some(file_id),
                 },
             ),
@@ -107,36 +109,36 @@ impl TaskState {
             FileContext::Standard { .. } => {
                 self.put_prelude_in_scope(store);
                 if self.current_file_is_test(store) {
-                    self.put_unprefixed_module_in_scope(
+                    self.put_unprefixed_package_in_scope(
                         store,
-                        crate::prelude::TEST_PRELUDE_MODULE_ID,
+                        crate::prelude::TEST_PRELUDE_PACKAGE_ID,
                     );
                 }
-                self.put_unprefixed_module_in_scope(store, module_id);
+                self.put_unprefixed_package_in_scope(store, package_id);
             }
             FileContext::ImportedTypedef { .. } => {
                 self.put_prelude_in_scope(store);
                 let self_alias = store
                     .go_package_names
-                    .get(module_id)
+                    .get(package_id)
                     .cloned()
-                    .unwrap_or_else(|| go_import_default_name(module_id).to_string());
+                    .unwrap_or_else(|| go_import_default_name(package_id).to_string());
                 self.imports.prefixed.insert(
                     self_alias,
                     PrefixedImport::LookupOnly {
-                        module_id: module_id.into(),
+                        package_id: package_id.into(),
                     },
                 );
             }
             FileContext::Prelude => {
-                self.put_unprefixed_module_in_scope(store, module_id);
+                self.put_unprefixed_package_in_scope(store, package_id);
             }
             FileContext::TestPrelude { .. } => {
                 self.put_prelude_in_scope(store);
-                self.put_unprefixed_module_in_scope(store, module_id);
+                self.put_unprefixed_package_in_scope(store, package_id);
             }
         }
-        self.put_imported_modules_in_scope(store, imports);
+        self.put_imported_packages_in_scope(store, imports);
 
         saved
     }

@@ -5,7 +5,7 @@ description: |
   import "go:fmt"
 ---
 [
-    ModuleImport {
+    PackageImport {
         name: "go:fmt",
         name_span: Span {
             file_id: 0,

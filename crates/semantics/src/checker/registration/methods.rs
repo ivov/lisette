@@ -13,7 +13,7 @@ use crate::checker::{TaskState, resolved_generic_bounds};
 use crate::store::Store;
 
 struct ImplReceiver<'a> {
-    module_id: &'a str,
+    package_id: &'a str,
     qualified_name: &'a str,
     display_name: &'a str,
     receiver_ty: &'a Type,
@@ -23,7 +23,7 @@ struct ImplReceiver<'a> {
 struct ResolvedImplReceiver {
     receiver_ty: Type,
     qualified_name: Symbol,
-    module_id: String,
+    package_id: String,
     generics: Vec<Generic>,
     impl_bounds: Vec<Bound>,
 }
@@ -39,13 +39,13 @@ impl TaskState {
         fn_name_span: Span,
         method_ty: &Type,
     ) -> bool {
-        let module = store
-            .get_module_mut(receiver.module_id)
-            .expect("current module must exist in store");
+        let package = store
+            .get_package_mut(receiver.package_id)
+            .expect("current package must exist in store");
 
-        let Some(definition) = module.definitions.get_mut(receiver.qualified_name) else {
-            // Receiver type not found in current module (e.g. resolved
-            // to a same-named type in another module). Skip registering
+        let Some(definition) = package.definitions.get_mut(receiver.qualified_name) else {
+            // Receiver type not found in current package (e.g. resolved
+            // to a same-named type in another package). Skip registering
             // the method to avoid false duplicate errors.
             return false;
         };
@@ -88,29 +88,29 @@ impl TaskState {
         fn_name_span: Span,
         impl_generics_empty: bool,
     ) {
-        let module_qualified_name =
-            Symbol::from_parts(receiver.module_id, receiver.display_name).with_segment(fn_name);
+        let package_qualified_name =
+            Symbol::from_parts(receiver.package_id, receiver.display_name).with_segment(fn_name);
 
-        let module = store
-            .get_module(receiver.module_id)
-            .expect("current module must exist in store");
+        let package = store
+            .get_package(receiver.package_id)
+            .expect("current package must exist in store");
 
-        if !module
+        if !package
             .definitions
-            .contains_key(module_qualified_name.as_str())
+            .contains_key(package_qualified_name.as_str())
         {
             return;
         }
 
         let is_cross_specialization = impl_generics_empty
             && matches!(
-                module.definitions.get(receiver.qualified_name).map(|d| &d.body),
+                package.definitions.get(receiver.qualified_name).map(|d| &d.body),
                 Some(DefinitionBody::Struct { generics: struct_generics, .. })
                     if !struct_generics.is_empty()
             );
 
         if is_cross_specialization {
-            let struct_generic_names: Vec<String> = match module
+            let struct_generic_names: Vec<String> = match package
                 .definitions
                 .get(receiver.qualified_name)
                 .map(|d| &d.body)
@@ -171,7 +171,7 @@ impl TaskState {
             .get_name()
             .expect("a resolved receiver always has a name");
         let receiver = ImplReceiver {
-            module_id: &resolved.module_id,
+            package_id: &resolved.package_id,
             qualified_name: resolved.qualified_name.as_str(),
             display_name: type_name,
             receiver_ty: &resolved.receiver_ty,
@@ -213,29 +213,29 @@ impl TaskState {
         let Some(receiver_qualified_name) = receiver_ty.get_qualified_name() else {
             self.sink.push(diagnostics::infer::impl_on_foreign_type(
                 type_name,
-                crate::prelude::PRELUDE_MODULE_ID,
+                crate::prelude::PRELUDE_PACKAGE_ID,
                 *span,
             ));
             return None;
         };
-        let module_id = self.cursor.module_id.clone();
+        let package_id = self.cursor.package_id.clone();
         let is_d_lis = self.is_d_lis(&*store);
 
         if !is_d_lis
-            && let Some(type_module) = store.module_for_qualified_name(&receiver_qualified_name)
-            && type_module != module_id
+            && let Some(type_package) = store.package_for_qualified_name(&receiver_qualified_name)
+            && type_package != package_id
         {
             self.sink.push(diagnostics::infer::impl_on_foreign_type(
                 type_name,
-                crate::loader::import_display_name(type_module),
+                crate::loader::import_display_name(type_package),
                 *span,
             ));
             return None;
         }
 
         if self.current_file_is_test(store)
-            && let Some(module) = store.get_module(&module_id)
-            && let Some(definition) = module.definitions.get(&receiver_qualified_name)
+            && let Some(package) = store.get_package(&package_id)
+            && let Some(definition) = package.definitions.get(&receiver_qualified_name)
             && !store.is_test_definition(definition)
         {
             self.sink
@@ -247,9 +247,9 @@ impl TaskState {
         }
 
         if !self.is_d_lis(&*store)
-            && let Some(module) = store.get_module(&module_id)
+            && let Some(package) = store.get_package(&package_id)
             && matches!(
-                module
+                package
                     .definitions
                     .get(&receiver_qualified_name)
                     .map(|d| &d.body),
@@ -279,7 +279,7 @@ impl TaskState {
         Some(ResolvedImplReceiver {
             receiver_ty,
             qualified_name: receiver_qualified_name,
-            module_id,
+            package_id,
             generics,
             impl_bounds,
         })
@@ -320,7 +320,7 @@ impl TaskState {
             &fn_span,
         );
         let qualified_name = format!("{}.{}", receiver.display_name, fn_sig.name);
-        let module_qualified_name = Symbol::from_parts(receiver.module_id, &qualified_name);
+        let package_qualified_name = Symbol::from_parts(receiver.package_id, &qualified_name);
         let is_instance_method = fn_sig.params.first().is_some_and(|p| {
             matches!(p.pattern, Pattern::Identifier { ref identifier, .. } if identifier == "self")
         });
@@ -349,7 +349,7 @@ impl TaskState {
         let go_hints = extract_attribute_flags(fn_attrs, "go");
         let method_key: EcoString =
             if is_instance_method && go_hints.iter().any(|h| h == "unexported") {
-                super::seal_method_key(is_d_lis, fn_attrs, receiver.module_id, fn_sig.name)
+                super::seal_method_key(is_d_lis, fn_attrs, receiver.package_id, fn_sig.name)
             } else {
                 fn_sig.name.clone()
             };
@@ -389,11 +389,11 @@ impl TaskState {
             generics.is_empty(),
         );
 
-        let module = store
-            .get_module_mut(receiver.module_id)
-            .expect("current module must exist in store");
-        module.definitions.insert(
-            module_qualified_name,
+        let package = store
+            .get_package_mut(receiver.package_id)
+            .expect("current package must exist in store");
+        package.definitions.insert(
+            package_qualified_name,
             Definition {
                 visibility: fn_visibility.clone(),
                 ty: method_ty,
@@ -426,7 +426,7 @@ impl TaskState {
         else {
             unreachable!("populate_interface called with non-Interface expression");
         };
-        let module_id = self.cursor.module_id.clone();
+        let package_id = self.cursor.package_id.clone();
         let is_d_lis = self.is_d_lis(&*store);
         struct MethodDef {
             name: EcoString,
@@ -509,7 +509,12 @@ impl TaskState {
                     let go_hints = extract_attribute_flags(fn_attrs, "go");
                     if go_hints.iter().any(|h| h == "unexported") {
                         (
-                            super::seal_method_key(is_d_lis, fn_attrs, &module_id, method_sig.name),
+                            super::seal_method_key(
+                                is_d_lis,
+                                fn_attrs,
+                                &package_id,
+                                method_sig.name,
+                            ),
                             fn_ty,
                         )
                     } else {
@@ -546,15 +551,15 @@ impl TaskState {
         };
 
         let visibility = self
-            .current_module(&*store)
+            .current_package(&*store)
             .definitions
             .get(qualified_name.as_str())
             .map(|definition| definition.visibility.clone())
             .unwrap_or(Visibility::Private);
 
-        let module = self.current_module_mut(store);
+        let package = self.current_package_mut(store);
 
-        module.definitions.insert(
+        package.definitions.insert(
             qualified_name.clone(),
             Definition {
                 visibility: visibility.clone(),
@@ -571,8 +576,9 @@ impl TaskState {
         // can look up their go_hints (e.g., comma_ok) by qualified name.
         // Methods inherit the interface's visibility: a `pub interface`'s methods are implicitly public.
         for method in method_defs {
-            let method_qualified_name = format!("{}.{}.{}", module_id, interface_name, method.name);
-            module.definitions.insert(
+            let method_qualified_name =
+                format!("{}.{}.{}", package_id, interface_name, method.name);
+            package.definitions.insert(
                 method_qualified_name.into(),
                 Definition {
                     visibility: visibility.clone(),

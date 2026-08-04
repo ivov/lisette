@@ -4,10 +4,10 @@ use super::definition::{Definition, Visibility};
 use super::file::File;
 use crate::types::Symbol;
 
-pub type ModuleId = String;
+pub type PackageId = String;
 
 #[derive(Debug, Clone)]
-pub struct Module {
+pub struct Package {
     pub id: String,
     /// file ID -> file. Source and declaration files are classified by [`File::is_d_lis`].
     pub files: HashMap<u32, File>,
@@ -15,17 +15,17 @@ pub struct Module {
     pub definitions: HashMap<Symbol, Definition>,
 }
 
-impl Module {
-    pub fn new(id: &str) -> Module {
-        Module {
+impl Package {
+    pub fn new(id: &str) -> Package {
+        Package {
             id: id.to_string(),
             files: Default::default(),
             definitions: Default::default(),
         }
     }
 
-    pub fn nominal() -> Module {
-        Module::new("**nominal")
+    pub fn nominal() -> Package {
+        Package::new("**nominal")
     }
 
     pub fn is_public(&self, qualified_name: &str) -> bool {

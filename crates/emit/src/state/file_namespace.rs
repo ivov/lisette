@@ -11,7 +11,7 @@ use syntax::ast::ImportAlias;
 use syntax::program::File;
 
 pub(crate) struct FileNamespace {
-    module_aliases: Vec<(String, String)>,
+    package_aliases: Vec<(String, String)>,
     enum_layouts: HashMap<String, Rc<EnumLayout>>,
     imports: ImportPlan,
     requirements: PackageRequirements,
@@ -24,7 +24,7 @@ impl FileNamespace {
         unused_imports: &rustc_hash::FxHashSet<EcoString>,
         go_package_names: &HashMap<String, String>,
     ) -> Self {
-        let mut module_aliases = Vec::new();
+        let mut package_aliases = Vec::new();
         for import in file.imports() {
             if matches!(import.alias, Some(ImportAlias::Blank(_))) {
                 continue;
@@ -32,11 +32,11 @@ impl FileNamespace {
             let Some(alias) = import.effective_alias(go_package_names) else {
                 continue;
             };
-            module_aliases.push((import.name.to_string(), alias));
+            package_aliases.push((import.name.to_string(), alias));
         }
 
         Self {
-            module_aliases,
+            package_aliases,
             enum_layouts: HashMap::default(),
             imports: ImportPlan::build(file, go_module, unused_imports, go_package_names),
             requirements: PackageRequirements::default(),
@@ -51,18 +51,18 @@ impl FileNamespace {
         self.enum_layouts.insert(enum_id, layout);
     }
 
-    pub(crate) fn module_alias(&self, module: &str) -> Option<&str> {
-        self.module_aliases
+    pub(crate) fn package_alias(&self, package: &str) -> Option<&str> {
+        self.package_aliases
             .iter()
             .rev()
-            .find_map(|(candidate, alias)| (candidate == module).then_some(alias.as_str()))
+            .find_map(|(candidate, alias)| (candidate == package).then_some(alias.as_str()))
     }
 
-    pub(crate) fn module_for_alias(&self, alias: &str) -> Option<&str> {
-        self.module_aliases
+    pub(crate) fn package_for_alias(&self, alias: &str) -> Option<&str> {
+        self.package_aliases
             .iter()
             .rev()
-            .find_map(|(module, candidate)| (candidate == alias).then_some(module.as_str()))
+            .find_map(|(package, candidate)| (candidate == alias).then_some(package.as_str()))
     }
 
     pub(crate) fn reference(&mut self, package: PackageUse) -> String {
@@ -82,9 +82,9 @@ impl FileNamespace {
     pub(crate) fn finish(
         self,
         go_package_names: &HashMap<String, String>,
-        go_module_ids: &rustc_hash::FxHashSet<String>,
+        go_package_ids: &rustc_hash::FxHashSet<String>,
     ) -> (Vec<(String, String)>, Vec<LisetteDiagnostic>) {
-        let mut builder = ImportBuilder::from_plan(self.imports, go_package_names, go_module_ids);
+        let mut builder = ImportBuilder::from_plan(self.imports, go_package_names, go_package_ids);
         builder.extend_with_package_uses(&self.requirements);
         builder.build()
     }

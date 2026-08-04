@@ -19,7 +19,7 @@
 
 ## Ecosystem
 
-- [`12-modules.md`](12-modules.md) — Modules, imports, visibility, prelude
+- [`12-packages.md`](12-packages.md) - Packages, imports, visibility, prelude
 - [`13-go-interop.md`](13-go-interop.md) — Go stdlib packages, type mappings, `.d.lis`
 - [`14-concurrency.md`](14-concurrency.md) — `task`, channels, `select`, iteration
 - [`15-attributes.md`](15-attributes.md) — Serialization tags, custom tags, lint suppression

@@ -1897,7 +1897,7 @@ fn unknown_map_return_from_typedef_api_allowed() {
     }
         "#,
     );
-    infer_module("ffi", fs).assert_no_errors();
+    infer_package("ffi", fs).assert_no_errors();
 }
 
 #[test]
@@ -1988,7 +1988,7 @@ fn unknown_in_param_type_allowed_in_typedef_file() {
     }
         "#,
     );
-    infer_module("ffi", fs).assert_no_errors();
+    infer_package("ffi", fs).assert_no_errors();
 }
 
 #[test]

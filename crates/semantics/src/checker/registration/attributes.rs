@@ -197,13 +197,13 @@ pub(super) fn extract_attribute_string(attributes: &[Attribute], name: &str) -> 
 pub(super) fn seal_method_key(
     is_d_lis: bool,
     attributes: &[Attribute],
-    module_id: &str,
+    package_id: &str,
     name: &str,
 ) -> ecow::EcoString {
     let id = if is_d_lis {
-        extract_attribute_string(attributes, "go").unwrap_or_else(|| format!("{module_id}.{name}"))
+        extract_attribute_string(attributes, "go").unwrap_or_else(|| format!("{package_id}.{name}"))
     } else {
-        format!("{module_id}.{name}")
+        format!("{package_id}.{name}")
     };
     crate::checker::sealing::unexported_key(&id)
 }

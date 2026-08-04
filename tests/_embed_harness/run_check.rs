@@ -6,7 +6,7 @@ use deps::TypedefLocator;
 use emit::{EmitOptions, Planner};
 use passes::analyze;
 use semantics::loader::MemoryLoader;
-use semantics::store::ENTRY_MODULE_ID;
+use semantics::store::ENTRY_PACKAGE_ID;
 use semantics::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
 
 use super::PrintedQuestion;
@@ -177,10 +177,10 @@ fn emit_and_write(
     printed: &[PrintedQuestion],
     work: &Path,
 ) -> Result<Emit, String> {
-    let module = format!("lisette/embed_emitted_{}", scenario.name);
+    let package = format!("lisette/embed_emitted_{}", scenario.name);
     let lisette = render_lis_run(scenario, printed);
     let mut loader = MemoryLoader::new();
-    loader.add_file(ENTRY_MODULE_ID, "main.lis", &lisette);
+    loader.add_file(ENTRY_PACKAGE_ID, "main.lis", &lisette);
     let output = analyze(AnalyzeInput {
         load_siblings: true,
         scope: AnalysisScope::Directory,
@@ -193,7 +193,7 @@ fn emit_and_write(
         locator: &TypedefLocator::default(),
         compile_phase: CompilePhase::Emit,
         project_kind: semantics::ProjectKind::Binary,
-        go_module: &module,
+        go_module: &package,
         disable_cache: true,
     });
     if output.has_parse_errors() {
@@ -210,7 +210,7 @@ fn emit_and_write(
 
     let files = Planner::emit(
         &output.emit_input,
-        &module,
+        &package,
         "main",
         EmitOptions {
             sourcemap: false,
@@ -223,7 +223,7 @@ fn emit_and_write(
     for file in &files {
         fs::write(dir.join(&file.name), file.to_go()).map_err(|e| e.to_string())?;
     }
-    write_go_mod(&dir, &module, true)?;
+    write_go_mod(&dir, &package, true)?;
     Ok(Emit::Done(GoDir { path: dir }))
 }
 
@@ -232,12 +232,12 @@ fn write_handwritten(
     printed: &[PrintedQuestion],
     work: &Path,
 ) -> Result<GoDir, String> {
-    let module = format!("lisette/embed_hand_{}", scenario.name);
+    let package = format!("lisette/embed_hand_{}", scenario.name);
     let go = render_go(scenario, GoMode::RunMain(printed));
     let dir = work.join("handwritten");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     fs::write(dir.join("main.go"), go).map_err(|e| e.to_string())?;
-    write_go_mod(&dir, &module, false)?;
+    write_go_mod(&dir, &package, false)?;
     Ok(GoDir { path: dir })
 }
 
@@ -254,9 +254,9 @@ fn go_run(dir: &GoDir) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
-fn write_go_mod(dir: &Path, module: &str, with_prelude: bool) -> Result<(), String> {
+fn write_go_mod(dir: &Path, package: &str, with_prelude: bool) -> Result<(), String> {
     let go_version = go_version();
-    let mut content = format!("module {module}\n\ngo {go_version}\n");
+    let mut content = format!("package {package}\n\ngo {go_version}\n");
     if with_prelude {
         let prelude = prelude_dir()
             .canonicalize()

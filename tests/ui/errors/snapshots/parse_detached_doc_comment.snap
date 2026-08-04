@@ -7,6 +7,6 @@ source: tests/ui/errors/mod.rs
  2 │ /// Provides utilities for working with strings.
    · ────────────────────────┬───────────────────────
    ·                         ╰── is detached
- 3 │ import "some_module"
+ 3 │ import "some_package"
    ╰────
   help: Place doc comments `///` on the line above a symbol definition and file comments `//!` at the very top of the file · code: [parse.detached_doc_comment]

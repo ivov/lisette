@@ -1,7 +1,7 @@
 use crate::cli_error;
 use crate::output::{format_backticks, use_color};
 use diagnostics::infer::levenshtein_distance;
-use semantics::cache::go_stdlib::{GoModuleCache, try_load_go_stdlib_cache};
+use semantics::cache::go_stdlib::{GoPackageCache, try_load_go_stdlib_cache};
 use semantics::cache::types::CachedDefinitionBody;
 use stdlib::{
     Target, format_targets, get_go_stdlib_package_targets, get_go_stdlib_packages,
@@ -1548,8 +1548,8 @@ fn doc_go_package(query: &str) -> i32 {
     }
 }
 
-fn has_go_module_matches(module_cache: &GoModuleCache, query_lower: &str) -> bool {
-    for (def_name, def) in &module_cache.definitions {
+fn has_go_package_matches(package_cache: &GoPackageCache, query_lower: &str) -> bool {
+    for (def_name, def) in &package_cache.definitions {
         if matches!(def.body, CachedDefinitionBody::Value { .. })
             && def_name.to_lowercase().contains(query_lower)
         {
@@ -1699,9 +1699,9 @@ fn collect_go_matches(target: Target, query_lower: &str) -> Vec<SearchMatch> {
 
     for package in get_go_stdlib_packages(target) {
         if let Some(ref cache) = go_cache {
-            let module_id = format!("go:{}", package);
-            if let Some(module_cache) = cache.modules.get(&module_id)
-                && !has_go_module_matches(module_cache, query_lower)
+            let package_id = format!("go:{}", package);
+            if let Some(package_cache) = cache.packages.get(&package_id)
+                && !has_go_package_matches(package_cache, query_lower)
             {
                 continue;
             }

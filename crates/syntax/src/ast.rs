@@ -1371,7 +1371,7 @@ pub enum Expression {
         visibility: Visibility,
         span: Span,
     },
-    ModuleImport {
+    PackageImport {
         name: EcoString,
         name_span: Span,
         alias: Option<ImportAlias>,
@@ -1586,7 +1586,7 @@ impl Expression {
             | Self::Assignment { .. }
             | Self::ImplBlock { .. }
             | Self::TypeAlias { .. }
-            | Self::ModuleImport { .. }
+            | Self::PackageImport { .. }
             | Self::Interface { .. }
             | Self::RawGo { .. }
             | Self::While { .. }
@@ -1632,7 +1632,7 @@ impl Expression {
             | Self::Select { span, .. }
             | Self::Loop { span, .. }
             | Self::TypeAlias { span, .. }
-            | Self::ModuleImport { span, .. }
+            | Self::PackageImport { span, .. }
             | Self::Interface { span, .. }
             | Self::Unit { span, .. }
             | Self::While { span, .. }
@@ -1987,7 +1987,7 @@ impl Expression {
             | Expression::Struct { .. }
             | Expression::TypeAlias { .. }
             | Expression::VariableDeclaration { .. }
-            | Expression::ModuleImport { .. }
+            | Expression::PackageImport { .. }
             | Expression::RawGo { .. } => Vec::new(),
         }
     }

@@ -10,11 +10,11 @@ use syntax::{
 
 use super::new_test_store;
 
-use super::TEST_MODULE_ID;
+use super::TEST_PACKAGE_ID;
 
 pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     let mut store = new_test_store();
-    store.add_module(TEST_MODULE_ID);
+    store.add_package(TEST_PACKAGE_ID);
 
     // Parser::new hardcodes file_id=0 in spans, so pin the test file to that id too.
     let file_id = 0u32;
@@ -32,14 +32,14 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     let ast = parse_result.ast;
 
     let mut checker = TaskState::with_fresh_allocator();
-    checker.cursor.module_id = TEST_MODULE_ID.to_string();
+    checker.cursor.package_id = TEST_PACKAGE_ID.to_string();
     checker.put_prelude_in_scope(&store);
 
     let locator = deps::TypedefLocator::default();
     let imports: Vec<FileImport> = ast
         .iter()
         .filter_map(|item| {
-            let Expression::ModuleImport {
+            let Expression::PackageImport {
                 name,
                 name_span,
                 alias,
@@ -51,7 +51,7 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
             if let Some(go_pkg) = name.strip_prefix("go:")
                 && let Some(typedef) = get_go_stdlib_typedef(go_pkg, Target::host())
             {
-                checker.parse_and_register_go_module(&mut store, name, typedef, None, &locator);
+                checker.parse_and_register_go_package(&mut store, name, typedef, None, &locator);
             }
             Some(FileImport {
                 name: name.clone(),
@@ -61,7 +61,7 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
             })
         })
         .collect();
-    checker.put_imported_modules_in_scope(&store, &imports);
+    checker.put_imported_packages_in_scope(&store, &imports);
 
     checker.register_types_and_values(&mut store, &ast, &Visibility::Private);
     checker.finalize_equality(&mut store);
@@ -91,7 +91,7 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
 
     let typed_file = File {
         id: file_id,
-        module_id: TEST_MODULE_ID.to_string(),
+        package_id: TEST_PACKAGE_ID.to_string(),
         name: "test.lis".to_string(),
         display_path: "test.lis".to_string(),
         source_path: None,

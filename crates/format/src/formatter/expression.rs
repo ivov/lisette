@@ -170,7 +170,7 @@ impl<'a> Formatter<'a> {
             | Expression::ImplBlock { .. }
             | Expression::Const { .. }
             | Expression::VariableDeclaration { .. }
-            | Expression::ModuleImport { .. } => self.definition(expression),
+            | Expression::PackageImport { .. } => self.definition(expression),
         };
 
         prepend_comments(doc, comments)

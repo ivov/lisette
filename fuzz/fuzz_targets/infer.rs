@@ -15,11 +15,11 @@ fuzz_target!(|data: &[u8]| {
 
     let sink = lisette_diagnostics::LocalSink::new();
     let mut store = lisette_semantics::store::Store::new();
-    store.add_module("fuzz");
+    store.add_package("fuzz");
     lisette_semantics::prelude::parse_and_register_prelude(&mut store, &sink);
 
     let mut checker = lisette_semantics::checker::TaskState::with_fresh_allocator();
-    checker.cursor.module_id = "fuzz".to_string();
+    checker.cursor.package_id = "fuzz".to_string();
     checker.put_prelude_in_scope(&store);
 
     checker.register_types_and_values(

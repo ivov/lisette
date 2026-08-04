@@ -3,12 +3,12 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::Span;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum ModuleItemId {
+pub enum PackageItemId {
     Definition(EcoString),
     Import { file_id: u32, alias: EcoString },
 }
 
-impl ModuleItemId {
+impl PackageItemId {
     pub fn new(name: &str) -> Self {
         Self::Definition(name.into())
     }
@@ -72,8 +72,8 @@ impl EnumVariantId {
 
 #[derive(Debug, Default)]
 pub struct ReferenceGraph {
-    edges: HashMap<ModuleItemId, HashSet<ModuleItemId>>,
-    items: HashMap<ModuleItemId, ItemInfo>,
+    edges: HashMap<PackageItemId, HashSet<PackageItemId>>,
+    items: HashMap<PackageItemId, ItemInfo>,
     unused_members: HashMap<MemberId, Span>,
 }
 
@@ -82,7 +82,13 @@ impl ReferenceGraph {
         Self::default()
     }
 
-    pub fn add_item(&mut self, id: ModuleItemId, span: Span, kind: ItemKind, is_entry_point: bool) {
+    pub fn add_item(
+        &mut self,
+        id: PackageItemId,
+        span: Span,
+        kind: ItemKind,
+        is_entry_point: bool,
+    ) {
         self.items.insert(
             id,
             ItemInfo {
@@ -93,7 +99,7 @@ impl ReferenceGraph {
         );
     }
 
-    pub fn add_import(&mut self, id: ModuleItemId, span: Span, statement_span: Span) {
+    pub fn add_import(&mut self, id: PackageItemId, span: Span, statement_span: Span) {
         self.items.insert(
             id,
             ItemInfo {
@@ -104,11 +110,11 @@ impl ReferenceGraph {
         );
     }
 
-    pub fn add_reference(&mut self, from: &ModuleItemId, to: ModuleItemId) {
+    pub fn add_reference(&mut self, from: &PackageItemId, to: PackageItemId) {
         self.edges.entry(from.clone()).or_default().insert(to);
     }
 
-    pub fn mark_as_used(&mut self, id: ModuleItemId) {
+    pub fn mark_as_used(&mut self, id: PackageItemId) {
         if let Some(item) = self.items.get_mut(&id) {
             item.is_entry_point = true;
         }
@@ -116,7 +122,7 @@ impl ReferenceGraph {
 
     pub fn analyze(&self) -> ReferenceUsage<'_> {
         let mut reachable = HashSet::default();
-        let mut worklist: Vec<ModuleItemId> = self
+        let mut worklist: Vec<PackageItemId> = self
             .items
             .iter()
             .filter(|(_, item)| item.is_entry_point)
@@ -169,11 +175,11 @@ impl ReferenceGraph {
 
 pub struct ReferenceUsage<'a> {
     graph: &'a ReferenceGraph,
-    reachable: HashSet<ModuleItemId>,
+    reachable: HashSet<PackageItemId>,
 }
 
 impl<'a> ReferenceUsage<'a> {
-    pub fn unreachable_items(&self) -> impl Iterator<Item = (&ModuleItemId, &ItemInfo)> {
+    pub fn unreachable_items(&self) -> impl Iterator<Item = (&PackageItemId, &ItemInfo)> {
         self.graph
             .items
             .iter()
@@ -246,8 +252,8 @@ mod tests {
     #[test]
     fn references_make_registered_items_reachable_without_a_second_node_registry() {
         let mut graph = ReferenceGraph::new();
-        let root = ModuleItemId::new("root");
-        let child = ModuleItemId::new("child");
+        let root = PackageItemId::new("root");
+        let child = PackageItemId::new("child");
         graph.add_item(root.clone(), span(0), ItemKind::Function, true);
         graph.add_item(child.clone(), span(1), ItemKind::Function, false);
         graph.add_reference(&root, child);
@@ -258,8 +264,8 @@ mod tests {
     #[test]
     fn import_alias_is_unused_only_when_unused_in_every_file() {
         let mut graph = ReferenceGraph::new();
-        let used = ModuleItemId::import(0, "dep");
-        let unused = ModuleItemId::import(1, "dep");
+        let used = PackageItemId::import(0, "dep");
+        let unused = PackageItemId::import(1, "dep");
         graph.add_import(used.clone(), span(0), span(0));
         graph.add_import(unused, span(1), span(1));
         graph.mark_as_used(used);
@@ -270,7 +276,7 @@ mod tests {
     #[test]
     fn using_member_removes_it_from_the_unused_candidates() {
         let mut graph = ReferenceGraph::new();
-        let field = StructFieldId::new("module.Type", "field");
+        let field = StructFieldId::new("package.Type", "field");
         let variant = EnumVariantId::new("Type", "Variant");
         graph.add_struct_field(field.clone(), span(0));
         graph.add_enum_variant(variant.clone(), span(1));

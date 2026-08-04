@@ -1,14 +1,14 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
-use super::{DependencyGraph, ModuleId};
+use super::{DependencyGraph, PackageId};
 
-pub fn topological_sort(edges: &DependencyGraph) -> (Vec<ModuleId>, Vec<Vec<ModuleId>>) {
-    let mut in_degree: HashMap<ModuleId, usize> = HashMap::default();
+pub fn topological_sort(edges: &DependencyGraph) -> (Vec<PackageId>, Vec<Vec<PackageId>>) {
+    let mut in_degree: HashMap<PackageId, usize> = HashMap::default();
     let mut order = Vec::new();
 
-    for module in edges.modules() {
-        in_degree.entry(module.clone()).or_insert(0);
-        for import in edges.dependencies(module) {
+    for package in edges.packages() {
+        in_degree.entry(package.clone()).or_insert(0);
+        for import in edges.dependencies(package) {
             *in_degree.entry(import.clone()).or_insert(0) += 1;
         }
     }
@@ -21,10 +21,10 @@ pub fn topological_sort(edges: &DependencyGraph) -> (Vec<ModuleId>, Vec<Vec<Modu
 
     queue.sort();
 
-    while let Some(module) = queue.pop() {
-        order.push(module.clone());
+    while let Some(package) = queue.pop() {
+        order.push(package.clone());
 
-        for import in edges.dependencies(&module) {
+        for import in edges.dependencies(&package) {
             if let Some(degree) = in_degree.get_mut(import) {
                 *degree -= 1;
                 if *degree == 0 {
@@ -46,10 +46,10 @@ pub fn topological_sort(edges: &DependencyGraph) -> (Vec<ModuleId>, Vec<Vec<Modu
     (order, cycles)
 }
 
-fn find_cycles(edges: &DependencyGraph, processed: &[ModuleId]) -> Vec<Vec<ModuleId>> {
+fn find_cycles(edges: &DependencyGraph, processed: &[PackageId]) -> Vec<Vec<PackageId>> {
     let processed_set: HashSet<_> = processed.iter().collect();
     let unprocessed: Vec<_> = edges
-        .modules()
+        .packages()
         .filter(|k| !processed_set.contains(k))
         .collect();
 

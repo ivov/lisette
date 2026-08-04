@@ -195,7 +195,7 @@ import "models"
 let u = models.User { name: "Alice" }
 ```
 
-Lisette modules are directories that you `import` by path. Imported items are namespaced.
+Lisette packages are directories that you `import` by path. Imported items are namespaced. What Rust calls a module, Lisette calls a package, matching the Go unit it compiles to.
 
 ## Concurrency
 

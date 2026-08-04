@@ -18,7 +18,7 @@ fn equals_visibility(store: &Store, id: &str) -> Option<String> {
     let method_key = format!("{id}.equals");
     match store.get_definition(&method_key) {
         Some(method) if method.visibility.is_public() => None,
-        _ => store.module_for_qualified_name(id).map(str::to_string),
+        _ => store.package_for_qualified_name(id).map(str::to_string),
     }
 }
 
@@ -68,7 +68,7 @@ impl TaskState {
             return None;
         }
 
-        let qualified = Symbol::from_parts(&context.module_id, name);
+        let qualified = Symbol::from_parts(&context.package_id, name);
         if is_tuple_struct(store, &qualified) {
             self.sink
                 .push(diagnostics::attribute::equality_on_tuple_struct(
@@ -113,7 +113,7 @@ impl TaskState {
             return None;
         }
 
-        self.synthesize_equals(store, &context.module_id, &qualified);
+        self.synthesize_equals(store, &context.package_id, &qualified);
         Some(qualified)
     }
 
@@ -138,12 +138,12 @@ impl TaskState {
     fn validate_equality_derivations(&mut self, store: &Store, derivations: &[Symbol]) {
         for qualified in derivations {
             let id = qualified.as_str();
-            let module_id = store
-                .module_for_qualified_name(id)
+            let package_id = store
+                .package_for_qualified_name(id)
                 .map(str::to_string)
                 .unwrap_or_default();
             let name = syntax::types::unqualified_name(id).to_string();
-            self.gate_equality_derivation(store, &name, qualified, &module_id);
+            self.gate_equality_derivation(store, &name, qualified, &package_id);
         }
     }
 
@@ -152,7 +152,7 @@ impl TaskState {
         store: &Store,
         type_name: &str,
         qualified: &Symbol,
-        module_id: &str,
+        package_id: &str,
     ) {
         let Some(definition) = store.get_definition(qualified.as_str()) else {
             return;
@@ -206,7 +206,7 @@ impl TaskState {
                     &this.env,
                     store,
                     field_ty,
-                    module_id,
+                    package_id,
                     &|name| param_is_equatable(&this.scopes, &this.env, store, name),
                     &|name| param_is_comparable(&this.scopes, &this.env, name),
                 );
@@ -224,9 +224,9 @@ impl TaskState {
         let synthesized: HashSet<&str> = derivations.iter().map(Symbol::as_str).collect();
 
         let ids: Vec<Symbol> = store
-            .modules
+            .packages
             .values()
-            .flat_map(|module| module.definitions.iter())
+            .flat_map(|package| package.definitions.iter())
             .filter_map(|(qualified, definition)| match &definition.body {
                 DefinitionBody::Struct { methods, .. } | DefinitionBody::Enum { methods, .. }
                     if methods.contains_key("equals") =>
@@ -264,7 +264,7 @@ impl TaskState {
         }
     }
 
-    fn synthesize_equals(&mut self, store: &mut Store, module_id: &str, qualified: &Symbol) {
+    fn synthesize_equals(&mut self, store: &mut Store, package_id: &str, qualified: &Symbol) {
         let Some(scheme) = store.get_type(qualified.as_str()).cloned() else {
             return;
         };
@@ -293,15 +293,17 @@ impl TaskState {
         let method_ty = wrap_with_impl_generics(&fn_ty, &generics, &impl_bounds);
 
         let equals_key = qualified.with_segment("equals");
-        let module = store.get_module_mut(module_id).expect("module must exist");
-        if let Some(methods) = module
+        let package = store
+            .get_package_mut(package_id)
+            .expect("package must exist");
+        if let Some(methods) = package
             .definitions
             .get_mut(qualified.as_str())
             .and_then(Definition::methods_mut)
         {
             methods.insert("equals".into(), method_ty.clone());
         }
-        module
+        package
             .definitions
             .entry(equals_key)
             .or_insert_with(|| Definition {

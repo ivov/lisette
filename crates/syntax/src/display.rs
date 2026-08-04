@@ -90,13 +90,13 @@ impl Type {
 
             Type::Error => "<error>".to_string(),
 
-            Type::ImportNamespace(module_id) if module_id.as_str() == crate::ENTRY_MODULE_ID => {
+            Type::ImportNamespace(package_id) if package_id.as_str() == crate::ENTRY_PACKAGE_ID => {
                 crate::ROOT_IMPORT.to_string()
             }
 
-            Type::ImportNamespace(module_id) => {
-                let path = module_id.strip_prefix("go:").unwrap_or(module_id);
-                path.rsplit('/').next().unwrap_or(module_id).to_string()
+            Type::ImportNamespace(package_id) => {
+                let path = package_id.strip_prefix("go:").unwrap_or(package_id);
+                path.rsplit('/').next().unwrap_or(package_id).to_string()
             }
 
             Type::ReceiverPlaceholder => "self".to_string(),

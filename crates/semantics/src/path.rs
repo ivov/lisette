@@ -170,8 +170,8 @@ mod tests {
             Some("src/main.lis".to_string())
         );
         assert_eq!(
-            base.relative(&Path::new("module_x").join("lib.lis")),
-            Some("src/module_x/lib.lis".to_string())
+            base.relative(&Path::new("package_x").join("lib.lis")),
+            Some("src/package_x/lib.lis".to_string())
         );
     }
 

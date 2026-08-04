@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·             ╰── already imported above
  4 │ 
    ╰────
-  help: Module `utils` is already imported. Remove the duplicate import · code: [resolve.duplicate_import]
+  help: Package `utils` is already imported. Remove the duplicate import · code: [resolve.duplicate_import]

@@ -979,7 +979,7 @@ impl<T: Parent> Box<T> {
 }
 
 #[test]
-fn equality_field_private_cross_module_equals_uses_native() {
+fn equality_field_private_cross_package_equals_uses_native() {
     let input = r#"
 struct Foo { x: int }
 
@@ -5340,7 +5340,7 @@ fn main() {
 }
 
 #[test]
-fn generic_struct_param_shadows_module_type() {
+fn generic_struct_param_shadows_package_type() {
     let input = r#"
 struct T {
   v: int,
@@ -5374,7 +5374,7 @@ fn test() -> int {
 }
 
 #[test]
-fn generic_enum_param_shadows_module_type() {
+fn generic_enum_param_shadows_package_type() {
     let input = r#"
 struct T {
   v: int,

@@ -1,7 +1,7 @@
 use syntax::ast::{Annotation, Expression, IdentifierResolution, Span};
 use syntax::program::{Definition, DefinitionBody};
 
-use crate::analysis::find_module_by_alias;
+use crate::analysis::find_package_by_alias;
 use crate::definition::{
     get_root_expression, resolve_dot_access_definition, resolve_enum_in_pattern,
     resolve_match_pattern_definition,
@@ -23,7 +23,7 @@ pub(crate) fn resolve_declaration_hover(
         if !offset_in_span(offset, &name_span) {
             return None;
         }
-        let qualified = format!("{}.{}", file.module_id, name);
+        let qualified = format!("{}.{}", file.package_id, name);
         let definition = snapshot.definitions().get(qualified.as_str())?;
         let ty = definition
             .instantiate_alias_target(&[])
@@ -105,12 +105,12 @@ fn resolve_constructor_name_hover(
 
     if cursor_in_name > dot_pos {
         let (qualifier, simple) = name.split_once('.')?;
-        let module_name = find_module_by_alias(
+        let package_name = find_package_by_alias(
             file,
             qualifier,
             &snapshot.analysis.emit_input.go_package_names,
         )?;
-        let qualified = format!("{}.{}", module_name, simple);
+        let qualified = format!("{}.{}", package_name, simple);
         let definition = snapshot.definitions().get(qualified.as_str())?;
         let simple_offset = span.byte_offset + dot_pos as u32 + 1;
         let simple_span = Span::new(span.file_id, simple_offset, simple.len() as u32);
@@ -129,7 +129,7 @@ fn lookup_type_by_name(
     snapshot: &AnalysisSnapshot,
 ) -> Option<syntax::types::Type> {
     let candidates = [
-        format!("{}.{}", file.module_id, name),
+        format!("{}.{}", file.package_id, name),
         name.to_string(),
         format!("prelude.{}", name),
     ];
@@ -306,8 +306,8 @@ fn resolve_dot_access_doc(
         _ => return None,
     };
 
-    let module_name =
-        find_module_by_alias(file, alias, &snapshot.analysis.emit_input.go_package_names)?;
+    let package_name =
+        find_package_by_alias(file, alias, &snapshot.analysis.emit_input.go_package_names)?;
 
     let qualified = if matches!(expression, Expression::DotAccess { .. }) {
         if let Some(dotted) = expression.as_dotted_path()
@@ -315,13 +315,13 @@ fn resolve_dot_access_doc(
         {
             dotted
                 .strip_prefix(root_id)
-                .map(|rest| format!("{}{}.{}", module_name, rest, member))
-                .unwrap_or_else(|| format!("{}.{}", module_name, member))
+                .map(|rest| format!("{}{}.{}", package_name, rest, member))
+                .unwrap_or_else(|| format!("{}.{}", package_name, member))
         } else {
-            format!("{}.{}", module_name, member)
+            format!("{}.{}", package_name, member)
         }
     } else {
-        format!("{}.{}", module_name, member)
+        format!("{}.{}", package_name, member)
     };
 
     snapshot.definitions().get(qualified.as_str())?.doc.clone()

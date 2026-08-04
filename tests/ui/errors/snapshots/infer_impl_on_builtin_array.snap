@@ -9,7 +9,7 @@ source: tests/ui/errors/mod.rs
  4 │ │       0
  5 │ │     }
  6 │ ├─▶ }
-   · ╰──── `Array` is defined in module `prelude`
+   · ╰──── `Array` is defined in package `prelude`
  7 │     
    ╰────
-  help: Methods can only be defined on types in the same module. Use a standalone function instead: `fn my_method(w: Array) { ... }` · code: [infer.impl_on_foreign_type]
+  help: Methods can only be defined on types in the same package. Use a standalone function instead: `fn my_method(w: Array) { ... }` · code: [infer.impl_on_foreign_type]

@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                                  ╰── `x` is private to `shapes`
  6 │ }
    ╰────
-  help: `x` of `shapes.Point` cannot be autofilled because `x` is private to module `shapes`. Provide an explicit value, or have `shapes` expose `x` as `pub` or offer a constructor · code: [resolve.private_field_autofill]
+  help: `x` of `shapes.Point` cannot be autofilled because `x` is private to package `shapes`. Provide an explicit value, or have `shapes` expose `x` as `pub` or offer a constructor · code: [resolve.private_field_autofill]

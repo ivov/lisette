@@ -1155,26 +1155,26 @@ impl<'source> Parser<'source> {
             let (label, help) = if name_token.kind == Identifier
                 && self.stream.peek_ahead(1).kind == Colon
             {
-                let module_name = name_token.text;
+                let package_name = name_token.text;
                 (
                     "expected double quotes".to_string(),
                     format!(
                         "Wrap the import path in double quotes: `import \"{0}:...\"`",
-                        module_name
+                        package_name
                     ),
                 )
             } else if name_token.kind == Identifier {
-                let module_name = name_token.text;
+                let package_name = name_token.text;
                 (
                     "expected double quotes".to_string(),
                     format!(
                         "Wrap the import path in double quotes: `import \"{}\"`",
-                        module_name
+                        package_name
                     ),
                 )
             } else {
                 (
-                    "expected module path".to_string(),
+                    "expected package path".to_string(),
                     "Wrap the import path in double quotes, e.g. `import \"go:os\"`".to_string(),
                 )
             };
@@ -1216,7 +1216,7 @@ impl<'source> Parser<'source> {
         let name: EcoString = unquoted.into();
         let name_span = Span::new(self.file_id, name_token.byte_offset, name_token.byte_length);
 
-        Expression::ModuleImport {
+        Expression::PackageImport {
             name,
             name_span,
             alias,

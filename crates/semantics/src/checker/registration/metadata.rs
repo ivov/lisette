@@ -1,18 +1,18 @@
 use super::*;
 
 impl TaskState {
-    pub(super) fn populate_module_generic_bounds(&self, store: &mut Store, module_id: &str) {
-        let Some(module) = store.get_module_mut(module_id) else {
+    pub(super) fn populate_package_generic_bounds(&self, store: &mut Store, package_id: &str) {
+        let Some(package) = store.get_package_mut(package_id) else {
             return;
         };
-        for file in module.files.values_mut() {
+        for file in package.files.values_mut() {
             for item in &mut file.items {
                 populate_expression_generic_bounds(item, &self.facts.bound_types);
             }
         }
     }
 
-    /// Resolve each item's generic bounds from the per-module pass results.
+    /// Resolve each item's generic bounds from the per-package pass results.
     /// Test harnesses that emit a typed AST directly bypass that pass.
     pub fn populate_item_generic_bounds(&self, items: &mut [Expression]) {
         for item in items {

@@ -9,15 +9,15 @@ use syntax::types::{CompoundKind, TypeVarId};
 pub(crate) fn run(store: &Store, checks: &DeferredChecks, sink: &LocalSink) {
     let mut reported_vars: HashSet<(String, TypeVarId)> = HashSet::default();
     let mut collected = Vec::new();
-    let mut report_vars = |ty: &syntax::types::Type, module_id: &str| {
+    let mut report_vars = |ty: &syntax::types::Type, package_id: &str| {
         collected.clear();
         ty.collect_unbound_variables(&mut collected);
-        reported_vars.extend(collected.iter().map(|v| (module_id.to_string(), *v)));
+        reported_vars.extend(collected.iter().map(|v| (package_id.to_string(), *v)));
     };
     for check in &checks.generic_calls {
         if check.ty.has_unbound_variables() {
             sink.push(diagnostics::infer::cannot_infer_type_argument(check.span));
-            report_vars(&check.ty, &check.module_id);
+            report_vars(&check.ty, &check.package_id);
         }
     }
     for obligation in &checks.generic_bounds {
@@ -42,7 +42,7 @@ pub(crate) fn run(store: &Store, checks: &DeferredChecks, sink: &LocalSink) {
                 }
             };
             sink.push(diagnostic);
-            report_vars(&obligation.argument, &obligation.module_id);
+            report_vars(&obligation.argument, &obligation.package_id);
         }
     }
     for check in &checks.empty_collections {
@@ -51,7 +51,7 @@ pub(crate) fn run(store: &Store, checks: &DeferredChecks, sink: &LocalSink) {
                 &check.name,
                 check.span,
             ));
-            report_vars(&check.ty, &check.module_id);
+            report_vars(&check.ty, &check.package_id);
         }
     }
     let mut reported_literal_spans = HashSet::default();
@@ -63,7 +63,7 @@ pub(crate) fn run(store: &Store, checks: &DeferredChecks, sink: &LocalSink) {
         check.ty.collect_unbound_variables(&mut literal_vars);
         if literal_vars
             .iter()
-            .any(|v| reported_vars.contains(&(check.module_id.clone(), *v)))
+            .any(|v| reported_vars.contains(&(check.package_id.clone(), *v)))
         {
             continue;
         }
@@ -82,7 +82,7 @@ pub(crate) fn run(store: &Store, checks: &DeferredChecks, sink: &LocalSink) {
         if element_ty.is_error() || element_ty.is_variable() {
             continue;
         }
-        if let Err(no_zero) = semantics::zero::has_zero(store, element_ty, &check.module_id) {
+        if let Err(no_zero) = semantics::zero::has_zero(store, element_ty, &check.package_id) {
             sink.push(diagnostics::infer::slice_make_no_zero(
                 &no_zero.leaf_ty.stringify(),
                 no_zero.hidden_go_state(),
@@ -121,17 +121,17 @@ mod tests {
         }
     }
 
-    fn run_checks(call_module: &str, literal_module: &str) -> Vec<String> {
+    fn run_checks(call_package: &str, literal_package: &str) -> Vec<String> {
         let mut checks = DeferredChecks::default();
         checks.generic_calls.push(GenericCallCheck {
             ty: unbound_slice(5),
             span: Span::new(0, 0, 10),
-            module_id: call_module.to_string(),
+            package_id: call_package.to_string(),
         });
         checks.empty_literals.push(EmptyLiteralCheck {
             ty: unbound_slice(5),
             span: Span::new(1, 4, 2),
-            module_id: literal_module.to_string(),
+            package_id: literal_package.to_string(),
         });
         let sink = LocalSink::new();
         run(&Store::new(), &checks, &sink);
@@ -142,12 +142,12 @@ mod tests {
     }
 
     #[test]
-    fn same_module_shared_var_suppresses_literal() {
+    fn same_package_shared_var_suppresses_literal() {
         assert_eq!(run_checks("a", "a"), vec!["infer.missing_type_argument"]);
     }
 
     #[test]
-    fn same_var_id_across_modules_does_not_suppress() {
+    fn same_var_id_across_packages_does_not_suppress() {
         assert_eq!(
             run_checks("a", "b"),
             vec![

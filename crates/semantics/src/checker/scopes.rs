@@ -766,7 +766,7 @@ mod tests {
     fn inner_type_parameter_shadows_outer_bounds_without_declaring_its_own() {
         let mut scopes = Scopes::new();
         scopes.insert_type_param("T".into(), 0);
-        scopes.insert_trait_bound(Symbol::from_parts("module", "T"), Type::Error);
+        scopes.insert_trait_bound(Symbol::from_parts("package", "T"), Type::Error);
         scopes.push();
         scopes.insert_type_param("T".into(), 0);
 

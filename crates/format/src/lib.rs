@@ -31,7 +31,7 @@ pub fn format_source(source: &str) -> Result<String, Vec<ParseError>> {
     }
 
     let mut formatter = Formatter::new(comments);
-    let document = formatter.module(&parse_result.ast);
+    let document = formatter.package(&parse_result.ast);
     let output = document.to_pretty_string(MAX_LINE_WIDTH);
 
     Ok(output)

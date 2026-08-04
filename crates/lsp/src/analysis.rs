@@ -38,8 +38,8 @@ pub(crate) fn offset_in_span(offset: u32, span: &syntax::ast::Span) -> bool {
     offset >= span.byte_offset && offset < span.byte_offset + span.byte_length
 }
 
-/// Look up the module name for an import alias in a file.
-pub(crate) fn find_module_by_alias(
+/// Look up the package name for an import alias in a file.
+pub(crate) fn find_package_by_alias(
     file: &syntax::program::File,
     alias: &str,
     go_package_names: &FxHashMap<String, String>,
@@ -71,10 +71,10 @@ impl SharedState {
         {
             let diagnostic = match issue {
                 semantics::loader::ExternalTestFileIssue::WrongSuffix => {
-                    diagnostics::module_graph::wrong_test_file_suffix(&filename)
+                    diagnostics::package_graph::wrong_test_file_suffix(&filename)
                 }
                 semantics::loader::ExternalTestFileIssue::NotATestFile => {
-                    diagnostics::module_graph::non_test_file_under_tests(&filename)
+                    diagnostics::package_graph::non_test_file_under_tests(&filename)
                 }
             };
             return Err(vec![convert_diagnostic(
@@ -319,9 +319,9 @@ mod tests {
         let span = syntax::ast::Span::new(0, 0, 1);
         let diagnostic = convert_diagnostic(
             &LisetteDiagnostic::error("Name not found")
-                .with_span_label(&span, "`missing` not found in module `root`"),
+                .with_span_label(&span, "`missing` not found in package `root`"),
             &LineIndex::new("x"),
         );
-        assert_eq!(diagnostic.message, "`missing` not found in module `root`");
+        assert_eq!(diagnostic.message, "`missing` not found in package `root`");
     }
 }

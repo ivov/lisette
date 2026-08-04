@@ -41,7 +41,7 @@ pub fn check_replaceable_with_autofill(expression: &Expression, ctx: &NodeCtx) {
     if !unspecified.is_empty() {
         return;
     }
-    if !rewrite_would_typecheck(ctx.store, ty, name, field_assignments, ctx.module_id()) {
+    if !rewrite_would_typecheck(ctx.store, ty, name, field_assignments, ctx.package_id()) {
         return;
     }
 
@@ -100,7 +100,7 @@ fn is_go_imported(ty: &Type) -> bool {
     id.as_str().starts_with("go:")
 }
 
-fn struct_module(ty: &Type) -> Option<String> {
+fn struct_package(ty: &Type) -> Option<String> {
     let Type::Nominal { id, .. } = ty.strip_refs() else {
         return None;
     };
@@ -112,7 +112,7 @@ fn rewrite_would_typecheck(
     ty: &Type,
     name: &str,
     field_assignments: &[StructFieldAssignment],
-    from_module: &str,
+    from_package: &str,
 ) -> bool {
     if is_go_imported(ty) {
         return true;
@@ -120,10 +120,10 @@ fn rewrite_would_typecheck(
     let Some(omitted) = post_rewrite_unspecified_fields(store, ty, name, field_assignments) else {
         return false;
     };
-    let is_cross_module = struct_module(ty).is_some_and(|m| m.as_str() != from_module);
+    let is_cross_package = struct_package(ty).is_some_and(|m| m.as_str() != from_package);
     omitted
         .iter()
-        .all(|f| (!is_cross_module || f.is_public) && has_zero(store, &f.ty, from_module).is_ok())
+        .all(|f| (!is_cross_package || f.is_public) && has_zero(store, &f.ty, from_package).is_ok())
 }
 
 struct OmittedField {

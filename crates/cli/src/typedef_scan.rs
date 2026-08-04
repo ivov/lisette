@@ -84,7 +84,7 @@ fn scan_file_imports(path: PathBuf) -> Result<Vec<ScannedImport>, SourceScanErro
 
     let mut imports = Vec::new();
     for expr in &parse_result.ast {
-        if let Expression::ModuleImport { name, alias, .. } = expr
+        if let Expression::PackageImport { name, alias, .. } = expr
             && let Some(pkg) = name.strip_prefix("go:")
             && deps::is_third_party(pkg)
         {

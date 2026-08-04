@@ -302,7 +302,7 @@ impl InferCtx<'_> {
 
         if ty.as_import_namespace().is_some() && !self.scopes.is_dot_access_base() {
             self.sink
-                .push(diagnostics::infer::module_namespace_used_as_value(
+                .push(diagnostics::infer::package_namespace_used_as_value(
                     &value, span,
                 ));
         }
@@ -649,13 +649,13 @@ impl InferCtx<'_> {
 
         let mut available_names = self.scopes.collect_all_value_names();
 
-        let module = self.current_module(store);
-        for qualified_name in module.definitions.keys() {
+        let package = self.current_package(store);
+        for qualified_name in package.definitions.keys() {
             let parts: Vec<&str> = qualified_name.rsplitn(2, '.').collect();
             if parts.len() == 2 {
-                let module_name = parts[1];
+                let package_name = parts[1];
                 let name = parts[0];
-                if module_name == module.id {
+                if package_name == package.id {
                     available_names.push(name.to_string());
                 }
             }

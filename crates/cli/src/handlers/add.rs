@@ -365,7 +365,7 @@ fn run_add_pipeline(plan: AddPlan) -> i32 {
     0
 }
 
-const PRELUDE_MODULE: &str = "github.com/ivov/lisette/prelude";
+const PRELUDE_GO_MODULE: &str = "github.com/ivov/lisette/prelude";
 
 fn parse_dep_string(input: &str) -> Result<ParsedDependency, String> {
     let input = input.trim();
@@ -467,7 +467,7 @@ fn parse_dep_string(input: &str) -> Result<ParsedDependency, String> {
 
     let requested_package = normalize_module_path(path)?;
 
-    if requested_package == PRELUDE_MODULE {
+    if requested_package == PRELUDE_GO_MODULE {
         return Err(
             "the Lisette prelude is built into every project and cannot be added as a dependency"
                 .to_string(),

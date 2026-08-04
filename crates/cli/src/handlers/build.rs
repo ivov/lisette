@@ -17,9 +17,9 @@ use lisette::pipeline::{
 };
 use semantics::loader::{
     EXTERNAL_TESTS_DIR, ExternalTestFileIssue, ROOT_IMPORT, external_test_file_issue,
-    is_production_module_file,
+    is_production_package_file,
 };
-use semantics::store::ENTRY_MODULE_ID;
+use semantics::store::ENTRY_PACKAGE_ID;
 
 pub fn emit(path: Option<String>, sourcemap: bool) -> i32 {
     with_locked_project(path, |prep| {
@@ -116,7 +116,7 @@ pub(super) fn with_locked_project(
     let owning_project = target_path
         .is_file()
         .then(|| match super::project::resolve_file_target(target_path) {
-            FileTarget::ProjectEntry { root } | FileTarget::ProjectModule { root } => Some(root),
+            FileTarget::ProjectEntry { root } | FileTarget::ProjectPackage { root } => Some(root),
             FileTarget::Script { .. } => None,
         })
         .flatten();
@@ -499,7 +499,7 @@ fn write_and_prune_outputs(
         .map(|entry| entry.name.as_str())
         .collect();
     if let Err(e) =
-        prune_orphan_go_files(&prep.target_dir, &produced, &emitted, &result.live_modules)
+        prune_orphan_go_files(&prep.target_dir, &produced, &emitted, &result.live_packages)
     {
         cli_error!(
             heading,
@@ -641,15 +641,15 @@ pub(super) fn resolve_project_layout(project_path: &Path) -> Option<ProjectLayou
     if let Some(rel) = sources.iter().find_map(|path| {
         path.strip_prefix(&src)
             .ok()
-            .filter(|rel| rel.starts_with(ENTRY_MODULE_ID))
+            .filter(|rel| rel.starts_with(ENTRY_PACKAGE_ID))
     }) {
         cli_error!(
-            "Reserved module directory",
+            "Reserved package directory",
             format!(
-                "`src/{}` sits under `src/{ENTRY_MODULE_ID}/`, which collides with the compiler's internal entry module",
+                "`src/{}` sits under `src/{ENTRY_PACKAGE_ID}/`, which collides with the compiler's internal entry package",
                 rel.display()
             ),
-            "Rename the module"
+            "Rename the package"
         );
         return None;
     }
@@ -665,12 +665,12 @@ pub(super) fn resolve_project_layout(project_path: &Path) -> Option<ProjectLayou
             .filter(|rel| rel.starts_with(EXTERNAL_TESTS_DIR))
     }) {
         cli_error!(
-            "Reserved module directory",
+            "Reserved package directory",
             format!(
                 "`src/{}` sits under `src/{EXTERNAL_TESTS_DIR}/`, which collides with the external test directory `{EXTERNAL_TESTS_DIR}/` at the project root",
                 rel.display()
             ),
-            "Rename the module"
+            "Rename the package"
         );
         return None;
     }
@@ -681,12 +681,12 @@ pub(super) fn resolve_project_layout(project_path: &Path) -> Option<ProjectLayou
             .filter(|rel| rel.starts_with(ROOT_IMPORT))
     }) {
         cli_error!(
-            "Reserved module directory",
+            "Reserved package directory",
             format!(
                 "`src/{}` sits under `src/{ROOT_IMPORT}/`, which collides with the reserved `{ROOT_IMPORT}` spelling for the library's root package",
                 rel.display()
             ),
-            "Rename the module"
+            "Rename the package"
         );
         return None;
     }
@@ -742,7 +742,7 @@ pub(super) fn resolve_project_layout(project_path: &Path) -> Option<ProjectLayou
     let has_production = sources.iter().any(|p| {
         p.file_name()
             .and_then(|n| n.to_str())
-            .is_some_and(is_production_module_file)
+            .is_some_and(is_production_package_file)
     });
 
     if !has_production {
@@ -752,7 +752,7 @@ pub(super) fn resolve_project_layout(project_path: &Path) -> Option<ProjectLayou
                 "No production `.lis` files under `src/` in `{}`",
                 project_path.display()
             ),
-            "Create `src/main.lis` for a binary, or any `src/<name>.lis` module for a library"
+            "Create `src/main.lis` for a binary, or any `src/<name>.lis` package for a library"
         );
         return None;
     }
@@ -856,7 +856,7 @@ fn go_ignored_shape(
                     || segment.starts_with('_')
                 {
                     return Some((
-                        "Go-ignored module directory",
+                        "Go-ignored package directory",
                         format!(
                             "`{root_label}/{}` sits under `{}`, which the Go toolchain skips",
                             rel.display(),

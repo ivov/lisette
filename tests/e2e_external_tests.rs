@@ -142,7 +142,7 @@ fn external_test_cannot_reach_private_symbols() {
     let check = lis(&project, &["check"]);
     let out = combined(&check);
     assert!(!check.status.success(), "expected failure: {out}");
-    assert!(out.contains("not found in module"), "got: {out}");
+    assert!(out.contains("not found in package"), "got: {out}");
 }
 
 #[test]
@@ -163,7 +163,7 @@ fn import_of_tests_namespace_is_rejected() {
     let check = lis(&project, &["check"]);
     let out = combined(&check);
     assert!(!check.status.success(), "expected failure: {out}");
-    assert!(out.contains("reserved module name"), "got: {out}");
+    assert!(out.contains("reserved package name"), "got: {out}");
 }
 
 #[test]
@@ -177,8 +177,8 @@ fn loose_directory_tests_import_is_not_reserved_but_unresolved() {
     let out = combined(&check);
     assert!(!check.status.success(), "expected failure: {out}");
     assert!(
-        out.contains("Module not found"),
-        "a missing `tests` module outside a project is unresolved, not reserved: {out}"
+        out.contains("Package not found"),
+        "a missing `tests` package outside a project is unresolved, not reserved: {out}"
     );
     assert!(
         !out.contains("reserved"),
@@ -202,9 +202,9 @@ fn loose_directory_tests_folder_is_unresolved_not_reserved() {
     let out = combined(&check);
     assert!(
         !check.status.success(),
-        "a lone file resolves no sibling module, `tests/` included: {out}"
+        "a lone file resolves no sibling package, `tests/` included: {out}"
     );
-    assert!(out.contains("Module not found"), "got: {out}");
+    assert!(out.contains("Package not found"), "got: {out}");
     assert!(
         !out.contains("reserved"),
         "the `tests` reservation must not apply outside a project: {out}"
@@ -242,7 +242,7 @@ fn src_tests_directory_is_reserved() {
     let check = lis(&project, &["check"]);
     let out = combined(&check);
     assert!(!check.status.success(), "expected failure: {out}");
-    assert!(out.contains("Reserved module directory"), "got: {out}");
+    assert!(out.contains("Reserved package directory"), "got: {out}");
 }
 
 #[test]
@@ -366,7 +366,7 @@ fn warm_check_catches_root_api_change() {
         "warm check missed the root change: {out}"
     );
     assert!(
-        out.contains("not found in module"),
+        out.contains("not found in package"),
         "the stale root member must be reported on a warm run: {out}"
     );
 }
@@ -393,7 +393,7 @@ fn library_external_test_imports_root() {
     let emitted = fs::read_to_string(project.join("target/tests/api_test.go")).unwrap();
     assert!(
         emitted.contains("\"example.com/acme/geo\""),
-        "root package imported at the bare module path: {emitted}"
+        "root package imported at the bare package path: {emitted}"
     );
     assert!(
         !emitted.contains("_entry_"),
@@ -480,7 +480,7 @@ fn src_root_directory_is_reserved() {
     let check = lis(&project, &["check"]);
     let out = combined(&check);
     assert!(!check.status.success(), "expected failure: {out}");
-    assert!(out.contains("Reserved module directory"), "got: {out}");
+    assert!(out.contains("Reserved package directory"), "got: {out}");
 }
 
 #[test]
@@ -497,9 +497,9 @@ fn src_entry_directory_is_reserved() {
     let check = lis(&project, &["check"]);
     let out = combined(&check);
     assert!(!check.status.success(), "expected failure: {out}");
-    assert!(out.contains("Reserved module directory"), "got: {out}");
+    assert!(out.contains("Reserved package directory"), "got: {out}");
     assert!(
-        out.contains("internal entry module"),
+        out.contains("internal entry package"),
         "the entry collision must be named: {out}"
     );
 }

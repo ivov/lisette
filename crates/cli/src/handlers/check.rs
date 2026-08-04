@@ -88,7 +88,7 @@ pub fn check(
 
 fn check_file(file_path: &Path, options: &CheckOptions) -> i32 {
     match super::project::resolve_file_target(file_path) {
-        FileTarget::ProjectEntry { root } | FileTarget::ProjectModule { root } => {
+        FileTarget::ProjectEntry { root } | FileTarget::ProjectPackage { root } => {
             check_project(&root, options)
         }
         FileTarget::Script { inside_project } => check_single_file(
@@ -370,7 +370,7 @@ fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
     let mut loose: Vec<(&PathBuf, bool)> = Vec::new();
     for file in &files {
         match super::project::resolve_file_target(file) {
-            FileTarget::ProjectEntry { root } | FileTarget::ProjectModule { root } => {
+            FileTarget::ProjectEntry { root } | FileTarget::ProjectPackage { root } => {
                 if !projects.contains(&root) {
                     projects.push(root);
                 }

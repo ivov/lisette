@@ -33,11 +33,11 @@ pub(super) fn register_entry_file(
 
     if !outcome.is_failed() {
         if entry.filename.ends_with("_test.lis") {
-            sink.push(diagnostics::module_graph::wrong_test_file_suffix(
+            sink.push(diagnostics::package_graph::wrong_test_file_suffix(
                 &entry.display_path,
             ));
         } else if entry.filename.ends_with(".test.lis") && !include_tests {
-            sink.push(diagnostics::module_graph::cannot_emit_test_file(
+            sink.push(diagnostics::package_graph::cannot_emit_test_file(
                 &entry.display_path,
             ));
         }
@@ -106,7 +106,7 @@ fn parse_entry_file(source: &str, mode: EntryParseMode) -> ParsedEntry {
     }
 }
 
-/// Loads every other `.lis` file in the entry module's folder as a sibling file.
+/// Loads every other `.lis` file in the entry package's folder as a sibling file.
 pub(super) fn load_sibling_files(
     store: &mut Store,
     sink: &LocalSink,
@@ -114,12 +114,12 @@ pub(super) fn load_sibling_files(
     entry_filename: Option<&str>,
     include_tests: bool,
 ) {
-    for (filename, content) in loader.scan_folder(ENTRY_MODULE_ID) {
+    for (filename, content) in loader.scan_folder(ENTRY_PACKAGE_ID) {
         if Some(filename.as_str()) == entry_filename {
             continue;
         }
         if filename.ends_with("_test.lis") {
-            sink.push(diagnostics::module_graph::wrong_test_file_suffix(
+            sink.push(diagnostics::package_graph::wrong_test_file_suffix(
                 &content.display_path,
             ));
             continue;
@@ -135,7 +135,7 @@ pub(super) fn load_sibling_files(
         sink.extend_parse_errors(result.errors);
         store.store_file(File {
             id: file_id,
-            module_id: ENTRY_MODULE_ID.to_string(),
+            package_id: ENTRY_PACKAGE_ID.to_string(),
             name: filename,
             display_path: content.display_path,
             source_path: None,
@@ -149,21 +149,21 @@ pub(super) fn load_sibling_files(
 pub(super) fn compute_roots(
     project_kind: ProjectKind,
     compile_phase: CompilePhase,
-    discovered: &DiscoveredModules,
-    entry_module: String,
+    discovered: &DiscoveredPackages,
+    entry_package: String,
 ) -> Roots {
     let include_test_roots = compile_phase.includes_tests();
     match project_kind {
         ProjectKind::Binary => {
             let mut additional = match compile_phase {
-                CompilePhase::Check => discovered.production_modules().cloned().collect(),
+                CompilePhase::Check => discovered.production_packages().cloned().collect(),
                 CompilePhase::Emit | CompilePhase::Test => Vec::new(),
             };
             if include_test_roots {
                 additional.extend(discovered.test_roots().cloned());
             }
             Roots {
-                primary: vec![entry_module],
+                primary: vec![entry_package],
                 additional,
             }
         }
@@ -172,22 +172,22 @@ pub(super) fn compute_roots(
             if include_test_roots {
                 additional.extend(discovered.test_roots().cloned());
             }
-            additional.push(entry_module);
+            additional.push(entry_package);
             Roots {
-                primary: discovered.production_modules().cloned().collect(),
+                primary: discovered.production_packages().cloned().collect(),
                 additional,
             }
         }
     }
 }
 
-/// Production modules the primary roots never reached.
-pub(super) fn find_unreachable_modules(
-    discovered: &DiscoveredModules,
-    graph_result: &crate::module_graph::ModuleGraphResult,
+/// Production packages the primary roots never reached.
+pub(super) fn find_unreachable_packages(
+    discovered: &DiscoveredPackages,
+    graph_result: &crate::package_graph::PackageGraphResult,
 ) -> Vec<String> {
     let mut unreachable: Vec<String> = discovered
-        .production_modules()
+        .production_packages()
         .filter(|m| !graph_result.primary_reachable.contains(m.as_str()))
         .cloned()
         .collect();

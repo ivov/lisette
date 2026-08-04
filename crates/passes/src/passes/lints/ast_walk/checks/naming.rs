@@ -188,7 +188,7 @@ fn go_method_name_exempt(
     if let Some(type_name) = impl_type
         && ctx
             .facts
-            .method_spelling_pinned_by_interface(ctx.module_id(), name, type_name)
+            .method_spelling_pinned_by_interface(ctx.package_id(), name, type_name)
     {
         return true;
     }

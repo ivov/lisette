@@ -7,9 +7,9 @@ use syntax::ast::BindingId;
 use syntax::program::{EmitInput, MutationInfo, UnusedInfo};
 
 use semantics::AnalyzeInput;
-use semantics::cache::{EmitStamp, save_module_cache};
+use semantics::cache::{EmitStamp, save_package_cache};
 use semantics::facts::{BindingFact, Usage};
-use semantics::store::ENTRY_MODULE_ID;
+use semantics::store::ENTRY_PACKAGE_ID;
 use semantics::{InferenceOutput, PARALLEL_THRESHOLD, run_inference};
 
 use crate::passes;
@@ -17,7 +17,7 @@ use crate::passes;
 pub struct Analysis {
     pub emit_input: EmitInput,
     pub emit_stamps: Vec<EmitStamp>,
-    pub unreachable_modules: Vec<String>,
+    pub unreachable_packages: Vec<String>,
     bindings: HashMap<BindingId, BindingFact>,
     usages: HashSet<Usage>,
     diagnostics: Vec<LisetteDiagnostic>,
@@ -79,10 +79,10 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
         facts,
         sink,
         has_pre_check_errors,
-        compiled_modules,
-        cached_modules,
+        compiled_packages,
+        cached_packages,
         cache_root,
-        unreachable_modules,
+        unreachable_packages,
         entry_parse,
     } = run_inference(input);
     let lint_mode = if entry_parse.is_clean() {
@@ -113,10 +113,10 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
     all_diagnostics.sort_by(diagnostics::LisetteDiagnostic::sort_key);
     all_diagnostics.splice(0..0, entry_parse_errors.into_iter().map(Into::into));
 
-    let emit_stamps: Vec<EmitStamp> = compiled_modules
+    let emit_stamps: Vec<EmitStamp> = compiled_packages
         .iter()
         .map(|c| EmitStamp {
-            module_id: c.module_id.clone(),
+            package_id: c.package_id.clone(),
             artifact_hash: c.artifact_hash,
         })
         .collect();
@@ -126,33 +126,33 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
             .iter()
             .any(|diagnostic| diagnostic.is_error());
         if !has_errors {
-            let save = |compiled: &semantics::cache::CompiledModule| {
+            let save = |compiled: &semantics::cache::CompiledPackage| {
                 let file_ids: HashSet<u32> = store
-                    .get_module(&compiled.module_id)
+                    .get_package(&compiled.package_id)
                     .map(|m| m.file_ids().collect())
                     .unwrap_or_default();
 
-                let has_module_lints = all_diagnostics.iter().any(|diagnostic| {
+                let has_package_lints = all_diagnostics.iter().any(|diagnostic| {
                     !diagnostic.is_error()
                         && diagnostic
                             .file_id()
                             .map(|fid| file_ids.contains(&fid))
                             .unwrap_or(true)
                 });
-                if !has_module_lints
-                    && let Err(e) = save_module_cache(compiled, &store, project_root)
+                if !has_package_lints
+                    && let Err(e) = save_package_cache(compiled, &store, project_root)
                 {
                     eprintln!(
                         "warning: failed to write cache for {}: {e}",
-                        compiled.module_id
+                        compiled.package_id
                     );
                 }
             };
-            if compiled_modules.len() < PARALLEL_THRESHOLD {
-                compiled_modules.iter().for_each(save);
+            if compiled_packages.len() < PARALLEL_THRESHOLD {
+                compiled_packages.iter().for_each(save);
             } else {
                 use rayon::prelude::*;
-                compiled_modules.par_iter().for_each(save);
+                compiled_packages.par_iter().for_each(save);
             }
         }
     }
@@ -160,44 +160,49 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
     let mut files = HashMap::default();
     let mut definitions = HashMap::default();
 
-    let go_module_ids: HashSet<String> = store
-        .modules
+    let go_package_ids: HashSet<String> = store
+        .packages
         .keys()
         .filter(|id| id.starts_with(syntax::types::GO_IMPORT_PREFIX))
         .cloned()
         .collect();
 
-    for (_, module) in store.modules {
+    for (_, package) in store.packages {
         // Worker views are gone by now, so this unwraps without cloning.
-        let module = Arc::try_unwrap(module).unwrap_or_else(|shared| (*shared).clone());
-        let is_internal = module.is_internal();
-        definitions.extend(module.definitions);
+        let package = Arc::try_unwrap(package).unwrap_or_else(|shared| (*shared).clone());
+        let is_internal = package.is_internal();
+        definitions.extend(package.definitions);
 
         // Internal typedef files remain available so the LSP can map their IDs
-        // to URIs for go-to-definition. Source files identify their own module.
+        // to URIs for go-to-definition. Source files identify their own package.
         if is_internal {
-            files.extend(module.files.into_iter().filter(|(_, file)| file.is_d_lis()));
+            files.extend(
+                package
+                    .files
+                    .into_iter()
+                    .filter(|(_, file)| file.is_d_lis()),
+            );
             continue;
         }
 
-        files.extend(module.files);
+        files.extend(package.files);
     }
 
     Analysis {
         emit_input: EmitInput {
             files,
             definitions,
-            entry_module_id: ENTRY_MODULE_ID.to_string(),
+            entry_package_id: ENTRY_PACKAGE_ID.to_string(),
             unused,
             mutations,
-            cached_modules,
+            cached_packages,
             equality_index: store.equality_index,
             test_index: store.test_index,
             go_package_names: store.go_package_names,
-            go_module_ids,
+            go_package_ids,
         },
         emit_stamps,
-        unreachable_modules,
+        unreachable_packages,
         bindings,
         usages,
         diagnostics: order_diagnostics_by_severity(all_diagnostics),
@@ -239,7 +244,7 @@ mod tests {
     fn analysis_retains_navigation_links() {
         let source = "fn main() {\n  let value = 1\n  let _ = value\n}\n";
         let mut loader = MemoryLoader::new();
-        loader.add_file(ENTRY_MODULE_ID, "main.lis", source);
+        loader.add_file(ENTRY_PACKAGE_ID, "main.lis", source);
         let locator = Default::default();
 
         let analysis = analyze(AnalyzeInput {

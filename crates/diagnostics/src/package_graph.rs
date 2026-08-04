@@ -1,71 +1,96 @@
 use crate::LisetteDiagnostic;
 use syntax::ast::Span;
 
-pub enum MissingModuleReason {
+pub enum MissingPackageReason {
     NotFound,
     GoStandardLibrary,
     Script { inside_project: bool },
     UnnecessarySrcPrefix(String),
 }
 
-pub fn module_not_found(
-    module_name: &str,
+pub fn package_not_found(
+    package_name: &str,
     span: Span,
-    reason: MissingModuleReason,
+    reason: MissingPackageReason,
 ) -> LisetteDiagnostic {
     let help = match reason {
-        MissingModuleReason::UnnecessarySrcPrefix(stripped) => format!(
+        MissingPackageReason::UnnecessarySrcPrefix(stripped) => format!(
             "Did you mean `import \"{}\"`? The `src/` prefix is not needed — imports are relative to the source directory.",
             stripped
         ),
-        MissingModuleReason::GoStandardLibrary => format!(
-            "No `{}` module found in your local project. Did you mean `import \"go:{}\"` from Go's stdlib?",
-            module_name, module_name
+        MissingPackageReason::GoStandardLibrary => format!(
+            "No `{}` package found in your local project. Did you mean `import \"go:{}\"` from Go's stdlib?",
+            package_name, package_name
         ),
-        MissingModuleReason::Script {
+        MissingPackageReason::Script {
             inside_project: false,
         } => {
-            "A file compiled on its own may import only from the Go standard library. To import modules normally, use `lis new` to create a project."
+            "A file compiled on its own may import only from the Go standard library. To import packages normally, use `lis new` to create a project."
                 .to_string()
         }
-        MissingModuleReason::Script {
+        MissingPackageReason::Script {
             inside_project: true,
         } => {
-            "A file compiled on its own may import only from the Go standard library. This file sits inside a project but outside its `src/`, so it is not part of it. Move it under `src/` to import the project's modules."
+            "A file compiled on its own may import only from the Go standard library. This file sits inside a project but outside its `src/`, so it is not part of it. Move it under `src/` to import the project's packages."
                 .to_string()
         }
-        MissingModuleReason::NotFound => {
-            "Check the module path and ensure the file exists".to_string()
+        MissingPackageReason::NotFound => {
+            "Check the package path and ensure the file exists".to_string()
         }
     };
 
-    LisetteDiagnostic::error("Module not found")
-        .with_resolve_code("module_not_found")
-        .with_span_label(&span, "not a module in this project")
+    LisetteDiagnostic::error("Package not found")
+        .with_resolve_code("package_not_found")
+        .with_span_label(&span, "not a package in this project")
         .with_help(help)
 }
 
-pub fn invalid_module_path(module_name: &str, span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error(format!("Invalid module path `{}`", module_name))
-        .with_resolve_code("invalid_module_path")
-        .with_span_label(&span, "module paths cannot contain `.`")
-        .with_help(
-            "Project imports use bare folder names like `import \"util\"` or `import \"nested/deep/module\"`. Relative-path syntax (`./sub`, `../sub`) is not supported.",
-        )
+/// A path with a dotted first segment and nonempty following segments, like `github.com/gorilla/mux`.
+pub fn is_go_package_shaped(package_name: &str) -> bool {
+    let Some((first_segment, rest)) = package_name.split_once('/') else {
+        return false;
+    };
+    first_segment.contains('.')
+        && !matches!(first_segment, "." | "..")
+        && rest.split('/').all(|segment| !segment.is_empty())
 }
 
-pub fn missing_go_prefix(module_name: &str, span: Span, is_blank: bool) -> LisetteDiagnostic {
-    let suggestion = if is_blank {
-        format!("import _ \"go:{}\"", module_name)
+pub fn invalid_package_path(package_name: &str, span: Span, is_blank: bool) -> LisetteDiagnostic {
+    let help = if is_go_package_shaped(package_name) {
+        let suggestion = if is_blank {
+            format!("import _ \"go:{}\"", package_name)
+        } else {
+            format!("import \"go:{}\"", package_name)
+        };
+        let add_argument = package_name
+            .strip_prefix("github.com/")
+            .unwrap_or(package_name);
+        format!(
+            "Go packages are imported with the `go:` prefix: `{}`. Add it first with `lis add {}`",
+            suggestion, add_argument
+        )
     } else {
-        format!("import \"go:{}\"", module_name)
+        "Project imports use bare folder names like `import \"util\"` or `import \"nested/deep/package\"`. Relative-path syntax (`./sub`, `../sub`) is not supported.".to_string()
     };
-    LisetteDiagnostic::error(format!("Invalid module path `{}`", module_name))
+
+    LisetteDiagnostic::error(format!("Invalid package path `{}`", package_name))
+        .with_resolve_code("invalid_package_path")
+        .with_span_label(&span, "package paths cannot contain `.`")
+        .with_help(help)
+}
+
+pub fn missing_go_prefix(package_name: &str, span: Span, is_blank: bool) -> LisetteDiagnostic {
+    let suggestion = if is_blank {
+        format!("import _ \"go:{}\"", package_name)
+    } else {
+        format!("import \"go:{}\"", package_name)
+    };
+    LisetteDiagnostic::error(format!("Invalid package path `{}`", package_name))
         .with_resolve_code("missing_go_prefix")
         .with_span_label(&span, "Go imports require the `go:` prefix")
         .with_help(format!(
             "`{}` is a declared Go dependency. Did you mean `{}`?",
-            module_name, suggestion
+            package_name, suggestion
         ))
 }
 
@@ -76,46 +101,46 @@ pub fn cannot_import_prelude(span: Span) -> LisetteDiagnostic {
         .with_help("Remove this import. Use e.g. `Option` or `prelude.Option` directly.")
 }
 
-pub fn reserved_module_import(span: Span) -> LisetteDiagnostic {
+pub fn reserved_package_import(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid import")
-        .with_resolve_code("reserved_module_import")
+        .with_resolve_code("reserved_package_import")
         .with_span_label(&span, "the `**` prefix is reserved for the compiler")
-        .with_help("Rename the module so its import path does not begin with `**`.")
+        .with_help("Rename the package so its import path does not begin with `**`.")
 }
 
 pub fn cannot_import_external_tests(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid import")
         .with_resolve_code("cannot_import_external_tests")
-        .with_span_label(&span, "reserved module name")
-        .with_help("The `tests` module at project root is reserved for external tests")
+        .with_span_label(&span, "reserved package name")
+        .with_help("The `tests` package at project root is reserved for external tests")
 }
 
 pub fn cannot_import_entry(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid import")
         .with_resolve_code("cannot_import_root")
-        .with_span_label(&span, "reserved module name")
-        .with_help("`_entry_` is an internal module. Import a library's root package with `root`")
+        .with_span_label(&span, "reserved package name")
+        .with_help("`_entry_` is an internal package. Import a library's root package with `root`")
 }
 
 pub fn cannot_import_root_from_src(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid import")
         .with_resolve_code("cannot_import_root")
-        .with_span_label(&span, "reserved module name")
+        .with_span_label(&span, "reserved package name")
         .with_help("`root` names the library's root package and is importable only from external tests under `tests/`")
 }
 
 pub fn cannot_import_root_in_binary(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid import")
         .with_resolve_code("cannot_import_root")
-        .with_span_label(&span, "reserved module name")
-        .with_help("A binary has no importable root. Move testable code into a sub-module under `src/`, or make the project a library")
+        .with_span_label(&span, "reserved package name")
+        .with_help("A binary has no importable root. Move testable code into a sub-package under `src/`, or make the project a library")
 }
 
 pub fn cannot_import_root_without_source(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid import")
         .with_resolve_code("cannot_import_root")
         .with_span_label(&span, "no root package")
-        .with_help("This library has no root package because `src/` holds no source files directly. Import a sub-module by name, or add a source file under `src/`")
+        .with_help("This library has no root package because `src/` holds no source files directly. Import a sub-package by name, or add a source file under `src/`")
 }
 
 pub fn wrong_test_file_suffix(display_path: &str) -> LisetteDiagnostic {
@@ -194,7 +219,7 @@ pub fn undeclared_go_import_via_replace(
 
 pub fn undeclared_go_import_via_local(
     go_pkg: &str,
-    local_module: &str,
+    local_package: &str,
     span: Span,
 ) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Undeclared Go dependency")
@@ -202,7 +227,7 @@ pub fn undeclared_go_import_via_local(
         .with_span_label(&span, "not in lisette.toml")
         .with_help(format!(
             "`{}` is a dependency of the local module `{}`. Run `lis sync` if it is published, or `lis add --path <dir>` if `{}` resolves it from a local directory",
-            go_pkg, local_module, local_module
+            go_pkg, local_package, local_package
         ))
 }
 
@@ -299,10 +324,10 @@ pub fn bindgen_failed(
     ))
 }
 
-pub fn unreachable_module(module_id: &str) -> LisetteDiagnostic {
-    LisetteDiagnostic::warn(format!("Unreachable module: `{}`", module_id))
-        .with_resolve_code("unreachable_module")
-        .with_help("This module is never imported. Use or remove it.")
+pub fn unreachable_package(package_id: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn(format!("Unreachable package: `{}`", package_id))
+        .with_resolve_code("unreachable_package")
+        .with_help("This package is never imported. Use or remove it.")
 }
 
 pub fn import_cycle(path: &[String]) -> LisetteDiagnostic {
@@ -311,7 +336,7 @@ pub fn import_cycle(path: &[String]) -> LisetteDiagnostic {
     let help = if is_self_import {
         "Remove the self-import"
     } else {
-        "To break the cycle, remove one of the imports or extract common dependencies into a separate module"
+        "To break the cycle, remove one of the imports or extract common dependencies into a separate package"
     };
 
     LisetteDiagnostic::error(format!("Import cycle detected: {}", path.join(" -> ")))
@@ -324,11 +349,55 @@ mod tests {
     use super::*;
 
     #[test]
-    fn unreachable_module_names_one_module_and_carries_a_code() {
-        let diagnostic = unreachable_module("orphan");
+    fn invalid_package_path_suggests_go_import_for_go_shaped_path() {
+        let diagnostic = invalid_package_path("github.com/gorilla/mux", Span::new(0, 0, 1), false);
+        let help = diagnostic.plain_help().unwrap_or_default();
+        assert!(help.contains("import \"go:github.com/gorilla/mux\""));
+        assert!(help.contains("lis add gorilla/mux"));
+    }
+
+    #[test]
+    fn invalid_package_path_preserves_blank_alias_in_suggestion() {
+        let diagnostic = invalid_package_path("github.com/gorilla/mux", Span::new(0, 0, 1), true);
+        let help = diagnostic.plain_help().unwrap_or_default();
+        assert!(
+            help.contains("import _ \"go:github.com/gorilla/mux\""),
+            "help was: {}",
+            help
+        );
+    }
+
+    #[test]
+    fn invalid_package_path_keeps_full_path_for_non_github_host() {
+        let diagnostic = invalid_package_path("go.uber.org/zap", Span::new(0, 0, 1), false);
+        let help = diagnostic.plain_help().unwrap_or_default();
+        assert!(help.contains("import \"go:go.uber.org/zap\""));
+        assert!(help.contains("lis add go.uber.org/zap"));
+    }
+
+    #[test]
+    fn go_package_shape_requires_nonempty_segments() {
+        assert!(is_go_package_shaped("github.com/gorilla/mux"));
+        assert!(!is_go_package_shaped("github.com/"));
+        assert!(!is_go_package_shaped("github.com//foo"));
+        assert!(!is_go_package_shaped("github.com/foo/"));
+    }
+
+    #[test]
+    fn invalid_package_path_keeps_folder_help_for_relative_path() {
+        for path in ["./sub", "../sub"] {
+            let diagnostic = invalid_package_path(path, Span::new(0, 0, 1), false);
+            let help = diagnostic.plain_help().unwrap_or_default();
+            assert!(help.contains("Relative-path syntax"), "help was: {}", help);
+        }
+    }
+
+    #[test]
+    fn unreachable_package_names_one_package_and_carries_a_code() {
+        let diagnostic = unreachable_package("orphan");
         assert!(diagnostic.is_warning());
-        assert_eq!(diagnostic.plain_message(), "Unreachable module: `orphan`");
-        assert_eq!(diagnostic.code_str(), Some("resolve.unreachable_module"));
+        assert_eq!(diagnostic.plain_message(), "Unreachable package: `orphan`");
+        assert_eq!(diagnostic.code_str(), Some("resolve.unreachable_package"));
     }
 
     #[test]

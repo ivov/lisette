@@ -4,8 +4,8 @@ source: tests/ui/errors/mod.rs
   ✕ Invalid `defer`
    ╭─[test.lis:3:9]
  2 │ fn f() {
- 3 │   defer module.cleanup
-   ·         ───────┬──────
+ 3 │   defer package.cleanup
+   ·         ───────┬───────
    ·                ╰── expected `()`
  4 │ }
    ╰────

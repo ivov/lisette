@@ -6,7 +6,7 @@ source: tests/ui/lint/mod.rs
  1 │ 
  2 │ import fmt "go:fmt"
    ·        ─┬─
-   ·         ╰── alias matches module name exactly
+   ·         ╰── alias matches package name exactly
  3 │ 
    ╰────
   help: Remove the alias: `import "go:fmt"` · code: [lint.redundant_import_alias]

@@ -334,7 +334,8 @@ impl Planner<'_> {
         if id == "Unknown" {
             return ("any".to_string(), None);
         }
-        let (module, unqualified) = if let Some(rest) = id.strip_prefix(go_name::GO_IMPORT_PREFIX) {
+        let (package, unqualified) = if let Some(rest) = id.strip_prefix(go_name::GO_IMPORT_PREFIX)
+        {
             let Some((path, ty)) = rest.rsplit_once('.') else {
                 return (go_name::escape_keyword(id).into_owned(), None);
             };
@@ -350,13 +351,14 @@ impl Planner<'_> {
             return ("any".to_string(), None);
         }
 
-        let escaped = if module == go_name::PRELUDE_MODULE || self.facts.is_foreign_module(module) {
-            go_name::escape_keyword(unqualified)
-        } else {
-            go_name::escape_type_name(unqualified)
-        };
+        let escaped =
+            if package == go_name::PRELUDE_PACKAGE || self.facts.is_foreign_package(package) {
+                go_name::escape_keyword(unqualified)
+            } else {
+                go_name::escape_type_name(unqualified)
+            };
 
-        if self.facts.is_foreign_module(module) {
+        if self.facts.is_foreign_package(package) {
             // A non-exported foreign type name (first char not uppercase) is an
             // opaque handle that reached a type position and cannot be spelled
             // from another package. Backstop for any inferred misuse the checker
@@ -368,7 +370,7 @@ impl Planner<'_> {
                  argument; it cannot be stored, returned, wrapped, or otherwise placed where \
                  its unexported Go type must be spelled."
             );
-            let package = self.package_use_for_module(module);
+            let package = self.package_use_for_package(package);
             (
                 format!("{}.{}", package.qualifier(), escaped),
                 Some(package),

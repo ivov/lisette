@@ -141,8 +141,8 @@ impl TaskState {
             ));
         }
 
-        let module = self.current_module_mut(store);
-        module.definitions.insert(
+        let package = self.current_package_mut(store);
+        package.definitions.insert(
             qualified_name,
             Definition {
                 visibility: item_visibility,
@@ -223,7 +223,7 @@ impl TaskState {
             None => syntax::program::ValueKind::ConstantDeclaration,
         };
 
-        self.current_module_mut(store).definitions.insert(
+        self.current_package_mut(store).definitions.insert(
             qualified_name,
             Definition {
                 visibility: item_visibility,
@@ -273,8 +273,8 @@ impl TaskState {
         let item_visibility =
             self.compute_item_visibility(&*store, syntactic_visibility, visibility);
 
-        let module = self.current_module_mut(store);
-        module.definitions.insert(
+        let package = self.current_package_mut(store);
+        package.definitions.insert(
             qualified_name,
             Definition {
                 visibility: item_visibility,

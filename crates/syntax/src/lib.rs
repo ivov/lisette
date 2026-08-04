@@ -12,7 +12,7 @@ pub mod types;
 pub use ecow::EcoString;
 pub use parse::ParseError;
 
-pub const ENTRY_MODULE_ID: &str = "_entry_";
+pub const ENTRY_PACKAGE_ID: &str = "_entry_";
 pub const ROOT_IMPORT: &str = "root";
 
 pub type AstBuildResult = parse::ParseResult;

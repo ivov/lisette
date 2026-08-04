@@ -388,7 +388,7 @@ impl Planner<'_> {
     }
 
     pub(crate) fn should_synthesize_to_string(&self, name: &str, attributes: &[Attribute]) -> bool {
-        attributes.iter().any(|a| a.name == "display") && !self.module.has_user_to_string(name)
+        attributes.iter().any(|a| a.name == "display") && !self.package.has_user_to_string(name)
     }
 
     pub(crate) fn should_synthesize_equals(&self, name: &str) -> bool {

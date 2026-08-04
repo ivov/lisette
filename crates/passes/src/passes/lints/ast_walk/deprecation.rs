@@ -8,8 +8,8 @@ use semantics::store::Store;
 
 pub(super) fn build_index(store: &Store) -> HashMap<Span, String> {
     let mut index = HashMap::default();
-    for module in store.modules.values() {
-        for definition in module.definitions.values() {
+    for package in store.packages.values() {
+        for definition in package.definitions.values() {
             if !is_function_type(&definition.ty) {
                 continue;
             }

@@ -30,7 +30,7 @@ pub(crate) fn resolve_field_type(
 
 impl Planner<'_> {
     pub(crate) fn generic_go_name<'a>(&'a self, source_name: &'a str) -> Cow<'a, str> {
-        match self.module.generic_rename(source_name) {
+        match self.package.generic_rename(source_name) {
             Some(renamed) => Cow::Borrowed(renamed),
             None => go_name::escape_type_name(source_name),
         }

@@ -5,9 +5,9 @@ use syntax::types::{FunctionType, Symbol, Type, unqualified_name};
 
 use semantics::store::Store;
 
-pub(crate) fn run(typed_ast: &[Expression], module_id: &str, store: &Store, sink: &LocalSink) {
+pub(crate) fn run(typed_ast: &[Expression], package_id: &str, store: &Store, sink: &LocalSink) {
     for item in typed_ast {
-        visit_expression(item, Position::Value, module_id, store, sink);
+        visit_expression(item, Position::Value, package_id, store, sink);
     }
 }
 
@@ -21,12 +21,12 @@ enum Position {
 fn visit_expression(
     expression: &Expression,
     position: Position,
-    module_id: &str,
+    package_id: &str,
     store: &Store,
     sink: &LocalSink,
 ) {
     if matches!(expression, Expression::Identifier { .. }) && position != Position::Callee {
-        check_one(expression, position, module_id, store, sink);
+        check_one(expression, position, package_id, store, sink);
     }
 
     match expression {
@@ -36,27 +36,27 @@ fn visit_expression(
             spread,
             ..
         } => {
-            visit_expression(callee, Position::Callee, module_id, store, sink);
+            visit_expression(callee, Position::Callee, package_id, store, sink);
             for arg in args {
-                visit_expression(arg, Position::Value, module_id, store, sink);
+                visit_expression(arg, Position::Value, package_id, store, sink);
             }
             if let Some(s) = spread.as_ref() {
-                visit_expression(s, Position::Value, module_id, store, sink);
+                visit_expression(s, Position::Value, package_id, store, sink);
             }
         }
         Expression::Paren {
             expression: inner, ..
         } => {
-            visit_expression(inner, position, module_id, store, sink);
+            visit_expression(inner, position, package_id, store, sink);
         }
         Expression::DotAccess {
             expression: inner, ..
         } => {
-            visit_expression(inner, Position::DotAccessBase, module_id, store, sink);
+            visit_expression(inner, Position::DotAccessBase, package_id, store, sink);
         }
         _ => {
             for child in expression.children() {
-                visit_expression(child, Position::Value, module_id, store, sink);
+                visit_expression(child, Position::Value, package_id, store, sink);
             }
         }
     }
@@ -65,7 +65,7 @@ fn visit_expression(
 fn check_one(
     identifier: &Expression,
     position: Position,
-    module_id: &str,
+    package_id: &str,
     store: &Store,
     sink: &LocalSink,
 ) {
@@ -81,7 +81,7 @@ fn check_one(
         value,
         "imaginary" | "assert_type" | "complex" | "real" | "panic"
     ) {
-        let qualified = Symbol::from_parts(module_id, value);
+        let qualified = Symbol::from_parts(package_id, value);
         if store.get_definition(&qualified).is_none() {
             sink.push(diagnostics::infer::native_constructor_value(value, span));
             return;
@@ -92,7 +92,7 @@ fn check_one(
         let qualified = if value.contains('.') {
             value.to_string()
         } else {
-            Symbol::from_parts(module_id, value).to_string()
+            Symbol::from_parts(package_id, value).to_string()
         };
         if resolves_to_struct_kind(&qualified, StructKind::Tuple, store) {
             sink.push(diagnostics::infer::native_constructor_value(value, span));
@@ -139,7 +139,7 @@ fn check_one(
     }
 
     if NativeTypeKind::is_constructor_method(method_part)
-        && !is_user_type(type_part, module_id, store)
+        && !is_user_type(type_part, package_id, store)
     {
         let ret_ty = fn_signature(ty).map(|f| f.return_type.as_ref());
         if let Some(ret) = ret_ty {
@@ -164,7 +164,7 @@ fn check_one(
         return;
     }
 
-    let method_key = format!("{}.{}.{}", module_id, type_part, method_part);
+    let method_key = format!("{}.{}.{}", package_id, type_part, method_part);
     let is_public = store
         .get_definition(&method_key)
         .map(|d| d.visibility.is_public())
@@ -186,11 +186,11 @@ fn fn_signature(ty: &Type) -> Option<&FunctionType> {
     }
 }
 
-fn is_user_type(type_part: &str, module_id: &str, store: &Store) -> bool {
+fn is_user_type(type_part: &str, package_id: &str, store: &Store) -> bool {
     let qualified = if type_part.contains('.') {
         type_part.to_string()
     } else {
-        Symbol::from_parts(module_id, type_part).to_string()
+        Symbol::from_parts(package_id, type_part).to_string()
     };
     matches!(
         store.get_definition(&qualified).map(|d| &d.body),

@@ -32,7 +32,7 @@ pub fn format_witness(pattern: &NormalizedPattern) -> String {
                 return format_array_pattern(pattern, format_witness);
             }
 
-            let display_tag = strip_module_prefix(tag);
+            let display_tag = strip_package_prefix(tag);
 
             if display_tag == INTERFACE_UNKNOWN_TAG {
                 return "_".to_string();
@@ -59,7 +59,7 @@ pub fn format_pattern(pattern: &NormalizedPattern) -> String {
 
         NormalizedPattern::Literal(lit) => format_literal(lit),
 
-        NormalizedPattern::OpaqueConst(key) => strip_module_prefix(key),
+        NormalizedPattern::OpaqueConst(key) => strip_package_prefix(key),
 
         NormalizedPattern::Constructor {
             type_name,
@@ -83,7 +83,7 @@ pub fn format_pattern(pattern: &NormalizedPattern) -> String {
                 return format_array_pattern(pattern, format_pattern);
             }
 
-            let display_tag = strip_module_prefix(tag);
+            let display_tag = strip_package_prefix(tag);
 
             if display_tag == INTERFACE_UNKNOWN_TAG {
                 return "_".to_string();
@@ -170,7 +170,7 @@ fn format_literal(lit: &Literal) -> String {
     }
 }
 
-fn strip_module_prefix(tag: &str) -> String {
+fn strip_package_prefix(tag: &str) -> String {
     let parts: Vec<&str> = tag.split('.').collect();
     if parts.len() >= 2 {
         parts[1..].join(".")

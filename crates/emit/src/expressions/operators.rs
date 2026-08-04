@@ -397,7 +397,7 @@ impl Planner<'_> {
                 .as_go_name()
                 .is_some_and(|name| self.is_go_const_binding(name)),
             None => {
-                let go = self.module.escape_remap(value).unwrap_or(value);
+                let go = self.package.escape_remap(value).unwrap_or(value);
                 self.is_go_const_binding(go)
             }
         }
@@ -407,8 +407,8 @@ impl Planner<'_> {
         let Expression::Identifier { value, .. } = package.unwrap_parens() else {
             return false;
         };
-        let module = self.canonical_module(value);
-        let qualified = format!("{module}.{member}");
+        let package = self.canonical_package(value);
+        let qualified = format!("{package}.{member}");
         let body = self
             .facts
             .definition(&qualified)
@@ -418,7 +418,9 @@ impl Planner<'_> {
             })
             .map(|definition| &definition.body);
         match body {
-            Some(DefinitionBody::Value { .. }) if module.starts_with(go_name::GO_IMPORT_PREFIX) => {
+            Some(DefinitionBody::Value { .. })
+                if package.starts_with(go_name::GO_IMPORT_PREFIX) =>
+            {
                 self.facts.is_const(&qualified)
             }
             Some(DefinitionBody::Value { .. }) => true,

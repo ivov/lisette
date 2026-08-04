@@ -4,10 +4,10 @@ use semantics::checker::promotion::{self, MemberKind, Resolution};
 use semantics::store::Store;
 use syntax::ast::{Annotation, Attribute, Expression, Pattern, SelectArm, Span, StructSpread};
 use syntax::program::File;
-use syntax::program::{DefinitionBody, DotAccessKind, EqualityIndex, Module};
+use syntax::program::{DefinitionBody, DotAccessKind, EqualityIndex, Package};
 use syntax::types::{CompoundKind, Symbol, Type, unqualified_name};
 
-use super::reference_graph::{EnumVariantId, ModuleItemId, ReferenceGraph, StructFieldId};
+use super::reference_graph::{EnumVariantId, PackageItemId, ReferenceGraph, StructFieldId};
 
 pub struct AliasMap<'a> {
     aliases: HashMap<String, ImportSpans>,
@@ -43,14 +43,14 @@ impl<'a> AliasMap<'a> {
         }
     }
 
-    fn resolve(&self, module: &Module, name: &str) -> Option<ModuleItemId> {
-        let qualified_name = Symbol::from_parts(&module.id, name);
-        if module.definitions.contains_key(qualified_name.as_str()) {
-            return Some(ModuleItemId::new(name));
+    fn resolve(&self, package: &Package, name: &str) -> Option<PackageItemId> {
+        let qualified_name = Symbol::from_parts(&package.id, name);
+        if package.definitions.contains_key(qualified_name.as_str()) {
+            return Some(PackageItemId::new(name));
         }
         self.aliases
             .contains_key(name)
-            .then(|| ModuleItemId::import(self.file_id, name))
+            .then(|| PackageItemId::import(self.file_id, name))
     }
 
     fn is_import_alias(&self, name: &str) -> bool {
@@ -70,37 +70,37 @@ fn deref_for_keying(ty: &Type, aliases: &AliasMap) -> Type {
 
 // ctx is `None` at the top level. Function/Const nest inside an enclosing item and inherit
 // it when present; every other item kind below always self-derives from its own name.
-fn item_ctx(ctx: Option<&ModuleItemId>, name: &str) -> ModuleItemId {
-    ctx.cloned().unwrap_or_else(|| ModuleItemId::new(name))
+fn item_ctx(ctx: Option<&PackageItemId>, name: &str) -> PackageItemId {
+    ctx.cloned().unwrap_or_else(|| PackageItemId::new(name))
 }
 
 pub(super) fn walk_expression(
-    module: &Module,
+    package: &Package,
     expression: &Expression,
     graph: &mut ReferenceGraph,
     alias_map: &AliasMap,
-    ctx: Option<&ModuleItemId>,
+    ctx: Option<&PackageItemId>,
 ) {
     match expression {
         Expression::Identifier { value, .. } => {
-            walk_identifier(module, value, graph, alias_map, ctx);
+            walk_identifier(package, value, graph, alias_map, ctx);
         }
 
         Expression::Call { .. } => {
-            walk_call(module, expression, graph, alias_map, ctx);
+            walk_call(package, expression, graph, alias_map, ctx);
         }
 
         Expression::StructCall { .. } => {
-            walk_struct_call(module, expression, graph, alias_map, ctx);
+            walk_struct_call(package, expression, graph, alias_map, ctx);
         }
 
         Expression::DotAccess { .. } => {
-            walk_dot_access(module, expression, graph, alias_map, ctx);
+            walk_dot_access(package, expression, graph, alias_map, ctx);
         }
 
         Expression::Function { name, .. } => {
             let fn_ctx = item_ctx(ctx, name);
-            walk_callable_body(module, expression, graph, alias_map, &fn_ctx);
+            walk_callable_body(package, expression, graph, alias_map, &fn_ctx);
         }
 
         Expression::Const {
@@ -111,10 +111,10 @@ pub(super) fn walk_expression(
         } => {
             let const_ctx = item_ctx(ctx, identifier);
             if let Some(ann) = annotation {
-                walk_annotation(module, ann, graph, alias_map, &const_ctx);
+                walk_annotation(package, ann, graph, alias_map, &const_ctx);
             }
             if let Some(value) = expression.value() {
-                walk_expression(module, value, graph, alias_map, Some(&const_ctx));
+                walk_expression(package, value, graph, alias_map, Some(&const_ctx));
             }
         }
 
@@ -124,14 +124,14 @@ pub(super) fn walk_expression(
             attributes,
             ..
         } => {
-            let enum_ctx = ModuleItemId::new(name);
+            let enum_ctx = PackageItemId::new(name);
             let synthesizes_equality =
-                has_synthesized_equality(module, name, attributes, alias_map);
+                has_synthesized_equality(package, name, attributes, alias_map);
             for v in variants {
                 for f in &v.fields {
-                    walk_annotation(module, &f.annotation, graph, alias_map, &enum_ctx);
+                    walk_annotation(package, &f.annotation, graph, alias_map, &enum_ctx);
                     if synthesizes_equality {
-                        mark_equals_roots(graph, &f.ty, module, alias_map);
+                        mark_equals_roots(graph, &f.ty, package, alias_map);
                     }
                 }
             }
@@ -144,18 +144,18 @@ pub(super) fn walk_expression(
             attributes,
             ..
         } => {
-            let struct_ctx = ModuleItemId::new(name);
+            let struct_ctx = PackageItemId::new(name);
             for g in generics {
                 for bound in g.bounds() {
-                    walk_annotation(module, bound, graph, alias_map, &struct_ctx);
+                    walk_annotation(package, bound, graph, alias_map, &struct_ctx);
                 }
             }
             let synthesizes_equality =
-                has_synthesized_equality(module, name, attributes, alias_map);
+                has_synthesized_equality(package, name, attributes, alias_map);
             for f in fields {
-                walk_annotation(module, &f.annotation, graph, alias_map, &struct_ctx);
+                walk_annotation(package, &f.annotation, graph, alias_map, &struct_ctx);
                 if synthesizes_equality {
-                    mark_equals_roots(graph, &f.ty, module, alias_map);
+                    mark_equals_roots(graph, &f.ty, package, alias_map);
                 }
             }
         }
@@ -163,8 +163,8 @@ pub(super) fn walk_expression(
         Expression::TypeAlias {
             name, annotation, ..
         } => {
-            let alias_ctx = ModuleItemId::new(name);
-            walk_annotation(module, annotation, graph, alias_map, &alias_ctx);
+            let alias_ctx = PackageItemId::new(name);
+            walk_annotation(package, annotation, graph, alias_map, &alias_ctx);
         }
 
         Expression::Interface {
@@ -173,21 +173,21 @@ pub(super) fn walk_expression(
             parents,
             ..
         } => {
-            let iface_ctx = ModuleItemId::new(name);
+            let iface_ctx = PackageItemId::new(name);
             for p in parents {
-                walk_annotation(module, &p.annotation, graph, alias_map, &iface_ctx);
+                walk_annotation(package, &p.annotation, graph, alias_map, &iface_ctx);
             }
             for sig in method_signatures {
-                walk_expression(module, sig, graph, alias_map, Some(&iface_ctx));
+                walk_expression(package, sig, graph, alias_map, Some(&iface_ctx));
             }
         }
 
         Expression::Lambda { params, body, .. } => {
             for p in params {
-                walk_pattern(module, &p.pattern, graph, alias_map, ctx);
+                walk_pattern(package, &p.pattern, graph, alias_map, ctx);
                 if let Some(from) = ctx {
                     walk_type_or_annotation(
-                        module,
+                        package,
                         &p.ty,
                         p.annotation.as_ref(),
                         graph,
@@ -196,7 +196,7 @@ pub(super) fn walk_expression(
                     );
                 }
             }
-            walk_expression(module, body, graph, alias_map, ctx);
+            walk_expression(package, body, graph, alias_map, ctx);
         }
 
         Expression::Let {
@@ -205,10 +205,10 @@ pub(super) fn walk_expression(
             mode,
             ..
         } => {
-            walk_pattern(module, &binding.pattern, graph, alias_map, ctx);
+            walk_pattern(package, &binding.pattern, graph, alias_map, ctx);
             if let Some(from) = ctx {
                 walk_type_or_annotation(
-                    module,
+                    package,
                     &binding.ty,
                     binding.annotation.as_ref(),
                     graph,
@@ -216,9 +216,9 @@ pub(super) fn walk_expression(
                     from,
                 );
             }
-            walk_expression(module, value, graph, alias_map, ctx);
+            walk_expression(package, value, graph, alias_map, ctx);
             if let Some(eb) = mode.else_block() {
-                walk_expression(module, eb, graph, alias_map, ctx);
+                walk_expression(package, eb, graph, alias_map, ctx);
             }
         }
 
@@ -230,33 +230,33 @@ pub(super) fn walk_expression(
             ..
         } => {
             if let Some(from) = ctx {
-                walk_annotation(module, annotation, graph, alias_map, from);
+                walk_annotation(package, annotation, graph, alias_map, from);
             }
-            let impl_id = ModuleItemId::new(receiver_name);
+            let impl_id = PackageItemId::new(receiver_name);
             let impl_context = ctx.unwrap_or(&impl_id);
             for g in generics {
                 for bound in g.bounds() {
-                    walk_annotation(module, bound, graph, alias_map, impl_context);
+                    walk_annotation(package, bound, graph, alias_map, impl_context);
                 }
             }
             for m in methods {
                 if let Expression::Function { name, .. } = m {
-                    let method_ctx = ModuleItemId::method(name, receiver_name);
-                    walk_callable_body(module, m, graph, alias_map, &method_ctx);
+                    let method_ctx = PackageItemId::method(name, receiver_name);
+                    walk_callable_body(package, m, graph, alias_map, &method_ctx);
                 } else {
-                    walk_expression(module, m, graph, alias_map, ctx);
+                    walk_expression(package, m, graph, alias_map, ctx);
                 }
             }
         }
 
         Expression::Match { subject, arms, .. } => {
-            walk_expression(module, subject, graph, alias_map, ctx);
+            walk_expression(package, subject, graph, alias_map, ctx);
             for arm in arms {
-                walk_pattern(module, &arm.pattern, graph, alias_map, ctx);
+                walk_pattern(package, &arm.pattern, graph, alias_map, ctx);
                 if let Some(g) = &arm.guard {
-                    walk_expression(module, g, graph, alias_map, ctx);
+                    walk_expression(package, g, graph, alias_map, ctx);
                 }
-                walk_expression(module, &arm.expression, graph, alias_map, ctx);
+                walk_expression(package, &arm.expression, graph, alias_map, ctx);
             }
         }
 
@@ -267,11 +267,11 @@ pub(super) fn walk_expression(
             alternative,
             ..
         } => {
-            walk_expression(module, scrutinee, graph, alias_map, ctx);
-            walk_pattern(module, pattern, graph, alias_map, ctx);
-            walk_expression(module, consequence, graph, alias_map, ctx);
+            walk_expression(package, scrutinee, graph, alias_map, ctx);
+            walk_pattern(package, pattern, graph, alias_map, ctx);
+            walk_expression(package, consequence, graph, alias_map, ctx);
             if let Some(alternative) = alternative.expression() {
-                walk_expression(module, alternative, graph, alias_map, ctx);
+                walk_expression(package, alternative, graph, alias_map, ctx);
             }
         }
 
@@ -281,9 +281,9 @@ pub(super) fn walk_expression(
             body,
             ..
         } => {
-            walk_expression(module, scrutinee, graph, alias_map, ctx);
-            walk_pattern(module, pattern, graph, alias_map, ctx);
-            walk_expression(module, body, graph, alias_map, ctx);
+            walk_expression(package, scrutinee, graph, alias_map, ctx);
+            walk_pattern(package, pattern, graph, alias_map, ctx);
+            walk_expression(package, body, graph, alias_map, ctx);
         }
 
         Expression::For {
@@ -292,13 +292,13 @@ pub(super) fn walk_expression(
             body,
             ..
         } => {
-            walk_pattern(module, &binding.pattern, graph, alias_map, ctx);
-            walk_expression(module, iterable, graph, alias_map, ctx);
-            walk_expression(module, body, graph, alias_map, ctx);
+            walk_pattern(package, &binding.pattern, graph, alias_map, ctx);
+            walk_expression(package, iterable, graph, alias_map, ctx);
+            walk_expression(package, body, graph, alias_map, ctx);
         }
 
         Expression::Select { arms, .. } => {
-            walk_select(module, arms, graph, alias_map, ctx);
+            walk_select(package, arms, graph, alias_map, ctx);
         }
 
         Expression::Cast {
@@ -307,27 +307,27 @@ pub(super) fn walk_expression(
             ..
         } => {
             if let Some(from) = ctx {
-                walk_annotation(module, target_type, graph, alias_map, from);
+                walk_annotation(package, target_type, graph, alias_map, from);
             }
-            walk_expression(module, expression, graph, alias_map, ctx);
+            walk_expression(package, expression, graph, alias_map, ctx);
         }
 
         _ => {
             for child in expression.children() {
-                walk_expression(module, child, graph, alias_map, ctx);
+                walk_expression(package, child, graph, alias_map, ctx);
             }
         }
     }
 }
 
 fn walk_identifier(
-    module: &Module,
+    package: &Package,
     value: &str,
     graph: &mut ReferenceGraph,
     alias_map: &AliasMap,
-    ctx: Option<&ModuleItemId>,
+    ctx: Option<&PackageItemId>,
 ) {
-    add_ref(graph, ctx, alias_map, module, extract_base_name(value));
+    add_ref(graph, ctx, alias_map, package, extract_base_name(value));
     let mut segments = value.split('.');
     let first = segments.next().unwrap_or("");
     // Static method values are represented as qualified identifiers.
@@ -337,20 +337,20 @@ fn walk_identifier(
         if is_upper(second) {
             graph.mark_enum_variant_used(EnumVariantId::new(first, second));
         }
-        add_ref(graph, ctx, alias_map, module, first);
+        add_ref(graph, ctx, alias_map, package, first);
         if let Some(from) = ctx {
             let method_name = value.rsplit('.').next().unwrap_or("");
-            graph.add_reference(from, ModuleItemId::method(method_name, first));
+            graph.add_reference(from, PackageItemId::method(method_name, first));
         }
     }
 }
 
 fn walk_call(
-    module: &Module,
+    package: &Package,
     expression: &Expression,
     graph: &mut ReferenceGraph,
     alias_map: &AliasMap,
-    ctx: Option<&ModuleItemId>,
+    ctx: Option<&PackageItemId>,
 ) {
     let Expression::Call {
         expression: callee,
@@ -366,10 +366,10 @@ fn walk_call(
         let mut segments = value.split('.');
         let first = segments.next().unwrap_or("");
         if segments.next().is_some() && is_upper(first) {
-            add_ref(graph, ctx, alias_map, module, first);
+            add_ref(graph, ctx, alias_map, package, first);
             if let Some(from) = ctx {
                 let method_name = value.rsplit('.').next().unwrap_or("");
-                graph.add_reference(from, ModuleItemId::method(method_name, first));
+                graph.add_reference(from, PackageItemId::method(method_name, first));
             }
         }
         if let Some(from) = ctx
@@ -377,29 +377,29 @@ fn walk_call(
             && let Some(receiver) = args.first()
             && is_container_receiver(&receiver.get_type(), alias_map)
         {
-            add_equals_references(graph, from, &receiver.get_type(), module, alias_map);
+            add_equals_references(graph, from, &receiver.get_type(), package, alias_map);
         }
     }
-    walk_expression(module, callee, graph, alias_map, ctx);
+    walk_expression(package, callee, graph, alias_map, ctx);
     for arg in args {
-        walk_expression(module, arg, graph, alias_map, ctx);
+        walk_expression(package, arg, graph, alias_map, ctx);
     }
     if let Some(spread_expr) = spread {
-        walk_expression(module, spread_expr, graph, alias_map, ctx);
+        walk_expression(package, spread_expr, graph, alias_map, ctx);
     }
     if let Some(from) = ctx {
         for type_arg in type_arguments.annotations() {
-            walk_annotation(module, type_arg, graph, alias_map, from);
+            walk_annotation(package, type_arg, graph, alias_map, from);
         }
     }
 }
 
 fn walk_struct_call(
-    module: &Module,
+    package: &Package,
     expression: &Expression,
     graph: &mut ReferenceGraph,
     alias_map: &AliasMap,
-    ctx: Option<&ModuleItemId>,
+    ctx: Option<&PackageItemId>,
 ) {
     let Expression::StructCall {
         name,
@@ -416,9 +416,9 @@ fn walk_struct_call(
     let p1 = segments.next();
     let p2 = segments.next();
     if !is_upper(p0) {
-        add_ref(graph, ctx, alias_map, module, p0);
+        add_ref(graph, ctx, alias_map, package, p0);
     } else {
-        add_ref(graph, ctx, alias_map, module, extract_base_name(name));
+        add_ref(graph, ctx, alias_map, package, extract_base_name(name));
     }
     if is_upper(p0) && p1.is_some_and(is_upper) {
         graph.mark_enum_variant_used(EnumVariantId::new(p0, p1.unwrap()));
@@ -426,16 +426,16 @@ fn walk_struct_call(
         graph.mark_enum_variant_used(EnumVariantId::new(p1.unwrap(), p2.unwrap()));
     }
     for f in field_assignments {
-        walk_expression(module, &f.value, graph, alias_map, ctx);
+        walk_expression(package, &f.value, graph, alias_map, ctx);
     }
     match spread {
         StructSpread::None => {}
         StructSpread::From(spread_expression) => {
-            walk_expression(module, spread_expression, graph, alias_map, ctx);
+            walk_expression(package, spread_expression, graph, alias_map, ctx);
             if let Some(ty_name) = qualified_type_name(&spread_expression.get_type(), alias_map) {
                 let explicit: HashSet<&str> =
                     field_assignments.iter().map(|f| f.name.as_str()).collect();
-                if let Some(def) = module.definitions.get(ty_name.as_str())
+                if let Some(def) = package.definitions.get(ty_name.as_str())
                     && let DefinitionBody::Struct { fields, .. } = &def.body
                 {
                     for field in fields {
@@ -453,7 +453,7 @@ fn walk_struct_call(
             if let Some(ty_name) = qualified_type_name(ty, alias_map) {
                 let explicit: HashSet<&str> =
                     field_assignments.iter().map(|f| f.name.as_str()).collect();
-                if let Some(def) = module.definitions.get(ty_name.as_str())
+                if let Some(def) = package.definitions.get(ty_name.as_str())
                     && let DefinitionBody::Struct { fields, .. } = &def.body
                 {
                     for field in fields {
@@ -471,11 +471,11 @@ fn walk_struct_call(
 }
 
 fn walk_dot_access(
-    module: &Module,
+    package: &Package,
     dot_access: &Expression,
     graph: &mut ReferenceGraph,
     alias_map: &AliasMap,
-    ctx: Option<&ModuleItemId>,
+    ctx: Option<&PackageItemId>,
 ) {
     let Expression::DotAccess {
         expression,
@@ -486,7 +486,7 @@ fn walk_dot_access(
     else {
         unreachable!("walk_dot_access called with non-DotAccess expression");
     };
-    walk_expression(module, expression, graph, alias_map, ctx);
+    walk_expression(package, expression, graph, alias_map, ctx);
     let receiver_ty = expression.get_type();
     if let Some(ty_name) = qualified_type_name(&receiver_ty, alias_map) {
         graph.mark_struct_field_used(StructFieldId::new(ty_name.as_str(), member));
@@ -494,7 +494,7 @@ fn walk_dot_access(
     mark_promoted_field_read(&receiver_ty, member, graph, alias_map);
     if let Some(from) = ctx
         && is_method_access(resolution.kind())
-        && credits_local_method(&receiver_ty, module, alias_map)
+        && credits_local_method(&receiver_ty, package, alias_map)
     {
         let to = method_node(member, &receiver_ty, alias_map);
         graph.add_reference(from, to);
@@ -503,16 +503,16 @@ fn walk_dot_access(
         && member == "equals"
         && is_container_receiver(&receiver_ty, alias_map)
     {
-        add_equals_references(graph, from, &receiver_ty, module, alias_map);
+        add_equals_references(graph, from, &receiver_ty, package, alias_map);
     }
 }
 
 fn walk_select(
-    module: &Module,
+    package: &Package,
     arms: &[SelectArm],
     graph: &mut ReferenceGraph,
     alias_map: &AliasMap,
-    ctx: Option<&ModuleItemId>,
+    ctx: Option<&PackageItemId>,
 ) {
     for arm in arms {
         match arm {
@@ -522,40 +522,40 @@ fn walk_select(
                 body,
                 ..
             } => {
-                walk_pattern(module, binding, graph, alias_map, ctx);
-                walk_expression(module, receive_expression, graph, alias_map, ctx);
-                walk_expression(module, body, graph, alias_map, ctx);
+                walk_pattern(package, binding, graph, alias_map, ctx);
+                walk_expression(package, receive_expression, graph, alias_map, ctx);
+                walk_expression(package, body, graph, alias_map, ctx);
             }
             SelectArm::Send {
                 send_expression,
                 body,
             } => {
-                walk_expression(module, send_expression, graph, alias_map, ctx);
-                walk_expression(module, body, graph, alias_map, ctx);
+                walk_expression(package, send_expression, graph, alias_map, ctx);
+                walk_expression(package, body, graph, alias_map, ctx);
             }
             SelectArm::MatchReceive {
                 receive_expression,
                 arms: match_arms,
             } => {
-                walk_expression(module, receive_expression, graph, alias_map, ctx);
+                walk_expression(package, receive_expression, graph, alias_map, ctx);
                 for match_arm in match_arms {
-                    walk_pattern(module, &match_arm.pattern, graph, alias_map, ctx);
-                    walk_expression(module, &match_arm.expression, graph, alias_map, ctx);
+                    walk_pattern(package, &match_arm.pattern, graph, alias_map, ctx);
+                    walk_expression(package, &match_arm.expression, graph, alias_map, ctx);
                 }
             }
             SelectArm::WildCard { body } => {
-                walk_expression(module, body, graph, alias_map, ctx);
+                walk_expression(package, body, graph, alias_map, ctx);
             }
         }
     }
 }
 
 fn walk_pattern(
-    module: &Module,
+    package: &Package,
     pattern: &Pattern,
     graph: &mut ReferenceGraph,
     alias_map: &AliasMap,
-    ctx: Option<&ModuleItemId>,
+    ctx: Option<&PackageItemId>,
 ) {
     match pattern {
         Pattern::EnumVariant {
@@ -564,9 +564,9 @@ fn walk_pattern(
             ty,
             ..
         } => {
-            mark_constructor_pattern(module, identifier, ty, graph, alias_map, ctx);
+            mark_constructor_pattern(package, identifier, ty, graph, alias_map, ctx);
             for f in fields {
-                walk_pattern(module, f, graph, alias_map, ctx);
+                walk_pattern(package, f, graph, alias_map, ctx);
             }
         }
         Pattern::Struct {
@@ -575,12 +575,12 @@ fn walk_pattern(
             ty,
             ..
         } => {
-            mark_constructor_pattern(module, identifier, ty, graph, alias_map, ctx);
+            mark_constructor_pattern(package, identifier, ty, graph, alias_map, ctx);
             let key = qualified_type_name(ty, alias_map).or_else(|| {
-                (!identifier.contains('.')).then(|| Symbol::from_parts(&module.id, identifier))
+                (!identifier.contains('.')).then(|| Symbol::from_parts(&package.id, identifier))
             });
             for f in fields {
-                walk_pattern(module, &f.value, graph, alias_map, ctx);
+                walk_pattern(package, &f.value, graph, alias_map, ctx);
                 if let Some(key) = &key {
                     graph.mark_struct_field_used(StructFieldId::new(key.as_str(), &f.name));
                 }
@@ -588,21 +588,21 @@ fn walk_pattern(
         }
         Pattern::Tuple { elements, .. } => {
             for e in elements {
-                walk_pattern(module, e, graph, alias_map, ctx);
+                walk_pattern(package, e, graph, alias_map, ctx);
             }
         }
         Pattern::Slice { prefix, .. } => {
             for p in prefix {
-                walk_pattern(module, p, graph, alias_map, ctx);
+                walk_pattern(package, p, graph, alias_map, ctx);
             }
         }
         Pattern::Or { patterns, .. } => {
             for p in patterns {
-                walk_pattern(module, p, graph, alias_map, ctx);
+                walk_pattern(package, p, graph, alias_map, ctx);
             }
         }
         Pattern::AsBinding { pattern, .. } => {
-            walk_pattern(module, pattern, graph, alias_map, ctx);
+            walk_pattern(package, pattern, graph, alias_map, ctx);
         }
         Pattern::Literal { .. }
         | Pattern::Identifier { .. }
@@ -612,35 +612,35 @@ fn walk_pattern(
 }
 
 fn walk_type_or_annotation(
-    module: &Module,
+    package: &Package,
     ty: &Type,
     annotation: Option<&Annotation>,
     graph: &mut ReferenceGraph,
     alias_map: &AliasMap,
-    from: &ModuleItemId,
+    from: &PackageItemId,
 ) {
     if let Some(a) = annotation {
-        walk_annotation(module, a, graph, alias_map, from);
+        walk_annotation(package, a, graph, alias_map, from);
     } else {
-        walk_type(module, ty, graph, alias_map, from);
+        walk_type(package, ty, graph, alias_map, from);
     }
 }
 
 fn walk_annotation(
-    module: &Module,
+    package: &Package,
     ann: &Annotation,
     graph: &mut ReferenceGraph,
     alias_map: &AliasMap,
-    from: &ModuleItemId,
+    from: &PackageItemId,
 ) {
     match ann {
         Annotation::Constructor { name, params, .. } => {
             let base_name = extract_base_name(name);
-            if let Some(to) = alias_map.resolve(module, base_name) {
+            if let Some(to) = alias_map.resolve(package, base_name) {
                 graph.add_reference(from, to);
             }
             for p in params {
-                walk_annotation(module, p, graph, alias_map, from);
+                walk_annotation(package, p, graph, alias_map, from);
             }
         }
         Annotation::Function {
@@ -649,13 +649,13 @@ fn walk_annotation(
             ..
         } => {
             for p in params {
-                walk_annotation(module, &p.annotation, graph, alias_map, from);
+                walk_annotation(package, &p.annotation, graph, alias_map, from);
             }
-            walk_annotation(module, return_type, graph, alias_map, from);
+            walk_annotation(package, return_type, graph, alias_map, from);
         }
         Annotation::Tuple { elements, .. } => {
             for e in elements {
-                walk_annotation(module, e, graph, alias_map, from);
+                walk_annotation(package, e, graph, alias_map, from);
             }
         }
         Annotation::Unknown | Annotation::Opaque { .. } | Annotation::Constant { .. } => {}
@@ -663,43 +663,43 @@ fn walk_annotation(
 }
 
 fn walk_type(
-    module: &Module,
+    package: &Package,
     ty: &Type,
     graph: &mut ReferenceGraph,
     alias_map: &AliasMap,
-    from: &ModuleItemId,
+    from: &PackageItemId,
 ) {
     match ty {
         Type::Nominal { id, params, .. } => {
             // Keep a local qualified type from being mistaken for an import.
-            let module_prefix = format!("{}.", module.id);
-            let local_id = id.strip_prefix(&module_prefix).unwrap_or(id);
+            let package_prefix = format!("{}.", package.id);
+            let local_id = id.strip_prefix(&package_prefix).unwrap_or(id);
             let base_name = extract_base_name(local_id);
-            if let Some(to) = alias_map.resolve(module, base_name) {
+            if let Some(to) = alias_map.resolve(package, base_name) {
                 graph.add_reference(from, to);
             }
             for p in params {
-                walk_type(module, p, graph, alias_map, from);
+                walk_type(package, p, graph, alias_map, from);
             }
         }
         Type::Function(f) => {
             for p in &f.params {
-                walk_type(module, &p.ty, graph, alias_map, from);
+                walk_type(package, &p.ty, graph, alias_map, from);
             }
-            walk_type(module, &f.return_type, graph, alias_map, from);
+            walk_type(package, &f.return_type, graph, alias_map, from);
         }
-        Type::Forall { body, .. } => walk_type(module, body, graph, alias_map, from),
+        Type::Forall { body, .. } => walk_type(package, body, graph, alias_map, from),
         Type::Tuple(elems) => {
             for e in elems {
-                walk_type(module, e, graph, alias_map, from);
+                walk_type(package, e, graph, alias_map, from);
             }
         }
         Type::Compound { args, .. } => {
             for a in args {
-                walk_type(module, a, graph, alias_map, from);
+                walk_type(package, a, graph, alias_map, from);
             }
         }
-        Type::Array { element, .. } => walk_type(module, element, graph, alias_map, from),
+        Type::Array { element, .. } => walk_type(package, element, graph, alias_map, from),
         Type::Simple(_)
         | Type::Var { .. }
         | Type::Uninferred
@@ -714,30 +714,30 @@ fn walk_type(
 
 fn add_ref(
     graph: &mut ReferenceGraph,
-    ctx: Option<&ModuleItemId>,
+    ctx: Option<&PackageItemId>,
     alias_map: &AliasMap,
-    module: &Module,
+    package: &Package,
     name: &str,
 ) {
     if let Some(from) = ctx
-        && let Some(to) = alias_map.resolve(module, name)
+        && let Some(to) = alias_map.resolve(package, name)
     {
         graph.add_reference(from, to);
     }
 }
 
 fn mark_constructor_pattern(
-    module: &Module,
+    package: &Package,
     identifier: &str,
     ty: &Type,
     graph: &mut ReferenceGraph,
     alias_map: &AliasMap,
-    ctx: Option<&ModuleItemId>,
+    ctx: Option<&PackageItemId>,
 ) {
     if let Some((alias, _)) = identifier.split_once('.')
         && alias_map.is_import_alias(alias)
     {
-        add_ref(graph, ctx, alias_map, module, alias);
+        add_ref(graph, ctx, alias_map, package, alias);
         return;
     }
 
@@ -747,7 +747,7 @@ fn mark_constructor_pattern(
             .map(|(first, _)| first.to_string())
     });
     if let Some(enum_name) = enum_name {
-        add_ref(graph, ctx, alias_map, module, &enum_name);
+        add_ref(graph, ctx, alias_map, package, &enum_name);
         graph.mark_enum_variant_used(EnumVariantId::new(&enum_name, unqualified_name(identifier)));
     }
 }
@@ -764,11 +764,11 @@ fn is_method_access(kind: Option<DotAccessKind>) -> bool {
 }
 
 fn walk_callable_body(
-    module: &Module,
+    package: &Package,
     function: &Expression,
     graph: &mut ReferenceGraph,
     alias_map: &AliasMap,
-    fn_ctx: &ModuleItemId,
+    fn_ctx: &PackageItemId,
 ) {
     let Expression::Function {
         generics,
@@ -782,13 +782,13 @@ fn walk_callable_body(
     };
     for g in generics {
         for bound in g.bounds() {
-            walk_annotation(module, bound, graph, alias_map, fn_ctx);
+            walk_annotation(package, bound, graph, alias_map, fn_ctx);
         }
     }
     for p in params {
-        walk_pattern(module, &p.pattern, graph, alias_map, Some(fn_ctx));
+        walk_pattern(package, &p.pattern, graph, alias_map, Some(fn_ctx));
         walk_type_or_annotation(
-            module,
+            package,
             &p.ty,
             p.annotation.as_ref(),
             graph,
@@ -796,26 +796,26 @@ fn walk_callable_body(
             fn_ctx,
         );
     }
-    walk_annotation(module, return_annotation, graph, alias_map, fn_ctx);
+    walk_annotation(package, return_annotation, graph, alias_map, fn_ctx);
     if let Some(body) = body.definition() {
-        walk_expression(module, body, graph, alias_map, Some(fn_ctx));
+        walk_expression(package, body, graph, alias_map, Some(fn_ctx));
     }
 }
 
-fn method_node(member: &str, receiver_ty: &Type, aliases: &AliasMap) -> ModuleItemId {
+fn method_node(member: &str, receiver_ty: &Type, aliases: &AliasMap) -> PackageItemId {
     match type_name(receiver_ty, aliases) {
-        Some(name) => ModuleItemId::method(member, &name),
-        None => ModuleItemId::new(member),
+        Some(name) => PackageItemId::method(member, &name),
+        None => PackageItemId::new(member),
     }
 }
 
-fn credits_local_method(receiver_ty: &Type, module: &Module, aliases: &AliasMap) -> bool {
+fn credits_local_method(receiver_ty: &Type, package: &Package, aliases: &AliasMap) -> bool {
     let current = match deref_for_keying(receiver_ty, aliases) {
         Type::Function(f) => (*f.return_type).clone(),
         other => other,
     };
     match current {
-        Type::Nominal { id, .. } => id.as_str().starts_with(&format!("{}.", module.id)),
+        Type::Nominal { id, .. } => id.as_str().starts_with(&format!("{}.", package.id)),
         _ => false,
     }
 }
@@ -825,27 +825,27 @@ fn has_equality_attr(attributes: &[Attribute]) -> bool {
 }
 
 fn has_synthesized_equality(
-    module: &Module,
+    package: &Package,
     name: &str,
     attributes: &[Attribute],
     alias_map: &AliasMap,
 ) -> bool {
-    let owner = format!("{}.{}", module.id, name);
+    let owner = format!("{}.{}", package.id, name);
     has_equality_attr(attributes) && alias_map.store.equality_index.is_synthesized(&owner)
 }
 
 fn add_equals_references(
     graph: &mut ReferenceGraph,
-    from: &ModuleItemId,
+    from: &PackageItemId,
     ty: &Type,
-    module: &Module,
+    package: &Package,
     aliases: &AliasMap,
 ) {
     let mut targets = Vec::new();
     let ty = ty.strip_refs();
     equals_targets(
         &ty,
-        module,
+        package,
         aliases.store,
         &aliases.store.equality_index,
         &mut targets,
@@ -855,11 +855,11 @@ fn add_equals_references(
     }
 }
 
-fn mark_equals_roots(graph: &mut ReferenceGraph, ty: &Type, module: &Module, aliases: &AliasMap) {
+fn mark_equals_roots(graph: &mut ReferenceGraph, ty: &Type, package: &Package, aliases: &AliasMap) {
     let mut targets = Vec::new();
     equals_targets(
         ty,
-        module,
+        package,
         aliases.store,
         &aliases.store.equality_index,
         &mut targets,
@@ -871,10 +871,10 @@ fn mark_equals_roots(graph: &mut ReferenceGraph, ty: &Type, module: &Module, ali
 
 pub(super) fn equals_targets(
     ty: &Type,
-    module: &Module,
+    package: &Package,
     store: &Store,
     index: &EqualityIndex,
-    out: &mut Vec<ModuleItemId>,
+    out: &mut Vec<PackageItemId>,
 ) {
     let mut current = ty.clone();
     let mut seen = HashSet::default();
@@ -893,7 +893,7 @@ pub(super) fn equals_targets(
             args,
         } => {
             if let Some(element) = args.first() {
-                equals_targets(element, module, store, index, out);
+                equals_targets(element, package, store, index, out);
             }
         }
         Type::Compound {
@@ -901,14 +901,14 @@ pub(super) fn equals_targets(
             args,
         } => {
             if let Some(value) = args.get(1) {
-                equals_targets(value, module, store, index, out);
+                equals_targets(value, package, store, index, out);
             }
         }
         Type::Nominal { id, .. }
-            if id.as_str().starts_with(&format!("{}.", module.id))
-                && index.usable_from(id.as_str(), &module.id) =>
+            if id.as_str().starts_with(&format!("{}.", package.id))
+                && index.usable_from(id.as_str(), &package.id) =>
         {
-            out.push(ModuleItemId::equals_method(unqualified_name(id)));
+            out.push(PackageItemId::equals_method(unqualified_name(id)));
         }
         _ => {}
     }

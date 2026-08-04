@@ -323,7 +323,7 @@ impl<'a> Planner<'a> {
                 GoExpression::call(GoExpression::opaque("fmt.Errorf".to_string()), arguments)
             }
             captured => {
-                let qualifier = self.require_module_import("go:errors");
+                let qualifier = self.require_package_import("go:errors");
                 GoExpression::call(
                     GoExpression::opaque(format!("{}.New", qualifier)),
                     vec![captured],

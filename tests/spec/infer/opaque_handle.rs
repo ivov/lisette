@@ -46,7 +46,7 @@ fn run() {
 }
 "#;
     infer_with_go_typedefs(input, &[("go:example.com/inv", TYPEDEF)])
-        .assert_resolve_code("not_found_in_module");
+        .assert_resolve_code("not_found_in_package");
 }
 
 #[test]

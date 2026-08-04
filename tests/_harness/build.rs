@@ -1,7 +1,7 @@
 use emit::{EmitOptions, Planner};
 use passes::{Analysis, analyze};
 use semantics::loader::Loader;
-use semantics::store::ENTRY_MODULE_ID;
+use semantics::store::ENTRY_PACKAGE_ID;
 use semantics::{AnalysisScope, AnalyzeInput, EntryFile};
 
 use super::filesystem::MockFileSystem;
@@ -12,7 +12,7 @@ fn compile_with(
     locator: deps::TypedefLocator,
 ) -> Analysis {
     let main_source = fs
-        .scan_folder(ENTRY_MODULE_ID)
+        .scan_folder(ENTRY_PACKAGE_ID)
         .get("main.lis")
         .map(|c| c.source.clone())
         .expect("main.lis must exist");
@@ -49,7 +49,7 @@ pub fn compile_script_entry(
     phase: semantics::CompilePhase,
 ) -> Analysis {
     let source = fs
-        .scan_folder(ENTRY_MODULE_ID)
+        .scan_folder(ENTRY_PACKAGE_ID)
         .get(entry_name)
         .map(|c| c.source.clone())
         .unwrap_or_else(|| panic!("entry file `{entry_name}` must exist"));
@@ -133,7 +133,7 @@ pub fn try_compile_project_files_with_tests(
     emit_tests: bool,
 ) -> Result<Vec<emit::OutputFile>, Vec<diagnostics::LisetteDiagnostic>> {
     let main_source = fs
-        .scan_folder(ENTRY_MODULE_ID)
+        .scan_folder(ENTRY_PACKAGE_ID)
         .get("main.lis")
         .map(|c| c.source.clone())
         .expect("main.lis must exist");

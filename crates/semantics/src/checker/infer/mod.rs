@@ -26,14 +26,14 @@ pub(crate) struct FileInferenceInput {
 }
 
 impl TaskState {
-    pub(crate) fn take_module_inference_input(
+    pub(crate) fn take_package_inference_input(
         store: &mut Store,
-        module_id: &str,
+        package_id: &str,
     ) -> Vec<FileInferenceInput> {
-        let module = store
-            .get_module_mut(module_id)
-            .expect("module must exist for inference");
-        let file_data = module
+        let package = store
+            .get_package_mut(package_id)
+            .expect("package must exist for inference");
+        let file_data = package
             .source_file_entries()
             .map(|(file_id, file)| (*file_id, file.imports()))
             .collect::<Vec<_>>();
@@ -43,10 +43,10 @@ impl TaskState {
                 id: file_id,
                 imports,
                 items: std::mem::take(
-                    &mut module
+                    &mut package
                         .files
                         .get_mut(&file_id)
-                        .expect("source file must remain in its module")
+                        .expect("source file must remain in its package")
                         .items,
                 ),
             })
@@ -62,26 +62,26 @@ impl TaskState {
         }
     }
 
-    /// Infer one registered module and replace its source ASTs with their typed forms.
-    pub fn infer_module(&mut self, store: &mut Store, module_id: &str) {
-        let files = Self::take_module_inference_input(store, module_id);
-        InferCtx::new(self, store).infer_module(module_id, files);
+    /// Infer one registered package and replace its source ASTs with their typed forms.
+    pub fn infer_package(&mut self, store: &mut Store, package_id: &str) {
+        let files = Self::take_package_inference_input(store, package_id);
+        InferCtx::new(self, store).infer_package(package_id, files);
         self.install_inferred_files(store);
     }
 }
 
 impl InferCtx<'_> {
-    /// Infer types for `files` belonging to `module_id`.
-    pub(crate) fn infer_module(&mut self, module_id: &str, files: Vec<FileInferenceInput>) {
+    /// Infer types for `files` belonging to `package_id`.
+    pub(crate) fn infer_package(&mut self, package_id: &str, files: Vec<FileInferenceInput>) {
         let items_per_file: Vec<&[Expression]> = files.iter().map(|f| f.items.as_slice()).collect();
         self.check_const_cycles(&items_per_file);
 
         for file in files {
-            self.infer_file(module_id, file);
+            self.infer_file(package_id, file);
         }
     }
 
-    fn infer_file(&mut self, module_id: &str, file: FileInferenceInput) {
+    fn infer_file(&mut self, package_id: &str, file: FileInferenceInput) {
         let store = self.store;
         let file_id = file.id;
         let imports = file.imports;
@@ -89,13 +89,13 @@ impl InferCtx<'_> {
         self.with_file_context(
             store,
             FileContext::Standard {
-                module_id,
+                package_id,
                 file_id,
                 imports: &imports,
             },
             |this, store| {
                 let mut ctx = InferCtx::new(this, store);
-                ctx.check_definition_module_collisions(&file.items, &imports);
+                ctx.check_definition_package_collisions(&file.items, &imports);
 
                 let inferred_items: Vec<_> = file
                     .items
@@ -127,7 +127,11 @@ impl InferCtx<'_> {
         );
     }
 
-    fn check_definition_module_collisions(&mut self, items: &[Expression], imports: &[FileImport]) {
+    fn check_definition_package_collisions(
+        &mut self,
+        items: &[Expression],
+        imports: &[FileImport],
+    ) {
         let store = self.store;
         let alias_to_path: HashMap<String, String> = imports
             .iter()
@@ -174,8 +178,8 @@ impl InferCtx<'_> {
 
     fn check_binding_shadows_import(&mut self, name: &str, span: Span, is_typedef: bool) {
         if !is_typedef
-            && name != crate::prelude::PRELUDE_MODULE_ID
-            && let Some(import_path) = self.imports.module_id(name)
+            && name != crate::prelude::PRELUDE_PACKAGE_ID
+            && let Some(import_path) = self.imports.package_id(name)
         {
             self.sink.push(diagnostics::infer::name_shadows_import(
                 name,
@@ -269,7 +273,7 @@ mod tests {
     #[test]
     fn inference_detaches_items_without_removing_the_file() {
         let mut store = Store::new();
-        store.add_module("m");
+        store.add_package("m");
         store.store_file(File::new_cached(
             "m",
             "example.test.lis",
@@ -278,7 +282,7 @@ mod tests {
             42,
         ));
 
-        let inputs = TaskState::take_module_inference_input(&mut store, "m");
+        let inputs = TaskState::take_package_inference_input(&mut store, "m");
 
         assert_eq!(inputs.len(), 1);
         assert!(store.get_file(42).is_some());

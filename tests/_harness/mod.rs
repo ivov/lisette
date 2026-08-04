@@ -13,9 +13,9 @@ pub use builders::*;
 pub use emit::{emit_with_go_typedefs, emit_with_sourcemap};
 pub use filesystem::MockFileSystem;
 pub use formatting::snapshot_description;
-pub use infer::{InferResult, infer, infer_module, infer_with_go_typedefs};
+pub use infer::{InferResult, infer, infer_package, infer_with_go_typedefs};
 
-pub const TEST_MODULE_ID: &str = "test";
+pub const TEST_PACKAGE_ID: &str = "test";
 
 use std::sync::OnceLock;
 
@@ -41,12 +41,12 @@ pub fn new_test_store() -> Store {
 }
 
 fn register_test_builtins(store: &mut Store) {
-    let module = store
-        .get_module_mut("prelude")
-        .expect("prelude module must exist");
+    let package = store
+        .get_package_mut("prelude")
+        .expect("prelude package must exist");
 
     let mut define = |name: &str, params: Vec<Type>, return_type: Type| {
-        module.definitions.insert(
+        package.definitions.insert(
             format!("prelude.{name}").into(),
             Definition {
                 visibility: Visibility::Public,

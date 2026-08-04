@@ -15,7 +15,7 @@ use rustc_hash::FxHashMap as HashMap;
 use semantics::facts::{Facts, Usage};
 use semantics::store::Store;
 use syntax::ast::{Expression, Pattern, Span};
-use syntax::program::Module;
+use syntax::program::Package;
 
 use attributes::{check_attributes, check_enum_attributes, check_struct_attributes};
 use checks::{
@@ -228,28 +228,28 @@ pub(crate) fn run(store: &Store, facts: &Facts) -> Vec<LisetteDiagnostic> {
         }
     }
 
-    let mut modules: Vec<&Module> = store
-        .modules
+    let mut packages: Vec<&Package> = store
+        .packages
         .values()
         .map(Arc::as_ref)
         .filter(|m| !m.is_internal())
         .collect();
-    modules.sort_unstable_by(|a, b| a.id.cmp(&b.id));
+    packages.sort_unstable_by(|a, b| a.id.cmp(&b.id));
 
-    if modules.len() < PARALLEL_THRESHOLD {
+    if packages.len() < PARALLEL_THRESHOLD {
         let sink = LocalSink::new();
-        for module in &modules {
-            run_module(module, store, facts, &sink, &deprecated, &usages_by_file);
+        for package in &packages {
+            run_package(package, store, facts, &sink, &deprecated, &usages_by_file);
         }
         return sink.into_diagnostics();
     }
 
-    let worker_sinks: Vec<LocalSink> = modules
+    let worker_sinks: Vec<LocalSink> = packages
         .par_iter()
-        .map(|module| {
+        .map(|package| {
             let local_sink = LocalSink::new();
-            run_module(
-                module,
+            run_package(
+                package,
                 store,
                 facts,
                 &local_sink,
@@ -262,17 +262,17 @@ pub(crate) fn run(store: &Store, facts: &Facts) -> Vec<LisetteDiagnostic> {
     LocalSink::merge(worker_sinks)
 }
 
-fn run_module(
-    module: &Module,
+fn run_package(
+    package: &Package,
     store: &Store,
     facts: &Facts,
     sink: &LocalSink,
     deprecated: &HashMap<Span, String>,
     usages_by_file: &HashMap<u32, Vec<&Usage>>,
 ) {
-    for (file_id, file) in module.source_file_entries() {
+    for (file_id, file) in package.source_file_entries() {
         let file_sink = LocalSink::new();
-        let mut ctx = NodeCtx::new(store, facts, module, file, &file_sink);
+        let mut ctx = NodeCtx::new(store, facts, package, file, &file_sink);
         walk_nodes(
             &file.items,
             &mut ctx,

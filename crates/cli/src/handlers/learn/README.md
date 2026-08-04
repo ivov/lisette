@@ -36,7 +36,7 @@ src/
     display.lis         # output formatting
 ```
 
-Each directory under `src/` is a module, imported by its directory name (e.g. `import "models"`). Files within a module share the same namespace, so `props.lis` and `task.lis` both contribute to the `models` module. A `.test.lis` file holds the tests for the module it sits in, so its tests can call the module's functions directly.
+Each directory under `src/` is a package, imported by its directory name (e.g. `import "models"`). Files within a package share the same namespace, so `props.lis` and `task.lis` both contribute to the `models` package. A `.test.lis` file holds the tests for the package it sits in, so its tests can call the package's functions directly.
 
 Language features shown:
 

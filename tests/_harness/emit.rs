@@ -34,7 +34,7 @@ fn emit_inner(
 
     let file = File {
         id: 0,
-        module_id: result.module_id.clone(),
+        package_id: result.package_id.clone(),
         name: "test.lis".to_string(),
         display_path: "src/test.lis".to_string(),
         source_path: None,
@@ -46,18 +46,18 @@ fn emit_inner(
     let test_index = syntax::program::TestIndex::default();
     let config = TestEmitConfig {
         definitions: &result.definitions,
-        module_id: &result.module_id,
+        package_id: &result.package_id,
         go_module: "myproject",
         unused: &result.unused,
         mutations: &result.mutations,
         equality_index: &result.equality_index,
         test_index: &test_index,
         go_package_names: &result.go_package_names,
-        go_module_ids: &result.go_module_ids,
+        go_package_ids: &result.go_package_ids,
     };
     let mut emitter = Planner::new_for_tests(&config, source_for_sourcemap);
     let emitted_files = emitter
-        .emit_files(&[&file], &result.module_id)
+        .emit_files(&[&file], &result.package_id)
         .unwrap_or_else(|diagnostics| panic!("Emission failed: {diagnostics:?}"));
 
     EmitResult {

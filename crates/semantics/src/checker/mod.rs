@@ -20,7 +20,7 @@ use registration::derived_attributes::DerivedAttributes;
 use scopes::Scopes;
 use syntax::ast::{Annotation, Expression, Generic, ImportAlias, Span};
 use syntax::program::{
-    Definition, DefinitionBody, FileImport, MethodSignatures, Module, NativeTypeKind,
+    Definition, DefinitionBody, FileImport, MethodSignatures, NativeTypeKind, Package,
     go_import_default_name,
 };
 use syntax::types::{Bound, SubstitutionMap, Symbol, Type, substitute};
@@ -37,31 +37,31 @@ impl TaskState {
             return false;
         };
 
-        let Some(module) = store.get_module(&self.cursor.module_id) else {
+        let Some(package) = store.get_package(&self.cursor.package_id) else {
             return false;
         };
 
-        module.is_typedef(file_id)
+        package.is_typedef(file_id)
     }
 
     fn is_lis(&self, store: &Store) -> bool {
         !self.is_d_lis(store)
     }
 
-    fn current_module<'a>(&self, store: &'a Store) -> &'a Module {
+    fn current_package<'a>(&self, store: &'a Store) -> &'a Package {
         store
-            .get_module(&self.cursor.module_id)
-            .expect("current module must exist in store")
+            .get_package(&self.cursor.package_id)
+            .expect("current package must exist in store")
     }
 
-    fn current_module_mut<'a>(&self, store: &'a mut Store) -> &'a mut Module {
+    fn current_package_mut<'a>(&self, store: &'a mut Store) -> &'a mut Package {
         store
-            .get_module_mut(&self.cursor.module_id)
-            .expect("current module must exist in store")
+            .get_package_mut(&self.cursor.package_id)
+            .expect("current package must exist in store")
     }
 
     fn qualify_name(&self, name: &str) -> Symbol {
-        Symbol::from_parts(&self.cursor.module_id, name)
+        Symbol::from_parts(&self.cursor.package_id, name)
     }
 
     pub(crate) fn put_in_scope(&mut self, generics: &[Generic]) {

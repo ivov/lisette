@@ -4,17 +4,17 @@ use syntax::program::{Definition, DefinitionBody, Visibility};
 
 use semantics::store::Store;
 
-pub(crate) fn run_module(module_id: &str, store: &Store, sink: &LocalSink) {
-    let Some(module) = store.get_module(module_id) else {
+pub(crate) fn run_package(package_id: &str, store: &Store, sink: &LocalSink) {
+    let Some(package) = store.get_package(package_id) else {
         return;
     };
 
-    let module_prefix = format!("{}.", module_id);
+    let package_prefix = format!("{}.", package_id);
 
-    let non_pub_interfaces: HashMap<String, HashSet<String>> = module
+    let non_pub_interfaces: HashMap<String, HashSet<String>> = package
         .definitions
         .iter()
-        .filter(|(key, _)| key.starts_with(&module_prefix))
+        .filter(|(key, _)| key.starts_with(&package_prefix))
         .filter(|(_, definition)| !store.is_test_definition(definition))
         .filter_map(|(qualified_name, definition)| {
             if let Definition {
@@ -42,10 +42,10 @@ pub(crate) fn run_module(module_id: &str, store: &Store, sink: &LocalSink) {
         return;
     }
 
-    for (key, definition) in module
+    for (key, definition) in package
         .definitions
         .iter()
-        .filter(|(key, _)| key.starts_with(&module_prefix))
+        .filter(|(key, _)| key.starts_with(&package_prefix))
         .filter(|(_, definition)| !store.is_test_definition(definition))
     {
         if let Definition {
@@ -58,8 +58,8 @@ pub(crate) fn run_module(module_id: &str, store: &Store, sink: &LocalSink) {
             for method_name in methods.keys() {
                 for (interface_name, interface_methods) in &non_pub_interfaces {
                     if interface_methods.contains(method_name.as_str()) {
-                        let method_key = format!("{}.{}.{}", module_id, name, method_name);
-                        let method_is_pub = module
+                        let method_key = format!("{}.{}.{}", package_id, name, method_name);
+                        let method_is_pub = package
                             .definitions
                             .get(method_key.as_str())
                             .map(|definition| definition.visibility.is_public())

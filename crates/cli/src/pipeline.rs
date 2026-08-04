@@ -83,7 +83,7 @@ pub struct CompileResult {
     pub diagnostics: Vec<LisetteDiagnostic>,
     pub sources: Sources,
     pub user_file_count: usize,
-    pub live_modules: Vec<String>,
+    pub live_packages: Vec<String>,
     pub emit_stamps: Vec<EmitStamp>,
     pub test_index: TestIndex,
 }
@@ -156,18 +156,18 @@ pub fn compile(
 
     let mut diagnostics = analysis.take_diagnostics();
     if !emit_tests {
-        for module_id in &analysis.unreachable_modules {
-            diagnostics.push(diagnostics::module_graph::unreachable_module(module_id));
+        for package_id in &analysis.unreachable_packages {
+            diagnostics.push(diagnostics::package_graph::unreachable_package(package_id));
         }
     }
 
     let mut sources = Sources::default();
-    let mut live_modules = Vec::new();
+    let mut live_packages = Vec::new();
     let mut user_file_count = 0;
     for (file_id, file) in analysis.emit_input.files {
         if !file.is_d_lis() {
             user_file_count += 1;
-            live_modules.push(file.module_id);
+            live_packages.push(file.package_id);
         }
         sources.insert(
             file_id,
@@ -177,8 +177,8 @@ pub fn compile(
             },
         );
     }
-    live_modules.sort_unstable();
-    live_modules.dedup();
+    live_packages.sort_unstable();
+    live_packages.dedup();
     let test_index = analysis.emit_input.test_index;
 
     let output = match emit_result {
@@ -205,7 +205,7 @@ pub fn compile(
         diagnostics,
         sources,
         user_file_count,
-        live_modules,
+        live_packages,
         emit_stamps,
         test_index,
     }
@@ -465,7 +465,7 @@ mod tests {
     }
 
     #[test]
-    fn a_module_whose_body_fails_to_parse_still_reports_its_syntax_error() {
+    fn a_package_whose_body_fails_to_parse_still_reports_its_syntax_error() {
         let tmp = tempdir().unwrap();
         let root = tmp.path();
         stdfs::create_dir_all(root.join("src").join("broken")).unwrap();
@@ -522,7 +522,7 @@ mod tests {
             disable_cache: false,
         });
 
-        let mut cached: Vec<String> = result.emit_input.cached_modules.iter().cloned().collect();
+        let mut cached: Vec<String> = result.emit_input.cached_packages.iter().cloned().collect();
         cached.sort();
         let mut diags: Vec<(bool, Option<String>)> = result
             .diagnostics()
@@ -586,11 +586,11 @@ mod tests {
         let (warm_cached, warm_diags) = analyze_cache_state(root);
         assert_eq!(
             warm_cached, expected,
-            "warm run must serve every module from cache via the parallel path"
+            "warm run must serve every package from cache via the parallel path"
         );
         assert_eq!(
             warm_diags, cold_diags,
-            "warm cross-module resolution must match cold"
+            "warm cross-package resolution must match cold"
         );
     }
 
@@ -630,7 +630,7 @@ mod tests {
     }
 
     #[test]
-    fn test_index_retains_cached_module_tests_on_warm_build() {
+    fn test_index_retains_cached_package_tests_on_warm_build() {
         let tmp = tempdir().unwrap();
         let root = tmp.path();
         stdfs::create_dir_all(root.join("src").join("math")).unwrap();
@@ -669,7 +669,7 @@ mod tests {
         let warm = test_index_names(root);
         assert_eq!(
             cold, warm,
-            "tests in a cached module must survive a warm build"
+            "tests in a cached package must survive a warm build"
         );
     }
 }

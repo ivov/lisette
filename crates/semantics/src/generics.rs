@@ -285,9 +285,9 @@ mod tests {
     #[test]
     fn nested_type_obligations_terminates_on_self_referential_alias() {
         let mut store = Store::new();
-        store.add_module("m");
+        store.add_package("m");
         store
-            .get_module_mut("m")
+            .get_package_mut("m")
             .unwrap()
             .definitions
             .insert(Symbol::from_raw("m.A"), self_referential_alias());

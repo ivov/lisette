@@ -4,13 +4,13 @@ use rustc_hash::FxHashSet as HashSet;
 use syntax::types::Type;
 
 #[derive(Default)]
-pub(crate) struct ModuleState {
+pub(crate) struct PackageState {
     user_to_string_types: HashSet<String>,
     escape_remap: HashMap<String, String>,
     generic_renames: HashMap<String, String>,
 }
 
-impl ModuleState {
+impl PackageState {
     pub(crate) fn record_user_to_string_type(&mut self, type_name: impl Into<String>) {
         self.user_to_string_types.insert(type_name.into());
     }

@@ -34,13 +34,13 @@ impl InferCtx<'_> {
                     return CallKind::NativeMethod(kind);
                 }
 
-                // Cross-module tuple struct constructor (e.g. `mod.Point(1, 2)`)
-                if let Some(module_id) = receiver
+                // Cross-package tuple struct constructor (e.g. `mod.Point(1, 2)`)
+                if let Some(package_id) = receiver
                     .get_type()
                     .resolve_in(&self.env)
                     .as_import_namespace()
                 {
-                    let qualified = Symbol::from_parts(module_id, member);
+                    let qualified = Symbol::from_parts(package_id, member);
                     if matches!(
                         store.get_definition(&qualified).map(|d| &d.body),
                         Some(DefinitionBody::Struct {

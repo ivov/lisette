@@ -48,7 +48,7 @@ impl InferCtx<'_> {
         if !bound_requires_evidence(self.store, &bound.required) {
             return;
         }
-        let module_id = self.cursor.module_id.clone();
+        let package_id = self.cursor.package_id.clone();
         let available_bounds = self.visible_parameter_bounds();
         self.facts
             .deferred
@@ -57,7 +57,7 @@ impl InferCtx<'_> {
                 argument: bound.argument,
                 required: bound.required,
                 span,
-                module_id,
+                package_id,
                 param_name: bound.parameter_name,
                 available_bounds,
                 origin: origin.clone(),

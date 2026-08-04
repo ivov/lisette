@@ -1,0 +1,5 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Import cycle detected: package_a -> package_b -> package_c -> package_a
+  help: To break the cycle, remove one of the imports or extract common dependencies into a separate package · code: [resolve.import_cycle]

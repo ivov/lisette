@@ -40,7 +40,7 @@ impl TaskState {
             return;
         }
 
-        let qualified = Symbol::from_parts(&context.module_id, name);
+        let qualified = Symbol::from_parts(&context.package_id, name);
         if is_struct
             && let Some(definition) = store.get_definition(qualified.as_str())
             && definition.is_pointer_backed_newtype(|id| store.get_definition(id))
@@ -52,13 +52,13 @@ impl TaskState {
             return;
         }
 
-        self.synthesize_to_string(store, &context.module_id, &candidate.span, &qualified);
+        self.synthesize_to_string(store, &context.package_id, &candidate.span, &qualified);
     }
 
     fn synthesize_to_string(
         &mut self,
         store: &mut Store,
-        module_id: &str,
+        package_id: &str,
         attribute_span: &Span,
         qualified: &Symbol,
     ) {
@@ -103,15 +103,17 @@ impl TaskState {
         let method_ty = wrap_with_impl_generics(&fn_ty, &generics, &[]);
 
         let to_string_key = qualified.with_segment("to_string");
-        let module = store.get_module_mut(module_id).expect("module must exist");
-        if let Some(methods) = module
+        let package = store
+            .get_package_mut(package_id)
+            .expect("package must exist");
+        if let Some(methods) = package
             .definitions
             .get_mut(qualified.as_str())
             .and_then(Definition::methods_mut)
         {
             methods.insert("to_string".into(), method_ty.clone());
         }
-        module
+        package
             .definitions
             .entry(to_string_key)
             .or_insert_with(|| Definition {

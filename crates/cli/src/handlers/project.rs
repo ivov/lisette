@@ -108,7 +108,7 @@ pub(crate) enum FileTarget {
     ProjectEntry {
         root: PathBuf,
     },
-    ProjectModule {
+    ProjectPackage {
         root: PathBuf,
     },
 }
@@ -145,10 +145,10 @@ pub(crate) fn resolve_file_target(file: &Path) -> FileTarget {
             if relative == Path::new("src/main.lis") {
                 FileTarget::ProjectEntry { root }
             } else {
-                FileTarget::ProjectModule { root }
+                FileTarget::ProjectPackage { root }
             }
         }
-        Some(semantics::loader::EXTERNAL_TESTS_DIR) => FileTarget::ProjectModule { root },
+        Some(semantics::loader::EXTERNAL_TESTS_DIR) => FileTarget::ProjectPackage { root },
         _ => outside,
     }
 }

@@ -38,7 +38,7 @@ pub(crate) struct DerivedAttribute {
 }
 
 pub(crate) struct DerivedAttributeContext {
-    pub(crate) module_id: String,
+    pub(crate) package_id: String,
     pub(crate) is_d_lis: bool,
 }
 
@@ -55,7 +55,7 @@ impl TaskState {
     ) {
         let candidates = collect_derived_attributes(
             DerivedAttributeContext {
-                module_id: self.cursor.module_id.clone(),
+                package_id: self.cursor.package_id.clone(),
                 is_d_lis: self.is_d_lis(store),
             },
             items,
@@ -63,20 +63,20 @@ impl TaskState {
         self.register_derived_attributes(store, candidates);
     }
 
-    pub(super) fn register_module_derived_attributes(
+    pub(super) fn register_package_derived_attributes(
         &mut self,
         store: &mut Store,
-        module_id: &str,
+        package_id: &str,
     ) {
         let candidates = {
-            let module = store.get_module(module_id).expect("module must exist");
-            module
+            let package = store.get_package(package_id).expect("package must exist");
+            package
                 .files
                 .values()
                 .map(|file| {
                     collect_derived_attributes(
                         DerivedAttributeContext {
-                            module_id: module_id.to_string(),
+                            package_id: package_id.to_string(),
                             is_d_lis: file.is_d_lis(),
                         },
                         &file.items,

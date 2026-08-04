@@ -1,7 +1,7 @@
 //! Reject public type declarations whose name cannot be exported from Go.
 //! Lisette maps a `pub` type to an exported Go identifier, which must begin
 //! with an uppercase letter. A public type with a lowercase name emits an
-//! unexported Go definition while cross-module references reach for the
+//! unexported Go definition while cross-package references reach for the
 //! exported spelling, so downstream packages fail to compile.
 
 use crate::passes::walk::NodeCtx;

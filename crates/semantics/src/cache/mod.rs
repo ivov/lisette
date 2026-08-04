@@ -11,10 +11,10 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use syntax::program::{File, Module, is_test_file};
+use syntax::program::{File, Package, is_test_file};
 
-use crate::loader::is_external_test_module;
-use crate::store::{ENTRY_MODULE_ID, Store};
+use crate::loader::is_external_test_package;
+use crate::store::{ENTRY_PACKAGE_ID, Store};
 use types::CachedDefinition;
 
 /// Current cache format version. Bump this when making breaking changes to the cache format.
@@ -26,7 +26,7 @@ pub(crate) const COMPILER_VERSION_HASH: u64 =
 
 /// Combined stdlib content hash. Changes to any stdlib file (prelude.d.lis,
 /// test_prelude.d.lis, or any typedefs/*.d.lis) will change this hash, invalidating
-/// all user module caches.
+/// all user package caches.
 const STDLIB_HASH: u64 = stdlib::STDLIB_CONTENT_HASH;
 
 /// Prelude content hash (prelude.d.lis + test_prelude.d.lis).
@@ -74,24 +74,24 @@ impl Hasher for FnvHasher {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModuleInterface {
+pub struct PackageInterface {
     version: u32,
 
     compiler_version: u64,
 
     stdlib_hash: u64,
 
-    /// Hash of all files, tests included; this module's own validity key.
+    /// Hash of all files, tests included; this package's own validity key.
     full_hash: u64,
 
-    /// Module hash of each direct dependency.
+    /// Package hash of each direct dependency.
     dependency_hashes: HashMap<String, u64>,
 
     pub(crate) files: Vec<CachedFile>,
 
     definitions: HashMap<String, CachedDefinition>,
 
-    /// Artifact hash of the on-disk Go files produced for this module.
+    /// Artifact hash of the on-disk Go files produced for this package.
     /// `None` after a Check-phase save or before the post-write stamp call;
     /// `Some(h)` when the on-disk Go files came from a successful Emit for
     /// artifact hash `h`.
@@ -105,8 +105,8 @@ pub struct CachedFile {
 }
 
 #[derive(Debug, Clone)]
-pub struct CompiledModule {
-    pub module_id: String,
+pub struct CompiledPackage {
+    pub package_id: String,
     pub artifact_hash: u64,
     pub(crate) full_hash: u64,
     pub(crate) dep_hashes: HashMap<String, u64>,
@@ -114,11 +114,11 @@ pub struct CompiledModule {
 
 #[derive(Debug, Clone)]
 pub struct EmitStamp {
-    pub module_id: String,
+    pub package_id: String,
     pub artifact_hash: u64,
 }
 
-/// Hash over the non-sourcemap Go-artifact inputs for one module.
+/// Hash over the non-sourcemap Go-artifact inputs for one package.
 pub fn compute_emit_artifact_hash(production_hash: u64, go_module: &str) -> u64 {
     let mut hasher = FnvHasher::new();
     production_hash.hash(&mut hasher);
@@ -126,23 +126,23 @@ pub fn compute_emit_artifact_hash(production_hash: u64, go_module: &str) -> u64 
     hasher.finish()
 }
 
-/// Hashes a module's sources, given each file's name and source: the
+/// Hashes a package's sources, given each file's name and source: the
 /// production-only hash drives dependents and the emit artifact, the all-files
-/// hash drives the module's own validity.
-pub(crate) fn hash_module_source_pair<'a>(
+/// hash drives the package's own validity.
+pub(crate) fn hash_package_source_pair<'a>(
     files: impl Iterator<Item = (&'a str, &'a str)> + Clone,
 ) -> (u64, u64) {
     let production_hash =
-        hash_module_sources(files.clone().filter(|(name, _)| !is_test_file(name)));
+        hash_package_sources(files.clone().filter(|(name, _)| !is_test_file(name)));
     let full_hash = if files.clone().any(|(name, _)| is_test_file(name)) {
-        hash_module_sources(files)
+        hash_package_sources(files)
     } else {
         production_hash
     };
     (production_hash, full_hash)
 }
 
-fn hash_module_sources<'a>(files: impl Iterator<Item = (&'a str, &'a str)>) -> u64 {
+fn hash_package_sources<'a>(files: impl Iterator<Item = (&'a str, &'a str)>) -> u64 {
     let mut hasher = FnvHasher::new();
 
     let mut sorted: Vec<(&str, &str)> = files.collect();
@@ -156,10 +156,10 @@ fn hash_module_sources<'a>(files: impl Iterator<Item = (&'a str, &'a str)>) -> u
     hasher.finish()
 }
 
-/// Compute a module's hash from its production hash and dependency hashes.
-/// This ensures transitive invalidation: if C changes, B's module_hash changes
+/// Compute a package's hash from its production hash and dependency hashes.
+/// This ensures transitive invalidation: if C changes, B's package_hash changes
 /// (even though B's source didn't), which invalidates A's cache.
-pub(crate) fn compute_module_hash(production_hash: u64, dep_hashes: &HashMap<String, u64>) -> u64 {
+pub(crate) fn compute_package_hash(production_hash: u64, dep_hashes: &HashMap<String, u64>) -> u64 {
     let mut hasher = FnvHasher::new();
     production_hash.hash(&mut hasher);
 
@@ -173,9 +173,9 @@ pub(crate) fn compute_module_hash(production_hash: u64, dep_hashes: &HashMap<Str
     hasher.finish()
 }
 
-pub(crate) fn get_dependency_module_hashes<'a>(
+pub(crate) fn get_dependency_package_hashes<'a>(
     dependencies: impl IntoIterator<Item = &'a String>,
-    module_hashes: &HashMap<String, u64>,
+    package_hashes: &HashMap<String, u64>,
 ) -> HashMap<String, u64> {
     dependencies
         .into_iter()
@@ -183,7 +183,7 @@ pub(crate) fn get_dependency_module_hashes<'a>(
             let hash = if dep_id.starts_with("go:") || dep_id == "prelude" {
                 STDLIB_HASH
             } else {
-                *module_hashes.get(dep_id).unwrap_or(&0)
+                *package_hashes.get(dep_id).unwrap_or(&0)
             };
             (dep_id.clone(), hash)
         })
@@ -191,7 +191,7 @@ pub(crate) fn get_dependency_module_hashes<'a>(
 }
 
 fn is_cache_valid(
-    cache: &ModuleInterface,
+    cache: &PackageInterface,
     current_full_hash: u64,
     current_dep_hashes: &HashMap<String, u64>,
 ) -> bool {
@@ -202,17 +202,17 @@ fn is_cache_valid(
         && cache.dependency_hashes == *current_dep_hashes
 }
 
-fn cache_path(project_root: &Path, module_id: &str) -> PathBuf {
+fn cache_path(project_root: &Path, package_id: &str) -> PathBuf {
     project_root
         .join("target")
         .join(".lisette")
         .join("cache")
-        .join(cache_file_name(module_id))
+        .join(cache_file_name(package_id))
 }
 
-pub fn cache_file_name(module_id: &str) -> String {
-    let mut encoded = String::with_capacity(module_id.len() + 6);
-    for ch in module_id.chars() {
+pub fn cache_file_name(package_id: &str) -> String {
+    let mut encoded = String::with_capacity(package_id.len() + 6);
+    for ch in package_id.chars() {
         match ch {
             '_' => encoded.push_str("__"),
             '/' => encoded.push_str("_s"),
@@ -224,14 +224,14 @@ pub fn cache_file_name(module_id: &str) -> String {
 }
 
 pub(crate) fn try_load_cache(
-    module_id: &str,
+    package_id: &str,
     expected_full_hash: u64,
     expected_dep_hashes: &HashMap<String, u64>,
     expected_artifact_hash: Option<u64>,
     project_root: &Path,
-) -> Option<ModuleInterface> {
-    let path = cache_path(project_root, module_id);
-    let interface: ModuleInterface = disk::read(&path).ok()?;
+) -> Option<PackageInterface> {
+    let path = cache_path(project_root, package_id);
+    let interface: PackageInterface = disk::read(&path).ok()?;
 
     if !is_cache_valid(&interface, expected_full_hash, expected_dep_hashes) {
         let _ = fs::remove_file(&path);
@@ -242,7 +242,7 @@ pub(crate) fn try_load_cache(
         if interface.emit_stamp != Some(expected_artifact_hash) {
             return None;
         }
-        if !all_go_outputs_exist(module_id, &interface.files, project_root) {
+        if !all_go_outputs_exist(package_id, &interface.files, project_root) {
             return None;
         }
     }
@@ -250,11 +250,15 @@ pub(crate) fn try_load_cache(
     Some(interface)
 }
 
-fn all_go_outputs_exist(module_id: &str, cached_files: &[CachedFile], project_root: &Path) -> bool {
-    let target_dir = if module_id == ENTRY_MODULE_ID {
+fn all_go_outputs_exist(
+    package_id: &str,
+    cached_files: &[CachedFile],
+    project_root: &Path,
+) -> bool {
+    let target_dir = if package_id == ENTRY_PACKAGE_ID {
         project_root.join("target")
     } else {
-        project_root.join("target").join(module_id)
+        project_root.join("target").join(package_id)
     };
 
     for cached_file in cached_files {
@@ -272,16 +276,16 @@ fn all_go_outputs_exist(module_id: &str, cached_files: &[CachedFile], project_ro
     true
 }
 
-pub fn save_module_cache(
-    compiled: &CompiledModule,
+pub fn save_package_cache(
+    compiled: &CompiledPackage,
     store: &Store,
     project_root: &Path,
 ) -> io::Result<()> {
-    let Some(module) = store.get_module(&compiled.module_id) else {
-        return Err(io::Error::other("module not found in store"));
+    let Some(package) = store.get_package(&compiled.package_id) else {
+        return Err(io::Error::other("package not found in store"));
     };
 
-    let mut all_files: Vec<_> = module.files.values().collect();
+    let mut all_files: Vec<_> = package.files.values().collect();
     all_files.sort_by_key(|f| &f.name);
 
     let file_id_to_index: HashMap<u32, u32> = all_files
@@ -290,7 +294,7 @@ pub fn save_module_cache(
         .map(|(idx, f)| (f.id, idx as u32))
         .collect();
 
-    let interface = ModuleInterface {
+    let interface = PackageInterface {
         version: CACHE_FORMAT_VERSION,
         compiler_version: COMPILER_VERSION_HASH,
         stdlib_hash: STDLIB_HASH,
@@ -303,24 +307,24 @@ pub fn save_module_cache(
                 source: f.source.clone(),
             })
             .collect(),
-        definitions: extract_cached_definitions(store, &compiled.module_id, &file_id_to_index),
+        definitions: extract_cached_definitions(store, &compiled.package_id, &file_id_to_index),
         emit_stamp: None,
     };
 
-    let path = cache_path(project_root, &compiled.module_id);
+    let path = cache_path(project_root, &compiled.package_id);
     disk::write(&path, &interface)
 }
 
 fn extract_cached_definitions(
     store: &Store,
-    module_id: &str,
+    package_id: &str,
     file_id_to_index: &HashMap<u32, u32>,
 ) -> HashMap<String, CachedDefinition> {
-    let Some(module) = store.get_module(module_id) else {
+    let Some(package) = store.get_package(package_id) else {
         return HashMap::default();
     };
 
-    module
+    package
         .definitions
         .iter()
         .filter(|(_, definition)| !store.is_test_definition(definition))
@@ -333,14 +337,14 @@ fn extract_cached_definitions(
         .collect()
 }
 
-pub(crate) fn build_cached_module(
-    module_id: String,
+pub(crate) fn build_cached_package(
+    package_id: String,
     file_id_base: u32,
-    cached: ModuleInterface,
+    cached: PackageInterface,
     src_base: &DisplayPathBase,
     root_base: &DisplayPathBase,
-) -> Module {
-    let mut module = Module::new(&module_id);
+) -> Package {
+    let mut package = Package::new(&package_id);
     let mut file_ids: Vec<u32> = Vec::with_capacity(cached.files.len());
 
     for (index, cached_file) in cached.files.iter().enumerate() {
@@ -348,46 +352,46 @@ pub(crate) fn build_cached_module(
         file_ids.push(file_id);
 
         let display_path =
-            cached_file_display_path(src_base, root_base, &module_id, &cached_file.name);
+            cached_file_display_path(src_base, root_base, &package_id, &cached_file.name);
         let file = File::new_cached(
-            &module_id,
+            &package_id,
             &cached_file.name,
             &display_path,
             &cached_file.source,
             file_id,
         );
-        module.files.insert(file_id, file);
+        package.files.insert(file_id, file);
     }
 
     for (qualified_name, cached_definition) in cached.definitions {
-        cached_definition.install_into(&mut module, qualified_name.into(), &file_ids);
+        cached_definition.install_into(&mut package, qualified_name.into(), &file_ids);
     }
 
-    module
+    package
 }
 
 fn cached_file_display_path(
     src_base: &DisplayPathBase,
     root_base: &DisplayPathBase,
-    module_id: &str,
+    package_id: &str,
     bare_name: &str,
 ) -> String {
-    if is_external_test_module(module_id) {
+    if is_external_test_package(package_id) {
         return root_base
-            .relative(&Path::new(module_id).join(bare_name))
+            .relative(&Path::new(package_id).join(bare_name))
             .unwrap_or_else(|| bare_name.to_string());
     }
-    let rel = if module_id == ENTRY_MODULE_ID {
+    let rel = if package_id == ENTRY_PACKAGE_ID {
         PathBuf::from(bare_name)
     } else {
-        Path::new(module_id).join(bare_name)
+        Path::new(package_id).join(bare_name)
     };
     src_base
         .relative(&rel)
         .unwrap_or_else(|| bare_name.to_string())
 }
 
-/// Set or clear the `emit_stamp` for each module's cache file. Missing files
+/// Set or clear the `emit_stamp` for each package's cache file. Missing files
 /// are skipped; undecodable (e.g. pre-bump) files are unlinked and skipped;
 /// other read errors propagate so the sourcemap pre-write clear can hard-fail
 /// rather than leave a stale stamp over freshly-overwritten Go.
@@ -396,8 +400,8 @@ pub fn apply_emit_stamps(
     updates: &[(EmitStamp, Option<u64>)],
 ) -> io::Result<()> {
     for (stamp, value) in updates {
-        let path = cache_path(project_root, &stamp.module_id);
-        let mut interface: ModuleInterface = match disk::read(&path) {
+        let path = cache_path(project_root, &stamp.package_id);
+        let mut interface: PackageInterface = match disk::read(&path) {
             Ok(interface) => interface,
             Err(error)
                 if matches!(
@@ -434,7 +438,7 @@ mod tests {
         Definition {
             visibility,
             ty: Type::Nominal {
-                id: Symbol::from_raw("module.Box"),
+                id: Symbol::from_raw("package.Box"),
                 params: vec![Type::Parameter("T".into())],
             },
             name_span: Some(Span::new(file_id, 0, 3)),
@@ -463,21 +467,21 @@ mod tests {
     }
 
     #[test]
-    fn test_hash_module_sources_deterministic() {
+    fn test_hash_package_sources_deterministic() {
         let first = ("a.lis", "fn foo() {}");
         let second = ("b.lis", "fn bar() {}");
 
         assert_eq!(
-            hash_module_sources([first, second].into_iter()),
-            hash_module_sources([second, first].into_iter())
+            hash_package_sources([first, second].into_iter()),
+            hash_package_sources([second, first].into_iter())
         );
     }
 
     #[test]
-    fn test_hash_module_sources_content_sensitive() {
+    fn test_hash_package_sources_content_sensitive() {
         assert_ne!(
-            hash_module_sources([("a.lis", "fn foo() {}")].into_iter()),
-            hash_module_sources([("a.lis", "fn bar() {}")].into_iter())
+            hash_package_sources([("a.lis", "fn foo() {}")].into_iter()),
+            hash_package_sources([("a.lis", "fn bar() {}")].into_iter())
         );
     }
 
@@ -487,8 +491,8 @@ mod tests {
         let test_a = ("core.test.lis", "fn t() {}");
         let test_b = ("core.test.lis", "fn t() { add() }");
 
-        let (production_a, full_a) = hash_module_source_pair([production, test_a].into_iter());
-        let (production_b, full_b) = hash_module_source_pair([production, test_b].into_iter());
+        let (production_a, full_a) = hash_package_source_pair([production, test_a].into_iter());
+        let (production_b, full_b) = hash_package_source_pair([production, test_b].into_iter());
         assert_eq!(
             production_a, production_b,
             "editing a test file must not change the production hash"
@@ -496,19 +500,19 @@ mod tests {
 
         let deps = HashMap::default();
         assert_eq!(
-            compute_module_hash(production_a, &deps),
-            compute_module_hash(production_b, &deps),
+            compute_package_hash(production_a, &deps),
+            compute_package_hash(production_b, &deps),
             "the hash propagated to dependents must be invariant to test edits"
         );
 
         assert_ne!(
             full_a, full_b,
-            "editing a test file must change the module's own full hash"
+            "editing a test file must change the package's own full hash"
         );
     }
 
     #[test]
-    fn test_compute_module_hash_includes_deps() {
+    fn test_compute_package_hash_includes_deps() {
         let source_hash = 12345u64;
         let mut deps1 = HashMap::default();
         deps1.insert("dep_a".to_string(), 111u64);
@@ -516,28 +520,28 @@ mod tests {
         let mut deps2 = HashMap::default();
         deps2.insert("dep_a".to_string(), 222u64);
 
-        let hash1 = compute_module_hash(source_hash, &deps1);
-        let hash2 = compute_module_hash(source_hash, &deps2);
+        let hash1 = compute_package_hash(source_hash, &deps1);
+        let hash2 = compute_package_hash(source_hash, &deps2);
 
         assert_ne!(hash1, hash2);
     }
 
     #[test]
-    fn test_compute_module_hash_deterministic() {
+    fn test_compute_package_hash_deterministic() {
         let source_hash = 12345u64;
         let mut deps = HashMap::default();
         deps.insert("dep_b".to_string(), 222u64);
         deps.insert("dep_a".to_string(), 111u64);
 
-        let hash1 = compute_module_hash(source_hash, &deps);
-        let hash2 = compute_module_hash(source_hash, &deps);
+        let hash1 = compute_package_hash(source_hash, &deps);
+        let hash2 = compute_package_hash(source_hash, &deps);
 
         assert_eq!(hash1, hash2);
     }
 
     #[test]
     fn test_cache_validity_checks_version() {
-        let cache = ModuleInterface {
+        let cache = PackageInterface {
             version: CACHE_FORMAT_VERSION + 1, // Wrong version
             compiler_version: COMPILER_VERSION_HASH,
             stdlib_hash: STDLIB_HASH,
@@ -553,7 +557,7 @@ mod tests {
 
     #[test]
     fn test_cache_validity_checks_compiler_version() {
-        let cache = ModuleInterface {
+        let cache = PackageInterface {
             version: CACHE_FORMAT_VERSION,
             compiler_version: COMPILER_VERSION_HASH + 1, // Wrong compiler
             stdlib_hash: STDLIB_HASH,
@@ -569,7 +573,7 @@ mod tests {
 
     #[test]
     fn test_cache_validity_checks_full_hash() {
-        let cache = ModuleInterface {
+        let cache = PackageInterface {
             version: CACHE_FORMAT_VERSION,
             compiler_version: COMPILER_VERSION_HASH,
             stdlib_hash: STDLIB_HASH,
@@ -585,7 +589,7 @@ mod tests {
     }
 
     #[test]
-    fn build_cached_module_preserves_constant_kind() {
+    fn build_cached_package_preserves_constant_kind() {
         use syntax::ast::Literal;
         use syntax::program::{Definition, DefinitionBody, ValueKind, Visibility};
 
@@ -628,7 +632,7 @@ mod tests {
             CachedDefinition::from_definition(&declaration_def, &empty_files),
         );
 
-        let interface = ModuleInterface {
+        let interface = PackageInterface {
             version: CACHE_FORMAT_VERSION,
             compiler_version: COMPILER_VERSION_HASH,
             stdlib_hash: STDLIB_HASH,
@@ -639,7 +643,7 @@ mod tests {
             emit_stamp: None,
         };
 
-        let built = build_cached_module(
+        let built = build_cached_package(
             "mymod".to_string(),
             0,
             interface,
@@ -671,7 +675,7 @@ mod tests {
             "proj/src/geometry/geometry.lis"
         );
         assert_eq!(
-            cached_file_display_path(&src_base, &root_base, ENTRY_MODULE_ID, "geo.lis"),
+            cached_file_display_path(&src_base, &root_base, ENTRY_PACKAGE_ID, "geo.lis"),
             "proj/src/geo.lis"
         );
     }
@@ -746,7 +750,7 @@ mod tests {
         let mut cached_deps = HashMap::default();
         cached_deps.insert("dep".to_string(), 111u64);
 
-        let cache = ModuleInterface {
+        let cache = PackageInterface {
             version: CACHE_FORMAT_VERSION,
             compiler_version: COMPILER_VERSION_HASH,
             stdlib_hash: STDLIB_HASH,
@@ -809,7 +813,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_dependency_module_hashes_uses_stdlib_hash() {
+    fn test_get_dependency_package_hashes_uses_stdlib_hash() {
         let mut edges = HashMap::default();
         let mut deps = HashSet::default();
         deps.insert("go:fmt".to_string());
@@ -817,10 +821,10 @@ mod tests {
         deps.insert("user_mod".to_string());
         edges.insert("my_mod".to_string(), deps);
 
-        let mut module_hashes = HashMap::default();
-        module_hashes.insert("user_mod".to_string(), 12345u64);
+        let mut package_hashes = HashMap::default();
+        package_hashes.insert("user_mod".to_string(), 12345u64);
 
-        let result = get_dependency_module_hashes(&edges["my_mod"], &module_hashes);
+        let result = get_dependency_package_hashes(&edges["my_mod"], &package_hashes);
 
         assert_eq!(result.get("go:fmt"), Some(&STDLIB_HASH));
         assert_eq!(result.get("prelude"), Some(&STDLIB_HASH));
@@ -828,7 +832,7 @@ mod tests {
     }
 
     #[test]
-    fn hash_module_sources_independent_of_display_path() {
+    fn hash_package_sources_independent_of_display_path() {
         let cli_file = File::new_cached(
             "greet",
             "greet.lis",
@@ -844,7 +848,7 @@ mod tests {
             1,
         );
         let sources = |file: &File| {
-            hash_module_sources([(file.name.as_str(), file.source.as_str())].into_iter())
+            hash_package_sources([(file.name.as_str(), file.source.as_str())].into_iter())
         };
 
         assert_eq!(sources(&cli_file), sources(&lsp_file));
@@ -877,7 +881,7 @@ mod tests {
         let root = tmp.path();
         std::fs::create_dir_all(root.join("target").join(".lisette").join("cache")).unwrap();
 
-        let interface = ModuleInterface {
+        let interface = PackageInterface {
             version: CACHE_FORMAT_VERSION,
             compiler_version: COMPILER_VERSION_HASH,
             stdlib_hash: STDLIB_HASH,
@@ -891,16 +895,18 @@ mod tests {
         std::fs::write(&path, bincode::serialize(&interface).unwrap()).unwrap();
 
         let stamp = EmitStamp {
-            module_id: "greet".to_string(),
+            package_id: "greet".to_string(),
             artifact_hash: 999,
         };
         apply_emit_stamps(root, &[(stamp.clone(), Some(999))]).unwrap();
-        let reread: ModuleInterface = bincode::deserialize(&std::fs::read(&path).unwrap()).unwrap();
+        let reread: PackageInterface =
+            bincode::deserialize(&std::fs::read(&path).unwrap()).unwrap();
         assert_eq!(reread.emit_stamp, Some(999));
         assert_eq!(reread.full_hash, 100);
 
         apply_emit_stamps(root, &[(stamp, None)]).unwrap();
-        let reread: ModuleInterface = bincode::deserialize(&std::fs::read(&path).unwrap()).unwrap();
+        let reread: PackageInterface =
+            bincode::deserialize(&std::fs::read(&path).unwrap()).unwrap();
         assert_eq!(reread.emit_stamp, None);
     }
 
@@ -908,7 +914,7 @@ mod tests {
     fn apply_emit_stamps_missing_cache_is_no_op() {
         let tmp = tempfile::tempdir().unwrap();
         let stamp = EmitStamp {
-            module_id: "absent".to_string(),
+            package_id: "absent".to_string(),
             artifact_hash: 0,
         };
         let result = apply_emit_stamps(tmp.path(), &[(stamp, None)]);
@@ -922,7 +928,7 @@ mod tests {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, b"invalid").unwrap();
         let stamp = EmitStamp {
-            module_id: "corrupt".to_string(),
+            package_id: "corrupt".to_string(),
             artifact_hash: 0,
         };
 
@@ -939,7 +945,7 @@ mod tests {
         std::fs::create_dir_all(root.join("target").join("greet")).unwrap();
         std::fs::write(root.join("target").join("greet").join("greet.go"), "").unwrap();
 
-        let interface = ModuleInterface {
+        let interface = PackageInterface {
             version: CACHE_FORMAT_VERSION,
             compiler_version: COMPILER_VERSION_HASH,
             stdlib_hash: STDLIB_HASH,
@@ -981,7 +987,7 @@ mod tests {
 
         let artifact_hash = compute_emit_artifact_hash(100, "github.com/test/x");
 
-        let interface = ModuleInterface {
+        let interface = PackageInterface {
             version: CACHE_FORMAT_VERSION,
             compiler_version: COMPILER_VERSION_HASH,
             stdlib_hash: STDLIB_HASH,
@@ -1002,7 +1008,7 @@ mod tests {
         );
 
         let stamp = EmitStamp {
-            module_id: "greet".to_string(),
+            package_id: "greet".to_string(),
             artifact_hash,
         };
         apply_emit_stamps(root, &[(stamp, None)]).unwrap();

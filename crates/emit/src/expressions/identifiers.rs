@@ -15,7 +15,7 @@ enum IdentifierKind {
     UnitConstructor { name: String, type_args: String },
     /// Enum variant constructor as function value → `MakeName[Types]`
     ConstructorFunction { name: String, type_args: String },
-    /// Regular identifier (may need static method capitalization or cross-module resolution)
+    /// Regular identifier (may need static method capitalization or cross-package resolution)
     Regular { name: String },
 }
 
@@ -211,7 +211,7 @@ impl Planner<'_> {
     ) -> Option<String> {
         let qualified_name = self.facts.qualified_current(name);
         let definition = self.facts.definition(qualified_name.as_str()).or_else(|| {
-            let prelude_name = format!("{}.{}", go_name::PRELUDE_MODULE, name);
+            let prelude_name = format!("{}.{}", go_name::PRELUDE_PACKAGE, name);
             self.facts.definition(prelude_name.as_str())
         })?;
         let definition_ty = definition.ty.clone();
@@ -221,8 +221,8 @@ impl Planner<'_> {
     }
 
     /// Like `format_generic_value_type_args` but takes a pre-qualified definition name
-    /// instead of constructing one from the current module.
-    pub(crate) fn format_cross_module_type_args(
+    /// instead of constructing one from the current package.
+    pub(crate) fn format_cross_package_type_args(
         &mut self,
         qualified_name: &str,
         instantiated_ty: &Type,
@@ -302,19 +302,19 @@ impl Planner<'_> {
         }
     }
 
-    /// Resolve `module.Type.method` as a cross-module static method call.
-    pub(crate) fn try_resolve_cross_module_static_method(
+    /// Resolve `package.Type.method` as a cross-package static method call.
+    pub(crate) fn try_resolve_cross_package_static_method(
         &mut self,
         qualified: Option<&str>,
     ) -> Option<String> {
         let id = qualified?;
-        let module_name = self.facts.module_for_qualified_name(id)?.to_string();
-        if self.facts.is_current_module(&module_name) {
+        let package_name = self.facts.package_for_qualified_name(id)?.to_string();
+        if self.facts.is_current_package(&package_name) {
             return None;
         }
-        let after_module = id.strip_prefix(&module_name)?.strip_prefix('.')?;
-        let (type_part, method_name) = after_module.rsplit_once('.')?;
-        let type_id = format!("{}.{}", module_name, type_part);
+        let after_package = id.strip_prefix(&package_name)?.strip_prefix('.')?;
+        let (type_part, method_name) = after_package.rsplit_once('.')?;
+        let type_id = format!("{}.{}", package_name, type_part);
 
         let is_public = self
             .facts
@@ -327,7 +327,7 @@ impl Planner<'_> {
     }
 
     /// `Some(capitalized)` when the identifier names a public function in
-    /// the current module.
+    /// the current package.
     fn try_capitalize_public_function(&self, name: &str, ty: &Type) -> Option<String> {
         let is_function = matches!(ty, Type::Function(_))
             || matches!(ty, Type::Forall { body, .. } if matches!(body.as_ref(), Type::Function(_)));

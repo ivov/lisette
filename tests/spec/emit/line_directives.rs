@@ -63,14 +63,14 @@ fn line_directive_includes_column() {
 }
 
 #[test]
-fn module_file_line_directive_uses_relative_path_not_doubled() {
+fn package_file_line_directive_uses_relative_path_not_doubled() {
     use crate::_harness::MockFileSystem;
     use crate::_harness::build::compile_project_files;
-    use semantics::store::ENTRY_MODULE_ID;
+    use semantics::store::ENTRY_PACKAGE_ID;
 
     let mut fs = MockFileSystem::new();
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         "import \"greet\"\n\nfn main() {\n  let _ = greet.value()\n}\n",
     );
@@ -93,10 +93,10 @@ fn module_file_line_directive_uses_relative_path_not_doubled() {
 
     assert!(
         go.contains("//line src/greet/greet.lis:"),
-        "module file directive should use its relative path, got:\n{go}"
+        "package file directive should use its relative path, got:\n{go}"
     );
     assert!(
         !go.contains("//line greet/src/greet/greet.lis"),
-        "module file path must not be doubled, got:\n{go}"
+        "package file path must not be doubled, got:\n{go}"
     );
 }

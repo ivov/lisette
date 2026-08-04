@@ -12,7 +12,7 @@ use crate::state::file_namespace::FileNamespace;
 use diagnostics::LisetteDiagnostic;
 use syntax::program::File;
 
-pub(crate) struct ModulePlan {
+pub(crate) struct PackagePlan {
     pub(crate) package_name: String,
     pub(crate) files: Vec<FilePlan>,
     /// Package-block Go-name collisions detected before rendering. Attached to
@@ -31,20 +31,20 @@ pub(crate) struct MakeFunctionPlan {
 }
 
 impl Planner<'_> {
-    /// Run module-level collection and fix per-file identity before any item
+    /// Run package-level collection and fix per-file identity before any item
     /// is rendered.
-    pub(crate) fn build_module_plan(&mut self, files: &[&File], module_id: &str) -> ModulePlan {
-        debug_assert_eq!(self.facts.current_module(), module_id);
+    pub(crate) fn build_package_plan(&mut self, files: &[&File], package_id: &str) -> PackagePlan {
+        debug_assert_eq!(self.facts.current_package(), package_id);
         self.collect_user_to_string_facts(files);
         self.collect_escape_remap(files);
         self.collect_generic_renames(files);
         let collision_diagnostics = self.detect_name_collisions(files);
         let mut make_functions_by_file = self.collect_local_make_function_plans();
 
-        let package_name = if self.facts.is_entry_module(module_id) {
+        let package_name = if self.facts.is_entry_package(package_id) {
             self.facts.entry_package_name().to_string()
         } else {
-            let raw = module_id.rsplit('/').next().unwrap_or(module_id);
+            let raw = package_id.rsplit('/').next().unwrap_or(package_id);
             go_name::sanitize_package_name(raw).into_owned()
         };
 
@@ -55,13 +55,13 @@ impl Planner<'_> {
                 namespace: FileNamespace::build(
                     file,
                     self.facts.go_module(),
-                    self.facts.unused_imports_for_current_module(),
+                    self.facts.unused_imports_for_current_package(),
                     self.facts.go_package_names(),
                 ),
             })
             .collect();
 
-        ModulePlan {
+        PackagePlan {
             package_name,
             files: file_plans,
             collision_diagnostics,

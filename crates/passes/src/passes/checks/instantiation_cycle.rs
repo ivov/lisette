@@ -74,13 +74,13 @@ impl<'a> Targets<'a> {
 }
 
 fn collect_generic_targets(store: &Store) -> Targets<'_> {
-    let mut module_ids: Vec<&str> = store.modules.keys().map(String::as_str).collect();
-    module_ids.sort_unstable();
+    let mut package_ids: Vec<&str> = store.packages.keys().map(String::as_str).collect();
+    package_ids.sort_unstable();
 
     let mut targets = Targets::default();
-    for module_id in module_ids {
-        let module = &store.modules[module_id];
-        let mut files: Vec<_> = module.source_files().collect();
+    for package_id in package_ids {
+        let package = &store.packages[package_id];
+        let mut files: Vec<_> = package.source_files().collect();
         files.sort_unstable_by(|a, b| a.name.cmp(&b.name).then_with(|| a.id.cmp(&b.id)));
         for file in files {
             for item in &file.items {
@@ -105,7 +105,7 @@ fn collect_generic_targets(store: &Store) -> Targets<'_> {
                             body,
                             first_node: 0,
                         });
-                        let qualified = Symbol::from_parts(module_id, name).as_eco().clone();
+                        let qualified = Symbol::from_parts(package_id, name).as_eco().clone();
                         targets.functions.insert(qualified, index);
                     }
                     Expression::ImplBlock {
@@ -119,7 +119,7 @@ fn collect_generic_targets(store: &Store) -> Targets<'_> {
                                 method,
                                 impl_generics,
                                 receiver_name,
-                                module_id,
+                                package_id,
                                 &mut targets,
                             );
                         }
@@ -136,7 +136,7 @@ fn collect_method<'a>(
     method: &'a Expression,
     impl_generics: &'a [syntax::ast::Generic],
     receiver_name: &EcoString,
-    module_id: &str,
+    package_id: &str,
     targets: &mut Targets<'a>,
 ) {
     let Expression::Function {
@@ -163,7 +163,7 @@ fn collect_method<'a>(
     };
     let (declared_self, declared_params) = split_self_param(params);
     let receiver_id = declared_self.and_then(receiver_type_id).unwrap_or_else(|| {
-        Symbol::from_parts(module_id, receiver_name)
+        Symbol::from_parts(package_id, receiver_name)
             .as_eco()
             .clone()
     });
@@ -177,7 +177,7 @@ fn collect_method<'a>(
         first_node: 0,
     });
     // Static-style references collapse to a plain identifier qualified as
-    // `module.Type.method`.
+    // `package.Type.method`.
     let qualified = Symbol::from_raw(receiver_id.clone())
         .with_segment(name)
         .as_eco()

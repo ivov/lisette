@@ -6,7 +6,7 @@ pub(crate) mod diagnostics;
 pub mod facts;
 pub mod generics;
 pub mod loader;
-pub mod module_graph;
+pub mod package_graph;
 pub mod path;
 pub mod prelude;
 pub mod store;

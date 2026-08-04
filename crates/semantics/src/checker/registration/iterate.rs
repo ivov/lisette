@@ -46,7 +46,7 @@ impl TaskState {
             return;
         }
 
-        let qualified = Symbol::from_parts(&context.module_id, name);
+        let qualified = Symbol::from_parts(&context.package_id, name);
         let variants_key = qualified.with_segment("variants");
 
         // A static method or a variant literally named `variants` both register
@@ -81,10 +81,10 @@ impl TaskState {
         };
         let fn_ty = Type::function(vec![], Default::default(), Box::new(slice_ty));
 
-        let module = store
-            .get_module_mut(&context.module_id)
-            .expect("module must exist");
-        module.definitions.insert(
+        let package = store
+            .get_package_mut(&context.package_id)
+            .expect("package must exist");
+        package.definitions.insert(
             variants_key,
             Definition {
                 visibility,

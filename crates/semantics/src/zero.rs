@@ -8,7 +8,7 @@ use syntax::types::{CompoundKind, SimpleKind, SubstitutionMap, Symbol, Type, sub
 use crate::store::Store;
 
 /// Chain of field accesses leading to a non-zero-constructible field.
-/// Used to render diagnostics like "outer.inner.b is private to module other".
+/// Used to render diagnostics like "outer.inner.b is private to package other".
 #[derive(Debug, Clone)]
 pub struct NoZero {
     pub(crate) chain: Vec<EcoString>,
@@ -31,27 +31,27 @@ pub enum NoZeroReason {
     /// `Ref<T>`, `Result<T, E>`, enum without default variant).
     NoZeroForType,
     /// A nested user-defined struct has a private field unreachable from the
-    /// calling module.
+    /// calling package.
     PrivateField {
         struct_name: EcoString,
         field: EcoString,
-        owning_module: EcoString,
+        owning_package: EcoString,
     },
     /// A Go type curated as broken at its zero value, named for the diagnostic.
     HiddenGoState { go_type: EcoString },
 }
 
-/// Predicate: does `ty` have a Lisette-side zero, constructible from `from_module`?
+/// Predicate: does `ty` have a Lisette-side zero, constructible from `from_package`?
 /// Returns `Err(NoZero)` with a chain of field accesses to the offending leaf when
 /// no zero is available; `Ok(())` otherwise.
-pub fn has_zero(store: &Store, ty: &Type, from_module: &str) -> Result<(), NoZero> {
-    has_zero_seen(store, ty, from_module, &mut Vec::new())
+pub fn has_zero(store: &Store, ty: &Type, from_package: &str) -> Result<(), NoZero> {
+    has_zero_seen(store, ty, from_package, &mut Vec::new())
 }
 
 fn has_zero_seen(
     store: &Store,
     ty: &Type,
-    from_module: &str,
+    from_package: &str,
     visited: &mut Vec<Type>,
 ) -> Result<(), NoZero> {
     match ty {
@@ -93,7 +93,7 @@ fn has_zero_seen(
         },
         Type::Tuple(elements) => {
             for (i, e) in elements.iter().enumerate() {
-                if let Err(mut nz) = has_zero_seen(store, e, from_module, visited) {
+                if let Err(mut nz) = has_zero_seen(store, e, from_package, visited) {
                     let mut chain = vec![EcoString::from(i.to_string())];
                     chain.append(&mut nz.chain);
                     nz.chain = chain;
@@ -106,7 +106,7 @@ fn has_zero_seen(
             if *length == 0 {
                 Ok(())
             } else {
-                has_zero_seen(store, element, from_module, visited)
+                has_zero_seen(store, element, from_package, visited)
             }
         }
         Type::Function(_) => Err(NoZero {
@@ -119,9 +119,9 @@ fn has_zero_seen(
                 // Option<T>'s zero is None regardless of T. Stop recursion.
                 return Ok(());
             }
-            has_zero_nominal(store, id, params, from_module, ty, visited)
+            has_zero_nominal(store, id, params, from_package, ty, visited)
         }
-        Type::Forall { body, .. } => has_zero_seen(store, body, from_module, visited),
+        Type::Forall { body, .. } => has_zero_seen(store, body, from_package, visited),
         Type::Var { .. }
         | Type::Uninferred
         | Type::Ignored
@@ -148,7 +148,7 @@ fn has_zero_nominal(
     store: &Store,
     id: &Symbol,
     params: &[Type],
-    from_module: &str,
+    from_package: &str,
     original_ty: &Type,
     visited: &mut Vec<Type>,
 ) -> Result<(), NoZero> {
@@ -170,7 +170,7 @@ fn has_zero_nominal(
         });
     }
     visited.push(original_ty.clone());
-    let result = has_zero_nominal_fields(store, id, params, from_module, original_ty, visited);
+    let result = has_zero_nominal_fields(store, id, params, from_package, original_ty, visited);
     visited.pop();
     result
 }
@@ -187,7 +187,7 @@ fn has_zero_nominal_fields(
     store: &Store,
     id: &Symbol,
     params: &[Type],
-    from_module: &str,
+    from_package: &str,
     original_ty: &Type,
     visited: &mut Vec<Type>,
 ) -> Result<(), NoZero> {
@@ -214,10 +214,10 @@ fn has_zero_nominal_fields(
             }
             let def_ty = &def.ty;
             let map = build_substitution(def_ty, params);
-            let struct_module = store
-                .module_for_qualified_name(id.as_str())
-                .unwrap_or(from_module);
-            let struct_is_foreign = struct_module != from_module;
+            let struct_package = store
+                .package_for_qualified_name(id.as_str())
+                .unwrap_or(from_package);
+            let struct_is_foreign = struct_package != from_package;
 
             let struct_name: EcoString = id.last_segment().into();
             for f in fields {
@@ -230,7 +230,7 @@ fn has_zero_nominal_fields(
                         reason: NoZeroReason::PrivateField {
                             struct_name: struct_name.clone(),
                             field: f.name.clone(),
-                            owning_module: EcoString::from(struct_module),
+                            owning_package: EcoString::from(struct_package),
                         },
                         leaf_ty: f.ty.clone(),
                     });
@@ -240,7 +240,7 @@ fn has_zero_nominal_fields(
                 } else {
                     substitute(&f.ty, &map)
                 };
-                if let Err(mut nz) = has_zero_seen(store, &resolved, from_module, visited) {
+                if let Err(mut nz) = has_zero_seen(store, &resolved, from_package, visited) {
                     let mut chain = vec![f.name.clone()];
                     chain.append(&mut nz.chain);
                     nz.chain = chain;
@@ -263,7 +263,7 @@ fn has_zero_nominal_fields(
             let resolved = def
                 .instantiate_alias_target(params)
                 .expect("transparent alias has a target");
-            has_zero_seen(store, &resolved, from_module, visited)
+            has_zero_seen(store, &resolved, from_package, visited)
         }
         // Enums and other definitions have no zero unless we add a designated
         // default-variant mechanism later.

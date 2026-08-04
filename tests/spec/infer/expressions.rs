@@ -2526,7 +2526,7 @@ fn complex_division_by_zero_rejected() {
 fn assert_not_sibling_flagged(source: &str) {
     let mut fs = MockFileSystem::new();
     fs.add_file("main", "main.lis", source);
-    let result = infer_module("main", fs);
+    let result = infer_package("main", fs);
     assert!(
         !result
             .errors
@@ -2598,7 +2598,7 @@ fn sibling_ref_ampersand_before_read_in_tuple_is_flagged() {
         }
         "#,
     );
-    infer_module("main", fs).assert_infer_code("reference_aliases_sibling");
+    infer_package("main", fs).assert_infer_code("reference_aliases_sibling");
 }
 
 #[test]
@@ -2619,5 +2619,5 @@ fn sibling_ref_ampersand_before_read_in_short_circuit_is_flagged() {
         }
         "#,
     );
-    infer_module("main", fs).assert_infer_code("reference_aliases_sibling");
+    infer_package("main", fs).assert_infer_code("reference_aliases_sibling");
 }

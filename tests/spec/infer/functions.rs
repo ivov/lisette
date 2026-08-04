@@ -856,7 +856,7 @@ fn lambda_composition() {
 }
 
 #[test]
-fn load_simple_module_with_function() {
+fn load_simple_package_with_function() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         "mylib",
@@ -868,11 +868,11 @@ fn load_simple_module_with_function() {
         "#,
     );
 
-    infer_module("mylib", fs).assert_no_errors();
+    infer_package("mylib", fs).assert_no_errors();
 }
 
 #[test]
-fn module_with_multiple_files() {
+fn package_with_multiple_files() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         "mylib",
@@ -894,11 +894,11 @@ fn module_with_multiple_files() {
         "#,
     );
 
-    infer_module("mylib", fs).assert_no_errors();
+    infer_package("mylib", fs).assert_no_errors();
 }
 
 #[test]
-fn module_with_struct_definition() {
+fn package_with_struct_definition() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         "shapes",
@@ -911,11 +911,11 @@ fn module_with_struct_definition() {
         "#,
     );
 
-    infer_module("shapes", fs).assert_no_errors();
+    infer_package("shapes", fs).assert_no_errors();
 }
 
 #[test]
-fn module_with_enum_definition() {
+fn package_with_enum_definition() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         "types",
@@ -929,11 +929,11 @@ fn module_with_enum_definition() {
         "#,
     );
 
-    infer_module("types", fs).assert_no_errors();
+    infer_package("types", fs).assert_no_errors();
 }
 
 #[test]
-fn module_using_imported_type_in_struct() {
+fn package_using_imported_type_in_struct() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -975,7 +975,7 @@ fn module_using_imported_type_in_struct() {
         "#,
     );
 
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -1004,11 +1004,11 @@ fn import_and_use_function() {
         "#,
     );
 
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
-fn import_multiple_modules() {
+fn import_multiple_packages() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1045,11 +1045,11 @@ fn import_multiple_modules() {
         "#,
     );
 
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
-fn import_type_from_module() {
+fn import_type_from_package() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1075,7 +1075,7 @@ fn import_type_from_module() {
         "#,
     );
 
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -1105,11 +1105,11 @@ fn import_and_use_struct_in_function_param() {
         "#,
     );
 
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
-fn cross_module_enum_variant_access() {
+fn cross_package_enum_variant_access() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1142,11 +1142,11 @@ fn cross_module_enum_variant_access() {
         "#,
     );
 
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
-fn module_not_found() {
+fn package_not_found() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1159,7 +1159,7 @@ fn module_not_found() {
         "#,
     );
 
-    infer_module("main", fs).assert_resolve_code("module_not_found");
+    infer_package("main", fs).assert_resolve_code("package_not_found");
 }
 
 #[test]
@@ -1180,7 +1180,7 @@ fn imported_function_not_found() {
         "#,
     );
 
-    infer_module("main", fs).assert_resolve_code("not_found_in_module");
+    infer_package("main", fs).assert_resolve_code("not_found_in_package");
 }
 
 #[test]
@@ -1210,11 +1210,11 @@ fn imported_type_not_found() {
         "#,
     );
 
-    infer_module("main", fs).assert_resolve_code("struct_not_found");
+    infer_package("main", fs).assert_resolve_code("struct_not_found");
 }
 
 #[test]
-fn private_type_not_accessible_cross_module() {
+fn private_type_not_accessible_cross_package() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1239,11 +1239,11 @@ fn private_type_not_accessible_cross_module() {
         "#,
     );
 
-    infer_module("main", fs).assert_resolve_code("struct_not_found");
+    infer_package("main", fs).assert_resolve_code("struct_not_found");
 }
 
 #[test]
-fn private_enum_variant_not_accessible_cross_module() {
+fn private_enum_variant_not_accessible_cross_package() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1272,11 +1272,11 @@ fn private_enum_variant_not_accessible_cross_module() {
         "#,
     );
 
-    infer_module("main", fs).assert_resolve_code("type_not_found");
+    infer_package("main", fs).assert_resolve_code("type_not_found");
 }
 
 #[test]
-fn type_error_across_modules() {
+fn type_error_across_packages() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file("math", "lib.lis", "pub fn square(x: int) -> int { x * x }");
@@ -1293,11 +1293,11 @@ fn type_error_across_modules() {
         "#,
     );
 
-    infer_module("main", fs).assert_type_mismatch();
+    infer_package("main", fs).assert_type_mismatch();
 }
 
 #[test]
-fn wrong_number_of_arguments_across_modules() {
+fn wrong_number_of_arguments_across_packages() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1318,7 +1318,7 @@ fn wrong_number_of_arguments_across_modules() {
         "#,
     );
 
-    infer_module("main", fs).assert_infer_code("arg_count_mismatch");
+    infer_package("main", fs).assert_infer_code("arg_count_mismatch");
 }
 
 #[test]
@@ -1359,7 +1359,7 @@ fn transitive_imports() {
         "#,
     );
 
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -1399,7 +1399,7 @@ fn diamond_dependency() {
         "#,
     );
 
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -1428,7 +1428,7 @@ fn import_generic_struct() {
         "#,
     );
 
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -1457,11 +1457,11 @@ fn import_generic_function() {
         "#,
     );
 
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
-fn method_calls_across_modules() {
+fn method_calls_across_packages() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1494,11 +1494,11 @@ fn method_calls_across_modules() {
         "#,
     );
 
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
-fn type_alias_across_modules() {
+fn type_alias_across_packages() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1521,7 +1521,7 @@ fn type_alias_across_modules() {
         "#,
     );
 
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -1630,7 +1630,7 @@ fn main() { take(|| -> () { 42 }) }
 }
 
 #[test]
-fn private_function_not_accessible_via_module_struct() {
+fn private_function_not_accessible_via_package_struct() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1654,7 +1654,7 @@ fn private_function_not_accessible_via_module_struct() {
         "#,
     );
 
-    infer_module("main", fs).assert_resolve_code("not_found_in_module");
+    infer_package("main", fs).assert_resolve_code("not_found_in_package");
 }
 
 #[test]
@@ -1682,13 +1682,13 @@ fn private_function_not_accessible_via_bare_name() {
         "#,
     );
 
-    infer_module("main", fs).assert_resolve_code("name_not_found");
+    infer_package("main", fs).assert_resolve_code("name_not_found");
 }
 
 #[test]
 fn compile_private_function_not_accessible_via_bare_name() {
     use crate::_harness::build::compile_check;
-    use semantics::store::ENTRY_MODULE_ID;
+    use semantics::store::ENTRY_PACKAGE_ID;
 
     let mut fs = MockFileSystem::new();
 
@@ -1702,7 +1702,7 @@ fn compile_private_function_not_accessible_via_bare_name() {
     );
 
     fs.add_file(
-        ENTRY_MODULE_ID,
+        ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
     import "lib"
@@ -1725,7 +1725,7 @@ fn compile_private_function_not_accessible_via_bare_name() {
 }
 
 #[test]
-fn private_function_not_accessible_through_module_struct() {
+fn private_function_not_accessible_through_package_struct() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1749,11 +1749,11 @@ fn private_function_not_accessible_through_module_struct() {
         "#,
     );
 
-    infer_module("main", fs).assert_resolve_code("not_found_in_module");
+    infer_package("main", fs).assert_resolve_code("not_found_in_package");
 }
 
 #[test]
-fn cross_module_enum_exhaustive() {
+fn cross_package_enum_exhaustive() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1784,11 +1784,11 @@ fn cross_module_enum_exhaustive() {
         "#,
     );
 
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
-fn cross_module_enum_non_exhaustive() {
+fn cross_package_enum_non_exhaustive() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1818,11 +1818,11 @@ fn cross_module_enum_non_exhaustive() {
         "#,
     );
 
-    infer_module("main", fs).assert_exhaustiveness_error();
+    infer_package("main", fs).assert_exhaustiveness_error();
 }
 
 #[test]
-fn cross_module_enum_redundant() {
+fn cross_package_enum_redundant() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1852,7 +1852,7 @@ fn cross_module_enum_redundant() {
         "#,
     );
 
-    infer_module("main", fs).assert_redundancy_error();
+    infer_package("main", fs).assert_redundancy_error();
 }
 
 #[test]
@@ -1946,7 +1946,7 @@ fn lambda_in_if_infers_params_from_return_type() {
 }
 
 #[test]
-fn private_method_not_accessible_cross_module() {
+fn private_method_not_accessible_cross_package() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1979,7 +1979,7 @@ fn private_method_not_accessible_cross_module() {
         "#,
     );
 
-    let result = infer_module("main", fs);
+    let result = infer_package("main", fs);
     assert!(
         !result.errors.is_empty(),
         "Expected private method error, but no errors were raised"
@@ -1993,7 +1993,7 @@ fn private_method_not_accessible_cross_module() {
 }
 
 #[test]
-fn pub_method_accessible_cross_module() {
+fn pub_method_accessible_cross_package() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -2026,11 +2026,11 @@ fn pub_method_accessible_cross_module() {
         "#,
     );
 
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
-fn cross_module_turbofish_on_static_method() {
+fn cross_package_turbofish_on_static_method() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -2070,11 +2070,11 @@ fn cross_module_turbofish_on_static_method() {
         "#,
     );
 
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
-fn private_static_method_not_accessible_cross_module() {
+fn private_static_method_not_accessible_cross_package() {
     use crate::_harness::filesystem::MockFileSystem;
     let mut fs = MockFileSystem::new();
 
@@ -2106,7 +2106,7 @@ fn private_static_method_not_accessible_cross_module() {
         "#,
     );
 
-    let result = infer_module("main", fs);
+    let result = infer_package("main", fs);
     assert!(
         !result.errors.is_empty(),
         "Expected private method error, but no errors were raised"
@@ -2145,7 +2145,7 @@ fn main() {
 "#;
     fs.add_file("main", "main.lis", source);
 
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -2808,7 +2808,7 @@ fn main() {
 "#,
     );
 
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -2837,7 +2837,7 @@ fn main() {
 "#,
     );
 
-    infer_module("main", fs).assert_infer_code("uninferable_generic_reference");
+    infer_package("main", fs).assert_infer_code("uninferable_generic_reference");
 }
 
 #[test]

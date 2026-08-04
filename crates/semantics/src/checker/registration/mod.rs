@@ -47,13 +47,13 @@ struct RegistrationFile {
 
 impl TaskState {
     fn definition_exists(&self, store: &Store, qualified_name: &str) -> bool {
-        self.current_module(store)
+        self.current_package(store)
             .definitions
             .contains_key(qualified_name)
     }
 
     fn type_definition_exists(&self, store: &Store, qualified_name: &str) -> bool {
-        self.current_module(store)
+        self.current_package(store)
             .definitions
             .get(qualified_name)
             .is_some_and(|d| {
@@ -67,17 +67,17 @@ impl TaskState {
             })
     }
 
-    pub fn register_module(&mut self, store: &mut Store, id: &str) {
-        self.predeclare_module_types(store, id);
-        self.register_predeclared_module(store, id);
+    pub fn register_package(&mut self, store: &mut Store, id: &str) {
+        self.predeclare_package_types(store, id);
+        self.register_predeclared_package(store, id);
     }
 
-    pub(crate) fn register_predeclared_module(&mut self, store: &mut Store, id: &str) {
+    pub(crate) fn register_predeclared_package(&mut self, store: &mut Store, id: &str) {
         let mut files = {
-            let module = store
-                .get_module_mut(id)
-                .expect("module must exist for registration");
-            module
+            let package = store
+                .get_package_mut(id)
+                .expect("package must exist for registration");
+            package
                 .files
                 .values_mut()
                 .map(|file| RegistrationFile {
@@ -92,7 +92,7 @@ impl TaskState {
             self.with_file_context_mut(
                 store,
                 FileContext::Standard {
-                    module_id: id,
+                    package_id: id,
                     file_id: file.id,
                     imports: &file.imports,
                 },
@@ -104,7 +104,7 @@ impl TaskState {
             self.with_file_context_mut(
                 store,
                 FileContext::Standard {
-                    module_id: id,
+                    package_id: id,
                     file_id: file.id,
                     imports: &file.imports,
                 },
@@ -116,7 +116,7 @@ impl TaskState {
             self.with_file_context_mut(
                 store,
                 FileContext::Standard {
-                    module_id: id,
+                    package_id: id,
                     file_id: file.id,
                     imports: &file.imports,
                 },
@@ -135,17 +135,17 @@ impl TaskState {
                 .items = std::mem::take(&mut file.items);
         }
 
-        self.register_module_derived_attributes(store, id);
-        self.validate_module_embeds(store, id);
-        self.check_module_recursive_types(store, id);
+        self.register_package_derived_attributes(store, id);
+        self.validate_package_embeds(store, id);
+        self.check_package_recursive_types(store, id);
 
-        self.register_module_tests(store, id);
-        self.populate_module_generic_bounds(store, id);
+        self.register_package_tests(store, id);
+        self.populate_package_generic_bounds(store, id);
     }
 
-    pub(crate) fn predeclare_module_types(&mut self, store: &mut Store, id: &str) {
+    pub(crate) fn predeclare_package_types(&mut self, store: &mut Store, id: &str) {
         let type_name_entries =
-            self.with_module_cursor(id, |this| this.collect_module_type_name_entries(store, id));
+            self.with_package_cursor(id, |this| this.collect_package_type_name_entries(store, id));
         self.insert_type_name_entries(store, id, type_name_entries);
     }
 }

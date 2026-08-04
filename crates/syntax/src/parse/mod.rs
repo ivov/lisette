@@ -127,7 +127,7 @@ impl<'source> Parser<'source> {
             let position = self.position();
             let item = self.parse_top_item();
             if !matches!(item, ast::Expression::Unit { .. }) {
-                if let ast::Expression::ModuleImport {
+                if let ast::Expression::PackageImport {
                     span, name_span, ..
                 } = &item
                 {
@@ -1215,7 +1215,7 @@ impl<'source> Parser<'source> {
             "top_item" if token.text == "use" => (
                 "unexpected syntax for import".to_string(),
                 "use_unsupported",
-                "Use `import` instead of `use` for imports: `import \"module/path\"`",
+                "Use `import` instead of `use` for imports: `import \"package/path\"`",
             ),
             "top_item" if token.kind == Let => (
                 "`let` is not allowed at the top level".to_string(),
@@ -1406,7 +1406,7 @@ mod import_order_tests {
         let result = super::Parser::lex_and_parse_file("fn f() {}\nimport \"go:fmt\"", 0);
         assert!(matches!(
             result.ast.last(),
-            Some(crate::ast::Expression::ModuleImport { .. })
+            Some(crate::ast::Expression::PackageImport { .. })
         ));
     }
 

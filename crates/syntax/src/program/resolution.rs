@@ -95,8 +95,8 @@ pub enum DotAccessKind {
     TupleStructField { is_newtype: bool },
     /// Tuple element access (e.g., `t.0`, `t.1`)
     TupleElement,
-    /// Module member access (e.g., `mod.func`)
-    ModuleMember,
+    /// Package member access (e.g., `mod.func`)
+    PackageMember,
     /// ADT enum variant constructor (e.g., `makeColorRed[T]()`)
     EnumVariant,
     /// Instance method (has `self` receiver)
@@ -122,7 +122,7 @@ pub enum DotAccessResolution {
         is_newtype: bool,
     },
     TupleElement,
-    ModuleMember {
+    PackageMember {
         definition: Option<Symbol>,
     },
     EnumVariant {
@@ -155,7 +155,7 @@ impl DotAccessResolution {
                 is_newtype: *is_newtype,
             },
             Self::TupleElement => DotAccessKind::TupleElement,
-            Self::ModuleMember { .. } => DotAccessKind::ModuleMember,
+            Self::PackageMember { .. } => DotAccessKind::PackageMember,
             Self::EnumVariant { .. } => DotAccessKind::EnumVariant,
             Self::InstanceMethod { is_exported, .. } => DotAccessKind::InstanceMethod {
                 is_exported: *is_exported,
@@ -185,7 +185,7 @@ impl DotAccessResolution {
 
     pub fn definition(&self) -> Option<&str> {
         match self {
-            Self::ModuleMember { definition }
+            Self::PackageMember { definition }
             | Self::InstanceMethod { definition, .. }
             | Self::InstanceMethodValue { definition, .. } => {
                 definition.as_ref().map(Symbol::as_str)

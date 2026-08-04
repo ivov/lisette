@@ -376,7 +376,7 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
 
         Expression::TypeAlias { .. } => {}
         Expression::VariableDeclaration { .. } => {}
-        Expression::ModuleImport { .. } => {}
+        Expression::PackageImport { .. } => {}
         Expression::Unit { .. } => {}
         Expression::RawGo { .. } => {}
         Expression::Break { value, .. } => {

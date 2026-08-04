@@ -5,7 +5,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::{BindingId, Pattern, RestPattern, Span};
 use syntax::program::{
-    Definition, DefinitionBody, EqualityIndex, ModuleId, MutationInfo, TestIndex, UnusedInfo,
+    Definition, DefinitionBody, EqualityIndex, MutationInfo, PackageId, TestIndex, UnusedInfo,
 };
 use syntax::types::{Symbol, Type};
 
@@ -23,14 +23,14 @@ pub(crate) struct EmitFactsConfig<'a> {
     pub(crate) equality_index: &'a EqualityIndex,
     pub(crate) test_index: &'a TestIndex,
     pub(crate) go_package_names: &'a HashMap<String, String>,
-    pub(crate) go_module_ids: &'a HashSet<String>,
-    pub(crate) entry_module: ModuleId,
+    pub(crate) go_package_ids: &'a HashSet<String>,
+    pub(crate) entry_package: PackageId,
     pub(crate) entry_package_name: &'a str,
     pub(crate) go_module: String,
     pub(crate) options: EmitOptions,
     pub(crate) line_indexes: Arc<HashMap<u32, LineIndex>>,
     pub(crate) globals: Arc<GlobalEmitData>,
-    pub(crate) current_module: ModuleId,
+    pub(crate) current_package: PackageId,
 }
 
 pub(crate) struct EmitFacts<'a> {
@@ -40,14 +40,14 @@ pub(crate) struct EmitFacts<'a> {
     equality_index: &'a EqualityIndex,
     test_index: &'a TestIndex,
     go_package_names: &'a HashMap<String, String>,
-    go_module_ids: &'a HashSet<String>,
-    entry_module: ModuleId,
+    go_package_ids: &'a HashSet<String>,
+    entry_package: PackageId,
     entry_package_name: &'a str,
     go_module: String,
     options: EmitOptions,
     line_indexes: Arc<HashMap<u32, LineIndex>>,
     globals: Arc<GlobalEmitData>,
-    current_module: ModuleId,
+    current_package: PackageId,
 }
 
 impl<'a> EmitFacts<'a> {
@@ -59,22 +59,25 @@ impl<'a> EmitFacts<'a> {
             equality_index: config.equality_index,
             test_index: config.test_index,
             go_package_names: config.go_package_names,
-            go_module_ids: config.go_module_ids,
-            entry_module: config.entry_module,
+            go_package_ids: config.go_package_ids,
+            entry_package: config.entry_package,
             entry_package_name: config.entry_package_name,
             go_module: config.go_module,
             options: config.options,
             line_indexes: config.line_indexes,
             globals: config.globals,
-            current_module: config.current_module,
+            current_package: config.current_package,
         }
     }
 
-    pub(crate) fn module_for_qualified_name<'b>(&self, id: &'b str) -> Option<&'b str>
+    pub(crate) fn package_for_qualified_name<'b>(&self, id: &'b str) -> Option<&'b str>
     where
         'a: 'b,
     {
-        syntax::types::module_for_qualified_name(id, self.go_module_ids.iter().map(String::as_str))
+        syntax::types::package_for_qualified_name(
+            id,
+            self.go_package_ids.iter().map(String::as_str),
+        )
     }
 
     pub(crate) fn definition(&self, id: &str) -> Option<&'a Definition> {
@@ -173,12 +176,12 @@ impl<'a> EmitFacts<'a> {
         self.unused.is_unused_definition(span)
     }
 
-    pub(crate) fn unused_imports_for_current_module(&self) -> &'a HashSet<EcoString> {
+    pub(crate) fn unused_imports_for_current_package(&self) -> &'a HashSet<EcoString> {
         static EMPTY: std::sync::LazyLock<HashSet<EcoString>> =
             std::sync::LazyLock::new(HashSet::default);
         self.unused
-            .imports_by_module
-            .get(self.current_module.as_str())
+            .imports_by_package
+            .get(self.current_package.as_str())
             .unwrap_or(&EMPTY)
     }
 
@@ -196,7 +199,7 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn usable_equals_from(&self, id: &str) -> bool {
-        self.equality_index.usable_from(id, &self.current_module)
+        self.equality_index.usable_from(id, &self.current_package)
     }
 
     pub(crate) fn synthesizes_equals(&self, id: &str) -> bool {
@@ -207,20 +210,20 @@ impl<'a> EmitFacts<'a> {
         self.test_index.contains_qualified(qualified_name)
     }
 
-    pub(crate) fn current_module(&self) -> &str {
-        &self.current_module
+    pub(crate) fn current_package(&self) -> &str {
+        &self.current_package
     }
 
-    pub(crate) fn is_current_module(&self, module: &str) -> bool {
-        module == self.current_module.as_str()
+    pub(crate) fn is_current_package(&self, package: &str) -> bool {
+        package == self.current_package.as_str()
     }
 
-    pub(crate) fn is_foreign_module(&self, module: &str) -> bool {
-        !self.is_current_module(module) && module != go_name::PRELUDE_MODULE
+    pub(crate) fn is_foreign_package(&self, package: &str) -> bool {
+        !self.is_current_package(package) && package != go_name::PRELUDE_PACKAGE
     }
 
-    pub(crate) fn is_entry_module(&self, module: &str) -> bool {
-        module == self.entry_module.as_str()
+    pub(crate) fn is_entry_package(&self, package: &str) -> bool {
+        package == self.entry_package.as_str()
     }
 
     pub(crate) fn entry_package_name(&self) -> &str {
@@ -228,37 +231,37 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn qualified_current(&self, name: &str) -> String {
-        format!("{}.{}", self.current_module, name)
+        format!("{}.{}", self.current_package, name)
     }
 
     pub(crate) fn qualified_current_member(&self, ty: &str, member: &str) -> String {
-        format!("{}.{}.{}", self.current_module, ty, member)
+        format!("{}.{}.{}", self.current_package, ty, member)
     }
 
     pub(crate) fn go_module(&self) -> &str {
         &self.go_module
     }
 
-    pub(crate) fn go_import_path(&self, module: &str) -> String {
-        if module == go_name::TEST_PRELUDE_MODULE {
+    pub(crate) fn go_import_path(&self, package: &str) -> String {
+        if package == go_name::TEST_PRELUDE_PACKAGE {
             return go_name::TESTKIT_IMPORT_PATH.to_string();
         }
-        if self.is_entry_module(module) {
+        if self.is_entry_package(package) {
             return self.go_module.clone();
         }
-        format!("{}/{}", self.go_module, module)
+        format!("{}/{}", self.go_module, package)
     }
 
-    pub(crate) fn go_package_name(&self, module: &str) -> Option<&str> {
-        self.go_package_names.get(module).map(String::as_str)
+    pub(crate) fn go_package_name(&self, package: &str) -> Option<&str> {
+        self.go_package_names.get(package).map(String::as_str)
     }
 
     pub(crate) fn go_package_names(&self) -> &'a HashMap<String, String> {
         self.go_package_names
     }
 
-    pub(crate) fn go_module_ids(&self) -> &'a HashSet<String> {
-        self.go_module_ids
+    pub(crate) fn go_package_ids(&self) -> &'a HashSet<String> {
+        self.go_package_ids
     }
 
     pub(crate) fn has_global_exported_method_name(&self, method: &str) -> bool {

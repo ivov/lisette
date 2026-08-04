@@ -3,14 +3,14 @@ use super::*;
 
 #[derive(Debug, Clone)]
 pub struct Cursor {
-    pub module_id: String,
+    pub package_id: String,
     pub(super) file_id: Option<u32>,
 }
 
 impl Default for Cursor {
     fn default() -> Self {
         Self {
-            module_id: "std".to_string(),
+            package_id: "std".to_string(),
             file_id: None,
         }
     }

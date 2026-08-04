@@ -142,7 +142,7 @@ fn hoistable_callee(
             member,
             resolution,
             ..
-        } if resolution.kind() == Some(DotAccessKind::ModuleMember) => {
+        } if resolution.kind() == Some(DotAccessKind::PackageMember) => {
             let Expression::Identifier { value: base, .. } = base.unwrap_parens() else {
                 return None;
             };

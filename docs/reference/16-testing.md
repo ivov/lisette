@@ -6,7 +6,7 @@ Lisette's test runner finds `#[test]` functions in `.test.lis` files and runs th
 
 `lis test` compiles the project and runs every test in it.
 
-In the test report, tests are grouped by module and file:
+In the test report, tests are grouped by package and file:
 
 ```
   ✓ Compiled `demo` v0.1.0 (120ms)
@@ -55,9 +55,9 @@ On failure, the test report includes a `Failures` section:
 
 Test files end with `.test.lis` and come in two kinds.
 
-- **Internal tests** sit in the same dir as the logic they test, so internal tests can access all private symbols in that module.
+- **Internal tests** sit in the same dir as the logic they test, so internal tests can access all private symbols in that package.
 
-- **External tests** sit in a `tests/` dir at project root. External tests import modules like any other consumer, so external tests can access only public symbols. Integration tests belong here.
+- **External tests** sit in a `tests/` dir at project root. External tests import packages like any other consumer, so external tests can access only public symbols. Integration tests belong here.
 
 ```
 src/
@@ -334,7 +334,7 @@ To select tests by name, use `lis test --filter` rather than `-run`.
 
 ## Testing a library root
 
-The root package of a library is named `root`. In a [library project](12-modules.md#library-projects), use `import "root"` to externally test files directly under `src/`.
+The root package of a library is named `root`. In a [library project](12-packages.md#library-projects), use `import "root"` to externally test files directly under `src/`.
 
 ```
 src/

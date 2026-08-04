@@ -47,7 +47,7 @@ pub fn compile_e2e_suite_test(input: &str, package_name: &str) -> Result<Emitted
 
     let file = File {
         id: 0,
-        module_id: result.module_id.clone(),
+        package_id: result.package_id.clone(),
         name: "test.lis".to_string(),
         display_path: "test.lis".to_string(),
         source_path: None,
@@ -59,18 +59,18 @@ pub fn compile_e2e_suite_test(input: &str, package_name: &str) -> Result<Emitted
     let test_index = syntax::program::TestIndex::default();
     let config = TestEmitConfig {
         definitions: &result.definitions,
-        module_id: &result.module_id,
+        package_id: &result.package_id,
         go_module: GO_MODULE,
         unused: &result.unused,
         mutations: &result.mutations,
         equality_index: &result.equality_index,
         test_index: &test_index,
         go_package_names: &result.go_package_names,
-        go_module_ids: &result.go_module_ids,
+        go_package_ids: &result.go_package_ids,
     };
     let mut emitter = Planner::new_for_tests(&config, None);
     let mut emitted_files = emitter
-        .emit_files(&[&file], &result.module_id)
+        .emit_files(&[&file], &result.package_id)
         .map_err(|diagnostics| format!("Emission failed: {diagnostics:?}"))?;
 
     if emitted_files.is_empty() {
@@ -283,7 +283,7 @@ pub fn write_go_mod(
 ) -> std::io::Result<()> {
     let abs = prelude_path.canonicalize()?;
     let content = format!(
-        "module {GO_MODULE}\n\ngo {go_version}\n\nrequire {PRELUDE_IMPORT_PATH} v0.0.0\n\nreplace {PRELUDE_IMPORT_PATH} => {}\n",
+        "package {GO_MODULE}\n\ngo {go_version}\n\nrequire {PRELUDE_IMPORT_PATH} v0.0.0\n\nreplace {PRELUDE_IMPORT_PATH} => {}\n",
         abs.display()
     );
     fs::write(target_dir.join("go.mod"), content)

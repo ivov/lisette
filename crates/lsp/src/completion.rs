@@ -12,7 +12,7 @@ use crate::snapshot::AnalysisSnapshot;
 use crate::traversal::{find_enclosing_impl_type, find_expression_at};
 use crate::type_name;
 
-pub(crate) fn get_module_prefix(source: &str, offset: usize) -> Option<&str> {
+pub(crate) fn get_package_prefix(source: &str, offset: usize) -> Option<&str> {
     let before = &source[..offset];
     if !before.ends_with('.') {
         return None;
@@ -180,7 +180,7 @@ pub(crate) fn detect_dot_context(
     }
 
     if let Expression::Identifier { value, .. } = expression.as_ref() {
-        for prefix in [file.module_id.as_str(), "prelude"] {
+        for prefix in [file.package_id.as_str(), "prelude"] {
             let qualified = format!("{prefix}.{value}");
             if let Some(definition) = snapshot.definitions().get(qualified.as_str())
                 && definition.is_type_definition()
@@ -199,7 +199,7 @@ pub(crate) fn detect_dot_context(
         && value == "self"
         && let Some(impl_type) = find_enclosing_impl_type(&file.items, offset)
     {
-        let qualified = format!("{}.{}", file.module_id, impl_type);
+        let qualified = format!("{}.{}", file.package_id, impl_type);
         return Some(DotContext::Instance(qualified));
     }
 
@@ -209,7 +209,7 @@ pub(crate) fn detect_dot_context(
 pub(crate) fn get_instance_completions(
     type_id: &str,
     snapshot: &AnalysisSnapshot,
-    same_module: bool,
+    same_package: bool,
 ) -> Vec<CompletionItem> {
     let mut items = Vec::new();
 
@@ -231,7 +231,7 @@ pub(crate) fn get_instance_completions(
         return items;
     }
 
-    struct_field_completions(type_id, snapshot, same_module, &mut items);
+    struct_field_completions(type_id, snapshot, same_package, &mut items);
 
     let method_prefix = format!("{type_id}.");
     for (qname, definition) in snapshot.definitions().iter() {
@@ -242,7 +242,7 @@ pub(crate) fn get_instance_completions(
                 syntax::program::DefinitionBody::Value { .. }
             )
             && is_instance_method(&definition.ty, type_id, snapshot)
-            && (same_module || definition.visibility.is_public())
+            && (same_package || definition.visibility.is_public())
         {
             items.push(CompletionItem {
                 label: method_name.to_string(),
@@ -260,7 +260,7 @@ pub(crate) fn get_instance_completions(
 fn struct_field_completions(
     type_id: &str,
     snapshot: &AnalysisSnapshot,
-    same_module: bool,
+    same_package: bool,
     items: &mut Vec<CompletionItem>,
 ) {
     if let Some(syntax::program::Definition {
@@ -269,7 +269,7 @@ fn struct_field_completions(
     }) = snapshot.definitions().get(type_id)
     {
         for field in fields {
-            if same_module || field.visibility.is_public() {
+            if same_package || field.visibility.is_public() {
                 items.push(CompletionItem {
                     label: field.name.to_string(),
                     kind: Some(CompletionItemKind::FIELD),
@@ -326,12 +326,12 @@ pub(crate) fn get_struct_literal_completions(
     type_id: &str,
     call_name: &str,
     snapshot: &AnalysisSnapshot,
-    same_module: bool,
+    same_package: bool,
     assigned: &[syntax::ast::StructFieldAssignment],
     offset: u32,
 ) -> Vec<CompletionItem> {
     let mut items = Vec::new();
-    struct_field_completions(type_id, snapshot, same_module, &mut items);
+    struct_field_completions(type_id, snapshot, same_package, &mut items);
     enum_variant_field_completions(type_id, call_name, snapshot, &mut items);
     items.retain(|item| {
         !assigned
@@ -410,7 +410,7 @@ fn collect_interface_methods(
 pub(crate) fn get_type_completions(
     type_id: &str,
     snapshot: &AnalysisSnapshot,
-    current_module: &str,
+    current_package: &str,
 ) -> Vec<CompletionItem> {
     // `Array.new` is an inline builtin constructor, not a prelude definition.
     if type_id == "prelude.Array" {
@@ -427,14 +427,14 @@ pub(crate) fn get_type_completions(
 
     let mut items = enum_variant_items(method_id, snapshot).unwrap_or_default();
 
-    let same_module = id_is_in_module(method_id, current_module);
+    let same_package = id_is_in_package(method_id, current_package);
     let method_prefix = format!("{method_id}.");
     for (qname, definition) in snapshot.definitions().iter() {
         if let Some(method_name) = qname.strip_prefix(method_prefix.as_str())
             && !method_name.contains('.')
             && matches!(definition.body, DefinitionBody::Value { .. })
             && !is_instance_method(&definition.ty, method_id, snapshot)
-            && (same_module || definition.visibility.is_public())
+            && (same_package || definition.visibility.is_public())
             && !items.iter().any(|i| i.label == method_name)
         {
             items.push(CompletionItem {
@@ -449,8 +449,8 @@ pub(crate) fn get_type_completions(
     items
 }
 
-pub(crate) fn id_is_in_module(qualified_id: &str, module: &str) -> bool {
-    qualified_id.starts_with(module) && qualified_id.as_bytes().get(module.len()) == Some(&b'.')
+pub(crate) fn id_is_in_package(qualified_id: &str, package: &str) -> bool {
+    qualified_id.starts_with(package) && qualified_id.as_bytes().get(package.len()) == Some(&b'.')
 }
 
 fn enum_variant_items(type_id: &str, snapshot: &AnalysisSnapshot) -> Option<Vec<CompletionItem>> {

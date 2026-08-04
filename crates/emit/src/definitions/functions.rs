@@ -23,7 +23,7 @@ pub(crate) fn is_test_context_ty(ty: &Type) -> bool {
     let stripped = ty.strip_refs();
     stripped.get_qualified_id().is_some_and(|id| {
         id.strip_suffix(".TestContext")
-            .is_some_and(|module| module == go_name::TEST_PRELUDE_MODULE)
+            .is_some_and(|package| package == go_name::TEST_PRELUDE_PACKAGE)
     })
 }
 
@@ -348,7 +348,8 @@ impl Planner<'_> {
             go_name::snake_to_camel(function_definition.name)
         } else if has_receiver {
             go_name::unexported_method_go_name(function_definition.name)
-        } else if let Some(remapped) = self.module.escape_remap(function_definition.name.as_str()) {
+        } else if let Some(remapped) = self.package.escape_remap(function_definition.name.as_str())
+        {
             remapped.to_string()
         } else {
             go_name::escape_reserved(function_definition.name).into_owned()
@@ -542,7 +543,7 @@ impl Planner<'_> {
                     .then(|| name.to_string())
             })
             .collect();
-        let state = crate::state::module_state::FunctionEmissionState::for_function(
+        let state = crate::state::package_state::FunctionEmissionState::for_function(
             generic_context,
             absorbed_ref_generics,
         );

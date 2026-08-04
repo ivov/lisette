@@ -13,12 +13,12 @@ struct TailContext<'a> {
 
 pub(crate) fn run(
     typed_ast: &[Expression],
-    module_id: &str,
+    package_id: &str,
     store: &Store,
     facts: &mut Vec<LisetteDiagnostic>,
 ) {
     for item in typed_ast {
-        visit_expression(item, TailUse::Kept, module_id, store, facts);
+        visit_expression(item, TailUse::Kept, package_id, store, facts);
     }
 }
 
@@ -38,7 +38,7 @@ enum TailUse<'a> {
 fn visit_expression(
     expression: &Expression,
     tail_use: TailUse<'_>,
-    module_id: &str,
+    package_id: &str,
     store: &Store,
     facts: &mut Vec<LisetteDiagnostic>,
 ) {
@@ -46,7 +46,7 @@ fn visit_expression(
         Expression::Block { items, ty, .. }
         | Expression::TryBlock { items, ty, .. }
         | Expression::RecoverBlock { items, ty, .. } => {
-            visit_block_items(items, ty, tail_use, module_id, store, facts);
+            visit_block_items(items, ty, tail_use, package_id, store, facts);
             return;
         }
         Expression::Function {
@@ -59,7 +59,7 @@ fn visit_expression(
                 return;
             };
             let ctx = tail_context_for_function(body, return_type, return_annotation);
-            visit_expression(body, declared_or_kept(&ctx), module_id, store, facts);
+            visit_expression(body, declared_or_kept(&ctx), package_id, store, facts);
             return;
         }
         Expression::Lambda {
@@ -78,13 +78,13 @@ fn visit_expression(
                     TailUse::Declared(ctx)
                 }
                 Some(ctx) => {
-                    descend_discarded(body, &DiscardMode::Tail(ctx), module_id, store, facts);
+                    descend_discarded(body, &DiscardMode::Tail(ctx), package_id, store, facts);
                     TailUse::Walked
                 }
                 None => TailUse::Kept,
             };
 
-            visit_expression(body, body_use, module_id, store, facts);
+            visit_expression(body, body_use, package_id, store, facts);
             return;
         }
         Expression::For {
@@ -102,12 +102,12 @@ fn visit_expression(
             body,
             ..
         } => {
-            visit_expression(pre_child, TailUse::Kept, module_id, store, facts);
-            visit_loop_body(body, tail_use, module_id, store, facts);
+            visit_expression(pre_child, TailUse::Kept, package_id, store, facts);
+            visit_loop_body(body, tail_use, package_id, store, facts);
             return;
         }
         Expression::Loop { body, .. } => {
-            visit_loop_body(body, tail_use, module_id, store, facts);
+            visit_loop_body(body, tail_use, package_id, store, facts);
             return;
         }
         // Walked by `visit_break_values` instead, under the loop's use.
@@ -120,14 +120,14 @@ fn visit_expression(
             expression: wrapped,
             ..
         } => {
-            visit_discarded_expression(wrapped, module_id, store, facts);
+            visit_discarded_expression(wrapped, package_id, store, facts);
             return;
         }
         // `descend_discarded` unwraps parens, so a walked spine passes through.
         Expression::Paren {
             expression: inner, ..
         } => {
-            visit_expression(inner, tail_use, module_id, store, facts);
+            visit_expression(inner, tail_use, package_id, store, facts);
             return;
         }
         // Branches carry the value and are what `descend_discarded` walks.
@@ -139,11 +139,11 @@ fn visit_expression(
             ty,
             ..
         } => {
-            visit_expression(condition, TailUse::Kept, module_id, store, facts);
+            visit_expression(condition, TailUse::Kept, package_id, store, facts);
             let branch_use = branch_use(tail_use, ty);
-            visit_expression(consequence, branch_use, module_id, store, facts);
+            visit_expression(consequence, branch_use, package_id, store, facts);
             if let Some(alternative) = alternative {
-                visit_expression(alternative, branch_use, module_id, store, facts);
+                visit_expression(alternative, branch_use, package_id, store, facts);
             }
             return;
         }
@@ -154,17 +154,17 @@ fn visit_expression(
             ty,
             ..
         } => {
-            visit_expression(scrutinee, TailUse::Kept, module_id, store, facts);
+            visit_expression(scrutinee, TailUse::Kept, package_id, store, facts);
             let branch_use = branch_use(tail_use, ty);
-            visit_expression(consequence, branch_use, module_id, store, facts);
+            visit_expression(consequence, branch_use, package_id, store, facts);
             if let Some(alternative) = alternative.expression() {
-                visit_expression(alternative, branch_use, module_id, store, facts);
+                visit_expression(alternative, branch_use, package_id, store, facts);
             }
             return;
         }
         Expression::Match { subject, arms, .. } => {
-            visit_expression(subject, TailUse::Kept, module_id, store, facts);
-            visit_match_arms(arms, tail_use, module_id, store, facts);
+            visit_expression(subject, TailUse::Kept, package_id, store, facts);
+            visit_match_arms(arms, tail_use, package_id, store, facts);
             return;
         }
         Expression::Select { arms, .. } => {
@@ -182,11 +182,11 @@ fn visit_expression(
                         visit_expression(
                             receive_expression,
                             TailUse::Kept,
-                            module_id,
+                            package_id,
                             store,
                             facts,
                         );
-                        visit_expression(body, tail_use, module_id, store, facts);
+                        visit_expression(body, tail_use, package_id, store, facts);
                     }
                     SelectArm::MatchReceive {
                         receive_expression,
@@ -195,14 +195,14 @@ fn visit_expression(
                         visit_expression(
                             receive_expression,
                             TailUse::Kept,
-                            module_id,
+                            package_id,
                             store,
                             facts,
                         );
-                        visit_match_arms(arms, tail_use, module_id, store, facts);
+                        visit_match_arms(arms, tail_use, package_id, store, facts);
                     }
                     SelectArm::WildCard { body } => {
-                        visit_expression(body, tail_use, module_id, store, facts);
+                        visit_expression(body, tail_use, package_id, store, facts);
                     }
                 }
             }
@@ -212,22 +212,22 @@ fn visit_expression(
     }
 
     for child in expression.children() {
-        visit_expression(child, TailUse::Kept, module_id, store, facts);
+        visit_expression(child, TailUse::Kept, package_id, store, facts);
     }
 }
 
 fn visit_match_arms(
     arms: &[MatchArm],
     tail_use: TailUse<'_>,
-    module_id: &str,
+    package_id: &str,
     store: &Store,
     facts: &mut Vec<LisetteDiagnostic>,
 ) {
     for arm in arms {
         if let Some(guard) = &arm.guard {
-            visit_expression(guard, TailUse::Kept, module_id, store, facts);
+            visit_expression(guard, TailUse::Kept, package_id, store, facts);
         }
-        visit_expression(&arm.expression, tail_use, module_id, store, facts);
+        visit_expression(&arm.expression, tail_use, package_id, store, facts);
     }
 }
 
@@ -288,19 +288,19 @@ fn tail_context_for_lambda<'a>(
 fn visit_loop_body(
     body: &Expression,
     loop_use: TailUse<'_>,
-    module_id: &str,
+    package_id: &str,
     store: &Store,
     facts: &mut Vec<LisetteDiagnostic>,
 ) {
-    visit_break_values(body, loop_use, module_id, store, facts);
+    visit_break_values(body, loop_use, package_id, store, facts);
 
     match body {
         Expression::Block { items, .. }
         | Expression::TryBlock { items, .. }
         | Expression::RecoverBlock { items, .. } => {
-            visit_discarded_items(items, module_id, store, facts);
+            visit_discarded_items(items, package_id, store, facts);
         }
-        _ => visit_expression(body, TailUse::Kept, module_id, store, facts),
+        _ => visit_expression(body, TailUse::Kept, package_id, store, facts),
     }
 }
 
@@ -308,7 +308,7 @@ fn visit_loop_body(
 fn visit_break_values(
     expression: &Expression,
     loop_use: TailUse<'_>,
-    module_id: &str,
+    package_id: &str,
     store: &Store,
     facts: &mut Vec<LisetteDiagnostic>,
 ) {
@@ -316,7 +316,7 @@ fn visit_break_values(
         Expression::Break {
             value: Some(value), ..
         } => {
-            visit_expression(value, loop_use, module_id, store, facts);
+            visit_expression(value, loop_use, package_id, store, facts);
         }
         Expression::Loop { .. }
         | Expression::While { .. }
@@ -328,7 +328,7 @@ fn visit_break_values(
         | Expression::Defer { .. } => {}
         _ => {
             for child in expression.children() {
-                visit_break_values(child, loop_use, module_id, store, facts);
+                visit_break_values(child, loop_use, package_id, store, facts);
             }
         }
     }
@@ -337,7 +337,7 @@ fn visit_break_values(
 /// Unlike a loop body, a bare wrapped expression is itself a discarded value.
 fn visit_discarded_expression(
     expression: &Expression,
-    module_id: &str,
+    package_id: &str,
     store: &Store,
     facts: &mut Vec<LisetteDiagnostic>,
 ) {
@@ -345,18 +345,18 @@ fn visit_discarded_expression(
         Expression::Block { items, .. }
         | Expression::TryBlock { items, .. }
         | Expression::RecoverBlock { items, .. } => {
-            visit_discarded_items(items, module_id, store, facts);
+            visit_discarded_items(items, package_id, store, facts);
         }
         _ => {
-            descend_discarded(expression, &DiscardMode::NonTail, module_id, store, facts);
-            visit_expression(expression, TailUse::Walked, module_id, store, facts);
+            descend_discarded(expression, &DiscardMode::NonTail, package_id, store, facts);
+            visit_expression(expression, TailUse::Walked, package_id, store, facts);
         }
     }
 }
 
 fn visit_discarded_items(
     items: &[Expression],
-    module_id: &str,
+    package_id: &str,
     store: &Store,
     facts: &mut Vec<LisetteDiagnostic>,
 ) {
@@ -364,7 +364,7 @@ fn visit_discarded_items(
         let walked = if is_statement_only(item) {
             false
         } else {
-            descend_discarded(item, &DiscardMode::NonTail, module_id, store, facts);
+            descend_discarded(item, &DiscardMode::NonTail, package_id, store, facts);
             true
         };
 
@@ -373,7 +373,7 @@ fn visit_discarded_items(
         } else {
             TailUse::Kept
         };
-        visit_expression(item, item_use, module_id, store, facts);
+        visit_expression(item, item_use, package_id, store, facts);
     }
 }
 
@@ -386,7 +386,7 @@ fn visit_block_items(
     items: &[Expression],
     block_ty: &Type,
     tail_use: TailUse<'_>,
-    module_id: &str,
+    package_id: &str,
     store: &Store,
     facts: &mut Vec<LisetteDiagnostic>,
 ) {
@@ -395,20 +395,20 @@ fn visit_block_items(
         let walked = if is_statement_only(item) {
             false
         } else if i != len - 1 {
-            descend_discarded(item, &DiscardMode::NonTail, module_id, store, facts);
+            descend_discarded(item, &DiscardMode::NonTail, package_id, store, facts);
             true
         } else {
             match tail_use {
                 TailUse::Declared(ctx) => {
-                    descend_discarded(item, &DiscardMode::Tail(ctx), module_id, store, facts);
+                    descend_discarded(item, &DiscardMode::Tail(ctx), package_id, store, facts);
                     true
                 }
                 TailUse::Dropped => {
-                    descend_discarded(item, &DiscardMode::NonTail, module_id, store, facts);
+                    descend_discarded(item, &DiscardMode::NonTail, package_id, store, facts);
                     true
                 }
                 TailUse::Kept if discards_value(block_ty) => {
-                    descend_discarded(item, &DiscardMode::NonTail, module_id, store, facts);
+                    descend_discarded(item, &DiscardMode::NonTail, package_id, store, facts);
                     true
                 }
                 TailUse::Kept => false,
@@ -421,7 +421,7 @@ fn visit_block_items(
         } else {
             TailUse::Kept
         };
-        visit_expression(item, item_use, module_id, store, facts);
+        visit_expression(item, item_use, package_id, store, facts);
     }
 }
 
@@ -433,7 +433,7 @@ enum DiscardMode<'a> {
 fn descend_discarded(
     expression: &Expression,
     mode: &DiscardMode<'_>,
-    module_id: &str,
+    package_id: &str,
     store: &Store,
     facts: &mut Vec<LisetteDiagnostic>,
 ) {
@@ -444,7 +444,7 @@ fn descend_discarded(
             if let Some(last) = items.last()
                 && !is_statement_only(last)
             {
-                descend_discarded(last, mode, module_id, store, facts);
+                descend_discarded(last, mode, package_id, store, facts);
             }
         }
         Expression::If {
@@ -452,9 +452,9 @@ fn descend_discarded(
             alternative,
             ..
         } => {
-            descend_discarded(consequence, mode, module_id, store, facts);
+            descend_discarded(consequence, mode, package_id, store, facts);
             if let Some(alternative) = alternative {
-                descend_discarded(alternative, mode, module_id, store, facts);
+                descend_discarded(alternative, mode, package_id, store, facts);
             }
         }
         Expression::IfLet {
@@ -462,14 +462,14 @@ fn descend_discarded(
             alternative,
             ..
         } => {
-            descend_discarded(consequence, mode, module_id, store, facts);
+            descend_discarded(consequence, mode, package_id, store, facts);
             if let Some(alternative) = alternative.expression() {
-                descend_discarded(alternative, mode, module_id, store, facts);
+                descend_discarded(alternative, mode, package_id, store, facts);
             }
         }
         Expression::Match { arms, .. } => {
             for arm in arms {
-                descend_discarded(&arm.expression, mode, module_id, store, facts);
+                descend_discarded(&arm.expression, mode, package_id, store, facts);
             }
         }
         Expression::Select { arms, .. } => {
@@ -478,20 +478,26 @@ fn descend_discarded(
                     SelectArm::Receive { body, .. }
                     | SelectArm::Send { body, .. }
                     | SelectArm::WildCard { body } => {
-                        descend_discarded(body, mode, module_id, store, facts);
+                        descend_discarded(body, mode, package_id, store, facts);
                     }
                     SelectArm::MatchReceive {
                         arms: match_arms, ..
                     } => {
                         for match_arm in match_arms {
-                            descend_discarded(&match_arm.expression, mode, module_id, store, facts);
+                            descend_discarded(
+                                &match_arm.expression,
+                                mode,
+                                package_id,
+                                store,
+                                facts,
+                            );
                         }
                     }
                 }
             }
         }
         Expression::Loop { body, .. } => {
-            descend_loop_break_values(body, mode, module_id, store, facts);
+            descend_loop_break_values(body, mode, package_id, store, facts);
         }
         Expression::Let { .. }
         | Expression::Const { .. }
@@ -506,9 +512,9 @@ fn descend_discarded(
         | Expression::For { .. } => {}
         unwrapped => match mode {
             DiscardMode::Tail(tail_ctx) => {
-                check_discarded_tail(expression, tail_ctx, module_id, store, facts)
+                check_discarded_tail(expression, tail_ctx, package_id, store, facts)
             }
-            DiscardMode::NonTail => emit_unused_at_leaf(unwrapped, module_id, store, facts),
+            DiscardMode::NonTail => emit_unused_at_leaf(unwrapped, package_id, store, facts),
         },
     }
 }
@@ -516,7 +522,7 @@ fn descend_discarded(
 fn descend_loop_break_values(
     expression: &Expression,
     mode: &DiscardMode<'_>,
-    module_id: &str,
+    package_id: &str,
     store: &Store,
     facts: &mut Vec<LisetteDiagnostic>,
 ) {
@@ -524,7 +530,7 @@ fn descend_loop_break_values(
         Expression::Break {
             value: Some(value), ..
         } => {
-            descend_discarded(value, mode, module_id, store, facts);
+            descend_discarded(value, mode, package_id, store, facts);
         }
         Expression::Loop { .. }
         | Expression::While { .. }
@@ -536,7 +542,7 @@ fn descend_loop_break_values(
         | Expression::Defer { .. } => {}
         _ => {
             for child in expression.children() {
-                descend_loop_break_values(child, mode, module_id, store, facts);
+                descend_loop_break_values(child, mode, package_id, store, facts);
             }
         }
     }
@@ -544,14 +550,14 @@ fn descend_loop_break_values(
 
 fn emit_unused_at_leaf(
     leaf: &Expression,
-    module_id: &str,
+    package_id: &str,
     store: &Store,
     facts: &mut Vec<LisetteDiagnostic>,
 ) {
     let span = leaf.get_span();
     let is_literal = is_literal_or_negated_literal(leaf);
     let ty = leaf.get_type();
-    let mut allowed_lints = callee_allowed_lints(leaf, module_id, store);
+    let mut allowed_lints = callee_allowed_lints(leaf, package_id, store);
     if is_channel_send(leaf) {
         allowed_lints.push("unused_value".to_string());
     }
@@ -592,7 +598,7 @@ fn lvalue_slice_growth_kind(expression: &Expression) -> Option<UnusedExpressionK
 fn check_discarded_tail(
     item: &Expression,
     expected: &TailContext<'_>,
-    module_id: &str,
+    package_id: &str,
     store: &Store,
     facts: &mut Vec<LisetteDiagnostic>,
 ) {
@@ -616,7 +622,7 @@ fn check_discarded_tail(
         MismatchedTailKind::Value
     };
 
-    let allowed_lints = callee_allowed_lints(unwrapped, module_id, store);
+    let allowed_lints = callee_allowed_lints(unwrapped, package_id, store);
     let alias = kind.allow_alias();
     if allowed_lints.iter().any(|s| s == alias) {
         return;
@@ -682,7 +688,7 @@ fn is_statement_only(expression: &Expression) -> bool {
             | Expression::ImplBlock { .. }
             | Expression::Const { .. }
             | Expression::VariableDeclaration { .. }
-            | Expression::ModuleImport { .. }
+            | Expression::PackageImport { .. }
             | Expression::RawGo { .. }
     )
 }
@@ -699,7 +705,7 @@ fn is_literal_or_negated_literal(expression: &Expression) -> bool {
     }
 }
 
-fn callee_allowed_lints(expression: &Expression, module_id: &str, store: &Store) -> Vec<String> {
+fn callee_allowed_lints(expression: &Expression, package_id: &str, store: &Store) -> Vec<String> {
     let Expression::Call {
         expression: callee, ..
     } = expression
@@ -719,7 +725,7 @@ fn callee_allowed_lints(expression: &Expression, module_id: &str, store: &Store)
         let qualified_guess = if value.contains('.') {
             value.to_string()
         } else {
-            Symbol::from_parts(module_id, value).to_string()
+            Symbol::from_parts(package_id, value).to_string()
         };
         if let Some(definition) = store.get_definition(&qualified_guess) {
             return definition.allowed_lints().to_vec();
@@ -739,8 +745,8 @@ fn callee_allowed_lints(expression: &Expression, module_id: &str, store: &Store)
                 return definition.allowed_lints().to_vec();
             }
         }
-        if let Some(module) = receiver.get_type().as_import_namespace() {
-            let method_key = Symbol::from_parts(module, member);
+        if let Some(package) = receiver.get_type().as_import_namespace() {
+            let method_key = Symbol::from_parts(package, member);
             if let Some(definition) = store.get_definition(&method_key) {
                 return definition.allowed_lints().to_vec();
             }

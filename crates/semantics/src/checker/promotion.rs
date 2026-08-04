@@ -411,11 +411,11 @@ mod tests {
     use syntax::program::{Attributes, Definition, DefinitionBody, Interface};
     use syntax::types::FunctionParameter;
 
-    const MODULE: &str = "m";
+    const PACKAGE: &str = "m";
 
     fn nominal(name: &str) -> Type {
         Type::Nominal {
-            id: Symbol::from_parts(MODULE, name),
+            id: Symbol::from_parts(PACKAGE, name),
             params: vec![],
         }
     }
@@ -463,7 +463,7 @@ mod tests {
     impl Builder {
         fn new() -> Self {
             let mut store = Store::new();
-            store.add_module(MODULE);
+            store.add_package(PACKAGE);
             Builder { store }
         }
 
@@ -476,10 +476,10 @@ mod tests {
                 body,
             };
             self.store
-                .get_module_mut(MODULE)
+                .get_package_mut(PACKAGE)
                 .unwrap()
                 .definitions
-                .insert(Symbol::from_parts(MODULE, name), def);
+                .insert(Symbol::from_parts(PACKAGE, name), def);
             self
         }
 
@@ -561,7 +561,7 @@ mod tests {
 
     fn generic_nominal(name: &str, args: Vec<Type>) -> Type {
         Type::Nominal {
-            id: Symbol::from_parts(MODULE, name),
+            id: Symbol::from_parts(PACKAGE, name),
             params: args,
         }
     }

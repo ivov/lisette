@@ -1,5 +1,5 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Import cycle detected: module_a -> module_a
+  ✕ Import cycle detected: package_a -> package_a
   help: Remove the self-import · code: [resolve.import_cycle]

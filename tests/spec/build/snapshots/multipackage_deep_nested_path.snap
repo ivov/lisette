@@ -1,0 +1,19 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import package_ "github.com/user/myproject/nested/deep/package"
+
+func main() {
+	_ = package_.Foo()
+}
+
+
+// === nested/deep/package/mod.go ===
+package package_
+
+func Foo() int {
+	return 42
+}

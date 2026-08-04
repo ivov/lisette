@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::time::Duration;
 
 use owo_colors::OwoColorize;
-use semantics::store::ENTRY_MODULE_ID;
+use semantics::store::ENTRY_PACKAGE_ID;
 use serde::Deserialize;
 use syntax::ast::Span;
 use syntax::program::TestFunction;
@@ -300,10 +300,10 @@ fn name_or_title_contains(fn_name: &str, title: Option<&str>, pattern: &str) -> 
 }
 
 fn test_key(test: &TestFunction, go_module: &str) -> TestKey {
-    let package = if test.module_id() == ENTRY_MODULE_ID {
+    let package = if test.package_id() == ENTRY_PACKAGE_ID {
         go_module.to_string()
     } else {
-        format!("{}/{}", go_module, test.module_id())
+        format!("{}/{}", go_module, test.package_id())
     };
     (package, go_test_name(test.name()))
 }
@@ -654,14 +654,14 @@ fn package_of_import_path(import_path: &str) -> &str {
 fn package_display(package: &str, go_module: &str) -> String {
     if package == go_module {
         "src".to_string()
-    } else if let Some(module_id) = package
+    } else if let Some(package_id) = package
         .strip_prefix(go_module)
         .and_then(|rest| rest.strip_prefix('/'))
     {
-        if semantics::loader::is_external_test_module(module_id) {
-            module_id.to_string()
+        if semantics::loader::is_external_test_package(package_id) {
+            package_id.to_string()
         } else {
-            format!("src/{module_id}")
+            format!("src/{package_id}")
         }
     } else {
         package.to_string()
@@ -1436,8 +1436,8 @@ mod tests {
 
     fn index(entries: &[(&str, &str)]) -> TestIndex {
         let mut index = TestIndex::default();
-        for (module_id, name) in entries {
-            index.push(TestFunction::new(module_id, name, None, None, span()));
+        for (package_id, name) in entries {
+            index.push(TestFunction::new(package_id, name, None, None, span()));
         }
         index
     }
@@ -1586,7 +1586,7 @@ mod tests {
 
     #[test]
     fn large_operands_are_truncated_in_the_report() {
-        let index = index(&[(ENTRY_MODULE_ID, "huge")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "huge")]);
         let big = "A".repeat(20_000);
         let inner = serde_json::json!({
             "file": 7,
@@ -1645,7 +1645,7 @@ mod tests {
     #[test]
     fn scalar_comparisons_read_as_a_sentence_composites_stack() {
         let render_relation = |operator: &str, left: &str, right: &str| {
-            let index = index(&[(ENTRY_MODULE_ID, "cmp")]);
+            let index = index(&[(ENTRY_PACKAGE_ID, "cmp")]);
             let inner = serde_json::json!({
                 "file": 7,
                 "lo": 3,
@@ -1710,7 +1710,7 @@ mod tests {
 
     #[test]
     fn all_pass_groups_by_package() {
-        let index = index(&[(ENTRY_MODULE_ID, "root_smoke"), ("math", "adds_numbers")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "root_smoke"), ("math", "adds_numbers")]);
         let events = vec![
             event("pass", "demo", Some("TestRootSmoke"), None),
             event("pass", "demo/math", Some("TestAddsNumbers"), None),
@@ -1758,7 +1758,7 @@ mod tests {
 
     #[test]
     fn nothing_executed_fails_even_when_go_succeeds() {
-        let index = index(&[(ENTRY_MODULE_ID, "alpha"), (ENTRY_MODULE_ID, "beta")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "alpha"), (ENTRY_PACKAGE_ID, "beta")]);
         let report = build_report(&index, &[], "demo");
         let text = render(
             &report,
@@ -1787,7 +1787,7 @@ mod tests {
 
     #[test]
     fn logged_values_render_in_a_logs_section_for_a_passing_test() {
-        let index = index(&[(ENTRY_MODULE_ID, "inspects")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "inspects")]);
         let events = vec![
             log_attr_event("demo", "TestInspects", 7, "42"),
             event("pass", "demo", Some("TestInspects"), None),
@@ -1821,7 +1821,7 @@ mod tests {
     }
 
     #[test]
-    fn every_module_groups_its_tests_under_filenames() {
+    fn every_package_groups_its_tests_under_filenames() {
         let mut index = TestIndex::default();
         for (name, file) in [("adds", 1u32), ("subtracts", 2u32)] {
             index.push(TestFunction::new(
@@ -1870,11 +1870,11 @@ mod tests {
 
         assert!(
             text.contains("add.test.lis") && text.contains("sub.test.lis"),
-            "a split module shows a header per file:\n{text}"
+            "a split package shows a header per file:\n{text}"
         );
         assert!(
             text.contains("io.test.lis"),
-            "a single-file module also shows its file header:\n{text}"
+            "a single-file package also shows its file header:\n{text}"
         );
         assert!(
             !text.contains("src/math/add.test.lis"),
@@ -1890,7 +1890,7 @@ mod tests {
 
     #[test]
     fn subtests_nest_under_their_parent() {
-        let index = index(&[(ENTRY_MODULE_ID, "parent")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "parent")]);
         let events = vec![
             event("run", "demo", Some("TestParent"), None),
             event("run", "demo", Some("TestParent/alpha"), None),
@@ -1922,7 +1922,7 @@ mod tests {
 
     #[test]
     fn subtest_metadata_without_execution_does_not_create_a_row() {
-        let index = index(&[(ENTRY_MODULE_ID, "parent")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "parent")]);
         let events = vec![
             event("run", "demo", Some("TestParent"), None),
             subtest_attr_event("demo", "TestParent/ghost", "ghost"),
@@ -1936,7 +1936,7 @@ mod tests {
 
     #[test]
     fn summary_counts_subtests_not_their_parent() {
-        let index = index(&[(ENTRY_MODULE_ID, "parent")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "parent")]);
         let events = vec![
             event("run", "demo", Some("TestParent"), None),
             event("run", "demo", Some("TestParent/alpha"), None),
@@ -1961,7 +1961,7 @@ mod tests {
 
     #[test]
     fn skipped_test_shows_reason_and_is_not_a_failure() {
-        let index = index(&[(ENTRY_MODULE_ID, "wip")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "wip")]);
         let events = vec![
             event("run", "demo", Some("TestWip"), None),
             skip_attr_event("demo", "TestWip", "not ready"),
@@ -1985,7 +1985,7 @@ mod tests {
 
     #[test]
     fn long_skip_reason_wraps_instead_of_overflowing() {
-        let index = index(&[(ENTRY_MODULE_ID, "wip")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "wip")]);
         let reason = "this reason is far too long to sit inline on the row without \
                       running well past the edge of any reasonable terminal width";
         let events = vec![
@@ -2023,7 +2023,7 @@ mod tests {
 
     #[test]
     fn skip_reason_layout_follows_passed_width_not_terminal() {
-        let index = index(&[(ENTRY_MODULE_ID, "wip")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "wip")]);
         let reason = "this reason is far too long to sit inline on the row without \
                       running well past the edge of any reasonable terminal width";
         let events = vec![
@@ -2058,7 +2058,7 @@ mod tests {
 
     #[test]
     fn skipped_subtest_renders_under_parent_with_reason() {
-        let index = index(&[(ENTRY_MODULE_ID, "parent")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "parent")]);
         let events = vec![
             event("run", "demo", Some("TestParent"), None),
             event("run", "demo", Some("TestParent/child"), None),
@@ -2087,7 +2087,7 @@ mod tests {
 
     #[test]
     fn skipped_parent_with_children_keeps_its_marker() {
-        let index = index(&[(ENTRY_MODULE_ID, "parent")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "parent")]);
         let events = vec![
             event("run", "demo", Some("TestParent"), None),
             event("run", "demo", Some("TestParent/child"), None),
@@ -2122,7 +2122,7 @@ mod tests {
 
     #[test]
     fn parent_own_output_shows_even_with_subtests() {
-        let index = index(&[(ENTRY_MODULE_ID, "parent")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "parent")]);
         let events = vec![
             event("run", "demo", Some("TestParent"), None),
             event("run", "demo", Some("TestParent/child"), None),
@@ -2162,7 +2162,7 @@ mod tests {
 
     #[test]
     fn nested_subtest_failure_attaches_to_leaf() {
-        let index = index(&[(ENTRY_MODULE_ID, "parent")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "parent")]);
         let events = vec![
             event("run", "demo", Some("TestParent"), None),
             event("run", "demo", Some("TestParent/group"), None),
@@ -2195,7 +2195,7 @@ mod tests {
 
     #[test]
     fn subtest_shows_source_name_not_go_munged_name() {
-        let index = index(&[(ENTRY_MODULE_ID, "names")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "names")]);
         let events = vec![
             event("run", "demo", Some("TestNames"), None),
             event("run", "demo", Some("TestNames/hello_world_here"), None),
@@ -2209,7 +2209,7 @@ mod tests {
 
     #[test]
     fn subtest_name_with_slashes_stays_one_leaf() {
-        let index = index(&[(ENTRY_MODULE_ID, "names")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "names")]);
         let events = vec![
             event("run", "demo", Some("TestNames"), None),
             event("run", "demo", Some("TestNames/path/to/thing"), None),
@@ -2226,7 +2226,7 @@ mod tests {
 
     #[test]
     fn sibling_subtest_named_like_a_path_prefix_stays_a_sibling() {
-        let index = index(&[(ENTRY_MODULE_ID, "names")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "names")]);
         let events = vec![
             event("run", "demo", Some("TestNames"), None),
             event("run", "demo", Some("TestNames/path"), None),
@@ -2255,7 +2255,7 @@ mod tests {
 
     #[test]
     fn duplicate_subtest_names_both_show_the_source_name() {
-        let index = index(&[(ENTRY_MODULE_ID, "dupes")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "dupes")]);
         let events = vec![
             event("run", "demo", Some("TestDupes"), None),
             event("run", "demo", Some("TestDupes/dup"), None),
@@ -2277,7 +2277,7 @@ mod tests {
 
     #[test]
     fn subtest_without_source_name_falls_back_to_go_segment() {
-        let index = index(&[(ENTRY_MODULE_ID, "names")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "names")]);
         let events = vec![
             event("run", "demo", Some("TestNames"), None),
             event("run", "demo", Some("TestNames/#00"), None),
@@ -2291,7 +2291,7 @@ mod tests {
 
     #[test]
     fn failed_test_shows_output_and_counts() {
-        let index = index(&[(ENTRY_MODULE_ID, "boom")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "boom")]);
         let events = vec![
             event("fail", "demo", Some("TestBoom"), None),
             event("output", "demo", Some("TestBoom"), Some("panic: boom\n")),
@@ -2313,7 +2313,7 @@ mod tests {
 
     #[test]
     fn declared_test_with_no_event_is_not_run() {
-        let index = index(&[(ENTRY_MODULE_ID, "ghost")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "ghost")]);
         let report = build_report(&index, &[], "demo");
         let text = render(
             &report,
@@ -2329,7 +2329,7 @@ mod tests {
 
     #[test]
     fn filtered_run_does_not_fail_when_go_succeeds() {
-        let index = index(&[(ENTRY_MODULE_ID, "kept"), (ENTRY_MODULE_ID, "filtered")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "kept"), (ENTRY_PACKAGE_ID, "filtered")]);
         let events = vec![event("pass", "demo", Some("TestKept"), None)];
         let report = build_report(&index, &events, "demo");
 
@@ -2347,7 +2347,7 @@ mod tests {
 
     #[test]
     fn build_failure_output_is_captured_from_build_output_events() {
-        let index = index(&[(ENTRY_MODULE_ID, "never_runs")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "never_runs")]);
         let events = vec![
             build_output_event("demo", "# demo\n"),
             build_output_event("demo", "./ops_test.go:3:5: undefined: foo\n"),
@@ -2404,7 +2404,7 @@ mod tests {
 
     #[test]
     fn started_test_without_terminal_is_crashed_and_shows_output() {
-        let index = index(&[(ENTRY_MODULE_ID, "hangs")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "hangs")]);
         let events = vec![
             event("run", "demo", Some("TestHangs"), None),
             event(
@@ -2431,7 +2431,7 @@ mod tests {
 
     #[test]
     fn late_run_event_does_not_erase_a_terminal_result() {
-        let index = index(&[(ENTRY_MODULE_ID, "done")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "done")]);
         let events = vec![
             event("pass", "demo", Some("TestDone"), None),
             event("run", "demo", Some("TestDone"), None),
@@ -2444,7 +2444,7 @@ mod tests {
 
     #[test]
     fn package_panic_before_any_test_shows_cause() {
-        let index = index(&[(ENTRY_MODULE_ID, "one"), (ENTRY_MODULE_ID, "two")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "one"), (ENTRY_PACKAGE_ID, "two")]);
         let events = vec![
             event("output", "demo", None, Some("panic: init blew up\n")),
             event("output", "demo", None, Some("goroutine 1 [running]:\n")),
@@ -2509,7 +2509,7 @@ mod tests {
 
     #[test]
     fn failure_record_reassembles_and_attaches() {
-        let index = index(&[(ENTRY_MODULE_ID, "parses")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "parses")]);
         let inner = r#"{"file":7,"lo":3,"hi":9,"message":"test returned Err","operands":[{"label":"error","value":"boom"}]}"#;
         let events = vec![
             event("run", "demo", Some("TestParses"), None),
@@ -2528,7 +2528,7 @@ mod tests {
 
     #[test]
     fn failure_record_reassembles_from_out_of_order_chunks() {
-        let index = index(&[(ENTRY_MODULE_ID, "big")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "big")]);
         let inner = r#"{"file":1,"lo":0,"hi":3,"message":"test returned Err","operands":[{"label":"error","value":"日本語"}]}"#;
         let hex = hex_encode(inner);
         let (first, second) = hex.split_at(hex.len() / 2);
@@ -2554,7 +2554,7 @@ mod tests {
 
     #[test]
     fn missing_chunk_yields_no_record() {
-        let index = index(&[(ENTRY_MODULE_ID, "big")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "big")]);
         let events = vec![
             attr_event("demo", "TestBig", r#"{"i":0,"n":3,"d":"7b"}"#),
             attr_event("demo", "TestBig", r#"{"i":2,"n":3,"d":"7d"}"#),
@@ -2569,7 +2569,7 @@ mod tests {
 
     #[test]
     fn failure_renders_spanned_block_when_source_known() {
-        let index = index(&[(ENTRY_MODULE_ID, "parses")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "parses")]);
         let inner = r#"{"file":7,"lo":3,"hi":9,"message":"test returned Err","operands":[{"label":"error","value":"boom"}]}"#;
         let events = vec![
             attr_event("demo", "TestParses", &fail_value(inner)),
@@ -2601,7 +2601,7 @@ mod tests {
     fn failure_block_shows_test_description() {
         let mut index = TestIndex::default();
         index.push(TestFunction::new(
-            ENTRY_MODULE_ID,
+            ENTRY_PACKAGE_ID,
             "multiplies",
             None,
             Some("Guards the multiplication that downstream calculations rely on.".to_string()),
@@ -2701,7 +2701,7 @@ mod tests {
 
     #[test]
     fn failed_keys_collects_failed_top_level_tests() {
-        let index = index(&[(ENTRY_MODULE_ID, "good"), (ENTRY_MODULE_ID, "bad")]);
+        let index = index(&[(ENTRY_PACKAGE_ID, "good"), (ENTRY_PACKAGE_ID, "bad")]);
         let events = vec![
             event("pass", "demo", Some("TestGood"), None),
             event("fail", "demo", Some("TestBad"), None),

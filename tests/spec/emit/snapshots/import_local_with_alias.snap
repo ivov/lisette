@@ -6,7 +6,7 @@ description: |
   import "go:fmt"
   
   fn test() {
-    fmt.Print("Local module with alias")
+    fmt.Print("Local package with alias")
   }
 ---
 package main
@@ -14,5 +14,5 @@ package main
 import "fmt"
 
 func test() {
-	fmt.Print("Local module with alias")
+	fmt.Print("Local package with alias")
 }

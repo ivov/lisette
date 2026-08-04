@@ -3,7 +3,7 @@ use syntax::ast::Expression;
 
 use super::helpers::{expressions_equivalent, is_side_effect_free};
 
-/// (module_id, function_name, arg index a, arg index b)
+/// (package_id, function_name, arg index a, arg index b)
 const DUP_ARG_TARGETS: &[(&str, &str, usize, usize)] = &[
     ("go:math", "Max", 0, 1),
     ("go:math", "Min", 0, 1),
@@ -38,12 +38,12 @@ pub fn check_dup_arg(expression: &Expression, ctx: &NodeCtx) {
     };
 
     let namespace_ty = namespace.get_type();
-    let Some(module_id) = namespace_ty.as_import_namespace() else {
+    let Some(package_id) = namespace_ty.as_import_namespace() else {
         return;
     };
 
-    for (target_module, target_function, a, b) in DUP_ARG_TARGETS {
-        if module_id != *target_module || member != *target_function {
+    for (target_package, target_function, a, b) in DUP_ARG_TARGETS {
+        if package_id != *target_package || member != *target_function {
             continue;
         }
         let (Some(arg_a), Some(arg_b)) = (args.get(*a), args.get(*b)) else {
@@ -57,7 +57,7 @@ pub fn check_dup_arg(expression: &Expression, ctx: &NodeCtx) {
         }
         ctx.sink.push(diagnostics::lint::duplicate_arguments(
             span,
-            target_module,
+            target_package,
             target_function,
         ));
         return;

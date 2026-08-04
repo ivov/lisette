@@ -106,9 +106,9 @@ impl Store {
             return None;
         }
 
-        let declaring_module = self.module_for_qualified_name(type_id)?;
-        let module = self.get_module(declaring_module)?;
-        let mut members: Vec<ClosedMember> = module
+        let declaring_package = self.package_for_qualified_name(type_id)?;
+        let package = self.get_package(declaring_package)?;
+        let mut members: Vec<ClosedMember> = package
             .definitions
             .iter()
             .filter_map(|(qualified_name, definition)| {
@@ -139,10 +139,10 @@ impl Store {
 }
 
 fn domain_display_name(qualified: &str) -> String {
-    let Some((module, name)) = qualified.rsplit_once('.') else {
+    let Some((package, name)) = qualified.rsplit_once('.') else {
         return qualified.to_string();
     };
-    match module.strip_prefix("go:") {
+    match package.strip_prefix("go:") {
         Some(go_module) => {
             let package = go_module.rsplit('/').next().unwrap_or(go_module);
             format!("{package}.{name}")

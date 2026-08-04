@@ -1,0 +1,10 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Package not found
+   ╭─[main.lis:1:8]
+ 1 │ import "src/math"
+   ·        ─────┬────
+   ·             ╰── not a package in this project
+   ╰────
+  help: Did you mean `import "math"`? The `src/` prefix is not needed — imports are relative to the source directory · code: [resolve.package_not_found]

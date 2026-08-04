@@ -5,7 +5,7 @@ use crate::names::go_name;
 use crate::names::packages::{PackageRequirements, PackageUse};
 
 impl Planner<'_> {
-    /// A `locally_bound` name must not be rewritten by a module-level remap
+    /// A `locally_bound` name must not be rewritten by a package-level remap
     /// of the same text.
     pub(crate) fn resolve_go_name(
         &mut self,
@@ -15,12 +15,12 @@ impl Planner<'_> {
     ) -> String {
         if !locally_bound
             && !name.contains('.')
-            && let Some(remapped) = self.module.escape_remap(name)
+            && let Some(remapped) = self.package.escape_remap(name)
         {
             return remapped.to_string();
         }
 
-        if let Some(go_call) = self.try_resolve_cross_module_static_method(qualified) {
+        if let Some(go_call) = self.try_resolve_cross_package_static_method(qualified) {
             return go_call;
         }
 
@@ -38,10 +38,10 @@ impl Planner<'_> {
             && !name.starts_with(go_name::PRELUDE_PREFIX)
             && self
                 .facts
-                .definition(format!("{}.{}", go_name::PRELUDE_MODULE, type_part).as_str())
+                .definition(format!("{}.{}", go_name::PRELUDE_PACKAGE, type_part).as_str())
                 .is_some()
         {
-            format!("{}.{}", go_name::PRELUDE_MODULE, name)
+            format!("{}.{}", go_name::PRELUDE_PACKAGE, name)
         } else {
             name
         };
@@ -59,8 +59,8 @@ impl Planner<'_> {
         if id == qualified {
             return None;
         }
-        let type_module = self.facts.module_for_qualified_name(&id).unwrap_or(&id);
-        if self.facts.is_current_module(type_module) {
+        let type_package = self.facts.package_for_qualified_name(&id).unwrap_or(&id);
+        if self.facts.is_current_package(type_package) {
             return Some(unqualified_name(&id).to_string());
         }
         Some(id)
@@ -102,60 +102,62 @@ impl Planner<'_> {
         if let Some(bound) = self.scope.resolve_binding_go_name(lisette_name) {
             return bound.to_string();
         }
-        self.module
+        self.package
             .escape_remap(lisette_name)
             .map(str::to_string)
             .unwrap_or_else(|| go_name::escape_reserved(lisette_name).into_owned())
     }
 
-    /// Record `module`'s Go import and return the package
+    /// Record `package`'s Go import and return the package
     /// qualifier exactly as the import renders it: `format_import` sanitizes
     /// default package names and prints explicit aliases verbatim, so
     /// references must follow the same rule.
-    pub(crate) fn record_module_import(
+    pub(crate) fn record_package_import(
         &self,
-        module: &str,
+        package: &str,
         requirements: &mut PackageRequirements,
     ) -> String {
-        let package = self.package_use_for_module(module);
+        let package = self.package_use_for_package(package);
         let qualifier = package.qualifier().to_string();
         requirements.require(package);
         qualifier
     }
 
-    /// Record a module reference in the current file namespace.
-    pub(crate) fn require_module_import(&self, module: &str) -> String {
-        let package = self.package_use_for_module(module);
+    /// Record a package reference in the current file namespace.
+    pub(crate) fn require_package_import(&self, package: &str) -> String {
+        let package = self.package_use_for_package(package);
         self.file_namespace_mut().reference(package)
     }
 
-    pub(crate) fn go_pkg_qualifier(&self, module: &str) -> String {
-        self.package_use_for_module(module).qualifier().to_string()
-    }
-
-    pub(crate) fn canonical_module(&self, module: &str) -> String {
-        self.file_namespace()
-            .module_for_alias(module)
-            .unwrap_or(module)
+    pub(crate) fn go_pkg_qualifier(&self, package: &str) -> String {
+        self.package_use_for_package(package)
+            .qualifier()
             .to_string()
     }
 
-    pub(crate) fn package_use_for_module(&self, module: &str) -> PackageUse {
-        if module == go_name::TEST_PRELUDE_MODULE {
+    pub(crate) fn canonical_package(&self, package: &str) -> String {
+        self.file_namespace()
+            .package_for_alias(package)
+            .unwrap_or(package)
+            .to_string()
+    }
+
+    pub(crate) fn package_use_for_package(&self, package: &str) -> PackageUse {
+        if package == go_name::TEST_PRELUDE_PACKAGE {
             return PackageUse::generated(go_name::GeneratedPackage::TestKit);
         }
-        let path = match module.strip_prefix(go_name::GO_IMPORT_PREFIX) {
+        let path = match package.strip_prefix(go_name::GO_IMPORT_PREFIX) {
             Some(rest) => rest.to_string(),
-            None => self.facts.go_import_path(module),
+            None => self.facts.go_import_path(package),
         };
         let qualifier = self
             .file_namespace()
-            .module_alias(module)
+            .package_alias(package)
             .map(str::to_string)
-            .or_else(|| self.facts.go_package_name(module).map(str::to_string))
-            .unwrap_or_else(|| match module.strip_prefix(go_name::GO_IMPORT_PREFIX) {
+            .or_else(|| self.facts.go_package_name(package).map(str::to_string))
+            .unwrap_or_else(|| match package.strip_prefix(go_name::GO_IMPORT_PREFIX) {
                 Some(go_path) => syntax::program::go_import_default_name(go_path).to_string(),
-                None => go_name::go_package_name(module).to_string(),
+                None => go_name::go_package_name(package).to_string(),
             });
         let qualifier = if qualifier == go_name::go_package_name(&path) {
             go_name::sanitize_package_name(&qualifier).into_owned()
@@ -171,20 +173,20 @@ impl Planner<'_> {
         method: &str,
         is_public: bool,
     ) -> String {
-        let module = self
+        let package = self
             .facts
-            .module_for_qualified_name(type_id)
+            .package_for_qualified_name(type_id)
             .map(str::to_string);
         let type_name = unqualified_name(type_id);
-        let computed_alias = match module.as_deref() {
-            Some(m) if self.facts.is_foreign_module(m) => Some(self.require_module_import(m)),
+        let computed_alias = match package.as_deref() {
+            Some(m) if self.facts.is_foreign_package(m) => Some(self.require_package_import(m)),
             _ => None,
         };
         let resolved = go_name::qualify_method(
-            module.as_deref(),
+            package.as_deref(),
             type_name,
             method,
-            self.facts.current_module(),
+            self.facts.current_package(),
             is_public,
             computed_alias.as_deref(),
         );
@@ -195,20 +197,20 @@ impl Planner<'_> {
     }
 
     pub(crate) fn resolve_variant(&mut self, identifier: &str, enum_id: &str) -> String {
-        let enum_module = self
+        let enum_package = self
             .facts
-            .module_for_qualified_name(enum_id)
+            .package_for_qualified_name(enum_id)
             .unwrap_or(enum_id);
-        let computed_alias = if self.facts.is_foreign_module(enum_module) {
-            Some(self.require_module_import(enum_module))
+        let computed_alias = if self.facts.is_foreign_package(enum_package) {
+            Some(self.require_package_import(enum_package))
         } else {
             None
         };
         let resolved = go_name::variant_by_id(
             identifier,
             enum_id,
-            enum_module,
-            self.facts.current_module(),
+            enum_package,
+            self.facts.current_package(),
             computed_alias.as_deref(),
         );
         if let Some(package) = resolved.package {

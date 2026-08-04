@@ -2425,7 +2425,7 @@ fn diagnostics_update_after_fix() {
 }
 
 #[test]
-fn cross_module_goto_definition() {
+fn cross_package_goto_definition() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
 
@@ -2454,7 +2454,7 @@ fn cross_module_goto_definition() {
     let completion = client.completion(&main_uri, 2, 0);
     assert!(
         completion.is_some(),
-        "server should still respond with cross-module code"
+        "server should still respond with cross-package code"
     );
 
     client.shutdown();
@@ -2486,7 +2486,7 @@ fn main() {
 }
 
 #[test]
-fn go_import_completion_on_module() {
+fn go_import_completion_on_package() {
     let mut client = TestClient::new();
     client.initialize();
 
@@ -6215,7 +6215,7 @@ fn main() {
 }
 
 #[test]
-fn stress_cross_module_hover_on_imported_function() {
+fn stress_cross_package_hover_on_imported_function() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("lisette.toml"), "").unwrap();
@@ -6252,7 +6252,7 @@ fn main() {
     let hover = client.hover(&main_uri, positions[1].0, positions[1].1);
     assert!(
         hover.is_some(),
-        "hover on cross-module function should work"
+        "hover on cross-package function should work"
     );
     let content = hover_content(&hover.unwrap());
     assert!(content.contains("int"), "should show return type");
@@ -6267,7 +6267,7 @@ fn main() {
 }
 
 #[test]
-fn stress_cross_module_completion_on_struct_methods() {
+fn stress_cross_package_completion_on_struct_methods() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("lisette.toml"), "").unwrap();
@@ -6321,7 +6321,7 @@ fn main() {
 }
 
 #[test]
-fn stress_cross_module_enum_variant_completion() {
+fn stress_cross_package_enum_variant_completion() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("lisette.toml"), "").unwrap();
@@ -6369,7 +6369,7 @@ fn main() {
 }
 
 #[test]
-fn stress_cross_module_rename_local_binding() {
+fn stress_cross_package_rename_local_binding() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("lisette.toml"), "").unwrap();
@@ -7092,7 +7092,7 @@ fn main() {
 }
 
 #[test]
-fn stress_cross_module_import_alias() {
+fn stress_cross_package_import_alias() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("lisette.toml"), "").unwrap();
@@ -7234,14 +7234,14 @@ fn hover_falls_back_to_last_valid_snapshot() {
 }
 
 /// Tests that completion after a dot following a multi-byte character
-/// does not panic in get_module_prefix (rfind + 1 byte offset issue).
+/// does not panic in get_package_prefix (rfind + 1 byte offset issue).
 #[test]
 fn stress_completion_after_multibyte_identifier() {
     let mut client = TestClient::new();
     client.initialize();
 
     // CJK character (3 bytes each in UTF-8) used as separator before an identifier
-    // This tests that `get_module_prefix` handles multi-byte chars correctly
+    // This tests that `get_package_prefix` handles multi-byte chars correctly
     // when doing `rfind(|c| ...).map(|i| i + 1)`: i+1 could be mid-char
     client.open(
         TEST_URI,
@@ -7270,7 +7270,7 @@ fn stress_completion_multibyte_before_dot() {
     client.initialize();
 
     // `let x = 1; 名.`: multi-byte char right before dot
-    // The get_module_prefix rfind will find the multi-byte char as the non-ident boundary,
+    // The get_package_prefix rfind will find the multi-byte char as the non-ident boundary,
     // then `i + 1` might be mid-char, which would panic on `base[start..]`
     // However, Lisette identifiers can only be ASCII, so this should not happen in practice
     // because the lexer would not produce a multi-byte identifier. But the LSP should
@@ -7616,7 +7616,7 @@ fn main() {
 }
 
 #[test]
-fn stress_cross_module_enum_variant_goto_def() {
+fn stress_cross_package_enum_variant_goto_def() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("lisette.toml"), "").unwrap();
@@ -7678,7 +7678,7 @@ fn main() {
 }
 
 #[test]
-fn goto_definition_const_pattern_resolves_exact_module() {
+fn goto_definition_const_pattern_resolves_exact_package() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("lisette.toml"), "").unwrap();
@@ -7733,7 +7733,7 @@ fn classify(d: b.Workday) -> int {
     );
     assert!(
         loc.unwrap().uri.as_str().contains("week_b"),
-        "const pattern must resolve to the matched module, not a same-named const elsewhere"
+        "const pattern must resolve to the matched package, not a same-named const elsewhere"
     );
 
     client.shutdown();
@@ -7886,7 +7886,7 @@ fn main() {
 }
 
 #[test]
-fn stress_cross_module_type_error_diagnostics() {
+fn stress_cross_package_type_error_diagnostics() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("lisette.toml"), "").unwrap();
@@ -7931,7 +7931,7 @@ fn main() {
 }
 
 #[test]
-fn stress_cross_module_sibling_files() {
+fn stress_cross_package_sibling_files() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("lisette.toml"), "").unwrap();
@@ -7952,7 +7952,7 @@ fn stress_cross_module_sibling_files() {
         "pub struct Rect { pub width: float64, pub height: float64 }",
     )
     .unwrap();
-    // Module entry file
+    // Package entry file
     std::fs::write(mod_dir.join("shapes.lis"), "").unwrap();
 
     let (main_content, positions) = cursors(
@@ -8105,7 +8105,7 @@ fn main() {
 }
 
 #[test]
-fn stress_cross_module_multiple_imports() {
+fn stress_cross_package_multiple_imports() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("lisette.toml"), "").unwrap();
@@ -8365,7 +8365,7 @@ fn main() {
 }
 
 #[test]
-fn stress_cross_module_rename_function() {
+fn stress_cross_package_rename_function() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("lisette.toml"), "").unwrap();
@@ -9421,7 +9421,7 @@ fn main() -> Result<(), string> {
 }
 
 #[test]
-fn goto_definition_same_module_function_call() {
+fn goto_definition_same_package_function_call() {
     let mut client = TestClient::new();
     client.initialize();
 
@@ -9437,7 +9437,7 @@ fn main() {
     let response = client.goto_definition(TEST_URI, line, character);
     assert!(
         response.is_some(),
-        "goto_definition on same-module function call should resolve"
+        "goto_definition on same-package function call should resolve"
     );
 
     let loc = definition_location(&response.unwrap()).unwrap();
@@ -9450,7 +9450,7 @@ fn main() {
 }
 
 #[test]
-fn references_cross_module_finds_call_sites() {
+fn references_cross_package_finds_call_sites() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
 
@@ -9483,7 +9483,7 @@ fn references_cross_module_finds_call_sites() {
     let refs = client.references(&utils_uri, 0, 7, true);
     assert!(
         refs.is_some(),
-        "references on pub fn should find cross-module call sites"
+        "references on pub fn should find cross-package call sites"
     );
 
     let locations = refs.unwrap();
@@ -9507,7 +9507,7 @@ fn references_cross_module_finds_call_sites() {
 }
 
 #[test]
-fn goto_definition_struct_field_cross_module() {
+fn goto_definition_struct_field_cross_package() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
 
@@ -9543,7 +9543,7 @@ fn goto_definition_struct_field_cross_module() {
     let response = client.goto_definition(&main_uri, line, character);
     assert!(
         response.is_some(),
-        "goto_definition on cross-module struct field should resolve"
+        "goto_definition on cross-package struct field should resolve"
     );
 
     let loc = definition_location(&response.unwrap()).unwrap();
@@ -9887,7 +9887,7 @@ fn process(maybe: Option<Line>) -> int {
 }
 
 #[test]
-fn completion_on_cross_module_enum_dot_access() {
+fn completion_on_cross_package_enum_dot_access() {
     let mut client = TestClient::new();
 
     let root = tempfile::tempdir().unwrap();
@@ -9931,7 +9931,7 @@ fn completion_on_cross_module_enum_dot_access() {
     let response = client.completion(&main_uri, 2, 23);
     assert!(
         response.is_some(),
-        "completion after cross-module enum dot should return results"
+        "completion after cross-package enum dot should return results"
     );
     let labels = completion_labels(&response.unwrap());
     assert!(
@@ -9949,7 +9949,7 @@ fn completion_on_cross_module_enum_dot_access() {
 }
 
 #[test]
-fn completion_dot_on_alias_to_cross_module_enum_shows_variants() {
+fn completion_dot_on_alias_to_cross_package_enum_shows_variants() {
     let mut client = TestClient::new();
 
     let root = tempfile::tempdir().unwrap();
@@ -9995,18 +9995,18 @@ fn completion_dot_on_alias_to_cross_module_enum_shows_variants() {
     let labels = completion_labels(&response.unwrap());
     assert!(
         labels.contains(&"Int".to_string()),
-        "should include 'Int' via alias to cross-module enum, got: {labels:?}"
+        "should include 'Int' via alias to cross-package enum, got: {labels:?}"
     );
     assert!(
         labels.contains(&"String".to_string()),
-        "should include 'String' via alias to cross-module enum, got: {labels:?}"
+        "should include 'String' via alias to cross-package enum, got: {labels:?}"
     );
 
     client.shutdown();
 }
 
 #[test]
-fn completion_dot_on_alias_to_cross_module_enum_hides_private_static_methods() {
+fn completion_dot_on_alias_to_cross_package_enum_hides_private_static_methods() {
     let mut client = TestClient::new();
 
     let root = tempfile::tempdir().unwrap();
@@ -10054,11 +10054,11 @@ impl Kind {\n\
     let labels = completion_labels(&response.unwrap());
     assert!(
         labels.contains(&"public_static".to_string()),
-        "should include 'public_static' from cross-module aliased type, got: {labels:?}"
+        "should include 'public_static' from cross-package aliased type, got: {labels:?}"
     );
     assert!(
         !labels.contains(&"private_static".to_string()),
-        "should NOT include 'private_static' from cross-module aliased type, got: {labels:?}"
+        "should NOT include 'private_static' from cross-package aliased type, got: {labels:?}"
     );
 
     client.shutdown();
@@ -10914,7 +10914,7 @@ fn goto_definition_type_alias_inside_tuple_annotation() {
 }
 
 #[test]
-fn goto_definition_type_alias_rhs_same_module() {
+fn goto_definition_type_alias_rhs_same_package() {
     let mut client = TestClient::new();
     client.initialize();
 
@@ -11930,7 +11930,7 @@ fn library_root_file_analyzes_cleanly() {
 }
 
 #[test]
-fn library_cross_module_goto_definition_works() {
+fn library_cross_package_goto_definition_works() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(
@@ -11963,11 +11963,11 @@ fn library_cross_module_goto_definition_works() {
         .collect();
     assert!(
         errors.is_empty(),
-        "cross-module library import should resolve: {errors:?}"
+        "cross-package library import should resolve: {errors:?}"
     );
 
     let goto = client.goto_definition(&uri, 3, 8);
-    assert!(goto.is_some(), "goto across library modules should work");
+    assert!(goto.is_some(), "goto across library packages should work");
     client.shutdown();
 }
 
@@ -12102,7 +12102,7 @@ fn external_test_file_is_analyzed_with_visibility_rules() {
     assert!(
         diagnostics.iter().any(|d| d.code
             == Some(NumberOrString::String(
-                "resolve.not_found_in_module".to_string()
+                "resolve.not_found_in_package".to_string()
             ))),
         "got: {diagnostics:?}"
     );
@@ -12499,7 +12499,7 @@ fn src_tests_overlay_does_not_collide_with_external_tests() {
     let diags = client.await_diagnostics_for(&api_uri).unwrap_or_default();
     assert!(
         diags.iter().any(|d| d.message.contains("from_src_tests")),
-        "a src/tests overlay must not leak into the external tests module: {diags:?}"
+        "a src/tests overlay must not leak into the external tests package: {diags:?}"
     );
 
     client.shutdown();
@@ -12561,7 +12561,7 @@ fn a_file_opened_without_a_workspace_root_resolves_its_own_project() {
     assert!(
         diagnostics
             .iter()
-            .all(|d| !d.message.contains("Module not")),
+            .all(|d| !d.message.contains("Package not")),
         "the ancestor walk must find the project from the file alone: {diagnostics:?}"
     );
 
@@ -12586,7 +12586,7 @@ fn a_file_with_no_project_above_it_is_told_how_to_make_one() {
         .find(|d| {
             d.code
                 == Some(NumberOrString::String(
-                    "resolve.module_not_found".to_string(),
+                    "resolve.package_not_found".to_string(),
                 ))
         })
         .unwrap_or_else(|| panic!("expected an unresolved import: {diagnostics:?}"));

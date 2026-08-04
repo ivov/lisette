@@ -3,18 +3,18 @@ use super::*;
 #[derive(Debug, Default)]
 pub(super) struct ImportState {
     pub(super) prefixed: HashMap<String, PrefixedImport>,
-    /// Modules whose exports are available without prefix (current module and prelude)
+    /// Packages whose exports are available without prefix (current package and prelude)
     pub(super) unprefixed_imports: HashSet<String>,
 }
 
 #[derive(Debug)]
 pub(super) enum PrefixedImport {
     Namespace {
-        module_id: String,
+        package_id: String,
     },
     /// A typedef's self-prefix resolves qualified names but is not itself a value.
     LookupOnly {
-        module_id: String,
+        package_id: String,
     },
     Failed,
 }
@@ -24,36 +24,35 @@ impl ImportState {
         Self::default()
     }
 
-    pub(super) fn module_id(&self, prefix: &str) -> Option<&str> {
+    pub(super) fn package_id(&self, prefix: &str) -> Option<&str> {
         match self.prefixed.get(prefix)? {
-            PrefixedImport::Namespace { module_id } | PrefixedImport::LookupOnly { module_id } => {
-                Some(module_id)
-            }
+            PrefixedImport::Namespace { package_id }
+            | PrefixedImport::LookupOnly { package_id } => Some(package_id),
             PrefixedImport::Failed => None,
         }
     }
 
     pub(super) fn namespace(&self, prefix: &str) -> Option<&str> {
         match self.prefixed.get(prefix)? {
-            PrefixedImport::Namespace { module_id } => Some(module_id),
+            PrefixedImport::Namespace { package_id } => Some(package_id),
             PrefixedImport::LookupOnly { .. } | PrefixedImport::Failed => None,
         }
     }
 
-    pub(super) fn modules(&self) -> impl Iterator<Item = (&str, &str)> {
+    pub(super) fn packages(&self) -> impl Iterator<Item = (&str, &str)> {
         self.prefixed.iter().filter_map(|(prefix, import)| {
-            let module_id = match import {
-                PrefixedImport::Namespace { module_id }
-                | PrefixedImport::LookupOnly { module_id } => module_id,
+            let package_id = match import {
+                PrefixedImport::Namespace { package_id }
+                | PrefixedImport::LookupOnly { package_id } => package_id,
                 PrefixedImport::Failed => return None,
             };
-            Some((prefix.as_str(), module_id.as_str()))
+            Some((prefix.as_str(), package_id.as_str()))
         })
     }
 
     pub(super) fn namespaces(&self) -> impl Iterator<Item = &str> {
         self.prefixed.values().filter_map(|import| match import {
-            PrefixedImport::Namespace { module_id } => Some(module_id.as_str()),
+            PrefixedImport::Namespace { package_id } => Some(package_id.as_str()),
             PrefixedImport::LookupOnly { .. } | PrefixedImport::Failed => None,
         })
     }
@@ -64,21 +63,21 @@ impl ImportState {
 }
 
 impl TaskState {
-    /// Resolve a simple name (e.g., "Sunday") to a public definition in an imported module.
-    /// First tries direct match (`module_id.name`), then falls back to searching
-    /// for nested definitions (e.g., `module_id.Weekday.Sunday`) preferring top-level
+    /// Resolve a simple name (e.g., "Sunday") to a public definition in an imported package.
+    /// First tries direct match (`package_id.name`), then falls back to searching
+    /// for nested definitions (e.g., `package_id.Weekday.Sunday`) preferring top-level
     /// over nested when both share the same simple name.
-    pub(super) fn resolve_in_imported_module<'m>(
+    pub(super) fn resolve_in_imported_package<'m>(
         &self,
         store: &Store,
-        module: &'m Module,
+        package: &'m Package,
         simple_name: &str,
     ) -> Option<(String, &'m Definition)> {
-        let module_prefix = format!("{}.", module.id);
+        let package_prefix = format!("{}.", package.id);
 
-        // Direct match: module_id.simple_name
-        let direct = format!("{}{}", module_prefix, simple_name);
-        if let Some(definition) = module.definitions.get(direct.as_str())
+        // Direct match: package_id.simple_name
+        let direct = format!("{}{}", package_prefix, simple_name);
+        if let Some(definition) = package.definitions.get(direct.as_str())
             && definition.visibility.is_public()
             && !store.is_test_definition(definition)
         {
@@ -86,17 +85,17 @@ impl TaskState {
         }
 
         // Nested match: find a public definition whose simple name matches,
-        // e.g., module_id.EnumType.VariantName where simple_name = "VariantName".
+        // e.g., package_id.EnumType.VariantName where simple_name = "VariantName".
         // Skip if a top-level definition with the same simple name exists
         // (handles transitive import collisions like go:net/http).
         let suffix = format!(".{}", simple_name);
-        for (qn, definition) in &module.definitions {
+        for (qn, definition) in &package.definitions {
             if qn.ends_with(suffix.as_str())
-                && qn.starts_with(module_prefix.as_str())
+                && qn.starts_with(package_prefix.as_str())
                 && definition.visibility.is_public()
                 && !store.is_test_definition(definition)
             {
-                let rest = &qn[module_prefix.len()..];
+                let rest = &qn[package_prefix.len()..];
                 // Only match if it's nested (contains a dot), direct was tried above
                 if rest.contains('.') {
                     return Some((qn.to_string(), definition));
@@ -130,16 +129,16 @@ impl TaskState {
             .is_some_and(|file_id| store.is_test_file(file_id))
     }
 
-    /// A test-file definition is visible only to test files of the same module.
+    /// A test-file definition is visible only to test files of the same package.
     pub(super) fn test_definition_visible(
         &self,
         store: &Store,
         definition: &Definition,
-        module_id: &str,
+        package_id: &str,
         in_test_file: bool,
     ) -> bool {
         !store.is_test_definition(definition)
-            || (in_test_file && module_id == self.cursor.module_id)
+            || (in_test_file && package_id == self.cursor.package_id)
     }
 
     pub(super) fn lookup_qualified_name_in_scope(
@@ -149,28 +148,28 @@ impl TaskState {
         prefer_type: bool,
     ) -> Option<EcoString> {
         if let Some((prefix, simple_name)) = type_name.split_once('.')
-            && let Some(module_id) = self.imports.module_id(prefix)
-            && let Some(imported_module) = store.get_module(module_id)
+            && let Some(package_id) = self.imports.package_id(prefix)
+            && let Some(imported_package) = store.get_package(package_id)
             && let Some((qualified_name, _)) =
-                self.resolve_in_imported_module(store, imported_module, simple_name)
+                self.resolve_in_imported_package(store, imported_package, simple_name)
         {
             return Some(qualified_name.into());
         }
 
         let in_test_file = self.current_file_is_test(store);
-        let module_ids = std::iter::once(self.cursor.module_id.as_str())
+        let package_ids = std::iter::once(self.cursor.package_id.as_str())
             .chain(self.imports.unprefixed_imports.iter().map(String::as_str));
 
         let mut value_fallback: Option<EcoString> = None;
-        for module_id in module_ids {
-            let Some(module) = store.get_module(module_id) else {
+        for package_id in package_ids {
+            let Some(package) = store.get_package(package_id) else {
                 continue;
             };
-            let qualified_name = Symbol::from_parts(module_id, type_name);
-            let Some(definition) = module.definitions.get(qualified_name.as_str()) else {
+            let qualified_name = Symbol::from_parts(package_id, type_name);
+            let Some(definition) = package.definitions.get(qualified_name.as_str()) else {
                 continue;
             };
-            if !self.test_definition_visible(store, definition, module_id, in_test_file) {
+            if !self.test_definition_visible(store, definition, package_id, in_test_file) {
                 continue;
             }
 
@@ -258,33 +257,33 @@ impl TaskState {
             return Some(ty.clone());
         }
 
-        if let Some(module_id) = self.imports.namespace(value_name) {
-            return Some(Type::ImportNamespace(module_id.into()));
+        if let Some(package_id) = self.imports.namespace(value_name) {
+            return Some(Type::ImportNamespace(package_id.into()));
         }
 
         if let Some((prefix, rest)) = value_name.split_once('.')
-            && let Some(module_id) = self.imports.module_id(prefix)
-            && let Some(imported_module) = store.get_module(module_id)
+            && let Some(package_id) = self.imports.package_id(prefix)
+            && let Some(imported_package) = store.get_package(package_id)
             && let Some((_, definition)) =
-                self.resolve_in_imported_module(store, imported_module, rest)
+                self.resolve_in_imported_package(store, imported_package, rest)
         {
             return Some(self.resolve_definition_value_type(store, definition));
         }
 
         let in_test_file = self.current_file_is_test(store);
-        let module = store.get_module(&self.cursor.module_id)?;
-        let qualified_name = Symbol::from_parts(&module.id, value_name);
+        let package = store.get_package(&self.cursor.package_id)?;
+        let qualified_name = Symbol::from_parts(&package.id, value_name);
 
-        if let Some(definition) = module.definitions.get(qualified_name.as_str())
-            && self.test_definition_visible(store, definition, &module.id, in_test_file)
+        if let Some(definition) = package.definitions.get(qualified_name.as_str())
+            && self.test_definition_visible(store, definition, &package.id, in_test_file)
         {
             return Some(self.resolve_definition_value_type(store, definition));
         }
 
-        for imported_module_id in &self.imports.unprefixed_imports {
-            if let Some(imported_module) = store.get_module(imported_module_id) {
-                let qualified_name = Symbol::from_parts(imported_module_id, value_name);
-                if let Some(definition) = imported_module.definitions.get(qualified_name.as_str())
+        for imported_package_id in &self.imports.unprefixed_imports {
+            if let Some(imported_package) = store.get_package(imported_package_id) {
+                let qualified_name = Symbol::from_parts(imported_package_id, value_name);
+                if let Some(definition) = imported_package.definitions.get(qualified_name.as_str())
                     && !store.is_test_definition(definition)
                 {
                     return Some(self.resolve_definition_value_type(store, definition));
@@ -363,18 +362,18 @@ impl TaskState {
     }
 
     pub fn put_prelude_in_scope(&mut self, store: &Store) {
-        self.put_unprefixed_module_in_scope(store, "prelude");
+        self.put_unprefixed_package_in_scope(store, "prelude");
         if self.imports.namespace("prelude").is_some() {
             return;
         }
-        self.put_module_in_scope(store, "prelude", Some("prelude".to_string()));
+        self.put_package_in_scope(store, "prelude", Some("prelude".to_string()));
     }
 
-    pub(super) fn put_unprefixed_module_in_scope(&mut self, store: &Store, module_id: &str) {
-        self.put_module_in_scope(store, module_id, None)
+    pub(super) fn put_unprefixed_package_in_scope(&mut self, store: &Store, package_id: &str) {
+        self.put_package_in_scope(store, package_id, None)
     }
 
-    pub fn put_imported_modules_in_scope(&mut self, store: &Store, imports: &[FileImport]) {
+    pub fn put_imported_packages_in_scope(&mut self, store: &Store, imports: &[FileImport]) {
         let mut seen_aliases: HashMap<String, String> = HashMap::default(); // alias -> path
         let mut seen_paths: HashSet<String> = HashSet::default();
 
@@ -425,41 +424,41 @@ impl TaskState {
 
             seen_aliases.insert(effective.clone(), import.name.to_string());
 
-            let module = store.get_module(&import.name);
-            if module.is_none() || module.is_some_and(Module::is_empty_stub) {
+            let package = store.get_package(&import.name);
+            if package.is_none() || package.is_some_and(Package::is_empty_stub) {
                 self.imports
                     .prefixed
                     .insert(effective, PrefixedImport::Failed);
                 continue;
             }
 
-            self.put_module_in_scope(store, &import.name, Some(effective));
+            self.put_package_in_scope(store, &import.name, Some(effective));
         }
     }
 
-    pub(super) fn put_module_in_scope(
+    pub(super) fn put_package_in_scope(
         &mut self,
         store: &Store,
-        module_id: &str,
+        package_id: &str,
         prefix: Option<String>,
     ) {
         let Some(prefix) = prefix else {
             self.imports
                 .unprefixed_imports
-                .insert(module_id.to_string());
+                .insert(package_id.to_string());
             return;
         };
 
-        let module = store
-            .get_module(module_id)
-            .expect("module must exist when putting in scope");
+        let package = store
+            .get_package(package_id)
+            .expect("package must exist when putting in scope");
 
-        let imported_module_id = module.id.clone();
+        let imported_package_id = package.id.clone();
 
         self.imports.prefixed.insert(
             prefix,
             PrefixedImport::Namespace {
-                module_id: imported_module_id,
+                package_id: imported_package_id,
             },
         );
     }

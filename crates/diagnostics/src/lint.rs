@@ -1218,7 +1218,7 @@ pub fn unused_import(span: &Span) -> LisetteDiagnostic {
 pub fn redundant_import_alias(span: &Span, path: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Redundant import alias")
         .with_lint_code("redundant_import_alias")
-        .with_span_label(span, "alias matches module name exactly")
+        .with_span_label(span, "alias matches package name exactly")
         .with_help(format!("Remove the alias: `import \"{path}\"`"))
 }
 
@@ -1308,13 +1308,13 @@ pub fn trim_charset_misuse(span: &Span, function: &str) -> LisetteDiagnostic {
         ))
 }
 
-pub fn duplicate_arguments(span: &Span, module: &str, function: &str) -> LisetteDiagnostic {
-    let display_module = module.strip_prefix("go:").unwrap_or(module);
+pub fn duplicate_arguments(span: &Span, package: &str, function: &str) -> LisetteDiagnostic {
+    let display_package = package.strip_prefix("go:").unwrap_or(package);
     LisetteDiagnostic::warn("Duplicate arguments")
         .with_lint_code("duplicate_arguments")
         .with_span_label(span, "identical arguments")
         .with_help(format!(
-            "Passing the same value twice to `{display_module}.{function}` makes this call a no-op. Did you mean to pass different values?"
+            "Passing the same value twice to `{display_package}.{function}` makes this call a no-op. Did you mean to pass different values?"
         ))
 }
 
@@ -1368,12 +1368,12 @@ pub enum PrintfOperand {
 
 pub fn printf_verb_mismatch(
     span: &Span,
-    module: &str,
+    package: &str,
     function: &str,
     operands: &[PrintfOperand],
     supplied: usize,
 ) -> LisetteDiagnostic {
-    let display_module = module.strip_prefix("go:").unwrap_or(module);
+    let display_package = package.strip_prefix("go:").unwrap_or(package);
     let only_verbs = operands
         .iter()
         .all(|operand| matches!(operand, PrintfOperand::Verb(_)));
@@ -1425,7 +1425,7 @@ pub fn printf_verb_mismatch(
                 .with_lint_code("printf_verb_mismatch")
                 .with_span_label(span, label)
                 .with_help(format!(
-                    "`{display_module}.{function}` has {counts}, so {corruption}. {repair}"
+                    "`{display_package}.{function}` has {counts}, so {corruption}. {repair}"
                 ))
         }
         None => {
@@ -1444,7 +1444,7 @@ pub fn printf_verb_mismatch(
                 .with_lint_code("printf_verb_mismatch")
                 .with_span_label(span, label)
                 .with_help(format!(
-                    "`{display_module}.{function}` has {counts}, so {extras} as `%!(EXTRA ...)` at the end of the output. {repair}"
+                    "`{display_package}.{function}` has {counts}, so {extras} as `%!(EXTRA ...)` at the end of the output. {repair}"
                 ))
         }
     }

@@ -1279,10 +1279,10 @@ fn user_defined_type_named_unit() {
     .assert_type(con_type("Unit", vec![]));
 }
 
-fn assert_main_module_clean(source: &str) {
+fn assert_main_package_clean(source: &str) {
     let mut fs = MockFileSystem::new();
     fs.add_file("main", "main.lis", source);
-    let result = infer_module("main", fs);
+    let result = infer_package("main", fs);
     assert!(
         result.errors.is_empty(),
         "expected no errors, got: {:?}",
@@ -1292,7 +1292,7 @@ fn assert_main_module_clean(source: &str) {
 
 #[test]
 fn bare_unit_variant_in_match_arm() {
-    assert_main_module_clean(
+    assert_main_package_clean(
         r#"
 enum Color { Red, Green, Blue }
 
@@ -1309,7 +1309,7 @@ fn name(c: Color) -> string {
 
 #[test]
 fn bare_tuple_variant_in_match_arm() {
-    assert_main_module_clean(
+    assert_main_package_clean(
         r#"
 enum Shape { Circle(int), Square(int) }
 
@@ -1325,7 +1325,7 @@ fn measure(s: Shape) -> int {
 
 #[test]
 fn bare_struct_variant_in_match_arm() {
-    assert_main_module_clean(
+    assert_main_package_clean(
         r#"
 enum Shape { Rect { w: int, h: int }, Dot }
 
@@ -1341,7 +1341,7 @@ fn area(s: Shape) -> int {
 
 #[test]
 fn bare_nested_variant_in_match_arm() {
-    assert_main_module_clean(
+    assert_main_package_clean(
         r#"
 enum Color { Red, Green }
 
@@ -1358,7 +1358,7 @@ fn describe(o: Option<Color>) -> int {
 
 #[test]
 fn bare_variant_in_or_pattern() {
-    assert_main_module_clean(
+    assert_main_package_clean(
         r#"
 enum Color { Red, Green, Blue }
 
@@ -1387,7 +1387,7 @@ fn f(c: Color) -> int {
 }
 "#;
     fs.add_file("main", "main.lis", source);
-    let result = infer_module("main", fs);
+    let result = infer_package("main", fs);
     assert!(
         !result.errors.is_empty(),
         "bare user variants must not resolve in if-let; expected an error"
@@ -1408,7 +1408,7 @@ fn f(s: State) -> int {
 }
 "#;
     fs.add_file("main", "main.lis", source);
-    let result = infer_module("main", fs);
+    let result = infer_package("main", fs);
     assert!(
         !result.errors.is_empty(),
         "bare user variants must not resolve in while-let; expected an error"
@@ -1417,7 +1417,7 @@ fn f(s: State) -> int {
 
 #[test]
 fn prelude_variant_still_resolves_in_if_let() {
-    assert_main_module_clean(
+    assert_main_package_clean(
         r#"
 fn f(o: Option<int>) -> int {
   if let Some(x) = o {
@@ -1432,7 +1432,7 @@ fn f(o: Option<int>) -> int {
 
 #[test]
 fn bare_variant_collision_resolves_to_local_enum() {
-    assert_main_module_clean(
+    assert_main_package_clean(
         r#"
 enum Maybe { Some, Nothing }
 
@@ -1448,7 +1448,7 @@ fn to_int(m: Maybe) -> int {
 
 #[test]
 fn bare_and_qualified_variants_may_be_mixed() {
-    assert_main_module_clean(
+    assert_main_package_clean(
         r#"
 enum Color { Red, Green, Blue }
 
@@ -1465,7 +1465,7 @@ fn rank(c: Color) -> int {
 
 #[test]
 fn lowercase_pattern_still_binds_not_variant() {
-    assert_main_module_clean(
+    assert_main_package_clean(
         r#"
 enum Color { Red, Green, Blue }
 
@@ -1480,7 +1480,7 @@ fn label(c: Color) -> string {
 
 #[test]
 fn bare_struct_variant_wins_over_in_scope_struct_in_match_arm() {
-    assert_main_module_clean(
+    assert_main_package_clean(
         r#"
 struct Rect { w: int, h: int }
 
@@ -1498,7 +1498,7 @@ fn area(s: Shape) -> int {
 
 #[test]
 fn bare_variant_through_type_alias_in_match_arm() {
-    assert_main_module_clean(
+    assert_main_package_clean(
         r#"
 enum Color { Red, Green, Blue }
 type Palette = Color
@@ -1516,7 +1516,7 @@ fn name(p: Palette) -> string {
 
 #[test]
 fn bare_variant_through_chained_alias_in_match_arm() {
-    assert_main_module_clean(
+    assert_main_package_clean(
         r#"
 type A = B
 type B = Color
@@ -1535,7 +1535,7 @@ fn f(x: A) -> int {
 
 #[test]
 fn qualified_variant_through_chained_alias_in_match_arm() {
-    assert_main_module_clean(
+    assert_main_package_clean(
         r#"
 type A = B
 type B = Color
@@ -1554,7 +1554,7 @@ fn f(x: A) -> int {
 
 #[test]
 fn bare_variant_through_chained_alias_nested_in_option() {
-    assert_main_module_clean(
+    assert_main_package_clean(
         r#"
 type A = B
 type B = Color
@@ -1573,7 +1573,7 @@ fn f(o: Option<A>) -> int {
 
 #[test]
 fn qualified_variant_through_chained_alias_nested_in_option() {
-    assert_main_module_clean(
+    assert_main_package_clean(
         r#"
 type A = B
 type B = Color
@@ -1591,7 +1591,7 @@ fn f(o: Option<A>) -> int {
 }
 
 #[test]
-fn bare_variant_cross_module_in_match_arm() {
+fn bare_variant_cross_package_in_match_arm() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         "palette",
@@ -1613,7 +1613,7 @@ fn name(c: palette.Color) -> string {
 "#;
     fs.add_file("main", "main.lis", source);
 
-    let result = infer_module("main", fs);
+    let result = infer_package("main", fs);
     assert!(
         result.errors.is_empty(),
         "expected no errors, got: {:?}",

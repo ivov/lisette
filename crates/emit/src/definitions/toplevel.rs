@@ -34,13 +34,13 @@ impl Planner<'_> {
         let ty_string = self.go_type_string(underlying);
 
         if let Type::Nominal { id, .. } = underlying
-            && let Some(module) = self.facts.module_for_qualified_name(id.as_str())
-            && !self.facts.is_current_module(module)
-            && module != go_name::PRELUDE_MODULE
-            && !go_name::is_go_import(module)
+            && let Some(package) = self.facts.package_for_qualified_name(id.as_str())
+            && !self.facts.is_current_package(package)
+            && package != go_name::PRELUDE_PACKAGE
+            && !go_name::is_go_import(package)
         {
-            let module = module.to_string();
-            self.require_module_import(&module);
+            let package = package.to_string();
+            self.require_package_import(&package);
         }
 
         let generics_string = self.generics_to_string(generics);
@@ -62,7 +62,7 @@ impl Planner<'_> {
         ty: &Type,
     ) -> ConstPlan {
         let target_name = self
-            .module
+            .package
             .escape_remap(identifier)
             .map(str::to_string)
             .unwrap_or_else(|| go_name::screaming_snake_to_camel(identifier));
@@ -126,7 +126,7 @@ impl Planner<'_> {
                     Some(BindingValue::GoName(name)) => self.is_go_const_binding(name),
                     Some(BindingValue::InlineExpr(_)) => false,
                     None => {
-                        let go = self.module.escape_remap(value).unwrap_or(value);
+                        let go = self.package.escape_remap(value).unwrap_or(value);
                         self.is_go_const_binding(go)
                     }
                 }
@@ -145,8 +145,8 @@ impl Planner<'_> {
                 ..
             } => {
                 let inner_ty = inner.get_type();
-                inner_ty.as_import_namespace().is_some_and(|module_id| {
-                    let qualified = Symbol::from_parts(module_id, member.as_str());
+                inner_ty.as_import_namespace().is_some_and(|package_id| {
+                    let qualified = Symbol::from_parts(package_id, member.as_str());
                     self.facts.is_const(qualified.as_str())
                 })
             }

@@ -2,9 +2,9 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::{Edit, Fix, LisetteDiagnostic};
 use semantics::store::Store;
-use syntax::ENTRY_MODULE_ID;
+use syntax::ENTRY_PACKAGE_ID;
 use syntax::ast::{Expression, ImportAlias, Span};
-use syntax::program::{File, Module, unaliased_binding_name};
+use syntax::program::{File, Package, unaliased_binding_name};
 
 pub(super) fn check_redundant_aliases(
     files: &HashMap<u32, File>,
@@ -14,7 +14,7 @@ pub(super) fn check_redundant_aliases(
 ) {
     for file in files.values().filter(|file| !file.is_d_lis()) {
         for item in &file.items {
-            let Expression::ModuleImport {
+            let Expression::PackageImport {
                 name,
                 name_span,
                 alias: Some(ImportAlias::Named(alias, alias_span)),
@@ -29,12 +29,13 @@ pub(super) fn check_redundant_aliases(
             }
 
             // Rewritten from `import "root"`, so this path is not what the file says.
-            if name == ENTRY_MODULE_ID {
+            if name == ENTRY_PACKAGE_ID {
                 continue;
             }
 
             // Without typedefs, the package clause that names the binding is unknown.
-            if name.starts_with("go:") && store.get_module(name).is_none_or(Module::is_empty_stub) {
+            if name.starts_with("go:") && store.get_package(name).is_none_or(Package::is_empty_stub)
+            {
                 continue;
             }
 

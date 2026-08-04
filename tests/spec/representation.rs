@@ -6,8 +6,8 @@ use syntax::ast::{
 use syntax::lex::Lexer;
 use syntax::parse::Parser;
 use syntax::program::{
-    BindingMutation, Definition, DefinitionBody, EqualityIndex, File, Module, MutationInfo,
-    NativeTypeKind, TestFunction, ValueKind, Visibility,
+    BindingMutation, Definition, DefinitionBody, EqualityIndex, File, MutationInfo, NativeTypeKind,
+    Package, TestFunction, ValueKind, Visibility,
 };
 use syntax::types::{
     CompoundKind, FunctionParameter, SubstitutionMap, Symbol, Type, TypeVarId, substitute,
@@ -81,13 +81,13 @@ fn alias_mutation_is_not_downgraded_by_a_direct_mark() {
 fn equality_index_has_one_visibility_rule_for_all_kinds() {
     let mut index = EqualityIndex::default();
     index.insert_declared_method("public".into(), None);
-    index.insert_synthesized_method("private".into(), Some("module".into()));
-    index.insert_ufcs_lowered("ufcs".into(), Some("module".into()));
+    index.insert_synthesized_method("private".into(), Some("package".into()));
+    index.insert_ufcs_lowered("ufcs".into(), Some("package".into()));
 
     assert!(index.usable_from("public", "other"));
-    assert!(index.usable_from("private", "module"));
+    assert!(index.usable_from("private", "package"));
     assert!(!index.usable_from("private", "other"));
-    assert!(index.is_ufcs_lowered_from("ufcs", "module"));
+    assert!(index.is_ufcs_lowered_from("ufcs", "package"));
     assert!(!index.is_ufcs_lowered_from("ufcs", "other"));
 }
 
@@ -323,11 +323,11 @@ fn native_type_classification_uses_the_canonical_type_variant() {
 }
 
 #[test]
-fn test_function_derives_its_module_and_name_from_one_symbol() {
+fn test_function_derives_its_package_and_name_from_one_symbol() {
     let test = TestFunction::new("example.com/math", "adds", None, None, Span::dummy());
 
     assert_eq!(test.qualified_name(), "example.com/math.adds");
-    assert_eq!(test.module_id(), "example.com/math");
+    assert_eq!(test.package_id(), "example.com/math");
     assert_eq!(test.name(), "adds");
 }
 
@@ -519,18 +519,18 @@ fn nonliteral_constants_remain_distinguishable_from_runtime_values() {
 }
 
 #[test]
-fn module_derives_file_classification_from_each_file() {
-    let mut module = Module::new("example");
+fn package_derives_file_classification_from_each_file() {
+    let mut package = Package::new("example");
     let source = File::new_cached("example", "main.lis", "main.lis", "", 1);
     let typedef = File::new_cached("example", "native.d.lis", "native.d.lis", "", 2);
-    module.files.insert(source.id, source);
-    module.files.insert(typedef.id, typedef);
+    package.files.insert(source.id, source);
+    package.files.insert(typedef.id, typedef);
 
-    assert_eq!(module.source_files().count(), 1);
-    assert_eq!(module.typedef_files().count(), 1);
-    assert_eq!(module.file_ids().collect::<Vec<_>>(), vec![1]);
-    assert!(module.get_file(2).is_some());
-    assert!(module.is_typedef(2));
+    assert_eq!(package.source_files().count(), 1);
+    assert_eq!(package.typedef_files().count(), 1);
+    assert_eq!(package.file_ids().collect::<Vec<_>>(), vec![1]);
+    assert!(package.get_file(2).is_some());
+    assert!(package.is_typedef(2));
 }
 
 #[test]

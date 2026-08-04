@@ -18,15 +18,15 @@ use crate::program::{Definition, DefinitionBody};
 pub struct Symbol(EcoString);
 
 impl Symbol {
-    /// Joins a module id and a local (possibly multi-segment) name.
+    /// Joins a package id and a local (possibly multi-segment) name.
     ///
     /// `Symbol::from_parts("main", "Point.sum")` → `"main.Point.sum"`.
-    pub fn from_parts(module: &str, local: &str) -> Self {
+    pub fn from_parts(package: &str, local: &str) -> Self {
         // Build straight into the EcoString: results up to its 15-byte inline
         // limit never touch the heap, and longer ones allocate once instead of
         // twice (a temporary `String` plus the `EcoString` copy).
-        let mut s = EcoString::with_capacity(module.len() + 1 + local.len());
-        s.push_str(module);
+        let mut s = EcoString::with_capacity(package.len() + 1 + local.len());
+        s.push_str(package);
         s.push('.');
         s.push_str(local);
         Self(s)
@@ -45,7 +45,7 @@ impl Symbol {
     }
 
     /// Wraps an already-constructed qualified string. Prefer `from_parts`
-    /// when the module id and local name are available separately.
+    /// when the package id and local name are available separately.
     pub fn from_raw(qualified: impl Into<EcoString>) -> Self {
         Self(qualified.into())
     }
@@ -147,12 +147,12 @@ pub fn unqualified_name(id: &str) -> &str {
 
 pub const GO_IMPORT_PREFIX: &str = "go:";
 
-/// Resolve the module of a qualified ID. For `go:` IDs containing `/`,
-/// does a longest-prefix match against `module_ids` to disambiguate paths
-/// whose module segment contains dots (e.g. `gopkg.in/yaml.v3`). Otherwise
+/// Resolve the package of a qualified ID. For `go:` IDs containing `/`,
+/// does a longest-prefix match against `package_ids` to disambiguate paths
+/// whose package segment contains dots (e.g. `gopkg.in/yaml.v3`). Otherwise
 /// splits on the first dot. Returns `None` when the id has no dot and is
-/// not a registered `go:` module.
-pub fn module_for_qualified_name<'a, I>(id: &'a str, module_ids: I) -> Option<&'a str>
+/// not a registered `go:` package.
+pub fn package_for_qualified_name<'a, I>(id: &'a str, package_ids: I) -> Option<&'a str>
 where
     I: IntoIterator<Item = &'a str>,
 {
@@ -160,12 +160,12 @@ where
         return id.split_once('.').map(|(m, _)| m);
     }
     let mut best: Option<&str> = None;
-    for module_id in module_ids {
-        if id.starts_with(module_id)
-            && id.as_bytes().get(module_id.len()) == Some(&b'.')
-            && best.is_none_or(|prev| module_id.len() > prev.len())
+    for package_id in package_ids {
+        if id.starts_with(package_id)
+            && id.as_bytes().get(package_id.len()) == Some(&b'.')
+            && best.is_none_or(|prev| package_id.len() > prev.len())
         {
-            best = Some(module_id);
+            best = Some(package_id);
         }
     }
     best
@@ -389,9 +389,9 @@ pub enum Type {
         params: Vec<Type>,
     },
 
-    /// Module namespace handle. Produced by imports (e.g. `import http "net/http"`
+    /// Package namespace handle. Produced by imports (e.g. `import http "net/http"`
     /// produces an `ImportNamespace("go:net/http")` on the local identifier).
-    /// Dot-access on this type resolves to the module's exports.
+    /// Dot-access on this type resolves to the package's exports.
     ImportNamespace(EcoString),
 
     Function(Arc<FunctionType>),
@@ -492,8 +492,8 @@ impl std::fmt::Debug for Type {
                 .field("element", element)
                 .finish(),
             Type::Error => write!(f, "Error"),
-            Type::ImportNamespace(module_id) => {
-                f.debug_tuple("ImportNamespace").field(module_id).finish()
+            Type::ImportNamespace(package_id) => {
+                f.debug_tuple("ImportNamespace").field(package_id).finish()
             }
             Type::ReceiverPlaceholder => write!(f, "ReceiverPlaceholder"),
             Type::Simple(kind) => f.debug_tuple("Simple").field(kind).finish(),
@@ -974,7 +974,7 @@ impl Type {
 
     pub fn as_import_namespace(&self) -> Option<&str> {
         match self {
-            Type::ImportNamespace(module_id) => Some(module_id),
+            Type::ImportNamespace(package_id) => Some(package_id),
             _ => None,
         }
     }
@@ -1259,8 +1259,8 @@ impl Type {
                 _ => Some(kind.leaf_name()),
             },
             Type::Nominal { id, .. } => Some(id.last_segment()),
-            Type::ImportNamespace(module_id) => {
-                let path = module_id.strip_prefix("go:").unwrap_or(module_id);
+            Type::ImportNamespace(package_id) => {
+                let path = package_id.strip_prefix("go:").unwrap_or(package_id);
                 path.rsplit('/').next()
             }
             Type::Array { .. } => Some("Array"),

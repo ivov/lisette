@@ -51,13 +51,13 @@ impl TaskState {
         }
 
         let visibility = self
-            .current_module(&*store)
+            .current_package(&*store)
             .definitions
             .get(qualified_name.as_str())
             .map(|definition| definition.visibility.clone())
             .unwrap_or(Visibility::Private);
 
-        let is_prelude = self.cursor.module_id == "prelude";
+        let is_prelude = self.cursor.package_id == "prelude";
 
         let variant_definitions: Vec<_> = new_variants
             .iter()
@@ -85,7 +85,7 @@ impl TaskState {
             ));
         }
 
-        let module = self.current_module_mut(store);
+        let package = self.current_package_mut(store);
 
         for (qualified_variant_name, simple_name, variant_ty, variant_name_span, variant_doc) in
             variant_definitions
@@ -103,19 +103,19 @@ impl TaskState {
                     go_type_param_recipe: None,
                 },
             };
-            module
+            package
                 .definitions
                 .insert(qualified_variant_name, definition.clone());
 
             if let Some(simple_qualified_name) = simple_name {
-                module
+                package
                     .definitions
                     .entry(simple_qualified_name)
                     .or_insert(definition);
             }
         }
 
-        module.definitions.insert(
+        package.definitions.insert(
             qualified_name.clone(),
             Definition {
                 visibility,
@@ -137,7 +137,7 @@ impl TaskState {
     /// Computes each field's Go name via the shared authority in
     /// `syntax::go_names` and rejects same-name-different-type conflicts.
     fn check_enum_field_type_conflicts(&mut self, name: &str, variants: &[EnumVariant]) {
-        if self.cursor.module_id == "prelude" {
+        if self.cursor.package_id == "prelude" {
             return;
         }
 
@@ -319,7 +319,7 @@ impl TaskState {
         });
 
         let visibility = self
-            .current_module(&*store)
+            .current_package(&*store)
             .definitions
             .get(qualified_name.as_str())
             .map(|definition| definition.visibility.clone())
@@ -331,7 +331,7 @@ impl TaskState {
             ));
         }
 
-        self.current_module_mut(store).definitions.insert(
+        self.current_package_mut(store).definitions.insert(
             qualified_name.clone(),
             Definition {
                 visibility,
@@ -348,14 +348,14 @@ impl TaskState {
         );
     }
 
-    pub(super) fn validate_module_embeds(&mut self, store: &Store, module_id: &str) {
-        let Some(module) = store.get_module(module_id) else {
+    pub(super) fn validate_package_embeds(&mut self, store: &Store, package_id: &str) {
+        let Some(package) = store.get_package(package_id) else {
             return;
         };
-        for definition in module.definitions.values() {
+        for definition in package.definitions.values() {
             if definition
                 .name_span
-                .is_some_and(|span| module.is_typedef(span.file_id))
+                .is_some_and(|span| package.is_typedef(span.file_id))
             {
                 continue;
             }
@@ -434,21 +434,21 @@ impl TaskState {
         }
     }
 
-    pub(super) fn check_module_recursive_types(&mut self, store: &Store, module_id: &str) {
-        if module_id.starts_with("go:") {
+    pub(super) fn check_package_recursive_types(&mut self, store: &Store, package_id: &str) {
+        if package_id.starts_with("go:") {
             return;
         }
-        let Some(module) = store.get_module(module_id) else {
+        let Some(package) = store.get_package(package_id) else {
             return;
         };
 
-        let mut targets: Vec<(&str, &str, Span)> = module
+        let mut targets: Vec<(&str, &str, Span)> = package
             .definitions
             .iter()
             .filter(|(_, definition)| matches!(definition.body, DefinitionBody::Struct { .. }))
             .filter_map(|(qualified_name, definition)| {
                 let span = definition.name_span?;
-                if module.is_typedef(span.file_id) {
+                if package.is_typedef(span.file_id) {
                     return None;
                 }
                 Some((qualified_name.as_str(), qualified_name.last_segment(), span))
@@ -502,7 +502,7 @@ impl TaskState {
             }
 
             let visibility = self
-                .current_module(&*store)
+                .current_package(&*store)
                 .definitions
                 .get(qualified_name.as_str())
                 .map(|definition| definition.visibility.clone())
@@ -516,7 +516,7 @@ impl TaskState {
                     .map(|g| Type::Parameter(g.name.clone()))
                     .collect();
 
-                let canonical_ty = if self.cursor.module_id == "prelude" {
+                let canonical_ty = if self.cursor.package_id == "prelude" {
                     if let Some(simple) = syntax::types::SimpleKind::from_name(name) {
                         Type::Simple(simple)
                     } else if let Some(compound) = syntax::types::CompoundKind::from_name(name) {
@@ -555,7 +555,7 @@ impl TaskState {
                 ));
             }
 
-            self.current_module_mut(store).definitions.insert(
+            self.current_package_mut(store).definitions.insert(
                 qualified_name,
                 Definition {
                     visibility,
@@ -605,7 +605,7 @@ impl TaskState {
         };
 
         let visibility = self
-            .current_module(&*store)
+            .current_package(&*store)
             .definitions
             .get(qualified_name.as_str())
             .map(|definition| definition.visibility.clone())
@@ -619,7 +619,7 @@ impl TaskState {
             ));
         }
 
-        self.current_module_mut(store).definitions.insert(
+        self.current_package_mut(store).definitions.insert(
             qualified_name,
             Definition {
                 visibility,

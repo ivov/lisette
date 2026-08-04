@@ -616,13 +616,13 @@ impl Planner<'_> {
     ) -> String {
         let go_fn_str = self.capture_operand_into(setup, expression);
 
-        let is_go_module_fn = matches!(
+        let is_go_package_fn = matches!(
             expression.unwrap_parens(),
             Expression::DotAccess { expression, .. }
             if expression.get_type().as_import_namespace()
                 .is_some_and(|m| m.starts_with(go_name::GO_IMPORT_PREFIX))
         );
-        if is_go_module_fn {
+        if is_go_package_fn {
             return go_fn_str;
         }
 

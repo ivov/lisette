@@ -1,6 +1,6 @@
-# Modules
+# Packages
 
-A module is a directory. All `.lis` files in a directory belong to the same module, and the directory name is the module name.
+A package is a directory. All `.lis` files in a directory belong to the same package, and the directory name is the package name.
 
 ```
 my_project/
@@ -18,15 +18,15 @@ my_project/
 
 In this project:
 - `src/` contains the entry point `main.lis`
-- `models/` is a module named `models`
-- `routes/` is a module named `routes`
-- `routes/admin/` is a module named `routes/admin`
+- `models/` is a package named `models`
+- `routes/` is a package named `routes`
+- `routes/admin/` is a package named `routes/admin`
 
-Definitions in `user.lis` and `post.lis` are part of the same `models` module.
+Definitions in `user.lis` and `post.lis` are part of the same `models` package.
 
 ## Imports
 
-Import a module by path:
+Import a package by path:
 
 ```rust
 import "models"
@@ -35,13 +35,13 @@ import "routes"
 
 Imports must come before every other top-level item in a file. Only comments may precede them.
 
-The path is relative to the project root. For nested modules:
+The path is relative to the project root. For nested packages:
 
 ```rust
 import "routes/admin"
 ```
 
-Imported definitions are namespaced under the module name:
+Imported definitions are namespaced under the package name:
 
 ```rust
 import "models"
@@ -52,7 +52,7 @@ fn main() {
 }
 ```
 
-Use an alias to rename an imported module:
+Use an alias to rename an imported package:
 
 ```rust
 import m "models"
@@ -66,7 +66,7 @@ Circular imports are disallowed.
 
 ## Visibility
 
-By default, definitions are private to their module. All files in a module are visible to each other. Use `pub` to make them visible to other modules:
+By default, definitions are private to their package. All files in a package are visible to each other. Use `pub` to make them visible to other packages:
 
 ```rust
 // in models/user.lis
@@ -81,7 +81,7 @@ pub fn save(user: User) {
 }
 
 fn validate(user: User) -> bool {
-  // private, only accessible inside the `models` module
+  // private, only accessible inside the `models` package
 }
 ```
 
@@ -102,7 +102,7 @@ fn handle(c: config.Config) {
 }
 ```
 
-Accessing a private field from another module is an error:
+Accessing a private field from another package is an error:
 
 ```
 error: Private field
@@ -117,7 +117,7 @@ error: Private field
 
 A project with `src/main.lis` is a binary: `lis build` compiles the file tree under `src/` into an executable at `target/.lisette/bin/`.
 
-A project without `src/main.lis` is a library: `lis build` turns the modules under `src/` into Go packages at `target/` and files at `src/` become the module's root package. `src/internal/` dir stays private, as in Go. Set `name` in `lisette.toml` to the Go module path that consumers will import.
+A project without `src/main.lis` is a library: `lis build` turns the packages under `src/` into Go packages at `target/` and files at `src/` become the module's root package. `src/internal/` dir stays private, as in Go. Set `name` in `lisette.toml` to the Go module path that consumers will import.
 
 ```sh
 geo/

@@ -7,13 +7,13 @@ use syntax::ast::{
     Visibility as FieldVisibility,
 };
 use syntax::program::{
-    AliasKind, Attributes, Definition, DefinitionBody, Interface, MethodSignatures, Module,
+    AliasKind, Attributes, Definition, DefinitionBody, Interface, MethodSignatures, Package,
     ValueKind, Visibility,
 };
 use syntax::types::{Symbol, Type};
 
 /// Span stored as file index + byte offsets.
-/// file_index refers to position in ModuleInterface.files array (sorted by filename).
+/// file_index refers to position in PackageInterface.files array (sorted by filename).
 /// When loading from cache, file indices are remapped to newly assigned file IDs.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CachedSpan {
@@ -644,12 +644,12 @@ impl CachedDefinition {
 
     pub(crate) fn install_into(
         &self,
-        module: &mut Module,
+        package: &mut Package,
         qualified_name: Symbol,
         file_ids: &[u32],
     ) {
         let definition = self.to_definition(file_ids);
-        module.definitions.insert(qualified_name, definition);
+        package.definitions.insert(qualified_name, definition);
     }
 
     pub(crate) fn to_definition(&self, file_ids: &[u32]) -> Definition {

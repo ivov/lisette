@@ -5,7 +5,7 @@ description: |
   import "core/net/http"
 ---
 [
-    ModuleImport {
+    PackageImport {
         name: "core/net/http",
         name_span: Span {
             file_id: 0,

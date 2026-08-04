@@ -46,7 +46,7 @@ pub(crate) fn emit_for_locator_result(
             emit_undeclared(import_name, go_pkg, span, script, replace_importer, sink);
         }
         TypedefLocatorResult::InternalPackage { module } => {
-            sink.push(diagnostics::module_graph::internal_go_package(
+            sink.push(diagnostics::package_graph::internal_go_package(
                 go_pkg, module, span,
             ));
         }
@@ -57,11 +57,11 @@ pub(crate) fn emit_for_locator_result(
             local,
         } => {
             if *local {
-                sink.push(diagnostics::module_graph::missing_local_go_typedef(
+                sink.push(diagnostics::package_graph::missing_local_go_typedef(
                     module, span,
                 ));
             } else {
-                sink.push(diagnostics::module_graph::missing_go_typedef(
+                sink.push(diagnostics::package_graph::missing_go_typedef(
                     go_pkg,
                     module,
                     version,
@@ -71,7 +71,7 @@ pub(crate) fn emit_for_locator_result(
             }
         }
         TypedefLocatorResult::UnreadableTypedef { path, error } => {
-            sink.push(diagnostics::module_graph::unreadable_go_typedef(
+            sink.push(diagnostics::package_graph::unreadable_go_typedef(
                 path, error, span,
             ));
         }
@@ -82,12 +82,12 @@ pub(crate) fn emit_for_locator_result(
             ..
         } => match kind {
             BindgenFailure::GoToolchainMissing => {
-                sink.push(diagnostics::module_graph::go_toolchain_missing(
+                sink.push(diagnostics::package_graph::go_toolchain_missing(
                     go_pkg, span,
                 ));
             }
             BindgenFailure::InvocationFailed { stderr } => {
-                sink.push(diagnostics::module_graph::bindgen_failed(
+                sink.push(diagnostics::package_graph::bindgen_failed(
                     go_pkg, module, version, stderr, span,
                 ));
             }
@@ -125,7 +125,7 @@ pub(crate) fn emit_for_declaration_status(
             false
         }
         DeclarationStatus::InternalPackage { module } => {
-            sink.push(diagnostics::module_graph::internal_go_package(
+            sink.push(diagnostics::package_graph::internal_go_package(
                 go_pkg, module, span,
             ));
             false
@@ -142,21 +142,21 @@ fn emit_unknown_stdlib(
     sink: &LocalSink,
 ) {
     if let Some(targets) = stdlib::get_go_stdlib_package_targets(go_pkg) {
-        sink.push(diagnostics::module_graph::go_stdlib_unavailable_on_target(
+        sink.push(diagnostics::package_graph::go_stdlib_unavailable_on_target(
             go_pkg,
             &target.to_string(),
             &stdlib::format_targets(targets),
             span,
         ));
     } else {
-        sink.push(diagnostics::module_graph::module_not_found(
+        sink.push(diagnostics::package_graph::package_not_found(
             import_name,
             span,
             match script {
-                Some(unit) => diagnostics::module_graph::MissingModuleReason::Script {
+                Some(unit) => diagnostics::package_graph::MissingPackageReason::Script {
                     inside_project: unit.inside_project,
                 },
-                None => diagnostics::module_graph::MissingModuleReason::NotFound,
+                None => diagnostics::package_graph::MissingPackageReason::NotFound,
             },
         ));
     }
@@ -171,27 +171,29 @@ fn emit_undeclared(
     sink: &LocalSink,
 ) {
     if let Some(unit) = script {
-        sink.push(diagnostics::module_graph::module_not_found(
+        sink.push(diagnostics::package_graph::package_not_found(
             import_name,
             span,
-            diagnostics::module_graph::MissingModuleReason::Script {
+            diagnostics::package_graph::MissingPackageReason::Script {
                 inside_project: unit.inside_project,
             },
         ));
     } else if let Some(ReplaceImporter::Module(replaced_module)) = replace_importer {
-        sink.push(diagnostics::module_graph::undeclared_go_import_via_replace(
+        sink.push(
+            diagnostics::package_graph::undeclared_go_import_via_replace(
+                go_pkg,
+                replaced_module,
+                span,
+            ),
+        );
+    } else if let Some(ReplaceImporter::Local(local_package)) = replace_importer {
+        sink.push(diagnostics::package_graph::undeclared_go_import_via_local(
             go_pkg,
-            replaced_module,
-            span,
-        ));
-    } else if let Some(ReplaceImporter::Local(local_module)) = replace_importer {
-        sink.push(diagnostics::module_graph::undeclared_go_import_via_local(
-            go_pkg,
-            local_module,
+            local_package,
             span,
         ));
     } else {
-        sink.push(diagnostics::module_graph::undeclared_go_import(
+        sink.push(diagnostics::package_graph::undeclared_go_import(
             go_pkg, span,
         ));
     }

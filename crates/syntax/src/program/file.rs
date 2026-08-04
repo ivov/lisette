@@ -9,14 +9,14 @@ use crate::ast::{Expression, ImportAlias, Span};
 #[derive(Debug, Clone, PartialEq)]
 pub struct File {
     pub id: u32,
-    pub module_id: String,
+    pub package_id: String,
     /// Stable bare filename (e.g. `greet.lis`); identity key for caching and
     /// LSP path reconstruction.
     pub name: String,
     /// Cwd-relative path for diagnostics and `--sourcemap` directives; equals
     /// `name` for synthetic/test loaders that have no notion of cwd.
     pub display_path: String,
-    /// Physical source path when it cannot be reconstructed from the module
+    /// Physical source path when it cannot be reconstructed from the package
     /// and filename, notably for generated Go typedefs.
     pub source_path: Option<PathBuf>,
     pub source: String,
@@ -83,7 +83,7 @@ fn is_major_version_segment(segment: &str) -> bool {
 
 impl File {
     pub fn new_cached(
-        module_id: &str,
+        package_id: &str,
         name: &str,
         display_path: &str,
         source: &str,
@@ -91,7 +91,7 @@ impl File {
     ) -> Self {
         Self {
             id,
-            module_id: module_id.to_string(),
+            package_id: package_id.to_string(),
             name: name.to_string(),
             display_path: display_path.to_string(),
             source_path: None,
@@ -114,7 +114,7 @@ impl File {
         self.items
             .iter()
             .filter_map(|item| match item {
-                Expression::ModuleImport {
+                Expression::PackageImport {
                     name,
                     name_span,
                     alias,
@@ -133,7 +133,7 @@ impl File {
     /// Redirects `import "{from}"` to `to`, keeping the source spelling as the qualifier.
     pub fn rewrite_import(&mut self, from: &str, to: &str) {
         for item in &mut self.items {
-            if let Expression::ModuleImport {
+            if let Expression::PackageImport {
                 name,
                 name_span,
                 alias,

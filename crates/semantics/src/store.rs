@@ -5,19 +5,20 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::{EnumVariant, Expression, StructFieldDefinition};
 use syntax::program::{
-    Definition, DefinitionBody, EqualityIndex, File, Interface, MethodSignatures, Module, TestIndex,
+    Definition, DefinitionBody, EqualityIndex, File, Interface, MethodSignatures, Package,
+    TestIndex,
 };
 use syntax::types::{SimpleKind, SubstitutionMap, Symbol, Type, substitute};
 
 pub use crate::closed_domain::{ClosedDomain, ClosedMember, DomainValue};
-pub use syntax::ENTRY_MODULE_ID;
+pub use syntax::ENTRY_PACKAGE_ID;
 pub(crate) const ENTRY_FILE_ID: u32 = 0;
 
 pub struct Store {
     /// `Arc` so registration workers share a read view; [`Arc::make_mut`]
-    /// writes stay zero-copy while a module has a single owner.
-    pub modules: HashMap<String, Arc<Module>>,
-    /// Go module ID -> package name from the typedef `// Package:` directive.
+    /// writes stay zero-copy while a package has a single owner.
+    pub packages: HashMap<String, Arc<Package>>,
+    /// Go package ID -> package name from the typedef `// Package:` directive.
     pub go_package_names: HashMap<String, String>,
     /// File ID counter. Starts at 2 because 0 is reserved for entry, 1 for prelude.
     next_file_id: AtomicU32,
@@ -28,7 +29,7 @@ pub struct Store {
 impl Clone for Store {
     fn clone(&self) -> Self {
         Self {
-            modules: self.modules.clone(),
+            packages: self.packages.clone(),
             go_package_names: self.go_package_names.clone(),
             next_file_id: AtomicU32::new(self.next_file_id.load(Ordering::Relaxed)),
             equality_index: self.equality_index.clone(),
@@ -45,18 +46,18 @@ impl Default for Store {
 
 impl Store {
     pub fn new() -> Self {
-        let prelude_module = Module::new("prelude");
-        let nominal_module = Module::nominal();
+        let prelude_package = Package::new("prelude");
+        let nominal_package = Package::nominal();
 
-        let modules = vec![
-            (prelude_module.id.clone(), Arc::new(prelude_module)),
-            (nominal_module.id.clone(), Arc::new(nominal_module)),
+        let packages = vec![
+            (prelude_package.id.clone(), Arc::new(prelude_package)),
+            (nominal_package.id.clone(), Arc::new(nominal_package)),
         ]
         .into_iter()
         .collect();
 
         Self {
-            modules,
+            packages,
             go_package_names: Default::default(),
             next_file_id: AtomicU32::new(2), // 0 = entrypoint, 1 = prelude
             equality_index: Default::default(),
@@ -72,13 +73,13 @@ impl Store {
         self.next_file_id.fetch_add(count, Ordering::Relaxed)
     }
 
-    pub(crate) fn entry_module_id(&self) -> &'static str {
-        ENTRY_MODULE_ID
+    pub(crate) fn entry_package_id(&self) -> &'static str {
+        ENTRY_PACKAGE_ID
     }
 
-    /// Creates the entry module (empty for a library, whose root files load as siblings).
-    pub(crate) fn init_entry_module(&mut self) {
-        self.add_module(ENTRY_MODULE_ID);
+    /// Creates the entry package (empty for a library, whose root files load as siblings).
+    pub(crate) fn init_entry_package(&mut self) {
+        self.add_package(ENTRY_PACKAGE_ID);
     }
 
     pub(crate) fn store_entry_file(
@@ -91,7 +92,7 @@ impl Store {
     ) {
         self.store_file(File {
             id: ENTRY_FILE_ID,
-            module_id: ENTRY_MODULE_ID.to_string(),
+            package_id: ENTRY_PACKAGE_ID.to_string(),
             name: filename.to_string(),
             display_path: display_path.to_string(),
             source_path: None,
@@ -101,73 +102,73 @@ impl Store {
         });
     }
 
-    pub fn store_module(&mut self, module_id: &str, files: Vec<File>) {
-        self.add_module(module_id);
+    pub fn store_package(&mut self, package_id: &str, files: Vec<File>) {
+        self.add_package(package_id);
 
         for file in files {
-            assert_eq!(file.module_id, module_id);
+            assert_eq!(file.package_id, package_id);
             self.store_file(file);
         }
     }
 
-    /// Stores a file in its owning module.
+    /// Stores a file in its owning package.
     pub fn store_file(&mut self, file: File) {
-        let module_id = file.module_id.clone();
+        let package_id = file.package_id.clone();
 
-        let module = self
-            .get_module_mut(&module_id)
-            .expect("module must exist to store file");
-        module.files.insert(file.id, file);
+        let package = self
+            .get_package_mut(&package_id)
+            .expect("package must exist to store file");
+        package.files.insert(file.id, file);
     }
 
     pub fn get_file(&self, file_id: u32) -> Option<&File> {
-        self.modules
+        self.packages
             .values()
-            .find_map(|module| module.get_file(file_id))
+            .find_map(|package| package.get_file(file_id))
     }
 
     pub(crate) fn get_file_mut(&mut self, file_id: u32) -> Option<&mut File> {
-        let module_id = self.modules.iter().find_map(|(module_id, module)| {
-            module
+        let package_id = self.packages.iter().find_map(|(package_id, package)| {
+            package
                 .files
                 .contains_key(&file_id)
-                .then(|| module_id.clone())
+                .then(|| package_id.clone())
         })?;
-        let module = Arc::make_mut(self.modules.get_mut(&module_id)?);
-        module.files.get_mut(&file_id)
+        let package = Arc::make_mut(self.packages.get_mut(&package_id)?);
+        package.files.get_mut(&file_id)
     }
 
-    pub fn get_module(&self, module_id: &str) -> Option<&Module> {
-        self.modules.get(module_id).map(Arc::as_ref)
+    pub fn get_package(&self, package_id: &str) -> Option<&Package> {
+        self.packages.get(package_id).map(Arc::as_ref)
     }
 
-    pub(crate) fn has(&self, module_id: &str) -> bool {
-        self.modules.contains_key(module_id)
+    pub(crate) fn has(&self, package_id: &str) -> bool {
+        self.packages.contains_key(package_id)
     }
 
-    pub fn add_module(&mut self, module_id: &str) {
-        if self.modules.contains_key(module_id) {
+    pub fn add_package(&mut self, package_id: &str) {
+        if self.packages.contains_key(package_id) {
             return;
         }
 
-        self.modules
-            .insert(module_id.to_string(), Arc::new(Module::new(module_id)));
+        self.packages
+            .insert(package_id.to_string(), Arc::new(Package::new(package_id)));
     }
 
-    pub fn get_module_mut(&mut self, module_id: &str) -> Option<&mut Module> {
-        self.modules.get_mut(module_id).map(Arc::make_mut)
+    pub fn get_package_mut(&mut self, package_id: &str) -> Option<&mut Package> {
+        self.packages.get_mut(package_id).map(Arc::make_mut)
     }
 
-    /// Inserts a worker-built module (e.g. cache-decoded).
-    pub(crate) fn insert_prebuilt_module(&mut self, module: Module) {
-        self.modules.insert(module.id.clone(), Arc::new(module));
+    /// Inserts a worker-built package (e.g. cache-decoded).
+    pub(crate) fn insert_prebuilt_package(&mut self, package: Package) {
+        self.packages.insert(package.id.clone(), Arc::new(package));
     }
 
     /// `Arc`-bump snapshot for a registration worker, which inserts its own
-    /// detached module before use.
+    /// detached package before use.
     pub(crate) fn registration_view(&self) -> Store {
         Store {
-            modules: self.modules.clone(),
+            packages: self.packages.clone(),
             go_package_names: self.go_package_names.clone(),
             next_file_id: AtomicU32::new(self.next_file_id.load(Ordering::Relaxed)),
             equality_index: EqualityIndex::default(),
@@ -176,9 +177,9 @@ impl Store {
     }
 
     pub fn get_definition(&self, qualified_name: &str) -> Option<&Definition> {
-        let module_name = self.module_for_qualified_name(qualified_name)?;
+        let package_name = self.package_for_qualified_name(qualified_name)?;
 
-        self.get_module(module_name)?
+        self.get_package(package_name)?
             .definitions
             .get(qualified_name)
     }
@@ -196,10 +197,10 @@ impl Store {
         self.get_file(file_id).is_some_and(File::is_test)
     }
 
-    pub fn module_for_qualified_name<'a>(&'a self, qualified_name: &'a str) -> Option<&'a str> {
-        syntax::types::module_for_qualified_name(
+    pub fn package_for_qualified_name<'a>(&'a self, qualified_name: &'a str) -> Option<&'a str> {
+        syntax::types::package_for_qualified_name(
             qualified_name,
-            self.modules.keys().map(String::as_str),
+            self.packages.keys().map(String::as_str),
         )
     }
 
@@ -534,9 +535,9 @@ mod clone_tests {
     }
 
     #[test]
-    fn clone_detaches_a_module_before_mutation() {
+    fn clone_detaches_a_package_before_mutation() {
         let mut store = Store::new();
-        store.add_module("m");
+        store.add_package("m");
         let mut cloned = store.clone();
 
         cloned.store_file(File::new_cached("m", "cloned.lis", "", "", 42));
@@ -564,7 +565,7 @@ mod closed_domain_tests {
     #[test]
     fn test_classification_is_derived_from_the_stored_file() {
         let mut store = Store::new();
-        store.add_module("m");
+        store.add_package("m");
         store.store_file(File::new_cached("m", "sample.test.lis", "", "", 42));
 
         assert!(store.is_test_file(42));
@@ -633,10 +634,10 @@ mod closed_domain_tests {
         }
     }
 
-    fn insert(store: &mut Store, module: &str, name: &str, def: Definition) {
-        store.add_module(module);
+    fn insert(store: &mut Store, package: &str, name: &str, def: Definition) {
+        store.add_package(package);
         store
-            .get_module_mut(module)
+            .get_package_mut(package)
             .unwrap()
             .definitions
             .insert(Symbol::from_raw(name), def);
@@ -687,7 +688,7 @@ mod closed_domain_tests {
     }
 
     #[test]
-    fn const_in_other_module_does_not_widen_domain() {
+    fn const_in_other_package_does_not_widen_domain() {
         let mut store = Store::new();
         let ty = nominal_int("lib.Weekday");
         insert(

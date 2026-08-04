@@ -1,0 +1,10 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Package not found
+   ╭─[main.lis:1:8]
+ 1 │ import "time"
+   ·        ───┬──
+   ·           ╰── not a package in this project
+   ╰────
+  help: No `time` package found in your local project. Did you mean `import "go:time"` from Go's stdlib? · code: [resolve.package_not_found]

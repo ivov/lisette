@@ -3,15 +3,15 @@ use rustc_hash::FxHashMap as HashMap;
 use diagnostics::LisetteDiagnostic;
 use syntax::ast::{Annotation, Expression, Span};
 use syntax::program::File;
-use syntax::program::{Module, Visibility};
+use syntax::program::{Package, Visibility};
 use syntax::types::{Type, unqualified_name};
 
 pub fn check_visibility_constraints(
-    module: &Module,
+    package: &Package,
     files: &HashMap<u32, File>,
     diagnostics: &mut Vec<LisetteDiagnostic>,
 ) {
-    for (qualified_name, definition) in &module.definitions {
+    for (qualified_name, definition) in &package.definitions {
         if definition.visibility != Visibility::Public {
             continue;
         }
@@ -24,7 +24,7 @@ pub fn check_visibility_constraints(
         let annotation = find_function_annotation(files, item_name);
 
         let mut ctx = LeakCtx {
-            module,
+            package,
             public_definition: item_name,
             fallback_span: definition.name_span,
             diagnostics,
@@ -51,11 +51,11 @@ fn find_function_annotation(files: &HashMap<u32, File>, name: &str) -> Option<An
 }
 
 struct LeakCtx<'a> {
-    module: &'a Module,
+    package: &'a Package,
     public_definition: &'a str,
     /// Used for positions without a user-provided annotation (function parameters,
     /// tuple elements). Without it, those diagnostics are spanless and the cache
-    /// cannot attribute them to a module.
+    /// cannot attribute them to a package.
     fallback_span: Option<Span>,
     diagnostics: &'a mut Vec<LisetteDiagnostic>,
 }
@@ -64,7 +64,7 @@ impl LeakCtx<'_> {
     fn check(&mut self, ty: &Type, annotation: Option<&Annotation>) {
         match ty {
             Type::Nominal { id, params, .. } => {
-                if let Some(definition) = self.module.definitions.get(id.as_str())
+                if let Some(definition) = self.package.definitions.get(id.as_str())
                     && definition.visibility == Visibility::Private
                 {
                     let span = annotation.map(|ann| ann.get_span()).or(self.fallback_span);

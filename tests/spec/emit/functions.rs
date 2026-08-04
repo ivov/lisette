@@ -2186,7 +2186,7 @@ fn test() {
 }
 
 #[test]
-fn pub_function_same_module_call_uses_exported_name() {
+fn pub_function_same_package_call_uses_exported_name() {
     let input = r#"
 import "go:fmt"
 
@@ -2202,7 +2202,7 @@ fn main() {
 }
 
 #[test]
-fn generic_param_shadows_module_struct() {
+fn generic_param_shadows_package_struct() {
     let input = r#"
 struct T {
   v: int,

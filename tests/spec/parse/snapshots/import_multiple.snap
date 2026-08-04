@@ -7,7 +7,7 @@ description: |
   import "third/party/utils"
 ---
 [
-    ModuleImport {
+    PackageImport {
         name: "go:fmt",
         name_span: Span {
             file_id: 0,
@@ -21,7 +21,7 @@ description: |
             byte_length: 15,
         },
     },
-    ModuleImport {
+    PackageImport {
         name: "app/services",
         name_span: Span {
             file_id: 0,
@@ -35,7 +35,7 @@ description: |
             byte_length: 21,
         },
     },
-    ModuleImport {
+    PackageImport {
         name: "third/party/utils",
         name_span: Span {
             file_id: 0,

@@ -301,7 +301,7 @@ impl<'a> FreezeFolder<'a> {
             | Expression::Struct { .. }
             | Expression::TypeAlias { .. }
             | Expression::VariableDeclaration { .. }
-            | Expression::ModuleImport { .. }
+            | Expression::PackageImport { .. }
             | Expression::Break { value: None, .. }
             | Expression::Continue { .. }
             | Expression::Unit { .. }
@@ -561,7 +561,7 @@ impl<'a> FreezeFolder<'a> {
             | Expression::While { .. }
             | Expression::Break { .. }
             | Expression::Continue { .. }
-            | Expression::ModuleImport { .. }
+            | Expression::PackageImport { .. }
             | Expression::RawGo { .. } => {}
         }
     }

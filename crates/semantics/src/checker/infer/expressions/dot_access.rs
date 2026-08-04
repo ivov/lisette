@@ -80,7 +80,7 @@ impl InferCtx<'_> {
             .as_struct_field(&args)
             .or_else(|| self.as_promoted_field(&args))
             .or_else(|| self.as_tuple_element(&args))
-            .or_else(|| self.as_module_member(&args))
+            .or_else(|| self.as_package_member(&args))
             .or_else(|| self.as_enum_variant(&args))
             .or_else(|| self.as_instance_method(&args))
             .or_else(|| self.as_static_method(&args));
@@ -149,14 +149,14 @@ impl InferCtx<'_> {
         args.build_dot_access(Type::Error, DotAccessResolution::Unresolved)
     }
 
-    /// Whether a type's owning module is foreign (not current, prelude, or Go stdlib).
-    /// Used to gate cross-module visibility checks on methods.
+    /// Whether a type's owning package is foreign (not current, prelude, or Go stdlib).
+    /// Used to gate cross-package visibility checks on methods.
     pub(super) fn is_foreign_type(&self, type_id: &str) -> bool {
         let store = self.store;
-        let type_module = store.module_for_qualified_name(type_id).unwrap_or(type_id);
-        type_module != self.cursor.module_id
-            && type_module != "prelude"
-            && !type_module.starts_with("go:")
+        let type_package = store.package_for_qualified_name(type_id).unwrap_or(type_id);
+        type_package != self.cursor.package_id
+            && type_package != "prelude"
+            && !type_package.starts_with("go:")
     }
 
     pub(super) fn is_type_level_receiver(&self, expression: &Expression) -> bool {
@@ -174,10 +174,10 @@ impl InferCtx<'_> {
                 ..
             } => {
                 let inner_ty = inner.get_type().shallow_resolve_in(&self.env);
-                let Some(module_id) = inner_ty.as_import_namespace() else {
+                let Some(package_id) = inner_ty.as_import_namespace() else {
                     return false;
                 };
-                let qualified = Symbol::from_parts(module_id, member.as_str());
+                let qualified = Symbol::from_parts(package_id, member.as_str());
                 store
                     .get_definition(&qualified)
                     .is_some_and(Definition::is_type_definition)
@@ -305,16 +305,16 @@ impl InferCtx<'_> {
 
         self.facts.add_usage(*args.span, field.name_span);
 
-        let struct_module = store
-            .module_for_qualified_name(&struct_name)
+        let struct_package = store
+            .package_for_qualified_name(&struct_name)
             .unwrap_or(&struct_name);
-        let is_cross_module = struct_module != self.cursor.module_id;
+        let is_cross_package = struct_package != self.cursor.package_id;
 
-        if is_cross_module && !field_is_pub {
+        if is_cross_package && !field_is_pub {
             self.sink.push(diagnostics::infer::private_field_access(
                 args.member_name,
                 qualified_name,
-                struct_module,
+                struct_package,
                 *args.span,
             ));
         }
@@ -325,7 +325,7 @@ impl InferCtx<'_> {
         self.unify(&args.deref_ty, &struct_ty, args.span);
         self.unify(args.expected_ty, &field_ty, args.span);
 
-        let is_exported = field_is_pub || is_cross_module;
+        let is_exported = field_is_pub || is_cross_package;
         let resolution = if struct_kind == StructKind::Tuple {
             DotAccessResolution::TupleStructField { is_newtype }
         } else {
@@ -367,15 +367,15 @@ impl InferCtx<'_> {
             self.facts.add_usage(*args.span, field.name_span);
         }
 
-        let declaring_module = store
-            .module_for_qualified_name(member.declaring_type.as_str())
+        let declaring_package = store
+            .package_for_qualified_name(member.declaring_type.as_str())
             .unwrap_or_else(|| member.declaring_type.as_str());
-        let is_cross_module = declaring_module != self.cursor.module_id;
-        if is_cross_module && !visibility.is_public() {
+        let is_cross_package = declaring_package != self.cursor.package_id;
+        if is_cross_package && !visibility.is_public() {
             self.sink.push(diagnostics::infer::private_field_access(
                 args.member_name,
                 qualified_name.as_str(),
-                declaring_module,
+                declaring_package,
                 *args.span,
             ));
         }
@@ -385,7 +385,7 @@ impl InferCtx<'_> {
         Some(args.build_dot_access(
             field_ty,
             DotAccessResolution::StructField {
-                is_exported: visibility.is_public() || is_cross_module,
+                is_exported: visibility.is_public() || is_cross_package,
             },
         ))
     }
@@ -408,45 +408,47 @@ impl InferCtx<'_> {
         Some(args.build_dot_access(element_ty, DotAccessResolution::TupleElement))
     }
 
-    fn as_module_member(&mut self, args: &DotAccessResolutionArgs) -> Option<Expression> {
+    fn as_package_member(&mut self, args: &DotAccessResolutionArgs) -> Option<Expression> {
         let store = self.store;
         let type_name = args.deref_ty.get_name()?;
         let namespace_id = args.deref_ty.as_import_namespace();
 
         // Look up by type-derived name first (works for non-aliased imports).
         // For aliased imports (e.g. `import u "utils"`), the map key is "u" but
-        // the type name is "utils", so fall back to matching by import module id.
-        let module_id = self
+        // the type name is "utils", so fall back to matching by import package id.
+        let package_id = self
             .imports
             .namespace(type_name)
-            .filter(|module_id| namespace_id.is_none_or(|namespace_id| *module_id == namespace_id))
+            .filter(|package_id| {
+                namespace_id.is_none_or(|namespace_id| *package_id == namespace_id)
+            })
             .or_else(|| {
-                let module_id = namespace_id?;
+                let package_id = namespace_id?;
                 self.imports
                     .namespaces()
-                    .find(|imported_module_id| *imported_module_id == module_id)
+                    .find(|imported_package_id| *imported_package_id == package_id)
             })?;
-        let module_id = module_id.to_string();
-        let display_module = crate::loader::import_display_name(type_name);
-        let module_ty = Type::ImportNamespace(module_id.clone().into());
+        let package_id = package_id.to_string();
+        let display_package = crate::loader::import_display_name(type_name);
+        let package_ty = Type::ImportNamespace(package_id.clone().into());
 
-        let resolved_definition = Symbol::from_parts(&module_id, args.member_name);
+        let resolved_definition = Symbol::from_parts(&package_id, args.member_name);
         let Some(definition) = store
-            .get_module(&module_id)
-            .and_then(|module| module.definitions.get(resolved_definition.as_str()))
+            .get_package(&package_id)
+            .and_then(|package| package.definitions.get(resolved_definition.as_str()))
             .filter(|definition| {
                 definition.visibility.is_public() && !store.is_test_definition(definition)
             })
         else {
             self.sink
-                .push(diagnostics::infer::function_or_value_not_found_in_module(
+                .push(diagnostics::infer::function_or_value_not_found_in_package(
                     args.member_name,
-                    display_module,
+                    display_package,
                     *args.span,
                 ));
             return Some(args.build_dot_access(
                 Type::Error,
-                DotAccessResolution::ModuleMember { definition: None },
+                DotAccessResolution::PackageMember { definition: None },
             ));
         };
         let member_type = self.resolve_definition_value_type(store, definition);
@@ -455,49 +457,49 @@ impl InferCtx<'_> {
             self.facts.add_usage(*args.span, definition_span);
         }
 
-        self.check_module_member_in_value_position(
+        self.check_package_member_in_value_position(
             store,
             &resolved_definition,
             &member_type,
-            display_module,
+            display_package,
             args,
         );
 
-        let (module_ty, _) = self.instantiate(&module_ty);
+        let (package_ty, _) = self.instantiate(&package_ty);
         let (member_ty, _) = self.instantiate(&member_type);
 
         let coerced_to_unconstrained_value = !self.scopes.is_callee_context()
             && !self.scopes.is_dot_access_base()
             && args.expected_ty.resolve_in(&self.env).is_variable();
 
-        self.unify(&args.deref_ty, &module_ty, args.span);
+        self.unify(&args.deref_ty, &package_ty, args.span);
         self.unify(args.expected_ty, &member_ty, args.span);
 
         if coerced_to_unconstrained_value {
-            let display_name = format!("{}.{}", display_module, args.member_name);
+            let display_name = format!("{}.{}", display_package, args.member_name);
             self.register_function_value_obligations(&display_name, &member_ty, *args.span);
         }
 
         Some(args.build_dot_access(
             member_ty,
-            DotAccessResolution::ModuleMember {
+            DotAccessResolution::PackageMember {
                 definition: Some(resolved_definition),
             },
         ))
     }
 
-    /// Rejects module members used in value position rather than called or used as a type.
-    fn check_module_member_in_value_position(
+    /// Rejects package members used in value position rather than called or used as a type.
+    fn check_package_member_in_value_position(
         &mut self,
         store: &crate::store::Store,
         resolved_definition: &Symbol,
         member_type: &Type,
-        display_module: &str,
+        display_package: &str,
         args: &DotAccessResolutionArgs,
     ) {
         let is_callee_context = self.scopes.is_callee_context();
         let is_dot_access_base = self.scopes.is_dot_access_base();
-        let display_name = format!("{}.{}", display_module, args.member_name);
+        let display_name = format!("{}.{}", display_package, args.member_name);
 
         if let Some(definition) = store.get_definition(resolved_definition) {
             match &definition.body {

@@ -204,11 +204,11 @@ fn array_is_reserved_as_import_alias() {
         "main.lis",
         "import Array \"arr\"\nfn f() -> int { Array.new() }\n",
     );
-    infer_module("main", fs).assert_resolve_code("reserved_import_alias");
+    infer_package("main", fs).assert_resolve_code("reserved_import_alias");
 }
 
 #[test]
-fn array_new_distinguishes_same_named_cross_module_types() {
+fn array_new_distinguishes_same_named_cross_package_types() {
     let mut fs = MockFileSystem::new();
     fs.add_file("b", "b.lis", "pub struct Box<T> { pub r: Ref<T> }\n");
     fs.add_file(
@@ -216,7 +216,7 @@ fn array_new_distinguishes_same_named_cross_module_types() {
         "main.lis",
         "import \"b\"\nstruct Box<T> { inner: b.Box<T> }\nfn f() { let _ = Array.new<Box<int>, 1>() }\n",
     );
-    infer_module("main", fs).assert_infer_code("array_new_no_zero");
+    infer_package("main", fs).assert_infer_code("array_new_no_zero");
 }
 
 #[test]
@@ -331,7 +331,7 @@ fn default_import_named_array_is_reserved() {
         "main.lis",
         "import \"Array\"\nfn f() -> int { Array.new() }\n",
     );
-    infer_module("main", fs).assert_resolve_code("reserved_import_alias");
+    infer_package("main", fs).assert_resolve_code("reserved_import_alias");
 }
 
 #[test]

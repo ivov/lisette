@@ -41,10 +41,10 @@ impl InferCtx<'_> {
             return false;
         };
         let inner_ty = inner.get_type();
-        let Some(module_id) = inner_ty.as_import_namespace() else {
+        let Some(package_id) = inner_ty.as_import_namespace() else {
             return false;
         };
-        let qualified = Symbol::from_parts(module_id, member.as_str());
+        let qualified = Symbol::from_parts(package_id, member.as_str());
         self.store.is_const(qualified.as_str())
     }
 
@@ -180,7 +180,7 @@ impl InferCtx<'_> {
             && new_value.is_empty_collection()
             && let Some(ref name) = binding_name
         {
-            let module_id = self.cursor.module_id.clone();
+            let package_id = self.cursor.package_id.clone();
             self.facts
                 .deferred
                 .empty_collections
@@ -188,7 +188,7 @@ impl InferCtx<'_> {
                     name: name.to_string(),
                     ty: new_binding.ty.clone(),
                     span,
-                    module_id,
+                    package_id,
                 });
         }
 
@@ -213,15 +213,15 @@ impl InferCtx<'_> {
         } = &new_value
         {
             let inner_ty = inner.get_type();
-            if let Some(module_id) = inner_ty.as_import_namespace() {
-                let qualified = Symbol::from_parts(module_id, member.as_str());
+            if let Some(package_id) = inner_ty.as_import_namespace() {
+                let qualified = Symbol::from_parts(package_id, member.as_str());
                 if matches!(
                     store.get_definition(&qualified).map(|d| &d.body),
                     Some(DefinitionBody::Enum { .. })
                 ) {
                     let type_name = format!(
                         "{}.{}",
-                        crate::loader::import_display_name(module_id),
+                        crate::loader::import_display_name(package_id),
                         member
                     );
                     self.sink.push(diagnostics::infer::let_binding_enum_type(

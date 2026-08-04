@@ -925,7 +925,7 @@ fn function() {
 }
 
 #[test]
-fn interop_package_const_nested_module() {
+fn interop_package_const_nested_package() {
     let input = r#"
 import "go:debug/dwarf"
 
@@ -954,7 +954,7 @@ fn describe(d: t.Duration) -> string {
 }
 
 #[test]
-fn interop_const_pattern_match_arm_nested_module() {
+fn interop_const_pattern_match_arm_nested_package() {
     let input = r#"
 import "go:debug/dwarf"
 

@@ -556,7 +556,7 @@ impl Planner<'_> {
                 };
                 let base = format!("{}_{}", receiver_name, method_go);
                 let go = self
-                    .module
+                    .package
                     .escape_remap(&base)
                     .map(str::to_string)
                     .unwrap_or_else(|| go_name::escape_reserved(&base).into_owned());
@@ -583,7 +583,7 @@ impl Planner<'_> {
 
     fn for_each_import_qualifier(&self, files: &[&File], mut visit: impl FnMut(&str, Span)) {
         let go_package_names = self.facts.go_package_names();
-        let unused = self.facts.unused_imports_for_current_module();
+        let unused = self.facts.unused_imports_for_current_package();
         for file in files {
             for import in file.imports() {
                 if matches!(import.alias, Some(ImportAlias::Blank(_))) {
@@ -609,7 +609,7 @@ impl Planner<'_> {
         if matches!(visibility, Visibility::Public) {
             go_name::snake_to_camel(name)
         } else {
-            self.module
+            self.package
                 .escape_remap(name)
                 .map(str::to_string)
                 .unwrap_or_else(|| go_name::escape_reserved(name).into_owned())
@@ -617,7 +617,7 @@ impl Planner<'_> {
     }
 
     fn const_go_name(&self, identifier: &str) -> String {
-        self.module
+        self.package
             .escape_remap(identifier)
             .map(str::to_string)
             .unwrap_or_else(|| identifier.to_string())

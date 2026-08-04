@@ -24,7 +24,7 @@ fuzz_target!(|data: &[u8]| {
         .ast
         .iter()
         .filter_map(|item| match item {
-            Expression::ModuleImport {
+            Expression::PackageImport {
                 name,
                 name_span,
                 alias,

@@ -1110,7 +1110,7 @@ fn collect_enum_variant_checks(
 }
 
 /// Emit a const pattern as a Go `case` constant (e.g. `time.Friday`), requiring
-/// the constant's package import when it is cross-module.
+/// the constant's package import when it is cross-package.
 fn collect_const_pattern_check(
     planner: &Planner,
     path: &AccessPath,
@@ -1118,13 +1118,13 @@ fn collect_const_pattern_check(
     collector: &mut PatternCollector,
 ) {
     let const_name = go_name::unqualified_name(qualified_name);
-    let go_literal = match planner.facts.module_for_qualified_name(qualified_name) {
-        Some(module) => {
-            let qualifier = planner.go_pkg_qualifier(module);
-            if qualifier.is_empty() || qualifier == planner.facts.current_module() {
+    let go_literal = match planner.facts.package_for_qualified_name(qualified_name) {
+        Some(package) => {
+            let qualifier = planner.go_pkg_qualifier(package);
+            if qualifier.is_empty() || qualifier == planner.facts.current_package() {
                 const_name.to_string()
             } else {
-                let qualifier = planner.record_module_import(module, &mut collector.packages);
+                let qualifier = planner.record_package_import(package, &mut collector.packages);
                 format!("{}.{}", qualifier, const_name)
             }
         }
@@ -1136,7 +1136,7 @@ fn collect_const_pattern_check(
     });
 }
 
-/// `true` when the variant is a foreign-module dotted name (e.g.
+/// `true` when the variant is a foreign-package dotted name (e.g.
 /// `httpkg.MethodGet`) emitted as a `Check::Literal`.
 fn handle_foreign_variant_literal(
     planner: &Planner,
@@ -1148,12 +1148,12 @@ fn handle_foreign_variant_literal(
     if planner.as_enum(ty).is_some() || !identifier.contains('.') {
         return false;
     }
-    if let Some((module, _)) = identifier.split_once('.')
-        && planner.facts.is_foreign_module(module)
+    if let Some((package, _)) = identifier.split_once('.')
+        && planner.facts.is_foreign_package(package)
     {
         collector
             .packages
-            .require(planner.package_use_for_module(&planner.canonical_module(module)));
+            .require(planner.package_use_for_package(&planner.canonical_package(package)));
     }
     collector.checks.push(Check::Literal {
         path: path.clone(),
@@ -1208,9 +1208,9 @@ struct EnumVariantData<'a> {
     field_types: &'a [Type],
 }
 
-fn enum_module_of<'a>(planner: &Planner<'a>, ty: &'a Type) -> &'a str {
+fn enum_package_of<'a>(planner: &Planner<'a>, ty: &'a Type) -> &'a str {
     match ty {
-        Type::Nominal { id, .. } => planner.facts.module_for_qualified_name(id).unwrap_or(id),
+        Type::Nominal { id, .. } => planner.facts.package_for_qualified_name(id).unwrap_or(id),
         _ => "",
     }
 }
@@ -1222,17 +1222,17 @@ fn collect_tagged_enum_checks(
     variant: &EnumVariantData,
     collector: &mut PatternCollector,
 ) {
-    let enum_module = enum_module_of(planner, variant.ty);
-    let alias = if planner.facts.is_foreign_module(enum_module) {
-        Some(planner.record_module_import(enum_module, &mut collector.packages))
+    let enum_package = enum_package_of(planner, variant.ty);
+    let alias = if planner.facts.is_foreign_package(enum_package) {
+        Some(planner.record_package_import(enum_package, &mut collector.packages))
     } else {
         None
     };
     let resolved = go_name::variant(
         variant.identifier,
         variant.ty,
-        enum_module,
-        planner.facts.current_module(),
+        enum_package,
+        planner.facts.current_package(),
         alias.as_deref(),
     );
     if let Some(package) = resolved.package {
@@ -1372,17 +1372,17 @@ fn resolve_struct_child_path(
     }
     let enum_info = detect_enum_info(resolution);
     if enum_info.is_some() {
-        let enum_module = enum_module_of(planner, ty);
-        let alias = if planner.facts.is_foreign_module(enum_module) {
-            Some(planner.record_module_import(enum_module, &mut collector.packages))
+        let enum_package = enum_package_of(planner, ty);
+        let alias = if planner.facts.is_foreign_package(enum_package) {
+            Some(planner.record_package_import(enum_package, &mut collector.packages))
         } else {
             None
         };
         let resolved = go_name::variant(
             identifier,
             ty,
-            enum_module,
-            planner.facts.current_module(),
+            enum_package,
+            planner.facts.current_package(),
             alias.as_deref(),
         );
         if let Some(package) = resolved.package {

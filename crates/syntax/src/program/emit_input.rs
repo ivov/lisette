@@ -10,7 +10,7 @@ use super::{Definition, File};
 #[derive(Debug, Clone, Default)]
 pub struct UnusedInfo {
     symbols: HashSet<Span>,
-    pub imports_by_module: HashMap<EcoString, HashSet<EcoString>>,
+    pub imports_by_package: HashMap<EcoString, HashSet<EcoString>>,
 }
 
 impl UnusedInfo {
@@ -51,12 +51,12 @@ impl UnusedInfo {
     pub fn merge(&mut self, other: UnusedInfo) {
         let UnusedInfo {
             symbols,
-            imports_by_module,
+            imports_by_package,
         } = other;
         self.symbols.extend(symbols);
-        for (module, imports) in imports_by_module {
-            self.imports_by_module
-                .entry(module)
+        for (package, imports) in imports_by_package {
+            self.imports_by_package
+                .entry(package)
                 .or_default()
                 .extend(imports);
         }
@@ -73,24 +73,24 @@ pub struct TestFunction {
 
 impl TestFunction {
     pub fn new(
-        module_id: &str,
+        package_id: &str,
         name: &str,
         title: Option<String>,
         doc: Option<String>,
         span: Span,
     ) -> Self {
         Self {
-            qualified_name: Symbol::from_parts(module_id, name),
+            qualified_name: Symbol::from_parts(package_id, name),
             title,
             doc,
             span,
         }
     }
 
-    pub fn module_id(&self) -> &str {
+    pub fn package_id(&self) -> &str {
         self.qualified_name
             .without_last_segment()
-            .expect("test names are constructed with a module")
+            .expect("test names are constructed with a package")
     }
 
     pub fn qualified_name(&self) -> &str {
@@ -138,64 +138,64 @@ enum EqualityKind {
 #[derive(Debug, Clone)]
 struct EqualityInfo {
     kind: EqualityKind,
-    private_to_module: Option<String>,
+    private_to_package: Option<String>,
 }
 
-fn visible_from(private_to_module: &Option<String>, current_module: &str) -> bool {
-    match private_to_module {
+fn visible_from(private_to_package: &Option<String>, current_package: &str) -> bool {
+    match private_to_package {
         None => true,
-        Some(module) => module == current_module,
+        Some(package) => package == current_package,
     }
 }
 
 impl EqualityIndex {
-    pub fn insert_declared_method(&mut self, id: String, private_to_module: Option<String>) {
+    pub fn insert_declared_method(&mut self, id: String, private_to_package: Option<String>) {
         self.by_id.insert(
             id,
             EqualityInfo {
                 kind: EqualityKind::DeclaredMethod,
-                private_to_module,
+                private_to_package,
             },
         );
     }
 
-    pub fn insert_synthesized_method(&mut self, id: String, private_to_module: Option<String>) {
+    pub fn insert_synthesized_method(&mut self, id: String, private_to_package: Option<String>) {
         self.by_id.insert(
             id,
             EqualityInfo {
                 kind: EqualityKind::SynthesizedMethod,
-                private_to_module,
+                private_to_package,
             },
         );
     }
 
-    pub fn insert_ufcs_lowered(&mut self, id: String, private_to_module: Option<String>) {
+    pub fn insert_ufcs_lowered(&mut self, id: String, private_to_package: Option<String>) {
         self.by_id.insert(
             id,
             EqualityInfo {
                 kind: EqualityKind::UfcsLowered,
-                private_to_module,
+                private_to_package,
             },
         );
     }
 
-    pub fn usable_from(&self, id: &str, current_module: &str) -> bool {
+    pub fn usable_from(&self, id: &str, current_package: &str) -> bool {
         matches!(
             self.by_id.get(id),
             Some(EqualityInfo {
                 kind: EqualityKind::DeclaredMethod | EqualityKind::SynthesizedMethod,
-                private_to_module,
-            }) if visible_from(private_to_module, current_module)
+                private_to_package,
+            }) if visible_from(private_to_package, current_package)
         )
     }
 
-    pub fn is_ufcs_lowered_from(&self, id: &str, current_module: &str) -> bool {
+    pub fn is_ufcs_lowered_from(&self, id: &str, current_package: &str) -> bool {
         matches!(
             self.by_id.get(id),
             Some(EqualityInfo {
                 kind: EqualityKind::UfcsLowered,
-                private_to_module,
-            }) if visible_from(private_to_module, current_module)
+                private_to_package,
+            }) if visible_from(private_to_package, current_package)
         )
     }
 
@@ -255,14 +255,14 @@ impl MutationInfo {
 pub struct EmitInput {
     pub files: HashMap<u32, File>,
     pub definitions: HashMap<Symbol, Definition>,
-    pub entry_module_id: String,
+    pub entry_package_id: String,
     pub unused: UnusedInfo,
     pub mutations: MutationInfo,
-    pub cached_modules: HashSet<String>,
+    pub cached_packages: HashSet<String>,
     pub equality_index: EqualityIndex,
     pub test_index: TestIndex,
     pub go_package_names: HashMap<String, String>,
-    pub go_module_ids: HashSet<String>,
+    pub go_package_ids: HashSet<String>,
 }
 
 #[cfg(test)]
@@ -278,21 +278,21 @@ mod tests {
         let mut a = UnusedInfo::default();
         a.mark_binding_unused(span(0));
         a.mark_definition_unused(span(1));
-        a.imports_by_module
+        a.imports_by_package
             .insert("m1".into(), HashSet::from_iter(["x".into()]));
 
         let mut b = UnusedInfo::default();
         b.mark_binding_unused(span(2));
         b.mark_definition_unused(span(3));
-        b.imports_by_module
+        b.imports_by_package
             .insert("m1".into(), HashSet::from_iter(["y".into()]));
-        b.imports_by_module
+        b.imports_by_package
             .insert("m2".into(), HashSet::from_iter(["z".into()]));
 
         a.merge(b);
 
         assert_eq!(a.symbols.len(), 4);
-        assert_eq!(a.imports_by_module["m1"].len(), 2);
-        assert_eq!(a.imports_by_module["m2"].len(), 1);
+        assert_eq!(a.imports_by_package["m1"].len(), 2);
+        assert_eq!(a.imports_by_package["m2"].len(), 1);
     }
 }

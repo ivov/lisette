@@ -220,7 +220,7 @@ fn library_rejects_replaced_dependency_on_build_but_not_check() {
 }
 
 #[test]
-fn library_rejects_go_ignored_module_directory() {
+fn library_rejects_go_ignored_package_directory() {
     for bad in ["_hidden", "testdata", "vendor"] {
         let (_dir, project) = scaffold("github.com/acme/gign");
         fs::create_dir_all(project.join("src").join(bad)).unwrap();
@@ -231,7 +231,7 @@ fn library_rejects_go_ignored_module_directory() {
         .unwrap();
         let build = lis(&project, &["build"]);
         assert!(!build.status.success(), "`{bad}` should be rejected");
-        assert!(combined(&build).contains("Go-ignored module directory"));
+        assert!(combined(&build).contains("Go-ignored package directory"));
     }
 }
 
@@ -347,7 +347,7 @@ fn library_warns_when_the_module_path_is_not_fetchable() {
 }
 
 #[test]
-fn library_may_have_a_bin_module() {
+fn library_may_have_a_bin_package() {
     if !go_available() {
         eprintln!("skipping: `go` not found");
         return;
@@ -383,7 +383,7 @@ fn library_may_have_a_bin_module() {
 }
 
 #[test]
-fn subpackage_only_library_with_bin_module_keeps_its_output() {
+fn subpackage_only_library_with_bin_package_keeps_its_output() {
     if !go_available() {
         eprintln!("skipping: `go` not found");
         return;
@@ -408,7 +408,7 @@ fn binary_named_like_a_bin_subpackage_converts_to_a_library() {
         return;
     }
     // Building as a binary puts the executable under `target/.lisette/bin`, out
-    // of the public package namespace, so a later `src/bin/tools` module cannot
+    // of the public package namespace, so a later `src/bin/tools` package cannot
     // collide with it.
     let (_dir, project) = scaffold("github.com/acme/tools");
     fs::write(

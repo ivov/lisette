@@ -24,11 +24,11 @@ fn main() {
 }
 ```
 
-The `go:` prefix distinguishes Go packages from your own project's modules.
+The `go:` prefix distinguishes Go packages from your own project's packages.
 
 ```rust
 import "go:fmt"       // Go stdlib
-import "handlers"     // project module (dir)
+import "handlers"     // project package (dir)
 ```
 
 To import a Go package for its side effects only, use a blank import:
@@ -452,6 +452,6 @@ Once the Go module is published, use `lis add` to depend on the published module
 <br>
 
 <table><tr>
-<td>← <a href="12-modules.md"><code>12-modules.md</code></a></td>
+<td>← <a href="12-packages.md"><code>12-packages.md</code></a></td>
 <td align="right"><a href="14-concurrency.md"><code>14-concurrency.md</code></a> →</td>
 </tr></table>

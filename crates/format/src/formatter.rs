@@ -44,11 +44,11 @@ impl<'a> Formatter<'a> {
         Self { comments }
     }
 
-    pub(crate) fn module(&mut self, top_level_items: &'a [Expression]) -> Document<'a> {
+    pub(crate) fn package(&mut self, top_level_items: &'a [Expression]) -> Document<'a> {
         let mut imports = Vec::new();
         let mut rest = Vec::new();
         for (index, expression) in top_level_items.iter().enumerate() {
-            if let Expression::ModuleImport {
+            if let Expression::PackageImport {
                 name,
                 alias,
                 name_span,
@@ -321,7 +321,7 @@ impl<'a> Formatter<'a> {
                     .append(Self::annotation(annotation)),
             ),
 
-            Expression::ModuleImport { name, alias, .. } => {
+            Expression::PackageImport { name, alias, .. } => {
                 (Visibility::Private, Self::import_line(name, alias.as_ref()))
             }
 

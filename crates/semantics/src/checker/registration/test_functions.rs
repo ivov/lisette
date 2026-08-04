@@ -9,7 +9,7 @@ use crate::store::Store;
 
 fn test_context_type() -> Type {
     Type::Nominal {
-        id: Symbol::from_parts(crate::prelude::TEST_PRELUDE_MODULE_ID, "TestContext"),
+        id: Symbol::from_parts(crate::prelude::TEST_PRELUDE_PACKAGE_ID, "TestContext"),
         params: vec![],
     }
 }
@@ -25,18 +25,18 @@ pub(crate) fn normalize_test_params(mut params: Vec<Binding>, is_test: bool) -> 
 }
 
 impl TaskState {
-    /// Collect and validate a module's `#[test]` functions into `facts`
+    /// Collect and validate a package's `#[test]` functions into `facts`
     /// (merge-safe, since this runs during parallel registration).
-    pub(super) fn register_module_tests(&mut self, store: &Store, module_id: &str) {
-        let module = store.get_module(module_id).expect("module must exist");
-        let context_shadowed = module_shadows_test_context(store, module_id);
+    pub(super) fn register_package_tests(&mut self, store: &Store, package_id: &str) {
+        let package = store.get_package(package_id).expect("package must exist");
+        let context_shadowed = package_shadows_test_context(store, package_id);
         let mut records: Vec<TestFunction> = Vec::new();
-        for file in module.files.values() {
+        for file in package.files.values() {
             let in_test_file = file.is_test();
             for item in &file.items {
                 collect_test_candidates(
                     item,
-                    module_id,
+                    package_id,
                     in_test_file,
                     context_shadowed,
                     &mut records,
@@ -47,14 +47,14 @@ impl TaskState {
         self.facts.test_functions.extend(records);
     }
 
-    pub(crate) fn collect_cached_module_tests(&mut self, store: &Store, module_id: &str) {
-        let Some(module) = store.get_module(module_id) else {
+    pub(crate) fn collect_cached_package_tests(&mut self, store: &Store, package_id: &str) {
+        let Some(package) = store.get_package(package_id) else {
             return;
         };
-        let context_shadowed = module_shadows_test_context(store, module_id);
+        let context_shadowed = package_shadows_test_context(store, package_id);
         let discard = LocalSink::new();
         let mut records: Vec<TestFunction> = Vec::new();
-        for file in module.files.values() {
+        for file in package.files.values() {
             if !file.is_test() {
                 continue;
             }
@@ -62,7 +62,7 @@ impl TaskState {
             for item in &parsed.ast {
                 collect_test_candidates(
                     item,
-                    module_id,
+                    package_id,
                     true,
                     context_shadowed,
                     &mut records,
@@ -119,8 +119,8 @@ fn is_supported_return(annotation: &Annotation) -> bool {
     )
 }
 
-fn module_shadows_test_context(store: &Store, module_id: &str) -> bool {
-    let qualified = format!("{module_id}.TestContext");
+fn package_shadows_test_context(store: &Store, package_id: &str) -> bool {
+    let qualified = format!("{package_id}.TestContext");
     store
         .get_definition(&qualified)
         .is_some_and(|definition| !definition.is_value(&qualified))
@@ -150,7 +150,7 @@ fn parse_title(args: &[AttributeArg]) -> Result<Option<String>, ()> {
 
 fn collect_test_candidates(
     item: &Expression,
-    module_id: &str,
+    package_id: &str,
     in_test_file: bool,
     context_shadowed: bool,
     records: &mut Vec<TestFunction>,
@@ -192,7 +192,7 @@ fn collect_test_candidates(
                 return;
             }
             records.push(TestFunction::new(
-                module_id,
+                package_id,
                 name,
                 title,
                 doc.clone(),

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use super::disk;
 use super::types::CachedDefinition;
 use super::{CACHE_FORMAT_VERSION, COMPILER_VERSION_HASH, PRELUDE_HASH};
-use crate::prelude::{PRELUDE_FILE_ID, PRELUDE_MODULE_ID};
+use crate::prelude::{PRELUDE_FILE_ID, PRELUDE_PACKAGE_ID};
 use crate::store::Store;
 
 #[derive(Serialize, Deserialize)]
@@ -43,12 +43,12 @@ pub(crate) fn try_load_prelude_cache() -> Option<PreludeCache> {
 pub(crate) fn save_prelude_cache(store: &Store) {
     let Some(path) = cache_path() else { return };
 
-    let Some(module) = store.get_module(PRELUDE_MODULE_ID) else {
+    let Some(package) = store.get_package(PRELUDE_PACKAGE_ID) else {
         return;
     };
 
     let file_id_to_index: HashMap<u32, u32> = [(PRELUDE_FILE_ID, 0)].into_iter().collect();
-    let definitions: HashMap<String, CachedDefinition> = module
+    let definitions: HashMap<String, CachedDefinition> = package
         .definitions
         .iter()
         .map(|(name, definition)| {
@@ -70,12 +70,12 @@ pub(crate) fn save_prelude_cache(store: &Store) {
 }
 
 pub(crate) fn register_cached_prelude(store: &mut Store, cached: PreludeCache) {
-    // Register the prelude file for file_id → module_id mapping (needed by diagnostics).
+    // Register the prelude file for file_id → package_id mapping (needed by diagnostics).
     // Items are empty since we're loading definitions from cache.
     use syntax::program::File;
     store.store_file(File {
         id: PRELUDE_FILE_ID,
-        module_id: PRELUDE_MODULE_ID.to_string(),
+        package_id: PRELUDE_PACKAGE_ID.to_string(),
         name: "prelude.d.lis".to_string(),
         display_path: "prelude.d.lis".to_string(),
         source_path: deps::prelude_typedef_path(),
@@ -85,11 +85,11 @@ pub(crate) fn register_cached_prelude(store: &mut Store, cached: PreludeCache) {
     });
 
     let file_ids: &[u32] = &[PRELUDE_FILE_ID];
-    let module = store
-        .get_module_mut(PRELUDE_MODULE_ID)
-        .expect("prelude module must be registered before loading cached definitions");
+    let package = store
+        .get_package_mut(PRELUDE_PACKAGE_ID)
+        .expect("prelude package must be registered before loading cached definitions");
     for (qualified_name, cached_definition) in cached.definitions {
-        cached_definition.install_into(module, qualified_name.into(), file_ids);
+        cached_definition.install_into(package, qualified_name.into(), file_ids);
     }
 }
 

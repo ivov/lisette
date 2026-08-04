@@ -168,7 +168,7 @@ impl Planner<'_> {
             },
             annotation: None,
             ty: Type::Nominal {
-                id: Symbol::from_parts(go_name::TEST_PRELUDE_MODULE, "TestContext"),
+                id: Symbol::from_parts(go_name::TEST_PRELUDE_PACKAGE, "TestContext"),
                 params: vec![],
             },
             mut_span: None,

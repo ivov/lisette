@@ -98,8 +98,8 @@ impl Planner<'_> {
         id.starts_with(go_name::PRELUDE_PREFIX)
             || self
                 .facts
-                .module_for_qualified_name(id.as_str())
-                .is_some_and(|m| self.facts.is_foreign_module(m))
+                .package_for_qualified_name(id.as_str())
+                .is_some_and(|m| self.facts.is_foreign_package(m))
     }
 
     pub(crate) fn struct_field_is_exported(&self, ty: &Type, field: &str) -> bool {

@@ -691,10 +691,10 @@ impl InferCtx<'_> {
 
         let scrutinee_is_error = expected_ty.shallow_resolve_in(&self.env).is_error();
 
-        let struct_module = store
-            .module_for_qualified_name(&qualified_name)
+        let struct_package = store
+            .package_for_qualified_name(&qualified_name)
             .unwrap_or(&qualified_name);
-        let is_cross_module = struct_module != self.cursor.module_id;
+        let is_cross_package = struct_package != self.cursor.package_id;
 
         let available: Vec<String> = struct_fields.iter().map(|f| f.name.to_string()).collect();
 
@@ -705,11 +705,11 @@ impl InferCtx<'_> {
 
                 let field_ty = match field_definition {
                     Some(field_definition) => {
-                        if is_cross_module && !field_definition.visibility.is_public() {
+                        if is_cross_package && !field_definition.visibility.is_public() {
                             self.sink.push(diagnostics::infer::private_field_access(
                                 &field.name,
                                 &qualified_name,
-                                struct_module,
+                                struct_package,
                                 field.value.get_span(),
                             ));
                         }
@@ -893,15 +893,16 @@ impl InferCtx<'_> {
     fn enum_display_name(&self, id: &str) -> String {
         let store = self.store;
         let simple = unqualified_name(id);
-        let Some(module_id) = store.module_for_qualified_name(id) else {
+        let Some(package_id) = store.package_for_qualified_name(id) else {
             return simple.to_string();
         };
-        if module_id == self.cursor.module_id || self.imports.unprefixed_imports.contains(module_id)
+        if package_id == self.cursor.package_id
+            || self.imports.unprefixed_imports.contains(package_id)
         {
             return simple.to_string();
         }
-        for (prefix, imported_module_id) in self.imports.modules() {
-            if imported_module_id == module_id {
+        for (prefix, imported_package_id) in self.imports.packages() {
+            if imported_package_id == package_id {
                 return format!("{}.{}", prefix, simple);
             }
         }

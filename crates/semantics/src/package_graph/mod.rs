@@ -10,16 +10,16 @@ use crate::analysis::{AnalysisScope, ProjectKind};
 use crate::diagnostics::{GoImportSite, emit_for_declaration_status, emit_for_locator_result};
 use crate::loader as semantics_loader;
 use crate::loader::Loader;
-use crate::store::{ENTRY_MODULE_ID, Store};
+use crate::store::{ENTRY_PACKAGE_ID, Store};
 use diagnostics::LocalSink;
 
-pub type ModuleId = String;
+pub type PackageId = String;
 
 pub fn root_import_target(name: &str, importer: &str, kind: ProjectKind) -> Option<&'static str> {
     (name == semantics_loader::ROOT_IMPORT
         && kind == ProjectKind::Library
-        && semantics_loader::is_external_test_module(importer))
-    .then_some(ENTRY_MODULE_ID)
+        && semantics_loader::is_external_test_package(importer))
+    .then_some(ENTRY_PACKAGE_ID)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,63 +60,63 @@ struct Dependency {
     usage: ImportUse,
 }
 
-/// One canonical classification for every direct module dependency.
+/// One canonical classification for every direct package dependency.
 #[derive(Debug, Default)]
 pub struct DependencyGraph {
-    edges: HashMap<ModuleId, HashMap<ModuleId, Dependency>>,
+    edges: HashMap<PackageId, HashMap<PackageId, Dependency>>,
 }
 
 impl DependencyGraph {
-    pub fn contains_module(&self, module_id: &str) -> bool {
-        self.edges.contains_key(module_id)
+    pub fn contains_package(&self, package_id: &str) -> bool {
+        self.edges.contains_key(package_id)
     }
 
-    pub fn contains_dependency(&self, module_id: &str, dependency: &str) -> bool {
+    pub fn contains_dependency(&self, package_id: &str, dependency: &str) -> bool {
         self.edges
-            .get(module_id)
+            .get(package_id)
             .is_some_and(|dependencies| dependencies.contains_key(dependency))
     }
 
-    pub fn contains_production_dependency(&self, module_id: &str, dependency: &str) -> bool {
+    pub fn contains_production_dependency(&self, package_id: &str, dependency: &str) -> bool {
         matches!(
             self.edges
-                .get(module_id)
+                .get(package_id)
                 .and_then(|dependencies| dependencies.get(dependency))
                 .map(|dependency| dependency.kind),
             Some(DependencyKind::Production)
         )
     }
 
-    pub(crate) fn modules(&self) -> impl Iterator<Item = &ModuleId> {
+    pub(crate) fn packages(&self) -> impl Iterator<Item = &PackageId> {
         self.edges.keys()
     }
 
-    pub(crate) fn dependencies(&self, module_id: &str) -> impl Iterator<Item = &ModuleId> {
+    pub(crate) fn dependencies(&self, package_id: &str) -> impl Iterator<Item = &PackageId> {
         self.edges
-            .get(module_id)
+            .get(package_id)
             .into_iter()
             .flat_map(HashMap::keys)
     }
 
     pub(crate) fn production_dependencies(
         &self,
-        module_id: &str,
-    ) -> impl Iterator<Item = &ModuleId> {
+        package_id: &str,
+    ) -> impl Iterator<Item = &PackageId> {
         self.edges
-            .get(module_id)
+            .get(package_id)
             .into_iter()
             .flat_map(|dependencies| {
-                dependencies.iter().filter_map(|(module_id, dependency)| {
-                    (dependency.kind == DependencyKind::Production).then_some(module_id)
+                dependencies.iter().filter_map(|(package_id, dependency)| {
+                    (dependency.kind == DependencyKind::Production).then_some(package_id)
                 })
             })
     }
 
-    pub(crate) fn is_link_only_module(&self, module_id: &str) -> bool {
+    pub(crate) fn is_link_only_package(&self, package_id: &str) -> bool {
         let mut uses = self
             .edges
             .values()
-            .filter_map(|dependencies| dependencies.get(module_id))
+            .filter_map(|dependencies| dependencies.get(package_id))
             .map(|dependency| dependency.usage);
         matches!(uses.next(), Some(ImportUse::LinkOnly))
             && uses.all(|usage| usage == ImportUse::LinkOnly)
@@ -126,17 +126,17 @@ impl DependencyGraph {
         self.edges.len()
     }
 
-    fn insert(&mut self, module_id: ModuleId, dependencies: HashMap<ModuleId, Dependency>) {
-        self.edges.insert(module_id, dependencies);
+    fn insert(&mut self, package_id: PackageId, dependencies: HashMap<PackageId, Dependency>) {
+        self.edges.insert(package_id, dependencies);
     }
 }
 
-impl From<HashMap<ModuleId, HashSet<ModuleId>>> for DependencyGraph {
-    fn from(edges: HashMap<ModuleId, HashSet<ModuleId>>) -> Self {
+impl From<HashMap<PackageId, HashSet<PackageId>>> for DependencyGraph {
+    fn from(edges: HashMap<PackageId, HashSet<PackageId>>) -> Self {
         Self {
             edges: edges
                 .into_iter()
-                .map(|(module_id, dependencies)| {
+                .map(|(package_id, dependencies)| {
                     let dependencies = dependencies
                         .into_iter()
                         .map(|dependency| {
@@ -149,17 +149,17 @@ impl From<HashMap<ModuleId, HashSet<ModuleId>>> for DependencyGraph {
                             )
                         })
                         .collect();
-                    (module_id, dependencies)
+                    (package_id, dependencies)
                 })
                 .collect(),
         }
     }
 }
 
-/// A module file read and scanned for imports, but not yet parsed.
+/// A package file read and scanned for imports, but not yet parsed.
 #[derive(Debug)]
 pub struct ScannedFile {
-    pub module_id: ModuleId,
+    pub package_id: PackageId,
     pub file_id: u32,
     pub name: String,
     pub display_path: String,
@@ -180,7 +180,7 @@ impl ScannedFile {
         let result = syntax::build_ast(&self.source, self.file_id);
         let file = File {
             id: self.file_id,
-            module_id: self.module_id,
+            package_id: self.package_id,
             name: self.name,
             display_path: self.display_path,
             source_path: None,
@@ -193,23 +193,23 @@ impl ScannedFile {
 }
 
 #[derive(Debug)]
-pub struct ModuleGraphResult {
-    pub order: Vec<ModuleId>,
-    pub cycles: Vec<Vec<ModuleId>>,
-    pub files: HashMap<ModuleId, Vec<ScannedFile>>,
+pub struct PackageGraphResult {
+    pub order: Vec<PackageId>,
+    pub cycles: Vec<Vec<PackageId>>,
+    pub files: HashMap<PackageId, Vec<ScannedFile>>,
     pub dependencies: DependencyGraph,
     /// Reachable from the primary roots, snapshotted before `additional` runs.
-    pub primary_reachable: HashSet<ModuleId>,
+    pub primary_reachable: HashSet<PackageId>,
 }
 
 /// `primary` defines the target. `additional` widens what is analyzed.
 #[derive(Debug, Default)]
 pub struct Roots {
-    pub primary: Vec<ModuleId>,
-    pub additional: Vec<ModuleId>,
+    pub primary: Vec<PackageId>,
+    pub additional: Vec<PackageId>,
 }
 
-pub struct ModuleGraphOptions<'a> {
+pub struct PackageGraphOptions<'a> {
     pub loader: Option<&'a dyn Loader>,
     pub sink: &'a LocalSink,
     pub scope: &'a AnalysisScope,
@@ -218,16 +218,16 @@ pub struct ModuleGraphOptions<'a> {
     pub project_kind: ProjectKind,
 }
 
-pub fn build_module_graph(
+pub fn build_package_graph(
     store: &mut Store,
     roots: Roots,
-    options: ModuleGraphOptions<'_>,
-) -> ModuleGraphResult {
+    options: PackageGraphOptions<'_>,
+) -> PackageGraphResult {
     let Roots {
         primary,
         additional,
     } = roots;
-    let ModuleGraphOptions {
+    let PackageGraphOptions {
         loader,
         sink,
         scope,
@@ -263,19 +263,19 @@ struct GraphBuilder<'a> {
     include_tests: bool,
     project_kind: ProjectKind,
     dependencies: DependencyGraph,
-    visited: HashSet<ModuleId>,
-    files: HashMap<ModuleId, Vec<ScannedFile>>,
-    import_spans: HashMap<ModuleId, Span>,
+    visited: HashSet<PackageId>,
+    files: HashMap<PackageId, Vec<ScannedFile>>,
+    import_spans: HashMap<PackageId, Span>,
 }
 
 impl<'a> GraphBuilder<'a> {
-    fn visit(&mut self, mut to_visit: Vec<ModuleId>) {
+    fn visit(&mut self, mut to_visit: Vec<PackageId>) {
         while !to_visit.is_empty() {
-            let drained: Vec<ModuleId> = std::mem::take(&mut to_visit);
-            let mut batch: Vec<ModuleId> = Vec::with_capacity(drained.len());
-            for module_id in drained {
-                if self.visited.insert(module_id.clone()) {
-                    batch.push(module_id);
+            let drained: Vec<PackageId> = std::mem::take(&mut to_visit);
+            let mut batch: Vec<PackageId> = Vec::with_capacity(drained.len());
+            for package_id in drained {
+                if self.visited.insert(package_id.clone()) {
+                    batch.push(package_id);
                 }
             }
             if batch.is_empty() {
@@ -284,7 +284,7 @@ impl<'a> GraphBuilder<'a> {
 
             batch.sort();
 
-            let mut scanned = batch_scan_modules(
+            let mut scanned = batch_scan_packages(
                 &batch,
                 self.store,
                 self.loader,
@@ -293,22 +293,22 @@ impl<'a> GraphBuilder<'a> {
                 self.scope.has_project_root(),
             );
 
-            for module_id in &batch {
-                let module_files = scanned.remove(module_id).unwrap_or_default();
-                let file_imports = if !module_files.is_empty() {
-                    classify_scanned_imports(&module_files)
-                } else if let Some(module) = self.store.get_module(module_id) {
-                    classify_file_imports(module.files.values())
+            for package_id in &batch {
+                let package_files = scanned.remove(package_id).unwrap_or_default();
+                let file_imports = if !package_files.is_empty() {
+                    classify_scanned_imports(&package_files)
+                } else if let Some(package) = self.store.get_package(package_id) {
+                    classify_file_imports(package.files.values())
                 } else {
                     Vec::new()
                 };
                 let root_has_production = self
                     .files
-                    .get(ENTRY_MODULE_ID)
+                    .get(ENTRY_PACKAGE_ID)
                     .is_some_and(|files| files.iter().any(|f| !f.is_test() && !f.is_d_lis()))
                     || self
                         .store
-                        .get_module(ENTRY_MODULE_ID)
+                        .get_package(ENTRY_PACKAGE_ID)
                         .is_some_and(|m| m.files.values().any(|f| !f.is_test()));
                 let imports = process_file_imports(
                     file_imports,
@@ -316,26 +316,26 @@ impl<'a> GraphBuilder<'a> {
                         sink: self.sink,
                         scope: self.scope,
                         root_has_production,
-                        importer: module_id,
+                        importer: package_id,
                         project_kind: self.project_kind,
                         locator: self.locator,
                     },
                 );
 
-                let has_production_file = module_files.iter().any(|file| !file.is_test());
-                let module_exists = has_production_file
-                    || self.store.has(module_id)
-                    || module_id.starts_with("go:")
+                let has_production_file = package_files.iter().any(|file| !file.is_test());
+                let package_exists = has_production_file
+                    || self.store.has(package_id)
+                    || package_id.starts_with("go:")
                     || (self.scope.has_project_root()
-                        && semantics_loader::is_external_test_module(module_id));
+                        && semantics_loader::is_external_test_package(package_id));
 
-                if !module_exists {
-                    if let Some(span) = self.import_spans.get(module_id) {
+                if !package_exists {
+                    if let Some(span) = self.import_spans.get(package_id) {
                         let is_go_stdlib =
-                            stdlib::get_go_stdlib_typedef(module_id, self.locator.target())
+                            stdlib::get_go_stdlib_typedef(package_id, self.locator.target())
                                 .is_some();
 
-                        let src_prefix_hint = module_id
+                        let src_prefix_hint = package_id
                             .strip_prefix("src/")
                             .filter(|stripped| {
                                 self.loader
@@ -344,26 +344,27 @@ impl<'a> GraphBuilder<'a> {
                             .map(String::from);
 
                         let reason = if let Some(stripped) = src_prefix_hint {
-                            diagnostics::module_graph::MissingModuleReason::UnnecessarySrcPrefix(
+                            diagnostics::package_graph::MissingPackageReason::UnnecessarySrcPrefix(
                                 stripped,
                             )
                         } else if is_go_stdlib {
-                            diagnostics::module_graph::MissingModuleReason::GoStandardLibrary
+                            diagnostics::package_graph::MissingPackageReason::GoStandardLibrary
                         } else if let Some(unit) = self.scope.script_unit() {
-                            diagnostics::module_graph::MissingModuleReason::Script {
+                            diagnostics::package_graph::MissingPackageReason::Script {
                                 inside_project: unit.inside_project,
                             }
                         } else {
-                            diagnostics::module_graph::MissingModuleReason::NotFound
+                            diagnostics::package_graph::MissingPackageReason::NotFound
                         };
-                        self.sink.push(diagnostics::module_graph::module_not_found(
-                            module_id, *span, reason,
-                        ));
+                        self.sink
+                            .push(diagnostics::package_graph::package_not_found(
+                                package_id, *span, reason,
+                            ));
                     }
                     continue;
                 }
 
-                self.files.insert(module_id.clone(), module_files);
+                self.files.insert(package_id.clone(), package_files);
 
                 for (import, resolved) in &imports {
                     if !self.visited.contains(import) {
@@ -376,17 +377,17 @@ impl<'a> GraphBuilder<'a> {
 
                 let dependencies = imports
                     .into_iter()
-                    .map(|(module_id, resolved)| (module_id, resolved.dependency))
+                    .map(|(package_id, resolved)| (package_id, resolved.dependency))
                     .collect();
-                self.dependencies.insert(module_id.clone(), dependencies);
+                self.dependencies.insert(package_id.clone(), dependencies);
             }
         }
     }
 
-    fn finish(self, primary_reachable: HashSet<ModuleId>) -> ModuleGraphResult {
+    fn finish(self, primary_reachable: HashSet<PackageId>) -> PackageGraphResult {
         let (order, cycles) = kahn::topological_sort(&self.dependencies);
 
-        ModuleGraphResult {
+        PackageGraphResult {
             order,
             cycles,
             files: self.files,
@@ -436,30 +437,30 @@ fn classify_scanned_imports(files: &[ScannedFile]) -> Vec<ClassifiedImport> {
 }
 
 struct ScanJob {
-    module_id: ModuleId,
+    package_id: PackageId,
     file_id: u32,
     filename: String,
     display_path: String,
     source: String,
 }
 
-/// Reads and scans every file of the given modules. The parse waits for the cache.
-fn batch_scan_modules(
-    modules: &[ModuleId],
+/// Reads and scans every file of the given packages. The parse waits for the cache.
+fn batch_scan_packages(
+    packages: &[PackageId],
     store: &Store,
     loader: Option<&dyn Loader>,
     sink: &LocalSink,
     include_tests: bool,
     has_project_root: bool,
-) -> HashMap<ModuleId, Vec<ScannedFile>> {
+) -> HashMap<PackageId, Vec<ScannedFile>> {
     let Some(fs) = loader else {
         return HashMap::default();
     };
 
     const PARALLEL_THRESHOLD: usize = 4;
 
-    let to_read: Vec<&ModuleId> = modules.iter().filter(|m| !store.has(m)).collect();
-    let folders: Vec<(&ModuleId, Vec<(String, semantics_loader::FileContent)>)> =
+    let to_read: Vec<&PackageId> = packages.iter().filter(|m| !store.has(m)).collect();
+    let folders: Vec<(&PackageId, Vec<(String, semantics_loader::FileContent)>)> =
         if to_read.len() < PARALLEL_THRESHOLD {
             to_read
                 .into_iter()
@@ -474,20 +475,20 @@ fn batch_scan_modules(
         };
 
     let mut jobs: Vec<ScanJob> = Vec::new();
-    for (module_id, entries) in folders {
+    for (package_id, entries) in folders {
         let is_external_test =
-            has_project_root && semantics_loader::is_external_test_module(module_id);
+            has_project_root && semantics_loader::is_external_test_package(package_id);
         for (filename, content) in entries {
             if is_external_test {
                 match semantics_loader::external_test_file_issue(&filename) {
                     Some(semantics_loader::ExternalTestFileIssue::WrongSuffix) => {
-                        sink.push(diagnostics::module_graph::wrong_test_file_suffix(
+                        sink.push(diagnostics::package_graph::wrong_test_file_suffix(
                             &content.display_path,
                         ));
                         continue;
                     }
                     Some(semantics_loader::ExternalTestFileIssue::NotATestFile) => {
-                        sink.push(diagnostics::module_graph::non_test_file_under_tests(
+                        sink.push(diagnostics::package_graph::non_test_file_under_tests(
                             &content.display_path,
                         ));
                         continue;
@@ -495,7 +496,7 @@ fn batch_scan_modules(
                     None => {}
                 }
             } else if filename.ends_with("_test.lis") {
-                sink.push(diagnostics::module_graph::wrong_test_file_suffix(
+                sink.push(diagnostics::package_graph::wrong_test_file_suffix(
                     &content.display_path,
                 ));
                 continue;
@@ -505,7 +506,7 @@ fn batch_scan_modules(
             }
             let file_id = store.new_file_id();
             jobs.push(ScanJob {
-                module_id: module_id.clone(),
+                package_id: package_id.clone(),
                 file_id,
                 filename,
                 display_path: content.display_path,
@@ -521,19 +522,19 @@ fn batch_scan_modules(
         jobs.into_par_iter().map(scan_one).collect()
     };
 
-    let mut grouped: HashMap<ModuleId, Vec<ScannedFile>> = HashMap::default();
+    let mut grouped: HashMap<PackageId, Vec<ScannedFile>> = HashMap::default();
     for file in scanned {
         grouped
-            .entry(file.module_id.clone())
+            .entry(file.package_id.clone())
             .or_default()
             .push(file);
     }
     grouped
 }
 
-fn read_folder(fs: &dyn Loader, module_id: &str) -> Vec<(String, semantics_loader::FileContent)> {
+fn read_folder(fs: &dyn Loader, package_id: &str) -> Vec<(String, semantics_loader::FileContent)> {
     let mut entries: Vec<(String, semantics_loader::FileContent)> =
-        fs.scan_folder(module_id).into_iter().collect();
+        fs.scan_folder(package_id).into_iter().collect();
     entries.sort_by(|a, b| a.0.cmp(&b.0));
     entries
 }
@@ -541,7 +542,7 @@ fn read_folder(fs: &dyn Loader, module_id: &str) -> Vec<(String, semantics_loade
 fn scan_one(job: ScanJob) -> ScannedFile {
     ScannedFile {
         imports: syntax::imports::scan_imports(&job.source, job.file_id),
-        module_id: job.module_id,
+        package_id: job.package_id,
         file_id: job.file_id,
         name: job.filename,
         display_path: job.display_path,
@@ -575,7 +576,7 @@ struct ImportContext<'a> {
 fn process_file_imports(
     file_imports: Vec<ClassifiedImport>,
     ctx: ImportContext<'_>,
-) -> HashMap<ModuleId, ResolvedImport> {
+) -> HashMap<PackageId, ResolvedImport> {
     let ImportContext {
         sink,
         scope,
@@ -616,29 +617,29 @@ fn process_file_imports(
     for classified in &file_imports {
         let file_import = &classified.import;
         if file_import.name == "prelude" {
-            sink.push(diagnostics::module_graph::cannot_import_prelude(
+            sink.push(diagnostics::package_graph::cannot_import_prelude(
                 file_import.span,
             ));
             continue;
         }
 
         if file_import.name.starts_with("**") {
-            sink.push(diagnostics::module_graph::reserved_module_import(
+            sink.push(diagnostics::package_graph::reserved_package_import(
                 file_import.span,
             ));
             continue;
         }
 
-        if file_import.name == ENTRY_MODULE_ID {
-            sink.push(diagnostics::module_graph::cannot_import_entry(
+        if file_import.name == ENTRY_PACKAGE_ID {
+            sink.push(diagnostics::package_graph::cannot_import_entry(
                 file_import.name_span,
             ));
             continue;
         }
 
-        if scope.has_project_root() && semantics_loader::is_external_test_module(&file_import.name)
+        if scope.has_project_root() && semantics_loader::is_external_test_package(&file_import.name)
         {
-            sink.push(diagnostics::module_graph::cannot_import_external_tests(
+            sink.push(diagnostics::package_graph::cannot_import_external_tests(
                 file_import.name_span,
             ));
             continue;
@@ -651,7 +652,7 @@ fn process_file_imports(
                 match root_import_target(&file_import.name, importer, project_kind) {
                     Some(_) if !root_has_production => {
                         sink.push(
-                            diagnostics::module_graph::cannot_import_root_without_source(
+                            diagnostics::package_graph::cannot_import_root_without_source(
                                 file_import.name_span,
                             ),
                         );
@@ -670,12 +671,12 @@ fn process_file_imports(
                             });
                     }
                     None if project_kind == ProjectKind::Binary => {
-                        sink.push(diagnostics::module_graph::cannot_import_root_in_binary(
+                        sink.push(diagnostics::package_graph::cannot_import_root_in_binary(
                             file_import.name_span,
                         ));
                     }
                     None => {
-                        sink.push(diagnostics::module_graph::cannot_import_root_from_src(
+                        sink.push(diagnostics::package_graph::cannot_import_root_from_src(
                             file_import.name_span,
                         ));
                     }
@@ -739,7 +740,7 @@ fn process_file_imports(
         let is_dotted = file_import.name.contains('.');
 
         if is_dotted && locator.is_declared_go_dep(&file_import.name) {
-            sink.push(diagnostics::module_graph::missing_go_prefix(
+            sink.push(diagnostics::package_graph::missing_go_prefix(
                 &file_import.name,
                 file_import.name_span,
                 blank_span.is_some(),
@@ -748,12 +749,15 @@ fn process_file_imports(
         }
 
         if is_dotted {
-            sink.push(diagnostics::module_graph::invalid_module_path(
+            sink.push(diagnostics::package_graph::invalid_package_path(
                 &file_import.name,
                 file_import.name_span,
+                blank_span.is_some(),
             ));
         }
-        if let Some(span) = blank_span {
+        if let Some(span) = blank_span
+            && !diagnostics::package_graph::is_go_package_shaped(&file_import.name)
+        {
             sink.push(diagnostics::infer::blank_import_non_go(span));
         }
         if is_dotted || blank_span.is_some() {
@@ -901,16 +905,16 @@ mod tests {
     fn root_import_resolves_only_for_library_external_tests() {
         assert_eq!(
             root_import_target("root", "tests", ProjectKind::Library),
-            Some(ENTRY_MODULE_ID)
+            Some(ENTRY_PACKAGE_ID)
         );
         assert_eq!(
             root_import_target("root", "tests/integration", ProjectKind::Library),
-            Some(ENTRY_MODULE_ID)
+            Some(ENTRY_PACKAGE_ID)
         );
         assert_eq!(
             root_import_target("root", "geometry", ProjectKind::Library),
             None,
-            "src modules cannot import the root"
+            "src packages cannot import the root"
         );
         assert_eq!(
             root_import_target("root", "tests", ProjectKind::Binary),
@@ -924,7 +928,7 @@ mod tests {
     }
 
     #[test]
-    fn referenced_edge_wins_across_importing_modules() {
+    fn referenced_edge_wins_across_importing_packages() {
         let dependency = |usage| Dependency {
             kind: DependencyKind::Production,
             usage,
@@ -939,6 +943,6 @@ mod tests {
             HashMap::from_iter([("go:fmt".into(), dependency(ImportUse::Referenced))]),
         );
 
-        assert!(!graph.is_link_only_module("go:fmt"));
+        assert!(!graph.is_link_only_package("go:fmt"));
     }
 }

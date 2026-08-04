@@ -7,7 +7,7 @@ use deps::TypedefLocator;
 use diagnostics::LisetteDiagnostic;
 use passes::analyze;
 use semantics::loader::MemoryLoader;
-use semantics::store::ENTRY_MODULE_ID;
+use semantics::store::ENTRY_PACKAGE_ID;
 use semantics::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
 
 use super::render_lis::{QuestionSpans, render_lis_declarations, render_lis_questions};
@@ -141,7 +141,7 @@ struct Checked {
 /// Compile a self-contained Lisette source through the real checker.
 fn check(source: &str) -> Checked {
     let mut loader = MemoryLoader::new();
-    loader.add_file(ENTRY_MODULE_ID, "main.lis", source);
+    loader.add_file(ENTRY_PACKAGE_ID, "main.lis", source);
 
     let output = analyze(AnalyzeInput {
         load_siblings: true,

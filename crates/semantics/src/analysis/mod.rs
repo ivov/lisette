@@ -1,12 +1,12 @@
-//! Coordinates entry parsing, module discovery, caching, registration, and inference.
+//! Coordinates entry parsing, package discovery, caching, registration, and inference.
 
 mod entry;
-mod modules;
+mod packages;
 
 use rustc_hash::FxHashSet as HashSet;
 
-use entry::{compute_roots, find_unreachable_modules, load_sibling_files, register_entry_file};
-use modules::{ModuleInferenceInput, infer_all_modules};
+use entry::{compute_roots, find_unreachable_packages, load_sibling_files, register_entry_file};
+use packages::{PackageInferenceInput, infer_all_packages};
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -15,26 +15,26 @@ use diagnostics::LocalSink;
 use syntax::ParseError;
 use syntax::lex::Lexer;
 use syntax::parse::{ParseResult, Parser};
-use syntax::program::{File, Module};
+use syntax::program::{File, Package};
 
 use deps::TypedefLocator;
 
 use crate::cache::{
-    CompiledModule, ModuleInterface, build_cached_module, compute_emit_artifact_hash,
-    compute_module_hash, get_dependency_module_hashes,
-    go_stdlib::{self, load_cached_go_module},
-    hash_module_source_pair, is_cache_disabled, prelude as prelude_cache, try_load_cache,
+    CompiledPackage, PackageInterface, build_cached_package, compute_emit_artifact_hash,
+    compute_package_hash, get_dependency_package_hashes,
+    go_stdlib::{self, load_cached_go_package},
+    hash_package_source_pair, is_cache_disabled, prelude as prelude_cache, try_load_cache,
 };
 use crate::checker::infer::{FileInferenceInput, InferCtx};
 use crate::checker::{TaskOutput, TaskState};
 use crate::diagnostics::{GoImportSite, emit_for_locator_result};
 use crate::facts::Facts;
-use crate::loader::{DiscoveredModules, Loader};
-use crate::module_graph::{
-    DependencyGraph, ModuleGraphOptions, Roots, ScannedFile, build_module_graph,
+use crate::loader::{DiscoveredPackages, Loader};
+use crate::package_graph::{
+    DependencyGraph, PackageGraphOptions, Roots, ScannedFile, build_package_graph,
 };
 use crate::prelude::{parse_and_register_prelude, parse_and_register_test_prelude};
-use crate::store::{ENTRY_FILE_ID, ENTRY_MODULE_ID, Store};
+use crate::store::{ENTRY_FILE_ID, ENTRY_PACKAGE_ID, Store};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CompilePhase {
@@ -218,9 +218,9 @@ impl LazyGoStdlibCache {
         }
     }
 
-    fn module_ids(&self) -> Option<HashSet<String>> {
+    fn package_ids(&self) -> Option<HashSet<String>> {
         match self {
-            Self::Loaded(cache) => Some(cache.modules.keys().cloned().collect()),
+            Self::Loaded(cache) => Some(cache.packages.keys().cloned().collect()),
             Self::Unloaded | Self::Missing => None,
         }
     }
@@ -231,10 +231,10 @@ pub struct InferenceOutput {
     pub facts: Facts,
     pub sink: LocalSink,
     pub has_pre_check_errors: bool,
-    pub compiled_modules: Vec<CompiledModule>,
-    pub cached_modules: HashSet<String>,
+    pub compiled_packages: Vec<CompiledPackage>,
+    pub cached_packages: HashSet<String>,
     pub cache_root: Option<PathBuf>,
-    pub unreachable_modules: Vec<String>,
+    pub unreachable_packages: Vec<String>,
     pub entry_parse: EntryParseOutcome,
 }
 
@@ -247,7 +247,7 @@ enum PreludeCacheState {
 enum CacheState<'a> {
     Disabled,
     Enabled {
-        module_root: Option<&'a Path>,
+        package_root: Option<&'a Path>,
         prelude: PreludeCacheState,
         go_stdlib: LazyGoStdlibCache,
     },
@@ -258,10 +258,10 @@ impl<'a> CacheState<'a> {
         matches!(self, Self::Disabled)
     }
 
-    fn module_root(&self) -> Option<&'a Path> {
+    fn package_root(&self) -> Option<&'a Path> {
         match self {
             Self::Disabled => None,
-            Self::Enabled { module_root, .. } => *module_root,
+            Self::Enabled { package_root, .. } => *package_root,
         }
     }
 
@@ -282,10 +282,10 @@ impl<'a> CacheState<'a> {
         }
     }
 
-    fn go_module_ids(&self) -> Option<HashSet<String>> {
+    fn go_package_ids(&self) -> Option<HashSet<String>> {
         match self {
             Self::Disabled => None,
-            Self::Enabled { go_stdlib, .. } => go_stdlib.module_ids(),
+            Self::Enabled { go_stdlib, .. } => go_stdlib.package_ids(),
         }
     }
 }
@@ -295,7 +295,7 @@ fn load_prelude<'a>(
     store: &mut Store,
     sink: &LocalSink,
     cache_disabled: bool,
-    module_root: Option<&'a Path>,
+    package_root: Option<&'a Path>,
 ) -> CacheState<'a> {
     if cache_disabled {
         parse_and_register_prelude(store, sink);
@@ -313,20 +313,20 @@ fn load_prelude<'a>(
         PreludeCacheState::Miss
     };
     CacheState::Enabled {
-        module_root,
+        package_root,
         prelude,
         go_stdlib: LazyGoStdlibCache::new(),
     }
 }
 
-/// Loads, registers, and infers every module, returning the artifacts the
+/// Loads, registers, and infers every package, returning the artifacts the
 /// post-inference passes consume. Internal, unstable API.
 pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
     let mut store = Store::new();
     let sink = LocalSink::new();
     let include_tests = input.compile_phase.includes_tests();
 
-    store.init_entry_module();
+    store.init_entry_package();
     let entry = register_entry_file(&mut store, &sink, input.entry, include_tests);
     if entry.parse.is_failed() {
         let checker = TaskState::with_sink(sink, input.project_kind);
@@ -335,10 +335,10 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
             facts: checker.facts,
             sink: checker.sink,
             has_pre_check_errors: true,
-            compiled_modules: Vec::new(),
-            cached_modules: HashSet::default(),
+            compiled_packages: Vec::new(),
+            cached_packages: HashSet::default(),
             cache_root: None,
-            unreachable_modules: Vec::new(),
+            unreachable_packages: Vec::new(),
             entry_parse: entry.parse,
         };
     }
@@ -352,24 +352,24 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
         );
     }
 
-    let entry_module = store.entry_module_id().to_string();
+    let entry_package = store.entry_package_id().to_string();
     let discovered = if input.scope.has_project_root() {
-        input.loader.discover_modules()
+        input.loader.discover_packages()
     } else {
-        DiscoveredModules::default()
+        DiscoveredPackages::default()
     };
 
     let roots = compute_roots(
         input.project_kind,
         input.compile_phase,
         &discovered,
-        entry_module,
+        entry_package,
     );
 
-    let graph_result = build_module_graph(
+    let graph_result = build_package_graph(
         &mut store,
         roots,
-        ModuleGraphOptions {
+        PackageGraphOptions {
             loader: Some(input.loader),
             sink: &sink,
             scope: &input.scope,
@@ -380,9 +380,9 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
     );
 
     for cycle in &graph_result.cycles {
-        sink.push(diagnostics::module_graph::import_cycle(cycle));
+        sink.push(diagnostics::package_graph::import_cycle(cycle));
     }
-    let unreachable_modules = find_unreachable_modules(&discovered, &graph_result);
+    let unreachable_packages = find_unreachable_packages(&discovered, &graph_result);
 
     let has_graph_errors = sink.has_errors();
 
@@ -395,10 +395,10 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
     );
     parse_and_register_test_prelude(&mut store, &sink);
 
-    let cache_root = cache.module_root().map(Path::to_path_buf);
-    let module_output = infer_all_modules(
+    let cache_root = cache.package_root().map(Path::to_path_buf);
+    let package_output = infer_all_packages(
         &mut store,
-        ModuleInferenceInput {
+        PackageInferenceInput {
             graph_result,
             sink,
             compile_phase: input.compile_phase,
@@ -412,13 +412,13 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
 
     InferenceOutput {
         store,
-        facts: module_output.facts,
-        sink: module_output.sink,
-        has_pre_check_errors: has_graph_errors || module_output.has_parse_errors,
-        compiled_modules: module_output.compiled_modules,
-        cached_modules: module_output.cached_modules,
+        facts: package_output.facts,
+        sink: package_output.sink,
+        has_pre_check_errors: has_graph_errors || package_output.has_parse_errors,
+        compiled_packages: package_output.compiled_packages,
+        cached_packages: package_output.cached_packages,
         cache_root,
-        unreachable_modules,
+        unreachable_packages,
         entry_parse: entry.parse,
     }
 }

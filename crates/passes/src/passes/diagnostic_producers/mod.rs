@@ -13,19 +13,19 @@ pub(crate) fn run_all(store: &Store) -> Vec<LisetteDiagnostic> {
 
     if work.len() < PARALLEL_THRESHOLD {
         let mut local = Vec::new();
-        for (module, file) in &work {
+        for (package, file) in &work {
             generics::run(&file.items, &mut local);
-            unused_expressions::run(&file.items, &module.id, store, &mut local);
+            unused_expressions::run(&file.items, &package.id, store, &mut local);
         }
         return local;
     }
 
     let locals: Vec<Vec<LisetteDiagnostic>> = work
         .par_iter()
-        .map(|(module, file)| {
+        .map(|(package, file)| {
             let mut local = Vec::new();
             generics::run(&file.items, &mut local);
-            unused_expressions::run(&file.items, &module.id, store, &mut local);
+            unused_expressions::run(&file.items, &package.id, store, &mut local);
             local
         })
         .collect();

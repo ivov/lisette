@@ -155,7 +155,7 @@ import h "utils/helpers"
 import "go:fmt"
 
 fn test() {
-  fmt.Print("Local module with alias")
+  fmt.Print("Local package with alias")
 }
 "#;
     assert_emit_snapshot!(input);
@@ -377,7 +377,7 @@ pub struct Program {}
 }
 
 #[test]
-fn two_versioned_modules_with_distinct_package_names_coexist() {
+fn two_versioned_packages_with_distinct_package_names_coexist() {
     let input = r#"
 import "go:example.com/bubbletea/v2"
 import "go:example.com/lipgloss/v2"
@@ -405,7 +405,7 @@ pub struct Style {}
 }
 
 #[test]
-fn distinct_versioned_modules_do_not_falsely_collide() {
+fn distinct_versioned_packages_do_not_falsely_collide() {
     let sdp = r#"
 pub struct SessionDescription {}
 "#;
@@ -430,7 +430,7 @@ fn make() {
     );
     assert!(
         !result.files.is_empty(),
-        "distinct `/v3` modules must emit successfully"
+        "distinct `/v3` packages must emit successfully"
     );
 }
 
@@ -559,7 +559,7 @@ pub const Value: int = 1
 }
 
 #[test]
-fn gopkg_in_dotted_version_path_resolves_module() {
+fn gopkg_in_dotted_version_path_resolves_package() {
     let input = r#"
 import "go:gopkg.in/yaml.v3"
 
@@ -633,7 +633,7 @@ pub struct TypeError {
 }
 
 #[test]
-fn cross_module_non_generic_alias_call_emits_without_type_args() {
+fn cross_package_non_generic_alias_call_emits_without_type_args() {
     let input = r#"
 import "go:example.com/cli"
 

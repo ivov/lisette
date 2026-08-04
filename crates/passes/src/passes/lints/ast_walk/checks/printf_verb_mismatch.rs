@@ -4,7 +4,7 @@ use std::str;
 use syntax::ast::{Expression, Literal};
 use syntax::lex::string_bytes;
 
-/// (module_id, function_name, index of the format-string argument)
+/// (package_id, function_name, index of the format-string argument)
 const PRINTF_TARGETS: &[(&str, &str, usize)] = &[
     ("go:fmt", "Appendf", 1),
     ("go:fmt", "Errorf", 0),
@@ -42,13 +42,13 @@ pub fn check_printf_verb_mismatch(expression: &Expression, ctx: &NodeCtx) {
     };
 
     let namespace_ty = namespace.get_type();
-    let Some(module_id) = namespace_ty.as_import_namespace() else {
+    let Some(package_id) = namespace_ty.as_import_namespace() else {
         return;
     };
 
     let Some((_, function, format_index)) = PRINTF_TARGETS
         .iter()
-        .find(|(module, function, _)| module_id == *module && member.as_str() == *function)
+        .find(|(package, function, _)| package_id == *package && member.as_str() == *function)
     else {
         return;
     };
@@ -74,7 +74,7 @@ pub fn check_printf_verb_mismatch(expression: &Expression, ctx: &NodeCtx) {
     }
 
     ctx.sink.push(diagnostics::lint::printf_verb_mismatch(
-        span, module_id, function, &operands, supplied,
+        span, package_id, function, &operands, supplied,
     ));
 }
 

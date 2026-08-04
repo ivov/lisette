@@ -95,9 +95,9 @@ struct User {
 }
 ```
 
-Private fields can only be accessed within the same module. Use `pub struct` to make the type itself public. Structs and their fields can carry attributes.
+Private fields can only be accessed within the same package. Use `pub struct` to make the type itself public. Structs and their fields can carry attributes.
 
-📚 See [`12-modules.md`](12-modules.md) and [`15-attributes.md`](15-attributes.md)
+📚 See [`12-packages.md`](12-packages.md) and [`15-attributes.md`](15-attributes.md)
 
 ### Embedding
 

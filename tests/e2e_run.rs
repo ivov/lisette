@@ -470,8 +470,8 @@ pub fn call() {
 fn parallel_registration_validates_bounds_with_dependency_ufcs_methods() {
     let scratch = tempfile::tempdir().expect("create temp dir");
     let project = scratch.path().join("proj");
-    for module in ["dep", "use_a", "use_b"] {
-        fs::create_dir_all(project.join("src").join(module)).unwrap();
+    for package in ["dep", "use_a", "use_b"] {
+        fs::create_dir_all(project.join("src").join(package)).unwrap();
     }
     fs::write(
         project.join("lisette.toml"),
@@ -987,9 +987,9 @@ fn main() {
 }
 
 #[test]
-fn orphan_module_tests_are_discovered() {
+fn orphan_package_tests_are_discovered() {
     if !go_available() {
-        eprintln!("skipping orphan_module_tests_are_discovered: `go` not found");
+        eprintln!("skipping orphan_package_tests_are_discovered: `go` not found");
         return;
     }
 
@@ -1020,7 +1020,7 @@ fn orphan_module_tests_are_discovered() {
 
     assert!(
         combined.contains("orphan_pass") && combined.contains("orphan_fail"),
-        "tests in an unimported module must be discovered:\nstdout: {stdout}\nstderr: {stderr}"
+        "tests in an unimported package must be discovered:\nstdout: {stdout}\nstderr: {stderr}"
     );
     assert!(
         !output.status.success(),
@@ -1029,7 +1029,7 @@ fn orphan_module_tests_are_discovered() {
 }
 
 #[test]
-fn single_file_check_ignores_unrelated_test_modules() {
+fn single_file_check_ignores_unrelated_test_packages() {
     let scratch = tempfile::tempdir().expect("create temp dir");
     let dir = scratch.path();
     fs::create_dir_all(dir.join("sub")).unwrap();
@@ -1046,7 +1046,7 @@ fn single_file_check_ignores_unrelated_test_modules() {
 
     assert!(
         output.status.success(),
-        "a single-file script check must not pull in an unrelated test module:\nstdout: {stdout}\nstderr: {stderr}"
+        "a single-file script check must not pull in an unrelated test package:\nstdout: {stdout}\nstderr: {stderr}"
     );
 }
 
@@ -1073,7 +1073,7 @@ fn loose_dir_check_does_not_duplicate_child_diagnostics() {
     let hits = combined.matches("child_bad").count();
     assert_eq!(
         hits, 1,
-        "a loose-directory check must report a child module's diagnostic once, not once per ancestor sweep:\n{combined}"
+        "a loose-directory check must report a child package's diagnostic once, not once per ancestor sweep:\n{combined}"
     );
 }
 
@@ -1151,7 +1151,7 @@ fn contains_file_named(dir: &Path, name: &str) -> bool {
 }
 
 #[test]
-fn broken_orphan_module_fails_check() {
+fn broken_orphan_package_fails_check() {
     let scratch = tempfile::tempdir().expect("create temp dir");
     let project = scaffold_orphan_project(
         scratch.path(),
@@ -1165,7 +1165,7 @@ fn broken_orphan_module_fails_check() {
 
     assert!(
         !output.status.success(),
-        "a type error in an unimported module must fail check:\n{combined}"
+        "a type error in an unimported package must fail check:\n{combined}"
     );
     assert!(
         combined.contains("Type mismatch") && combined.contains("infer.type_mismatch"),
@@ -1174,7 +1174,7 @@ fn broken_orphan_module_fails_check() {
 }
 
 #[test]
-fn clean_orphan_module_warns_at_check_but_passes() {
+fn clean_orphan_package_warns_at_check_but_passes() {
     let scratch = tempfile::tempdir().expect("create temp dir");
     let project = scaffold_orphan_project(scratch.path(), "pub fn helper() -> int { 1 }\n");
 
@@ -1185,18 +1185,18 @@ fn clean_orphan_module_warns_at_check_but_passes() {
 
     assert!(
         output.status.success(),
-        "a clean unreachable module is a warning, not an error:\n{combined}"
+        "a clean unreachable package is a warning, not an error:\n{combined}"
     );
     assert!(
-        combined.contains("Unreachable module: `orphan`"),
-        "check should warn about the unreachable module:\n{combined}"
+        combined.contains("Unreachable package: `orphan`"),
+        "check should warn about the unreachable package:\n{combined}"
     );
 }
 
 #[test]
-fn build_excludes_and_notes_orphan_module() {
+fn build_excludes_and_notes_orphan_package() {
     if !go_available() {
-        eprintln!("skipping build_excludes_and_notes_orphan_module: `go` not found");
+        eprintln!("skipping build_excludes_and_notes_orphan_package: `go` not found");
         return;
     }
 
@@ -1213,12 +1213,12 @@ fn build_excludes_and_notes_orphan_module() {
         "the binary is sound, so build succeeds:\n{combined}"
     );
     assert!(
-        combined.contains("Unreachable module: `orphan`"),
-        "build should warn about the unreachable module:\n{combined}"
+        combined.contains("Unreachable package: `orphan`"),
+        "build should warn about the unreachable package:\n{combined}"
     );
     assert!(
         !contains_file_named(&project.join("target"), "orphan.go"),
-        "the orphan module must not be emitted into target/"
+        "the orphan package must not be emitted into target/"
     );
 }
 
@@ -1397,7 +1397,7 @@ fn a_project_source_file_is_checked_as_its_project() {
 
     assert!(
         output.status.success(),
-        "a project entrypoint must resolve its own modules:\n{combined}"
+        "a project entrypoint must resolve its own packages:\n{combined}"
     );
     assert!(
         combined.contains("2 files"),
@@ -1410,7 +1410,7 @@ fn a_project_source_file_is_checked_as_its_project() {
 }
 
 #[test]
-fn running_a_project_module_names_the_project() {
+fn running_a_project_package_names_the_project() {
     let scratch = tempfile::tempdir().expect("create temp dir");
     let project = scaffold_util_project(scratch.path());
 
@@ -1421,7 +1421,7 @@ fn running_a_project_module_names_the_project() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    assert!(!output.status.success(), "a module is not a program");
+    assert!(!output.status.success(), "a package is not a program");
     assert!(combined.contains("demoproj"), "{combined}");
     assert!(combined.contains("main"), "{combined}");
     assert!(!combined.contains("lis new"), "{combined}");
@@ -1444,8 +1444,8 @@ fn a_file_beside_a_project_is_not_told_to_create_one() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    assert!(!output.status.success(), "a lone file resolves no modules");
-    assert!(combined.contains("Module not found"), "{combined}");
+    assert!(!output.status.success(), "a lone file resolves no packages");
+    assert!(combined.contains("Package not found"), "{combined}");
     assert!(!combined.contains("lis new"), "{combined}");
 }
 
@@ -1468,7 +1468,7 @@ fn a_tree_walk_checks_a_nested_project_as_a_project() {
         );
         assert!(
             output.status.success(),
-            "project files under {} must resolve their own modules:\n{combined}",
+            "project files under {} must resolve their own packages:\n{combined}",
             target.display()
         );
     }

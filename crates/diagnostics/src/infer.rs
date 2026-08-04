@@ -43,10 +43,10 @@ pub fn mismatched_tail_value(
 pub fn blank_import_non_go(blank_span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid import")
         .with_resolve_code("blank_import_non_go")
-        .with_span_label(&blank_span, "only allowed for Go modules")
+        .with_span_label(&blank_span, "only allowed for Go packages")
         .with_help(
             "Remove the underscore. Blank imports are allowed only for Go imports, \
-             because Lisette modules have no `init()` side effects.",
+             because Lisette packages have no `init()` side effects.",
         )
 }
 
@@ -85,7 +85,7 @@ pub fn duplicate_import_path(path: &str, name_span: Span) -> LisetteDiagnostic {
         .with_resolve_code("duplicate_import")
         .with_span_label(&name_span, "already imported above")
         .with_help(format!(
-            "Module `{}` is already imported. Remove the duplicate import.",
+            "Package `{}` is already imported. Remove the duplicate import.",
             path
         ))
 }
@@ -95,10 +95,10 @@ pub fn name_shadows_import(name: &str, import_path: &str, name_span: Span) -> Li
         .with_resolve_code("name_shadows_import")
         .with_span_label(
             &name_span,
-            format!("conflicts with imported module `{}`", import_path),
+            format!("conflicts with imported package `{}`", import_path),
         )
         .with_help(format!(
-            "`{}` is already used as a module alias for `{}`. \
+            "`{}` is already used as a package alias for `{}`. \
              Rename it or use a different import alias.",
             name, import_path
         ))
@@ -426,16 +426,16 @@ pub fn static_method_called_on_instance(
         ))
 }
 
-pub fn function_or_value_not_found_in_module(
+pub fn function_or_value_not_found_in_package(
     name: &str,
-    module: &str,
+    package: &str,
     span: Span,
 ) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Name not found")
-        .with_resolve_code("not_found_in_module")
+        .with_resolve_code("not_found_in_package")
         .with_span_label(
             &span,
-            format!("`{}` not found in module `{}`", name, module),
+            format!("`{}` not found in package `{}`", name, package),
         )
         .with_help("Ensure the name is exported and spelled correctly")
 }
@@ -927,12 +927,12 @@ pub fn pattern_missing_fields(missing: &[String], span: Span) -> LisetteDiagnost
 pub fn private_field_access(
     field_name: &str,
     struct_name: &str,
-    owning_module: &str,
+    owning_package: &str,
     span: Span,
 ) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Private field")
         .with_resolve_code("private_field_access")
-        .with_span_label(&span, format!("private to `{}`", owning_module))
+        .with_span_label(&span, format!("private to `{}`", owning_package))
         .with_help(format!(
             "Cannot access private field `{}` of struct `{}`. Mark the field as `pub`",
             field_name, struct_name
@@ -942,12 +942,12 @@ pub fn private_field_access(
 pub fn private_method_access(
     method_name: &str,
     type_name: &str,
-    owning_module: &str,
+    owning_package: &str,
     span: Span,
 ) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Private method")
         .with_resolve_code("private_method_access")
-        .with_span_label(&span, format!("private to `{}`", owning_module))
+        .with_span_label(&span, format!("private to `{}`", owning_package))
         .with_help(format!(
             "Cannot access private method `{}` of type `{}`. Mark the method as `pub`",
             method_name, type_name
@@ -957,14 +957,14 @@ pub fn private_method_access(
 pub fn private_field_in_spread(
     field_name: &str,
     struct_name: &str,
-    owning_module: &str,
+    owning_package: &str,
     span: Span,
 ) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Private field")
         .with_resolve_code("private_field_spread")
         .with_span_label(
             &span,
-            format!("`{}` is private to `{}`", field_name, owning_module),
+            format!("`{}` is private to `{}`", field_name, owning_package),
         )
         .with_help(format!(
             "Cannot spread `{}` because field `{}` is private. Mark the field as `pub`",
@@ -975,20 +975,20 @@ pub fn private_field_in_spread(
 pub fn private_field_in_autofill(
     field_name: &str,
     struct_name: &str,
-    owning_module: &str,
+    owning_package: &str,
     span: Span,
 ) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Private field")
         .with_resolve_code("private_field_autofill")
         .with_span_label(
             &span,
-            format!("`{}` is private to `{}`", field_name, owning_module),
+            format!("`{}` is private to `{}`", field_name, owning_package),
         )
         .with_help(format!(
-            "`{}` of `{}` cannot be autofilled because `{}` is private to module `{}`. \
+            "`{}` of `{}` cannot be autofilled because `{}` is private to package `{}`. \
              Provide an explicit value, or have `{}` expose `{}` as `pub` or offer a \
              constructor.",
-            field_name, struct_name, field_name, owning_module, owning_module, field_name
+            field_name, struct_name, field_name, owning_package, owning_package, field_name
         ))
 }
 
@@ -997,7 +997,7 @@ pub enum FieldNoZeroCause<'a> {
     PrivateField {
         struct_name: &'a str,
         field: &'a str,
-        owning_module: &'a str,
+        owning_package: &'a str,
     },
     HiddenGoState {
         go_type: &'a str,
@@ -1021,17 +1021,17 @@ pub fn field_no_zero(
         FieldNoZeroCause::PrivateField {
             struct_name: priv_struct,
             field: priv_field,
-            owning_module: priv_module,
+            owning_package: priv_package,
         } => format!(
-            "`{}` of `{}` cannot be autofilled because `{}.{}` is private to module `{}`. \
+            "`{}` of `{}` cannot be autofilled because `{}.{}` is private to package `{}`. \
              Provide an explicit value for `{}`, or have `{}` expose `{}` as `pub`.",
             field_name,
             struct_name,
             priv_struct,
             priv_field,
-            priv_module,
+            priv_package,
             field_name,
-            priv_module,
+            priv_package,
             priv_field
         ),
         FieldNoZeroCause::HiddenGoState { go_type } => format!(
@@ -2450,7 +2450,7 @@ pub fn duplicate_definition(kind: &str, name: &str, span: Span) -> LisetteDiagno
         .with_infer_code("duplicate_definition")
         .with_span_label(&span, "already defined")
         .with_help(format!(
-            "`{}` is already defined in this module. Rename or remove this definition.",
+            "`{}` is already defined in this package. Rename or remove this definition.",
             name
         ))
 }
@@ -3388,15 +3388,15 @@ pub fn interface_method_conflict(
         ))
 }
 
-pub fn impl_on_foreign_type(type_name: &str, module_name: &str, span: Span) -> LisetteDiagnostic {
+pub fn impl_on_foreign_type(type_name: &str, package_name: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Cannot implement methods on foreign type")
         .with_infer_code("impl_on_foreign_type")
         .with_span_label(
             &span,
-            format!("`{}` is defined in module `{}`", type_name, module_name),
+            format!("`{}` is defined in package `{}`", type_name, package_name),
         )
         .with_help(format!(
-            "Methods can only be defined on types in the same module. \
+            "Methods can only be defined on types in the same package. \
              Use a standalone function instead: `fn my_method(w: {}) {{ ... }}`",
             type_name
         ))
@@ -3588,19 +3588,19 @@ pub fn type_used_as_value(name: &str, span: Span) -> LisetteDiagnostic {
 }
 
 pub fn namespace_alias_used_as_value(span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Cannot use a module or enum-type alias as a value")
+    LisetteDiagnostic::error("Cannot use a package or enum-type alias as a value")
         .with_infer_code("namespace_alias_used_as_value")
         .with_span_label(
             &span,
-            "this alias refers to a type or module, not a runtime value",
+            "this alias refers to a type or package, not a runtime value",
         )
         .with_help("Access a member instead, e.g. `alias.VariantName`")
 }
 
-pub fn module_namespace_used_as_value(name: &str, span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Cannot use a module namespace as a value")
-        .with_infer_code("module_namespace_used_as_value")
-        .with_span_label(&span, "module namespaces are not runtime values")
+pub fn package_namespace_used_as_value(name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot use a package namespace as a value")
+        .with_infer_code("package_namespace_used_as_value")
+        .with_span_label(&span, "package namespaces are not runtime values")
         .with_help(format!("Access a member instead, e.g. `{name}.Member`"))
 }
 

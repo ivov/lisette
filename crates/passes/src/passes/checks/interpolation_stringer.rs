@@ -55,8 +55,8 @@ fn check_interpolation(inner: &Expression, store: &Store, sink: &LocalSink) {
 }
 
 fn is_foreign(definition: &Definition, id: &str, store: &Store) -> bool {
-    if let Some(module) = store.module_for_qualified_name(id)
-        && (module == "prelude" || module.starts_with("go:"))
+    if let Some(package) = store.package_for_qualified_name(id)
+        && (package == "prelude" || package.starts_with("go:"))
     {
         return true;
     }

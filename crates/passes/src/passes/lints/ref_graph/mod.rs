@@ -17,13 +17,13 @@ use semantics::store::Store;
 use syntax::ast::{Attribute, AttributeArg, Expression, Span, StructFieldDefinition, Visibility};
 use syntax::program::EqualityIndex;
 use syntax::program::File;
-use syntax::program::Module;
+use syntax::program::Package;
 use syntax::program::UnusedInfo;
 
 use extract::{AliasMap, is_upper, walk_expression};
 use redundant_import_alias::check_redundant_aliases;
 use reference_graph::{
-    EnumVariantId, ItemKind, MemberKind, ModuleItemId, ReferenceGraph, StructFieldId,
+    EnumVariantId, ItemKind, MemberKind, PackageItemId, ReferenceGraph, StructFieldId,
 };
 use syntax::attributes::SERIALIZATION_KEYS;
 use visibility_constraints::check_visibility_constraints;
@@ -35,31 +35,31 @@ struct RefLintResult {
 }
 
 pub(crate) fn run(store: &Store, facts: &Facts) -> (Vec<LisetteDiagnostic>, UnusedInfo) {
-    let mut modules: Vec<&Module> = store
-        .modules
+    let mut packages: Vec<&Package> = store
+        .packages
         .values()
         .map(Arc::as_ref)
         .filter(|m| !m.is_internal())
         .collect();
-    modules.sort_unstable_by(|a, b| a.id.cmp(&b.id));
+    packages.sort_unstable_by(|a, b| a.id.cmp(&b.id));
 
     let mut unused = UnusedInfo::default();
 
-    if modules.len() < PARALLEL_THRESHOLD {
+    if packages.len() < PARALLEL_THRESHOLD {
         let sink = LocalSink::new();
-        for module in &modules {
-            apply_ref_lints(module, facts, store, &mut unused, &sink);
+        for package in &packages {
+            apply_ref_lints(package, facts, store, &mut unused, &sink);
         }
         return (sink.into_diagnostics(), unused);
     }
 
     type WorkerOutput = (LocalSink, UnusedInfo);
-    let outputs: Vec<WorkerOutput> = modules
+    let outputs: Vec<WorkerOutput> = packages
         .par_iter()
-        .map(|module| {
+        .map(|package| {
             let local_sink = LocalSink::new();
             let mut local_unused = UnusedInfo::default();
-            apply_ref_lints(module, facts, store, &mut local_unused, &local_sink);
+            apply_ref_lints(package, facts, store, &mut local_unused, &local_sink);
             (local_sink, local_unused)
         })
         .collect();
@@ -73,16 +73,16 @@ pub(crate) fn run(store: &Store, facts: &Facts) -> (Vec<LisetteDiagnostic>, Unus
 }
 
 fn apply_ref_lints(
-    module: &Module,
+    package: &Package,
     facts: &Facts,
     store: &Store,
     unused: &mut UnusedInfo,
     sink: &LocalSink,
 ) {
-    let result = run_ref_lints(module, facts, store);
+    let result = run_ref_lints(package, facts, store);
     if !result.unused_import_aliases.is_empty() {
-        unused.imports_by_module.insert(
-            module.id.clone().into(),
+        unused.imports_by_package.insert(
+            package.id.clone().into(),
             result
                 .unused_import_aliases
                 .into_iter()
@@ -95,7 +95,7 @@ fn apply_ref_lints(
     }
     let mut diagnostics = result.diagnostics;
     if !diagnostics.is_empty() {
-        let allows: Vec<_> = module
+        let allows: Vec<_> = package
             .source_files()
             .flat_map(|file| super::suppression::collect_declaration_allows(&file.items))
             .collect();
@@ -105,8 +105,8 @@ fn apply_ref_lints(
     sink.extend(diagnostics);
 }
 
-fn run_ref_lints(module: &Module, facts: &Facts, store: &Store) -> RefLintResult {
-    let files = &module.files;
+fn run_ref_lints(package: &Package, facts: &Facts, store: &Store) -> RefLintResult {
+    let files = &package.files;
     let equality_index = &store.equality_index;
     let mut diagnostics = Vec::new();
     let mut unused_import_spans = HashSet::default();
@@ -118,24 +118,24 @@ fn run_ref_lints(module: &Module, facts: &Facts, store: &Store) -> RefLintResult
         .filter(|file| !file.is_d_lis())
         .map(|file| (file, AliasMap::build(file, store)))
         .collect();
-    collect_items(&files_with_aliases, &module.id, equality_index, &mut graph);
+    collect_items(&files_with_aliases, &package.id, equality_index, &mut graph);
 
     for (file, alias_map) in &files_with_aliases {
         for item in &file.items {
-            walk_expression(module, item, &mut graph, alias_map, None);
+            walk_expression(package, item, &mut graph, alias_map, None);
         }
     }
 
-    for ((method_module_id, method_name), satisfactions) in &facts.interface_satisfied_methods {
-        if method_module_id != &module.id {
+    for ((method_package_id, method_name), satisfactions) in &facts.interface_satisfied_methods {
+        if method_package_id != &package.id {
             continue;
         }
         if method_name == "equals" {
             for satisfaction in satisfactions {
-                graph.mark_as_used(ModuleItemId::equals_method(&satisfaction.impl_type_name));
+                graph.mark_as_used(PackageItemId::equals_method(&satisfaction.impl_type_name));
             }
         } else {
-            graph.mark_as_used(ModuleItemId::new(method_name));
+            graph.mark_as_used(PackageItemId::new(method_name));
         }
     }
 
@@ -160,12 +160,12 @@ fn run_ref_lints(module: &Module, facts: &Facts, store: &Store) -> RefLintResult
         diagnostics.push(diagnostic);
     }
 
-    // Emit drops an import from every file of the module at once.
+    // Emit drops an import from every file of the package at once.
     let unused_import_aliases = usage.unused_import_aliases();
 
     check_redundant_aliases(files, store, &unused_import_spans, &mut diagnostics);
 
-    check_visibility_constraints(module, files, &mut diagnostics);
+    check_visibility_constraints(package, files, &mut diagnostics);
 
     for (kind, span) in graph.unused_members() {
         diagnostics.push(match kind {
@@ -183,21 +183,21 @@ fn run_ref_lints(module: &Module, facts: &Facts, store: &Store) -> RefLintResult
 
 fn collect_items(
     files: &[(&File, AliasMap<'_>)],
-    module_id: &str,
+    package_id: &str,
     equality_index: &EqualityIndex,
     graph: &mut ReferenceGraph,
 ) {
     for (file, aliases) in files {
         for (alias, name_span, statement_span) in aliases.imports() {
             graph.add_import(
-                ModuleItemId::import(file.id, alias),
+                PackageItemId::import(file.id, alias),
                 name_span,
                 statement_span,
             );
         }
         for item in &file.items {
             match item {
-                Expression::ModuleImport { .. } => {}
+                Expression::PackageImport { .. } => {}
                 Expression::Function {
                     name,
                     name_span,
@@ -205,7 +205,7 @@ fn collect_items(
                     attributes,
                     ..
                 } => {
-                    let id = ModuleItemId::new(name);
+                    let id = PackageItemId::new(name);
                     let is_entry = function_is_entry(name, *visibility, attributes);
                     graph.add_item(id, *name_span, ItemKind::Function, is_entry);
                 }
@@ -215,7 +215,7 @@ fn collect_items(
                     visibility,
                     ..
                 } => {
-                    let id = ModuleItemId::new(identifier);
+                    let id = PackageItemId::new(identifier);
                     graph.add_item(
                         id,
                         *identifier_span,
@@ -231,7 +231,7 @@ fn collect_items(
                     visibility,
                     ..
                 } => {
-                    let id = ModuleItemId::new(name);
+                    let id = PackageItemId::new(name);
                     let is_public = *visibility == Visibility::Public;
                     graph.add_item(id, *name_span, ItemKind::Type, is_public);
 
@@ -252,11 +252,11 @@ fn collect_items(
                     visibility,
                     ..
                 } => {
-                    let id = ModuleItemId::new(name);
+                    let id = PackageItemId::new(name);
                     let is_public = *visibility == Visibility::Public;
                     graph.add_item(id, *name_span, ItemKind::Type, is_public);
 
-                    let qualified_name = format!("{module_id}.{name}");
+                    let qualified_name = format!("{package_id}.{name}");
                     let flags = StructLintFlags {
                         is_public,
                         has_serialization_attr: has_serialization_attr(attributes),
@@ -283,7 +283,7 @@ fn collect_items(
                     visibility,
                     ..
                 } => {
-                    let id = ModuleItemId::new(name);
+                    let id = PackageItemId::new(name);
                     graph.add_item(
                         id,
                         *name_span,
@@ -304,7 +304,7 @@ fn collect_items(
                             ..
                         } = method
                         {
-                            let id = ModuleItemId::method(name, receiver_name);
+                            let id = PackageItemId::method(name, receiver_name);
                             let is_entry = method_is_entry(name, *visibility);
                             graph.add_item(id, *name_span, ItemKind::Function, is_entry);
                         }

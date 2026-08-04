@@ -42,12 +42,12 @@ use analyze::facts::{EmitFactsConfig, is_nullable_option};
 use diagnostics::LisetteDiagnostic;
 use names::go_name::GeneratedPackage;
 use names::packages::{PackageRequirements, PackageUse};
-use plan::ModulePlan;
+use plan::PackagePlan;
 use plan::bodies::{LoopId, LoweredBlock, LoweredStatement};
 use state::adapter_registry::AdapterRegistry;
 use state::bindings::BindingSnapshot;
 use state::file_namespace::FileNamespace;
-use state::module_state::{FunctionEmissionState, ModuleState};
+use state::package_state::{FunctionEmissionState, PackageState};
 use state::scope::ScopeState;
 use syntax::ast::Span;
 use syntax::program::{
@@ -62,7 +62,7 @@ pub struct EmitOptions {
     pub emit_tests: bool,
 }
 
-/// A library root's Go package name, from its module path (`example.com/lib/v2` -> `lib`).
+/// A library root's Go package name, from its package path (`example.com/lib/v2` -> `lib`).
 pub fn root_package_name(go_module: &str) -> String {
     go_name::sanitize_package_name(syntax::program::go_import_default_name(go_module)).into_owned()
 }
@@ -174,19 +174,19 @@ fn sentinel_hint(hints: &[String]) -> Option<i64> {
 
 pub struct TestEmitConfig<'a> {
     pub definitions: &'a HashMap<Symbol, Definition>,
-    pub module_id: &'a str,
+    pub package_id: &'a str,
     pub go_module: &'a str,
     pub unused: &'a UnusedInfo,
     pub mutations: &'a MutationInfo,
     pub equality_index: &'a EqualityIndex,
     pub test_index: &'a TestIndex,
     pub go_package_names: &'a HashMap<String, String>,
-    pub go_module_ids: &'a HashSet<String>,
+    pub go_package_ids: &'a HashSet<String>,
 }
 
 pub struct Planner<'a> {
     facts: EmitFacts<'a>,
-    module: ModuleState,
+    package: PackageState,
     function_state: FunctionEmissionState,
     scope: ScopeState,
     adapter_registry: AdapterRegistry,
@@ -308,35 +308,35 @@ impl<'a> Planner<'a> {
             globals: Arc::new(GlobalEmitData::compute(&analysis.definitions)),
         };
 
-        let mut files_by_module: HashMap<&str, Vec<&File>> = HashMap::default();
+        let mut files_by_package: HashMap<&str, Vec<&File>> = HashMap::default();
         for file in analysis.files.values().filter(|file| !file.is_d_lis()) {
-            if !analysis.cached_modules.contains(&file.module_id) {
-                files_by_module
-                    .entry(file.module_id.as_str())
+            if !analysis.cached_packages.contains(&file.package_id) {
+                files_by_package
+                    .entry(file.package_id.as_str())
                     .or_default()
                     .push(file);
             }
         }
-        for files in files_by_module.values_mut() {
+        for files in files_by_package.values_mut() {
             files.sort_unstable_by_key(|file| file.id);
         }
-        let mut work: Vec<_> = files_by_module.into_iter().collect();
-        work.sort_unstable_by_key(|(module_id, _)| *module_id);
+        let mut work: Vec<_> = files_by_package.into_iter().collect();
+        work.sort_unstable_by_key(|(package_id, _)| *package_id);
 
         const PARALLEL_THRESHOLD: usize = 4;
 
-        let emit_one = |(module_id, files): &(&str, Vec<&File>)| {
-            emit_module(
+        let emit_one = |(package_id, files): &(&str, Vec<&File>)| {
+            emit_package(
                 analysis,
                 go_module,
                 entry_package_name,
                 &shared,
-                module_id,
+                package_id,
                 files,
             )
         };
 
-        let module_outputs: Vec<Result<Vec<OutputFile>, Vec<LisetteDiagnostic>>> =
+        let package_outputs: Vec<Result<Vec<OutputFile>, Vec<LisetteDiagnostic>>> =
             if work.len() < PARALLEL_THRESHOLD {
                 work.iter().map(emit_one).collect()
             } else {
@@ -346,8 +346,8 @@ impl<'a> Planner<'a> {
 
         let mut output = Vec::new();
         let mut diagnostics = Vec::new();
-        for module_output in module_outputs {
-            match module_output {
+        for package_output in package_outputs {
+            match package_output {
                 Ok(mut files) => output.append(&mut files),
                 Err(mut errors) => diagnostics.append(&mut errors),
             }
@@ -381,8 +381,8 @@ impl<'a> Planner<'a> {
             equality_index: config.equality_index,
             test_index: config.test_index,
             go_package_names: config.go_package_names,
-            go_module_ids: config.go_module_ids,
-            entry_module: config.module_id.to_string(),
+            go_package_ids: config.go_package_ids,
+            entry_package: config.package_id.to_string(),
             entry_package_name: "main",
             go_module: config.go_module.to_string(),
             options: EmitOptions {
@@ -391,7 +391,7 @@ impl<'a> Planner<'a> {
             },
             line_indexes,
             globals,
-            current_module: config.module_id.to_string(),
+            current_package: config.package_id.to_string(),
         });
         Self::new(facts)
     }
@@ -399,7 +399,7 @@ impl<'a> Planner<'a> {
     fn new(facts: EmitFacts<'a>) -> Self {
         Self {
             facts,
-            module: ModuleState::default(),
+            package: PackageState::default(),
             function_state: FunctionEmissionState::default(),
             scope: ScopeState::new(),
             adapter_registry: AdapterRegistry::default(),
@@ -449,7 +449,7 @@ impl<'a> Planner<'a> {
 
     /// The enclosing function/lambda/try/recover return context, maintained on
     /// the scope stack and shared cheaply via `Rc`. Defaults to
-    /// `ReturnContext::None` outside any function body (e.g. module-level
+    /// `ReturnContext::None` outside any function body (e.g. package-level
     /// collection). This is the single source of truth for return-context
     /// lowering.
     fn return_ctx(&self) -> ReturnContext {
@@ -600,18 +600,18 @@ impl<'a> Planner<'a> {
     pub fn emit_files(
         &mut self,
         files: &[&File],
-        module_id: &str,
+        package_id: &str,
     ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
-        let plan = self.build_module_plan(files, module_id);
-        self.render_module_plan(files, plan)
+        let plan = self.build_package_plan(files, package_id);
+        self.render_package_plan(files, plan)
     }
 
-    fn render_module_plan(
+    fn render_package_plan(
         &mut self,
         files: &[&File],
-        plan: ModulePlan,
+        plan: PackagePlan,
     ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
-        let ModulePlan {
+        let PackagePlan {
             package_name,
             files: file_plans,
             mut collision_diagnostics,
@@ -646,7 +646,7 @@ impl<'a> Planner<'a> {
                 .take()
                 .expect("file namespace was installed before rendering");
             let (imports, mut diagnostics) =
-                namespace.finish(self.facts.go_package_names(), self.facts.go_module_ids());
+                namespace.finish(self.facts.go_package_names(), self.facts.go_package_ids());
             if i == 0 {
                 diagnostics.append(&mut collision_diagnostics);
             }
@@ -669,19 +669,19 @@ impl<'a> Planner<'a> {
     }
 }
 
-/// Emit state built once in [`Planner::emit`] and shared by every module worker.
+/// Emit state built once in [`Planner::emit`] and shared by every package worker.
 struct SharedEmitContext {
     options: EmitOptions,
     line_indexes: Arc<HashMap<u32, LineIndex>>,
     globals: Arc<GlobalEmitData>,
 }
 
-fn emit_module<'a>(
+fn emit_package<'a>(
     analysis: &'a EmitInput,
     go_module: &str,
     entry_package_name: &'a str,
     shared_emit_ctx: &SharedEmitContext,
-    module_id: &str,
+    package_id: &str,
     files: &[&'a File],
 ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
     let facts = EmitFacts::new(EmitFactsConfig {
@@ -691,25 +691,25 @@ fn emit_module<'a>(
         equality_index: &analysis.equality_index,
         test_index: &analysis.test_index,
         go_package_names: &analysis.go_package_names,
-        go_module_ids: &analysis.go_module_ids,
-        entry_module: analysis.entry_module_id.to_string(),
+        go_package_ids: &analysis.go_package_ids,
+        entry_package: analysis.entry_package_id.to_string(),
         entry_package_name,
         go_module: go_module.to_string(),
         options: shared_emit_ctx.options.clone(),
         line_indexes: shared_emit_ctx.line_indexes.clone(),
         globals: shared_emit_ctx.globals.clone(),
-        current_module: module_id.to_string(),
+        current_package: package_id.to_string(),
     });
     let mut planner: Planner<'a> = Planner::new(facts);
 
     planner
-        .emit_files(files, module_id)
-        .map(|mut module_output| {
-            if module_id != analysis.entry_module_id.as_str() {
-                for file in &mut module_output {
-                    file.name = format!("{}/{}", module_id, file.name);
+        .emit_files(files, package_id)
+        .map(|mut package_output| {
+            if package_id != analysis.entry_package_id.as_str() {
+                for file in &mut package_output {
+                    file.name = format!("{}/{}", package_id, file.name);
                 }
             }
-            module_output
+            package_output
         })
 }

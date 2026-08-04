@@ -5,14 +5,14 @@ use syntax::types::{FunctionParameter, Type};
 use crate::analysis::ProjectKind;
 use crate::checker::infer::InferCtx;
 use crate::checker::registration::test_functions::normalize_test_params;
-use crate::store::ENTRY_MODULE_ID;
+use crate::store::ENTRY_PACKAGE_ID;
 
 impl InferCtx<'_> {
     fn ty_is_test_context(&self, ty: &Type) -> bool {
         let resolved = ty.resolve_in(&self.env).strip_refs();
         resolved.get_qualified_id().is_some_and(|id| {
             id.strip_suffix(".TestContext")
-                .is_some_and(|module| module == crate::prelude::TEST_PRELUDE_MODULE_ID)
+                .is_some_and(|package| package == crate::prelude::TEST_PRELUDE_PACKAGE_ID)
         })
     }
 
@@ -62,7 +62,7 @@ impl InferCtx<'_> {
 
         if name == "main"
             && self.project_kind == ProjectKind::Binary
-            && self.cursor.module_id == ENTRY_MODULE_ID
+            && self.cursor.package_id == ENTRY_PACKAGE_ID
             && (!params.is_empty() || return_annotation != Annotation::Unknown)
         {
             self.sink

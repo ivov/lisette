@@ -208,9 +208,9 @@ fn collect_shadowed_captures(store: &Store, facts: &Facts, out: &mut Vec<Lisette
         .filter_map(LisetteDiagnostic::file_id)
         .collect();
     let allows: Vec<_> = store
-        .modules
+        .packages
         .values()
-        .flat_map(|module| module.source_files())
+        .flat_map(|package| package.source_files())
         .filter(|file| reported.contains(&file.id))
         .flat_map(|file| super::suppression::collect_function_allows(&file.items))
         .collect();

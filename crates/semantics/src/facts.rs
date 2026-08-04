@@ -102,7 +102,7 @@ pub struct GenericCallCheck {
     pub ty: Type,
     pub span: Span,
     /// Qualifies `ty`'s variable ids, which are unique only per inference context.
-    pub module_id: String,
+    pub package_id: String,
 }
 
 #[derive(Debug, Clone)]
@@ -110,7 +110,7 @@ pub struct GenericBoundObligation {
     pub argument: Type,
     pub required: Type,
     pub span: Span,
-    pub module_id: String,
+    pub package_id: String,
     pub param_name: EcoString,
     pub(crate) available_bounds: Vec<(EcoString, Vec<Type>)>,
     pub origin: GenericBoundOrigin,
@@ -133,7 +133,7 @@ pub struct EmptyCollectionCheck {
     pub name: String,
     pub ty: Type,
     pub span: Span,
-    pub module_id: String,
+    pub package_id: String,
 }
 
 /// An empty slice literal, rejected if its element type stays unbound.
@@ -141,14 +141,14 @@ pub struct EmptyCollectionCheck {
 pub struct EmptyLiteralCheck {
     pub ty: Type,
     pub span: Span,
-    pub module_id: String,
+    pub package_id: String,
 }
 
 #[derive(Debug, Clone)]
 pub struct SliceMakeCheck {
     pub ty: Type,
     pub span: Span,
-    pub module_id: String,
+    pub package_id: String,
 }
 
 #[derive(Debug, Clone)]
@@ -305,13 +305,13 @@ impl Facts {
 
     pub(crate) fn mark_method_used_for_interface(
         &mut self,
-        module_id: String,
+        package_id: String,
         method_name: String,
         impl_type_name: String,
         spelling_pinned: bool,
     ) {
         self.interface_satisfied_methods
-            .entry((module_id, method_name))
+            .entry((package_id, method_name))
             .or_default()
             .push(InterfaceSatisfaction {
                 impl_type_name,
@@ -323,12 +323,12 @@ impl Facts {
     /// by source spelling, so the naming lint must not suggest a rename.
     pub fn method_spelling_pinned_by_interface(
         &self,
-        module_id: &str,
+        package_id: &str,
         method_name: &str,
         type_name: &str,
     ) -> bool {
         self.interface_satisfied_methods
-            .get(&(module_id.to_string(), method_name.to_string()))
+            .get(&(package_id.to_string(), method_name.to_string()))
             .is_some_and(|satisfactions| {
                 satisfactions
                     .iter()

@@ -9,7 +9,7 @@ pub(crate) fn is_go_import(id: &str) -> bool {
     id.starts_with(GO_IMPORT_PREFIX)
 }
 
-pub(crate) const PRELUDE_MODULE: &str = "prelude";
+pub(crate) const PRELUDE_PACKAGE: &str = "prelude";
 
 pub(crate) const PRELUDE_PREFIX: &str = "prelude.";
 
@@ -36,7 +36,7 @@ pub(crate) fn reserved_prefix_of(go: &str) -> Option<&'static str> {
 
 pub const PRELUDE_IMPORT_PATH: &str = "github.com/ivov/lisette/prelude";
 
-pub(crate) const TEST_PRELUDE_MODULE: &str = "**test_prelude";
+pub(crate) const TEST_PRELUDE_PACKAGE: &str = "**test_prelude";
 pub const TESTKIT_IMPORT_PATH: &str = "github.com/ivov/lisette/prelude/testkit";
 const TESTKIT_PKG: &str = "testkit";
 
@@ -66,8 +66,8 @@ pub(crate) fn iterate_variants_fn_name(enum_name: &str, exported: bool) -> Strin
     format!("{}_{}", enum_name, method_segment)
 }
 
-pub(crate) fn go_package_name(module: &str) -> &str {
-    module.rsplit('/').next().unwrap_or(module)
+pub(crate) fn go_package_name(package: &str) -> &str {
+    package.rsplit('/').next().unwrap_or(package)
 }
 
 pub(crate) fn is_plain_identifier(value: &str) -> bool {
@@ -135,7 +135,7 @@ impl ResolvedName {
 /// # Examples
 /// - `"prelude.Option"` → `"lisette.Option"` (Prelude package)
 /// - `"prelude.Slice.filter"` → `"lisette.SliceFilter"` (Prelude package)
-/// - `"mymodule.foo"` → `"mymodule_foo"` (no package)
+/// - `"mypackage.foo"` → `"mypackage_foo"` (no package)
 /// - `"range"` → `"range_"` (Go keyword escaped)
 pub(crate) fn resolve(name: &str) -> ResolvedName {
     if let Some(rest) = name.strip_prefix(PRELUDE_PREFIX) {
@@ -149,23 +149,23 @@ pub(crate) fn resolve(name: &str) -> ResolvedName {
 pub(crate) fn variant(
     identifier: &str,
     ty: &Type,
-    enum_module: &str,
-    current_module: &str,
-    module_alias: Option<&str>,
+    enum_package: &str,
+    current_package: &str,
+    package_alias: Option<&str>,
 ) -> ResolvedName {
     let Type::Nominal { id, .. } = ty else {
         return ResolvedName::local(identifier.replace('.', "_"));
     };
 
-    variant_by_id(identifier, id, enum_module, current_module, module_alias)
+    variant_by_id(identifier, id, enum_package, current_package, package_alias)
 }
 
 pub(crate) fn variant_by_id(
     identifier: &str,
     enum_id: &str,
-    enum_module: &str,
-    current_module: &str,
-    module_alias: Option<&str>,
+    enum_package: &str,
+    current_package: &str,
+    package_alias: Option<&str>,
 ) -> ResolvedName {
     let is_prelude = enum_id.starts_with(PRELUDE_PREFIX);
     let enum_name = unqualified_name(enum_id);
@@ -175,8 +175,8 @@ pub(crate) fn variant_by_id(
         ResolvedName::stdlib(format!("{}.{enum_name}{variant_name}", GO_STDLIB_PKG))
     } else {
         let base = enum_tag_constant(enum_name, variant_name);
-        if enum_module != current_module {
-            let pkg = module_alias.unwrap_or_else(|| go_package_name(enum_module));
+        if enum_package != current_package {
+            let pkg = package_alias.unwrap_or_else(|| go_package_name(enum_package));
             ResolvedName::local(format!("{pkg}.{base}"))
         } else {
             ResolvedName::local(base)
@@ -301,14 +301,14 @@ pub(crate) fn escape_reserved(name: &str) -> Cow<'_, str> {
 }
 
 pub(crate) fn qualify_method(
-    module: Option<&str>,
+    package: Option<&str>,
     type_name: &str,
     method: &str,
-    current_module: &str,
+    current_package: &str,
     is_public: bool,
-    module_alias: Option<&str>,
+    package_alias: Option<&str>,
 ) -> ResolvedName {
-    let Some(module) = module else {
+    let Some(package) = package else {
         let method_name = if is_public {
             snake_to_camel(method)
         } else {
@@ -317,14 +317,14 @@ pub(crate) fn qualify_method(
         return ResolvedName::local(format!("{}_{}", type_name, method_name));
     };
 
-    if module == PRELUDE_MODULE {
+    if package == PRELUDE_PACKAGE {
         ResolvedName::stdlib(format!(
             "{}.{}{}",
             GO_STDLIB_PKG,
             type_name,
             snake_to_camel(method)
         ))
-    } else if module == current_module {
+    } else if package == current_package {
         let method_name = if is_public {
             snake_to_camel(method)
         } else {
@@ -332,7 +332,7 @@ pub(crate) fn qualify_method(
         };
         ResolvedName::local(format!("{}_{}", type_name, method_name))
     } else {
-        let pkg = module_alias.unwrap_or_else(|| go_package_name(module));
+        let pkg = package_alias.unwrap_or_else(|| go_package_name(package));
         ResolvedName::local(format!("{}.{}_{}", pkg, type_name, snake_to_camel(method)))
     }
 }

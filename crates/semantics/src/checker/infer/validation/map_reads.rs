@@ -61,8 +61,8 @@ impl InferCtx<'_> {
         if value_ty.is_error() || value_ty.is_variable() {
             return;
         }
-        let from_module = self.cursor.module_id.clone();
-        if self.has_zero(value_ty, &from_module).is_err() {
+        let from_package = self.cursor.package_id.clone();
+        if self.has_zero(value_ty, &from_package).is_err() {
             let receiver = collection.root_identifier().unwrap_or("m");
             let full_span = collection.get_span().merge(span);
             self.sink.push(diagnostics::infer::map_read_no_zero(

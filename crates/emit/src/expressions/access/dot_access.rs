@@ -51,8 +51,8 @@ impl Planner<'_> {
 
         let expression_ty = expression.get_type();
 
-        let base_plan = if let Some(module) = expression_ty.as_import_namespace() {
-            ValuePlan::name(Vec::new(), self.require_module_import(module), true)
+        let base_plan = if let Some(package) = expression_ty.as_import_namespace() {
+            ValuePlan::name(Vec::new(), self.require_package_import(package), true)
         } else {
             self.plan_coerced_expression(expression, receiver_coercion, ctx)
         };
@@ -84,7 +84,7 @@ impl Planner<'_> {
             self.resolve_is_exported(expression, &expression_ty, member, dot_access_kind);
         let is_embedded = self.field_is_embedded(&expression_ty, member);
         let field = self
-            .try_resolve_cross_module_const(&expression_ty, member)
+            .try_resolve_cross_package_const(&expression_ty, member)
             .unwrap_or_else(|| go_field_name(&expression_ty, member, is_exported, is_embedded));
 
         if let Some(s) = self.plan_nullable_field_access(
@@ -108,7 +108,7 @@ impl Planner<'_> {
             field,
         );
         let rendered_selector = selector.rendered();
-        let result = self.append_cross_module_type_args(
+        let result = self.append_cross_package_type_args(
             rendered_selector.clone(),
             &expression_ty,
             member,
@@ -124,8 +124,8 @@ impl Planner<'_> {
     }
 
     /// Dispatch kinds that can resolve without the receiver emitted first.
-    /// `ModuleMember` and unresolved kinds may still resolve under a
-    /// cross-module/alias rename.
+    /// `PackageMember` and unresolved kinds may still resolve under a
+    /// cross-package/alias rename.
     fn try_emit_pre_receiver_dot(
         &mut self,
         expression: &Expression,
@@ -149,7 +149,7 @@ impl Planner<'_> {
                 is_exported,
                 is_pointer_receiver,
             ),
-            Some(SemanticDotKind::ModuleMember) | None => {
+            Some(SemanticDotKind::PackageMember) | None => {
                 if let Some(s) = self.emit_enum_variant_dot(member, result_ty) {
                     Some(s)
                 } else {
@@ -244,10 +244,10 @@ impl Planner<'_> {
         Some(coerced)
     }
 
-    /// When accessing a cross-module generic member by value (not as a callee),
+    /// When accessing a cross-package generic member by value (not as a callee),
     /// look up the instantiation's type args and append them to the expression.
     /// Callee-position accesses skip this because the call site re-instantiates.
-    fn append_cross_module_type_args(
+    fn append_cross_package_type_args(
         &mut self,
         base_access: String,
         expression_ty: &Type,
@@ -258,11 +258,11 @@ impl Planner<'_> {
         if ctx.is_callee() {
             return base_access;
         }
-        let Some(module) = expression_ty.as_import_namespace() else {
+        let Some(package) = expression_ty.as_import_namespace() else {
             return base_access;
         };
-        let qualified = format!("{}.{}", module, member);
-        match self.format_cross_module_type_args(&qualified, result_ty) {
+        let qualified = format!("{}.{}", package, member);
+        match self.format_cross_package_type_args(&qualified, result_ty) {
             Some(type_args) => format!("{}{}", base_access, type_args),
             None => base_access,
         }
@@ -402,12 +402,16 @@ impl Planner<'_> {
         Some(format!("{}.F{}", expression_string, index))
     }
 
-    fn try_resolve_cross_module_const(&self, expression_ty: &Type, member: &str) -> Option<String> {
-        let module = expression_ty.as_import_namespace()?;
-        if go_name::is_go_import(module) {
+    fn try_resolve_cross_package_const(
+        &self,
+        expression_ty: &Type,
+        member: &str,
+    ) -> Option<String> {
+        let package = expression_ty.as_import_namespace()?;
+        if go_name::is_go_import(package) {
             return None;
         }
-        let qualified_name = format!("{}.{}", module, member);
+        let qualified_name = format!("{}.{}", package, member);
         let definition = self.facts.definition(qualified_name.as_str())?;
         if !definition.visibility.is_public() {
             return None;
@@ -461,14 +465,14 @@ fn go_field_name(
     }
 }
 
-/// Whether the type resolves to a prelude-module declaration. Shared with
+/// Whether the type resolves to a prelude-package declaration. Shared with
 /// the struct-call path, which also uses prelude-ness to decide field
 /// naming and type formatting.
 pub(super) fn is_from_prelude(ty: &Type) -> bool {
     let Type::Nominal { id, .. } = ty.strip_refs() else {
         return false;
     };
-    // Only return true if the type actually comes from the prelude module.
+    // Only return true if the type actually comes from the prelude package.
     // User-defined types with the same name should NOT be treated as prelude types.
     id.starts_with(go_name::PRELUDE_PREFIX)
 }

@@ -195,7 +195,7 @@ mod tests {
         let result = build_ast(source, 7);
         File {
             id: 7,
-            module_id: "m".into(),
+            package_id: "m".into(),
             name: "m.lis".into(),
             display_path: "m.lis".into(),
             source_path: None,

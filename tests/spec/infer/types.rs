@@ -2209,7 +2209,7 @@ fn static_method_recursion_through_alias_produces_error() {
 }
 
 #[test]
-fn imported_module_polymorphic_recursion_produces_error() {
+fn imported_package_polymorphic_recursion_produces_error() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         "helpers",
@@ -2232,7 +2232,7 @@ fn main() {
 "#,
     );
 
-    infer_module("main", fs).assert_infer_code_once("instantiation_cycle");
+    infer_package("main", fs).assert_infer_code_once("instantiation_cycle");
 }
 
 #[test]
@@ -2763,7 +2763,7 @@ fn is_weekend(day: weekday.Weekday) -> bool {
 "#;
     fs.add_file("main", "main.lis", source);
 
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -2791,7 +2791,7 @@ fn get_name(day: weekday.Weekday) -> string {
 "#;
     fs.add_file("main", "main.lis", source);
 
-    infer_module("main", fs).assert_exhaustiveness_error();
+    infer_package("main", fs).assert_exhaustiveness_error();
 }
 
 #[test]
@@ -2820,7 +2820,7 @@ fn get_name(day: weekday.Weekday) -> string {
 "#;
     fs.add_file("main", "main.lis", source);
 
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 fn weekday_typedef() -> &'static str {
@@ -2853,7 +2853,7 @@ fn get_name(day: weekday.Weekday) -> string {
 }
 "#;
     fs.add_file("main", "main.lis", source);
-    infer_module("main", fs).assert_infer_code("type_mismatch");
+    infer_package("main", fs).assert_infer_code("type_mismatch");
 }
 
 #[test]
@@ -2872,7 +2872,7 @@ fn get_name(day: weekday.Weekday) -> string {
 }
 "#;
     fs.add_file("main", "main.lis", source);
-    infer_module("main", fs).assert_infer_code("redundant_arm");
+    infer_package("main", fs).assert_infer_code("redundant_arm");
 }
 
 #[test]
@@ -2899,7 +2899,7 @@ fn name(c: codes.Code) -> string {
 }
 "#;
     fs.add_file("main", "main.lis", source);
-    infer_module("main", fs).assert_infer_code("redundant_arm");
+    infer_package("main", fs).assert_infer_code("redundant_arm");
 }
 
 #[test]
@@ -2925,7 +2925,7 @@ fn name(c: codes.Code) -> int {
 }
 "#;
     fs.add_file("main", "main.lis", source);
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -2951,7 +2951,7 @@ fn name(c: codes.Code) -> int {
 }
 "#;
     fs.add_file("main", "main.lis", source);
-    infer_module("main", fs).assert_infer_code("redundant_arm");
+    infer_package("main", fs).assert_infer_code("redundant_arm");
 }
 
 #[test]
@@ -2966,7 +2966,7 @@ fn test() {
 }
 "#;
     fs.add_file("main", "main.lis", source);
-    infer_module("main", fs).assert_infer_code("const_pattern_outside_match_arm");
+    infer_package("main", fs).assert_infer_code("const_pattern_outside_match_arm");
 }
 
 #[test]
@@ -2988,7 +2988,7 @@ fn name(day: lib.Weekday) -> string {
 }
 "#;
     fs.add_file("main", "main.lis", source);
-    infer_module("main", fs).assert_infer_code("const_pattern_not_eligible");
+    infer_package("main", fs).assert_infer_code("const_pattern_not_eligible");
 }
 
 #[test]
@@ -3011,7 +3011,7 @@ fn handle() -> int {
 }
 "#;
     fs.add_file("main", "main.lis", source);
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3038,7 +3038,7 @@ fn describe(d: time.Duration) -> string {
 }
 "#;
     fs.add_file("main", "main.lis", source);
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3199,7 +3199,7 @@ fn test() -> time.Duration {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3217,7 +3217,7 @@ fn test() -> time.Duration {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3235,7 +3235,7 @@ fn test() -> time.Duration {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3253,7 +3253,7 @@ fn test() -> time.Duration {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3271,7 +3271,7 @@ fn test() -> time.Duration {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3289,7 +3289,7 @@ fn test() -> time.Duration {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3307,7 +3307,7 @@ fn test() -> time.Duration {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3325,7 +3325,7 @@ fn test() -> time.Duration {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3343,7 +3343,7 @@ fn test() -> time.Duration {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3361,7 +3361,7 @@ fn test() -> bool {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3379,7 +3379,7 @@ fn test() -> bool {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3397,7 +3397,7 @@ fn test() -> bool {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3415,7 +3415,7 @@ fn test() -> bool {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3433,7 +3433,7 @@ fn test() -> bool {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3451,7 +3451,7 @@ fn test() -> bool {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3469,7 +3469,7 @@ fn test() -> time.Duration {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3487,7 +3487,7 @@ fn test() -> time.Duration {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3506,7 +3506,7 @@ fn test() {
 }
 "#,
     );
-    infer_module("main", fs).assert_infer_code("type_mismatch");
+    infer_package("main", fs).assert_infer_code("type_mismatch");
 }
 
 #[test]
@@ -3525,7 +3525,7 @@ fn test() -> time.Duration {
 }
 "#,
     );
-    infer_module("main", fs).assert_infer_code("type_mismatch");
+    infer_package("main", fs).assert_infer_code("type_mismatch");
 }
 
 #[test]
@@ -3544,7 +3544,7 @@ fn test() -> time.Duration {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3562,7 +3562,7 @@ fn test() -> time.Duration {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3582,7 +3582,7 @@ fn test() {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3600,7 +3600,7 @@ fn get_delay(multiplier: int) -> time.Duration {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3618,7 +3618,7 @@ fn test() -> time.Duration {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3636,7 +3636,7 @@ fn test() -> bool {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3654,7 +3654,7 @@ fn test() -> bool {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3672,7 +3672,7 @@ fn test() -> bool {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3690,7 +3690,7 @@ fn test() -> bool {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3708,7 +3708,7 @@ fn test() {
 }
 "#,
     );
-    infer_module("main", fs).assert_infer_code("type_mismatch");
+    infer_package("main", fs).assert_infer_code("type_mismatch");
 }
 
 #[test]
@@ -3735,7 +3735,7 @@ fn test() {
 }
 "#,
     );
-    infer_module("main", fs).assert_infer_code("incompatible_named_types");
+    infer_package("main", fs).assert_infer_code("incompatible_named_types");
 }
 
 #[test]
@@ -3762,7 +3762,7 @@ fn test() -> bool {
 }
 "#,
     );
-    infer_module("main", fs).assert_infer_code("incompatible_named_types");
+    infer_package("main", fs).assert_infer_code("incompatible_named_types");
 }
 
 #[test]
@@ -3789,7 +3789,7 @@ fn test() -> time.Duration {
 }
 "#,
     );
-    infer_module("main", fs).assert_infer_code("type_mismatch");
+    infer_package("main", fs).assert_infer_code("type_mismatch");
 }
 
 #[test]
@@ -3817,7 +3817,7 @@ fn test() {
 }
 "#,
     );
-    infer_module("main", fs).assert_infer_code("type_mismatch");
+    infer_package("main", fs).assert_infer_code("type_mismatch");
 }
 
 #[test]
@@ -3845,7 +3845,7 @@ fn test() {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3873,7 +3873,7 @@ fn test() {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3893,7 +3893,7 @@ fn test() -> time.Duration {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3913,7 +3913,7 @@ fn test() -> int64 {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -3932,7 +3932,7 @@ fn test() {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -5021,7 +5021,7 @@ struct Foo<T> {}
 "#,
     );
 
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -5339,7 +5339,7 @@ fn use_it(p: P) -> int { p.foo() }
 fn main() {}
 "#,
     );
-    infer_module("main", fs).assert_infer_code("interface_cycle");
+    infer_package("main", fs).assert_infer_code("interface_cycle");
 }
 
 #[test]
@@ -5371,7 +5371,7 @@ fn take(p: P) {}
 fn main() { take(S {}) }
 "#,
     );
-    infer_module("main", fs).assert_infer_code("interface_cycle");
+    infer_package("main", fs).assert_infer_code("interface_cycle");
 }
 
 #[test]
@@ -5467,7 +5467,7 @@ fn take(c: C) {}
 fn main() { take(S {}) }
 "#,
     );
-    infer_module("main", fs).assert_infer_code("interface_method_conflict");
+    infer_package("main", fs).assert_infer_code("interface_method_conflict");
 }
 
 #[test]
@@ -5505,7 +5505,7 @@ fn test() { let _w: Worker = MyWorker {} }
 fn main() {}
 "#,
     );
-    infer_module("main", fs).assert_infer_code("interface_not_implemented");
+    infer_package("main", fs).assert_infer_code("interface_not_implemented");
 }
 
 #[test]
@@ -5574,7 +5574,7 @@ fn main() {
 }
 "#,
     );
-    infer_module("main", fs).assert_resolve_code_once("type_not_found");
+    infer_package("main", fs).assert_resolve_code_once("type_not_found");
 }
 
 #[test]
@@ -6354,7 +6354,7 @@ fn main() {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -6378,7 +6378,7 @@ fn main() {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -6414,7 +6414,7 @@ fn main() {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -6470,7 +6470,7 @@ fn main() {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -6496,7 +6496,7 @@ fn main() {
 "#,
     );
 
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -6802,7 +6802,7 @@ fn test() {
 }
 "#,
     );
-    infer_module("main", fs).assert_infer_code("type_mismatch");
+    infer_package("main", fs).assert_infer_code("type_mismatch");
 }
 
 #[test]
@@ -6824,7 +6824,7 @@ fn test() -> bool {
 }
 "#,
     );
-    infer_module("main", fs).assert_infer_code("type_mismatch");
+    infer_package("main", fs).assert_infer_code("type_mismatch");
 }
 
 #[test]
@@ -6846,7 +6846,7 @@ fn test() -> D {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -6875,7 +6875,7 @@ fn test() {
 }
 "#,
     );
-    infer_module("main", fs).assert_infer_code("type_mismatch");
+    infer_package("main", fs).assert_infer_code("type_mismatch");
 }
 
 #[test]
@@ -6899,7 +6899,7 @@ fn test() {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -6921,7 +6921,7 @@ fn test() -> sys.Errno {
 }
 "#,
     );
-    infer_module("main", fs).assert_infer_code("type_mismatch");
+    infer_package("main", fs).assert_infer_code("type_mismatch");
 }
 
 #[test]
@@ -6943,7 +6943,7 @@ fn test() -> bool {
 }
 "#,
     );
-    infer_module("main", fs).assert_infer_code("type_mismatch");
+    infer_package("main", fs).assert_infer_code("type_mismatch");
 }
 
 #[test]
@@ -6991,7 +6991,7 @@ fn infer_code_main(body: &str) -> InferResult {
         "main.lis",
         &format!("import \"status\"\n\nfn test() {{\n{body}\n}}\n"),
     );
-    infer_module("main", fs)
+    infer_package("main", fs)
 }
 
 #[test]
@@ -8561,7 +8561,7 @@ fn main() {}
 }
 
 #[test]
-fn embed_of_public_type_is_accessible_across_modules() {
+fn embed_of_public_type_is_accessible_across_packages() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         "types",
@@ -8582,11 +8582,11 @@ fn main() {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
-fn embed_of_private_type_not_accessible_across_modules() {
+fn embed_of_private_type_not_accessible_across_packages() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         "types",
@@ -8608,11 +8608,11 @@ fn main() {
 }
 "#,
     );
-    infer_module("main", fs).assert_resolve_code("private_field_access");
+    infer_package("main", fs).assert_resolve_code("private_field_access");
 }
 
 #[test]
-fn promoted_member_resolves_across_modules() {
+fn promoted_member_resolves_across_packages() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         "types",
@@ -8636,7 +8636,7 @@ fn main() {
 }
 "#,
     );
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -8742,7 +8742,7 @@ fn main() {}
 }
 
 #[test]
-fn cross_module_promoted_private_method_expression_is_rejected() {
+fn cross_package_promoted_private_method_expression_is_rejected() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         "lib",
@@ -8765,11 +8765,11 @@ fn use_it() {
 "#,
     );
 
-    infer_module("main", fs).assert_resolve_code("private_method_access");
+    infer_package("main", fs).assert_resolve_code("private_method_access");
 }
 
 #[test]
-fn cross_module_promoted_public_method_expression_resolves() {
+fn cross_package_promoted_public_method_expression_resolves() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         "lib",
@@ -8793,7 +8793,7 @@ fn use_it(o: lib.Outer) -> string {
 "#,
     );
 
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -9036,7 +9036,7 @@ fn main() {}
 }
 
 #[test]
-fn cross_module_promoted_private_method_is_rejected() {
+fn cross_package_promoted_private_method_is_rejected() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         "types",
@@ -9059,7 +9059,7 @@ fn main() {
 }
 "#,
     );
-    infer_module("main", fs).assert_resolve_code("private_method_access");
+    infer_package("main", fs).assert_resolve_code("private_method_access");
 }
 
 #[test]
@@ -9274,7 +9274,7 @@ fn main() {
             .errors
             .iter()
             .any(|error| error.code_str() == Some("resolve.import_conflict")),
-        "expected no import conflict for distinct `/vN` modules, got: {:?}",
+        "expected no import conflict for distinct `/vN` packages, got: {:?}",
         result.errors
     );
 }
@@ -9478,7 +9478,7 @@ fn baz(value: Bar) {
 "#,
     );
 
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -9499,7 +9499,7 @@ fn read(h: Holder) {
 "#,
     );
 
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -9521,7 +9521,7 @@ fn baz(value: Bar) {
 "#,
     );
 
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]
@@ -9544,7 +9544,7 @@ fn baz(value: Bar) {
 "#,
     );
 
-    infer_module("main", fs).assert_no_errors();
+    infer_package("main", fs).assert_no_errors();
 }
 
 #[test]

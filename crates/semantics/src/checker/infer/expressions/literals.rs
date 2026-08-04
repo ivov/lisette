@@ -176,14 +176,14 @@ impl InferCtx<'_> {
                 let unified = self.unify(expected_ty, &slice_ty, &span);
 
                 if new_elements.is_empty() && unified {
-                    let module_id = self.cursor.module_id.clone();
+                    let package_id = self.cursor.package_id.clone();
                     self.facts
                         .deferred
                         .empty_literals
                         .push(crate::facts::EmptyLiteralCheck {
                             ty: slice_ty.clone(),
                             span,
-                            module_id,
+                            package_id,
                         });
                 }
 

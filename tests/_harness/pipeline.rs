@@ -13,7 +13,7 @@ use syntax::{
 
 use super::new_test_store;
 
-use super::TEST_MODULE_ID;
+use super::TEST_PACKAGE_ID;
 use super::wrap::{TEST_WRAPPER_NAME, wrap};
 
 pub struct TestPipeline {
@@ -48,9 +48,9 @@ impl TestPipeline {
         self
     }
 
-    pub fn with_go_typedef(mut self, module_name: &str, typedef_source: &str) -> Self {
+    pub fn with_go_typedef(mut self, package_name: &str, typedef_source: &str) -> Self {
         self.extra_go_typedefs
-            .push((module_name.to_string(), typedef_source.to_string()));
+            .push((package_name.to_string(), typedef_source.to_string()));
         self
     }
 
@@ -84,7 +84,7 @@ pub struct CompiledTest {
 impl CompiledTest {
     pub fn run_inference(self) -> InferenceResult {
         let mut store = new_test_store();
-        store.add_module(TEST_MODULE_ID);
+        store.add_package(TEST_PACKAGE_ID);
 
         let sink = LocalSink::new();
 
@@ -95,23 +95,23 @@ impl CompiledTest {
             mutations,
             equality_index,
             go_package_names,
-            go_module_ids,
+            go_package_ids,
         ) = {
             let mut checker = TaskState::with_fresh_allocator();
-            checker.cursor.module_id = TEST_MODULE_ID.to_string();
+            checker.cursor.package_id = TEST_PACKAGE_ID.to_string();
             checker.put_prelude_in_scope(&store);
 
             let locator = deps::TypedefLocator::default();
 
             for (name, typedef) in &self.extra_go_typedefs {
-                checker.parse_and_register_go_module(&mut store, name, typedef, None, &locator);
+                checker.parse_and_register_go_package(&mut store, name, typedef, None, &locator);
             }
 
             let imports: Vec<FileImport> = self
                 .ast
                 .iter()
                 .filter_map(|item| {
-                    if let Expression::ModuleImport {
+                    if let Expression::PackageImport {
                         name,
                         name_span,
                         alias,
@@ -121,7 +121,7 @@ impl CompiledTest {
                         if let Some(go_pkg) = name.strip_prefix("go:")
                             && let Some(typedef) = get_go_stdlib_typedef(go_pkg, Target::host())
                         {
-                            checker.parse_and_register_go_module(
+                            checker.parse_and_register_go_package(
                                 &mut store, name, typedef, None, &locator,
                             );
                         }
@@ -137,7 +137,7 @@ impl CompiledTest {
                 })
                 .collect();
 
-            checker.put_imported_modules_in_scope(&store, &imports);
+            checker.put_imported_packages_in_scope(&store, &imports);
 
             checker.register_types_and_values(&mut store, &self.ast, &Visibility::Private);
             InferCtx::new(&mut checker, &store).check_const_cycles(&[self.ast.as_slice()]);
@@ -145,7 +145,7 @@ impl CompiledTest {
             let test_file_id = store.new_file_id();
             store.store_file(File {
                 id: test_file_id,
-                module_id: TEST_MODULE_ID.to_string(),
+                package_id: TEST_PACKAGE_ID.to_string(),
                 name: "test.lis".to_string(),
                 display_path: "test.lis".to_string(),
                 source_path: None,
@@ -187,10 +187,10 @@ impl CompiledTest {
 
             if !checker.failed() {
                 // Overwrite the stored file with the typed AST so passes::run
-                // sees post-inference items when iterating store.modules.
+                // sees post-inference items when iterating store.packages.
                 store.store_file(File {
                     id: test_file_id,
-                    module_id: TEST_MODULE_ID.to_string(),
+                    package_id: TEST_PACKAGE_ID.to_string(),
                     name: "test.lis".to_string(),
                     display_path: "test.lis".to_string(),
                     source_path: None,
@@ -230,7 +230,7 @@ impl CompiledTest {
             }
 
             let definitions: HashMap<Symbol, Definition> = store
-                .modules
+                .packages
                 .values()
                 .flat_map(|m| m.definitions.iter())
                 .map(|(k, v)| (k.clone(), v.clone()))
@@ -249,8 +249,8 @@ impl CompiledTest {
 
             let equality_index = std::mem::take(&mut store.equality_index);
             let go_package_names = store.go_package_names.clone();
-            let go_module_ids: HashSet<String> = store
-                .modules
+            let go_package_ids: HashSet<String> = store
+                .packages
                 .keys()
                 .filter(|id| id.starts_with(syntax::types::GO_IMPORT_PREFIX))
                 .cloned()
@@ -265,7 +265,7 @@ impl CompiledTest {
                 mutations,
                 equality_index,
                 go_package_names,
-                go_module_ids,
+                go_package_ids,
             )
         };
 
@@ -273,12 +273,12 @@ impl CompiledTest {
             ast: typed_ast,
             errors: sink.into_diagnostics(),
             definitions,
-            module_id: TEST_MODULE_ID.to_string(),
+            package_id: TEST_PACKAGE_ID.to_string(),
             unused,
             mutations,
             equality_index,
             go_package_names,
-            go_module_ids,
+            go_package_ids,
         }
     }
 }
@@ -287,12 +287,12 @@ pub struct InferenceResult {
     pub ast: Vec<Expression>,
     pub errors: Vec<LisetteDiagnostic>,
     pub definitions: HashMap<Symbol, Definition>,
-    pub module_id: String,
+    pub package_id: String,
     pub unused: UnusedInfo,
     pub mutations: MutationInfo,
     pub equality_index: EqualityIndex,
     pub go_package_names: HashMap<String, String>,
-    pub go_module_ids: HashSet<String>,
+    pub go_package_ids: HashSet<String>,
 }
 
 fn unwrap_test_wrapper(expression: Expression) -> Expression {

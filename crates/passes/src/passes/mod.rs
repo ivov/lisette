@@ -1,7 +1,7 @@
 use diagnostics::LocalSink;
 use syntax::ast::Expression;
 use syntax::program::UnusedInfo;
-use syntax::program::{File, Module};
+use syntax::program::{File, Package};
 
 use semantics::facts::Facts;
 use semantics::store::Store;
@@ -23,12 +23,12 @@ pub enum LintMode {
 
 pub(crate) const PARALLEL_THRESHOLD: usize = 4;
 
-pub(crate) fn source_file_work(store: &semantics::store::Store) -> Vec<(&Module, &File)> {
+pub(crate) fn source_file_work(store: &semantics::store::Store) -> Vec<(&Package, &File)> {
     let mut work: Vec<_> = store
-        .modules
+        .packages
         .values()
         .map(std::sync::Arc::as_ref)
-        .flat_map(|module| module.source_files().map(move |file| (module, file)))
+        .flat_map(|package| package.source_files().map(move |file| (package, file)))
         .collect();
     work.sort_unstable_by(|a, b| {
         a.0.id

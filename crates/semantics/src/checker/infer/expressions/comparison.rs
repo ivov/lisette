@@ -350,19 +350,19 @@ fn is_interface_or_unknown(store: &Store, ty: &Type) -> bool {
     resolved.is_unknown() || store.is_interface(&resolved)
 }
 
-fn type_has_usable_equals(store: &Store, ty: &Type, current_module: &str) -> bool {
+fn type_has_usable_equals(store: &Store, ty: &Type, current_package: &str) -> bool {
     let resolved = store.deep_resolve_alias(ty);
     let Some(qualified) = resolved.get_qualified_id() else {
         return false;
     };
-    store.equality_index.usable_from(qualified, current_module)
+    store.equality_index.usable_from(qualified, current_package)
 }
 
 pub(crate) fn check_not_equatable(
     env: &TypeEnv,
     store: &Store,
     ty: &Type,
-    current_module: &str,
+    current_package: &str,
     equatable_param: &dyn Fn(&str) -> bool,
     comparable_param: &dyn Fn(&str) -> bool,
 ) -> Option<&'static str> {
@@ -373,7 +373,7 @@ pub(crate) fn check_not_equatable(
     {
         return None;
     }
-    if type_has_usable_equals(store, &resolved, current_module) {
+    if type_has_usable_equals(store, &resolved, current_package) {
         return None;
     }
 
@@ -381,7 +381,7 @@ pub(crate) fn check_not_equatable(
         let id = resolved.get_qualified_id()?;
         return store
             .equality_index
-            .is_ufcs_lowered_from(id, current_module)
+            .is_ufcs_lowered_from(id, current_package)
             .then_some("a type whose `equals` is not a method");
     };
 
@@ -390,7 +390,7 @@ pub(crate) fn check_not_equatable(
             env,
             store,
             args.first()?,
-            current_module,
+            current_package,
             equatable_param,
             comparable_param,
         ),
@@ -402,7 +402,7 @@ pub(crate) fn check_not_equatable(
                 env,
                 store,
                 args.get(1)?,
-                current_module,
+                current_package,
                 equatable_param,
                 comparable_param,
             )
@@ -585,7 +585,7 @@ impl InferCtx<'_> {
                     )),
             }
         } else if operands_match
-            && type_has_usable_equals(store, &resolved, self.cursor.module_id.as_str())
+            && type_has_usable_equals(store, &resolved, self.cursor.package_id.as_str())
         {
             self.sink
                 .push(diagnostics::infer::not_comparable_value_use_equals(
@@ -614,7 +614,7 @@ impl InferCtx<'_> {
             &self.env,
             self.store,
             ty,
-            self.cursor.module_id.as_str(),
+            self.cursor.package_id.as_str(),
             &is_comparable,
             &is_comparable,
         )
@@ -678,7 +678,7 @@ impl InferCtx<'_> {
                 &self.env,
                 self.store,
                 &substituted,
-                self.cursor.module_id.as_str(),
+                self.cursor.package_id.as_str(),
                 &is_comparable,
                 &is_comparable,
             )

@@ -51,7 +51,7 @@ pub fn run(
 
     match super::project::resolve_file_target(target_path) {
         FileTarget::ProjectEntry { root } => run_project(&root, args, sourcemap, &go_flags),
-        FileTarget::ProjectModule { root } => not_an_entrypoint(target_path, &root),
+        FileTarget::ProjectPackage { root } => not_an_entrypoint(target_path, &root),
         FileTarget::Script { inside_project } => {
             run_script(&target, args, sourcemap, &go_flags, inside_project)
         }
@@ -68,7 +68,7 @@ fn not_an_entrypoint(file_path: &Path, root: &Path) -> i32 {
         cli_error!(
             "Nothing to run",
             format!(
-                "`{}` is a module of project `{}`, not its `main`",
+                "`{}` is a package of project `{}`, not its `main`",
                 file, project
             ),
             format!("Run `lis run {}` to run the project", project_path)

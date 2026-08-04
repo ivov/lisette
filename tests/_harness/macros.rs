@@ -116,7 +116,7 @@ macro_rules! assert_infer_error_snapshot {
 }
 
 #[macro_export]
-macro_rules! assert_multimodule_infer_error_snapshot {
+macro_rules! assert_multipackage_infer_error_snapshot {
     ($result:expr, $source:expr) => {
         if $result.errors.is_empty() {
             panic!("Expected errors but inference succeeded");

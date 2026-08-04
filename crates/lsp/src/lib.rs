@@ -23,8 +23,8 @@ use syntax::ast::IdentifierResolution;
 use crate::analysis::{convert_diagnostic, offset_in_span, type_name};
 use crate::completion::{
     DotContext, attribute_completions, definition_to_completion_kind, detect_dot_context,
-    detect_struct_literal_field_context, get_instance_completions, get_module_prefix,
-    get_struct_literal_completions, get_type_completions, id_is_in_module, resolve_variable_type,
+    detect_struct_literal_field_context, get_instance_completions, get_package_prefix,
+    get_struct_literal_completions, get_type_completions, id_is_in_package, resolve_variable_type,
 };
 use crate::definition::{
     find_struct_field_span, is_generated_typedef_span, lookup_definition_span,
@@ -367,7 +367,7 @@ impl Backend {
                 .iter()
                 .find(|f| offset_in_span(offset, &f.name_span))
                 .and_then(|f| {
-                    let qualified = format!("{}.{}", file.module_id, name);
+                    let qualified = format!("{}.{}", file.package_id, name);
                     find_struct_field_span(&qualified, &f.name, &snapshot)
                 })
                 .or_else(|| offset_in_span(offset, name_span).then_some(*name_span)),
@@ -381,7 +381,7 @@ impl Backend {
                 .iter()
                 .find(|v| offset_in_span(offset, &v.name_span))
                 .and_then(|v| {
-                    let qualified = format!("{}.{}.{}", file.module_id, name, v.name);
+                    let qualified = format!("{}.{}.{}", file.package_id, name, v.name);
                     snapshot
                         .definitions()
                         .get(qualified.as_str())
@@ -689,7 +689,7 @@ impl Backend {
             | syntax::ast::Expression::TypeAlias {
                 name, name_span, ..
             } => {
-                let qname = format!("{}.{}", file.module_id, name);
+                let qname = format!("{}.{}", file.package_id, name);
                 validation::check_rename_guards(&qname)?;
                 rename_response(*name_span, name)
             }
@@ -700,7 +700,7 @@ impl Backend {
                 fields,
                 ..
             } => {
-                let qname = format!("{}.{}", file.module_id, name);
+                let qname = format!("{}.{}", file.package_id, name);
                 if let Some(field) = fields.iter().find(|f| offset_in_span(offset, &f.name_span))
                     && find_struct_field_span(&qname, &field.name, &snapshot).is_some()
                 {
@@ -721,11 +721,11 @@ impl Backend {
                     .iter()
                     .find(|v| offset_in_span(offset, &v.name_span))
                 {
-                    let qname = format!("{}.{}.{}", file.module_id, name, variant.name);
+                    let qname = format!("{}.{}.{}", file.package_id, name, variant.name);
                     validation::check_rename_guards(&qname)?;
                     return rename_response(variant.name_span, &variant.name);
                 }
-                let qualified_name = format!("{}.{}", file.module_id, name);
+                let qualified_name = format!("{}.{}", file.package_id, name);
                 validation::check_rename_guards(&qualified_name)?;
                 rename_response(*name_span, name)
             }
@@ -739,7 +739,7 @@ impl Backend {
                 identifier_span,
                 ..
             } => {
-                let qname = format!("{}.{}", file.module_id, identifier);
+                let qname = format!("{}.{}", file.package_id, identifier);
                 validation::check_rename_guards(&qname)?;
                 rename_response(*identifier_span, identifier)
             }
@@ -935,10 +935,10 @@ impl Backend {
             return Ok(Some(CompletionResponse::Array(items)));
         }
 
-        let module_prefix = get_module_prefix(&file.source, offset as usize);
+        let package_prefix = get_package_prefix(&file.source, offset as usize);
 
-        if let Some(module_name) = module_prefix
-            && let Some(items) = imported_module_completions(module_name, file, &snapshot)
+        if let Some(package_name) = package_prefix
+            && let Some(items) = imported_package_completions(package_name, file, &snapshot)
         {
             return Ok(Some(CompletionResponse::Array(items)));
         }
@@ -947,10 +947,10 @@ impl Backend {
             return Ok(Some(CompletionResponse::Array(items)));
         }
 
-        if let Some(prefix) = module_prefix {
+        if let Some(prefix) = package_prefix {
             // A prefix that resolves to nothing still returns here: a `foo.`
             // cursor must never fall through to the general completions below.
-            let items = module_prefix_completions(prefix, file, offset, &snapshot);
+            let items = package_prefix_completions(prefix, file, offset, &snapshot);
             return Ok(Some(CompletionResponse::Array(items)));
         }
 
@@ -1009,8 +1009,8 @@ fn location_for(span: syntax::ast::Span, snapshot: &AnalysisSnapshot) -> Option<
     })
 }
 
-fn imported_module_completions(
-    module_name: &str,
+fn imported_package_completions(
+    package_name: &str,
     file: &File,
     snapshot: &AnalysisSnapshot,
 ) -> Option<Vec<CompletionItem>> {
@@ -1018,7 +1018,7 @@ fn imported_module_completions(
     let imp = imports.iter().find(|imp| {
         imp.effective_alias(&snapshot.analysis.emit_input.go_package_names)
             .as_deref()
-            == Some(module_name)
+            == Some(package_name)
     })?;
 
     let mut items = Vec::new();
@@ -1047,16 +1047,18 @@ fn dot_context_completions(
     let ctx = detect_dot_context(file, offset, snapshot)?;
     Some(match ctx {
         DotContext::Instance(type_id) => {
-            let same_module = id_is_in_module(&type_id, &file.module_id);
-            get_instance_completions(&type_id, snapshot, same_module)
+            let same_package = id_is_in_package(&type_id, &file.package_id);
+            get_instance_completions(&type_id, snapshot, same_package)
         }
-        DotContext::TypeLevel(type_id) => get_type_completions(&type_id, snapshot, &file.module_id),
+        DotContext::TypeLevel(type_id) => {
+            get_type_completions(&type_id, snapshot, &file.package_id)
+        }
     })
 }
 
 /// A `foo.` prefix that resolves to nothing still returns an (empty) result
 /// here: it must never fall through to the general completions below.
-fn module_prefix_completions(
+fn package_prefix_completions(
     prefix: &str,
     file: &File,
     offset: u32,
@@ -1064,18 +1066,18 @@ fn module_prefix_completions(
 ) -> Vec<CompletionItem> {
     if prefix == "self" {
         if let Some(impl_type) = traversal::find_enclosing_impl_type(&file.items, offset) {
-            let type_id = format!("{}.{}", file.module_id, impl_type);
+            let type_id = format!("{}.{}", file.package_id, impl_type);
             return get_instance_completions(&type_id, snapshot, true);
         }
         return Vec::new();
     }
 
-    for module in [file.module_id.as_str(), "prelude"] {
-        let qualified = format!("{module}.{prefix}");
+    for package in [file.package_id.as_str(), "prelude"] {
+        let qualified = format!("{package}.{prefix}");
         if let Some(definition) = snapshot.definitions().get(qualified.as_str())
             && definition.is_type_definition()
         {
-            return get_type_completions(&qualified, snapshot, &file.module_id);
+            return get_type_completions(&qualified, snapshot, &file.package_id);
         }
     }
 
@@ -1085,14 +1087,14 @@ fn module_prefix_completions(
             && definition.is_type_definition()
             && definition.visibility.is_public()
         {
-            return get_type_completions(&qualified, snapshot, &file.module_id);
+            return get_type_completions(&qualified, snapshot, &file.package_id);
         }
     }
 
     let indexed = offset as usize >= 2 && file.source.as_bytes()[offset as usize - 2] == b']';
     if let Some(type_id) = resolve_variable_type(prefix, file, offset, snapshot, indexed) {
-        let same_module = id_is_in_module(&type_id, &file.module_id);
-        return get_instance_completions(&type_id, snapshot, same_module);
+        let same_package = id_is_in_package(&type_id, &file.package_id);
+        return get_instance_completions(&type_id, snapshot, same_package);
     }
 
     Vec::new()
@@ -1106,12 +1108,12 @@ fn struct_literal_field_completions(
 ) -> Option<Vec<CompletionItem>> {
     let (name, ty, assigned) = detect_struct_literal_field_context(file, offset)?;
     let type_id = type_name(ty, snapshot)?;
-    let same_module = id_is_in_module(&type_id, &file.module_id);
+    let same_package = id_is_in_package(&type_id, &file.package_id);
     Some(get_struct_literal_completions(
         &type_id,
         name,
         snapshot,
-        same_module,
+        same_package,
         assigned,
         offset,
     ))
@@ -1158,9 +1160,9 @@ fn general_completions(
         });
     }
 
-    let module_prefix = format!("{}.", file.module_id);
+    let package_prefix = format!("{}.", file.package_id);
     for (qname, definition) in snapshot.definitions().iter() {
-        if let Some(name) = qname.strip_prefix(&module_prefix)
+        if let Some(name) = qname.strip_prefix(&package_prefix)
             && !name.contains('.')
         {
             items.push(CompletionItem {

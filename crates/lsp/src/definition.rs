@@ -6,7 +6,7 @@ use syntax::ast::{
 use syntax::program::DefinitionBody;
 use syntax::types::unqualified_name;
 
-use crate::analysis::find_module_by_alias;
+use crate::analysis::find_package_by_alias;
 use crate::offset_in_span;
 use crate::snapshot::AnalysisSnapshot;
 use crate::traversal::find_expression_at;
@@ -81,7 +81,7 @@ pub(crate) fn resolve_dot_access_definition(
             .get(name)
             .and_then(|d| d.name_span)
             .or_else(|| {
-                let qualified = format!("{}.{}", file.module_id, name);
+                let qualified = format!("{}.{}", file.package_id, name);
                 snapshot
                     .definitions()
                     .get(qualified.as_str())
@@ -134,14 +134,14 @@ pub(crate) fn resolve_dot_access_definition(
             }
         ) {
             resolve_by_type()
-        } else if let Some(module_name) = find_module_by_alias(
+        } else if let Some(package_name) = find_package_by_alias(
             file,
             root_identifier,
             &snapshot.analysis.emit_input.go_package_names,
         ) {
             let qualified = dotted_path
                 .strip_prefix(root_identifier)
-                .map(|rest| format!("{}{}", module_name, rest))
+                .map(|rest| format!("{}{}", package_name, rest))
                 .unwrap_or(dotted_path);
             snapshot
                 .definitions()
@@ -155,12 +155,12 @@ pub(crate) fn resolve_dot_access_definition(
     } = expression.unwrap_parens()
         && !matches!(resolution, IdentifierResolution::Binding(_))
     {
-        if let Some(module_name) = find_module_by_alias(
+        if let Some(package_name) = find_package_by_alias(
             file,
             value.as_str(),
             &snapshot.analysis.emit_input.go_package_names,
         ) {
-            let qualified = format!("{}.{}", module_name, member);
+            let qualified = format!("{}.{}", package_name, member);
             snapshot
                 .definitions()
                 .get(qualified.as_str())
@@ -189,7 +189,7 @@ pub(crate) fn is_generated_typedef_span(
     snapshot
         .files()
         .get(&span.file_id)
-        .is_some_and(|f| f.module_id.starts_with("go:") || f.module_id == "prelude")
+        .is_some_and(|f| f.package_id.starts_with("go:") || f.package_id == "prelude")
 }
 
 /// Resolve an import alias to the import statement's span.
@@ -240,7 +240,7 @@ pub(crate) fn resolve_annotation_definition(
 }
 
 /// Resolve a `Constructor` name's goto target. Routes the simple side through
-/// the qualifier's module so a same-named local can't shadow it.
+/// the qualifier's package so a same-named local can't shadow it.
 fn resolve_constructor_name(
     name: &str,
     span: Span,
@@ -258,13 +258,13 @@ fn resolve_constructor_name(
     }
 
     let (qualifier, simple) = name.split_once('.')?;
-    let module_name = find_module_by_alias(
+    let package_name = find_package_by_alias(
         file,
         qualifier,
         &snapshot.analysis.emit_input.go_package_names,
     )?;
 
-    let qualified = format!("{}.{}", module_name, simple);
+    let qualified = format!("{}.{}", package_name, simple);
 
     snapshot
         .definitions()
@@ -283,7 +283,7 @@ pub(crate) fn lookup_definition_span(
         return Some(span);
     }
 
-    let qualified = format!("{}.{}", file.module_id, name);
+    let qualified = format!("{}.{}", file.package_id, name);
     if let Some(definition) = snapshot.definitions().get(qualified.as_str())
         && let Some(span) = definition.name_span
     {
@@ -565,7 +565,7 @@ pub(crate) fn resolve_symbol_definition_span(
                     .iter()
                     .find(|f| offset_in_span(offset, &f.name_span))
                     .and_then(|f| {
-                        let qualified = format!("{}.{}", file.module_id, name);
+                        let qualified = format!("{}.{}", file.package_id, name);
                         find_struct_field_span(&qualified, &f.name, snapshot)
                     })
                     .or(Some(*name_span)),
@@ -579,7 +579,7 @@ pub(crate) fn resolve_symbol_definition_span(
                     .iter()
                     .find(|v| offset_in_span(offset, &v.name_span))
                     .and_then(|v| {
-                        let qualified = format!("{}.{}.{}", file.module_id, name, v.name);
+                        let qualified = format!("{}.{}.{}", file.package_id, name, v.name);
                         snapshot
                             .definitions()
                             .get(qualified.as_str())

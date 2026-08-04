@@ -140,10 +140,10 @@ fn runtime_const(expression: &Expression) -> Option<RuntimeConst> {
     else {
         return None;
     };
-    let Type::ImportNamespace(module) = base.get_type().strip_refs() else {
+    let Type::ImportNamespace(package) = base.get_type().strip_refs() else {
         return None;
     };
-    if module != "go:runtime" {
+    if package != "go:runtime" {
         return None;
     }
     match member.as_str() {

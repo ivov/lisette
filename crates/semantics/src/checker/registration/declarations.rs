@@ -1,23 +1,23 @@
 use super::*;
 
 impl TaskState {
-    pub(super) fn collect_module_type_name_entries(
+    pub(super) fn collect_package_type_name_entries(
         &self,
         store: &Store,
-        module_id: &str,
+        package_id: &str,
     ) -> Vec<(Symbol, Definition)> {
-        let module = store
-            .get_module(module_id)
-            .expect("module must exist for declaration");
+        let package = store
+            .get_package(package_id)
+            .expect("package must exist for declaration");
         let mut entries = Vec::new();
-        for file in module.source_files() {
+        for file in package.source_files() {
             entries.extend(self.collect_type_name_entries(
                 &file.items,
                 &Visibility::Private,
                 false,
             ));
         }
-        for file in module.typedef_files() {
+        for file in package.typedef_files() {
             entries.extend(self.collect_type_name_entries(&file.items, &Visibility::Private, true));
         }
         entries
@@ -26,14 +26,14 @@ impl TaskState {
     pub(super) fn insert_type_name_entries(
         &mut self,
         store: &mut Store,
-        module_id: &str,
+        package_id: &str,
         type_name_entries: Vec<(Symbol, Definition)>,
     ) {
-        let module = store
-            .get_module_mut(module_id)
-            .expect("module must exist for declaration");
+        let package = store
+            .get_package_mut(package_id)
+            .expect("package must exist for declaration");
         for (qualified_name, definition) in type_name_entries {
-            module
+            package
                 .definitions
                 .entry(qualified_name)
                 .or_insert(definition);
@@ -52,9 +52,9 @@ impl TaskState {
         self.register_impl_blocks(store, items);
         self.register_values(store, items, visibility);
         self.register_item_derived_attributes(store, items);
-        let module_id = self.cursor.module_id.clone();
-        self.validate_module_embeds(store, &module_id);
-        self.check_module_recursive_types(store, &module_id);
+        let package_id = self.cursor.package_id.clone();
+        self.validate_package_embeds(store, &package_id);
+        self.check_package_recursive_types(store, &package_id);
     }
 
     pub(crate) fn register_type_names(
@@ -64,9 +64,9 @@ impl TaskState {
         visibility: &Visibility,
     ) {
         let entries = self.collect_type_name_entries(items, visibility, self.is_d_lis(&*store));
-        let module = self.current_module_mut(store);
+        let package = self.current_package_mut(store);
         for (qualified_name, definition) in entries {
-            module
+            package
                 .definitions
                 .entry(qualified_name)
                 .or_insert(definition);
@@ -123,7 +123,7 @@ impl TaskState {
             // Canonical form for prelude-registered native types uses the
             // dedicated Simple/Compound variants; everything else remains a
             // nominal Constructor.
-            let canonical_ty = if self.cursor.module_id == "prelude" {
+            let canonical_ty = if self.cursor.package_id == "prelude" {
                 if let Some(simple) = syntax::types::SimpleKind::from_name(name) {
                     debug_assert!(args.is_empty(), "simple kinds have no generics");
                     Type::Simple(simple)
@@ -156,7 +156,7 @@ impl TaskState {
 
             let item_visibility = match visibility {
                 Visibility::Local => Visibility::Local,
-                // A Go unexported type stays module-private even in a typedef,
+                // A Go unexported type stays package-private even in a typedef,
                 // mirroring Go's lexical export rule.
                 _ if has_unexported_attribute(attributes) => Visibility::Private,
                 _ => {

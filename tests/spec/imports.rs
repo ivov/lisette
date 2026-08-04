@@ -39,7 +39,7 @@ fn parsed_imports(source: &str) -> Option<Vec<FileImport>> {
     Some(
         File {
             id: 0,
-            module_id: "corpus".to_string(),
+            package_id: "corpus".to_string(),
             name: "corpus.lis".to_string(),
             display_path: "corpus.lis".to_string(),
             source_path: None,

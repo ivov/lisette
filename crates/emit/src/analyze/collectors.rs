@@ -27,7 +27,7 @@ impl Planner<'_> {
                     .facts
                     .is_ufcs_method(&self.facts.qualified_current(receiver_name), "to_string")
             {
-                self.module
+                self.package
                     .record_user_to_string_type(receiver_name.to_string());
             }
         }
@@ -36,7 +36,7 @@ impl Planner<'_> {
     /// Record the emitted Go names of top-level private functions and
     /// constants that differ from their source spelling. Colliding private
     /// functions freshen to `name_2`, `name_3`, etc. Constants never
-    /// freshen: cross-module references derive a constant's Go name from
+    /// freshen: cross-package references derive a constant's Go name from
     /// the source name alone, so converging constants surface as a Go name
     /// collision instead.
     pub(crate) fn collect_escape_remap(&mut self, files: &[&File]) {
@@ -44,7 +44,7 @@ impl Planner<'_> {
             if let Expression::Const { identifier, .. } = item {
                 let natural = go_name::screaming_snake_to_camel(identifier);
                 if natural != identifier.as_str() {
-                    self.module
+                    self.package
                         .record_escape_remap(identifier.to_string(), natural);
                 }
             }
@@ -78,7 +78,7 @@ impl Planner<'_> {
                 continue;
             }
             if taken.insert(natural.clone()) {
-                self.module
+                self.package
                     .record_escape_remap((*name).to_string(), natural.clone());
                 continue;
             }
@@ -87,7 +87,7 @@ impl Planner<'_> {
                 .find(|c| !taken.contains(c))
                 .expect("freshening counter is unbounded");
             taken.insert(fresh.clone());
-            self.module.record_escape_remap((*name).to_string(), fresh);
+            self.package.record_escape_remap((*name).to_string(), fresh);
         }
     }
 
@@ -119,12 +119,12 @@ impl Planner<'_> {
                 .find(|candidate| !taken.contains(candidate))
                 .expect("freshening counter is unbounded");
             taken.insert(fresh.clone());
-            self.module.record_generic_rename(name.to_string(), fresh);
+            self.package.record_generic_rename(name.to_string(), fresh);
         }
     }
 
     pub(crate) fn collect_local_make_function_plans(&self) -> HashMap<u32, Vec<MakeFunctionPlan>> {
-        let module_prefix = format!("{}.", self.facts.current_module());
+        let package_prefix = format!("{}.", self.facts.current_package());
         let mut code: HashMap<u32, Vec<MakeFunctionPlan>> = HashMap::default();
 
         let local_enums: Vec<_> = self
@@ -143,10 +143,10 @@ impl Planner<'_> {
                 if PreludeType::from_name(name).is_some() {
                     return None;
                 }
-                if !key.starts_with(&module_prefix) {
+                if !key.starts_with(&package_prefix) {
                     return None;
                 }
-                let rest = &key[module_prefix.len()..];
+                let rest = &key[package_prefix.len()..];
                 if rest.contains('.') {
                     return None;
                 }

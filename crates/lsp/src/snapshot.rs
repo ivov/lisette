@@ -7,7 +7,7 @@ use syntax::ast::BindingId;
 use syntax::program::{Definition, File};
 use syntax::types::Symbol;
 
-use crate::paths::{ENTRY_MODULE_ID, module_file_to_path};
+use crate::paths::{ENTRY_PACKAGE_ID, package_file_to_path};
 use crate::position::LineIndex;
 use crate::project::ProjectConfig;
 
@@ -50,7 +50,7 @@ impl AnalysisSnapshot {
             .and_then(|p| p.parent().map(|d| d.to_path_buf()));
 
         for (file_id, file) in &analysis.emit_input.files {
-            let uri = if !external_test && file.module_id == ENTRY_MODULE_ID {
+            let uri = if !external_test && file.package_id == ENTRY_PACKAGE_ID {
                 if analyzed_filename.as_deref() == Some(&file.name) {
                     analyzed_uri.clone()
                 } else if let Some(ref dir) = analyzed_dir {
@@ -69,11 +69,11 @@ impl AnalysisSnapshot {
                     Ok(uri) => uri,
                     Err(_) => continue,
                 }
-            } else if file.module_id.starts_with("go:") || file.module_id == "prelude" {
+            } else if file.package_id.starts_with("go:") || file.package_id == "prelude" {
                 // Embedded typedef with no recorded on-disk path; nothing to navigate to.
                 continue;
             } else {
-                let path = module_file_to_path(config, &file.module_id, &file.name);
+                let path = package_file_to_path(config, &file.package_id, &file.name);
                 match Url::from_file_path(&path) {
                     Ok(uri) => uri,
                     Err(_) => continue,

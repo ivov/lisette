@@ -4,13 +4,13 @@ use crate::go_name;
 use diagnostics::{LisetteDiagnostic, emit as emit_diag};
 use ecow::EcoString;
 use syntax::ast::ImportAlias;
-use syntax::program::{File, FileImport, ModuleId};
+use syntax::program::{File, FileImport, PackageId};
 
 use crate::names::packages::{PackageRequirements, PackageUse};
 
 /// Source-derived imports resolved during the plan phase: path -> chosen
 /// alias, plus the aliases of imports dropped as unused (still needed so a
-/// later generated reference to the same module reuses the source alias).
+/// later generated reference to the same package reuses the source alias).
 pub(crate) struct ImportPlan {
     imports: HashMap<String, String>,
     dropped_aliases: HashMap<String, String>,
@@ -53,57 +53,57 @@ impl ImportPlan {
 
 pub struct ImportBuilder<'a> {
     go_package_names: &'a HashMap<String, String>,
-    go_module_ids: &'a HashSet<String>,
+    go_package_ids: &'a HashSet<String>,
     imports: HashMap<String, String>,
     /// Additional qualifiers requested for a path already present under a
     /// different qualifier.
     duplicate_imports: Vec<(String, String)>,
     dropped_aliases: HashMap<String, String>,
-    used_modules: HashSet<String>,
+    used_packages: HashSet<String>,
 }
 
 impl<'a> ImportBuilder<'a> {
     pub fn new(
         go_package_names: &'a HashMap<String, String>,
-        go_module_ids: &'a HashSet<String>,
+        go_package_ids: &'a HashSet<String>,
     ) -> Self {
         Self {
             go_package_names,
-            go_module_ids,
+            go_package_ids,
             imports: HashMap::default(),
             duplicate_imports: Vec::new(),
             dropped_aliases: HashMap::default(),
-            used_modules: HashSet::default(),
+            used_packages: HashSet::default(),
         }
     }
 
     pub(crate) fn from_plan(
         plan: ImportPlan,
         go_package_names: &'a HashMap<String, String>,
-        go_module_ids: &'a HashSet<String>,
+        go_package_ids: &'a HashSet<String>,
     ) -> Self {
         Self {
             go_package_names,
-            go_module_ids,
+            go_package_ids,
             imports: plan.imports,
             duplicate_imports: Vec::new(),
             dropped_aliases: plan.dropped_aliases,
-            used_modules: HashSet::default(),
+            used_packages: HashSet::default(),
         }
     }
 
-    pub fn extend_with_modules(&mut self, module_ids: &HashSet<ModuleId>) {
-        for module_id in module_ids {
+    pub fn extend_with_packages(&mut self, package_ids: &HashSet<PackageId>) {
+        for package_id in package_ids {
             let qualifier = self
                 .dropped_aliases
-                .get(module_id)
+                .get(package_id)
                 .or_else(|| {
                     self.go_package_names
-                        .get(&format!("{}{module_id}", go_name::GO_IMPORT_PREFIX))
+                        .get(&format!("{}{package_id}", go_name::GO_IMPORT_PREFIX))
                 })
                 .cloned()
                 .unwrap_or_default();
-            self.require_package_use(&PackageUse::new(module_id.clone(), qualifier));
+            self.require_package_use(&PackageUse::new(package_id.clone(), qualifier));
         }
     }
 
@@ -116,9 +116,9 @@ impl<'a> ImportBuilder<'a> {
     fn require_package_use(&mut self, package: &PackageUse) {
         let path = package.package().path();
         let qualifier = package.qualifier();
-        self.used_modules.insert(path.to_string());
+        self.used_packages.insert(path.to_string());
         match self.imports.get(path) {
-            Some(alias) if effective_qualifier(path, alias, self.go_module_ids) == qualifier => {}
+            Some(alias) if effective_qualifier(path, alias, self.go_package_ids) == qualifier => {}
             Some(_) => {
                 if !self
                     .duplicate_imports
@@ -136,7 +136,7 @@ impl<'a> ImportBuilder<'a> {
                     .dropped_aliases
                     .get(path)
                     .filter(|alias| {
-                        effective_qualifier(path, alias, self.go_module_ids) == qualifier
+                        effective_qualifier(path, alias, self.go_package_ids) == qualifier
                     })
                     .cloned()
                     .unwrap_or_else(|| qualifier.to_string());
@@ -147,19 +147,19 @@ impl<'a> ImportBuilder<'a> {
 
     pub fn build(mut self) -> (Vec<(String, String)>, Vec<LisetteDiagnostic>) {
         self.imports
-            .retain(|path, alias| alias == "_" || self.used_modules.contains(path));
+            .retain(|path, alias| alias == "_" || self.used_packages.contains(path));
         let mut entries: Vec<(String, String)> = self.imports.into_iter().collect();
         entries.extend(self.duplicate_imports);
         entries.sort();
         entries.dedup();
-        let diagnostics = detect_collisions(&entries, self.go_module_ids);
+        let diagnostics = detect_collisions(&entries, self.go_package_ids);
         (entries, diagnostics)
     }
 }
 
 fn detect_collisions(
     entries: &[(String, String)],
-    go_module_ids: &HashSet<String>,
+    go_package_ids: &HashSet<String>,
 ) -> Vec<LisetteDiagnostic> {
     if entries.len() < 2 {
         return Vec::new();
@@ -169,7 +169,7 @@ fn detect_collisions(
         if alias == "_" {
             continue;
         }
-        let qualifier = effective_qualifier(path, alias, go_module_ids);
+        let qualifier = effective_qualifier(path, alias, go_package_ids);
         groups.entry(qualifier).or_default().push(path.as_str());
     }
     let mut groups: Vec<_> = groups.into_iter().filter(|(_, p)| p.len() > 1).collect();
@@ -185,10 +185,10 @@ fn detect_collisions(
         .collect()
 }
 
-fn effective_qualifier(path: &str, alias: &str, go_module_ids: &HashSet<String>) -> String {
+fn effective_qualifier(path: &str, alias: &str, go_package_ids: &HashSet<String>) -> String {
     let package_name = if !alias.is_empty() {
         alias
-    } else if go_module_ids.contains(&format!("{}{path}", go_name::GO_IMPORT_PREFIX)) {
+    } else if go_package_ids.contains(&format!("{}{path}", go_name::GO_IMPORT_PREFIX)) {
         syntax::program::go_import_default_name(path)
     } else {
         path.rsplit('/').next().unwrap_or(path)

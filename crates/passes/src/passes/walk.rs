@@ -1,7 +1,7 @@
 use diagnostics::LocalSink;
 use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::{Expression, Pattern, SelectArm, Span};
-use syntax::program::{File, Module};
+use syntax::program::{File, Package};
 
 use semantics::facts::Facts;
 use semantics::store::Store;
@@ -9,7 +9,7 @@ use semantics::store::Store;
 pub(crate) struct NodeCtx<'a> {
     pub store: &'a Store,
     pub facts: &'a Facts,
-    module: &'a Module,
+    package: &'a Package,
     file: &'a File,
     pub sink: &'a LocalSink,
     claimed_spans: HashSet<(ClaimKind, Span)>,
@@ -30,22 +30,22 @@ impl<'a> NodeCtx<'a> {
     pub fn new(
         store: &'a Store,
         facts: &'a Facts,
-        module: &'a Module,
+        package: &'a Package,
         file: &'a File,
         sink: &'a LocalSink,
     ) -> Self {
         Self {
             store,
             facts,
-            module,
+            package,
             file,
             sink,
             claimed_spans: HashSet::default(),
         }
     }
 
-    pub fn module_id(&self) -> &str {
-        &self.module.id
+    pub fn package_id(&self) -> &str {
+        &self.package.id
     }
 
     pub fn source(&self) -> &str {
@@ -295,10 +295,10 @@ mod tests {
     fn claims_only_suppress_their_own_diagnostic_family() {
         let store = Store::new();
         let facts = Facts::new(Default::default());
-        let module = Module::new("main");
+        let package = Package::new("main");
         let file = File::new_cached("main", "main.lis", "main.lis", "", 0);
         let sink = LocalSink::new();
-        let mut ctx = NodeCtx::new(&store, &facts, &module, &file, &sink);
+        let mut ctx = NodeCtx::new(&store, &facts, &package, &file, &sink);
         let span = Span::new(0, 0, 1);
 
         ctx.claim(ClaimKind::MinMax, span);

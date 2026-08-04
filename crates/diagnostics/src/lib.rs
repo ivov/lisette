@@ -8,7 +8,7 @@ pub mod embed;
 pub mod emit;
 pub mod infer;
 pub mod lint;
-pub mod module_graph;
+pub mod package_graph;
 pub mod pattern;
 pub mod render;
 

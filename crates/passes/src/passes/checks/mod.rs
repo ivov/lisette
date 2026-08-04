@@ -36,7 +36,7 @@ mod visibility;
 
 use diagnostics::{LisetteDiagnostic, LocalSink};
 use rayon::prelude::*;
-use syntax::program::{File, Module};
+use syntax::program::{File, Package};
 
 use crate::passes::walk::NodeCtx;
 use semantics::facts::Facts;
@@ -52,11 +52,11 @@ pub(crate) fn run_all(
     let sink = LocalSink::new();
     let pattern_lint_sink = LocalSink::new();
 
-    let mut module_ids: Vec<&str> = store.modules.keys().map(String::as_str).collect();
-    module_ids.sort_unstable();
-    for module_id in &module_ids {
-        visibility::run_module(module_id, store, &sink);
-        json_methods::run_module(module_id, store, &sink);
+    let mut package_ids: Vec<&str> = store.packages.keys().map(String::as_str).collect();
+    package_ids.sort_unstable();
+    for package_id in &package_ids {
+        visibility::run_package(package_id, store, &sink);
+        json_methods::run_package(package_id, store, &sink);
     }
     instantiation_cycle::run(store, &sink);
 
@@ -74,8 +74,8 @@ pub(crate) fn run_all(
                 LintMode::Run => Some(&pattern_lint_sink),
             },
         );
-        for (module, file) in &work {
-            run_file_checks(module, file, store, facts, &mut pattern_ctx);
+        for (package, file) in &work {
+            run_file_checks(package, file, store, facts, &mut pattern_ctx);
         }
         return (
             sink.into_diagnostics(),
@@ -85,7 +85,7 @@ pub(crate) fn run_all(
 
     let worker_sinks: Vec<(LocalSink, LocalSink)> = work
         .par_iter()
-        .map(|(module, file)| {
+        .map(|(package, file)| {
             let local_sink = LocalSink::new();
             let local_pattern_lint_sink = LocalSink::new();
             let mut pattern_ctx = pattern_analysis::Context::new(
@@ -97,7 +97,7 @@ pub(crate) fn run_all(
                     LintMode::Run => Some(&local_pattern_lint_sink),
                 },
             );
-            run_file_checks(module, file, store, facts, &mut pattern_ctx);
+            run_file_checks(package, file, store, facts, &mut pattern_ctx);
             drop(pattern_ctx);
             (local_sink, local_pattern_lint_sink)
         })
@@ -113,20 +113,20 @@ pub(crate) fn run_all(
 }
 
 fn run_file_checks(
-    module: &Module,
+    package: &Package,
     file: &File,
     store: &Store,
     facts: &Facts,
     pattern_ctx: &mut pattern_analysis::Context,
 ) {
     let sink = pattern_ctx.sink();
-    let mut ctx = NodeCtx::new(store, facts, module, file, sink);
+    let mut ctx = NodeCtx::new(store, facts, package, file, sink);
     node_walk::run(&file.items, &mut ctx);
     interpolation_stringer::run(&file.items, store, sink);
 
     prelude_shadowing::run(&file.items, store, sink);
     generics::run(&file.items, store, sink);
-    native_value_usage::run(&file.items, &module.id, store, sink);
+    native_value_usage::run(&file.items, &package.id, store, sink);
     json_serializable_fields::run(&file.items, sink);
     empty_select_default::run(&file.items, sink);
 

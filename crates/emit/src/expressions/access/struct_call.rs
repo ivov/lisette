@@ -507,13 +507,13 @@ impl Planner<'_> {
             return go.code;
         }
 
-        // For cross-module struct calls (including type aliases), use the original name
+        // For cross-package struct calls (including type aliases), use the original name
         // to preserve the alias. E.g., "api.PublicSecret" should emit as "api.PublicSecret"
         // not as the underlying "internal.Secret".
         if name.contains('.') && !is_prelude {
             let parts: Vec<&str> = name.split('.').collect();
             let emits_qualified = (is_enum && parts.len() == 3) || (!is_enum && parts.len() == 2);
-            if emits_qualified && !self.facts.is_current_module(parts[0]) {
+            if emits_qualified && !self.facts.is_current_package(parts[0]) {
                 let type_args = if self.is_non_generic_alias_call(parts[1], ty) {
                     String::new()
                 } else if let Type::Nominal { params, .. } = ty {
@@ -521,7 +521,7 @@ impl Planner<'_> {
                 } else {
                     String::new()
                 };
-                let pkg = self.require_module_import(&self.canonical_module(parts[0]));
+                let pkg = self.require_package_import(&self.canonical_package(parts[0]));
                 return format!("{}.{}{}", pkg, go_name::snake_to_camel(parts[1]), type_args);
             }
         }
@@ -530,15 +530,15 @@ impl Planner<'_> {
     }
 
     /// True when `type_name` (e.g., `StringFlag`) is a non-generic alias in the
-    /// same module as the underlying struct `ty`.
+    /// same package as the underlying struct `ty`.
     fn is_non_generic_alias_call(&self, type_name: &str, ty: &Type) -> bool {
         let Type::Nominal { id: struct_id, .. } = ty else {
             return false;
         };
-        let Some(module) = self.facts.module_for_qualified_name(struct_id) else {
+        let Some(package) = self.facts.package_for_qualified_name(struct_id) else {
             return false;
         };
-        let alias_id = format!("{}.{}", module, type_name);
+        let alias_id = format!("{}.{}", package, type_name);
         matches!(
             self.facts.definition(&alias_id).map(|d| &d.body),
             Some(DefinitionBody::TypeAlias { generics, .. }) if generics.is_empty()
@@ -575,17 +575,17 @@ impl Planner<'_> {
     }
 
     fn add_enum_imports_if_needed(&mut self, name: &str, enum_id: &str) {
-        if let Some(enum_module) = self.facts.module_for_qualified_name(enum_id)
-            && !self.facts.is_current_module(enum_module)
+        if let Some(enum_package) = self.facts.package_for_qualified_name(enum_id)
+            && !self.facts.is_current_package(enum_package)
         {
-            let enum_module = enum_module.to_string();
-            self.require_module_import(&enum_module);
+            let enum_package = enum_package.to_string();
+            self.require_package_import(&enum_package);
         }
 
         let parts: Vec<&str> = name.split('.').collect();
         if parts.len() == 3 {
-            let module = self.canonical_module(parts[0]);
-            self.require_module_import(&module);
+            let package = self.canonical_package(parts[0]);
+            self.require_package_import(&package);
         }
     }
 

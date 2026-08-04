@@ -18,7 +18,7 @@ impl Planner<'_> {
         self.emit_unit_variant_constructor(member, result_ty)
     }
 
-    /// Static method dot access (cross-module, alias, or instance-as-value).
+    /// Static method dot access (cross-package, alias, or instance-as-value).
     pub(crate) fn emit_static_method_dot(
         &mut self,
         expression: &Expression,
@@ -26,7 +26,7 @@ impl Planner<'_> {
         result_ty: &Type,
         ctx: ExpressionContext<'_>,
     ) -> Option<String> {
-        if let Some(s) = self.emit_cross_module_static_method(expression, member, result_ty, ctx) {
+        if let Some(s) = self.emit_cross_package_static_method(expression, member, result_ty, ctx) {
             return Some(s);
         }
         if let Some(s) = self.emit_alias_static_method(expression, member, result_ty) {
@@ -58,8 +58,8 @@ impl Planner<'_> {
 
         let make_fn_name = self.facts.make_function_name(enum_id, variant_name)?;
 
-        let enum_module = self.facts.module_for_qualified_name(enum_id)?;
-        let needs_qualifier = !self.facts.is_current_module(enum_module);
+        let enum_package = self.facts.package_for_qualified_name(enum_id)?;
+        let needs_qualifier = !self.facts.is_current_package(enum_package);
 
         let needs_type_args = ret_params.len() > fn_params.len();
         let type_args = if needs_type_args {
@@ -76,7 +76,7 @@ impl Planner<'_> {
                 }
                 format!("{}{}", resolved.name, type_args)
             } else {
-                let pkg = self.require_module_import(enum_module);
+                let pkg = self.require_package_import(enum_package);
                 format!("{}.{}{}", pkg, make_fn_name, type_args)
             }
         } else {
@@ -99,9 +99,9 @@ impl Planner<'_> {
             return None;
         };
 
-        let enum_module = self.facts.module_for_qualified_name(enum_id)?;
-        let is_prelude = enum_module == go_name::PRELUDE_MODULE;
-        let is_cross_module = !self.facts.is_current_module(enum_module) && !is_prelude;
+        let enum_package = self.facts.package_for_qualified_name(enum_id)?;
+        let is_prelude = enum_package == go_name::PRELUDE_PACKAGE;
+        let is_cross_package = !self.facts.is_current_package(enum_package) && !is_prelude;
 
         let definition = self.facts.definition(enum_id.as_str())?;
         let DefinitionBody::Enum { variants, .. } = &definition.body else {
@@ -122,8 +122,8 @@ impl Planner<'_> {
                 self.require_generated_package(package);
             }
             Some(format!("{}{}()", resolved.name, type_args))
-        } else if is_cross_module {
-            let pkg = self.require_module_import(enum_module);
+        } else if is_cross_package {
+            let pkg = self.require_package_import(enum_package);
             Some(format!("{}.{}{}()", pkg, make_fn, type_args))
         } else {
             Some(format!("{}{}()", make_fn, type_args))
@@ -196,8 +196,8 @@ impl Planner<'_> {
 
         let inner_ty = inner_expression.get_type();
 
-        let module_name = if let Some(synthetic_module) = inner_ty.as_import_namespace() {
-            synthetic_module.to_string()
+        let package_name = if let Some(synthetic_package) = inner_ty.as_import_namespace() {
+            synthetic_package.to_string()
         } else if matches!(&inner_ty, Type::Nominal { .. })
             && let Expression::Identifier { value, .. } = inner_expression.as_ref()
         {
@@ -205,7 +205,7 @@ impl Planner<'_> {
         } else {
             return None;
         };
-        let module_name = module_name.as_str();
+        let package_name = package_name.as_str();
 
         let go_method = if is_exported {
             go_name::snake_to_camel(member)
@@ -213,7 +213,7 @@ impl Planner<'_> {
             go_name::unexported_method_go_name(member)
         };
 
-        let pkg = self.require_module_import(module_name);
+        let pkg = self.require_package_import(package_name);
         let go_type_name = go_name::snake_to_camel(type_name);
         let type_args = self.method_expression_type_args(result_ty);
 
@@ -247,9 +247,9 @@ impl Planner<'_> {
         }
     }
 
-    /// Cross-module static method access (`shapes.Point.new` →
+    /// Cross-package static method access (`shapes.Point.new` →
     /// `shapes.Point_new`).
-    fn emit_cross_module_static_method(
+    fn emit_cross_package_static_method(
         &mut self,
         expression: &Expression,
         member: &str,
@@ -271,8 +271,8 @@ impl Planner<'_> {
 
         let inner_ty = inner_expression.get_type();
 
-        let module_name = if let Some(synthetic_module) = inner_ty.as_import_namespace() {
-            synthetic_module.to_string()
+        let package_name = if let Some(synthetic_package) = inner_ty.as_import_namespace() {
+            synthetic_package.to_string()
         } else if matches!(inner_ty, Type::Nominal { .. }) {
             if let Expression::Identifier { value, .. } = inner_expression.as_ref() {
                 value.to_string()
@@ -282,12 +282,12 @@ impl Planner<'_> {
         } else {
             return None;
         };
-        let module_name = module_name.as_str();
+        let package_name = package_name.as_str();
 
-        let qualified_type = format!("{}.{}", module_name, type_name);
+        let qualified_type = format!("{}.{}", package_name, type_name);
         let definition = self.facts.definition(qualified_type.as_str())?;
 
-        let is_go_type = go_name::is_go_import(module_name);
+        let is_go_type = go_name::is_go_import(package_name);
         if !is_go_type
             && !matches!(
                 definition.body,
@@ -314,7 +314,7 @@ impl Planner<'_> {
         let qualified_name = self.qualify_method_call(&qualified_type, member, is_public);
 
         let type_args = if !ctx.is_callee() {
-            self.format_cross_module_type_args(&qualified_method, result_ty)
+            self.format_cross_package_type_args(&qualified_method, result_ty)
                 .unwrap_or_default()
         } else {
             String::new()

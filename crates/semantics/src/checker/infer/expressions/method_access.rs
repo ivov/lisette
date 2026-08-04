@@ -155,10 +155,10 @@ impl InferCtx<'_> {
 
     fn promoted_method_is_exported(&self, declaring_type: &Symbol, member_name: &str) -> bool {
         let store = self.store;
-        let type_module = store
-            .module_for_qualified_name(declaring_type)
+        let type_package = store
+            .package_for_qualified_name(declaring_type)
             .unwrap_or(declaring_type.as_str());
-        if type_module != self.cursor.module_id {
+        if type_package != self.cursor.package_id {
             return true;
         }
         let method_key = declaring_type.with_segment(member_name);
@@ -168,7 +168,7 @@ impl InferCtx<'_> {
             .unwrap_or(false)
     }
 
-    /// Check cross-module visibility, record usage for find-references,
+    /// Check cross-package visibility, record usage for find-references,
     /// and warn if a UFCS method is taken as a value.
     fn check_instance_method_access(
         &mut self,
@@ -198,7 +198,7 @@ impl InferCtx<'_> {
                     args.member_name,
                     declaring,
                     store
-                        .module_for_qualified_name(declaring)
+                        .package_for_qualified_name(declaring)
                         .unwrap_or(declaring),
                     *args.span,
                 ));
@@ -257,7 +257,7 @@ impl InferCtx<'_> {
             .then_some(resolved_definition)
     }
 
-    /// When a cross-module instance method is used as a value (not called),
+    /// When a cross-package instance method is used as a value (not called),
     /// preserve the receiver in the type signature. The emitter emits Go
     /// method expression syntax (e.g., `lib.Point.Sum`).
     fn as_method_value(
@@ -272,13 +272,13 @@ impl InferCtx<'_> {
         };
         let params = &f.params;
 
-        let is_cross_module_type_access = matches!(
+        let is_cross_package_type_access = matches!(
             args.expression,
             Expression::DotAccess { expression: inner, .. }
                 if inner.get_type().resolve_in(&self.env).as_import_namespace().is_some()
         );
 
-        if !is_cross_module_type_access || self.scopes.is_callee_context() {
+        if !is_cross_package_type_access || self.scopes.is_callee_context() {
             return None;
         }
 
@@ -515,7 +515,7 @@ impl InferCtx<'_> {
             self.sink.push(diagnostics::infer::private_method_access(
                 args.member_name,
                 type_simple_name,
-                store.module_for_qualified_name(&id).unwrap_or(&id),
+                store.package_for_qualified_name(&id).unwrap_or(&id),
                 *args.span,
             ));
         }
@@ -531,9 +531,9 @@ impl InferCtx<'_> {
 
         self.unify(args.expected_ty, &method_ty, args.span);
 
-        let type_module = store.module_for_qualified_name(&id).unwrap_or(&id);
-        let is_cross_module = type_module != self.cursor.module_id;
-        let is_exported = is_public || is_cross_module;
+        let type_package = store.package_for_qualified_name(&id).unwrap_or(&id);
+        let is_cross_package = type_package != self.cursor.package_id;
+        let is_exported = is_public || is_cross_package;
         Some(args.build_dot_access(
             method_ty,
             DotAccessResolution::StaticMethod {
@@ -546,14 +546,14 @@ impl InferCtx<'_> {
     fn is_dot_access_exported(&self, deref_ty: &Type, member_name: &str) -> bool {
         let store = self.store;
         let Type::Nominal { id, .. } = deref_ty.strip_refs() else {
-            // Type parameters (bounded generics), can't determine module,
+            // Type parameters (bounded generics), can't determine package,
             // fall back to false; the emitter will check method_needs_export.
             return false;
         };
-        let type_module = store.module_for_qualified_name(&id).unwrap_or(&id);
-        let is_cross_module = type_module != self.cursor.module_id;
+        let type_package = store.package_for_qualified_name(&id).unwrap_or(&id);
+        let is_cross_package = type_package != self.cursor.package_id;
 
-        if is_cross_module {
+        if is_cross_package {
             return true;
         }
 

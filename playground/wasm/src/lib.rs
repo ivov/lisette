@@ -425,8 +425,8 @@ fn extract_word(source: &str, span: Span) -> String {
 
 // ─── Completion helpers ──────────────────────────────────────────────────────
 
-/// Detect if the cursor is after a dot on a module prefix or value.
-fn get_module_prefix(source: &str, offset: usize) -> Option<&str> {
+/// Detect if the cursor is after a dot on a package prefix or value.
+fn get_package_prefix(source: &str, offset: usize) -> Option<&str> {
     if offset == 0 || offset > source.len() {
         return None;
     }
@@ -484,9 +484,9 @@ fn build_dot_completions(
 ) -> Vec<JsCompletionItem> {
     let mut items = Vec::new();
 
-    // Check if prefix is a module alias
-    let module_name = file_items.iter().find_map(|item| {
-        if let Expression::ModuleImport { name, alias, .. } = item {
+    // Check if prefix is a package alias
+    let package_name = file_items.iter().find_map(|item| {
+        if let Expression::PackageImport { name, alias, .. } = item {
             let effective_alias = match alias {
                 Some(lisette_syntax::ast::ImportAlias::Named(a, _)) => a.to_string(),
                 _ => name
@@ -507,16 +507,16 @@ fn build_dot_completions(
         }
     });
 
-    if let Some(module_name) = &module_name {
-        // Module-level completions: find all definitions qualified with this module
+    if let Some(package_name) = &package_name {
+        // Package-level completions: find all definitions qualified with this package
         for (qname, def) in &analysis.emit_input.definitions {
             let qname_str = qname.as_str();
-            // Match "module_name.X" definitions
+            // Match "package_name.X" definitions
             if let Some(member) = qname_str
-                .strip_prefix(module_name.as_str())
+                .strip_prefix(package_name.as_str())
                 .and_then(|rest| rest.strip_prefix('.'))
             {
-                // Skip nested members (e.g. "module.Type.method")
+                // Skip nested members (e.g. "package.Type.method")
                 if !member.contains('.') {
                     items.push(JsCompletionItem {
                         label: member.to_string(),
@@ -530,7 +530,7 @@ fn build_dot_completions(
         return items;
     }
 
-    // Not a module — try to resolve as a variable/expression type
+    // Not a package, try to resolve as a variable/expression type
     // Find the expression before the dot and get its type
     if let Some(expr) = find_expression_at(file_items, offset.saturating_sub(2)) {
         let ty = expr.get_type();
@@ -652,16 +652,16 @@ pub fn complete(code: &str, offset: u32) -> String {
         .collect();
 
     // Check for dot-access context
-    if let Some(prefix) = get_module_prefix(code, offset as usize) {
+    if let Some(prefix) = get_package_prefix(code, offset as usize) {
         let items = build_dot_completions(prefix, &result.analysis, &items_refs, offset);
         return serde_json::to_string(&items).unwrap_or_else(|_| "[]".to_string());
     }
 
-    // Top-level completions: local definitions in the entry module
+    // Top-level completions: local definitions in the entry package
     let mut items: Vec<JsCompletionItem> = Vec::new();
     for (qname, def) in &result.analysis.emit_input.definitions {
         let qname_str = qname.as_str();
-        // Only show definitions from the entry module (unqualified or _entry_ prefixed)
+        // Only show definitions from the entry package (unqualified or _entry_ prefixed)
         let label = if let Some(rest) = qname_str.strip_prefix("_entry_.") {
             if rest.contains('.') {
                 continue;
