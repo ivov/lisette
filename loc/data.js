@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785798585002,
+  "lastUpdate": 1785861742591,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -18237,6 +18237,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/86afd242fc2dee3dd21a3c555bb0effb8828e4d9"
         },
         "date": 1785798583932,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 125774,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30326,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 25496,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18536,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13416,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 11925,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 7517,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5362,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2883,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1286,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7416,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "350e190dc2e75af07b60e2bf500317686c7ee717",
+          "message": "docs: update stale type param bounds section (#1205)",
+          "timestamp": "2026-08-04T18:41:50+02:00",
+          "tree_id": "9b131b4667c275ede8fc36cfbc0b21465edc1735",
+          "url": "https://github.com/ivov/lisette/commit/350e190dc2e75af07b60e2bf500317686c7ee717"
+        },
+        "date": 1785861741189,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
