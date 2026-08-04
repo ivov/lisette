@@ -3449,6 +3449,68 @@ fn test() {
 }
 
 #[test]
+fn infer_param_not_mutable() {
+    let input = r#"
+fn test(count: int) {
+  count = 20;
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_param_not_mutable_for_ref_receiver_method() {
+    let input = r#"
+struct Counter { count: int }
+
+impl Counter {
+  fn increment(self: Ref<Counter>) {
+    self.count = self.count + 1;
+  }
+}
+
+fn test(counter: Counter) {
+  counter.increment()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_destructured_param_not_mutable() {
+    let input = r#"
+fn test((x, y): (int, int)) -> int {
+  x = 1
+  x + y
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_destructured_struct_param_not_mutable() {
+    let input = r#"
+struct Point { x: int, y: int }
+
+fn test(Point { x, y }: Point) -> int {
+  x = 1
+  x + y
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_param_not_mutable_for_map_delete() {
+    let input = r#"
+fn test(scores: Map<string, int>) {
+  scores.delete("a")
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_mut_binding_aliases_slice() {
     let input = r#"
 fn test() {

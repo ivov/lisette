@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Immutable variable
+    ╭─[test.lis:11:3]
+ 10 │ fn test(counter: Counter) {
+ 11 │   counter.increment()
+    ·   ────────┬────────
+    ·           ╰── `counter` was declared without `mut`
+ 12 │ }
+    ╰────
+  help: Declare the parameter with `mut` to mutate it · code: [infer.immutable]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Immutable variable
+   ╭─[test.lis:5:3]
+ 4 │ fn test(Point { x, y }: Point) -> int {
+ 5 │   x = 1
+   ·   ──┬──
+   ·     ╰── `x` was declared without `mut`
+ 6 │   x + y
+   ╰────
+  help: Declare the parameter with `mut` to mutate it · code: [infer.immutable]

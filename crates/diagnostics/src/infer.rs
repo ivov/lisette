@@ -1,5 +1,5 @@
 use crate::LisetteDiagnostic;
-use syntax::ast::{Annotation, BinaryOperator, Span};
+use syntax::ast::{Annotation, BinaryOperator, BindingKind, Span};
 use syntax::types::{SimpleKind, Type};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -511,7 +511,7 @@ pub fn disallowed_mutation(
     variable_name: &str,
     span: Span,
     self_type_name: Option<&str>,
-    is_pattern_binding: bool,
+    binding_kind: Option<BindingKind>,
     is_const_binding: bool,
 ) -> LisetteDiagnostic {
     if variable_name == "self" {
@@ -535,7 +535,7 @@ pub fn disallowed_mutation(
             .with_help(format!(
                 "`const` bindings are immutable. Rebind with `let mut {variable_name} = {variable_name}` to mutate a local copy"
             ))
-    } else if is_pattern_binding {
+    } else if binding_kind.is_some_and(|kind| kind.is_pattern_position()) {
         LisetteDiagnostic::error("Immutable variable")
             .with_infer_code("immutable")
             .with_span_label(&span, "patterns cannot bind with `mut`")
@@ -543,15 +543,18 @@ pub fn disallowed_mutation(
                 "Rebind with `let mut {variable_name} = {variable_name}`, then mutate that"
             ))
     } else {
+        let help = if binding_kind.is_some_and(|kind| kind.is_param()) {
+            "Declare the parameter with `mut` to mutate it".to_string()
+        } else {
+            format!("Declare using `let mut {variable_name}` to make the variable mutable")
+        };
         LisetteDiagnostic::error("Immutable variable")
             .with_infer_code("immutable")
             .with_span_label(
                 &span,
                 format!("`{variable_name}` was declared without `mut`"),
             )
-            .with_help(format!(
-                "Declare using `let mut {variable_name}` to make the variable mutable"
-            ))
+            .with_help(help)
     }
 }
 
