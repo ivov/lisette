@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+   ╭─[test.lis:6:16]
+ 5 │   let d: time.Duration = 5
+ 6 │   let n: int = d
+   ·                ┬
+   ·                ╰── expected `int`, found `time.Duration`
+ 7 │ }
+   ╰────
+  help: Cast with `as`, e.g. `value as int` · code: [infer.type_mismatch]

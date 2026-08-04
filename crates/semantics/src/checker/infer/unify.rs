@@ -736,18 +736,27 @@ impl InferCtx<'_> {
                         );
                 }
 
+                let (expected_name, actual_name) = Type::stringify_pair(expected, actual);
+
                 LisetteDiagnostic::error("Type mismatch")
                     .with_infer_code("type_mismatch")
-                    .with_span_label(span, format!("expected `{}`, found `{}`", expected, actual))
+                    .with_span_label(
+                        span,
+                        format!("expected `{}`, found `{}`", expected_name, actual_name),
+                    )
                     .with_help("The function types must have the same number of parameters")
             }
 
             UnifyError::TypeMismatch | UnifyError::Multiple(_) => {
-                let help = self.help(expected, actual);
+                let (expected_name, actual_name) = Type::stringify_pair(expected, actual);
+                let help = self.help(expected, actual, &expected_name, &actual_name);
 
                 LisetteDiagnostic::error("Type mismatch")
                     .with_infer_code("type_mismatch")
-                    .with_span_label(span, format!("expected `{}`, found `{}`", expected, actual))
+                    .with_span_label(
+                        span,
+                        format!("expected `{}`, found `{}`", expected_name, actual_name),
+                    )
                     .with_help(help)
             }
 
@@ -757,18 +766,24 @@ impl InferCtx<'_> {
         }
     }
 
-    fn help(&self, expected: &Type, actual: &Type) -> String {
+    fn help(
+        &self,
+        expected: &Type,
+        actual: &Type,
+        expected_name: &str,
+        actual_name: &str,
+    ) -> String {
         if actual.is_unknown() {
             return format!(
                 "The `Unknown` type cannot be used directly. Use `assert_type` to narrow it down to a concrete type. Example: `let value = assert_type<{}>(...)?`",
-                expected
+                expected_name
             );
         }
 
         if expected.is_unknown() {
             return format!(
                 "The `Unknown` type cannot be used directly. Use `assert_type` to narrow it down to a concrete type.  Example: `let value = assert_type<{}>(...)?`",
-                actual
+                actual_name
             );
         }
 
@@ -802,7 +817,7 @@ impl InferCtx<'_> {
 
         if array_to_slice_help_applies(expected, actual) {
             return format!(
-                "Call `.to_slice()` to copy the elements into a new slice, or change the receiving type to `{actual}`"
+                "Call `.to_slice()` to copy the elements into a new slice, or change the receiving type to `{actual_name}`"
             );
         }
 
@@ -824,7 +839,7 @@ impl InferCtx<'_> {
                 {
                     format!(
                         "Build the map with `Map.new()` plus indexed assignment: `let mut m: {} = Map.new(); m[k] = v`",
-                        expected
+                        expected_name
                     )
                 }
                 Some((Slice, args))
@@ -832,7 +847,7 @@ impl InferCtx<'_> {
                         .first()
                         .is_some_and(|ty| self.store.resolves_to_unknown(ty)) =>
                 {
-                    format!("Annotate the slice literal: `let xs: {} = [v1, v2, ...]`", expected)
+                    format!("Annotate the slice literal: `let xs: {} = [v1, v2, ...]`", expected_name)
                 }
                 _ if self.store.resolve_to_function_type(expected).is_some()
                     && self.store.resolve_to_function_type(actual).is_some() =>
@@ -840,7 +855,7 @@ impl InferCtx<'_> {
                     "Function types must match exactly, and `Unknown` matches only `Unknown`. Declare the function with the expected signature and narrow with `assert_type` inside, or wrap it in a closure that narrows at the call site".to_string()
                 }
                 _ => format!(
-                    "`Unknown` matches only `Unknown`, never a concrete type. Build `{expected}` from a value already annotated as `Unknown`, e.g. `let value: Unknown = ...`, or change the expected type to `{actual}`"
+                    "`Unknown` matches only `Unknown`, never a concrete type. Build `{expected_name}` from a value already annotated as `Unknown`, e.g. `let value: Unknown = ...`, or change the expected type to `{actual_name}`"
                 ),
             };
         }
@@ -848,12 +863,12 @@ impl InferCtx<'_> {
         if self.store.is_interface(actual) && !self.store.is_interface(expected) {
             return format!(
                 "An interface value does not carry its concrete type. Narrow it with `assert_type`, e.g. `let value = assert_type<{}>(value)?`",
-                expected
+                expected_name
             );
         }
 
         if self.store.is_numeric_compatible_with(expected, actual) {
-            return format!("Cast with `as`, e.g. `value as {}`", expected);
+            return format!("Cast with `as`, e.g. `value as {}`", expected_name);
         }
 
         if let Some(Type::Function(function)) = self.store.resolve_to_function_type(expected)
@@ -872,17 +887,22 @@ impl InferCtx<'_> {
             None => {}
         }
 
-        if let Some(widening) = self.container_widening_help(expected, actual) {
+        if let Some(widening) = self.container_widening_help(expected, actual, expected_name) {
             return widening;
         }
 
         format!(
             "Change the type annotation to `{}` or convert the value to `{}`",
-            actual, expected
+            actual_name, expected_name
         )
     }
 
-    fn container_widening_help(&self, expected: &Type, actual: &Type) -> Option<String> {
+    fn container_widening_help(
+        &self,
+        expected: &Type,
+        actual: &Type,
+        expected_name: &str,
+    ) -> Option<String> {
         let container = WideningContainer::of(expected)?;
         if WideningContainer::of(actual) != Some(container) {
             return None;
@@ -914,7 +934,7 @@ impl InferCtx<'_> {
             Widening::Value => format!("Use `.map({cast})` to widen the value"),
             Widening::Error => format!("Use `.map_err({cast})` to widen the error"),
             Widening::Entries => format!(
-                "Copy the entries into a new `{expected}`, widening each value: `widened[key] = value as {expected_element}`"
+                "Copy the entries into a new `{expected_name}`, widening each value: `widened[key] = value as {expected_element}`"
             ),
         })
     }

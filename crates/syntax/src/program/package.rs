@@ -7,6 +7,10 @@ use crate::types::Symbol;
 
 pub type PackageId = String;
 
+pub fn is_internal_package_id(id: &str) -> bool {
+    id == "prelude" || id == "**test_prelude" || id == "**nominal" || id.starts_with("go:")
+}
+
 #[derive(Debug, Clone)]
 pub struct Package {
     pub id: String,
@@ -80,13 +84,6 @@ impl Package {
 
     pub fn is_typedef(&self, file_id: u32) -> bool {
         self.files.get(&file_id).is_some_and(File::is_d_lis)
-    }
-
-    pub fn is_internal(&self) -> bool {
-        self.id == "prelude"
-            || self.id == "**test_prelude"
-            || self.id == "**nominal"
-            || self.id.starts_with("go:")
     }
 
     pub fn is_empty_stub(&self) -> bool {

@@ -3259,6 +3259,121 @@ fn get_number() -> int {
 }
 
 #[test]
+fn infer_type_mismatch_names_go_package() {
+    let input = r#"
+import "go:time"
+
+fn test() {
+  let d: time.Duration = 5
+  let n: int = d
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_type_mismatch_go_type_named_after_a_builtin() {
+    let input = r#"
+import "go:go/types"
+
+fn take(t: types.Tuple) -> int { 1 }
+
+fn test() {
+  let _ = take(5)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_type_mismatch_go_and_project_type_share_a_leaf_name() {
+    let input = r#"
+import "go:bytes"
+
+struct Buffer { n: int }
+
+fn take_go(mut b: bytes.Buffer) -> int { b.Len() }
+
+fn test() {
+  let mine = Buffer { n: 1 }
+  let _ = take_go(mine)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_type_mismatch_two_packages_share_a_leaf_name() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file("alpha", "alpha.lis", "pub struct Config { pub n: int }\n");
+    fs.add_file("beta", "beta.lis", "pub struct Config { pub n: int }\n");
+
+    let source = r#"
+import "alpha"
+import "beta"
+
+fn take(c: alpha.Config) -> int { c.n }
+
+fn main() {
+  let b = beta.Config { n: 1 }
+  let _ = take(b)
+}
+"#;
+    fs.add_file(ENTRY_PACKAGE_ID, "main.lis", source);
+
+    let result = infer_package(ENTRY_PACKAGE_ID, fs);
+    assert_multipackage_infer_error_snapshot!(result, source);
+}
+
+#[test]
+fn infer_binary_operator_operands_share_a_leaf_name() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file("alpha", "alpha.lis", "pub struct Config { pub n: int }\n");
+    fs.add_file("beta", "beta.lis", "pub struct Config { pub n: int }\n");
+
+    let source = r#"
+import "alpha"
+import "beta"
+
+fn main() {
+  let a: Option<alpha.Config> = Some(alpha.Config { n: 1 })
+  let b: Option<beta.Config> = Some(beta.Config { n: 2 })
+  let _ = a == b
+}
+"#;
+    fs.add_file(ENTRY_PACKAGE_ID, "main.lis", source);
+
+    let result = infer_package(ENTRY_PACKAGE_ID, fs);
+    assert_multipackage_infer_error_snapshot!(result, source);
+}
+
+#[test]
+fn infer_type_mismatch_entry_package_shares_a_leaf_name() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file("alpha", "alpha.lis", "pub struct Config { pub n: int }\n");
+
+    let source = r#"
+import "alpha"
+
+struct Config { n: int }
+
+fn take(c: alpha.Config) -> int { c.n }
+
+fn main() {
+  let mine = Config { n: 1 }
+  let _ = take(mine)
+}
+"#;
+    fs.add_file(ENTRY_PACKAGE_ID, "main.lis", source);
+
+    let result = infer_package(ENTRY_PACKAGE_ID, fs);
+    assert_multipackage_infer_error_snapshot!(result, source);
+}
+
+#[test]
 fn infer_type_not_found() {
     let input = r#"
 fn test() {

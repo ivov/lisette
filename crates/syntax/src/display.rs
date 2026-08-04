@@ -1,36 +1,69 @@
 use std::fmt;
 
-use crate::types::Type;
+use crate::program::is_internal_package_id;
+use crate::types::{GO_IMPORT_PREFIX, Symbol, Type};
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Qualifier {
+    Package,
+    Path,
+}
 
 impl Type {
     pub fn stringify(&self) -> String {
+        self.stringify_as(Qualifier::Package)
+    }
+
+    pub fn stringify_pair(first: &Self, second: &Self) -> (String, String) {
+        let (named, _) = Self::remove_vars(&[first, second]);
+        let (first, second) = (&named[0], &named[1]);
+
+        let (short_first, short_second) = (first.stringify(), second.stringify());
+        if short_first != short_second {
+            return (short_first, short_second);
+        }
+
+        let wide_first = first.stringify_as(Qualifier::Path);
+        let wide_second = second.stringify_as(Qualifier::Path);
+        if wide_first == wide_second {
+            return (short_first, short_second);
+        }
+
+        (wide_first, wide_second)
+    }
+
+    fn stringify_as(&self, qualifier: Qualifier) -> String {
         match self {
             Type::Nominal {
                 id, params: args, ..
             } => {
                 let args_formatted = args
                     .iter()
-                    .map(|a| a.stringify())
+                    .map(|a| a.stringify_as(qualifier))
                     .collect::<Vec<_>>()
                     .join(", ");
 
-                let name = id.last_segment();
+                let leaf = id.last_segment();
 
-                if name == "Unit" {
-                    return "()".to_string();
+                if !id.as_str().starts_with(GO_IMPORT_PREFIX) {
+                    if leaf == "Unit" {
+                        return "()".to_string();
+                    }
+
+                    if leaf == "bool" {
+                        return "bool".to_string();
+                    }
+
+                    if leaf.starts_with("Tuple") {
+                        return format!("({})", args_formatted);
+                    }
+
+                    if leaf == "Ref" {
+                        return format!("Ref<{}>", args_formatted);
+                    }
                 }
 
-                if name == "bool" {
-                    return "bool".to_string();
-                }
-
-                if name.starts_with("Tuple") {
-                    return format!("({})", args_formatted);
-                }
-
-                if name == "Ref" {
-                    return format!("Ref<{}>", args_formatted);
-                }
+                let name = qualified_name(id, qualifier);
 
                 if args.is_empty() {
                     return name.to_string();
@@ -54,15 +87,15 @@ impl Type {
                     .iter()
                     .map(|param| {
                         if param.mutable {
-                            format!("mut {}", param.ty.stringify())
+                            format!("mut {}", param.ty.stringify_as(qualifier))
                         } else {
-                            param.ty.stringify()
+                            param.ty.stringify_as(qualifier)
                         }
                     })
                     .collect::<Vec<_>>()
                     .join(", ");
 
-                let ret_formatted = f.return_type.stringify();
+                let ret_formatted = f.return_type.stringify_as(qualifier);
 
                 format!("fn ({}) -> {}", args_formatted, ret_formatted)
             }
@@ -78,14 +111,14 @@ impl Type {
             Type::Tuple(elements) => {
                 let formatted = elements
                     .iter()
-                    .map(|e| e.stringify())
+                    .map(|e| e.stringify_as(qualifier))
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!("({})", formatted)
             }
 
             Type::Array { length, element } => {
-                format!("Array<{}, {}>", element.stringify(), length)
+                format!("Array<{}, {}>", element.stringify_as(qualifier), length)
             }
 
             Type::Error => "<error>".to_string(),
@@ -109,7 +142,7 @@ impl Type {
             Type::Compound { kind, args } => {
                 let args_formatted = args
                     .iter()
-                    .map(|a| a.stringify())
+                    .map(|a| a.stringify_as(qualifier))
                     .collect::<Vec<_>>()
                     .join(", ");
                 if args.is_empty() {
@@ -119,6 +152,25 @@ impl Type {
                 }
             }
         }
+    }
+}
+
+fn qualified_name(id: &Symbol, qualifier: Qualifier) -> &str {
+    if let Some(path) = id.as_str().strip_prefix(GO_IMPORT_PREFIX) {
+        return path;
+    }
+
+    if qualifier == Qualifier::Package {
+        return id.last_segment();
+    }
+
+    match id.as_str().split_once('.') {
+        Some((package, _))
+            if package != crate::ENTRY_PACKAGE_ID && !is_internal_package_id(package) =>
+        {
+            id.as_str()
+        }
+        _ => id.last_segment(),
     }
 }
 

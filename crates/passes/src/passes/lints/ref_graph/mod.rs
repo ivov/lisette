@@ -17,8 +17,8 @@ use semantics::store::Store;
 use syntax::ast::{Attribute, AttributeArg, Expression, Span, StructFieldDefinition, Visibility};
 use syntax::program::EqualityIndex;
 use syntax::program::File;
-use syntax::program::Package;
 use syntax::program::UnusedInfo;
+use syntax::program::{Package, is_internal_package_id};
 
 use extract::{AliasMap, is_upper, walk_expression};
 use redundant_import_alias::check_redundant_aliases;
@@ -39,7 +39,7 @@ pub(crate) fn run(store: &Store, facts: &Facts) -> (Vec<LisetteDiagnostic>, Unus
         .packages
         .values()
         .map(Arc::as_ref)
-        .filter(|m| !m.is_internal())
+        .filter(|m| !is_internal_package_id(&m.id))
         .collect();
     packages.sort_unstable_by(|a, b| a.id.cmp(&b.id));
 

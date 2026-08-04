@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+    ╭─[main.lis:9:16]
+  8 │   let b = beta.Config { n: 1 }
+  9 │   let _ = take(b)
+    ·                ┬
+    ·                ╰── expected `alpha.Config`, found `beta.Config`
+ 10 │ }
+    ╰────
+  help: Change the type annotation to `beta.Config` or convert the value to `alpha.Config` · code: [infer.type_mismatch]

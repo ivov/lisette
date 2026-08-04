@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+   ╭─[main.lis:8:11]
+ 7 │   let b: Option<beta.Config> = Some(beta.Config { n: 2 })
+ 8 │   let _ = a == b
+   ·           ───┬──
+   ·              ╰── cannot compare `Option<alpha.Config>` and `Option<beta.Config>`
+ 9 │ }
+   ╰────
+  help: The `==` operator requires both operands to have the same type · code: [infer.type_mismatch]

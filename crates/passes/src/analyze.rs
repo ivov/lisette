@@ -4,7 +4,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::LisetteDiagnostic;
 use syntax::ast::BindingId;
-use syntax::program::{EmitInput, MutationInfo, UnusedInfo};
+use syntax::program::{EmitInput, MutationInfo, UnusedInfo, is_internal_package_id};
 
 use semantics::AnalyzeInput;
 use semantics::cache::{EmitStamp, save_package_cache};
@@ -170,7 +170,7 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
     for (_, package) in store.packages {
         // Worker views are gone by now, so this unwraps without cloning.
         let package = Arc::try_unwrap(package).unwrap_or_else(|shared| (*shared).clone());
-        let is_internal = package.is_internal();
+        let is_internal = is_internal_package_id(&package.id);
         definitions.extend(package.definitions);
 
         // Internal typedef files remain available so the LSP can map their IDs

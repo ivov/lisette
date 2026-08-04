@@ -1261,11 +1261,12 @@ pub fn binary_operator_type_mismatch(
     right_ty: &Type,
     span: Span,
 ) -> LisetteDiagnostic {
+    let (left_name, right_name) = Type::stringify_pair(left_ty, right_ty);
     let label_msg = format!(
         "cannot {} `{}` and `{}`",
         operator_verb(operator),
-        left_ty,
-        right_ty
+        left_name,
+        right_name
     );
 
     LisetteDiagnostic::error("Type mismatch")
@@ -1511,11 +1512,16 @@ pub fn branch_type_mismatch(
     branch_span: Span,
     result_ty: &Type,
 ) -> LisetteDiagnostic {
+    let (branch_name, result_name) = Type::stringify_pair(branch_ty, result_ty);
+
     LisetteDiagnostic::error("Type mismatch")
         .with_infer_code("type_mismatch")
         .with_span_label(
             &branch_span,
-            format!("this branch produces `{}`, not `{}`", branch_ty, result_ty),
+            format!(
+                "this branch produces `{}`, not `{}`",
+                branch_name, result_name
+            ),
         )
         .with_help("All branches must produce the same type when used as a value")
 }

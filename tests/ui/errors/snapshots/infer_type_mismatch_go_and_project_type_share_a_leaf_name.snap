@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+    ╭─[test.lis:10:19]
+  9 │   let mine = Buffer { n: 1 }
+ 10 │   let _ = take_go(mine)
+    ·                   ──┬─
+    ·                     ╰── expected `bytes.Buffer`, found `Buffer`
+ 11 │ }
+    ╰────
+  help: Change the type annotation to `Buffer` or convert the value to `bytes.Buffer` · code: [infer.type_mismatch]

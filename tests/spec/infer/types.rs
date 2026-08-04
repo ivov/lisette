@@ -10218,3 +10218,20 @@ fn main() {}
     infer_with_go_typedefs(input, &[("go:example.com/cache", typedef)])
         .assert_infer_code("comma_ok_abi_mismatch");
 }
+
+#[test]
+fn go_type_names_its_import_path_not_a_derived_package_name() {
+    let typedef = r#"// Package: yaml
+
+pub struct Decoder { pub Strict: bool }
+"#;
+    let input = r#"
+import yaml "go:gopkg.in/yaml.v3"
+
+fn run() {
+  let _: int = yaml.Decoder { Strict: true }
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:gopkg.in/yaml.v3", typedef)])
+        .assert_error_contains("gopkg.in/yaml.v3.Decoder");
+}

@@ -15,7 +15,7 @@ use rustc_hash::FxHashMap as HashMap;
 use semantics::facts::{Facts, Usage};
 use semantics::store::Store;
 use syntax::ast::{Expression, Pattern, Span};
-use syntax::program::Package;
+use syntax::program::{Package, is_internal_package_id};
 
 use attributes::{check_attributes, check_enum_attributes, check_struct_attributes};
 use checks::{
@@ -232,7 +232,7 @@ pub(crate) fn run(store: &Store, facts: &Facts) -> Vec<LisetteDiagnostic> {
         .packages
         .values()
         .map(Arc::as_ref)
-        .filter(|m| !m.is_internal())
+        .filter(|m| !is_internal_package_id(&m.id))
         .collect();
     packages.sort_unstable_by(|a, b| a.id.cmp(&b.id));
 
