@@ -64,6 +64,15 @@ impl ImportState {
 }
 
 impl TaskState {
+    pub(super) fn may_name_uninferred_export(&self, store: &Store, name: &str) -> bool {
+        let Some((prefix, member)) = name.split_once('.') else {
+            return false;
+        };
+        self.imports
+            .module_id(prefix)
+            .is_some_and(|module_id| store.uninferred_module_may_export(module_id, member))
+    }
+
     /// Resolve a simple name (e.g., "Sunday") to a public definition in an imported module.
     /// First tries direct match (`module_id.name`), then falls back to searching
     /// for nested definitions (e.g., `module_id.Weekday.Sunday`) preferring top-level

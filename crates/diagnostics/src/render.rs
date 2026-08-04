@@ -1,12 +1,11 @@
 use std::borrow::Cow;
-use std::fmt;
 use std::time::Duration;
 
 use rustc_hash::FxHashMap;
 
 use crate::LisetteDiagnostic;
 use crate::diagnostic::IndexedSource;
-use crate::graphical::{self, FrameReport, FrameTheme};
+use crate::graphical::{self, FrameReport, FrameSource, FrameTheme};
 use owo_colors::{OwoColorize, Style};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -155,35 +154,38 @@ fn frame_theme(diagnostic: &LisetteDiagnostic, use_color: bool) -> FrameTheme {
     }
 }
 
-fn write_graphical_report(
-    output: &mut String,
+/// Draws a frame for every file the labels point into.
+pub fn render_with_sources<F: Fn(u32) -> Option<(String, String)>>(
     diagnostic: &LisetteDiagnostic,
-    source: Option<(&IndexedSource, &str)>,
+    sources: &mut SourceCache<F>,
     use_color: bool,
     context_lines: usize,
-) -> fmt::Result {
-    let labels = diagnostic.frame_labels(use_color);
+) -> String {
+    let frames: Vec<FrameSource> = diagnostic
+        .label_file_ids()
+        .into_iter()
+        .filter_map(|file_id| {
+            let (source, filename) = sources.get(Some(file_id))?;
+            Some(FrameSource {
+                source,
+                filename,
+                labels: diagnostic.frame_labels(file_id, use_color),
+            })
+        })
+        .collect();
+
     let help = diagnostic.styled_help_text(use_color);
-    graphical::render_report(
-        output,
+    let mut output = String::new();
+    let _ = graphical::render_report(
+        &mut output,
         &FrameReport {
             message: &diagnostic.styled_message(use_color),
-            labels: &labels,
+            sources: &frames,
             help: help.as_deref(),
         },
-        source,
         &frame_theme(diagnostic, use_color),
         context_lines,
-    )
-}
-
-fn graphical_report(
-    diagnostic: &LisetteDiagnostic,
-    source: Option<(&IndexedSource, &str)>,
-    use_color: bool,
-) -> String {
-    let mut output = String::new();
-    let _ = write_graphical_report(&mut output, diagnostic, source, use_color, 1);
+    );
     output
 }
 
@@ -194,22 +196,11 @@ pub fn render_to_string(
     use_color: bool,
     context_lines: usize,
 ) -> String {
-    let source = IndexedSource::new(source);
-    let mut output = String::new();
-    let _ = write_graphical_report(
-        &mut output,
-        diagnostic,
-        Some((&source, filename)),
-        use_color,
-        context_lines,
-    );
-    output
-}
-
-pub fn render_standalone(diagnostic: &LisetteDiagnostic) -> String {
-    let mut output = String::new();
-    let _ = write_graphical_report(&mut output, diagnostic, None, false, 1);
-    output
+    let anchor = diagnostic.file_id();
+    let mut sources = SourceCache::new(|file_id| {
+        (Some(file_id) == anchor).then(|| (source.to_string(), filename.to_string()))
+    });
+    render_with_sources(diagnostic, &mut sources, use_color, context_lines)
 }
 
 fn render_group<F: Fn(u32) -> Option<(String, String)>>(
@@ -218,8 +209,7 @@ fn render_group<F: Fn(u32) -> Option<(String, String)>>(
     sources: &mut SourceCache<F>,
 ) {
     for diagnostic in diagnostics {
-        let source = sources.get(diagnostic.file_id());
-        eprintln!("{}", graphical_report(diagnostic, source, use_color));
+        eprintln!("{}", render_with_sources(diagnostic, sources, use_color, 1));
     }
 }
 
@@ -244,13 +234,13 @@ impl<F: Fn(u32) -> Option<(String, String)>> SourceCache<F> {
         }
     }
 
-    fn get(&mut self, file_id: Option<u32>) -> Option<(&IndexedSource, &str)> {
+    fn get(&mut self, file_id: Option<u32>) -> Option<(IndexedSource, String)> {
         let file_id = file_id?;
         let get_source = &self.get_source;
         let entry = self.cache.entry(file_id).or_insert_with(|| {
             get_source(file_id).map(|(source, name)| (IndexedSource::new(&source), name))
         });
-        entry.as_ref().map(|(source, name)| (source, name.as_str()))
+        entry.clone()
     }
 }
 
@@ -415,7 +405,9 @@ pub fn render_unix(
         .chain(&groups.warnings)
         .chain(&groups.info)
     {
-        output.push_str(&unix_line(diagnostic, sources.get(diagnostic.file_id())));
+        let source = sources.get(diagnostic.file_id());
+        let source = source.as_ref().map(|(text, name)| (text, name.as_str()));
+        output.push_str(&unix_line(diagnostic, source));
         output.push('\n');
     }
 
@@ -445,8 +437,7 @@ mod tests {
 
     fn graphical_output(diagnostic: &LisetteDiagnostic) -> String {
         let mut sources = SourceCache::new(entry_only);
-        let source = sources.get(diagnostic.file_id());
-        graphical_report(diagnostic, source, false)
+        render_with_sources(diagnostic, &mut sources, false, 1)
     }
 
     #[test]

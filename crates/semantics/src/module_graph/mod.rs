@@ -58,6 +58,14 @@ impl ImportUse {
 struct Dependency {
     kind: DependencyKind,
     usage: ImportUse,
+    span: Span,
+}
+
+impl Dependency {
+    fn merge(&mut self, other: Self) {
+        self.kind = self.kind.merge(other.kind);
+        self.usage = self.usage.merge(other.usage);
+    }
 }
 
 /// One canonical classification for every direct module dependency.
@@ -96,6 +104,17 @@ impl DependencyGraph {
             .get(module_id)
             .into_iter()
             .flat_map(HashMap::keys)
+    }
+
+    pub(crate) fn imports(&self, module_id: &str) -> impl Iterator<Item = (&ModuleId, Span)> {
+        self.edges
+            .get(module_id)
+            .into_iter()
+            .flat_map(|dependencies| {
+                dependencies
+                    .iter()
+                    .map(|(module_id, dependency)| (module_id, dependency.span))
+            })
     }
 
     pub(crate) fn production_dependencies(
@@ -145,6 +164,7 @@ impl From<HashMap<ModuleId, HashSet<ModuleId>>> for DependencyGraph {
                                 Dependency {
                                     kind: DependencyKind::Production,
                                     usage: ImportUse::Referenced,
+                                    span: Span::dummy(),
                                 },
                             )
                         })
@@ -195,7 +215,7 @@ impl ScannedFile {
 #[derive(Debug)]
 pub struct ModuleGraphResult {
     pub order: Vec<ModuleId>,
-    pub cycles: Vec<Vec<ModuleId>>,
+    pub cycles: Vec<kahn::Cycle>,
     pub files: HashMap<ModuleId, Vec<ScannedFile>>,
     pub dependencies: DependencyGraph,
     /// Reachable from the primary roots, snapshotted before `additional` runs.
@@ -365,20 +385,16 @@ impl<'a> GraphBuilder<'a> {
 
                 self.files.insert(module_id.clone(), module_files);
 
-                for (import, resolved) in &imports {
+                for (import, dependency) in &imports {
                     if !self.visited.contains(import) {
                         to_visit.push(import.clone());
                     }
                     self.import_spans
                         .entry(import.clone())
-                        .or_insert(resolved.span);
+                        .or_insert(dependency.span);
                 }
 
-                let dependencies = imports
-                    .into_iter()
-                    .map(|(module_id, resolved)| (module_id, resolved.dependency))
-                    .collect();
-                self.dependencies.insert(module_id.clone(), dependencies);
+                self.dependencies.insert(module_id.clone(), imports);
             }
         }
     }
@@ -550,19 +566,6 @@ fn scan_one(job: ScanJob) -> ScannedFile {
 }
 
 #[derive(Clone, Copy)]
-struct ResolvedImport {
-    span: Span,
-    dependency: Dependency,
-}
-
-impl ResolvedImport {
-    fn merge(&mut self, dependency: Dependency) {
-        self.dependency.kind = self.dependency.kind.merge(dependency.kind);
-        self.dependency.usage = self.dependency.usage.merge(dependency.usage);
-    }
-}
-
-#[derive(Clone, Copy)]
 struct ImportContext<'a> {
     sink: &'a LocalSink,
     scope: &'a AnalysisScope,
@@ -575,7 +578,7 @@ struct ImportContext<'a> {
 fn process_file_imports(
     file_imports: Vec<ClassifiedImport>,
     ctx: ImportContext<'_>,
-) -> HashMap<ModuleId, ResolvedImport> {
+) -> HashMap<ModuleId, Dependency> {
     let ImportContext {
         sink,
         scope,
@@ -585,7 +588,7 @@ fn process_file_imports(
         locator,
     } = ctx;
     let mut imports = HashMap::default();
-    let mut pending_go_imports: HashMap<&str, ResolvedImport> = HashMap::default();
+    let mut pending_go_imports: HashMap<&str, Dependency> = HashMap::default();
     for classified in &file_imports {
         let file_import = &classified.import;
         if !file_import.name.starts_with("go:") {
@@ -596,21 +599,15 @@ fn process_file_imports(
         } else {
             ImportUse::Referenced
         };
+        let dependency = Dependency {
+            kind: classified.kind,
+            usage,
+            span: file_import.name_span,
+        };
         pending_go_imports
             .entry(&file_import.name)
-            .and_modify(|pending| {
-                pending.merge(Dependency {
-                    kind: classified.kind,
-                    usage,
-                });
-            })
-            .or_insert(ResolvedImport {
-                span: file_import.name_span,
-                dependency: Dependency {
-                    kind: classified.kind,
-                    usage,
-                },
-            });
+            .and_modify(|pending| pending.merge(dependency))
+            .or_insert(dependency);
     }
 
     for classified in &file_imports {
@@ -660,14 +657,12 @@ fn process_file_imports(
                         let dependency = Dependency {
                             kind: classified.kind,
                             usage: ImportUse::Referenced,
+                            span: file_import.name_span,
                         };
                         imports
                             .entry(entry.to_string())
-                            .and_modify(|resolved: &mut ResolvedImport| resolved.merge(dependency))
-                            .or_insert(ResolvedImport {
-                                span: file_import.name_span,
-                                dependency,
-                            });
+                            .and_modify(|existing: &mut Dependency| existing.merge(dependency))
+                            .or_insert(dependency);
                     }
                     None if project_kind == ProjectKind::Binary => {
                         sink.push(diagnostics::module_graph::cannot_import_root_in_binary(
@@ -688,7 +683,7 @@ fn process_file_imports(
             let Some(pending) = pending_go_imports.remove(file_import.name.as_str()) else {
                 continue;
             };
-            let ok = match pending.dependency.usage {
+            let ok = match pending.usage {
                 ImportUse::Referenced => {
                     let result = locator.find_typedef_content(go_pkg);
                     emit_for_locator_result(
@@ -721,13 +716,7 @@ fn process_file_imports(
                 }
             };
             if ok {
-                imports.insert(
-                    file_import.name.to_string(),
-                    ResolvedImport {
-                        span: pending.span,
-                        dependency: pending.dependency,
-                    },
-                );
+                imports.insert(file_import.name.to_string(), pending);
             }
             continue;
         }
@@ -763,14 +752,12 @@ fn process_file_imports(
         let dependency = Dependency {
             kind: classified.kind,
             usage: ImportUse::Referenced,
+            span: file_import.name_span,
         };
         imports
             .entry(file_import.name.to_string())
-            .and_modify(|resolved: &mut ResolvedImport| resolved.merge(dependency))
-            .or_insert(ResolvedImport {
-                span: file_import.name_span,
-                dependency,
-            });
+            .and_modify(|existing: &mut Dependency| existing.merge(dependency))
+            .or_insert(dependency);
     }
 
     imports
@@ -818,7 +805,7 @@ mod tests {
         assert!(!sink.has_errors());
         resolved
             .get("go:fmt")
-            .is_some_and(|resolved| resolved.dependency.usage == ImportUse::LinkOnly)
+            .is_some_and(|dependency| dependency.usage == ImportUse::LinkOnly)
     }
 
     #[test]
@@ -928,6 +915,7 @@ mod tests {
         let dependency = |usage| Dependency {
             kind: DependencyKind::Production,
             usage,
+            span: Span::dummy(),
         };
         let mut graph = DependencyGraph::default();
         graph.insert(

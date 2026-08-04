@@ -1,8 +1,18 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
+use syntax::ast::Span;
+
 use super::{DependencyGraph, ModuleId};
 
-pub fn topological_sort(edges: &DependencyGraph) -> (Vec<ModuleId>, Vec<Vec<ModuleId>>) {
+#[derive(Debug, Clone)]
+pub struct CycleHop {
+    pub module: ModuleId,
+    pub span: Span,
+}
+
+pub type Cycle = Vec<CycleHop>;
+
+pub fn topological_sort(edges: &DependencyGraph) -> (Vec<ModuleId>, Vec<Cycle>) {
     let mut in_degree: HashMap<ModuleId, usize> = HashMap::default();
     let mut order = Vec::new();
 
@@ -46,7 +56,7 @@ pub fn topological_sort(edges: &DependencyGraph) -> (Vec<ModuleId>, Vec<Vec<Modu
     (order, cycles)
 }
 
-fn find_cycles(edges: &DependencyGraph, processed: &[ModuleId]) -> Vec<Vec<ModuleId>> {
+fn find_cycles(edges: &DependencyGraph, processed: &[ModuleId]) -> Vec<Cycle> {
     let processed_set: HashSet<_> = processed.iter().collect();
     let unprocessed: Vec<_> = edges
         .modules()
@@ -61,26 +71,46 @@ fn find_cycles(edges: &DependencyGraph, processed: &[ModuleId]) -> Vec<Vec<Modul
             continue;
         }
 
-        let mut stack = vec![(start, vec![start.clone()])];
+        let mut stack: Vec<(&ModuleId, Cycle)> = vec![(start, Vec::new())];
 
         while let Some((node, path)) = stack.pop() {
             if !visited.insert(node.clone()) {
                 continue;
             }
 
-            for import in edges.dependencies(node) {
-                if let Some(position) = path.iter().position(|p| p == import) {
-                    let mut cycle_path: Vec<_> = path[position..].to_vec();
-                    cycle_path.push(import.clone());
-                    cycles.push(cycle_path);
+            for (import, span) in edges.imports(node) {
+                let hop = CycleHop {
+                    module: node.clone(),
+                    span,
+                };
+                let closes_on = path
+                    .iter()
+                    .chain([&hop])
+                    .position(|walked| &walked.module == import);
+                if let Some(position) = closes_on {
+                    let mut cycle: Cycle = path[position..].to_vec();
+                    cycle.push(hop);
+                    rotate_to_first_module(&mut cycle);
+                    cycles.push(cycle);
                 } else if !visited.contains(import) {
-                    let mut new_path = path.clone();
-                    new_path.push(import.clone());
-                    stack.push((import, new_path));
+                    let mut extended = path.clone();
+                    extended.push(hop);
+                    stack.push((import, extended));
                 }
             }
         }
     }
 
     cycles
+}
+
+/// So the reported chain does not depend on where the walk started.
+fn rotate_to_first_module(cycle: &mut Cycle) {
+    if let Some((position, _)) = cycle
+        .iter()
+        .enumerate()
+        .min_by(|(_, left), (_, right)| left.module.cmp(&right.module))
+    {
+        cycle.rotate_left(position);
+    }
 }

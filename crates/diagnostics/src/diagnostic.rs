@@ -374,11 +374,20 @@ impl LisetteDiagnostic {
         )
     }
 
-    pub(crate) fn frame_labels(&self, use_color: bool) -> Vec<FrameLabel> {
-        let file_id = self.file_id();
+    pub(crate) fn label_file_ids(&self) -> Vec<u32> {
+        let mut file_ids: Vec<u32> = Vec::new();
+        for label in &self.labels {
+            if !file_ids.contains(&label.span.file_id) {
+                file_ids.push(label.span.file_id);
+            }
+        }
+        file_ids
+    }
+
+    pub(crate) fn frame_labels(&self, file_id: u32, use_color: bool) -> Vec<FrameLabel> {
         self.labels
             .iter()
-            .filter(|label| Some(label.span.file_id) == file_id)
+            .filter(|label| label.span.file_id == file_id)
             .map(|label| {
                 let formatted = if use_color {
                     let style = |s: &str| match self.severity {
@@ -526,6 +535,8 @@ mod tests {
 
         assert_eq!(diagnostic.file_id(), Some(3));
         assert_eq!(diagnostic.label_points(), vec![(3, 4), (7, 8)]);
-        assert_eq!(diagnostic.frame_labels(false).len(), 1);
+        assert_eq!(diagnostic.label_file_ids(), vec![3, 7]);
+        assert_eq!(diagnostic.frame_labels(3, false).len(), 1);
+        assert_eq!(diagnostic.frame_labels(7, false).len(), 1);
     }
 }

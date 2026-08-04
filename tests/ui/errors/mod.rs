@@ -1,13 +1,14 @@
 use crate::_harness::build::compile_check;
 use crate::_harness::filesystem::MockFileSystem;
-use crate::_harness::formatting::{format_diagnostic_for_snapshot, format_diagnostic_standalone};
+use crate::_harness::formatting::{
+    format_diagnostic_for_snapshot, format_project_diagnostic_for_snapshot,
+};
 use crate::_harness::infer::{infer, infer_module};
 use crate::{
     assert_infer_error_snapshot, assert_lex_error_snapshot,
     assert_multimodule_infer_error_snapshot, assert_parse_error_snapshot,
 };
 
-use diagnostics::module_graph::import_cycle;
 use semantics::store::ENTRY_MODULE_ID;
 
 #[test]
@@ -4611,17 +4612,42 @@ fn test() {
     });
 }
 
+fn cycle_diagnostic_snapshot(fs: MockFileSystem) -> String {
+    let result = compile_check(fs);
+    let cycle = result
+        .errors()
+        .iter()
+        .find(|error| error.code_str() == Some("resolve.import_cycle"))
+        .expect("the cycle must be reported");
+
+    format_project_diagnostic_for_snapshot(&result, cycle)
+}
+
 #[test]
 fn module_graph_import_cycle() {
-    let cycle = vec![
-        "module_a".to_string(),
-        "module_b".to_string(),
-        "module_c".to_string(),
-        "module_a".to_string(),
-    ];
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"module_a\"\n\nfn main() {}\n",
+    );
+    fs.add_file(
+        "module_a",
+        "module_a.lis",
+        "import \"module_b\"\n\npub fn a() -> int { module_b.b() }\n",
+    );
+    fs.add_file(
+        "module_b",
+        "module_b.lis",
+        "import \"module_c\"\n\npub fn b() -> int { module_c.c() }\n",
+    );
+    fs.add_file(
+        "module_c",
+        "module_c.lis",
+        "import \"module_a\"\n\npub fn c() -> int { module_a.a() }\n",
+    );
 
-    let diagnostic = import_cycle(&cycle);
-    let output = format_diagnostic_standalone(&diagnostic);
+    let output = cycle_diagnostic_snapshot(fs);
 
     insta::with_settings!({
         prepend_module_to_snapshot => false,
@@ -4633,10 +4659,19 @@ fn module_graph_import_cycle() {
 
 #[test]
 fn module_graph_import_self_loop() {
-    let cycle = vec!["module_a".to_string(), "module_a".to_string()];
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"module_a\"\n\nfn main() {}\n",
+    );
+    fs.add_file(
+        "module_a",
+        "module_a.lis",
+        "import \"module_a\"\n\npub fn a() -> int { 1 }\n",
+    );
 
-    let diagnostic = import_cycle(&cycle);
-    let output = format_diagnostic_standalone(&diagnostic);
+    let output = cycle_diagnostic_snapshot(fs);
 
     insta::with_settings!({
         prepend_module_to_snapshot => false,

@@ -5,7 +5,8 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::{EnumVariant, Expression, StructFieldDefinition};
 use syntax::program::{
-    Definition, DefinitionBody, EqualityIndex, File, Interface, MethodSignatures, Module, TestIndex,
+    Definition, DefinitionBody, EqualityIndex, File, Interface, MethodSignatures, Module,
+    TestIndex, UninferredExports,
 };
 use syntax::types::{SimpleKind, SubstitutionMap, Symbol, Type, substitute};
 
@@ -110,6 +111,18 @@ impl Store {
         }
     }
 
+    pub(crate) fn store_uninferred_module(
+        &mut self,
+        module_id: &str,
+        files: Vec<File>,
+        exports: UninferredExports,
+    ) {
+        self.store_module(module_id, files);
+        if let Some(module) = self.get_module_mut(module_id) {
+            module.uninferred_exports = Some(exports);
+        }
+    }
+
     /// Stores a file in its owning module.
     pub fn store_file(&mut self, file: File) {
         let module_id = file.module_id.clone();
@@ -143,6 +156,13 @@ impl Store {
 
     pub(crate) fn has(&self, module_id: &str) -> bool {
         self.modules.contains_key(module_id)
+    }
+
+    pub(crate) fn uninferred_module_may_export(&self, module_id: &str, member: &str) -> bool {
+        self.modules
+            .get(module_id)
+            .and_then(|module| module.uninferred_exports.as_ref())
+            .is_some_and(|exports| exports.may_contain(member))
     }
 
     pub fn add_module(&mut self, module_id: &str) {

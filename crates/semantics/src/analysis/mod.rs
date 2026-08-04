@@ -380,7 +380,14 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
     );
 
     for cycle in &graph_result.cycles {
-        sink.push(diagnostics::module_graph::import_cycle(cycle));
+        let hops: Vec<diagnostics::module_graph::CycleHop<'_>> = cycle
+            .iter()
+            .map(|hop| diagnostics::module_graph::CycleHop {
+                module: &hop.module,
+                span: hop.span,
+            })
+            .collect();
+        sink.push(diagnostics::module_graph::import_cycle(&hops));
     }
     let unreachable_modules = find_unreachable_modules(&discovered, &graph_result);
 

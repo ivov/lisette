@@ -281,7 +281,7 @@ impl TaskState {
                     annotation_span,
                     receiver.as_deref(),
                 ));
-            } else {
+            } else if !self.may_name_uninferred_export(store, type_name) {
                 self.sink.push(diagnostics::infer::type_not_found(
                     type_name,
                     annotation_span,

@@ -1,4 +1,5 @@
-use rustc_hash::FxHashMap as HashMap;
+use ecow::EcoString;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use super::definition::{Definition, Visibility};
 use super::file::File;
@@ -13,6 +14,26 @@ pub struct Module {
     pub files: HashMap<u32, File>,
     /// qualified name -> definition
     pub definitions: HashMap<Symbol, Definition>,
+    /// Set when an import cycle keeps the module out of inference: nothing
+    /// registers its files, so its exports are read from syntax.
+    pub uninferred_exports: Option<UninferredExports>,
+}
+
+#[derive(Debug, Clone)]
+pub enum UninferredExports {
+    /// Read from the syntax of the module's files.
+    Known(HashSet<EcoString>),
+    /// A file did not parse, so its declarations cannot be read.
+    Unreadable,
+}
+
+impl UninferredExports {
+    pub fn may_contain(&self, member: &str) -> bool {
+        match self {
+            Self::Known(names) => names.contains(member),
+            Self::Unreadable => true,
+        }
+    }
 }
 
 impl Module {
@@ -21,6 +42,7 @@ impl Module {
             id: id.to_string(),
             files: Default::default(),
             definitions: Default::default(),
+            uninferred_exports: None,
         }
     }
 

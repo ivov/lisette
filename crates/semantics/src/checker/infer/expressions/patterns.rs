@@ -358,8 +358,7 @@ impl InferCtx<'_> {
             return result;
         }
 
-        let is_bare_name =
-            fields.is_empty() && !identifier.contains('.') && !kind.is_pattern_position();
+        let is_bare_name = is_bare_constructor_name(&identifier, &fields, kind);
 
         let constructor_ty = if kind.is_match_arm()
             && let Some(ty) = self.resolve_bare_variant_type(&identifier, &expected_ty)
@@ -377,7 +376,7 @@ impl InferCtx<'_> {
                     &expected_ty,
                     span,
                     kind,
-                    is_bare_name,
+                    &fields,
                 );
             };
             ty
@@ -389,7 +388,7 @@ impl InferCtx<'_> {
                 &expected_ty,
                 span,
                 kind,
-                is_bare_name,
+                &fields,
             );
         };
 
@@ -532,9 +531,16 @@ impl InferCtx<'_> {
         expected_ty: &Type,
         span: Span,
         kind: BindingKind,
-        is_bare_name: bool,
+        fields: &[Pattern],
     ) -> Pattern {
-        if is_bare_name {
+        if self.may_name_uninferred_export(self.store, identifier) {
+            for field in fields {
+                self.infer_pattern_inner(field.clone(), Type::Error, kind, false);
+            }
+            return Pattern::WildCard { span };
+        }
+
+        if is_bare_constructor_name(identifier, fields, kind) {
             self.sink
                 .push(diagnostics::infer::uppercase_binding(span, identifier));
         } else {
@@ -624,6 +630,29 @@ impl InferCtx<'_> {
         })
     }
 
+    fn unresolved_struct_pattern(
+        &mut self,
+        identifier: &str,
+        fields: &[StructFieldPattern],
+        span: Span,
+        kind: BindingKind,
+    ) -> Pattern {
+        if !self.may_name_uninferred_export(self.store, identifier) {
+            self.sink
+                .push(diagnostics::infer::struct_not_found(identifier, span));
+            return Pattern::WildCard { span };
+        }
+
+        for field in fields {
+            let is_shorthand = matches!(
+                &field.value,
+                Pattern::Identifier { identifier, .. } if identifier == &field.name
+            );
+            self.infer_pattern_inner(field.value.clone(), Type::Error, kind, is_shorthand);
+        }
+        Pattern::WildCard { span }
+    }
+
     fn infer_struct_pattern(
         &mut self,
         pattern: Pattern,
@@ -655,11 +684,7 @@ impl InferCtx<'_> {
         let Some(qualified_name) = self.lookup_qualified_name(store, identifier) else {
             return self
                 .try_infer_enum_struct_variant(&pattern, &expected_ty, kind)
-                .unwrap_or_else(|| {
-                    self.sink
-                        .push(diagnostics::infer::struct_not_found(identifier, span));
-                    Pattern::WildCard { span }
-                });
+                .unwrap_or_else(|| self.unresolved_struct_pattern(identifier, fields, span, kind));
         };
         let Some(Definition {
             ty: struct_forall_ty,
@@ -673,11 +698,7 @@ impl InferCtx<'_> {
         else {
             return self
                 .try_infer_enum_struct_variant(&pattern, &expected_ty, kind)
-                .unwrap_or_else(|| {
-                    self.sink
-                        .push(diagnostics::infer::struct_not_found(identifier, span));
-                    Pattern::WildCard { span }
-                });
+                .unwrap_or_else(|| self.unresolved_struct_pattern(identifier, fields, span, kind));
         };
 
         let struct_forall_ty = struct_forall_ty.clone();
@@ -1104,6 +1125,10 @@ impl InferCtx<'_> {
             span: *span,
         })
     }
+}
+
+fn is_bare_constructor_name(identifier: &str, fields: &[Pattern], kind: BindingKind) -> bool {
+    fields.is_empty() && !identifier.contains('.') && !kind.is_pattern_position()
 }
 
 fn format_literal(lit: &Literal) -> String {

@@ -236,6 +236,294 @@ fn graph_cycle_detection() {
 }
 
 #[test]
+fn graph_cycle_carries_the_span_of_every_hop() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("a", "a.lis", "import \"b\"\n");
+    fs.add_file("b", "b.lis", "import \"a\"\n");
+
+    let mut store = Store::new();
+
+    let sink = LocalSink::new();
+    let result = build_module_graph(
+        &mut store,
+        roots("a"),
+        graph_options(&fs, &sink, &default_resolver(), &PROJECT_SCOPE),
+    );
+
+    let cycle = result.cycles.first().expect("the cycle must be detected");
+    let modules: Vec<&str> = cycle.iter().map(|hop| hop.module.as_str()).collect();
+    assert_eq!(
+        modules,
+        vec!["a", "b"],
+        "a cycle starts at its first module"
+    );
+    for hop in cycle {
+        assert_eq!(
+            hop.span.byte_offset, 7,
+            "each hop points at the name of its own `import`"
+        );
+    }
+    assert_ne!(
+        cycle[0].span.file_id, cycle[1].span.file_id,
+        "each hop belongs to the file that declares its import"
+    );
+}
+
+/// Every way an importer can name something in a module the cycle dropped.
+fn analyze_importer_of_cycle(entry_source: &str) -> passes::Analysis {
+    use passes::analyze;
+    use semantics::loader::MemoryLoader;
+    use semantics::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
+
+    let tmp = tempfile::tempdir().unwrap();
+
+    let mut fs = MemoryLoader::new();
+    fs.add_file(
+        "alpha",
+        "alpha.lis",
+        "import \"beta\"\n\
+         pub struct Node { pub id: int }\n\
+         pub enum Color { Red, Green }\n\
+         pub enum Shape { Circle(int), Square(int) }\n\
+         pub const LIMIT: int = 10\n\
+         pub fn describe(n: Node) -> string { beta.render(n.id) }\n\
+         pub fn mk() -> Node { Node { id: 1 } }\n",
+    );
+    fs.add_file(
+        "beta",
+        "beta.lis",
+        "import \"alpha\"\npub fn render(_id: int) -> string { \"node\" }\n",
+    );
+
+    analyze(AnalyzeInput {
+        load_siblings: false,
+        scope: AnalysisScope::Project(tmp.path().to_path_buf()),
+        loader: &fs,
+        entry: Some(EntryFile::new(
+            entry_source.to_string(),
+            "main.lis".to_string(),
+            "main.lis".to_string(),
+        )),
+        compile_phase: CompilePhase::Check,
+        project_kind: semantics::ProjectKind::Binary,
+        locator: &deps::TypedefLocator::default(),
+        go_module: "",
+        disable_cache: true,
+    })
+}
+
+fn error_codes(analysis: &passes::Analysis) -> Vec<&str> {
+    analysis
+        .errors()
+        .iter()
+        .filter_map(|error| error.code_str())
+        .collect()
+}
+
+#[test]
+fn cycle_suppresses_the_name_errors_it_causes_in_importers() {
+    let output = analyze_importer_of_cycle(
+        "import \"alpha\"\n\
+         \n\
+         fn main() {\n\
+         \x20 let a = alpha.Node { id: 1 }\n\
+         \x20 let b: alpha.Node = alpha.mk()\n\
+         \x20 let c = alpha.describe(a)\n\
+         \x20 let d = alpha.LIMIT\n\
+         \x20 let e = alpha.Color.Red\n\
+         \x20 let f: Slice<alpha.Node> = []\n\
+         \x20 let g = alpha.Node { ..a }\n\
+         \x20 match alpha.mk() {\n\
+         \x20   alpha.Node { id } => { let _ = id },\n\
+         \x20 }\n\
+         \x20 match e {\n\
+         \x20   alpha.Color.Red => {},\n\
+         \x20   alpha.Color.Green => {},\n\
+         \x20 }\n\
+         \x20 match alpha.Shape.Circle(1) {\n\
+         \x20   alpha.Shape.Circle(r) => { let _ = r },\n\
+         \x20   alpha.Shape.Square(s) => { let _ = s },\n\
+         \x20 }\n\
+         }\n",
+    );
+
+    assert_eq!(
+        error_codes(&output),
+        vec!["resolve.import_cycle"],
+        "every one of those names is declared and `pub` in `alpha`, and unresolvable \
+         only because the cycle dropped it"
+    );
+}
+
+/// A name the dropped module never declared is the caller's own mistake.
+#[test]
+fn cycle_still_reports_names_the_dropped_module_never_declared() {
+    let output = analyze_importer_of_cycle(
+        "import \"alpha\"\n\
+         \n\
+         fn main() {\n\
+         \x20 let _ = alpha.missing()\n\
+         \x20 let _ = alpha.LIMITT\n\
+         \x20 let _ = alpha.Nope { x: 1 }\n\
+         \x20 let _: alpha.NoType = 1\n\
+         \x20 match alpha.Shape.Circle(1) {\n\
+         \x20   alpha.Shape.Triangle(r) => { let _ = r },\n\
+         \x20   _ => {},\n\
+         \x20 }\n\
+         }\n",
+    );
+
+    let mut codes = error_codes(&output);
+    codes.sort_unstable();
+    codes.dedup();
+    assert_eq!(
+        codes,
+        vec![
+            "resolve.import_cycle",
+            "resolve.name_not_found",
+            "resolve.not_found_in_module",
+            "resolve.struct_not_found",
+            "resolve.type_not_found",
+            "resolve.variant_not_found",
+        ],
+    );
+}
+
+/// A typedef exports every declaration, `pub` or not.
+#[test]
+fn cycle_reads_the_exports_of_a_declaration_only_module() {
+    use passes::analyze;
+    use semantics::loader::MemoryLoader;
+    use semantics::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
+
+    let tmp = tempfile::tempdir().unwrap();
+
+    let mut fs = MemoryLoader::new();
+    fs.add_file(
+        "decl",
+        "decl.d.lis",
+        "import \"beta\"\n\
+         pub var Counter: int\n\
+         var Hidden: int\n\
+         pub fn helper() -> int\n\
+         enum Mode { Fast, Slow }\n",
+    );
+    fs.add_file(
+        "beta",
+        "beta.lis",
+        "import \"decl\"\npub fn g() -> int { decl.helper() }\n",
+    );
+
+    let source = "import \"decl\"\n\
+                  \n\
+                  fn main() {\n\
+                  \x20 let _ = decl.Counter\n\
+                  \x20 let _ = decl.Hidden\n\
+                  \x20 let _ = decl.helper()\n\
+                  \x20 let _ = decl.Mode.Fast\n\
+                  }\n";
+    let output = analyze(AnalyzeInput {
+        load_siblings: false,
+        scope: AnalysisScope::Project(tmp.path().to_path_buf()),
+        loader: &fs,
+        entry: Some(EntryFile::new(
+            source.to_string(),
+            "main.lis".to_string(),
+            "main.lis".to_string(),
+        )),
+        compile_phase: CompilePhase::Check,
+        project_kind: semantics::ProjectKind::Binary,
+        locator: &deps::TypedefLocator::default(),
+        go_module: "",
+        disable_cache: true,
+    });
+
+    assert_eq!(error_codes(&output), vec!["resolve.import_cycle"]);
+}
+
+/// Suppression follows the reference, not the file.
+#[test]
+fn cycle_keeps_the_unrelated_errors_of_an_importer() {
+    let output = analyze_importer_of_cycle(
+        "import \"alpha\"\n\
+         import \"alpha\"\n\
+         \n\
+         fn main() {\n\
+         \x20 let _ = alpha.mk()\n\
+         \x20 let _ = undefined_local\n\
+         \x20 let _: Undeclared = 1\n\
+         \x20 let _ = Nonexistent { x: 1 }\n\
+         }\n",
+    );
+
+    let mut codes = error_codes(&output);
+    codes.sort_unstable();
+    codes.dedup();
+    assert_eq!(
+        codes,
+        vec![
+            "resolve.duplicate_import",
+            "resolve.import_cycle",
+            "resolve.name_not_found",
+            "resolve.struct_not_found",
+            "resolve.type_not_found",
+        ],
+    );
+}
+
+/// An unregistered `go:` module would reach the shared stdlib cache empty.
+#[test]
+fn cycle_keeps_unregistered_go_modules_out_of_the_store() {
+    use passes::analyze;
+    use semantics::loader::MemoryLoader;
+    use semantics::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile};
+
+    let tmp = tempfile::tempdir().unwrap();
+
+    let mut fs = MemoryLoader::new();
+    fs.add_file(
+        "alpha",
+        "alpha.lis",
+        "import \"beta\"\nimport \"go:fmt\"\npub fn f() -> string { fmt.Sprintf(\"%d\", beta.g()) }\n",
+    );
+    fs.add_file(
+        "beta",
+        "beta.lis",
+        "import \"alpha\"\npub fn g() -> int { 2 }\n",
+    );
+
+    let source = "import \"alpha\"\n\nfn main() {\n  let _ = alpha.f()\n}\n";
+    let output = analyze(AnalyzeInput {
+        load_siblings: false,
+        scope: AnalysisScope::Project(tmp.path().to_path_buf()),
+        loader: &fs,
+        entry: Some(EntryFile::new(
+            source.to_string(),
+            "main.lis".to_string(),
+            "main.lis".to_string(),
+        )),
+        compile_phase: CompilePhase::Check,
+        project_kind: semantics::ProjectKind::Binary,
+        locator: &deps::TypedefLocator::default(),
+        go_module: "",
+        disable_cache: true,
+    });
+
+    assert!(
+        output.emit_input.go_module_ids.is_empty(),
+        "`go:fmt` is imported only by a module the cycle dropped, so it is never \
+         registered and must not reach the store: {:?}",
+        output.emit_input.go_module_ids,
+    );
+    assert!(
+        output
+            .errors()
+            .iter()
+            .any(|error| error.code_str() == Some("resolve.import_cycle")),
+    );
+}
+
+#[test]
 fn additional_roots_widen_graph_but_not_reachable_set() {
     let mut fs = MockFileSystem::new();
     fs.add_file("main", "main.lis", r#"import "lib""#);

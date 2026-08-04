@@ -438,12 +438,16 @@ impl InferCtx<'_> {
                 definition.visibility.is_public() && !store.is_test_definition(definition)
             })
         else {
-            self.sink
-                .push(diagnostics::infer::function_or_value_not_found_in_module(
-                    args.member_name,
-                    display_module,
-                    *args.span,
-                ));
+            if store.uninferred_module_may_export(&module_id, args.member_name) {
+                self.unify(args.expected_ty, &Type::Error, args.span);
+            } else {
+                self.sink
+                    .push(diagnostics::infer::function_or_value_not_found_in_module(
+                        args.member_name,
+                        display_module,
+                        *args.span,
+                    ));
+            }
             return Some(args.build_dot_access(
                 Type::Error,
                 DotAccessResolution::ModuleMember { definition: None },

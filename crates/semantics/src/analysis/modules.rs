@@ -1,6 +1,7 @@
 use super::*;
 use rayon::prelude::*;
 use rustc_hash::FxHashMap as HashMap;
+use syntax::program::UninferredExports;
 
 struct CacheCandidate {
     compiled: CompiledModule,
@@ -241,6 +242,8 @@ pub(super) fn infer_all_modules(
     unparsed.extend(cache_load.missed);
 
     let has_parse_errors = parse_and_store_modules(&mut checker, store, unparsed, &mut to_infer);
+    let uninferred = std::mem::take(&mut input.graph_result.files);
+    store_uninferred_modules(&mut checker, store, uninferred);
 
     for pending in &to_infer {
         checker.predeclare_module_types(store, pending.module_id());
@@ -324,6 +327,38 @@ fn parse_and_store_modules(
         to_infer.push(module.pending);
     }
     has_parse_errors
+}
+
+fn store_uninferred_modules(
+    checker: &mut TaskState,
+    store: &mut Store,
+    modules: HashMap<String, Vec<ScannedFile>>,
+) {
+    for (module_id, scanned) in modules {
+        if scanned.is_empty() {
+            continue;
+        }
+        let mut files = Vec::with_capacity(scanned.len());
+        let mut parsed = true;
+        for scanned_file in scanned {
+            let (file, errors) = scanned_file.parse();
+            parsed &= errors.is_empty();
+            checker.sink.extend_parse_errors(errors);
+            files.push(file);
+        }
+        let exports = if parsed {
+            UninferredExports::Known(
+                files
+                    .iter()
+                    .filter(|file| !file.is_test())
+                    .flat_map(File::public_declarations)
+                    .collect(),
+            )
+        } else {
+            UninferredExports::Unreadable
+        };
+        store.store_uninferred_module(&module_id, files, exports);
+    }
 }
 
 /// Registers one `go:` module, reusing the stdlib cache when it covers the package.
