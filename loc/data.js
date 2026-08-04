@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785868133675,
+  "lastUpdate": 1785869675639,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -18445,6 +18445,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "cli",
             "value": 11925,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 7548,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5362,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2883,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1286,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7416,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "28d2f13ba74ce6b49b14b882c8ea9f4e67db5458",
+          "message": "feat: `lis build` and `lis emit` for scripts (#1207)",
+          "timestamp": "2026-08-04T20:54:10+02:00",
+          "tree_id": "709006a215e4266958a60db259ea2f1fc16a7deb",
+          "url": "https://github.com/ivov/lisette/commit/28d2f13ba74ce6b49b14b882c8ea9f4e67db5458"
+        },
+        "date": 1785869674685,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 126392,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30326,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 25601,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18536,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13480,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 12343,
             "unit": "lines"
           },
           {
