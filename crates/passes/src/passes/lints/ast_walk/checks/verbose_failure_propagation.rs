@@ -1,6 +1,7 @@
 use crate::passes::walk::NodeCtx;
+use semantics::store::Store;
 use syntax::ast::{Expression, MatchArm, Pattern, Span};
-use syntax::types::unqualified_name;
+use syntax::types::{Type, unqualified_name};
 
 use super::helpers::enum_variant_binding;
 
@@ -19,7 +20,7 @@ pub fn check_verbose_failure_propagation(expression: &Expression, ctx: &NodeCtx)
             }
             let a = (&arms[0].pattern, arms[0].expression.as_ref());
             let b = (&arms[1].pattern, arms[1].expression.as_ref());
-            (propagation_fires(subject, a, b), span, 5)
+            (propagation_fires(subject, a, b, ctx.store), span, 5)
         }
         Expression::IfLet {
             scrutinee,
@@ -37,7 +38,7 @@ pub fn check_verbose_failure_propagation(expression: &Expression, ctx: &NodeCtx)
             };
             let a = (pattern, consequence.as_ref());
             let b = (&wildcard, alternative);
-            (propagation_fires(scrutinee, a, b), span, 2)
+            (propagation_fires(scrutinee, a, b, ctx.store), span, 2)
         }
         _ => return,
     };
@@ -51,12 +52,12 @@ pub fn check_verbose_failure_propagation(expression: &Expression, ctx: &NodeCtx)
     }
 }
 
-fn propagation_fires(subject: &Expression, a: Arm, b: Arm) -> bool {
+fn propagation_fires(subject: &Expression, a: Arm, b: Arm, store: &Store) -> bool {
     let subject_ty = subject.get_type();
     if subject_ty.is_option() {
         check_option_propagation(a, b)
     } else if subject_ty.is_result() {
-        check_result_propagation(a, b)
+        check_result_propagation(&subject_ty, a, b, store)
     } else {
         false
     }
@@ -74,7 +75,7 @@ fn check_option_propagation(arm_a: Arm, arm_b: Arm) -> bool {
     try_pair(arm_a, arm_b) || try_pair(arm_b, arm_a)
 }
 
-fn check_result_propagation(arm_a: Arm, arm_b: Arm) -> bool {
+fn check_result_propagation(subject_ty: &Type, arm_a: Arm, arm_b: Arm, store: &Store) -> bool {
     let try_pair = |ok_arm: Arm, err_arm: Arm| {
         let Some(ok_name) = enum_variant_binding(ok_arm.0, "Ok") else {
             return false;
@@ -82,9 +83,20 @@ fn check_result_propagation(arm_a: Arm, arm_b: Arm) -> bool {
         let Some(err_name) = enum_variant_binding(err_arm.0, "Err") else {
             return false;
         };
-        body_is_identifier(ok_arm.1, ok_name) && body_is_return_err(err_arm.1, err_name)
+        if !body_is_identifier(ok_arm.1, ok_name) {
+            return false;
+        }
+        let Some(returned) = returned_err_of_binding(err_arm.1, err_name) else {
+            return false;
+        };
+        propagation_type_checks(subject_ty, &returned.get_type(), store)
     };
     try_pair(arm_a, arm_b) || try_pair(arm_b, arm_a)
+}
+
+fn propagation_type_checks(subject_ty: &Type, returned_ty: &Type, store: &Store) -> bool {
+    returned_ty.is_result()
+        && store.peel_alias(&subject_ty.err_type()) == store.peel_alias(&returned_ty.err_type())
 }
 
 fn is_none_or_wildcard(pattern: &Pattern) -> bool {
@@ -119,15 +131,21 @@ fn body_is_return_none(expression: &Expression) -> bool {
     }
 }
 
-fn body_is_return_err(expression: &Expression, binding: &str) -> bool {
+fn returned_err_of_binding<'a>(
+    expression: &'a Expression,
+    binding: &str,
+) -> Option<&'a Expression> {
     match expression.unwrap_parens() {
         Expression::Return {
             expression: inner, ..
-        } => is_err_of_binding(inner, binding),
-        Expression::Block { items, .. } => {
-            items.len() == 1 && body_is_return_err(&items[0], binding)
+        } => {
+            let inner = inner.unwrap_parens();
+            is_err_of_binding(inner, binding).then_some(inner)
         }
-        _ => false,
+        Expression::Block { items, .. } if items.len() == 1 => {
+            returned_err_of_binding(&items[0], binding)
+        }
+        _ => None,
     }
 }
 

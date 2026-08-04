@@ -14698,6 +14698,36 @@ fn main() {
 }
 
 #[test]
+fn verbose_failure_propagation_widened_error_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct ValidationError { field: string }
+
+impl ValidationError {
+  fn Error(self) -> string { self.field }
+}
+
+fn validate(name: string) -> Result<string, ValidationError> {
+  if name == "" { return Err(ValidationError { field: "name" }) }
+  Ok(name)
+}
+
+fn load(name: string) -> Result<string, error> {
+  let n = match validate(name) {
+    Ok(v) => v,
+    Err(e) => return Err(e),
+  }
+  Ok(n)
+}
+
+fn main() {
+  let _ = load("bob")
+}
+"#
+    );
+}
+
+#[test]
 fn empty_range_in_for() {
     assert_lint_snapshot!(
         r#"
