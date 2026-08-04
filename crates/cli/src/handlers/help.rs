@@ -15,10 +15,10 @@ Commands:
     `new`          Create a new project
     `run`, `r`       Compile and run a project
     `build`, `b`     Compile a project to a binary
-    `emit`, `e`      Emit Go code into `target/` dir
+    `emit`, `e`      Emit Go code into target/ dir
     `check`, `c`     Lint and typecheck a project
     `format`, `f`    Format a project
-    `test`, `t`      Run a project's tests {(in development):d}
+    `test`, `t`      Run a project's tests
     `add`          Add a third-party Go dependency
     `sync`         Tidy up project manifest
 
@@ -71,45 +71,53 @@ Arguments:
         "build" | "b" => print_help(
             "`lis build` {[path]} {[--flags]:b}
 
-Compile a Lisette project to a binary at the `target/.lisette/bin/` dir.
+Compile a project to a binary at the `target/.lisette/bin/` dir.
 For a library, generate an importable Go package at the `target/` dir.
+For a script, compile it to a binary at the current dir.
 
 Arguments:
-    {path:g} {(optional):d}                     Path to project dir (default: current dir)
+    {path:g} {(optional):d}                     Path to project dir or file (default: current dir)
 
 Flags:
     {--sourcemap:b}                         Include `//line` in Go code for stack traces
     {--go-flags:b} {\"<flags>\":g}                Pass flags through to `go build`
+    {-o:b}{,:d} {--output:b} {<path>:g}                 Write the binary for a script at this path
 
 Examples:
     `lis build`                           Build project in current dir
     `lis build` {~/projects/demo:g}           Build project in specific dir
+    `lis build` {greet.lis:g}                 Build a script to `./greet`
+    `lis build` {greet.lis:g} {-o:b} {bin/greet:g}    Build a script to a chosen path
     `lis build` {--go-flags:b} {\"-trimpath\":g}    Strip file paths from the binary",
         ),
 
         "emit" | "e" => print_help(
             "`lis emit` {[path]} {[--flags]:b}
 
-Generate Go code from a Lisette project into the `target/` dir.
+Generate Go code from a Lisette project at the `target/` dir.
+For a script, generate its Go file at the current dir.
 
 Arguments:
-    {path:g} {(optional):d}             Path to project dir (default: current dir)
+    {path:g} {(optional):d}             Path to project dir or file (default: current dir)
 
 Flags:
     {--sourcemap:b}                 Include `//line` in Go code for stack traces
+    {-o:b}{,:d} {--output:b} {<path>:g}         Write the Go file for a script at this path
 
 Examples:
     `lis emit`                    Emit Go for project in current dir
-    `lis emit` {~/projects/demo:g}    Emit Go for project in specific dir",
+    `lis emit` {~/projects/demo:g}    Emit Go for project in specific dir
+    `lis emit` {greet.lis:g}          Emit a script to `./greet.go`",
         ),
 
         "run" | "r" => print_help(
             "`lis run` {[target]} {[--flags]:b}
 
 Compile a Lisette project to a binary at `target/bin/` and run the binary.
+For a script, compile it to a binary at `/tmp/lis-script-<hash>/` and run it.
 
 Arguments:
-    {target:g} {(optional):d}                        Project dir (default: current dir)
+    {target:g} {(optional):d}                        Project dir or file (default: current dir)
 
 Flags:
     {--sourcemap:b}                              Include `//line` in Go code for stack traces

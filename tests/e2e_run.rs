@@ -1491,7 +1491,10 @@ fn a_non_lisette_file_under_src_is_not_a_project_target() {
         !output.status.success(),
         "naming a non-`.lis` file must not build its directory's project:\n{combined}"
     );
-    assert!(combined.contains("Not a project directory"), "{combined}");
+    assert!(
+        !combined.contains("Emit completed"),
+        "the project must not be built:\n{combined}"
+    );
 }
 
 #[test]
@@ -1522,6 +1525,416 @@ fn a_tree_walk_reports_a_nested_project_with_no_sources() {
         assert!(
             combined.contains("No Lisette sources"),
             "{label}: {combined}"
+        );
+    }
+}
+
+fn lis_in(cwd: &Path, args: &[&str]) -> std::process::Output {
+    let manifest = repo().join("Cargo.toml");
+    Command::new("cargo")
+        .args(["run", "--quiet", "--manifest-path"])
+        .arg(&manifest)
+        .args(["-p", "lisette", "--"])
+        .args(args)
+        .current_dir(cwd)
+        .env("NO_COLOR", "1")
+        .output()
+        .expect("failed to invoke lisette")
+}
+
+fn combined(output: &std::process::Output) -> String {
+    format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    )
+}
+
+const GREETER: &str = "import \"go:fmt\"\n\nfn main() {\n  fmt.Println(\"hi\")\n}\n";
+
+#[test]
+fn emit_writes_one_go_file_beside_no_target_dir() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let dir = scratch.path();
+    fs::write(dir.join("greet.lis"), GREETER).unwrap();
+
+    let output = lis_in(dir, &["emit", "greet.lis"]);
+
+    assert!(output.status.success(), "{}", combined(&output));
+    let go = fs::read_to_string(dir.join("greet.go")).expect("greet.go must exist");
+    assert!(go.contains("package main"), "{go}");
+    assert!(
+        !dir.join("target").exists(),
+        "a script emit must not create `target/`"
+    );
+}
+
+#[test]
+fn emit_output_flag_chooses_the_path() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let dir = scratch.path();
+    fs::write(dir.join("greet.lis"), GREETER).unwrap();
+
+    let output = lis_in(dir, &["emit", "greet.lis", "-o", "out/custom.go"]);
+
+    assert!(output.status.success(), "{}", combined(&output));
+    assert!(dir.join("out/custom.go").is_file());
+    assert!(!dir.join("greet.go").exists());
+}
+
+#[test]
+fn build_links_a_runnable_binary_into_the_working_dir() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let dir = scratch.path();
+    fs::write(dir.join("greet.lis"), GREETER).unwrap();
+
+    let output = lis_in(dir, &["build", "greet.lis"]);
+    assert!(output.status.success(), "{}", combined(&output));
+    assert!(
+        !dir.join("target").exists(),
+        "a script build must not create `target/`"
+    );
+
+    let ran = Command::new(dir.join("greet"))
+        .output()
+        .expect("the built binary must run");
+    assert_eq!(String::from_utf8_lossy(&ran.stdout).trim(), "hi");
+}
+
+#[test]
+fn an_extensionless_script_runs_checks_and_builds() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let dir = scratch.path();
+    fs::write(dir.join("backup"), GREETER).unwrap();
+
+    let checked = lis_in(dir, &["check", "backup"]);
+    assert!(checked.status.success(), "{}", combined(&checked));
+
+    let ran = lis_in(dir, &["run", "backup"]);
+    assert!(ran.status.success(), "{}", combined(&ran));
+    assert_eq!(String::from_utf8_lossy(&ran.stdout).trim(), "hi");
+
+    let built = lis_in(dir, &["build", "backup", "-o", "backup.bin"]);
+    assert!(built.status.success(), "{}", combined(&built));
+    assert!(dir.join("backup.bin").is_file());
+}
+
+#[test]
+fn build_refuses_to_overwrite_the_script_it_compiles() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let dir = scratch.path();
+    fs::write(dir.join("backup"), GREETER).unwrap();
+
+    let output = lis_in(dir, &["build", "backup"]);
+
+    assert!(!output.status.success(), "{}", combined(&output));
+    assert!(
+        combined(&output).contains("is the script being compiled"),
+        "{}",
+        combined(&output)
+    );
+    assert_eq!(
+        fs::read_to_string(dir.join("backup")).unwrap(),
+        GREETER,
+        "the source must survive a refused build"
+    );
+}
+
+#[test]
+fn output_flag_aimed_at_any_input_file_is_refused() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let dir = scratch.path();
+    fs::write(dir.join("greet.lis"), GREETER).unwrap();
+
+    for args in [
+        vec!["emit", "greet.lis", "-o", "greet.lis"],
+        vec!["build", "greet.lis", "-o", "greet.lis"],
+    ] {
+        let output = lis_in(dir, &args);
+        assert!(!output.status.success(), "{args:?}: {}", combined(&output));
+        assert_eq!(
+            fs::read_to_string(dir.join("greet.lis")).unwrap(),
+            GREETER,
+            "{args:?} must leave the source untouched"
+        );
+    }
+}
+
+#[test]
+fn a_script_named_the_way_go_ignores_still_builds() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let dir = scratch.path();
+
+    for name in ["_leading.lis", ".hidden.lis", "-dashed.lis", "..."] {
+        fs::write(dir.join(name), GREETER).unwrap();
+        let relative = format!("./{name}");
+
+        let ran = lis_in(dir, &["run", &relative]);
+        assert_eq!(
+            String::from_utf8_lossy(&ran.stdout).trim(),
+            "hi",
+            "`{name}`: {}",
+            combined(&ran)
+        );
+
+        let built = lis_in(dir, &["build", &relative, "-o", "out.bin"]);
+        assert!(built.status.success(), "`{name}`: {}", combined(&built));
+    }
+}
+
+#[test]
+fn a_stale_go_file_in_the_build_directory_is_pruned() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let dir = scratch.path();
+    fs::write(dir.join("greet.lis"), GREETER).unwrap();
+
+    let scratch_tmp = dir.join("tmp");
+    fs::create_dir(&scratch_tmp).unwrap();
+    let build = || {
+        let manifest = repo().join("Cargo.toml");
+        Command::new("cargo")
+            .args(["run", "--quiet", "--manifest-path"])
+            .arg(&manifest)
+            .args(["-p", "lisette", "--", "build", "greet.lis", "-o", "out.bin"])
+            .current_dir(dir)
+            .env("NO_COLOR", "1")
+            .env("TMPDIR", &scratch_tmp)
+            .env("TMP", &scratch_tmp)
+            .env("TEMP", &scratch_tmp)
+            .output()
+            .expect("failed to invoke lisette")
+    };
+
+    let first = build();
+    assert!(first.status.success(), "{}", combined(&first));
+
+    let build_dir = fs::read_dir(&scratch_tmp)
+        .unwrap()
+        .flatten()
+        .map(|entry| entry.path())
+        .find(|path| path.join("greet.go").is_file())
+        .expect("the build directory must sit under the test's own TMPDIR");
+    fs::write(
+        build_dir.join("orphan.go"),
+        "package main\n\nfunc dupe() {}\n",
+    )
+    .unwrap();
+
+    let second = build();
+    assert!(second.status.success(), "{}", combined(&second));
+    assert!(
+        !build_dir.join("orphan.go").exists(),
+        "a Go file outside the emit must not survive into `go build`"
+    );
+}
+
+#[test]
+fn a_hard_link_to_the_script_is_refused() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let dir = scratch.path();
+    fs::write(dir.join("greet.lis"), GREETER).unwrap();
+    fs::hard_link(dir.join("greet.lis"), dir.join("linked.go")).unwrap();
+
+    let output = lis_in(dir, &["emit", "greet.lis", "-o", "linked.go"]);
+
+    assert!(!output.status.success(), "{}", combined(&output));
+    assert_eq!(
+        fs::read_to_string(dir.join("greet.lis")).unwrap(),
+        GREETER,
+        "a hard link shares no pathname with its source, and still is it"
+    );
+}
+
+#[test]
+fn a_path_through_a_missing_directory_cannot_reach_the_script() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let dir = scratch.path();
+    fs::write(dir.join("greet.lis"), GREETER).unwrap();
+
+    for args in [
+        vec!["emit", "greet.lis", "-o", "missing/../greet.lis"],
+        vec!["build", "greet.lis", "-o", "missing/../greet.lis"],
+    ] {
+        let output = lis_in(dir, &args);
+        assert!(!output.status.success(), "{args:?}: {}", combined(&output));
+        assert_eq!(
+            fs::read_to_string(dir.join("greet.lis")).unwrap(),
+            GREETER,
+            "{args:?} must not reach the source through a directory made later"
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_symlinked_parent_cannot_reach_the_script() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let dir = scratch.path();
+    fs::create_dir(dir.join("real")).unwrap();
+    std::os::unix::fs::symlink("real", dir.join("link")).unwrap();
+    fs::write(dir.join("real/greet.lis"), GREETER).unwrap();
+
+    for args in [
+        vec!["emit", "greet.lis", "-o", "../link/missing/../greet.lis"],
+        vec!["build", "greet.lis", "-o", "../link/missing/../greet.lis"],
+    ] {
+        let output = lis_in(&dir.join("real"), &args);
+        assert!(!output.status.success(), "{args:?}: {}", combined(&output));
+        assert_eq!(
+            fs::read_to_string(dir.join("real/greet.lis")).unwrap(),
+            GREETER,
+            "{args:?} must not reach the source by crossing a symlink with `..`"
+        );
+    }
+}
+
+#[test]
+fn a_path_that_can_only_name_a_directory_is_refused() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let dir = scratch.path();
+    fs::write(dir.join("greet.lis"), GREETER).unwrap();
+    fs::write(dir.join("victim"), "precious\n").unwrap();
+
+    for args in [
+        vec!["emit", "greet.lis", "-o", "fresh/"],
+        vec!["emit", "greet.lis", "-o", "victim/"],
+        vec!["build", "greet.lis", "-o", "fresh/"],
+        vec!["emit", "greet.lis", "-o", "fresh/."],
+        vec!["emit", "greet.lis", "-o", "victim/."],
+        vec!["build", "greet.lis", "-o", "fresh/."],
+    ] {
+        let output = lis_in(dir, &args);
+        let text = combined(&output);
+        assert!(!output.status.success(), "{args:?}: {text}");
+        assert!(text.contains("names a directory"), "{args:?}: {text}");
+    }
+
+    assert!(
+        !dir.join("fresh").exists(),
+        "these paths name a directory, so no file `fresh` may appear"
+    );
+    assert_eq!(
+        fs::read_to_string(dir.join("victim")).unwrap(),
+        "precious\n",
+        "these are paths the kernel refuses, so the file must survive"
+    );
+
+    let ordinary = lis_in(dir, &["emit", "greet.lis", "-o", "./out.go"]);
+    assert!(ordinary.status.success(), "{}", combined(&ordinary));
+    assert!(
+        dir.join("out.go").is_file(),
+        "a `.` inside a path is still an ordinary path"
+    );
+}
+
+#[test]
+fn a_path_leading_through_a_file_is_refused() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let dir = scratch.path();
+    fs::write(dir.join("greet.lis"), GREETER).unwrap();
+    fs::write(dir.join("blocker"), "not a directory\n").unwrap();
+
+    for args in [
+        vec!["emit", "greet.lis", "-o", "blocker/../out.go"],
+        vec!["build", "greet.lis", "-o", "blocker/../out"],
+    ] {
+        let output = lis_in(dir, &args);
+        let text = combined(&output);
+        assert!(!output.status.success(), "{args:?}: {text}");
+        assert!(text.contains("is not a directory"), "{args:?}: {text}");
+    }
+
+    assert!(
+        !dir.join("out.go").exists() && !dir.join("out").exists(),
+        "a path the kernel answers with ENOTDIR must not be folded into a sibling write"
+    );
+}
+
+#[test]
+fn a_directory_destination_is_refused_rather_than_written_into() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let dir = scratch.path();
+    fs::write(dir.join("greet.lis"), GREETER).unwrap();
+    fs::create_dir(dir.join("greet")).unwrap();
+    fs::create_dir(dir.join("dest")).unwrap();
+
+    for args in [
+        vec!["build", "greet.lis"],
+        vec!["build", "greet.lis", "-o", "dest"],
+        vec!["emit", "greet.lis", "-o", "dest"],
+    ] {
+        let output = lis_in(dir, &args);
+        let text = combined(&output);
+        assert!(!output.status.success(), "{args:?}: {text}");
+        assert!(text.contains("is a directory"), "{args:?}: {text}");
+    }
+
+    assert!(
+        fs::read_dir(dir.join("greet")).unwrap().next().is_none(),
+        "nothing may be written inside the colliding directory"
+    );
+    assert!(
+        fs::read_dir(dir.join("dest")).unwrap().next().is_none(),
+        "nothing may be written inside the named directory"
+    );
+}
+
+#[test]
+fn a_nonexistent_target_names_the_path() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let dir = scratch.path();
+
+    for subcommand in ["run", "emit", "build"] {
+        let output = lis_in(dir, &[subcommand, "nope"]);
+        let text = combined(&output);
+        assert!(!output.status.success(), "{subcommand}: {text}");
+        assert!(
+            text.contains("Path `nope` does not exist"),
+            "{subcommand}: {text}"
+        );
+    }
+}
+
+#[test]
+fn project_emit_and_build_reject_the_output_flag() {
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"outflag\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(project.join("src/main.lis"), "fn main() {}\n").unwrap();
+
+    for subcommand in ["emit", "build"] {
+        let output = lis_in(&project, &[subcommand, ".", "-o", "somewhere"]);
+        let text = combined(&output);
+        assert!(!output.status.success(), "{subcommand}: {text}");
+        assert!(
+            text.contains("has no meaning for a project"),
+            "{subcommand}: {text}"
         );
     }
 }

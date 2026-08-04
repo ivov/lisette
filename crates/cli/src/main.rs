@@ -63,8 +63,13 @@ fn main() {
             path,
             sourcemap,
             go_flags,
-        } => handlers::build(path, sourcemap, go_flags),
-        Command::Emit { path, sourcemap } => handlers::emit(path, sourcemap),
+            output,
+        } => handlers::build(path, sourcemap, go_flags, output),
+        Command::Emit {
+            path,
+            sourcemap,
+            output,
+        } => handlers::emit(path, sourcemap, output),
         Command::Run {
             target,
             args,

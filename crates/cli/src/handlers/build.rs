@@ -21,17 +21,62 @@ use semantics::loader::{
 };
 use semantics::store::ENTRY_MODULE_ID;
 
-pub fn emit(path: Option<String>, sourcemap: bool) -> i32 {
-    with_locked_project(path, |prep| {
-        match build_locked(prep, BuildPurpose::Emit { sourcemap }) {
-            Ok(_) => 0,
-            Err(code) => code,
+pub fn emit(path: Option<String>, sourcemap: bool, output: Option<String>) -> i32 {
+    let target = path.unwrap_or_else(|| ".".to_string());
+    let target_path = Path::new(&target);
+
+    match resolve_target(target_path, "Failed to emit") {
+        Err(code) => code,
+        Ok(BuildTarget::Script { inside_project }) => {
+            super::script::emit(target_path, sourcemap, output.as_deref(), inside_project)
         }
-    })
+        Ok(BuildTarget::Project(root)) => {
+            if reject_project_output(output.as_deref(), "writes Go to `target/`").is_err() {
+                return 1;
+            }
+            with_locked_project(&root, |prep| {
+                match build_locked(prep, BuildPurpose::Emit { sourcemap }) {
+                    Ok(_) => 0,
+                    Err(code) => code,
+                }
+            })
+        }
+    }
 }
 
-pub fn build(path: Option<String>, sourcemap: bool, go_flags: Vec<String>) -> i32 {
-    with_locked_project(path, |prep| {
+pub fn build(
+    path: Option<String>,
+    sourcemap: bool,
+    go_flags: Vec<String>,
+    output: Option<String>,
+) -> i32 {
+    let target = path.unwrap_or_else(|| ".".to_string());
+    let target_path = Path::new(&target);
+
+    let root = match resolve_target(target_path, "Failed to build") {
+        Err(code) => return code,
+        Ok(BuildTarget::Script { inside_project }) => {
+            return super::script::build(
+                target_path,
+                sourcemap,
+                &go_flags,
+                output.as_deref(),
+                inside_project,
+            );
+        }
+        Ok(BuildTarget::Project(root)) => root,
+    };
+
+    if reject_project_output(
+        output.as_deref(),
+        "links into `target/bin/`. Use `--go-flags \"-o <path>\"` to choose the location",
+    )
+    .is_err()
+    {
+        return 1;
+    }
+
+    with_locked_project(&root, |prep| {
         if prep.kind == ProjectKind::Library {
             if go_flags.iter().any(|f| go_cli::is_go_output_flag(f)) {
                 cli_error!(
@@ -106,22 +151,60 @@ fn build_library(project: &LockedProject, go_flags: &[String], target: stdlib::T
     0
 }
 
-pub(super) fn with_locked_project(
-    path: Option<String>,
-    f: impl FnOnce(&LockedProject) -> i32,
-) -> i32 {
-    let target = path.unwrap_or_else(|| ".".to_string());
-    let target_path = Path::new(&target);
+enum BuildTarget {
+    Script { inside_project: bool },
+    Project(PathBuf),
+}
 
-    let owning_project = target_path
-        .is_file()
-        .then(|| match super::project::resolve_file_target(target_path) {
-            FileTarget::ProjectEntry { root } | FileTarget::ProjectModule { root } => Some(root),
-            FileTarget::Script { .. } => None,
-        })
-        .flatten();
+/// A file is a script, a directory is a project, anything else an error.
+fn resolve_target(target: &Path, heading: &str) -> Result<BuildTarget, i32> {
+    if !target.exists() {
+        cli_error!(
+            heading,
+            format!("Path `{}` does not exist", target.display()),
+            "Check the path and try again"
+        );
+        return Err(1);
+    }
 
-    let project = match LockedProject::acquire(owning_project.as_deref().unwrap_or(target_path)) {
+    if !target.is_file() {
+        return Ok(BuildTarget::Project(target.to_path_buf()));
+    }
+
+    match super::project::resolve_file_target(target) {
+        FileTarget::ProjectEntry { root } | FileTarget::ProjectModule { root } => {
+            Ok(BuildTarget::Project(root))
+        }
+        FileTarget::Script { inside_project } => Ok(BuildTarget::Script { inside_project }),
+    }
+}
+
+/// `-o` names one artifact, which a project build does not produce.
+fn reject_project_output(output: Option<&str>, instead: &str) -> Result<(), i32> {
+    if output.is_none() {
+        return Ok(());
+    }
+
+    cli_error!(
+        "Unsupported flag",
+        format!("`-o` has no meaning for a project, which {}", instead),
+        "Remove `-o`, or pass a single file to compile it as a script"
+    );
+    Err(1)
+}
+
+pub(super) fn project_root_for(target: &Path) -> PathBuf {
+    if !target.is_file() {
+        return target.to_path_buf();
+    }
+    match super::project::resolve_file_target(target) {
+        FileTarget::ProjectEntry { root } | FileTarget::ProjectModule { root } => root,
+        FileTarget::Script { .. } => target.to_path_buf(),
+    }
+}
+
+pub(super) fn with_locked_project(path: &Path, f: impl FnOnce(&LockedProject) -> i32) -> i32 {
+    let project = match LockedProject::acquire(path) {
         Ok(project) => project,
         Err(code) => return code,
     };

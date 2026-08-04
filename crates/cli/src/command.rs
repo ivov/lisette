@@ -34,10 +34,12 @@ pub enum Command {
         path: Option<String>,
         sourcemap: bool,
         go_flags: Vec<String>,
+        output: Option<String>,
     },
     Emit {
         path: Option<String>,
         sourcemap: bool,
+        output: Option<String>,
     },
     Run {
         target: Option<String>,
@@ -103,24 +105,61 @@ pub enum ParseError {
     },
 }
 
-fn parse_path_and_sourcemap(
-    arguments: impl Iterator<Item = String>,
-) -> Result<(Option<String>, bool), ParseError> {
+fn parse_emit(mut arguments: impl Iterator<Item = String>) -> Result<Command, ParseError> {
     let mut path = None;
     let mut sourcemap = false;
-    for arg in arguments {
-        match arg.as_str() {
-            "--sourcemap" => sourcemap = true,
-            s if s.starts_with('-') => return Err(ParseError::UnknownFlag(s.to_string())),
-            s => set_target(
-                &mut path,
-                s.to_string(),
-                "emit",
-                "Run `lis emit` once per path",
-            )?,
+    let mut output = None;
+
+    while let Some(arg) = arguments.next() {
+        if arg == "--sourcemap" {
+            sourcemap = true;
+        } else if let Some(value) = output_value(&arg, &mut arguments, "emit")? {
+            output = Some(value);
+        } else if arg.starts_with('-') {
+            return Err(ParseError::UnknownFlag(arg));
+        } else {
+            set_target(&mut path, arg, "emit", "Run `lis emit` once per path")?;
         }
     }
-    Ok((path, sourcemap))
+
+    Ok(Command::Emit {
+        path,
+        sourcemap,
+        output,
+    })
+}
+
+/// An option-looking value almost always means the path was left off, so a
+/// real one is spelled `./-name`.
+fn output_value(
+    arg: &str,
+    arguments: &mut impl Iterator<Item = String>,
+    command: &'static str,
+) -> Result<Option<String>, ParseError> {
+    let Some(value) = flag_value(arg, &["-o", "--output"], arguments, command, "-o <path>")? else {
+        return Ok(None);
+    };
+
+    if value.is_empty() {
+        return Err(ParseError::MissingArgument {
+            command,
+            argument: "-o <path>",
+        });
+    }
+
+    if value.starts_with('-') {
+        return Err(ParseError::UnexpectedArgument {
+            message: format!("unexpected value `{}` for `-o`", value),
+            reason: "`-o` takes a path, and a value starting with `-` reads as another flag"
+                .to_string(),
+            hint: format!(
+                "Give the path, or write `./{}` if that really is the filename",
+                value
+            ),
+        });
+    }
+
+    Ok(Some(value))
 }
 
 fn set_target(
@@ -264,10 +303,7 @@ impl Command {
         match command.as_str() {
             "new" => parse_new(arguments),
             "build" | "b" => parse_build(arguments),
-            "emit" | "e" => {
-                let (path, sourcemap) = parse_path_and_sourcemap(arguments)?;
-                Ok(Command::Emit { path, sourcemap })
-            }
+            "emit" | "e" => parse_emit(arguments),
             "run" | "r" => parse_run(arguments),
             "format" | "f" => parse_format(arguments),
             "check" | "c" => parse_check(arguments),
@@ -313,6 +349,7 @@ fn parse_build(mut arguments: impl Iterator<Item = String>) -> Result<Command, P
     let mut path = None;
     let mut sourcemap = false;
     let mut go_flags = Vec::new();
+    let mut output = None;
 
     while let Some(arg) = arguments.next() {
         if arg == "--sourcemap" {
@@ -325,6 +362,8 @@ fn parse_build(mut arguments: impl Iterator<Item = String>) -> Result<Command, P
             "--go-flags <flags>",
         )? {
             extend_go_flags(&mut go_flags, &value)?;
+        } else if let Some(value) = output_value(&arg, &mut arguments, "build")? {
+            output = Some(value);
         } else if arg.starts_with('-') {
             return Err(ParseError::UnknownFlag(arg));
         } else {
@@ -336,6 +375,7 @@ fn parse_build(mut arguments: impl Iterator<Item = String>) -> Result<Command, P
         path,
         sourcemap,
         go_flags,
+        output,
     })
 }
 
@@ -1205,7 +1245,9 @@ mod tests {
 
     #[test]
     fn emit_parses_path_and_sourcemap() {
-        let Ok(Command::Emit { path, sourcemap }) = parse(&["lis", "emit", "src", "--sourcemap"])
+        let Ok(Command::Emit {
+            path, sourcemap, ..
+        }) = parse(&["lis", "emit", "src", "--sourcemap"])
         else {
             panic!("expected Emit command");
         };
@@ -1219,6 +1261,87 @@ mod tests {
             parse(&["lis", "emit", "--bogus"]),
             Err(ParseError::UnknownFlag(_))
         ));
+    }
+
+    #[test]
+    fn emit_parses_both_output_spellings() {
+        for argument in [
+            vec!["lis", "emit", "tool.lis", "-o", "out.go"],
+            vec!["lis", "emit", "tool.lis", "--output", "out.go"],
+            vec!["lis", "emit", "tool.lis", "--output=out.go"],
+        ] {
+            let Ok(Command::Emit { path, output, .. }) = parse(&argument) else {
+                panic!("expected Emit command for {argument:?}");
+            };
+            assert_eq!(path.as_deref(), Some("tool.lis"));
+            assert_eq!(output.as_deref(), Some("out.go"), "for {argument:?}");
+        }
+    }
+
+    #[test]
+    fn build_parses_output_beside_go_flags() {
+        let Ok(Command::Build {
+            path,
+            go_flags,
+            output,
+            ..
+        }) = parse(&[
+            "lis",
+            "build",
+            "tool.lis",
+            "-o",
+            "dist/tool",
+            "--go-flags",
+            "-trimpath",
+        ])
+        else {
+            panic!("expected Build command");
+        };
+        assert_eq!(path.as_deref(), Some("tool.lis"));
+        assert_eq!(output.as_deref(), Some("dist/tool"));
+        assert_eq!(go_flags, vec!["-trimpath"]);
+    }
+
+    #[test]
+    fn output_flag_without_a_path_is_a_missing_argument() {
+        for argument in [vec!["lis", "emit", "-o"], vec!["lis", "build", "-o"]] {
+            assert!(
+                matches!(
+                    parse(&argument),
+                    Err(ParseError::MissingArgument {
+                        argument: "-o <path>",
+                        ..
+                    })
+                ),
+                "expected a missing-argument error for {argument:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn output_flag_rejects_a_value_that_looks_like_an_option() {
+        for argument in [
+            vec!["lis", "build", "-o", "--sourcemap"],
+            vec!["lis", "build", "-o", "--go-flags"],
+            vec!["lis", "emit", "-o", "--output"],
+            vec!["lis", "emit", "-o", "--bogus"],
+            vec!["lis", "emit", "--output=-o"],
+        ] {
+            assert!(
+                matches!(parse(&argument), Err(ParseError::UnexpectedArgument { .. })),
+                "expected a rejection for {argument:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn output_flag_accepts_a_dash_path_spelled_relatively() {
+        let Ok(Command::Emit { output, .. }) =
+            parse(&["lis", "emit", "f.lis", "-o", "./-weird.go"])
+        else {
+            panic!("expected Emit command");
+        };
+        assert_eq!(output.as_deref(), Some("./-weird.go"));
     }
 
     #[test]
