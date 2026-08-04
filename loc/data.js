@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785875256017,
+  "lastUpdate": 1785876489834,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -18722,6 +18722,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "lsp",
             "value": 5367,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2883,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1286,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7416,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f67d36d59e304a1e199c9520735e9ce76d4eb27e",
+          "message": "fix: reject dot-named package dirs (#1210)",
+          "timestamp": "2026-08-04T22:47:36+02:00",
+          "tree_id": "7882e6f080849b028c07425b7a8679c1f7e6ebcf",
+          "url": "https://github.com/ivov/lisette/commit/f67d36d59e304a1e199c9520735e9ce76d4eb27e"
+        },
+        "date": 1785876488047,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 126647,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30337,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 25740,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18541,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13480,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 12354,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 7585,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5414,
             "unit": "lines"
           },
           {
