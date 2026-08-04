@@ -297,6 +297,25 @@ fn go_ignored_shape_under_tests_is_rejected() {
 }
 
 #[test]
+fn dotted_directory_under_tests_is_rejected() {
+    let (_dir, project) = scaffold_binary_with_math("extdot");
+    fs::create_dir_all(project.join("tests/v1.2")).unwrap();
+    fs::write(
+        project.join("tests/v1.2/api.test.lis"),
+        "struct VConf { a: int }\n#[test]\nfn t() {}\n",
+    )
+    .unwrap();
+
+    let check = lis(&project, &["check"]);
+    let out = combined(&check);
+    assert!(!check.status.success(), "expected failure: {out}");
+    assert!(
+        out.contains("Dotted package directory") && !out.contains("INTERNAL COMPILER ERROR"),
+        "got: {out}"
+    );
+}
+
+#[test]
 fn library_project_runs_external_tests() {
     if !go_available() {
         eprintln!("skipping: `go` not found");

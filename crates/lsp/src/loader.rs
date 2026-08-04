@@ -15,6 +15,7 @@ pub(crate) struct ProjectState {
 
 pub(crate) struct ProjectAnalysis {
     pub(crate) config: ProjectConfig,
+    pub(crate) package_id: String,
     pub(crate) filename: String,
     pub(crate) external_test: bool,
     pub(crate) loader: AnalysisLoader,
@@ -75,7 +76,7 @@ impl ProjectState {
         let (entry_package_path, external_test_root) = if external_test {
             (
                 package_id_to_dir(&project.config, ENTRY_PACKAGE_ID),
-                Some(package_id),
+                Some(package_id.clone()),
             )
         } else {
             let dir = uri
@@ -88,6 +89,7 @@ impl ProjectState {
 
         Some(ProjectAnalysis {
             config: project.config.clone(),
+            package_id,
             filename,
             external_test,
             loader: project.for_analysis(entry_package_path, external_test_root),

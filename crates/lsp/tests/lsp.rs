@@ -12594,3 +12594,234 @@ fn a_file_with_no_project_above_it_is_told_how_to_make_one() {
 
     client.shutdown();
 }
+
+#[test]
+fn a_dotted_project_directory_is_not_a_dotted_package() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("my.app");
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"github.com/acme/myapp\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    let content = "pub struct VConf { pub a: int }\n";
+    let path = root.join("src/conf.lis");
+    std::fs::write(&path, content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(&root);
+    let uri = Url::from_file_path(&path).unwrap().to_string();
+    client.open(&uri, content);
+
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
+    assert!(
+        !diags.iter().any(|d| d.code
+            == Some(NumberOrString::String(
+                "resolve.dotted_package_directory".to_string()
+            ))),
+        "the dot is in the project directory, not a package path: {diags:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn a_typedef_file_under_a_dotted_directory_is_exempt() {
+    let (_dir, root) = geo_library_project();
+    let content = "pub fn Ext() -> int\n";
+    std::fs::create_dir_all(root.join("src/v1.2")).unwrap();
+    let path = root.join("src/v1.2/api.d.lis");
+    std::fs::write(&path, content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(&root);
+    let uri = Url::from_file_path(&path).unwrap().to_string();
+    client.open(&uri, content);
+
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
+    assert!(
+        !diags.iter().any(|d| d.code
+            == Some(NumberOrString::String(
+                "resolve.dotted_package_directory".to_string()
+            ))),
+        "a typedef file puts no directory in the package graph, and `lis build` accepts this project: {diags:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn a_typedef_beside_a_compiled_sibling_under_a_dotted_directory_is_rejected() {
+    for sibling in ["s.lis", "api.test.lis"] {
+        let (_dir, root) = geo_library_project();
+        std::fs::create_dir_all(root.join("src/v1.2")).unwrap();
+        let content = "pub fn Ext() -> int\n";
+        let path = root.join("src/v1.2/api.d.lis");
+        std::fs::write(&path, content).unwrap();
+        std::fs::write(
+            root.join("src/v1.2").join(sibling),
+            "pub struct S { pub a: int }\n",
+        )
+        .unwrap();
+
+        let mut client = TestClient::new();
+        client.initialize_with_root(&root);
+        let uri = Url::from_file_path(&path).unwrap().to_string();
+        client.open(&uri, content);
+
+        let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
+        assert!(
+            diags.iter().any(|d| d.code
+                == Some(NumberOrString::String(
+                    "resolve.dotted_package_directory".to_string()
+                ))),
+            "`{sibling}` puts `v1.2` in the package graph and `lis build` rejects it: {diags:?}"
+        );
+
+        client.shutdown();
+    }
+}
+
+#[test]
+fn a_typedef_tree_under_a_dotted_directory_tracks_the_whole_subtree() {
+    let dotted_code = Some(NumberOrString::String(
+        "resolve.dotted_package_directory".to_string(),
+    ));
+    let typedef = "pub fn Ext() -> int\n";
+
+    for (open_at, compiled_at) in [
+        ("src/v1.2/api.d.lis", "src/v1.2/sub/x.lis"),
+        ("src/v1.2/sub/api.d.lis", "src/v1.2/x.lis"),
+        ("src/v1.2/sub/api.d.lis", "src/v1.2/sub/x.lis"),
+    ] {
+        let (_dir, root) = geo_library_project();
+        std::fs::create_dir_all(root.join("src/v1.2/sub")).unwrap();
+        std::fs::write(root.join(open_at), typedef).unwrap();
+        std::fs::write(root.join(compiled_at), "pub fn f() -> int { 1 }\n").unwrap();
+
+        let mut client = TestClient::new();
+        client.initialize_with_root(&root);
+        let uri = Url::from_file_path(root.join(open_at)).unwrap().to_string();
+        client.open(&uri, typedef);
+
+        let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
+        assert!(
+            diags.iter().any(|d| d.code == dotted_code),
+            "`{compiled_at}` puts `v1.2` in the package graph while `{open_at}` is open: {diags:?}"
+        );
+
+        client.shutdown();
+    }
+
+    let (_dir, root) = geo_library_project();
+    std::fs::create_dir_all(root.join("src/v1.2/sub")).unwrap();
+    std::fs::write(root.join("src/v1.2/api.d.lis"), typedef).unwrap();
+    std::fs::write(root.join("src/v1.2/sub/other.d.lis"), typedef).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(&root);
+    let uri = Url::from_file_path(root.join("src/v1.2/api.d.lis"))
+        .unwrap()
+        .to_string();
+    client.open(&uri, typedef);
+
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
+    assert!(
+        !diags.iter().any(|d| d.code == dotted_code),
+        "a tree of nothing but typedefs reaches no package and `lis build` accepts it: {diags:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn dotted_external_test_directory_is_rejected() {
+    let (_dir, root) = geo_library_project();
+    let content = "struct VConf { a: int }\n\n#[test]\nfn value() {\n  let c = VConf { a: 1 }\n  assert c.a == 1\n}\n";
+    std::fs::create_dir_all(root.join("tests/v1.2")).unwrap();
+    let test_path = root.join("tests/v1.2/api.test.lis");
+    std::fs::write(&test_path, content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(&root);
+    let uri = Url::from_file_path(&test_path).unwrap().to_string();
+    client.open(&uri, content);
+
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
+    assert!(
+        diags.iter().any(|d| d.code
+            == Some(NumberOrString::String(
+                "resolve.dotted_package_directory".to_string()
+            ))),
+        "a dotted directory under tests/ must be rejected, not crash registration: {diags:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn dotted_source_directory_is_rejected() {
+    let (_dir, root) = geo_library_project();
+    let content = "pub struct VConf { pub a: int }\n";
+    std::fs::create_dir_all(root.join("src/v1.2")).unwrap();
+    let path = root.join("src/v1.2/vconf.lis");
+    std::fs::write(&path, content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(&root);
+    let uri = Url::from_file_path(&path).unwrap().to_string();
+    client.open(&uri, content);
+
+    let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
+    let dotted = diags
+        .iter()
+        .find(|d| {
+            d.code
+                == Some(NumberOrString::String(
+                    "resolve.dotted_package_directory".to_string(),
+                ))
+        })
+        .unwrap_or_else(|| {
+            panic!("the editor must agree with what `lis build` rejects: {diags:?}")
+        });
+    assert!(dotted.message.contains("`v1.2`"), "got: {dotted:?}");
+
+    client.shutdown();
+}
+
+#[test]
+fn an_unsaved_test_file_in_a_dotted_directory_is_rejected() {
+    let content = "struct VConf { a: int }\n\n#[test]\nfn t() {\n  let c = VConf { a: 1 }\n  assert c.a == 1\n}\n";
+
+    for on_disk in [None, Some("api.d.lis")] {
+        let (_dir, root) = geo_library_project();
+        std::fs::create_dir_all(root.join("tests/v1.2")).unwrap();
+        if let Some(sibling) = on_disk {
+            std::fs::write(
+                root.join("tests/v1.2").join(sibling),
+                "pub fn Ext() -> int\n",
+            )
+            .unwrap();
+        }
+
+        let mut client = TestClient::new();
+        client.initialize_with_root(&root);
+        let uri = Url::from_file_path(root.join("tests/v1.2/api.test.lis"))
+            .unwrap()
+            .to_string();
+        client.open(&uri, content);
+
+        let diags = client.await_diagnostics_for(&uri).unwrap_or_default();
+        assert!(
+            diags.iter().any(|d| d.code
+                == Some(NumberOrString::String(
+                    "resolve.dotted_package_directory".to_string()
+                ))),
+            "the open buffer is the compiled source, saved or not, and reaching registration \
+             through the overlay crashes the server: {diags:?}"
+        );
+
+        client.shutdown();
+    }
+}

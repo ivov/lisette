@@ -737,7 +737,7 @@ pub(super) fn resolve_project_layout(project_path: &Path) -> Option<ProjectLayou
         return None;
     }
 
-    if let Some((heading, reason, hint)) = go_ignored_shape(&src, "src", &sources) {
+    if let Some((heading, reason, hint)) = rejected_source_shape(&src, "src", &sources) {
         cli_error!(heading, reason, hint);
         return None;
     }
@@ -808,7 +808,7 @@ pub(super) fn resolve_project_layout(project_path: &Path) -> Option<ProjectLayou
     }
 
     if let Some((heading, reason, hint)) =
-        go_ignored_shape(&tests_dir, EXTERNAL_TESTS_DIR, &test_sources)
+        rejected_source_shape(&tests_dir, EXTERNAL_TESTS_DIR, &test_sources)
     {
         cli_error!(heading, reason, hint);
         return None;
@@ -916,7 +916,7 @@ fn go_platform_suffix(go_filename: &str) -> Option<String> {
     None
 }
 
-fn go_ignored_shape(
+fn rejected_source_shape(
     root: &Path,
     root_label: &str,
     sources: &[PathBuf],
@@ -928,7 +928,7 @@ fn go_ignored_shape(
         let Some(name) = rel.file_name().and_then(|n| n.to_str()) else {
             continue;
         };
-        if name.ends_with(".d.lis") {
+        if semantics::loader::is_typedef_file(name) {
             continue;
         }
 
@@ -946,6 +946,18 @@ fn go_ignored_shape(
                             segment
                         ),
                         "Rename it: Go skips `testdata`, `vendor`, and directories beginning with `.` or `_`".to_string(),
+                    ));
+                }
+
+                if segment.contains('.') {
+                    return Some((
+                        "Dotted package directory",
+                        format!(
+                            "`{root_label}/{}` sits under `{}`, and package paths cannot contain `.`",
+                            rel.display(),
+                            segment
+                        ),
+                        "Rename it: `.` separates a package path from the name it qualifies, as in `v1.VConf`".to_string(),
                     ));
                 }
             }

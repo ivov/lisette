@@ -28,7 +28,11 @@ fn counts_for_internal_test_root(name: &str) -> bool {
 /// The predicate package discovery roots on. Shared so callers that pre-scan
 /// `src/` cannot disagree with the graph about what a production package is.
 pub fn is_production_package_file(name: &str) -> bool {
-    name.ends_with(".lis") && !name.ends_with(".test.lis") && !name.ends_with(".d.lis")
+    name.ends_with(".lis") && !name.ends_with(".test.lis") && !is_typedef_file(name)
+}
+
+pub fn is_typedef_file(name: &str) -> bool {
+    name.ends_with(".d.lis")
 }
 
 pub const EXTERNAL_TESTS_DIR: &str = "tests";

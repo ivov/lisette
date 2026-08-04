@@ -236,6 +236,54 @@ fn library_rejects_go_ignored_package_directory() {
 }
 
 #[test]
+fn library_rejects_dotted_package_directory() {
+    for bad in ["v1.2", "api/v1.2", "v2."] {
+        let (_dir, project) = scaffold("github.com/acme/dotted");
+        fs::write(
+            project.join("src/dotted.lis"),
+            "pub fn top() -> int { 1 }\n",
+        )
+        .unwrap();
+        fs::create_dir_all(project.join("src").join(bad)).unwrap();
+        fs::write(
+            project.join("src").join(bad).join("x.lis"),
+            "pub struct VConf { pub a: int }\n",
+        )
+        .unwrap();
+        let build = lis(&project, &["build"]);
+        let output = combined(&build);
+        assert!(!build.status.success(), "`{bad}` should be rejected");
+        assert!(
+            output.contains("Dotted package directory"),
+            "`{bad}` should be rejected, got: {output}"
+        );
+        assert!(
+            !output.contains("INTERNAL COMPILER ERROR"),
+            "`{bad}` must not reach type registration, got: {output}"
+        );
+    }
+}
+
+#[test]
+fn binary_check_rejects_dotted_package_directory() {
+    let (_dir, project) = scaffold("github.com/acme/dottedbin");
+    fs::write(project.join("src/main.lis"), "fn main() { () }\n").unwrap();
+    fs::create_dir_all(project.join("src/v1.2")).unwrap();
+    fs::write(
+        project.join("src/v1.2/vconf.lis"),
+        "pub enum Mode { On, Off }\n",
+    )
+    .unwrap();
+    let check = lis(&project, &["check"]);
+    let output = combined(&check);
+    assert!(!check.status.success());
+    assert!(
+        output.contains("Dotted package directory") && !output.contains("INTERNAL COMPILER ERROR"),
+        "got: {output}"
+    );
+}
+
+#[test]
 fn library_rejects_platform_suffixed_source() {
     for bad in [
         "api_windows.lis",

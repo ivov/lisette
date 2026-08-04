@@ -79,6 +79,14 @@ pub fn invalid_package_path(package_name: &str, span: Span, is_blank: bool) -> L
         .with_help(help)
 }
 
+pub fn dotted_package_directory(package_id: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!("Dotted package directory `{}`", package_id))
+        .with_resolve_code("dotted_package_directory")
+        .with_help(
+            "Rename the directory. `.` separates a package path from the name it qualifies, as in `v1.VConf`, so a package path cannot contain one.",
+        )
+}
+
 pub fn missing_go_prefix(package_name: &str, span: Span, is_blank: bool) -> LisetteDiagnostic {
     let suggestion = if is_blank {
         format!("import _ \"go:{}\"", package_name)

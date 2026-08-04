@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::sync::Arc;
 
 use crate::protocol::*;
@@ -16,6 +17,46 @@ use crate::state::{AnalysisRequest, DocumentState, SharedState};
 enum AnalysisError {
     Diagnostics(Vec<Diagnostic>),
     Superseded,
+}
+
+fn dotted_directory_reaches_package_graph(uri: &Url, filename: &str, root: &Path) -> bool {
+    if !semantics::loader::is_typedef_file(filename) {
+        return true;
+    }
+
+    let Ok(file) = uri.to_file_path() else {
+        return true;
+    };
+
+    let mut outermost = None;
+    let mut walk = file.parent();
+    while let Some(dir) = walk.filter(|dir| *dir != root && dir.starts_with(root)) {
+        if dir
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.contains('.'))
+        {
+            outermost = Some(dir);
+        }
+        walk = dir.parent();
+    }
+
+    outermost.is_none_or(tree_has_compiled_source)
+}
+
+fn tree_has_compiled_source(dir: &Path) -> bool {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return true;
+    };
+    entries.flatten().any(|entry| {
+        if entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+            return tree_has_compiled_source(&entry.path());
+        }
+        entry
+            .file_name()
+            .to_str()
+            .is_some_and(|name| name.ends_with(".lis") && !semantics::loader::is_typedef_file(name))
+    })
 }
 
 /// Extract the constructor type name, unwrapping `Ref<T>` and peeling aliases.
@@ -66,6 +107,18 @@ impl SharedState {
             .get(uri)
             .map(|document| document.content().to_string())
             .ok_or_else(Vec::new)?;
+
+        if let Some(dotted) = project
+            .package_id
+            .split('/')
+            .find(|segment| segment.contains('.'))
+            .filter(|_| dotted_directory_reaches_package_graph(uri, &filename, config.root()))
+        {
+            return Err(vec![convert_diagnostic(
+                &diagnostics::package_graph::dotted_package_directory(dotted),
+                &LineIndex::new(&source),
+            )]);
+        }
 
         if external_test && let Some(issue) = semantics::loader::external_test_file_issue(&filename)
         {
