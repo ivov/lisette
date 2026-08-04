@@ -57,34 +57,11 @@ let counts = Map.new<string, int>()
 
 ## Type bounds
 
-A type parameter can be constrained to types that implement an interface. See [`11-interfaces.md`](11-interfaces.md)
-
-```rust
-fn print_value<T: Display>(value: T) {
-  fmt.Println(value.to_string())
-}
-```
-
-Multiple bounds use `+`:
-
-```rust
-fn process<T: Display + Clone>(value: T) -> T {
-  fmt.Println(value.to_string())
-  value.clone()
-}
-```
-
-Multiple type parameters can each have their own bounds:
-
-```rust
-fn combine<T: Display, U: Debug>(a: T, b: U) -> string {
-  a.to_string() + b.debug_string()
-}
-```
+A type parameter can carry a bound restricting which types may instantiate it. 
 
 Two bounds are built in:
 
-- `Comparable` for types that admit `==` and `!=` (arrays, structs, enums, and tuples qualify when all their components do; slices, maps, functions, and interfaces do not)
+- `Comparable` for types that admit `==` and `!=` (arrays, structs, enums, and tuples qualify when all their components do)
 - `Ordered` for types that admit `<`, `>`, `<=`, and `>=` (signed and unsigned integers, floats, and `string`)
 
 `Ordered` implies `Comparable`, so `==` and `!=` are also available on a type bound by `Ordered`.
@@ -92,6 +69,30 @@ Two bounds are built in:
 ```rust
 fn dedupe<T: Comparable>(xs: Slice<T>) -> Slice<T> { ... }
 fn sorted<T: Ordered>(xs: Slice<T>) -> Slice<T> { ... }
+```
+
+A user-declared interface can also serve as a bound. See [`11-interfaces.md`](11-interfaces.md)
+
+```rust
+interface Display {
+  fn to_string() -> string
+}
+
+fn print_value<T: Display>(value: T) {
+  fmt.Println(value.to_string())
+}
+```
+
+To a type parameter multiple bounds:
+
+```rust
+fn render<T: Display + Shape>(value: T) -> string { ... }
+```
+
+To give type parameters their individual bounds:
+
+```rust
+fn label<T: Display, U: Ordered>(value: T, rank: U) -> string { ... }
 ```
 
 ## Mutable parameters
