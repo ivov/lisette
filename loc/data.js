@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785869675639,
+  "lastUpdate": 1785870143493,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -18539,6 +18539,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "diagnostics",
             "value": 7548,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5362,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2883,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1286,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7416,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "76de9745ed3bade65f0c286b183f6a3179e5541e",
+          "message": "feat: diagnostic for unprefixed f-strings (#1208)",
+          "timestamp": "2026-08-04T21:01:50+02:00",
+          "tree_id": "3028988225b4f8a8e727f8526d622aa6726a213a",
+          "url": "https://github.com/ivov/lisette/commit/76de9745ed3bade65f0c286b183f6a3179e5541e"
+        },
+        "date": 1785870142483,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 126496,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30326,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 25709,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18524,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13480,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 12343,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 7556,
             "unit": "lines"
           },
           {
