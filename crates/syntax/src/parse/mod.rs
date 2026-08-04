@@ -19,6 +19,11 @@ pub(crate) enum ParamMode {
     TestFunction,
 }
 
+struct TypeArgsScan {
+    end: usize,
+    crossed_newline: bool,
+}
+
 mod annotations;
 mod control_flow;
 mod definitions;
@@ -229,7 +234,7 @@ impl<'source> Parser<'source> {
                 self.skip_comments();
                 ast::Expression::Unit {
                     ty: Type::uninferred(),
-                    span: self.span_from_tokens(start),
+                    span: self.span_from_offset(start.byte_offset),
                 }
             }
             _ => self.unexpected_token("top_item"),
@@ -489,46 +494,38 @@ impl<'source> Parser<'source> {
         ast::Span::new(self.file_id, token.byte_offset, token.byte_length)
     }
 
-    fn span_from_tokens(&self, start_token: Token<'source>) -> ast::Span {
-        let previous = self.stream.previous();
-        let end_byte_offset = previous.byte_offset + previous.byte_length;
-        let byte_length = end_byte_offset.saturating_sub(start_token.byte_offset);
-
-        ast::Span::new(self.file_id, start_token.byte_offset, byte_length)
-    }
-
     fn span_from_offset(&self, start_byte_offset: u32) -> ast::Span {
-        let previous = self.stream.previous();
+        let previous = self.stream.previous_code();
         let end_byte_offset = previous.byte_offset + previous.byte_length;
         let byte_length = end_byte_offset.saturating_sub(start_byte_offset);
 
         ast::Span::new(self.file_id, start_byte_offset, byte_length)
     }
 
-    fn is_type_args_call(&self) -> bool {
+    fn scan_type_args(&self) -> Option<TypeArgsScan> {
         let mut position = 1; // 0 is <
         let mut depth = 1;
+        let mut crossed_newline = false;
 
         loop {
             if position > MAX_LOOKAHEAD {
-                return false;
+                return None;
             }
+            crossed_newline |= self.newline_before_peek(position);
             match self.stream.peek_ahead(position).kind {
                 LeftAngleBracket => depth += 1,
                 RightAngleBracket if depth == 1 => {
-                    let next = self.stream.peek_ahead(position + 1).kind;
-                    return next == LeftParen
-                        || (next == Dot
-                            && self.stream.peek_ahead(position + 2).kind == Identifier
-                            && self.stream.peek_ahead(position + 3).kind == LeftParen);
+                    return Some(TypeArgsScan {
+                        end: position + 1,
+                        crossed_newline,
+                    });
                 }
                 RightAngleBracket => depth -= 1,
                 ShiftRight if depth <= 2 => {
-                    let next = self.stream.peek_ahead(position + 1).kind;
-                    return next == LeftParen
-                        || (next == Dot
-                            && self.stream.peek_ahead(position + 2).kind == Identifier
-                            && self.stream.peek_ahead(position + 3).kind == LeftParen);
+                    return Some(TypeArgsScan {
+                        end: position + 1,
+                        crossed_newline,
+                    });
                 }
                 ShiftRight => depth -= 2,
                 LeftParen => {
@@ -536,12 +533,13 @@ impl<'source> Parser<'source> {
                     position += 1;
                     while paren_depth > 0 {
                         if position > MAX_LOOKAHEAD {
-                            return false;
+                            return None;
                         }
+                        crossed_newline |= self.newline_before_peek(position);
                         match self.stream.peek_ahead(position).kind {
                             LeftParen => paren_depth += 1,
                             RightParen => paren_depth -= 1,
-                            EOF => return false,
+                            EOF => return None,
                             _ => {}
                         }
                         position += 1;
@@ -550,11 +548,50 @@ impl<'source> Parser<'source> {
                 }
                 EOF | Plus | Minus | Star | Slash | Percent | EqualDouble | NotEqual
                 | AmpersandDouble | PipeDouble | Semicolon | LeftCurlyBrace | RightCurlyBrace
-                | LeftSquareBracket | RightSquareBracket => return false,
+                | LeftSquareBracket | RightSquareBracket => return None,
                 _ => {}
             }
             position += 1;
         }
+    }
+
+    fn opens_type_args(&self) -> bool {
+        let Some(scan) = self.scan_type_args() else {
+            return false;
+        };
+
+        let next = self.stream.peek_ahead(scan.end).kind;
+
+        let call = next == LeftParen
+            || (next == Dot
+                && self.stream.peek_ahead(scan.end + 1).kind == Identifier
+                && self.stream.peek_ahead(scan.end + 2).kind == LeftParen);
+
+        call || (!scan.crossed_newline && self.ends_expression_at(scan.end))
+    }
+
+    fn ends_expression_at(&self, position: usize) -> bool {
+        let mut position = position;
+        while matches!(
+            self.stream.peek_ahead(position).kind,
+            Comment | DocComment | FileComment
+        ) {
+            position += 1;
+        }
+
+        self.newline_before_peek(position)
+            || matches!(
+                self.stream.peek_ahead(position).kind,
+                EOF | Semicolon | RightCurlyBrace | RightParen | RightSquareBracket | Comma
+            )
+    }
+
+    fn newline_before_peek(&self, position: usize) -> bool {
+        let previous = self.stream.peek_ahead(position.saturating_sub(1));
+        let from = (previous.byte_offset + previous.byte_length) as usize;
+        let to = self.stream.peek_ahead(position).byte_offset as usize;
+
+        from <= to && to <= self.source.len() && self.source[from..to].contains('\n')
     }
 
     fn has_block_after_struct(&self) -> bool {
@@ -868,7 +905,7 @@ impl<'source> Parser<'source> {
             )
         } else {
             self.error_unclosed_block(&error_anchor);
-            self.span_from_tokens(start)
+            self.span_from_offset(start.byte_offset)
         }
     }
 
@@ -1284,6 +1321,16 @@ impl<'source> TokenStream<'source> {
 
     fn previous(&self) -> Token<'source> {
         self.tokens[self.position.saturating_sub(1)]
+    }
+
+    fn previous_code(&self) -> Token<'source> {
+        let mut index = self.position.saturating_sub(1);
+
+        while index > 0 && matches!(self.tokens[index].kind, Comment | DocComment | FileComment) {
+            index -= 1;
+        }
+
+        self.tokens[index]
     }
 
     fn consume(&mut self) -> Token<'source> {

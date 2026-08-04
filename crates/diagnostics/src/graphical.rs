@@ -172,26 +172,31 @@ fn read_window(
     })
 }
 
+pub(crate) struct FrameSource {
+    pub source: IndexedSource,
+    pub filename: String,
+    pub labels: Vec<FrameLabel>,
+}
+
 pub(crate) struct FrameReport<'a> {
     pub message: &'a str,
-    pub labels: &'a [FrameLabel],
+    pub sources: &'a [FrameSource],
     pub help: Option<&'a str>,
 }
 
 pub(crate) fn render_report(
     output: &mut String,
     report: &FrameReport<'_>,
-    source: Option<(&IndexedSource, &str)>,
     theme: &FrameTheme,
     context_lines: usize,
 ) -> fmt::Result {
     render_message(output, report.message, theme)?;
-    if let Some((source, filename)) = source {
+    for frame in report.sources {
         render_snippets(
             output,
-            source,
-            filename,
-            report.labels,
+            &frame.source,
+            &frame.filename,
+            &frame.labels,
             theme,
             context_lines,
         )?;

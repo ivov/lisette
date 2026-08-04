@@ -113,14 +113,9 @@ pub(crate) enum FileTarget {
     },
 }
 
-/// Resolves the unit `file`, which must exist, is compiled as.
+/// Resolves the unit `file`, which must exist, is compiled as. A named file is
+/// always source, so an extensionless script in `~/bin` is a script.
 pub(crate) fn resolve_file_target(file: &Path) -> FileTarget {
-    if file.extension() != Some(OsStr::new("lis")) {
-        return FileTarget::Script {
-            inside_project: false,
-        };
-    }
-
     let absolute = file.canonicalize().unwrap_or_else(|_| file.to_path_buf());
 
     let Some(root) = deps::find_project_root(&absolute) else {
@@ -132,6 +127,11 @@ pub(crate) fn resolve_file_target(file: &Path) -> FileTarget {
     let outside = FileTarget::Script {
         inside_project: true,
     };
+
+    if file.extension() != Some(OsStr::new("lis")) {
+        return outside;
+    }
+
     let Ok(relative) = absolute.strip_prefix(&root) else {
         return outside;
     };

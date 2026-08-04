@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Unprefixed f-string
+   ╭─[test.lis:7:13]
+ 6 │   let p = Point { x: 1 };
+ 7 │   let msg = "at {p}";
+   ·             ────┬───
+   ·                 ╰── `p` will not be interpolated
+ 8 │   let _ = p.x;
+   ╰────
+  help: Add the `f` prefix to interpolate `p`. Without it the braces stay literal text · code: [lint.unprefixed_fstring]

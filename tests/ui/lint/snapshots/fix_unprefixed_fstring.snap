@@ -1,0 +1,16 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+fn main() {
+  let name = "world";
+  let msg = "hello {name}";
+  let _ = name;
+  let _ = msg
+}
+=== fixed ===
+fn main() {
+  let name = "world";
+  let msg = f"hello {name}";
+  let _ = name;
+  let _ = msg
+}

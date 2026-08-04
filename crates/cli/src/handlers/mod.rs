@@ -12,6 +12,7 @@ mod new;
 mod project;
 pub(crate) mod reconciliation;
 mod run;
+mod script;
 mod sync;
 mod test;
 

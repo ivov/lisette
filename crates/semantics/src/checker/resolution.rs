@@ -63,6 +63,15 @@ impl ImportState {
 }
 
 impl TaskState {
+    pub(super) fn may_name_uninferred_export(&self, store: &Store, name: &str) -> bool {
+        let Some((prefix, member)) = name.split_once('.') else {
+            return false;
+        };
+        self.imports
+            .package_id(prefix)
+            .is_some_and(|package_id| store.uninferred_package_may_export(package_id, member))
+    }
+
     /// Resolve a simple name (e.g., "Sunday") to a public definition in an imported package.
     /// First tries direct match (`package_id.name`), then falls back to searching
     /// for nested definitions (e.g., `package_id.Weekday.Sunday`) preferring top-level

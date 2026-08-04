@@ -380,7 +380,14 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
     );
 
     for cycle in &graph_result.cycles {
-        sink.push(diagnostics::package_graph::import_cycle(cycle));
+        let hops: Vec<diagnostics::package_graph::CycleHop<'_>> = cycle
+            .iter()
+            .map(|hop| diagnostics::package_graph::CycleHop {
+                package: &hop.package,
+                span: hop.span,
+            })
+            .collect();
+        sink.push(diagnostics::package_graph::import_cycle(&hops));
     }
     let unreachable_packages = find_unreachable_packages(&discovered, &graph_result);
 

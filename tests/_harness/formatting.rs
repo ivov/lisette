@@ -25,6 +25,21 @@ pub fn format_result_diagnostic_for_snapshot(
     format_diagnostic_for_snapshot(diagnostic, &file.source, &file.name)
 }
 
+/// Renders a diagnostic against every file it labels, the way the CLI does.
+pub fn format_project_diagnostic_for_snapshot(
+    result: &Analysis,
+    diagnostic: &LisetteDiagnostic,
+) -> String {
+    let mut sources = diagnostics::render::SourceCache::new(|file_id: u32| {
+        result
+            .emit_input
+            .files
+            .get(&file_id)
+            .map(|file| (file.source.clone(), file.name.clone()))
+    });
+    diagnostics::render::render_with_sources(diagnostic, &mut sources, false, 1)
+}
+
 /// Escapes carriage returns, which insta's YAML literal blocks cannot round-trip.
 pub fn snapshot_description(input: &str) -> String {
     input.replace('\r', "\\r")
@@ -46,8 +61,4 @@ pub fn format_diagnostic_unix(
 pub fn format_parse_error_unix(error: &ParseError, source: &str, filename: &str) -> String {
     let diagnostic: LisetteDiagnostic = error.clone().into();
     format_diagnostic_unix(&diagnostic, source, filename)
-}
-
-pub fn format_diagnostic_standalone(diagnostic: &LisetteDiagnostic) -> String {
-    diagnostics::render::render_standalone(diagnostic)
 }

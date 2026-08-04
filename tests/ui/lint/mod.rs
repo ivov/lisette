@@ -10433,6 +10433,224 @@ fn main() {
 }
 
 #[test]
+fn unprefixed_fstring() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let name = "world";
+  let msg = "hello {name}";
+  let _ = name;
+  let _ = msg
+}
+"#
+    );
+}
+
+#[test]
+fn unprefixed_fstring_raw_string_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let name = "world";
+  let msg = r"hello {name}\n";
+  let _ = name;
+  let _ = msg
+}
+"#
+    );
+}
+
+#[test]
+fn unprefixed_fstring_unresolved_name_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let route = "/users/{id}";
+  let _ = route
+}
+"#
+    );
+}
+
+#[test]
+fn unprefixed_fstring_doubled_braces_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let name = "world";
+  let template = "{{name}}";
+  let _ = name;
+  let _ = template
+}
+"#
+    );
+}
+
+#[test]
+fn unprefixed_fstring_non_identifier_hole_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let job = "api";
+  let query = "{job=\"api\"}";
+  let _ = job;
+  let _ = query
+}
+"#
+    );
+}
+
+#[test]
+fn unprefixed_fstring_stray_brace_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let name = "world";
+  let msg = "}{name}";
+  let _ = name;
+  let _ = msg
+}
+"#
+    );
+}
+
+#[test]
+fn unprefixed_fstring_constant_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+const GREETING: string = "hi";
+
+fn main() {
+  let msg = "{GREETING}";
+  let _ = GREETING;
+  let _ = msg
+}
+"#
+    );
+}
+
+#[test]
+fn unprefixed_fstring_function_name_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn name() -> int { 1 }
+
+fn main() {
+  let msg = "{name}";
+  let _ = name();
+  let _ = msg
+}
+"#
+    );
+}
+
+#[test]
+fn unprefixed_fstring_partially_resolved_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let name = "world";
+  let msg = "{name} {missing}";
+  let _ = name;
+  let _ = msg
+}
+"#
+    );
+}
+
+#[test]
+fn unprefixed_fstring_unicode_escape_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let a = 1;
+  let msg = "\u{a}";
+  let _ = a;
+  let _ = msg
+}
+"#
+    );
+}
+
+#[test]
+fn unprefixed_fstring_non_displayable_struct_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Point { x: int }
+
+fn main() {
+  let p = Point { x: 1 };
+  let msg = "at {p}";
+  let _ = p.x;
+  let _ = msg
+}
+"#
+    );
+}
+
+#[test]
+fn unprefixed_fstring_non_displayable_enum_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+enum Color { Red, Blue }
+
+fn main() {
+  let c = Color.Red;
+  let msg = "picked {c}";
+  let _ = c == Color.Blue;
+  let _ = msg
+}
+"#
+    );
+}
+
+#[test]
+fn unprefixed_fstring_after_unicode_escape() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let name = "world";
+  let msg = "\u{263A} {name}";
+  let _ = name;
+  let _ = msg
+}
+"#
+    );
+}
+
+#[test]
+fn unprefixed_fstring_displayable_struct() {
+    assert_lint_snapshot!(
+        r#"
+#[display]
+struct Point { x: int }
+
+fn main() {
+  let p = Point { x: 1 };
+  let msg = "at {p}";
+  let _ = p.x;
+  let _ = msg
+}
+"#
+    );
+}
+
+#[test]
+fn unprefixed_fstring_allow_attribute_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+#[allow(unprefixed_fstring)]
+fn main() {
+  let id = 7;
+  let route = "/users/{id}";
+  let _ = id;
+  let _ = route
+}
+"#
+    );
+}
+
+#[test]
 fn slice_literal_uses_function() {
     assert_no_lint_warnings!(
         r#"

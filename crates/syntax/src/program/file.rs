@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::hash::BuildHasher;
 use std::path::PathBuf;
 
-use ecow::EcoString;
+use ecow::{EcoString, eco_format};
 
 use crate::ast::{Expression, ImportAlias, Span};
 
@@ -128,6 +128,55 @@ impl File {
                 _ => None,
             })
             .collect()
+    }
+
+    pub fn public_declarations(&self) -> Vec<EcoString> {
+        let exports_all = self.is_d_lis();
+        let mut names = Vec::new();
+        for item in &self.items {
+            let (name, visibility) = match item {
+                Expression::Function {
+                    name, visibility, ..
+                }
+                | Expression::Struct {
+                    name, visibility, ..
+                }
+                | Expression::TypeAlias {
+                    name, visibility, ..
+                }
+                | Expression::Interface {
+                    name, visibility, ..
+                }
+                | Expression::VariableDeclaration {
+                    name, visibility, ..
+                } => (name, visibility),
+                Expression::Const {
+                    identifier,
+                    visibility,
+                    ..
+                } => (identifier, visibility),
+                Expression::Enum {
+                    name,
+                    variants,
+                    visibility,
+                    ..
+                } => {
+                    if exports_all || visibility.is_public() {
+                        names.extend(
+                            variants
+                                .iter()
+                                .map(|variant| eco_format!("{}.{}", name, variant.name)),
+                        );
+                    }
+                    (name, visibility)
+                }
+                _ => continue,
+            };
+            if exports_all || visibility.is_public() {
+                names.push(name.clone());
+            }
+        }
+        names
     }
 
     /// Redirects `import "{from}"` to `to`, keeping the source spelling as the qualifier.

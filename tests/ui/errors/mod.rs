@@ -1,13 +1,14 @@
 use crate::_harness::build::compile_check;
 use crate::_harness::filesystem::MockFileSystem;
-use crate::_harness::formatting::{format_diagnostic_for_snapshot, format_diagnostic_standalone};
+use crate::_harness::formatting::{
+    format_diagnostic_for_snapshot, format_project_diagnostic_for_snapshot,
+};
 use crate::_harness::infer::{infer, infer_package};
 use crate::{
     assert_infer_error_snapshot, assert_lex_error_snapshot,
     assert_multipackage_infer_error_snapshot, assert_parse_error_snapshot,
 };
 
-use diagnostics::package_graph::import_cycle;
 use semantics::store::ENTRY_PACKAGE_ID;
 
 #[test]
@@ -95,6 +96,67 @@ fn parse_go_make_slice_with_capacity() {
     let input = r#"
 fn test() {
   let xs = make([]int, 0, 16)
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_call_missing_parens_array_new() {
+    let input = r#"
+fn test() {
+  let buffer = Array.new<byte, 0x80>
+  buffer.length()
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_call_missing_parens_single_type_arg() {
+    let input = r#"
+fn test() {
+  let xs = Slice.new<int>
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_call_missing_parens_nested_type_arg() {
+    let input = r#"
+fn test() {
+  let m = Map.new<string, Slice<int>>
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_call_missing_parens_fn_type_arg() {
+    let input = r#"
+fn test() {
+  let m = Map.new<string, fn(int, int) -> int>
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_call_missing_parens_tuple_type_arg() {
+    let input = r#"
+fn test() {
+  let m = Map.new<string, (int, int)>
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_call_missing_parens_trailing_comment() {
+    let input = r#"
+fn test() {
+  let xs = Slice.new<int> // make a slice
 }
 "#;
     assert_parse_error_snapshot!(input);
@@ -3174,6 +3236,16 @@ fn test() {
 }
 
 #[test]
+fn infer_type_mismatch_span_stops_before_trailing_comment() {
+    let input = r#"
+fn test() {
+  let xs: string = Slice.new<int>() // trailing note
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_type_mismatch_return() {
     let input = r#"
 fn get_number() -> int {
@@ -4611,17 +4683,42 @@ fn test() {
     });
 }
 
+fn cycle_diagnostic_snapshot(fs: MockFileSystem) -> String {
+    let result = compile_check(fs);
+    let cycle = result
+        .errors()
+        .iter()
+        .find(|error| error.code_str() == Some("resolve.import_cycle"))
+        .expect("the cycle must be reported");
+
+    format_project_diagnostic_for_snapshot(&result, cycle)
+}
+
 #[test]
 fn package_graph_import_cycle() {
-    let cycle = vec![
-        "package_a".to_string(),
-        "package_b".to_string(),
-        "package_c".to_string(),
-        "package_a".to_string(),
-    ];
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        "import \"package_a\"\n\nfn main() {}\n",
+    );
+    fs.add_file(
+        "package_a",
+        "package_a.lis",
+        "import \"package_b\"\n\npub fn a() -> int { package_b.b() }\n",
+    );
+    fs.add_file(
+        "package_b",
+        "package_b.lis",
+        "import \"package_c\"\n\npub fn b() -> int { package_c.c() }\n",
+    );
+    fs.add_file(
+        "package_c",
+        "package_c.lis",
+        "import \"package_a\"\n\npub fn c() -> int { package_a.a() }\n",
+    );
 
-    let diagnostic = import_cycle(&cycle);
-    let output = format_diagnostic_standalone(&diagnostic);
+    let output = cycle_diagnostic_snapshot(fs);
 
     insta::with_settings!({
         prepend_module_to_snapshot => false,
@@ -4633,10 +4730,19 @@ fn package_graph_import_cycle() {
 
 #[test]
 fn package_graph_import_self_loop() {
-    let cycle = vec!["package_a".to_string(), "package_a".to_string()];
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        "import \"package_a\"\n\nfn main() {}\n",
+    );
+    fs.add_file(
+        "package_a",
+        "package_a.lis",
+        "import \"package_a\"\n\npub fn a() -> int { 1 }\n",
+    );
 
-    let diagnostic = import_cycle(&cycle);
-    let output = format_diagnostic_standalone(&diagnostic);
+    let output = cycle_diagnostic_snapshot(fs);
 
     insta::with_settings!({
         prepend_module_to_snapshot => false,
@@ -8265,6 +8371,16 @@ fn identity<T>(x: T) -> T { x }
 
 fn test() {
   let x = identity::<int>(5);
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_rust_turbofish_with_method() {
+    let input = r#"
+fn test() {
+  let xs = Slice::<int>::new()
 }
 "#;
     assert_parse_error_snapshot!(input);

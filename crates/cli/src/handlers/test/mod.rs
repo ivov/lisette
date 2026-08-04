@@ -6,7 +6,7 @@ use crate::command::TestSelection;
 use crate::go_cli;
 use crate::output::{terminal_width, use_color};
 
-use super::build::{BuildPurpose, build_locked, with_locked_project};
+use super::build::{BuildPurpose, build_locked, project_root_for, with_locked_project};
 
 mod failed;
 mod report;
@@ -16,7 +16,9 @@ use report::{
 
 pub fn test(path: Option<String>, go_flags: Vec<String>, selection: TestSelection) -> i32 {
     crate::output::print_preview_notice("Test runner", false);
-    with_locked_project(path, |prep| {
+    let target = path.unwrap_or_else(|| ".".to_string());
+    let root = project_root_for(std::path::Path::new(&target));
+    with_locked_project(&root, |prep| {
         let outcome = match build_locked(prep, BuildPurpose::Test) {
             Ok(outcome) => outcome,
             Err(code) => return code,

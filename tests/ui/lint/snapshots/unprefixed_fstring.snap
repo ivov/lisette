@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Unprefixed f-string
+   ╭─[test.lis:4:13]
+ 3 │   let name = "world";
+ 4 │   let msg = "hello {name}";
+   ·             ───────┬──────
+   ·                    ╰── `name` will not be interpolated
+ 5 │   let _ = name;
+   ╰────
+  help: Add the `f` prefix to interpolate `name`. Without it the braces stay literal text · code: [lint.unprefixed_fstring]

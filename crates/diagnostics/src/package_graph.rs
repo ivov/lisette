@@ -330,8 +330,13 @@ pub fn unreachable_package(package_id: &str) -> LisetteDiagnostic {
         .with_help("This package is never imported. Use or remove it.")
 }
 
-pub fn import_cycle(path: &[String]) -> LisetteDiagnostic {
-    let is_self_import = path.len() == 2;
+pub struct CycleHop<'a> {
+    pub package: &'a str,
+    pub span: Span,
+}
+
+pub fn import_cycle(hops: &[CycleHop<'_>]) -> LisetteDiagnostic {
+    let is_self_import = hops.len() == 1;
 
     let help = if is_self_import {
         "Remove the self-import"
@@ -339,9 +344,35 @@ pub fn import_cycle(path: &[String]) -> LisetteDiagnostic {
         "To break the cycle, remove one of the imports or extract common dependencies into a separate package"
     };
 
-    LisetteDiagnostic::error(format!("Import cycle detected: {}", path.join(" -> ")))
-        .with_resolve_code("import_cycle")
-        .with_help(help)
+    let chain: Vec<&str> = hops
+        .iter()
+        .map(|hop| hop.package)
+        .chain(hops.first().map(|hop| hop.package))
+        .collect();
+
+    let mut diagnostic =
+        LisetteDiagnostic::error(format!("Import cycle detected: {}", chain.join(" -> ")))
+            .with_resolve_code("import_cycle")
+            .with_help(help);
+
+    for (index, hop) in hops.iter().enumerate() {
+        let label = if is_self_import {
+            format!("`{}` imports itself", hop.package)
+        } else {
+            format!(
+                "`{}` imports `{}`",
+                hop.package,
+                hops[(index + 1) % hops.len()].package
+            )
+        };
+        diagnostic = if index == 0 {
+            diagnostic.with_span_primary_label(&hop.span, label)
+        } else {
+            diagnostic.with_span_label(&hop.span, label)
+        };
+    }
+
+    diagnostic
 }
 
 #[cfg(test)]
@@ -400,11 +431,16 @@ mod tests {
         assert_eq!(diagnostic.code_str(), Some("resolve.unreachable_package"));
     }
 
+    fn hop(package: &str, file_id: u32) -> CycleHop<'_> {
+        CycleHop {
+            package,
+            span: Span::new(file_id, 7, 6),
+        }
+    }
+
     #[test]
     fn import_cycle_names_the_whole_chain_on_one_line() {
-        let cycle = ["alpha".to_string(), "beta".to_string(), "alpha".to_string()];
-
-        let diagnostic = import_cycle(&cycle);
+        let diagnostic = import_cycle(&[hop("alpha", 1), hop("beta", 2)]);
 
         assert_eq!(
             diagnostic.plain_message(),
@@ -414,15 +450,23 @@ mod tests {
     }
 
     #[test]
-    fn import_cycle_calls_out_a_self_import() {
-        let cycle = ["alpha".to_string(), "alpha".to_string()];
+    fn import_cycle_labels_the_import_of_every_hop() {
+        let diagnostic = import_cycle(&[hop("alpha", 1), hop("beta", 2)]);
 
-        let diagnostic = import_cycle(&cycle);
+        assert_eq!(diagnostic.label_file_ids(), vec![1, 2]);
+        assert_eq!(diagnostic.plain_label(), Some("`alpha` imports `beta`"));
+        assert_eq!(diagnostic.file_id(), Some(1));
+    }
+
+    #[test]
+    fn import_cycle_calls_out_a_self_import() {
+        let diagnostic = import_cycle(&[hop("alpha", 1)]);
 
         assert_eq!(
             diagnostic.plain_message(),
             "Import cycle detected: alpha -> alpha"
         );
         assert_eq!(diagnostic.plain_help(), Some("Remove the self-import"));
+        assert_eq!(diagnostic.plain_label(), Some("`alpha` imports itself"));
     }
 }

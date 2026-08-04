@@ -80,7 +80,7 @@ impl<'source> Parser<'source> {
                     expression: lhs.into(),
                     target_type,
                     ty: Type::uninferred(),
-                    span: self.span_from_tokens(start),
+                    span: self.span_from_offset(start.byte_offset),
                 };
                 continue;
             }
@@ -105,7 +105,7 @@ impl<'source> Parser<'source> {
                     left: lhs.into(),
                     right: rhs.into(),
                     ty: Type::uninferred(),
-                    span: self.span_from_tokens(start),
+                    span: self.span_from_offset(start.byte_offset),
                 };
                 continue;
             }
@@ -143,7 +143,7 @@ impl<'source> Parser<'source> {
 
     fn binary_operator_precedence(&self, kind: TokenKind) -> Option<u8> {
         match kind {
-            LeftAngleBracket if self.is_type_args_call() => None,
+            LeftAngleBracket if self.opens_type_args() => None,
             Pipeline => Some(1),
             PipeDouble if self.stream.peek_ahead(1).kind == Arrow => None,
             PipeDouble => Some(3),
@@ -165,7 +165,7 @@ impl<'source> Parser<'source> {
                 }
                 _ => false,
             },
-            LeftAngleBracket => self.is_type_args_call(),
+            LeftAngleBracket => self.opens_type_args(),
             Colon if self.stream.peek_ahead(1).kind == Colon => true,
             _ => false,
         }
@@ -201,7 +201,7 @@ impl<'source> Parser<'source> {
                     operator,
                     expression: self.pratt_parse(prec, context).into(),
                     ty: Type::uninferred(),
-                    span: self.span_from_tokens(start),
+                    span: self.span_from_offset(start.byte_offset),
                 }
             }
 
@@ -225,7 +225,7 @@ impl<'source> Parser<'source> {
                 ast::Expression::Reference {
                     expression: self.pratt_parse(prec, context).into(),
                     ty: Type::uninferred(),
-                    span: self.span_from_tokens(start),
+                    span: self.span_from_offset(start.byte_offset),
                 }
             }
 
@@ -298,6 +298,10 @@ impl<'source> Parser<'source> {
                     return self.parse_function_call(dot_access, type_args);
                 }
 
+                if !self.is(LeftParen) {
+                    return self.recover_call_missing_parens(lhs, type_args);
+                }
+
                 self.parse_function_call(lhs, type_args)
             }
 
@@ -312,6 +316,14 @@ impl<'source> Parser<'source> {
                 let after = self.stream.peek_ahead(2);
 
                 if after.kind == LeftAngleBracket {
+                    self.next(); // consume first `:`
+                    self.next(); // consume second `:`
+                    let type_args = self.parse_type_args();
+
+                    if self.at_turbofish_method() {
+                        return self.recover_turbofish_method(lhs, type_args, &lhs_name, span);
+                    }
+
                     let help = if !lhs_name.is_empty() {
                         format!(
                             "Lisette does not use turbofish syntax. Use `{}<T>(...)` instead",
@@ -322,9 +334,6 @@ impl<'source> Parser<'source> {
                             .to_string()
                     };
                     self.track_error_at(span, "invalid syntax", help);
-                    self.next(); // consume first `:`
-                    self.next(); // consume second `:`
-                    let type_args = self.parse_type_args();
                     self.parse_function_call(lhs, type_args)
                 } else {
                     let help = if !lhs_name.is_empty() && after.kind == Identifier {
@@ -336,18 +345,7 @@ impl<'source> Parser<'source> {
                         "Use `.` instead of `::` for enum variant access".to_string()
                     };
                     self.track_error_at(span, "invalid syntax", help);
-                    self.next(); // consume first `:`
-                    self.next(); // consume second `:`
-                    let field_start = self.current_token();
-                    let field: EcoString = self.current_token().text.into();
-                    self.ensure(Identifier);
-                    ast::Expression::DotAccess {
-                        ty: Type::uninferred(),
-                        expression: lhs.into(),
-                        member: field,
-                        span: self.span_from_tokens(field_start),
-                        resolution: DotAccessResolution::Unresolved,
-                    }
+                    self.recover_double_colon_access(lhs)
                 }
             }
 
@@ -360,6 +358,53 @@ impl<'source> Parser<'source> {
                 self.resync_on_error();
                 lhs
             }
+        }
+    }
+
+    fn at_turbofish_method(&self) -> bool {
+        self.is(Colon)
+            && self.stream.peek_ahead(1).kind == Colon
+            && self.stream.peek_ahead(2).kind == Identifier
+    }
+
+    fn recover_turbofish_method(
+        &mut self,
+        lhs: ast::Expression,
+        type_args: Vec<ast::Annotation>,
+        lhs_name: &str,
+        span: ast::Span,
+    ) -> ast::Expression {
+        let method = self.stream.peek_ahead(2).text;
+        let args = type_args
+            .iter()
+            .map(format_annotation)
+            .collect::<Vec<_>>()
+            .join(", ");
+        let help = format!(
+            "Lisette does not use turbofish syntax. Use `{}.{}<{}>()` instead",
+            lhs_name, method, args
+        );
+        self.track_error_at(span, "invalid syntax", help);
+
+        let dot_access = self.recover_double_colon_access(lhs);
+
+        self.parse_function_call(dot_access, type_args)
+    }
+
+    fn recover_double_colon_access(&mut self, lhs: ast::Expression) -> ast::Expression {
+        self.next(); // consume first `:`
+        self.next(); // consume second `:`
+
+        let field_start = self.current_token();
+        let field: EcoString = self.current_token().text.into();
+        self.ensure(Identifier);
+
+        ast::Expression::DotAccess {
+            ty: Type::uninferred(),
+            expression: lhs.into(),
+            member: field,
+            span: self.span_from_offset(field_start.byte_offset),
+            resolution: DotAccessResolution::Unresolved,
         }
     }
 

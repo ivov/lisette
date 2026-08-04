@@ -115,10 +115,12 @@ impl InferCtx<'_> {
             return self.infer_struct_call_for_enum_variant(literal, resolved, expected_ty);
         }
 
-        self.sink.push(diagnostics::infer::struct_not_found(
-            &literal.name,
-            literal.span,
-        ));
+        if !self.may_name_uninferred_export(store, &literal.name) {
+            self.sink.push(diagnostics::infer::struct_not_found(
+                &literal.name,
+                literal.span,
+            ));
+        }
         self.unify(expected_ty, &Type::Error, &literal.span);
         literal.with_type(Type::Error)
     }

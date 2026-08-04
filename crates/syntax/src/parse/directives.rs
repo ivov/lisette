@@ -18,7 +18,7 @@ impl<'source> Parser<'source> {
                 }
                 Expression::Unit {
                     ty: Type::uninferred(),
-                    span: self.span_from_tokens(start),
+                    span: self.span_from_offset(start.byte_offset),
                 }
             }
         }

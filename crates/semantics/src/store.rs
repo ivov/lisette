@@ -6,7 +6,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use syntax::ast::{EnumVariant, Expression, StructFieldDefinition};
 use syntax::program::{
     Definition, DefinitionBody, EqualityIndex, File, Interface, MethodSignatures, Package,
-    TestIndex,
+    TestIndex, UninferredExports,
 };
 use syntax::types::{SimpleKind, SubstitutionMap, Symbol, Type, substitute};
 
@@ -111,6 +111,18 @@ impl Store {
         }
     }
 
+    pub(crate) fn store_uninferred_package(
+        &mut self,
+        package_id: &str,
+        files: Vec<File>,
+        exports: UninferredExports,
+    ) {
+        self.store_package(package_id, files);
+        if let Some(package) = self.get_package_mut(package_id) {
+            package.uninferred_exports = Some(exports);
+        }
+    }
+
     /// Stores a file in its owning package.
     pub fn store_file(&mut self, file: File) {
         let package_id = file.package_id.clone();
@@ -144,6 +156,13 @@ impl Store {
 
     pub(crate) fn has(&self, package_id: &str) -> bool {
         self.packages.contains_key(package_id)
+    }
+
+    pub(crate) fn uninferred_package_may_export(&self, package_id: &str, member: &str) -> bool {
+        self.packages
+            .get(package_id)
+            .and_then(|package| package.uninferred_exports.as_ref())
+            .is_some_and(|exports| exports.may_contain(member))
     }
 
     pub fn add_package(&mut self, package_id: &str) {
@@ -408,6 +427,56 @@ impl Store {
     pub fn is_ufcs_method(&self, qualified_type: &str, method: &str) -> bool {
         self.get_definition(qualified_type)
             .is_some_and(|definition| definition.is_ufcs_method(method))
+    }
+
+    pub fn is_interpolatable(&self, ty: &Type) -> bool {
+        let peeled = self.peel_alias(ty);
+        let Type::Nominal { id, .. } = &peeled else {
+            return true;
+        };
+        let Some(definition) = self.get_definition(id.as_str()) else {
+            return true;
+        };
+        if !matches!(
+            definition.body,
+            DefinitionBody::Struct { .. } | DefinitionBody::Enum { .. }
+        ) {
+            return true;
+        }
+        self.is_foreign_definition(definition, id.as_str())
+            || self.has_stringer(definition, id.as_str())
+    }
+
+    fn is_foreign_definition(&self, definition: &Definition, qualified_name: &str) -> bool {
+        if let Some(package) = self.package_for_qualified_name(qualified_name)
+            && (package == "prelude" || package.starts_with("go:"))
+        {
+            return true;
+        }
+        definition
+            .name_span
+            .and_then(|span| self.get_file(span.file_id))
+            .is_some_and(File::is_d_lis)
+    }
+
+    fn has_stringer(&self, definition: &Definition, qualified_name: &str) -> bool {
+        if self.is_pointer_backed_newtype(definition) {
+            return false;
+        }
+        if definition.is_display() {
+            return true;
+        }
+        let Some(methods) = self.get_own_methods(qualified_name) else {
+            return false;
+        };
+        ["string", "String"].iter().any(|name| {
+            methods.get(*name).is_some_and(Type::is_stringer_signature)
+                && !definition.is_ufcs_method(name)
+        })
+    }
+
+    fn is_pointer_backed_newtype(&self, definition: &Definition) -> bool {
+        definition.is_pointer_backed_newtype(|id| self.get_definition(id))
     }
 
     pub(crate) fn get_all_methods(

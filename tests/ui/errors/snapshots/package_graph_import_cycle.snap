@@ -2,4 +2,22 @@
 source: tests/ui/errors/mod.rs
 ---
   ✕ Import cycle detected: package_a -> package_b -> package_c -> package_a
+   ╭─[package_a.lis:1:8]
+ 1 │ import "package_b"
+   ·        ─────┬─────
+   ·             ╰── `package_a` imports `package_b`
+ 2 │ 
+   ╰────
+   ╭─[package_b.lis:1:8]
+ 1 │ import "package_c"
+   ·        ─────┬─────
+   ·             ╰── `package_b` imports `package_c`
+ 2 │ 
+   ╰────
+   ╭─[package_c.lis:1:8]
+ 1 │ import "package_a"
+   ·        ─────┬─────
+   ·             ╰── `package_c` imports `package_a`
+ 2 │ 
+   ╰────
   help: To break the cycle, remove one of the imports or extract common dependencies into a separate package · code: [resolve.import_cycle]

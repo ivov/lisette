@@ -1508,3 +1508,17 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn fix_unprefixed_fstring() {
+    assert_fix_snapshot!(
+        r#"
+fn main() {
+  let name = "world";
+  let msg = "hello {name}";
+  let _ = name;
+  let _ = msg
+}
+"#
+    );
+}

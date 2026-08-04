@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:3:17]
+ 2 │ fn test() {
+ 3 │   let xs = Slice::<int>::new()
+   ·                 ─┬
+   ·                  ╰── invalid syntax
+ 4 │ }
+   ╰────
+  help: Lisette does not use turbofish syntax. Use `Slice.new<int>()` instead · code: [parse.syntax_error]

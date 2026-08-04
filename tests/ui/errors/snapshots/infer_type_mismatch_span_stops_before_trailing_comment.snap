@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+   ╭─[test.lis:3:20]
+ 2 │ fn test() {
+ 3 │   let xs: string = Slice.new<int>() // trailing note
+   ·                    ────────┬───────
+   ·                            ╰── expected `string`, found `Slice<int>`
+ 4 │ }
+   ╰────
+  help: Change the type annotation to `Slice<int>` or convert the value to `string` · code: [infer.type_mismatch]

@@ -1080,6 +1080,15 @@ pub fn uninterpolated_fstring(span: &Span) -> LisetteDiagnostic {
         .with_help("Remove the `f` prefix. A string without interpolations does not need to be a format string")
 }
 
+pub fn unprefixed_fstring(span: &Span, name: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Unprefixed f-string")
+        .with_lint_code("unprefixed_fstring")
+        .with_span_label(span, format!("`{name}` will not be interpolated"))
+        .with_help(format!(
+            "Add the `f` prefix to interpolate `{name}`. Without it the braces stay literal text"
+        ))
+}
+
 pub fn nested_fstring(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Nested f-string")
         .with_lint_code("nested_fstring")
