@@ -38,6 +38,7 @@ pub struct Facts {
     pub overused_references: Vec<OverusedReferenceFact>,
     pub always_failing_try_blocks: Vec<Span>,
     pub expression_only_fstrings: Vec<ExpressionOnlyFstringFact>,
+    pub unprefixed_fstrings: Vec<UnprefixedFstringFact>,
     pub interface_satisfied_methods: HashMap<(String, String), Vec<InterfaceSatisfaction>>,
     pub(crate) test_functions: Vec<TestFunction>,
 
@@ -184,6 +185,7 @@ impl Facts {
             overused_references: Vec::new(),
             always_failing_try_blocks: Vec::new(),
             expression_only_fstrings: Vec::new(),
+            unprefixed_fstrings: Vec::new(),
             deferred: DeferredChecks::default(),
             branch_subsumptions: Vec::new(),
             select_exhaustiveness_checks: Vec::new(),
@@ -296,6 +298,11 @@ impl Facts {
             .push(ExpressionOnlyFstringFact { span, needs_parens });
     }
 
+    pub(crate) fn add_unprefixed_fstring(&mut self, span: Span, name: String) {
+        self.unprefixed_fstrings
+            .push(UnprefixedFstringFact { span, name });
+    }
+
     pub(crate) fn add_usage(&mut self, usage_span: Span, definition_span: Span) {
         self.usages.insert(Usage {
             usage_span,
@@ -349,6 +356,7 @@ impl Facts {
             overused_references,
             always_failing_try_blocks,
             expression_only_fstrings,
+            unprefixed_fstrings,
             deferred,
             branch_subsumptions,
             select_exhaustiveness_checks,
@@ -370,6 +378,7 @@ impl Facts {
             .extend(always_failing_try_blocks);
         self.expression_only_fstrings
             .extend(expression_only_fstrings);
+        self.unprefixed_fstrings.extend(unprefixed_fstrings);
         self.deferred.merge(deferred);
         self.branch_subsumptions.extend(branch_subsumptions);
         self.select_exhaustiveness_checks
@@ -393,6 +402,13 @@ impl Facts {
 pub struct ExpressionOnlyFstringFact {
     pub span: Span,
     pub needs_parens: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct UnprefixedFstringFact {
+    pub span: Span,
+    /// First hole, named in the diagnostic.
+    pub name: String,
 }
 
 #[derive(Debug, Clone)]

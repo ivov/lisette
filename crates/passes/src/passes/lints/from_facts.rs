@@ -81,6 +81,7 @@ pub(crate) fn run(
     collect_overused_references(facts, &mut diagnostics);
     collect_always_failing_try_blocks(facts, &mut diagnostics);
     collect_expression_only_fstrings(store, facts, &mut diagnostics);
+    collect_unprefixed_fstrings(store, facts, &mut diagnostics);
 
     diagnostics.sort_by(LisetteDiagnostic::sort_key);
     sink.extend(diagnostics);
@@ -111,6 +112,21 @@ fn fstring_inner(store: &Store, span: Span) -> Option<&str> {
     let text = source.get(span.byte_offset as usize..span.end() as usize)?;
     let inner = text.strip_prefix("f\"")?.strip_suffix('"')?.trim();
     Some(inner.strip_prefix('{')?.strip_suffix('}')?.trim())
+}
+
+fn collect_unprefixed_fstrings(store: &Store, facts: &Facts, out: &mut Vec<LisetteDiagnostic>) {
+    let produced: Vec<LisetteDiagnostic> = facts
+        .unprefixed_fstrings
+        .iter()
+        .map(|fact| {
+            let before = Span::new(fact.span.file_id, fact.span.byte_offset, 0);
+            diagnostics::lint::unprefixed_fstring(&fact.span, &fact.name).with_fix(Fix::new(
+                "Add the `f` prefix",
+                Edit::replacement(before, "f"),
+            ))
+        })
+        .collect();
+    push_suppressible(store, produced, out);
 }
 
 fn erroring_function_spans(facts: &Facts, sink: &LocalSink) -> Vec<Span> {
@@ -200,6 +216,14 @@ fn collect_shadowed_captures(store: &Store, facts: &Facts, out: &mut Vec<Lisette
             ))
         })
         .collect();
+    push_suppressible(store, produced, out);
+}
+
+fn push_suppressible(
+    store: &Store,
+    produced: Vec<LisetteDiagnostic>,
+    out: &mut Vec<LisetteDiagnostic>,
+) {
     if produced.is_empty() {
         return;
     }

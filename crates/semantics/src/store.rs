@@ -409,6 +409,56 @@ impl Store {
             .is_some_and(|definition| definition.is_ufcs_method(method))
     }
 
+    pub fn is_interpolatable(&self, ty: &Type) -> bool {
+        let peeled = self.peel_alias(ty);
+        let Type::Nominal { id, .. } = &peeled else {
+            return true;
+        };
+        let Some(definition) = self.get_definition(id.as_str()) else {
+            return true;
+        };
+        if !matches!(
+            definition.body,
+            DefinitionBody::Struct { .. } | DefinitionBody::Enum { .. }
+        ) {
+            return true;
+        }
+        self.is_foreign_definition(definition, id.as_str())
+            || self.has_stringer(definition, id.as_str())
+    }
+
+    fn is_foreign_definition(&self, definition: &Definition, qualified_name: &str) -> bool {
+        if let Some(module) = self.module_for_qualified_name(qualified_name)
+            && (module == "prelude" || module.starts_with("go:"))
+        {
+            return true;
+        }
+        definition
+            .name_span
+            .and_then(|span| self.get_file(span.file_id))
+            .is_some_and(File::is_d_lis)
+    }
+
+    fn has_stringer(&self, definition: &Definition, qualified_name: &str) -> bool {
+        if self.is_pointer_backed_newtype(definition) {
+            return false;
+        }
+        if definition.is_display() {
+            return true;
+        }
+        let Some(methods) = self.get_own_methods(qualified_name) else {
+            return false;
+        };
+        ["string", "String"].iter().any(|name| {
+            methods.get(*name).is_some_and(Type::is_stringer_signature)
+                && !definition.is_ufcs_method(name)
+        })
+    }
+
+    fn is_pointer_backed_newtype(&self, definition: &Definition) -> bool {
+        definition.is_pointer_backed_newtype(|id| self.get_definition(id))
+    }
+
     pub(crate) fn get_all_methods(
         &self,
         ty: &Type,
