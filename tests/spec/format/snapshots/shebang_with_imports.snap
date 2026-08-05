@@ -1,6 +1,13 @@
 ---
 source: tests/spec/format/mod.rs
-description: "#!/usr/bin/env -S lis run\n\nimport \"go:fmt\"\n\nfn main() {\n  fmt.Println(1)\n}"
+description: |-
+  #!/usr/bin/env -S lis run
+  
+  import "go:fmt"
+  
+  fn main() {
+    fmt.Println(1)
+  }
 ---
 #!/usr/bin/env -S lis run
 
