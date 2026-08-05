@@ -125,7 +125,8 @@ impl<'source> Parser<'source> {
         let mut top_items = vec![];
         let mut seen_non_import = false;
 
-        let file_comment = self.collect_file_comments();
+        let shebang_end = self.consume_shebang();
+        let file_comment = self.collect_file_comments(shebang_end);
         self.skip_comments();
 
         while !self.at_eof() && !self.too_many_errors() {
@@ -351,14 +352,37 @@ impl<'source> Parser<'source> {
         }
     }
 
-    fn collect_file_comments(&mut self) -> Option<std::string::String> {
+    fn consume_shebang(&mut self) -> Option<u32> {
+        if !self.is(Shebang) {
+            return None;
+        }
+
+        let token = self.current_token();
+        self.stream.consume();
+        Some(token.end_offset())
+    }
+
+    fn opens_file_header(&self, offset: u32, shebang_end: Option<u32>) -> bool {
+        match shebang_end {
+            None => offset == 0,
+            Some(end) => self
+                .source
+                .get(end as usize..offset as usize)
+                .is_some_and(|between| {
+                    between.chars().all(char::is_whitespace)
+                        && between.bytes().filter(|&byte| byte == b'\n').count() <= 2
+                }),
+        }
+    }
+
+    fn collect_file_comments(&mut self, shebang_end: Option<u32>) -> Option<std::string::String> {
         let mut docs = Vec::new();
         let mut previous_end: Option<u32> = None;
 
         while self.is(FileComment) {
             let token = self.current_token();
             match previous_end {
-                None if token.byte_offset != 0 => {
+                None if !self.opens_file_header(token.byte_offset, shebang_end) => {
                     self.error_misplaced_file_comment_at(self.span_from_token(token));
                 }
                 Some(end)

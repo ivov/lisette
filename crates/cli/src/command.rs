@@ -287,7 +287,7 @@ fn test_selection_conflict() -> ParseError {
 }
 
 impl Command {
-    pub fn parse(args: Vec<String>) -> Result<Command, ParseError> {
+    pub fn parse(args: Vec<String>, is_file: impl Fn(&str) -> bool) -> Result<Command, ParseError> {
         let mut arguments = args.into_iter().skip(1).peekable();
 
         let Some(command) = arguments.next() else {
@@ -304,7 +304,7 @@ impl Command {
             "new" => parse_new(arguments),
             "build" | "b" => parse_build(arguments),
             "emit" | "e" => parse_emit(arguments),
-            "run" | "r" => parse_run(arguments),
+            "run" | "r" => parse_run(arguments, is_file),
             "format" | "f" => parse_format(arguments),
             "check" | "c" => parse_check(arguments),
             "test" | "t" => parse_test(arguments),
@@ -379,18 +379,21 @@ fn parse_build(mut arguments: impl Iterator<Item = String>) -> Result<Command, P
     })
 }
 
-fn parse_run(mut arguments: impl Iterator<Item = String>) -> Result<Command, ParseError> {
+fn parse_run(
+    mut arguments: impl Iterator<Item = String>,
+    is_file: impl Fn(&str) -> bool,
+) -> Result<Command, ParseError> {
     let mut target = None;
     let mut args = Vec::new();
     let mut sourcemap = false;
     let mut go_flags = Vec::new();
-    let mut found_separator = false;
+    let mut program_arguments = false;
 
     while let Some(arg) = arguments.next() {
-        if found_separator {
+        if program_arguments {
             args.push(arg);
         } else if arg == "--" {
-            found_separator = true;
+            program_arguments = true;
         } else if arg == "--sourcemap" {
             sourcemap = true;
         } else if let Some(value) = flag_value(
@@ -404,12 +407,14 @@ fn parse_run(mut arguments: impl Iterator<Item = String>) -> Result<Command, Par
         } else if arg.starts_with('-') {
             return Err(ParseError::UnknownFlag(arg));
         } else {
+            let ends_run_arguments = is_file(&arg);
             set_target(
                 &mut target,
                 arg,
                 "run",
-                "Pass one target; arguments for the program go after `--`",
+                "Pass one target, and arguments for the program after `--`",
             )?;
+            program_arguments = ends_run_arguments;
         }
     }
 
@@ -793,7 +798,13 @@ mod tests {
     use super::*;
 
     fn parse(parts: &[&str]) -> Result<Command, ParseError> {
-        Command::parse(parts.iter().map(|s| s.to_string()).collect())
+        parse_with_files(parts, &[])
+    }
+
+    fn parse_with_files(parts: &[&str], files: &[&str]) -> Result<Command, ParseError> {
+        Command::parse(parts.iter().map(|s| s.to_string()).collect(), |path| {
+            files.contains(&path)
+        })
     }
 
     #[test]
@@ -1214,6 +1225,90 @@ mod tests {
         let (target, args, _) = run_parts(&["lis", "run", "a.lis", "--", "b.lis"]);
         assert_eq!(target.as_deref(), Some("a.lis"));
         assert_eq!(args, vec!["b.lis"]);
+    }
+
+    fn run_file_parts(
+        parts: &[&str],
+        files: &[&str],
+    ) -> (Option<String>, Vec<String>, Vec<String>) {
+        let Ok(Command::Run {
+            target,
+            args,
+            go_flags,
+            ..
+        }) = parse_with_files(parts, files)
+        else {
+            panic!("expected Run command");
+        };
+        (target, args, go_flags)
+    }
+
+    #[test]
+    fn everything_after_a_file_target_goes_to_the_program() {
+        let (target, args, _) =
+            run_file_parts(&["lis", "run", "tool.lis", "alpha", "beta"], &["tool.lis"]);
+        assert_eq!(target.as_deref(), Some("tool.lis"));
+        assert_eq!(args, vec!["alpha", "beta"]);
+    }
+
+    #[test]
+    fn a_flag_the_compiler_knows_belongs_to_the_program_after_a_file_target() {
+        let (target, args, go_flags) = run_file_parts(
+            &[
+                "lis",
+                "run",
+                "--sourcemap",
+                "tool.lis",
+                "--sourcemap",
+                "--go-flags",
+                "input.txt",
+            ],
+            &["tool.lis"],
+        );
+        assert_eq!(target.as_deref(), Some("tool.lis"));
+        assert_eq!(args, vec!["--sourcemap", "--go-flags", "input.txt"]);
+        assert!(go_flags.is_empty());
+    }
+
+    #[test]
+    fn a_separator_after_a_file_target_belongs_to_the_program() {
+        let (target, args, _) =
+            run_file_parts(&["lis", "run", "tool.lis", "--", "-o", "--"], &["tool.lis"]);
+        assert_eq!(target.as_deref(), Some("tool.lis"));
+        assert_eq!(args, vec!["--", "-o", "--"]);
+    }
+
+    #[test]
+    fn a_separator_before_a_directory_target_still_separates() {
+        let (target, args, _) = run_file_parts(&["lis", "run", ".", "--", "-o"], &["tool.lis"]);
+        assert_eq!(target.as_deref(), Some("."));
+        assert_eq!(args, vec!["-o"]);
+    }
+
+    #[test]
+    fn an_extensionless_file_target_ends_the_compiler_arguments() {
+        let (target, args, _) = run_file_parts(&["lis", "run", "backup", "--verbose"], &["backup"]);
+        assert_eq!(target.as_deref(), Some("backup"));
+        assert_eq!(args, vec!["--verbose"]);
+    }
+
+    #[test]
+    fn a_second_target_after_a_directory_still_points_at_the_separator() {
+        let Err(ParseError::UnexpectedArgument { hint, .. }) =
+            parse_with_files(&["lis", "run", ".", "arg"], &["tool.lis"])
+        else {
+            panic!("expected a rejection");
+        };
+        assert!(hint.contains("`--`"), "{hint}");
+    }
+
+    #[test]
+    fn a_directory_target_keeps_the_compiler_grammar() {
+        let (target, args, go_flags) =
+            run_file_parts(&["lis", "run", ".", "--go-flags", "-race"], &["tool.lis"]);
+        assert_eq!(target.as_deref(), Some("."));
+        assert!(args.is_empty());
+        assert_eq!(go_flags, vec!["-race"]);
     }
 
     #[test]

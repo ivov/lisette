@@ -10,6 +10,21 @@ mod errors;
 mod token;
 mod types;
 
+pub(crate) fn shebang_len(source: &str) -> Option<usize> {
+    let rest = source.strip_prefix("#!")?;
+    if matches!(rest.as_bytes().first()?, b'[' | b'\r' | b'\n') {
+        return None;
+    }
+
+    let length = rest
+        .as_bytes()
+        .iter()
+        .position(|byte| matches!(byte, b'\r' | b'\n'))
+        .unwrap_or(rest.len());
+
+    Some("#!".len() + length)
+}
+
 pub struct Lexer<'source> {
     input: &'source str,
     current_offset: usize,
@@ -33,6 +48,10 @@ impl<'source> Lexer<'source> {
 
     pub fn lex(mut self) -> LexResult<'source> {
         let mut tokens = Vec::new();
+
+        if let Some(shebang) = self.lex_shebang() {
+            tokens.push(shebang);
+        }
 
         loop {
             self.skip_whitespace();
@@ -1227,6 +1246,18 @@ impl<'source> Lexer<'source> {
         }
     }
 
+    fn lex_shebang(&mut self) -> Option<Token<'source>> {
+        let length = shebang_len(self.input)?;
+        self.current_offset = length;
+
+        Some(Token {
+            kind: TokenKind::Shebang,
+            text: &self.input[..length],
+            byte_offset: 0,
+            byte_length: length as u32,
+        })
+    }
+
     fn lex_slash(&mut self) -> Token<'source> {
         let start_offset = self.current_offset;
 
@@ -1394,6 +1425,48 @@ pub fn rune_codepoint(text: &str) -> Option<u32> {
         b'0'..=b'7' => u32::from_str_radix(rest, 8).ok(),
         _ => None,
     }
+}
+
+pub fn interpolation_holes(value: &str) -> Option<Vec<&str>> {
+    let bytes = value.as_bytes();
+    let mut names = Vec::new();
+    let mut at = 0;
+
+    while at < bytes.len() {
+        match bytes[at] {
+            b'\\' => at = skip_escape(value, at)?,
+            b'{' if bytes.get(at + 1) == Some(&b'{') => return None,
+            b'{' => {
+                let start = at + 1;
+                let close = start + value[start..].find('}')?;
+                let name = &value[start..close];
+                if !is_bare_identifier(name) {
+                    return None;
+                }
+                names.push(name);
+                at = close + 1;
+            }
+            b'}' => return None,
+            _ => at += 1,
+        }
+    }
+
+    (!names.is_empty()).then_some(names)
+}
+
+fn skip_escape(value: &str, at: usize) -> Option<usize> {
+    let bytes = value.as_bytes();
+    if bytes.get(at + 1) == Some(&b'u') && bytes.get(at + 2) == Some(&b'{') {
+        return Some(at + 4 + value[at + 3..].find('}')?);
+    }
+    let escaped = value[at + 1..].chars().next()?;
+    Some(at + 1 + escaped.len_utf8())
+}
+
+fn is_bare_identifier(text: &str) -> bool {
+    let mut chars = text.chars();
+    chars.next().is_some_and(|c| c.is_alphabetic() || c == '_')
+        && chars.all(|c| c.is_alphanumeric() || c == '_')
 }
 
 /// Decodes a quote-stripped string literal to the bytes it holds at runtime,

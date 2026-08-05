@@ -50,15 +50,23 @@ pub(super) fn prepare(
         }
     };
 
-    prune_stale_go(&dir, &emit.new_manifest);
+    let emitted: Vec<&str> = result
+        .output
+        .iter()
+        .map(|file| file.name.as_str())
+        .collect();
+    prune_stale_go(&dir, &emitted);
 
-    let import_set_hash = go_cli::compute_import_set_hash(&emit.new_manifest, GO_MODULE);
+    let mut manifest = emit.new_manifest;
+    manifest.retain(|entry| emitted.contains(&entry.name.as_str()));
+
+    let import_set_hash = go_cli::compute_import_set_hash(&manifest, GO_MODULE);
     if let Err(e) = go_cli::finalize_go_dir(&dir, target, &emit.changed, import_set_hash) {
         cli_error!(heading, e.message, e.hint);
         return Err(1);
     }
 
-    go_cli::write_emit_manifest(&dir, &emit.new_manifest);
+    go_cli::write_emit_manifest(&dir, &manifest);
 
     Ok(ScriptBuild {
         dir,
@@ -262,14 +270,14 @@ fn absolute(path: &Path) -> Option<PathBuf> {
     Some(std::env::current_dir().ok()?.join(path))
 }
 
-fn prune_stale_go(dir: &Path, manifest: &[go_cli::ManifestEntry]) {
+fn prune_stale_go(dir: &Path, emitted: &[&str]) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
     for entry in entries.flatten() {
         let name = entry.file_name();
         let Some(name) = name.to_str() else { continue };
-        if name.ends_with(".go") && !manifest.iter().any(|entry| entry.name == name) {
+        if name.ends_with(".go") && !emitted.contains(&name) {
             let _ = fs::remove_file(entry.path());
         }
     }

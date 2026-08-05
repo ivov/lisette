@@ -463,6 +463,16 @@ impl InferCtx<'_> {
         result
     }
 
+    fn with_pattern<F, R>(&mut self, f: F) -> R
+    where
+        F: FnOnce(&mut Self) -> R,
+    {
+        let previous = self.scopes.replace_in_pattern(true);
+        let result = f(self);
+        self.scopes.replace_in_pattern(previous);
+        result
+    }
+
     fn with_let_binding_rhs<F, R>(&mut self, f: F) -> R
     where
         F: FnOnce(&mut Self) -> R,

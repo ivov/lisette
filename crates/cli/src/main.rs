@@ -17,7 +17,7 @@ fn main() {
 
     let args: Vec<String> = std::env::args().collect();
 
-    let command = match Command::parse(args) {
+    let command = match Command::parse(args, |path| std::path::Path::new(path).is_file()) {
         Ok(command) => command,
         Err(command::ParseError::MissingArgument { command, argument }) => {
             cli_error!(

@@ -248,6 +248,9 @@
 (doc_comment) @comment.documentation
 (file_comment) @comment.documentation
 
+; Shebang
+(shebang) @comment
+
 ; Visibility
 (visibility_modifier) @keyword.modifier
 

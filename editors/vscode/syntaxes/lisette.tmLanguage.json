@@ -3,6 +3,7 @@
   "name": "Lisette",
   "scopeName": "source.lisette",
   "patterns": [
+    { "include": "#shebang" },
     { "include": "#comments" },
     { "include": "#strings" },
     { "include": "#characters" },
@@ -16,6 +17,10 @@
     { "include": "#punctuation" }
   ],
   "repository": {
+    "shebang": {
+      "name": "comment.line.shebang.lisette",
+      "match": "\\A#![^\\[\\r\\n][^\\r\\n]*"
+    },
     "comments": {
       "patterns": [
         {

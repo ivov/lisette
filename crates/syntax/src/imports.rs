@@ -15,6 +15,7 @@ pub fn scan_imports(source: &str, file_id: u32) -> Vec<FileImport> {
         offset: 0,
         file_id,
     };
+    scanner.skip_shebang();
     let mut imports = Vec::new();
     while let Some(import) = scanner.next_import() {
         imports.push(import);
@@ -44,6 +45,12 @@ impl<'source> Scanner<'source> {
     fn skip_line(&mut self) {
         while !matches!(self.byte(), None | Some(b'\n')) {
             self.offset += 1;
+        }
+    }
+
+    fn skip_shebang(&mut self) {
+        if let Some(length) = crate::lex::shebang_len(self.source) {
+            self.offset = length;
         }
     }
 
@@ -241,6 +248,15 @@ mod tests {
             "#[test]\nfn f() {}\n",
             "struct S {}\nimport \"go:fmt\"",
             "import \"esc\\\"aped\"\nfn f() {}",
+            "#!/usr/bin/env -S lis run\nimport \"go:fmt\"\nfn f() {}",
+            "#!/usr/bin/env -S lis run\n\nimport \"go:fmt\"\nimport \"go:os\"\n",
+            "#!/usr/bin/env -S lis run\r\nimport \"go:fmt\"\n",
+            "#!/usr/bin/env -S lis run\n//! header\n\nimport \"go:fmt\"\n",
+            "#![foo]\nimport \"go:fmt\"\n",
+            "#!\nimport \"go:fmt\"\n",
+            "#!\r\nimport \"go:fmt\"\n",
+            "#!/usr/bin/env -S lis run\rimport \"go:fmt\"\n",
+            "#!",
         ] {
             assert_matches_parser(source);
         }

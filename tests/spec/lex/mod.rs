@@ -233,6 +233,54 @@ fn file_comment_vs_comment_vs_doc_comment() {
 }
 
 #[test]
+fn shebang() {
+    let input = "#!/usr/bin/env -S lis run\nfn main() {}";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn shebang_alone() {
+    let input = "#!/usr/bin/env -S lis run";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn shebang_before_file_comment() {
+    let input = "#!/usr/bin/env -S lis run\n//! A tool.\nfn main() {}";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn inner_attribute_is_not_a_shebang() {
+    let input = "#![foo]\nfn main() {}";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn shebang_below_the_first_line_is_not_a_shebang() {
+    let input = "fn main() {}\n#!/usr/bin/env -S lis run";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn shebang_without_an_interpreter_is_not_a_shebang() {
+    let input = "#!\nfn main() {}";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn shebang_ends_at_a_carriage_return() {
+    let input = "#!/usr/bin/env -S lis run\rfn main() {}";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn shebang_leaves_a_carriage_return_newline_out_of_the_token() {
+    let input = "#!/usr/bin/env -S lis run\r\nfn main() {}";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
 fn format_string_simple() {
     let input = "f\"hello world\"";
     assert_lex_snapshot!(input);

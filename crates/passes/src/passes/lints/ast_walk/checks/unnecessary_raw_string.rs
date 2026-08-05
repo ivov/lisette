@@ -1,6 +1,7 @@
 use crate::passes::walk::NodeCtx;
 use diagnostics::{Edit, Fix};
 use syntax::ast::{Expression, Literal, Pattern, Span};
+use syntax::lex::interpolation_holes;
 
 pub fn check_unnecessary_raw_string_expression(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Literal {
@@ -11,7 +12,7 @@ pub fn check_unnecessary_raw_string_expression(expression: &Expression, ctx: &No
     else {
         return;
     };
-    if !value.contains('\\') {
+    if !value.contains('\\') && interpolation_holes(value).is_none() {
         ctx.sink.push(
             diagnostics::lint::unnecessary_raw_string(span).with_fix(Fix::new(
                 "Remove the `r` prefix",

@@ -1,0 +1,21 @@
+---
+source: tests/spec/format/mod.rs
+description: |-
+  #!/usr/bin/env -S lis run
+  //! A tool.
+  
+  import "go:fmt"
+  
+  fn main() {
+    fmt.Println(1)
+  }
+---
+#!/usr/bin/env -S lis run
+
+//! A tool.
+
+import "go:fmt"
+
+fn main() {
+  fmt.Println(1)
+}
