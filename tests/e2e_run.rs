@@ -1746,6 +1746,58 @@ fn a_stale_go_file_in_the_build_directory_is_pruned() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn a_symlink_named_apart_from_its_target_still_runs() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let dir = scratch.path();
+    fs::write(dir.join("greet-tool.lis"), GREETER).unwrap();
+    std::os::unix::fs::symlink(dir.join("greet-tool.lis"), dir.join("greet")).unwrap();
+
+    let scratch_tmp = dir.join("tmp");
+    fs::create_dir(&scratch_tmp).unwrap();
+    let run = |target: &str| {
+        let manifest = repo().join("Cargo.toml");
+        Command::new("cargo")
+            .args(["run", "--quiet", "--manifest-path"])
+            .arg(&manifest)
+            .args(["-p", "lisette", "--", "run", target])
+            .current_dir(dir)
+            .env("NO_COLOR", "1")
+            .env("TMPDIR", &scratch_tmp)
+            .env("TMP", &scratch_tmp)
+            .env("TEMP", &scratch_tmp)
+            .output()
+            .expect("failed to invoke lisette")
+    };
+
+    for target in ["greet", "greet-tool.lis", "greet"] {
+        let output = run(target);
+        assert!(output.status.success(), "`{target}`: {}", combined(&output));
+    }
+
+    let build_dir = fs::read_dir(&scratch_tmp)
+        .unwrap()
+        .flatten()
+        .map(|entry| entry.path())
+        .find(|path| path.join("go.mod").is_file())
+        .expect("the build directory must sit under the test's own TMPDIR");
+    let go_files: Vec<String> = fs::read_dir(&build_dir)
+        .unwrap()
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name.ends_with(".go"))
+        .collect();
+    assert_eq!(
+        go_files.len(),
+        1,
+        "one script must leave one Go file behind, found {go_files:?}"
+    );
+}
+
 #[test]
 fn a_hard_link_to_the_script_is_refused() {
     let scratch = tempfile::tempdir().expect("create temp dir");
