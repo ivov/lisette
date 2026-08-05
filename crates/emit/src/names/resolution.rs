@@ -129,12 +129,6 @@ impl Planner<'_> {
         self.file_namespace_mut().reference(package)
     }
 
-    pub(crate) fn go_pkg_qualifier(&self, package: &str) -> String {
-        self.package_use_for_package(package)
-            .qualifier()
-            .to_string()
-    }
-
     pub(crate) fn canonical_package(&self, package: &str) -> String {
         self.file_namespace()
             .package_for_alias(package)

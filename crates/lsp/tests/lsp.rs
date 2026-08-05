@@ -7740,6 +7740,48 @@ fn classify(d: b.Workday) -> int {
 }
 
 #[test]
+fn goto_definition_bare_const_pattern_resolves_local_constant() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(root.join("lisette.toml"), "").unwrap();
+
+    let src = root.join("src");
+    std::fs::create_dir_all(&src).unwrap();
+
+    let main_content = "\
+const MAX_SIZE = 1024
+
+fn classify(n: int) -> int {
+  match n {
+    MAX_SIZE => 1,
+    _ => 0,
+  }
+}";
+    std::fs::write(src.join("main.lis"), main_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let main_path = src.join("main.lis");
+    let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
+    client.open(&main_uri, main_content);
+
+    let response = client.goto_definition(&main_uri, 4, 6);
+    let loc = response.as_ref().and_then(definition_location);
+    assert!(
+        loc.is_some(),
+        "bare const pattern should resolve to its constant definition"
+    );
+    assert_eq!(
+        loc.unwrap().range.start.line,
+        0,
+        "bare const pattern must resolve to the `const` declaration"
+    );
+
+    client.shutdown();
+}
+
+#[test]
 fn stress_references_on_struct_field() {
     let mut client = TestClient::new();
     client.initialize();

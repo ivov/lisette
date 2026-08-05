@@ -8678,6 +8678,101 @@ fn main() {
 }
 
 #[test]
+fn rejected_const_pattern_in_if_let_reports_once() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+const MAX_SIZE = 1024
+
+fn classify(n: int) -> string {
+  if let MAX_SIZE = n {
+    "max"
+  } else {
+    "other"
+  }
+}
+
+fn main() {
+  let _ = classify(1)
+}
+"#;
+    fs.add_file(ENTRY_PACKAGE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    let error_codes: Vec<&str> = result
+        .errors()
+        .iter()
+        .filter_map(|e| e.code_str())
+        .collect();
+    assert_eq!(
+        error_codes,
+        vec!["infer.const_pattern_outside_match_arm"],
+        "a rejected const pattern must report once: {error_codes:?}"
+    );
+    let lint_codes: Vec<&str> = result.lints().iter().filter_map(|l| l.code_str()).collect();
+    for claim in [
+        "lint.redundant_if_let",
+        "lint.unreachable_if_let_else",
+        "lint.unused_constant",
+    ] {
+        assert!(
+            !lint_codes.contains(&claim),
+            "the rejected pattern must not be treated as a wildcard by `{claim}`: {lint_codes:?}"
+        );
+    }
+}
+
+#[test]
+fn rejected_const_pattern_in_while_let_reports_once() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+const MAX_SIZE = 1024
+
+fn drain(n: int) {
+  while let MAX_SIZE = n {
+    ()
+  }
+}
+
+fn main() {
+  drain(1)
+}
+"#;
+    fs.add_file(ENTRY_PACKAGE_ID, "main.lis", source);
+
+    let result = compile_check(fs);
+    let error_codes: Vec<&str> = result
+        .errors()
+        .iter()
+        .filter_map(|e| e.code_str())
+        .collect();
+    assert_eq!(
+        error_codes,
+        vec!["infer.const_pattern_outside_match_arm"],
+        "a rejected const pattern must not also be reported as always matching: {error_codes:?}"
+    );
+}
+
+#[test]
+fn constant_used_only_in_pattern_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+const MAX_SIZE = 1024
+
+fn classify(n: int) -> string {
+  match n {
+    MAX_SIZE => "max",
+    _ => "other",
+  }
+}
+
+fn main() {
+  let _ = classify(1)
+}
+"#
+    );
+}
+
+#[test]
 fn used_constant_no_warning() {
     assert_no_lint_warnings!(
         r#"

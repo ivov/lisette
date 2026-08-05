@@ -2,7 +2,10 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use semantics::checker::promotion::{self, MemberKind, Resolution};
 use semantics::store::Store;
-use syntax::ast::{Annotation, Attribute, Expression, Pattern, SelectArm, Span, StructSpread};
+use syntax::ast::{
+    Annotation, Attribute, ConstructorPatternResolution, Expression, Pattern, SelectArm, Span,
+    StructSpread,
+};
 use syntax::program::File;
 use syntax::program::{DefinitionBody, DotAccessKind, EqualityIndex, Package};
 use syntax::types::{CompoundKind, Symbol, Type, unqualified_name};
@@ -561,10 +564,19 @@ fn walk_pattern(
         Pattern::EnumVariant {
             identifier,
             fields,
+            resolution,
             ty,
             ..
         } => {
-            mark_constructor_pattern(package, identifier, ty, graph, alias_map, ctx);
+            if matches!(
+                resolution,
+                ConstructorPatternResolution::Const { .. }
+                    | ConstructorPatternResolution::ConstValue { .. }
+            ) {
+                walk_identifier(package, identifier, graph, alias_map, ctx);
+            } else {
+                mark_constructor_pattern(package, identifier, ty, graph, alias_map, ctx);
+            }
             for f in fields {
                 walk_pattern(package, f, graph, alias_map, ctx);
             }

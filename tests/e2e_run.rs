@@ -1938,3 +1938,67 @@ fn project_emit_and_build_reject_the_output_flag() {
         );
     }
 }
+
+#[test]
+fn const_patterns_build_and_run_with_renamed_go_constants() {
+    if !go_available() {
+        eprintln!(
+            "skipping const_patterns_build_and_run_with_renamed_go_constants: `go` not found"
+        );
+        return;
+    }
+
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    fs::create_dir_all(project.join("src/cfg")).unwrap();
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"github.com/user/constpat\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(project.join("src/cfg/cfg.lis"), "pub const LIMIT = 10\n").unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        r#"import "cfg"
+import "go:fmt"
+import "go:os"
+
+const MAX_SIZE = 1024
+
+fn classify(n: int) -> string {
+  match n {
+    MAX_SIZE => "max",
+    cfg.LIMIT => "limit",
+    _ => "other",
+  }
+}
+
+fn describe(flag: int) -> string {
+  match flag {
+    os.O_RDONLY => "readonly",
+    _ => "other",
+  }
+}
+
+fn main() {
+  fmt.Println(classify(1024))
+  fmt.Println(classify(10))
+  fmt.Println(describe(0))
+}
+"#,
+    )
+    .unwrap();
+
+    let output = lis(&project, "run");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "const patterns must emit the Go names of their constants:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+    assert!(
+        stdout.contains("max") && stdout.contains("limit") && stdout.contains("readonly"),
+        "const patterns did not match at runtime:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+}

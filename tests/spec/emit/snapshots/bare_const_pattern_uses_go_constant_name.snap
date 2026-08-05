@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  const MAX_SIZE = 1024
+  const RETRY_LIMIT = 3
+  
+  fn classify(n: int) -> string {
+    match n {
+      MAX_SIZE => "max",
+      RETRY_LIMIT => "retry",
+      _ => "other",
+    }
+  }
+---
+package main
+
+const MaxSize int = 1024
+
+const RetryLimit int = 3
+
+func classify(n int) string {
+	switch n {
+	case MaxSize:
+		return "max"
+	case RetryLimit:
+		return "retry"
+	default:
+		return "other"
+	}
+}

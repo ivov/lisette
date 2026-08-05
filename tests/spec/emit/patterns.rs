@@ -1434,3 +1434,39 @@ fn classify(p: Pair) -> int {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn bare_const_pattern_against_interface_scrutinee() {
+    let input = r#"
+interface Shape {}
+
+struct Token(int)
+
+const ZERO: Token = 0
+
+fn test(s: Shape) -> int {
+  match s {
+    ZERO => 0,
+    _ => 1,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn bare_const_pattern_uses_go_constant_name() {
+    let input = r#"
+const MAX_SIZE = 1024
+const RETRY_LIMIT = 3
+
+fn classify(n: int) -> string {
+  match n {
+    MAX_SIZE => "max",
+    RETRY_LIMIT => "retry",
+    _ => "other",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

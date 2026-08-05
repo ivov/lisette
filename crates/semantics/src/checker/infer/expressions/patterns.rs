@@ -351,7 +351,6 @@ impl InferCtx<'_> {
         };
         let store = self.store;
         if fields.is_empty()
-            && identifier.contains('.')
             && let Some(result) =
                 self.try_infer_const_pattern(&identifier, rest, kind, &expected_ty, span)
         {
@@ -565,6 +564,15 @@ impl InferCtx<'_> {
         span: Span,
     ) -> Option<Pattern> {
         let store = self.store;
+        let is_qualified = identifier.contains('.');
+        if !is_qualified
+            && (!kind.is_pattern_position()
+                || self
+                    .resolve_bare_variant_type(identifier, expected_ty)
+                    .is_some())
+        {
+            return None;
+        }
         let qualified = self.lookup_qualified_name(store, identifier)?;
         let definition = store.get_definition(&qualified)?;
         if !matches!(definition.body, DefinitionBody::Value { .. }) {
@@ -577,7 +585,8 @@ impl InferCtx<'_> {
         // Enum-variant resolution takes precedence, so a unit variant of its own
         // enum type stays on the enum-variant path.
         let member_name = unqualified_name(&qualified);
-        if let Type::Nominal { id, .. } = unwrapped_ty
+        if !definition.is_const()
+            && let Type::Nominal { id, .. } = unwrapped_ty
             && store
                 .variants_of(id.as_str())
                 .is_some_and(|variants| variants.iter().any(|v| v.name == member_name))
@@ -585,31 +594,33 @@ impl InferCtx<'_> {
             return None;
         }
 
-        if !kind.is_match_arm() {
+        if matches!(unwrapped_ty, Type::Function(_)) {
+            if !is_qualified {
+                return None;
+            }
+            self.sink.push(if kind.is_match_arm() {
+                diagnostics::infer::const_pattern_not_eligible(identifier, span)
+            } else {
+                diagnostics::infer::const_pattern_outside_match_arm(identifier, span)
+            });
+            return Some(Pattern::WildCard { span });
+        }
+
+        let outside_match_arm = !kind.is_match_arm();
+        if outside_match_arm {
             self.sink
                 .push(diagnostics::infer::const_pattern_outside_match_arm(
                     identifier, span,
                 ));
-            return Some(Pattern::WildCard { span });
+            if !kind.is_pattern_position() {
+                return Some(Pattern::WildCard { span });
+            }
         }
-
-        if matches!(unwrapped_ty, Type::Function(_)) {
-            self.sink
-                .push(diagnostics::infer::const_pattern_not_eligible(
-                    identifier, span,
-                ));
-            return Some(Pattern::WildCard { span });
-        }
-
-        let (const_ty, _) = self.instantiate(definition_ty);
-        let unify_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
-        self.unify(&unify_expected, &const_ty, &span);
 
         if let Some(definition_span) = self.get_definition_name_span(store, &qualified) {
             self.facts.add_usage(span, definition_span);
         }
 
-        let resolved_ty = const_ty.resolve_in(&self.env);
         let resolution = match definition.const_value().cloned() {
             Some(value) => ConstructorPatternResolution::ConstValue {
                 qualified_name: qualified,
@@ -620,12 +631,21 @@ impl InferCtx<'_> {
             },
         };
 
+        let ty = if outside_match_arm {
+            expected_ty.clone()
+        } else {
+            let (const_ty, _) = self.instantiate(definition_ty);
+            let unify_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
+            self.unify(&unify_expected, &const_ty, &span);
+            const_ty.resolve_in(&self.env)
+        };
+
         Some(Pattern::EnumVariant {
             identifier: identifier.into(),
             fields: vec![],
             rest,
             resolution,
-            ty: resolved_ty,
+            ty,
             span,
         })
     }

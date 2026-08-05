@@ -1,0 +1,32 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  interface Shape {}
+  
+  struct Token(int)
+  
+  const ZERO: Token = 0
+  
+  fn test(s: Shape) -> int {
+    match s {
+      ZERO => 0,
+      _ => 1,
+    }
+  }
+---
+package main
+
+type Shape interface {
+}
+
+type Token int
+
+const Zero Token = 0
+
+func test(s Shape) int {
+	if s == Zero {
+		return 0
+	}
+	return 1
+}

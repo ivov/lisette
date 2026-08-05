@@ -17,7 +17,7 @@ func main() {
 		fmt.Println("high")
 	}
 	x := 9
-	if x == print_.LIMIT {
+	if x == print_.Limit {
 		fmt.Println("limit")
 	} else {
 		fmt.Println("other")

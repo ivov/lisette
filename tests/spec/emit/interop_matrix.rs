@@ -954,6 +954,22 @@ fn describe(d: t.Duration) -> string {
 }
 
 #[test]
+fn interop_const_pattern_match_arm_screaming_snake_go_name() {
+    let input = r#"
+import "go:os"
+
+fn describe(flag: int) -> string {
+  match flag {
+    os.O_RDONLY => "readonly",
+    os.O_WRONLY => "writeonly",
+    _ => "other",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn interop_const_pattern_match_arm_nested_package() {
     let input = r#"
 import "go:debug/dwarf"

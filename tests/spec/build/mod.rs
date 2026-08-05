@@ -8087,6 +8087,41 @@ fn main() {
 }
 
 #[test]
+fn builtin_named_package_matches_its_own_const_without_self_import() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "print",
+        "mod.lis",
+        r#"
+pub const LIMIT = 9
+
+pub fn classify(n: int) -> string {
+  match n {
+    LIMIT => "limit",
+    _ => "other",
+  }
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+import "print"
+
+fn main() {
+  fmt.Println(print.classify(9))
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn build_excludes_test_files_from_emit() {
     let mut fs = MockFileSystem::new();
     fs.add_file(

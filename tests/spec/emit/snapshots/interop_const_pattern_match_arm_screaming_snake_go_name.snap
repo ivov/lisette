@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:os"
+  
+  fn describe(flag: int) -> string {
+    match flag {
+      os.O_RDONLY => "readonly",
+      os.O_WRONLY => "writeonly",
+      _ => "other",
+    }
+  }
+---
+package main
+
+import "os"
+
+func describe(flag int) string {
+	switch flag {
+	case os.O_RDONLY:
+		return "readonly"
+	case os.O_WRONLY:
+		return "writeonly"
+	default:
+		return "other"
+	}
+}

@@ -3015,6 +3015,271 @@ fn handle() -> int {
 }
 
 #[test]
+fn bare_const_pattern_succeeds() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+const MAX_SIZE = 1024
+
+fn classify(n: int) -> string {
+  match n {
+    MAX_SIZE => "max",
+    _ => "other",
+  }
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    infer_package("main", fs).assert_no_errors();
+}
+
+#[test]
+fn bare_const_pattern_from_sibling_file_succeeds() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("main", "limits.lis", "const MAX_SIZE = 1024\n");
+    let source = r#"
+fn classify(n: int) -> string {
+  match n {
+    MAX_SIZE => "max",
+    _ => "other",
+  }
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    infer_package("main", fs).assert_no_errors();
+}
+
+#[test]
+fn bare_const_pattern_with_constexpr_initializer_succeeds() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+const BASE = 512
+const DOUBLED = BASE * 2
+
+fn classify(n: int) -> string {
+  match n {
+    DOUBLED => "doubled",
+    _ => "other",
+  }
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    infer_package("main", fs).assert_no_errors();
+}
+
+#[test]
+fn bare_const_pattern_requires_catch_all() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+const MAX_SIZE = 1024
+
+fn classify(n: int) -> string {
+  match n {
+    MAX_SIZE => "max",
+  }
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    infer_package("main", fs).assert_exhaustiveness_error();
+}
+
+#[test]
+fn bare_const_pattern_before_its_literal_is_redundant() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+const MAX_SIZE = 1024
+
+fn classify(n: int) -> string {
+  match n {
+    MAX_SIZE => "max",
+    1024 => "also max",
+    _ => "other",
+  }
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    infer_package("main", fs).assert_redundancy_error();
+}
+
+#[test]
+fn bare_const_pattern_type_mismatch() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+const MAX_SIZE = 1024
+
+fn classify(s: string) -> string {
+  match s {
+    MAX_SIZE => "max",
+    _ => "other",
+  }
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    infer_package("main", fs).assert_type_mismatch();
+}
+
+#[test]
+fn bare_const_pattern_in_if_let_rejected() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+const MAX_SIZE = 1024
+
+fn classify(n: int) -> string {
+  if let MAX_SIZE = n {
+    "max"
+  } else {
+    "other"
+  }
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    infer_package("main", fs).assert_infer_code("const_pattern_outside_match_arm");
+}
+
+#[test]
+fn bare_const_name_in_let_still_reports_uppercase_binding() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+const MAX_SIZE = 1024
+
+fn classify() -> int {
+  let MAX_SIZE = 5
+  MAX_SIZE
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    infer_package("main", fs).assert_infer_code("uppercase_binding");
+}
+
+#[test]
+fn bare_prelude_variant_outranks_const_pattern() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+fn unwrap_or_zero(o: Option<int>) -> int {
+  match o {
+    Some(n) => n,
+    None => 0,
+  }
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    infer_package("main", fs).assert_no_errors();
+}
+
+#[test]
+fn bare_enum_variant_outranks_same_named_const() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+enum Color {
+  RED,
+  GREEN,
+}
+
+const RED = 1
+
+fn shade(c: Color) -> string {
+  match c {
+    RED => "red",
+    _ => "other",
+  }
+}
+
+fn size() -> int {
+  RED
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    infer_package("main", fs).assert_no_errors();
+}
+
+#[test]
+fn bare_function_name_pattern_reports_variant_not_found() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+fn Today() -> int {
+  1
+}
+
+fn name(n: int) -> string {
+  match n {
+    Today => "today",
+    _ => "other",
+  }
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    infer_package("main", fs).assert_resolve_code("variant_not_found");
+}
+
+#[test]
+fn bare_const_holding_a_variant_matches_by_value_off_its_enum() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+interface Shape {}
+
+enum Color {
+  RED,
+  GREEN,
+}
+
+const RED: Color = Color.RED
+
+fn describe(s: Shape) -> int {
+  match s {
+    RED => 0,
+    _ => 1,
+  }
+}
+
+fn shade(c: Color) -> int {
+  match c {
+    RED => 0,
+    _ => 1,
+  }
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    infer_package("main", fs).assert_no_errors();
+}
+
+#[test]
+fn bare_function_name_in_if_let_is_not_called_a_constant() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+fn Today() -> int {
+  1
+}
+
+fn name(n: int) -> string {
+  if let Today = n {
+    "today"
+  } else {
+    "other"
+  }
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    infer_package("main", fs)
+        .assert_resolve_code("variant_not_found")
+        .assert_infer_code_count("const_pattern_outside_match_arm", 0);
+}
+
+#[test]
+fn bare_tuple_struct_pattern_without_payload_still_rejected() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+struct UserId(int)
+
+fn name(n: int) -> string {
+  match n {
+    UserId => "user",
+    _ => "other",
+  }
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    infer_package("main", fs).assert_infer_code("arg_count_mismatch");
+}
+
+#[test]
 fn named_primitive_method_preserved() {
     let mut fs = MockFileSystem::new();
     fs.add_file(

@@ -1,0 +1,27 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	print_ "github.com/user/myproject/print"
+)
+
+func main() {
+	fmt.Println(print_.Classify(9))
+}
+
+
+// === print/mod.go ===
+package print_
+
+const Limit int = 9
+
+func Classify(n int) string {
+	if n == Limit {
+		return "limit"
+	}
+	return "other"
+}

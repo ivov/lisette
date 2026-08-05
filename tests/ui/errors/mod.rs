@@ -1760,25 +1760,6 @@ fn test(s: Status) -> int {
 }
 
 #[test]
-fn infer_const_of_struct_type_as_interface_pattern() {
-    let input = r#"
-interface Shape {}
-
-struct Token(int)
-
-const ZERO: Token = 0
-
-fn test(s: Shape) -> int {
-  match s {
-    ZERO => 0,
-    _ => 1,
-  }
-}
-"#;
-    assert_infer_error_snapshot!(input);
-}
-
-#[test]
 fn infer_enum_name_as_pattern_on_interface_scrutinee() {
     let input = r#"
 interface Event {}

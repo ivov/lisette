@@ -1120,20 +1120,32 @@ fn collect_const_pattern_check(
     let const_name = go_name::unqualified_name(qualified_name);
     let go_literal = match planner.facts.package_for_qualified_name(qualified_name) {
         Some(package) => {
-            let qualifier = planner.go_pkg_qualifier(package);
-            if qualifier.is_empty() || qualifier == planner.facts.current_package() {
-                const_name.to_string()
+            if planner.facts.is_current_package(package) {
+                local_const_go_name(planner, const_name)
             } else {
+                let member = if go_name::is_go_import(package) {
+                    const_name.to_string()
+                } else {
+                    go_name::screaming_snake_to_camel(const_name)
+                };
                 let qualifier = planner.record_package_import(package, &mut collector.packages);
-                format!("{}.{}", qualifier, const_name)
+                format!("{}.{}", qualifier, member)
             }
         }
-        None => const_name.to_string(),
+        None => local_const_go_name(planner, const_name),
     };
     collector.checks.push(Check::Literal {
         path: path.clone(),
         go_literal,
     });
+}
+
+fn local_const_go_name(planner: &Planner, const_name: &str) -> String {
+    planner
+        .package
+        .escape_remap(const_name)
+        .map(str::to_string)
+        .unwrap_or_else(|| go_name::escape_reserved(const_name).into_owned())
 }
 
 /// `true` when the variant is a foreign-package dotted name (e.g.
