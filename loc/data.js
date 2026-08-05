@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1785946660315,
+  "lastUpdate": 1785948536933,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -19246,6 +19246,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "cli",
             "value": 12354,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 7593,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5414,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2883,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1286,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7416,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "8970c340849742c83c88da6cb9933e4a9a245ab3",
+          "message": "fix: prune a script build dir against its own emit (#1217)",
+          "timestamp": "2026-08-05T18:48:19+02:00",
+          "tree_id": "cf3d0c7ca43357b9c1ca7eeffec63ae9f9b26f92",
+          "url": "https://github.com/ivov/lisette/commit/8970c340849742c83c88da6cb9933e4a9a245ab3"
+        },
+        "date": 1785948534659,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 126753,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30337,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 25738,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18559,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13555,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 12361,
             "unit": "lines"
           },
           {
