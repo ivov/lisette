@@ -402,26 +402,11 @@ impl Planner<'_> {
         members: &mut SpanMap,
         diagnostics: &mut Vec<LisetteDiagnostic>,
     ) {
+        let slots = syntax::go_names::enum_field_slots(name, variants);
         let mut seen: HashSet<String> = HashSet::default();
-        for variant in variants {
-            let Some(field_shape) = syntax::go_names::enum_field_shape(&variant.fields) else {
-                continue;
-            };
-            let field_names = variant
-                .fields
-                .iter()
-                .enumerate()
-                .map(|(index, field)| {
-                    syntax::go_names::enum_field_go_name(
-                        &variant.name,
-                        &field.name,
-                        index,
-                        field_shape,
-                        name,
-                    )
-                })
-                .collect::<Vec<_>>();
-            for field_name in &field_names {
+        for (variant_index, variant) in variants.iter().enumerate() {
+            let field_names = &slots[variant_index];
+            for field_name in field_names {
                 if seen.insert(field_name.clone()) {
                     members
                         .entry(field_name.clone())
@@ -431,7 +416,7 @@ impl Planner<'_> {
             }
             if let VariantFields::Struct(fields) = &variant.fields {
                 let mut variant_fields: SpanMap = HashMap::default();
-                for (field, field_name) in fields.iter().zip(&field_names) {
+                for (field, field_name) in fields.iter().zip(field_names) {
                     variant_fields
                         .entry(field_name.clone())
                         .or_default()

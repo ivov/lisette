@@ -52,10 +52,11 @@ impl EnumLayout {
         let enum_name = go_name::unqualified_name(enum_id).to_string();
         let tag_type = format!("{}Tag", enum_name);
 
+        let slots = syntax::go_names::enum_field_slots(&enum_name, variants);
         let variants = variants
             .iter()
             .enumerate()
-            .map(|(vi, v)| Self::compute_variant_layout(vi, v, &enum_name, field_types))
+            .map(|(vi, v)| Self::compute_variant_layout(vi, v, &enum_name, &slots[vi], field_types))
             .collect();
 
         Self {
@@ -70,6 +71,7 @@ impl EnumLayout {
         variant_index: usize,
         variant: &EnumVariant,
         enum_name: &str,
+        slots: &[String],
         field_types: &FieldTypeMap,
     ) -> VariantLayout {
         let tag_constant = go_name::enum_tag_constant(enum_name, &variant.name);
@@ -88,13 +90,7 @@ impl EnumLayout {
                     fi.to_string()
                 };
 
-                let go_name = syntax::go_names::enum_field_go_name(
-                    &variant.name,
-                    &field.name,
-                    fi,
-                    field_shape,
-                    enum_name,
-                );
+                let go_name = slots[fi].clone();
 
                 let info = field_types.get(&(variant_index, fi));
                 let go_type = info
@@ -173,11 +169,16 @@ impl EnumLayout {
         ));
         output.push(format!("Tag {}", self.tag_type));
 
-        let mut seen_fields = rustc_hash::FxHashSet::default();
+        let mut seen_fields = rustc_hash::FxHashMap::default();
         for variant in &self.variants {
             for field in &variant.fields {
-                if seen_fields.insert(&field.go_name) {
-                    output.push(format!("{} {}", field.go_name, field.go_type));
+                match seen_fields.insert(&field.go_name, &field.go_type) {
+                    None => output.push(format!("{} {}", field.go_name, field.go_type)),
+                    Some(first) => debug_assert_eq!(
+                        first, &field.go_type,
+                        "enum {} shares Go field `{}` between differing types, so this emits one of them silently",
+                        self.enum_name, field.go_name
+                    ),
                 }
             }
         }

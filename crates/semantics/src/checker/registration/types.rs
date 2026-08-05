@@ -44,7 +44,7 @@ impl TaskState {
             (generics, new_variants)
         });
 
-        self.check_enum_field_type_conflicts(name, &new_variants);
+        self.check_enum_field_slot_collisions(name, &new_variants);
 
         for new_variant in &new_variants {
             self.add_enum_variant_to_scope(new_variant, name, &enum_ty, &generics);
@@ -132,14 +132,13 @@ impl TaskState {
         );
     }
 
-    /// Check for Go-level field name collisions across enum variants.
-    ///
-    /// Computes each field's Go name via the shared authority in
-    /// `syntax::go_names` and rejects same-name-different-type conflicts.
-    fn check_enum_field_type_conflicts(&mut self, name: &str, variants: &[EnumVariant]) {
+    /// Emit's layout dedupes by Go name, so a survivor would take the first type.
+    fn check_enum_field_slot_collisions(&mut self, name: &str, variants: &[EnumVariant]) {
         if self.cursor.package_id == "prelude" {
             return;
         }
+
+        let slots = syntax::go_names::enum_field_slots(name, variants);
 
         // (variant_name, field_name, field shape, type, span)
         let mut seen: FxHashMap<
@@ -147,19 +146,13 @@ impl TaskState {
             (&str, &str, syntax::go_names::EnumFieldShape, &Type, Span),
         > = FxHashMap::default();
 
-        for variant in variants {
+        for (vi, variant) in variants.iter().enumerate() {
             let Some(field_shape) = syntax::go_names::enum_field_shape(&variant.fields) else {
                 continue;
             };
 
             for (fi, field) in variant.fields.iter().enumerate() {
-                let go_name = syntax::go_names::enum_field_go_name(
-                    &variant.name,
-                    &field.name,
-                    fi,
-                    field_shape,
-                    name,
-                );
+                let go_name = slots[vi][fi].clone();
 
                 let resolved = field.ty.resolve_in(&self.env);
                 let annotation_span = field.annotation.get_span();
@@ -199,6 +192,7 @@ impl TaskState {
                     &ty_a_resolved.to_string(),
                     &loc_b,
                     &resolved.to_string(),
+                    &go_name,
                     span,
                 ));
             }

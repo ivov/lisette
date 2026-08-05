@@ -1,0 +1,99 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  #[json]
+  enum Shape {
+    Rect { w: float64 },
+    Square { w: int },
+  }
+  
+  fn main() {
+    let a = Shape.Square { w: 3 }
+    let _ = a
+  }
+---
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+)
+
+func MakeShapeRect(arg0 float64) Shape {
+	return Shape{Tag: ShapeRect, RectW: arg0}
+}
+
+func MakeShapeSquare(arg0 int) Shape {
+	return Shape{Tag: ShapeSquare, SquareW: arg0}
+}
+
+type ShapeTag int
+
+const (
+	ShapeRect ShapeTag = iota
+	ShapeSquare
+)
+
+type Shape struct {
+	Tag     ShapeTag
+	RectW   float64
+	SquareW int
+}
+
+func (s Shape) MarshalJSON() ([]byte, error) {
+	switch s.Tag {
+	case ShapeRect:
+		return json.Marshal(map[string]any{"Rect": map[string]any{"w": s.RectW}})
+	case ShapeSquare:
+		return json.Marshal(map[string]any{"Square": map[string]any{"w": s.SquareW}})
+	default:
+		return nil, fmt.Errorf("unknown Shape tag: %d", s.Tag)
+	}
+}
+
+func (s *Shape) UnmarshalJSON(data []byte) error {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return fmt.Errorf("invalid Shape JSON")
+	}
+	for key, val := range obj {
+		switch key {
+		case "Rect":
+			s.Tag = ShapeRect
+			var inner map[string]json.RawMessage
+			if err := json.Unmarshal(val, &inner); err != nil {
+				return err
+			}
+			if v, ok := inner["w"]; ok {
+				if err := json.Unmarshal(v, &s.RectW); err != nil {
+					return err
+				}
+			}
+			return nil
+		case "Square":
+			s.Tag = ShapeSquare
+			var inner map[string]json.RawMessage
+			if err := json.Unmarshal(val, &inner); err != nil {
+				return err
+			}
+			if v, ok := inner["w"]; ok {
+				if err := json.Unmarshal(v, &s.SquareW); err != nil {
+					return err
+				}
+			}
+			return nil
+		default:
+			return fmt.Errorf("unknown Shape variant: %s", key)
+		}
+	}
+	return fmt.Errorf("empty Shape JSON object")
+}
+
+func main() {
+	a := Shape{
+		Tag:     ShapeSquare,
+		SquareW: 3,
+	}
+	_ = a
+}

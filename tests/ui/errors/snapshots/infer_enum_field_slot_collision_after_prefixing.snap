@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Conflicting field types across enum variants
+   ╭─[test.lis:5:19]
+ 4 │   Square { w: int },
+ 5 │   Third { rect_w: string },
+   ·                   ───┬──
+   ·                      ╰── field type mismatch
+ 6 │ }
+   ╰────
+  help: `Shape.Rect.w` is `float64` but `Shape.Third.rect_w` is `string`, and both become `RectW` in Go. Rename one of the fields · code: [infer.enum_field_type_conflict]

@@ -3176,6 +3176,38 @@ fn test() {
 }
 
 #[test]
+fn infer_enum_spread_contested_field_slot_mismatch() {
+    let input = r#"
+enum E {
+  A { w: int, keep: string },
+  B { w: string, keep: string },
+}
+
+fn test() {
+  let a = E.A { w: 1, keep: "k" }
+  let _b = E.B { ..a }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_enum_spread_mixed_field_slot_mismatch() {
+    let input = r#"
+enum E {
+  A { tag: int, w: int, keep: string },
+  B { tag: int, w: string, keep: string },
+}
+
+fn test() {
+  let a = E.A { tag: 1, w: 2, keep: "k" }
+  let _b = E.B { ..a }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_struct_not_found() {
     let input = r#"
 fn test() {
@@ -10831,44 +10863,12 @@ fn main() {
 }
 
 #[test]
-fn infer_enum_field_type_conflict() {
-    let input = r#"
-enum Event {
-  Click { target: int },
-  Hover { target: string },
-}
-"#;
-    assert_infer_error_snapshot!(input);
-}
-
-#[test]
-fn infer_enum_field_type_conflict_struct_vs_tuple() {
+fn infer_enum_field_slot_collision_after_prefixing() {
     let input = r#"
 enum Shape {
-  Circle(string),
-  Other { circle: int },
-}
-"#;
-    assert_infer_error_snapshot!(input);
-}
-
-#[test]
-fn infer_enum_field_type_conflict_snake_vs_camel() {
-    let input = r#"
-enum Event {
-  Click { foo_bar: int },
-  Hover { fooBar: string },
-}
-"#;
-    assert_infer_error_snapshot!(input);
-}
-
-#[test]
-fn infer_enum_field_type_conflict_trailing_underscore() {
-    let input = r#"
-enum Event {
-  Click { x_: int },
-  Hover { x: string },
+  Rect { w: float64 },
+  Square { w: int },
+  Third { rect_w: string },
 }
 "#;
     assert_infer_error_snapshot!(input);

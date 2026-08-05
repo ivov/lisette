@@ -1,0 +1,52 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  enum Shape {
+    Rect { w: float64, h: float64 },
+    Square { w: float64 },
+  }
+  
+  fn main() {
+    let a = Shape.Rect { w: 1.0, h: 2.0 }
+    let b = Shape.Square { w: 3.0 }
+    let _ = a
+    let _ = b
+  }
+---
+package main
+
+func MakeShapeRect(arg0 float64, arg1 float64) Shape {
+	return Shape{Tag: ShapeRect, W: arg0, H: arg1}
+}
+
+func MakeShapeSquare(arg0 float64) Shape {
+	return Shape{Tag: ShapeSquare, W: arg0}
+}
+
+type ShapeTag int
+
+const (
+	ShapeRect ShapeTag = iota
+	ShapeSquare
+)
+
+type Shape struct {
+	Tag ShapeTag
+	W   float64
+	H   float64
+}
+
+func main() {
+	a := Shape{
+		Tag: ShapeRect,
+		W:   1.0,
+		H:   2.0,
+	}
+	b := Shape{
+		Tag: ShapeSquare,
+		W:   3.0,
+	}
+	_ = a
+	_ = b
+}

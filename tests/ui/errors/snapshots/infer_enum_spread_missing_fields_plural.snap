@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
     ·                    ╰── may be `E.A`, which has no field `y`
  10 │ }
     ╰────
-  help: A spread can only fill fields that exist in every `E` variant. Assign fields `y`, `z` explicitly, or bind them first when the source is known to be `E.B`: `let E.B { y, z, .. } = source else { ... }` · code: [infer.enum_spread_missing_fields]
+  help: A spread can only fill fields that exist in every `E` variant. Assign fields `y` and `z` explicitly, or bind them first when the source is known to be `E.B`: `let E.B { y, z, .. } = source else { ... }` · code: [infer.enum_spread_missing_fields]

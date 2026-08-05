@@ -533,37 +533,26 @@ impl InferCtx<'_> {
         let written_enum = written_name
             .rsplit_once('.')
             .map_or(enum_name, |(prefix, _)| prefix);
+        let Some(target_index) = variants.iter().position(|v| v.name == target_variant) else {
+            return;
+        };
+        let slots = syntax::go_names::enum_field_slots(enum_name, variants);
         let missing: Vec<String> = variant_fields
             .iter()
             .enumerate()
             .filter(|(_, field)| !matched_fields.contains(&field.name))
             .filter(|(field_index, field)| {
-                let target_slot = syntax::go_names::enum_field_go_name(
-                    target_variant,
-                    &field.name,
-                    *field_index,
-                    syntax::go_names::EnumFieldShape::Struct,
-                    enum_name,
-                );
-                !variants.iter().all(|variant| {
+                let Some(target_slot) = slots[target_index].get(*field_index) else {
+                    return false;
+                };
+                !variants.iter().enumerate().all(|(other_variant, variant)| {
                     variant
                         .fields
                         .iter()
                         .enumerate()
                         .any(|(other_index, other)| {
-                            let Some(field_shape) =
-                                syntax::go_names::enum_field_shape(&variant.fields)
-                            else {
-                                return false;
-                            };
                             other.name == field.name
-                                && syntax::go_names::enum_field_go_name(
-                                    &variant.name,
-                                    &other.name,
-                                    other_index,
-                                    field_shape,
-                                    enum_name,
-                                ) == target_slot
+                                && slots[other_variant].get(other_index) == Some(target_slot)
                         })
                 })
             })
@@ -578,12 +567,28 @@ impl InferCtx<'_> {
                 .find(|variant| !variant.fields.iter().any(|f| f.name == field_name.as_str()))
                 .map(|variant| (variant.name.as_str(), field_name.as_str()))
         });
+        let builtin_collisions = missing
+            .iter()
+            .filter(|field_name| {
+                syntax::go_names::is_builtin_enum_member(&syntax::go_names::snake_to_camel(
+                    field_name,
+                ))
+            })
+            .count();
+        let reason = if builtin_collisions == missing.len() {
+            diagnostics::infer::SeparateSlotReason::BuiltinMember
+        } else if builtin_collisions == 0 {
+            diagnostics::infer::SeparateSlotReason::ConflictingTypes
+        } else {
+            diagnostics::infer::SeparateSlotReason::Mixed
+        };
         self.sink
             .push(diagnostics::infer::enum_spread_missing_fields(
                 written_enum,
                 target_variant,
                 &missing,
                 counterexample,
+                reason,
                 spread_span,
             ));
     }

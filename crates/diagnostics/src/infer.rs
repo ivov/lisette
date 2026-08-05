@@ -2687,14 +2687,23 @@ pub fn enum_field_type_conflict(
     type_a: &str,
     loc_b: &str,
     type_b: &str,
+    slot: &str,
     span: Span,
 ) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Conflicting field types across enum variants")
         .with_infer_code("enum_field_type_conflict")
         .with_span_label(&span, "field type mismatch")
         .with_help(format!(
-            "`{loc_a}` is `{type_a}` but `{loc_b}` is `{type_b}`. Rename one of the fields or align their types",
+            "`{loc_a}` is `{type_a}` but `{loc_b}` is `{type_b}`, and both become `{slot}` in Go. Rename one of the fields",
         ))
+}
+
+/// Why a field every variant declares still gets a per-variant Go slot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SeparateSlotReason {
+    BuiltinMember,
+    ConflictingTypes,
+    Mixed,
 }
 
 pub fn enum_spread_missing_fields(
@@ -2702,13 +2711,14 @@ pub fn enum_spread_missing_fields(
     target_variant: &str,
     missing: &[String],
     counterexample: Option<(&str, &str)>,
+    reason: SeparateSlotReason,
     span: Span,
 ) -> LisetteDiagnostic {
     let (noun, pronoun, fields_fmt) = if missing.len() == 1 {
         ("field", "it", format!("`{}`", missing[0]))
     } else {
         let formatted: Vec<String> = missing.iter().map(|f| format!("`{}`", f)).collect();
-        ("fields", "them", formatted.join(", "))
+        ("fields", "them", crate::pattern::join_and(&formatted))
     };
 
     let (label, help) = match counterexample {
@@ -2722,11 +2732,17 @@ pub fn enum_spread_missing_fields(
         None => (
             format!("may hold any `{enum_name}` variant"),
             format!(
-                "Every `{enum_name}` variant has {fields_fmt}, but the {name_noun} with a built-in enum member, so each variant stores {pronoun} separately and a spread cannot fill {pronoun}. Assign {noun} {fields_fmt} explicitly",
-                name_noun = if missing.len() == 1 {
-                    "name collides"
-                } else {
-                    "names collide"
+                "Every `{enum_name}` variant has {fields_fmt}, but {cause}, so each variant stores {pronoun} separately and a spread cannot fill {pronoun}. Assign {noun} {fields_fmt} explicitly",
+                cause = match (reason, missing.len()) {
+                    (SeparateSlotReason::BuiltinMember, 1) =>
+                        "the name collides with a built-in enum member",
+                    (SeparateSlotReason::BuiltinMember, _) =>
+                        "the names collide with built-in enum members",
+                    (SeparateSlotReason::ConflictingTypes, 1) =>
+                        "the variants give it conflicting types",
+                    (SeparateSlotReason::ConflictingTypes, _) =>
+                        "the variants give them conflicting types",
+                    (SeparateSlotReason::Mixed, _) => "they cannot share one slot across variants",
                 },
             ),
         ),

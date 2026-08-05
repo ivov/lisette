@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Enum spread cannot fill variant-specific fields
+    ╭─[test.lis:9:20]
+  8 │   let a = E.A { w: 1, keep: "k" }
+  9 │   let _b = E.B { ..a }
+    ·                    ┬
+    ·                    ╰── may hold any `E` variant
+ 10 │ }
+    ╰────
+  help: Every `E` variant has `w`, but the variants give it conflicting types, so each variant stores it separately and a spread cannot fill it. Assign field `w` explicitly · code: [infer.enum_spread_missing_fields]

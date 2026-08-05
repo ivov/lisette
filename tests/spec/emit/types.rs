@@ -4415,6 +4415,95 @@ fn main() {
 }
 
 #[test]
+fn enum_contested_field_slots_are_variant_prefixed() {
+    let input = r#"
+enum Event {
+  Click { target: int },
+  Hover { target: string },
+}
+
+fn main() {
+  let a = Event.Click { target: 1 }
+  let b = Event.Hover { target: "x" }
+  let _ = a
+  let _ = b
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn enum_contested_field_slot_prefixes_only_the_struct_field() {
+    let input = r#"
+enum Shape {
+  Circle(string),
+  Other { circle: int },
+}
+
+fn main() {
+  let a = Shape.Circle("x")
+  let b = Shape.Other { circle: 1 }
+  let _ = a
+  let _ = b
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn enum_contested_field_slots_contest_through_normalization() {
+    let input = r#"
+enum Event {
+  Click { foo_bar: int, x_: int },
+  Hover { fooBar: string, x: string },
+}
+
+fn main() {
+  let a = Event.Click { foo_bar: 1, x_: 2 }
+  let b = Event.Hover { fooBar: "y", x: "z" }
+  let _ = a
+  let _ = b
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn enum_uncontested_field_slot_stays_shared() {
+    let input = r#"
+enum Shape {
+  Rect { w: float64, h: float64 },
+  Square { w: float64 },
+}
+
+fn main() {
+  let a = Shape.Rect { w: 1.0, h: 2.0 }
+  let b = Shape.Square { w: 3.0 }
+  let _ = a
+  let _ = b
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn enum_contested_field_json_keys_stay_source_spelled() {
+    let input = r#"
+#[json]
+enum Shape {
+  Rect { w: float64 },
+  Square { w: int },
+}
+
+fn main() {
+  let a = Shape.Square { w: 3 }
+  let _ = a
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn struct_user_string_method_emits_go_string() {
     let input = r#"
 struct Point { x: int, y: int }

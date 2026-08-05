@@ -1,0 +1,48 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  enum Shape {
+    Circle(string),
+    Other { circle: int },
+  }
+  
+  fn main() {
+    let a = Shape.Circle("x")
+    let b = Shape.Other { circle: 1 }
+    let _ = a
+    let _ = b
+  }
+---
+package main
+
+func MakeShapeCircle(arg0 string) Shape {
+	return Shape{Tag: ShapeCircle, Circle: arg0}
+}
+
+func MakeShapeOther(arg0 int) Shape {
+	return Shape{Tag: ShapeOther, OtherCircle: arg0}
+}
+
+type ShapeTag int
+
+const (
+	ShapeCircle ShapeTag = iota
+	ShapeOther
+)
+
+type Shape struct {
+	Tag         ShapeTag
+	Circle      string
+	OtherCircle int
+}
+
+func main() {
+	a := MakeShapeCircle("x")
+	b := Shape{
+		Tag:         ShapeOther,
+		OtherCircle: 1,
+	}
+	_ = a
+	_ = b
+}

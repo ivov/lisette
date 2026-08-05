@@ -17,7 +17,7 @@ pub fn non_exhaustive(match_span: Span, cases: &[String]) -> LisetteDiagnostic {
         ))
 }
 
-fn join_and(items: &[String]) -> String {
+pub(crate) fn join_and(items: &[String]) -> String {
     match items {
         [] => String::new(),
         [only] => only.clone(),

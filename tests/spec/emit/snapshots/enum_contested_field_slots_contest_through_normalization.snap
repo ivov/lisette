@@ -1,0 +1,55 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  enum Event {
+    Click { foo_bar: int, x_: int },
+    Hover { fooBar: string, x: string },
+  }
+  
+  fn main() {
+    let a = Event.Click { foo_bar: 1, x_: 2 }
+    let b = Event.Hover { fooBar: "y", x: "z" }
+    let _ = a
+    let _ = b
+  }
+---
+package main
+
+func MakeEventClick(arg0 int, arg1 int) Event {
+	return Event{Tag: EventClick, ClickFooBar: arg0, ClickX: arg1}
+}
+
+func MakeEventHover(arg0 string, arg1 string) Event {
+	return Event{Tag: EventHover, HoverFooBar: arg0, HoverX: arg1}
+}
+
+type EventTag int
+
+const (
+	EventClick EventTag = iota
+	EventHover
+)
+
+type Event struct {
+	Tag         EventTag
+	ClickFooBar int
+	ClickX      int
+	HoverFooBar string
+	HoverX      string
+}
+
+func main() {
+	a := Event{
+		Tag:         EventClick,
+		ClickFooBar: 1,
+		ClickX:      2,
+	}
+	b := Event{
+		Tag:         EventHover,
+		HoverFooBar: "y",
+		HoverX:      "z",
+	}
+	_ = a
+	_ = b
+}

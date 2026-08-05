@@ -1,10 +1,11 @@
 //! Go identifier computation shared by the checker and the emitter, so
 //! neither has to mirror the other's naming policy.
 
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::borrow::Cow;
 
 use crate::EcoString;
-use crate::ast::VariantFields;
+use crate::ast::{EnumVariant, VariantFields};
 use crate::program::MethodSignatures;
 use crate::types::{GO_IMPORT_PREFIX, Type};
 
@@ -350,6 +351,12 @@ fn select_by_emitted_name<'a>(
         .map(|(_, _, _, name, ty)| (name, ty))
 }
 
+pub fn is_builtin_enum_member(go_name: &str) -> bool {
+    go_name == ENUM_TAG_FIELD
+        || go_name == ENUM_STRINGER_METHOD
+        || go_name == ENUM_GO_STRINGER_METHOD
+}
+
 /// Go struct field name for an enum variant field. Emit's enum layout and
 /// the checker's cross-variant conflict check must both use this single
 /// authority so their notions of a field's Go name cannot drift.
@@ -362,29 +369,90 @@ pub fn enum_field_go_name(
 ) -> String {
     if shape == EnumFieldShape::Struct {
         let base = snake_to_camel(field_name);
-        if base == ENUM_TAG_FIELD || base == ENUM_STRINGER_METHOD || base == ENUM_GO_STRINGER_METHOD
-        {
+        if is_builtin_enum_member(&base) {
             escape_keyword(&format!("{}{}", variant_name, base)).into_owned()
         } else {
             escape_keyword(&base).into_owned()
         }
     } else if shape == EnumFieldShape::TupleSingle {
         let base = variant_name.to_string();
-        if base == ENUM_TAG_FIELD || base == ENUM_STRINGER_METHOD || base == ENUM_GO_STRINGER_METHOD
-        {
+        if is_builtin_enum_member(&base) {
             format!("{}{}_", enum_name, base)
         } else {
             base
         }
     } else {
         let base = format!("{}{}", variant_name, field_index);
-        if base == ENUM_TAG_FIELD || base == ENUM_STRINGER_METHOD || base == ENUM_GO_STRINGER_METHOD
-        {
+        if is_builtin_enum_member(&base) {
             format!("{}{}_{}", enum_name, variant_name, field_index)
         } else {
             base
         }
     }
+}
+
+/// Go field name per enum field, indexed by variant then field. Same-typed
+/// fields share one slot, which enum spread reads. Types compare structurally,
+/// erring toward prefixing, which is the safe direction.
+pub fn enum_field_slots(enum_name: &str, variants: &[EnumVariant]) -> Vec<Vec<String>> {
+    let mut slots: Vec<Vec<String>> = variants
+        .iter()
+        .map(|variant| match enum_field_shape(&variant.fields) {
+            None => Vec::new(),
+            Some(shape) => variant
+                .fields
+                .iter()
+                .enumerate()
+                .map(|(index, field)| {
+                    enum_field_go_name(&variant.name, &field.name, index, shape, enum_name)
+                })
+                .collect(),
+        })
+        .collect();
+
+    let contested = contested_slots(variants, &slots);
+    if contested.is_empty() {
+        return slots;
+    }
+
+    for (variant, names) in variants.iter().zip(&mut slots) {
+        if enum_field_shape(&variant.fields) != Some(EnumFieldShape::Struct) {
+            continue;
+        }
+        for (field, name) in variant.fields.iter().zip(names) {
+            if contested.contains(name.as_str()) {
+                *name = escape_keyword(&format!("{}{}", variant.name, snake_to_camel(&field.name)))
+                    .into_owned();
+            }
+        }
+    }
+
+    slots
+}
+
+fn contested_slots(variants: &[EnumVariant], slots: &[Vec<String>]) -> HashSet<String> {
+    let mut claimed: HashMap<&str, &Type> = HashMap::default();
+    let mut contested = HashSet::default();
+
+    for (variant, names) in variants.iter().zip(slots) {
+        for (field, name) in variant.fields.iter().zip(names) {
+            if matches!(field.ty, Type::Error) {
+                continue;
+            }
+            match claimed.get(name.as_str()) {
+                None => {
+                    claimed.insert(name, &field.ty);
+                }
+                Some(first) => {
+                    if **first != field.ty {
+                        contested.insert(name.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    contested
 }
 
 #[cfg(test)]
