@@ -21,7 +21,7 @@ impl InferCtx<'_> {
         expected_ty: Type,
         kind: BindingKind,
     ) -> Pattern {
-        self.infer_pattern_inner(pattern, expected_ty, kind, false)
+        self.with_pattern(|this| this.infer_pattern_inner(pattern, expected_ty, kind, false))
     }
 
     fn infer_pattern_inner(

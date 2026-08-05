@@ -114,6 +114,7 @@ struct InheritedContext {
     invariant_depth: DepthCounter,
     use_context: UseContext,
     dot_access_base: bool,
+    in_pattern: bool,
     let_binding_rhs: bool,
     test_context: TestContext,
 }
@@ -595,6 +596,14 @@ impl Scopes {
 
     pub(crate) fn replace_dot_access_base(&mut self, value: bool) -> bool {
         std::mem::replace(&mut self.current_mut().inherited.dot_access_base, value)
+    }
+
+    pub(crate) fn is_in_pattern(&self) -> bool {
+        self.current().inherited.in_pattern
+    }
+
+    pub(crate) fn replace_in_pattern(&mut self, value: bool) -> bool {
+        std::mem::replace(&mut self.current_mut().inherited.in_pattern, value)
     }
 
     pub(crate) fn is_let_binding_rhs(&self) -> bool {

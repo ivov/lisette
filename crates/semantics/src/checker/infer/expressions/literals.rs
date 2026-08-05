@@ -1,7 +1,7 @@
 use crate::checker::EnvResolve;
 use crate::store::Store;
 use syntax::ast::{Expression, FormatStringPart, Literal, Span};
-use syntax::lex::rune_codepoint;
+use syntax::lex::{interpolation_holes, rune_codepoint};
 use syntax::types::{SimpleKind, Type};
 
 use crate::checker::infer::InferCtx;
@@ -99,6 +99,7 @@ impl InferCtx<'_> {
                 };
 
                 if !raw
+                    && !self.scopes.is_in_pattern()
                     && let Some(names) = interpolation_holes(&value)
                     && names.iter().all(|name| self.hole_would_interpolate(name))
                 {
@@ -253,48 +254,6 @@ impl InferCtx<'_> {
         self.unify(expected_ty, &new_ty, &span);
         Expression::Unit { ty: new_ty, span }
     }
-}
-
-fn interpolation_holes(value: &str) -> Option<Vec<&str>> {
-    let bytes = value.as_bytes();
-    let mut names = Vec::new();
-    let mut at = 0;
-
-    while at < bytes.len() {
-        match bytes[at] {
-            b'\\' => at = skip_escape(value, at)?,
-            b'{' if bytes.get(at + 1) == Some(&b'{') => return None,
-            b'{' => {
-                let start = at + 1;
-                let close = start + value[start..].find('}')?;
-                let name = &value[start..close];
-                if !is_bare_identifier(name) {
-                    return None;
-                }
-                names.push(name);
-                at = close + 1;
-            }
-            b'}' => return None,
-            _ => at += 1,
-        }
-    }
-
-    (!names.is_empty()).then_some(names)
-}
-
-fn skip_escape(value: &str, at: usize) -> Option<usize> {
-    let bytes = value.as_bytes();
-    if bytes.get(at + 1) == Some(&b'u') && bytes.get(at + 2) == Some(&b'{') {
-        return Some(at + 4 + value[at + 3..].find('}')?);
-    }
-    let escaped = value[at + 1..].chars().next()?;
-    Some(at + 1 + escaped.len_utf8())
-}
-
-fn is_bare_identifier(text: &str) -> bool {
-    let mut chars = text.chars();
-    chars.next().is_some_and(|c| c.is_alphabetic() || c == '_')
-        && chars.all(|c| c.is_alphanumeric() || c == '_')
 }
 
 /// Whether `expr` must be parenthesized to replace its f-string: true unless it
