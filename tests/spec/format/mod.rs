@@ -2067,3 +2067,27 @@ fn file_comment_before_item_without_imports() {
 fn file_comment_followed_by_regular_comment() {
     assert_format_snapshot!("//! Header.\n\n// section note\nfn main() {\n  let _ = 1\n}");
 }
+
+#[test]
+fn shebang_with_imports() {
+    assert_format_snapshot!(
+        "#!/usr/bin/env -S lis run\n\nimport \"go:fmt\"\n\nfn main() {\n  fmt.Println(1)\n}"
+    );
+}
+
+#[test]
+fn shebang_gains_a_blank_line_below() {
+    assert_format_snapshot!("#!/usr/bin/env -S lis run\nfn main() {\n  let _ = 1\n}");
+}
+
+#[test]
+fn shebang_above_a_file_comment() {
+    assert_format_snapshot!(
+        "#!/usr/bin/env -S lis run\n//! A tool.\n\nimport \"go:fmt\"\n\nfn main() {\n  fmt.Println(1)\n}"
+    );
+}
+
+#[test]
+fn shebang_only() {
+    assert_format_snapshot!("#!/usr/bin/env -S lis run");
+}

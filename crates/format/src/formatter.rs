@@ -74,7 +74,15 @@ impl<'a> Formatter<'a> {
 
         let mut docs = Vec::new();
 
+        if let Some(shebang) = self.comments.take_shebang() {
+            docs.push(shebang);
+        }
+
         if let Some(file_comment) = self.comments.take_file_comments() {
+            if !docs.is_empty() {
+                docs.push(Document::Newline);
+                docs.push(Document::Newline);
+            }
             docs.push(file_comment.force_break());
         }
 

@@ -1938,3 +1938,162 @@ fn project_emit_and_build_reject_the_output_flag() {
         );
     }
 }
+
+const ARGUMENT_ECHO: &str = r#"import "go:fmt"
+import "go:os"
+import "go:strings"
+
+fn main() {
+  fmt.Println(strings.Join(os.Args[1..], "|"))
+}
+"#;
+
+#[test]
+fn arguments_after_a_file_target_reach_the_program() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let dir = scratch.path();
+    fs::write(dir.join("echo.lis"), ARGUMENT_ECHO).unwrap();
+
+    let output = lis_in(dir, &["run", "echo.lis", "alpha", "beta"]);
+
+    assert!(output.status.success(), "{}", combined(&output));
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "alpha|beta");
+}
+
+#[test]
+fn a_script_receives_the_flags_the_compiler_also_knows() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let dir = scratch.path();
+    fs::write(dir.join("echo.lis"), ARGUMENT_ECHO).unwrap();
+
+    let output = lis_in(
+        dir,
+        &[
+            "run",
+            "--sourcemap",
+            "echo.lis",
+            "--sourcemap",
+            "--verbose",
+            "input.txt",
+        ],
+    );
+
+    assert!(output.status.success(), "{}", combined(&output));
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "--sourcemap|--verbose|input.txt",
+        "the compiler must keep only the `--sourcemap` before the target"
+    );
+}
+
+#[test]
+fn a_separator_after_a_script_reaches_the_program() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let dir = scratch.path();
+    fs::write(dir.join("echo.lis"), ARGUMENT_ECHO).unwrap();
+
+    let output = lis_in(dir, &["run", "echo.lis", "--", "alpha"]);
+
+    assert!(output.status.success(), "{}", combined(&output));
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "--|alpha");
+}
+
+#[cfg(unix)]
+fn executable_script(dir: &Path, name: &str, body: &str) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+
+    let path = dir.join(name);
+    fs::write(&path, format!("#!/usr/bin/env -S lis run\n\n{body}")).unwrap();
+    let mut permissions = fs::metadata(&path).unwrap().permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(&path, permissions).unwrap();
+    path
+}
+
+#[cfg(unix)]
+fn lis_on_path() -> PathBuf {
+    let repo = repo();
+    let built = Command::new("cargo")
+        .args(["build", "-p", "lisette", "--quiet"])
+        .current_dir(&repo)
+        .env("NO_COLOR", "1")
+        .status()
+        .expect("failed to build lisette");
+    assert!(built.success(), "cargo build -p lisette failed");
+    repo.join("target/debug")
+}
+
+#[cfg(unix)]
+#[test]
+fn an_executable_script_runs_through_its_shebang() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let dir = scratch.path();
+    let bin = lis_on_path();
+
+    for name in ["greet.lis", "backup"] {
+        let script = executable_script(dir, name, ARGUMENT_ECHO);
+
+        let output = Command::new(&script)
+            .args(["alpha", "beta"])
+            .env(
+                "PATH",
+                format!("{}:{}", bin.display(), std::env::var("PATH").unwrap()),
+            )
+            .env("NO_COLOR", "1")
+            .output()
+            .expect("failed to execute the script");
+
+        assert!(output.status.success(), "`{name}`: {}", combined(&output));
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).trim(),
+            "alpha|beta",
+            "`{name}`: {}",
+            combined(&output)
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_shebang_survives_check_format_emit_and_build() {
+    if !go_available() {
+        return;
+    }
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let dir = scratch.path();
+    let script = executable_script(dir, "greet.lis", GREETER);
+    let source = fs::read_to_string(&script).unwrap();
+
+    for args in [
+        vec!["check", "greet.lis"],
+        vec!["format", "--check", "greet.lis"],
+        vec!["emit", "greet.lis"],
+        vec!["build", "greet.lis", "-o", "greet.bin"],
+    ] {
+        let output = lis_in(dir, &args);
+        assert!(output.status.success(), "{args:?}: {}", combined(&output));
+    }
+
+    assert_eq!(
+        fs::read_to_string(&script).unwrap(),
+        source,
+        "the shebang must round-trip through `lis format`"
+    );
+    let go = fs::read_to_string(dir.join("greet.go")).unwrap();
+    assert!(
+        !go.contains("#!"),
+        "the shebang is a kernel instruction, not Go:\n{go}"
+    );
+}

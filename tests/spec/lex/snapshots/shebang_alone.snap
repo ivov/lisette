@@ -1,0 +1,22 @@
+---
+source: tests/spec/lex/mod.rs
+description: "#!/usr/bin/env -S lis run"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Shebang,
+            text: "#!/usr/bin/env -S lis run",
+            byte_offset: 0,
+            byte_length: 25,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 25,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    blank_lines: [],
+}

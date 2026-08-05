@@ -109,7 +109,7 @@ module.exports = grammar({
   word: $ => $.identifier,
 
   rules: {
-    source_file: $ => repeat($._statement),
+    source_file: $ => seq(optional($.shebang), repeat($._statement)),
 
     _statement: $ => choice(
       $.expression_statement,
@@ -1029,6 +1029,9 @@ module.exports = grammar({
     doc_comment: _ => token(seq('///', /.*/)),
 
     file_comment: _ => token(prec(1, seq('//!', /.*/))),
+
+    // `immediate` pins byte 0, and the class is the interpreter the compiler needs.
+    shebang: _ => token.immediate(/#![^\[\r\n][^\r\n]*/),
 
     // Identifiers
 

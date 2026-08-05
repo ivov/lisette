@@ -83,4 +83,80 @@ mod tests {
         assert!(result.errors.is_empty());
         assert!(result.ast.iter().any(contains_pipeline));
     }
+
+    #[test]
+    fn a_shebang_leaves_the_items_and_their_offsets_alone() {
+        let body = "import \"go:fmt\"\n\nfn main() {}\n";
+        let with_shebang = format!("#!/usr/bin/env -S lis run\n\n{body}");
+        let shift = with_shebang.len() - body.len();
+
+        let bare = super::build_ast(body, 0);
+        let result = super::build_ast(&with_shebang, 0);
+
+        assert!(result.errors.is_empty(), "{:?}", result.errors);
+        let offsets = |items: &[Expression]| {
+            items
+                .iter()
+                .map(|item| item.get_span().byte_offset as usize)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            offsets(&result.ast),
+            offsets(&bare.ast)
+                .into_iter()
+                .map(|offset| offset + shift)
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn a_file_comment_may_open_what_the_shebang_leaves() {
+        for source in [
+            "#!/usr/bin/env -S lis run\n//! A tool.\nfn main() {}",
+            "#!/usr/bin/env -S lis run\n\n//! A tool.\nfn main() {}",
+        ] {
+            let result = super::build_ast(source, 0);
+
+            assert!(result.errors.is_empty(), "{source:?}: {:?}", result.errors);
+            assert_eq!(
+                result.file_comment.as_deref(),
+                Some("A tool."),
+                "{source:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_file_comment_detached_from_the_shebang_is_misplaced() {
+        for source in [
+            "#!/usr/bin/env -S lis run\n\n\n//! A tool.\nfn main() {}",
+            "#!/usr/bin/env -S lis run\r\n\r\n\r\n//! A tool.\r\nfn main() {}",
+        ] {
+            let result = super::build_ast(source, 0);
+
+            assert_eq!(
+                result
+                    .errors
+                    .iter()
+                    .map(|error| error.code.as_str())
+                    .collect::<Vec<_>>(),
+                ["parse.misplaced_file_comment"],
+                "{source:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_file_comment_below_an_item_stays_misplaced_under_a_shebang() {
+        let result = super::build_ast("#!/usr/bin/env -S lis run\nfn main() {}\n//! Late.\n", 0);
+
+        assert_eq!(
+            result
+                .errors
+                .iter()
+                .map(|error| error.code.as_str())
+                .collect::<Vec<_>>(),
+            ["parse.misplaced_file_comment"]
+        );
+    }
 }

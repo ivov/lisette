@@ -10,6 +10,21 @@ mod errors;
 mod token;
 mod types;
 
+pub(crate) fn shebang_len(source: &str) -> Option<usize> {
+    let rest = source.strip_prefix("#!")?;
+    if matches!(rest.as_bytes().first()?, b'[' | b'\r' | b'\n') {
+        return None;
+    }
+
+    let length = rest
+        .as_bytes()
+        .iter()
+        .position(|byte| matches!(byte, b'\r' | b'\n'))
+        .unwrap_or(rest.len());
+
+    Some("#!".len() + length)
+}
+
 pub struct Lexer<'source> {
     input: &'source str,
     current_offset: usize,
@@ -33,6 +48,10 @@ impl<'source> Lexer<'source> {
 
     pub fn lex(mut self) -> LexResult<'source> {
         let mut tokens = Vec::new();
+
+        if let Some(shebang) = self.lex_shebang() {
+            tokens.push(shebang);
+        }
 
         loop {
             self.skip_whitespace();
@@ -1225,6 +1244,18 @@ impl<'source> Lexer<'source> {
         } else {
             self.error_unterminated_rune(start_offset, self.current_offset - start_offset);
         }
+    }
+
+    fn lex_shebang(&mut self) -> Option<Token<'source>> {
+        let length = shebang_len(self.input)?;
+        self.current_offset = length;
+
+        Some(Token {
+            kind: TokenKind::Shebang,
+            text: &self.input[..length],
+            byte_offset: 0,
+            byte_length: length as u32,
+        })
     }
 
     fn lex_slash(&mut self) -> Token<'source> {

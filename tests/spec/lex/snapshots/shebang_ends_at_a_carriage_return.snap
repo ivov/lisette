@@ -1,0 +1,58 @@
+---
+source: tests/spec/lex/mod.rs
+description: "#!/usr/bin/env -S lis run\\rfn main() {}"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Shebang,
+            text: "#!/usr/bin/env -S lis run",
+            byte_offset: 0,
+            byte_length: 25,
+        },
+        Token {
+            kind: Function,
+            text: "fn",
+            byte_offset: 26,
+            byte_length: 2,
+        },
+        Token {
+            kind: Identifier,
+            text: "main",
+            byte_offset: 29,
+            byte_length: 4,
+        },
+        Token {
+            kind: LeftParen,
+            text: "(",
+            byte_offset: 33,
+            byte_length: 1,
+        },
+        Token {
+            kind: RightParen,
+            text: ")",
+            byte_offset: 34,
+            byte_length: 1,
+        },
+        Token {
+            kind: LeftCurlyBrace,
+            text: "{",
+            byte_offset: 36,
+            byte_length: 1,
+        },
+        Token {
+            kind: RightCurlyBrace,
+            text: "}",
+            byte_offset: 37,
+            byte_length: 1,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 38,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    blank_lines: [],
+}

@@ -1,0 +1,132 @@
+---
+source: tests/spec/lex/mod.rs
+description: |-
+  fn main() {}
+  #!/usr/bin/env -S lis run
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Function,
+            text: "fn",
+            byte_offset: 0,
+            byte_length: 2,
+        },
+        Token {
+            kind: Identifier,
+            text: "main",
+            byte_offset: 3,
+            byte_length: 4,
+        },
+        Token {
+            kind: LeftParen,
+            text: "(",
+            byte_offset: 7,
+            byte_length: 1,
+        },
+        Token {
+            kind: RightParen,
+            text: ")",
+            byte_offset: 8,
+            byte_length: 1,
+        },
+        Token {
+            kind: LeftCurlyBrace,
+            text: "{",
+            byte_offset: 10,
+            byte_length: 1,
+        },
+        Token {
+            kind: RightCurlyBrace,
+            text: "}",
+            byte_offset: 11,
+            byte_length: 1,
+        },
+        Token {
+            kind: Semicolon,
+            text: "",
+            byte_offset: 12,
+            byte_length: 0,
+        },
+        Token {
+            kind: Hash,
+            text: "#",
+            byte_offset: 13,
+            byte_length: 1,
+        },
+        Token {
+            kind: Bang,
+            text: "!",
+            byte_offset: 14,
+            byte_length: 1,
+        },
+        Token {
+            kind: Slash,
+            text: "/",
+            byte_offset: 15,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "usr",
+            byte_offset: 16,
+            byte_length: 3,
+        },
+        Token {
+            kind: Slash,
+            text: "/",
+            byte_offset: 19,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "bin",
+            byte_offset: 20,
+            byte_length: 3,
+        },
+        Token {
+            kind: Slash,
+            text: "/",
+            byte_offset: 23,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "env",
+            byte_offset: 24,
+            byte_length: 3,
+        },
+        Token {
+            kind: Minus,
+            text: "-",
+            byte_offset: 28,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "S",
+            byte_offset: 29,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "lis",
+            byte_offset: 31,
+            byte_length: 3,
+        },
+        Token {
+            kind: Identifier,
+            text: "run",
+            byte_offset: 35,
+            byte_length: 3,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 38,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    blank_lines: [],
+}

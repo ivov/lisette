@@ -28,6 +28,7 @@ pub struct Comments<'a> {
     doc_comments: Vec<Comment<'a>>,
     doc_comments_cursor: usize,
     file_comments: Vec<Comment<'a>>,
+    shebang: Option<&'a str>,
     source: &'a str,
 }
 
@@ -65,7 +66,12 @@ impl<'a> Comments<'a> {
             .collect::<Vec<_>>();
         let mut doc_comments = Vec::new();
         let mut file_comments = Vec::new();
+        let mut shebang = None;
         for token in tokens {
+            if token.kind == TokenKind::Shebang {
+                shebang = source.get(token.byte_offset as usize..token.end_offset() as usize);
+                continue;
+            }
             let prefix = match token.kind {
                 TokenKind::Comment => "//",
                 TokenKind::DocComment => "///",
@@ -95,6 +101,7 @@ impl<'a> Comments<'a> {
             doc_comments,
             doc_comments_cursor: 0,
             file_comments,
+            shebang,
             source,
         }
     }
@@ -238,6 +245,10 @@ impl<'a> Comments<'a> {
         self.doc_comments_cursor = end;
 
         doc_comment_to_document(popped.iter().map(|c| c.content))
+    }
+
+    pub fn take_shebang(&mut self) -> Option<Document<'a>> {
+        self.shebang.take().map(Document::str)
     }
 
     pub fn take_file_comments(&mut self) -> Option<Document<'a>> {
@@ -437,6 +448,7 @@ mod tests {
             doc_comments: Vec::new(),
             doc_comments_cursor: 0,
             file_comments: Vec::new(),
+            shebang: None,
             source,
         }
     }

@@ -408,3 +408,89 @@ fn main() {}
     name: (identifier)
     parameters: (parameters)
     body: (block)))
+
+================================================================================
+Shebang
+================================================================================
+#!/usr/bin/env -S lis run
+
+fn main() {}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (shebang)
+  (function_item
+    name: (identifier)
+    parameters: (parameters)
+    body: (block)))
+
+================================================================================
+Shebang above a file comment
+================================================================================
+#!/usr/bin/env -S lis run
+//! A tool.
+
+fn main() {}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (shebang)
+  (file_comment)
+  (function_item
+    name: (identifier)
+    parameters: (parameters)
+    body: (block)))
+
+================================================================================
+Inner attribute is not a shebang
+================================================================================
+
+#![foo]
+fn main() {}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (attribute_item
+    (ERROR)
+    (attribute
+      name: (identifier)))
+  (function_item
+    name: (identifier)
+    parameters: (parameters)
+    body: (block)))
+
+================================================================================
+Bare shebang names no interpreter, so it is not a shebang
+================================================================================
+#!
+fn main() {}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (ERROR)
+  (function_item
+    name: (identifier)
+    parameters: (parameters)
+    body: (block)))
+
+================================================================================
+Shebang below byte zero is not a shebang
+================================================================================
+
+fn main() {}
+#!x
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_item
+    name: (identifier)
+    parameters: (parameters)
+    body: (block))
+  (ERROR)
+  (expression_statement
+    (identifier)))
