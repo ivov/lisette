@@ -4695,6 +4695,129 @@ type Cb = fn() -> Unknown;
 }
 
 #[test]
+fn tuple_of_concrete_widens_to_unknown_elements_in_argument_position() {
+    let input = r#"
+fn describe(pair: (int, Unknown)) -> string {
+  match assert_type<string>(pair.1) {
+    Some(text) => text,
+    None => "",
+  }
+}
+
+fn test() {
+  if describe((1, "two")) != "two" {
+    panic("tuple argument lost its Unknown element")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_of_concrete_widens_to_unknown_elements_in_slice_literal() {
+    let input = r#"
+fn second(pair: (string, Unknown)) -> int {
+  match assert_type<int>(pair.1) {
+    Some(value) => value,
+    None => 0,
+  }
+}
+
+fn test() {
+  let pairs: Slice<(string, Unknown)> = [("one", 2)]
+  if second(pairs[0]) != 2 {
+    panic("slice element lost its Unknown element")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_annotated_unknown_declares_any_for_concrete_value() {
+    let input = r#"
+fn identity(value: int) -> int {
+  value
+}
+
+fn describe(value: Unknown) -> string {
+  match assert_type<string>(value) {
+    Some(text) => text,
+    None => "",
+  }
+}
+
+fn test() {
+  let mut value: Unknown = identity(1)
+  value = "two"
+  if describe(value) != "two" {
+    panic("annotated Unknown binding was declared at the concrete type")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_shadowing_annotated_unknown_declares_any() {
+    let input = r#"
+fn identity(value: int) -> int {
+  value
+}
+
+fn describe(value: Unknown) -> string {
+  match assert_type<string>(value) {
+    Some(text) => text,
+    None => "",
+  }
+}
+
+fn test() {
+  let value = 1
+  let mut value: Unknown = identity(value)
+  value = "two"
+  if describe(value) != "two" {
+    panic("shadowing Unknown binding was declared at the concrete type")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_annotated_unknown_declares_any_for_propagated_value() {
+    let input = r#"
+fn fallible() -> Result<int, error> {
+  Ok(1)
+}
+
+fn describe(value: Unknown) -> string {
+  match assert_type<string>(value) {
+    Some(text) => text,
+    None => "",
+  }
+}
+
+fn run() -> Result<string, error> {
+  let mut value: Unknown = fallible()?
+  value = "two"
+  Ok(describe(value))
+}
+
+fn test() {
+  let text = match run() {
+    Ok(text) => text,
+    Err(_) => "",
+  }
+  if text != "two" {
+    panic("propagated Unknown binding was declared at the concrete type")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn option_in_go_unknown_struct_field_stays_tagged() {
     let input = r#"
 import "go:example.com/dyn"

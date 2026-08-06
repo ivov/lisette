@@ -819,6 +819,19 @@ fn test() -> Map<string, int> {
 }
 
 #[test]
+fn map_from_pairs_with_unknown_value() {
+    let input = r#"
+fn test() {
+  let m = Map.from<string, Unknown>([("one", "two")])
+  if m.length() != 1 {
+    panic("Map.from lost its entry when widening values to Unknown")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn map_with_void_function_value() {
     let input = r#"
 fn test() -> Map<string, fn()> {

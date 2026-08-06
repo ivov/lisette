@@ -663,7 +663,7 @@ impl Planner<'_> {
         }
         params
             .iter()
-            .any(|p| self.facts.is_interface(p) || self.is_function_alias(p))
+            .any(|p| self.facts.is_interface_or_unknown(p) || self.is_function_alias(p))
             .then(|| self.format_type_args(params))
     }
 }

@@ -25,7 +25,7 @@ fn needs_explicit_type_declaration(
     value: &Expression,
     binding_ty: &Type,
 ) -> bool {
-    if planner.facts.as_interface(binding_ty).is_some() {
+    if planner.facts.is_interface_or_unknown(binding_ty) {
         let value_ty = value.get_type();
         if *binding_ty != value_ty {
             return true;
@@ -75,7 +75,7 @@ fn resolve_let_temp_declaration_ty(
         }
         return binding_ty.clone();
     }
-    if planner.facts.is_interface(binding_ty) && *binding_ty != value_ty {
+    if planner.facts.is_interface_or_unknown(binding_ty) && *binding_ty != value_ty {
         return binding_ty.clone();
     }
     value_ty
@@ -156,7 +156,7 @@ impl Planner<'_> {
         };
         let go_identifier = self.choose_let_go_name(identifier, raw_go_name, false);
         let widens_to_interface =
-            self.facts.is_interface(binding_ty) && *binding_ty != value.get_type();
+            self.facts.is_interface_or_unknown(binding_ty) && *binding_ty != value.get_type();
         let mut statements = Vec::new();
         if widens_to_interface {
             let var_ty = self.go_type_string(binding_ty);
@@ -229,30 +229,32 @@ impl Planner<'_> {
         let (coercion_setup, value_expression) = coercion.lower(self, value_expression);
         statements.extend(coercion_setup);
 
-        let go_identifier = self.scope.bind(identifier, raw_go_name);
-        let is_new = self.try_declare(&go_identifier);
-
-        if !is_new || self.scope.is_active_assign_target(&go_identifier) {
+        let bound = self.scope.bind(identifier, raw_go_name);
+        let is_new = self.try_declare(&bound);
+        let go_identifier = if !is_new || self.scope.is_active_assign_target(&bound) {
             let fresh = self.fresh_var(Some(identifier));
             self.scope.bind(identifier, &fresh);
             self.try_declare(&fresh);
-            statements.push(LoweredStatement::TempBind {
-                name: fresh,
-                value: value_expression,
-            });
-        } else if needs_explicit_type_declaration(self, value, binding_ty) {
-            let var_ty = self.go_type_string(binding_ty);
-            statements.push(LoweredStatement::VarDecl {
-                name: go_identifier,
-                go_type: var_ty,
-                value: Some(value_expression),
-            });
+            fresh
         } else {
-            statements.push(LoweredStatement::TempBind {
-                name: go_identifier,
-                value: value_expression,
-            });
-        }
+            bound
+        };
+
+        statements.push(
+            if needs_explicit_type_declaration(self, value, binding_ty) {
+                let var_ty = self.go_type_string(binding_ty);
+                LoweredStatement::VarDecl {
+                    name: go_identifier,
+                    go_type: var_ty,
+                    value: Some(value_expression),
+                }
+            } else {
+                LoweredStatement::TempBind {
+                    name: go_identifier,
+                    value: value_expression,
+                }
+            },
+        );
         statements
     }
 

@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn take(value: Option<Unknown>) -> bool {
+    value.is_some()
+  }
+  
+  fn test() {
+    let boxed: Option<Unknown> = Some(1)
+    if !take(boxed) {
+      panic("Option<Unknown> lost its widened type argument")
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func take(value lisette.Option[any]) bool {
+	return value.IsSome()
+}
+
+func test() {
+	boxed := lisette.MakeOptionSome[any](1)
+	if !take(boxed) {
+		panic("Option<Unknown> lost its widened type argument")
+	}
+}

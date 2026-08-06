@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn test() {
+    let m = Map.from<string, Unknown>([("one", "two")])
+    if m.length() != 1 {
+      panic("Map.from lost its entry when widening values to Unknown")
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() {
+	tup_1 := lisette.MakeTuple2("one", "two")
+	m := lisette.MapFrom[string, any]([]lisette.Tuple2[string, any]{lisette.MakeTuple2[string, any](tup_1.First, tup_1.Second)})
+	if len(m) != 1 {
+		panic("Map.from lost its entry when widening values to Unknown")
+	}
+}

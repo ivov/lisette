@@ -1,0 +1,78 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  fn fallible() -> Result<int, error> {
+    Ok(1)
+  }
+  
+  fn describe(value: Unknown) -> string {
+    match assert_type<string>(value) {
+      Some(text) => text,
+      None => "",
+    }
+  }
+  
+  fn run() -> Result<string, error> {
+    let mut value: Unknown = fallible()?
+    value = "two"
+    Ok(describe(value))
+  }
+  
+  fn test() {
+    let text = match run() {
+      Ok(text) => text,
+      Err(_) => "",
+    }
+    if text != "two" {
+      panic("propagated Unknown binding was declared at the concrete type")
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func fallible() (int, error) {
+	return 1, nil
+}
+
+func describe(value any) string {
+	subject_1 := lisette.AssertType[string](value)
+	if subject_1.Tag == lisette.OptionSome {
+		return subject_1.SomeVal
+	}
+	return ""
+}
+
+func run() (string, error) {
+	var value any
+	ret_1, ret_2 := fallible()
+	var result_3 lisette.Result[int, error]
+	if ret_2 != nil {
+		result_3 = lisette.MakeResultErr[int, error](ret_2)
+	} else {
+		result_3 = lisette.MakeResultOk[int, error](ret_1)
+	}
+	check_4 := result_3
+	if check_4.Tag != lisette.ResultOk {
+		return "", check_4.ErrVal
+	}
+	value = check_4.OkVal
+	value = "two"
+	return describe(value), nil
+}
+
+func test() {
+	var text_1 string
+	ret_2, ret_3 := run()
+	if ret_3 == nil {
+		text := ret_2
+		text_1 = text
+	} else {
+		text_1 = ""
+	}
+	if text_1 != "two" {
+		panic("propagated Unknown binding was declared at the concrete type")
+	}
+}

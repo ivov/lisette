@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn take(v: int64) -> int64 {
+    v
+  }
+  
+  fn test() {
+    let x = 1
+    if x != 1 {
+      panic("outer binding was clobbered")
+    }
+    let x: int64 = 5
+    if take(x) != 5 {
+      panic("shadowing binding lost its annotated type")
+    }
+  }
+---
+package main
+
+func take(v int64) int64 {
+	return v
+}
+
+func test() {
+	x := 1
+	if x != 1 {
+		panic("outer binding was clobbered")
+	}
+	var x_1 int64 = 5
+	if take(x_1) != 5 {
+		panic("shadowing binding lost its annotated type")
+	}
+}

@@ -152,6 +152,10 @@ impl<'a> EmitFacts<'a> {
         as_interface(self.definitions, ty).is_some()
     }
 
+    pub(crate) fn is_interface_or_unknown(&self, ty: &Type) -> bool {
+        self.is_interface(ty) || self.resolves_to_unknown(ty)
+    }
+
     pub(crate) fn is_nilable_go_type(&self, ty: &Type) -> bool {
         is_nilable_go_type(self.definitions, ty)
     }

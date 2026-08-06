@@ -1024,6 +1024,23 @@ fn test() {
 }
 
 #[test]
+fn option_with_unknown_type_param() {
+    let input = r#"
+fn take(value: Option<Unknown>) -> bool {
+  value.is_some()
+}
+
+fn test() {
+  let boxed: Option<Unknown> = Some(1)
+  if !take(boxed) {
+    panic("Option<Unknown> lost its widened type argument")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn slice_of_option_interface() {
     let input = r#"
 interface Printable {

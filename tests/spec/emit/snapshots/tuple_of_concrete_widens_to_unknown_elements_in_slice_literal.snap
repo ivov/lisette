@@ -1,0 +1,37 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  fn second(pair: (string, Unknown)) -> int {
+    match assert_type<int>(pair.1) {
+      Some(value) => value,
+      None => 0,
+    }
+  }
+  
+  fn test() {
+    let pairs: Slice<(string, Unknown)> = [("one", 2)]
+    if second(pairs[0]) != 2 {
+      panic("slice element lost its Unknown element")
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func second(pair lisette.Tuple2[string, any]) int {
+	subject_1 := lisette.AssertType[int](pair.Second)
+	if subject_1.Tag == lisette.OptionSome {
+		return subject_1.SomeVal
+	}
+	return 0
+}
+
+func test() {
+	tup_1 := lisette.MakeTuple2("one", 2)
+	pairs := []lisette.Tuple2[string, any]{lisette.MakeTuple2[string, any](tup_1.First, tup_1.Second)}
+	if second(pairs[0]) != 2 {
+		panic("slice element lost its Unknown element")
+	}
+}

@@ -1662,6 +1662,27 @@ fn test(items: Slice<int>) -> int {
 }
 
 #[test]
+fn shadowing_let_keeps_its_annotated_type() {
+    let input = r#"
+fn take(v: int64) -> int64 {
+  v
+}
+
+fn test() {
+  let x = 1
+  if x != 1 {
+    panic("outer binding was clobbered")
+  }
+  let x: int64 = 5
+  if take(x) != 5 {
+    panic("shadowing binding lost its annotated type")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn parameter_shadows_go_builtin() {
     let input = r#"
 fn test(len: int) -> int {

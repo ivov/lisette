@@ -327,7 +327,10 @@ impl Planner<'_> {
 
     pub(crate) fn make_tuple_callee(&mut self, slot_types: &[Type], arity: usize) -> String {
         self.require_stdlib();
-        if !slot_types.iter().any(|slot| self.facts.is_interface(slot)) {
+        if !slot_types
+            .iter()
+            .any(|slot| self.facts.is_interface_or_unknown(slot))
+        {
             return format!("lisette.MakeTuple{}", arity);
         }
         let rendered: Vec<String> = slot_types

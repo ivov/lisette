@@ -539,7 +539,8 @@ fn aggregate_rebuild(planner: &Planner<'_>, from: &Type, to: &Type) -> Option<Co
 
 fn widening_element_plan(planner: &Planner<'_>, from: &Type, to: &Type) -> Option<CoercionPlan> {
     let plan = CoercionPlan::internal(planner, from, to);
-    (from != to && (planner.facts.is_interface(to) || !plan.is_identity())).then_some(plan)
+    (from != to && (planner.facts.is_interface_or_unknown(to) || !plan.is_identity()))
+        .then_some(plan)
 }
 
 fn needs_newtype_wrap(planner: &Planner<'_>, from: &Type, to: &Type) -> bool {
