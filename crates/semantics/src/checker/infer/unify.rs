@@ -5,6 +5,7 @@ use syntax::ast::Span;
 use syntax::types::{Bound, CompoundKind, Type, TypeVarId};
 
 use crate::checker::infer::InferCtx;
+use crate::checker::infer::carry_mut::can_carry_mutation_across_fn_boundary;
 use crate::checker::type_env::VarState;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -557,17 +558,6 @@ impl InferCtx<'_> {
             return Err(UnifyError::ArityMismatch);
         }
 
-        // A function with `mut` params cannot unify with one without (or vice versa),
-        // since that would let callers bypass the `let mut` requirement.
-        if f1
-            .params
-            .iter()
-            .zip(&f2.params)
-            .any(|(left, right)| left.mutable != right.mutable)
-        {
-            return Err(UnifyError::TypeMismatch);
-        }
-
         let (params_result, return_type_result) = self.in_invariant_position(|this| {
             let params_result = this.unify_pairs(
                 f1.params
@@ -579,6 +569,15 @@ impl InferCtx<'_> {
             let return_type_result = this.try_unify(&f1.return_type, &f2.return_type, span);
             (params_result, return_type_result)
         });
+
+        if params_result.is_ok()
+            && f1.params.iter().zip(&f2.params).any(|(left, right)| {
+                left.mutable != right.mutable
+                    && (self.mut_reaches_caller(&left.ty) || self.mut_reaches_caller(&right.ty))
+            })
+        {
+            return Err(UnifyError::TypeMismatch);
+        }
 
         for bound in &f1.bounds {
             self.check_function_bound(bound, &f1.params, span);
@@ -597,6 +596,12 @@ impl InferCtx<'_> {
             (Ok(()), Err(e2)) => Err(e2),
             (Err(e1), Err(e2)) => Err(UnifyError::Multiple(Box::new(vec![e1, e2]))),
         }
+    }
+
+    fn mut_reaches_caller(&self, ty: &Type) -> bool {
+        let resolved = self.store.peel_alias(&ty.resolve_in(&self.env));
+        can_carry_mutation_across_fn_boundary(&resolved, &self.env, self.store)
+            || self.store.is_interface(&resolved)
     }
 
     fn bounds_equivalent(&self, bounds1: &[Bound], bounds2: &[Bound]) -> bool {
@@ -877,6 +882,12 @@ impl InferCtx<'_> {
             return "Remove the `()` so that the type matches".to_string();
         }
 
+        if differs_only_in_param_mutability(expected, actual) {
+            return format!(
+                "`mut` belongs to the function type when the parameter carries mutation back to the caller. Match `mut` on each differing parameter, or expect `{actual_name}` instead"
+            );
+        }
+
         match self.closure_adapter(expected, actual) {
             Some(ClosureAdapter::Widens) => {
                 return "Function types must match exactly. Wrap the value in a closure to convert at the call site, e.g. `|value| callee(value)`".to_string();
@@ -1024,6 +1035,22 @@ fn array_to_slice_help_applies(expected: &Type, actual: &Type) -> bool {
         return false;
     };
     expected_element == element.as_ref()
+}
+
+/// Whether two function types are the same but for `mut` on one or more parameters.
+fn differs_only_in_param_mutability(expected: &Type, actual: &Type) -> bool {
+    let (Function(expected), Function(actual)) = (expected, actual) else {
+        return false;
+    };
+    if expected.params.len() != actual.params.len()
+        || expected.return_type != actual.return_type
+        || expected.bounds != actual.bounds
+    {
+        return false;
+    }
+    let pairs = || expected.params.iter().zip(&actual.params);
+    pairs().all(|(left, right)| left.ty == right.ty)
+        && pairs().any(|(left, right)| left.mutable != right.mutable)
 }
 
 fn are_go_type_aliases(a: &str, b: &str) -> bool {

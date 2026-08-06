@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+    ╭─[test.lis:13:17]
+ 12 │   let buf = Slice.make<byte>(3)
+ 13 │   let _ = apply(advance, buf)
+    ·                 ───┬───
+    ·                    ╰── expected `fn (Slice<byte>) -> int`, found `fn (mut Slice<byte>) -> int`
+ 14 │ }
+    ╰────
+  help: `mut` belongs to the function type when the parameter carries mutation back to the caller. Match `mut` on each differing parameter, or expect `fn (mut Slice<byte>) -> int` instead · code: [infer.type_mismatch]

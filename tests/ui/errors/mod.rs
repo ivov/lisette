@@ -1965,6 +1965,47 @@ fn test() {
 }
 
 #[test]
+fn infer_mut_param_function_type_mismatch() {
+    let input = r#"
+fn advance(mut data: Slice<byte>) -> int {
+  data = data[1..]
+  return data.length()
+}
+
+fn apply(f: fn(Slice<byte>) -> int, v: Slice<byte>) -> int {
+  return f(v)
+}
+
+fn test() {
+  let buf = Slice.make<byte>(3)
+  let _ = apply(advance, buf)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_opposing_mut_params_function_type_mismatch() {
+    let input = r#"
+fn advance(mut head: Slice<int>, tail: Slice<int>) -> int {
+  head = head[1..]
+  head.length() + tail.length()
+}
+
+fn apply(f: fn(Slice<int>, mut Slice<int>) -> int, a: Slice<int>, mut b: Slice<int>) -> int {
+  f(a, b)
+}
+
+fn test() {
+  let a = [1]
+  let mut b = [2]
+  let _ = apply(advance, a, b)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_function_value_with_concrete_param_where_interface_param_expected() {
     let input = r#"
 struct FooError {}

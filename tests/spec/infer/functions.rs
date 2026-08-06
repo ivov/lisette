@@ -2560,6 +2560,186 @@ fn main() {
 }
 
 #[test]
+fn mut_int_param_unifies_with_plain_function_type() {
+    infer(
+        r#"
+fn bump(mut n: int) -> int {
+  n += 1
+  return n
+}
+
+fn apply(f: fn(int) -> int, v: int) -> int {
+  return f(v)
+}
+
+fn main() {
+  let _ = apply(bump, 1)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mut_value_struct_param_unifies_with_plain_function_type() {
+    infer(
+        r#"
+struct Point { x: int, y: int }
+
+fn relocate(mut p: Point) -> Point {
+  p = Point { x: 0, y: 0 }
+  return p
+}
+
+fn apply(f: fn(Point) -> Point, p: Point) -> Point {
+  return f(p)
+}
+
+fn main() {
+  let _ = apply(relocate, Point { x: 1, y: 2 })
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mut_int_param_satisfies_plain_interface_method() {
+    infer(
+        r#"
+interface Counter {
+  fn bump(n: int) -> int
+}
+
+struct Impl { base: int }
+
+impl Impl {
+  fn bump(self: Ref<Impl>, mut n: int) -> int {
+    n += 1
+    return self.base + n
+  }
+}
+
+fn use_it(c: Counter) -> int {
+  return c.bump(1)
+}
+
+fn main() {
+  let it = Impl { base: 10 }
+  let _ = use_it(&it)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mut_slice_param_does_not_unify_with_plain_function_type() {
+    infer(
+        r#"
+fn advance(mut data: Slice<byte>) -> int {
+  data = data[1..]
+  return data.length()
+}
+
+fn apply(f: fn(Slice<byte>) -> int, v: Slice<byte>) -> int {
+  return f(v)
+}
+
+fn main() {
+  let buf = Slice.make<byte>(3)
+  let _ = apply(advance, buf)
+}
+"#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn mut_struct_containing_slice_param_does_not_unify_with_plain_function_type() {
+    infer(
+        r#"
+struct Box { items: Slice<int> }
+
+fn write_first(mut b: Box) {
+  b.items[0] = 99
+}
+
+fn apply(f: fn(Box), b: Box) {
+  f(b)
+}
+
+fn main() {
+  let b = Box { items: [1, 2, 3] }
+  apply(write_first, b)
+}
+"#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn mut_interface_param_does_not_unify_with_plain_function_type() {
+    infer(
+        r#"
+struct Counter { n: int }
+
+impl Counter {
+  fn bump(self: Ref<Counter>) { self.n += 1 }
+}
+
+interface Bumper {
+  fn bump()
+}
+
+fn use_it(mut b: Bumper) {
+  b.bump()
+}
+
+fn call(f: fn(Bumper), b: Bumper) {
+  f(b)
+}
+
+fn main() {
+  let c = Counter { n: 0 }
+  call(use_it, &c)
+}
+"#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn mut_slice_param_does_not_satisfy_plain_interface_method() {
+    infer(
+        r#"
+interface Sink {
+  fn write(data: Slice<byte>) -> int
+}
+
+struct Impl { total: int }
+
+impl Impl {
+  fn write(self: Ref<Impl>, mut data: Slice<byte>) -> int {
+    data = data[1..]
+    return self.total + data.length()
+  }
+}
+
+fn use_it(s: Sink) -> int {
+  return s.write(Slice.make<byte>(3))
+}
+
+fn main() {
+  let it = Impl { total: 10 }
+  let _ = use_it(&it)
+}
+"#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
 fn generic_empty_varargs_call_without_type_arg_errors() {
     infer(
         r#"
