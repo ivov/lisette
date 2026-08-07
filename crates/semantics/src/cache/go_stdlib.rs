@@ -7,7 +7,6 @@ use stdlib::{Target, get_go_stdlib_typedef};
 use super::disk;
 use super::types::CachedDefinition;
 use super::{CACHE_FORMAT_VERSION, COMPILER_VERSION_HASH, GO_STDLIB_HASH};
-use crate::checker::registration::extract_package_directive;
 use crate::store::Store;
 use syntax::program::File;
 
@@ -130,11 +129,11 @@ fn register_cached_go_package(
     let source = go_pkg.and_then(|go_pkg| get_go_stdlib_typedef(go_pkg, target));
 
     if let Some(source) = source
-        && let Some(pkg_name) = extract_package_directive(source)
+        && let Some(pkg_name) = stdlib::declared_package_name(source)
     {
         store
             .go_package_names
-            .insert(package_id.to_string(), pkg_name);
+            .insert(package_id.to_string(), pkg_name.to_string());
     }
 
     // Register the typedef File and its on-disk path so go-to-definition can

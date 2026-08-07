@@ -19,10 +19,10 @@ impl TaskState {
 
         store.add_package(package_id);
 
-        if let Some(pkg_name) = extract_package_directive(source) {
+        if let Some(pkg_name) = stdlib::declared_package_name(source) {
             store
                 .go_package_names
-                .insert(package_id.to_string(), pkg_name);
+                .insert(package_id.to_string(), pkg_name.to_string());
         }
 
         let file_id = store.new_file_id();

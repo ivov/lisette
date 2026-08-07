@@ -28,14 +28,7 @@ impl Import<'_> {
     }
 
     fn sort_path(&self) -> &str {
-        match self.alias {
-            Some(ImportAlias::Named(alias, _)) => alias,
-            Some(ImportAlias::Blank(_)) => "_",
-            None => self
-                .name
-                .split_once(':')
-                .map_or(self.name, |(_, path)| path),
-        }
+        crate::import_sort_key(self.name, self.alias)
     }
 }
 

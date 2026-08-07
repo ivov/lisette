@@ -15,22 +15,6 @@ const KNOWN_GO_HINTS: &[&str] = &[
     "zero_unsafe",
 ];
 
-pub(crate) fn extract_package_directive(source: &str) -> Option<String> {
-    for line in source.lines().take(10) {
-        let line = line.trim_start();
-        if let Some(rest) = line.strip_prefix("// Package:") {
-            let name = rest.trim();
-            if !name.is_empty() {
-                return Some(name.to_string());
-            }
-        }
-        if !line.starts_with("//") && !line.is_empty() {
-            break;
-        }
-    }
-    None
-}
-
 pub(super) fn extract_go_name(attributes: &[Attribute]) -> Option<String> {
     attributes
         .iter()

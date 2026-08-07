@@ -15,7 +15,7 @@ pub(crate) mod test_functions;
 mod types;
 mod values;
 
-pub(crate) use attributes::*;
+use attributes::*;
 use metadata::{
     declaration_value_position_types, enum_variant_constructor_type, function_signature_pairs,
     has_recursive_instantiation, wrap_with_impl_generics,

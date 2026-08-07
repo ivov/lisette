@@ -6,11 +6,21 @@ pub(crate) use formatter::Formatter;
 
 use comments::Comments;
 use syntax::ParseError;
+use syntax::ast::ImportAlias;
 use syntax::lex::Lexer;
 use syntax::parse::{IMPORT_AFTER_ITEM_CODE, Parser};
 
 const MAX_LINE_WIDTH: isize = 80;
 const INDENT_WIDTH: isize = 2;
+
+/// The key an import sorts by within its group.
+pub fn import_sort_key<'a>(name: &'a str, alias: Option<&'a ImportAlias>) -> &'a str {
+    match alias {
+        Some(ImportAlias::Named(alias, _)) => alias,
+        Some(ImportAlias::Blank(_)) => "_",
+        None => name.split_once(':').map_or(name, |(_, path)| path),
+    }
+}
 
 pub fn format_source(source: &str) -> Result<String, Vec<ParseError>> {
     let lex_result = Lexer::new(source, 0).lex();
