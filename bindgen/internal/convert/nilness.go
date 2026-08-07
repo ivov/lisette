@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"go/types"
 	"os"
-	"slices"
 	"sort"
 
 	"github.com/ivov/lisette/bindgen/internal/config"
@@ -39,11 +38,15 @@ type NilnessAnalysis struct {
 	verdicts       map[*types.Func]FunctionNilness
 	summaries      map[*ssa.Function]*nilnessSummary
 	staticRecovers map[*ssa.Function]bool
+	// inProgress: a summary read while on the stack is partial
+	inProgress map[*ssa.Function]bool
 	// summaryDepth bounds acyclic recursion; cycles hit the memo placeholder
 	summaryDepth int
 
 	globalUsages map[*ssa.Global]*globalUsage
 	globalFacts  map[*ssa.Global]nilness
+
+	params *ParameterNilability
 }
 
 // NewNilnessAnalysis returns nil when SSA construction fails, leaving
@@ -73,6 +76,7 @@ func NewNilnessAnalysis(roots []*packages.Package, cfg *config.Config) (analysis
 		verdicts:       make(map[*types.Func]FunctionNilness),
 		summaries:      make(map[*ssa.Function]*nilnessSummary),
 		staticRecovers: make(map[*ssa.Function]bool),
+		inProgress:     make(map[*ssa.Function]bool),
 		globalFacts:    make(map[*ssa.Global]nilness),
 	}
 
@@ -81,6 +85,7 @@ func NewNilnessAnalysis(roots []*packages.Package, cfg *config.Config) (analysis
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].PkgPath < sorted[j].PkgPath })
 
 	// cycle verdicts depend on summarization order, so fix it here
+	var bound []*types.Func
 	for _, pkg := range sorted {
 		if pkg.Types == nil {
 			continue
@@ -89,7 +94,7 @@ func NewNilnessAnalysis(roots []*packages.Package, cfg *config.Config) (analysis
 		for _, name := range scope.Names() {
 			switch obj := scope.Lookup(name).(type) {
 			case *types.Func:
-				analysis.record(obj)
+				bound = append(bound, obj)
 			case *types.TypeName:
 				named, ok := obj.Type().(*types.Named)
 				if !ok {
@@ -97,14 +102,26 @@ func NewNilnessAnalysis(roots []*packages.Package, cfg *config.Config) (analysis
 				}
 				for sel := range program.MethodSets.MethodSet(types.NewPointer(named)).Methods() {
 					if fn, ok := sel.Obj().(*types.Func); ok {
-						analysis.record(fn)
+						bound = append(bound, fn)
 					}
 				}
 			}
 		}
 	}
 
+	analysis.params = newParameterNilability(analysis, bound, sorted)
+	for _, fn := range bound {
+		analysis.record(fn)
+	}
+
 	return analysis
+}
+
+func (a *NilnessAnalysis) Params() *ParameterNilability {
+	if a == nil {
+		return nil
+	}
+	return a.params
 }
 
 func (a *NilnessAnalysis) Function(obj types.Object) (FunctionNilness, bool) {
@@ -128,11 +145,12 @@ func (a *NilnessAnalysis) record(fn *types.Func) {
 		a.verdicts[fn] = FunctionNilness{}
 		return
 	}
-	var nilableParams []string
-	if a.cfg != nil && fn.Pkg() != nil {
-		nilableParams = a.cfg.NilableParams(fn.Pkg().Path(), qualifiedFunctionName(fn))
+	body := functionBody(ssaFn)
+	if body == nil {
+		a.verdicts[fn] = FunctionNilness{}
+		return
 	}
-	a.verdicts[fn] = a.analyze(ssaFn, nilableParams)
+	a.verdicts[fn] = a.analyze(ssaFn, a.withdrawnPositions(fn, body))
 }
 
 // qualifiedFunctionName matches the config key format.
@@ -151,7 +169,7 @@ func qualifiedFunctionName(fn *types.Func) string {
 	return fn.Name()
 }
 
-func (a *NilnessAnalysis) analyze(fn *ssa.Function, nilableParams []string) FunctionNilness {
+func (a *NilnessAnalysis) analyze(fn *ssa.Function, withdrawn []bool) FunctionNilness {
 	body := functionBody(fn)
 	if body == nil {
 		return FunctionNilness{}
@@ -179,14 +197,14 @@ func (a *NilnessAnalysis) analyze(fn *ssa.Function, nilableParams []string) Func
 
 	merged := nilnessValue{n: nilnessNonNil}
 
-	sawReturn := a.walkReturnSites(body, a.boundaryAxioms(body, nilableParams), func(ret *ssa.Return, dominating []nilnessFact, values []nilnessValue) {
+	sawReturn := a.walkReturnSites(body, a.boundaryAxioms(body, withdrawn), func(ret *ssa.Return, dominating []nilnessFact, values []nilnessValue) {
 		// NilWithNilError needs a provable (nil, nil): a bare inherited
 		// witness is usually a lost error correlation.
 		for i := range values {
 			if values[i].witness {
 				facts.NilWitness[i] = true
 			}
-			if values[i].n == nilnessNil && lastIsError && values[resultCount-1].n == nilnessNil {
+			if (values[i].n == nilnessNil || values[i].boundaryNil) && lastIsError && values[resultCount-1].n == nilnessNil {
 				facts.NilWithNilError[i] = true
 			}
 		}
@@ -218,8 +236,9 @@ func (a *NilnessAnalysis) analyze(fn *ssa.Function, nilableParams []string) Func
 func (a *NilnessAnalysis) walkReturnSites(body *ssa.Function, axioms []nilnessFact, visit func(*ssa.Return, []nilnessFact, []nilnessValue)) bool {
 	resultCount := body.Signature.Results().Len()
 	sawReturn := false
-	a.walk(body, axioms, func(ret *ssa.Return, dominating []nilnessFact) {
-		if len(ret.Results) != resultCount {
+	a.walk(body, axioms, func(instr ssa.Instruction, dominating []nilnessFact) {
+		ret, ok := instr.(*ssa.Return)
+		if !ok || len(ret.Results) != resultCount {
 			return
 		}
 		values, ok := a.siteValues(body, ret, dominating)
@@ -260,17 +279,40 @@ func (a *NilnessAnalysis) forwardedNilNil(ret *ssa.Return, values []nilnessValue
 	return out
 }
 
-// boundaryAxioms: Lisette passes pointers and interfaces as non-nil Ref<T>
-// and interface values. A Lisette empty slice may be a nil Go slice.
-func (a *NilnessAnalysis) boundaryAxioms(fn *ssa.Function, nilableParams []string) []nilnessFact {
+// boundaryAxioms: a parameter is assumed non-nil exactly when Lisette cannot
+// pass nil to it. Withdrawal seeds a fact rather than omitting one, since
+// omitting reads as ignorance rather than as a caller who can pass None.
+func (a *NilnessAnalysis) boundaryAxioms(fn *ssa.Function, withdrawn []bool) []nilnessFact {
 	var out []nilnessFact
-	for _, param := range fn.Params {
-		if slices.Contains(nilableParams, param.Name()) {
-			continue
-		}
+	for position, param := range fn.Params {
 		switch param.Type().Underlying().(type) {
 		case *types.Pointer, *types.Interface:
-			out = append(out, nilnessFact{param, nilnessNonNil})
+		default:
+			continue
+		}
+		if position < len(withdrawn) && withdrawn[position] {
+			out = append(out, nilnessFact{value: param, n: nilnessUnknown, boundaryNil: true})
+			continue
+		}
+		out = append(out, nilnessFact{value: param, n: nilnessNonNil})
+	}
+	return out
+}
+
+// withdrawnPositions marks the SSA positions whose surface is Option<Ref<T>>.
+func (a *NilnessAnalysis) withdrawnPositions(fn *types.Func, body *ssa.Function) []bool {
+	out := make([]bool, len(body.Params))
+	sig, ok := fn.Type().(*types.Signature)
+	if !ok {
+		return out
+	}
+	offset := 0
+	if sig.Recv() != nil {
+		offset = 1
+	}
+	for position := range out {
+		if index := position - offset; index >= 0 {
+			out[position] = a.params.Optional(fn, index)
 		}
 	}
 	return out

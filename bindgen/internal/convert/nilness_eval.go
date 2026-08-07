@@ -19,8 +19,9 @@ const (
 
 // witness: a concrete nil-producing path exists, not mere ignorance.
 type nilnessValue struct {
-	n       nilness
-	witness bool
+	n           nilness
+	witness     bool
+	boundaryNil bool
 }
 
 func meetNilness(a, b nilnessValue) nilnessValue {
@@ -28,12 +29,13 @@ func meetNilness(a, b nilnessValue) nilnessValue {
 	if a.n != b.n {
 		n = nilnessUnknown
 	}
-	return nilnessValue{n, a.witness || b.witness}
+	return nilnessValue{n, a.witness || b.witness, a.boundaryNil || b.boundaryNil}
 }
 
 type nilnessFact struct {
-	value ssa.Value
-	n     nilness
+	value       ssa.Value
+	n           nilness
+	boundaryNil bool
 }
 
 func nilComparison(b *ssa.BasicBlock) (op *ssa.BinOp, trueSucc, falseSucc *ssa.BasicBlock) {
@@ -54,8 +56,7 @@ func nilComparison(b *ssa.BasicBlock) (op *ssa.BinOp, trueSucc, falseSucc *ssa.B
 	return nil, nil, nil
 }
 
-// walk mirrors the x/tools nilness pass: dominator order, edge facts.
-func (a *NilnessAnalysis) walk(fn *ssa.Function, axioms []nilnessFact, found func(*ssa.Return, []nilnessFact)) {
+func (a *NilnessAnalysis) walk(fn *ssa.Function, axioms []nilnessFact, found func(ssa.Instruction, []nilnessFact)) {
 	if fn.Blocks == nil {
 		return
 	}
@@ -68,9 +69,7 @@ func (a *NilnessAnalysis) walk(fn *ssa.Function, axioms []nilnessFact, found fun
 		seen[b.Index] = true
 
 		for _, instr := range b.Instrs {
-			if ret, ok := instr.(*ssa.Return); ok {
-				found(ret, stack)
-			}
+			found(instr, stack)
 		}
 
 		if binop, trueSucc, falseSucc := nilComparison(b); binop != nil {
@@ -107,9 +106,9 @@ func (a *NilnessAnalysis) walk(fn *ssa.Function, axioms []nilnessFact, found fun
 						// own logical length
 						switch d {
 						case trueSucc:
-							s = append(stack, nilnessFact{v, nilnessNil})
+							s = append(stack, nilnessFact{value: v, n: nilnessNil})
 						case falseSucc:
-							s = append(stack, nilnessFact{v, nilnessNonNil})
+							s = append(stack, nilnessFact{value: v, n: nilnessNonNil})
 						}
 					}
 					visit(d, s)
@@ -143,10 +142,10 @@ func edgeFact(pred, succ *ssa.BasicBlock) (nilnessFact, bool) {
 		return nilnessFact{}, false
 	}
 	if succ == trueSucc {
-		return nilnessFact{v, nilnessNil}, true
+		return nilnessFact{value: v, n: nilnessNil}, true
 	}
 	if succ == falseSucc {
-		return nilnessFact{v, nilnessNonNil}, true
+		return nilnessFact{value: v, n: nilnessNonNil}, true
 	}
 	return nilnessFact{}, false
 }
@@ -160,7 +159,8 @@ func (a *NilnessAnalysis) eval(v ssa.Value, stack []nilnessFact, visiting map[ss
 
 	for i := len(stack) - 1; i >= 0; i-- {
 		if stack[i].value == v {
-			return nilnessValue{stack[i].n, stack[i].n == nilnessNil}
+			f := stack[i]
+			return nilnessValue{f.n, f.n == nilnessNil || f.boundaryNil, f.boundaryNil}
 		}
 	}
 
@@ -179,7 +179,7 @@ func (a *NilnessAnalysis) eval(v ssa.Value, stack []nilnessFact, visiting map[ss
 
 	case *ssa.Const:
 		if v.IsNil() {
-			return nilnessValue{nilnessNil, true}
+			return nilnessValue{n: nilnessNil, witness: true}
 		}
 		return nilnessValue{}
 

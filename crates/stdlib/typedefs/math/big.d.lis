@@ -269,7 +269,7 @@ impl Float {
   /// 
   /// x and mant may be the same in which case x is set to its
   /// mantissa value.
-  fn MantExp(self: Ref<Float>, mant: Ref<Float>) -> int
+  fn MantExp(self: Ref<Float>, mant: Option<Ref<Float>>) -> int
 
   /// MarshalText implements the [encoding.TextMarshaler] interface.
   /// Only the [Float] value is marshaled (in full precision), other

@@ -19,23 +19,32 @@ type nilnessSummary struct {
 	exclusive bool
 	// nilWithNilError[i]: some site returns result i nil with a nil error
 	nilWithNilError []bool
+	// incomplete: cut short by depth or read mid-build, so an empty delegates
+	// means "not computed" rather than "nothing delegated"
+	incomplete bool
 }
 
 const nilnessMaxDepth = 32
 
-// summarize memoizes; a function on the summarization stack yields the
-// zero summary.
+// summarize memoizes. A function on the summarization stack yields the partial
+// summary built so far, flagged incomplete.
 func (a *NilnessAnalysis) summarize(fn *ssa.Function) *nilnessSummary {
 	if s, ok := a.summaries[fn]; ok {
+		if a.inProgress[fn] {
+			s.incomplete = true
+		}
 		return s
 	}
 	if a.summaryDepth > nilnessMaxDepth {
-		return &nilnessSummary{} // not memoized: shallow by depth, not by content
+		// not memoized: shallow by depth, not by content
+		return &nilnessSummary{incomplete: true}
 	}
 	a.summaryDepth++
 	defer func() { a.summaryDepth-- }()
 	s := &nilnessSummary{}
 	a.summaries[fn] = s
+	a.inProgress[fn] = true
+	defer delete(a.inProgress, fn)
 
 	body := functionBody(fn)
 	if body == nil {
@@ -253,6 +262,15 @@ func (a *NilnessAnalysis) callResult(s *nilnessSummary, index int, args []ssa.Va
 			r = meetNilness(r, a.eval(args[j], dominating, visiting))
 		} else {
 			r = meetNilness(r, nilnessValue{})
+		}
+	}
+	if s.incomplete {
+		for _, arg := range args {
+			if a.eval(arg, dominating, visiting).boundaryNil {
+				r.witness = true
+				r.boundaryNil = true
+				break
+			}
 		}
 	}
 	return r

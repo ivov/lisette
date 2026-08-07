@@ -158,7 +158,7 @@ pub fn New(h: Handler) -> Ref<Logger>
 /// NewJSONHandler creates a [JSONHandler] that writes to w,
 /// using the given options.
 /// If opts is nil, the default options are used.
-pub fn NewJSONHandler(w: io.Writer, opts: Ref<HandlerOptions>) -> Ref<JSONHandler>
+pub fn NewJSONHandler(w: io.Writer, opts: Option<Ref<HandlerOptions>>) -> Ref<JSONHandler>
 
 /// NewLogLogger returns a new [log.Logger] such that each call to its Output method
 /// dispatches a Record to the specified handler. The logger acts as a bridge from
@@ -175,7 +175,7 @@ pub fn NewRecord(t: time.Time, level: Level, msg: string, pc: uintptr) -> Record
 /// NewTextHandler creates a [TextHandler] that writes to w,
 /// using the given options.
 /// If opts is nil, the default options are used.
-pub fn NewTextHandler(w: io.Writer, opts: Ref<HandlerOptions>) -> Ref<TextHandler>
+pub fn NewTextHandler(w: io.Writer, opts: Option<Ref<HandlerOptions>>) -> Ref<TextHandler>
 
 /// SetDefault makes l the default [Logger], which is used by
 /// the top-level functions [Info], [Debug] and so on.

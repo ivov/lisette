@@ -40,6 +40,9 @@ type TypeOverrides struct {
 	// (e.g. `nil` means "use the default"), so they should be `Option<Ref<T>>`
 	// instead of `Ref<T>`.
 	NilableParam map[string]map[string][]string `json:"nilable_param"`
+	// NonNilableParam cancels a wrong inference, keeping a parameter `Ref<T>`
+	// when the analysis proved it accepts nil.
+	NonNilableParam map[string]map[string][]string `json:"non_nilable_param"`
 	// SentinelMinusOne declares int-returning functions that signal
 	// "absent" with `-1`. Bindgen rewrites the return to `Option<int>`
 	// and emits `#[go(sentinel_minus_one)]`.
@@ -214,6 +217,16 @@ func (c *Config) NilableParams(pkg, name string) []string {
 		return nil
 	}
 	return nestedParams(c.Overrides.Types.NilableParam, pkg, name)
+}
+
+// NonNilableParams returns the list of parameter names that must stay `Ref<>`
+// for the given function or method, cancelling an inference, or nil if none
+// are configured.
+func (c *Config) NonNilableParams(pkg, name string) []string {
+	if c == nil {
+		return nil
+	}
+	return nestedParams(c.Overrides.Types.NonNilableParam, pkg, name)
 }
 
 // IsPartialResult returns true if the given function or method in the given

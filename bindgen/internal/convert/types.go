@@ -3,7 +3,6 @@ package convert
 import (
 	"fmt"
 	"go/types"
-	"slices"
 	"strings"
 
 	"github.com/ivov/lisette/bindgen/internal/extract"
@@ -38,10 +37,10 @@ func ToLisetteNilable(t types.Type, conv *Converter) TypeResult {
 	return toLisetteNilableRecursive(t, make(map[types.Type]bool), conv, nil)
 }
 
-// convertParamType wraps a `*T` parameter in `Option<>` when the param's name
-// appears in `nilable` — used for Go APIs where passing nil means "use default".
-func convertParamType(t types.Type, name string, nilable []string, conv *Converter, substitutions map[string]string) TypeResult {
-	if slices.Contains(nilable, name) {
+// convertParamType wraps a `*T` parameter in `Option<>` when it was proven to
+// accept nil, for Go APIs where nil means "use the default".
+func convertParamType(t types.Type, optional bool, conv *Converter, substitutions map[string]string) TypeResult {
+	if optional {
 		return toLisetteNilableRecursive(t, make(map[types.Type]bool), conv, substitutions)
 	}
 	return toLisetteWithSubstitutions(t, conv, substitutions)

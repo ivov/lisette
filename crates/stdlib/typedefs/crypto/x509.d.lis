@@ -665,7 +665,7 @@ impl CertPool {
   fn Clone(self: Ref<CertPool>) -> Ref<CertPool>
 
   /// Equal reports whether s and other are equal.
-  fn Equal(self: Ref<CertPool>, other: Ref<CertPool>) -> bool
+  fn Equal(self: Ref<CertPool>, other: Option<Ref<CertPool>>) -> bool
 
   /// Subjects returns a list of the DER-encoded subjects of
   /// all of the certificates in the pool.
@@ -715,7 +715,7 @@ impl Certificate {
     expiry: time.Time,
   ) -> Result<Slice<byte>, error>
 
-  fn Equal(self: Ref<Certificate>, other: Ref<Certificate>) -> bool
+  fn Equal(self: Ref<Certificate>, other: Option<Ref<Certificate>>) -> bool
 
   /// Verify attempts to verify c by building one or more chains from c to a
   /// certificate in opts.Roots, using certificates in opts.Intermediates if

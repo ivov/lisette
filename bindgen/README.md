@@ -244,14 +244,16 @@ Bindgen accepts a config file with per-package overrides:
         },
       },
 
-      // Turn `Ref<T>` parameter into `Option<Ref<T>>` for Go APIs that accept
-      // nil to mean "use the default"
+      // Force `Ref<T>` parameter to `Option<Ref<T>>` when inference did not
       // e.g. `rp` in `mongo.Client.Ping(ctx, rp)` accepts nil
       "nilable_param": {
         "go.mongodb.org/mongo-driver/v2/mongo": {
           "Client.Ping": ["rp"],
         },
       },
+
+      // Keep `Ref<T>` parameter when inference wrongly proved it accepts nil
+      "non_nilable_param": {},
 
       // Allow constructing a type at its Go zero value, verified against Go's docs.
       // Applies to types with no visible fields, which are refused by default

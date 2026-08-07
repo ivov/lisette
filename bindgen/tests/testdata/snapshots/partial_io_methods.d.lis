@@ -13,9 +13,9 @@ pub type NotSink
 pub type Sink
 
 impl NotSink {
-  fn ReadFrom(self: Ref<NotSink>, r: io.Reader) -> Result<string, error>
+  fn ReadFrom(self: Ref<NotSink>, r: Option<io.Reader>) -> Result<string, error>
   fn WriteString(self: Ref<NotSink>, str: string) -> Result<(), error>
-  fn WriteTo(self: Ref<NotSink>, w: io.Writer) -> Result<string, error>
+  fn WriteTo(self: Ref<NotSink>, w: Option<io.Writer>) -> Result<string, error>
 }
 
 impl Sink {

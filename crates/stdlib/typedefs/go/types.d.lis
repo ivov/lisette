@@ -196,7 +196,7 @@ pub fn DefPredeclaredTestFuncs()
 /// Default returns the default "typed" type for an "untyped" type;
 /// it returns the incoming type for all other types. The default type
 /// for untyped nil is untyped nil.
-pub fn Default(t: Type) -> Type
+pub fn Default(t: Option<Type>) -> Option<Type>
 
 /// Eval returns the type and, if constant, the value for the
 /// expression expr, evaluated at position pos of package pkg,
@@ -222,7 +222,7 @@ pub fn ExprString(x: ast.Expr) -> string
 
 /// Id returns name if it is exported, otherwise it
 /// returns the name qualified with the package path.
-pub fn Id(pkg: Ref<Package>, name: string) -> string
+pub fn Id(pkg: Option<Ref<Package>>, name: string) -> string
 
 /// Identical reports whether x and y are identical types.
 /// Receivers of [Signature] types are ignored.
@@ -378,10 +378,10 @@ pub fn NewChan(dir: ChanDir, elem: Type) -> Ref<Chan>
 /// NewChecker returns a new [Checker] instance for a given package.
 /// [Package] files may be added incrementally via checker.Files.
 pub fn NewChecker(
-  conf: Ref<Config>,
+  conf: Option<Ref<Config>>,
   fset: Ref<token.FileSet>,
   pkg: Ref<Package>,
-  info: Ref<Info>,
+  info: Option<Ref<Info>>,
 ) -> Ref<Checker>
 
 /// NewConst returns a new constant with value val.
@@ -1208,7 +1208,7 @@ impl Info {
   /// it defines, not the type (*[TypeName]) it uses.
   /// 
   /// Precondition: the Uses and Defs maps are populated.
-  fn ObjectOf(self: Ref<Info>, id: Ref<ast.Ident>) -> Option<Object>
+  fn ObjectOf(self: Ref<Info>, id: Option<Ref<ast.Ident>>) -> Option<Object>
 
   /// PkgNameOf returns the local package name defined by the import,
   /// or nil if not found.
@@ -1220,7 +1220,7 @@ impl Info {
 
   /// TypeOf returns the type of expression e, or nil if not found.
   /// Precondition: the Types, Uses and Defs maps are populated.
-  fn TypeOf(self: Ref<Info>, e: ast.Expr) -> Option<Type>
+  fn TypeOf(self: Ref<Info>, e: Option<ast.Expr>) -> Option<Type>
 }
 
 impl Initializer {

@@ -166,8 +166,8 @@ func (c *Converter) applySentinelInt(result *ConvertResult, qualifiedName string
 
 func (c *Converter) convertParams(sig *types.Signature, obj types.Object, lookupName, methodName string, paramOverrides map[int]string, directEligible bool, substitutions map[string]string) ([]FunctionParameter, *SkipReason) {
 	mutParams := c.cfg.MutatingParams(c.currentPkgPath, lookupName)
-	nilableParams := c.cfg.NilableParams(c.currentPkgPath, lookupName)
 	mutation, _ := c.mutation.Function(obj)
+	declaring, _ := obj.(*types.Func)
 
 	params := sig.Params()
 	usedNames := collectNamedParams(params)
@@ -186,7 +186,8 @@ func (c *Converter) convertParams(sig *types.Signature, obj types.Object, lookup
 		if named, ok := c.directHandleIfEligible(param.Type(), directEligible); ok {
 			paramType = TypeResult{LisetteType: named.Obj().Name()}
 		} else {
-			paramType = convertParamType(param.Type(), name, nilableParams, c, substitutions)
+			optional := declaring != nil && c.nilness.Params().Optional(declaring, i)
+			paramType = convertParamType(param.Type(), optional, c, substitutions)
 		}
 		if paramType.SkipReason != nil {
 			return nil, paramType.SkipReason

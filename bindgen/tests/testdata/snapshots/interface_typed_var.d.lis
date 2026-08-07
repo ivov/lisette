@@ -7,7 +7,7 @@
 import "go:io"
 
 /// Discard forces the io import so io.Writer is a reachable candidate interface.
-pub fn Discard(w: io.Writer)
+pub fn Discard(w: Option<io.Writer>)
 
 /// AnonParamIface is exported but not representable in Lisette: its method takes
 /// a tagged anonymous struct, which gates. A singleton implementing only it must

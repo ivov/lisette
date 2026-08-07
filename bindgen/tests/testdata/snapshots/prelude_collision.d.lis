@@ -5,7 +5,7 @@
 
 pub fn NewOption<T: Comparable>(key: string, value: T) -> prelude_collision.Option<T>
 
-pub fn TakeField(f: Field)
+pub fn TakeField(f: Option<Field>)
 
 /// WithWidth returns the interface itself; the nilable return becomes the prelude
 /// `Option<Field>` wrapper.

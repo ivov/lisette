@@ -2223,7 +2223,7 @@ impl Transport {
   /// Deprecated: Use [Request.WithContext] to create a request with a
   /// cancelable context instead. CancelRequest cannot cancel HTTP/2
   /// requests. This may become a no-op in a future release of Go.
-  fn CancelRequest(self: Ref<Transport>, req: Ref<Request>)
+  fn CancelRequest(self: Ref<Transport>, req: Option<Ref<Request>>)
 
   /// Clone returns a deep copy of t's exported fields.
   fn Clone(self: Ref<Transport>) -> Ref<Transport>

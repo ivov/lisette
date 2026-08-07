@@ -7,7 +7,7 @@
 pub type chest
 
 /// Direct consumer: eligible.
-pub fn NewMenu(submittable: Submittable, name: string, c: chest) -> Menu
+pub fn NewMenu(submittable: Option<Submittable>, name: string, c: chest) -> Menu
 
 // SKIPPED: TakesCallback - opaque-unexported-struct
 // underlying type "chest" is unexported

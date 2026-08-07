@@ -40,7 +40,7 @@ impl Ring {
   /// them creates a single ring with the elements of s inserted
   /// after r. The result points to the element following the
   /// last element of s after insertion.
-  fn Link(self: Ref<Ring>, s: Ref<Ring>) -> Ref<Ring>
+  fn Link(self: Ref<Ring>, s: Option<Ref<Ring>>) -> Ref<Ring>
 
   /// Move moves n % r.Len() elements backward (n < 0) or forward (n >= 0)
   /// in the ring and returns that ring element. r must not be empty.

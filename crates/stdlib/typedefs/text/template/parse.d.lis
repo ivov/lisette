@@ -49,7 +49,7 @@ pub const NodeVariable: NodeType = 18
 pub const NodeWith: NodeType = 19
 
 /// IsEmptyTree reports whether this tree (node) is empty of everything but space or comments.
-pub fn IsEmptyTree(n: Node) -> bool
+pub fn IsEmptyTree(n: Option<Node>) -> bool
 
 /// New allocates a new parse tree with the given name.
 pub fn New(name: string, funcs: VarArgs<Map<string, Unknown>>) -> Ref<Tree>

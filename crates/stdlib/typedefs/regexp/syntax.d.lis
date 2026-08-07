@@ -262,7 +262,7 @@ impl Regexp {
   fn CapNames(self: Ref<Regexp>) -> Slice<string>
 
   /// Equal reports whether x and y have identical structure.
-  fn Equal(self: Ref<Regexp>, y: Ref<Regexp>) -> bool
+  fn Equal(self: Ref<Regexp>, y: Option<Ref<Regexp>>) -> bool
 
   /// MaxCap walks the regexp to find the maximum capture index.
   fn MaxCap(self: Ref<Regexp>) -> int
