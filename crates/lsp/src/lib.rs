@@ -3,6 +3,7 @@ mod completion;
 mod definition;
 mod document;
 mod hover;
+mod imports;
 mod inlay_hints;
 mod loader;
 mod paths;
@@ -32,8 +33,10 @@ use crate::definition::{
     resolve_import_span, resolve_match_pattern_definition, resolve_struct_call_field,
     resolve_symbol_definition_span, resolve_word_at_offset, word_at_offset,
 };
+use crate::imports::EditTarget;
+use crate::position::LineIndex;
 use crate::project::find_project_root;
-use crate::snapshot::AnalysisSnapshot;
+use crate::snapshot::{AnalysisSnapshot, SnapshotDocument};
 use crate::traversal::find_expression_at;
 use syntax::program::File;
 
@@ -41,6 +44,15 @@ pub use crate::state::{Backend, SharedState};
 
 impl Backend {
     fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
+        self.insert_replace_support.store(
+            params
+                .capabilities
+                .pointer("/textDocument/completion/completionItem/insertReplaceSupport")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false),
+            std::sync::atomic::Ordering::Relaxed,
+        );
+
         let workspace_root = params
             .root_uri
             .and_then(|uri| uri.to_file_path().ok())
@@ -439,7 +451,7 @@ impl Backend {
 
         fn expression_to_symbol(
             expression: &syntax::ast::Expression,
-            line_index: &crate::position::LineIndex,
+            line_index: &LineIndex,
         ) -> Option<DocumentSymbol> {
             use syntax::ast::Expression;
 
@@ -923,8 +935,8 @@ impl Backend {
         let Some(cursor) = snapshot.position(uri, position) else {
             return Ok(None);
         };
-        let file_id = cursor.document.file_id;
-        let file = cursor.document.file;
+        let document = &cursor.document;
+        let file = document.file;
         let offset = cursor.offset;
 
         // An in-progress `#[ ... ]` is exclusive: when the cursor is in attribute
@@ -935,9 +947,11 @@ impl Backend {
             return Ok(Some(CompletionResponse::Array(items)));
         }
 
+        let target = self.edit_target(uri, position);
+
         let package_prefix = get_package_prefix(&file.source, offset as usize);
 
-        if let Some(package_name) = package_prefix
+        if let Some((package_name, _)) = package_prefix
             && let Some(items) = imported_package_completions(package_name, file, &snapshot)
         {
             return Ok(Some(CompletionResponse::Array(items)));
@@ -947,10 +961,9 @@ impl Backend {
             return Ok(Some(CompletionResponse::Array(items)));
         }
 
-        if let Some(prefix) = package_prefix {
-            // A prefix that resolves to nothing still returns here: a `foo.`
-            // cursor must never fall through to the general completions below.
-            let items = package_prefix_completions(prefix, file, offset, &snapshot);
+        if let Some((prefix, dot_offset)) = package_prefix {
+            let after_dot = dot_offset as u32 + 1;
+            let items = package_prefix_completions(prefix, document, after_dot, target, &snapshot);
             return Ok(Some(CompletionResponse::Array(items)));
         }
 
@@ -959,8 +972,41 @@ impl Backend {
         }
 
         Ok(Some(CompletionResponse::Array(general_completions(
-            file, file_id, offset, &snapshot,
+            document, offset, target, &snapshot,
         ))))
+    }
+
+    fn edit_target(&self, uri: &Url, position: Position) -> Option<EditTarget> {
+        let documents = self.documents();
+        let document = documents.get(uri)?;
+        let line_index = document.line_index();
+        let offset = line_index.position_to_offset(position)? as usize;
+        let source = document.content();
+
+        let is_word = |c: char| c.is_alphanumeric() || c == '_';
+        let start = source[..offset]
+            .rfind(|c: char| !is_word(c))
+            .map(|index| index + source[index..].chars().next().map_or(1, char::len_utf8))
+            .unwrap_or(0);
+        let end = offset
+            + source[offset..]
+                .find(|c: char| !is_word(c))
+                .unwrap_or(source.len() - offset);
+        let start = line_index.offset_to_position(start as u32);
+
+        Some(EditTarget {
+            insert: Range {
+                start,
+                end: position,
+            },
+            replace: Range {
+                start,
+                end: line_index.offset_to_position(end as u32),
+            },
+            insert_replace_support: self
+                .insert_replace_support
+                .load(std::sync::atomic::Ordering::Relaxed),
+        })
     }
 
     fn signature_help(&self, params: SignatureHelpParams) -> Result<Option<SignatureHelp>> {
@@ -1060,10 +1106,12 @@ fn dot_context_completions(
 /// here: it must never fall through to the general completions below.
 fn package_prefix_completions(
     prefix: &str,
-    file: &File,
+    document: &SnapshotDocument,
     offset: u32,
+    target: Option<EditTarget>,
     snapshot: &AnalysisSnapshot,
 ) -> Vec<CompletionItem> {
+    let file = document.file;
     if prefix == "self" {
         if let Some(impl_type) = traversal::find_enclosing_impl_type(&file.items, offset) {
             let type_id = format!("{}.{}", file.package_id, impl_type);
@@ -1097,7 +1145,14 @@ fn package_prefix_completions(
         return get_instance_completions(&type_id, snapshot, same_package);
     }
 
-    Vec::new()
+    let packages = snapshot.importable_packages();
+    imports::not_yet_imported(&packages, file, snapshot)
+        .into_iter()
+        .filter(|importable| importable.name == prefix)
+        .flat_map(|importable| {
+            imports::member_completions(importable, file, document.line_index, target)
+        })
+        .collect()
 }
 
 /// In a struct literal's field-name position, offers the unassigned fields.
@@ -1120,11 +1175,12 @@ fn struct_literal_field_completions(
 }
 
 fn general_completions(
-    file: &File,
-    file_id: u32,
+    document: &SnapshotDocument,
     offset: u32,
+    target: Option<EditTarget>,
     snapshot: &AnalysisSnapshot,
 ) -> Vec<CompletionItem> {
+    let file = document.file;
     let mut items = Vec::new();
 
     for kw in validation::KEYWORDS {
@@ -1148,10 +1204,8 @@ fn general_completions(
         });
     }
 
-    const PRELUDE_VALUES: &[&str] = &[
-        "Some", "None", "Ok", "Err", "Unit", "println", "print", "panic", "len", "cap", "make",
-        "append", "copy",
-    ];
+    // `len`, `make` and `println` are Go builtins the compiler rejects by name.
+    const PRELUDE_VALUES: &[&str] = &["Some", "None", "Ok", "Err", "panic"];
     for val in PRELUDE_VALUES {
         items.push(CompletionItem {
             label: val.to_string(),
@@ -1175,7 +1229,7 @@ fn general_completions(
     }
 
     for binding in snapshot.bindings().values() {
-        if binding.span.file_id == file_id && binding.span.byte_offset < offset {
+        if binding.span.file_id == document.file_id && binding.span.byte_offset < offset {
             items.push(CompletionItem {
                 label: binding.name.clone(),
                 kind: Some(CompletionItemKind::VARIABLE),
@@ -1195,10 +1249,19 @@ fn general_completions(
         });
     }
 
+    let packages = snapshot.importable_packages();
+    let unimported = imports::not_yet_imported(&packages, file, snapshot);
+    items.extend(imports::package_completions(
+        &unimported,
+        file,
+        document.line_index,
+        target,
+    ));
+
     items
 }
 
-fn ranges_overlap(a: Range, b: Range) -> bool {
+pub(crate) fn ranges_overlap(a: Range, b: Range) -> bool {
     let position_le = |x: Position, y: Position| (x.line, x.character) <= (y.line, y.character);
     position_le(a.start, b.end) && position_le(b.start, a.end)
 }

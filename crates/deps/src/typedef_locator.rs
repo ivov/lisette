@@ -96,6 +96,46 @@ pub enum DeclarationStatus {
     UndeclaredImport,
 }
 
+#[derive(Debug)]
+pub struct ImportablePackage {
+    /// Import path without the `go:` prefix, e.g. `net/http`.
+    pub path: String,
+    typedef: PackageTypedef,
+}
+
+#[derive(Debug)]
+enum PackageTypedef {
+    Embedded(&'static str),
+    Cached(PathBuf),
+}
+
+impl ImportablePackage {
+    pub fn typedef_source(&self) -> Option<Cow<'static, str>> {
+        match &self.typedef {
+            PackageTypedef::Embedded(source) => Some(Cow::Borrowed(source)),
+            PackageTypedef::Cached(path) => std::fs::read_to_string(path).ok().map(Cow::Owned),
+        }
+    }
+
+    pub fn declared_package_name(&self) -> Option<String> {
+        match &self.typedef {
+            PackageTypedef::Embedded(source) => {
+                stdlib::declared_package_name(source).map(str::to_string)
+            }
+            PackageTypedef::Cached(path) => {
+                let mut reader = std::io::BufReader::new(std::fs::File::open(path).ok()?);
+                let mut header = String::new();
+                for _ in 0..stdlib::HEADER_LINES {
+                    if std::io::BufRead::read_line(&mut reader, &mut header).ok()? == 0 {
+                        break;
+                    }
+                }
+                stdlib::declared_package_name(&header).map(str::to_string)
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypedefOrigin {
     Stdlib,
@@ -172,6 +212,17 @@ impl TypedefLocator {
         }
     }
 
+    pub fn declared_stamp(&self) -> String {
+        crate::local_source::stamp_hash(&self.deps, None)
+    }
+
+    pub fn with_fresh_local_stamp(&self) -> Self {
+        Self {
+            local_stamp: Arc::new(OnceLock::new()),
+            ..self.clone()
+        }
+    }
+
     /// The stamp value gating local typedefs, `None` when none are declared.
     pub fn local_stamp_value(&self) -> Option<&str> {
         self.local_stamp
@@ -186,7 +237,7 @@ impl TypedefLocator {
                         }
                     )
                 });
-                has_local.then(|| crate::local_source::local_stamp_hash(project_root, &self.deps))
+                has_local.then(|| crate::local_source::stamp_hash(&self.deps, Some(project_root)))
             })
             .as_deref()
     }
@@ -306,6 +357,51 @@ impl TypedefLocator {
             },
             None => DeclarationStatus::UndeclaredImport,
         }
+    }
+
+    pub fn importable_packages(&self) -> Vec<ImportablePackage> {
+        let mut packages: Vec<ImportablePackage> = stdlib::get_go_stdlib_packages(self.target)
+            .into_iter()
+            .filter_map(|path| {
+                Some(ImportablePackage {
+                    path: path.to_string(),
+                    typedef: PackageTypedef::Embedded(stdlib::get_go_stdlib_typedef(
+                        path,
+                        self.target,
+                    )?),
+                })
+            })
+            .collect();
+
+        let Some(project_root) = &self.project_root else {
+            return packages;
+        };
+        let cache_dir = typedef_cache_dir(project_root);
+
+        for module_path in self.deps.keys() {
+            let Some((module, version, replacement)) = self.module_for_package(module_path) else {
+                continue;
+            };
+            let pkg = GoPackage {
+                module: GoModule {
+                    path: &module,
+                    version: &version,
+                    replacement: replacement.as_ref().map(ResolvedReplacement::as_target),
+                },
+                package: &module,
+            };
+            let local_stamp = match replacement {
+                Some(ResolvedReplacement::Local) => self.local_stamp_value(),
+                _ => None,
+            };
+
+            let root_typedef = pkg.typedef_path(&cache_dir, self.target);
+            if let Some(module_dir) = root_typedef.parent() {
+                collect_cached_packages(module_dir, &module, local_stamp, &mut packages);
+            }
+        }
+
+        packages
     }
 
     /// Resolve a `go:` package: stdlib -> on-disk cache -> bindgen runner if set.
@@ -430,6 +526,46 @@ impl TypedefLocator {
     }
 }
 
+fn collect_cached_packages(
+    dir: &Path,
+    package_path: &str,
+    local_stamp: Option<&str>,
+    out: &mut Vec<ImportablePackage>,
+) {
+    let last_segment = package_path.rsplit('/').next().unwrap_or(package_path);
+    let typedef = dir.join(format!("{last_segment}.d.lis"));
+    let fresh = local_stamp
+        .is_none_or(|stamp| crate::local_source::local_typedef_is_fresh(&typedef, stamp));
+    if fresh && typedef.is_file() {
+        out.push(ImportablePackage {
+            path: package_path.to_string(),
+            typedef: PackageTypedef::Cached(typedef),
+        });
+    }
+
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        if !entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+            continue;
+        }
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else {
+            continue;
+        };
+        if name == "internal" {
+            continue;
+        }
+        collect_cached_packages(
+            &entry.path(),
+            &format!("{package_path}/{name}"),
+            local_stamp,
+            out,
+        );
+    }
+}
+
 enum ReadOutcome {
     Found(String),
     Missing,
@@ -463,6 +599,70 @@ fn read_cached_typedef(path: &Path) -> Option<TypedefLocatorResult> {
 mod tests {
     use super::*;
     use std::collections::BTreeMap;
+
+    fn write_typedef(path: &Path, content: &str) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, content).unwrap();
+    }
+
+    #[test]
+    fn importable_packages_walk_a_cached_module_tree() {
+        let project = tempfile::tempdir().unwrap();
+        let mut deps = BTreeMap::new();
+        deps.insert(
+            "github.com/example/go-lib".to_string(),
+            GoDependency::Remote {
+                version: "v1.2.0".to_string(),
+                via: None,
+            },
+        );
+        let locator = TypedefLocator::new(deps, Some(project.path().to_path_buf()), Target::host());
+
+        let module_dir = typedef_cache_dir(project.path())
+            .join(Target::host().cache_segment())
+            .join("github.com/example/go-lib@v1.2.0");
+        write_typedef(&module_dir.join("go-lib.d.lis"), "// Package: lib\n");
+        write_typedef(&module_dir.join("mux/mux.d.lis"), "pub fn New() -> int\n");
+        write_typedef(&module_dir.join("internal/hide/hide.d.lis"), "pub fn X()\n");
+
+        let mut found: Vec<(String, Option<String>)> = locator
+            .importable_packages()
+            .into_iter()
+            .filter(|package| crate::is_third_party(&package.path))
+            .map(|package| (package.path.clone(), package.declared_package_name()))
+            .collect();
+        found.sort();
+
+        assert_eq!(
+            found,
+            vec![
+                (
+                    "github.com/example/go-lib".to_string(),
+                    Some("lib".to_string())
+                ),
+                ("github.com/example/go-lib/mux".to_string(), None),
+            ],
+            "subpackages come along, another module's internal packages do not"
+        );
+    }
+
+    #[test]
+    fn importable_packages_include_the_stdlib_with_its_embedded_typedef() {
+        let locator = TypedefLocator::new(BTreeMap::new(), None, Target::host());
+
+        let strings = locator
+            .importable_packages()
+            .into_iter()
+            .find(|package| package.path == "strings")
+            .expect("the stdlib is importable without a project");
+
+        assert!(
+            strings
+                .typedef_source()
+                .is_some_and(|source| source.contains("pub fn ToLower")),
+            "the embedded typedef comes with the package"
+        );
+    }
 
     #[test]
     fn replace_diagnostic_shows_replacement_version_not_synthetic() {
@@ -606,5 +806,86 @@ mod tests {
             edited.find_typedef_content(module),
             TypedefLocatorResult::MissingTypedef { local: true, .. }
         ));
+    }
+
+    #[test]
+    fn a_refreshed_locator_rereads_local_source_an_older_one_has_already_seen() {
+        let module = "example.com/me/foo";
+        let (project, locator) = local_project(module, "foo");
+
+        let pkg = GoPackage {
+            module: GoModule {
+                path: module,
+                version: "v0.0.0",
+                replacement: Some(crate::ReplacementTarget::LocalDirectory),
+            },
+            package: module,
+        };
+        let typedef_path = pkg.typedef_path(&typedef_cache_dir(project.path()), Target::host());
+        write_typedef(&typedef_path, "pub fn Old() -> int\n");
+        let stamp = locator
+            .local_stamp_value()
+            .expect("a local module is declared");
+        std::fs::write(typedef_path.with_file_name("foo.stamp"), stamp).unwrap();
+
+        let is_offered = |locator: &TypedefLocator| {
+            locator
+                .importable_packages()
+                .iter()
+                .any(|package| package.path == module)
+        };
+        assert!(is_offered(&locator));
+
+        std::fs::write(project.path().join("foo/lib.go"), "package lib // edited\n").unwrap();
+        assert!(
+            is_offered(&locator),
+            "this locator answered once already and holds that answer"
+        );
+        assert!(
+            !is_offered(&locator.with_fresh_local_stamp()),
+            "a copy that has yet to look sees the edit, so a periodic re-walk \
+             cannot keep serving what an earlier analysis saw"
+        );
+    }
+
+    #[test]
+    fn importable_packages_drop_a_local_module_whose_source_moved_on() {
+        let module = "example.com/me/foo";
+        let (project, locator) = local_project(module, "foo");
+
+        let pkg = GoPackage {
+            module: GoModule {
+                path: module,
+                version: "v0.0.0",
+                replacement: Some(crate::ReplacementTarget::LocalDirectory),
+            },
+            package: module,
+        };
+        let typedef_path = pkg.typedef_path(&typedef_cache_dir(project.path()), Target::host());
+        write_typedef(&typedef_path, "pub fn Old() -> int\n");
+        let stamp = locator
+            .local_stamp_value()
+            .expect("a declared local module has a stamp");
+        std::fs::write(typedef_path.with_file_name("foo.stamp"), stamp).unwrap();
+
+        let is_offered = |locator: &TypedefLocator| {
+            locator
+                .importable_packages()
+                .iter()
+                .any(|package| package.path == module)
+        };
+        assert!(is_offered(&locator), "a stamped typedef is current");
+
+        std::fs::write(project.path().join("foo/lib.go"), "package lib // edited\n").unwrap();
+        let edited = TypedefLocator::new(
+            locator.deps().clone(),
+            Some(project.path().to_path_buf()),
+            Target::host(),
+        );
+        assert!(
+            !is_offered(&edited),
+            "the typedef describes source that no longer exists, so completing from it \
+             would suggest gone packages and insert an import that fails to analyse"
+        );
     }
 }

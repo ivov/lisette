@@ -5,6 +5,7 @@ use std::sync::{Arc, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use crate::protocol::{Client, Url};
 use deps::BindgenSetup;
 
+use crate::imports::PackageIndex;
 use crate::loader::ProjectState;
 use crate::position::LineIndex;
 use crate::snapshot::AnalysisSnapshot;
@@ -14,6 +15,8 @@ pub struct SharedState {
     pub(crate) project: ProjectState,
     documents: RwLock<HashMap<Url, DocumentState>>,
     pub(crate) bindgen_setup: Option<Arc<dyn BindgenSetup>>,
+    pub(crate) packages: Arc<PackageIndex>,
+    pub(crate) insert_replace_support: AtomicBool,
 }
 
 impl SharedState {
@@ -249,6 +252,8 @@ impl Backend {
                 project: ProjectState::new(),
                 documents: RwLock::new(HashMap::new()),
                 bindgen_setup,
+                packages: Arc::default(),
+                insert_replace_support: AtomicBool::new(false),
             }),
         }
     }

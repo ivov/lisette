@@ -6,12 +6,10 @@ use std::path::{Path, PathBuf};
 
 use crate::project_manifest::{GoDependency, ReplacementSource};
 
-/// Hash of every declared local module's content plus every entry's identity,
-/// covering all inputs that can change what bindgen emits. Content, never
-/// mtime: a `git checkout` can move mtimes backwards.
-pub(crate) fn local_stamp_hash(
-    project_root: &Path,
+/// Content, never mtime: a `git checkout` can move mtimes backwards.
+pub(crate) fn stamp_hash(
     deps: &BTreeMap<String, GoDependency>,
+    local_source: Option<&Path>,
 ) -> String {
     let mut hash = Fnv::new();
     for (module, dep) in deps {
@@ -30,7 +28,9 @@ pub(crate) fn local_stamp_hash(
                 ..
             } => {
                 hash.write(path.as_bytes());
-                hash_local_module(&mut hash, &project_root.join(path));
+                if let Some(project_root) = local_source {
+                    hash_local_module(&mut hash, &project_root.join(path));
+                }
             }
         }
     }
@@ -99,15 +99,20 @@ fn stamp_path_for_typedef(typedef_path: &Path) -> PathBuf {
     typedef_path.with_file_name(format!("{}.stamp", stem))
 }
 
+pub(crate) fn local_typedef_is_fresh(typedef_path: &Path, stamp: &str) -> bool {
+    std::fs::read_to_string(stamp_path_for_typedef(typedef_path))
+        .is_ok_and(|existing| existing == stamp)
+}
+
 /// On stamp mismatch, delete the typedef so resolution reroutes into the
 /// regenerate-on-miss path. A failed eviction (e.g. a file lock on Windows) is
 /// returned so the caller refuses the stale read, and keeps the old stamp so
 /// eviction retries next time.
 pub(crate) fn gate_local_typedef(typedef_path: &Path, stamp: &str) -> Result<(), std::io::Error> {
-    let stamp_path = stamp_path_for_typedef(typedef_path);
-    if std::fs::read_to_string(&stamp_path).is_ok_and(|existing| existing == stamp) {
+    if local_typedef_is_fresh(typedef_path, stamp) {
         return Ok(());
     }
+    let stamp_path = stamp_path_for_typedef(typedef_path);
     match std::fs::remove_file(typedef_path) {
         Ok(()) => {}
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -177,15 +182,15 @@ mod tests {
         write(root, "foo/foo_test.go", "package foo\n");
         let deps = deps_with(vec![("example.com/me/foo", local_dep("foo"))]);
 
-        let before = local_stamp_hash(root, &deps);
+        let before = stamp_hash(&deps, Some(root));
 
         write(root, "foo/foo_test.go", "package foo // edited\n");
-        assert_eq!(before, local_stamp_hash(root, &deps), "test files ignored");
+        assert_eq!(before, stamp_hash(&deps, Some(root)), "test files ignored");
 
         write(root, "foo/foo.go", "package foo // edited\n");
         assert_ne!(
             before,
-            local_stamp_hash(root, &deps),
+            stamp_hash(&deps, Some(root)),
             "source edits detected"
         );
     }
@@ -205,16 +210,16 @@ mod tests {
             ("example.com/me/foo", local_dep("foo")),
             ("github.com/google/uuid", remote("v1.6.0")),
         ]);
-        let before = local_stamp_hash(root, &deps);
+        let before = stamp_hash(&deps, Some(root));
 
         let bumped = deps_with(vec![
             ("example.com/me/foo", local_dep("foo")),
             ("github.com/google/uuid", remote("v1.7.0")),
         ]);
-        assert_ne!(before, local_stamp_hash(root, &bumped));
+        assert_ne!(before, stamp_hash(&bumped, Some(root)));
 
         write(root, "foo/go.mod", "module example.com/me/foo\n\ngo 1.25\n");
-        assert_ne!(before, local_stamp_hash(root, &deps));
+        assert_ne!(before, stamp_hash(&deps, Some(root)));
     }
 
     #[test]
@@ -231,9 +236,9 @@ mod tests {
         write(root, "foo/child/child.go", "package child\n");
         let deps = deps_with(vec![("example.com/me/foo", local_dep("foo"))]);
 
-        let before = local_stamp_hash(root, &deps);
+        let before = stamp_hash(&deps, Some(root));
         write(root, "foo/child/child.go", "package child // edited\n");
-        assert_eq!(before, local_stamp_hash(root, &deps));
+        assert_eq!(before, stamp_hash(&deps, Some(root)));
     }
 
     #[test]

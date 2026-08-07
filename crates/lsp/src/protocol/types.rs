@@ -286,6 +286,9 @@ pub struct InitializeParams {
     pub root_uri: Option<Url>,
     #[serde(default)]
     pub workspace_folders: Option<Vec<WorkspaceFolder>>,
+    /// Kept raw: the server reads the few capabilities it acts on by pointer.
+    #[serde(default)]
+    pub capabilities: Value,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -454,7 +457,17 @@ pub struct CompletionItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text_edit: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub additional_text_edits: Option<Vec<TextEdit>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<Value>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InsertReplaceEdit {
+    pub new_text: String,
+    pub insert: Range,
+    pub replace: Range,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

@@ -111,9 +111,13 @@ impl TestClient {
     }
 
     pub fn initialize(&mut self) -> InitializeResult {
+        self.initialize_with_capabilities(json!({}))
+    }
+
+    pub fn initialize_with_capabilities(&mut self, capabilities: Value) -> InitializeResult {
         let result = self.request(
             "initialize",
-            json!({"processId": null, "capabilities": {}, "rootUri": null}),
+            json!({"processId": null, "capabilities": capabilities, "rootUri": null}),
         );
         self.notify("initialized", json!({}));
         result
@@ -442,6 +446,13 @@ pub fn definition_target_text(location: &Location) -> String {
         .nth(location.range.start.line as usize)
         .expect("range line should exist");
     line[location.range.start.character as usize..].to_string()
+}
+
+pub fn completion_items(response: &CompletionResponse) -> &[CompletionItem] {
+    match response {
+        CompletionResponse::Array(items) => items,
+        CompletionResponse::List(list) => &list.items,
+    }
 }
 
 pub fn completion_labels(response: &CompletionResponse) -> Vec<String> {

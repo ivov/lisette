@@ -10,6 +10,7 @@ use passes::analyze;
 use semantics::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile, ProjectKind};
 use syntax::types::{CompoundKind, Type};
 
+use crate::imports::PackageResolver;
 use crate::position::LineIndex;
 use crate::snapshot::AnalysisSnapshot;
 use crate::state::{AnalysisRequest, DocumentState, SharedState};
@@ -146,6 +147,9 @@ impl SharedState {
             }
         };
 
+        // No bindgen runner on this copy: a keystroke must never shell out to Go.
+        let packages = PackageResolver::new(locator.clone(), Arc::clone(&self.packages));
+
         let (locator, session, bindgen_error) = if script || manifest_error.is_some() {
             (locator, None, None)
         } else if let Some(setup) = self.bindgen_setup.as_ref() {
@@ -222,7 +226,13 @@ impl SharedState {
         // Release the target lock before the lock-free snapshot construction.
         drop(session);
 
-        Ok(AnalysisSnapshot::new(analysis, &config, uri, external_test))
+        Ok(AnalysisSnapshot::new(
+            analysis,
+            &config,
+            uri,
+            external_test,
+            packages,
+        ))
     }
 
     fn run_analysis_cached(&self, uri: &Url) -> Result<Arc<AnalysisSnapshot>, AnalysisError> {

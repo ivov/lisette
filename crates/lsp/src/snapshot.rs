@@ -1,5 +1,7 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
+use std::sync::Arc;
+
 use crate::protocol::{Position, Url};
 use passes::Analysis;
 use semantics::facts::{BindingFact, Usage};
@@ -7,6 +9,7 @@ use syntax::ast::BindingId;
 use syntax::program::{Definition, File};
 use syntax::types::Symbol;
 
+use crate::imports::{Importable, PackageResolver};
 use crate::paths::{ENTRY_PACKAGE_ID, package_file_to_path};
 use crate::position::LineIndex;
 use crate::project::ProjectConfig;
@@ -14,6 +17,7 @@ use crate::project::ProjectConfig;
 pub(crate) struct AnalysisSnapshot {
     pub(crate) analysis: Analysis,
     sources: HashMap<u32, SnapshotSource>,
+    packages: PackageResolver,
 }
 
 pub(crate) struct SnapshotSource {
@@ -38,6 +42,7 @@ impl AnalysisSnapshot {
         config: &ProjectConfig,
         analyzed_uri: &Url,
         external_test: bool,
+        packages: PackageResolver,
     ) -> Self {
         let mut sources = HashMap::default();
 
@@ -89,7 +94,15 @@ impl AnalysisSnapshot {
             );
         }
 
-        Self { analysis, sources }
+        Self {
+            analysis,
+            sources,
+            packages,
+        }
+    }
+
+    pub(crate) fn importable_packages(&self) -> Arc<Vec<Importable>> {
+        self.packages.packages()
     }
 
     pub(crate) fn document(&self, uri: &Url) -> Option<SnapshotDocument<'_>> {

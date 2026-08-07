@@ -12,12 +12,16 @@ use crate::snapshot::AnalysisSnapshot;
 use crate::traversal::{find_enclosing_impl_type, find_expression_at};
 use crate::type_name;
 
-pub(crate) fn get_package_prefix(source: &str, offset: usize) -> Option<&str> {
+/// The identifier before the dot, with that dot's offset, whether the cursor
+/// sits right after it or partway through the member.
+pub(crate) fn get_package_prefix(source: &str, offset: usize) -> Option<(&str, usize)> {
     let before = &source[..offset];
+    let before = before.trim_end_matches(|c: char| c.is_alphanumeric() || c == '_');
     if !before.ends_with('.') {
         return None;
     }
-    let before_dot = &before[..before.len() - 1];
+    let dot_offset = before.len() - 1;
+    let before_dot = &before[..dot_offset];
 
     let base = if before_dot.ends_with(']') {
         let bracket_start = before_dot.rfind('[')?;
@@ -26,15 +30,16 @@ pub(crate) fn get_package_prefix(source: &str, offset: usize) -> Option<&str> {
         before_dot
     };
 
+    // A multi-byte boundary character would otherwise leave `start` inside it.
     let start = base
         .rfind(|c: char| !c.is_alphanumeric() && c != '_')
-        .map(|i| i + 1)
+        .map(|index| index + base[index..].chars().next().map_or(1, char::len_utf8))
         .unwrap_or(0);
     let identifier = base[start..].trim();
     if identifier.is_empty() || !identifier.starts_with(|c: char| c.is_alphabetic() || c == '_') {
         return None;
     }
-    Some(identifier)
+    Some((identifier, dot_offset))
 }
 
 pub(crate) fn definition_to_completion_kind(
@@ -725,6 +730,49 @@ fn skip_stacked_attribute(after: &[Token], mut i: usize) -> usize {
         i += 1;
     }
     i
+}
+
+#[cfg(test)]
+mod package_prefix_tests {
+    use super::get_package_prefix;
+
+    fn prefix_at(source_with_cursor: &str) -> Option<String> {
+        let offset = source_with_cursor
+            .find('|')
+            .expect("test input needs a `|` cursor");
+        let source = source_with_cursor.replacen('|', "", 1);
+        get_package_prefix(&source, offset).map(|(prefix, dot)| {
+            assert_eq!(&source[dot..dot + 1], ".", "the offset should be the dot");
+            prefix.to_string()
+        })
+    }
+
+    #[test]
+    fn a_dot_and_a_half_typed_member_both_resolve_to_the_qualifier() {
+        assert_eq!(prefix_at("strings.|"), Some("strings".to_string()));
+        assert_eq!(prefix_at("strings.To|"), Some("strings".to_string()));
+        assert_eq!(
+            prefix_at("let s = strings.ToLo|wer"),
+            Some("strings".to_string())
+        );
+    }
+
+    #[test]
+    fn an_indexed_element_resolves_to_the_collection() {
+        assert_eq!(prefix_at("items[0].|"), Some("items".to_string()));
+        assert_eq!(prefix_at("items[0].fi|"), Some("items".to_string()));
+    }
+
+    #[test]
+    fn a_dotless_cursor_or_a_number_resolves_to_nothing() {
+        assert!(prefix_at("let x = 1|").is_none());
+        assert!(prefix_at("let x = 1.5|").is_none());
+    }
+
+    #[test]
+    fn a_multi_byte_boundary_character_does_not_split() {
+        assert_eq!(prefix_at("→名.|"), Some("名".to_string()));
+    }
 }
 
 #[cfg(test)]

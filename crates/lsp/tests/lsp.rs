@@ -2,8 +2,8 @@ mod lsp_harness;
 
 use lisette_lsp::protocol::*;
 use lsp_harness::{
-    TestClient, completion_labels, cursor, cursors, definition_location, definition_target_text,
-    doc_end, hover_content, inlay_hint_triples, symbol_names,
+    TestClient, completion_items, completion_labels, cursor, cursors, definition_location,
+    definition_target_text, doc_end, hover_content, inlay_hint_triples, symbol_names,
 };
 
 const TEST_URI: &str = "file:///test.lis";
@@ -304,6 +304,32 @@ fn completion_includes_prelude_types() {
     assert!(labels.iter().any(|l| l == "Option"));
     assert!(labels.iter().any(|l| l == "Result"));
     assert!(labels.iter().any(|l| l == "Array"));
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_omits_go_builtins_lisette_does_not_have() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(TEST_URI, "");
+
+    let labels = completion_labels(&client.completion(TEST_URI, 0, 0).unwrap());
+
+    for absent in [
+        "println", "print", "len", "cap", "make", "append", "copy", "Unit",
+    ] {
+        assert!(
+            !labels.iter().any(|l| l == absent),
+            "`{absent}` is a Go builtin the compiler rejects by name, so offering it misleads"
+        );
+    }
+    for present in ["Some", "None", "Ok", "Err", "panic"] {
+        assert!(
+            labels.iter().any(|l| l == present),
+            "`{present}` resolves and should be offered"
+        );
+    }
 
     client.shutdown();
 }
@@ -12866,4 +12892,378 @@ fn an_unsaved_test_file_in_a_dotted_directory_is_rejected() {
 
         client.shutdown();
     }
+}
+
+fn completion_item<'a>(response: &'a CompletionResponse, label: &str) -> &'a CompletionItem {
+    let items = completion_items(response);
+    items
+        .iter()
+        .find(|item| item.label == label)
+        .unwrap_or_else(|| {
+            let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
+            panic!("expected a `{label}` completion, got: {labels:?}")
+        })
+}
+
+fn import_edits(item: &CompletionItem) -> &[TextEdit] {
+    item.additional_text_edits
+        .as_deref()
+        .unwrap_or_else(|| panic!("`{}` should carry its import", item.label))
+}
+
+#[test]
+fn completion_after_unimported_go_package_offers_its_members_and_import() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let (source, line, character) = cursor("fn main() {\n  let slug = strings.~\n}\n");
+    client.open(TEST_URI, &source);
+
+    let response = client
+        .completion(TEST_URI, line, character)
+        .expect("a package the file has yet to import should still complete");
+
+    let lower = completion_item(&response, "ToLower");
+    assert_eq!(lower.kind, Some(CompletionItemKind::FUNCTION));
+    assert_eq!(
+        lower.detail.as_deref(),
+        Some("fn ToLower(s: string) -> string · go:strings")
+    );
+    assert_eq!(
+        import_edits(lower),
+        [TextEdit {
+            range: Range {
+                start: Position::new(0, 0),
+                end: Position::new(0, 0),
+            },
+            new_text: "import \"go:strings\"\n\n".to_string(),
+        }]
+    );
+
+    let builder = completion_item(&response, "Builder");
+    assert_eq!(
+        builder.kind,
+        Some(CompletionItemKind::TYPE_PARAMETER),
+        "a Go named type reads as it does once the package is imported"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_after_a_shared_package_name_offers_every_package_that_answers_to_it() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let (source, line, character) = cursor("fn main() {\n  let n = rand.~\n}\n");
+    client.open(TEST_URI, &source);
+
+    let response = client.completion(TEST_URI, line, character).unwrap();
+    let details: Vec<&str> = completion_items(&response)
+        .iter()
+        .filter_map(|item| item.detail.as_deref())
+        .collect();
+
+    for package in ["go:math/rand", "go:math/rand/v2", "go:crypto/rand"] {
+        assert!(
+            details.iter().any(|detail| detail.ends_with(package)),
+            "three packages bind `rand`, so all three belong in the list: {details:?}"
+        );
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_partway_through_a_member_still_lists_the_package() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let (source, line, character) = cursor("fn main() {\n  let slug = strings.ToLo~\n}\n");
+    client.open(TEST_URI, &source);
+
+    let response = client.completion(TEST_URI, line, character).unwrap();
+
+    let lower = completion_item(&response, "ToLower");
+    assert_eq!(
+        import_edits(lower)[0].new_text,
+        "import \"go:strings\"\n\n",
+        "a half-typed member is still the package's list, import and all"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_partway_through_a_member_of_an_imported_package() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let (source, line, character) = cursor("import \"go:fmt\"\n\nfn main() {\n  fmt.Printl~\n}\n");
+    client.open(TEST_URI, &source);
+
+    let response = client.completion(TEST_URI, line, character).unwrap();
+    let println = completion_item(&response, "Println");
+
+    assert!(
+        println.additional_text_edits.is_none(),
+        "the package is imported already: {println:?}"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_at_the_import_position_folds_the_import_into_one_edit() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    client.open(TEST_URI, "");
+    client.change(TEST_URI, "strings", 2);
+
+    let response = client.completion(TEST_URI, 0, 3).unwrap();
+    let strings = completion_item(&response, "strings");
+
+    assert!(
+        strings.additional_text_edits.is_none(),
+        "a second edit here would share the item's own position: {strings:?}"
+    );
+    let edit: TextEdit = serde_json::from_value(
+        strings
+            .text_edit
+            .clone()
+            .expect("the item should carry one edit that writes both"),
+    )
+    .expect("the edit should be a TextEdit");
+    assert_eq!(edit.new_text, "import \"go:strings\"\n\nstrings");
+    assert_eq!(
+        edit.range,
+        Range {
+            start: Position::new(0, 0),
+            end: Position::new(0, 7),
+        },
+        "the whole word, which only the buffer knows, or the tail survives as \
+         `stringsings`"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_offers_unimported_go_packages_by_name() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let (source, line, character) = cursor("fn main() {\n  let x = str~\n}\n");
+    client.open(TEST_URI, &source);
+
+    let response = client.completion(TEST_URI, line, character).unwrap();
+
+    let strings = completion_item(&response, "strings");
+    assert_eq!(strings.kind, Some(CompletionItemKind::MODULE));
+    assert_eq!(strings.detail.as_deref(), Some("go:strings"));
+    assert_eq!(
+        import_edits(strings)[0].new_text,
+        "import \"go:strings\"\n\n"
+    );
+
+    let edit: TextEdit = serde_json::from_value(
+        strings
+            .text_edit
+            .clone()
+            .expect("an item carrying an import states where its own text goes"),
+    )
+    .expect("a client without insertReplaceSupport gets a plain edit");
+    assert_eq!(edit.new_text, "strings");
+    assert_eq!(
+        edit.range,
+        Range {
+            start: Position::new(1, 10),
+            end: Position::new(1, 13),
+        },
+        "the typed prefix, not a range the editor guesses at"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_mid_word_rewrites_the_word_for_a_client_that_states_no_preference() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    client.open(TEST_URI, "fn main() {\n  let x = strings\n}\n");
+
+    let response = client.completion(TEST_URI, 1, 13).unwrap();
+    let edit: TextEdit = serde_json::from_value(
+        completion_item(&response, "strings")
+            .text_edit
+            .clone()
+            .expect("the item states its own edit"),
+    )
+    .unwrap();
+
+    assert_eq!(edit.new_text, "strings");
+    assert_eq!(
+        edit.range,
+        Range {
+            start: Position::new(1, 10),
+            end: Position::new(1, 17),
+        },
+        "an edit stopping at the cursor would leave `stringsings` behind"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_hands_both_ranges_to_a_client_that_takes_them() {
+    let mut client = TestClient::new();
+    client.initialize_with_capabilities(serde_json::json!({
+        "textDocument": {"completion": {"completionItem": {"insertReplaceSupport": true}}}
+    }));
+
+    client.open(TEST_URI, "fn main() {\n  let x = strings\n}\n");
+
+    let response = client.completion(TEST_URI, 1, 13).unwrap();
+    let edit: InsertReplaceEdit = serde_json::from_value(
+        completion_item(&response, "strings")
+            .text_edit
+            .clone()
+            .expect("the item states its own edit"),
+    )
+    .expect("a client with insertReplaceSupport gets both ranges");
+
+    assert_eq!(edit.new_text, "strings");
+    assert_eq!(edit.insert.end, Position::new(1, 13), "stops at the cursor");
+    assert_eq!(
+        edit.replace.end,
+        Position::new(1, 17),
+        "takes the whole word"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_leaves_an_imported_package_alone() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let (source, line, character) =
+        cursor("import \"go:strings\"\n\nfn main() {\n  let x = str~\n}\n");
+    client.open(TEST_URI, &source);
+
+    let response = client.completion(TEST_URI, line, character).unwrap();
+    let offered: Vec<&CompletionItem> = completion_items(&response)
+        .iter()
+        .filter(|item| item.label == "strings")
+        .collect();
+
+    assert_eq!(
+        offered.len(),
+        1,
+        "an imported package is one completion, not one per import edit: {offered:?}"
+    );
+    assert!(
+        offered[0].additional_text_edits.is_none(),
+        "an imported package needs no import: {:?}",
+        offered[0]
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_leaves_a_blank_imported_package_alone() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let (source, line, character) =
+        cursor("import _ \"go:image/png\"\n\nfn main() {\n  let x = pn~\n}\n");
+    client.open(TEST_URI, &source);
+
+    let response = client.completion(TEST_URI, line, character).unwrap();
+
+    assert!(
+        !completion_items(&response)
+            .iter()
+            .any(|item| item.label == "png"),
+        "a blank import binds no name, but importing the path again is still a duplicate"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_after_unimported_third_party_package_offers_its_members_and_import() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+
+    let manifest = format!(
+        "[project]\nname = \"test\"\nversion = \"0.0.1\"\n\n[toolchain]\nlis = \"{}\"\n\n[dependencies.go]\n\"github.com/example/go-lib\" = \"v1.0.0\"\n",
+        env!("CARGO_PKG_VERSION")
+    );
+    std::fs::write(root.join("lisette.toml"), manifest).unwrap();
+
+    let pkg = deps::GoPackage {
+        module: deps::GoModule {
+            path: "github.com/example/go-lib",
+            version: "v1.0.0",
+            replacement: None,
+        },
+        package: "github.com/example/go-lib",
+    };
+    let typedef_path = pkg.typedef_path(&deps::typedef_cache_dir(root), stdlib::Target::host());
+    std::fs::create_dir_all(typedef_path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &typedef_path,
+        "// Generated by Lisette bindgen\n// Package: lib\n\npub fn DoStuff(n: int) -> int\n",
+    )
+    .unwrap();
+
+    let src = root.join("src");
+    std::fs::create_dir_all(&src).unwrap();
+    let (content, line, character) = cursor("fn main() {\n  let n = lib.~\n}\n");
+    let main_path = src.join("main.lis");
+    std::fs::write(&main_path, &content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+
+    let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
+    client.open(&main_uri, &content);
+
+    let response = client.completion(&main_uri, line, character).unwrap();
+
+    let do_stuff = completion_item(&response, "DoStuff");
+    assert_eq!(
+        do_stuff.detail.as_deref(),
+        Some("fn DoStuff(n: int) -> int · go:github.com/example/go-lib")
+    );
+    assert_eq!(
+        import_edits(do_stuff)[0].new_text,
+        "import \"go:github.com/example/go-lib\"\n\n"
+    );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_after_an_unknown_prefix_dot_offers_nothing() {
+    let mut client = TestClient::new();
+    client.initialize();
+
+    let (source, line, character) = cursor("fn main() {\n  let x = nosuchpackage.~\n}\n");
+    client.open(TEST_URI, &source);
+
+    let response = client.completion(TEST_URI, line, character).unwrap();
+
+    assert!(
+        completion_items(&response).is_empty(),
+        "a prefix that names nothing must not fall through to package members: {:?}",
+        completion_labels(&response)
+    );
+
+    client.shutdown();
 }

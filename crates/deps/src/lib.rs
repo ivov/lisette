@@ -40,7 +40,7 @@ pub use project_manifest::{
 };
 pub use typedef_locator::{
     Bindgen, BindgenFailure, BindgenGuard, BindgenSession, BindgenSetup, DeclarationStatus,
-    ResolvedReplacement, TypedefLocator, TypedefLocatorResult, TypedefOrigin,
+    ImportablePackage, ResolvedReplacement, TypedefLocator, TypedefLocatorResult, TypedefOrigin,
 };
 
 pub fn is_third_party(pkg: &str) -> bool {
