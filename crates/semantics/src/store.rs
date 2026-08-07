@@ -13,11 +13,15 @@ use syntax::types::{SimpleKind, SubstitutionMap, Symbol, Type, substitute};
 pub use crate::closed_domain::{ClosedDomain, ClosedMember, DomainValue};
 pub use syntax::ENTRY_PACKAGE_ID;
 pub(crate) const ENTRY_FILE_ID: u32 = 0;
+// A linear scan wins for small stores by avoiding a second hash lookup.
+const DIRECT_FILE_LOOKUP_PACKAGE_THRESHOLD: usize = 16;
 
 pub struct Store {
     /// `Arc` so registration workers share a read view; [`Arc::make_mut`]
     /// writes stay zero-copy while a package has a single owner.
     pub packages: HashMap<String, Arc<Package>>,
+    /// Dense file ID -> owning package ID index, enabled for large stores.
+    file_packages: Option<Arc<Vec<Option<String>>>>,
     /// Go package ID -> package name from the typedef `// Package:` directive.
     pub go_package_names: HashMap<String, String>,
     /// File ID counter. Starts at 2 because 0 is reserved for entry, 1 for prelude.
@@ -30,6 +34,7 @@ impl Clone for Store {
     fn clone(&self) -> Self {
         Self {
             packages: self.packages.clone(),
+            file_packages: self.file_packages.clone(),
             go_package_names: self.go_package_names.clone(),
             next_file_id: AtomicU32::new(self.next_file_id.load(Ordering::Relaxed)),
             equality_index: self.equality_index.clone(),
@@ -58,6 +63,7 @@ impl Store {
 
         Self {
             packages,
+            file_packages: None,
             go_package_names: Default::default(),
             next_file_id: AtomicU32::new(2), // 0 = entrypoint, 1 = prelude
             equality_index: Default::default(),
@@ -126,14 +132,28 @@ impl Store {
     /// Stores a file in its owning package.
     pub fn store_file(&mut self, file: File) {
         let package_id = file.package_id.clone();
+        let file_id = file.id;
 
         let package = self
             .get_package_mut(&package_id)
             .expect("package must exist to store file");
-        package.files.insert(file.id, file);
+        package.files.insert(file_id, file);
+        self.index_file(file_id, package_id);
     }
 
     pub fn get_file(&self, file_id: u32) -> Option<&File> {
+        if let Some(package_id) = self
+            .file_packages
+            .as_deref()
+            .and_then(|packages| packages.get(file_id as usize))
+            .and_then(Option::as_deref)
+            && let Some(file) = self
+                .packages
+                .get(package_id)
+                .and_then(|package| package.get_file(file_id))
+        {
+            return Some(file);
+        }
         self.packages
             .values()
             .find_map(|package| package.get_file(file_id))
@@ -148,6 +168,38 @@ impl Store {
         })?;
         let package = Arc::make_mut(self.packages.get_mut(&package_id)?);
         package.files.get_mut(&file_id)
+    }
+
+    fn index_file(&mut self, file_id: u32, package_id: String) {
+        let Some(file_packages) = self.file_packages.as_mut() else {
+            return;
+        };
+        let index = file_id as usize;
+        let file_packages = Arc::make_mut(file_packages);
+        if file_packages.len() <= index {
+            file_packages.resize_with(index + 1, || None);
+        }
+        file_packages[index] = Some(package_id);
+    }
+
+    fn enable_file_index_if_large(&mut self) {
+        if self.file_packages.is_some()
+            || self.packages.len() < DIRECT_FILE_LOOKUP_PACKAGE_THRESHOLD
+        {
+            return;
+        }
+
+        let mut file_packages = Vec::new();
+        for (package_id, package) in &self.packages {
+            for file_id in package.files.keys().copied() {
+                let index = file_id as usize;
+                if file_packages.len() <= index {
+                    file_packages.resize_with(index + 1, || None);
+                }
+                file_packages[index] = Some(package_id.clone());
+            }
+        }
+        self.file_packages = Some(Arc::new(file_packages));
     }
 
     pub fn get_package(&self, package_id: &str) -> Option<&Package> {
@@ -172,6 +224,9 @@ impl Store {
 
         self.packages
             .insert(package_id.to_string(), Arc::new(Package::new(package_id)));
+        if self.packages.len() == DIRECT_FILE_LOOKUP_PACKAGE_THRESHOLD {
+            self.enable_file_index_if_large();
+        }
     }
 
     pub fn get_package_mut(&mut self, package_id: &str) -> Option<&mut Package> {
@@ -180,7 +235,20 @@ impl Store {
 
     /// Inserts a worker-built package (e.g. cache-decoded).
     pub(crate) fn insert_prebuilt_package(&mut self, package: Package) {
+        if self.file_packages.is_none() {
+            self.packages.insert(package.id.clone(), Arc::new(package));
+            if self.packages.len() == DIRECT_FILE_LOOKUP_PACKAGE_THRESHOLD {
+                self.enable_file_index_if_large();
+            }
+            return;
+        }
+
+        let package_id = package.id.clone();
+        let file_ids: Vec<u32> = package.files.keys().copied().collect();
         self.packages.insert(package.id.clone(), Arc::new(package));
+        for file_id in file_ids {
+            self.index_file(file_id, package_id.clone());
+        }
     }
 
     /// `Arc`-bump snapshot for a registration worker, which inserts its own
@@ -188,6 +256,7 @@ impl Store {
     pub(crate) fn registration_view(&self) -> Store {
         Store {
             packages: self.packages.clone(),
+            file_packages: self.file_packages.clone(),
             go_package_names: self.go_package_names.clone(),
             next_file_id: AtomicU32::new(self.next_file_id.load(Ordering::Relaxed)),
             equality_index: EqualityIndex::default(),
@@ -612,6 +681,41 @@ mod clone_tests {
         cloned.store_file(File::new_cached("m", "cloned.lis", "", "", 42));
 
         assert!(store.get_file(42).is_none());
+    }
+
+    #[test]
+    fn prebuilt_package_files_are_added_to_the_lookup_index() {
+        let mut store = Store::new();
+        for index in 0..DIRECT_FILE_LOOKUP_PACKAGE_THRESHOLD - 3 {
+            store.add_package(&format!("package{index}"));
+        }
+        let mut package = Package::new("cached");
+        package
+            .files
+            .insert(42, File::new_cached("cached", "cached.lis", "", "", 42));
+
+        store.insert_prebuilt_package(package);
+
+        assert_eq!(
+            store.get_file(42).map(|file| file.name.as_str()),
+            Some("cached.lis")
+        );
+    }
+
+    #[test]
+    fn stored_files_are_added_after_the_lookup_index_is_enabled() {
+        let mut store = Store::new();
+        for index in 0..DIRECT_FILE_LOOKUP_PACKAGE_THRESHOLD - 3 {
+            store.add_package(&format!("package{index}"));
+        }
+        store.add_package("large");
+
+        store.store_file(File::new_cached("large", "large.lis", "", "", 42));
+
+        assert_eq!(
+            store.get_file(42).map(|file| file.name.as_str()),
+            Some("large.lis")
+        );
     }
 }
 
