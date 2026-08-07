@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786119334600,
+  "lastUpdate": 1786119345246,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -19671,6 +19671,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 30329,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 25782,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18571,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13669,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 12366,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 7607,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5414,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2900,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1286,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 695,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7416,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "037ddb889f0ed1ca6fddeb7135e9bbdf46ad3ccb",
+          "message": "fix: treat `Unknown` as a Go interface when emitting (#1222)",
+          "timestamp": "2026-08-07T18:15:17+02:00",
+          "tree_id": "022679977f387e959cd1ac3042ac8795466a16d7",
+          "url": "https://github.com/ivov/lisette/commit/037ddb889f0ed1ca6fddeb7135e9bbdf46ad3ccb"
+        },
+        "date": 1786119343978,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 126959,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30337,
             "unit": "lines"
           },
           {
