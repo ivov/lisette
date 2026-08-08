@@ -9,8 +9,8 @@ use crate::definitions::structs::is_raw_function_type;
 use crate::names::go_name;
 use syntax::ast::{Generic, Pattern, RestPattern, StructFields};
 use syntax::containment::enum_payload_pointer_wrapped;
-use syntax::program::{Definition, DefinitionBody};
-use syntax::types::{Type, build_substitution_map, substitute};
+use syntax::program::{Definition, DefinitionBody, interface_requirements};
+use syntax::types::{Type, substitute};
 
 impl Planner<'_> {
     pub(crate) fn go_name_for_binding(&self, pattern: &Pattern) -> Option<String> {
@@ -127,45 +127,11 @@ impl Planner<'_> {
     }
 
     fn interface_bound_provides_equals(&self, bound: &Type, param_name: &str) -> bool {
-        let mut stack = vec![(bound.clone(), Vec::<String>::new())];
-        let mut seen: Vec<Type> = Vec::new();
-        while let Some((current, mut path)) = stack.pop() {
-            if seen.contains(&current) {
-                continue;
-            }
-            seen.push(current.clone());
-            let Type::Nominal { id, .. } = &current else {
-                continue;
-            };
-            if path.iter().any(|seen_id| seen_id == id.as_str()) {
-                continue;
-            }
-            let Some(Definition {
-                body: DefinitionBody::Interface { definition },
-                ..
-            }) = self.facts.definition(id.as_str())
-            else {
-                continue;
-            };
-            path.push(id.to_string());
-            let map = build_substitution_map(
-                &definition.generics,
-                current.get_type_params().unwrap_or_default(),
-            );
-            let provides_equals = definition.methods.get("equals").is_some_and(|equals| {
-                substitute(&equals.ty, &map).is_equals_bound_signature(param_name)
-            });
-            if provides_equals {
-                return true;
-            }
-            for parent in &definition.parents {
-                stack.push((
-                    self.facts.peel_alias(&substitute(parent, &map)),
-                    path.clone(),
-                ));
-            }
-        }
-        false
+        interface_requirements(bound, |id| self.facts.definition(id))
+            .into_iter()
+            .any(|requirement| {
+                requirement.name == "equals" && requirement.ty.is_equals_bound_signature(param_name)
+            })
     }
 
     pub(crate) fn has_field(&self, struct_ty: &Type, field_name: &str) -> bool {

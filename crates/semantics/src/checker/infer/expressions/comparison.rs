@@ -6,8 +6,8 @@ use crate::checker::infer::InferCtx;
 use crate::checker::scopes::Scopes;
 use crate::store::Store;
 use syntax::ast::{Annotation, Expression, Span, StructFields};
-use syntax::program::{DefinitionBody, Visibility};
-use syntax::types::{CompoundKind, Type, build_substitution_map, substitute};
+use syntax::program::{DefinitionBody, Visibility, interface_instances, interface_requirements};
+use syntax::types::{CompoundKind, Type, substitute};
 
 const RECURSIVE_TYPES: &str = "recursive types";
 
@@ -442,48 +442,11 @@ pub(crate) fn bound_implied(store: &Store, type_bounds: &[Type], method_bound: &
         .any(|tb| bound_satisfies(store, tb, method_bound))
 }
 
-fn interface_closure_any(
-    store: &Store,
-    start: &Type,
-    mut predicate: impl FnMut(&Type) -> bool,
-) -> bool {
-    let mut stack = vec![(store.deep_resolve_alias(start), Vec::<String>::new())];
-    let mut seen = Vec::new();
-    while let Some((current, mut path)) = stack.pop() {
-        if seen.contains(&current) {
-            continue;
-        }
-        seen.push(current.clone());
-        if predicate(&current) {
-            return true;
-        }
-        let Some(id) = current.get_qualified_id() else {
-            continue;
-        };
-        if path.iter().any(|seen_id| seen_id == id) {
-            continue;
-        }
-        path.push(id.to_string());
-        let Some(interface) = store.get_interface(id) else {
-            continue;
-        };
-        let map = build_substitution_map(
-            &interface.generics,
-            current.get_type_params().unwrap_or_default(),
-        );
-        for parent in &interface.parents {
-            stack.push((
-                store.deep_resolve_alias(&substitute(parent, &map)),
-                path.clone(),
-            ));
-        }
-    }
-    false
-}
-
 fn bound_satisfies(store: &Store, start: &Type, target: &Type) -> bool {
     let target = store.deep_resolve_alias(target);
-    interface_closure_any(store, start, |current| current == &target)
+    interface_instances(start, |id| store.get_definition(id))
+        .into_iter()
+        .any(|current| current.ty == target)
 }
 
 pub(crate) fn param_is_comparable(scopes: &Scopes, env: &TypeEnv, param_name: &str) -> bool {
@@ -505,21 +468,11 @@ pub(crate) fn param_is_comparable(scopes: &Scopes, env: &TypeEnv, param_name: &s
 }
 
 fn interface_bound_guarantees_equals(store: &Store, bound: &Type, param_name: &str) -> bool {
-    interface_closure_any(store, bound, |current| {
-        let Some(id) = current.get_qualified_id() else {
-            return false;
-        };
-        let Some(interface) = store.get_interface(id) else {
-            return false;
-        };
-        let map = build_substitution_map(
-            &interface.generics,
-            current.get_type_params().unwrap_or_default(),
-        );
-        interface.methods.get("equals").is_some_and(|equals| {
-            substitute(&equals.ty, &map).is_equals_bound_signature(param_name)
+    interface_requirements(bound, |id| store.get_definition(id))
+        .into_iter()
+        .any(|requirement| {
+            requirement.name == "equals" && requirement.ty.is_equals_bound_signature(param_name)
         })
-    })
 }
 
 pub(crate) fn param_is_equatable(

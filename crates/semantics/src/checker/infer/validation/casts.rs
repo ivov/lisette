@@ -93,10 +93,10 @@ impl InferCtx<'_> {
         // Used for explicit coercion before wrapping in generic containers,
         // e.g. `Some(my_dog as Animal)` to get `Option<Animal>`.
         let peeled_target = store.peel_alias(&target_ty);
-        if let Type::Nominal { id, params, .. } = &peeled_target
-            && let Some(interface) = store.get_interface(id).cloned()
+        if let Type::Nominal { id, .. } = &peeled_target
+            && store.get_interface(id).is_some()
         {
-            let _ = self.satisfies_interface(&source_ty, &interface, id, params, &span);
+            let _ = self.satisfies_interface(&source_ty, &peeled_target, &span);
             return;
         }
 

@@ -1056,23 +1056,19 @@ impl InferCtx<'_> {
             }
 
             let interface_ty = bound.ty.resolve_in(&self.env);
-            let Type::Nominal { id, params, .. } = interface_ty else {
+            if !store.is_interface(&interface_ty) {
                 continue;
-            };
-
-            let Some(interface) = store.get_interface(&id).cloned() else {
-                continue;
-            };
+            }
 
             if self
-                .satisfies_interface(&resolved_ty, &interface, &id, &params, &span)
+                .satisfies_interface(&resolved_ty, &interface_ty, &span)
                 .is_ok()
                 && !self.generic_absorbed_via_ref_param(
                     &bound.generic,
                     signature_params.iter().map(|param| &param.ty),
                 )
             {
-                let _ = self.check_pointer_receivers(&resolved_ty, &interface, &id, &span);
+                let _ = self.check_pointer_receivers(&resolved_ty, &interface_ty, &span);
             }
         }
     }

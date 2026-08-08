@@ -4,7 +4,7 @@ use ecow::EcoString;
 
 use crate::ast::{Annotation, EnumVariant, Generic, Literal, Span, StructFields};
 use crate::types::{
-    FunctionParameter, Type, build_substitution_map, substitute, type_args_match_params,
+    FunctionParameter, Symbol, Type, build_substitution_map, substitute, type_args_match_params,
 };
 
 #[derive(Debug, Clone)]
@@ -419,9 +419,149 @@ impl Method {
     pub fn with_type(&self, ty: Type) -> Self {
         Self { ty, ..self.clone() }
     }
+
+    fn with_receiver_placeholder(self) -> Self {
+        let Self {
+            source_name,
+            ty,
+            visibility,
+            name_span,
+            doc,
+            allowed_lints,
+            go_hints,
+        } = self;
+        Self {
+            source_name,
+            ty: ty.with_receiver_placeholder(),
+            visibility,
+            name_span,
+            doc,
+            allowed_lints,
+            go_hints,
+        }
+    }
 }
 
 pub type Methods = HashMap<EcoString, Method>;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct InterfaceInstance {
+    pub ty: Type,
+    pub parent_of: Option<Symbol>,
+}
+
+/// Instantiate an interface and its complete parent hierarchy exactly once.
+/// Package-qualified structural identity prevents same-named interfaces from
+/// collapsing, while the active path guard terminates malformed cycles.
+pub fn interface_instances<'d, F>(interface_ty: &Type, lookup: F) -> Vec<InterfaceInstance>
+where
+    F: Copy + Fn(&str) -> Option<&'d Definition>,
+{
+    fn collect<'d, F>(
+        interface_ty: &Type,
+        parent_of: Option<&Symbol>,
+        lookup: F,
+        visited: &mut HashSet<String>,
+        visiting: &mut HashSet<Symbol>,
+        instances: &mut Vec<InterfaceInstance>,
+    ) where
+        F: Copy + Fn(&str) -> Option<&'d Definition>,
+    {
+        let resolved = crate::types::peel_alias(interface_ty, lookup);
+        let Type::Nominal { id, params } = &resolved else {
+            return;
+        };
+        // `Display` intentionally omits package qualification, so it cannot
+        // distinguish same-named interfaces from different packages.
+        if !visited.insert(format!("{resolved:?}")) || !visiting.insert(id.clone()) {
+            return;
+        }
+        let Some(Definition {
+            body: DefinitionBody::Interface { definition },
+            ..
+        }) = lookup(id)
+        else {
+            visiting.remove(id);
+            return;
+        };
+        let map = build_substitution_map(&definition.generics, params);
+        instances.push(InterfaceInstance {
+            ty: resolved.clone(),
+            parent_of: parent_of.cloned(),
+        });
+        for parent in &definition.parents {
+            collect(
+                &substitute(parent, &map),
+                Some(id),
+                lookup,
+                visited,
+                visiting,
+                instances,
+            );
+        }
+        visiting.remove(id);
+    }
+
+    let mut instances = Vec::new();
+    collect(
+        interface_ty,
+        None,
+        lookup,
+        &mut HashSet::default(),
+        &mut HashSet::default(),
+        &mut instances,
+    );
+    instances
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct InterfaceRequirement {
+    pub declaring_interface: Symbol,
+    pub parent_of: Option<Symbol>,
+    pub name: EcoString,
+    /// The method as declared. Its type determines the generic declaration's
+    /// physical ABI even when substitution reveals a special logical type.
+    pub method: Method,
+    /// The logical signature after applying all interface type arguments.
+    pub ty: Type,
+}
+
+/// Flatten an interface and its instantiated parents into declaration-tagged
+/// method requirements. Cycles and repeated generic instantiations are handled
+/// here so registration, inference, and emission cannot disagree about the
+/// inherited signatures.
+pub fn interface_requirements<'d, F>(interface_ty: &Type, lookup: F) -> Vec<InterfaceRequirement>
+where
+    F: Copy + Fn(&str) -> Option<&'d Definition>,
+{
+    let mut requirements = Vec::new();
+    for instance in interface_instances(interface_ty, lookup) {
+        let Type::Nominal { id, params } = instance.ty else {
+            continue;
+        };
+        let Some(Definition {
+            body: DefinitionBody::Interface { definition },
+            ..
+        }) = lookup(&id)
+        else {
+            continue;
+        };
+        let map = build_substitution_map(&definition.generics, &params);
+        requirements.extend(
+            definition
+                .methods
+                .iter()
+                .map(|(name, method)| InterfaceRequirement {
+                    declaring_interface: id.clone(),
+                    parent_of: instance.parent_of.clone(),
+                    name: name.clone(),
+                    method: method.clone(),
+                    ty: substitute(&method.ty, &map),
+                }),
+        );
+    }
+    requirements
+}
 
 /// Resolve the complete method set for a type, including inherited and alias methods.
 pub fn methods_for_type<'d, F>(
@@ -450,28 +590,21 @@ where
             return Methods::default();
         }
 
-        if let Some(Definition {
-            body: DefinitionBody::Interface { definition },
-            ..
-        }) = lookup(&qualified_name)
+        if lookup(&qualified_name)
+            .is_some_and(|definition| matches!(definition.body, DefinitionBody::Interface { .. }))
         {
-            let map = build_substitution_map(
-                &definition.generics,
-                ty.get_type_params().unwrap_or_default(),
-            );
-            let mut methods = definition
-                .methods
-                .iter()
-                .map(|(name, method)| {
-                    let ty = substitute(&method.ty, &map).with_receiver_placeholder();
-                    (name.clone(), method.with_type(ty))
+            return interface_requirements(&stripped, lookup)
+                .into_iter()
+                .map(|requirement| {
+                    (
+                        requirement.name,
+                        requirement
+                            .method
+                            .with_type(requirement.ty)
+                            .with_receiver_placeholder(),
+                    )
                 })
-                .collect::<Methods>();
-
-            for parent in &definition.parents {
-                methods.extend(collect(parent, trait_bounds, lookup, visited));
-            }
-            return methods;
+                .collect();
         }
 
         if let Some(bounds) = trait_bounds.get(&qualified_name) {
@@ -502,8 +635,6 @@ where
 }
 
 fn method_lookup_key(ty: &Type) -> Option<crate::types::Symbol> {
-    use crate::types::Symbol;
-
     match ty {
         Type::Nominal { id, .. } => Some(id.clone()),
         Type::Compound { kind, .. } => Some(Symbol::from_parts("prelude", kind.leaf_name())),

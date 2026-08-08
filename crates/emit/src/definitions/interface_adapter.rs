@@ -6,7 +6,7 @@ use crate::names::go_name::GO_IMPORT_PREFIX;
 use crate::write_line;
 use ecow::EcoString;
 use rustc_hash::FxHashSet as HashSet;
-use syntax::program::{Definition, DefinitionBody, Interface};
+use syntax::program::{Definition, DefinitionBody, interface_requirements};
 use syntax::types::{
     SubstitutionMap, Symbol, Type, build_substitution_map, substitute, unqualified_name,
 };
@@ -62,49 +62,6 @@ impl Planner<'_> {
         self.facts.resolve_to_function_type(ty).is_some()
     }
 
-    /// Collect own + transitively inherited methods, tagged with the id
-    /// of the interface that *declared* each one. Methods are registered
-    /// under the declaring interface, so hint lookup needs that id.
-    fn collect_all_interface_methods(
-        &self,
-        root_id: &str,
-        iface: &Interface,
-    ) -> Vec<(EcoString, Type, EcoString)> {
-        let mut result: Vec<(EcoString, Type, EcoString)> = Vec::new();
-        let mut seen: HashSet<String> = HashSet::default();
-        let mut queue: Vec<(&Interface, EcoString)> = vec![(iface, EcoString::from(root_id))];
-        while let Some((current, current_id)) = queue.pop() {
-            for (name, ty) in &current.methods {
-                // Parents may spell one Go method with different source names.
-                let selector = if self.method_needs_export(name) {
-                    go_name::snake_to_camel(name)
-                } else {
-                    go_name::unexported_method_go_name(name)
-                };
-                if seen.insert(selector) {
-                    result.push((name.clone(), ty.ty.clone(), current_id.clone()));
-                }
-            }
-            for parent_ty in &current.parents {
-                let parent = self.facts.peel_alias(parent_ty);
-                let Type::Nominal { id, .. } = &parent else {
-                    continue;
-                };
-                if let Some(Definition {
-                    body:
-                        DefinitionBody::Interface {
-                            definition: parent_definition,
-                        },
-                    ..
-                }) = self.facts.definition(id.as_str())
-                {
-                    queue.push((parent_definition, id.as_eco().clone()));
-                }
-            }
-        }
-        result
-    }
-
     /// Build an adapter when the implementation and interface expose different
     /// physical Go return signatures for the same logical methods.
     pub(crate) fn needs_adapter(&self, source_ty: &Type, target_ty: &Type) -> Option<AdapterPlan> {
@@ -113,7 +70,7 @@ impl Planner<'_> {
             return None;
         };
         let Some(Definition {
-            body: DefinitionBody::Interface { definition },
+            body: DefinitionBody::Interface { .. },
             ..
         }) = self.facts.definition(target_id.as_str())
         else {
@@ -123,8 +80,7 @@ impl Planner<'_> {
         let Type::Nominal { id: source_id, .. } = &source_stripped else {
             return None;
         };
-        let methods =
-            self.adapted_methods(source_id, &source_stripped, target_id.as_str(), definition)?;
+        let methods = self.adapted_methods(source_id, &source_stripped, &target)?;
         Some(AdapterPlan {
             concrete_id: source_id.as_eco().clone(),
             interface_id: target_id.as_eco().clone(),
@@ -140,8 +96,7 @@ impl Planner<'_> {
         &self,
         source_id: &Symbol,
         source_stripped: &Type,
-        target_id: &str,
-        definition: &Interface,
+        target: &Type,
     ) -> Option<Vec<AdapterMethod>> {
         if source_id.starts_with(GO_IMPORT_PREFIX) {
             return None;
@@ -161,22 +116,30 @@ impl Planner<'_> {
 
         let mut methods = Vec::new();
         let mut any_adapted = false;
-        for (method_name, interface_method_ty, declaring_id) in
-            &self.collect_all_interface_methods(target_id, definition)
-        {
+        let mut seen = HashSet::default();
+        for requirement in interface_requirements(target, |id| self.facts.definition(id)) {
+            // Parents may spell one Go method with different source names.
+            let selector = if self.method_needs_export(&requirement.name) {
+                go_name::snake_to_camel(&requirement.name)
+            } else {
+                go_name::unexported_method_go_name(&requirement.name)
+            };
+            if !seen.insert(selector) {
+                continue;
+            }
             let (_, impl_ty) = syntax::go_names::conformance_method(
                 impl_methods,
-                declaring_id.as_str(),
+                requirement.declaring_interface.as_str(),
                 self.facts
-                    .definition(declaring_id.as_str())
+                    .definition(requirement.declaring_interface.as_str())
                     .is_some_and(|definition| definition.visibility.is_public()),
-                method_name.as_str(),
+                requirement.name.as_str(),
                 &own_candidate,
             )?;
             let (method, adapted) = self.build_adapter_method(
-                method_name,
-                declaring_id,
-                interface_method_ty,
+                &requirement.name,
+                &requirement.method.ty,
+                &requirement.method.go_hints,
                 impl_ty,
                 source_stripped,
             )?;
@@ -206,8 +169,8 @@ impl Planner<'_> {
     fn build_adapter_method(
         &self,
         method_name: &EcoString,
-        declaring_id: &EcoString,
         interface_method_ty: &Type,
+        interface_hints: &[String],
         impl_ty: &Type,
         concrete_ty: &Type,
     ) -> Option<(AdapterMethod, bool)> {
@@ -221,10 +184,9 @@ impl Planner<'_> {
         let return_type = substitute(&f.return_type, &substitution);
 
         let user_abi = self.callable_return_abi(&f.return_type);
-        let interface_hints = self.go_interface_method_hints(declaring_id, method_name);
         let interface_return = &interface_method_ty.as_function_type()?.return_type;
         let interface_abi =
-            self.callable_return_abi_with_go_hints(interface_return, &interface_hints);
+            self.callable_return_abi_with_go_hints(interface_return, interface_hints);
         let interface_returns_void = self
             .lowered_return_go_type(&interface_abi, interface_return)
             .code

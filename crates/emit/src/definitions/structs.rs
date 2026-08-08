@@ -7,7 +7,7 @@ use crate::utils::{synthesized_local_name, synthesized_receiver_name};
 use rustc_hash::FxHashSet;
 use syntax::ast::{Attribute, Generic, StructFieldDefinition, StructFields};
 use syntax::attributes::struct_attribute_forces_field_export;
-use syntax::program::{Definition, DefinitionBody, Interface, Methods};
+use syntax::program::{Definition, DefinitionBody, Methods, interface_requirements};
 use syntax::types::Type;
 
 pub(crate) const DEBUG_STRING_METHOD: &str = "DebugString";
@@ -124,12 +124,9 @@ impl Planner<'_> {
         if definition_declares_string(definition, |m| self.facts.is_ufcs_method(id, m)) {
             return Some(StringerKind::Foreign);
         }
-        if let DefinitionBody::Interface {
-            definition: interface,
-        } = &definition.body
-        {
+        if matches!(definition.body, DefinitionBody::Interface { .. }) {
             return self
-                .interface_has_string_selector(interface, visited)
+                .interface_has_string_selector(id)
                 .then_some(StringerKind::Foreign);
         }
         if definition_emits_go_string_field(definition) {
@@ -160,16 +157,16 @@ impl Planner<'_> {
         matches!(first, StringerKind::Synthesized).then_some(StringerKind::Synthesized)
     }
 
-    fn interface_has_string_selector(
-        &self,
-        interface: &Interface,
-        visited: &mut FxHashSet<String>,
-    ) -> bool {
-        interface_declares_string(&interface.methods)
-            || interface
-                .parents
-                .iter()
-                .any(|parent| self.stringer_kind(parent, visited).is_some())
+    fn interface_has_string_selector(&self, id: &str) -> bool {
+        let interface_ty = Type::Nominal {
+            id: id.into(),
+            params: vec![],
+        };
+        interface_requirements(&interface_ty, |id| self.facts.definition(id))
+            .iter()
+            .any(|requirement| {
+                requirement.name == "string" || requirement.name == ENUM_STRINGER_METHOD
+            })
     }
 
     /// Emit a tuple struct and its optional Stringer.
@@ -604,12 +601,6 @@ fn definition_declares_string(definition: &Definition, is_ufcs: impl Fn(&str) ->
     ["string", ENUM_STRINGER_METHOD]
         .iter()
         .any(|method| methods.contains_key(*method) && !is_ufcs(method))
-}
-
-fn interface_declares_string(methods: &Methods) -> bool {
-    ["string", ENUM_STRINGER_METHOD]
-        .iter()
-        .any(|method| methods.contains_key(*method))
 }
 
 fn emit_struct_shadow_stringer_method(
