@@ -4,7 +4,9 @@ use crate::abi::layout::SlotOrigin;
 use crate::expressions::staging::VariadicCombine;
 use crate::types::native::NativeGoType;
 use syntax::ast::{Expression, IdentifierResolution};
-use syntax::program::{CallKind, Definition, NativeTypeKind, resolved_definition};
+use syntax::program::{
+    CallKind, Definition, Method, NativeTypeKind, Visibility, resolved_definition,
+};
 use syntax::types::{FunctionParameter, Type};
 
 #[derive(Debug)]
@@ -21,7 +23,7 @@ pub(crate) struct CallPlan<'a> {
 #[derive(Debug)]
 pub(crate) struct ResolvedCallee<'a> {
     pub(crate) origin: CallableOrigin,
-    pub(crate) definition: Option<&'a Definition>,
+    pub(crate) declaration: Option<CallableDeclaration<'a>>,
     pub(crate) instantiated: Type,
     pub(crate) receiver_offset: usize,
     pub(crate) abi: CallableAbi,
@@ -30,7 +32,40 @@ pub(crate) struct ResolvedCallee<'a> {
 
 impl ResolvedCallee<'_> {
     pub(crate) fn declared_type(&self) -> Option<&Type> {
-        self.definition.map(|definition| &definition.ty)
+        self.declaration.map(CallableDeclaration::ty)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum CallableDeclaration<'a> {
+    Definition(&'a Definition),
+    Method(&'a Method),
+}
+
+impl<'a> CallableDeclaration<'a> {
+    pub(crate) fn ty(self) -> &'a Type {
+        match self {
+            Self::Definition(definition) => &definition.ty,
+            Self::Method(method) => &method.ty,
+        }
+    }
+
+    pub(crate) fn visibility(self) -> &'a Visibility {
+        match self {
+            Self::Definition(definition) => &definition.visibility,
+            Self::Method(method) => &method.visibility,
+        }
+    }
+
+    pub(crate) fn is_type_definition(self) -> bool {
+        matches!(self, Self::Definition(definition) if definition.is_type_definition())
+    }
+
+    pub(crate) fn go_type_param_recipe(self) -> Option<&'a str> {
+        match self {
+            Self::Definition(definition) => definition.go_type_param_recipe(),
+            Self::Method(_) => None,
+        }
     }
 }
 
@@ -198,14 +233,13 @@ impl<'a> Planner<'a> {
         go_return: Option<&CallableReturnAbi>,
         arg_count: usize,
     ) -> ResolvedCallee<'a> {
-        let (id, definition) = self.resolve_callee_definition(function);
+        let (id, declaration) = self.resolve_callee_definition(function);
+        let declared_type = declaration.map(CallableDeclaration::ty);
         let instantiated = self
             .facts
             .resolve_to_function_type(function.get_type().unwrap_forall())
             .unwrap_or_else(|| function.get_type().unwrap_forall().clone());
-        let declared_params = definition
-            .map(|definition| &definition.ty)
-            .and_then(|ty| ty.unwrap_forall().get_function_params());
+        let declared_params = declared_type.and_then(|ty| ty.unwrap_forall().get_function_params());
         let receiver_offset =
             declared_params.map_or(0, |params| params.len().saturating_sub(arg_count));
         let params = build_param_abi(
@@ -219,7 +253,7 @@ impl<'a> Planner<'a> {
         let result = match go_return {
             Some(result) => result.clone(),
             None => self
-                .classify_callee_abi(function, definition)
+                .classify_callee_abi(function, declared_type)
                 .unwrap_or_else(|| {
                     instantiated
                         .get_function_ret()
@@ -228,9 +262,7 @@ impl<'a> Planner<'a> {
                 }),
         };
         let return_type = instantiated.get_function_ret().unwrap_or(&Type::Never);
-        let declared_return = definition
-            .map(|definition| &definition.ty)
-            .and_then(|ty| ty.unwrap_forall().get_function_ret());
+        let declared_return = declared_type.and_then(|ty| ty.unwrap_forall().get_function_ret());
         let catalog_return = matches!(origin, CallableOrigin::GoInterop)
             .then(|| {
                 id.as_deref()
@@ -268,7 +300,7 @@ impl<'a> Planner<'a> {
 
         ResolvedCallee {
             origin,
-            definition,
+            declaration,
             instantiated,
             receiver_offset,
             abi: CallableAbi {
@@ -302,12 +334,20 @@ impl<'a> Planner<'a> {
     pub(crate) fn resolve_callee_definition(
         &self,
         function: &Expression,
-    ) -> (Option<String>, Option<&'a Definition>) {
+    ) -> (Option<String>, Option<CallableDeclaration<'a>>) {
         let id = resolved_definition(function).map(str::to_string);
-        let definition = id
-            .as_deref()
-            .and_then(|definition| self.facts.definition(definition));
-        (id, definition)
+        let declaration = id.as_deref().and_then(|id| {
+            self.facts
+                .definition(id)
+                .map(CallableDeclaration::Definition)
+                .or_else(|| {
+                    let (owner, name) = id.rsplit_once('.')?;
+                    self.facts
+                        .method(owner, name)
+                        .map(CallableDeclaration::Method)
+                })
+        });
+        (id, declaration)
     }
 
     pub(crate) fn resolve_callable_params(
@@ -315,8 +355,8 @@ impl<'a> Planner<'a> {
         function: &Expression,
         arg_count: usize,
     ) -> Vec<CallableParamAbi> {
-        let (id, definition) = self.resolve_callee_definition(function);
-        let declared = definition.map(|definition| &definition.ty);
+        let (id, declaration) = self.resolve_callee_definition(function);
+        let declared = declaration.map(CallableDeclaration::ty);
         let declared_params = declared.and_then(|ty| ty.unwrap_forall().get_function_params());
         let receiver_offset =
             declared_params.map_or(0, |params| params.len().saturating_sub(arg_count));
@@ -344,7 +384,7 @@ impl<'a> Planner<'a> {
     fn classify_callee_abi(
         &self,
         callee: &Expression,
-        definition: Option<&Definition>,
+        declared_type: Option<&Type>,
     ) -> Option<CallableReturnAbi> {
         let callee_ty = callee.get_type();
         let unwrapped = callee_ty.unwrap_forall();
@@ -390,8 +430,7 @@ impl<'a> Planner<'a> {
         {
             return None;
         }
-        let declared_return =
-            definition.and_then(|definition| definition.ty.unwrap_forall().get_function_ret());
+        let declared_return = declared_type.and_then(|ty| ty.unwrap_forall().get_function_ret());
         let classify_ty = declared_return.unwrap_or(f.return_type.as_ref());
 
         self.classify_direct_emission(classify_ty)
@@ -427,6 +466,12 @@ impl<'a> Planner<'a> {
             .facts
             .definition(qualified_name)
             .map(Definition::go_hints)
+            .or_else(|| {
+                let (owner, name) = qualified_name.rsplit_once('.')?;
+                self.facts
+                    .method(owner, name)
+                    .map(|method| method.go_hints.as_slice())
+            })
             .unwrap_or_default();
         self.facts.classify_go_return_type(return_ty, go_hints)
     }

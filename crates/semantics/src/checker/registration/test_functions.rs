@@ -4,7 +4,7 @@ use syntax::attributes::test_attribute;
 use syntax::program::TestFunction;
 use syntax::types::{Symbol, Type};
 
-use super::TaskState;
+use super::{RegistrationFile, TaskState};
 use crate::store::Store;
 
 fn test_context_type() -> Type {
@@ -27,12 +27,19 @@ pub(crate) fn normalize_test_params(mut params: Vec<Binding>, is_test: bool) -> 
 impl TaskState {
     /// Collect and validate a package's `#[test]` functions for finalization.
     /// The pending records are merge-safe across parallel registration tasks.
-    pub(super) fn register_package_tests(&mut self, store: &Store, package_id: &str) {
-        let package = store.get_package(package_id).expect("package must exist");
+    pub(super) fn register_package_tests(
+        &mut self,
+        store: &Store,
+        package_id: &str,
+        files: &[RegistrationFile],
+    ) {
         let context_shadowed = package_shadows_test_context(store, package_id);
         let mut records: Vec<TestFunction> = Vec::new();
-        for file in package.files.values() {
-            let in_test_file = file.is_test();
+        for file in files {
+            let in_test_file = store
+                .get_file(file.id)
+                .expect("registered file must remain in the store")
+                .is_test();
             for item in &file.items {
                 collect_test_candidates(
                     item,

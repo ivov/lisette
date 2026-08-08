@@ -347,7 +347,7 @@ impl<'a> Planner<'a> {
 
     fn callee_collapsed_recipe(&self, callee: &ResolvedCallee<'_>) -> Option<String> {
         callee
-            .definition?
+            .declaration?
             .go_type_param_recipe()
             .map(str::to_string)
     }

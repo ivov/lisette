@@ -82,7 +82,7 @@ impl Planner<'_> {
                     go_name::unexported_method_go_name(name)
                 };
                 if seen.insert(selector) {
-                    result.push((name.clone(), ty.clone(), current_id.clone()));
+                    result.push((name.clone(), ty.ty.clone(), current_id.clone()));
                 }
             }
             for parent_ty in &current.parents {
@@ -153,13 +153,7 @@ impl Planner<'_> {
             _ => return None,
         };
 
-        let is_public_definition = |id: &str| {
-            self.facts
-                .definition(id)
-                .is_some_and(|d| d.visibility.is_public())
-        };
         let own_candidate = |name: &str| syntax::go_names::ConformanceCandidate::Resolved {
-            exported: is_public_definition(&format!("{source_id}.{name}")),
             depth: 0,
             owner: source_id.as_eco().clone(),
             shadowed: self.facts.is_ufcs_method(source_id.as_str(), name),
@@ -173,7 +167,9 @@ impl Planner<'_> {
             let (_, impl_ty) = syntax::go_names::conformance_method(
                 impl_methods,
                 declaring_id.as_str(),
-                is_public_definition(declaring_id.as_str()),
+                self.facts
+                    .definition(declaring_id.as_str())
+                    .is_some_and(|definition| definition.visibility.is_public()),
                 method_name.as_str(),
                 &own_candidate,
             )?;
@@ -254,10 +250,9 @@ impl Planner<'_> {
         interface_id: &str,
         method_name: &str,
     ) -> Vec<String> {
-        let qualified = format!("{}.{}", interface_id, method_name);
         self.facts
-            .definition(qualified.as_str())
-            .map(|d| d.go_hints().to_vec())
+            .method(interface_id, method_name)
+            .map(|method| method.go_hints.clone())
             .unwrap_or_default()
     }
 

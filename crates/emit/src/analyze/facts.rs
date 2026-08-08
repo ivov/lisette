@@ -5,7 +5,8 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::{BindingId, Pattern, RestPattern, Span};
 use syntax::program::{
-    Definition, DefinitionBody, EqualityIndex, MutationInfo, PackageId, TestIndex, UnusedInfo,
+    Definition, DefinitionBody, EqualityIndex, Method, MutationInfo, PackageId, TestIndex,
+    UnusedInfo,
 };
 use syntax::types::{Symbol, Type};
 
@@ -82,6 +83,10 @@ impl<'a> EmitFacts<'a> {
 
     pub(crate) fn definition(&self, id: &str) -> Option<&'a Definition> {
         self.definitions.get(id)
+    }
+
+    pub(crate) fn method(&self, owner: &str, name: &str) -> Option<&'a Method> {
+        self.definition(owner)?.methods()?.get(name)
     }
 
     pub(crate) fn is_const(&self, qualified_name: &str) -> bool {

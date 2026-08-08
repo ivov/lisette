@@ -213,9 +213,22 @@ impl Planner<'_> {
         let definition = self.facts.definition(qualified_name.as_str()).or_else(|| {
             let prelude_name = format!("{}.{}", go_name::PRELUDE_PACKAGE, name);
             self.facts.definition(prelude_name.as_str())
-        })?;
-        let definition_ty = definition.ty.clone();
-        let recipe = definition.go_type_param_recipe().map(str::to_string);
+        });
+        let (definition_ty, recipe) = if let Some(definition) = definition {
+            (
+                definition.ty.clone(),
+                definition.go_type_param_recipe().map(str::to_string),
+            )
+        } else {
+            let (owner, method) = name.rsplit_once('.')?;
+            let local_owner = self.facts.qualified_current(owner);
+            let prelude_owner = format!("{}.{}", go_name::PRELUDE_PACKAGE, owner);
+            let method = self
+                .facts
+                .method(&local_owner, method)
+                .or_else(|| self.facts.method(&prelude_owner, method))?;
+            (method.ty.clone(), None)
+        };
 
         self.format_type_args_from_forall(&definition_ty, instantiated_ty, recipe.as_deref())
     }
@@ -227,9 +240,16 @@ impl Planner<'_> {
         qualified_name: &str,
         instantiated_ty: &Type,
     ) -> Option<String> {
-        let definition = self.facts.definition(qualified_name)?;
-        let definition_ty = definition.ty.clone();
-        let recipe = definition.go_type_param_recipe().map(str::to_string);
+        let (definition_ty, recipe) =
+            if let Some(definition) = self.facts.definition(qualified_name) {
+                (
+                    definition.ty.clone(),
+                    definition.go_type_param_recipe().map(str::to_string),
+                )
+            } else {
+                let (owner, name) = qualified_name.rsplit_once('.')?;
+                (self.facts.method(owner, name)?.ty.clone(), None)
+            };
 
         self.format_type_args_from_forall(&definition_ty, instantiated_ty, recipe.as_deref())
     }
@@ -271,11 +291,10 @@ impl Planner<'_> {
             return None;
         }
 
-        let method_key = self.facts.qualified_current_member(type_part, method_part);
         let should_export = self
             .facts
-            .definition(method_key.as_str())
-            .map(|d| d.visibility.is_public())
+            .method(&qualified_name, method_part)
+            .map(|method| method.visibility.is_public())
             .unwrap_or(false)
             || self.method_needs_export(method_part);
         let go_method = if should_export {
@@ -318,8 +337,8 @@ impl Planner<'_> {
 
         let is_public = self
             .facts
-            .definition(id)
-            .map(|d| d.visibility.is_public())
+            .method(&type_id, method_name)
+            .map(|method| method.visibility.is_public())
             .unwrap_or(true)
             || self.method_needs_export(method_name);
 

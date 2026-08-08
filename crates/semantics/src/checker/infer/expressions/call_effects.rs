@@ -120,7 +120,7 @@ impl InferCtx<'_> {
                 _ => None,
             })?;
 
-        let has_self = match &method_ty {
+        let has_self = match &method_ty.ty {
             Type::Function(f) => !f.params.is_empty(),
             Type::Forall { body, .. } => {
                 if let Type::Function(f) = body.as_ref() {
@@ -142,8 +142,8 @@ impl InferCtx<'_> {
         }
 
         let is_public = store
-            .get_definition(&Symbol::from_parts(&qualified_name, method))
-            .map(|d| d.visibility.is_public())
+            .get_method(&qualified_name, method)
+            .map(|method| method.visibility.is_public())
             .unwrap_or(false);
 
         Some(CallKind::ReceiverMethodUfcs { is_public })

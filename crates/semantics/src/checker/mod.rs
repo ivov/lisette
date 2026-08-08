@@ -20,13 +20,15 @@ use registration::derived_attributes::EqualityAttributes;
 use scopes::Scopes;
 use syntax::ast::{Annotation, Expression, Generic, ImportAlias, Span};
 use syntax::program::{
-    Definition, DefinitionBody, FileImport, MethodSignatures, NativeTypeKind, Package,
+    Definition, DefinitionBody, FileImport, Methods, NativeTypeKind, Package,
     go_import_default_name,
 };
 use syntax::types::{Bound, SubstitutionMap, Symbol, Type, substitute};
 
 pub(crate) use context::FileContext;
 pub use infer::expressions::comparison::{check_never_comparable, check_not_comparable};
+pub use registration::RegisteredPackage;
+pub(crate) use registration::UnregisteredPackage;
 pub use state::{Cursor, TaskState};
 pub(crate) use state::{InferredFile, TaskOutput};
 pub use type_env::{EnvResolve, TypeEnv, VarState};

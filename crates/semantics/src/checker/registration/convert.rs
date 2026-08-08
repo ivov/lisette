@@ -7,7 +7,7 @@ use syntax::EcoString;
 use syntax::ast::{Annotation, Generic, Span};
 use syntax::program::DefinitionBody;
 use syntax::types::{
-    FunctionParameter, SubstitutionMap, Symbol, Type, substitute, unqualified_name,
+    FunctionParameter, Symbol, Type, build_named_substitution_map, substitute, unqualified_name,
 };
 
 use crate::checker::TaskState;
@@ -80,8 +80,7 @@ impl TaskState {
             },
         );
         if !result.contains_error() {
-            self.facts
-                .bound_types
+            self.resolved_bound_types
                 .insert(annotation.get_span(), result.clone());
         }
         result
@@ -349,11 +348,7 @@ impl TaskState {
         let resolved_ty = if generics.is_empty() && concrete_args.is_empty() {
             body
         } else {
-            let map: SubstitutionMap = generics
-                .iter()
-                .cloned()
-                .zip(concrete_args.iter().cloned())
-                .collect();
+            let map = build_named_substitution_map(&generics, &concrete_args);
             substitute(&body, &map)
         };
 
@@ -558,11 +553,7 @@ impl TaskState {
             })
             .collect();
 
-        let map: SubstitutionMap = generics
-            .iter()
-            .zip(args.iter())
-            .map(|(name, (_, ty))| (name.clone(), ty.clone()))
-            .collect();
+        let map = build_named_substitution_map(generics, args.iter().map(|(_, ty)| ty));
 
         (substitute(body, &map), args)
     }

@@ -1,7 +1,7 @@
 use syntax::EcoString;
 use syntax::ast::{Attribute, Expression, Span, VariantFields};
 
-use super::TaskState;
+use super::{RegistrationFile, TaskState};
 use crate::store::Store;
 
 #[derive(Debug, Clone)]
@@ -66,23 +66,24 @@ impl TaskState {
         &mut self,
         store: &mut Store,
         package_id: &str,
+        files: &[RegistrationFile],
     ) {
-        let candidates = {
-            let package = store.get_package(package_id).expect("package must exist");
-            package
-                .files
-                .values()
-                .map(|file| {
-                    collect_derived_attributes(
-                        DerivedAttributeContext {
-                            package_id: package_id.to_string(),
-                            is_d_lis: file.is_d_lis(),
-                        },
-                        &file.items,
-                    )
-                })
-                .collect::<Vec<_>>()
-        };
+        let candidates = files
+            .iter()
+            .map(|file| {
+                let is_d_lis = store
+                    .get_file(file.id)
+                    .expect("registered file must remain in the store")
+                    .is_d_lis();
+                collect_derived_attributes(
+                    DerivedAttributeContext {
+                        package_id: package_id.to_string(),
+                        is_d_lis,
+                    },
+                    &file.items,
+                )
+            })
+            .collect::<Vec<_>>();
         for candidates in candidates {
             self.register_derived_attributes(store, candidates);
         }

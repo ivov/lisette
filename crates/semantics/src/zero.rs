@@ -3,7 +3,10 @@
 
 use ecow::EcoString;
 use syntax::program::DefinitionBody;
-use syntax::types::{CompoundKind, SimpleKind, SubstitutionMap, Symbol, Type, substitute};
+use syntax::types::{
+    CompoundKind, SimpleKind, SubstitutionMap, Symbol, Type, build_named_substitution_map,
+    substitute,
+};
 
 use crate::store::Store;
 
@@ -309,13 +312,10 @@ pub fn hidden_embed_field(field: &syntax::ast::StructFieldDefinition) -> bool {
 }
 
 fn build_substitution(def_ty: &Type, params: &[Type]) -> SubstitutionMap {
-    let mut map = SubstitutionMap::default();
     if let Type::Forall { vars, .. } = def_ty
         && vars.len() == params.len()
     {
-        for (var, param) in vars.iter().zip(params.iter()) {
-            map.insert(var.clone(), param.clone());
-        }
+        return build_named_substitution_map(vars, params);
     }
-    map
+    SubstitutionMap::default()
 }

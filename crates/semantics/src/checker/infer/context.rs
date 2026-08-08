@@ -103,16 +103,19 @@ impl<'a> InferCtx<'a> {
         }
     }
 
-    pub(super) fn enter_loop(&mut self, context: LoopContext) {
+    pub(super) fn with_loop<T>(
+        &mut self,
+        context: LoopContext,
+        f: impl FnOnce(&mut Self) -> T,
+    ) -> T {
         self.traversal.loops.push(context);
-    }
-
-    pub(super) fn exit_loop(&mut self) {
+        let result = f(self);
         assert!(
             self.traversal.loops.len() > self.visible_loop_start(),
             "a visible loop must be entered before it is exited"
         );
         self.traversal.loops.pop();
+        result
     }
 
     pub(super) fn is_inside_loop(&self) -> bool {

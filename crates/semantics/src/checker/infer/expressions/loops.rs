@@ -23,16 +23,6 @@ fn iter_seq_kind(ty: &Type) -> Option<IterSeqKind> {
 }
 
 impl InferCtx<'_> {
-    fn infer_in_loop_context<F>(&mut self, context: LoopContext, f: F) -> Expression
-    where
-        F: FnOnce(&mut Self) -> Expression,
-    {
-        self.enter_loop(context);
-        let result = f(self);
-        self.exit_loop();
-        result
-    }
-
     pub(super) fn infer_loop(
         &mut self,
         body: Box<Expression>,
@@ -41,7 +31,7 @@ impl InferCtx<'_> {
     ) -> Expression {
         let break_ty = self.new_type_var();
 
-        let new_body = self.infer_in_loop_context(LoopContext::Value(break_ty.clone()), |this| {
+        let new_body = self.with_loop(LoopContext::Value(break_ty.clone()), |this| {
             this.infer_expression(*body, &Type::ignored())
         });
 
@@ -77,7 +67,7 @@ impl InferCtx<'_> {
                 .push(diagnostics::infer::propagate_in_condition(span));
         }
 
-        let new_body = self.infer_in_loop_context(LoopContext::Statement, |s| {
+        let new_body = self.with_loop(LoopContext::Statement, |s| {
             s.infer_expression(*body, &Type::ignored())
         });
 
@@ -112,7 +102,7 @@ impl InferCtx<'_> {
                 scrutinee_ty.resolve_in(&this.env),
                 BindingKind::WhileLet,
             );
-            let new_body = this.infer_in_loop_context(LoopContext::Statement, |s| {
+            let new_body = this.with_loop(LoopContext::Statement, |s| {
                 s.infer_expression(*body, &Type::ignored())
             });
             (new_pattern, new_body)
@@ -176,7 +166,7 @@ impl InferCtx<'_> {
                 }
             }
 
-            let new_body = this.infer_in_loop_context(LoopContext::Statement, |s| {
+            let new_body = this.with_loop(LoopContext::Statement, |s| {
                 s.infer_expression(*body, &Type::ignored())
             });
             (new_binding, new_body)

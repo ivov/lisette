@@ -7,8 +7,8 @@ use syntax::ast::{
     Visibility as FieldVisibility,
 };
 use syntax::program::{
-    AliasKind, Attributes, Definition, DefinitionBody, Interface, MethodSignatures, Package,
-    ValueKind, Visibility,
+    AliasKind, Attributes, Definition, DefinitionBody, Interface, Methods, Package, ValueKind,
+    Visibility,
 };
 use syntax::types::{Symbol, Type};
 
@@ -447,7 +447,7 @@ impl CachedEnumField {
 pub struct CachedInterface {
     generics: Vec<CachedGeneric>,
     parents: Vec<Type>,
-    pub methods: MethodSignatures,
+    pub methods: Methods,
 }
 
 impl CachedInterface {
@@ -499,20 +499,20 @@ pub enum CachedValueKind {
 pub enum CachedDefinitionBody {
     TypeAlias {
         generics: Vec<CachedGeneric>,
-        methods: MethodSignatures,
+        methods: Methods,
         alias: CachedAliasKind,
         attributes: Attributes,
     },
     Enum {
         generics: Vec<CachedGeneric>,
         variants: Vec<CachedEnumVariant>,
-        methods: MethodSignatures,
+        methods: Methods,
         attributes: Attributes,
     },
     Struct {
         generics: Vec<CachedGeneric>,
         fields: CachedStructFields,
-        methods: MethodSignatures,
+        methods: Methods,
         attributes: Attributes,
     },
     Interface {

@@ -13,38 +13,14 @@ pub(crate) use unify::BuiltinBound;
 use rustc_hash::FxHashMap as HashMap;
 
 use super::freeze::FreezeFolder;
+use super::registration::{RegisteredPackage, RegistrationFile};
 use super::state::InferredFile;
 use super::{FileContext, TaskState};
 use crate::store::Store;
 use syntax::ast::{Expression, Span};
 use syntax::program::FileImport;
 
-pub(crate) struct FileInferenceInput {
-    pub(crate) id: u32,
-    pub(crate) imports: Vec<FileImport>,
-    pub(crate) items: Vec<Expression>,
-}
-
 impl TaskState {
-    pub(crate) fn take_package_inference_input(
-        store: &mut Store,
-        package_id: &str,
-    ) -> Vec<FileInferenceInput> {
-        let package = store
-            .get_package_mut(package_id)
-            .expect("package must exist for inference");
-        package
-            .files
-            .values_mut()
-            .filter(|file| !file.is_d_lis())
-            .map(|file| FileInferenceInput {
-                id: file.id,
-                imports: file.imports(),
-                items: std::mem::take(&mut file.items),
-            })
-            .collect()
-    }
-
     pub(crate) fn install_inferred_files(store: &mut Store, inferred_files: Vec<InferredFile>) {
         for inferred_file in inferred_files {
             store
@@ -54,31 +30,42 @@ impl TaskState {
         }
     }
 
-    /// Infer one registered package and replace its source ASTs with their typed forms.
-    pub fn infer_package(&mut self, store: &mut Store, package_id: &str) {
-        let files = Self::take_package_inference_input(store, package_id);
-        let inferred_files = InferCtx::new(self, store).infer_package(package_id, files);
+    /// Infer one registered package and install its typed ASTs.
+    pub fn infer_package(&mut self, store: &mut Store, package: RegisteredPackage) {
+        let inferred_files = InferCtx::new(self, store).infer_package(package);
         Self::install_inferred_files(store, inferred_files);
     }
 }
 
 impl InferCtx<'_> {
-    /// Infer types for `files` belonging to `package_id`.
-    pub(crate) fn infer_package(
-        &mut self,
-        package_id: &str,
-        files: Vec<FileInferenceInput>,
-    ) -> Vec<InferredFile> {
+    pub(crate) fn infer_package(&mut self, package: RegisteredPackage) -> Vec<InferredFile> {
+        let package_id = package.id;
+        let (files, typedefs): (Vec<_>, Vec<_>) = package.files.into_iter().partition(|file| {
+            !self
+                .store
+                .get_file(file.id)
+                .expect("registered file must remain in the store")
+                .is_d_lis()
+        });
         let items_per_file: Vec<&[Expression]> = files.iter().map(|f| f.items.as_slice()).collect();
         self.check_const_cycles(&items_per_file);
 
-        files
+        let mut inferred: Vec<_> = files
             .into_iter()
-            .map(|file| self.infer_file(package_id, file))
-            .collect()
+            .map(|file| self.infer_file(&package_id, file))
+            .collect();
+        inferred.extend(
+            typedefs
+                .into_iter()
+                .map(|file: RegistrationFile| InferredFile {
+                    id: file.id,
+                    items: file.items,
+                }),
+        );
+        inferred
     }
 
-    fn infer_file(&mut self, package_id: &str, file: FileInferenceInput) -> InferredFile {
+    fn infer_file(&mut self, package_id: &str, file: RegistrationFile) -> InferredFile {
         assert!(
             self.file_checks.is_empty(),
             "file checks from the previous file must be resolved"
@@ -265,30 +252,5 @@ impl InferCtx<'_> {
 
         let scope = self.scopes.current_mut();
         scope.insert_value(name.to_string(), fn_ty);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use syntax::program::File;
-
-    #[test]
-    fn inference_detaches_items_without_removing_the_file() {
-        let mut store = Store::new();
-        store.add_package("m");
-        store.store_file(File::new_cached(
-            "m",
-            "example.test.lis",
-            "example.test.lis",
-            "",
-            42,
-        ));
-
-        let inputs = TaskState::take_package_inference_input(&mut store, "m");
-
-        assert_eq!(inputs.len(), 1);
-        assert!(store.get_file(42).is_some());
-        assert!(store.is_test_file(42));
     }
 }

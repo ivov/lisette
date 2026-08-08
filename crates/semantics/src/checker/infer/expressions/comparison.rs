@@ -516,8 +516,8 @@ fn interface_bound_guarantees_equals(store: &Store, bound: &Type, param_name: &s
             &interface.generics,
             current.get_type_params().unwrap_or_default(),
         );
-        interface.methods.get("equals").is_some_and(|equals_ty| {
-            substitute(equals_ty, &map).is_equals_bound_signature(param_name)
+        interface.methods.get("equals").is_some_and(|equals| {
+            substitute(&equals.ty, &map).is_equals_bound_signature(param_name)
         })
     })
 }

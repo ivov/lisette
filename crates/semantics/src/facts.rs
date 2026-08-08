@@ -52,11 +52,6 @@ pub struct Facts {
     /// Span of every inferred function, so lints can attribute errors to
     /// the containing function.
     pub function_spans: Vec<Span>,
-
-    /// Resolved type for each generic-bound annotation, keyed by the
-    /// annotation's span. Lets emit render bounds from the resolved type
-    /// instead of re-resolving the annotation.
-    pub bound_types: HashMap<Span, Type>,
 }
 
 #[derive(Debug, Default)]
@@ -207,7 +202,6 @@ impl Facts {
             function_spans: Vec::new(),
             usages: HashSet::default(),
             interface_satisfied_methods: HashMap::default(),
-            bound_types: HashMap::default(),
         }
     }
 
@@ -368,9 +362,7 @@ impl Facts {
             function_spans,
             usages,
             interface_satisfied_methods,
-            bound_types,
         } = other;
-        self.bound_types.extend(bound_types);
 
         self.bindings.extend(bindings);
         self.dead_code.extend(dead_code);

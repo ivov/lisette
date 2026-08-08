@@ -4,10 +4,10 @@ use crate::definitions::tags::{format_tag_string, interpret_field_attributes};
 use crate::expressions::top_items::emit_doc;
 use crate::names::go_name::{self, prelude_qualifier};
 use crate::utils::{synthesized_local_name, synthesized_receiver_name};
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashSet;
 use syntax::ast::{Attribute, Generic, StructFieldDefinition, StructFields};
 use syntax::attributes::struct_attribute_forces_field_export;
-use syntax::program::{Definition, DefinitionBody, Interface, MethodSignatures};
+use syntax::program::{Definition, DefinitionBody, Interface, Methods};
 use syntax::types::Type;
 
 pub(crate) const DEBUG_STRING_METHOD: &str = "DebugString";
@@ -296,8 +296,11 @@ impl Planner<'_> {
             .and_then(type_methods);
 
         let is_user_stringer = |method_name: &str| {
-            methods.is_some_and(|m| m.get(method_name).is_some_and(Type::is_stringer_signature))
-                && !self.facts.is_ufcs_method(&qualified, method_name)
+            methods.is_some_and(|methods| {
+                methods
+                    .get(method_name)
+                    .is_some_and(|method| method.ty.is_stringer_signature())
+            }) && !self.facts.is_ufcs_method(&qualified, method_name)
         };
 
         let has_stringer = is_user_stringer("string") || is_user_stringer(ENUM_STRINGER_METHOD);
@@ -313,8 +316,11 @@ impl Planner<'_> {
             .definition(qualified.as_str())
             .and_then(type_methods);
         let has_signature = |method_name: &str| {
-            methods.is_some_and(|m| m.get(method_name).is_some_and(Type::is_stringer_signature))
-                && !self.facts.is_ufcs_method(&qualified, method_name)
+            methods.is_some_and(|methods| {
+                methods
+                    .get(method_name)
+                    .is_some_and(|method| method.ty.is_stringer_signature())
+            }) && !self.facts.is_ufcs_method(&qualified, method_name)
         };
         (self.method_needs_export("debug_string") && has_signature("debug_string"))
             || has_signature(DEBUG_STRING_METHOD)
@@ -582,7 +588,7 @@ fn definition_emits_go_string_field(definition: &Definition) -> bool {
     })
 }
 
-fn type_methods(definition: &Definition) -> Option<&MethodSignatures> {
+fn type_methods(definition: &Definition) -> Option<&Methods> {
     match &definition.body {
         DefinitionBody::Struct { methods, .. }
         | DefinitionBody::Enum { methods, .. }
@@ -600,7 +606,7 @@ fn definition_declares_string(definition: &Definition, is_ufcs: impl Fn(&str) ->
         .any(|method| methods.contains_key(*method) && !is_ufcs(method))
 }
 
-fn interface_declares_string(methods: &FxHashMap<ecow::EcoString, Type>) -> bool {
+fn interface_declares_string(methods: &Methods) -> bool {
     ["string", ENUM_STRINGER_METHOD]
         .iter()
         .any(|method| methods.contains_key(*method))

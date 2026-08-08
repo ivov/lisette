@@ -58,12 +58,9 @@ pub(crate) fn run_package(package_id: &str, store: &Store, sink: &LocalSink) {
             for method_name in methods.keys() {
                 for (interface_name, interface_methods) in &non_pub_interfaces {
                     if interface_methods.contains(method_name.as_str()) {
-                        let method_key = format!("{}.{}.{}", package_id, name, method_name);
-                        let method_is_pub = package
-                            .definitions
-                            .get(method_key.as_str())
-                            .map(|definition| definition.visibility.is_public())
-                            .unwrap_or(false);
+                        let method_is_pub = methods
+                            .get(method_name)
+                            .is_some_and(|method| method.visibility.is_public());
 
                         if method_is_pub {
                             sink.push(diagnostics::infer::non_pub_interface_with_pub_impl(

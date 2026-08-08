@@ -1,13 +1,10 @@
 use super::*;
 
 impl TaskState {
-    pub(super) fn populate_package_generic_bounds(&self, store: &mut Store, package_id: &str) {
-        let Some(package) = store.get_package_mut(package_id) else {
-            return;
-        };
-        for file in package.files.values_mut() {
+    pub(super) fn populate_package_generic_bounds(&self, files: &mut [RegistrationFile]) {
+        for file in files {
             for item in &mut file.items {
-                populate_expression_generic_bounds(item, &self.facts.bound_types);
+                populate_expression_generic_bounds(item, &self.resolved_bound_types);
             }
         }
     }
@@ -16,7 +13,7 @@ impl TaskState {
     /// Test harnesses that emit a typed AST directly bypass that pass.
     pub fn populate_item_generic_bounds(&self, items: &mut [Expression]) {
         for item in items {
-            populate_expression_generic_bounds(item, &self.facts.bound_types);
+            populate_expression_generic_bounds(item, &self.resolved_bound_types);
         }
     }
 }

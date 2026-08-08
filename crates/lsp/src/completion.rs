@@ -1,6 +1,4 @@
 use crate::protocol::*;
-use rustc_hash::FxHashSet;
-
 use syntax::ast::{Expression, IdentifierResolution};
 use syntax::attributes::{AttributeInfo, AttributeTarget, attributes_for};
 use syntax::lex::{Lexer, Token, TokenKind as Tk};
@@ -217,42 +215,22 @@ pub(crate) fn get_instance_completions(
     same_package: bool,
 ) -> Vec<CompletionItem> {
     let mut items = Vec::new();
-
-    if let Some(syntax::program::Definition {
-        body: syntax::program::DefinitionBody::Interface { definition },
-        ..
-    }) = snapshot.definitions().get(type_id)
-    {
-        let mut visited = FxHashSet::default();
-        let mut seen = FxHashSet::default();
-        collect_interface_methods(
-            type_id,
-            definition,
-            snapshot,
-            &mut visited,
-            &mut seen,
-            &mut items,
-        );
-        return items;
-    }
-
     struct_field_completions(type_id, snapshot, same_package, &mut items);
 
-    let method_prefix = format!("{type_id}.");
-    for (qname, definition) in snapshot.definitions().iter() {
-        if let Some(method_name) = qname.strip_prefix(method_prefix.as_str())
-            && !method_name.contains('.')
-            && matches!(
-                definition.body,
-                syntax::program::DefinitionBody::Value { .. }
-            )
-            && is_instance_method(&definition.ty, type_id, snapshot)
-            && (same_package || definition.visibility.is_public())
-        {
+    let ty = Type::Nominal {
+        id: type_id.into(),
+        params: vec![],
+    };
+    for method in syntax::program::methods_for_type(&ty, &Default::default(), |id| {
+        snapshot.definitions().get(id)
+    })
+    .into_values()
+    {
+        if same_package || method.visibility.is_public() {
             items.push(CompletionItem {
-                label: method_name.to_string(),
+                label: method.source_name.to_string(),
                 kind: Some(CompletionItemKind::METHOD),
-                detail: Some(definition.ty.to_string()),
+                detail: Some(method.ty.to_string()),
                 ..Default::default()
             });
         }
@@ -379,39 +357,6 @@ fn cursor_on_name(fa: &syntax::ast::StructFieldAssignment, offset: u32) -> bool 
     offset >= start && offset <= start + fa.name_span.byte_length
 }
 
-fn collect_interface_methods(
-    interface_id: &str,
-    interface: &syntax::program::Interface,
-    snapshot: &AnalysisSnapshot,
-    visited: &mut FxHashSet<String>,
-    seen: &mut FxHashSet<String>,
-    items: &mut Vec<CompletionItem>,
-) {
-    if !visited.insert(interface_id.to_string()) {
-        return;
-    }
-    for (name, method_ty) in &interface.methods {
-        if seen.insert(name.to_string()) {
-            items.push(CompletionItem {
-                label: name.to_string(),
-                kind: Some(CompletionItemKind::METHOD),
-                detail: Some(method_ty.to_string()),
-                ..Default::default()
-            });
-        }
-    }
-    for parent in &interface.parents {
-        if let Some(parent_id) = parent.get_qualified_id()
-            && let Some(syntax::program::Definition {
-                body: syntax::program::DefinitionBody::Interface { definition },
-                ..
-            }) = snapshot.definitions().get(parent_id)
-        {
-            collect_interface_methods(parent_id, definition, snapshot, visited, seen, items);
-        }
-    }
-}
-
 pub(crate) fn get_type_completions(
     type_id: &str,
     snapshot: &AnalysisSnapshot,
@@ -438,7 +383,6 @@ pub(crate) fn get_type_completions(
         if let Some(method_name) = qname.strip_prefix(method_prefix.as_str())
             && !method_name.contains('.')
             && matches!(definition.body, DefinitionBody::Value { .. })
-            && !is_instance_method(&definition.ty, method_id, snapshot)
             && (same_package || definition.visibility.is_public())
             && !items.iter().any(|i| i.label == method_name)
         {
@@ -494,23 +438,6 @@ fn alias_target(type_id: &str, snapshot: &AnalysisSnapshot) -> Option<String> {
         _ => return None,
     };
     (target != type_id).then_some(target)
-}
-
-fn is_instance_method(
-    ty: &syntax::types::Type,
-    type_id: &str,
-    snapshot: &AnalysisSnapshot,
-) -> bool {
-    let func_ty = match ty {
-        syntax::types::Type::Forall { body, .. } => body,
-        other => other,
-    };
-    match func_ty {
-        syntax::types::Type::Function(f) if !f.params.is_empty() => {
-            type_name(&f.params[0].ty, snapshot).is_some_and(|name| name == type_id)
-        }
-        _ => false,
-    }
 }
 
 pub(crate) fn attribute_completions(

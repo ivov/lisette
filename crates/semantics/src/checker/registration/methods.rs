@@ -2,7 +2,7 @@ use ecow::EcoString;
 use syntax::ast::{
     Annotation, Expression, Generic, Pattern, Span, Visibility as SyntacticVisibility,
 };
-use syntax::program::{Definition, DefinitionBody, Interface, Visibility};
+use syntax::program::{Definition, DefinitionBody, Interface, Method, Visibility};
 use syntax::types::{
     Bound, Symbol, Type, build_substitution_map, substitute, type_args_match_params,
     unqualified_name,
@@ -17,6 +17,11 @@ struct ImplReceiver<'a> {
     qualified_name: &'a str,
     display_name: &'a str,
     receiver_ty: &'a Type,
+}
+
+struct MethodName<'a> {
+    source: &'a str,
+    key: &'a str,
 }
 
 /// Receiver type resolved from an `impl` block's annotation, with its generics' bounds registered.
@@ -37,7 +42,7 @@ impl TaskState {
         receiver: &ImplReceiver<'_>,
         fn_name: &str,
         fn_name_span: Span,
-        method_ty: &Type,
+        method: Method,
     ) -> bool {
         let package = store
             .get_package_mut(receiver.package_id)
@@ -74,7 +79,7 @@ impl TaskState {
         }
 
         if let Some(methods) = definition.methods_mut() {
-            methods.insert(fn_name.into(), method_ty.clone());
+            methods.insert(fn_name.into(), method);
         }
 
         true
@@ -84,21 +89,26 @@ impl TaskState {
         &self,
         store: &Store,
         receiver: &ImplReceiver<'_>,
-        fn_name: &str,
+        name: MethodName<'_>,
         fn_name_span: Span,
         impl_generics_empty: bool,
     ) {
-        let package_qualified_name =
-            Symbol::from_parts(receiver.package_id, receiver.display_name).with_segment(fn_name);
+        let package_qualified_name = Symbol::from_parts(receiver.package_id, receiver.display_name)
+            .with_segment(name.source);
 
         let package = store
             .get_package(receiver.package_id)
             .expect("current package must exist in store");
 
-        if !package
+        let qualified_exists = package
             .definitions
-            .contains_key(package_qualified_name.as_str())
-        {
+            .contains_key(package_qualified_name.as_str());
+        let instance_exists = package
+            .definitions
+            .get(receiver.qualified_name)
+            .and_then(Definition::methods)
+            .is_some_and(|methods| methods.contains_key(name.key));
+        if !(qualified_exists || instance_exists) {
             return;
         }
 
@@ -122,7 +132,7 @@ impl TaskState {
             };
             self.sink.push(
                 diagnostics::infer::duplicate_method_across_specialized_impls(
-                    fn_name,
+                    name.source,
                     receiver.display_name,
                     &struct_generic_names,
                     fn_name_span,
@@ -130,7 +140,7 @@ impl TaskState {
             );
         } else {
             self.sink.push(diagnostics::infer::duplicate_impl_item(
-                fn_name,
+                name.source,
                 receiver.display_name,
                 fn_name_span,
             ));
@@ -365,14 +375,34 @@ impl TaskState {
                 ));
         }
 
+        self.check_duplicate_method(
+            &*store,
+            receiver,
+            MethodName {
+                source: fn_sig.name,
+                key: &method_key,
+            },
+            fn_sig.name_span,
+            generics.is_empty(),
+        );
+
         let mut static_entry = None;
         if is_instance_method {
+            let method = Method {
+                source_name: fn_sig.name.clone(),
+                ty: method_ty.clone(),
+                visibility: fn_visibility.clone(),
+                name_span: Some(fn_sig.name_span),
+                doc: fn_doc.clone(),
+                allowed_lints: extract_attribute_flags(fn_attrs, "allow"),
+                go_hints: go_hints.clone(),
+            };
             if !self.try_register_instance_method(
                 store,
                 receiver,
                 &method_key,
                 fn_sig.name_span,
-                &method_ty,
+                method,
             ) {
                 // Receiver not found: skip the duplicate check and the definition insert below.
                 return None;
@@ -381,33 +411,27 @@ impl TaskState {
             static_entry = Some((qualified_name, method_ty.clone()));
         }
 
-        self.check_duplicate_method(
-            &*store,
-            receiver,
-            fn_sig.name,
-            fn_sig.name_span,
-            generics.is_empty(),
-        );
-
-        let package = store
-            .get_package_mut(receiver.package_id)
-            .expect("current package must exist in store");
-        package.definitions.insert(
-            package_qualified_name,
-            Definition {
-                visibility: fn_visibility.clone(),
-                ty: method_ty,
-                name_span: Some(fn_sig.name_span),
-                doc: fn_doc,
-                body: DefinitionBody::Value {
-                    kind: syntax::program::ValueKind::Runtime,
-                    allowed_lints: extract_attribute_flags(fn_attrs, "allow"),
-                    go_hints,
-                    go_name: None,
-                    go_type_param_recipe: None,
+        if !is_instance_method {
+            let package = store
+                .get_package_mut(receiver.package_id)
+                .expect("current package must exist in store");
+            package.definitions.insert(
+                package_qualified_name,
+                Definition {
+                    visibility: fn_visibility.clone(),
+                    ty: method_ty,
+                    name_span: Some(fn_sig.name_span),
+                    doc: fn_doc,
+                    body: DefinitionBody::Value {
+                        kind: syntax::program::ValueKind::Runtime,
+                        allowed_lints: extract_attribute_flags(fn_attrs, "allow"),
+                        go_hints,
+                        go_name: None,
+                        go_type_param_recipe: None,
+                    },
                 },
-            },
-        );
+            );
+        }
 
         static_entry
     }
@@ -428,15 +452,14 @@ impl TaskState {
         };
         let package_id = self.cursor.package_id().to_string();
         let is_d_lis = self.is_d_lis(&*store);
-        struct MethodDef {
-            name: EcoString,
-            ty: Type,
-            go_hints: Vec<String>,
-            allowed_lints: Vec<String>,
-            name_span: Span,
-            doc: Option<String>,
-        }
-        let (generics, new_parents, methods, method_defs) = self.with_scope(|this| {
+        let qualified_name = self.qualify_name(interface_name);
+        let visibility = self
+            .current_package(&*store)
+            .definitions
+            .get(qualified_name.as_str())
+            .map(|definition| definition.visibility.clone())
+            .unwrap_or(Visibility::Private);
+        let (generics, new_parents, methods) = self.with_scope(|this| {
             this.put_in_scope(generics);
             let generics = this.resolve_generic_bounds(&*store, generics, span);
 
@@ -445,7 +468,6 @@ impl TaskState {
                 .map(|parent| this.convert_to_type(&*store, &parent.annotation, &parent.span))
                 .collect();
 
-            let mut method_defs = Vec::new();
             let mut self_receiver_spans = Vec::new();
             let methods = fn_expressions
                 .iter()
@@ -507,27 +529,23 @@ impl TaskState {
                     });
 
                     let go_hints = extract_attribute_flags(fn_attrs, "go");
-                    if go_hints.iter().any(|h| h == "unexported") {
-                        (
-                            super::seal_method_key(
-                                is_d_lis,
-                                fn_attrs,
-                                &package_id,
-                                method_sig.name,
-                            ),
-                            fn_ty,
-                        )
+                    let key = if go_hints.iter().any(|h| h == "unexported") {
+                        super::seal_method_key(is_d_lis, fn_attrs, &package_id, method_sig.name)
                     } else {
-                        method_defs.push(MethodDef {
-                            name: method_sig.name.clone(),
-                            ty: fn_ty.clone(),
-                            go_hints,
-                            allowed_lints: extract_attribute_flags(fn_attrs, "allow"),
-                            name_span: method_sig.name_span,
+                        method_sig.name.clone()
+                    };
+                    (
+                        key,
+                        Method {
+                            source_name: method_sig.name.clone(),
+                            ty: fn_ty,
+                            visibility: visibility.clone(),
+                            name_span: Some(method_sig.name_span),
                             doc: fn_doc,
-                        });
-                        (method_sig.name.clone(), fn_ty)
-                    }
+                            allowed_lints: extract_attribute_flags(fn_attrs, "allow"),
+                            go_hints,
+                        },
+                    )
                 })
                 .collect();
 
@@ -535,10 +553,9 @@ impl TaskState {
                 this.sink
                     .push(diagnostics::infer::self_in_interface_method(self_span));
             }
-            (generics, new_parents, methods, method_defs)
+            (generics, new_parents, methods)
         });
 
-        let qualified_name = self.qualify_name(interface_name);
         let interface_ty = store
             .get_type(&qualified_name)
             .expect("interface type scheme must exist")
@@ -549,13 +566,6 @@ impl TaskState {
             parents: new_parents,
             methods,
         };
-
-        let visibility = self
-            .current_package(&*store)
-            .definitions
-            .get(qualified_name.as_str())
-            .map(|definition| definition.visibility.clone())
-            .unwrap_or(Visibility::Private);
 
         let package = self.current_package_mut(store);
 
@@ -571,30 +581,6 @@ impl TaskState {
                 },
             },
         );
-
-        // Register interface methods as Definition::Value entries so the emitter
-        // can look up their go_hints (e.g., comma_ok) by qualified name.
-        // Methods inherit the interface's visibility: a `pub interface`'s methods are implicitly public.
-        for method in method_defs {
-            let method_qualified_name =
-                format!("{}.{}.{}", package_id, interface_name, method.name);
-            package.definitions.insert(
-                method_qualified_name.into(),
-                Definition {
-                    visibility: visibility.clone(),
-                    ty: method.ty,
-                    name_span: Some(method.name_span),
-                    doc: method.doc,
-                    body: DefinitionBody::Value {
-                        kind: syntax::program::ValueKind::Runtime,
-                        allowed_lints: method.allowed_lints,
-                        go_hints: method.go_hints,
-                        go_name: None,
-                        go_type_param_recipe: None,
-                    },
-                },
-            );
-        }
 
         self.check_interface_embedding(&*store, &qualified_name, interface_name, name_span);
     }
@@ -660,7 +646,7 @@ impl TaskState {
         for (method_name, method_ty) in &interface.methods {
             seen.insert(
                 method_name.to_string(),
-                (method_ty.clone(), interface_name.to_string()),
+                (method_ty.ty.clone(), interface_name.to_string()),
             );
         }
         for (method_name, method_ty, source) in &inherited_methods {
@@ -748,7 +734,7 @@ impl TaskState {
         for (method_name, method_ty) in &interface.methods {
             methods.push((
                 method_name.to_string(),
-                substitute(method_ty, &map),
+                substitute(&method_ty.ty, &map),
                 source_name.to_string(),
             ));
         }

@@ -6,7 +6,7 @@ use std::borrow::Cow;
 
 use crate::EcoString;
 use crate::ast::{EnumVariant, VariantFields};
-use crate::program::MethodSignatures;
+use crate::program::Methods;
 use crate::types::{GO_IMPORT_PREFIX, Type};
 
 /// Go reserved keywords that cannot be used as identifiers.
@@ -210,7 +210,6 @@ pub enum ConformanceCandidate {
     /// The method exists in the available method set, but its owner metadata is unavailable.
     Unresolved,
     Resolved {
-        exported: bool,
         depth: usize,
         owner: EcoString,
         shadowed: bool,
@@ -275,20 +274,22 @@ pub fn interface_matches_by_source_name(interface_id: &str, interface_is_public:
 /// Resolve which implementing method satisfies an interface requirement, by
 /// emitted Go name under Go's selector rules.
 pub fn conformance_method<'a>(
-    methods: &'a MethodSignatures,
+    methods: &'a Methods,
     interface_id: &str,
     interface_is_public: bool,
     method_name: &str,
     candidate: &dyn Fn(&str) -> ConformanceCandidate,
 ) -> Option<(&'a EcoString, &'a Type)> {
     if interface_matches_by_source_name(interface_id, interface_is_public) {
-        return methods.get_key_value(method_name);
+        return methods
+            .get_key_value(method_name)
+            .map(|(name, method)| (name, &method.ty));
     }
     select_by_emitted_name(methods, interface_id, method_name, candidate, false)
 }
 
 pub fn conformance_method_if_public<'a>(
-    methods: &'a MethodSignatures,
+    methods: &'a Methods,
     interface_id: &str,
     interface_is_public: bool,
     method_name: &str,
@@ -301,7 +302,7 @@ pub fn conformance_method_if_public<'a>(
 }
 
 fn select_by_emitted_name<'a>(
-    methods: &'a MethodSignatures,
+    methods: &'a Methods,
     interface_id: &str,
     method_name: &str,
     candidate: &dyn Fn(&str) -> ConformanceCandidate,
@@ -313,16 +314,17 @@ fn select_by_emitted_name<'a>(
         Cow::Owned(snake_to_camel(method_name))
     };
     let mut matches: Vec<(usize, bool, Option<EcoString>, &EcoString, &Type)> = Vec::new();
-    for (name, ty) in methods {
+    for (name, method) in methods {
+        let ty = &method.ty;
+        let exported = method.visibility.is_public();
         let exact = name == method_name;
-        let (exported, depth, owner, shadowed) = match candidate(name) {
-            ConformanceCandidate::Unresolved => (false, 0, None, false),
+        let (depth, owner, shadowed) = match candidate(name) {
+            ConformanceCandidate::Unresolved => (0, None, false),
             ConformanceCandidate::Resolved {
-                exported,
                 depth,
                 owner,
                 shadowed,
-            } => (exported, depth, Some(owner), shadowed),
+            } => (depth, Some(owner), shadowed),
         };
         if shadowed {
             continue;
@@ -458,6 +460,19 @@ fn contested_slots(variants: &[EnumVariant], slots: &[Vec<String>]) -> HashSet<S
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::program::{Method, Visibility};
+
+    fn method(visibility: Visibility) -> Method {
+        Method {
+            source_name: "method".into(),
+            ty: Type::Error,
+            visibility,
+            name_span: None,
+            doc: None,
+            allowed_lints: vec![],
+            go_hints: vec![],
+        }
+    }
 
     #[test]
     fn snake_to_camel_converts_and_normalizes() {
@@ -550,47 +565,40 @@ mod tests {
         );
     }
 
-    fn exported_at(depth: usize) -> impl Fn(&str) -> ConformanceCandidate {
+    fn at_depth(depth: usize) -> impl Fn(&str) -> ConformanceCandidate {
         move |_| ConformanceCandidate::Resolved {
-            exported: true,
             depth,
             owner: "main.T".into(),
             shadowed: false,
         }
     }
 
-    const UNEXPORTED: fn(&str) -> ConformanceCandidate = |_| ConformanceCandidate::Resolved {
-        exported: false,
-        depth: 0,
-        owner: "main.T".into(),
-        shadowed: false,
-    };
-
     #[test]
     fn conformance_method_matches_source_then_emitted_name() {
-        let mut methods = MethodSignatures::default();
-        methods.insert("read".into(), Type::Error);
-        methods.insert("close".into(), Type::Error);
+        let mut methods = Methods::default();
+        methods.insert("read".into(), method(Visibility::Public));
+        methods.insert("close".into(), method(Visibility::Public));
 
-        let via_emitted = conformance_method(&methods, "go:io", true, "Read", &exported_at(0));
+        let via_emitted = conformance_method(&methods, "go:io", true, "Read", &at_depth(0));
         assert_eq!(via_emitted.map(|(name, _)| name.as_str()), Some("read"));
 
-        let private_method = conformance_method(&methods, "go:io", true, "Read", &UNEXPORTED);
+        methods.insert("read".into(), method(Visibility::Private));
+        let private_method = conformance_method(&methods, "go:io", true, "Read", &at_depth(0));
         assert_eq!(private_method, None);
 
         let initialism =
-            conformance_method(&methods, "go:net/http", true, "ServeHTTP", &exported_at(0));
+            conformance_method(&methods, "go:net/http", true, "ServeHTTP", &at_depth(0));
         assert_eq!(initialism, None);
 
-        methods.insert("Read".into(), Type::Error);
-        let via_source = conformance_method(&methods, "go:io", true, "Read", &UNEXPORTED);
+        methods.insert("Read".into(), method(Visibility::Private));
+        let via_source = conformance_method(&methods, "go:io", true, "Read", &at_depth(0));
         assert_eq!(via_source.map(|(name, _)| name.as_str()), Some("Read"));
     }
 
     #[test]
     fn conformance_method_accepts_unresolved_candidates() {
-        let mut methods = MethodSignatures::default();
-        methods.insert("read".into(), Type::Error);
+        let mut methods = Methods::default();
+        methods.insert("read".into(), method(Visibility::Private));
 
         let selected = conformance_method_if_public(&methods, "go:io", true, "Read", &|_| {
             ConformanceCandidate::Unresolved
@@ -601,33 +609,34 @@ mod tests {
 
     #[test]
     fn conformance_method_if_public_finds_private_near_misses() {
-        let mut methods = MethodSignatures::default();
-        methods.insert("write".into(), Type::Error);
+        let mut methods = Methods::default();
+        methods.insert("write".into(), method(Visibility::Private));
 
         let private_hit =
-            conformance_method_if_public(&methods, "go:io", true, "Write", &UNEXPORTED);
+            conformance_method_if_public(&methods, "go:io", true, "Write", &at_depth(0));
         assert_eq!(private_hit.map(|(name, _)| name.as_str()), Some("write"));
 
+        methods.insert("write".into(), method(Visibility::Public));
         let already_exported =
-            conformance_method_if_public(&methods, "go:io", true, "Write", &exported_at(0));
+            conformance_method_if_public(&methods, "go:io", true, "Write", &at_depth(0));
         assert_eq!(already_exported, None);
 
+        methods.insert("write".into(), method(Visibility::Private));
         let exact_name =
-            conformance_method_if_public(&methods, "main.W", true, "write", &UNEXPORTED);
+            conformance_method_if_public(&methods, "main.W", true, "write", &at_depth(0));
         assert_eq!(exact_name, None);
 
         let source_matched =
-            conformance_method_if_public(&methods, "main.W", false, "write", &UNEXPORTED);
+            conformance_method_if_public(&methods, "main.W", false, "write", &at_depth(0));
         assert_eq!(source_matched, None);
     }
 
     #[test]
     fn conformance_method_prefers_shallow_over_exact() {
-        let mut methods = MethodSignatures::default();
-        methods.insert("describe".into(), Type::Error);
-        methods.insert("Describe".into(), Type::Error);
+        let mut methods = Methods::default();
+        methods.insert("describe".into(), method(Visibility::Public));
+        methods.insert("Describe".into(), method(Visibility::Public));
         let candidate = |name: &str| ConformanceCandidate::Resolved {
-            exported: true,
             depth: if name == "Describe" { 1 } else { 0 },
             owner: if name == "Describe" {
                 "main.Base"
@@ -641,17 +650,16 @@ mod tests {
         let shallow = conformance_method(&methods, "go:reg", true, "Describe", &candidate);
         assert_eq!(shallow.map(|(name, _)| name.as_str()), Some("describe"));
 
-        let same_depth = conformance_method(&methods, "go:reg", true, "Describe", &exported_at(0));
+        let same_depth = conformance_method(&methods, "go:reg", true, "Describe", &at_depth(0));
         assert_eq!(same_depth.map(|(name, _)| name.as_str()), Some("Describe"));
     }
 
     #[test]
     fn conformance_method_rejects_equal_depth_cross_owner_ambiguity() {
-        let mut methods = MethodSignatures::default();
-        methods.insert("get_item".into(), Type::Error);
-        methods.insert("getItem".into(), Type::Error);
+        let mut methods = Methods::default();
+        methods.insert("get_item".into(), method(Visibility::Public));
+        methods.insert("getItem".into(), method(Visibility::Public));
         let promoted = |name: &str| ConformanceCandidate::Resolved {
-            exported: true,
             depth: 1,
             owner: if name == "get_item" {
                 "main.A"
@@ -668,10 +676,9 @@ mod tests {
 
     #[test]
     fn conformance_method_skips_field_shadowed_candidates() {
-        let mut methods = MethodSignatures::default();
-        methods.insert("getItem".into(), Type::Error);
+        let mut methods = Methods::default();
+        methods.insert("getItem".into(), method(Visibility::Public));
         let shadowed = |_: &str| ConformanceCandidate::Resolved {
-            exported: true,
             depth: 1,
             owner: "main.Base".into(),
             shadowed: true,
@@ -683,18 +690,17 @@ mod tests {
 
     #[test]
     fn conformance_method_gates_on_interface_kind() {
-        let mut methods = MethodSignatures::default();
-        methods.insert("run".into(), Type::Error);
+        let mut methods = Methods::default();
+        methods.insert("run".into(), method(Visibility::Public));
 
-        let public_lisette =
-            conformance_method(&methods, "main.Runner", true, "Run", &exported_at(0));
+        let public_lisette = conformance_method(&methods, "main.Runner", true, "Run", &at_depth(0));
         assert_eq!(public_lisette.map(|(name, _)| name.as_str()), Some("run"));
 
         let private_lisette =
-            conformance_method(&methods, "main.Runner", false, "Run", &exported_at(0));
+            conformance_method(&methods, "main.Runner", false, "Run", &at_depth(0));
         assert_eq!(private_lisette, None);
 
-        let prelude = conformance_method(&methods, "prelude.Runner", true, "Run", &exported_at(0));
+        let prelude = conformance_method(&methods, "prelude.Runner", true, "Run", &at_depth(0));
         assert_eq!(prelude, None);
     }
 

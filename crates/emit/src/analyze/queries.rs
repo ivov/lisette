@@ -65,19 +65,16 @@ impl Planner<'_> {
                         resolved.definition.is_serialized(),
                     );
                 }
-                let method_key = format!("{}.{}", id, field_name);
                 self.facts
-                    .definition(method_key.as_str())
-                    .map(|d| d.visibility.is_public())
+                    .method(id, field_name)
+                    .map(|method| method.visibility.is_public())
                     .unwrap_or(false)
             }
-            DefinitionBody::Enum { .. } => {
-                let method_key = format!("{}.{}", id, field_name);
-                self.facts
-                    .definition(method_key.as_str())
-                    .map(|d| d.visibility.is_public())
-                    .unwrap_or(false)
-            }
+            DefinitionBody::Enum { .. } => self
+                .facts
+                .method(id, field_name)
+                .map(|method| method.visibility.is_public())
+                .unwrap_or(false),
             DefinitionBody::Interface { definition } => {
                 resolved.definition.visibility.is_public()
                     && definition.methods.contains_key(field_name)
@@ -155,8 +152,8 @@ impl Planner<'_> {
                 &definition.generics,
                 current.get_type_params().unwrap_or_default(),
             );
-            let provides_equals = definition.methods.get("equals").is_some_and(|equals_ty| {
-                substitute(equals_ty, &map).is_equals_bound_signature(param_name)
+            let provides_equals = definition.methods.get("equals").is_some_and(|equals| {
+                substitute(&equals.ty, &map).is_equals_bound_signature(param_name)
             });
             if provides_equals {
                 return true;

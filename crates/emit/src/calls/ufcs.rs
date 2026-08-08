@@ -280,8 +280,8 @@ impl Planner<'_> {
             .unwrap_or_default();
 
         let is_public = callee
-            .definition
-            .map(|d| d.visibility.is_public())
+            .declaration
+            .map(|declaration| declaration.visibility().is_public())
             .unwrap_or(false)
             || self.method_needs_export(member);
 

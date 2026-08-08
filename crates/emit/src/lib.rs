@@ -109,6 +109,19 @@ impl GlobalEmitData {
             _ => {}
         }
 
+        if !is_go
+            && !key.starts_with(go_name::PRELUDE_PREFIX)
+            && let Some(methods) = definition.methods()
+        {
+            for method in methods
+                .values()
+                .filter(|method| method.visibility.is_public())
+            {
+                self.exported_method_names
+                    .insert(method.source_name.to_string());
+            }
+        }
+
         if definition.visibility.is_public() && definition.is_display() {
             self.exported_method_names.insert("to_string".to_string());
         }

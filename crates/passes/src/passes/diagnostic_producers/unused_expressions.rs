@@ -722,6 +722,12 @@ fn callee_allowed_lints(expression: &Expression, package_id: &str, store: &Store
         {
             return definition.allowed_lints().to_vec();
         }
+        if let Some(q) = resolution.definition()
+            && let Some((owner, name)) = q.rsplit_once('.')
+            && let Some(method) = store.get_method(owner, name)
+        {
+            return method.allowed_lints.clone();
+        }
         let qualified_guess = if value.contains('.') {
             value.to_string()
         } else {
@@ -739,11 +745,10 @@ fn callee_allowed_lints(expression: &Expression, package_id: &str, store: &Store
     } = callee.as_ref()
     {
         let receiver_ty = receiver.get_type().strip_refs();
-        if let Type::Nominal { id, .. } = &receiver_ty {
-            let method_key = id.with_segment(member);
-            if let Some(definition) = store.get_definition(&method_key) {
-                return definition.allowed_lints().to_vec();
-            }
+        if let Type::Nominal { id, .. } = &receiver_ty
+            && let Some(method) = store.get_method(id, member)
+        {
+            return method.allowed_lints.clone();
         }
         if let Some(package) = receiver.get_type().as_import_namespace() {
             let method_key = Symbol::from_parts(package, member);

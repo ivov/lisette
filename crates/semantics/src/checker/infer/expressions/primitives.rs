@@ -256,7 +256,12 @@ impl InferCtx<'_> {
         }
 
         let qualified: Option<EcoString> = if binding_id.is_none() {
-            self.lookup_qualified_name(store, &value)
+            self.lookup_qualified_name(store, &value).or_else(|| {
+                let (owner, method) = value.rsplit_once('.')?;
+                let owner = self.lookup_qualified_name(store, owner)?;
+                store.get_method(&owner, method)?;
+                Some(format!("{owner}.{method}").into())
+            })
         } else {
             None
         };
@@ -284,6 +289,14 @@ impl InferCtx<'_> {
                 self.sink
                     .push(diagnostics::infer::type_used_as_value(&value, span));
             }
+        }
+        if let Some(ref qname) = qualified
+            && store.get_definition(qname.as_str()).is_none()
+            && let Some((owner, name)) = qname.rsplit_once('.')
+            && let Some(method) = store.get_method(owner, name)
+            && let Some(definition_span) = method.name_span
+        {
+            self.facts.add_usage(span, definition_span);
         }
 
         let ty = match self.lookup_type(store, &value) {

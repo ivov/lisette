@@ -607,7 +607,7 @@ impl InferCtx<'_> {
                     .get(member)
                     .cloned()
                 {
-                    return method_ty;
+                    return method_ty.ty;
                 }
 
                 let stripped = receiver_ty.strip_refs();

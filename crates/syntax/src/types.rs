@@ -202,6 +202,17 @@ pub fn build_substitution_map(generics: &[Generic], type_args: &[Type]) -> Subst
         .collect()
 }
 
+pub fn build_named_substitution_map<'a>(
+    names: &[EcoString],
+    type_args: impl IntoIterator<Item = &'a Type>,
+) -> SubstitutionMap {
+    names
+        .iter()
+        .zip(type_args)
+        .map(|(name, ty)| (name.clone(), ty.clone()))
+        .collect()
+}
+
 pub fn type_args_match_params<'a>(
     args: &[Type],
     params: impl ExactSizeIterator<Item = &'a EcoString>,

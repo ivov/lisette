@@ -273,10 +273,18 @@ impl TaskState {
         if let Some((prefix, rest)) = value_name.split_once('.')
             && let Some(package_id) = self.imports.package_id(prefix)
             && let Some(imported_package) = store.get_package(package_id)
-            && let Some((_, definition)) =
-                self.resolve_in_imported_package(store, imported_package, rest)
         {
-            return Some(self.resolve_definition_value_type(store, definition));
+            if let Some((_, definition)) =
+                self.resolve_in_imported_package(store, imported_package, rest)
+            {
+                return Some(self.resolve_definition_value_type(store, definition));
+            }
+            if let Some((owner, method)) = rest.rsplit_once('.') {
+                let owner = Symbol::from_parts(package_id, owner);
+                if let Some(method) = store.get_method(&owner, method) {
+                    return Some(method.ty.clone());
+                }
+            }
         }
 
         let in_test_file = self.current_file_is_test(store);
@@ -288,6 +296,12 @@ impl TaskState {
         {
             return Some(self.resolve_definition_value_type(store, definition));
         }
+        if let Some((owner, method)) = value_name.rsplit_once('.') {
+            let owner = Symbol::from_parts(&package.id, owner);
+            if let Some(method) = store.get_method(&owner, method) {
+                return Some(method.ty.clone());
+            }
+        }
 
         for imported_package_id in &self.imports.unprefixed_imports {
             if let Some(imported_package) = store.get_package(imported_package_id) {
@@ -296,6 +310,12 @@ impl TaskState {
                     && !store.is_test_definition(definition)
                 {
                     return Some(self.resolve_definition_value_type(store, definition));
+                }
+                if let Some((owner, method)) = value_name.rsplit_once('.') {
+                    let owner = Symbol::from_parts(imported_package_id, owner);
+                    if let Some(method) = store.get_method(&owner, method) {
+                        return Some(method.ty.clone());
+                    }
                 }
             }
         }
@@ -338,7 +358,7 @@ impl TaskState {
         Some((qualified_name, ty))
     }
 
-    pub(super) fn get_all_methods(&mut self, store: &Store, ty: &Type) -> MethodSignatures {
+    pub(super) fn get_all_methods(&mut self, store: &Store, ty: &Type) -> Methods {
         if let Type::Parameter(name) = ty {
             let trait_bounds = self.scopes.collect_all_trait_bounds();
             let qualified_name = self.qualify_name(name);
@@ -349,7 +369,7 @@ impl TaskState {
         match &resolved {
             Type::Nominal { .. } | Type::Compound { .. } | Type::Simple(_) | Type::Array { .. } => {
             }
-            _ => return MethodSignatures::default(),
+            _ => return Methods::default(),
         }
 
         let peeled = store.peel_alias(&resolved);

@@ -83,6 +83,7 @@ struct CacheBuildJob {
 
 struct RegistrationOutput {
     packages: Vec<Arc<Package>>,
+    registered: Vec<RegisteredPackage>,
     task: TaskOutput,
 }
 
@@ -257,8 +258,12 @@ pub(super) fn infer_all_packages(
         })
         .collect();
 
-    register_packages(&mut checker, store, &to_infer, dependencies);
-    infer_packages(&mut checker, store, &to_infer);
+    let unregistered = to_infer
+        .iter()
+        .map(|package_id| TaskState::take_unregistered_package(store, package_id))
+        .collect();
+    let registered = register_packages(&mut checker, store, unregistered, dependencies);
+    infer_packages(&mut checker, store, registered);
 
     if !input.cache.is_disabled() {
         let all_go_packages: Vec<String> = store
@@ -482,31 +487,45 @@ fn load_cache_candidates(
 fn register_packages(
     checker: &mut TaskState,
     store: &mut Store,
-    to_infer: &[String],
+    packages: Vec<UnregisteredPackage>,
     dependencies: &DependencyGraph,
-) {
-    if to_infer.len() < PARALLEL_THRESHOLD {
-        for package_id in to_infer {
-            checker.register_predeclared_package(store, package_id);
-        }
-        return;
+) -> Vec<RegisteredPackage> {
+    if packages.len() < PARALLEL_THRESHOLD {
+        return packages
+            .into_iter()
+            .map(|package| checker.register_predeclared_package(store, package))
+            .collect();
     }
+
+    let package_ids: Vec<_> = packages.iter().map(|package| package.id.clone()).collect();
+    let mut inputs: HashMap<_, _> = packages
+        .into_iter()
+        .map(|package| (package.id.clone(), package))
+        .collect();
+    let mut all_registered = Vec::with_capacity(package_ids.len());
 
     // Same-wave packages never read each other, so each worker mutates only its
     // own detached package and reads the rest through a snapshot.
-    for wave in registration_waves(to_infer, dependencies) {
+    for wave in registration_waves(&package_ids, dependencies) {
         if wave.len() == 1 {
-            checker.register_predeclared_package(store, &wave[0]);
+            let input = inputs
+                .remove(&wave[0])
+                .expect("registration input must match its package");
+            all_registered.push(checker.register_predeclared_package(store, input));
             continue;
         }
 
-        let detached: Vec<Arc<Package>> = wave
+        let detached: Vec<(Arc<Package>, UnregisteredPackage)> = wave
             .into_iter()
             .map(|package_id| {
-                store
+                let package = store
                     .packages
                     .remove(&package_id)
-                    .expect("fresh package must be stored before registration")
+                    .expect("fresh package must be stored before registration");
+                let input = inputs
+                    .remove(&package_id)
+                    .expect("registration input must match its package");
+                (package, input)
             })
             .collect();
 
@@ -520,19 +539,21 @@ fn register_packages(
             .map(|chunk| {
                 let mut worker = seed.spawn();
                 let mut view = store_ref.registration_view();
-                let mut registered = Vec::with_capacity(chunk.len());
-                for package in chunk {
+                let mut registered_packages = Vec::with_capacity(chunk.len());
+                let mut registered_inputs = Vec::with_capacity(chunk.len());
+                for (package, input) in chunk {
                     let package_id = package.id.clone();
                     view.packages.insert(package_id.clone(), package);
-                    worker.register_predeclared_package(&mut view, &package_id);
+                    registered_inputs.push(worker.register_predeclared_package(&mut view, input));
                     let package = view
                         .packages
                         .remove(&package_id)
                         .expect("registered package must remain in view");
-                    registered.push(package);
+                    registered_packages.push(package);
                 }
                 RegistrationOutput {
-                    packages: registered,
+                    packages: registered_packages,
+                    registered: registered_inputs,
                     task: worker.into_output(),
                 }
             })
@@ -543,39 +564,33 @@ fn register_packages(
             for package in output.packages {
                 store.packages.insert(package.id.clone(), package);
             }
+            all_registered.extend(output.registered);
             task_outputs.push(output.task);
         }
         checker.absorb_outputs(task_outputs);
     }
+    debug_assert!(inputs.is_empty());
+    all_registered
 }
 
-fn infer_packages(checker: &mut TaskState, store: &mut Store, to_infer: &[String]) {
+fn infer_packages(checker: &mut TaskState, store: &mut Store, packages: Vec<RegisteredPackage>) {
     checker.finalize_registration(store);
 
-    let package_files: Vec<(String, Vec<FileInferenceInput>)> = to_infer
-        .iter()
-        .map(|package_id| {
-            let files = TaskState::take_package_inference_input(store, package_id);
-            (package_id.clone(), files)
-        })
-        .collect();
-
-    let inferred_files = if package_files.len() < PARALLEL_THRESHOLD {
+    let inferred_files = if packages.len() < PARALLEL_THRESHOLD {
         let mut inferred_files = Vec::new();
-        for (package_id, files) in package_files {
-            inferred_files.extend(InferCtx::new(checker, store).infer_package(&package_id, files));
+        for package in packages {
+            inferred_files.extend(InferCtx::new(checker, store).infer_package(package));
         }
         inferred_files
     } else {
         let seed = checker.worker_seed();
         let store_ref: &Store = store;
 
-        let outputs: Vec<(TaskOutput, Vec<crate::checker::InferredFile>)> = package_files
+        let outputs: Vec<(TaskOutput, Vec<crate::checker::InferredFile>)> = packages
             .into_par_iter()
-            .map(|(package_id, files)| {
+            .map(|package| {
                 let mut worker = seed.spawn();
-                let inferred_files =
-                    InferCtx::new(&mut worker, store_ref).infer_package(&package_id, files);
+                let inferred_files = InferCtx::new(&mut worker, store_ref).infer_package(package);
                 (worker.into_output(), inferred_files)
             })
             .collect();

@@ -15,8 +15,7 @@ use crate::checker::registration::derived_attributes::{
 use crate::store::Store;
 
 fn equals_visibility(store: &Store, id: &str) -> Option<String> {
-    let method_key = format!("{id}.equals");
-    match store.get_definition(&method_key) {
+    match store.get_method(id, "equals") {
         Some(method) if method.visibility.is_public() => None,
         _ => store.package_for_qualified_name(id).map(str::to_string),
     }
@@ -292,7 +291,6 @@ impl TaskState {
         let impl_bounds = resolved_generic_bounds(&generics);
         let method_ty = wrap_with_impl_generics(&fn_ty, &generics, &impl_bounds);
 
-        let equals_key = qualified.with_segment("equals");
         let package = store
             .get_package_mut(package_id)
             .expect("package must exist");
@@ -301,24 +299,19 @@ impl TaskState {
             .get_mut(qualified.as_str())
             .and_then(Definition::methods_mut)
         {
-            methods.insert("equals".into(), method_ty.clone());
-        }
-        package
-            .definitions
-            .entry(equals_key)
-            .or_insert_with(|| Definition {
-                visibility,
-                ty: method_ty,
-                name_span,
-                doc: None,
-                body: DefinitionBody::Value {
-                    kind: syntax::program::ValueKind::Runtime,
+            methods.insert(
+                "equals".into(),
+                syntax::program::Method {
+                    source_name: "equals".into(),
+                    ty: method_ty,
+                    visibility,
+                    name_span,
+                    doc: None,
                     allowed_lints: vec![],
                     go_hints: vec![],
-                    go_name: None,
-                    go_type_param_recipe: None,
                 },
-            });
+            );
+        }
     }
 }
 
@@ -341,10 +334,9 @@ fn has_hidden_user_equals(store: &Store, qualified: &Symbol) -> bool {
     if in_method_set {
         return false;
     }
-    let equals_key = qualified.with_segment("equals");
     store
-        .get_definition(equals_key.as_str())
-        .is_some_and(|d| d.name_span.is_some())
+        .get_method(qualified, "equals")
+        .is_some_and(|method| method.name_span.is_some())
 }
 
 fn user_equals(store: &Store, qualified: &Symbol) -> UserEquals {
@@ -364,11 +356,12 @@ fn user_equals(store: &Store, qualified: &Symbol) -> UserEquals {
         return UserEquals::None;
     };
     if method_ty
+        .ty
         .equals_receiver_vars(qualified.as_str(), generics_len)
         .is_some()
     {
         UserEquals::ValidReceiver
-    } else if method_ty.is_equals_signature() {
+    } else if method_ty.ty.is_equals_signature() {
         UserEquals::Specialized
     } else {
         UserEquals::Conflict

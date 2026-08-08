@@ -107,7 +107,7 @@ pub fn infer_package(package_name: &str, fs: MockFileSystem) -> InferResult {
         checker.put_prelude_in_scope(&store);
 
         let order = std::mem::take(&mut graph_result.order);
-        let mut to_infer: Vec<String> = Vec::new();
+        let mut to_infer = Vec::new();
         for package_id in order {
             if let Some(go_pkg) = package_id.strip_prefix("go:") {
                 if let Some(typedef) = get_go_stdlib_typedef(go_pkg, Target::host()) {
@@ -125,15 +125,15 @@ pub fn infer_package(package_name: &str, fs: MockFileSystem) -> InferResult {
             let files = parsed.remove(&package_id).unwrap_or_default();
 
             store.store_package(&package_id, files);
-            checker.register_package(&mut store, &package_id);
+            let package = checker.register_package(&mut store, &package_id);
 
-            to_infer.push(package_id);
+            to_infer.push(package);
         }
 
         checker.finalize_registration(&mut store);
 
-        for package_id in &to_infer {
-            checker.infer_package(&mut store, package_id);
+        for package in to_infer {
+            checker.infer_package(&mut store, package);
         }
 
         checker.check_post_inference_bounds(&store);

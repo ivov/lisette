@@ -5,7 +5,7 @@ use syntax::ast::{
     StructFields, VariantFields,
 };
 use syntax::containment::{EnumPayloads, definition_contains_by_value};
-use syntax::program::{AliasKind, Definition, DefinitionBody, MethodSignatures, Visibility};
+use syntax::program::{AliasKind, Definition, DefinitionBody, Methods, Visibility};
 use syntax::types::Type;
 
 use super::enum_variant_constructor_type;
@@ -125,7 +125,7 @@ impl TaskState {
                 body: DefinitionBody::Enum {
                     generics,
                     variants: new_variants,
-                    methods: MethodSignatures::default(),
+                    methods: Methods::default(),
                     attributes,
                 },
             },

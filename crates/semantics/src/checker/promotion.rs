@@ -3,8 +3,10 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::collections::BTreeMap;
 
 use syntax::ast::{Generic, Visibility};
-use syntax::program::{DefinitionBody, MethodSignatures};
-use syntax::types::{CompoundKind, Symbol, Type, build_substitution_map, substitute};
+use syntax::program::{DefinitionBody, Method, Methods};
+use syntax::types::{
+    CompoundKind, Symbol, Type, build_named_substitution_map, build_substitution_map, substitute,
+};
 
 use crate::store::Store;
 
@@ -16,9 +18,7 @@ pub enum MemberKind {
     },
     /// `ty` already carries the effective receiver: value embeds keep the
     /// declared receiver, promoted methods are re-pointed at the embedder.
-    Method {
-        ty: Type,
-    },
+    Method(Method),
 }
 
 #[derive(Clone, Debug)]
@@ -49,7 +49,7 @@ pub fn resolve_selector(store: &Store, outer: &Type, name: &str) -> Resolution {
     resolve_in_entries(store, &entries, outer, name)
 }
 
-pub(crate) fn promoted_method_set(store: &Store, outer: &Type) -> MethodSignatures {
+pub(crate) fn promoted_method_set(store: &Store, outer: &Type) -> Methods {
     let entries = walk(store, outer);
 
     let mut names: HashSet<EcoString> = HashSet::default();
@@ -57,12 +57,12 @@ pub(crate) fn promoted_method_set(store: &Store, outer: &Type) -> MethodSignatur
         collect_member_names(store, &entry.ty, &mut names);
     }
 
-    let mut result = MethodSignatures::default();
+    let mut result = Methods::default();
     for name in names {
         if let Resolution::Found(member) = resolve_in_entries(store, &entries, outer, &name)
-            && let MemberKind::Method { ty } = member.kind
+            && let MemberKind::Method(method) = member.kind
         {
-            result.insert(name, ty);
+            result.insert(name, method);
         }
     }
     result
@@ -202,21 +202,19 @@ fn entry_candidate(store: &Store, ty: &Type, name: &str) -> Option<Candidate> {
 
     if store.get_interface(id).is_some() {
         let methods = store.get_all_methods(ty, &Default::default());
-        let method_ty = methods.get(name)?.clone();
+        let method = methods.get(name)?.clone();
         return Some(Candidate {
             declaring_type: Symbol::from_raw(id),
-            kind: MemberKind::Method { ty: method_ty },
+            kind: MemberKind::Method(method),
         });
     }
 
     if !store.is_ufcs_method(id, name)
-        && let Some(method_ty) = store.get_own_methods(id).and_then(|m| m.get(name))
+        && let Some(method) = store.get_own_methods(id).and_then(|m| m.get(name))
     {
         return Some(Candidate {
             declaring_type: Symbol::from_raw(id),
-            kind: MemberKind::Method {
-                ty: instantiate_method(store, ty, method_ty),
-            },
+            kind: MemberKind::Method(method.with_type(instantiate_method(store, ty, &method.ty))),
         });
     }
 
@@ -242,19 +240,19 @@ fn build_member(outer: &Type, entry: &Entry, candidate: &Candidate) -> ResolvedM
             ty: ty.clone(),
             visibility: *visibility,
         },
-        MemberKind::Method { ty } => {
+        MemberKind::Method(method) => {
             // Only promoted methods are re-pointed; a depth-0 receiver is already
             // the outer type, and rewriting it would break generics. A promoted
             // method stays pointer-only when its receiver is a pointer and no
             // pointer edge was crossed.
             let method_ty = if entry.depth == 0 {
-                ty.clone()
-            } else if !entry.indirect && method_has_pointer_receiver(ty) {
-                ty.with_replaced_first_param(&ref_of(outer))
+                method.ty.clone()
+            } else if !entry.indirect && method_has_pointer_receiver(&method.ty) {
+                method.ty.with_replaced_first_param(&ref_of(outer))
             } else {
-                ty.with_replaced_first_param(outer)
+                method.ty.with_replaced_first_param(outer)
             };
-            MemberKind::Method { ty: method_ty }
+            MemberKind::Method(method.with_type(method_ty))
         }
     };
 
@@ -399,7 +397,7 @@ fn instantiate_method(store: &Store, container: &Type, method_ty: &Type) -> Type
     let Type::Forall { vars, body } = method_ty else {
         return method_ty.clone();
     };
-    let map: HashMap<EcoString, Type> = vars.iter().cloned().zip(args.iter().cloned()).collect();
+    let map = build_named_substitution_map(vars, args);
     substitute(body, &map)
 }
 
@@ -489,9 +487,20 @@ mod tests {
             fields: Vec<StructFieldDefinition>,
             methods: Vec<(&str, Type)>,
         ) -> &mut Self {
-            let mut method_map = MethodSignatures::default();
+            let mut method_map = Methods::default();
             for (n, t) in methods {
-                method_map.insert(n.into(), t);
+                method_map.insert(
+                    n.into(),
+                    Method {
+                        source_name: n.into(),
+                        ty: t,
+                        visibility: ProgVis::Public,
+                        name_span: None,
+                        doc: None,
+                        allowed_lints: vec![],
+                        go_hints: vec![],
+                    },
+                );
             }
             self.insert(
                 name,
@@ -511,9 +520,20 @@ mod tests {
             fields: Vec<StructFieldDefinition>,
             methods: Vec<(&str, Type)>,
         ) -> &mut Self {
-            let mut method_map = MethodSignatures::default();
+            let mut method_map = Methods::default();
             for (n, t) in methods {
-                method_map.insert(n.into(), t);
+                method_map.insert(
+                    n.into(),
+                    Method {
+                        source_name: n.into(),
+                        ty: t,
+                        visibility: ProgVis::Public,
+                        name_span: None,
+                        doc: None,
+                        allowed_lints: vec![],
+                        go_hints: vec![],
+                    },
+                );
             }
             self.insert(
                 name,
@@ -530,9 +550,20 @@ mod tests {
         }
 
         fn interface(&mut self, name: &str, methods: Vec<&str>, parents: Vec<&str>) -> &mut Self {
-            let mut method_map = MethodSignatures::default();
+            let mut method_map = Methods::default();
             for n in methods {
-                method_map.insert(n.into(), interface_method());
+                method_map.insert(
+                    n.into(),
+                    Method {
+                        source_name: n.into(),
+                        ty: interface_method(),
+                        visibility: ProgVis::Public,
+                        name_span: None,
+                        doc: None,
+                        allowed_lints: vec![],
+                        go_hints: vec![],
+                    },
+                );
             }
             self.insert(
                 name,
@@ -589,7 +620,7 @@ mod tests {
 
     fn is_pointer_receiver(member: &ResolvedMember) -> bool {
         match &member.kind {
-            MemberKind::Method { ty } => ty.get_function_params().unwrap()[0].ty.is_ref(),
+            MemberKind::Method(method) => method.ty.get_function_params().unwrap()[0].ty.is_ref(),
             other => panic!("expected a method, got {other:?}"),
         }
     }
@@ -791,12 +822,12 @@ mod tests {
         assert!(set.contains_key("m"));
         assert!(set.contains_key("pm"));
         assert!(
-            !set.get("m").unwrap().get_function_params().unwrap()[0]
+            !set.get("m").unwrap().ty.get_function_params().unwrap()[0]
                 .ty
                 .is_ref()
         );
         assert!(
-            set.get("pm").unwrap().get_function_params().unwrap()[0]
+            set.get("pm").unwrap().ty.get_function_params().unwrap()[0]
                 .ty
                 .is_ref()
         );
@@ -824,7 +855,7 @@ mod tests {
 
     fn method_return(member: &ResolvedMember) -> Type {
         match &member.kind {
-            MemberKind::Method { ty } => ty.get_function_ret().unwrap().clone(),
+            MemberKind::Method(method) => method.ty.get_function_ret().unwrap().clone(),
             other => panic!("expected a method, got {other:?}"),
         }
     }

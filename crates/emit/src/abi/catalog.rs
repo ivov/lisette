@@ -33,7 +33,22 @@ impl GoAbiCatalog {
             if !go_name::is_go_import(qualified_name) {
                 continue;
             }
-            catalog.register_callable(definitions, qualified_name, definition);
+            catalog.register_callable(
+                definitions,
+                qualified_name,
+                &definition.ty,
+                definition.go_hints(),
+            );
+            if let Some(methods) = definition.methods() {
+                for method in methods.values() {
+                    catalog.register_callable(
+                        definitions,
+                        &format!("{qualified_name}.{}", method.source_name),
+                        &method.ty,
+                        &method.go_hints,
+                    );
+                }
+            }
             catalog.register_fields(definitions, qualified_name, definition);
         }
         catalog
@@ -69,9 +84,10 @@ impl GoAbiCatalog {
         &mut self,
         definitions: &HashMap<Symbol, Definition>,
         qualified_name: &str,
-        definition: &Definition,
+        ty: &Type,
+        go_hints: &[String],
     ) {
-        let Type::Function(function) = definition.ty.unwrap_forall() else {
+        let Type::Function(function) = ty.unwrap_forall() else {
             return;
         };
         let parameters = function
@@ -92,8 +108,7 @@ impl GoAbiCatalog {
             )),
             declared_type: (*function.return_type).clone(),
         };
-        let return_abi =
-            classify_go_return_type(definitions, &function.return_type, definition.go_hints());
+        let return_abi = classify_go_return_type(definitions, &function.return_type, go_hints);
         self.callables.insert(
             qualified_name.to_string(),
             GoCallableSlots {

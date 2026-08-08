@@ -2,13 +2,15 @@ use crate::checker::EnvResolve;
 use crate::store::Store;
 use diagnostics::infer::{InterfaceMethodViolation, InterfaceViolation, MissingMethod};
 use syntax::ast::Span;
-use syntax::program::{DefinitionBody, Interface, MethodSignatures};
-use syntax::types::{GO_IMPORT_PREFIX, SubstitutionMap, Type, substitute, unqualified_name};
+use syntax::program::{DefinitionBody, Interface, Methods};
+use syntax::types::{
+    GO_IMPORT_PREFIX, SubstitutionMap, Type, build_substitution_map, substitute, unqualified_name,
+};
 
 use crate::checker::infer::InferCtx;
 
 struct PointerReceiverCheck<'a> {
-    methods: &'a MethodSignatures,
+    methods: &'a Methods,
     receiver: &'a Type,
     found: Vec<String>,
     visiting: rustc_hash::FxHashSet<String>,
@@ -24,7 +26,7 @@ struct ConformanceTraversal<'a> {
 
 struct ConformanceSite<'a> {
     ty: &'a Type,
-    symbol_methods: &'a MethodSignatures,
+    symbol_methods: &'a Methods,
     interface_qualified_id: &'a str,
     interface_is_public: bool,
     map: &'a SubstitutionMap,
@@ -38,8 +40,8 @@ fn method_comma_ok(store: &Store, type_id: &str, method: &str) -> bool {
         method: &str,
         seen: &mut rustc_hash::FxHashSet<String>,
     ) -> bool {
-        if let Some(def) = store.get_definition(&format!("{type_id}.{method}")) {
-            return def.go_hints().iter().any(|h| h == "comma_ok");
+        if let Some(method) = store.get_method(type_id, method) {
+            return method.go_hints.iter().any(|hint| hint == "comma_ok");
         }
         if !seen.insert(type_id.to_string()) {
             return false;
@@ -67,7 +69,7 @@ impl InferCtx<'_> {
         let Some(id) = resolved.get_qualified_id() else {
             return false;
         };
-        let owner = if store.get_definition(&format!("{id}.{method}")).is_some() {
+        let owner = if store.get_method(id, method).is_some() {
             id.to_string()
         } else {
             match crate::checker::promotion::resolve_selector(store, &resolved, method) {
@@ -80,9 +82,12 @@ impl InferCtx<'_> {
         if !owner.starts_with(GO_IMPORT_PREFIX) {
             return false;
         }
-        store
-            .get_definition(&format!("{owner}.{method}"))
-            .is_some_and(|def| def.go_hints().iter().any(|h| h == "value_method_set"))
+        store.get_method(&owner, method).is_some_and(|method| {
+            method
+                .go_hints
+                .iter()
+                .any(|hint| hint == "value_method_set")
+        })
     }
 
     pub(crate) fn check_concrete_bound(&mut self, ty: &Type, bound: &Type, span: &Span) {
@@ -371,15 +376,15 @@ impl InferCtx<'_> {
         method: &str,
     ) -> Option<syntax::go_names::ConformanceCandidate> {
         let id = resolved.get_qualified_id()?;
-        let public = method_definition_public(
-            self.store,
-            id,
-            method,
-            &mut rustc_hash::FxHashSet::default(),
-        )?;
+        if self.store.get_interface(id).is_some() {
+            self.store
+                .get_all_methods(resolved, &Default::default())
+                .get(method)?;
+        } else {
+            self.store.get_method(id, method)?;
+        }
         // UFCS-lowered methods emit as free functions, not selectors.
         Some(syntax::go_names::ConformanceCandidate::Resolved {
-            exported: public,
             depth: 0,
             owner: id.into(),
             shadowed: self.store.is_ufcs_method(id, method),
@@ -399,14 +404,10 @@ impl InferCtx<'_> {
         else {
             return None;
         };
-        let public = method_definition_public(
-            store,
-            member.declaring_type.as_str(),
-            method,
-            &mut rustc_hash::FxHashSet::default(),
-        )
-        .unwrap_or(false);
-        let selector = if public {
+        let crate::checker::promotion::MemberKind::Method(promoted) = &member.kind else {
+            return None;
+        };
+        let selector = if promoted.visibility.is_public() {
             syntax::go_names::snake_to_camel(method)
         } else {
             syntax::go_names::unexported_method_go_name(method)
@@ -414,7 +415,6 @@ impl InferCtx<'_> {
         let shadowed = promotion::field_selector_depth(store, resolved, &selector)
             .is_some_and(|field_depth| field_depth <= member.depth);
         Some(syntax::go_names::ConformanceCandidate::Resolved {
-            exported: public,
             depth: member.depth,
             owner: member.declaring_type.as_eco().clone(),
             shadowed,
@@ -433,19 +433,12 @@ impl InferCtx<'_> {
         let bounds = self.scopes.collect_all_trait_bounds();
         let qualified = self.qualify_name(name);
         bounds.get(&qualified)?.iter().find_map(|bound| {
-            let iface_id = self
-                .store
-                .deep_resolve_alias(bound)
-                .get_qualified_id()?
-                .to_string();
-            let public = method_definition_public(
-                self.store,
-                &iface_id,
-                method,
-                &mut rustc_hash::FxHashSet::default(),
-            )?;
+            let interface_ty = self.store.deep_resolve_alias(bound);
+            interface_ty.get_qualified_id()?;
+            self.store
+                .get_all_methods(&interface_ty, &Default::default())
+                .get(method)?;
             Some(syntax::go_names::ConformanceCandidate::Resolved {
-                exported: public,
                 depth: 0,
                 owner: qualified.as_eco().clone(),
                 shadowed: false,
@@ -484,7 +477,7 @@ impl InferCtx<'_> {
 
     fn own_methods_cover_interface(
         &self,
-        own: &MethodSignatures,
+        own: &Methods,
         own_id: &str,
         interface: &Interface,
         interface_qualified_id: &str,
@@ -499,15 +492,12 @@ impl InferCtx<'_> {
             .is_some_and(|d| d.visibility.is_public());
         let own_candidate = |name: &str| {
             store
-                .get_definition(&format!("{own_id}.{name}"))
-                .map(
-                    |definition| syntax::go_names::ConformanceCandidate::Resolved {
-                        exported: definition.visibility.is_public(),
-                        depth: 0,
-                        owner: own_id.into(),
-                        shadowed: self.store.is_ufcs_method(own_id, name),
-                    },
-                )
+                .get_method(own_id, name)
+                .map(|_| syntax::go_names::ConformanceCandidate::Resolved {
+                    depth: 0,
+                    owner: own_id.into(),
+                    shadowed: self.store.is_ufcs_method(own_id, name),
+                })
                 .unwrap_or(syntax::go_names::ConformanceCandidate::Unresolved)
         };
         let covered = interface.methods.keys().all(|method| {
@@ -555,12 +545,7 @@ impl InferCtx<'_> {
 
         let symbol_methods = self.get_all_methods(store, ty);
 
-        let map: SubstitutionMap = interface
-            .generics
-            .iter()
-            .map(|g| g.name.clone())
-            .zip(type_args.iter().cloned())
-            .collect();
+        let map = build_substitution_map(&interface.generics, type_args);
 
         let mut method_violations = Vec::new();
 
@@ -616,25 +601,29 @@ impl InferCtx<'_> {
                     }
                     method_violations.push(InterfaceMethodViolation::Missing(MissingMethod {
                         name: method_name.to_string(),
-                        signature: method_ty.clone(),
+                        signature: method_ty.ty.clone(),
                         private_candidate: None,
                     }));
                     continue;
                 }
                 SelectedMethod::Missing => {
                     let private_candidate =
-                        self.private_method_hint(&site, method_name.as_str(), method_ty);
+                        self.private_method_hint(&site, method_name.as_str(), &method_ty.ty);
                     method_violations.push(InterfaceMethodViolation::Missing(MissingMethod {
                         name: method_name.to_string(),
-                        signature: method_ty.clone(),
+                        signature: method_ty.ty.clone(),
                         private_candidate,
                     }));
                     continue;
                 }
             };
 
-            let signature =
-                self.check_method_signature(&site, method_name.as_str(), method_ty, &symbol_method);
+            let signature = self.check_method_signature(
+                &site,
+                method_name.as_str(),
+                &method_ty.ty,
+                &symbol_method,
+            );
 
             match signature {
                 SignatureCheck::Matched => {
@@ -653,7 +642,7 @@ impl InferCtx<'_> {
                 SignatureCheck::ReceiverMismatch => {
                     method_violations.push(InterfaceMethodViolation::Missing(MissingMethod {
                         name: method_name.to_string(),
-                        signature: method_ty.clone(),
+                        signature: method_ty.ty.clone(),
                         private_candidate: None,
                     }));
                 }
@@ -884,24 +873,6 @@ enum SignatureCheck {
     Incompatible { expected: Type, actual: Type },
 }
 
-fn method_definition_public(
-    store: &Store,
-    owner: &str,
-    method: &str,
-    seen: &mut rustc_hash::FxHashSet<String>,
-) -> Option<bool> {
-    if !seen.insert(owner.to_string()) {
-        return None;
-    }
-    if let Some(def) = store.get_definition(&format!("{owner}.{method}")) {
-        return Some(def.visibility.is_public());
-    }
-    let interface = store.get_interface(owner)?;
-    interface.parents.iter().find_map(|parent| {
-        method_definition_public(store, parent.get_qualified_name()?.as_str(), method, seen)
-    })
-}
-
 pub(crate) fn interface_requires_methods(store: &Store, id: &str) -> bool {
     store.get_interface(id).is_some_and(|interface| {
         interface_declares_methods(store, interface, &mut rustc_hash::FxHashSet::default())
@@ -957,10 +928,9 @@ fn covariant_return_adjustment(
         return None;
     }
 
-    let method_qualified = format!("{}.{}", interface_qualified_id, method_name);
     let hints = store
-        .get_definition(&method_qualified)
-        .map(|def| def.go_hints())
+        .get_method(interface_qualified_id, method_name)
+        .map(|method| method.go_hints.as_slice())
         .unwrap_or(&[]);
     if hints.iter().any(|h| h == "comma_ok") {
         return None;

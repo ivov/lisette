@@ -5,10 +5,10 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::{EnumVariant, Expression, StructFieldDefinition};
 use syntax::program::{
-    Definition, DefinitionBody, EqualityIndex, File, Interface, MethodSignatures, Package,
-    TestIndex, UninferredExports,
+    Definition, DefinitionBody, EqualityIndex, File, Interface, Method, Methods, Package,
+    TestIndex, UninferredExports, methods_for_type,
 };
-use syntax::types::{SimpleKind, SubstitutionMap, Symbol, Type, substitute};
+use syntax::types::{SimpleKind, Symbol, Type};
 
 pub use crate::closed_domain::{ClosedDomain, ClosedMember, DomainValue};
 pub use syntax::ENTRY_PACKAGE_ID;
@@ -489,8 +489,17 @@ impl Store {
         }
     }
 
-    pub fn get_own_methods(&self, qualified_name: &str) -> Option<&MethodSignatures> {
+    pub fn get_own_methods(&self, qualified_name: &str) -> Option<&Methods> {
         self.get_definition(qualified_name)?.methods()
+    }
+
+    pub fn get_method(&self, qualified_type: &str, method: &str) -> Option<&Method> {
+        let methods = self.get_own_methods(qualified_type)?;
+        methods.get(method).or_else(|| {
+            methods
+                .values()
+                .find(|candidate| candidate.source_name == method)
+        })
     }
 
     pub fn is_ufcs_method(&self, qualified_type: &str, method: &str) -> bool {
@@ -539,7 +548,9 @@ impl Store {
             return false;
         };
         ["string", "String"].iter().any(|name| {
-            methods.get(*name).is_some_and(Type::is_stringer_signature)
+            methods
+                .get(*name)
+                .is_some_and(|method| method.ty.is_stringer_signature())
                 && !definition.is_ufcs_method(name)
         })
     }
@@ -552,111 +563,22 @@ impl Store {
         &self,
         ty: &Type,
         trait_bounds: &HashMap<Symbol, Vec<Type>>,
-    ) -> MethodSignatures {
-        let mut visited = HashSet::default();
-        self.get_all_methods_recursive(ty, trait_bounds, &mut visited)
-    }
-
-    fn get_all_methods_recursive(
-        &self,
-        ty: &Type,
-        trait_bounds: &HashMap<Symbol, Vec<Type>>,
-        visited: &mut HashSet<String>,
-    ) -> MethodSignatures {
-        let stripped = ty.strip_refs();
-        let Some(qualified_name) = method_lookup_key(&stripped) else {
-            return MethodSignatures::default();
-        };
-
-        // Cyclic embeddings survive registration as an error with parents intact; guard the walk.
-        if !visited.insert(qualified_name.as_str().to_string()) {
-            return MethodSignatures::default();
-        }
-
-        if let Some(interface) = self.get_interface(&qualified_name) {
-            let mut all_interface_methods = MethodSignatures::default();
-
-            let type_args = ty.get_type_params().unwrap_or_default();
-            let map: SubstitutionMap = interface
-                .generics
-                .iter()
-                .map(|g| g.name.clone())
-                .zip(type_args.iter().cloned())
-                .collect();
-
-            for (name, method_ty) in &interface.methods {
-                let substituted = substitute(method_ty, &map);
-                all_interface_methods.insert(name.clone(), substituted.with_receiver_placeholder());
-            }
-
-            for parent in &interface.parents {
-                for (name, method_ty) in
-                    self.get_all_methods_recursive(parent, trait_bounds, visited)
-                {
-                    all_interface_methods.insert(name, method_ty);
-                }
-            }
-
-            return all_interface_methods;
-        }
-
-        if let Some(bound_types) = trait_bounds.get(&qualified_name) {
-            return bound_types
-                .iter()
-                .flat_map(|interface_ty| {
-                    self.get_all_methods_recursive(interface_ty, trait_bounds, visited)
-                })
-                .collect();
-        }
-
-        let mut methods = self
-            .get_own_methods(&qualified_name)
-            .cloned()
-            .unwrap_or_default();
-
-        // Type aliases inherit methods from the underlying type.
-        if let Some(definition) = self.get_definition(&qualified_name)
-            && matches!(definition.body, DefinitionBody::TypeAlias { .. })
-        {
-            let underlying = self.peel_alias(&stripped);
-            if underlying != stripped {
-                for (name, method_ty) in
-                    self.get_all_methods_recursive(&underlying, trait_bounds, visited)
-                {
-                    methods.entry(name).or_insert(method_ty);
-                }
-            }
-        }
-
-        methods
+    ) -> Methods {
+        methods_for_type(ty, trait_bounds, |id| self.get_definition(id))
     }
 
     pub(crate) fn get_methods_from_bounds(
         &self,
         qualified_name: &str,
         trait_bounds: &HashMap<Symbol, Vec<Type>>,
-    ) -> MethodSignatures {
+    ) -> Methods {
         if let Some(bound_types) = trait_bounds.get(qualified_name) {
             return bound_types
                 .iter()
                 .flat_map(|interface_ty| self.get_all_methods(interface_ty, trait_bounds))
                 .collect();
         }
-        MethodSignatures::default()
-    }
-}
-
-/// Return the qualified name used to look up methods/fields for a given type.
-/// For `Type::Compound` and `Type::Simple`, this is the prelude-qualified name
-/// (e.g. `Type::Compound { Slice, .. }` → `"prelude.Slice"`).
-fn method_lookup_key(ty: &Type) -> Option<Symbol> {
-    match ty {
-        Type::Nominal { id, .. } => Some(id.clone()),
-        Type::Compound { kind, .. } => Some(Symbol::from_parts("prelude", kind.leaf_name())),
-        Type::Simple(kind) => Some(Symbol::from_parts("prelude", kind.leaf_name())),
-        // Array methods live on the prelude `Array` impl.
-        Type::Array { .. } => Some(Symbol::from_parts("prelude", "Array")),
-        _ => None,
+        Methods::default()
     }
 }
 

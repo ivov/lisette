@@ -164,10 +164,9 @@ fn check_one(
         return;
     }
 
-    let method_key = format!("{}.{}.{}", package_id, type_part, method_part);
     let is_public = store
-        .get_definition(&method_key)
-        .map(|d| d.visibility.is_public())
+        .get_method(&format!("{package_id}.{type_part}"), method_part)
+        .map(|method| method.visibility.is_public())
         .unwrap_or(true);
 
     if !is_public {

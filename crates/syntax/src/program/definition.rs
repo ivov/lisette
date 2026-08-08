@@ -47,19 +47,19 @@ pub enum DefinitionBody {
     TypeAlias {
         generics: Vec<Generic>,
         alias: AliasKind,
-        methods: MethodSignatures,
+        methods: Methods,
         attributes: Attributes,
     },
     Enum {
         generics: Vec<Generic>,
         variants: Vec<EnumVariant>,
-        methods: MethodSignatures,
+        methods: Methods,
         attributes: Attributes,
     },
     Struct {
         generics: Vec<Generic>,
         fields: StructFields,
-        methods: MethodSignatures,
+        methods: Methods,
         attributes: Attributes,
     },
     Interface {
@@ -274,21 +274,23 @@ impl Definition {
         )
     }
 
-    pub fn methods_mut(&mut self) -> Option<&mut MethodSignatures> {
+    pub fn methods_mut(&mut self) -> Option<&mut Methods> {
         match &mut self.body {
             DefinitionBody::Struct { methods, .. } => Some(methods),
             DefinitionBody::TypeAlias { methods, .. } => Some(methods),
             DefinitionBody::Enum { methods, .. } => Some(methods),
-            _ => None,
+            DefinitionBody::Interface { definition } => Some(&mut definition.methods),
+            DefinitionBody::Value { .. } => None,
         }
     }
 
-    pub fn methods(&self) -> Option<&MethodSignatures> {
+    pub fn methods(&self) -> Option<&Methods> {
         match &self.body {
             DefinitionBody::Struct { methods, .. }
             | DefinitionBody::TypeAlias { methods, .. }
             | DefinitionBody::Enum { methods, .. } => Some(methods),
-            DefinitionBody::Interface { .. } | DefinitionBody::Value { .. } => None,
+            DefinitionBody::Interface { definition } => Some(&definition.methods),
+            DefinitionBody::Value { .. } => None,
         }
     }
 
@@ -307,7 +309,7 @@ impl Definition {
         };
         methods
             .get(method)
-            .is_some_and(|method_ty| is_ufcs_method_type(method_ty, base_generics_count))
+            .is_some_and(|method| is_ufcs_method_type(&method.ty, base_generics_count))
     }
 
     fn attributes(&self) -> Option<&Attributes> {
@@ -401,7 +403,115 @@ fn is_ufcs_method_type(method_ty: &Type, base_generics_count: usize) -> bool {
     false
 }
 
-pub type MethodSignatures = HashMap<EcoString, Type>;
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Method {
+    pub source_name: EcoString,
+    pub ty: Type,
+    pub visibility: Visibility,
+    pub name_span: Option<Span>,
+    pub doc: Option<String>,
+    pub allowed_lints: Vec<String>,
+    pub go_hints: Vec<String>,
+}
+
+impl Method {
+    pub fn with_type(&self, ty: Type) -> Self {
+        Self { ty, ..self.clone() }
+    }
+}
+
+pub type Methods = HashMap<EcoString, Method>;
+
+/// Resolve the complete method set for a type, including inherited and alias methods.
+pub fn methods_for_type<'d, F>(
+    ty: &Type,
+    trait_bounds: &HashMap<crate::types::Symbol, Vec<Type>>,
+    lookup: F,
+) -> Methods
+where
+    F: Copy + Fn(&str) -> Option<&'d Definition>,
+{
+    fn collect<'d, F>(
+        ty: &Type,
+        trait_bounds: &HashMap<crate::types::Symbol, Vec<Type>>,
+        lookup: F,
+        visited: &mut HashSet<String>,
+    ) -> Methods
+    where
+        F: Copy + Fn(&str) -> Option<&'d Definition>,
+    {
+        let stripped = ty.strip_refs();
+        let Some(qualified_name) = method_lookup_key(&stripped) else {
+            return Methods::default();
+        };
+
+        if !visited.insert(qualified_name.as_str().to_string()) {
+            return Methods::default();
+        }
+
+        if let Some(Definition {
+            body: DefinitionBody::Interface { definition },
+            ..
+        }) = lookup(&qualified_name)
+        {
+            let map = build_substitution_map(
+                &definition.generics,
+                ty.get_type_params().unwrap_or_default(),
+            );
+            let mut methods = definition
+                .methods
+                .iter()
+                .map(|(name, method)| {
+                    let ty = substitute(&method.ty, &map).with_receiver_placeholder();
+                    (name.clone(), method.with_type(ty))
+                })
+                .collect::<Methods>();
+
+            for parent in &definition.parents {
+                methods.extend(collect(parent, trait_bounds, lookup, visited));
+            }
+            return methods;
+        }
+
+        if let Some(bounds) = trait_bounds.get(&qualified_name) {
+            return bounds
+                .iter()
+                .flat_map(|bound| collect(bound, trait_bounds, lookup, visited))
+                .collect();
+        }
+
+        let mut methods = lookup(&qualified_name)
+            .and_then(Definition::methods)
+            .cloned()
+            .unwrap_or_default();
+
+        if lookup(&qualified_name).is_some_and(Definition::is_transparent_type_alias) {
+            let underlying = crate::types::peel_alias(&stripped, lookup);
+            if underlying != stripped {
+                for (name, method) in collect(&underlying, trait_bounds, lookup, visited) {
+                    methods.entry(name).or_insert(method);
+                }
+            }
+        }
+
+        methods
+    }
+
+    collect(ty, trait_bounds, lookup, &mut HashSet::default())
+}
+
+fn method_lookup_key(ty: &Type) -> Option<crate::types::Symbol> {
+    use crate::types::Symbol;
+
+    match ty {
+        Type::Nominal { id, .. } => Some(id.clone()),
+        Type::Compound { kind, .. } => Some(Symbol::from_parts("prelude", kind.leaf_name())),
+        Type::Simple(kind) => Some(Symbol::from_parts("prelude", kind.leaf_name())),
+        Type::Array { .. } => Some(Symbol::from_parts("prelude", "Array")),
+        _ => None,
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -421,7 +531,7 @@ impl Visibility {
 pub struct Interface {
     pub generics: Vec<Generic>,
     pub parents: Vec<Type>,
-    pub methods: HashMap<EcoString, Type>,
+    pub methods: Methods,
 }
 
 #[cfg(test)]
@@ -461,7 +571,18 @@ mod tests {
             body: DefinitionBody::Struct {
                 generics: vec![generic("T")],
                 fields: StructFields::Record(vec![]),
-                methods: HashMap::from_iter([("map".into(), method_ty)]),
+                methods: HashMap::from_iter([(
+                    "map".into(),
+                    Method {
+                        source_name: "map".into(),
+                        ty: method_ty,
+                        visibility: Visibility::Public,
+                        name_span: None,
+                        doc: None,
+                        allowed_lints: vec![],
+                        go_hints: vec![],
+                    },
+                )]),
                 attributes: Attributes::default(),
             },
         }

@@ -86,7 +86,7 @@ impl TaskState {
                     ));
                 return;
             }
-            if user_ty.is_stringer_signature() {
+            if user_ty.ty.is_stringer_signature() {
                 return;
             }
         }
@@ -102,7 +102,6 @@ impl TaskState {
         );
         let method_ty = wrap_with_impl_generics(&fn_ty, &generics, &[]);
 
-        let to_string_key = qualified.with_segment("to_string");
         let package = store
             .get_package_mut(package_id)
             .expect("package must exist");
@@ -111,24 +110,19 @@ impl TaskState {
             .get_mut(qualified.as_str())
             .and_then(Definition::methods_mut)
         {
-            methods.insert("to_string".into(), method_ty.clone());
-        }
-        package
-            .definitions
-            .entry(to_string_key)
-            .or_insert_with(|| Definition {
-                visibility,
-                ty: method_ty,
-                name_span,
-                doc: None,
-                body: DefinitionBody::Value {
-                    kind: syntax::program::ValueKind::Runtime,
+            methods.insert(
+                "to_string".into(),
+                syntax::program::Method {
+                    source_name: "to_string".into(),
+                    ty: method_ty,
+                    visibility,
+                    name_span,
+                    doc: None,
                     allowed_lints: vec![],
                     go_hints: vec![],
-                    go_name: None,
-                    go_type_param_recipe: None,
                 },
-            });
+            );
+        }
     }
 }
 
