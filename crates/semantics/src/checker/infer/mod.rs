@@ -83,19 +83,16 @@ impl InferCtx<'_> {
             self.file_checks.is_empty(),
             "file checks from the previous file must be resolved"
         );
-        let store = self.store;
         let file_id = file.id;
         let imports = file.imports;
 
         let inferred = self.with_file_context(
-            store,
             FileContext::Standard {
                 package_id,
                 file_id,
                 imports: &imports,
             },
-            |this, store| {
-                let mut ctx = InferCtx::new(this, store);
+            |ctx| {
                 ctx.check_definition_package_collisions(&file.items, &imports);
 
                 let inferred_items: Vec<_> = file
@@ -114,7 +111,7 @@ impl InferCtx<'_> {
 
                 let frozen_items = {
                     let store = ctx.store;
-                    let state = &mut *ctx;
+                    let state = &mut *ctx.state;
                     let folder = FreezeFolder::new(&state.env, store);
                     folder.freeze_facts(&mut state.facts);
                     FreezeFolder::new(&state.env, store).freeze_items(inferred_items)

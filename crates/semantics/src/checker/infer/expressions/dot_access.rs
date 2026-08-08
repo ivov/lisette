@@ -93,10 +93,10 @@ impl InferCtx<'_> {
                 self.sink
                     .push(diagnostics::infer::ref_slice_growth(&member, span));
             }
-            if member.as_str() == "equals" && self.scopes.is_callee_context() {
+            if member.as_str() == "equals" && self.is_callee_context() {
                 self.gate_container_equals(&args.deref_ty, args.expression.get_span());
             }
-            if !self.scopes.is_callee_context()
+            if !self.is_callee_context()
                 && matches!(
                     expression.get_type().resolve_in(&self.env),
                     Type::Function(_) | Type::Forall { .. }
@@ -143,7 +143,7 @@ impl InferCtx<'_> {
                 Some(&available_members)
             },
             unwrap_hint,
-            self.scopes.is_callee_context(),
+            self.is_callee_context(),
         ));
 
         args.build_dot_access(Type::Error, DotAccessResolution::Unresolved)
@@ -472,8 +472,8 @@ impl InferCtx<'_> {
         let (package_ty, _) = self.instantiate(&package_ty);
         let (member_ty, _) = self.instantiate(&member_type);
 
-        let coerced_to_unconstrained_value = !self.scopes.is_callee_context()
-            && !self.scopes.is_dot_access_base()
+        let coerced_to_unconstrained_value = !self.is_callee_context()
+            && !self.is_dot_access_base()
             && args.expected_ty.resolve_in(&self.env).is_variable();
 
         self.unify(&args.deref_ty, &package_ty, args.span);
@@ -501,8 +501,8 @@ impl InferCtx<'_> {
         display_package: &str,
         args: &DotAccessResolutionArgs,
     ) {
-        let is_callee_context = self.scopes.is_callee_context();
-        let is_dot_access_base = self.scopes.is_dot_access_base();
+        let is_callee_context = self.is_callee_context();
+        let is_dot_access_base = self.is_dot_access_base();
         let display_name = format!("{}.{}", display_package, args.member_name);
 
         if let Some(definition) = store.get_definition(resolved_definition) {
@@ -531,10 +531,7 @@ impl InferCtx<'_> {
                     }
                 }
                 DefinitionBody::Enum { .. } => {
-                    if !is_callee_context
-                        && !is_dot_access_base
-                        && !self.scopes.is_let_binding_rhs()
-                    {
+                    if !is_callee_context && !is_dot_access_base && !self.is_let_binding_rhs() {
                         self.sink
                             .push(diagnostics::infer::namespace_alias_used_as_value(
                                 *args.span,

@@ -1,5 +1,5 @@
 use crate::checker::EnvResolve;
-use crate::checker::{BranchArm, SelectExhaustivenessCheck};
+use crate::checker::infer::context::{BranchArm, SelectExhaustivenessCheck};
 use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, Span};
 use syntax::program::{ChannelOperation, channel_operation};
 use syntax::types::{Type, unqualified_name};

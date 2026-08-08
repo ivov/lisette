@@ -172,7 +172,7 @@ impl InferCtx<'_> {
             (Type::Var { id, .. }, _) => self.unify_type_variable(*id, &r2, span, false),
             (_, Type::Var { id, .. }) => self.unify_type_variable(*id, &r1, span, true),
 
-            _ if r1_is_unknown && self.scopes.is_inside_invariant_position() => {
+            _ if r1_is_unknown && self.is_inside_invariant_position() => {
                 Err(UnifyError::TypeMismatch)
             }
             _ if r1_is_unknown => Ok(()),
@@ -318,13 +318,6 @@ impl InferCtx<'_> {
         self.store
             .get_definition(id)
             .is_some_and(|definition| definition.is_transparent_type_alias())
-    }
-
-    pub(super) fn in_invariant_position<T>(&mut self, unify: impl FnOnce(&mut Self) -> T) -> T {
-        self.scopes.enter_invariant_position();
-        let result = unify(self);
-        self.scopes.exit_invariant_position();
-        result
     }
 
     fn unify_refs(&mut self, t1: &Type, t2: &Type, span: &Span) -> Result<(), UnifyError> {
@@ -482,7 +475,7 @@ impl InferCtx<'_> {
             return Ok(());
         }
 
-        if self.scopes.is_inside_invariant_position() {
+        if self.is_inside_invariant_position() {
             return Err(UnifyError::TypeMismatch);
         }
 
@@ -513,7 +506,7 @@ impl InferCtx<'_> {
         type_args: &[Type],
         span: &Span,
     ) -> Result<(), UnifyError> {
-        if self.scopes.is_inside_invariant_position() {
+        if self.is_inside_invariant_position() {
             return Err(UnifyError::TypeMismatch);
         }
         let Some(interface) = self.store.get_interface(interface_id).cloned() else {

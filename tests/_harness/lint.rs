@@ -68,16 +68,14 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     checker.check_pending_generic_bounds(&store);
 
     let mut typed_ast = vec![];
-
-    for expression in ast {
-        let type_var = checker.new_type_var();
-        let typed_expression =
-            InferCtx::new(&mut checker, &store).infer_root_expression(expression, &type_var);
-        typed_ast.push(typed_expression);
-    }
-
     {
         let mut ctx = InferCtx::new(&mut checker, &store);
+        for expression in ast {
+            let type_var = ctx.new_type_var();
+            let typed_expression = ctx.infer_root_expression(expression, &type_var);
+            typed_ast.push(typed_expression);
+        }
+
         ctx.resolve_branch_subsumptions();
         ctx.resolve_select_exhaustiveness();
     }

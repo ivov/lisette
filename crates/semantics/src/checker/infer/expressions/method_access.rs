@@ -72,7 +72,7 @@ impl InferCtx<'_> {
             return Some(expression);
         }
 
-        if self.scopes.is_callee_context() && self.is_type_level_receiver(args.expression) {
+        if self.is_callee_context() && self.is_type_level_receiver(args.expression) {
             self.sink.push(diagnostics::infer::type_used_as_value(
                 &args.expression.as_dotted_path().unwrap_or_default(),
                 args.expression.get_span(),
@@ -205,7 +205,7 @@ impl InferCtx<'_> {
             }
         }
 
-        if !self.scopes.is_callee_context()
+        if !self.is_callee_context()
             && (matches!(deref_ty, Type::Nominal { id, .. }
                     if self.store.is_ufcs_method(id.as_str(), args.member_name))
                 || matches!(store.deep_resolve_alias(deref_ty), Type::Nominal { id, .. }
@@ -278,7 +278,7 @@ impl InferCtx<'_> {
                 if inner.get_type().resolve_in(&self.env).as_import_namespace().is_some()
         );
 
-        if !is_cross_package_type_access || self.scopes.is_callee_context() {
+        if !is_cross_package_type_access || self.is_callee_context() {
             return None;
         }
 

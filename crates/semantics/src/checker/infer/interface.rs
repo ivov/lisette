@@ -792,18 +792,17 @@ impl InferCtx<'_> {
         let mut resolved_impl_method = None;
         let sig_match = self.in_invariant_position(|ctx| {
             ctx.speculatively(|this| {
-                let mut ctx = InferCtx::new(this, store);
                 if let Some(receiver) = &receiver_to_pin {
-                    ctx.try_unify(receiver, &candidate_ty, &Span::dummy())
+                    this.try_unify(receiver, &candidate_ty, &Span::dummy())
                         .map_err(|_| Mismatch::Receiver)?;
                 }
-                ctx.try_unify(
+                this.try_unify(
                     &strip_bounds(&substituted_method),
                     &strip_bounds(&impl_for_unify),
                     &Span::dummy(),
                 )
                 .map_err(|_| {
-                    resolved_impl_method = Some(impl_method_without_receiver.resolve_in(&ctx.env));
+                    resolved_impl_method = Some(impl_method_without_receiver.resolve_in(&this.env));
                     Mismatch::Signature
                 })
             })

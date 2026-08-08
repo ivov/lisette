@@ -139,10 +139,10 @@ impl InferCtx<'_> {
         let store = self.store;
         let callee_ty = self.new_type_var();
 
-        let callee_expression = self
-            .with_use_context(crate::checker::scopes::UseContext::Callee, |state| {
-                state.infer_expression(*expression, &callee_ty)
-            });
+        let callee_expression = self.with_use_context(
+            crate::checker::infer::context::UseContext::Callee,
+            |state| state.infer_expression(*expression, &callee_ty),
+        );
 
         let forall_ty = self.resolve_callee_forall_type(&callee_expression, &type_args);
         let (callee_ty, type_arguments) =
@@ -171,7 +171,7 @@ impl InferCtx<'_> {
         } = self.extract_call_signature(callee_ty, &args, &callee_expression);
 
         if self.is_panic_call(&callee_expression)
-            && self.scopes.is_value_context()
+            && self.is_value_context()
             && !expected_ty.is_unit()
             && !expected_ty.is_ignored()
             && !expected_ty.is_never()
@@ -188,9 +188,7 @@ impl InferCtx<'_> {
                     || !store.contains_unknown(&resolved_expected))
             {
                 let peeled = store.deep_resolve_alias(&resolved_expected);
-                let _ = self.speculatively(|this| {
-                    InferCtx::new(this, store).try_unify(&peeled, &return_ty, &span)
-                });
+                let _ = self.speculatively(|this| this.try_unify(&peeled, &return_ty, &span));
             }
         }
 

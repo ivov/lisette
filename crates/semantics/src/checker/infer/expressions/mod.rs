@@ -430,56 +430,9 @@ impl InferCtx<'_> {
 
     /// Bans `task`/`defer` as a bare subexpression, skipped when the dedicated check already fires.
     fn check_control_flow_in_expression(&mut self, kind: &str, span: Span, is_subexpression: bool) {
-        if is_subexpression && !self.scopes.is_value_context() {
+        if is_subexpression && !self.is_value_context() {
             self.sink
                 .push(diagnostics::infer::control_flow_in_expression(kind, span));
         }
-    }
-
-    fn with_use_context<F, R>(&mut self, context: crate::checker::scopes::UseContext, f: F) -> R
-    where
-        F: FnOnce(&mut Self) -> R,
-    {
-        let prev_ctx = self.scopes.replace_use_context(context);
-        let result = f(self);
-        self.scopes.restore_use_context(prev_ctx);
-        result
-    }
-
-    fn with_value_context<F, R>(&mut self, f: F) -> R
-    where
-        F: FnOnce(&mut Self) -> R,
-    {
-        self.with_use_context(crate::checker::scopes::UseContext::Value, f)
-    }
-
-    fn with_dot_access_base<F, R>(&mut self, f: F) -> R
-    where
-        F: FnOnce(&mut Self) -> R,
-    {
-        let previous = self.scopes.replace_dot_access_base(true);
-        let result = f(self);
-        self.scopes.replace_dot_access_base(previous);
-        result
-    }
-
-    fn with_pattern<F, R>(&mut self, f: F) -> R
-    where
-        F: FnOnce(&mut Self) -> R,
-    {
-        let previous = self.scopes.replace_in_pattern(true);
-        let result = f(self);
-        self.scopes.replace_in_pattern(previous);
-        result
-    }
-
-    fn with_let_binding_rhs<F, R>(&mut self, f: F) -> R
-    where
-        F: FnOnce(&mut Self) -> R,
-    {
-        let previous = self.scopes.replace_let_binding_rhs(true);
-        let result = f(self);
-        self.scopes.replace_let_binding_rhs(previous);
-        result
     }
 }

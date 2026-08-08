@@ -279,9 +279,8 @@ impl InferCtx<'_> {
                 .push(diagnostics::infer::propagate_in_condition(span));
         }
 
-        let store = self.store;
         let (expression_ty, reported) = self.tracking_diagnostics(|this| {
-            InferCtx::new(this, store).resolve_binary_type(
+            this.resolve_binary_type(
                 &operator,
                 BinaryOperands {
                     left: BinaryOperand {
@@ -596,10 +595,8 @@ impl InferCtx<'_> {
         right_operand_ty: &Type,
         span: &Span,
     ) {
-        let store = self.store;
-        let (unification, reported) = self.tracking_diagnostics(|this| {
-            InferCtx::new(this, store).try_unify(left_operand_ty, right_operand_ty, span)
-        });
+        let (unification, reported) = self
+            .tracking_diagnostics(|this| this.try_unify(left_operand_ty, right_operand_ty, span));
         if unification.is_err() {
             if !reported
                 && self

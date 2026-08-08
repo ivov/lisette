@@ -4,21 +4,18 @@ use rustc_hash::FxHashMap as HashMap;
 use syntax::program::UninferredExports;
 
 struct CacheCandidate {
-    compiled: CompiledPackage,
+    pending: CompiledPendingPackage,
     files: Vec<ScannedFile>,
     rewrite_root_import: bool,
-    topo_rank: usize,
 }
 
 struct UnparsedPackage {
-    package_id: String,
     files: Vec<ScannedFile>,
     rewrite_root_import: bool,
     pending: PendingPackage,
 }
 
 struct ParsedPackage {
-    package_id: String,
     files: Vec<File>,
     errors: Vec<ParseError>,
     pending: PendingPackage,
@@ -27,16 +24,16 @@ struct ParsedPackage {
 impl UnparsedPackage {
     fn parse(self) -> ParsedPackage {
         let Self {
-            package_id,
             files: scanned,
             rewrite_root_import,
             pending,
         } = self;
 
+        let package_id = pending.package_id();
         let mut files = Vec::with_capacity(scanned.len());
         let mut errors = Vec::new();
         for scanned_file in scanned {
-            let (mut file, file_errors) = scanned_file.parse();
+            let (mut file, file_errors) = scanned_file.parse(package_id);
             if rewrite_root_import {
                 file.rewrite_import(crate::loader::ROOT_IMPORT, ENTRY_PACKAGE_ID);
             }
@@ -45,7 +42,6 @@ impl UnparsedPackage {
         }
 
         ParsedPackage {
-            package_id,
             files,
             errors,
             pending,
@@ -53,27 +49,28 @@ impl UnparsedPackage {
     }
 }
 
+struct CompiledPendingPackage {
+    package: CompiledPackage,
+    topo_rank: usize,
+}
+
 enum PendingPackage {
-    Entry {
-        topo_rank: usize,
-    },
-    Compiled {
-        package: CompiledPackage,
-        topo_rank: usize,
-    },
+    Entry { topo_rank: usize },
+    Compiled(CompiledPendingPackage),
 }
 
 impl PendingPackage {
     fn package_id(&self) -> &str {
         match self {
             Self::Entry { .. } => ENTRY_PACKAGE_ID,
-            Self::Compiled { package, .. } => &package.package_id,
+            Self::Compiled(pending) => &pending.package.package_id,
         }
     }
 
     fn topo_rank(&self) -> usize {
         match self {
-            Self::Entry { topo_rank, .. } | Self::Compiled { topo_rank, .. } => *topo_rank,
+            Self::Entry { topo_rank } => *topo_rank,
+            Self::Compiled(pending) => pending.topo_rank,
         }
     }
 }
@@ -207,18 +204,21 @@ pub(super) fn infer_all_packages(
 
         match (input.cache.package_root(), compiled) {
             (Some(_), Some(compiled)) => candidates.push(CacheCandidate {
-                compiled,
+                pending: CompiledPendingPackage {
+                    package: compiled,
+                    topo_rank,
+                },
                 files,
                 rewrite_root_import,
-                topo_rank,
             }),
             (None, compiled) | (Some(_), compiled @ None) => {
                 let pending = match compiled {
-                    Some(package) => PendingPackage::Compiled { package, topo_rank },
+                    Some(package) => {
+                        PendingPackage::Compiled(CompiledPendingPackage { package, topo_rank })
+                    }
                     None => PendingPackage::Entry { topo_rank },
                 };
                 unparsed.push(UnparsedPackage {
-                    package_id,
                     files,
                     rewrite_root_import,
                     pending,
@@ -254,9 +254,9 @@ pub(super) fn infer_all_packages(
         .into_iter()
         .map(|pending| match pending {
             PendingPackage::Entry { .. } => ENTRY_PACKAGE_ID.to_string(),
-            PendingPackage::Compiled { package, .. } => {
-                let package_id = package.package_id.clone();
-                compiled_packages.push(package);
+            PendingPackage::Compiled(pending) => {
+                let package_id = pending.package.package_id.clone();
+                compiled_packages.push(pending.package);
                 package_id
             }
         })
@@ -323,7 +323,7 @@ fn parse_and_store_packages(
     for package in parsed {
         has_parse_errors |= !package.errors.is_empty();
         checker.sink.extend_parse_errors(package.errors);
-        store.store_package(&package.package_id, package.files);
+        store.store_package(package.pending.package_id(), package.files);
         to_infer.push(package.pending);
     }
     has_parse_errors
@@ -341,7 +341,7 @@ fn store_uninferred_packages(
         let mut files = Vec::with_capacity(scanned.len());
         let mut parsed = true;
         for scanned_file in scanned {
-            let (file, errors) = scanned_file.parse();
+            let (file, errors) = scanned_file.parse(&package_id);
             parsed &= errors.is_empty();
             checker.sink.extend_parse_errors(errors);
             files.push(file);
@@ -422,11 +422,12 @@ fn load_cache_candidates(
     compile_phase: CompilePhase,
 ) -> CacheLoad {
     let load = |c: &CacheCandidate| {
-        let expected_artifact_hash = compile_phase.emits().then_some(c.compiled.artifact_hash);
+        let compiled = &c.pending.package;
+        let expected_artifact_hash = compile_phase.emits().then_some(compiled.artifact_hash);
         try_load_cache(
-            &c.compiled.package_id,
-            c.compiled.full_hash,
-            &c.compiled.dep_hashes,
+            &compiled.package_id,
+            compiled.full_hash,
+            &compiled.dep_hashes,
             expected_artifact_hash,
             project_root,
         )
@@ -442,19 +443,15 @@ fn load_cache_candidates(
     for (candidate, interface) in candidates.into_iter().zip(loaded) {
         let Some(interface) = interface else {
             result.missed.push(UnparsedPackage {
-                package_id: candidate.compiled.package_id.clone(),
                 files: candidate.files,
                 rewrite_root_import: candidate.rewrite_root_import,
-                pending: PendingPackage::Compiled {
-                    package: candidate.compiled,
-                    topo_rank: candidate.topo_rank,
-                },
+                pending: PendingPackage::Compiled(candidate.pending),
             });
             continue;
         };
         let file_id_base = store.reserve_file_ids(interface.files.len() as u32);
         build_jobs.push(CacheBuildJob {
-            package_id: candidate.compiled.package_id,
+            package_id: candidate.pending.package.package_id,
             interface,
             file_id_base,
         });

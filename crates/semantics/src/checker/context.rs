@@ -1,6 +1,5 @@
 use super::resolution::{ImportState, PrefixedImport};
 use super::state::Cursor;
-use super::type_env::SpeculationOutcome;
 use super::*;
 
 #[derive(Debug, Clone, Copy)]
@@ -46,25 +45,13 @@ impl<'a> FileContext<'a> {
     }
 }
 
-struct SavedFileContext {
+pub(super) struct SavedFileContext {
     cursor: Cursor,
     scopes: Scopes,
     imports: ImportState,
 }
 
 impl TaskState {
-    pub(super) fn with_file_context<T>(
-        &mut self,
-        store: &Store,
-        context: FileContext<'_>,
-        f: impl FnOnce(&mut Self, &Store) -> T,
-    ) -> T {
-        let saved = self.enter_file_context(store, context);
-        let result = f(self, store);
-        self.exit_file_context(saved);
-        result
-    }
-
     pub(crate) fn with_file_context_mut<T>(
         &mut self,
         store: &mut Store,
@@ -77,7 +64,11 @@ impl TaskState {
         result
     }
 
-    fn enter_file_context(&mut self, store: &Store, context: FileContext<'_>) -> SavedFileContext {
+    pub(super) fn enter_file_context(
+        &mut self,
+        store: &Store,
+        context: FileContext<'_>,
+    ) -> SavedFileContext {
         let (package_id, file_id, imports) = context.parts();
         let saved = SavedFileContext {
             cursor: std::mem::replace(&mut self.cursor, Cursor::file(package_id, file_id)),
@@ -123,34 +114,10 @@ impl TaskState {
         saved
     }
 
-    fn exit_file_context(&mut self, saved: SavedFileContext) {
+    pub(super) fn exit_file_context(&mut self, saved: SavedFileContext) {
         self.cursor = saved.cursor;
         self.scopes = saved.scopes;
         self.imports = saved.imports;
-    }
-
-    /// Run a closure speculatively: if it returns `Err`, type variable bindings
-    /// and diagnostics produced during the closure are rolled back together.
-    pub(super) fn speculatively<T, E>(
-        &mut self,
-        f: impl FnOnce(&mut Self) -> Result<T, E>,
-    ) -> Result<T, E> {
-        let diagnostics_before = self.sink.checkpoint();
-        let speculation = self.env.begin_speculation();
-        let result = f(self);
-        match result {
-            Ok(value) => {
-                self.env
-                    .end_speculation(speculation, SpeculationOutcome::Commit);
-                Ok(value)
-            }
-            Err(error) => {
-                self.env
-                    .end_speculation(speculation, SpeculationOutcome::Rollback);
-                self.sink.rollback(diagnostics_before);
-                Err(error)
-            }
-        }
     }
 
     pub(super) fn without_diagnostics<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
@@ -158,50 +125,5 @@ impl TaskState {
         let result = f(self);
         self.sink.rollback(diagnostics_before);
         result
-    }
-
-    pub(super) fn tracking_diagnostics<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> (T, bool) {
-        let checkpoint = self.sink.checkpoint();
-        let result = f(self);
-        (result, self.sink.has_changed_since(checkpoint))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn failed_speculation_rolls_back_diagnostics() {
-        let mut task = TaskState::with_fresh_allocator();
-        task.sink
-            .push(diagnostics::LisetteDiagnostic::error("before"));
-
-        let result: Result<(), ()> = task.speculatively(|task| {
-            task.sink
-                .push(diagnostics::LisetteDiagnostic::error("speculative"));
-            Err(())
-        });
-
-        assert!(result.is_err());
-        let diagnostics = task.sink.into_diagnostics();
-        assert_eq!(diagnostics.len(), 1);
-        assert_eq!(diagnostics[0].plain_message(), "before");
-    }
-
-    #[test]
-    fn successful_speculation_keeps_diagnostics() {
-        let mut task = TaskState::with_fresh_allocator();
-
-        let result: Result<(), ()> = task.speculatively(|task| {
-            task.sink
-                .push(diagnostics::LisetteDiagnostic::error("reported"));
-            Ok(())
-        });
-
-        assert!(result.is_ok());
-        let diagnostics = task.sink.into_diagnostics();
-        assert_eq!(diagnostics.len(), 1);
-        assert_eq!(diagnostics[0].plain_message(), "reported");
     }
 }

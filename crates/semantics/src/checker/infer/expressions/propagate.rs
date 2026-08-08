@@ -226,7 +226,7 @@ impl InferCtx<'_> {
         let err_ty = self.new_type_var();
 
         let (new_items, usage) = self.with_scope(|this| {
-            let entry_loop_depth = this.scopes.loop_depth();
+            let entry_loop_depth = this.loop_depth();
             this.scopes.set_try_block_context(TryBlockContext {
                 ok_ty: ok_ty.clone(),
                 err_ty: err_ty.clone(),
@@ -334,7 +334,7 @@ impl InferCtx<'_> {
         }
 
         let new_items = self.with_scope(|this| {
-            let entry_loop_depth = this.scopes.loop_depth();
+            let entry_loop_depth = this.loop_depth();
             this.scopes
                 .set_recover_block_context(RecoverBlockContext { entry_loop_depth });
             this.register_block_local_items(&items);

@@ -245,7 +245,7 @@ impl InferCtx<'_> {
         let binding_id = self.scopes.lookup_binding_id(&value);
         if let Some(id) = binding_id {
             // Don't mark assignment targets as "used" - only mark actual uses
-            if !self.scopes.is_assignment_target_context() {
+            if !self.is_assignment_target_context() {
                 self.facts.mark_used(id);
             }
 
@@ -280,8 +280,7 @@ impl InferCtx<'_> {
                     .is_none(),
                 _ => false,
             };
-            if names_a_type && !self.scopes.is_callee_context() && !self.scopes.is_dot_access_base()
-            {
+            if names_a_type && !self.is_callee_context() && !self.is_dot_access_base() {
                 self.sink
                     .push(diagnostics::infer::type_used_as_value(&value, span));
             }
@@ -300,14 +299,14 @@ impl InferCtx<'_> {
             }
         };
 
-        if ty.as_import_namespace().is_some() && !self.scopes.is_dot_access_base() {
+        if ty.as_import_namespace().is_some() && !self.is_dot_access_base() {
             self.sink
                 .push(diagnostics::infer::package_namespace_used_as_value(
                     &value, span,
                 ));
         }
 
-        if !self.scopes.is_callee_context() && !self.scopes.is_assignment_target_context() {
+        if !self.is_callee_context() && !self.is_assignment_target_context() {
             let phantom = phantom_type_params(&ty);
             if !phantom.is_empty() {
                 self.sink
@@ -319,8 +318,8 @@ impl InferCtx<'_> {
 
         let (identifier_ty, _) = self.instantiate(&ty);
 
-        let coerced_to_unconstrained_value = !self.scopes.is_callee_context()
-            && !self.scopes.is_assignment_target_context()
+        let coerced_to_unconstrained_value = !self.is_callee_context()
+            && !self.is_assignment_target_context()
             && expected_ty.resolve_in(&self.env).is_variable();
 
         self.unify(expected_ty, &identifier_ty, &span);
@@ -382,7 +381,7 @@ impl InferCtx<'_> {
         let is_simple_target = matches!(&*target, Expression::Identifier { .. });
         let new_target = if is_simple_target {
             self.with_use_context(
-                crate::checker::scopes::UseContext::AssignmentTarget,
+                crate::checker::infer::context::UseContext::AssignmentTarget,
                 |state| state.infer_expression(*target, &target_ty),
             )
         } else {
@@ -618,9 +617,10 @@ impl InferCtx<'_> {
             };
 
             let inferred_item = if !is_last {
-                self.with_use_context(crate::checker::scopes::UseContext::Statement, |state| {
-                    state.infer_root_expression(item, &expression_ty)
-                })
+                self.with_use_context(
+                    crate::checker::infer::context::UseContext::Statement,
+                    |state| state.infer_root_expression(item, &expression_ty),
+                )
             } else {
                 self.infer_root_expression(item, &expression_ty)
             };

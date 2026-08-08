@@ -179,7 +179,6 @@ impl From<HashMap<PackageId, HashSet<PackageId>>> for DependencyGraph {
 /// A package file read and scanned for imports, but not yet parsed.
 #[derive(Debug)]
 pub struct ScannedFile {
-    pub package_id: PackageId,
     pub file_id: u32,
     pub name: String,
     pub display_path: String,
@@ -196,11 +195,11 @@ impl ScannedFile {
         syntax::program::is_test_file(&self.name)
     }
 
-    pub fn parse(self) -> (File, Vec<syntax::ParseError>) {
+    pub fn parse(self, package_id: &str) -> (File, Vec<syntax::ParseError>) {
         let result = syntax::build_ast(&self.source, self.file_id);
         let file = File {
             id: self.file_id,
-            package_id: self.package_id,
+            package_id: package_id.to_string(),
             name: self.name,
             display_path: self.display_path,
             source_path: None,
@@ -531,7 +530,7 @@ fn batch_scan_packages(
         }
     }
 
-    let scanned: Vec<ScannedFile> = if jobs.len() < PARALLEL_THRESHOLD {
+    let scanned: Vec<(PackageId, ScannedFile)> = if jobs.len() < PARALLEL_THRESHOLD {
         jobs.into_iter().map(scan_one).collect()
     } else {
         use rayon::prelude::*;
@@ -539,11 +538,8 @@ fn batch_scan_packages(
     };
 
     let mut grouped: HashMap<PackageId, Vec<ScannedFile>> = HashMap::default();
-    for file in scanned {
-        grouped
-            .entry(file.package_id.clone())
-            .or_default()
-            .push(file);
+    for (package_id, file) in scanned {
+        grouped.entry(package_id).or_default().push(file);
     }
     grouped
 }
@@ -555,15 +551,15 @@ fn read_folder(fs: &dyn Loader, package_id: &str) -> Vec<(String, semantics_load
     entries
 }
 
-fn scan_one(job: ScanJob) -> ScannedFile {
-    ScannedFile {
+fn scan_one(job: ScanJob) -> (PackageId, ScannedFile) {
+    let file = ScannedFile {
         imports: syntax::imports::scan_imports(&job.source, job.file_id),
-        package_id: job.package_id,
         file_id: job.file_id,
         name: job.filename,
         display_path: job.display_path,
         source: job.source,
-    }
+    };
+    (job.package_id, file)
 }
 
 #[derive(Clone, Copy)]

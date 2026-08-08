@@ -81,12 +81,12 @@ impl InferCtx<'_> {
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
-        if self.scopes.is_value_context() {
+        if self.is_value_context() {
             self.sink
                 .push(diagnostics::infer::defer_in_expression_position(span));
         }
 
-        if self.scopes.is_inside_loop() {
+        if self.is_inside_loop() {
             self.sink.push(diagnostics::infer::defer_in_loop(span));
         }
 
@@ -156,7 +156,7 @@ impl InferCtx<'_> {
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
-        if self.scopes.is_value_context() {
+        if self.is_value_context() {
             self.sink
                 .push(diagnostics::infer::task_in_expression_position(span));
         }

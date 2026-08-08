@@ -30,13 +30,15 @@ fuzz_target!(|data: &[u8]| {
     checker.finalize_equality(&mut store);
     checker.check_pending_generic_bounds(&store);
 
+    let mut ctx = InferCtx::new(&mut checker, &store);
     for expression in ast_result.ast {
-        let type_var = checker.new_type_var();
-        let _ =
-            InferCtx::new(&mut checker, &store).infer_root_expression(expression, &type_var);
+        let type_var = ctx.new_type_var();
+        let _ = ctx.infer_root_expression(expression, &type_var);
 
-        if checker.failed() {
+        if ctx.failed() {
             break;
         }
     }
+    ctx.resolve_branch_subsumptions();
+    ctx.resolve_select_exhaustiveness();
 });

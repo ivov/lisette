@@ -27,10 +27,8 @@ use syntax::types::{Bound, SubstitutionMap, Symbol, Type, substitute};
 
 pub(crate) use context::FileContext;
 pub use infer::expressions::comparison::{check_never_comparable, check_not_comparable};
-pub(crate) use state::{
-    BranchArm, BranchSubsumption, InferredFile, SelectExhaustivenessCheck, TaskOutput,
-};
 pub use state::{Cursor, TaskState};
+pub(crate) use state::{InferredFile, TaskOutput};
 pub use type_env::{EnvResolve, TypeEnv, VarState};
 
 impl TaskState {

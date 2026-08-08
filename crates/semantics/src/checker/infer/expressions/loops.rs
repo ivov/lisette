@@ -1,5 +1,5 @@
 use crate::checker::EnvResolve;
-use crate::checker::scopes::LoopContext;
+use crate::checker::infer::context::LoopContext;
 use syntax::ast::BindingKind;
 use syntax::ast::{Binding, Expression, Pattern, Span};
 use syntax::types::Type;
@@ -27,9 +27,9 @@ impl InferCtx<'_> {
     where
         F: FnOnce(&mut Self) -> Expression,
     {
-        self.scopes.enter_loop(context);
+        self.enter_loop(context);
         let result = f(self);
-        self.scopes.exit_loop();
+        self.exit_loop();
         result
     }
 
@@ -330,19 +330,15 @@ impl InferCtx<'_> {
         self.check_break_in_defer_block(span);
 
         let new_value = if let Some(val) = value {
-            if self.scopes.loop_break_type().is_none() && self.scopes.is_inside_loop() {
+            if self.loop_break_type().is_none() && self.is_inside_loop() {
                 self.sink
                     .push(diagnostics::infer::break_value_in_non_loop(span));
             }
-            let break_ty = self
-                .scopes
-                .loop_break_type()
-                .cloned()
-                .unwrap_or_else(|| Type::Error);
+            let break_ty = self.loop_break_type().cloned().unwrap_or(Type::Error);
             let inferred = self.with_value_context(|s| s.infer_expression(*val, &break_ty));
             Some(Box::new(inferred))
         } else {
-            if let Some(break_ty) = self.scopes.loop_break_type().cloned() {
+            if let Some(break_ty) = self.loop_break_type().cloned() {
                 let unit = self.type_unit();
                 self.unify(&break_ty, &unit, &span);
             }

@@ -64,34 +64,6 @@ pub(crate) struct InferredFile {
     pub(super) items: Vec<Expression>,
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct BranchArm {
-    pub(crate) ty: Type,
-    pub(crate) span: Span,
-}
-
-pub(crate) struct BranchSubsumption {
-    pub(crate) result_ty: Type,
-    pub(crate) arms: Vec<BranchArm>,
-}
-
-pub(crate) struct SelectExhaustivenessCheck {
-    pub(crate) result_ty: Type,
-    pub(crate) span: Span,
-}
-
-#[derive(Default)]
-pub(crate) struct FileChecks {
-    pub(crate) branch_subsumptions: Vec<BranchSubsumption>,
-    pub(crate) select_exhaustiveness: Vec<SelectExhaustivenessCheck>,
-}
-
-impl FileChecks {
-    pub(crate) fn is_empty(&self) -> bool {
-        self.branch_subsumptions.is_empty() && self.select_exhaustiveness.is_empty()
-    }
-}
-
 /// The parts of a checker task that survive after its local inference state is
 /// discarded.
 pub(crate) struct TaskOutput {
@@ -142,12 +114,7 @@ pub struct TaskState {
     pub sink: LocalSink,
     pub facts: Facts,
     pub(crate) project_kind: crate::analysis::ProjectKind,
-    /// Recursion guard for interface satisfaction. Prevents
-    /// `collect_interface_violations` from diverging when a bound on `T`
-    /// transitively requires checking `T` against the same interface.
-    pub(super) satisfying_stack: rustc_hash::FxHashSet<(String, String)>,
     pub(crate) pending: PendingWork,
-    pub(crate) file_checks: FileChecks,
 }
 
 impl TaskState {
@@ -164,9 +131,7 @@ impl TaskState {
             sink,
             facts: Facts::new(binding_ids),
             project_kind,
-            satisfying_stack: rustc_hash::FxHashSet::default(),
             pending: PendingWork::default(),
-            file_checks: FileChecks::default(),
         }
     }
 
@@ -197,10 +162,6 @@ impl TaskState {
     }
 
     pub(crate) fn into_output(self) -> TaskOutput {
-        assert!(
-            self.file_checks.is_empty(),
-            "file checks must be resolved before a checker task finishes"
-        );
         let Self {
             env: _,
             scopes: _,
@@ -209,9 +170,7 @@ impl TaskState {
             sink,
             facts,
             project_kind: _,
-            satisfying_stack: _,
             pending,
-            file_checks: _,
         } = self;
         TaskOutput {
             facts,

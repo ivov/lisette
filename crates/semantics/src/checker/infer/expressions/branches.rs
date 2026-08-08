@@ -1,5 +1,5 @@
 use crate::checker::EnvResolve;
-use crate::checker::{BranchArm, BranchSubsumption};
+use crate::checker::infer::context::{BranchArm, BranchSubsumption};
 use syntax::ast::BindingKind;
 use syntax::ast::{Expression, IfLetAlternative, MatchArm, Pattern, Span};
 use syntax::types::Type;
@@ -34,7 +34,7 @@ impl MatchArmsKind {
 }
 
 impl InferCtx<'_> {
-    pub(crate) fn reconcile_and_unify(
+    pub(super) fn reconcile_and_unify(
         &mut self,
         result_ty: &Type,
         branches: &[BranchArm],
@@ -89,13 +89,8 @@ impl InferCtx<'_> {
                 if arm.is_never() || arm.is_error() {
                     continue;
                 }
-                let store = self.store;
                 let (unification, reported) = self.tracking_diagnostics(|this| {
-                    InferCtx::new(this, store).try_unify(
-                        &obligation.result_ty,
-                        &branch.ty,
-                        &branch.span,
-                    )
+                    this.try_unify(&obligation.result_ty, &branch.ty, &branch.span)
                 });
                 if unification.is_err() && !reported {
                     let result = obligation.result_ty.resolve_in(&self.env);
@@ -114,7 +109,6 @@ impl InferCtx<'_> {
         branches: &[BranchArm],
         span: &Span,
     ) -> BranchReconciliation {
-        let store = self.store;
         if branches.len() < 2 {
             return BranchReconciliation::FirstBranch;
         }
@@ -125,14 +119,14 @@ impl InferCtx<'_> {
         for branch in &branches[1..] {
             let next = &branch.ty;
             if self
-                .speculatively(|this| InferCtx::new(this, store).try_unify(&common, next, span))
+                .speculatively(|this| this.try_unify(&common, next, span))
                 .is_ok()
             {
                 continue;
             }
 
             if self
-                .speculatively(|this| InferCtx::new(this, store).try_unify(next, &common, span))
+                .speculatively(|this| this.try_unify(next, &common, span))
                 .is_ok()
             {
                 common = next.clone();
