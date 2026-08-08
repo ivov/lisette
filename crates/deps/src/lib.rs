@@ -1,4 +1,5 @@
 mod local_source;
+mod module_path;
 mod project_manifest;
 mod typedef_locator;
 
@@ -57,24 +58,44 @@ pub fn placeholder_require_version(module_path: &str) -> String {
 }
 
 pub fn check_version_matches_path(module_path: &str, version: &str) -> Result<(), String> {
+    let Some((_, path_major)) = crate::module_path::split_path_version(module_path) else {
+        return Ok(());
+    };
+    let path_major = path_major.strip_suffix("-unstable").unwrap_or(path_major);
+
+    if version.starts_with("v0.0.0-") && path_major == ".v1" {
+        return Ok(());
+    }
+
     let Some(actual) = version_major(version) else {
         return Ok(());
     };
-    let ok = match path_major(module_path) {
-        Some(required) => actual == required,
-        None => actual <= 1,
+
+    let expected = match path_major.strip_prefix(['/', '.']) {
+        Some(required) => required,
+        None => {
+            // `+incompatible` is how a pre-modules v2 or later declares itself.
+            if actual <= 1 || build_metadata(version) == Some("incompatible") {
+                return Ok(());
+            }
+            return Err(format!(
+                "version `{}` is not valid for module path `{}` (expected v0.x or v1.x)",
+                version, module_path
+            ));
+        }
     };
-    if ok {
+
+    if expected.strip_prefix('v').and_then(parse_major_digits) == Some(actual) {
         return Ok(());
     }
-    let expected = match path_major(module_path) {
-        Some(required) => format!("v{}.x", required),
-        None => "v0.x or v1.x".to_string(),
-    };
     Err(format!(
-        "version `{}` is not valid for module path `{}` (expected {})",
+        "version `{}` is not valid for module path `{}` (expected {}.x)",
         version, module_path, expected
     ))
+}
+
+fn build_metadata(version: &str) -> Option<&str> {
+    version.split_once('+').map(|(_, build)| build)
 }
 
 fn version_major(version: &str) -> Option<u64> {
@@ -88,13 +109,13 @@ fn version_major(version: &str) -> Option<u64> {
 
 /// The major a path's suffix demands: `/vN` (N >= 2), or gopkg.in `.vN` (any N).
 fn path_major(module_path: &str) -> Option<u64> {
-    let last = module_path.rsplit('/').next()?;
-    if module_path.starts_with("gopkg.in/") {
-        let (_, digits) = last.rsplit_once(".v")?;
-        return parse_major_digits(digits);
-    }
-    let digits = last.strip_prefix('v')?;
-    parse_major_digits(digits).filter(|&major| major >= 2)
+    let (_, path_major) = crate::module_path::split_path_version(module_path)?;
+    let digits = path_major
+        .strip_suffix("-unstable")
+        .unwrap_or(path_major)
+        .strip_prefix(['/', '.'])?
+        .strip_prefix('v')?;
+    parse_major_digits(digits)
 }
 
 fn parse_major_digits(digits: &str) -> Option<u64> {
@@ -455,6 +476,20 @@ mod tests {
     #[test]
     fn check_version_matches_path_enforces_major_suffix() {
         // /vN path requires vN
+        assert!(
+            check_version_matches_path("github.com/hashicorp/consul", "v2.1.0+incompatible")
+                .is_ok()
+        );
+        assert!(
+            check_version_matches_path("github.com/docker/docker", "v20.10.24+incompatible")
+                .is_ok()
+        );
+        assert!(
+            check_version_matches_path("gopkg.in/check.v1", "v0.0.0-20161208181325-20d25e280405")
+                .is_ok()
+        );
+        assert!(check_version_matches_path("gopkg.in/pkg.v3-unstable", "v3.1.0").is_ok());
+        assert!(check_version_matches_path("github.com/you/mux", "v2.1.0+build.1").is_err());
         assert!(check_version_matches_path("example.com/lib/v2", "v2.3.0").is_ok());
         assert!(check_version_matches_path("example.com/lib/v2", "v1.0.0").is_err());
         // gopkg.in .vN path requires vN

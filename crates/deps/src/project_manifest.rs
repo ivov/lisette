@@ -203,33 +203,52 @@ pub fn parse_manifest(project_root: &Path) -> Result<Manifest, String> {
     Ok(manifest)
 }
 
-/// A replaced entry's key (the original module) and its `replace` target must
-/// both be third-party module paths, or resolution silently misclassifies them
-/// (a dotless key reads as the Go standard library).
+/// A dotless path is reported first and by name, since it reads as the Go
+/// standard library rather than as a malformed path.
 fn validate_go_dep_paths(manifest: &Manifest) -> Result<(), String> {
     for (key, dep) in &manifest.go_deps() {
-        let GoDependency::Replaced { source, .. } = dep else {
-            continue;
-        };
-        if !crate::is_third_party(key) {
-            return Err(match source {
-                ReplacementSource::Module { .. } => format!(
-                    "`{}` in `[dependencies.go]` has a `replace` but is not a third-party module path (its first path segment needs a dot)",
-                    key
-                ),
-                ReplacementSource::Local { .. } => format!(
-                    "`{}` in `[dependencies.go]` has a local `path` but no dot in its first path segment; lisette reads dotless paths as Go standard library packages, so a local module needs a dotted module path like `example.com/{}` (a lisette limitation, not a Go rule)",
-                    key, key
-                ),
-            });
+        if let GoDependency::Replaced { source, .. } = dep {
+            if !crate::is_third_party(key) {
+                return Err(match source {
+                    ReplacementSource::Module { .. } => format!(
+                        "`{}` in `[dependencies.go]` has a `replace` but is not a third-party module path (its first path segment needs a dot)",
+                        key
+                    ),
+                    ReplacementSource::Local { .. } => format!(
+                        "`{}` in `[dependencies.go]` has a local `path` but no dot in its first path segment; lisette reads dotless paths as Go standard library packages, so a local module needs a dotted module path like `example.com/{}` (a lisette limitation, not a Go rule)",
+                        key, key
+                    ),
+                });
+            }
+            if let ReplacementSource::Module { path, .. } = source
+                && !crate::is_third_party(path)
+            {
+                return Err(format!(
+                    "the `replace` target `{}` for `{}` is not a third-party module path",
+                    path, key
+                ));
+            }
         }
-        if let ReplacementSource::Module { path, .. } = source
-            && !crate::is_third_party(path)
+
+        crate::module_path::check_module_path(key).map_err(|reason| {
+            format!(
+                "`{}` in `[dependencies.go]` is not a Go module path: {}",
+                key, reason
+            )
+        })?;
+
+        // A local `path` names a directory, not a module.
+        if let GoDependency::Replaced {
+            source: ReplacementSource::Module { path, .. },
+            ..
+        } = dep
         {
-            return Err(format!(
-                "the `replace` target `{}` for `{}` is not a third-party module path",
-                path, key
-            ));
+            crate::module_path::check_module_path(path).map_err(|reason| {
+                format!(
+                    "the `replace` target `{}` for `{}` is not a Go module path: {}",
+                    path, key, reason
+                )
+            })?;
         }
     }
     Ok(())
@@ -607,6 +626,57 @@ mod tests {
         let orphan = outside.path().join("loose.lis");
         std::fs::write(&orphan, "fn main() {}\n").unwrap();
         assert_eq!(find_project_root(&orphan), None);
+    }
+
+    #[test]
+    fn a_key_go_would_refuse_is_not_a_dependency() {
+        for key in [
+            "fmt",
+            "github.com//x",
+            "GitHub.com/x/y",
+            "example.com/lib/v1",
+        ] {
+            let dir = project_with(&format!(
+                "[project]\nname = \"demo\"\nversion = \"0.1.0\"\n\n[dependencies.go]\n\"{}\" = \"v1.0.0\"\n",
+                key
+            ));
+            let error = parse_manifest(dir.path()).unwrap_err();
+            assert!(
+                error.contains("not a Go module path"),
+                "{key} gave: {error}"
+            );
+        }
+
+        let dir = project_with(
+            "[project]\nname = \"demo\"\nversion = \"0.1.0\"\n\n[dependencies.go]\n\"gopkg.in/yaml.v3\" = \"v3.0.1\"\n\"example.com/lib/v2\" = \"v2.0.0\"\n",
+        );
+        assert!(parse_manifest(dir.path()).is_ok());
+    }
+
+    #[test]
+    fn a_replacement_is_held_to_the_same_module_path_rule() {
+        for entry in [
+            "\"github.com//x\" = { replacement = \"example.com/y@v1.0.0\" }",
+            "\"example.com/lib/v1\" = { replacement = \"example.com/y@v1.0.0\" }",
+            "\"example.com/lib\" = { replacement = \"github.com//y@v1.0.0\" }",
+            "\"example.com/lib\" = { replacement = \"example.com/y/v1@v1.0.0\" }",
+            "\"github.com//x\" = { path = \"../local\" }",
+        ] {
+            let dir = project_with(&format!(
+                "[project]\nname = \"demo\"\nversion = \"0.1.0\"\n\n[dependencies.go]\n{}\n",
+                entry
+            ));
+            let error = parse_manifest(dir.path()).unwrap_err();
+            assert!(
+                error.contains("not a Go module path"),
+                "{entry} gave: {error}"
+            );
+        }
+
+        let dir = project_with(
+            "[project]\nname = \"demo\"\nversion = \"0.1.0\"\n\n[dependencies.go]\n\"example.com/lib\" = { replacement = \"github.com/you/lib@v1.0.0\" }\n\"example.com/other\" = { path = \"../local\" }\n",
+        );
+        assert!(parse_manifest(dir.path()).is_ok());
     }
 
     #[test]
