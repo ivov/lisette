@@ -43,6 +43,7 @@ pub(crate) struct TaskOutput {
 pub(crate) struct TaskSeed {
     binding_ids: Arc<BindingIdAllocator>,
     project_kind: crate::analysis::ProjectKind,
+    script: Option<crate::analysis::ScriptUnit>,
 }
 
 impl TaskSeed {
@@ -51,6 +52,7 @@ impl TaskSeed {
             self.binding_ids.clone(),
             LocalSink::new(),
             self.project_kind,
+            self.script,
         )
     }
 }
@@ -64,6 +66,7 @@ pub struct TaskState {
     pub sink: LocalSink,
     pub facts: Facts,
     pub(crate) project_kind: crate::analysis::ProjectKind,
+    pub(crate) script: Option<crate::analysis::ScriptUnit>,
     /// Recursion guard for interface satisfaction. Prevents
     /// `collect_interface_violations` from diverging when a bound on `T`
     /// transitively requires checking `T` against the same interface.
@@ -83,6 +86,7 @@ impl TaskState {
         binding_ids: Arc<BindingIdAllocator>,
         sink: LocalSink,
         project_kind: crate::analysis::ProjectKind,
+        script: Option<crate::analysis::ScriptUnit>,
     ) -> Self {
         Self {
             env: TypeEnv::new(),
@@ -92,6 +96,7 @@ impl TaskState {
             sink,
             facts: Facts::new(binding_ids),
             project_kind,
+            script,
             satisfying_stack: rustc_hash::FxHashSet::default(),
             inferred_files: Vec::new(),
             pending_equality_attributes: Vec::new(),
@@ -105,11 +110,21 @@ impl TaskState {
             Arc::new(BindingIdAllocator::new()),
             LocalSink::new(),
             crate::analysis::ProjectKind::Binary,
+            None,
         )
     }
 
-    pub(crate) fn with_sink(sink: LocalSink, project_kind: crate::analysis::ProjectKind) -> Self {
-        Self::new(Arc::new(BindingIdAllocator::new()), sink, project_kind)
+    pub(crate) fn with_sink(
+        sink: LocalSink,
+        project_kind: crate::analysis::ProjectKind,
+        script: Option<crate::analysis::ScriptUnit>,
+    ) -> Self {
+        Self::new(
+            Arc::new(BindingIdAllocator::new()),
+            sink,
+            project_kind,
+            script,
+        )
     }
 
     pub(crate) fn with_scope<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
@@ -123,6 +138,7 @@ impl TaskState {
         TaskSeed {
             binding_ids: self.facts.allocator(),
             project_kind: self.project_kind,
+            script: self.script,
         }
     }
 
@@ -135,6 +151,7 @@ impl TaskState {
             sink,
             facts,
             project_kind: _,
+            script: _,
             satisfying_stack: _,
             inferred_files,
             pending_equality_attributes,

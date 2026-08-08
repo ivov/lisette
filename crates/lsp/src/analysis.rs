@@ -147,6 +147,20 @@ impl SharedState {
             }
         };
 
+        let script_path = uri.to_file_path().ok();
+        let script_setup = self
+            .bindgen_setup
+            .as_ref()
+            .filter(|_| script && manifest_error.is_none())
+            .zip(script_path.as_deref());
+        let (locator, script_session, script_error) = match script_setup {
+            Some((setup, path)) => match setup.for_script(&source, path) {
+                Ok((resolved, session)) => (resolved, session, None),
+                Err(msg) => (locator, None, Some(msg)),
+            },
+            None => (locator, None, None),
+        };
+
         // No bindgen runner on this copy: a keystroke must never shell out to Go.
         let packages = PackageResolver::new(locator.clone(), Arc::clone(&self.packages));
 
@@ -213,6 +227,16 @@ impl SharedState {
             analysis.push_error(LisetteDiagnostic::error(msg).with_resolve_code("manifest_error"));
         }
 
+        if let Some(msg) = script_error {
+            analysis.push_error(
+                LisetteDiagnostic::error(format!(
+                    "Could not resolve this script's dependencies: {}",
+                    msg
+                ))
+                .with_resolve_code("script_setup_failed"),
+            );
+        }
+
         if let Some(msg) = bindgen_error {
             analysis.push_error(
                 LisetteDiagnostic::error(format!(
@@ -225,6 +249,7 @@ impl SharedState {
 
         // Release the target lock before the lock-free snapshot construction.
         drop(session);
+        drop(script_session);
 
         Ok(AnalysisSnapshot::new(
             analysis,

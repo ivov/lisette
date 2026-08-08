@@ -1,3 +1,4 @@
+mod dependency_table;
 mod local_source;
 mod module_path;
 mod project_manifest;
@@ -34,6 +35,9 @@ fn typedef_home() -> Option<PathBuf> {
     }
 }
 
+pub use dependency_table::{
+    DependencyTable, TableError, parse_dependency_table, validate_script_entry,
+};
 pub use project_manifest::{
     GoDependency, Manifest, ManifestDocument, ReplacementSource, TrimmedVia, ViaChanges,
     check_no_subpackage_deps, check_toolchain_version, finalize_via, find_project_root,
@@ -43,7 +47,8 @@ pub use project_manifest::{
 pub use toml_edit::DocumentMut;
 pub use typedef_locator::{
     Bindgen, BindgenFailure, BindgenGuard, BindgenSession, BindgenSetup, DeclarationStatus,
-    ImportablePackage, ResolvedReplacement, TypedefLocator, TypedefLocatorResult, TypedefOrigin,
+    ImportablePackage, ResolvedReplacement, ScriptSession, TypedefLocator, TypedefLocatorResult,
+    TypedefOrigin,
 };
 
 pub fn is_third_party(pkg: &str) -> bool {
@@ -125,6 +130,62 @@ fn parse_major_digits(digits: &str) -> Option<u64> {
         && digits.bytes().all(|b| b.is_ascii_digit())
         && (digits.len() == 1 || !digits.starts_with('0'));
     is_canonical.then(|| digits.parse().ok()).flatten()
+}
+
+pub fn is_exact_version(version: &str) -> bool {
+    let Some(rest) = version.strip_prefix('v') else {
+        return false;
+    };
+
+    let (rest, build) = match rest.split_once('+') {
+        Some((rest, build)) => (rest, Some(build)),
+        None => (rest, None),
+    };
+    let (core, pre_release) = match rest.split_once('-') {
+        Some((core, pre)) => (core, Some(pre)),
+        None => (rest, None),
+    };
+
+    let mut numbers = core.split('.');
+    let (Some(major), Some(minor), Some(patch), None) = (
+        numbers.next(),
+        numbers.next(),
+        numbers.next(),
+        numbers.next(),
+    ) else {
+        return false;
+    };
+    if ![major, minor, patch].iter().all(|part| is_numeric_id(part)) {
+        return false;
+    }
+
+    pre_release.is_none_or(|section| section.split('.').all(is_pre_release_id))
+        && build.is_none_or(|section| section.split('.').all(is_semver_id))
+}
+
+fn is_numeric_id(part: &str) -> bool {
+    !part.is_empty()
+        && part.bytes().all(|b| b.is_ascii_digit())
+        && (part == "0" || !part.starts_with('0'))
+}
+
+fn is_pre_release_id(part: &str) -> bool {
+    if part.bytes().all(|b| b.is_ascii_digit()) {
+        return is_numeric_id(part);
+    }
+    is_semver_id(part)
+}
+
+fn is_semver_id(part: &str) -> bool {
+    !part.is_empty() && part.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+}
+
+pub fn is_valid_package_path(pkg: &str) -> bool {
+    !pkg.is_empty()
+        && !pkg.contains('@')
+        && pkg
+            .split('/')
+            .all(|segment| !matches!(segment, "" | "." | ".."))
 }
 
 pub fn is_stdlib(pkg: &str) -> bool {
@@ -542,5 +603,48 @@ mod tests {
             &home.join("project/src/main.lis")
         ));
         assert!(!is_generated_typedef_path(Path::new("/etc/passwd")));
+    }
+}
+
+#[cfg(test)]
+mod exact_version_tests {
+    use super::is_exact_version;
+
+    #[test]
+    fn accepts_go_module_versions() {
+        for version in [
+            "v1.6.0",
+            "v0.0.0-20191109021931-daa7c04131f5",
+            "v2.1.0+incompatible",
+            "v1.2.3-rc.1",
+            "v1.2.3+001",
+            "v0.21.0",
+        ] {
+            assert!(is_exact_version(version), "{version}");
+        }
+    }
+
+    #[test]
+    fn rejects_inexact_or_malformed_versions() {
+        for version in [
+            "latest",
+            "master",
+            "",
+            "v1",
+            "v1.6",
+            "1.6.0",
+            "vx.y.z",
+            "v01.2.3",
+            "v1.2.3-",
+            "v1.2.3+",
+            "v1.2.3-rc..1",
+            "v1.2.3-rc_1",
+            "v1.2.3-01",
+            "v1.2.3-rc.007",
+            "v1.2.3.4",
+            "v-1.2.3",
+        ] {
+            assert!(!is_exact_version(version), "{version}");
+        }
     }
 }

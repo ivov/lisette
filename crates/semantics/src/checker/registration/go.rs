@@ -30,9 +30,16 @@ impl TaskState {
 
         let build_result = syntax::build_ast(source, file_id);
         if build_result.failed() {
-            for error in &build_result.errors {
-                eprintln!("bindgen: error parsing {}: {:?}", filename, error);
-            }
+            let discarded = cache_path.as_deref().is_some_and(|path| {
+                locator.discard_typedef(path);
+                !path.exists()
+            });
+            self.sink
+                .push(diagnostics::package_graph::corrupt_go_typedef(
+                    package_id.strip_prefix("go:").unwrap_or(package_id),
+                    discarded,
+                    self.script.is_some(),
+                ));
         }
 
         let file = File {
@@ -86,12 +93,12 @@ impl TaskState {
                         emit_for_locator_result(
                             &other,
                             &GoImportSite {
-                                import_name: &import.name,
                                 go_pkg,
                                 name_span: Some(import.name_span),
                                 target: locator.target(),
-                                script: None,
+                                script: self.script,
                                 replace_importer,
+                                transitive_importer: package_id.strip_prefix("go:"),
                             },
                             &self.sink,
                         );

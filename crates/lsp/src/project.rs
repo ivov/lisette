@@ -26,7 +26,12 @@ impl ProjectConfig {
 }
 
 pub(crate) fn find_project_root(start_path: &Path) -> Option<ProjectConfig> {
-    deps::find_project_root(start_path).map(ProjectConfig::Workspace)
+    let root = deps::find_project_root(start_path)?;
+    let belongs = start_path.extension().is_some_and(|ext| ext == "lis")
+        && start_path
+            .strip_prefix(&root)
+            .is_ok_and(|relative| relative.starts_with("src") || relative.starts_with("tests"));
+    belongs.then_some(ProjectConfig::Workspace(root))
 }
 
 pub(crate) fn resolve_script_root(file_path: &Path) -> ProjectConfig {

@@ -25,13 +25,13 @@ pub fn package_not_found(
         MissingPackageReason::Script {
             inside_project: false,
         } => {
-            "A file compiled on its own may import only from the Go standard library. To import packages normally, use `lis new` to create a project."
+            "A file compiled on its own has no packages beside it, only the Go ones it imports. Use `lis new` to create a project."
                 .to_string()
         }
         MissingPackageReason::Script {
             inside_project: true,
         } => {
-            "A file compiled on its own may import only from the Go standard library. This file sits inside a project but outside its `src/`, so it is not part of it. Move it under `src/` to import the project's packages."
+            "A file compiled on its own has no packages beside it, only the Go ones it imports. This file sits inside a project but outside its `src/`, so it is not part of it. Move it under `src/` to import the project's packages."
                 .to_string()
         }
         MissingPackageReason::NotFound => {
@@ -55,20 +55,29 @@ pub fn is_go_package_shaped(package_name: &str) -> bool {
         && rest.split('/').all(|segment| !segment.is_empty())
 }
 
-pub fn invalid_package_path(package_name: &str, span: Span, is_blank: bool) -> LisetteDiagnostic {
+pub fn invalid_package_path(
+    package_name: &str,
+    span: Span,
+    is_blank: bool,
+    script: bool,
+) -> LisetteDiagnostic {
     let help = if is_go_package_shaped(package_name) {
-        let suggestion = if is_blank {
-            format!("import _ \"go:{}\"", package_name)
+        let blank = if is_blank { "_ " } else { "" };
+        if script {
+            format!(
+                "Go packages are imported with the `go:` prefix: `import {}\"go:{}\"`, with the module that provides it declared in the `[dependencies.go]` table",
+                blank, package_name
+            )
         } else {
-            format!("import \"go:{}\"", package_name)
-        };
-        let add_argument = package_name
-            .strip_prefix("github.com/")
-            .unwrap_or(package_name);
-        format!(
-            "Go packages are imported with the `go:` prefix: `{}`. Add it first with `lis add {}`",
-            suggestion, add_argument
-        )
+            format!(
+                "Go packages are imported with the `go:` prefix: `import {}\"go:{}\"`. Add it first with `lis add {}`",
+                blank,
+                package_name,
+                package_name
+                    .strip_prefix("github.com/")
+                    .unwrap_or(package_name)
+            )
+        }
     } else {
         "Project imports use bare folder names like `import \"util\"` or `import \"nested/deep/package\"`. Relative-path syntax (`./sub`, `../sub`) is not supported.".to_string()
     };
@@ -201,6 +210,84 @@ pub fn go_stdlib_unavailable_on_target(
         ))
 }
 
+pub fn unknown_go_stdlib_package(go_pkg: &str, span: Span, script: bool) -> LisetteDiagnostic {
+    let third_party = if script {
+        "a third-party one needs its full module path, and an entry in the `[dependencies.go]` table"
+    } else {
+        "a third-party one needs its full module path, and `lis add` to declare it"
+    };
+
+    LisetteDiagnostic::error(format!("`{}` is not a Go standard library package", go_pkg))
+        .with_resolve_code("unknown_go_stdlib_package")
+        .with_span_label(&span, "no such package in the Go standard library")
+        .with_help(format!("Check the spelling: {}", third_party))
+}
+
+pub fn empty_import_path(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Empty import path")
+        .with_resolve_code("empty_import_path")
+        .with_span_label(&span, "no package named")
+        .with_help(
+            "Name the package after `go:`, as `import \"go:fmt\"` or `import \"go:github.com/google/uuid\"`",
+        )
+}
+
+pub fn invalid_go_package_path(go_pkg: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!("Invalid Go package path `{}`", go_pkg))
+        .with_resolve_code("invalid_go_package_path")
+        .with_span_label(&span, "not a path Go can resolve")
+        .with_help(
+            "Write the path as Go does, with no empty, `.`, or `..` segments, such as `github.com/google/uuid`",
+        )
+}
+
+pub fn invalid_dependency_table(message: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Invalid dependency table")
+        .with_resolve_code("invalid_dependency_table")
+        .with_span_label(&span, "not a valid entry")
+        .with_help(format!(
+            "{}. The table holds one Go module per line, as `\"github.com/google/uuid\" = \"v1.6.0\"`",
+            message.trim_end_matches('.')
+        ))
+}
+
+pub fn duplicate_dependency_table(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Duplicate dependency table")
+        .with_resolve_code("duplicate_dependency_table")
+        .with_span_label(&span, "a second `[dependencies.go]` table")
+        .with_help("Merge the entries into the first table and delete this one")
+}
+
+pub fn dependency_table_in_project(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Dependency table in a project file")
+        .with_resolve_code("dependency_table_in_project")
+        .with_span_label(&span, "not read here")
+        .with_help(
+            "A project records dependencies in `lisette.toml`. Move these entries there, where `lis add` and `lis sync` maintain them",
+        )
+}
+
+pub fn script_undeclared_dependency(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Undeclared Go dependency")
+        .with_resolve_code("script_undeclared_dependency")
+        .with_span_label(&span, "not in this script's dependency table")
+        .with_help("Declare the module that provides it in the `[dependencies.go]` table")
+}
+
+pub fn script_transitive_go_dependency(
+    go_pkg: &str,
+    importer: &str,
+    span: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Undeclared transitive Go dependency")
+        .with_resolve_code("script_transitive_go_dependency")
+        .with_span_label(&span, "not in this script's dependency table")
+        .with_help(format!(
+            "`{}` appears in `{}`'s API, so the `[dependencies.go]` table has to declare its module too",
+            go_pkg, importer
+        ))
+}
+
 pub fn undeclared_go_import(go_pkg: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Undeclared Go dependency")
         .with_resolve_code("undeclared_go_import")
@@ -265,11 +352,17 @@ pub fn missing_go_typedef(
     version: &str,
     replacement_path: Option<&str>,
     span: Span,
+    script: bool,
 ) -> LisetteDiagnostic {
     let help = if let Some(replacement_path) = replacement_path {
         format!(
             "Module `{}` is sourced via `replace` from `{}@{}` but has no typedef. Run `lis sync` to regenerate it.",
             module, replacement_path, version
+        )
+    } else if script {
+        format!(
+            "Module `{}` {} resolved but its typedef is missing. Run `lis run` or `lis build` on this file to generate it.",
+            module, version
         )
     } else if go_pkg == module {
         format!(
@@ -286,6 +379,23 @@ pub fn missing_go_typedef(
     LisetteDiagnostic::error("Missing Go typedef")
         .with_resolve_code("missing_go_typedef")
         .with_span_label(&span, "no .d.lis file found")
+        .with_help(help)
+}
+
+pub fn corrupt_go_typedef(go_pkg: &str, discarded: bool, script: bool) -> LisetteDiagnostic {
+    let regenerate = if script {
+        "Run `lis run` or `lis build` on this file again to regenerate it"
+    } else {
+        "Run `lis sync` to regenerate it"
+    };
+    let help = if discarded {
+        format!("The cached typedef has been discarded. {}", regenerate)
+    } else {
+        format!("Delete the cached typedef. {}", regenerate)
+    };
+
+    LisetteDiagnostic::error(format!("Corrupt Go typedef for `{}`", go_pkg))
+        .with_resolve_code("corrupt_go_typedef")
         .with_help(help)
 }
 
@@ -312,12 +422,26 @@ pub fn bindgen_failed(
     version: &str,
     stderr: &str,
     span: Span,
+    script: bool,
 ) -> LisetteDiagnostic {
     let trimmed = stderr.trim();
     let stderr_block = if trimmed.is_empty() {
         String::new()
     } else {
         format!("\n\n{}", trimmed)
+    };
+    let lead = if script {
+        String::new()
+    } else {
+        format!(
+            "Re-run with `lis bindgen {}` to inspect the failure in isolation.",
+            go_pkg
+        )
+    };
+    let help = match (lead.is_empty(), stderr_block.is_empty()) {
+        (true, true) => format!("Check that `{}` exists in {} {}", go_pkg, module, version),
+        (true, false) => trimmed.to_string(),
+        _ => format!("{}{}", lead, stderr_block),
     };
 
     LisetteDiagnostic::error(format!(
@@ -326,10 +450,7 @@ pub fn bindgen_failed(
     ))
     .with_resolve_code("bindgen_failed")
     .with_span_label(&span, "bindgen failed for this import")
-    .with_help(format!(
-        "Re-run with `lis bindgen {}` to inspect the failure in isolation.{}",
-        go_pkg, stderr_block
-    ))
+    .with_help(help)
 }
 
 pub fn unreachable_package(package_id: &str) -> LisetteDiagnostic {
@@ -389,7 +510,8 @@ mod tests {
 
     #[test]
     fn invalid_package_path_suggests_go_import_for_go_shaped_path() {
-        let diagnostic = invalid_package_path("github.com/gorilla/mux", Span::new(0, 0, 1), false);
+        let diagnostic =
+            invalid_package_path("github.com/gorilla/mux", Span::new(0, 0, 1), false, false);
         let help = diagnostic.plain_help().unwrap_or_default();
         assert!(help.contains("import \"go:github.com/gorilla/mux\""));
         assert!(help.contains("lis add gorilla/mux"));
@@ -397,7 +519,8 @@ mod tests {
 
     #[test]
     fn invalid_package_path_preserves_blank_alias_in_suggestion() {
-        let diagnostic = invalid_package_path("github.com/gorilla/mux", Span::new(0, 0, 1), true);
+        let diagnostic =
+            invalid_package_path("github.com/gorilla/mux", Span::new(0, 0, 1), true, false);
         let help = diagnostic.plain_help().unwrap_or_default();
         assert!(
             help.contains("import _ \"go:github.com/gorilla/mux\""),
@@ -408,10 +531,45 @@ mod tests {
 
     #[test]
     fn invalid_package_path_keeps_full_path_for_non_github_host() {
-        let diagnostic = invalid_package_path("go.uber.org/zap", Span::new(0, 0, 1), false);
+        let diagnostic = invalid_package_path("go.uber.org/zap", Span::new(0, 0, 1), false, false);
         let help = diagnostic.plain_help().unwrap_or_default();
         assert!(help.contains("import \"go:go.uber.org/zap\""));
         assert!(help.contains("lis add go.uber.org/zap"));
+    }
+
+    #[test]
+    fn an_undeclared_dependency_points_at_the_table() {
+        let direct = script_undeclared_dependency(Span::new(0, 0, 1));
+        assert!(
+            direct
+                .plain_help()
+                .unwrap_or_default()
+                .contains("[dependencies.go]")
+        );
+
+        let transitive = script_transitive_go_dependency(
+            "github.com/spf13/pflag",
+            "github.com/spf13/cobra",
+            Span::new(0, 0, 1),
+        );
+        let help = transitive.plain_help().unwrap_or_default();
+        assert!(help.contains("[dependencies.go]"), "help was: {}", help);
+        assert!(
+            help.contains("github.com/spf13/cobra"),
+            "help was: {}",
+            help
+        );
+    }
+
+    #[test]
+    fn invalid_package_path_points_a_script_at_its_table() {
+        let diagnostic =
+            invalid_package_path("github.com/gorilla/mux", Span::new(0, 0, 1), false, true);
+        let help = diagnostic.plain_help().unwrap_or_default();
+
+        assert!(help.contains("import \"go:github.com/gorilla/mux\""));
+        assert!(help.contains("[dependencies.go]"), "help was: {}", help);
+        assert!(!help.contains("lis add"), "help was: {}", help);
     }
 
     #[test]
@@ -425,7 +583,7 @@ mod tests {
     #[test]
     fn invalid_package_path_keeps_folder_help_for_relative_path() {
         for path in ["./sub", "../sub"] {
-            let diagnostic = invalid_package_path(path, Span::new(0, 0, 1), false);
+            let diagnostic = invalid_package_path(path, Span::new(0, 0, 1), false, false);
             let help = diagnostic.plain_help().unwrap_or_default();
             assert!(help.contains("Relative-path syntax"), "help was: {}", help);
         }

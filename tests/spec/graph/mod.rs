@@ -685,7 +685,7 @@ fn check_analyzes_tests_in_declaration_only_package() {
 }
 
 #[test]
-fn graph_script_third_party_go_import_uses_package_not_found() {
+fn graph_script_third_party_go_import_is_undeclared() {
     let mut fs = MockFileSystem::new();
     fs.add_file("main", "main.lis", r#"import "go:github.com/gorilla/mux""#);
 
@@ -699,7 +699,10 @@ fn graph_script_third_party_go_import_uses_package_not_found() {
     );
 
     assert!(sink.has_errors());
-    assert!(has_diagnostic_code(&sink, "resolve.package_not_found"));
+    assert!(has_diagnostic_code(
+        &sink,
+        "resolve.script_undeclared_dependency"
+    ));
 }
 
 #[test]

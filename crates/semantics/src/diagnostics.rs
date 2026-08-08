@@ -13,7 +13,6 @@ pub(crate) enum ReplaceImporter<'a> {
 
 /// The import site a typedef-resolution diagnostic refers to.
 pub(crate) struct GoImportSite<'a> {
-    pub(crate) import_name: &'a str,
     pub(crate) go_pkg: &'a str,
     pub(crate) name_span: Option<Span>,
     pub(crate) target: Target,
@@ -21,6 +20,7 @@ pub(crate) struct GoImportSite<'a> {
     /// Set when reached through a replaced module's typedef, so the hint names
     /// the right reconciliation command.
     pub(crate) replace_importer: Option<ReplaceImporter<'a>>,
+    pub(crate) transitive_importer: Option<&'a str>,
 }
 
 pub(crate) fn emit_for_locator_result(
@@ -29,21 +29,28 @@ pub(crate) fn emit_for_locator_result(
     sink: &LocalSink,
 ) -> bool {
     let GoImportSite {
-        import_name,
         go_pkg,
         name_span,
         target,
         script,
         replace_importer,
+        transitive_importer,
     } = *site;
     let span = name_span.unwrap_or_else(|| Span::new(0, 0, 0));
     match result {
         TypedefLocatorResult::Found { .. } => return true,
         TypedefLocatorResult::UnknownStdlib => {
-            emit_unknown_stdlib(import_name, go_pkg, span, target, script, sink);
+            emit_unknown_stdlib(go_pkg, span, target, script, sink);
         }
         TypedefLocatorResult::UndeclaredImport => {
-            emit_undeclared(import_name, go_pkg, span, script, replace_importer, sink);
+            emit_undeclared(
+                go_pkg,
+                span,
+                script,
+                replace_importer,
+                transitive_importer,
+                sink,
+            );
         }
         TypedefLocatorResult::InternalPackage { module } => {
             sink.push(diagnostics::package_graph::internal_go_package(
@@ -67,6 +74,7 @@ pub(crate) fn emit_for_locator_result(
                     version,
                     replacement_path.as_deref(),
                     span,
+                    script.is_some(),
                 ));
             }
         }
@@ -88,7 +96,12 @@ pub(crate) fn emit_for_locator_result(
             }
             BindgenFailure::InvocationFailed { stderr } => {
                 sink.push(diagnostics::package_graph::bindgen_failed(
-                    go_pkg, module, version, stderr, span,
+                    go_pkg,
+                    module,
+                    version,
+                    stderr,
+                    span,
+                    script.is_some(),
                 ));
             }
         },
@@ -103,11 +116,11 @@ pub(crate) fn emit_for_declaration_status(
     sink: &LocalSink,
 ) -> bool {
     let GoImportSite {
-        import_name,
         go_pkg,
         name_span,
         target,
         script,
+        transitive_importer,
         ..
     } = *site;
     let span = name_span.unwrap_or_else(|| Span::new(0, 0, 0));
@@ -117,11 +130,11 @@ pub(crate) fn emit_for_declaration_status(
         | DeclarationStatus::DeclaredReplacement { .. }
         | DeclarationStatus::DeclaredLocal { .. } => true,
         DeclarationStatus::UnknownStdlib => {
-            emit_unknown_stdlib(import_name, go_pkg, span, target, script, sink);
+            emit_unknown_stdlib(go_pkg, span, target, script, sink);
             false
         }
         DeclarationStatus::UndeclaredImport => {
-            emit_undeclared(import_name, go_pkg, span, script, None, sink);
+            emit_undeclared(go_pkg, span, script, None, transitive_importer, sink);
             false
         }
         DeclarationStatus::InternalPackage { module } => {
@@ -134,7 +147,6 @@ pub(crate) fn emit_for_declaration_status(
 }
 
 fn emit_unknown_stdlib(
-    import_name: &str,
     go_pkg: &str,
     span: Span,
     target: Target,
@@ -149,34 +161,29 @@ fn emit_unknown_stdlib(
             span,
         ));
     } else {
-        sink.push(diagnostics::package_graph::package_not_found(
-            import_name,
+        sink.push(diagnostics::package_graph::unknown_go_stdlib_package(
+            go_pkg,
             span,
-            match script {
-                Some(unit) => diagnostics::package_graph::MissingPackageReason::Script {
-                    inside_project: unit.inside_project,
-                },
-                None => diagnostics::package_graph::MissingPackageReason::NotFound,
-            },
+            script.is_some(),
         ));
     }
 }
 
 fn emit_undeclared(
-    import_name: &str,
     go_pkg: &str,
     span: Span,
     script: Option<ScriptUnit>,
     replace_importer: Option<ReplaceImporter>,
+    transitive_importer: Option<&str>,
     sink: &LocalSink,
 ) {
-    if let Some(unit) = script {
-        sink.push(diagnostics::package_graph::package_not_found(
-            import_name,
+    if let (Some(_), Some(importer)) = (script, transitive_importer) {
+        sink.push(diagnostics::package_graph::script_transitive_go_dependency(
+            go_pkg, importer, span,
+        ));
+    } else if script.is_some() {
+        sink.push(diagnostics::package_graph::script_undeclared_dependency(
             span,
-            diagnostics::package_graph::MissingPackageReason::Script {
-                inside_project: unit.inside_project,
-            },
         ));
     } else if let Some(ReplaceImporter::Module(replaced_module)) = replace_importer {
         sink.push(

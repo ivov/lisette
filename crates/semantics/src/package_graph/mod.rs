@@ -315,13 +315,28 @@ impl<'a> GraphBuilder<'a> {
 
             for package_id in &batch {
                 let package_files = scanned.remove(package_id).unwrap_or_default();
+                let stored = self.store.get_package(package_id);
                 let file_imports = if !package_files.is_empty() {
                     classify_scanned_imports(&package_files)
-                } else if let Some(package) = self.store.get_package(package_id) {
+                } else if let Some(package) = stored {
                     classify_file_imports(package.files.values())
                 } else {
                     Vec::new()
                 };
+
+                let sources: Vec<(u32, &str)> = if !package_files.is_empty() {
+                    package_files
+                        .iter()
+                        .map(|file| (file.file_id, file.source.as_str()))
+                        .collect()
+                } else {
+                    stored
+                        .into_iter()
+                        .flat_map(|package| package.files.values())
+                        .map(|file| (file.id, file.source.as_str()))
+                        .collect()
+                };
+                check_dependency_blocks(&sources, self.scope, self.sink);
                 let root_has_production = self
                     .files
                     .get(ENTRY_PACKAGE_ID)
@@ -576,6 +591,100 @@ struct ImportContext<'a> {
     locator: &'a TypedefLocator,
 }
 
+fn check_import_paths<'a>(
+    file_imports: &'a [ClassifiedImport],
+    sink: &LocalSink,
+) -> HashSet<&'a str> {
+    let mut unresolvable = HashSet::default();
+
+    for classified in file_imports {
+        let file_import = &classified.import;
+        let Some(go_pkg) = file_import.name.strip_prefix("go:") else {
+            continue;
+        };
+
+        if go_pkg.is_empty() {
+            sink.push(diagnostics::package_graph::empty_import_path(
+                file_import.name_span,
+            ));
+            unresolvable.insert(file_import.name.as_str());
+            continue;
+        }
+
+        if !deps::is_valid_package_path(go_pkg) {
+            sink.push(diagnostics::package_graph::invalid_go_package_path(
+                go_pkg,
+                file_import.name_span,
+            ));
+            unresolvable.insert(file_import.name.as_str());
+            continue;
+        }
+    }
+
+    unresolvable
+}
+
+pub(crate) fn check_dependency_blocks(
+    sources: &[(u32, &str)],
+    scope: &AnalysisScope,
+    sink: &LocalSink,
+) {
+    let script = scope.script_unit().is_some();
+
+    for (file_id, source) in sources {
+        let blocks = syntax::dependency_block::scan_dependency_blocks(source, *file_id);
+        let Some((first, rest)) = blocks.split_first() else {
+            continue;
+        };
+        for extra in rest {
+            sink.push(diagnostics::package_graph::duplicate_dependency_table(
+                extra.span,
+            ));
+        }
+        if !script {
+            sink.push(diagnostics::package_graph::dependency_table_in_project(
+                first.span,
+            ));
+            continue;
+        }
+
+        let table = match deps::parse_dependency_table(&first.text) {
+            Ok(table) => table,
+            Err(error) => {
+                let span = error
+                    .range
+                    .map_or(first.span, |range| first.map_span(range, *file_id));
+                sink.push(diagnostics::package_graph::invalid_dependency_table(
+                    &error.message,
+                    span,
+                ));
+                continue;
+            }
+        };
+
+        for (module_path, dep) in &table.deps {
+            if let Err(message) = deps::validate_script_entry(module_path, dep) {
+                let span = entry_span(first, &table, module_path, *file_id);
+                sink.push(diagnostics::package_graph::invalid_dependency_table(
+                    &message, span,
+                ));
+            }
+        }
+    }
+}
+
+fn entry_span(
+    block: &syntax::dependency_block::DependencyBlock,
+    table: &deps::DependencyTable,
+    module_path: &str,
+    file_id: u32,
+) -> Span {
+    match table.spans.get(module_path) {
+        Some(range) => block.map_span(range.clone(), file_id),
+        None => block.span,
+    }
+}
+
 fn process_file_imports(
     file_imports: Vec<ClassifiedImport>,
     ctx: ImportContext<'_>,
@@ -588,6 +697,8 @@ fn process_file_imports(
         project_kind,
         locator,
     } = ctx;
+    let unresolvable = check_import_paths(&file_imports, sink);
+
     let mut imports = HashMap::default();
     let mut pending_go_imports: HashMap<&str, Dependency> = HashMap::default();
     for classified in &file_imports {
@@ -684,18 +795,21 @@ fn process_file_imports(
             let Some(pending) = pending_go_imports.remove(file_import.name.as_str()) else {
                 continue;
             };
+            if unresolvable.contains(file_import.name.as_str()) {
+                continue;
+            }
             let ok = match pending.usage {
                 ImportUse::Referenced => {
                     let result = locator.find_typedef_content(go_pkg);
                     emit_for_locator_result(
                         &result,
                         &GoImportSite {
-                            import_name: &file_import.name,
                             go_pkg,
                             name_span: Some(pending.span),
                             target: locator.target(),
                             script: scope.script_unit(),
                             replace_importer: None,
+                            transitive_importer: None,
                         },
                         sink,
                     )
@@ -705,12 +819,12 @@ fn process_file_imports(
                     emit_for_declaration_status(
                         &status,
                         &GoImportSite {
-                            import_name: &file_import.name,
                             go_pkg,
                             name_span: Some(pending.span),
                             target: locator.target(),
                             script: scope.script_unit(),
                             replace_importer: None,
+                            transitive_importer: None,
                         },
                         sink,
                     )
@@ -742,6 +856,7 @@ fn process_file_imports(
                 &file_import.name,
                 file_import.name_span,
                 blank_span.is_some(),
+                scope.script_unit().is_some(),
             ));
         }
         if let Some(span) = blank_span
@@ -806,7 +921,6 @@ mod tests {
             },
         );
 
-        assert!(!sink.has_errors());
         resolved
             .get("go:fmt")
             .is_some_and(|dependency| dependency.usage == ImportUse::LinkOnly)

@@ -1,6 +1,7 @@
 pub mod ast;
 pub mod attributes;
 pub mod containment;
+pub mod dependency_block;
 mod display;
 pub mod go_names;
 pub mod imports;

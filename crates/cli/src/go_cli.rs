@@ -14,11 +14,12 @@ use stdlib::Target;
 pub fn go_command(target: Target) -> Command {
     let mut c = Command::new("go");
     // Isolate from any user-side env that would change Go's mode against
-    // lisette's `target/`: a stray `go.work` (workspace mode) or a stray
-    // `GOFLAGS=-mod=vendor` (vendor mode) both turn into multi-line errors
-    // for unrelated `lis add` invocations otherwise.
+    // lisette's `target/`: a stray `go.work` (workspace mode), a stray
+    // `GOFLAGS=-mod=vendor` (vendor mode), or `GO111MODULE=off` (GOPATH mode)
+    // all turn into unrelated errors otherwise.
     c.env("GOWORK", "off");
     c.env("GOFLAGS", "");
+    c.env("GO111MODULE", "on");
     c.env("GOOS", target.goos);
     c.env("GOARCH", target.goarch);
     c
@@ -122,6 +123,11 @@ pub fn go_fmt_paths(paths: &[PathBuf]) -> Result<(), String> {
 }
 
 pub fn write_go_mod(dir: &Path, module_name: &str, locator: &TypedefLocator) -> Result<(), String> {
+    let content = go_mod_content(module_name, locator)?;
+    write_go_mod_content(dir, &content)
+}
+
+pub fn go_mod_content(module_name: &str, locator: &TypedefLocator) -> Result<String, String> {
     let prelude_version = env!("CARGO_PKG_VERSION");
 
     let mut requires = vec![format!("\t{} v{}", PRELUDE_IMPORT_PATH, prelude_version)];
@@ -179,6 +185,10 @@ pub fn write_go_mod(dir: &Path, module_name: &str, locator: &TypedefLocator) -> 
         }
     }
 
+    Ok(content)
+}
+
+fn write_go_mod_content(dir: &Path, content: &str) -> Result<(), String> {
     let go_mod_path = dir.join("go.mod");
     let lisette_dir = dir.join(".lisette");
     let stamp_path = lisette_dir.join("go.mod.stamp");
@@ -188,11 +198,11 @@ pub fn write_go_mod(dir: &Path, module_name: &str, locator: &TypedefLocator) -> 
         && fs::read_to_string(&stamp_path).is_ok_and(|existing| existing == content);
 
     if !stamp_matches {
-        fs::write(&go_mod_path, &content).map_err(|e| format!("Failed to write go.mod: {}", e))?;
+        fs::write(&go_mod_path, content).map_err(|e| format!("Failed to write go.mod: {}", e))?;
         let _ = fs::remove_file(dir.join("go.sum"));
         let _ = fs::remove_file(lisette_dir.join("go.mod.tidy"));
         let _ = fs::create_dir_all(&lisette_dir);
-        let _ = fs::write(&stamp_path, &content);
+        let _ = fs::write(&stamp_path, content);
     }
 
     Ok(())

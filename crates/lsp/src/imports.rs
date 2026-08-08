@@ -322,11 +322,19 @@ fn header_end(source: &str) -> u32 {
     for line in source.split_inclusive('\n') {
         let trimmed = line.trim();
         if !trimmed.is_empty() && !trimmed.starts_with("//") && !trimmed.starts_with("#!") {
-            return block_start(source, offset as u32, declaration_comment);
+            return block_start(source, offset as u32, declaration_comment).max(table_end(source));
         }
         offset += line.len();
     }
     offset as u32
+}
+
+fn table_end(source: &str) -> u32 {
+    syntax::dependency_block::scan_dependency_blocks(source, 0)
+        .iter()
+        .map(|block| block.span.byte_offset + block.span.byte_length)
+        .max()
+        .unwrap_or(0)
 }
 
 /// A blank line ends the block, and a shebang or file comment is never crossed.
@@ -442,6 +450,28 @@ mod tests {
     #[test]
     fn an_empty_file_takes_the_import_without_a_trailing_blank_line() {
         assert_eq!(with_import("strings", ""), "import \"go:strings\"\n");
+    }
+
+    #[test]
+    fn the_import_goes_below_the_dependency_table() {
+        assert_eq!(
+            with_import(
+                "strings",
+                "// [dependencies.go]\n// \"x.y/z\" = \"v1.0.0\"\n\nfn main() {}\n"
+            ),
+            "// [dependencies.go]\n// \"x.y/z\" = \"v1.0.0\"\n\nimport \"go:strings\"\n\nfn main() {}\n"
+        );
+    }
+
+    #[test]
+    fn the_import_goes_below_a_dependency_table_with_no_blank_line() {
+        assert_eq!(
+            with_import(
+                "strings",
+                "// [dependencies.go]\n// \"x.y/z\" = \"v1.0.0\"\nfn main() {}\n"
+            ),
+            "// [dependencies.go]\n// \"x.y/z\" = \"v1.0.0\"\nimport \"go:strings\"\n\nfn main() {}\n"
+        );
     }
 
     #[test]

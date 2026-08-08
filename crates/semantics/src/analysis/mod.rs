@@ -329,7 +329,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
     store.init_entry_package();
     let entry = register_entry_file(&mut store, &sink, input.entry, include_tests);
     if entry.parse.is_failed() {
-        let checker = TaskState::with_sink(sink, input.project_kind);
+        let checker = TaskState::with_sink(sink, input.project_kind, input.scope.script_unit());
         return InferenceOutput {
             store,
             facts: checker.facts,

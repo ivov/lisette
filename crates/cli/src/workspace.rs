@@ -1060,6 +1060,23 @@ impl BindgenSetup for WorkspaceBindgenSetup {
 
         Ok(BindgenSession::new(bindgen, Box::new(lock)))
     }
+
+    fn for_script(
+        &self,
+        source: &str,
+        file: &Path,
+    ) -> Result<(deps::TypedefLocator, Option<deps::ScriptSession>), String> {
+        let (locator, dir) = crate::handlers::script_locator(
+            source,
+            file,
+            crate::handlers::ScriptResolveMode::Offline,
+        )?;
+        let session = dir
+            .map(|dir| crate::lock::acquire_target_lock_quiet(&dir))
+            .transpose()?
+            .map(|lock| deps::ScriptSession::new(Box::new(lock)));
+        Ok((locator, session))
+    }
 }
 
 impl Bindgen for WorkspaceBindgen {
@@ -1145,6 +1162,20 @@ mod tests {
             version: MODULE_VERSION,
             replacement: None,
         }
+    }
+
+    #[test]
+    fn a_dependency_free_script_gets_no_build_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("main.lis");
+        stdfs::write(&file, "import \"go:fmt\"\n").unwrap();
+
+        let (_, dir) = WorkspaceBindgenSetup
+            .for_script("import \"go:fmt\"\n", &file)
+            .unwrap();
+
+        assert!(dir.is_none());
+        assert!(!crate::handlers::script_build_dir(&file).exists());
     }
 
     fn valid_typedef() -> String {
