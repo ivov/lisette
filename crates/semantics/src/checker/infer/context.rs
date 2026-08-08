@@ -54,6 +54,92 @@ struct TraversalContext {
     dot_access_base: bool,
     in_pattern: bool,
     let_binding_rhs: bool,
+    expectation: Option<Expectation>,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct Expectation {
+    pub(super) role: ExpectationRole,
+    pub(super) span: Span,
+    pub(super) expected_ty: Type,
+}
+
+#[derive(Debug, Clone)]
+pub(super) enum ExpectationRole {
+    CallArgument {
+        callee_label: String,
+        index: usize,
+        parameter_name: Option<String>,
+    },
+    TailReturn {
+        function_name: String,
+        return_annotation_span: Span,
+    },
+    MatchArm,
+}
+
+impl Expectation {
+    pub(super) fn help(&self, expected_name: &str, actual_name: &str) -> String {
+        match &self.role {
+            ExpectationRole::CallArgument {
+                callee_label,
+                index,
+                parameter_name: Some(parameter_name),
+            } => format!(
+                "{} expects `{}` for its {} argument `{}`. Convert the value to `{}`, or change the parameter type.",
+                callee_label,
+                expected_name,
+                ordinal(*index),
+                parameter_name,
+                expected_name,
+            ),
+            ExpectationRole::CallArgument {
+                callee_label,
+                index,
+                parameter_name: None,
+            } => format!(
+                "{} expects `{}` for its {} argument. Convert the value to `{}`.",
+                callee_label,
+                expected_name,
+                ordinal(*index),
+                expected_name,
+            ),
+            ExpectationRole::TailReturn { function_name, .. } => format!(
+                "`{}` declares return type `{}`, but this tail expression has type `{}`. Change the value, or declare `-> {}`.",
+                function_name, expected_name, actual_name, actual_name,
+            ),
+            ExpectationRole::MatchArm => format!(
+                "Every `match` arm must produce the same type. This arm produces `{}`, but the `match` is expected to produce `{}`.",
+                actual_name, expected_name,
+            ),
+        }
+    }
+}
+
+fn ordinal(n: usize) -> String {
+    let word = match n {
+        1 => "first",
+        2 => "second",
+        3 => "third",
+        4 => "fourth",
+        5 => "fifth",
+        6 => "sixth",
+        7 => "seventh",
+        8 => "eighth",
+        9 => "ninth",
+        10 => "tenth",
+        _ => {
+            let suffix = match (n % 100, n % 10) {
+                (11..=13, _) => "th",
+                (_, 1) => "st",
+                (_, 2) => "nd",
+                (_, 3) => "rd",
+                _ => "th",
+            };
+            return format!("{n}{suffix}");
+        }
+    };
+    word.to_string()
 }
 
 #[derive(Debug, Clone)]
@@ -217,6 +303,24 @@ impl<'a> InferCtx<'a> {
 
     pub(super) fn with_value_context<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
         self.with_use_context(UseContext::Value, f)
+    }
+
+    pub(super) fn with_expectation<T>(
+        &mut self,
+        expectation: Expectation,
+        f: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        let previous = self.traversal.expectation.replace(expectation);
+        let result = f(self);
+        self.traversal.expectation = previous;
+        result
+    }
+
+    pub(super) fn expectation_at(&self, span: &Span) -> Option<&Expectation> {
+        self.traversal
+            .expectation
+            .as_ref()
+            .filter(|expectation| expectation.span == *span)
     }
 
     pub(super) fn with_dot_access_base<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {

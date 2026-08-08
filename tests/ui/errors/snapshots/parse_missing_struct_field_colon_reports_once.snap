@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:3:8]
+ 2 │ struct User {
+ 3 │   name string,
+   ·        ───┬──
+   ·           ╰── expected `:`
+ 4 │   age: int,
+   ╰────
+  help:  · code: [parse.unexpected_token]

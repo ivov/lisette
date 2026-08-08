@@ -8,6 +8,7 @@ use syntax::types::{
     unqualified_name,
 };
 
+use super::super::context::{Expectation, ExpectationRole};
 use super::super::unify::Dispatched;
 use super::struct_call::same_nominal;
 use crate::checker::infer::InferCtx;
@@ -196,12 +197,13 @@ impl InferCtx<'_> {
 
         let substring_range_idx =
             self.substring_carve_out_param_idx(call_kind, &callee_expression, &parameters);
+        let variadic_start = variadic.as_ref().map(|variadic| variadic.first_index);
         let new_args = if let Some(idx) = substring_range_idx {
             let mut adjusted = parameters.clone();
             adjusted[idx] = adjusted[idx].with_type(self.new_type_var());
-            self.infer_call_arguments(args, &adjusted)
+            self.infer_call_arguments(args, &adjusted, variadic_start, &callee_expression)
         } else {
-            self.infer_call_arguments(args, &parameters)
+            self.infer_call_arguments(args, &parameters, variadic_start, &callee_expression)
         };
         self.check_call_arity(&parameters, &new_args, &callee_expression, &span);
         self.check_mut_param_arguments(&new_args, &parameters, &callee_expression);
@@ -954,15 +956,33 @@ impl InferCtx<'_> {
         &mut self,
         args: Vec<Expression>,
         parameters: &[FunctionParameter],
+        variadic_start: Option<usize>,
+        callee_expression: &Expression,
     ) -> Vec<Expression> {
+        let callee = callee_label(callee_expression);
         args.into_iter()
             .enumerate()
             .map(|(i, arg)| {
-                let expected_ty = parameters
-                    .get(i)
-                    .map(|param| param.ty.clone())
-                    .unwrap_or_else(|| self.new_type_var());
-                self.with_value_context(|s| s.infer_expression(arg, &expected_ty))
+                let Some(param) = parameters.get(i) else {
+                    let expected_ty = self.new_type_var();
+                    return self.with_value_context(|s| s.infer_expression(arg, &expected_ty));
+                };
+                let expected_ty = param.ty.clone();
+                if variadic_start.is_some_and(|start| i >= start) {
+                    return self.with_value_context(|s| s.infer_expression(arg, &expected_ty));
+                }
+                let expectation = Expectation {
+                    role: ExpectationRole::CallArgument {
+                        callee_label: callee.clone(),
+                        index: i + 1,
+                        parameter_name: param.name.as_ref().map(|name| name.to_string()),
+                    },
+                    span: arg.get_span(),
+                    expected_ty: expected_ty.clone(),
+                };
+                self.with_expectation(expectation, |s| {
+                    s.with_value_context(|s| s.infer_expression(arg, &expected_ty))
+                })
             })
             .collect()
     }

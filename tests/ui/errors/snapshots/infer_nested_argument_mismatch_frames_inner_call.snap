@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+    ╭─[test.lis:11:16]
+ 10 │ fn test() -> int {
+ 11 │   double(inner("x"))
+    ·                ─┬─
+    ·                 ╰── expected `int`, found `string`
+ 12 │ }
+    ╰────
+  help: `inner()` expects `int` for its first argument `n`. Convert the value to `int`, or change the parameter type · code: [infer.type_mismatch]

@@ -367,8 +367,11 @@ impl<'source> Parser<'source> {
             let name_token = self.current_token();
             let name_span = Span::new(self.file_id, name_token.byte_offset, name_token.byte_length);
             let name = self.read_identifier();
-            self.ensure(Colon);
-            let annotation = self.parse_annotation();
+            let annotation = if self.ensure_in_place(Colon) || self.can_recover_annotation() {
+                self.parse_annotation()
+            } else {
+                Annotation::Unknown
+            };
 
             if let Some((_, first_span)) = seen_fields.iter().find(|(n, _)| n == &name) {
                 self.error_duplicate_struct_field(&name, *first_span, name_span);
@@ -549,14 +552,18 @@ impl<'source> Parser<'source> {
         let name_span = Span::new(self.file_id, name_token.byte_offset, name_token.byte_length);
         let name = self.read_identifier();
 
-        self.ensure(Colon);
+        let annotation = if self.ensure_in_place(Colon) || self.can_recover_annotation() {
+            self.parse_annotation()
+        } else {
+            Annotation::Unknown
+        };
 
         Some(StructFieldDefinition {
             doc,
             visibility,
             name,
             name_span,
-            annotation: self.parse_annotation(),
+            annotation,
             ty: Type::uninferred(),
             kind: StructFieldKind::Named { attributes },
         })
@@ -668,8 +675,11 @@ impl<'source> Parser<'source> {
             return self.recover_var_initializer(start);
         }
 
-        self.ensure(Colon);
-        let annotation = self.parse_annotation();
+        let annotation = if self.ensure_in_place(Colon) || self.can_recover_annotation() {
+            self.parse_annotation()
+        } else {
+            Annotation::Unknown
+        };
 
         if self.advance_if(Equal) {
             return self.recover_var_initializer(start);

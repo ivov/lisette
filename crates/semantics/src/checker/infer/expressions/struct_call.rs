@@ -601,6 +601,7 @@ impl InferCtx<'_> {
         FindDef: FnMut(&mut Self, &StructFieldAssignment) -> Option<&'a Type>,
     {
         let mut matched = HashSet::default();
+        let mut unknown_fields: Vec<EcoString> = vec![];
         let new_assignments: Vec<StructFieldAssignment> = ctx
             .field_assignments
             .iter()
@@ -613,6 +614,7 @@ impl InferCtx<'_> {
                     None => {
                         let available: Vec<String> =
                             ctx.all_fields.clone().map(|(n, _)| n.to_string()).collect();
+                        unknown_fields.push(field.name.clone());
                         self.sink.push(diagnostics::infer::member_not_found(
                             ctx.target_ty,
                             &field.name,
@@ -641,6 +643,18 @@ impl InferCtx<'_> {
                 .filter(|(n, _)| !matched.contains(n.as_str()))
                 .map(|(n, _)| n.to_string())
                 .collect();
+            if !unknown_fields.is_empty() {
+                let all_field_names: Vec<String> =
+                    ctx.all_fields.clone().map(|(n, _)| n.to_string()).collect();
+                for unknown in &unknown_fields {
+                    if let Some(suggested) =
+                        diagnostics::infer::find_similar_name(unknown, &all_field_names)
+                        && let Some(position) = missing.iter().position(|f| f == &suggested)
+                    {
+                        missing.remove(position);
+                    }
+                }
+            }
             if !missing.is_empty() {
                 missing.sort();
                 self.sink.push(diagnostics::infer::struct_missing_fields(

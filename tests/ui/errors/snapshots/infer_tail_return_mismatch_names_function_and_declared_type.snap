@@ -1,0 +1,15 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+   ╭─[test.lis:2:17]
+ 1 │ 
+ 2 │ fn returns() -> int {
+   ·                 ─┬─
+   ·                  ╰── return type declared here
+ 3 │   "four"
+   ·   ───┬──
+   ·      ╰── expected `int`, found `string`
+ 4 │ }
+   ╰────
+  help: `returns` declares return type `int`, but this tail expression has type `string`. Change the value, or declare `-> string` · code: [infer.type_mismatch]

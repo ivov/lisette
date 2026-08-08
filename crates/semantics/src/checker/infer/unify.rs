@@ -6,6 +6,7 @@ use syntax::types::{Bound, CompoundKind, Type, TypeVarId};
 
 use crate::checker::infer::InferCtx;
 use crate::checker::infer::carry_mut::can_carry_mutation_across_fn_boundary;
+use crate::checker::infer::context::{Expectation, ExpectationRole};
 use crate::checker::type_env::VarState;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -742,15 +743,30 @@ impl InferCtx<'_> {
 
             UnifyError::TypeMismatch | UnifyError::Multiple(_) => {
                 let (expected_name, actual_name) = Type::stringify_pair(expected, actual);
-                let help = self.help(expected, actual, &expected_name, &actual_name);
+                let expectation = self.site_expectation(span, &t1_normalized);
+                let help = self.help(expected, actual, &expected_name, &actual_name, expectation);
 
-                LisetteDiagnostic::error("Type mismatch")
+                let mut diagnostic = LisetteDiagnostic::error("Type mismatch")
                     .with_infer_code("type_mismatch")
                     .with_span_label(
                         span,
                         format!("expected `{}`, found `{}`", expected_name, actual_name),
                     )
-                    .with_help(help)
+                    .with_help(help);
+                if let Some(Expectation {
+                    role:
+                        ExpectationRole::TailReturn {
+                            return_annotation_span,
+                            ..
+                        },
+                    ..
+                }) = expectation
+                {
+                    let return_annotation_span = *return_annotation_span;
+                    diagnostic = diagnostic
+                        .with_span_label(&return_annotation_span, "return type declared here");
+                }
+                diagnostic
             }
 
             UnifyError::AlreadyReported => {
@@ -759,12 +775,19 @@ impl InferCtx<'_> {
         }
     }
 
+    fn site_expectation(&self, span: &Span, expected_resolved: &Type) -> Option<&Expectation> {
+        self.expectation_at(span).filter(|expectation| {
+            expectation.expected_ty.resolve_in(&self.env) == *expected_resolved
+        })
+    }
+
     fn help(
         &self,
         expected: &Type,
         actual: &Type,
         expected_name: &str,
         actual_name: &str,
+        expectation: Option<&Expectation>,
     ) -> String {
         if actual.is_unknown() {
             return format!(
@@ -888,6 +911,10 @@ impl InferCtx<'_> {
 
         if let Some(widening) = self.container_widening_help(expected, actual, expected_name) {
             return widening;
+        }
+
+        if let Some(expectation) = expectation {
+            return expectation.help(expected_name, actual_name);
         }
 
         format!(

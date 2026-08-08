@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:2:8]
+ 1 │ 
+ 2 │ fn id(x) {
+   ·        ┬
+   ·        ╰── expected `:`
+ 3 │   x
+   ╰────
+  help:  · code: [parse.unexpected_token]

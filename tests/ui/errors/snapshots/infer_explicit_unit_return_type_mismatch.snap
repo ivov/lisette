@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·    ╰── expected `()`, found `int`
  4 │ }
    ╰────
-  help: Change the type annotation to `int` or convert the value to `()` · code: [infer.type_mismatch]
+  help: `foo` declares return type `()`, but this tail expression has type `int`. Change the value, or declare `-> int` · code: [infer.type_mismatch]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+   ╭─[test.lis:5:14]
+ 4 │     true => 1,
+ 5 │     false => "two",
+   ·              ──┬──
+   ·                ╰── expected `int`, found `string`
+ 6 │   }
+   ╰────
+  help: Every `match` arm must produce the same type. This arm produces `string`, but the `match` is expected to produce `int` · code: [infer.type_mismatch]

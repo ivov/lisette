@@ -17,8 +17,29 @@ impl<'source> Parser<'source> {
     }
 
     fn parse_annotation_inner(&mut self) -> Annotation {
+        if self.at_recovery_boundary() {
+            self.track_error("expected a type", "Add the missing type");
+            return Annotation::Unknown;
+        }
+
         match self.current_token().kind {
-            Function => self.parse_function_annotation(),
+            Function if self.stream.peek_ahead(1).kind == LeftParen => {
+                self.parse_function_annotation()
+            }
+            Function => {
+                let start = self.current_token();
+                self.track_error(
+                    "incomplete function type",
+                    "A function type is written `fn(int) -> int`",
+                );
+                self.next();
+                let return_type = self.parse_function_return_annotation();
+                Annotation::Function {
+                    params: vec![],
+                    return_type: return_type.into(),
+                    span: self.span_from_offset(start.byte_offset),
+                }
+            }
             LeftParen => self.parse_tuple_annotation(),
             LeftSquareBracket => {
                 let start = self.current_token();
@@ -222,16 +243,21 @@ impl<'source> Parser<'source> {
 
         let mut params = vec![];
 
-        while self.is_not(RightParen) {
+        while self.is_not(RightParen) && !self.at_recovery_boundary() {
+            let start_position = self.stream.position;
             let mutable = self.advance_if(Mut);
             params.push(crate::ast::FunctionAnnotationParameter {
                 annotation: self.parse_annotation(),
                 mutable,
             });
+            if self.at_recovery_boundary() {
+                break;
+            }
             self.expect_comma_or(RightParen);
+            self.ensure_progress(start_position, RightParen);
         }
 
-        self.ensure(RightParen);
+        self.ensure_in_place(RightParen);
 
         let return_type = self.parse_function_return_annotation();
 
@@ -249,13 +275,18 @@ impl<'source> Parser<'source> {
         let mut annotations = vec![];
         let mut has_trailing_comma = false;
 
-        while self.is_not(RightParen) {
+        while self.is_not(RightParen) && !self.at_recovery_boundary() {
+            let start_position = self.stream.position;
             annotations.push(self.parse_annotation());
             has_trailing_comma = self.is(Comma);
+            if self.at_recovery_boundary() {
+                break;
+            }
             self.expect_comma_or(RightParen);
+            self.ensure_progress(start_position, RightParen);
         }
 
-        self.ensure(RightParen);
+        self.ensure_in_place(RightParen);
 
         let span = self.span_from_offset(start.byte_offset);
 

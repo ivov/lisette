@@ -14220,3 +14220,549 @@ fn main() {
     let result = infer_package("main", fs);
     assert_multipackage_infer_error_snapshot!(result, source);
 }
+
+fn parse_expecting_errors(
+    input: &str,
+    expected_errors: usize,
+    context: &str,
+) -> syntax::parse::ParseResult {
+    let lex_result = syntax::lex::Lexer::new(input, 0).lex();
+    let parse_result = syntax::parse::Parser::new(lex_result.tokens, input).parse();
+    assert!(
+        parse_result.errors.len() == expected_errors,
+        "Expected exactly {} errors for {}, got {}: {:?}",
+        expected_errors,
+        context,
+        parse_result.errors.len(),
+        parse_result
+            .errors
+            .iter()
+            .map(|e| &e.message)
+            .collect::<Vec<_>>()
+    );
+    parse_result
+}
+
+#[test]
+fn parse_missing_param_colon_reports_once() {
+    let input = r#"
+fn id(x) {
+  x
+}
+
+fn main() {
+  let _ = id(42)
+}
+"#;
+
+    parse_expecting_errors(input, 1, "a missing parameter colon");
+
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_missing_param_colon_recovers_annotation() {
+    let input = r#"
+fn f(x int) -> int {
+  x
+}
+
+fn main() {
+  let _ = f(1)
+}
+"#;
+
+    parse_expecting_errors(input, 1, "the annotation following a missing colon");
+
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_missing_struct_field_colon_reports_once() {
+    let input = r#"
+struct User {
+  name string,
+  age: int,
+}
+"#;
+
+    parse_expecting_errors(input, 1, "a missing struct field colon");
+
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_missing_variant_field_colon_reports_once() {
+    let input = r#"
+enum Shape {
+  Rect { width float64, height: float64 },
+}
+"#;
+
+    parse_expecting_errors(input, 1, "a missing variant field colon");
+
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_unclosed_params_stop_at_next_declaration() {
+    let input = r#"
+fn id(x:
+
+fn main() {
+  let _ = 1
+}
+"#;
+
+    let parse_result = parse_expecting_errors(input, 2, "unclosed params before a declaration");
+    assert!(parse_result.ast.iter().any(
+        |item| matches!(item, syntax::ast::Expression::Function { name, .. } if name == "main")
+    ));
+
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_unclosed_typed_params_preserve_next_declaration() {
+    let input = r#"
+fn id(x: int
+
+fn main() {
+  let _ = 1
+}
+"#;
+
+    let parse_result =
+        parse_expecting_errors(input, 2, "unclosed typed params before a declaration");
+    assert!(parse_result.ast.iter().any(
+        |item| matches!(item, syntax::ast::Expression::Function { name, .. } if name == "main")
+    ));
+
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_unclosed_function_type_preserves_next_declaration() {
+    let input = r#"
+fn f(g: fn(int
+
+fn main() {
+  let _ = 1
+}
+"#;
+
+    let parse_result =
+        parse_expecting_errors(input, 3, "an unclosed function type before a declaration");
+    assert!(parse_result.ast.iter().any(
+        |item| matches!(item, syntax::ast::Expression::Function { name, .. } if name == "main")
+    ));
+
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_unclosed_tuple_type_preserves_next_declaration() {
+    let input = r#"
+fn f(p: (int,
+
+fn main() {
+  let _ = 1
+}
+"#;
+
+    let parse_result =
+        parse_expecting_errors(input, 3, "an unclosed tuple type before a declaration");
+    assert!(parse_result.ast.iter().any(
+        |item| matches!(item, syntax::ast::Expression::Function { name, .. } if name == "main")
+    ));
+
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_missing_comma_before_pub_field_reports() {
+    let input = r#"
+struct S {
+  a: int pub b: int,
+}
+"#;
+
+    let parse_result = parse_expecting_errors(input, 1, "a missing comma before a pub field");
+    assert!(parse_result.ast.iter().any(|item| matches!(
+        item,
+        syntax::ast::Expression::Struct {
+            fields: syntax::ast::StructFields::Record(fields),
+            ..
+        } if fields.len() == 2 && fields[1].visibility.is_public()
+    )));
+
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_unclosed_params_preserve_next_struct_declaration() {
+    let input = r#"
+fn id(x:
+
+struct S {
+  a: int,
+}
+"#;
+
+    let parse_result =
+        parse_expecting_errors(input, 2, "unclosed params before a struct declaration");
+    assert!(parse_result.ast.iter().any(|item| matches!(
+        item,
+        syntax::ast::Expression::Struct { name, .. } if name == "S"
+    )));
+
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_unclosed_params_preserve_pub_declaration() {
+    let input = r#"
+fn id(x:
+
+pub fn helper() -> int {
+  1
+}
+"#;
+
+    let parse_result = parse_expecting_errors(input, 2, "unclosed params before a pub declaration");
+    assert!(parse_result.ast.iter().any(|item| matches!(
+        item,
+        syntax::ast::Expression::Function {
+            name,
+            visibility: syntax::ast::Visibility::Public,
+            ..
+        } if name == "helper"
+    )));
+
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_unclosed_params_preserve_attributed_declaration() {
+    let input = r#"
+fn id(x:
+
+#[test]
+fn checks() {
+  let _ = 1
+}
+"#;
+
+    let parse_result =
+        parse_expecting_errors(input, 2, "unclosed params before an attributed declaration");
+    assert!(parse_result.ast.iter().any(|item| matches!(
+        item,
+        syntax::ast::Expression::Function { name, attributes, .. }
+            if name == "checks" && attributes.iter().any(|a| a.name == "test")
+    )));
+
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_unclosed_params_preserve_documented_declaration() {
+    let input = r#"
+fn id(x:
+
+/// Documented.
+fn documented() {
+  let _ = 1
+}
+"#;
+
+    let parse_result =
+        parse_expecting_errors(input, 2, "unclosed params before a documented declaration");
+    assert!(parse_result.ast.iter().any(|item| matches!(
+        item,
+        syntax::ast::Expression::Function { name, doc: Some(_), .. } if name == "documented"
+    )));
+
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_unclosed_function_type_preserve_pub_declaration() {
+    let input = r#"
+fn f(g: fn(int
+
+pub fn helper() -> int {
+  1
+}
+"#;
+
+    let parse_result = parse_expecting_errors(
+        input,
+        3,
+        "an unclosed function type before a pub declaration",
+    );
+    assert!(parse_result.ast.iter().any(|item| matches!(
+        item,
+        syntax::ast::Expression::Function {
+            name,
+            visibility: syntax::ast::Visibility::Public,
+            ..
+        } if name == "helper"
+    )));
+
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_malformed_function_type_recovers_in_place() {
+    let input = r#"
+fn f(x: fn -> int) -> int {
+  x()
+}
+
+fn main() {
+  let _ = f(|| 1)
+}
+"#;
+
+    let parse_result = parse_expecting_errors(input, 1, "a function type without parens");
+    for expected_fn in ["f", "main"] {
+        assert!(parse_result.ast.iter().any(
+            |item| matches!(item, syntax::ast::Expression::Function { name, .. } if name == expected_fn)
+        ));
+    }
+
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_keyword_param_keeps_reserved_error() {
+    let input = r#"
+fn f(type: int) -> int {
+  1
+}
+"#;
+
+    parse_expecting_errors(input, 1, "a keyword parameter name");
+
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_unclosed_struct_pattern_before_declaration_terminates() {
+    let input = r#"
+fn main() {
+  match u {
+    User {
+
+fn other() {}
+"#;
+
+    let lex_result = syntax::lex::Lexer::new(input, 0).lex();
+    let parse_result = syntax::parse::Parser::new(lex_result.tokens, input).parse();
+    assert!(!parse_result.errors.is_empty());
+
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn infer_struct_literal_typo_does_not_claim_sibling_missing_field() {
+    let input = r#"
+struct User {
+  name: string,
+  names: Slice<string>,
+}
+
+fn test() -> string {
+  let u = User { name: "x", nam: "y" }
+  u.name
+}
+"#;
+
+    let result = infer(input);
+    assert_eq!(result.errors.len(), 2);
+    assert!(
+        result.errors[1]
+            .code_str()
+            .is_some_and(|c| c.contains("missing_struct_fields"))
+    );
+
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_struct_literal_field_typo_claims_missing_field() {
+    let input = r#"
+struct User { name: string, age: int }
+
+fn test() -> string {
+  let u = User { nam: "ada", age: 36 }
+  u.name
+}
+"#;
+
+    let result = infer(input);
+    assert_eq!(result.errors.len(), 1);
+
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_struct_literal_typo_of_written_field_keeps_missing_field() {
+    let input = r#"
+struct User { name: string, age: int }
+
+fn test() -> string {
+  let u = User { name: "a", nam: "x" }
+  u.name
+}
+"#;
+
+    let result = infer(input);
+    assert_eq!(result.errors.len(), 2);
+    assert!(
+        result.errors[1]
+            .code_str()
+            .is_some_and(|c| c.contains("missing_struct_fields"))
+    );
+
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_struct_literal_two_typos_claim_one_missing_field() {
+    let input = r#"
+struct User { name: string, age: int }
+
+fn test() -> string {
+  let u = User { nam: "a", naem: "b", age: 1 }
+  u.name
+}
+"#;
+
+    let result = infer(input);
+    assert_eq!(result.errors.len(), 2);
+    assert!(
+        result
+            .errors
+            .iter()
+            .all(|e| { e.code_str().is_some_and(|c| c.contains("member_not_found")) })
+    );
+
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_call_argument_mismatch_names_callee_and_parameter() {
+    let input = r#"
+fn double(n: int) -> int {
+  n * 2
+}
+
+fn test() -> int {
+  double("four")
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_call_argument_mismatch_unnamed_parameter() {
+    let input = r#"
+fn test(f: fn(int) -> int) -> int {
+  f("x")
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_nested_argument_mismatch_frames_inner_call() {
+    let input = r#"
+fn inner(n: int) -> int {
+  n
+}
+
+fn double(n: int) -> int {
+  n * 2
+}
+
+fn test() -> int {
+  double(inner("x"))
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_tail_return_mismatch_names_function_and_declared_type() {
+    let input = r#"
+fn returns() -> int {
+  "four"
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_match_arm_mismatch_names_match_expectation() {
+    let input = r#"
+fn arms(b: bool) -> int {
+  match b {
+    true => 1,
+    false => "two",
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_variadic_fixed_argument_mismatch_keeps_role_help() {
+    let input = r#"
+fn join(sep: string, parts: VarArgs<string>) -> string {
+  let _ = parts
+  sep
+}
+
+fn test() -> string {
+  join(1, "a")
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_variadic_tail_argument_mismatch_keeps_generic_help() {
+    let input = r#"
+fn join(sep: string, parts: VarArgs<string>) -> string {
+  let _ = parts
+  sep
+}
+
+fn test() -> string {
+  join(",", 5)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unary_operand_mismatch_keeps_generic_help() {
+    let input = r#"
+fn f() -> int {
+  !1
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_let_annotation_mismatch_keeps_annotation_help() {
+    let input = r#"
+fn test() {
+  let x: int = "four"
+  let _ = x
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
