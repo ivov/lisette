@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786191064231,
+  "lastUpdate": 1786193297913,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -20413,6 +20413,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "lsp",
             "value": 5884,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2901,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1815,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 713,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7823,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b14b6673fe4c6098db47e735f272b2fb603d5d01",
+          "message": "refactor: consolidate semantic state into single owners (#1233)",
+          "timestamp": "2026-08-08T14:47:57+02:00",
+          "tree_id": "fc70799ad18d69d6a7f62389bbcafba29aae16b3",
+          "url": "https://github.com/ivov/lisette/commit/b14b6673fe4c6098db47e735f272b2fb603d5d01"
+        },
+        "date": 1786193297011,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 128818,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30354,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 25639,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18573,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14002,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 12547,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 7717,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5818,
             "unit": "lines"
           },
           {
