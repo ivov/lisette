@@ -28,7 +28,7 @@ pub fn parse_and_register_prelude(store: &mut Store, sink: &LocalSink) {
         file_comment: None,
     });
 
-    let mut checker = TaskState::with_fresh_allocator();
+    let mut checker = TaskState::for_package(PRELUDE_PACKAGE_ID);
     let package = store
         .get_package(PRELUDE_PACKAGE_ID)
         .cloned()
@@ -69,7 +69,7 @@ pub fn parse_and_register_test_prelude(store: &mut Store, sink: &LocalSink) {
         file_comment: None,
     });
 
-    let mut checker = TaskState::with_fresh_allocator();
+    let mut checker = TaskState::for_package(TEST_PRELUDE_PACKAGE_ID);
     let package = store
         .get_package(TEST_PRELUDE_PACKAGE_ID)
         .cloned()

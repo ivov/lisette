@@ -131,8 +131,8 @@ fn run_ref_lints(package: &Package, facts: &Facts, store: &Store) -> RefLintResu
             continue;
         }
         if method_name == "equals" {
-            for satisfaction in satisfactions {
-                graph.mark_as_used(PackageItemId::equals_method(&satisfaction.impl_type_name));
+            for impl_type_name in satisfactions.impl_type_names() {
+                graph.mark_as_used(PackageItemId::equals_method(impl_type_name));
             }
         } else {
             graph.mark_as_used(PackageItemId::new(method_name));

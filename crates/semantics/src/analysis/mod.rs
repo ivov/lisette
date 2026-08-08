@@ -31,7 +31,8 @@ use crate::diagnostics::{GoImportSite, emit_for_locator_result};
 use crate::facts::Facts;
 use crate::loader::{DiscoveredPackages, Loader};
 use crate::package_graph::{
-    DependencyGraph, PackageGraphOptions, Roots, ScannedFile, build_package_graph,
+    DependencyGraph, PackageGraphOptions, PackageGraphResult, Roots, ScannedFile,
+    build_package_graph,
 };
 use crate::prelude::{parse_and_register_prelude, parse_and_register_test_prelude};
 use crate::store::{ENTRY_FILE_ID, ENTRY_PACKAGE_ID, Store};
@@ -403,10 +404,18 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
     parse_and_register_test_prelude(&mut store, &sink);
 
     let cache_root = cache.package_root().map(Path::to_path_buf);
+    let PackageGraphResult {
+        order,
+        files,
+        dependencies,
+        ..
+    } = graph_result;
     let package_output = infer_all_packages(
         &mut store,
         PackageInferenceInput {
-            graph_result,
+            order,
+            files,
+            dependencies,
             sink,
             compile_phase: input.compile_phase,
             go_module: input.go_module,

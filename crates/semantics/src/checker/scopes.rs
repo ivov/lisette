@@ -83,11 +83,6 @@ struct ScopedValue {
     kind: ScopedValueKind,
 }
 
-#[derive(Debug, Clone, Default)]
-struct GenericContext {
-    parameters: HashMap<String, GenericParameter>,
-}
-
 #[derive(Debug, Clone)]
 struct GenericParameter {
     index: usize,
@@ -97,7 +92,7 @@ struct GenericParameter {
 #[derive(Debug)]
 pub struct Scope {
     values: HashMap<String, ScopedValue>,
-    generics: Option<GenericContext>,
+    generic_parameters: HashMap<String, GenericParameter>,
     pub(crate) fn_return_type: Option<Type>,
     is_lambda: bool,
     deferred_map_key_checks: Vec<DeferredMapKeyCheck>,
@@ -116,7 +111,7 @@ impl Scope {
     fn new() -> Self {
         Scope {
             values: HashMap::default(),
-            generics: None,
+            generic_parameters: HashMap::default(),
             fn_return_type: None,
             is_lambda: false,
             deferred_map_key_checks: Vec::new(),
@@ -161,10 +156,6 @@ impl Scope {
                 kind: ScopedValueKind::Const,
             },
         );
-    }
-
-    fn generics_mut(&mut self) -> &mut GenericContext {
-        self.generics.get_or_insert_with(GenericContext::default)
     }
 }
 
@@ -276,16 +267,14 @@ impl Scopes {
     pub(crate) fn lookup_type_param(&self, name: &str) -> Option<usize> {
         self.stack.iter().rev().find_map(|scope| {
             scope
-                .generics
-                .as_ref()?
-                .parameters
+                .generic_parameters
                 .get(name)
                 .map(|parameter| parameter.index)
         })
     }
 
     pub(crate) fn insert_type_param(&mut self, name: String, index: usize) {
-        self.current_mut().generics_mut().parameters.insert(
+        self.current_mut().generic_parameters.insert(
             name,
             GenericParameter {
                 index,
@@ -298,8 +287,7 @@ impl Scopes {
         let name = parameter.last_segment().to_string();
         let generic = self
             .current_mut()
-            .generics_mut()
-            .parameters
+            .generic_parameters
             .get_mut(&name)
             .expect("a generic parameter must be in scope before recording its bounds");
         let (existing_parameter, bounds) = generic
@@ -404,14 +392,14 @@ impl Scopes {
         let mut all_bounds: HashMap<Symbol, Vec<Type>> = HashMap::default();
         // Walk from bottom to top so inner scopes override outer
         for scope in &self.stack {
-            if let Some(generics) = &scope.generics {
-                all_bounds.retain(|parameter, _| {
-                    !generics.parameters.contains_key(parameter.last_segment())
-                });
-                for parameter in generics.parameters.values() {
-                    if let Some((qualified, bounds)) = &parameter.bounds {
-                        all_bounds.insert(qualified.clone(), bounds.clone());
-                    }
+            all_bounds.retain(|parameter, _| {
+                !scope
+                    .generic_parameters
+                    .contains_key(parameter.last_segment())
+            });
+            for parameter in scope.generic_parameters.values() {
+                if let Some((qualified, bounds)) = &parameter.bounds {
+                    all_bounds.insert(qualified.clone(), bounds.clone());
                 }
             }
         }
@@ -420,11 +408,7 @@ impl Scopes {
 
     pub(crate) fn for_each_bound_on_param<F: FnMut(&Type)>(&self, param_name: &str, mut visit: F) {
         for scope in self.stack.iter().rev() {
-            if let Some(parameter) = scope
-                .generics
-                .as_ref()
-                .and_then(|generics| generics.parameters.get(param_name))
-            {
+            if let Some(parameter) = scope.generic_parameters.get(param_name) {
                 if let Some((_, bounds)) = &parameter.bounds {
                     for bound in bounds {
                         visit(bound);

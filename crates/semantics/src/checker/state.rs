@@ -13,25 +13,13 @@ enum CursorLocation {
     File { package_id: String, file_id: u32 },
 }
 
-impl Default for Cursor {
-    fn default() -> Self {
+impl Cursor {
+    fn package(package_id: impl Into<String>) -> Self {
         Self {
             location: CursorLocation::Package {
-                package_id: "std".to_string(),
+                package_id: package_id.into(),
             },
         }
-    }
-}
-
-impl Cursor {
-    fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn set_package(&mut self, package_id: impl Into<String>) {
-        self.location = CursorLocation::Package {
-            package_id: package_id.into(),
-        };
     }
 
     pub fn package_id(&self) -> &str {
@@ -104,6 +92,7 @@ impl TaskSeed {
             self.binding_ids.clone(),
             LocalSink::new(),
             self.project_kind,
+            crate::store::ENTRY_PACKAGE_ID,
         )
     }
 }
@@ -125,11 +114,12 @@ impl TaskState {
         binding_ids: Arc<BindingIdAllocator>,
         sink: LocalSink,
         project_kind: crate::analysis::ProjectKind,
+        package_id: impl Into<String>,
     ) -> Self {
         Self {
             env: TypeEnv::new(),
             scopes: Scopes::new(),
-            cursor: Cursor::new(),
+            cursor: Cursor::package(package_id),
             imports: ImportState::new(),
             sink,
             facts: Facts::new(binding_ids),
@@ -138,16 +128,22 @@ impl TaskState {
         }
     }
 
-    pub fn with_fresh_allocator() -> Self {
+    pub fn for_package(package_id: impl Into<String>) -> Self {
         Self::new(
             Arc::new(BindingIdAllocator::new()),
             LocalSink::new(),
             crate::analysis::ProjectKind::Binary,
+            package_id,
         )
     }
 
     pub(crate) fn with_sink(sink: LocalSink, project_kind: crate::analysis::ProjectKind) -> Self {
-        Self::new(Arc::new(BindingIdAllocator::new()), sink, project_kind)
+        Self::new(
+            Arc::new(BindingIdAllocator::new()),
+            sink,
+            project_kind,
+            crate::store::ENTRY_PACKAGE_ID,
+        )
     }
 
     pub(crate) fn with_scope<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
@@ -246,20 +242,5 @@ impl TaskState {
             }
             _ => (ty.clone(), HashMap::default()),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Cursor;
-
-    #[test]
-    fn changing_package_cannot_retain_a_file_from_the_previous_package() {
-        let mut cursor = Cursor::file("first", 42);
-
-        cursor.set_package("second");
-
-        assert_eq!(cursor.package_id(), "second");
-        assert_eq!(cursor.file_id(), None);
     }
 }

@@ -18,8 +18,7 @@ fuzz_target!(|data: &[u8]| {
     store.add_package("fuzz");
     lisette_semantics::prelude::parse_and_register_prelude(&mut store, &sink);
 
-    let mut checker = lisette_semantics::checker::TaskState::with_fresh_allocator();
-    checker.cursor.set_package("fuzz");
+    let mut checker = lisette_semantics::checker::TaskState::for_package("fuzz");
     checker.put_prelude_in_scope(&store);
 
     checker.register_types_and_values(

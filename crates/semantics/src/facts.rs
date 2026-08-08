@@ -39,7 +39,7 @@ pub struct Facts {
     pub always_failing_try_blocks: Vec<Span>,
     pub expression_only_fstrings: Vec<ExpressionOnlyFstringFact>,
     pub unprefixed_fstrings: Vec<UnprefixedFstringFact>,
-    pub interface_satisfied_methods: HashMap<(String, String), Vec<InterfaceSatisfaction>>,
+    pub interface_satisfied_methods: HashMap<(String, String), InterfaceSatisfactions>,
 
     pub(crate) deferred: DeferredChecks,
 
@@ -80,11 +80,53 @@ impl DeferredChecks {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct InterfaceSatisfaction {
-    pub impl_type_name: String,
-    /// The interface matches by source spelling, so renaming breaks it.
-    spelling_pinned: bool,
+#[derive(Debug, Clone, Copy)]
+enum InterfaceMatch {
+    Structural,
+    SpellingPinned,
+}
+
+#[derive(Debug, Default)]
+pub struct InterfaceSatisfactions {
+    impl_types: HashMap<String, InterfaceMatch>,
+}
+
+impl InterfaceSatisfactions {
+    fn record(&mut self, impl_type_name: String, spelling_pinned: bool) {
+        let match_kind = if spelling_pinned {
+            InterfaceMatch::SpellingPinned
+        } else {
+            InterfaceMatch::Structural
+        };
+        self.impl_types
+            .entry(impl_type_name)
+            .and_modify(|existing| {
+                if spelling_pinned {
+                    *existing = InterfaceMatch::SpellingPinned;
+                }
+            })
+            .or_insert(match_kind);
+    }
+
+    fn merge(&mut self, other: Self) {
+        for (impl_type_name, match_kind) in other.impl_types {
+            self.record(
+                impl_type_name,
+                matches!(match_kind, InterfaceMatch::SpellingPinned),
+            );
+        }
+    }
+
+    pub fn impl_type_names(&self) -> impl Iterator<Item = &str> {
+        self.impl_types.keys().map(String::as_str)
+    }
+
+    fn spelling_pinned(&self, impl_type_name: &str) -> bool {
+        matches!(
+            self.impl_types.get(impl_type_name),
+            Some(InterfaceMatch::SpellingPinned)
+        )
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -290,10 +332,7 @@ impl Facts {
         self.interface_satisfied_methods
             .entry((package_id, method_name))
             .or_default()
-            .push(InterfaceSatisfaction {
-                impl_type_name,
-                spelling_pinned,
-            });
+            .record(impl_type_name, spelling_pinned);
     }
 
     /// Whether `type_name`'s `method_name` satisfies an interface that matches
@@ -306,11 +345,7 @@ impl Facts {
     ) -> bool {
         self.interface_satisfied_methods
             .get(&(package_id.to_string(), method_name.to_string()))
-            .is_some_and(|satisfactions| {
-                satisfactions
-                    .iter()
-                    .any(|s| s.spelling_pinned && s.impl_type_name == type_name)
-            })
+            .is_some_and(|satisfactions| satisfactions.spelling_pinned(type_name))
     }
 
     pub(crate) fn merge(&mut self, other: Facts) {
@@ -352,11 +387,11 @@ impl Facts {
 
         self.usages.extend(usages);
 
-        for (key, impl_types) in interface_satisfied_methods {
+        for (key, satisfactions) in interface_satisfied_methods {
             self.interface_satisfied_methods
                 .entry(key)
                 .or_default()
-                .extend(impl_types);
+                .merge(satisfactions);
         }
     }
 }
@@ -551,24 +586,30 @@ mod tests {
     }
 
     #[test]
-    fn merge_concatenates_interface_method_impl_types() {
+    fn merge_unifies_interface_method_impl_types() {
         let allocator = Arc::new(BindingIdAllocator::new());
         let mut a = Facts::new(allocator.clone());
         let mut b = Facts::new(allocator);
 
-        a.mark_method_used_for_interface("m".into(), "f".into(), "A".into(), true);
+        a.mark_method_used_for_interface("m".into(), "f".into(), "A".into(), false);
+        b.mark_method_used_for_interface("m".into(), "f".into(), "A".into(), true);
         b.mark_method_used_for_interface("m".into(), "f".into(), "B".into(), false);
         b.mark_method_used_for_interface("m".into(), "g".into(), "C".into(), true);
 
         a.merge(b);
         assert_eq!(a.interface_satisfied_methods.len(), 2);
         assert_eq!(
-            a.interface_satisfied_methods[&("m".into(), "f".into())].len(),
+            a.interface_satisfied_methods[&("m".into(), "f".into())]
+                .impl_type_names()
+                .count(),
             2
         );
         assert_eq!(
-            a.interface_satisfied_methods[&("m".into(), "g".into())].len(),
+            a.interface_satisfied_methods[&("m".into(), "g".into())]
+                .impl_type_names()
+                .count(),
             1
         );
+        assert!(a.method_spelling_pinned_by_interface("m", "f", "A"));
     }
 }

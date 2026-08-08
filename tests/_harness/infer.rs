@@ -103,7 +103,7 @@ pub fn infer_package(package_name: &str, fs: MockFileSystem) -> InferResult {
     }
 
     let ast = {
-        let mut checker = TaskState::with_fresh_allocator();
+        let mut checker = TaskState::for_package(package_name);
         checker.put_prelude_in_scope(&store);
 
         let order = std::mem::take(&mut graph_result.order);

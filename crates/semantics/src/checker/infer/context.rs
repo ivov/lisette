@@ -338,7 +338,7 @@ mod tests {
 
     #[test]
     fn failed_speculation_rolls_back_diagnostics() {
-        let mut task = TaskState::with_fresh_allocator();
+        let mut task = TaskState::for_package(crate::store::ENTRY_PACKAGE_ID);
         let store = Store::new();
         let result: Result<(), ()> = {
             let mut ctx = InferCtx::new(&mut task, &store);
@@ -359,7 +359,7 @@ mod tests {
 
     #[test]
     fn successful_speculation_keeps_diagnostics() {
-        let mut task = TaskState::with_fresh_allocator();
+        let mut task = TaskState::for_package(crate::store::ENTRY_PACKAGE_ID);
         let store = Store::new();
         let result: Result<(), ()> = InferCtx::new(&mut task, &store).speculatively(|ctx| {
             ctx.sink

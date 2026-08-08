@@ -87,7 +87,9 @@ struct RegistrationOutput {
 }
 
 pub(super) struct PackageInferenceInput<'a> {
-    pub(super) graph_result: crate::package_graph::PackageGraphResult,
+    pub(super) order: Vec<String>,
+    pub(super) files: HashMap<String, Vec<ScannedFile>>,
+    pub(super) dependencies: DependencyGraph,
     pub(super) sink: LocalSink,
     pub(super) compile_phase: CompilePhase,
     pub(super) go_module: &'a str,
@@ -116,29 +118,26 @@ pub(super) fn infer_all_packages(
 
     let mut package_hashes: HashMap<String, u64> = HashMap::default();
     let mut cached_packages: HashSet<String> = HashSet::default();
-    let order = std::mem::take(&mut input.graph_result.order);
-    let dependencies = &input.graph_result.dependencies;
+    let order = input.order;
+    let dependencies = &input.dependencies;
 
     let mut to_infer: Vec<PendingPackage> = Vec::new();
     let mut candidates: Vec<CacheCandidate> = Vec::new();
     let mut unparsed: Vec<UnparsedPackage> = Vec::new();
 
-    let mut source_hashes: HashMap<String, (u64, u64)> =
-        if input.graph_result.files.len() < PARALLEL_THRESHOLD {
-            input
-                .graph_result
-                .files
-                .iter()
-                .map(|(id, files)| (id.clone(), hash_package_source_pair(scanned_sources(files))))
-                .collect()
-        } else {
-            input
-                .graph_result
-                .files
-                .par_iter()
-                .map(|(id, files)| (id.clone(), hash_package_source_pair(scanned_sources(files))))
-                .collect()
-        };
+    let mut source_hashes: HashMap<String, (u64, u64)> = if input.files.len() < PARALLEL_THRESHOLD {
+        input
+            .files
+            .iter()
+            .map(|(id, files)| (id.clone(), hash_package_source_pair(scanned_sources(files))))
+            .collect()
+    } else {
+        input
+            .files
+            .par_iter()
+            .map(|(id, files)| (id.clone(), hash_package_source_pair(scanned_sources(files))))
+            .collect()
+    };
 
     let entry_files: Vec<&File> = store
         .get_package(ENTRY_PACKAGE_ID)
@@ -170,11 +169,7 @@ pub(super) fn infer_all_packages(
             continue;
         }
 
-        let files = input
-            .graph_result
-            .files
-            .remove(&package_id)
-            .unwrap_or_default();
+        let files = input.files.remove(&package_id).unwrap_or_default();
         let rewrite_root_import = input.scope.has_project_root()
             && input.project_kind == ProjectKind::Library
             && crate::loader::is_external_test_package(&package_id);
@@ -242,7 +237,7 @@ pub(super) fn infer_all_packages(
     unparsed.extend(cache_load.missed);
 
     let has_parse_errors = parse_and_store_packages(&mut checker, store, unparsed, &mut to_infer);
-    let uninferred = std::mem::take(&mut input.graph_result.files);
+    let uninferred = input.files;
     store_uninferred_packages(&mut checker, store, uninferred);
 
     for pending in &to_infer {
