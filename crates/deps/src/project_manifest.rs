@@ -374,15 +374,67 @@ fn save_manifest(
     .map_err(|e| format!("Failed to write `lisette.toml`: {}", e))
 }
 
+pub struct ManifestDocument {
+    path: PathBuf,
+    encoding: ManifestEncoding,
+    pub document: toml_edit::DocumentMut,
+}
+
+impl ManifestDocument {
+    pub fn open(project_root: &Path) -> Result<Self, String> {
+        let path = project_root.join("lisette.toml");
+        let (encoding, document) = open_manifest(&path)?;
+        Ok(Self {
+            path,
+            encoding,
+            document,
+        })
+    }
+
+    pub fn save(&self) -> Result<(), String> {
+        save_manifest(&self.path, &self.encoding, &self.document)
+    }
+}
+
+pub fn go_deps_of_document(
+    document: &toml_edit::DocumentMut,
+) -> Result<BTreeMap<String, GoDependency>, String> {
+    let Some(go) = document
+        .get("dependencies")
+        .and_then(|dependencies| dependencies.get("go"))
+    else {
+        return Ok(BTreeMap::new());
+    };
+
+    let mut wrapped = toml_edit::DocumentMut::new();
+    wrapped.insert("go", go.clone());
+    toml_edit::de::from_document::<GoTable>(wrapped)
+        .map(|table| table.go)
+        .map_err(|error| format!("Invalid `[dependencies.go]`: {}", error.message()))
+}
+
+#[derive(Deserialize)]
+struct GoTable {
+    go: BTreeMap<String, GoDependency>,
+}
+
 /// Add or update a Go dependency in `lisette.toml`, written in the shape matching its variant.
 pub fn upsert_go_dependency(
     project_root: &Path,
     module_path: &str,
     dep: &GoDependency,
 ) -> Result<(), String> {
-    let path = project_root.join("lisette.toml");
-    let (encoding, mut manifest) = open_manifest(&path)?;
-    let go = ensure_go_deps_table(&mut manifest)?;
+    let mut manifest = ManifestDocument::open(project_root)?;
+    upsert_into_document(&mut manifest.document, module_path, dep)?;
+    manifest.save()
+}
+
+pub fn upsert_into_document(
+    manifest: &mut toml_edit::DocumentMut,
+    module_path: &str,
+    dep: &GoDependency,
+) -> Result<(), String> {
+    let go = ensure_go_deps_table(manifest)?;
 
     let via = dep.via().map(|via_list| {
         let mut sorted = via_list.to_vec();
@@ -429,7 +481,7 @@ pub fn upsert_go_dependency(
         }
     }
 
-    save_manifest(&path, &encoding, &manifest)
+    Ok(())
 }
 
 fn via_array(via_list: &[String]) -> toml_edit::Value {
@@ -440,19 +492,14 @@ fn via_array(via_list: &[String]) -> toml_edit::Value {
     toml_edit::Value::Array(arr)
 }
 
-pub fn remove_go_dep(project_root: &Path, go_dep_path: &str) -> Result<(), String> {
-    let path = project_root.join("lisette.toml");
-    let (encoding, mut manifest) = open_manifest(&path)?;
-
+pub fn remove_from_document(manifest: &mut toml_edit::DocumentMut, module_path: &str) {
     if let Some(deps) = manifest
         .get_mut("dependencies")
         .and_then(|d| d.as_table_mut())
         && let Some(go) = deps.get_mut("go").and_then(|g| g.as_table_mut())
     {
-        go.remove(go_dep_path);
+        go.remove(module_path);
     }
-
-    save_manifest(&path, &encoding, &manifest)
 }
 
 /// Trimmed transitive dep. `removed_parents` are parents dropped from `via`.
@@ -461,21 +508,22 @@ pub struct TrimmedVia {
     pub removed_parents: Vec<String>,
 }
 
-pub struct ResolveReport {
-    pub promoted: Vec<String>,
-    pub removed: Vec<String>,
+struct ResolveReport {
+    promoted: Vec<String>,
+    removed: Vec<String>,
 }
 
-/// Drop `via` parents that are no longer manifest keys. Never deletes entries.
-/// `resolve_empty_via` handles entries left with `via = []`.
-pub fn trim_dead_via_parents(project_root: &Path) -> Result<Vec<TrimmedVia>, String> {
-    let manifest = parse_manifest(project_root)?;
-    let live_deps = manifest.go_deps();
+/// Drop `via` parents that are no longer declared. Never deletes entries.
+/// `resolve_empty_via_in` handles entries left with `via = []`.
+fn trim_dead_via_in(
+    document: &mut toml_edit::DocumentMut,
+    live_deps: &BTreeMap<String, GoDependency>,
+) -> Result<Vec<TrimmedVia>, String> {
     let live_paths: HashSet<&str> = live_deps.keys().map(|s| s.as_str()).collect();
 
     let mut trimmed = Vec::new();
 
-    for (dep_path, dep) in &live_deps {
+    for (dep_path, dep) in live_deps {
         let Some(via) = dep.via() else { continue };
 
         let removed_parents: Vec<String> = via
@@ -496,7 +544,7 @@ pub fn trim_dead_via_parents(project_root: &Path) -> Result<Vec<TrimmedVia>, Str
         canonical.sort();
         canonical.dedup();
 
-        upsert_go_dependency(project_root, dep_path, &dep.with_via(Some(canonical)))?;
+        upsert_into_document(document, dep_path, &dep.with_via(Some(canonical)))?;
         trimmed.push(TrimmedVia {
             module_path: dep_path.clone(),
             removed_parents,
@@ -512,17 +560,16 @@ pub fn trim_dead_via_parents(project_root: &Path) -> Result<Vec<TrimmedVia>, Str
 ///
 /// Each import maps to a single best key: its longest declared prefix. E.g.
 /// `k8s.io/api/core/v1` maps to `k8s.io/api` (not `k8s.io`) when both are
-/// declared, preventing double-counting against nested keys.
-pub fn resolve_empty_via(
-    project_root: &Path,
+/// declared. The key is already declared, so this asks only whether an import
+/// reaches it, never which module owns a package.
+fn resolve_empty_via_in(
+    document: &mut toml_edit::DocumentMut,
+    live_deps: &BTreeMap<String, GoDependency>,
     imported_pkgs: &[String],
 ) -> Result<ResolveReport, String> {
-    let manifest = parse_manifest(project_root)?;
-    let live_deps = manifest.go_deps();
-
     let mut matched: HashSet<String> = HashSet::new();
     for pkg in imported_pkgs {
-        if let Some((module, _)) = find_module_for_pkg(&live_deps, pkg) {
+        if let Some((module, _)) = find_module_for_pkg(live_deps, pkg) {
             matched.insert(module.to_string());
         }
     }
@@ -530,22 +577,58 @@ pub fn resolve_empty_via(
     let mut promoted = Vec::new();
     let mut removed = Vec::new();
 
-    for (dep_path, dep) in &live_deps {
+    for (dep_path, dep) in live_deps {
         let Some(via) = dep.via() else { continue };
         if !via.is_empty() {
             continue;
         }
 
         if matched.contains(dep_path.as_str()) {
-            upsert_go_dependency(project_root, dep_path, &dep.with_via(None))?;
+            upsert_into_document(document, dep_path, &dep.with_via(None))?;
             promoted.push(dep_path.clone());
         } else {
-            remove_go_dep(project_root, dep_path)?;
+            remove_from_document(document, dep_path);
             removed.push(dep_path.clone());
         }
     }
 
     Ok(ResolveReport { promoted, removed })
+}
+
+#[derive(Default)]
+pub struct ViaChanges {
+    pub trimmed: Vec<TrimmedVia>,
+    pub promoted: Vec<String>,
+    pub removed: Vec<String>,
+}
+
+impl ViaChanges {
+    pub fn is_empty(&self) -> bool {
+        self.trimmed.is_empty() && self.promoted.is_empty() && self.removed.is_empty()
+    }
+}
+
+pub fn finalize_via(
+    document: &mut toml_edit::DocumentMut,
+    imported_pkgs: &[String],
+) -> Result<ViaChanges, String> {
+    let mut changes = ViaChanges::default();
+
+    loop {
+        let trimmed = trim_dead_via_in(document, &go_deps_of_document(document)?)?;
+        let report =
+            resolve_empty_via_in(document, &go_deps_of_document(document)?, imported_pkgs)?;
+
+        let changed =
+            !trimmed.is_empty() || !report.promoted.is_empty() || !report.removed.is_empty();
+        changes.trimmed.extend(trimmed);
+        changes.promoted.extend(report.promoted);
+        changes.removed.extend(report.removed);
+
+        if !changed {
+            return Ok(changes);
+        }
+    }
 }
 
 /// Whether `pkg_path` equals `module_path` or is a path nested under it
@@ -609,6 +692,16 @@ mod tests {
         std::fs::read_to_string(dir.path().join("lisette.toml")).unwrap()
     }
 
+    fn finalize(dir: &TempDir, imported: &[&str]) -> ViaChanges {
+        let imported: Vec<String> = imported.iter().map(|p| (*p).to_string()).collect();
+        let mut manifest = ManifestDocument::open(dir.path()).unwrap();
+        let changes = finalize_via(&mut manifest.document, &imported).unwrap();
+        if !changes.is_empty() {
+            manifest.save().unwrap();
+        }
+        changes
+    }
+
     #[test]
     fn project_root_is_found_from_a_file_a_directory_or_not_at_all() {
         let dir = project_with("[project]\nname = \"demo\"\nversion = \"0.1.0\"\n");
@@ -626,6 +719,15 @@ mod tests {
         let orphan = outside.path().join("loose.lis");
         std::fs::write(&orphan, "fn main() {}\n").unwrap();
         assert_eq!(find_project_root(&orphan), None);
+    }
+
+    #[test]
+    fn a_malformed_table_is_an_error_not_an_empty_one() {
+        let document: toml_edit::DocumentMut = "[dependencies.go]\n\"a.b/c\" = { nonsense = 1 }\n"
+            .parse()
+            .unwrap();
+
+        assert!(go_deps_of_document(&document).is_err());
     }
 
     #[test]
@@ -699,11 +801,9 @@ version = "0.1.0"
 "#,
         );
 
-        trim_dead_via_parents(dir.path()).unwrap();
-        let report =
-            resolve_empty_via(dir.path(), &["github.com/gorilla/context".to_string()]).unwrap();
+        let changes = finalize(&dir, &["github.com/gorilla/context"]);
 
-        assert_eq!(report.promoted, vec!["github.com/gorilla/context"]);
+        assert_eq!(changes.promoted, vec!["github.com/gorilla/context"]);
         let after = manifest_text(&dir);
         assert!(after.contains(r#""github.com/gorilla/context" = "v1.1.1""#));
         assert!(!after.contains("via"));
@@ -721,10 +821,9 @@ version = "0.1.0"
 "#,
         );
 
-        trim_dead_via_parents(dir.path()).unwrap();
-        let report = resolve_empty_via(dir.path(), &[]).unwrap();
+        let changes = finalize(&dir, &[]);
 
-        assert_eq!(report.removed, vec!["github.com/gorilla/context"]);
+        assert_eq!(changes.removed, vec!["github.com/gorilla/context"]);
         assert!(!manifest_text(&dir).contains("gorilla/context"));
     }
 
@@ -741,8 +840,7 @@ version = "0.1.0"
 "#,
         );
 
-        trim_dead_via_parents(dir.path()).unwrap();
-        resolve_empty_via(dir.path(), &[]).unwrap();
+        finalize(&dir, &[]);
 
         let after = manifest_text(&dir);
         assert!(after.contains("gorilla/context"));
@@ -762,10 +860,9 @@ version = "0.1.0"
 "#,
         );
 
-        trim_dead_via_parents(dir.path()).unwrap();
-        let report = resolve_empty_via(dir.path(), &["k8s.io/api/core/v1".to_string()]).unwrap();
+        let changes = finalize(&dir, &["k8s.io/api/core/v1"]);
 
-        assert_eq!(report.promoted, vec!["k8s.io/api"]);
+        assert_eq!(changes.promoted, vec!["k8s.io/api"]);
         assert!(manifest_text(&dir).contains(r#""k8s.io/api" = "v0.30.0""#));
     }
 
@@ -782,13 +879,9 @@ version = "0.1.0"
         );
         let before = manifest_text(&dir);
 
-        let trimmed = trim_dead_via_parents(dir.path()).unwrap();
-        let report =
-            resolve_empty_via(dir.path(), &["github.com/gorilla/mux".to_string()]).unwrap();
+        let changes = finalize(&dir, &["github.com/gorilla/mux"]);
 
-        assert!(trimmed.is_empty());
-        assert!(report.promoted.is_empty());
-        assert!(report.removed.is_empty());
+        assert!(changes.is_empty());
         assert_eq!(before, manifest_text(&dir));
     }
 

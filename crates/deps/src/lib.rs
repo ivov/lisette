@@ -35,10 +35,12 @@ fn typedef_home() -> Option<PathBuf> {
 }
 
 pub use project_manifest::{
-    GoDependency, Manifest, ReplacementSource, ResolveReport, TrimmedVia, check_no_subpackage_deps,
-    check_toolchain_version, find_project_root, parse_manifest, remove_go_dep, resolve_empty_via,
-    trim_dead_via_parents, upsert_go_dependency, validate_project_name,
+    GoDependency, Manifest, ManifestDocument, ReplacementSource, TrimmedVia, ViaChanges,
+    check_no_subpackage_deps, check_toolchain_version, finalize_via, find_project_root,
+    go_deps_of_document, parse_manifest, remove_from_document, upsert_go_dependency,
+    upsert_into_document, validate_project_name,
 };
+pub use toml_edit::DocumentMut;
 pub use typedef_locator::{
     Bindgen, BindgenFailure, BindgenGuard, BindgenSession, BindgenSetup, DeclarationStatus,
     ImportablePackage, ResolvedReplacement, TypedefLocator, TypedefLocatorResult, TypedefOrigin,
