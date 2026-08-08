@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786182389241,
+  "lastUpdate": 1786191064231,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -20334,6 +20334,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "deps",
             "value": 1637,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 713,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7823,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f4601b11f2cd6ead96573e9f8a1c09c318d20eff",
+          "message": "refactor: resolve script imports from declared dependencies (#1232)",
+          "timestamp": "2026-08-08T14:10:38+02:00",
+          "tree_id": "eb7040cfa13f2cf4b330c58dbedeb0a03e251fe8",
+          "url": "https://github.com/ivov/lisette/commit/f4601b11f2cd6ead96573e9f8a1c09c318d20eff"
+        },
+        "date": 1786191063046,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 128970,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30337,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 25962,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18571,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 13784,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 12547,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 7717,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5884,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2901,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1815,
             "unit": "lines"
           },
           {
