@@ -328,7 +328,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
 
     store.init_entry_package();
     let entry = register_entry_file(&mut store, &sink, input.entry, include_tests);
-    if entry.parse.is_failed() {
+    if entry.parse_failed() {
         let checker = TaskState::with_sink(sink, input.project_kind);
         return InferenceOutput {
             store,
@@ -339,7 +339,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
             cached_packages: HashSet::default(),
             cache_root: None,
             unreachable_packages: Vec::new(),
-            entry_parse: entry.parse,
+            entry_parse: entry.into_parse(),
         };
     }
     if input.load_siblings {
@@ -347,7 +347,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
             &mut store,
             &sink,
             input.loader,
-            entry.filename.as_deref(),
+            entry.filename(),
             include_tests,
         );
     }
@@ -426,6 +426,6 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
         cached_packages: package_output.cached_packages,
         cache_root,
         unreachable_packages,
-        entry_parse: entry.parse,
+        entry_parse: entry.into_parse(),
     }
 }

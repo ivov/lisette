@@ -25,8 +25,8 @@ pub(crate) fn normalize_test_params(mut params: Vec<Binding>, is_test: bool) -> 
 }
 
 impl TaskState {
-    /// Collect and validate a package's `#[test]` functions into `facts`
-    /// (merge-safe, since this runs during parallel registration).
+    /// Collect and validate a package's `#[test]` functions for finalization.
+    /// The pending records are merge-safe across parallel registration tasks.
     pub(super) fn register_package_tests(&mut self, store: &Store, package_id: &str) {
         let package = store.get_package(package_id).expect("package must exist");
         let context_shadowed = package_shadows_test_context(store, package_id);
@@ -44,7 +44,7 @@ impl TaskState {
                 );
             }
         }
-        self.facts.test_functions.extend(records);
+        self.pending.test_functions.extend(records);
     }
 
     pub(crate) fn collect_cached_package_tests(&mut self, store: &Store, package_id: &str) {
@@ -70,11 +70,11 @@ impl TaskState {
                 );
             }
         }
-        self.facts.test_functions.extend(records);
+        self.pending.test_functions.extend(records);
     }
 
-    pub fn finalize_tests(&mut self, store: &mut Store) {
-        for test in std::mem::take(&mut self.facts.test_functions) {
+    pub(super) fn finalize_tests(&mut self, store: &mut Store) {
+        for test in std::mem::take(&mut self.pending.test_functions) {
             store.test_index.push(test);
         }
     }

@@ -27,8 +27,7 @@ fuzz_target!(|data: &[u8]| {
         &ast_result.ast,
         &lisette_syntax::program::Visibility::Private,
     );
-    checker.finalize_equality(&mut store);
-    checker.check_pending_generic_bounds(&store);
+    checker.finalize_registration(&mut store);
 
     let mut ctx = InferCtx::new(&mut checker, &store);
     for expression in ast_result.ast {

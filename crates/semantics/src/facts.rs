@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use syntax::EcoString;
 use syntax::ast::{BindingId, BindingKind, DeadCodeCause, Span};
-use syntax::program::{BindingMutation, TestFunction};
+use syntax::program::BindingMutation;
 use syntax::types::Type;
 
 #[derive(Debug, Default)]
@@ -40,7 +40,6 @@ pub struct Facts {
     pub expression_only_fstrings: Vec<ExpressionOnlyFstringFact>,
     pub unprefixed_fstrings: Vec<UnprefixedFstringFact>,
     pub interface_satisfied_methods: HashMap<(String, String), Vec<InterfaceSatisfaction>>,
-    pub(crate) test_functions: Vec<TestFunction>,
 
     pub(crate) deferred: DeferredChecks,
 
@@ -166,7 +165,6 @@ impl Facts {
             function_spans: Vec::new(),
             usages: HashSet::default(),
             interface_satisfied_methods: HashMap::default(),
-            test_functions: Vec::new(),
             bound_types: HashMap::default(),
         }
     }
@@ -335,10 +333,8 @@ impl Facts {
             function_spans,
             usages,
             interface_satisfied_methods,
-            test_functions,
             bound_types,
         } = other;
-        self.test_functions.extend(test_functions);
         self.bound_types.extend(bound_types);
 
         self.bindings.extend(bindings);

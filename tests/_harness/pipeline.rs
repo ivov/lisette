@@ -153,8 +153,7 @@ impl CompiledTest {
                 items: self.ast.clone(),
                 file_comment: None,
             });
-            checker.finalize_equality(&mut store);
-            checker.check_pending_generic_bounds(&store);
+            checker.finalize_registration(&mut store);
 
             let mut typed_ast = vec![];
             {

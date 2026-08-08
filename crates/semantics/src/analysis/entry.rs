@@ -1,8 +1,34 @@
 use super::*;
 
-pub(super) struct EntryRegistration {
-    pub(super) filename: Option<String>,
-    pub(super) parse: EntryParseOutcome,
+pub(super) enum EntryRegistration {
+    Absent,
+    Present {
+        filename: String,
+        parse: EntryParseOutcome,
+    },
+}
+
+impl EntryRegistration {
+    pub(super) fn filename(&self) -> Option<&str> {
+        match self {
+            Self::Absent => None,
+            Self::Present { filename, .. } => Some(filename),
+        }
+    }
+
+    pub(super) fn parse_failed(&self) -> bool {
+        match self {
+            Self::Absent => false,
+            Self::Present { parse, .. } => parse.is_failed(),
+        }
+    }
+
+    pub(super) fn into_parse(self) -> EntryParseOutcome {
+        match self {
+            Self::Absent => EntryParseOutcome::Clean,
+            Self::Present { parse, .. } => parse,
+        }
+    }
 }
 
 struct ParsedEntry {
@@ -19,10 +45,7 @@ pub(super) fn register_entry_file(
     include_tests: bool,
 ) -> EntryRegistration {
     let Some(entry) = entry else {
-        return EntryRegistration {
-            filename: None,
-            parse: EntryParseOutcome::Clean,
-        };
+        return EntryRegistration::Absent;
     };
 
     let ParsedEntry {
@@ -50,8 +73,8 @@ pub(super) fn register_entry_file(
         file_comment,
     );
 
-    EntryRegistration {
-        filename: Some(entry.filename),
+    EntryRegistration::Present {
+        filename: entry.filename,
         parse: outcome,
     }
 }

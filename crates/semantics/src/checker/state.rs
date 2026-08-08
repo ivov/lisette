@@ -1,5 +1,6 @@
 use super::resolution::ImportState;
 use super::*;
+use syntax::program::TestFunction;
 
 #[derive(Debug, Clone)]
 pub struct Cursor {
@@ -74,9 +75,10 @@ pub(crate) struct TaskOutput {
 
 #[derive(Default)]
 pub(crate) struct PendingWork {
-    pub(crate) equality_attributes: Vec<DerivedAttributes>,
+    pub(crate) equality_attributes: Vec<EqualityAttributes>,
     pub(crate) pre_inference_bound_checks: Vec<(Type, Type, Span)>,
     pub(crate) post_inference_bound_checks: Vec<(Type, Type, Span)>,
+    pub(crate) test_functions: Vec<TestFunction>,
 }
 
 impl PendingWork {
@@ -86,6 +88,7 @@ impl PendingWork {
             .extend(other.pre_inference_bound_checks);
         self.post_inference_bound_checks
             .extend(other.post_inference_bound_checks);
+        self.test_functions.extend(other.test_functions);
     }
 }
 

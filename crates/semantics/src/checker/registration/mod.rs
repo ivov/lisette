@@ -46,6 +46,13 @@ struct RegistrationFile {
 }
 
 impl TaskState {
+    /// Completes work that must wait until every package has been registered.
+    pub fn finalize_registration(&mut self, store: &mut Store) {
+        self.finalize_equality(store);
+        self.check_pending_generic_bounds(store);
+        self.finalize_tests(store);
+    }
+
     fn definition_exists(&self, store: &Store, qualified_name: &str) -> bool {
         self.current_package(store)
             .definitions

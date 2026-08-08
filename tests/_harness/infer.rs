@@ -130,9 +130,7 @@ pub fn infer_package(package_name: &str, fs: MockFileSystem) -> InferResult {
             to_infer.push(package_id);
         }
 
-        checker.finalize_equality(&mut store);
-        checker.check_pending_generic_bounds(&store);
-        checker.finalize_tests(&mut store);
+        checker.finalize_registration(&mut store);
 
         for package_id in &to_infer {
             checker.infer_package(&mut store, package_id);

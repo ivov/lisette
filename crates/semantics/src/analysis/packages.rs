@@ -555,9 +555,7 @@ fn register_packages(
 }
 
 fn infer_packages(checker: &mut TaskState, store: &mut Store, to_infer: &[String]) {
-    checker.finalize_equality(store);
-    checker.check_pending_generic_bounds(store);
-    checker.finalize_tests(store);
+    checker.finalize_registration(store);
 
     let package_files: Vec<(String, Vec<FileInferenceInput>)> = to_infer
         .iter()

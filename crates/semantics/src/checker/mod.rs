@@ -16,7 +16,7 @@ use crate::facts::{BindingIdAllocator, Facts};
 use crate::store::Store;
 use diagnostics::LocalSink;
 use ecow::EcoString;
-use registration::derived_attributes::DerivedAttributes;
+use registration::derived_attributes::EqualityAttributes;
 use scopes::Scopes;
 use syntax::ast::{Annotation, Expression, Generic, ImportAlias, Span};
 use syntax::program::{

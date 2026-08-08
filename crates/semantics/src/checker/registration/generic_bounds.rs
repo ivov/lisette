@@ -173,7 +173,7 @@ impl TaskState {
         }
     }
 
-    pub fn check_pending_generic_bounds(&mut self, store: &Store) {
+    pub(super) fn check_pending_generic_bounds(&mut self, store: &Store) {
         let pending = std::mem::take(&mut self.pending.pre_inference_bound_checks);
         let mut ctx = InferCtx::new(self, store);
         for (argument, required, span) in pending {
