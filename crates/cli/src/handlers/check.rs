@@ -86,6 +86,36 @@ pub fn check(
     check_loose_dir(target_path, &options)
 }
 
+struct Snapshot {
+    source: Option<String>,
+    locator: TypedefLocator,
+}
+
+impl Snapshot {
+    fn read(file: &Path) -> Self {
+        let Ok(source) = std::fs::read_to_string(file) else {
+            return Self {
+                source: None,
+                locator: TypedefLocator::default(),
+            };
+        };
+        let locator =
+            super::script::script_locator(&source, file, super::script_deps::Mode::Offline)
+                .map_or_else(|_| TypedefLocator::default(), |(locator, _)| locator);
+        Self {
+            source: Some(source),
+            locator,
+        }
+    }
+
+    fn of(locator: TypedefLocator) -> Self {
+        Self {
+            source: None,
+            locator,
+        }
+    }
+}
+
 fn check_file(file_path: &Path, options: &CheckOptions) -> i32 {
     match super::project::resolve_file_target(file_path) {
         FileTarget::ProjectEntry { root } | FileTarget::ProjectPackage { root } => {
@@ -95,7 +125,7 @@ fn check_file(file_path: &Path, options: &CheckOptions) -> i32 {
             file_path,
             options,
             CompileScope::Script { inside_project },
-            TypedefLocator::default(),
+            Snapshot::read(file_path),
             "main",
             None,
         ),
@@ -172,7 +202,7 @@ fn check_project(project_path: &Path, options: &CheckOptions) -> i32 {
                 &src_main,
                 options,
                 CompileScope::Project(project_path.to_path_buf()),
-                locator,
+                Snapshot::of(locator),
                 &go_module,
                 Some(scanned),
             )
@@ -199,12 +229,12 @@ fn check_single_file(
     file_path: &Path,
     options: &CheckOptions,
     scope: CompileScope,
-    locator: TypedefLocator,
+    snapshot: Snapshot,
     go_module: &str,
     scanned: Option<ScannedSources>,
 ) -> i32 {
     let start = Instant::now();
-    let result = match compile_single_file(file_path, scope, locator, go_module, scanned) {
+    let result = match compile_single_file(file_path, scope, snapshot, go_module, scanned) {
         Ok(result) => result,
         Err(ReadFailure) => return 1,
     };
@@ -261,11 +291,12 @@ fn report_check(result: &CompileResult, options: &CheckOptions, start: Instant) 
 fn compile_single_file(
     file_path: &Path,
     scope: CompileScope,
-    locator: TypedefLocator,
+    snapshot: Snapshot,
     go_module: &str,
     scanned: Option<ScannedSources>,
 ) -> Result<CompileResult, ReadFailure> {
-    let source = match fs::read_to_string(file_path) {
+    let Snapshot { source, locator } = snapshot;
+    let source = match source.ok_or(()).or_else(|_| fs::read_to_string(file_path)) {
         Ok(s) => s,
         Err(e) => {
             cli_error!(
@@ -403,7 +434,7 @@ fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
         let Ok(compiled) = compile_single_file(
             file,
             CompileScope::Script { inside_project },
-            TypedefLocator::default(),
+            Snapshot::read(file),
             "main",
             None,
         ) else {

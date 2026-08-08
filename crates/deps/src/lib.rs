@@ -1,4 +1,6 @@
+mod dependency_table;
 mod local_source;
+mod module_path;
 mod project_manifest;
 mod typedef_locator;
 
@@ -33,14 +35,20 @@ fn typedef_home() -> Option<PathBuf> {
     }
 }
 
-pub use project_manifest::{
-    GoDependency, Manifest, ReplacementSource, ResolveReport, TrimmedVia, check_no_subpackage_deps,
-    check_toolchain_version, find_project_root, parse_manifest, remove_go_dep, resolve_empty_via,
-    trim_dead_via_parents, upsert_go_dependency, validate_project_name,
+pub use dependency_table::{
+    DependencyTable, TableError, parse_dependency_table, validate_script_entry,
 };
+pub use project_manifest::{
+    GoDependency, Manifest, ManifestDocument, ReplacementSource, TrimmedVia, ViaChanges,
+    check_no_subpackage_deps, check_toolchain_version, finalize_via, find_project_root,
+    go_deps_of_document, parse_manifest, remove_from_document, upsert_go_dependency,
+    upsert_into_document, validate_project_name,
+};
+pub use toml_edit::DocumentMut;
 pub use typedef_locator::{
     Bindgen, BindgenFailure, BindgenGuard, BindgenSession, BindgenSetup, DeclarationStatus,
-    ImportablePackage, ResolvedReplacement, TypedefLocator, TypedefLocatorResult, TypedefOrigin,
+    ImportablePackage, ResolvedReplacement, ScriptSession, TypedefLocator, TypedefLocatorResult,
+    TypedefOrigin,
 };
 
 pub fn is_third_party(pkg: &str) -> bool {
@@ -57,24 +65,44 @@ pub fn placeholder_require_version(module_path: &str) -> String {
 }
 
 pub fn check_version_matches_path(module_path: &str, version: &str) -> Result<(), String> {
+    let Some((_, path_major)) = crate::module_path::split_path_version(module_path) else {
+        return Ok(());
+    };
+    let path_major = path_major.strip_suffix("-unstable").unwrap_or(path_major);
+
+    if version.starts_with("v0.0.0-") && path_major == ".v1" {
+        return Ok(());
+    }
+
     let Some(actual) = version_major(version) else {
         return Ok(());
     };
-    let ok = match path_major(module_path) {
-        Some(required) => actual == required,
-        None => actual <= 1,
+
+    let expected = match path_major.strip_prefix(['/', '.']) {
+        Some(required) => required,
+        None => {
+            // `+incompatible` is how a pre-modules v2 or later declares itself.
+            if actual <= 1 || build_metadata(version) == Some("incompatible") {
+                return Ok(());
+            }
+            return Err(format!(
+                "version `{}` is not valid for module path `{}` (expected v0.x or v1.x)",
+                version, module_path
+            ));
+        }
     };
-    if ok {
+
+    if expected.strip_prefix('v').and_then(parse_major_digits) == Some(actual) {
         return Ok(());
     }
-    let expected = match path_major(module_path) {
-        Some(required) => format!("v{}.x", required),
-        None => "v0.x or v1.x".to_string(),
-    };
     Err(format!(
-        "version `{}` is not valid for module path `{}` (expected {})",
+        "version `{}` is not valid for module path `{}` (expected {}.x)",
         version, module_path, expected
     ))
+}
+
+fn build_metadata(version: &str) -> Option<&str> {
+    version.split_once('+').map(|(_, build)| build)
 }
 
 fn version_major(version: &str) -> Option<u64> {
@@ -88,13 +116,13 @@ fn version_major(version: &str) -> Option<u64> {
 
 /// The major a path's suffix demands: `/vN` (N >= 2), or gopkg.in `.vN` (any N).
 fn path_major(module_path: &str) -> Option<u64> {
-    let last = module_path.rsplit('/').next()?;
-    if module_path.starts_with("gopkg.in/") {
-        let (_, digits) = last.rsplit_once(".v")?;
-        return parse_major_digits(digits);
-    }
-    let digits = last.strip_prefix('v')?;
-    parse_major_digits(digits).filter(|&major| major >= 2)
+    let (_, path_major) = crate::module_path::split_path_version(module_path)?;
+    let digits = path_major
+        .strip_suffix("-unstable")
+        .unwrap_or(path_major)
+        .strip_prefix(['/', '.'])?
+        .strip_prefix('v')?;
+    parse_major_digits(digits)
 }
 
 fn parse_major_digits(digits: &str) -> Option<u64> {
@@ -102,6 +130,62 @@ fn parse_major_digits(digits: &str) -> Option<u64> {
         && digits.bytes().all(|b| b.is_ascii_digit())
         && (digits.len() == 1 || !digits.starts_with('0'));
     is_canonical.then(|| digits.parse().ok()).flatten()
+}
+
+pub fn is_exact_version(version: &str) -> bool {
+    let Some(rest) = version.strip_prefix('v') else {
+        return false;
+    };
+
+    let (rest, build) = match rest.split_once('+') {
+        Some((rest, build)) => (rest, Some(build)),
+        None => (rest, None),
+    };
+    let (core, pre_release) = match rest.split_once('-') {
+        Some((core, pre)) => (core, Some(pre)),
+        None => (rest, None),
+    };
+
+    let mut numbers = core.split('.');
+    let (Some(major), Some(minor), Some(patch), None) = (
+        numbers.next(),
+        numbers.next(),
+        numbers.next(),
+        numbers.next(),
+    ) else {
+        return false;
+    };
+    if ![major, minor, patch].iter().all(|part| is_numeric_id(part)) {
+        return false;
+    }
+
+    pre_release.is_none_or(|section| section.split('.').all(is_pre_release_id))
+        && build.is_none_or(|section| section.split('.').all(is_semver_id))
+}
+
+fn is_numeric_id(part: &str) -> bool {
+    !part.is_empty()
+        && part.bytes().all(|b| b.is_ascii_digit())
+        && (part == "0" || !part.starts_with('0'))
+}
+
+fn is_pre_release_id(part: &str) -> bool {
+    if part.bytes().all(|b| b.is_ascii_digit()) {
+        return is_numeric_id(part);
+    }
+    is_semver_id(part)
+}
+
+fn is_semver_id(part: &str) -> bool {
+    !part.is_empty() && part.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+}
+
+pub fn is_valid_package_path(pkg: &str) -> bool {
+    !pkg.is_empty()
+        && !pkg.contains('@')
+        && pkg
+            .split('/')
+            .all(|segment| !matches!(segment, "" | "." | ".."))
 }
 
 pub fn is_stdlib(pkg: &str) -> bool {
@@ -455,6 +539,20 @@ mod tests {
     #[test]
     fn check_version_matches_path_enforces_major_suffix() {
         // /vN path requires vN
+        assert!(
+            check_version_matches_path("github.com/hashicorp/consul", "v2.1.0+incompatible")
+                .is_ok()
+        );
+        assert!(
+            check_version_matches_path("github.com/docker/docker", "v20.10.24+incompatible")
+                .is_ok()
+        );
+        assert!(
+            check_version_matches_path("gopkg.in/check.v1", "v0.0.0-20161208181325-20d25e280405")
+                .is_ok()
+        );
+        assert!(check_version_matches_path("gopkg.in/pkg.v3-unstable", "v3.1.0").is_ok());
+        assert!(check_version_matches_path("github.com/you/mux", "v2.1.0+build.1").is_err());
         assert!(check_version_matches_path("example.com/lib/v2", "v2.3.0").is_ok());
         assert!(check_version_matches_path("example.com/lib/v2", "v1.0.0").is_err());
         // gopkg.in .vN path requires vN
@@ -505,5 +603,48 @@ mod tests {
             &home.join("project/src/main.lis")
         ));
         assert!(!is_generated_typedef_path(Path::new("/etc/passwd")));
+    }
+}
+
+#[cfg(test)]
+mod exact_version_tests {
+    use super::is_exact_version;
+
+    #[test]
+    fn accepts_go_module_versions() {
+        for version in [
+            "v1.6.0",
+            "v0.0.0-20191109021931-daa7c04131f5",
+            "v2.1.0+incompatible",
+            "v1.2.3-rc.1",
+            "v1.2.3+001",
+            "v0.21.0",
+        ] {
+            assert!(is_exact_version(version), "{version}");
+        }
+    }
+
+    #[test]
+    fn rejects_inexact_or_malformed_versions() {
+        for version in [
+            "latest",
+            "master",
+            "",
+            "v1",
+            "v1.6",
+            "1.6.0",
+            "vx.y.z",
+            "v01.2.3",
+            "v1.2.3-",
+            "v1.2.3+",
+            "v1.2.3-rc..1",
+            "v1.2.3-rc_1",
+            "v1.2.3-01",
+            "v1.2.3-rc.007",
+            "v1.2.3.4",
+            "v-1.2.3",
+        ] {
+            assert!(!is_exact_version(version), "{version}");
+        }
     }
 }

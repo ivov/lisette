@@ -10,6 +10,15 @@ mod errors;
 mod token;
 mod types;
 
+pub(crate) fn bom_len(source: &str) -> usize {
+    const BOM: char = '\u{feff}';
+    if source.starts_with(BOM) {
+        BOM.len_utf8()
+    } else {
+        0
+    }
+}
+
 pub(crate) fn shebang_len(source: &str) -> Option<usize> {
     let rest = source.strip_prefix("#!")?;
     if matches!(rest.as_bytes().first()?, b'[' | b'\r' | b'\n') {
@@ -48,6 +57,7 @@ impl<'source> Lexer<'source> {
 
     pub fn lex(mut self) -> LexResult<'source> {
         let mut tokens = Vec::new();
+        self.current_offset = bom_len(self.input);
 
         if let Some(shebang) = self.lex_shebang() {
             tokens.push(shebang);
@@ -1247,13 +1257,14 @@ impl<'source> Lexer<'source> {
     }
 
     fn lex_shebang(&mut self) -> Option<Token<'source>> {
-        let length = shebang_len(self.input)?;
-        self.current_offset = length;
+        let start = self.current_offset;
+        let length = shebang_len(&self.input[start..])?;
+        self.current_offset = start + length;
 
         Some(Token {
             kind: TokenKind::Shebang,
-            text: &self.input[..length],
-            byte_offset: 0,
+            text: &self.input[start..start + length],
+            byte_offset: start as u32,
             byte_length: length as u32,
         })
     }

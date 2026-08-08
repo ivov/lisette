@@ -84,6 +84,7 @@ impl PendingWork {
 pub(crate) struct TaskSeed {
     binding_ids: Arc<BindingIdAllocator>,
     project_kind: crate::analysis::ProjectKind,
+    script: Option<crate::analysis::ScriptUnit>,
 }
 
 impl TaskSeed {
@@ -93,6 +94,7 @@ impl TaskSeed {
             LocalSink::new(),
             self.project_kind,
             crate::store::ENTRY_PACKAGE_ID,
+            self.script,
         )
     }
 }
@@ -106,6 +108,7 @@ pub struct TaskState {
     pub sink: LocalSink,
     pub facts: Facts,
     pub(crate) project_kind: crate::analysis::ProjectKind,
+    pub(crate) script: Option<crate::analysis::ScriptUnit>,
     pub(crate) pending: PendingWork,
 }
 
@@ -115,6 +118,7 @@ impl TaskState {
         sink: LocalSink,
         project_kind: crate::analysis::ProjectKind,
         package_id: impl Into<String>,
+        script: Option<crate::analysis::ScriptUnit>,
     ) -> Self {
         Self {
             env: TypeEnv::new(),
@@ -124,6 +128,7 @@ impl TaskState {
             sink,
             facts: Facts::new(binding_ids),
             project_kind,
+            script,
             pending: PendingWork::default(),
         }
     }
@@ -134,15 +139,21 @@ impl TaskState {
             LocalSink::new(),
             crate::analysis::ProjectKind::Binary,
             package_id,
+            None,
         )
     }
 
-    pub(crate) fn with_sink(sink: LocalSink, project_kind: crate::analysis::ProjectKind) -> Self {
+    pub(crate) fn with_sink(
+        sink: LocalSink,
+        project_kind: crate::analysis::ProjectKind,
+        script: Option<crate::analysis::ScriptUnit>,
+    ) -> Self {
         Self::new(
             Arc::new(BindingIdAllocator::new()),
             sink,
             project_kind,
             crate::store::ENTRY_PACKAGE_ID,
+            script,
         )
     }
 
@@ -157,6 +168,7 @@ impl TaskState {
         TaskSeed {
             binding_ids: self.facts.allocator(),
             project_kind: self.project_kind,
+            script: self.script,
         }
     }
 
@@ -169,6 +181,7 @@ impl TaskState {
             sink,
             facts,
             project_kind: _,
+            script: _,
             pending,
         } = self;
         TaskOutput {

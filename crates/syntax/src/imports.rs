@@ -49,8 +49,9 @@ impl<'source> Scanner<'source> {
     }
 
     fn skip_shebang(&mut self) {
-        if let Some(length) = crate::lex::shebang_len(self.source) {
-            self.offset = length;
+        self.offset = crate::lex::bom_len(self.source);
+        if let Some(length) = crate::lex::shebang_len(&self.source[self.offset..]) {
+            self.offset += length;
         }
     }
 

@@ -2,8 +2,9 @@ use std::path::{Path, PathBuf};
 
 use super::project::MutationProject;
 use super::reconciliation::{
-    ReplacedRoot, ReplacedRootMode, ResolvedDependency, RootWrite, apply_graph_to_manifest,
-    declared_local_dirs, declared_replacements, finalize_manifest_via, reconcile_root,
+    ReplacedRoot, ReplacedRootMode, ResolvedDependency, RootWrite, apply_graph_to_document,
+    declared_local_dirs, declared_replacements, open_manifest_document, reconcile_root,
+    save_manifest_document,
 };
 use crate::go_cli;
 use crate::output::{print_add_success, print_preview_notice, print_progress, print_warning};
@@ -312,10 +313,13 @@ fn run_add_pipeline(plan: AddPlan) -> i32 {
             fallback_version: &plan.resolved_version,
         },
     };
-    let upgraded = match apply_graph_to_manifest(
+    let mut manifest = match open_manifest_document(&project.root) {
+        Ok(manifest) => manifest,
+        Err(code) => return code,
+    };
+    let upgraded = match apply_graph_to_document(
         &resolved_dep.canonical_module,
-        &project.root,
-        &project.manifest,
+        &mut manifest.document,
         &workspace,
         &module_graph,
         root_write,
@@ -323,8 +327,11 @@ fn run_add_pipeline(plan: AddPlan) -> i32 {
         Ok(u) => u,
         Err(code) => return code,
     };
-
-    if let Err(code) = finalize_manifest_via(&project.root, &[]) {
+    if let Err(message) = deps::finalize_via(&mut manifest.document, &[]) {
+        error!("failed to update manifest", message);
+        return 1;
+    }
+    if let Err(code) = save_manifest_document(&manifest) {
         return code;
     }
 

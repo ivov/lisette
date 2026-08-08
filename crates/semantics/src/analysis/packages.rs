@@ -115,7 +115,8 @@ pub(super) fn infer_all_packages(
     store: &mut Store,
     mut input: PackageInferenceInput,
 ) -> PackageInferenceOutput {
-    let mut checker = TaskState::with_sink(input.sink, input.project_kind);
+    let mut checker =
+        TaskState::with_sink(input.sink, input.project_kind, input.scope.script_unit());
 
     let mut package_hashes: HashMap<String, u64> = HashMap::default();
     let mut cached_packages: HashSet<String> = HashSet::default();
@@ -394,12 +395,12 @@ fn register_go_package(
             emit_for_locator_result(
                 &other,
                 &GoImportSite {
-                    import_name: package_id,
                     go_pkg,
                     name_span: None,
                     target: locator.target(),
                     script,
                     replace_importer: None,
+                    transitive_importer: None,
                 },
                 &checker.sink,
             );

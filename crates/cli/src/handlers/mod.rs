@@ -13,8 +13,14 @@ mod project;
 pub(crate) mod reconciliation;
 mod run;
 mod script;
+mod script_deps;
 mod sync;
 mod test;
+
+#[cfg(test)]
+pub(crate) use script::script_build_dir;
+pub(crate) use script::script_locator;
+pub(crate) use script_deps::Mode as ScriptResolveMode;
 
 pub use add::add;
 pub use bindgen::bindgen;

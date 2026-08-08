@@ -211,7 +211,50 @@ impl File {
 
 #[cfg(test)]
 mod tests {
-    use super::go_import_default_name;
+    use super::{FileImport, Span, go_import_default_name};
+    use crate::ast::ImportAlias;
+
+    fn import(raw: &str) -> FileImport {
+        let span = Span::new(0, 7, raw.len() as u32 + 2);
+        FileImport {
+            name: raw.into(),
+            name_span: span,
+            alias: None,
+            span,
+        }
+    }
+
+    #[test]
+    fn an_import_path_is_kept_whole() {
+        assert_eq!(
+            import("go:github.com/google/uuid").name,
+            "go:github.com/google/uuid"
+        );
+        assert_eq!(
+            import("go:github.com/google/uuid@v1.6.0").name,
+            "go:github.com/google/uuid@v1.6.0"
+        );
+        assert_eq!(import("helper@v1.0.0").name, "helper@v1.0.0");
+    }
+
+    #[test]
+    fn a_blank_alias_is_preserved() {
+        let span = Span::new(0, 0, 1);
+        let blank = FileImport {
+            name: "go:fmt".into(),
+            name_span: span,
+            alias: Some(ImportAlias::Blank(span)),
+            span,
+        };
+
+        assert!(matches!(blank.alias, Some(ImportAlias::Blank(_))));
+    }
+
+    #[test]
+    fn default_names_come_from_the_last_segment() {
+        assert_eq!(go_import_default_name("go:github.com/google/uuid"), "uuid");
+        assert_eq!(go_import_default_name("go:encoding/json"), "json");
+    }
 
     #[test]
     fn major_version_suffix_resolves_to_preceding_segment() {

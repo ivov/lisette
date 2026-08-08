@@ -6,6 +6,7 @@ use std::path::{Component, Path, PathBuf};
 use crate::cli_error;
 use crate::go_cli;
 use diagnostics::render::{self, Filter};
+use emit::PRELUDE_IMPORT_PATH;
 use lisette::pipeline::{
     CompileConfig, CompileEntry, CompileInput, CompileMode, CompileResult, CompileScope, compile,
 };
@@ -25,21 +26,22 @@ pub(super) fn prepare(
     inside_project: bool,
     heading: &str,
 ) -> Result<ScriptBuild, i32> {
-    let locator = deps::TypedefLocator::default();
-    let (mut result, diagnostics_shown) =
-        compile_file(file, sourcemap, inside_project, &locator, heading)?;
     let dir = build_dir(file, heading)?;
+    let source = read_source(file, heading)?;
+    let locator = resolve_locator(&source, &dir);
+    if let Err(e) = go_cli::write_go_mod(&dir, GO_MODULE, &locator) {
+        cli_error!(heading, e, "Check file permissions");
+        return Err(1);
+    }
+
+    let (mut result, diagnostics_shown) =
+        compile_file(file, &source, sourcemap, inside_project, &locator)?;
     let target = locator.target();
 
     for file in &mut result.output {
         if let Some(staged) = stage_name(&file.name) {
             file.name = staged;
         }
-    }
-
-    if let Err(e) = go_cli::write_go_mod(&dir, GO_MODULE, &locator) {
-        cli_error!(heading, e, "Check file permissions");
-        return Err(1);
     }
 
     let emit = match go_cli::write_go_outputs(&dir, &result.output) {
@@ -91,9 +93,19 @@ pub(super) fn emit(
         Err(code) => return code,
     };
 
-    let locator = deps::TypedefLocator::default();
+    let Ok(dir) = build_dir(file, heading) else {
+        return 1;
+    };
+    let Ok(source) = read_source(file, heading) else {
+        return 1;
+    };
+    let locator = resolve_locator(&source, &dir);
+    if let Err(e) = go_cli::write_go_mod(&dir, GO_MODULE, &locator) {
+        cli_error!(heading, e, "Check file permissions");
+        return 1;
+    }
     let Ok((result, diagnostics_shown)) =
-        compile_file(file, sourcemap, inside_project, &locator, heading)
+        compile_file(file, &source, sourcemap, inside_project, &locator)
     else {
         return 1;
     };
@@ -118,7 +130,10 @@ pub(super) fn emit(
         return 1;
     }
 
-    if let Err(e) = fs::write(&destination, go_file.to_go()) {
+    let go_source = go_file.to_go();
+    let needs_module = !locator.deps().is_empty() || go_source.contains(PRELUDE_IMPORT_PATH);
+
+    if let Err(e) = fs::write(&destination, go_source) {
         cli_error!(
             heading,
             format!("Failed to write `{}`: {}", destination.display(), e),
@@ -128,6 +143,9 @@ pub(super) fn emit(
     }
 
     report_written("Go file", &destination, diagnostics_shown);
+    if needs_module {
+        report_module_needed(&locator);
+    }
     0
 }
 
@@ -175,24 +193,64 @@ pub(super) fn build(
     0
 }
 
+pub(crate) fn script_locator(
+    source: &str,
+    file: &Path,
+    mode: super::script_deps::Mode,
+) -> Result<(deps::TypedefLocator, Option<PathBuf>), String> {
+    let dir = script_build_dir(file);
+    let deps = super::script_deps::script_deps(source);
+
+    if deps.is_empty() {
+        return Ok((
+            super::script_deps::locator(Default::default(), &dir, mode),
+            None,
+        ));
+    }
+
+    ensure_build_dir(&dir)?;
+    Ok((super::script_deps::locator(deps, &dir, mode), Some(dir)))
+}
+
+fn report_module_needed(locator: &deps::TypedefLocator) {
+    let Ok(content) = go_cli::go_mod_content(GO_MODULE, locator) else {
+        return;
+    };
+
+    eprintln!("\n  This Go needs a module. Write `go.mod` beside it:\n");
+    for line in content.lines() {
+        eprintln!("      {}", line);
+    }
+    eprintln!("\n  then run `go mod tidy` to record the checksums.");
+}
+
+fn read_source(file: &Path, heading: &str) -> Result<String, i32> {
+    fs::read_to_string(file).map_err(|e| {
+        cli_error!(
+            heading,
+            format!("Failed to read `{}`: {}", file.display(), e),
+            "Check file permissions"
+        );
+        1
+    })
+}
+
+fn resolve_locator(source: &str, dir: &Path) -> deps::TypedefLocator {
+    super::script_deps::locator(
+        super::script_deps::script_deps(source),
+        dir,
+        super::script_deps::Mode::Online,
+    )
+}
+
 fn compile_file(
     file: &Path,
+    source: &str,
     sourcemap: bool,
     inside_project: bool,
     locator: &deps::TypedefLocator,
-    heading: &str,
 ) -> Result<(CompileResult, bool), i32> {
-    let source = match fs::read_to_string(file) {
-        Ok(source) => source,
-        Err(e) => {
-            cli_error!(
-                heading,
-                format!("Failed to read `{}`: {}", file.display(), e),
-                "Check file permissions"
-            );
-            return Err(1);
-        }
-    };
+    let source = source.to_string();
 
     let entry_name = file
         .file_name()
@@ -237,17 +295,32 @@ fn compile_file(
     Ok((result, counts.warnings + counts.info > 0))
 }
 
-fn build_dir(file: &Path, heading: &str) -> Result<PathBuf, i32> {
+fn ensure_build_dir(dir: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(dir).map_err(|e| format!("Failed to create `{}`: {}", dir.display(), e))
+}
+
+const BUILD_DIR_PREFIX: &str = "lis-script-";
+
+pub(crate) fn script_build_dir(file: &Path) -> PathBuf {
     let absolute = file.canonicalize().unwrap_or_else(|_| file.to_path_buf());
     let mut hasher = DefaultHasher::new();
     absolute.hash(&mut hasher);
-    let dir = std::env::temp_dir().join(format!("lis-script-{:x}", hasher.finish()));
+    std::env::temp_dir().join(format!("{}{:x}", BUILD_DIR_PREFIX, hasher.finish()))
+}
+
+fn build_dir(file: &Path, heading: &str) -> Result<PathBuf, i32> {
+    let dir = script_build_dir(file);
 
     if let Err(e) = fs::create_dir_all(&dir) {
+        let hint = if dir.exists() {
+            "Remove it: the build directory's name is derived from the script's path"
+        } else {
+            "Check permissions on temp directory"
+        };
         cli_error!(
             heading,
-            format!("Failed to create temporary directory: {}", e),
-            "Check permissions on temp directory"
+            format!("Failed to create `{}`: {}", dir.display(), e),
+            hint
         );
         return Err(1);
     }

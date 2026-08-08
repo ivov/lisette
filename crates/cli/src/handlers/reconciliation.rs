@@ -11,7 +11,7 @@ use crate::go_cli;
 use crate::output::{print_progress, print_warning};
 use crate::workspace::{GoWorkspace, UnresolvedTransitive};
 use crate::{cli_error, error};
-use deps::{GoModule, resolve_empty_via, trim_dead_via_parents, upsert_go_dependency};
+use deps::GoModule;
 use stdlib::Target;
 
 /// The dependency to reconcile, after its containing module is resolved.
@@ -243,18 +243,11 @@ pub(crate) fn reconcile_declared_replacements(
         walked.push((original.clone(), replacement.clone(), graph));
     }
 
+    let mut manifest = open_manifest_document(project_root)?;
     for (original, replacement, graph) in &walked {
-        let current = match deps::parse_manifest(project_root) {
-            Ok(m) => m,
-            Err(msg) => {
-                error!("failed to read manifest", msg);
-                return Err(1);
-            }
-        };
-        apply_graph_to_manifest(
+        apply_graph_to_document(
             original,
-            project_root,
-            &current,
+            &mut manifest.document,
             &workspace,
             graph,
             RootWrite::Replaced(ReplacedRoot {
@@ -263,8 +256,23 @@ pub(crate) fn reconcile_declared_replacements(
             }),
         )?;
     }
+    save_manifest_document(&manifest)?;
 
     Ok(())
+}
+
+pub(crate) fn open_manifest_document(project_root: &Path) -> Result<deps::ManifestDocument, i32> {
+    deps::ManifestDocument::open(project_root).map_err(|msg| {
+        error!("failed to read manifest", msg);
+        1
+    })
+}
+
+pub(crate) fn save_manifest_document(manifest: &deps::ManifestDocument) -> Result<(), i32> {
+    manifest.save().map_err(|msg| {
+        error!("failed to update manifest", msg);
+        1
+    })
 }
 
 /// A Go resolution error that means a `replace` target is not import-compatible:
@@ -1156,13 +1164,12 @@ impl ManifestChanges {
     }
 }
 
-/// Upsert one manifest entry, mapping a write failure to the exit code.
-fn write_manifest_dependency(
-    project_root: &Path,
+fn write_dependency(
+    document: &mut deps::DocumentMut,
     module: &str,
     dependency: &deps::GoDependency,
 ) -> Result<(), i32> {
-    upsert_go_dependency(project_root, module, dependency).map_err(|message| {
+    deps::upsert_into_document(document, module, dependency).map_err(|message| {
         error!("failed to update manifest", message);
         1
     })
@@ -1185,15 +1192,17 @@ fn write_manifest_dependency(
 /// `gorilla/context = { via = ["mux"] }`. The new mux version no longer imports
 /// context, so context is no longer reachable from the added subgraph. `via`
 /// becomes `[]`, and the entry is removed.
-pub(crate) fn apply_graph_to_manifest(
+pub(crate) fn apply_graph_to_document(
     added_dep: &str,
-    project_root: &Path,
-    manifest: &deps::Manifest,
+    document: &mut deps::DocumentMut,
     workspace: &GoWorkspace,
     graph: &GraphResult,
     root: RootWrite<'_>,
 ) -> Result<Vec<DirectUpgrade>, i32> {
-    let existing_deps = manifest.go_deps();
+    let existing_deps = deps::go_deps_of_document(document).map_err(|message| {
+        error!("failed to read manifest", message);
+        1
+    })?;
     let transitives = graph.transitive_map(added_dep);
     let mut upgraded: Vec<DirectUpgrade> = Vec::new();
 
@@ -1218,7 +1227,7 @@ pub(crate) fn apply_graph_to_manifest(
             }
         }
     };
-    write_manifest_dependency(project_root, added_dep, &root_dependency)?;
+    write_dependency(document, added_dep, &root_dependency)?;
 
     let mut sorted_transitives: Vec<(&String, &Vec<String>)> = transitives.iter().collect();
     sorted_transitives.sort_by(|a, b| a.0.cmp(b.0));
@@ -1240,8 +1249,8 @@ pub(crate) fn apply_graph_to_manifest(
             } = existing
                 && existing_version != version
             {
-                write_manifest_dependency(
-                    project_root,
+                write_dependency(
+                    document,
                     module_path,
                     &deps::GoDependency::Remote {
                         version: version.to_string(),
@@ -1274,10 +1283,10 @@ pub(crate) fn apply_graph_to_manifest(
         // A replaced transitive keeps its `replace` shape, only its `via` is reconciled.
         match existing {
             Some(replaced @ deps::GoDependency::Replaced { .. }) => {
-                write_manifest_dependency(project_root, module_path, &replaced.with_via(Some(via)))?
+                write_dependency(document, module_path, &replaced.with_via(Some(via)))?
             }
-            _ => write_manifest_dependency(
-                project_root,
+            _ => write_dependency(
+                document,
                 module_path,
                 &deps::GoDependency::Remote {
                     version: version.to_string(),
@@ -1309,21 +1318,21 @@ pub(crate) fn apply_graph_to_manifest(
         filtered.sort();
 
         if filtered.is_empty() {
-            write_manifest_dependency(project_root, dep_path, &dep.with_via(Some(Vec::new())))?;
+            write_dependency(document, dep_path, &dep.with_via(Some(Vec::new())))?;
             continue;
         }
 
         match dep {
             deps::GoDependency::Replaced { .. } => {
-                write_manifest_dependency(project_root, dep_path, &dep.with_via(Some(filtered)))?;
+                write_dependency(document, dep_path, &dep.with_via(Some(filtered)))?;
             }
             deps::GoDependency::Remote { .. } => {
                 let dep_version = workspace.query_version(dep_path).map_err(|msg| {
                     error!("failed to resolve module version", msg);
                     1
                 })?;
-                write_manifest_dependency(
-                    project_root,
+                write_dependency(
+                    document,
                     dep_path,
                     &deps::GoDependency::Remote {
                         version: dep_version,
@@ -1344,30 +1353,19 @@ pub(crate) fn finalize_manifest_via(
     project_root: &Path,
     imported_pkgs: &[String],
 ) -> Result<ManifestChanges, i32> {
-    let mut changes = ManifestChanges::default();
-
-    loop {
-        let trimmed = trim_dead_via_parents(project_root).map_err(|msg| {
-            error!("failed to update manifest", msg);
-            1
-        })?;
-        let report = resolve_empty_via(project_root, imported_pkgs).map_err(|msg| {
-            error!("failed to update manifest", msg);
-            1
-        })?;
-
-        let changed =
-            !trimmed.is_empty() || !report.promoted.is_empty() || !report.removed.is_empty();
-        changes.trimmed.extend(trimmed);
-        changes.promoted.extend(report.promoted);
-        changes.removed.extend(report.removed);
-
-        if !changed {
-            break;
-        }
+    let mut manifest = open_manifest_document(project_root)?;
+    let changes = deps::finalize_via(&mut manifest.document, imported_pkgs).map_err(|msg| {
+        error!("failed to update manifest", msg);
+        1
+    })?;
+    if !changes.is_empty() {
+        save_manifest_document(&manifest)?;
     }
-
-    Ok(changes)
+    Ok(ManifestChanges {
+        trimmed: changes.trimmed,
+        promoted: changes.promoted,
+        removed: changes.removed,
+    })
 }
 
 #[cfg(test)]

@@ -174,6 +174,16 @@ impl BindgenSession {
     }
 }
 
+pub struct ScriptSession {
+    _guard: Box<dyn BindgenGuard>,
+}
+
+impl ScriptSession {
+    pub fn new(guard: Box<dyn BindgenGuard>) -> Self {
+        Self { _guard: guard }
+    }
+}
+
 pub trait BindgenGuard: sealed::Sealed + Send {}
 
 mod sealed {
@@ -185,6 +195,12 @@ impl BindgenGuard for std::fs::File {}
 
 pub trait BindgenSetup: Send + Sync {
     fn for_project(&self, project_root: &Path, target: Target) -> Result<BindgenSession, String>;
+
+    fn for_script(
+        &self,
+        source: &str,
+        file: &Path,
+    ) -> Result<(TypedefLocator, Option<ScriptSession>), String>;
 }
 
 #[derive(Debug, Clone, Default)]
@@ -303,6 +319,15 @@ impl TypedefLocator {
                 (module, synthetic, Some(replacement))
             }
         })
+    }
+
+    pub fn discard_typedef(&self, path: &Path) {
+        let Some(root) = self.project_root.as_deref() else {
+            return;
+        };
+        if path.starts_with(crate::typedef_cache_dir(root)) {
+            let _ = std::fs::remove_file(path);
+        }
     }
 
     /// Classify a `go:` import path without touching the cache or bindgen.
