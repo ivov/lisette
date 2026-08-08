@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+   ╭─[test.lis:3:3]
+ 2 │ fn f() -> int {
+ 3 │   !1
+   ·   ─┬
+   ·    ╰── expected `bool`, found `int`
+ 4 │ }
+   ╰────
+  help: Change the type annotation to `int` or convert the value to `bool` · code: [infer.type_mismatch]

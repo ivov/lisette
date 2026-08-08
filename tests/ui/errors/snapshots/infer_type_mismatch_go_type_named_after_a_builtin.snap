@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                ╰── expected `go/types.Tuple`, found `int`
  8 │ }
    ╰────
-  help: Change the type annotation to `int` or convert the value to `go/types.Tuple` · code: [infer.type_mismatch]
+  help: `take()` expects `go/types.Tuple` for its first argument `t`. Convert the value to `go/types.Tuple`, or change the parameter type · code: [infer.type_mismatch]

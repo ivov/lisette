@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:4:1]
+ 3 │ 
+ 4 │ pub fn helper() -> int {
+   · ─┬─
+   ·  ╰── expected a type
+ 5 │   1
+   ╰────
+  help: Add the missing type · code: [parse.syntax_error]

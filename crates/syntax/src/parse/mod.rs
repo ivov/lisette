@@ -447,7 +447,8 @@ impl<'source> Parser<'source> {
     }
 
     fn recover_to_comma_or(&mut self, closing: TokenKind) {
-        while !self.at_eof() && !self.is(Comma) && !self.is(closing) && !self.at_item_boundary() {
+        while !self.at_eof() && !self.is(Comma) && !self.is(closing) && !self.at_recovery_boundary()
+        {
             self.next();
         }
 
@@ -493,6 +494,16 @@ impl<'source> Parser<'source> {
         }
 
         self.next();
+    }
+
+    fn ensure_in_place(&mut self, token_kind: TokenKind) -> bool {
+        if self.is(token_kind) {
+            self.next();
+            return true;
+        }
+
+        self.track_ensure_error(token_kind);
+        false
     }
 
     fn ensure_progress(&mut self, start_position: usize, closing: TokenKind) {
@@ -754,6 +765,30 @@ impl<'source> Parser<'source> {
             self.current_token().kind,
             Identifier | Function | LeftParen | Integer
         )
+    }
+
+    fn can_recover_annotation(&self) -> bool {
+        !self.at_recovery_boundary() && self.can_start_annotation()
+    }
+
+    fn at_recovery_boundary(&self) -> bool {
+        if self.is(Function) {
+            return self.at_function_declaration();
+        }
+        matches!(self.current_token().kind, DocComment | Hash | Pub) || self.at_item_boundary()
+    }
+
+    fn at_parameter_recovery_boundary(&self) -> bool {
+        self.at_recovery_boundary() && self.stream.peek_ahead(1).kind != Colon
+    }
+
+    fn at_function_declaration(&self) -> bool {
+        self.is(Function)
+            && self.stream.peek_ahead(1).kind == Identifier
+            && matches!(
+                self.stream.peek_ahead(2).kind,
+                LeftParen | LeftAngleBracket | Dot
+            )
     }
 
     fn at_item_boundary(&self) -> bool {

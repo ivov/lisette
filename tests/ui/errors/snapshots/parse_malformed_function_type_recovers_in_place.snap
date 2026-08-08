@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:2:9]
+ 1 │ 
+ 2 │ fn f(x: fn -> int) -> int {
+   ·         ─┬
+   ·          ╰── incomplete function type
+ 3 │   x()
+   ╰────
+  help: A function type is written `fn(int) -> int` · code: [parse.syntax_error]

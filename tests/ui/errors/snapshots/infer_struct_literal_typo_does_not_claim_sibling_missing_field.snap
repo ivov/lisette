@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Member not found
+   ╭─[test.lis:8:11]
+ 7 │ fn test() -> string {
+ 8 │   let u = User { name: "x", nam: "y" }
+   ·           ──────────────┬─────────────
+   ·                         ╰── no member `nam` on type `User`
+ 9 │   u.name
+   ╰────
+  help: Did you mean `name`? · code: [infer.member_not_found]

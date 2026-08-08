@@ -700,7 +700,15 @@ impl<'source> Parser<'source> {
             };
         }
 
-        self.ensure(Colon);
+        if !self.ensure_in_place(Colon) && !self.can_recover_annotation() {
+            return Binding {
+                pattern,
+                annotation: None,
+                ty: Type::uninferred(),
+                mut_span,
+            };
+        }
+
         let annotation = self.parse_annotation();
 
         Binding {

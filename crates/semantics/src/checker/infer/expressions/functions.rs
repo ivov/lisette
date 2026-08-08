@@ -4,6 +4,7 @@ use syntax::types::{FunctionParameter, Type};
 
 use crate::analysis::ProjectKind;
 use crate::checker::infer::InferCtx;
+use crate::checker::infer::context::{Expectation, ExpectationRole};
 use crate::checker::registration::test_functions::normalize_test_params;
 use crate::store::ENTRY_PACKAGE_ID;
 
@@ -123,7 +124,13 @@ impl InferCtx<'_> {
             };
 
             let new_body = body.map_definition(|body| {
-                this.infer_function_body(Box::new(body), &body_ty, &return_annotation, &return_ty)
+                this.infer_function_body(
+                    Box::new(body),
+                    &body_ty,
+                    &return_annotation,
+                    &return_ty,
+                    Some(name.as_str()),
+                )
             });
 
             this.check_deferred_map_key_bounds(store);
@@ -220,7 +227,7 @@ impl InferCtx<'_> {
                 return_ty.clone()
             };
             let new_body = this.without_enclosing_loop(|this| {
-                this.infer_function_body(body, &body_ty, &return_annotation, &return_ty)
+                this.infer_function_body(body, &body_ty, &return_annotation, &return_ty, None)
             });
 
             this.check_deferred_map_key_bounds(store);
@@ -244,6 +251,7 @@ impl InferCtx<'_> {
         body_ty: &Type,
         return_annotation: &Annotation,
         return_ty: &Type,
+        function_name: Option<&str>,
     ) -> Expression {
         if let Expression::Block {
             items,
@@ -264,6 +272,22 @@ impl InferCtx<'_> {
                 ty: self.type_unit(),
                 span: *body_span,
             };
+        }
+
+        if let Some(function_name) = function_name
+            && *return_annotation != Annotation::Unknown
+            && let Expression::Block { items, .. } = body.as_ref()
+            && let Some(tail) = items.last()
+        {
+            let expectation = Expectation {
+                role: ExpectationRole::TailReturn {
+                    function_name: function_name.to_string(),
+                    return_annotation_span: return_annotation.get_span(),
+                },
+                span: tail.get_span(),
+                expected_ty: body_ty.clone(),
+            };
+            return self.with_expectation(expectation, |s| s.infer_expression(*body, body_ty));
         }
 
         self.infer_expression(*body, body_ty)

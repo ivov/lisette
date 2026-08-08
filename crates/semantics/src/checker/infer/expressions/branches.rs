@@ -1,5 +1,5 @@
 use crate::checker::EnvResolve;
-use crate::checker::infer::context::{BranchArm, BranchSubsumption};
+use crate::checker::infer::context::{BranchArm, BranchSubsumption, Expectation, ExpectationRole};
 use syntax::ast::BindingKind;
 use syntax::ast::{Expression, IfLetAlternative, MatchArm, Pattern, Span};
 use syntax::types::Type;
@@ -379,6 +379,9 @@ impl InferCtx<'_> {
         let needs_reconciliation =
             !arms_independent && result_ty.resolve_in(&self.env).is_variable();
 
+        let frame_match_arm =
+            matches!(kind, MatchArmsKind::Match) && !arms_independent && !needs_reconciliation;
+
         let new_arms = arms
             .into_iter()
             .map(|a| {
@@ -398,7 +401,18 @@ impl InferCtx<'_> {
                         &result_ty
                     };
                     // Arm body is a tail-like context where Never calls are valid.
-                    let new_expression = this.infer_root_expression(*a.expression, arm_expected);
+                    let new_expression = if frame_match_arm {
+                        let expectation = Expectation {
+                            role: ExpectationRole::MatchArm,
+                            span: a.expression.get_span(),
+                            expected_ty: result_ty.clone(),
+                        };
+                        this.with_expectation(expectation, |this| {
+                            this.infer_root_expression(*a.expression, arm_expected)
+                        })
+                    } else {
+                        this.infer_root_expression(*a.expression, arm_expected)
+                    };
 
                     MatchArm {
                         pattern: new_pattern,

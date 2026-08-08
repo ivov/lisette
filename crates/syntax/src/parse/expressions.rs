@@ -887,12 +887,15 @@ impl<'source> Parser<'source> {
 
         let mut params = vec![];
 
-        while self.is_not(RightParen) {
+        while self.is_not(RightParen) && !self.at_parameter_recovery_boundary() {
             params.push(self.parse_binding_with_type(mode, params.is_empty()));
+            if self.at_parameter_recovery_boundary() {
+                break;
+            }
             self.expect_comma_or(RightParen);
         }
 
-        self.ensure(RightParen);
+        self.ensure_in_place(RightParen);
 
         params
     }
