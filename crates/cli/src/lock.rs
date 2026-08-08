@@ -3,8 +3,7 @@ use std::path::Path;
 
 use crate::{cli_error, error};
 
-/// Project-scoped, fail-fast lock guarding `lisette.toml` mutations
-pub fn acquire_mutation_lock(target_dir: &Path) -> Result<File, i32> {
+pub fn acquire_mutation_lock(target_dir: &Path, subject: &str) -> Result<File, i32> {
     let lock_path = target_dir.join(".lis-mutate.lock");
     let file = create_lock_file(&lock_path)?;
 
@@ -12,8 +11,8 @@ pub fn acquire_mutation_lock(target_dir: &Path) -> Result<File, i32> {
         Ok(()) => {}
         Err(TryLockError::WouldBlock) => {
             cli_error!(
-                "Another manifest mutation is in progress",
-                "A concurrent `lis add` or `lis sync` holds the project lock",
+                format!("Another {} mutation is in progress", subject),
+                "A concurrent `lis add` or `lis sync` holds the lock",
                 "Wait for the other invocation to finish, then retry"
             );
             return Err(1);

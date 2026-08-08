@@ -11,7 +11,11 @@ use crate::typedef_scan::{SourceScanError, scan_source_imports};
 use crate::workspace::WorkspaceBindgen;
 use crate::{cli_error, error};
 
-pub fn sync() -> i32 {
+pub fn sync(script: Option<&str>) -> i32 {
+    if let Some(script) = script {
+        return super::script_sync::run(std::path::Path::new(script));
+    }
+
     let project = match MutationProject::open() {
         Ok(project) => project,
         Err(code) => return code,
@@ -96,6 +100,7 @@ pub fn sync() -> i32 {
     changes.extend(post_changes);
 
     print_sync_summary(
+        "Manifest",
         &changes.trimmed,
         &changes.promoted,
         &changes.removed,

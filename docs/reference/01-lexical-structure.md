@@ -179,7 +179,7 @@ import "strings"
 
 ## Shebang
 
-At the very start of a file, a `#!` followed by an interpreter, marks a shebang line, which makes the file executable on Unix.
+At the very start of a file, a `#!` plus an interpreter is a shebang line, which makes the file executable on Unix.
 
 ```rust
 #!/usr/bin/env -S lis run

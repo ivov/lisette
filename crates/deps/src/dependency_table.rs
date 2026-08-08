@@ -9,6 +9,13 @@ use crate::GoDependency;
 pub struct DependencyTable {
     pub deps: BTreeMap<String, GoDependency>,
     pub spans: BTreeMap<String, Range<usize>>,
+    document: toml_edit::ImDocument<String>,
+}
+
+impl DependencyTable {
+    pub fn into_document(self) -> toml_edit::DocumentMut {
+        self.document.into_mut()
+    }
 }
 
 pub struct TableError {
@@ -29,7 +36,7 @@ const TABLE: &str = "dependencies";
 const GO: &str = "go";
 
 pub fn parse_dependency_table(text: &str) -> Result<DependencyTable, TableError> {
-    let document = toml_edit::ImDocument::parse(text).map_err(|error| TableError {
+    let document = toml_edit::ImDocument::parse(text.to_owned()).map_err(|error| TableError {
         message: error.message().to_string(),
         range: error.span(),
     })?;
@@ -47,6 +54,7 @@ pub fn parse_dependency_table(text: &str) -> Result<DependencyTable, TableError>
         return Ok(DependencyTable {
             deps: BTreeMap::new(),
             spans: BTreeMap::new(),
+            document,
         });
     };
     for (key, _) in dependencies.as_table().into_iter().flat_map(|t| t.iter()) {
@@ -63,7 +71,11 @@ pub fn parse_dependency_table(text: &str) -> Result<DependencyTable, TableError>
         None => (BTreeMap::new(), BTreeMap::new()),
     };
 
-    Ok(DependencyTable { deps, spans })
+    Ok(DependencyTable {
+        deps,
+        spans,
+        document,
+    })
 }
 
 pub(crate) fn deserialize_go_table(

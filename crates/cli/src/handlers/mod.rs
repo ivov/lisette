@@ -13,7 +13,11 @@ mod project;
 pub(crate) mod reconciliation;
 mod run;
 mod script;
+mod script_add;
 mod script_deps;
+mod script_edit;
+mod script_sync;
+mod script_table;
 mod sync;
 mod test;
 

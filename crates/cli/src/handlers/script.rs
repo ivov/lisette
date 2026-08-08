@@ -12,7 +12,7 @@ use lisette::pipeline::{
 };
 use semantics::loader::MemoryLoader;
 
-const GO_MODULE: &str = "lis-script";
+pub(super) const GO_MODULE: &str = "lis-script";
 
 pub(super) struct ScriptBuild {
     pub(super) dir: PathBuf,

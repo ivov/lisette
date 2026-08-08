@@ -14,9 +14,9 @@ use deps::GoModule;
 use stdlib::Target;
 
 /// CLI-input dependency: the path the user typed, which may be a subpackage.
-struct ParsedDependency {
-    requested_package: String,
-    version: String,
+pub(super) struct ParsedDependency {
+    pub(super) requested_package: String,
+    pub(super) version: String,
 }
 
 struct AddPlan {
@@ -31,7 +31,23 @@ enum DependencySource {
     Replacement(deps::ReplacementSource),
 }
 
-pub fn add(dep_string: Option<&str>, replace: Option<&str>, path: Option<&str>) -> i32 {
+pub fn add(
+    dep_string: Option<&str>,
+    replace: Option<&str>,
+    path: Option<&str>,
+    script: Option<&str>,
+) -> i32 {
+    if let Some(script) = script {
+        let Some(dep_string) = dep_string else {
+            cli_error!(
+                "Invalid dependency",
+                "no dependency given",
+                "Example: `lis add --script tool.lis google/uuid`"
+            );
+            return 1;
+        };
+        return super::script_add::run(std::path::Path::new(script), dep_string);
+    }
     if let Some(path) = path {
         return add_local(path);
     }
@@ -374,7 +390,7 @@ fn run_add_pipeline(plan: AddPlan) -> i32 {
 
 const PRELUDE_GO_MODULE: &str = "github.com/ivov/lisette/prelude";
 
-fn parse_dep_string(input: &str) -> Result<ParsedDependency, String> {
+pub(super) fn parse_dep_string(input: &str) -> Result<ParsedDependency, String> {
     let input = input.trim();
     if input.starts_with('-') {
         return Err(format!(

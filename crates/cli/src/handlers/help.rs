@@ -197,32 +197,42 @@ Run `lis doc test` to learn how to write tests.",
         "add" => print_help(
             "`lis add` <dependency>{[@version]:b} {[--flags]:b}
 
-Add a third-party Go module as a dependency to your Lisette project.
+Add a third-party Go module as a dependency to your project or script.
 
 Arguments:
     {dependency:g} {(required):d}          Go module name
 
 Options:
     {--replace:b} {<module>:g}             Redirect to another module
-    {--path:b} {<dir>:g}                   Use a local module on disk
+    {--path:b} {<dir>:g}                   Add a local Go module
+    {--script:b} {<file>:g}                Add to this script
 
 Examples:
     `lis add` {google/uuid:g}            Latest version
     `lis add` {google/uuid:g}{@v1.6.0:b}     Exact version
     `lis add` {google/uuid:g}{@2d3c2a9:b}    Exact commit hash or branch
     `lis add` {go.uber.org/zap:g}        Full path for non-GitHub host
+    `lis add` {--path:b} {../auth:g}         Use the Go module at {../auth:g}
     `lis add` {gorilla/mux:g} \\
       {--replace:b} {you/mux:g}            Use your own fork of {gorilla/mux:g}
-    `lis add` {--path:b} {../auth:g}         Use the Go module at {../auth:g}",
+    `lis add` {--script:b} {tool.lis:g} \\
+      {google/uuid:g}                  Add {google/uuid:g} to a script",
         ),
 
         "sync" => print_help(
-            "`lis sync`
+            "`lis sync` {[--flags]:b}
 
 Tidy `lisette.toml` against the `go:` imports in `src/`, similar to `go mod tidy`.
 Will drop dependency entries no longer reached by any import, and generate
 typedefs for every imported package. Run this after removing imports, deleting
-source files, or pulling new code.",
+source files, or pulling new code.
+
+Options:
+    {--script:b} {<file>:g}                Tidy this script's dependencies
+
+Examples:
+    `lis sync`                       Tidy the project in the current dir
+    `lis sync` {--script:b} {tool.lis:g}     Tidy a script's dependencies",
         ),
 
         "lsp" => print_help(

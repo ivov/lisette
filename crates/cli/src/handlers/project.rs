@@ -49,7 +49,7 @@ impl MutationProject {
             1
         })?;
 
-        let mutation_lock = acquire_mutation_lock(&target_dir)?;
+        let mutation_lock = acquire_mutation_lock(&target_dir, "manifest")?;
         let target_lock = acquire_target_lock(&target_dir)?;
         let typedef_cache_dir = deps::typedef_cache_dir(&root);
 

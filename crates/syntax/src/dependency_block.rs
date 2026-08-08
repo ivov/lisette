@@ -117,6 +117,27 @@ fn line_at(source: &str, offset: usize) -> &str {
     }
 }
 
+/// After a shebang and any file doc comments, before the first import or item.
+pub fn insertion_point(source: &str) -> usize {
+    let mut offset = prologue_start(source);
+    offset += line_break_len(&source[offset..]);
+    if offset > 0 {
+        offset += line_break_len(&source[offset..]);
+    }
+    while source[offset..].starts_with("//!") {
+        offset += line_at(source, offset).len();
+    }
+    offset
+}
+
+fn line_break_len(rest: &str) -> usize {
+    if rest.starts_with("\r\n") {
+        2
+    } else {
+        usize::from(rest.starts_with('\n'))
+    }
+}
+
 fn prologue_start(source: &str) -> usize {
     let bom = crate::lex::bom_len(source);
     bom + crate::lex::shebang_len(&source[bom..]).unwrap_or(0)

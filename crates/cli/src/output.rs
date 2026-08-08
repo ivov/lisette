@@ -392,6 +392,7 @@ impl TreePrinter<'_> {
 }
 
 pub fn print_sync_summary(
+    subject: &str,
     trimmed: &[deps::TrimmedVia],
     promoted: &[String],
     removed: &[String],
@@ -402,7 +403,7 @@ pub fn print_sync_summary(
     }
 
     if trimmed.is_empty() && promoted.is_empty() && removed.is_empty() {
-        eprintln!("  ✓ Manifest already in sync");
+        eprintln!("  ✓ {} already in sync", subject);
         return;
     }
 

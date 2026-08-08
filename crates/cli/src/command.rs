@@ -71,8 +71,11 @@ pub enum Command {
         dependency: Option<String>,
         replace: Option<String>,
         path: Option<String>,
+        script: Option<String>,
     },
-    Sync,
+    Sync {
+        script: Option<String>,
+    },
     Lsp,
     Bindgen {
         target: BindgenTarget,
@@ -605,9 +608,18 @@ fn parse_add(mut arguments: impl Iterator<Item = String>) -> Result<Command, Par
     let mut dependency = None;
     let mut replace = None;
     let mut path = None;
+    let mut script = None;
 
     while let Some(arg) = arguments.next() {
         if let Some(value) = flag_value(
+            &arg,
+            &["--script"],
+            &mut arguments,
+            "add",
+            "--script <file>",
+        )? {
+            script = Some(value);
+        } else if let Some(value) = flag_value(
             &arg,
             &["--replace"],
             &mut arguments,
@@ -632,6 +644,15 @@ fn parse_add(mut arguments: impl Iterator<Item = String>) -> Result<Command, Par
         }
     }
 
+    if script.is_some() && (path.is_some() || replace.is_some()) {
+        return Err(ParseError::UnexpectedArgument {
+            message: "`--script` cannot be combined with `--path` or `--replace`".to_string(),
+            reason: "a script declares published modules and cannot redirect them".to_string(),
+            hint: "Use `lis add --script <file> <module>`, or drop `--script` for a project"
+                .to_string(),
+        });
+    }
+
     if path.is_some() && replace.is_some() {
         return Err(ParseError::UnexpectedArgument {
             message: "`--path` cannot be combined with `--replace`".to_string(),
@@ -653,11 +674,13 @@ fn parse_add(mut arguments: impl Iterator<Item = String>) -> Result<Command, Par
             dependency: None,
             replace: None,
             path: Some(path),
+            script: None,
         }),
         (Some(dependency), None) => Ok(Command::Add {
             dependency: Some(dependency),
             replace,
             path: None,
+            script,
         }),
         (None, None) => Err(ParseError::MissingArgument {
             command: "add",
@@ -667,14 +690,26 @@ fn parse_add(mut arguments: impl Iterator<Item = String>) -> Result<Command, Par
 }
 
 fn parse_sync(mut arguments: impl Iterator<Item = String>) -> Result<Command, ParseError> {
-    if let Some(extra) = arguments.next() {
-        return Err(ParseError::UnexpectedArgument {
-            message: format!("unexpected argument `{}`", extra),
-            reason: "`lis sync` takes no arguments".to_string(),
-            hint: "Run `lis sync` from the project root".to_string(),
-        });
+    let mut script = None;
+    while let Some(arg) = arguments.next() {
+        if let Some(value) = flag_value(
+            &arg,
+            &["--script"],
+            &mut arguments,
+            "sync",
+            "--script <file>",
+        )? {
+            script = Some(value);
+        } else {
+            return Err(ParseError::UnexpectedArgument {
+                message: format!("unexpected argument `{}`", arg),
+                reason: "`lis sync` takes no arguments outside a script".to_string(),
+                hint: "Run `lis sync` from the project root, or `lis sync --script <file>`"
+                    .to_string(),
+            });
+        }
     }
-    Ok(Command::Sync)
+    Ok(Command::Sync { script })
 }
 
 fn parse_doc(arguments: impl Iterator<Item = String>) -> Result<Command, ParseError> {
@@ -825,6 +860,7 @@ mod tests {
         let Ok(Command::Add {
             dependency,
             replace,
+            script: _,
             path,
         }) = parse(&["lis", "add", "github.com/gorilla/mux"])
         else {
@@ -884,6 +920,7 @@ mod tests {
         let Ok(Command::Add {
             dependency,
             replace,
+            script: _,
             path,
         }) = parse(&["lis", "add", "--path", "../foo"])
         else {
