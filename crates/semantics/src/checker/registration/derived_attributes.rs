@@ -55,7 +55,7 @@ impl TaskState {
     ) {
         let candidates = collect_derived_attributes(
             DerivedAttributeContext {
-                package_id: self.cursor.package_id.clone(),
+                package_id: self.cursor.package_id().to_string(),
                 is_d_lis: self.is_d_lis(store),
             },
             items,
@@ -111,7 +111,7 @@ impl TaskState {
             .filter(|candidate| candidate.kind == DerivedAttributeKind::Equality)
             .collect();
         if !equality.is_empty() {
-            self.pending_equality_attributes.push(DerivedAttributes {
+            self.pending.equality_attributes.push(DerivedAttributes {
                 context,
                 candidates: equality,
             });

@@ -585,7 +585,7 @@ impl InferCtx<'_> {
                     )),
             }
         } else if operands_match
-            && type_has_usable_equals(store, &resolved, self.cursor.package_id.as_str())
+            && type_has_usable_equals(store, &resolved, self.cursor.package_id())
         {
             self.sink
                 .push(diagnostics::infer::not_comparable_value_use_equals(
@@ -614,7 +614,7 @@ impl InferCtx<'_> {
             &self.env,
             self.store,
             ty,
-            self.cursor.package_id.as_str(),
+            self.cursor.package_id(),
             &is_comparable,
             &is_comparable,
         )
@@ -678,7 +678,7 @@ impl InferCtx<'_> {
                 &self.env,
                 self.store,
                 &substituted,
-                self.cursor.package_id.as_str(),
+                self.cursor.package_id(),
                 &is_comparable,
                 &is_comparable,
             )

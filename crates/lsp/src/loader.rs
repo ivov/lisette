@@ -219,7 +219,7 @@ impl Loader for AnalysisLoader {
         let mut discovered = DiscoveredPackages::default();
         discovered.add_production(ENTRY_PACKAGE_ID.to_string(), false);
         if let Some(package_id) = &self.external_test_root {
-            discovered.add_external_test_root(package_id.clone());
+            discovered.add_test_root(package_id.clone());
         }
         discovered
     }

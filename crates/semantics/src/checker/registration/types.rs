@@ -57,7 +57,7 @@ impl TaskState {
             .map(|definition| definition.visibility.clone())
             .unwrap_or(Visibility::Private);
 
-        let is_prelude = self.cursor.package_id == "prelude";
+        let is_prelude = self.cursor.package_id() == "prelude";
 
         let variant_definitions: Vec<_> = new_variants
             .iter()
@@ -134,7 +134,7 @@ impl TaskState {
 
     /// Emit's layout dedupes by Go name, so a survivor would take the first type.
     fn check_enum_field_slot_collisions(&mut self, name: &str, variants: &[EnumVariant]) {
-        if self.cursor.package_id == "prelude" {
+        if self.cursor.package_id() == "prelude" {
             return;
         }
 
@@ -510,7 +510,7 @@ impl TaskState {
                     .map(|g| Type::Parameter(g.name.clone()))
                     .collect();
 
-                let canonical_ty = if self.cursor.package_id == "prelude" {
+                let canonical_ty = if self.cursor.package_id() == "prelude" {
                     if let Some(simple) = syntax::types::SimpleKind::from_name(name) {
                         Type::Simple(simple)
                     } else if let Some(compound) = syntax::types::CompoundKind::from_name(name) {

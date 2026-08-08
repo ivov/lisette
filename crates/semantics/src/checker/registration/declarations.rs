@@ -15,10 +15,16 @@ impl TaskState {
                 &file.items,
                 &Visibility::Private,
                 false,
+                package_id,
             ));
         }
         for file in package.typedef_files() {
-            entries.extend(self.collect_type_name_entries(&file.items, &Visibility::Private, true));
+            entries.extend(self.collect_type_name_entries(
+                &file.items,
+                &Visibility::Private,
+                true,
+                package_id,
+            ));
         }
         entries
     }
@@ -52,7 +58,7 @@ impl TaskState {
         self.register_impl_blocks(store, items);
         self.register_values(store, items, visibility);
         self.register_item_derived_attributes(store, items);
-        let package_id = self.cursor.package_id.clone();
+        let package_id = self.cursor.package_id().to_string();
         self.validate_package_embeds(store, &package_id);
         self.check_package_recursive_types(store, &package_id);
     }
@@ -63,7 +69,9 @@ impl TaskState {
         items: &[Expression],
         visibility: &Visibility,
     ) {
-        let entries = self.collect_type_name_entries(items, visibility, self.is_d_lis(&*store));
+        let package_id = self.cursor.package_id().to_string();
+        let entries =
+            self.collect_type_name_entries(items, visibility, self.is_d_lis(&*store), &package_id);
         let package = self.current_package_mut(store);
         for (qualified_name, definition) in entries {
             package
@@ -78,6 +86,7 @@ impl TaskState {
         items: &[Expression],
         visibility: &Visibility,
         is_typedef: bool,
+        package_id: &str,
     ) -> Vec<(Symbol, Definition)> {
         let mut entries = Vec::new();
 
@@ -114,7 +123,7 @@ impl TaskState {
                     _ => continue,
                 };
 
-            let qualified_name = self.qualify_name(name);
+            let qualified_name = Symbol::from_parts(package_id, name);
             let args: Vec<Type> = generics
                 .iter()
                 .map(|g| Type::Parameter(g.name.clone()))
@@ -123,7 +132,7 @@ impl TaskState {
             // Canonical form for prelude-registered native types uses the
             // dedicated Simple/Compound variants; everything else remains a
             // nominal Constructor.
-            let canonical_ty = if self.cursor.package_id == "prelude" {
+            let canonical_ty = if package_id == "prelude" {
                 if let Some(simple) = syntax::types::SimpleKind::from_name(name) {
                     debug_assert!(args.is_empty(), "simple kinds have no generics");
                     Type::Simple(simple)

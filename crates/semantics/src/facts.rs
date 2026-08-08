@@ -44,14 +44,6 @@ pub struct Facts {
 
     pub(crate) deferred: DeferredChecks,
 
-    /// Value-position `match`/`select` arms that did not reconcile, drained and
-    /// checked against the use-site result type at the end of `infer_file`.
-    pub(crate) branch_subsumptions: Vec<BranchSubsumption>,
-
-    /// Value-position selects with one shorthand receive and no default,
-    /// checked for exhaustiveness once the result type is pinned.
-    pub(crate) select_exhaustiveness_checks: Vec<SelectExhaustivenessCheck>,
-
     /// Suppresses contradictory lints from or-patterns whose binding sets disagree.
     pub or_pattern_error_spans: HashSet<Span>,
 
@@ -158,24 +150,6 @@ pub struct StatementTailCheck {
     pub span: Span,
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct BranchArm {
-    pub(crate) ty: Type,
-    pub(crate) span: Span,
-}
-
-#[derive(Debug, Clone)]
-pub struct BranchSubsumption {
-    pub(crate) result_ty: Type,
-    pub(crate) arms: Vec<BranchArm>,
-}
-
-#[derive(Debug, Clone)]
-pub struct SelectExhaustivenessCheck {
-    pub(crate) result_ty: Type,
-    pub(crate) span: Span,
-}
-
 impl Facts {
     pub fn new(allocator: Arc<BindingIdAllocator>) -> Self {
         Self {
@@ -187,8 +161,6 @@ impl Facts {
             expression_only_fstrings: Vec::new(),
             unprefixed_fstrings: Vec::new(),
             deferred: DeferredChecks::default(),
-            branch_subsumptions: Vec::new(),
-            select_exhaustiveness_checks: Vec::new(),
             or_pattern_error_spans: HashSet::default(),
             type_error_spans: HashSet::default(),
             function_spans: Vec::new(),
@@ -358,8 +330,6 @@ impl Facts {
             expression_only_fstrings,
             unprefixed_fstrings,
             deferred,
-            branch_subsumptions,
-            select_exhaustiveness_checks,
             or_pattern_error_spans,
             type_error_spans,
             function_spans,
@@ -380,9 +350,6 @@ impl Facts {
             .extend(expression_only_fstrings);
         self.unprefixed_fstrings.extend(unprefixed_fstrings);
         self.deferred.merge(deferred);
-        self.branch_subsumptions.extend(branch_subsumptions);
-        self.select_exhaustiveness_checks
-            .extend(select_exhaustiveness_checks);
         self.or_pattern_error_spans.extend(or_pattern_error_spans);
         self.type_error_spans.extend(type_error_spans);
         self.function_spans.extend(function_spans);

@@ -416,7 +416,7 @@ impl InferCtx<'_> {
     }
 
     fn record_generic_call_check(&mut self, ty: Type, span: Span, target: DeferredCallCheckTarget) {
-        let package_id = self.cursor.package_id.clone();
+        let package_id = self.cursor.package_id().to_string();
         match target {
             DeferredCallCheckTarget::GenericCall => {
                 self.facts
@@ -547,7 +547,7 @@ impl InferCtx<'_> {
         let array_ty = match resolved {
             Some((elem, len)) => {
                 let array_ty = self.type_array(len, elem);
-                let from_package = self.cursor.package_id.clone();
+                let from_package = self.cursor.package_id().to_string();
                 if let Err(no_zero) = self.has_zero(&array_ty, &from_package) {
                     self.sink.push(diagnostics::infer::array_new_no_zero(
                         &no_zero.leaf_ty.stringify(),

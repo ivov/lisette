@@ -120,7 +120,7 @@ impl TaskState {
     /// Synthesize queued equality methods, build the verdict, and gate derivations.
     /// Run once after registration has completed every type definition.
     pub fn finalize_equality(&mut self, store: &mut Store) {
-        let batches = std::mem::take(&mut self.pending_equality_attributes);
+        let batches = std::mem::take(&mut self.pending.equality_attributes);
         let mut derivations = Vec::new();
         for batch in &batches {
             for candidate in &batch.candidates {

@@ -158,7 +158,7 @@ impl InferCtx<'_> {
         let type_package = store
             .package_for_qualified_name(declaring_type)
             .unwrap_or(declaring_type.as_str());
-        if type_package != self.cursor.package_id {
+        if type_package != self.cursor.package_id() {
             return true;
         }
         let method_key = declaring_type.with_segment(member_name);
@@ -532,7 +532,7 @@ impl InferCtx<'_> {
         self.unify(args.expected_ty, &method_ty, args.span);
 
         let type_package = store.package_for_qualified_name(&id).unwrap_or(&id);
-        let is_cross_package = type_package != self.cursor.package_id;
+        let is_cross_package = type_package != self.cursor.package_id();
         let is_exported = is_public || is_cross_package;
         Some(args.build_dot_access(
             method_ty,
@@ -551,7 +551,7 @@ impl InferCtx<'_> {
             return false;
         };
         let type_package = store.package_for_qualified_name(&id).unwrap_or(&id);
-        let is_cross_package = type_package != self.cursor.package_id;
+        let is_cross_package = type_package != self.cursor.package_id();
 
         if is_cross_package {
             return true;

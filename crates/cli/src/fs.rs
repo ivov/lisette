@@ -474,11 +474,11 @@ impl Loader for LocalFileSystem {
             if contents.has_production {
                 discovered.add_production(package_id, has_internal_tests);
             } else if has_internal_tests {
-                discovered.add_internal_test_root(package_id);
+                discovered.add_test_root(package_id);
             }
         }
         for package_id in self.discover_external_test_roots() {
-            discovered.add_external_test_root(package_id);
+            discovered.add_test_root(package_id);
         }
         discovered
     }

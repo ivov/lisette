@@ -98,7 +98,7 @@ impl InferCtx<'_> {
             let alias_ty = alias_ty.clone();
             let (instantiated_ty, _) = self.instantiate(&alias_ty);
             self.unify(expected_ty, &instantiated_ty, &literal.span);
-            let from_package = self.cursor.package_id.clone();
+            let from_package = self.cursor.package_id().to_string();
             if self.has_zero(&instantiated_ty, &from_package).is_err() {
                 self.sink.push(diagnostics::infer::hidden_state_no_zero(
                     &instantiated_ty,
@@ -319,7 +319,7 @@ impl InferCtx<'_> {
         let struct_package = store
             .package_for_qualified_name(&qualified_name)
             .unwrap_or(&qualified_name);
-        let is_cross_package = struct_package != self.cursor.package_id
+        let is_cross_package = struct_package != self.cursor.package_id()
             || struct_name
                 .split_once('.')
                 .is_some_and(|(prefix, _)| self.imports.namespace(prefix).is_some());
@@ -663,7 +663,7 @@ impl InferCtx<'_> {
         map: &SubstitutionMap,
         spread_span: Span,
     ) {
-        let from_package = self.cursor.package_id.clone();
+        let from_package = self.cursor.package_id().to_string();
         for (name, ty) in fields {
             if matched_fields.contains(name.as_str()) {
                 continue;

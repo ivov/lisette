@@ -48,7 +48,7 @@ impl InferCtx<'_> {
         if !bound_requires_evidence(self.store, &bound.required) {
             return;
         }
-        let package_id = self.cursor.package_id.clone();
+        let package_id = self.cursor.package_id().to_string();
         let available_bounds = self.visible_parameter_bounds();
         self.facts
             .deferred

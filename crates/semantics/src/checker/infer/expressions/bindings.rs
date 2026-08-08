@@ -180,7 +180,7 @@ impl InferCtx<'_> {
             && new_value.is_empty_collection()
             && let Some(ref name) = binding_name
         {
-            let package_id = self.cursor.package_id.clone();
+            let package_id = self.cursor.package_id().to_string();
             self.facts
                 .deferred
                 .empty_collections

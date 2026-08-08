@@ -218,7 +218,7 @@ impl TaskState {
             ));
             return None;
         };
-        let package_id = self.cursor.package_id.clone();
+        let package_id = self.cursor.package_id().to_string();
         let is_d_lis = self.is_d_lis(&*store);
 
         if !is_d_lis
@@ -426,7 +426,7 @@ impl TaskState {
         else {
             unreachable!("populate_interface called with non-Interface expression");
         };
-        let package_id = self.cursor.package_id.clone();
+        let package_id = self.cursor.package_id().to_string();
         let is_d_lis = self.is_d_lis(&*store);
         struct MethodDef {
             name: EcoString,

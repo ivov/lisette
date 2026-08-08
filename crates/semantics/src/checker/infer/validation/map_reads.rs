@@ -61,7 +61,7 @@ impl InferCtx<'_> {
         if value_ty.is_error() || value_ty.is_variable() {
             return;
         }
-        let from_package = self.cursor.package_id.clone();
+        let from_package = self.cursor.package_id().to_string();
         if self.has_zero(value_ty, &from_package).is_err() {
             let receiver = collection.root_identifier().unwrap_or("m");
             let full_span = collection.get_span().merge(span);

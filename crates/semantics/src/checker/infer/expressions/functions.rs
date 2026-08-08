@@ -62,7 +62,7 @@ impl InferCtx<'_> {
 
         if name == "main"
             && self.project_kind == ProjectKind::Binary
-            && self.cursor.package_id == ENTRY_PACKAGE_ID
+            && self.cursor.package_id() == ENTRY_PACKAGE_ID
             && (!params.is_empty() || return_annotation != Annotation::Unknown)
         {
             self.sink

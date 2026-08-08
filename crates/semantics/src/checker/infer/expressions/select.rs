@@ -1,5 +1,5 @@
 use crate::checker::EnvResolve;
-use crate::facts::{BranchArm, SelectExhaustivenessCheck};
+use crate::checker::{BranchArm, SelectExhaustivenessCheck};
 use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, Span};
 use syntax::program::{ChannelOperation, channel_operation};
 use syntax::types::{Type, unqualified_name};
@@ -19,7 +19,7 @@ fn select_arm_body_span(pattern: &SelectArm) -> Span {
 
 impl InferCtx<'_> {
     pub fn resolve_select_exhaustiveness(&mut self) {
-        for check in std::mem::take(&mut self.facts.select_exhaustiveness_checks) {
+        for check in std::mem::take(&mut self.file_checks.select_exhaustiveness) {
             let resolved = check.result_ty.resolve_in(&self.env);
             if !resolved.is_unit() && !resolved.is_variable() {
                 self.sink
@@ -129,8 +129,8 @@ impl InferCtx<'_> {
             .iter()
             .any(|arm| matches!(arm, SelectArm::WildCard { .. }));
         if !expected_ty.is_ignored() && shorthand_receive_count == 1 && !has_default {
-            self.facts
-                .select_exhaustiveness_checks
+            self.file_checks
+                .select_exhaustiveness
                 .push(SelectExhaustivenessCheck {
                     result_ty: result_ty.clone(),
                     span,

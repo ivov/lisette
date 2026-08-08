@@ -1,5 +1,6 @@
 use super::resolution::{ImportState, PrefixedImport};
 use super::state::Cursor;
+use super::type_env::SpeculationOutcome;
 use super::*;
 
 #[derive(Debug, Clone, Copy)]
@@ -52,21 +53,6 @@ struct SavedFileContext {
 }
 
 impl TaskState {
-    pub(super) fn with_package_cursor<T>(
-        &mut self,
-        package_id: &str,
-        f: impl FnOnce(&mut Self) -> T,
-    ) -> T {
-        if self.cursor.package_id == package_id {
-            return f(self);
-        }
-
-        let previous_package_id = std::mem::replace(&mut self.cursor.package_id, package_id.into());
-        let result = f(self);
-        self.cursor.package_id = previous_package_id;
-        result
-    }
-
     pub(super) fn with_file_context<T>(
         &mut self,
         store: &Store,
@@ -94,13 +80,7 @@ impl TaskState {
     fn enter_file_context(&mut self, store: &Store, context: FileContext<'_>) -> SavedFileContext {
         let (package_id, file_id, imports) = context.parts();
         let saved = SavedFileContext {
-            cursor: std::mem::replace(
-                &mut self.cursor,
-                Cursor {
-                    package_id: package_id.into(),
-                    file_id: Some(file_id),
-                },
-            ),
+            cursor: std::mem::replace(&mut self.cursor, Cursor::file(package_id, file_id)),
             scopes: std::mem::take(&mut self.scopes),
             imports: std::mem::take(&mut self.imports),
         };
@@ -156,14 +136,21 @@ impl TaskState {
         f: impl FnOnce(&mut Self) -> Result<T, E>,
     ) -> Result<T, E> {
         let diagnostics_before = self.sink.checkpoint();
-        self.env.begin_speculation();
+        let speculation = self.env.begin_speculation();
         let result = f(self);
-        let rollback = result.is_err();
-        self.env.end_speculation(rollback);
-        if rollback {
-            self.sink.rollback(diagnostics_before);
+        match result {
+            Ok(value) => {
+                self.env
+                    .end_speculation(speculation, SpeculationOutcome::Commit);
+                Ok(value)
+            }
+            Err(error) => {
+                self.env
+                    .end_speculation(speculation, SpeculationOutcome::Rollback);
+                self.sink.rollback(diagnostics_before);
+                Err(error)
+            }
         }
-        result
     }
 
     pub(super) fn without_diagnostics<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {

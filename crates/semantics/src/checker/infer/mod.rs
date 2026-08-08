@@ -33,28 +33,20 @@ impl TaskState {
         let package = store
             .get_package_mut(package_id)
             .expect("package must exist for inference");
-        let file_data = package
-            .source_file_entries()
-            .map(|(file_id, file)| (*file_id, file.imports()))
-            .collect::<Vec<_>>();
-        file_data
-            .into_iter()
-            .map(|(file_id, imports)| FileInferenceInput {
-                id: file_id,
-                imports,
-                items: std::mem::take(
-                    &mut package
-                        .files
-                        .get_mut(&file_id)
-                        .expect("source file must remain in its package")
-                        .items,
-                ),
+        package
+            .files
+            .values_mut()
+            .filter(|file| !file.is_d_lis())
+            .map(|file| FileInferenceInput {
+                id: file.id,
+                imports: file.imports(),
+                items: std::mem::take(&mut file.items),
             })
             .collect()
     }
 
-    pub(crate) fn install_inferred_files(&mut self, store: &mut Store) {
-        for inferred_file in std::mem::take(&mut self.inferred_files) {
+    pub(crate) fn install_inferred_files(store: &mut Store, inferred_files: Vec<InferredFile>) {
+        for inferred_file in inferred_files {
             store
                 .get_file_mut(inferred_file.id)
                 .expect("inferred file must remain in the store")
@@ -65,28 +57,37 @@ impl TaskState {
     /// Infer one registered package and replace its source ASTs with their typed forms.
     pub fn infer_package(&mut self, store: &mut Store, package_id: &str) {
         let files = Self::take_package_inference_input(store, package_id);
-        InferCtx::new(self, store).infer_package(package_id, files);
-        self.install_inferred_files(store);
+        let inferred_files = InferCtx::new(self, store).infer_package(package_id, files);
+        Self::install_inferred_files(store, inferred_files);
     }
 }
 
 impl InferCtx<'_> {
     /// Infer types for `files` belonging to `package_id`.
-    pub(crate) fn infer_package(&mut self, package_id: &str, files: Vec<FileInferenceInput>) {
+    pub(crate) fn infer_package(
+        &mut self,
+        package_id: &str,
+        files: Vec<FileInferenceInput>,
+    ) -> Vec<InferredFile> {
         let items_per_file: Vec<&[Expression]> = files.iter().map(|f| f.items.as_slice()).collect();
         self.check_const_cycles(&items_per_file);
 
-        for file in files {
-            self.infer_file(package_id, file);
-        }
+        files
+            .into_iter()
+            .map(|file| self.infer_file(package_id, file))
+            .collect()
     }
 
-    fn infer_file(&mut self, package_id: &str, file: FileInferenceInput) {
+    fn infer_file(&mut self, package_id: &str, file: FileInferenceInput) -> InferredFile {
+        assert!(
+            self.file_checks.is_empty(),
+            "file checks from the previous file must be resolved"
+        );
         let store = self.store;
         let file_id = file.id;
         let imports = file.imports;
 
-        self.with_file_context(
+        let inferred = self.with_file_context(
             store,
             FileContext::Standard {
                 package_id,
@@ -119,12 +120,17 @@ impl InferCtx<'_> {
                     FreezeFolder::new(&state.env, store).freeze_items(inferred_items)
                 };
 
-                ctx.inferred_files.push(InferredFile {
+                InferredFile {
                     id: file_id,
                     items: frozen_items,
-                });
+                }
             },
         );
+        assert!(
+            self.file_checks.is_empty(),
+            "file checks must be resolved before inference returns"
+        );
+        inferred
     }
 
     fn check_definition_package_collisions(

@@ -134,7 +134,7 @@ impl TaskState {
     /// Whether the file being checked is a `.test.lis` file.
     pub(super) fn current_file_is_test(&self, store: &Store) -> bool {
         self.cursor
-            .file_id
+            .file_id()
             .is_some_and(|file_id| store.is_test_file(file_id))
     }
 
@@ -147,7 +147,7 @@ impl TaskState {
         in_test_file: bool,
     ) -> bool {
         !store.is_test_definition(definition)
-            || (in_test_file && package_id == self.cursor.package_id)
+            || (in_test_file && package_id == self.cursor.package_id())
     }
 
     pub(super) fn lookup_qualified_name_in_scope(
@@ -166,7 +166,7 @@ impl TaskState {
         }
 
         let in_test_file = self.current_file_is_test(store);
-        let package_ids = std::iter::once(self.cursor.package_id.as_str())
+        let package_ids = std::iter::once(self.cursor.package_id())
             .chain(self.imports.unprefixed_imports.iter().map(String::as_str));
 
         let mut value_fallback: Option<EcoString> = None;
@@ -280,7 +280,7 @@ impl TaskState {
         }
 
         let in_test_file = self.current_file_is_test(store);
-        let package = store.get_package(&self.cursor.package_id)?;
+        let package = store.get_package(self.cursor.package_id())?;
         let qualified_name = Symbol::from_parts(&package.id, value_name);
 
         if let Some(definition) = package.definitions.get(qualified_name.as_str())

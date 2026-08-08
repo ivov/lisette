@@ -70,107 +70,82 @@ pub fn external_test_file_issue(name: &str) -> Option<ExternalTestFileIssue> {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum DiscoveredPackageKind {
-    Production { has_internal_tests: bool },
-    InternalTests,
-    ExternalTests,
+enum DiscoveredPackageContents {
+    Production,
+    Tests,
+    ProductionAndTests,
+}
+
+impl DiscoveredPackageContents {
+    fn merge(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Production, Self::Tests) | (Self::Tests, Self::Production) => {
+                Self::ProductionAndTests
+            }
+            (Self::ProductionAndTests, _) | (_, Self::ProductionAndTests) => {
+                Self::ProductionAndTests
+            }
+            (Self::Production, Self::Production) | (Self::Tests, Self::Tests) => self,
+        }
+    }
+
+    fn has_production(self) -> bool {
+        matches!(self, Self::Production | Self::ProductionAndTests)
+    }
+
+    fn has_tests(self) -> bool {
+        matches!(self, Self::Tests | Self::ProductionAndTests)
+    }
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct DiscoveredPackages {
-    packages: HashMap<String, DiscoveredPackageKind>,
+    packages: HashMap<String, DiscoveredPackageContents>,
 }
 
 impl DiscoveredPackages {
     pub fn add_production(&mut self, package_id: String, has_internal_tests: bool) {
-        self.add(
-            package_id,
-            DiscoveredPackageKind::Production { has_internal_tests },
-        );
+        let contents = if has_internal_tests {
+            DiscoveredPackageContents::ProductionAndTests
+        } else {
+            DiscoveredPackageContents::Production
+        };
+        self.add(package_id, contents);
     }
 
-    pub fn add_internal_test_root(&mut self, package_id: String) {
-        self.add(package_id, DiscoveredPackageKind::InternalTests);
+    pub fn add_test_root(&mut self, package_id: String) {
+        self.add(package_id, DiscoveredPackageContents::Tests);
     }
 
-    pub fn add_external_test_root(&mut self, package_id: String) {
-        self.add(package_id, DiscoveredPackageKind::ExternalTests);
-    }
-
-    fn add(&mut self, package_id: String, incoming: DiscoveredPackageKind) {
+    fn add(&mut self, package_id: String, incoming: DiscoveredPackageContents) {
         self.packages
             .entry(package_id)
-            .and_modify(|existing| {
-                *existing = match (*existing, incoming) {
-                    (
-                        DiscoveredPackageKind::Production {
-                            has_internal_tests: left,
-                        },
-                        DiscoveredPackageKind::Production {
-                            has_internal_tests: right,
-                        },
-                    ) => DiscoveredPackageKind::Production {
-                        has_internal_tests: left || right,
-                    },
-                    (
-                        DiscoveredPackageKind::Production { .. },
-                        DiscoveredPackageKind::InternalTests,
-                    )
-                    | (
-                        DiscoveredPackageKind::InternalTests,
-                        DiscoveredPackageKind::Production { .. },
-                    ) => DiscoveredPackageKind::Production {
-                        has_internal_tests: true,
-                    },
-                    (
-                        DiscoveredPackageKind::InternalTests,
-                        DiscoveredPackageKind::InternalTests,
-                    ) => DiscoveredPackageKind::InternalTests,
-                    (
-                        DiscoveredPackageKind::ExternalTests,
-                        DiscoveredPackageKind::ExternalTests,
-                    ) => DiscoveredPackageKind::ExternalTests,
-                    _ => panic!("a package cannot be both internal and external"),
-                };
-            })
+            .and_modify(|existing| *existing = existing.merge(incoming))
             .or_insert(incoming);
     }
 
     pub fn production_packages(&self) -> impl Iterator<Item = &String> {
-        self.packages.iter().filter_map(|(package_id, kind)| {
-            matches!(kind, DiscoveredPackageKind::Production { .. }).then_some(package_id)
-        })
+        self.packages
+            .iter()
+            .filter_map(|(package_id, kind)| kind.has_production().then_some(package_id))
     }
 
     pub fn internal_test_roots(&self) -> impl Iterator<Item = &String> {
         self.packages.iter().filter_map(|(package_id, kind)| {
-            matches!(
-                kind,
-                DiscoveredPackageKind::Production {
-                    has_internal_tests: true
-                } | DiscoveredPackageKind::InternalTests
-            )
-            .then_some(package_id)
+            (kind.has_tests() && !is_external_test_package(package_id)).then_some(package_id)
         })
     }
 
     pub fn external_test_roots(&self) -> impl Iterator<Item = &String> {
         self.packages.iter().filter_map(|(package_id, kind)| {
-            matches!(kind, DiscoveredPackageKind::ExternalTests).then_some(package_id)
+            (kind.has_tests() && is_external_test_package(package_id)).then_some(package_id)
         })
     }
 
     pub fn test_roots(&self) -> impl Iterator<Item = &String> {
-        self.packages.iter().filter_map(|(package_id, kind)| {
-            matches!(
-                kind,
-                DiscoveredPackageKind::Production {
-                    has_internal_tests: true
-                } | DiscoveredPackageKind::InternalTests
-                    | DiscoveredPackageKind::ExternalTests
-            )
-            .then_some(package_id)
-        })
+        self.packages
+            .iter()
+            .filter_map(|(package_id, kind)| kind.has_tests().then_some(package_id))
     }
 }
 
@@ -231,7 +206,7 @@ impl Loader for MemoryLoader {
             let has_tests = files.keys().any(|name| name.ends_with(".test.lis"));
             if is_external_test_package(package_id) {
                 if has_tests {
-                    discovered.add_external_test_root(package_id.clone());
+                    discovered.add_test_root(package_id.clone());
                 }
                 continue;
             }
@@ -242,7 +217,7 @@ impl Loader for MemoryLoader {
             if has_production {
                 discovered.add_production(package_id.clone(), is_internal_test_root);
             } else if is_internal_test_root {
-                discovered.add_internal_test_root(package_id.clone());
+                discovered.add_test_root(package_id.clone());
             }
         }
         discovered
@@ -287,5 +262,25 @@ mod tests {
             external,
             vec!["tests".to_string(), "tests/flows".to_string()]
         );
+    }
+
+    #[test]
+    fn package_contents_merge_without_a_kind_transition_protocol() {
+        let mut discovered = DiscoveredPackages::default();
+        discovered.add_test_root("math".into());
+        discovered.add_production("math".into(), false);
+
+        assert_eq!(discovered.production_packages().count(), 1);
+        assert_eq!(discovered.internal_test_roots().count(), 1);
+        assert_eq!(discovered.test_roots().count(), 1);
+    }
+
+    #[test]
+    fn external_test_identity_comes_from_the_package_path() {
+        let mut discovered = DiscoveredPackages::default();
+        discovered.add_test_root("tests/integration".into());
+
+        assert_eq!(discovered.internal_test_roots().count(), 0);
+        assert_eq!(discovered.external_test_roots().count(), 1);
     }
 }

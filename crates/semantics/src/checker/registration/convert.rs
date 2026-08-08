@@ -394,7 +394,7 @@ impl TaskState {
         span: &Span,
         mode: ConvertMode,
     ) -> Type {
-        if params.len() == 1 && self.cursor.package_id == PRELUDE_PACKAGE_ID {
+        if params.len() == 1 && self.cursor.package_id() == PRELUDE_PACKAGE_ID {
             let element = self.convert_to_type_mode(store, &params[0], span, mode.nested());
             return Type::Nominal {
                 id: Symbol::from_parts("prelude", "Array"),
@@ -736,7 +736,8 @@ impl TaskState {
         {
             return;
         }
-        self.pending_interface_bound_checks
+        self.pending
+            .post_inference_bound_checks
             .push((argument, required.clone(), span));
     }
 

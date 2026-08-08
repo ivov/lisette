@@ -735,7 +735,7 @@ impl InferCtx<'_> {
         let struct_package = store
             .package_for_qualified_name(&qualified_name)
             .unwrap_or(&qualified_name);
-        let is_cross_package = struct_package != self.cursor.package_id;
+        let is_cross_package = struct_package != self.cursor.package_id();
 
         let available: Vec<String> = struct_fields.iter().map(|f| f.name.to_string()).collect();
 
@@ -937,7 +937,7 @@ impl InferCtx<'_> {
         let Some(package_id) = store.package_for_qualified_name(id) else {
             return simple.to_string();
         };
-        if package_id == self.cursor.package_id
+        if package_id == self.cursor.package_id()
             || self.imports.unprefixed_imports.contains(package_id)
         {
             return simple.to_string();

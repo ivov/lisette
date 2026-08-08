@@ -185,7 +185,7 @@ impl InferCtx<'_> {
                 let unified = self.unify(expected_ty, &slice_ty, &span);
 
                 if new_elements.is_empty() && unified {
-                    let package_id = self.cursor.package_id.clone();
+                    let package_id = self.cursor.package_id().to_string();
                     self.facts
                         .deferred
                         .empty_literals

@@ -159,12 +159,11 @@ impl TaskState {
                     .is_some_and(|id| store.get_interface(id).is_some())
             {
                 match context {
-                    BoundCheckContext::Declaration => self.pending_generic_bound_checks.push((
-                        argument,
-                        required,
-                        declaration_span,
-                    )),
-                    BoundCheckContext::Value => self.pending_interface_bound_checks.push((
+                    BoundCheckContext::Declaration => self
+                        .pending
+                        .pre_inference_bound_checks
+                        .push((argument, required, declaration_span)),
+                    BoundCheckContext::Value => self.pending.post_inference_bound_checks.push((
                         argument,
                         required,
                         declaration_span,
@@ -175,7 +174,7 @@ impl TaskState {
     }
 
     pub fn check_pending_generic_bounds(&mut self, store: &Store) {
-        let pending = std::mem::take(&mut self.pending_generic_bound_checks);
+        let pending = std::mem::take(&mut self.pending.pre_inference_bound_checks);
         let mut ctx = InferCtx::new(self, store);
         for (argument, required, span) in pending {
             ctx.check_concrete_bound(&argument, &required, &span);
@@ -183,7 +182,7 @@ impl TaskState {
     }
 
     pub(crate) fn check_pending_interface_bounds(&mut self, store: &Store) {
-        let pending = std::mem::take(&mut self.pending_interface_bound_checks);
+        let pending = std::mem::take(&mut self.pending.post_inference_bound_checks);
         let mut seen = rustc_hash::FxHashSet::default();
         let mut ctx = InferCtx::new(self, store);
         for (argument, required, span) in pending {

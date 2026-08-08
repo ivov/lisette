@@ -1,5 +1,5 @@
 use crate::checker::EnvResolve;
-use crate::facts::{BranchArm, BranchSubsumption};
+use crate::checker::{BranchArm, BranchSubsumption};
 use syntax::ast::BindingKind;
 use syntax::ast::{Expression, IfLetAlternative, MatchArm, Pattern, Span};
 use syntax::types::Type;
@@ -64,14 +64,16 @@ impl InferCtx<'_> {
     }
 
     fn record_branch_subsumption(&mut self, result_ty: &Type, branches: &[BranchArm]) {
-        self.facts.branch_subsumptions.push(BranchSubsumption {
-            result_ty: result_ty.clone(),
-            arms: branches.to_vec(),
-        });
+        self.file_checks
+            .branch_subsumptions
+            .push(BranchSubsumption {
+                result_ty: result_ty.clone(),
+                arms: branches.to_vec(),
+            });
     }
 
     fn contains_pending_branch_var(&self, ty: &Type) -> bool {
-        self.facts.branch_subsumptions.iter().any(|o| {
+        self.file_checks.branch_subsumptions.iter().any(|o| {
             let Type::Var { id, .. } = self.env.shallow_resolve(&o.result_ty) else {
                 return false;
             };
@@ -80,7 +82,7 @@ impl InferCtx<'_> {
     }
 
     pub fn resolve_branch_subsumptions(&mut self) {
-        let obligations = std::mem::take(&mut self.facts.branch_subsumptions);
+        let obligations = std::mem::take(&mut self.file_checks.branch_subsumptions);
         for obligation in obligations.into_iter().rev() {
             for branch in &obligation.arms {
                 let arm = branch.ty.resolve_in(&self.env);

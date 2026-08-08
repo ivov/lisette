@@ -98,7 +98,7 @@ impl CompiledTest {
             go_package_ids,
         ) = {
             let mut checker = TaskState::with_fresh_allocator();
-            checker.cursor.package_id = TEST_PACKAGE_ID.to_string();
+            checker.cursor.set_package(TEST_PACKAGE_ID);
             checker.put_prelude_in_scope(&store);
 
             let locator = deps::TypedefLocator::default();

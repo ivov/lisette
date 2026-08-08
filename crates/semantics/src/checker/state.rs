@@ -3,15 +3,21 @@ use super::*;
 
 #[derive(Debug, Clone)]
 pub struct Cursor {
-    pub package_id: String,
-    pub(super) file_id: Option<u32>,
+    location: CursorLocation,
+}
+
+#[derive(Debug, Clone)]
+enum CursorLocation {
+    Package { package_id: String },
+    File { package_id: String, file_id: u32 },
 }
 
 impl Default for Cursor {
     fn default() -> Self {
         Self {
-            package_id: "std".to_string(),
-            file_id: None,
+            location: CursorLocation::Package {
+                package_id: "std".to_string(),
+            },
         }
     }
 }
@@ -20,23 +26,95 @@ impl Cursor {
     fn new() -> Self {
         Self::default()
     }
+
+    pub fn set_package(&mut self, package_id: impl Into<String>) {
+        self.location = CursorLocation::Package {
+            package_id: package_id.into(),
+        };
+    }
+
+    pub fn package_id(&self) -> &str {
+        match &self.location {
+            CursorLocation::Package { package_id } | CursorLocation::File { package_id, .. } => {
+                package_id
+            }
+        }
+    }
+
+    pub(super) fn file_id(&self) -> Option<u32> {
+        match &self.location {
+            CursorLocation::Package { .. } => None,
+            CursorLocation::File { file_id, .. } => Some(*file_id),
+        }
+    }
+
+    pub(super) fn file(package_id: impl Into<String>, file_id: u32) -> Self {
+        Self {
+            location: CursorLocation::File {
+                package_id: package_id.into(),
+                file_id,
+            },
+        }
+    }
 }
 
-#[derive(Debug, Default)]
-pub(super) struct InferredFile {
+#[derive(Debug)]
+pub(crate) struct InferredFile {
     pub(super) id: u32,
     pub(super) items: Vec<Expression>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct BranchArm {
+    pub(crate) ty: Type,
+    pub(crate) span: Span,
+}
+
+pub(crate) struct BranchSubsumption {
+    pub(crate) result_ty: Type,
+    pub(crate) arms: Vec<BranchArm>,
+}
+
+pub(crate) struct SelectExhaustivenessCheck {
+    pub(crate) result_ty: Type,
+    pub(crate) span: Span,
+}
+
+#[derive(Default)]
+pub(crate) struct FileChecks {
+    pub(crate) branch_subsumptions: Vec<BranchSubsumption>,
+    pub(crate) select_exhaustiveness: Vec<SelectExhaustivenessCheck>,
+}
+
+impl FileChecks {
+    pub(crate) fn is_empty(&self) -> bool {
+        self.branch_subsumptions.is_empty() && self.select_exhaustiveness.is_empty()
+    }
 }
 
 /// The parts of a checker task that survive after its local inference state is
 /// discarded.
 pub(crate) struct TaskOutput {
     facts: Facts,
-    inferred_files: Vec<InferredFile>,
-    pending_equality_attributes: Vec<DerivedAttributes>,
-    pending_generic_bound_checks: Vec<(Type, Type, Span)>,
-    pending_interface_bound_checks: Vec<(Type, Type, Span)>,
+    pending: PendingWork,
     sink: LocalSink,
+}
+
+#[derive(Default)]
+pub(crate) struct PendingWork {
+    pub(crate) equality_attributes: Vec<DerivedAttributes>,
+    pub(crate) pre_inference_bound_checks: Vec<(Type, Type, Span)>,
+    pub(crate) post_inference_bound_checks: Vec<(Type, Type, Span)>,
+}
+
+impl PendingWork {
+    fn merge(&mut self, other: Self) {
+        self.equality_attributes.extend(other.equality_attributes);
+        self.pre_inference_bound_checks
+            .extend(other.pre_inference_bound_checks);
+        self.post_inference_bound_checks
+            .extend(other.post_inference_bound_checks);
+    }
 }
 
 /// A consistent read-only snapshot from which parallel checker tasks start.
@@ -68,14 +146,8 @@ pub struct TaskState {
     /// `collect_interface_violations` from diverging when a bound on `T`
     /// transitively requires checking `T` against the same interface.
     pub(super) satisfying_stack: rustc_hash::FxHashSet<(String, String)>,
-    /// Typed ASTs produced by inference, keyed by their canonical stored file.
-    pub(super) inferred_files: Vec<InferredFile>,
-    /// Equality synthesis waits until registration has completed every type definition.
-    pub(crate) pending_equality_attributes: Vec<DerivedAttributes>,
-    pub(crate) pending_generic_bound_checks: Vec<(Type, Type, Span)>,
-    /// Interface bounds on concrete type arguments named in annotations. Drained
-    /// once after inference, since body annotations register during it.
-    pub(crate) pending_interface_bound_checks: Vec<(Type, Type, Span)>,
+    pub(crate) pending: PendingWork,
+    pub(crate) file_checks: FileChecks,
 }
 
 impl TaskState {
@@ -93,10 +165,8 @@ impl TaskState {
             facts: Facts::new(binding_ids),
             project_kind,
             satisfying_stack: rustc_hash::FxHashSet::default(),
-            inferred_files: Vec::new(),
-            pending_equality_attributes: Vec::new(),
-            pending_generic_bound_checks: Vec::new(),
-            pending_interface_bound_checks: Vec::new(),
+            pending: PendingWork::default(),
+            file_checks: FileChecks::default(),
         }
     }
 
@@ -127,6 +197,10 @@ impl TaskState {
     }
 
     pub(crate) fn into_output(self) -> TaskOutput {
+        assert!(
+            self.file_checks.is_empty(),
+            "file checks must be resolved before a checker task finishes"
+        );
         let Self {
             env: _,
             scopes: _,
@@ -136,17 +210,12 @@ impl TaskState {
             facts,
             project_kind: _,
             satisfying_stack: _,
-            inferred_files,
-            pending_equality_attributes,
-            pending_generic_bound_checks,
-            pending_interface_bound_checks,
+            pending,
+            file_checks: _,
         } = self;
         TaskOutput {
             facts,
-            inferred_files,
-            pending_equality_attributes,
-            pending_generic_bound_checks,
-            pending_interface_bound_checks,
+            pending,
             sink,
         }
     }
@@ -156,20 +225,11 @@ impl TaskState {
         for output in outputs {
             let TaskOutput {
                 facts,
-                inferred_files,
-                pending_equality_attributes,
-                pending_generic_bound_checks,
-                pending_interface_bound_checks,
+                pending,
                 sink,
             } = output;
             self.facts.merge(facts);
-            self.inferred_files.extend(inferred_files);
-            self.pending_equality_attributes
-                .extend(pending_equality_attributes);
-            self.pending_generic_bound_checks
-                .extend(pending_generic_bound_checks);
-            self.pending_interface_bound_checks
-                .extend(pending_interface_bound_checks);
+            self.pending.merge(pending);
             sinks.push(sink);
         }
         self.sink.extend(LocalSink::merge(sinks));
@@ -224,5 +284,20 @@ impl TaskState {
             }
             _ => (ty.clone(), HashMap::default()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Cursor;
+
+    #[test]
+    fn changing_package_cannot_retain_a_file_from_the_previous_package() {
+        let mut cursor = Cursor::file("first", 42);
+
+        cursor.set_package("second");
+
+        assert_eq!(cursor.package_id(), "second");
+        assert_eq!(cursor.file_id(), None);
     }
 }

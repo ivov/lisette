@@ -22,6 +22,16 @@ pub struct TypeEnv {
     undo_logs: Vec<Vec<(TypeVarId, VarState)>>,
 }
 
+#[must_use]
+pub(super) struct Speculation {
+    depth: usize,
+}
+
+pub(super) enum SpeculationOutcome {
+    Commit,
+    Rollback,
+}
+
 impl Default for TypeEnv {
     fn default() -> Self {
         Self::new()
@@ -234,21 +244,38 @@ impl TypeEnv {
         }
     }
 
-    pub(super) fn begin_speculation(&mut self) {
+    pub(super) fn begin_speculation(&mut self) -> Speculation {
         self.undo_logs.push(Vec::new());
+        Speculation {
+            depth: self.undo_logs.len(),
+        }
     }
 
-    pub(super) fn end_speculation(&mut self, is_err: bool) {
+    pub(super) fn end_speculation(
+        &mut self,
+        speculation: Speculation,
+        outcome: SpeculationOutcome,
+    ) {
+        assert_eq!(
+            speculation.depth,
+            self.undo_logs.len(),
+            "speculations must finish in nesting order"
+        );
         let log = self
             .undo_logs
             .pop()
             .expect("speculation must be started before it is ended");
-        if is_err {
-            for (id, original) in log.into_iter().rev() {
-                self.entries[Self::slot(id)] = original;
+        match outcome {
+            SpeculationOutcome::Rollback => {
+                for (id, original) in log.into_iter().rev() {
+                    self.entries[Self::slot(id)] = original;
+                }
             }
-        } else if let Some(parent_log) = self.undo_logs.last_mut() {
-            parent_log.extend(log);
+            SpeculationOutcome::Commit => {
+                if let Some(parent_log) = self.undo_logs.last_mut() {
+                    parent_log.extend(log);
+                }
+            }
         }
     }
 }
@@ -298,12 +325,12 @@ mod tests {
         let outer = env.fresh();
         let inner = env.fresh();
 
-        env.begin_speculation();
+        let outer_speculation = env.begin_speculation();
         env.bind(outer, Type::Simple(SimpleKind::Int));
-        env.begin_speculation();
+        let inner_speculation = env.begin_speculation();
         env.bind(inner, Type::Simple(SimpleKind::String));
-        env.end_speculation(false);
-        env.end_speculation(true);
+        env.end_speculation(inner_speculation, SpeculationOutcome::Commit);
+        env.end_speculation(outer_speculation, SpeculationOutcome::Rollback);
 
         assert!(matches!(env.state(outer), VarState::Unbound));
         assert!(matches!(env.state(inner), VarState::Unbound));

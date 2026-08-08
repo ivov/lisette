@@ -570,27 +570,32 @@ fn infer_packages(checker: &mut TaskState, store: &mut Store, to_infer: &[String
         })
         .collect();
 
-    if package_files.len() < PARALLEL_THRESHOLD {
+    let inferred_files = if package_files.len() < PARALLEL_THRESHOLD {
+        let mut inferred_files = Vec::new();
         for (package_id, files) in package_files {
-            InferCtx::new(checker, store).infer_package(&package_id, files);
+            inferred_files.extend(InferCtx::new(checker, store).infer_package(&package_id, files));
         }
+        inferred_files
     } else {
         let seed = checker.worker_seed();
         let store_ref: &Store = store;
 
-        let outputs: Vec<TaskOutput> = package_files
+        let outputs: Vec<(TaskOutput, Vec<crate::checker::InferredFile>)> = package_files
             .into_par_iter()
             .map(|(package_id, files)| {
                 let mut worker = seed.spawn();
-                InferCtx::new(&mut worker, store_ref).infer_package(&package_id, files);
-                worker.into_output()
+                let inferred_files =
+                    InferCtx::new(&mut worker, store_ref).infer_package(&package_id, files);
+                (worker.into_output(), inferred_files)
             })
             .collect();
 
-        checker.absorb_outputs(outputs);
-    }
+        let (task_outputs, inferred_files): (Vec<_>, Vec<_>) = outputs.into_iter().unzip();
+        checker.absorb_outputs(task_outputs);
+        inferred_files.into_iter().flatten().collect()
+    };
 
-    checker.install_inferred_files(store);
+    TaskState::install_inferred_files(store, inferred_files);
 
     checker.check_post_inference_bounds(store);
 }

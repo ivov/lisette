@@ -154,7 +154,7 @@ impl InferCtx<'_> {
     pub(super) fn is_foreign_type(&self, type_id: &str) -> bool {
         let store = self.store;
         let type_package = store.package_for_qualified_name(type_id).unwrap_or(type_id);
-        type_package != self.cursor.package_id
+        type_package != self.cursor.package_id()
             && type_package != "prelude"
             && !type_package.starts_with("go:")
     }
@@ -308,7 +308,7 @@ impl InferCtx<'_> {
         let struct_package = store
             .package_for_qualified_name(&struct_name)
             .unwrap_or(&struct_name);
-        let is_cross_package = struct_package != self.cursor.package_id;
+        let is_cross_package = struct_package != self.cursor.package_id();
 
         if is_cross_package && !field_is_pub {
             self.sink.push(diagnostics::infer::private_field_access(
@@ -370,7 +370,7 @@ impl InferCtx<'_> {
         let declaring_package = store
             .package_for_qualified_name(member.declaring_type.as_str())
             .unwrap_or_else(|| member.declaring_type.as_str());
-        let is_cross_package = declaring_package != self.cursor.package_id;
+        let is_cross_package = declaring_package != self.cursor.package_id();
         if is_cross_package && !visibility.is_public() {
             self.sink.push(diagnostics::infer::private_field_access(
                 args.member_name,

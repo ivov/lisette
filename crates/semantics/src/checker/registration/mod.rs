@@ -73,7 +73,7 @@ impl TaskState {
     }
 
     pub(crate) fn register_predeclared_package(&mut self, store: &mut Store, id: &str) {
-        let mut files = {
+        let files = {
             let package = store
                 .get_package_mut(id)
                 .expect("package must exist for registration");
@@ -128,11 +128,11 @@ impl TaskState {
             );
         }
 
-        for file in &mut files {
+        for file in files {
             store
                 .get_file_mut(file.id)
                 .expect("registered file must remain in the store")
-                .items = std::mem::take(&mut file.items);
+                .items = file.items;
         }
 
         self.register_package_derived_attributes(store, id);
@@ -144,8 +144,7 @@ impl TaskState {
     }
 
     pub(crate) fn predeclare_package_types(&mut self, store: &mut Store, id: &str) {
-        let type_name_entries =
-            self.with_package_cursor(id, |this| this.collect_package_type_name_entries(store, id));
+        let type_name_entries = self.collect_package_type_name_entries(store, id);
         self.insert_type_name_entries(store, id, type_name_entries);
     }
 }
