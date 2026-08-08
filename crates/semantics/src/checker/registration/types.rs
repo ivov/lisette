@@ -13,7 +13,7 @@ use crate::checker::TaskState;
 use crate::store::Store;
 
 impl TaskState {
-    pub(super) fn populate_enum(&mut self, store: &mut Store, expression: &Expression) {
+    pub(super) fn populate_enum(&mut self, store: &mut Store, expression: &mut Expression) {
         let Expression::Enum {
             name,
             name_span,
@@ -36,12 +36,12 @@ impl TaskState {
 
         let (generics, new_variants) = self.with_scope(|this| {
             this.put_in_scope(generics);
-            let generics = this.resolve_generic_bounds(&*store, generics, span);
+            this.resolve_generic_bounds(&*store, generics, span);
             let new_variants: Vec<_> = variants
                 .iter()
                 .map(|variant| this.resolve_enum_variant_fields(&*store, variant, span))
                 .collect();
-            (generics, new_variants)
+            (generics.clone(), new_variants)
         });
 
         self.check_enum_field_slot_collisions(name, &new_variants);
@@ -263,7 +263,7 @@ impl TaskState {
         scope.insert_value_if_absent(variant.name.to_string(), enum_variant_constructor_ty);
     }
 
-    pub(super) fn populate_struct(&mut self, store: &mut Store, expression: &Expression) {
+    pub(super) fn populate_struct(&mut self, store: &mut Store, expression: &mut Expression) {
         let Expression::Struct {
             name,
             name_span,
@@ -286,7 +286,7 @@ impl TaskState {
 
         let (generics, new_fields) = self.with_scope(|this| {
             this.put_in_scope(generics);
-            let generics = this.resolve_generic_bounds(&*store, generics, span);
+            this.resolve_generic_bounds(&*store, generics, span);
 
             let new_fields = fields
                 .iter()
@@ -309,7 +309,7 @@ impl TaskState {
                 StructFields::Record(_) => StructFields::Record(new_fields),
                 StructFields::Tuple(_) => StructFields::Tuple(new_fields),
             };
-            (generics, new_fields)
+            (generics.clone(), new_fields)
         });
 
         let visibility = self
@@ -466,11 +466,11 @@ impl TaskState {
         }
     }
 
-    pub(super) fn populate_type_alias(&mut self, store: &mut Store, expression: &Expression) {
+    pub(super) fn populate_type_alias(&mut self, store: &mut Store, expression: &mut Expression) {
         self.with_scope(|this| this.populate_type_alias_in_scope(store, expression));
     }
 
-    fn populate_type_alias_in_scope(&mut self, store: &mut Store, expression: &Expression) {
+    fn populate_type_alias_in_scope(&mut self, store: &mut Store, expression: &mut Expression) {
         let Expression::TypeAlias {
             name,
             name_span,
@@ -487,7 +487,8 @@ impl TaskState {
         let qualified_name = self.qualify_name(name);
 
         self.put_in_scope(generics);
-        let generics = self.resolve_generic_bounds(&*store, generics, span);
+        self.resolve_generic_bounds(&*store, generics, span);
+        let generics = generics.clone();
 
         if annotation.is_opaque() {
             if self.is_lis(&*store) {

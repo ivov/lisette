@@ -8,7 +8,7 @@ fuzz_target!(|data: &[u8]| {
         return;
     };
 
-    let ast_result = lisette_syntax::build_ast(source, 0);
+    let mut ast_result = lisette_syntax::build_ast(source, 0);
     if ast_result.failed() {
         return;
     }
@@ -23,7 +23,7 @@ fuzz_target!(|data: &[u8]| {
 
     checker.register_types_and_values(
         &mut store,
-        &ast_result.ast,
+        &mut ast_result.ast,
         &lisette_syntax::program::Visibility::Private,
     );
     checker.finalize_registration(&mut store);

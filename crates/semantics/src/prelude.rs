@@ -29,7 +29,7 @@ pub fn parse_and_register_prelude(store: &mut Store, sink: &LocalSink) {
     });
 
     let mut checker = TaskState::for_package(PRELUDE_PACKAGE_ID);
-    let package = store
+    let mut package = store
         .get_package(PRELUDE_PACKAGE_ID)
         .cloned()
         .expect("prelude package must exist");
@@ -39,10 +39,10 @@ pub fn parse_and_register_prelude(store: &mut Store, sink: &LocalSink) {
             checker.register_type_names(store, &file.items, &Visibility::Public);
         }
 
-        for file in package.typedef_files() {
-            checker.register_type_definitions(store, &file.items);
-            checker.register_impl_blocks(store, &file.items);
-            checker.register_values(store, &file.items, &Visibility::Public);
+        for file in package.files.values_mut().filter(|file| file.is_d_lis()) {
+            checker.register_type_definitions(store, &mut file.items);
+            checker.register_impl_blocks(store, &mut file.items);
+            checker.register_values(store, &mut file.items, &Visibility::Public);
         }
         checker.finalize_registration(store);
     });
@@ -70,7 +70,7 @@ pub fn parse_and_register_test_prelude(store: &mut Store, sink: &LocalSink) {
     });
 
     let mut checker = TaskState::for_package(TEST_PRELUDE_PACKAGE_ID);
-    let package = store
+    let mut package = store
         .get_package(TEST_PRELUDE_PACKAGE_ID)
         .cloned()
         .expect("test_prelude package must exist");
@@ -83,10 +83,10 @@ pub fn parse_and_register_test_prelude(store: &mut Store, sink: &LocalSink) {
                 checker.register_type_names(store, &file.items, &Visibility::Public);
             }
 
-            for file in package.typedef_files() {
-                checker.register_type_definitions(store, &file.items);
-                checker.register_impl_blocks(store, &file.items);
-                checker.register_values(store, &file.items, &Visibility::Public);
+            for file in package.files.values_mut().filter(|file| file.is_d_lis()) {
+                checker.register_type_definitions(store, &mut file.items);
+                checker.register_impl_blocks(store, &mut file.items);
+                checker.register_values(store, &mut file.items, &Visibility::Public);
             }
             checker.finalize_registration(store);
         },

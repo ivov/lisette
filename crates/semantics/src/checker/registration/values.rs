@@ -58,7 +58,7 @@ impl TaskState {
     pub(crate) fn register_values(
         &mut self,
         store: &mut Store,
-        items: &[Expression],
+        items: &mut [Expression],
         visibility: &Visibility,
     ) {
         for item in items {
@@ -82,7 +82,7 @@ impl TaskState {
     fn register_function_value(
         &mut self,
         store: &mut Store,
-        item: &Expression,
+        item: &mut Expression,
         visibility: &Visibility,
     ) {
         let Expression::Function {
@@ -316,16 +316,16 @@ impl TaskState {
     pub(crate) fn extract_signature_parts(
         &mut self,
         store: &Store,
-        generics: &[Generic],
+        generics: &mut [Generic],
         params: &[Binding],
         return_annotation: &Annotation,
         span: &Span,
     ) -> Type {
         let (generics, bounds, param_types, return_ty) = self.with_scope(|this| {
             this.put_in_scope(generics);
-            let generics = this.resolve_generic_bounds(store, generics, span);
-            this.check_transitive_generic_bounds(store, &generics, *span);
-            let bounds = resolved_generic_bounds(&generics);
+            this.resolve_generic_bounds(store, generics, span);
+            this.check_transitive_generic_bounds(store, generics, *span);
+            let bounds = resolved_generic_bounds(generics);
 
             let (param_types, return_ty) = this.without_diagnostics(|this| {
                 let param_types: Vec<Type> = params
@@ -343,7 +343,7 @@ impl TaskState {
                 };
                 (param_types, return_ty)
             });
-            (generics, bounds, param_types, return_ty)
+            (generics.to_vec(), bounds, param_types, return_ty)
         });
 
         let function_params = param_types

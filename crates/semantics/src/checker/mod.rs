@@ -69,22 +69,24 @@ impl TaskState {
     pub(crate) fn put_in_scope(&mut self, generics: &[Generic]) {
         for (index, generic) in generics.iter().enumerate() {
             self.scopes
-                .insert_type_param(generic.name.to_string(), index);
+                .insert_type_param(self.qualify_name(&generic.name), index);
         }
     }
 
     pub(crate) fn resolve_generic_bounds(
         &mut self,
         store: &Store,
-        generics: &[Generic],
+        generics: &mut [Generic],
         span: &Span,
-    ) -> Vec<Generic> {
-        let mut resolved = generics.to_vec();
-        for generic in &mut resolved {
-            generic.resolve_bounds_with(|bound| self.register_bound_annotation(store, bound, span));
+    ) {
+        for generic in &mut *generics {
+            if !generic.bounds_are_resolved() {
+                generic.resolve_bounds_with(|bound| {
+                    self.register_bound_annotation(store, bound, span)
+                });
+            }
         }
-        self.record_resolved_generic_bounds(&resolved);
-        resolved
+        self.record_resolved_generic_bounds(generics);
     }
 
     fn record_resolved_generic_bounds(&mut self, generics: &[Generic]) {
@@ -101,20 +103,15 @@ impl TaskState {
     fn ensure_generic_bounds(
         &mut self,
         store: &Store,
-        generics: Vec<Generic>,
+        mut generics: Vec<Generic>,
         span: &Span,
     ) -> Vec<Generic> {
-        if generics.iter().all(Generic::bounds_are_resolved) {
-            self.record_resolved_generic_bounds(&generics);
-            generics
-        } else {
-            self.resolve_generic_bounds(store, &generics, span)
-        }
+        self.resolve_generic_bounds(store, &mut generics, span);
+        generics
     }
 
     fn record_generic_bound(&mut self, parameter: &str, bound: Type) {
-        let qualified_parameter = self.qualify_name(parameter);
-        self.scopes.insert_trait_bound(qualified_parameter, bound);
+        self.scopes.insert_trait_bound(parameter, bound);
     }
 
     fn parameter_satisfies_bound(&self, parameter: &str, target: infer::BuiltinBound) -> bool {

@@ -83,6 +83,12 @@ pub struct CompiledTest {
 
 impl CompiledTest {
     pub fn run_inference(self) -> InferenceResult {
+        let Self {
+            mut ast,
+            wrapped,
+            e2e_suite_mode,
+            extra_go_typedefs,
+        } = self;
         let mut store = new_test_store();
         store.add_package(TEST_PACKAGE_ID);
 
@@ -102,12 +108,11 @@ impl CompiledTest {
 
             let locator = deps::TypedefLocator::default();
 
-            for (name, typedef) in &self.extra_go_typedefs {
+            for (name, typedef) in &extra_go_typedefs {
                 checker.parse_and_register_go_package(&mut store, name, typedef, None, &locator);
             }
 
-            let imports: Vec<FileImport> = self
-                .ast
+            let imports: Vec<FileImport> = ast
                 .iter()
                 .filter_map(|item| {
                     if let Expression::PackageImport {
@@ -138,8 +143,8 @@ impl CompiledTest {
 
             checker.put_imported_packages_in_scope(&store, &imports);
 
-            checker.register_types_and_values(&mut store, &self.ast, &Visibility::Private);
-            InferCtx::new(&mut checker, &store).check_const_cycles(&[self.ast.as_slice()]);
+            checker.register_types_and_values(&mut store, &mut ast, &Visibility::Private);
+            InferCtx::new(&mut checker, &store).check_const_cycles(&[ast.as_slice()]);
 
             let test_file_id = store.new_file_id();
             store.store_file(File {
@@ -149,7 +154,7 @@ impl CompiledTest {
                 display_path: "test.lis".to_string(),
                 source_path: None,
                 source: String::new(),
-                items: self.ast.clone(),
+                items: ast.clone(),
                 file_comment: None,
             });
             checker.finalize_registration(&mut store);
@@ -157,7 +162,7 @@ impl CompiledTest {
             let mut typed_ast = vec![];
             {
                 let mut ctx = InferCtx::new(&mut checker, &store);
-                for expression in self.ast {
+                for expression in ast {
                     let type_var = ctx.new_type_var();
                     let typed_expression = ctx.infer_root_expression(expression, &type_var);
                     typed_ast.push(typed_expression);
@@ -179,8 +184,6 @@ impl CompiledTest {
             typed_ast = semantics::checker::freeze::FreezeFolder::new(&checker.env, &store)
                 .freeze_items(typed_ast);
             checker.check_post_inference_bounds(&store);
-            checker.populate_item_generic_bounds(&mut typed_ast);
-
             if !checker.failed() {
                 // Overwrite the stored file with the typed AST so passes::run
                 // sees post-inference items when iterating store.packages.
@@ -202,7 +205,7 @@ impl CompiledTest {
                 );
             }
 
-            if self.wrapped && !self.e2e_suite_mode {
+            if wrapped && !e2e_suite_mode {
                 let has_hoisted = typed_ast.len() > 1
                     && typed_ast.iter().any(|expr| {
                         matches!(expr, Expression::Function { name, .. } if name == TEST_WRAPPER_NAME)

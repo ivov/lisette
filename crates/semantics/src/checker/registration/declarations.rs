@@ -49,7 +49,7 @@ impl TaskState {
     pub fn register_types_and_values(
         &mut self,
         store: &mut Store,
-        items: &[Expression],
+        items: &mut [Expression],
         visibility: &Visibility,
     ) {
         self.register_type_names(store, items, visibility);
@@ -225,12 +225,16 @@ impl TaskState {
         }
     }
 
-    pub(crate) fn register_type_definitions(&mut self, store: &mut Store, items: &[Expression]) {
+    pub(crate) fn register_type_definitions(
+        &mut self,
+        store: &mut Store,
+        items: &mut [Expression],
+    ) {
         self.register_type_aliases(store, items);
         self.register_type_bodies(store, items);
     }
 
-    pub(super) fn register_type_aliases(&mut self, store: &mut Store, items: &[Expression]) {
+    pub(super) fn register_type_aliases(&mut self, store: &mut Store, items: &mut [Expression]) {
         for item in items {
             if matches!(item, Expression::TypeAlias { .. }) {
                 self.populate_type_alias(store, item);
@@ -238,7 +242,7 @@ impl TaskState {
         }
     }
 
-    pub(super) fn register_type_bodies(&mut self, store: &mut Store, items: &[Expression]) {
+    pub(super) fn register_type_bodies(&mut self, store: &mut Store, items: &mut [Expression]) {
         self.check_go_hints_in_items(items);
         for item in items {
             match item {
@@ -278,7 +282,7 @@ impl TaskState {
         }
     }
 
-    pub(crate) fn register_impl_blocks(&mut self, store: &mut Store, items: &[Expression]) {
+    pub(crate) fn register_impl_blocks(&mut self, store: &mut Store, items: &mut [Expression]) {
         for item in items {
             if let Expression::ImplBlock {
                 annotation,

@@ -247,7 +247,8 @@ impl InferCtx<'_> {
 
         let store = self.store;
         let fn_ty = self.without_diagnostics(|this| {
-            this.extract_signature_parts(store, generics, params, return_annotation, span)
+            let mut generics = generics.clone();
+            this.extract_signature_parts(store, &mut generics, params, return_annotation, span)
         });
 
         let scope = self.scopes.current_mut();

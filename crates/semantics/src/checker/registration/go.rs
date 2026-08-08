@@ -110,13 +110,13 @@ impl TaskState {
                 imports: &imports,
             },
             |this, store| {
-                let items = std::mem::take(
+                let mut items = std::mem::take(
                     &mut store
                         .get_file_mut(file_id)
                         .expect("file must exist after store_file")
                         .items,
                 );
-                this.register_types_and_values(store, &items, &Visibility::Public);
+                this.register_types_and_values(store, &mut items, &Visibility::Public);
             },
         );
     }

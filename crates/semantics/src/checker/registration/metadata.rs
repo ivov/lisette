@@ -1,23 +1,5 @@
 use super::*;
 
-impl TaskState {
-    pub(super) fn populate_package_generic_bounds(&self, files: &mut [RegistrationFile]) {
-        for file in files {
-            for item in &mut file.items {
-                populate_expression_generic_bounds(item, &self.resolved_bound_types);
-            }
-        }
-    }
-
-    /// Resolve each item's generic bounds from the per-package pass results.
-    /// Test harnesses that emit a typed AST directly bypass that pass.
-    pub fn populate_item_generic_bounds(&self, items: &mut [Expression]) {
-        for item in items {
-            populate_expression_generic_bounds(item, &self.resolved_bound_types);
-        }
-    }
-}
-
 pub(super) fn declaration_value_position_types(definition: &Definition) -> Vec<(Type, Span)> {
     match &definition.body {
         DefinitionBody::Struct { fields, .. } => fields
@@ -72,51 +54,6 @@ fn alias_body_types(alias: &AliasKind) -> Vec<(Type, Span)> {
         AliasKind::Transparent { annotation, target } => {
             vec![(target.clone(), annotation.get_span())]
         }
-    }
-}
-
-fn populate_expression_generic_bounds(
-    expression: &mut Expression,
-    bound_types: &rustc_hash::FxHashMap<Span, Type>,
-) {
-    match expression {
-        Expression::Function { generics, .. }
-        | Expression::Struct { generics, .. }
-        | Expression::Enum { generics, .. }
-        | Expression::TypeAlias { generics, .. } => populate_generic_bounds(generics, bound_types),
-        Expression::ImplBlock {
-            generics, methods, ..
-        } => {
-            populate_generic_bounds(generics, bound_types);
-            for method in methods {
-                populate_expression_generic_bounds(method, bound_types);
-            }
-        }
-        Expression::Interface {
-            generics,
-            method_signatures,
-            ..
-        } => {
-            populate_generic_bounds(generics, bound_types);
-            for method in method_signatures {
-                populate_expression_generic_bounds(method, bound_types);
-            }
-        }
-        _ => {}
-    }
-}
-
-fn populate_generic_bounds(
-    generics: &mut [Generic],
-    bound_types: &rustc_hash::FxHashMap<Span, Type>,
-) {
-    for generic in generics {
-        generic.resolve_bounds_with(|bound| {
-            bound_types
-                .get(&bound.get_span())
-                .cloned()
-                .unwrap_or(Type::Error)
-        });
     }
 }
 

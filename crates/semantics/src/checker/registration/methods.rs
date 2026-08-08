@@ -150,8 +150,8 @@ impl TaskState {
         &mut self,
         store: &mut Store,
         annotation: &Annotation,
-        generics: &[Generic],
-        functions: &[Expression],
+        generics: &mut [Generic],
+        functions: &mut [Expression],
         span: &Span,
     ) {
         let static_methods = self.with_scope(|this| {
@@ -168,8 +168,8 @@ impl TaskState {
         &mut self,
         store: &mut Store,
         annotation: &Annotation,
-        generics: &[Generic],
-        functions: &[Expression],
+        generics: &mut [Generic],
+        functions: &mut [Expression],
         span: &Span,
     ) -> Vec<(String, Type)> {
         let Some(resolved) = self.resolve_impl_receiver(store, annotation, generics, span) else {
@@ -208,14 +208,14 @@ impl TaskState {
         &mut self,
         store: &mut Store,
         annotation: &Annotation,
-        generics: &[Generic],
+        generics: &mut [Generic],
         span: &Span,
     ) -> Option<ResolvedImplReceiver> {
         self.put_in_scope(generics);
-        let generics = self.resolve_generic_bounds(&*store, generics, span);
-        let impl_bounds = resolved_generic_bounds(&generics);
+        self.resolve_generic_bounds(&*store, generics, span);
+        let impl_bounds = resolved_generic_bounds(generics);
 
-        self.check_undeclared_impl_type_params(annotation, &generics);
+        self.check_undeclared_impl_type_params(annotation, generics);
         let receiver_ty = self.convert_receiver_to_type(&*store, annotation, span);
         let type_name = receiver_ty.get_name()?;
         // Prelude built-ins like `Array` have no qualified name to key methods by.
@@ -272,24 +272,24 @@ impl TaskState {
             return None;
         }
 
-        if self.impl_has_simple_type_params(&receiver_ty, &generics) {
+        if self.impl_has_simple_type_params(&receiver_ty, generics) {
             let receiver_bounds =
-                self.register_receiver_type_bounds(&*store, &receiver_qualified_name, &generics);
+                self.register_receiver_type_bounds(&*store, &receiver_qualified_name, generics);
             self.check_strengthened_impl_bounds(
                 &*store,
                 &receiver_qualified_name,
-                &generics,
+                generics,
                 &impl_bounds,
                 &receiver_bounds,
             );
         }
-        self.check_transitive_generic_bounds(&*store, &generics, *span);
+        self.check_transitive_generic_bounds(&*store, generics, *span);
 
         Some(ResolvedImplReceiver {
             receiver_ty,
             qualified_name: receiver_qualified_name,
             package_id,
-            generics,
+            generics: generics.to_vec(),
             impl_bounds,
         })
     }
@@ -299,54 +299,55 @@ impl TaskState {
         &mut self,
         store: &mut Store,
         receiver: &ImplReceiver<'_>,
-        function: &Expression,
+        function: &mut Expression,
         generics: &[Generic],
         impl_bounds: &[Bound],
     ) -> Option<(String, Type)> {
         let is_d_lis = self.is_d_lis(&*store);
-        let (fn_attrs, fn_doc) = if let Expression::Function {
-            attributes, doc, ..
+        let Expression::Function {
+            attributes: fn_attrs,
+            doc: fn_doc,
+            visibility,
+            name: fn_name,
+            name_span: fn_name_span,
+            generics: fn_generics,
+            params: fn_params,
+            return_annotation,
+            span: fn_span,
+            ..
         } = function
-        {
-            (attributes.as_slice(), doc.clone())
-        } else {
-            (&[][..], None)
+        else {
+            unreachable!("impl item must be a function")
         };
-        let fn_visibility = if let Expression::Function { visibility, .. } = function
-            && (*visibility == SyntacticVisibility::Public || is_d_lis)
-        {
+        let fn_doc = fn_doc.clone();
+        let fn_visibility = if *visibility == SyntacticVisibility::Public || is_d_lis {
             Visibility::Public
         } else {
             Visibility::Private
         };
-        let fn_sig = function.function_definition_view();
-        let fn_span = function.get_span();
         let mut fn_ty = self.extract_signature_parts(
             &*store,
-            fn_sig.generics,
-            fn_sig.params,
-            fn_sig.annotation,
-            &fn_span,
+            fn_generics,
+            fn_params,
+            return_annotation,
+            fn_span,
         );
-        let qualified_name = format!("{}.{}", receiver.display_name, fn_sig.name);
+        let qualified_name = format!("{}.{}", receiver.display_name, fn_name);
         let package_qualified_name = Symbol::from_parts(receiver.package_id, &qualified_name);
-        let is_instance_method = fn_sig.params.first().is_some_and(|p| {
+        let is_instance_method = fn_params.first().is_some_and(|p| {
             matches!(p.pattern, Pattern::Identifier { ref identifier, .. } if identifier == "self")
         });
 
-        let has_unannotated_self = fn_sig
-            .params
-            .first()
-            .is_some_and(|p| p.annotation.is_none());
+        let has_unannotated_self = fn_params.first().is_some_and(|p| p.annotation.is_none());
 
         if is_instance_method && has_unannotated_self {
             fn_ty = fn_ty.with_replaced_first_param(receiver.receiver_ty);
         }
 
         let (method_signature_pairs, method_signature_bounds) =
-            super::function_signature_pairs(&fn_ty, fn_sig.params, fn_span);
+            super::function_signature_pairs(&fn_ty, fn_params, *fn_span);
         self.with_scope(|this| {
-            this.put_in_scope(fn_sig.generics);
+            this.put_in_scope(fn_generics);
             for bound in &method_signature_bounds {
                 this.record_generic_bound(&bound.param_name, bound.ty.clone());
             }
@@ -358,9 +359,9 @@ impl TaskState {
         let go_hints = extract_attribute_flags(fn_attrs, "go");
         let method_key: EcoString =
             if is_instance_method && go_hints.iter().any(|h| h == "unexported") {
-                super::seal_method_key(is_d_lis, fn_attrs, receiver.package_id, fn_sig.name)
+                super::seal_method_key(is_d_lis, fn_attrs, receiver.package_id, fn_name)
             } else {
-                fn_sig.name.clone()
+                fn_name.clone()
             };
 
         if !generics.is_empty()
@@ -370,7 +371,7 @@ impl TaskState {
             self.sink
                 .push(diagnostics::infer::recursive_generic_instantiation(
                     receiver.display_name,
-                    fn_sig.name_span,
+                    *fn_name_span,
                 ));
         }
 
@@ -378,20 +379,20 @@ impl TaskState {
             &*store,
             receiver,
             MethodName {
-                source: fn_sig.name,
+                source: fn_name,
                 key: &method_key,
             },
-            fn_sig.name_span,
+            *fn_name_span,
             generics.is_empty(),
         );
 
         let mut static_entry = None;
         if is_instance_method {
             let method = Method {
-                source_name: fn_sig.name.clone(),
+                source_name: fn_name.clone(),
                 ty: method_ty.clone(),
                 visibility: fn_visibility.clone(),
-                name_span: Some(fn_sig.name_span),
+                name_span: Some(*fn_name_span),
                 doc: fn_doc.clone(),
                 allowed_lints: extract_attribute_flags(fn_attrs, "allow"),
                 go_hints: go_hints.clone(),
@@ -400,7 +401,7 @@ impl TaskState {
                 store,
                 receiver,
                 &method_key,
-                fn_sig.name_span,
+                *fn_name_span,
                 method,
             ) {
                 // Receiver not found: skip the duplicate check and the definition insert below.
@@ -419,7 +420,7 @@ impl TaskState {
                 Definition {
                     visibility: fn_visibility.clone(),
                     ty: method_ty,
-                    name_span: Some(fn_sig.name_span),
+                    name_span: Some(*fn_name_span),
                     doc: fn_doc,
                     body: DefinitionBody::Value {
                         kind: syntax::program::ValueKind::Runtime,
@@ -435,7 +436,7 @@ impl TaskState {
         static_entry
     }
 
-    pub(super) fn populate_interface(&mut self, store: &mut Store, expression: &Expression) {
+    pub(super) fn populate_interface(&mut self, store: &mut Store, expression: &mut Expression) {
         let Expression::Interface {
             name: interface_name,
             name_span,
@@ -460,7 +461,7 @@ impl TaskState {
             .unwrap_or(Visibility::Private);
         let (generics, new_parents, methods) = self.with_scope(|this| {
             this.put_in_scope(generics);
-            let generics = this.resolve_generic_bounds(&*store, generics, span);
+            this.resolve_generic_bounds(&*store, generics, span);
 
             let new_parents = parents
                 .iter()
@@ -469,37 +470,41 @@ impl TaskState {
 
             let mut self_receiver_spans = Vec::new();
             let methods = fn_expressions
-                .iter()
+                .iter_mut()
                 .map(|fe| {
-                    let (fn_attrs, fn_doc) = if let Expression::Function {
-                        attributes, doc, ..
+                    let Expression::Function {
+                        attributes: fn_attrs,
+                        doc: fn_doc,
+                        name: method_name,
+                        name_span: method_name_span,
+                        generics: method_generics,
+                        params: method_params,
+                        return_annotation,
+                        span: method_span,
+                        ..
                     } = fe
-                    {
-                        (attributes.as_slice(), doc.clone())
-                    } else {
-                        (&[][..], None)
+                    else {
+                        unreachable!("interface item must be a function signature")
                     };
-                    let method_sig = fe.function_definition_view();
-                    let method_span = fe.get_span();
+                    let fn_doc = fn_doc.clone();
                     let fn_ty = this.extract_signature_parts(
                         &*store,
-                        method_sig.generics,
-                        method_sig.params,
-                        method_sig.annotation,
-                        &method_span,
+                        method_generics,
+                        method_params,
+                        return_annotation,
+                        method_span,
                     );
                     let fn_ty = match &fn_ty {
                         Type::Forall { body, .. } => body.as_ref().clone(),
                         _ => fn_ty,
                     };
 
-                    let self_receiver_span =
-                        method_sig.params.first().and_then(|p| match &p.pattern {
-                            Pattern::Identifier { identifier, span } if identifier == "self" => {
-                                Some(*span)
-                            }
-                            _ => None,
-                        });
+                    let self_receiver_span = method_params.first().and_then(|p| match &p.pattern {
+                        Pattern::Identifier { identifier, span } if identifier == "self" => {
+                            Some(*span)
+                        }
+                        _ => None,
+                    });
                     if let Some(self_span) = self_receiver_span {
                         self_receiver_spans.push(self_span);
                     }
@@ -513,14 +518,14 @@ impl TaskState {
                     };
 
                     let (mut signature_pairs, signature_bounds) =
-                        super::function_signature_pairs(&fn_ty, &[], method_span);
+                        super::function_signature_pairs(&fn_ty, &[], *method_span);
                     if let Type::Function(f) = fn_ty.unwrap_forall() {
-                        signature_pairs.push(((*f.return_type).clone(), method_span));
+                        signature_pairs.push(((*f.return_type).clone(), *method_span));
                     }
                     this.with_scope(|this| {
-                        this.put_in_scope(&generics);
-                        this.record_resolved_generic_bounds(&generics);
-                        this.put_in_scope(method_sig.generics);
+                        this.put_in_scope(generics);
+                        this.record_resolved_generic_bounds(generics);
+                        this.put_in_scope(method_generics);
                         for bound in &signature_bounds {
                             this.record_generic_bound(&bound.param_name, bound.ty.clone());
                         }
@@ -529,17 +534,17 @@ impl TaskState {
 
                     let go_hints = extract_attribute_flags(fn_attrs, "go");
                     let key = if go_hints.iter().any(|h| h == "unexported") {
-                        super::seal_method_key(is_d_lis, fn_attrs, &package_id, method_sig.name)
+                        super::seal_method_key(is_d_lis, fn_attrs, &package_id, method_name)
                     } else {
-                        method_sig.name.clone()
+                        method_name.clone()
                     };
                     (
                         key,
                         Method {
-                            source_name: method_sig.name.clone(),
+                            source_name: method_name.clone(),
                             ty: fn_ty,
                             visibility: visibility.clone(),
-                            name_span: Some(method_sig.name_span),
+                            name_span: Some(*method_name_span),
                             doc: fn_doc,
                             allowed_lints: extract_attribute_flags(fn_attrs, "allow"),
                             go_hints,
@@ -552,7 +557,7 @@ impl TaskState {
                 this.sink
                     .push(diagnostics::infer::self_in_interface_method(self_span));
             }
-            (generics, new_parents, methods)
+            (generics.clone(), new_parents, methods)
         });
 
         let interface_ty = store

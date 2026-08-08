@@ -86,7 +86,8 @@ struct ScopedValue {
 #[derive(Debug, Clone)]
 struct GenericParameter {
     index: usize,
-    bounds: Option<(Symbol, Vec<Type>)>,
+    qualified: Symbol,
+    bounds: Vec<Type>,
 }
 
 #[derive(Debug)]
@@ -273,30 +274,25 @@ impl Scopes {
         })
     }
 
-    pub(crate) fn insert_type_param(&mut self, name: String, index: usize) {
+    pub(crate) fn insert_type_param(&mut self, qualified: Symbol, index: usize) {
+        let name = qualified.last_segment().to_string();
         self.current_mut().generic_parameters.insert(
             name,
             GenericParameter {
                 index,
-                bounds: None,
+                qualified,
+                bounds: Vec::new(),
             },
         );
     }
 
-    pub(crate) fn insert_trait_bound(&mut self, parameter: Symbol, bound: Type) {
-        let name = parameter.last_segment().to_string();
-        let generic = self
+    pub(crate) fn insert_trait_bound(&mut self, parameter: &str, bound: Type) {
+        let bounds = &mut self
             .current_mut()
             .generic_parameters
-            .get_mut(&name)
-            .expect("a generic parameter must be in scope before recording its bounds");
-        let (existing_parameter, bounds) = generic
-            .bounds
-            .get_or_insert_with(|| (parameter.clone(), Vec::new()));
-        assert_eq!(
-            existing_parameter, &parameter,
-            "one generic parameter cannot have multiple qualified identities"
-        );
+            .get_mut(parameter)
+            .expect("a generic parameter must be in scope before recording its bounds")
+            .bounds;
         if !bounds.contains(&bound) {
             bounds.push(bound);
         }
@@ -398,8 +394,8 @@ impl Scopes {
                     .contains_key(parameter.last_segment())
             });
             for parameter in scope.generic_parameters.values() {
-                if let Some((qualified, bounds)) = &parameter.bounds {
-                    all_bounds.insert(qualified.clone(), bounds.clone());
+                if !parameter.bounds.is_empty() {
+                    all_bounds.insert(parameter.qualified.clone(), parameter.bounds.clone());
                 }
             }
         }
@@ -409,10 +405,8 @@ impl Scopes {
     pub(crate) fn for_each_bound_on_param<F: FnMut(&Type)>(&self, param_name: &str, mut visit: F) {
         for scope in self.stack.iter().rev() {
             if let Some(parameter) = scope.generic_parameters.get(param_name) {
-                if let Some((_, bounds)) = &parameter.bounds {
-                    for bound in bounds {
-                        visit(bound);
-                    }
+                for bound in &parameter.bounds {
+                    visit(bound);
                 }
                 return;
             }
@@ -597,10 +591,10 @@ mod tests {
     #[test]
     fn inner_type_parameter_shadows_outer_bounds_without_declaring_its_own() {
         let mut scopes = Scopes::new();
-        scopes.insert_type_param("T".into(), 0);
-        scopes.insert_trait_bound(Symbol::from_parts("package", "T"), Type::Error);
+        scopes.insert_type_param(Symbol::from_parts("package", "T"), 0);
+        scopes.insert_trait_bound("T", Type::Error);
         scopes.push();
-        scopes.insert_type_param("T".into(), 0);
+        scopes.insert_type_param(Symbol::from_parts("package", "T"), 0);
 
         let bounds = scopes.collect_all_trait_bounds();
 

@@ -119,7 +119,7 @@ impl TaskState {
     ) -> RegisteredPackage {
         let UnregisteredPackage { id, mut files } = package;
 
-        for file in &files {
+        for file in &mut files {
             self.with_file_context_mut(
                 store,
                 FileContext::Standard {
@@ -127,11 +127,11 @@ impl TaskState {
                     file_id: file.id,
                     imports: &file.imports,
                 },
-                |this, store| this.register_type_aliases(store, &file.items),
+                |this, store| this.register_type_aliases(store, &mut file.items),
             );
         }
 
-        for file in &files {
+        for file in &mut files {
             self.with_file_context_mut(
                 store,
                 FileContext::Standard {
@@ -139,11 +139,11 @@ impl TaskState {
                     file_id: file.id,
                     imports: &file.imports,
                 },
-                |this, store| this.register_type_bodies(store, &file.items),
+                |this, store| this.register_type_bodies(store, &mut file.items),
             );
         }
 
-        for file in &files {
+        for file in &mut files {
             self.with_file_context_mut(
                 store,
                 FileContext::Standard {
@@ -153,8 +153,8 @@ impl TaskState {
                 },
                 |this, store| {
                     this.check_type_generic_bounds(store, &file.items);
-                    this.register_impl_blocks(store, &file.items);
-                    this.register_values(store, &file.items, &Visibility::Private);
+                    this.register_impl_blocks(store, &mut file.items);
+                    this.register_values(store, &mut file.items, &Visibility::Private);
                 },
             );
         }
@@ -164,8 +164,6 @@ impl TaskState {
         self.check_package_recursive_types(store, &id);
 
         self.register_package_tests(store, &id, &files);
-        self.populate_package_generic_bounds(&mut files);
-
         RegisteredPackage { id, files }
     }
 

@@ -69,7 +69,7 @@ impl TaskState {
         annotation: &Annotation,
         span: &Span,
     ) -> Type {
-        let result = self.convert_to_type_mode(
+        self.convert_to_type_mode(
             store,
             annotation,
             span,
@@ -78,12 +78,7 @@ impl TaskState {
                 type_argument_checks: TypeArgumentChecks::Deferred,
                 position: TypePosition::Bound,
             },
-        );
-        if !result.contains_error() {
-            self.resolved_bound_types
-                .insert(annotation.get_span(), result.clone());
-        }
-        result
+        )
     }
 
     pub(crate) fn convert_to_type(
@@ -603,7 +598,7 @@ impl TaskState {
 
         for (i, (name, param_span)) in undeclared.iter().enumerate() {
             self.scopes
-                .insert_type_param(name.clone(), generics.len() + i);
+                .insert_type_param(self.qualify_name(name), generics.len() + i);
             self.sink
                 .push(diagnostics::infer::undeclared_impl_type_param(
                     name,

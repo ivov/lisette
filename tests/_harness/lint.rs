@@ -29,7 +29,7 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
         panic!("Parsing failed in lint test: {:?}", parse_result.errors);
     }
 
-    let ast = parse_result.ast;
+    let mut ast = parse_result.ast;
 
     let mut checker = TaskState::for_package(TEST_PACKAGE_ID);
     checker.put_prelude_in_scope(&store);
@@ -62,7 +62,7 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
         .collect();
     checker.put_imported_packages_in_scope(&store, &imports);
 
-    checker.register_types_and_values(&mut store, &ast, &Visibility::Private);
+    checker.register_types_and_values(&mut store, &mut ast, &Visibility::Private);
     checker.finalize_registration(&mut store);
 
     let mut typed_ast = vec![];
