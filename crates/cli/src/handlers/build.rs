@@ -650,12 +650,16 @@ fn reconcile_target_manifest(
         &emit.changed,
         import_set_hash,
     ) {
-        let message = super::reconciliation::augment_go_error_with_local_hint(
-            e.message,
+        let remedy = super::reconciliation::local_child_remedy(
+            &e.message,
             &prep.project_path,
             &prep.target_dir,
             &prep.manifest,
         );
+        let message = match remedy {
+            Some(remedy) => format!("{}\n · {}", e.message, remedy),
+            None => e.message,
+        };
         cli_error!(heading, message, e.hint);
         return Err(1);
     }

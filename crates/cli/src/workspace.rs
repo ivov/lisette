@@ -566,11 +566,11 @@ fn translate_go_error(args: &[&str], stderr: &str) -> String {
     if stderr.contains("errors parsing go.mod") {
         if let Some(culprit) = extract_invalid_pin(stderr) {
             return format!(
-                "`lisette.toml` has an invalid Go version for `{}` (`{}`); fix the pin and retry",
+                "`lisette.toml` has an invalid Go version for `{}` (`{}`). Fix the pin and retry",
                 culprit.0, culprit.1
             );
         }
-        return "`lisette.toml` contains an invalid Go version; fix the offending pin and retry"
+        return "`lisette.toml` contains an invalid Go version. Fix the offending pin and retry"
             .to_string();
     }
     // Must precede the generic `invalid version` branch below; Go's
@@ -597,7 +597,7 @@ fn translate_go_error(args: &[&str], stderr: &str) -> String {
             && !rest.contains('/')
         {
             return format!(
-                "`{}` is missing the repository segment; try `github.com/{}/<repo>`",
+                "`{}` is missing the repository segment. Try `github.com/{}/<repo>`",
                 module, rest
             );
         }
@@ -608,7 +608,7 @@ fn translate_go_error(args: &[&str], stderr: &str) -> String {
     }
     if let Some((found, missing)) = extract_missing_subpackage(stderr) {
         return format!(
-            "Module `{}` exists but does not contain package `{}`; v1 Go modules do not use a `/v1` suffix (only v2+ require the major-version suffix)",
+            "Module `{}` exists but does not contain package `{}`. A v1 Go module does not use a `/v1` suffix (only v2+ require the major-version suffix)",
             found, missing
         );
     }
@@ -618,7 +618,7 @@ fn translate_go_error(args: &[&str], stderr: &str) -> String {
         return format!("No module provides package `{}`", module);
     }
     if stderr.contains("existing contents have changed since last read") {
-        return "Another `lis add` is in progress against this project; wait for it to finish and retry".to_string();
+        return "Another `lis add` is in progress against this project. Wait for it to finish and retry".to_string();
     }
     if stderr.contains("unable to access") || stderr.contains("requested URL returned error: 4") {
         return format!(
@@ -628,26 +628,26 @@ fn translate_go_error(args: &[&str], stderr: &str) -> String {
     }
     if stderr.contains("module lookup disabled by GOPROXY") {
         return format!(
-            "Module `{}` is not in the local cache and `GOPROXY=off` disables remote lookups; unset `GOPROXY` or set it to a working proxy",
+            "Module `{}` is not in the local cache and `GOPROXY=off` disables remote lookups. Unset `GOPROXY` or set it to a working proxy",
             module
         );
     }
     if stderr.contains("modules disabled by GO111MODULE") {
-        return "`GO111MODULE=off` disables Go modules entirely; unset `GO111MODULE` (Go modules are required by lisette)".to_string();
+        return "`GO111MODULE=off` disables Go modules entirely. Unset `GO111MODULE` (Go modules are required by lisette)".to_string();
     }
     if stderr.contains("-insecure flag is no longer supported") {
-        return "`-insecure` is no longer a valid Go flag; remove it from `GOFLAGS` or set `GOINSECURE` instead".to_string();
+        return "`-insecure` is no longer a valid Go flag. Remove it from `GOFLAGS` or set `GOINSECURE` instead".to_string();
     }
     if stderr.contains("unrecognized import path") {
         let offender = extract_unrecognized_path(stderr).unwrap_or(module.to_string());
         return format!(
-            "`{}` is not a recognized Go module path; the host does not serve `go-import` metadata",
+            "`{}` is not a recognized Go module path. The host does not serve `go-import` metadata",
             offender
         );
     }
     if stderr.contains("updates to go.mod needed") {
         return format!(
-            "Resolving `{}` requires updates to `target/go.mod` that lisette could not perform; please file an issue",
+            "Resolving `{}` requires updates to `target/go.mod` that lisette could not perform. Please file an issue",
             target
         );
     }
@@ -971,7 +971,7 @@ fn validate_typedef_parses(pkg_path: &str, typedef: &str) -> Result<(), String> 
         return Ok(());
     }
     Err(format!(
-        "Bindgen produced unparseable typedef for `{}`: {} parse error(s); first: {}",
+        "Bindgen produced unparseable typedef for `{}`: {} parse error(s). First: {}",
         pkg_path,
         parse.errors.len(),
         parse.errors[0].message,
@@ -1109,22 +1109,18 @@ impl Bindgen for WorkspaceBindgen {
         match workspace.reconcile_package(module, pkg.package) {
             Ok(_stubs) => Ok(()),
             Err(stderr) => {
-                let stderr = self.with_local_child_hint(stderr);
-                Err(BindgenFailure::InvocationFailed { stderr })
+                let hint = self.local_child_remedy(&stderr);
+                Err(BindgenFailure::InvocationFailed { stderr, hint })
             }
         }
     }
 }
 
 impl WorkspaceBindgen {
-    fn with_local_child_hint(&self, stderr: String) -> String {
-        let Some(project_root) = self.target_dir.parent() else {
-            return stderr;
-        };
-        let Ok(manifest) = deps::parse_manifest(project_root) else {
-            return stderr;
-        };
-        crate::handlers::reconciliation::augment_go_error_with_local_hint(
+    fn local_child_remedy(&self, stderr: &str) -> Option<String> {
+        let project_root = self.target_dir.parent()?;
+        let manifest = deps::parse_manifest(project_root).ok()?;
+        crate::handlers::reconciliation::local_child_remedy(
             stderr,
             project_root,
             &self.target_dir,
