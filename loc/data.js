@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786299477337,
+  "lastUpdate": 1786301064004,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -21451,6 +21451,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 30397,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 25912,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18583,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14124,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 12980,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 7930,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5975,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2901,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1830,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 713,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7823,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4da8bbdcc8bd0f326eeb90d7868fff20f584e39e",
+          "message": "fix: emit explicit tuple type arguments for adapted literals (#1248)",
+          "timestamp": "2026-08-09T20:43:57+02:00",
+          "tree_id": "9fd2b84a6c32da9cef5e6d874cfbbe56ffb4cb8b",
+          "url": "https://github.com/ivov/lisette/commit/4da8bbdcc8bd0f326eeb90d7868fff20f584e39e"
+        },
+        "date": 1786301062516,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 130082,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30395,
             "unit": "lines"
           },
           {
