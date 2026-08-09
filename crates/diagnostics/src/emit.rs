@@ -63,21 +63,20 @@ pub fn go_import_collision(
     sorted.extend_from_slice(rest);
     sorted.sort();
 
-    let bullet_list = sorted
-        .iter()
-        .map(|p| format!("  - go:{}", p))
-        .collect::<Vec<_>>()
-        .join("\n");
-
+    let packages: Vec<String> = sorted.iter().map(|p| format!("`go:{}`", p)).collect();
     let suggestion_target = sorted[sorted.len() - 1];
 
     LisetteDiagnostic::error("Go import collision")
         .with_emit_code("go_import_collision")
         .with_help(format!(
-            "These Go packages all default to `{}` in generated code:\n{}\n\
+            "{} {} default to `{}` in generated code. \
              Add an alias to at least one of them in your source: \
              `import my_{} \"go:{}\"`. \
              One of these may have been pulled in transitively by a typedef.",
-            alias, bullet_list, alias, suggestion_target,
+            crate::pattern::join_and(&packages),
+            if packages.len() == 2 { "both" } else { "all" },
+            alias,
+            alias,
+            suggestion_target,
         ))
 }

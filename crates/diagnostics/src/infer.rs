@@ -4185,9 +4185,9 @@ pub fn reference_aliases_sibling(
         .with_span_label(&ref_span, format!("may mutate `{}`", var_name))
         .with_span_label(&read_span, "may see the mutated value")
         .with_help(format!(
-            "Make evaluation order explicit by choosing which value the read should see:\n\
-             - for the value before `&{0}` runs, copy it first with `let before = {0}` and read `before`\n\
-             - for the value after, bind the reference-taking operand to a variable first, then read `{0}`",
+            "Make evaluation order explicit: to read the value before `&{0}` runs, copy it first \
+             with `let before = {0}`, and to read the value after, bind the reference-taking \
+             operand to a variable first",
             var_name
         ))
 }
