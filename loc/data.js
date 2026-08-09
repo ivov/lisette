@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786280166708,
+  "lastUpdate": 1786283478080,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -21209,6 +21209,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "diagnostics",
             "value": 7949,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5975,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2901,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1830,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 713,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7823,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "3156b02d568f51dbb68a4320f6e556917446ed06",
+          "message": "refactor: flatten multi-line help in three diagnostics (#1244)",
+          "timestamp": "2026-08-09T15:50:53+02:00",
+          "tree_id": "c83c49ed5ef3d15330ec5e6c4399a92f1d028830",
+          "url": "https://github.com/ivov/lisette/commit/3156b02d568f51dbb68a4320f6e556917446ed06"
+        },
+        "date": 1786283475404,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 130086,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30397,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 25914,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18583,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14124,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 12980,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 7930,
             "unit": "lines"
           },
           {
