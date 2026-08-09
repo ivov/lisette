@@ -113,6 +113,15 @@ fn validate(input: Input) -> Result<Input, ValidationError> {
 }
 ```
 
+A custom error propagates with `?` into a function that returns an `error` interface type:
+
+```rust
+fn process(input: Input) -> Result<Input, error> {
+  let valid = validate(input)? // ValidationError satisfies error
+  Ok(valid)
+}
+```
+
 📚 See [`10-methods.md`](10-methods.md)
 
 

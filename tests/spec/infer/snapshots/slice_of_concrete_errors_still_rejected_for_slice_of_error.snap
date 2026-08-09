@@ -1,0 +1,12 @@
+---
+source: tests/spec/infer/try.rs
+---
+  ✕ Type mismatch
+    ╭─[test.lis:12:19]
+ 11 │       let errors: Slice<CError> = [CError {}]
+ 12 │       take_errors(errors)
+    ·                   ───┬──
+    ·                      ╰── expected `Slice<error>`, found `Slice<CError>`
+ 13 │     }
+    ╰────
+  help: Use `.map(|value| value as error)` to widen each element · code: [infer.type_mismatch]

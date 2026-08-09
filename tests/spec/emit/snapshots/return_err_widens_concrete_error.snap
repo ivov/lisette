@@ -1,0 +1,48 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  struct AError { }
+  
+  impl AError {
+    fn Error(self) -> string { "a failed" }
+  }
+  
+  fn bail() -> Result<int, error> {
+    return Err(AError {})
+  }
+  
+  fn test() {
+    match bail() {
+      Ok(_) => panic("expected error"),
+      Err(e) => {
+        if e.Error() != "a failed" {
+          panic("wrong returned error")
+        }
+      },
+    }
+  }
+---
+package main
+
+type AError struct{}
+
+func (a AError) Error() string {
+	return "a failed"
+}
+
+func bail() (int, error) {
+	return 0, AError{}
+}
+
+func test() {
+	_, ret_1 := bail()
+	if ret_1 == nil {
+		panic("expected error")
+	} else {
+		e := ret_1
+		if e.Error() != "a failed" {
+			panic("wrong returned error")
+		}
+	}
+}

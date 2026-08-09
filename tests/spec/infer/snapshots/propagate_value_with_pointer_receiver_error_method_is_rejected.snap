@@ -1,0 +1,12 @@
+---
+source: tests/spec/infer/try.rs
+---
+  ✕ Interface not implemented
+    ╭─[test.lis:11:15]
+ 10 │     fn load() -> Result<int, error> {
+ 11 │       let n = read_value()?
+    ·               ──────┬──────
+    ·                     ╰── `FileError` does not implement `error`
+ 12 │       Ok(n)
+    ╰────
+  help: `FileError.Error` mutates through `self: Ref<FileError>`, so `error` is satisfied by a `Ref<FileError>`, not a value. Take a reference with `&` (for example `&FileError { ... }`) · code: [infer.interface_not_implemented]

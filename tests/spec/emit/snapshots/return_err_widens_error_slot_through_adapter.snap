@@ -1,0 +1,67 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: |
+  
+  interface Failing<T> {
+    fn get() -> T
+  }
+  
+  struct Boom {}
+  
+  impl Boom {
+    fn get(self) -> Result<int, error> {
+      Ok(1)
+    }
+  }
+  
+  fn bail() -> Result<int, Failing<Result<int, error>>> {
+    return Err(Boom {})
+  }
+  
+  fn main() {
+    match bail() {
+      Ok(_) => panic("expected error"),
+      Err(_) => {},
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Failing[T any] interface {
+	get() T
+}
+
+type Boom struct{}
+
+func (b Boom) get() (int, error) {
+	return 1, nil
+}
+
+func bail() (int, Failing[lisette.Result[int, error]]) {
+	return 0, _lisAdapter_Boom_Failing_0{inner: Boom{}}
+}
+
+func main() {
+	_, ret_1 := bail()
+	if ret_1 == nil {
+		panic("expected error")
+	} else {
+	}
+}
+
+type _lisAdapter_Boom_Failing_0 struct {
+	inner Boom
+}
+
+func (a _lisAdapter_Boom_Failing_0) get() lisette.Result[int, error] {
+	ret_1, ret_2 := a.inner.get()
+	var result_3 lisette.Result[int, error]
+	if ret_2 != nil {
+		result_3 = lisette.MakeResultErr[int, error](ret_2)
+	} else {
+		result_3 = lisette.MakeResultOk[int, error](ret_1)
+	}
+	return result_3
+}

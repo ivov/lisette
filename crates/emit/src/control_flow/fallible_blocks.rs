@@ -149,14 +149,19 @@ impl Planner<'_> {
         if let Some(shape) = return_ctx.lowered_shape() {
             let return_ty = return_ctx.expect_ty();
             let values = if fallible.is_result() {
-                let err_expr = err_arg.as_deref().unwrap_or("");
-                transition::lowered_err_values(self, &shape, &return_ty, err_expr)
+                let err_expr = err_arg.unwrap_or_default();
+                let err_expr =
+                    self.convert_error_to_return_context(&mut statements, err_expr, fallible);
+                transition::lowered_err_values(self, &shape, &return_ty, &err_expr)
             } else {
                 transition::lowered_none_values(self, &shape, &return_ty)
             };
             statements.push(plain_return(values.join(", ")));
         } else {
             self.require_stdlib();
+            let err_arg = err_arg.map(|value| {
+                self.convert_error_to_return_context(&mut statements, value, fallible)
+            });
             let err_return = {
                 let mut fe = FalliblePlanner::new(self, fallible);
                 fe.emit_contextual_failure(err_arg.as_deref())

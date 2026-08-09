@@ -2297,6 +2297,17 @@ pub fn interface_not_implemented(
         .with_help(help_lines.join("\n"))
 }
 
+pub fn cannot_propagate_error(declared: &str, operand: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot propagate error")
+        .with_infer_code("cannot_propagate_error")
+        .with_span_label(&span, format!("expected `{declared}`, found `{operand}`"))
+        .with_help(propagation_framing_help(declared, operand))
+}
+
+fn propagation_framing_help(declared: &str, operand: &str) -> String {
+    format!("cannot propagate `{operand}` as `{declared}`. Convert with `.map_err(...)`")
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum WrapperKind {
     Result,
