@@ -1098,21 +1098,12 @@ fn render_failure(
             .unwrap_or_else(|| stacked_operand_label(&record.operands, &values));
         diagnostic = diagnostic.with_span_primary_label(&span, label);
     } else {
-        let label = values
-            .first()
-            .cloned()
-            .unwrap_or_else(|| record.message.clone());
+        let label = match values.as_slice() {
+            [] => record.message.clone(),
+            [only] => only.clone(),
+            _ => stacked_operand_label(&record.operands, &values),
+        };
         diagnostic = diagnostic.with_span_primary_label(&span, label);
-        let notes: Vec<String> = record
-            .operands
-            .iter()
-            .zip(&values)
-            .skip(1)
-            .map(|(operand, value)| format!("{}: {}", operand.label, value))
-            .collect();
-        if !notes.is_empty() {
-            diagnostic = diagnostic.with_note(notes.join("\n"));
-        }
     }
     let rendered =
         diagnostics::render::render_to_string(&diagnostic, &info.source, &info.filename, color, 2);

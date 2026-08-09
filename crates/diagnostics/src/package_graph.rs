@@ -416,37 +416,64 @@ pub fn go_toolchain_missing(go_pkg: &str, span: Span) -> LisetteDiagnostic {
     .with_help("Install Go from https://go.dev/dl/")
 }
 
-pub fn bindgen_failed(
-    go_pkg: &str,
-    module: &str,
-    version: &str,
-    stderr: &str,
-    span: Span,
-    script: bool,
-) -> LisetteDiagnostic {
-    let trimmed = stderr.trim();
-    let stderr_block = if trimmed.is_empty() {
-        String::new()
-    } else {
-        format!("\n\n{}", trimmed)
-    };
-    let lead = if script {
-        String::new()
-    } else {
-        format!(
+fn indent_reported_output(reported: &str) -> String {
+    let mut block = String::from("bindgen reported:");
+    for line in reported.lines() {
+        let expanded = line.replace('\t', "    ");
+        block.push_str("\n  ");
+        block.push_str(expanded.trim_end());
+    }
+    block
+}
+
+pub struct BindgenFailureDetails<'a> {
+    pub go_pkg: &'a str,
+    pub module: &'a str,
+    pub version: &'a str,
+    pub stderr: &'a str,
+    pub hint: Option<&'a str>,
+    pub script: bool,
+}
+
+pub fn bindgen_failed(details: BindgenFailureDetails<'_>, span: Span) -> LisetteDiagnostic {
+    let BindgenFailureDetails {
+        go_pkg,
+        module,
+        version,
+        stderr,
+        hint,
+        script,
+    } = details;
+
+    let reported = stderr.trim();
+    let advice = match (hint, script) {
+        (Some(hint), _) => hint.to_string(),
+        (None, true) => String::new(),
+        (None, false) => format!(
             "Re-run with `lis bindgen {}` to inspect the failure in isolation.",
             go_pkg
-        )
+        ),
     };
-    let help = match (lead.is_empty(), stderr_block.is_empty()) {
-        (true, true) => format!("Check that `{}` exists in {} {}", go_pkg, module, version),
-        (true, false) => trimmed.to_string(),
-        _ => format!("{}{}", lead, stderr_block),
+    let help = match (reported, advice.as_str()) {
+        ("", "") => format!("Check that `{}` exists in {} {}", go_pkg, module, version),
+        ("", advice) => advice.to_string(),
+        (reported, "") if reported.contains('\n') => indent_reported_output(reported),
+        (reported, "") => reported.to_string(),
+        (reported, advice) if reported.contains('\n') => {
+            format!("{}\n{}", advice, indent_reported_output(reported))
+        }
+        (reported, advice) => format!("{}. {}", reported, advice),
+    };
+
+    let origin = if go_pkg == module {
+        version.to_string()
+    } else {
+        format!("{} {}", module, version)
     };
 
     LisetteDiagnostic::error(format!(
-        "Failed to generate Go typedef for `{}` ({} {})",
-        go_pkg, module, version
+        "Failed to generate Go typedef for `{}` ({})",
+        go_pkg, origin
     ))
     .with_resolve_code("bindgen_failed")
     .with_span_label(&span, "bindgen failed for this import")

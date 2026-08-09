@@ -66,8 +66,11 @@ pub enum TypedefLocatorResult {
 pub enum BindgenFailure {
     /// `go` is not installed or not on PATH.
     GoToolchainMissing,
-    /// The bindgen subprocess failed; `stderr` is the trimmed message.
-    InvocationFailed { stderr: String },
+    /// The bindgen subprocess failed.
+    InvocationFailed {
+        stderr: String,
+        hint: Option<String>,
+    },
 }
 
 /// Classification of a `go:` import path without touching the cache.
@@ -536,6 +539,7 @@ impl TypedefLocator {
                                     "bindgen reported success but `{}` was not written",
                                     typedef_path.display()
                                 ),
+                                hint: None,
                             },
                         }
                     }),

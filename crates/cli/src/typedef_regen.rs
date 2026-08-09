@@ -66,12 +66,15 @@ pub fn prewarm_typedef_cache(
                             pkg_label(&pkg, &module, &version)
                         ));
                     }
-                    BindgenFailure::InvocationFailed { stderr } => {
+                    BindgenFailure::InvocationFailed { stderr, hint } => {
                         print_warning(&format!(
                             "bindgen failed for {}: {}",
                             pkg_label(&pkg, &module, &version),
                             stderr.trim()
                         ));
+                        if let Some(hint) = hint {
+                            print_warning(&hint);
+                        }
                     }
                 }
                 had_failure = true;

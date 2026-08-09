@@ -94,14 +94,17 @@ pub(crate) fn emit_for_locator_result(
                     go_pkg, span,
                 ));
             }
-            BindgenFailure::InvocationFailed { stderr } => {
+            BindgenFailure::InvocationFailed { stderr, hint } => {
                 sink.push(diagnostics::package_graph::bindgen_failed(
-                    go_pkg,
-                    module,
-                    version,
-                    stderr,
+                    diagnostics::package_graph::BindgenFailureDetails {
+                        go_pkg,
+                        module,
+                        version,
+                        stderr,
+                        hint: hint.as_deref(),
+                        script: script.is_some(),
+                    },
                     span,
-                    script.is_some(),
                 ));
             }
         },

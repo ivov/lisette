@@ -1124,7 +1124,7 @@ pub fn invisible_in_string(
         (
             "Bidirectional character in string",
             "bidi_in_string",
-            "Bidirectional control characters can reorder surrounding text and enable source-spoofing attacks. If intentional, write it as a `\\u` escape so it is visible in source; otherwise remove it.",
+            "Bidirectional control characters can reorder surrounding text and enable source-spoofing attacks. If intentional, write it as a `\\u` escape so it is visible in source. Otherwise remove it.",
         )
     } else {
         (

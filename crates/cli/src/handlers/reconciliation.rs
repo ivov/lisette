@@ -497,7 +497,7 @@ impl LocalChildHint {
             )
         } else {
             format!(
-                "local module `{}` resolves `{}` from `{}`, but `{}` is not declared in `lisette.toml`",
+                "Local module `{}` resolves `{}` from `{}`, but `{}` is not declared in `lisette.toml`",
                 self.parent_module,
                 self.child_module,
                 self.directory.display(),
@@ -694,37 +694,32 @@ fn report_unresolved_transitives(
     Ok(())
 }
 
-/// Go ignores a dependency's replace directives, so a local child fails
-/// resolution until declared itself. Appends the `lis add --path` remedy.
-pub(crate) fn augment_go_error_with_local_hint(
-    error: String,
+/// Go ignores a dependency's replace directives, so a local child stays unresolved until declared.
+pub(crate) fn local_child_remedy(
+    error: &str,
     project_root: &Path,
     target_dir: &Path,
     manifest: &deps::Manifest,
-) -> String {
+) -> Option<String> {
     let replacements = declared_replacements(manifest);
     let locals = declared_local_dirs(&replacements, project_root);
     if locals.is_empty() {
-        return error;
+        return None;
     }
     let workspace = GoWorkspace::new(target_dir, target_dir, Target::host());
     let hint = find_local_child(&workspace, &locals, |old| {
-        message_names_module(&error, old) && !replacements.contains_key(old)
+        message_names_module(error, old) && !replacements.contains_key(old)
     })
     .or_else(|| {
         nested_local_candidates(&locals)
             .into_iter()
-            .find(|candidate| message_names_module(&error, &candidate.child_module))
-    });
-    match hint {
-        Some(hint) => format!(
-            "{}\n · {}. Run `lis add --path {}`",
-            error,
-            hint.describe(),
-            hint.directory.display()
-        ),
-        None => error,
-    }
+            .find(|candidate| message_names_module(error, &candidate.child_module))
+    })?;
+    Some(format!(
+        "{}. Run `lis add --path {}`",
+        hint.describe(),
+        hint.directory.display()
+    ))
 }
 
 /// The declared replacement redirects, keyed by original module path.

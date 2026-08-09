@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                  ╰── contains U+202E (right-to-left override)
  4 │ }
    ╰────
-  help: Bidirectional control characters can reorder surrounding text and enable source-spoofing attacks. If intentional, write it as a `\u` escape so it is visible in source; otherwise remove it · code: [lint.bidi_in_string]
+  help: Bidirectional control characters can reorder surrounding text and enable source-spoofing attacks. If intentional, write it as a `\u` escape so it is visible in source. Otherwise remove it · code: [lint.bidi_in_string]
