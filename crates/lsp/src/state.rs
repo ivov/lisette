@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::{Arc, Mutex, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::protocol::{Client, Url};
 use deps::BindgenSetup;
@@ -13,23 +13,121 @@ use crate::snapshot::AnalysisSnapshot;
 pub struct SharedState {
     pub(crate) client: Client,
     pub(crate) project: ProjectState,
-    documents: RwLock<HashMap<Url, DocumentState>>,
+    workspace: RwLock<Workspace>,
     pub(crate) bindgen_setup: Option<Arc<dyn BindgenSetup>>,
     pub(crate) packages: Arc<PackageIndex>,
     pub(crate) insert_replace_support: AtomicBool,
 }
 
 impl SharedState {
-    pub(crate) fn documents(&self) -> RwLockReadGuard<'_, HashMap<Url, DocumentState>> {
-        self.documents
+    pub(crate) fn workspace(&self) -> RwLockReadGuard<'_, Workspace> {
+        self.workspace
             .read()
             .unwrap_or_else(PoisonError::into_inner)
     }
 
-    pub(crate) fn documents_mut(&self) -> RwLockWriteGuard<'_, HashMap<Url, DocumentState>> {
-        self.documents
+    pub(crate) fn workspace_mut(&self) -> RwLockWriteGuard<'_, Workspace> {
+        self.workspace
             .write()
             .unwrap_or_else(PoisonError::into_inner)
+    }
+}
+
+/// Under one lock so a build installs against a document set that cannot
+/// shift underneath it.
+#[derive(Default)]
+pub(crate) struct Workspace {
+    pub(crate) documents: HashMap<Url, DocumentState>,
+    analyses: HashMap<AnalysisKey, SharedAnalysis>,
+    generation: u64,
+}
+
+/// What an analysis is determined by, and so what it can be shared across.
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub(crate) enum AnalysisKey {
+    Package {
+        external_test: bool,
+        package_id: String,
+    },
+    /// Scripts, and files the package loader excludes from sibling loading.
+    Document { uri: Url },
+}
+
+#[derive(Default)]
+struct SharedAnalysis {
+    current: Option<Arc<AnalysisSnapshot>>,
+    pending_diagnostics: Option<CancellationToken>,
+    build: Arc<Mutex<()>>,
+}
+
+impl Workspace {
+    pub(crate) fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    pub(crate) fn keys(&self) -> Vec<AnalysisKey> {
+        self.analyses.keys().cloned().collect()
+    }
+
+    pub(crate) fn snapshot(&self, key: &AnalysisKey) -> Option<Arc<AnalysisSnapshot>> {
+        self.analyses.get(key)?.current.clone()
+    }
+
+    pub(crate) fn ensure(&mut self, key: &AnalysisKey) {
+        self.analyses.entry(key.clone()).or_default();
+    }
+
+    pub(crate) fn build_lock(&self, key: &AnalysisKey) -> Option<Arc<Mutex<()>>> {
+        Some(Arc::clone(&self.analyses.get(key)?.build))
+    }
+
+    pub(crate) fn install(
+        &mut self,
+        key: &AnalysisKey,
+        generation: u64,
+        snapshot: Arc<AnalysisSnapshot>,
+    ) -> bool {
+        if self.generation != generation {
+            return false;
+        }
+        let Some(analysis) = self.analyses.get_mut(key) else {
+            return false;
+        };
+        analysis.current = Some(snapshot);
+        true
+    }
+
+    pub(crate) fn invalidate_all(&mut self) {
+        self.generation += 1;
+        for analysis in self.analyses.values_mut() {
+            analysis.current = None;
+        }
+    }
+
+    pub(crate) fn set_pending_diagnostics(&mut self, key: &AnalysisKey, token: CancellationToken) {
+        let Some(analysis) = self.analyses.get_mut(key) else {
+            token.cancel();
+            return;
+        };
+        if let Some(previous) = analysis.pending_diagnostics.replace(token) {
+            previous.cancel();
+        }
+    }
+
+    pub(crate) fn finish_diagnostics(&mut self, key: &AnalysisKey, token: &CancellationToken) {
+        if let Some(analysis) = self.analyses.get_mut(key)
+            && analysis.pending_diagnostics.as_ref() == Some(token)
+        {
+            analysis.pending_diagnostics = None;
+        }
+    }
+
+    pub(crate) fn evict(&mut self, key: &AnalysisKey) {
+        if let Some(analysis) = self.analyses.remove(key)
+            && let Some(token) = analysis.pending_diagnostics
+        {
+            token.cancel();
+        }
     }
 }
 
@@ -72,104 +170,7 @@ impl std::ops::Deref for Backend {
 pub(crate) struct DocumentState {
     line_index: LineIndex,
     version: i32,
-    analysis: DocumentAnalysis,
-    pending_diagnostics: Option<CancellationToken>,
-}
-
-struct DocumentAnalysis {
-    revision: AnalysisRevision,
-    result: AnalysisResult,
-}
-
-#[derive(Clone)]
-pub(crate) struct AnalysisRevision(Arc<()>);
-
-pub(crate) enum AnalysisRequest {
-    Cached(Arc<AnalysisSnapshot>),
-    Required(AnalysisRevision),
-}
-
-#[derive(Default)]
-enum AnalysisResult {
-    #[default]
-    Empty,
-    Stale(Arc<AnalysisSnapshot>),
-    Valid(Arc<AnalysisSnapshot>),
-    Invalid {
-        current: Arc<AnalysisSnapshot>,
-        last_valid: Option<Arc<AnalysisSnapshot>>,
-    },
-}
-
-impl Default for DocumentAnalysis {
-    fn default() -> Self {
-        Self {
-            revision: AnalysisRevision(Arc::new(())),
-            result: AnalysisResult::default(),
-        }
-    }
-}
-
-impl DocumentAnalysis {
-    fn current(&self) -> Option<Arc<AnalysisSnapshot>> {
-        match &self.result {
-            AnalysisResult::Valid(snapshot)
-            | AnalysisResult::Invalid {
-                current: snapshot, ..
-            } => Some(Arc::clone(snapshot)),
-            AnalysisResult::Empty | AnalysisResult::Stale(_) => None,
-        }
-    }
-
-    fn last_valid(&self) -> Option<Arc<AnalysisSnapshot>> {
-        match &self.result {
-            AnalysisResult::Stale(snapshot) | AnalysisResult::Valid(snapshot) => {
-                Some(Arc::clone(snapshot))
-            }
-            AnalysisResult::Invalid { last_valid, .. } => last_valid.clone(),
-            AnalysisResult::Empty => None,
-        }
-    }
-
-    fn request(&self) -> AnalysisRequest {
-        match self.current() {
-            Some(snapshot) => AnalysisRequest::Cached(snapshot),
-            None => AnalysisRequest::Required(self.revision.clone()),
-        }
-    }
-
-    fn invalidate(&mut self) {
-        self.revision = AnalysisRevision(Arc::new(()));
-        let current = std::mem::take(&mut self.result);
-        self.result = match current {
-            AnalysisResult::Valid(snapshot) | AnalysisResult::Stale(snapshot) => {
-                AnalysisResult::Stale(snapshot)
-            }
-            AnalysisResult::Invalid {
-                last_valid: Some(snapshot),
-                ..
-            } => AnalysisResult::Stale(snapshot),
-            AnalysisResult::Empty
-            | AnalysisResult::Invalid {
-                last_valid: None, ..
-            } => AnalysisResult::Empty,
-        };
-    }
-
-    fn update(&mut self, revision: &AnalysisRevision, snapshot: Arc<AnalysisSnapshot>) -> bool {
-        if !Arc::ptr_eq(&self.revision.0, &revision.0) {
-            return false;
-        }
-        if snapshot.has_parse_errors() {
-            self.result = AnalysisResult::Invalid {
-                current: snapshot,
-                last_valid: self.last_valid(),
-            };
-        } else {
-            self.result = AnalysisResult::Valid(snapshot);
-        }
-        true
-    }
+    last_usable: Option<Arc<AnalysisSnapshot>>,
 }
 
 impl DocumentState {
@@ -177,15 +178,13 @@ impl DocumentState {
         Self {
             line_index: LineIndex::new(&content),
             version,
-            analysis: DocumentAnalysis::default(),
-            pending_diagnostics: None,
+            last_usable: None,
         }
     }
 
     pub(crate) fn update(&mut self, content: String, version: i32) {
         self.line_index = LineIndex::new(&content);
         self.version = version;
-        self.analysis.invalidate();
     }
 
     pub(crate) fn content(&self) -> &str {
@@ -200,47 +199,12 @@ impl DocumentState {
         self.version
     }
 
-    pub(crate) fn request_analysis(&self) -> AnalysisRequest {
-        self.analysis.request()
+    pub(crate) fn last_usable(&self) -> Option<Arc<AnalysisSnapshot>> {
+        self.last_usable.clone()
     }
 
-    pub(crate) fn last_valid_analysis(&self) -> Option<Arc<AnalysisSnapshot>> {
-        self.analysis.last_valid()
-    }
-
-    pub(crate) fn cache_analysis(
-        &mut self,
-        revision: &AnalysisRevision,
-        snapshot: Arc<AnalysisSnapshot>,
-    ) -> bool {
-        self.analysis.update(revision, snapshot)
-    }
-
-    pub(crate) fn invalidate_analysis(&mut self) {
-        self.analysis.invalidate();
-    }
-
-    pub(crate) fn abort_pending_diagnostics(&mut self) {
-        if let Some(token) = self.pending_diagnostics.take() {
-            token.cancel();
-        }
-    }
-
-    pub(crate) fn set_pending_diagnostics(&mut self, token: CancellationToken) {
-        self.abort_pending_diagnostics();
-        self.pending_diagnostics = Some(token);
-    }
-
-    pub(crate) fn finish_diagnostics(&mut self, token: &CancellationToken) {
-        if self.pending_diagnostics.as_ref() == Some(token) {
-            self.pending_diagnostics = None;
-        }
-    }
-}
-
-impl Drop for DocumentState {
-    fn drop(&mut self) {
-        self.abort_pending_diagnostics();
+    pub(crate) fn set_last_usable(&mut self, snapshot: Arc<AnalysisSnapshot>) {
+        self.last_usable = Some(snapshot);
     }
 }
 
@@ -250,7 +214,7 @@ impl Backend {
             shared_state: Arc::new(SharedState {
                 client,
                 project: ProjectState::new(),
-                documents: RwLock::new(HashMap::new()),
+                workspace: RwLock::default(),
                 bindgen_setup,
                 packages: Arc::default(),
                 insert_replace_support: AtomicBool::new(false),
@@ -263,39 +227,77 @@ impl Backend {
 mod tests {
     use super::*;
 
-    #[test]
-    fn dropping_document_cancels_pending_diagnostics() {
-        let token = CancellationToken::new();
-        let mut document = DocumentState::new(String::new(), 1);
-        document.set_pending_diagnostics(token.clone());
-
-        drop(document);
-
-        assert!(token.is_cancelled());
+    fn key() -> AnalysisKey {
+        AnalysisKey::Package {
+            external_test: false,
+            package_id: "_entry_".to_string(),
+        }
     }
 
     #[test]
     fn replacing_pending_diagnostics_cancels_previous_run() {
         let old_token = CancellationToken::new();
         let new_token = CancellationToken::new();
-        let mut document = DocumentState::new(String::new(), 1);
-        document.set_pending_diagnostics(old_token.clone());
+        let mut workspace = Workspace::default();
+        workspace.ensure(&key());
+        workspace.set_pending_diagnostics(&key(), old_token.clone());
 
-        document.set_pending_diagnostics(new_token.clone());
+        workspace.set_pending_diagnostics(&key(), new_token.clone());
 
         assert!(old_token.is_cancelled());
         assert!(!new_token.is_cancelled());
     }
 
     #[test]
-    fn invalidation_rejects_an_in_flight_analysis() {
-        let mut document = DocumentState::new(String::new(), 1);
-        let AnalysisRequest::Required(revision) = document.request_analysis() else {
-            panic!("new document should require analysis");
-        };
+    fn eviction_cancels_pending_diagnostics() {
+        let token = CancellationToken::new();
+        let mut workspace = Workspace::default();
+        workspace.ensure(&key());
+        workspace.set_pending_diagnostics(&key(), token.clone());
 
-        document.invalidate_analysis();
+        workspace.evict(&key());
 
-        assert!(!Arc::ptr_eq(&document.analysis.revision.0, &revision.0));
+        assert!(token.is_cancelled());
+    }
+
+    #[test]
+    fn invalidation_moves_the_generation_an_in_flight_build_captured() {
+        let mut workspace = Workspace::default();
+        workspace.ensure(&key());
+        let generation = workspace.generation();
+
+        workspace.invalidate_all();
+
+        assert_ne!(workspace.generation(), generation);
+    }
+
+    #[test]
+    fn reopening_an_evicted_key_installs_a_different_build_lock() {
+        let mut workspace = Workspace::default();
+        workspace.ensure(&key());
+        let held = workspace.build_lock(&key()).unwrap();
+
+        workspace.evict(&key());
+        workspace.ensure(&key());
+
+        let current = workspace.build_lock(&key()).unwrap();
+        assert!(
+            !Arc::ptr_eq(&current, &held),
+            "a waiter on the old lock must be able to tell it is stale"
+        );
+    }
+
+    #[test]
+    fn an_evicted_key_is_not_recreated_by_a_late_caller() {
+        let mut workspace = Workspace::default();
+        workspace.ensure(&key());
+        workspace.evict(&key());
+
+        let token = CancellationToken::new();
+        workspace.set_pending_diagnostics(&key(), token.clone());
+
+        assert!(workspace.build_lock(&key()).is_none());
+        assert!(workspace.keys().is_empty());
+        assert!(token.is_cancelled());
     }
 }

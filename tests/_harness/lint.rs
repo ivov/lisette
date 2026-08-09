@@ -25,7 +25,7 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     }
 
     let parse_result = Parser::new(lex_result.tokens, source).parse();
-    if parse_result.failed() {
+    if parse_result.has_errors() {
         panic!("Parsing failed in lint test: {:?}", parse_result.errors);
     }
 

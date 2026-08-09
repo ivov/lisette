@@ -32,6 +32,7 @@ fn compile_with(
         project_kind: semantics::ProjectKind::Binary,
         go_module: "",
         disable_cache: false,
+        recover_target: semantics::RecoverTarget::None,
     })
 }
 
@@ -70,6 +71,7 @@ pub fn compile_script_entry(
         project_kind: semantics::ProjectKind::Binary,
         go_module: "",
         disable_cache: true,
+        recover_target: semantics::RecoverTarget::None,
     })
 }
 
@@ -156,6 +158,7 @@ pub fn try_compile_project_files_with_tests(
         project_kind: semantics::ProjectKind::Binary,
         go_module,
         disable_cache: true,
+        recover_target: semantics::RecoverTarget::None,
     });
     assert!(
         analysis.errors().is_empty(),

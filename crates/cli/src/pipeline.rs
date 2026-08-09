@@ -6,7 +6,7 @@ use emit::{EmitOptions, OutputFile, Planner};
 
 use passes::analyze;
 use semantics::cache::EmitStamp;
-use semantics::{AnalyzeInput, EntryFile};
+use semantics::{AnalyzeInput, EntryFile, RecoverTarget};
 
 use semantics::CompilePhase;
 use semantics::loader::Loader;
@@ -142,6 +142,7 @@ pub fn compile(
         locator,
         go_module,
         disable_cache,
+        recover_target: RecoverTarget::None,
     });
     let failed = analysis.failed();
     let emit_result = match mode.emit_options() {
@@ -520,6 +521,7 @@ mod tests {
             locator: &locator,
             go_module: "test",
             disable_cache: false,
+            recover_target: RecoverTarget::None,
         });
 
         let mut cached: Vec<String> = result.emit_input.cached_packages.iter().cloned().collect();
@@ -617,6 +619,7 @@ mod tests {
             locator: &locator,
             go_module: "test",
             disable_cache: false,
+            recover_target: RecoverTarget::None,
         });
         let mut names: Vec<String> = output
             .emit_input

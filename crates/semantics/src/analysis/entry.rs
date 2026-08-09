@@ -65,6 +65,16 @@ pub(super) fn register_entry_file(
             ));
         }
     }
+
+    store.record_parse_status(
+        ENTRY_FILE_ID,
+        match outcome.status() {
+            EntryParseStatus::Clean => FileParseStatus::Clean,
+            EntryParseStatus::Recovered => FileParseStatus::Recovered,
+            EntryParseStatus::Failed => FileParseStatus::Failed,
+        },
+    );
+
     store.store_entry_file(
         &entry.filename,
         &entry.display_path,
@@ -80,52 +90,19 @@ pub(super) fn register_entry_file(
 }
 
 fn parse_entry_file(source: &str, mode: EntryParseMode) -> ParsedEntry {
-    match mode {
-        EntryParseMode::Strict => {
-            let ParseResult {
-                ast,
-                errors,
-                file_comment,
-                ..
-            } = syntax::build_ast(source, ENTRY_FILE_ID);
-            let outcome = if errors.is_empty() {
-                EntryParseOutcome::Clean
-            } else {
-                EntryParseOutcome::Failed(errors)
-            };
-            ParsedEntry {
-                ast,
-                file_comment,
-                outcome,
-            }
-        }
-        EntryParseMode::Recover => {
-            let lex_result = Lexer::new(source, ENTRY_FILE_ID).lex();
-            if lex_result.failed() {
-                return ParsedEntry {
-                    ast: Vec::new(),
-                    file_comment: None,
-                    outcome: EntryParseOutcome::Failed(lex_result.errors),
-                };
-            }
-
-            let ParseResult {
-                ast,
-                errors,
-                file_comment,
-                ..
-            } = Parser::new(lex_result.tokens, source).parse();
-            let outcome = if errors.is_empty() {
-                EntryParseOutcome::Clean
-            } else {
-                EntryParseOutcome::Recovered(errors)
-            };
-            ParsedEntry {
-                ast,
-                file_comment,
-                outcome,
-            }
-        }
+    let result = match mode {
+        EntryParseMode::Strict => syntax::build_ast(source, ENTRY_FILE_ID),
+        EntryParseMode::Recover => syntax::build_ast_recovering(source, ENTRY_FILE_ID),
+    };
+    let outcome = match result.status {
+        FileParseStatus::Clean => EntryParseOutcome::Clean,
+        FileParseStatus::Recovered => EntryParseOutcome::Recovered(result.errors),
+        FileParseStatus::Failed => EntryParseOutcome::Failed(result.errors),
+    };
+    ParsedEntry {
+        ast: result.ast,
+        file_comment: result.file_comment,
+        outcome,
     }
 }
 
@@ -136,6 +113,7 @@ pub(super) fn load_sibling_files(
     loader: &dyn Loader,
     entry_filename: Option<&str>,
     include_tests: bool,
+    recover: bool,
 ) {
     for (filename, content) in loader.scan_folder(ENTRY_PACKAGE_ID) {
         if Some(filename.as_str()) == entry_filename {
@@ -154,7 +132,12 @@ pub(super) fn load_sibling_files(
             continue;
         }
         let file_id = store.new_file_id();
-        let result = syntax::build_ast(&content.source, file_id);
+        let result = if recover {
+            syntax::build_ast_recovering(&content.source, file_id)
+        } else {
+            syntax::build_ast(&content.source, file_id)
+        };
+        store.record_parse_status(file_id, result.status);
         sink.extend_parse_errors(result.errors);
         store.store_file(File {
             id: file_id,

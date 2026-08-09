@@ -42,10 +42,20 @@ pub struct ParseResult {
     pub errors: Vec<ParseError>,
     pub file_comment: Option<std::string::String>,
     pub truncated: bool,
+    pub status: FileParseStatus,
+}
+
+/// How much of a file survived parsing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FileParseStatus {
+    #[default]
+    Clean,
+    Recovered,
+    Failed,
 }
 
 impl ParseResult {
-    pub fn failed(&self) -> bool {
+    pub fn has_errors(&self) -> bool {
         !self.errors.is_empty()
     }
 }
@@ -99,6 +109,7 @@ impl<'source> Parser<'source> {
                 errors: lex_result.errors,
                 file_comment: None,
                 truncated: true,
+                status: FileParseStatus::Failed,
             };
         }
 
@@ -152,12 +163,18 @@ impl<'source> Parser<'source> {
         }
 
         let truncated = !self.at_eof();
+        let status = if self.errors.is_empty() {
+            FileParseStatus::Clean
+        } else {
+            FileParseStatus::Recovered
+        };
 
         ParseResult {
             ast: top_items,
             errors: self.errors,
             file_comment,
             truncated,
+            status,
         }
     }
 

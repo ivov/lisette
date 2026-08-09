@@ -157,6 +157,7 @@ fn check(source: &str) -> Checked {
         project_kind: semantics::ProjectKind::Binary,
         go_module: "",
         disable_cache: true,
+        recover_target: semantics::RecoverTarget::None,
     });
 
     let parse_failed = output.has_parse_errors();

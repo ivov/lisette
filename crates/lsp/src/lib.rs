@@ -117,17 +117,18 @@ impl Backend {
     }
 
     fn did_open(&self, params: DidOpenTextDocumentParams) {
-        let uri = params.text_document.uri;
-        let content = params.text_document.text;
-        self.update_document(uri.clone(), content, params.text_document.version);
-        self.publish_diagnostics(uri);
+        self.shared_state.open_document(
+            params.text_document.uri,
+            params.text_document.text,
+            params.text_document.version,
+        );
     }
 
     fn did_change(&self, params: DidChangeTextDocumentParams) {
         let uri = params.text_document.uri;
         if let Some(change) = params.content_changes.into_iter().last() {
-            self.update_document(uri, change.text, params.text_document.version);
-            self.shared_state.recheck_open_documents();
+            self.shared_state
+                .change_document(uri, change.text, params.text_document.version);
         }
     }
 
@@ -136,22 +137,14 @@ impl Backend {
     }
 
     fn did_close(&self, params: DidCloseTextDocumentParams) {
-        let uri = &params.text_document.uri;
-        self.documents_mut().remove(uri);
-
-        let overlay_removed = self.project.remove_overlay(uri);
-
-        self.client.publish_diagnostics(uri.clone(), vec![], None);
-
-        if overlay_removed {
-            self.shared_state.recheck_open_documents();
-        }
+        self.shared_state.close_document(&params.text_document.uri);
     }
 
     fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
         let uri = &params.text_document.uri;
         let (source, end_position) = {
-            let documents = self.documents();
+            let workspace = self.workspace();
+            let documents = &workspace.documents;
             let Some(doc) = documents.get(uri) else {
                 return Ok(None);
             };
@@ -977,7 +970,8 @@ impl Backend {
     }
 
     fn edit_target(&self, uri: &Url, position: Position) -> Option<EditTarget> {
-        let documents = self.documents();
+        let workspace = self.workspace();
+        let documents = &workspace.documents;
         let document = documents.get(uri)?;
         let line_index = document.line_index();
         let offset = line_index.position_to_offset(position)? as usize;

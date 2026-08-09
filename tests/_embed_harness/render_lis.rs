@@ -441,7 +441,7 @@ mod tests {
             ] {
                 let result = syntax::build_ast(&src, 0);
                 assert!(
-                    !result.failed(),
+                    !result.has_errors(),
                     "{} ({label}) failed to parse: {:?}\n--- source ---\n{src}",
                     scenario.name,
                     result.errors
@@ -456,7 +456,7 @@ mod tests {
                    interface N0 {\n  embed N1\n  fn A() -> int\n  fn B() -> string\n}\n";
         let result = syntax::build_ast(src, 0);
         assert!(
-            !result.failed(),
+            !result.has_errors(),
             "multi-member interface parse: {:?}",
             result.errors
         );

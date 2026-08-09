@@ -195,6 +195,7 @@ fn emit_and_write(
         project_kind: semantics::ProjectKind::Binary,
         go_module: &package,
         disable_cache: true,
+        recover_target: semantics::RecoverTarget::None,
     });
     if output.has_parse_errors() {
         return Ok(Emit::NotRunnable(vec!["parse".to_string()]));

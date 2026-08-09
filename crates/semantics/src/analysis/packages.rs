@@ -18,11 +18,12 @@ struct UnparsedPackage {
 struct ParsedPackage {
     files: Vec<File>,
     errors: Vec<ParseError>,
+    statuses: Vec<(u32, syntax::FileParseStatus)>,
     pending: PendingPackage,
 }
 
 impl UnparsedPackage {
-    fn parse(self) -> ParsedPackage {
+    fn parse(self, recover_target: &RecoverTarget) -> ParsedPackage {
         let Self {
             files: scanned,
             rewrite_root_import,
@@ -30,13 +31,16 @@ impl UnparsedPackage {
         } = self;
 
         let package_id = pending.package_id();
+        let recover = recover_target.covers(package_id);
         let mut files = Vec::with_capacity(scanned.len());
         let mut errors = Vec::new();
+        let mut statuses = Vec::new();
         for scanned_file in scanned {
-            let (mut file, file_errors) = scanned_file.parse(package_id);
+            let (mut file, file_errors, status) = scanned_file.parse(package_id, recover);
             if rewrite_root_import {
                 file.rewrite_import(crate::loader::ROOT_IMPORT, ENTRY_PACKAGE_ID);
             }
+            statuses.push((file.id, status));
             files.push(file);
             errors.extend(file_errors);
         }
@@ -44,6 +48,7 @@ impl UnparsedPackage {
         ParsedPackage {
             files,
             errors,
+            statuses,
             pending,
         }
     }
@@ -98,6 +103,7 @@ pub(super) struct PackageInferenceInput<'a> {
     pub(super) locator: &'a TypedefLocator,
     pub(super) scope: &'a AnalysisScope,
     pub(super) project_kind: ProjectKind,
+    pub(super) recover_target: &'a RecoverTarget,
 }
 
 pub(super) struct PackageInferenceOutput {
@@ -199,7 +205,12 @@ pub(super) fn infer_all_packages(
             dep_hashes,
         });
 
-        match (input.cache.package_root(), compiled) {
+        let cache_root = input
+            .cache
+            .package_root()
+            .filter(|_| !input.recover_target.covers(&package_id));
+
+        match (cache_root, compiled) {
             (Some(_), Some(compiled)) => candidates.push(CacheCandidate {
                 pending: CompiledPendingPackage {
                     package: compiled,
@@ -238,9 +249,15 @@ pub(super) fn infer_all_packages(
     cached_packages.extend(cache_load.cached);
     unparsed.extend(cache_load.missed);
 
-    let has_parse_errors = parse_and_store_packages(&mut checker, store, unparsed, &mut to_infer);
+    let has_parse_errors = parse_and_store_packages(
+        &mut checker,
+        store,
+        unparsed,
+        &mut to_infer,
+        input.recover_target,
+    );
     let uninferred = input.files;
-    store_uninferred_packages(&mut checker, store, uninferred);
+    store_uninferred_packages(&mut checker, store, uninferred, input.recover_target);
 
     for pending in &to_infer {
         checker.predeclare_package_types(store, pending.package_id());
@@ -309,14 +326,18 @@ fn parse_and_store_packages(
     store: &mut Store,
     unparsed: Vec<UnparsedPackage>,
     to_infer: &mut Vec<PendingPackage>,
+    recover_target: &RecoverTarget,
 ) -> bool {
     let file_count: usize = unparsed.iter().map(|package| package.files.len()).sum();
     let parsed: Vec<ParsedPackage> = if file_count < PARALLEL_THRESHOLD {
-        unparsed.into_iter().map(UnparsedPackage::parse).collect()
+        unparsed
+            .into_iter()
+            .map(|package| package.parse(recover_target))
+            .collect()
     } else {
         unparsed
             .into_par_iter()
-            .map(UnparsedPackage::parse)
+            .map(|package| package.parse(recover_target))
             .collect()
     };
 
@@ -324,6 +345,9 @@ fn parse_and_store_packages(
     for package in parsed {
         has_parse_errors |= !package.errors.is_empty();
         checker.sink.extend_parse_errors(package.errors);
+        for (file_id, status) in package.statuses {
+            store.record_parse_status(file_id, status);
+        }
         store.store_package(package.pending.package_id(), package.files);
         to_infer.push(package.pending);
     }
@@ -334,18 +358,25 @@ fn store_uninferred_packages(
     checker: &mut TaskState,
     store: &mut Store,
     packages: HashMap<String, Vec<ScannedFile>>,
+    recover_target: &RecoverTarget,
 ) {
     for (package_id, scanned) in packages {
         if scanned.is_empty() {
             continue;
         }
+        let recover = recover_target.covers(&package_id);
         let mut files = Vec::with_capacity(scanned.len());
         let mut parsed = true;
+        let mut statuses = Vec::with_capacity(files.capacity());
         for scanned_file in scanned {
-            let (file, errors) = scanned_file.parse(&package_id);
+            let (file, errors, status) = scanned_file.parse(&package_id, recover);
             parsed &= errors.is_empty();
             checker.sink.extend_parse_errors(errors);
+            statuses.push((file.id, status));
             files.push(file);
+        }
+        for (file_id, status) in statuses {
+            store.record_parse_status(file_id, status);
         }
         let exports = if parsed {
             UninferredExports::Known(

@@ -14,5 +14,5 @@ pub mod zero;
 
 pub use analysis::{
     AnalysisScope, AnalyzeInput, CompilePhase, EntryFile, EntryParseOutcome, EntryParseStatus,
-    InferenceOutput, PARALLEL_THRESHOLD, ProjectKind, run_inference,
+    InferenceOutput, PARALLEL_THRESHOLD, ProjectKind, RecoverTarget, run_inference,
 };

@@ -16,7 +16,7 @@ fuzz_target!(|data: &[u8]| {
     let scanned = scan_imports(source, 0);
 
     let result = lisette_syntax::build_ast(source, 0);
-    if result.failed() {
+    if result.has_errors() {
         return;
     }
 

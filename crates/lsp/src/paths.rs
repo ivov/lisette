@@ -26,6 +26,15 @@ pub(crate) fn package_id_to_dir(config: &ProjectConfig, package_id: &str) -> Pat
     }
 }
 
+pub(crate) fn source_package_dir(config: &ProjectConfig, package_id: &str) -> PathBuf {
+    let source_root = config.source_root();
+    if package_id == ENTRY_PACKAGE_ID {
+        source_root
+    } else {
+        source_root.join(package_id)
+    }
+}
+
 pub(crate) fn package_file_to_path(
     config: &ProjectConfig,
     package_id: &str,

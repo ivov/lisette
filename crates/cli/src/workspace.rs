@@ -967,7 +967,7 @@ fn atomic_write(path: &Path, content: &str) -> Result<(), String> {
 
 fn validate_typedef_parses(pkg_path: &str, typedef: &str) -> Result<(), String> {
     let parse = Parser::lex_and_parse_file(typedef, 0);
-    if !parse.failed() {
+    if !parse.has_errors() {
         return Ok(());
     }
     Err(format!(

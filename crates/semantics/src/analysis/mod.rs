@@ -12,9 +12,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use diagnostics::LocalSink;
+use syntax::FileParseStatus;
 use syntax::ParseError;
-use syntax::lex::Lexer;
-use syntax::parse::{ParseResult, Parser};
 use syntax::program::{File, Package};
 
 use deps::TypedefLocator;
@@ -191,6 +190,26 @@ pub struct AnalyzeInput<'a> {
     /// When true, `analyze` skips both cache load and save. Set by the CLI for
     /// `--sourcemap` Emit so cwd-decorated Go files are not reused across cwds.
     pub disable_cache: bool,
+    /// Which package keeps partial ASTs through parse errors, so that one
+    /// broken file does not blank out everything around it.
+    pub recover_target: RecoverTarget,
+}
+
+/// The one package, if any, that parses with error recovery.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum RecoverTarget {
+    #[default]
+    None,
+    Package(String),
+}
+
+impl RecoverTarget {
+    pub(crate) fn covers(&self, package_id: &str) -> bool {
+        match self {
+            Self::None => false,
+            Self::Package(target) => target == package_id,
+        }
+    }
 }
 
 pub const PARALLEL_THRESHOLD: usize = 4;
@@ -350,6 +369,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
             input.loader,
             entry.filename(),
             include_tests,
+            input.recover_target.covers(ENTRY_PACKAGE_ID),
         );
     }
 
@@ -423,6 +443,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
             locator: input.locator,
             scope: &input.scope,
             project_kind: input.project_kind,
+            recover_target: &input.recover_target,
         },
     );
 

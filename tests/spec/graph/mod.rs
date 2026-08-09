@@ -309,6 +309,7 @@ fn analyze_importer_of_cycle(entry_source: &str) -> passes::Analysis {
         locator: &deps::TypedefLocator::default(),
         go_module: "",
         disable_cache: true,
+        recover_target: semantics::RecoverTarget::None,
     })
 }
 
@@ -436,6 +437,7 @@ fn cycle_reads_the_exports_of_a_declaration_only_module() {
         locator: &deps::TypedefLocator::default(),
         go_module: "",
         disable_cache: true,
+        recover_target: semantics::RecoverTarget::None,
     });
 
     assert_eq!(error_codes(&output), vec!["resolve.import_cycle"]);
@@ -507,6 +509,7 @@ fn cycle_keeps_unregistered_go_modules_out_of_the_store() {
         locator: &deps::TypedefLocator::default(),
         go_module: "",
         disable_cache: true,
+        recover_target: semantics::RecoverTarget::None,
     });
 
     assert!(
@@ -624,6 +627,7 @@ fn check_analyzes_orphan_and_surfaces_its_error() {
         locator: &deps::TypedefLocator::default(),
         go_module: "",
         disable_cache: true,
+        recover_target: semantics::RecoverTarget::None,
     });
 
     assert!(
@@ -672,6 +676,7 @@ fn check_analyzes_tests_in_declaration_only_package() {
         locator: &deps::TypedefLocator::default(),
         go_module: "",
         disable_cache: true,
+        recover_target: semantics::RecoverTarget::None,
     });
 
     assert!(
@@ -1027,6 +1032,7 @@ fn main() {
         locator: &resolver,
         go_module: "",
         disable_cache: false,
+        recover_target: semantics::RecoverTarget::None,
     });
 
     let impl_errors: Vec<_> = result
@@ -1111,6 +1117,7 @@ fn main() {
         locator: &resolver,
         go_module: "",
         disable_cache: false,
+        recover_target: semantics::RecoverTarget::None,
     });
 
     assert!(
@@ -1133,6 +1140,7 @@ fn main() {
         locator: &resolver,
         go_module: "",
         disable_cache: false,
+        recover_target: semantics::RecoverTarget::None,
     });
 
     assert!(

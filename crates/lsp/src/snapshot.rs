@@ -5,6 +5,7 @@ use std::sync::Arc;
 use crate::protocol::{Position, Url};
 use passes::Analysis;
 use semantics::facts::{BindingFact, Usage};
+use syntax::FileParseStatus::Failed;
 use syntax::ast::BindingId;
 use syntax::program::{Definition, File};
 use syntax::types::Symbol;
@@ -40,32 +41,17 @@ impl AnalysisSnapshot {
     pub(crate) fn new(
         analysis: Analysis,
         config: &ProjectConfig,
-        analyzed_uri: &Url,
+        entry_dir: &std::path::Path,
         external_test: bool,
         packages: PackageResolver,
     ) -> Self {
         let mut sources = HashMap::default();
 
-        let analyzed_path = analyzed_uri.to_file_path().ok();
-        let analyzed_filename = analyzed_path
-            .as_ref()
-            .and_then(|p| p.file_name().map(|s| s.to_string_lossy().into_owned()));
-        let analyzed_dir = analyzed_path
-            .as_ref()
-            .and_then(|p| p.parent().map(|d| d.to_path_buf()));
-
         for (file_id, file) in &analysis.emit_input.files {
             let uri = if !external_test && file.package_id == ENTRY_PACKAGE_ID {
-                if analyzed_filename.as_deref() == Some(&file.name) {
-                    analyzed_uri.clone()
-                } else if let Some(ref dir) = analyzed_dir {
-                    let sibling_path = dir.join(&file.name);
-                    match Url::from_file_path(&sibling_path) {
-                        Ok(uri) => uri,
-                        Err(_) => continue,
-                    }
-                } else {
-                    continue;
+                match Url::from_file_path(entry_dir.join(&file.name)) {
+                    Ok(uri) => uri,
+                    Err(_) => continue,
                 }
             } else if let Some(typedef_path) = &file.source_path {
                 // The synthetic `file.name` for go: typedefs does not match the
@@ -150,7 +136,8 @@ impl AnalysisSnapshot {
         &self.analysis.emit_input.definitions
     }
 
-    pub(crate) fn has_parse_errors(&self) -> bool {
-        self.analysis.has_parse_errors()
+    pub(crate) fn is_usable(&self, uri: &Url) -> bool {
+        self.document(uri)
+            .is_some_and(|document| self.analysis.parse_status(document.file_id) != Failed)
     }
 }

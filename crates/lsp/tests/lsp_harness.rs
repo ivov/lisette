@@ -200,6 +200,13 @@ impl TestClient {
         );
     }
 
+    pub fn save(&mut self, uri: &str) {
+        self.notify(
+            "textDocument/didSave",
+            json!({"textDocument": {"uri": uri}}),
+        );
+    }
+
     pub fn close(&mut self, uri: &str) {
         self.notify(
             "textDocument/didClose",
