@@ -11,5 +11,5 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test() {
-	_ = lisette.MakeTuple2(42, "hello")
+	_ = lisette.MakeTuple2[int, string](42, "hello")
 }

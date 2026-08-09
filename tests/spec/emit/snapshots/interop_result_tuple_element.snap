@@ -21,7 +21,7 @@ import (
 )
 
 func main() {
-	t := lisette.MakeTuple2(strconv.Atoi, 1)
+	t := lisette.MakeTuple2[func(string) (int, error), int](strconv.Atoi, 1)
 	ret_1, ret_2 := t.First("1")
 	var result_3 lisette.Result[int, error]
 	if ret_2 != nil {

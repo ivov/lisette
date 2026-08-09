@@ -24,10 +24,10 @@ func (r Reader2) Read(_ []uint8) (int, error) {
 func pick(flag bool) (io.Reader, int) {
 	var result lisette.Tuple2[io.Reader, int]
 	if flag {
-		tup_1 := lisette.MakeTuple2(Reader1{}, 1)
+		tup_1 := lisette.MakeTuple2[Reader1, int](Reader1{}, 1)
 		result = lisette.MakeTuple2[io.Reader, int](tup_1.First, tup_1.Second)
 	} else {
-		tup_2 := lisette.MakeTuple2(Reader2{}, 2)
+		tup_2 := lisette.MakeTuple2[Reader2, int](Reader2{}, 2)
 		result = lisette.MakeTuple2[io.Reader, int](tup_2.First, tup_2.Second)
 	}
 	tup_3 := result

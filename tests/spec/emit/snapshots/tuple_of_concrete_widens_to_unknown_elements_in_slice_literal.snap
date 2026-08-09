@@ -29,7 +29,7 @@ func second(pair lisette.Tuple2[string, any]) int {
 }
 
 func test() {
-	tup_1 := lisette.MakeTuple2("one", 2)
+	tup_1 := lisette.MakeTuple2[string, int]("one", 2)
 	pairs := []lisette.Tuple2[string, any]{lisette.MakeTuple2[string, any](tup_1.First, tup_1.Second)}
 	if second(pairs[0]) != 2 {
 		panic("slice element lost its Unknown element")

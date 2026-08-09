@@ -36,7 +36,10 @@ func first(rows [2]lisette.Tuple2[error, int]) string {
 }
 
 func test() {
-	concrete := [2]lisette.Tuple2[Boom, int]{lisette.MakeTuple2(Boom{}, 1), lisette.MakeTuple2(Boom{}, 2)}
+	concrete := [2]lisette.Tuple2[Boom, int]{
+		lisette.MakeTuple2[Boom, int](Boom{}, 1),
+		lisette.MakeTuple2[Boom, int](Boom{}, 2),
+	}
 	var boxed_1 [2]lisette.Tuple2[error, int]
 	for i_2 := range concrete {
 		tup_3 := concrete[i_2]

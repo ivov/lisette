@@ -17,6 +17,6 @@ func doNothing() {}
 
 func main() {
 	doNothing()
-	t := lisette.MakeTuple2(42, struct{}{})
+	t := lisette.MakeTuple2[int, struct{}](42, struct{}{})
 	_ = t.First
 }

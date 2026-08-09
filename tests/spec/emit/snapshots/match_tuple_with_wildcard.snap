@@ -17,7 +17,7 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test() int {
-	triple := lisette.MakeTuple3(1, 2, 3)
+	triple := lisette.MakeTuple3[int, int, int](1, 2, 3)
 	if triple.First == 1 {
 		return 1
 	} else if triple.Second == 2 {

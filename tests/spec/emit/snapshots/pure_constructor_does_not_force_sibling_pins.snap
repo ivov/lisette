@@ -16,6 +16,6 @@ import lisette "github.com/ivov/lisette/prelude"
 type Wrap int
 
 func run() int {
-	pair := lisette.MakeTuple2(Wrap(9), Wrap(8))
+	pair := lisette.MakeTuple2[Wrap, Wrap](Wrap(9), Wrap(8))
 	return int(pair.First) + int(pair.Second)
 }

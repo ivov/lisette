@@ -3878,6 +3878,29 @@ fn main() {
 }
 
 #[test]
+fn adapted_numeric_literal_in_tuple_slot_compiles() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+
+fn main() {
+  let runes: Slice<(int, int)> = [('A', 2)]
+  let wide: Slice<(float64, int)> = [(90071992547409, 1)]
+  let narrow: Slice<(uint8, int)> = [(200, 1)]
+  let single: Slice<(float32, int)> = [(1.5, 1)]
+  fmt.Println(runes, wide, narrow, single)
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn cross_package_generic_function_value_instantiated() {
     let mut fs = MockFileSystem::new();
 

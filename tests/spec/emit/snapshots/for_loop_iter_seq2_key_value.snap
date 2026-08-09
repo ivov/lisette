@@ -21,7 +21,7 @@ import (
 )
 
 func main() {
-	m := lisette.MapFrom([]lisette.Tuple2[string, int]{lisette.MakeTuple2("a", 1)})
+	m := lisette.MapFrom([]lisette.Tuple2[string, int]{lisette.MakeTuple2[string, int]("a", 1)})
 	for k, v := range maps.All(m) {
 		fmt.Printf("%s=%d\n", k, v)
 	}

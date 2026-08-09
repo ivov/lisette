@@ -22,5 +22,5 @@ func tryInt(x int) lisette.Result[int, string] {
 }
 
 func test() {
-	_ = lisette.MakeTuple2(tryInt(5), tryInt(10))
+	_ = lisette.MakeTuple2[lisette.Result[int, string], lisette.Result[int, string]](tryInt(5), tryInt(10))
 }

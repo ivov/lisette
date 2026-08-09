@@ -23,7 +23,7 @@ import (
 
 func main() {
 	m := make(map[string]lisette.Tuple2[int, int])
-	m["k"] = lisette.MakeTuple2(0, 0)
+	m["k"] = lisette.MakeTuple2[int, int](0, 0)
 	entry := m["k"]
 	entry.First = 1
 	m["k"] = entry

@@ -26,6 +26,6 @@ func side() {
 
 func test() int {
 	side()
-	t := lisette.MakeTuple2(struct{}{}, 1)
+	t := lisette.MakeTuple2[struct{}, int](struct{}{}, 1)
 	return t.Second
 }

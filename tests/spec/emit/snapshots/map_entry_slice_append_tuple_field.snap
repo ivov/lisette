@@ -19,8 +19,8 @@ import (
 
 func main() {
 	m := make(map[string]lisette.Tuple2[[]int, int])
-	m["a"] = lisette.MakeTuple2([]int{1}, 2)
-	entry := lisette.MakeTuple2(slices.Clone(m["a"].First), m["a"].Second)
+	m["a"] = lisette.MakeTuple2[[]int, int]([]int{1}, 2)
+	entry := lisette.MakeTuple2[[]int, int](slices.Clone(m["a"].First), m["a"].Second)
 	entry.First = append(entry.First, 3)
 	m["a"] = entry
 }

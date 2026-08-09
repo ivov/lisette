@@ -16,7 +16,7 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func maybePair(n int) (lisette.Tuple2[int, int], bool) {
 	if n > 0 {
-		return lisette.MakeTuple2(n, n+1), true
+		return lisette.MakeTuple2[int, int](n, n+1), true
 	}
 	return *new(lisette.Tuple2[int, int]), false
 }

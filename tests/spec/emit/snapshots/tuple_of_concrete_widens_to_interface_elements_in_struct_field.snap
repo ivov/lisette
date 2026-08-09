@@ -37,7 +37,7 @@ type Holder struct {
 }
 
 func test() {
-	concrete := lisette.MakeTuple2(Boom{}, 1)
+	concrete := lisette.MakeTuple2[Boom, int](Boom{}, 1)
 	holder := Holder{pair: lisette.MakeTuple2[error, int](concrete.First, concrete.Second)}
 	if holder.pair.First.Error() != "boom" {
 		panic("struct field lost its interface elements")

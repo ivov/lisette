@@ -22,5 +22,5 @@ func main() {
 	x := "hi"
 	_ = x
 	x_1, y := math.Modf(1.25)
-	_ = lisette.MakeTuple2(x_1, y)
+	_ = lisette.MakeTuple2[float64, float64](x_1, y)
 }

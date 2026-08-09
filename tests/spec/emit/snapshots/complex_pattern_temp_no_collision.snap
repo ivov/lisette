@@ -16,7 +16,7 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func main() {
-	tmp_1 := lisette.MakeTuple2(1, lisette.MakeTuple2(2, 3))
+	tmp_1 := lisette.MakeTuple2[int, lisette.Tuple2[int, int]](1, lisette.MakeTuple2[int, int](2, 3))
 	a := tmp_1.First
 	b := tmp_1.Second.First
 	c := tmp_1.Second.Second

@@ -12,6 +12,6 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test() {
-	tuple := lisette.MakeTuple2(42, "hello")
+	tuple := lisette.MakeTuple2[int, string](42, "hello")
 	_ = tuple.First
 }

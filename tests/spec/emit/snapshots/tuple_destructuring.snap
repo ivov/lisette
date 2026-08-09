@@ -13,7 +13,7 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test() int {
-	pair := lisette.MakeTuple2(10, 20)
+	pair := lisette.MakeTuple2[int, int](10, 20)
 	a := pair.First
 	b := pair.Second
 	return a + b

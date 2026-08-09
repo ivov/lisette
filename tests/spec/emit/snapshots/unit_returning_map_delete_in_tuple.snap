@@ -17,6 +17,6 @@ func main() {
 	m := make(map[string]int)
 	m["a"] = 1
 	delete(m, "a")
-	t := lisette.MakeTuple2(struct{}{}, 1)
+	t := lisette.MakeTuple2[struct{}, int](struct{}{}, 1)
 	_ = t.Second
 }

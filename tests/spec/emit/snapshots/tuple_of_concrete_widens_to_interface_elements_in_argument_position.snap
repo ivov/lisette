@@ -36,7 +36,7 @@ func describe(pair lisette.Tuple2[error, int]) string {
 }
 
 func test() {
-	concrete := lisette.MakeTuple2(Boom{}, 1)
+	concrete := lisette.MakeTuple2[Boom, int](Boom{}, 1)
 	if describe(lisette.MakeTuple2[error, int](concrete.First, concrete.Second)) != "boom" {
 		panic("tuple argument lost its interface elements")
 	}
