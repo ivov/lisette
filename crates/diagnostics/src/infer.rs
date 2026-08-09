@@ -2174,6 +2174,7 @@ pub enum InterfaceMethodViolation {
         name: String,
         expected: Type,
         actual: Type,
+        impl_span: Option<Span>,
     },
 }
 
@@ -2205,96 +2206,298 @@ pub fn sealed_interface_not_satisfiable(
     ))
 }
 
+struct LabelledMethod<'a> {
+    interface: &'a str,
+    name: &'a str,
+    span: Span,
+    expected: &'a Type,
+    actual: &'a Type,
+}
+
+fn labelled_methods<'a>(
+    violations: &'a [InterfaceViolation],
+    file_id: u32,
+) -> Option<Vec<LabelledMethod<'a>>> {
+    let mut methods = Vec::new();
+    for violation in violations {
+        for method in &violation.methods {
+            let InterfaceMethodViolation::Incompatible {
+                name,
+                expected,
+                actual,
+                impl_span,
+            } = method
+            else {
+                return None;
+            };
+            let span = (*impl_span)?;
+            if span.file_id != file_id {
+                return None;
+            }
+            methods.push(LabelledMethod {
+                interface: &violation.interface_name,
+                name,
+                span,
+                expected,
+                actual,
+            });
+        }
+    }
+    (!methods.is_empty() && methods.len() <= 2).then_some(methods)
+}
+
+fn ordinal(index: usize) -> String {
+    match index {
+        0 => "first".to_string(),
+        1 => "second".to_string(),
+        2 => "third".to_string(),
+        3 => "fourth".to_string(),
+        4 => "fifth".to_string(),
+        other => format!("{}th", other + 1),
+    }
+}
+
+fn count_word(count: usize) -> String {
+    match count {
+        1 => "One".to_string(),
+        2 => "Two".to_string(),
+        3 => "Three".to_string(),
+        4 => "Four".to_string(),
+        5 => "Five".to_string(),
+        6 => "Six".to_string(),
+        7 => "Seven".to_string(),
+        8 => "Eight".to_string(),
+        9 => "Nine".to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn change_sentence(method: &LabelledMethod<'_>) -> String {
+    let (Type::Function(expected), Type::Function(actual)) = (method.expected, method.actual)
+    else {
+        return format!("Change `{}` to `{}`", method.name, method.expected);
+    };
+
+    if expected.params.len() != actual.params.len() {
+        let plural = if expected.params.len() == 1 { "" } else { "s" };
+        return format!(
+            "`{}` requires `{}` to take {} parameter{}, not {}",
+            method.interface,
+            method.name,
+            expected.params.len(),
+            plural,
+            actual.params.len()
+        );
+    }
+
+    let diverged: Vec<usize> = expected
+        .params
+        .iter()
+        .zip(&actual.params)
+        .enumerate()
+        .filter(|(_, (expected, actual))| expected.ty != actual.ty)
+        .map(|(index, _)| index)
+        .collect();
+    let return_diverged = expected.return_type != actual.return_type;
+
+    match (diverged.as_slice(), return_diverged) {
+        ([], true) => format!(
+            "Change `{}` to return `{}`",
+            method.name, expected.return_type
+        ),
+        ([index], false) => {
+            let parameter = expected.params[*index].name.as_ref().map_or_else(
+                || format!("{} parameter", ordinal(*index)),
+                |name| format!("`{}` parameter", name),
+            );
+            format!(
+                "Change the {} of `{}` to `{}`",
+                parameter, method.name, expected.params[*index].ty
+            )
+        }
+        _ => format!("Change `{}` to `{}`", method.name, method.expected),
+    }
+}
+
+fn declaration(name: &str, signature: &Type, receiver: Option<&str>) -> String {
+    let Type::Function(function) = signature else {
+        return format!("{}: {}", name, signature);
+    };
+
+    let mut params: Vec<String> = receiver
+        .map(|receiver| format!("self: {}", receiver))
+        .into_iter()
+        .collect();
+    for (index, param) in function.params.iter().enumerate() {
+        let name = param
+            .name
+            .as_ref()
+            .map_or_else(|| format!("arg{}", index + 1), ToString::to_string);
+        let mutable = if param.mutable { "mut " } else { "" };
+        params.push(format!("{}{}: {}", mutable, name, param.ty));
+    }
+
+    format!(
+        "fn {}({}) -> {}",
+        name,
+        params.join(", "),
+        function.return_type
+    )
+}
+
+fn attribution(violation: &InterfaceViolation) -> String {
+    match &violation.parent_of {
+        Some(parent) => format!(
+            "from `{}`, embedded in `{}`",
+            violation.interface_name, parent
+        ),
+        None => format!("from `{}`", violation.interface_name),
+    }
+}
+
+fn list_lead(
+    interface_name: &str,
+    type_name: &str,
+    violations: &[InterfaceViolation],
+    foreign_package: Option<&str>,
+) -> String {
+    let missing = violations
+        .iter()
+        .flat_map(|violation| &violation.methods)
+        .filter(|method| matches!(method, InterfaceMethodViolation::Missing(_)))
+        .count();
+    let total: usize = violations
+        .iter()
+        .map(|violation| violation.methods.len())
+        .sum();
+
+    if let Some(package) = foreign_package {
+        let noun = if missing > 0 { "missing" } else { "required" };
+        let plural = if total == 1 { "" } else { "s" };
+        return format!(
+            "`{}` comes from `{}`, so methods cannot be added to it. Wrap it in a local struct \
+             that embeds it and declares the {} method{}:",
+            type_name, package, noun, plural
+        );
+    }
+
+    let embedded: Vec<&str> = violations
+        .iter()
+        .filter(|violation| violation.interface_name != interface_name)
+        .map(|violation| violation.interface_name.as_str())
+        .collect();
+    match embedded.as_slice() {
+        [] => {
+            let plural = if total == 1 { " does" } else { "s do" };
+            format!(
+                "{} method{} not satisfy `{}`:",
+                count_word(total),
+                plural,
+                interface_name
+            )
+        }
+        [single] => format!(
+            "`{}` embeds `{}`, so both contracts apply:",
+            interface_name, single
+        ),
+        _ => format!(
+            "`{}` embeds other interfaces, so their requirements apply too:",
+            interface_name
+        ),
+    }
+}
+
 pub fn interface_not_implemented(
     interface_name: &str,
     type_name: &str,
     violations: &[InterfaceViolation],
+    foreign_package: Option<&str>,
     span: Span,
 ) -> LisetteDiagnostic {
-    let mut help_lines = Vec::new();
+    let mut diagnostic = LisetteDiagnostic::error(format!(
+        "`{}` does not implement `{}`",
+        type_name, interface_name
+    ))
+    .with_infer_code("interface_not_implemented")
+    .with_span_label(&span, format!("`{}` needed here", interface_name));
 
-    let mut missing_sections: Vec<(String, Vec<String>)> = Vec::new();
-    let mut incompatible_sections: Vec<(String, Vec<String>)> = Vec::new();
-
-    for violation in violations {
-        let header = if let Some(ref parent) = violation.parent_of {
-            format!(
-                "From `{}` (required by `{}`)",
-                violation.interface_name, parent
-            )
-        } else {
-            format!("From `{}`", violation.interface_name)
-        };
-
-        let missing: Vec<String> = violation
-            .methods
-            .iter()
-            .filter_map(|method| match method {
-                InterfaceMethodViolation::Missing(method) => Some(method),
-                InterfaceMethodViolation::Incompatible { .. } => None,
-            })
-            .flat_map(|method| {
-                std::iter::once(format!("  - {}: {}", method.name, method.signature)).chain(
-                    method.private_candidate.iter().map(|private_name| {
-                        format!(
-                            "    (add `pub` to the private method `{}` to satisfy this)",
-                            private_name
-                        )
-                    }),
-                )
-            })
-            .collect();
-        if !missing.is_empty() {
-            missing_sections.push((header.clone(), missing));
+    if let Some(methods) = labelled_methods(violations, span.file_id) {
+        let sentences: Vec<String> = methods.iter().map(change_sentence).collect();
+        for method in &methods {
+            diagnostic = diagnostic.with_span_label(
+                &method.span,
+                format!("`{}` requires `{}`", method.interface, method.expected),
+            );
         }
+        return diagnostic.with_help(sentences.join(". "));
+    }
 
-        let incompatible: Vec<String> = violation
-            .methods
-            .iter()
-            .filter_map(|method| match method {
-                InterfaceMethodViolation::Missing(_) => None,
+    let receiver = foreign_package.is_none().then_some(type_name);
+    let attribute = violations
+        .iter()
+        .any(|violation| violation.interface_name != interface_name);
+
+    let mut missing: Vec<(String, Option<String>, Option<String>)> = Vec::new();
+    let mut incompatible: Vec<(String, Option<String>)> = Vec::new();
+    for violation in violations {
+        let attributed = attribute.then(|| attribution(violation));
+        for method in &violation.methods {
+            match method {
+                InterfaceMethodViolation::Missing(method) => missing.push((
+                    declaration(&method.name, &method.signature, receiver),
+                    method.private_candidate.clone(),
+                    attributed.clone(),
+                )),
                 InterfaceMethodViolation::Incompatible {
                     name,
                     expected,
                     actual,
-                } => Some(format!(
-                    "  - {}: expected `{}`, found `{}`",
-                    name, expected, actual
+                    ..
+                } => incompatible.push((
+                    format!("{}: expected `{}`, found `{}`", name, expected, actual),
+                    attributed.clone(),
                 )),
-            })
-            .collect();
-        if !incompatible.is_empty() {
-            incompatible_sections.push((header, incompatible));
-        }
-    }
-
-    if !missing_sections.is_empty() {
-        help_lines.push("Missing methods:".to_string());
-        for (header, methods) in &missing_sections {
-            help_lines.push(format!("  {}", header));
-            for method in methods {
-                help_lines.push(format!("  {}", method));
             }
         }
     }
 
-    if !incompatible_sections.is_empty() {
-        help_lines.push("Incompatible methods:".to_string());
-        for (header, methods) in &incompatible_sections {
-            help_lines.push(format!("  {}", header));
-            for method in methods {
-                help_lines.push(format!("  {}", method));
+    let width = missing
+        .iter()
+        .map(|(row, _, _)| row.chars().count())
+        .chain(incompatible.iter().map(|(row, _)| row.chars().count()))
+        .max()
+        .unwrap_or(0);
+    let pad = |row: &str, attributed: &Option<String>| match attributed {
+        Some(attributed) => format!("  {:<width$}  {}", row, attributed, width = width),
+        None => format!("  {}", row),
+    };
+
+    let mut help = vec![list_lead(
+        interface_name,
+        type_name,
+        violations,
+        foreign_package,
+    )];
+    if !missing.is_empty() {
+        help.push("Missing:".to_string());
+        for (row, private_candidate, attributed) in &missing {
+            help.push(pad(row, attributed));
+            if let Some(private) = private_candidate {
+                help.push(format!(
+                    "    (add `pub` to the private method `{}` to satisfy this)",
+                    private
+                ));
             }
         }
     }
+    if !incompatible.is_empty() {
+        help.push("Incompatible:".to_string());
+        for (row, attributed) in &incompatible {
+            help.push(pad(row, attributed));
+        }
+    }
 
-    LisetteDiagnostic::error("Interface not implemented")
-        .with_infer_code("interface_not_implemented")
-        .with_span_label(
-            &span,
-            format!("`{}` does not implement `{}`", type_name, interface_name),
-        )
-        .with_help(help_lines.join("\n"))
+    diagnostic.with_help(help.join("\n"))
 }
 
 pub fn cannot_propagate_error(declared: &str, operand: &str, span: Span) -> LisetteDiagnostic {

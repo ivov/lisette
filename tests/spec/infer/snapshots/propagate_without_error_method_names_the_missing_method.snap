@@ -1,15 +1,15 @@
 ---
 source: tests/spec/infer/try.rs
 ---
-  ✕ Interface not implemented
+  ✕ `PlainError` does not implement `error`
    ╭─[test.lis:7:15]
  6 │     fn load() -> Result<int, error> {
  7 │       let n = fetch()?
    ·               ────┬───
-   ·                   ╰── `PlainError` does not implement `error`
+   ·                   ╰── `error` needed here
  8 │       Ok(n)
    ╰────
-  help: Missing methods:
-          From `error`
-            - Error: fn () -> string
-        code: [infer.interface_not_implemented]
+  help: One method does not satisfy `error`:
+        Missing:
+          fn Error(self: PlainError) -> string
+  code: [infer.interface_not_implemented]

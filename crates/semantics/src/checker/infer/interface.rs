@@ -193,11 +193,16 @@ impl InferCtx<'_> {
             let type_name = resolved
                 .get_name()
                 .map_or_else(|| resolved.to_string(), str::to_owned);
+            let foreign_package = resolved
+                .get_qualified_id()
+                .filter(|id| id.starts_with("go:"))
+                .and_then(|id| id.rsplit_once('.').map(|(package, _)| package));
             self.sink
                 .push(diagnostics::infer::interface_not_implemented(
                     unqualified_name(interface_qualified_id),
                     &type_name,
                     &violations,
+                    foreign_package,
                     *span,
                 ));
         }
@@ -554,6 +559,10 @@ impl InferCtx<'_> {
                     );
                 }
                 SignatureCheck::Incompatible { expected, actual } => {
+                    let impl_span = site
+                        .symbol_methods
+                        .get(impl_method_name.as_str())
+                        .and_then(|method| method.name_span);
                     check.push_violation(
                         interface_qualified_id,
                         requirement.parent_of.as_ref(),
@@ -561,6 +570,7 @@ impl InferCtx<'_> {
                             name: method_name.to_string(),
                             expected,
                             actual,
+                            impl_span,
                         },
                     );
                 }

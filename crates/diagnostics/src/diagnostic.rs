@@ -167,42 +167,23 @@ impl fmt::Display for LisetteDiagnostic {
 
 impl std::error::Error for LisetteDiagnostic {}
 
-struct HelpText<'a> {
-    help: Option<&'a str>,
-    note: Option<&'a str>,
-    diagnostic_code: Option<&'a str>,
-    use_color: bool,
+fn style_help(text: &str, use_color: bool) -> String {
+    if use_color {
+        format_with_backticks(text, true, |s| format!("{}", s.dimmed()))
+    } else {
+        text.to_string()
+    }
 }
 
-impl fmt::Display for HelpText<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let use_color = self.use_color;
-        let has_code = self.diagnostic_code.is_some();
-
-        let combined = combine_help_and_note(self.help, self.note, has_code).unwrap_or_default();
-
-        if !combined.is_empty() {
-            if use_color {
-                let styled = format_with_backticks(&combined, true, |s| format!("{}", s.dimmed()));
-                write!(f, "{}", styled)?;
-            } else {
-                write!(f, "{}", combined)?;
-            }
-        }
-
-        if let Some(code) = self.diagnostic_code {
-            let is_listing = self
-                .help
-                .is_some_and(|h| h.lines().skip(1).any(|line| line.starts_with("  ")));
-            let prefix = if is_listing { "\ncode: " } else { " · code: " };
-            if use_color {
-                write!(f, "{}{}", prefix.dimmed(), format!("[{}]", code).dimmed())?;
-            } else {
-                write!(f, "{}[{}]", prefix, code)?;
-            }
-        }
-
-        Ok(())
+fn style_code(code: &str, prefix: &str, use_color: bool) -> String {
+    if use_color {
+        format!(
+            "{}{}",
+            format!("{}code: ", prefix).dimmed(),
+            format!("[{}]", code).dimmed()
+        )
+    } else {
+        format!("{}code: [{}]", prefix, code)
     }
 }
 
@@ -359,19 +340,43 @@ impl LisetteDiagnostic {
         }
     }
 
-    pub(crate) fn styled_help_text(&self, use_color: bool) -> Option<String> {
-        if self.help.is_none() && self.note.is_none() && self.code.is_none() {
-            return None;
-        }
-        Some(
-            HelpText {
-                help: self.help.as_deref(),
-                note: self.note.as_deref(),
-                diagnostic_code: self.code.as_deref(),
-                use_color,
-            }
-            .to_string(),
+    pub(crate) fn styled_help_parts(&self, use_color: bool) -> (Option<String>, Option<String>) {
+        let combined = combine_help_and_note(
+            self.help.as_deref(),
+            self.note.as_deref(),
+            self.code.is_some(),
         )
+        .filter(|text| !text.is_empty());
+        let code = self.code.as_deref();
+
+        match (combined, code) {
+            (None, None) => (None, None),
+            (None, Some(code)) => (None, Some(style_code(code, "", use_color))),
+            (Some(text), None) => (Some(style_help(&text, use_color)), None),
+            (Some(text), Some(code)) if text.contains('\n') => (
+                Some(style_help(&text, use_color)),
+                Some(style_code(code, "", use_color)),
+            ),
+            (Some(text), Some(code)) => (
+                Some(format!(
+                    "{}{}",
+                    style_help(&text, use_color),
+                    style_code(code, " · ", use_color)
+                )),
+                None,
+            ),
+        }
+    }
+
+    pub fn secondary_labels(&self) -> impl Iterator<Item = (Span, &str)> {
+        self.labels
+            .iter()
+            .skip(1)
+            .map(|label| (label.span, label.text.as_str()))
+    }
+
+    pub fn label_count(&self) -> usize {
+        self.labels.len()
     }
 
     pub(crate) fn label_file_ids(&self) -> Vec<u32> {

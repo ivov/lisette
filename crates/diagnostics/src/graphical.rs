@@ -182,6 +182,7 @@ pub(crate) struct FrameReport<'a> {
     pub message: &'a str,
     pub sources: &'a [FrameSource],
     pub help: Option<&'a str>,
+    pub code: Option<&'a str>,
 }
 
 pub(crate) fn render_report(
@@ -203,6 +204,9 @@ pub(crate) fn render_report(
     }
     if let Some(help) = report.help {
         render_help(output, help, theme)?;
+    }
+    if let Some(code) = report.code {
+        writeln!(output, "  {}", code)?;
     }
     Ok(())
 }

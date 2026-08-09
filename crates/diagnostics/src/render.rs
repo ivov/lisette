@@ -174,7 +174,7 @@ pub fn render_with_sources<F: Fn(u32) -> Option<(String, String)>>(
         })
         .collect();
 
-    let help = diagnostic.styled_help_text(use_color);
+    let (help, code) = diagnostic.styled_help_parts(use_color);
     let mut output = String::new();
     let _ = graphical::render_report(
         &mut output,
@@ -182,6 +182,7 @@ pub fn render_with_sources<F: Fn(u32) -> Option<(String, String)>>(
             message: &diagnostic.styled_message(use_color),
             sources: &frames,
             help: help.as_deref(),
+            code: code.as_deref(),
         },
         &frame_theme(diagnostic, use_color),
         context_lines,

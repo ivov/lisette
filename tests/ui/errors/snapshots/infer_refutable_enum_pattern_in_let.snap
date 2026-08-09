@@ -18,4 +18,4 @@ source: tests/ui/errors/mod.rs
                 Some(x) => ...,
                 None => ...,
             }
-        code: [infer.refutable_pattern]
+  code: [infer.refutable_pattern]
