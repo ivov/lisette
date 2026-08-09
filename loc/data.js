@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786301064004,
+  "lastUpdate": 1786302508813,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -21540,6 +21540,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 30395,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 25912,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18583,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14124,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 12980,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 7930,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5975,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2901,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1830,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 713,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7823,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d0dc1ded10acd406da4aee76a7fd8acc2b614f50",
+          "message": "refactor: lower `Map.from` to a Go map literal (#1249)",
+          "timestamp": "2026-08-09T21:08:06+02:00",
+          "tree_id": "e44d9801ed17a20b007610efa3b46feacbdfdb86",
+          "url": "https://github.com/ivov/lisette/commit/d0dc1ded10acd406da4aee76a7fd8acc2b614f50"
+        },
+        "date": 1786302506831,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 130172,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30485,
             "unit": "lines"
           },
           {
