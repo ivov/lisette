@@ -17,17 +17,14 @@ description: |
 ---
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "fmt"
 
 type Box struct {
 	x int
 }
 
 func main() {
-	m := lisette.MapFrom([]lisette.Tuple2[string, Box]{lisette.MakeTuple2[string, Box]("a", Box{x: 1})})
+	m := map[string]Box{"a": Box{x: 1}}
 	entry := m["a"]
 	entry.x = 2
 	m["a"] = entry

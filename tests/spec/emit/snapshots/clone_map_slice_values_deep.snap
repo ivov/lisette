@@ -18,7 +18,7 @@ import (
 )
 
 func main() {
-	m := lisette.MapFrom([]lisette.Tuple2[string, []int]{lisette.MakeTuple2[string, []int]("k", []int{1, 2})})
+	m := map[string][]int{"k": []int{1, 2}}
 	m2 := lisette.MapCloneFunc(m, func(e_1 []int) []int { return slices.Clone(e_1) })
 	m2["k"] = []int{9}
 	_ = m
