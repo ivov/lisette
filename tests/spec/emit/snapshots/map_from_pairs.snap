@@ -8,11 +8,6 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
 func test() map[string]int {
-	return lisette.MapFrom([]lisette.Tuple2[string, int]{
-		lisette.MakeTuple2[string, int]("alice", 95),
-		lisette.MakeTuple2[string, int]("bob", 82),
-	})
+	return map[string]int{"alice": 95, "bob": 82}
 }

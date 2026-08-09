@@ -11,11 +11,8 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
 func test() {
-	tup_1 := lisette.MakeTuple2[string, string]("one", "two")
-	m := lisette.MapFrom[string, any]([]lisette.Tuple2[string, any]{lisette.MakeTuple2[string, any](tup_1.First, tup_1.Second)})
+	m := map[string]any{"one": "two"}
 	if len(m) != 1 {
 		panic("Map.from lost its entry when widening values to Unknown")
 	}

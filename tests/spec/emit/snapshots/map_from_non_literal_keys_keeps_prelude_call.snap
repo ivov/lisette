@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  const KEY = "a"
+  
+  fn test() -> Map<string, int> {
+    Map.from([(KEY, 1), (KEY, 2)])
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+const Key string = "a"
+
+func test() map[string]int {
+	return lisette.MapFrom([]lisette.Tuple2[string, int]{
+		lisette.MakeTuple2[string, int](Key, 1),
+		lisette.MakeTuple2[string, int](Key, 2),
+	})
+}

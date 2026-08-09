@@ -832,6 +832,28 @@ fn test() {
 }
 
 #[test]
+fn map_from_non_literal_keys_keeps_prelude_call() {
+    let input = r#"
+const KEY = "a"
+
+fn test() -> Map<string, int> {
+  Map.from([(KEY, 1), (KEY, 2)])
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_from_numeric_keys_keeps_prelude_call() {
+    let input = r#"
+fn test() -> Map<int, int> {
+  Map.from([(65, 1), ('A', 2)])
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn map_with_void_function_value() {
     let input = r#"
 fn test() -> Map<string, fn()> {

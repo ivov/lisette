@@ -14,7 +14,7 @@ use crate::plan::calls::CallableOrigin;
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use crate::types::native::NativeGoType;
 use syntax::EcoString;
-use syntax::ast::{Expression, ResolvedCallTypeArguments, StructFields};
+use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments, StructFields};
 use syntax::program::{CallKind, Definition, DefinitionBody};
 use syntax::types::{
     CompoundKind, FunctionParameter, SimpleKind, Type, build_substitution_map, substitute,
@@ -23,6 +23,16 @@ use syntax::types::{
 struct TupleStructTarget {
     go_ty: String,
     field_tys: Vec<Type>,
+}
+
+fn is_checked_literal_key(key: &Expression) -> bool {
+    matches!(
+        key.unwrap_parens(),
+        Expression::Literal {
+            literal: Literal::Boolean(_) | Literal::String { .. },
+            ..
+        }
+    )
 }
 
 /// The shape of a call's value arguments, used to decide which type parameters
@@ -122,20 +132,24 @@ impl Planner<'_> {
         type_args: ResolvedCallTypeArguments<'_>,
         call_ty: Option<&Type>,
     ) -> (String, String) {
+        let (key, value) = self.resolve_map_lisette_types(function, type_args, call_ty);
+        (self.go_type_string(&key), self.go_type_string(&value))
+    }
+
+    fn resolve_map_lisette_types(
+        &self,
+        function: &Expression,
+        type_args: ResolvedCallTypeArguments<'_>,
+        call_ty: Option<&Type>,
+    ) -> (Type, Type) {
         if type_args.len() >= 2 {
-            return (
-                self.go_type_string(&type_args[0]),
-                self.go_type_string(&type_args[1]),
-            );
+            return (type_args[0].clone(), type_args[1].clone());
         }
         if let Some(call_result_ty) = call_ty
             && let Some(params) = call_result_ty.get_type_params()
             && params.len() >= 2
         {
-            return (
-                self.go_type_string(&params[0]),
-                self.go_type_string(&params[1]),
-            );
+            return (params[0].clone(), params[1].clone());
         }
         let ty = function.get_type();
         let Some(f) = ty.as_function_type() else {
@@ -145,10 +159,7 @@ impl Planner<'_> {
             .return_type
             .get_type_params()
             .expect("MapNew must return a type with type arguments");
-        (
-            self.go_type_string(&params[0]),
-            self.go_type_string(&params[1]),
-        )
+        (params[0].clone(), params[1].clone())
     }
 
     fn stage_size_argument(
@@ -208,6 +219,7 @@ impl Planner<'_> {
                     self.native_constructor_effect(ctx, EvaluationEffect::Pure),
                 ))
             }
+            (NativeGoType::Map, "from") => self.try_lower_map_from_pairs(ctx),
             (NativeGoType::Slice, "new") => {
                 let element =
                     self.resolve_element_type(ctx.function, ctx.resolved_type_args, ctx.call_ty);
@@ -259,6 +271,94 @@ impl Planner<'_> {
             }
             _ => None,
         }
+    }
+
+    fn try_lower_map_from_pairs(&mut self, ctx: &NativeCallContext) -> Option<ValuePlan> {
+        if ctx.spread.is_some() {
+            return None;
+        }
+        let [argument] = ctx.args else {
+            return None;
+        };
+        let Expression::Literal {
+            literal: Literal::Slice(entries),
+            ..
+        } = argument.unwrap_parens()
+        else {
+            return None;
+        };
+        let pairs = entries
+            .iter()
+            .map(|entry| match entry.unwrap_parens() {
+                Expression::Tuple { elements, .. } => match elements.as_slice() {
+                    [key, value] => Some((key, value)),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect::<Option<Vec<_>>>()?;
+
+        if !pairs.iter().all(|(key, _)| is_checked_literal_key(key)) {
+            return None;
+        }
+
+        let (key_ty, value_ty) =
+            self.resolve_map_lisette_types(ctx.function, ctx.resolved_type_args, ctx.call_ty);
+        let map_ty = format!(
+            "map[{}]{}",
+            self.go_type_string(&key_ty),
+            self.go_type_string(&value_ty)
+        );
+
+        if pairs.is_empty() {
+            return Some(ValuePlan::computed(
+                Vec::new(),
+                GoExpression::composite_literal(format!("{map_ty}{{}}"), false),
+                self.native_constructor_effect(ctx, EvaluationEffect::Pure),
+            ));
+        }
+
+        let stages: Vec<ValuePlan> = pairs
+            .iter()
+            .flat_map(|(key, value)| [*key, *value])
+            .map(|e| self.stage_composite(e, ExpressionContext::value()))
+            .collect();
+        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "_entry");
+        let effect = sequenced.effect;
+        let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
+        let (mut setup, rendered) = sequenced.into_rendered();
+
+        let mut lowered = Vec::with_capacity(pairs.len());
+        for ((key, value), staged) in pairs.iter().zip(rendered.chunks_exact(2)) {
+            let [staged_key, staged_value] = staged else {
+                unreachable!("each pair stages exactly two values")
+            };
+            let (key_setup, coerced_key) = CoercionPlan::internal(self, &key.get_type(), &key_ty)
+                .lower(self, staged_key.clone());
+            setup.extend(key_setup);
+            let (value_setup, coerced_value) =
+                CoercionPlan::internal(self, &value.get_type(), &value_ty)
+                    .lower(self, staged_value.clone());
+            setup.extend(value_setup);
+            lowered.push(format!("{coerced_key}: {coerced_value}"));
+        }
+
+        let value = if lowered.len() > 1 && lowered.iter().any(|entry| entry.len() > 30) {
+            let indented = lowered
+                .iter()
+                .map(|entry| format!("\t{}", entry))
+                .collect::<Vec<_>>()
+                .join(",\n");
+            format!("{map_ty}{{\n{indented},\n}}")
+        } else {
+            format!("{map_ty}{{ {} }}", lowered.join(", "))
+        };
+
+        Some(ValuePlan::computed(
+            setup,
+            GoExpression::composite_literal(value, contains_deferred_evaluation),
+            self.native_constructor_effect(ctx, effect),
+        ))
     }
 
     fn native_constructor_effect(
