@@ -848,14 +848,11 @@ impl InferCtx<'_> {
         if self.store.contains_unknown(expected) && !self.store.contains_unknown(actual) {
             use syntax::types::CompoundKind::{Map, Slice};
             return match expected.as_compound() {
-                Some((Map, args))
-                    if args
-                        .get(1)
-                        .is_some_and(|ty| self.store.resolves_to_unknown(ty)) =>
-                {
+                Some((Map, [key, value])) if self.store.resolves_to_unknown(value) => {
                     format!(
-                        "Build the map with `Map.new()` plus indexed assignment: `let mut m: {} = Map.new(); m[k] = v`",
-                        expected_name
+                        "Build the map at `Map<{0}, {1}>`, e.g. `Map.from<{0}, {1}>([(k, v)])`",
+                        key.stringify(),
+                        value.stringify()
                     )
                 }
                 Some((Slice, args))
