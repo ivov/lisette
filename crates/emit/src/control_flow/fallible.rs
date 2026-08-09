@@ -1,5 +1,7 @@
 use crate::Planner;
+use crate::abi::coercion::CoercionPlan;
 use crate::names::go_name;
+use crate::plan::bodies::LoweredStatement;
 use syntax::ast::Expression;
 use syntax::types::Type;
 
@@ -72,7 +74,7 @@ impl Fallible {
         }
     }
 
-    fn err_ty(&self) -> Option<&Type> {
+    pub(crate) fn err_ty(&self) -> Option<&Type> {
         match self {
             Self::Result { err_ty, .. } => Some(err_ty),
             Self::Option { .. } => None,
@@ -129,6 +131,44 @@ impl Fallible {
                 format!("{pkg}.MakeResultOk[{}, {}]({})", inner_ty, err_ty, value)
             }
         }
+    }
+}
+
+impl Planner<'_> {
+    pub(crate) fn contextual_err_ty(&self, fallible: &Fallible) -> Option<Type> {
+        if let Some(ty) = self.return_ctx().ty() {
+            let peeled = self.facts.peel_alias(ty);
+            if peeled.is_result() {
+                return Some(peeled.err_type());
+            }
+        }
+        fallible.err_ty().cloned()
+    }
+
+    pub(crate) fn coerce_value(
+        &mut self,
+        statements: &mut Vec<LoweredStatement>,
+        value: String,
+        from: &Type,
+        to: &Type,
+    ) -> String {
+        let coercion = CoercionPlan::internal(self, from, to);
+        let (setup, value) = coercion.lower(self, value);
+        statements.extend(setup);
+        value
+    }
+
+    pub(crate) fn convert_error_to_return_context(
+        &mut self,
+        statements: &mut Vec<LoweredStatement>,
+        value: String,
+        fallible: &Fallible,
+    ) -> String {
+        let (Some(from), Some(to)) = (fallible.err_ty().cloned(), self.contextual_err_ty(fallible))
+        else {
+            return value;
+        };
+        self.coerce_value(statements, value, &from, &to)
     }
 }
 
@@ -212,13 +252,17 @@ impl<'a, 'e> FalliblePlanner<'a, 'e> {
         }
     }
 
-    /// Emit a failure wrapper using the contextual ok type (from return context).
+    /// Emit a failure wrapper using the contextual ok and err types (from return context).
     pub(crate) fn emit_contextual_failure(&mut self, error_value: Option<&str>) -> String {
         self.planner.require_stdlib();
         let pkg = go_name::GO_STDLIB_PKG;
         let inner_ty = self.contextual_ok_type_string();
         if self.fallible.is_result() {
-            let err_ty = self.err_type_string().expect("Result must have error type");
+            let err_ty = self
+                .planner
+                .contextual_err_ty(self.fallible)
+                .expect("Result must have error type");
+            let err_ty = self.planner.go_type_string(&err_ty);
             format!(
                 "{pkg}.MakeResultErr[{}, {}]({})",
                 inner_ty,

@@ -1,0 +1,86 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  struct ParseError { text: string }
+  
+  impl ParseError {
+    fn Error(self) -> string { f"bad: {self.text}" }
+  }
+  
+  fn parse_word(w: string) -> Result<int, ParseError> {
+    if w == "x" { Err(ParseError { text: w }) } else { Ok(w.length()) }
+  }
+  
+  fn test() {
+    let words = ["one", "x"]
+    let parsed = words.map(|w| -> Result<int, error> {
+      let n = parse_word(w)?
+      Ok(n)
+    })
+    match parsed[0] {
+      Ok(n) => {
+        if n != 3 {
+          panic("wrong parsed length")
+        }
+      },
+      Err(_) => panic("expected ok"),
+    }
+    match parsed[1] {
+      Ok(_) => panic("expected error"),
+      Err(e) => {
+        if e.Error() != "bad: x" {
+          panic("wrong lambda error")
+        }
+      },
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type ParseError struct {
+	text string
+}
+
+func (p ParseError) Error() string {
+	return fmt.Sprintf("bad: %s", p.text)
+}
+
+func parseWord(w string) lisette.Result[int, ParseError] {
+	if w == "x" {
+		return lisette.MakeResultErr[int, ParseError](ParseError{text: w})
+	}
+	return lisette.MakeResultOk[int, ParseError](len(w))
+}
+
+func test() {
+	words := []string{"one", "x"}
+	parsed := lisette.SliceMap(words, func(w string) lisette.Result[int, error] {
+		check_1 := parseWord(w)
+		if check_1.Tag != lisette.ResultOk {
+			return lisette.MakeResultErr[int, error](check_1.ErrVal)
+		}
+		n := check_1.OkVal
+		return lisette.MakeResultOk[int, error](n)
+	})
+	subject_2 := parsed[0]
+	if subject_2.Tag == lisette.ResultOk {
+		if subject_2.OkVal != 3 {
+			panic("wrong parsed length")
+		}
+	} else {
+		panic("expected ok")
+	}
+	subject_3 := parsed[1]
+	if subject_3.Tag == lisette.ResultOk {
+		panic("expected error")
+	}
+	if subject_3.ErrVal.Error() != "bad: x" {
+		panic("wrong lambda error")
+	}
+}

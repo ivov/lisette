@@ -1,0 +1,15 @@
+---
+source: tests/spec/infer/try.rs
+---
+  ✕ Interface not implemented
+    ╭─[test.lis:16:17]
+ 15 │     fn handler() -> Result<int, AppError> {
+ 16 │       let row = query()?
+    ·                 ────┬───
+    ·                     ╰── `DbError` does not implement `AppError`
+ 17 │       Ok(row.length())
+    ╰────
+  help: Missing methods:
+          From `AppError`
+            - status: fn () -> int
+        code: [infer.interface_not_implemented]

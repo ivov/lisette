@@ -1,0 +1,74 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  struct FileError { path: string }
+  
+  impl FileError {
+    fn Error(self: Ref<FileError>) -> string { f"cannot open {self.path}" }
+  }
+  
+  fn read_value() -> Result<int, Ref<FileError>> { Err(&FileError { path: "a.txt" }) }
+  
+  fn load() -> Result<int, error> {
+    let n = read_value()?
+    Ok(n)
+  }
+  
+  fn test() {
+    match load() {
+      Ok(_) => panic("expected error"),
+      Err(e) => {
+        if e.Error() != "cannot open a.txt" {
+          panic("wrong ref error")
+        }
+      },
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type FileError struct {
+	path string
+}
+
+func (f *FileError) Error() string {
+	return fmt.Sprintf("cannot open %s", f.path)
+}
+
+func readValue() (int, *FileError) {
+	return 0, &FileError{path: "a.txt"}
+}
+
+func load() (int, error) {
+	ret_1, ret_2 := readValue()
+	var result_3 lisette.Result[int, *FileError]
+	if ret_2 != nil {
+		result_3 = lisette.MakeResultErr[int, *FileError](ret_2)
+	} else {
+		result_3 = lisette.MakeResultOk[int, *FileError](ret_1)
+	}
+	check_4 := result_3
+	if check_4.Tag != lisette.ResultOk {
+		return 0, check_4.ErrVal
+	}
+	n := check_4.OkVal
+	return n, nil
+}
+
+func test() {
+	_, ret_1 := load()
+	if ret_1 == nil {
+		panic("expected error")
+	} else {
+		e := ret_1
+		if e.Error() != "cannot open a.txt" {
+			panic("wrong ref error")
+		}
+	}
+}

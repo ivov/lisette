@@ -1,0 +1,93 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  struct AError { }
+  
+  impl AError {
+    fn Error(self) -> string { "a failed" }
+  }
+  
+  struct BError { }
+  
+  impl BError {
+    fn Error(self) -> string { "b failed" }
+  }
+  
+  fn do_a(ok: bool) -> Result<int, AError> {
+    if ok { Ok(1) } else { Err(AError {}) }
+  }
+  
+  fn do_b(ok: bool) -> Result<int, BError> {
+    if ok { Ok(2) } else { Err(BError {}) }
+  }
+  
+  fn test() {
+    let r: Result<int, error> = try {
+      let a = do_a(true)?
+      let b = do_b(false)?
+      a + b
+    }
+    match r {
+      Ok(_) => panic("expected error"),
+      Err(e) => {
+        if e.Error() != "b failed" {
+          panic("wrong try block error")
+        }
+      },
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type AError struct{}
+
+func (a AError) Error() string {
+	return "a failed"
+}
+
+type BError struct{}
+
+func (b BError) Error() string {
+	return "b failed"
+}
+
+func doA(ok bool) lisette.Result[int, AError] {
+	if ok {
+		return lisette.MakeResultOk[int, AError](1)
+	}
+	return lisette.MakeResultErr[int, AError](AError{})
+}
+
+func doB(ok bool) lisette.Result[int, BError] {
+	if ok {
+		return lisette.MakeResultOk[int, BError](2)
+	}
+	return lisette.MakeResultErr[int, BError](BError{})
+}
+
+func test() {
+	var r lisette.Result[int, error]
+	tryResult_1 := func() lisette.Result[int, error] {
+		check_2 := doA(true)
+		if check_2.Tag != lisette.ResultOk {
+			return lisette.MakeResultErr[int, error](check_2.ErrVal)
+		}
+		a := check_2.OkVal
+		check_3 := doB(false)
+		if check_3.Tag != lisette.ResultOk {
+			return lisette.MakeResultErr[int, error](check_3.ErrVal)
+		}
+		b := check_3.OkVal
+		return lisette.MakeResultOk[int, error](a + b)
+	}()
+	r = tryResult_1
+	if r.Tag == lisette.ResultOk {
+		panic("expected error")
+	}
+	if r.ErrVal.Error() != "b failed" {
+		panic("wrong try block error")
+	}
+}

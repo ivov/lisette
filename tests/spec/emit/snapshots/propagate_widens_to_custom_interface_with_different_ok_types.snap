@@ -1,0 +1,99 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  pub interface AppError {
+    fn Error() -> string
+    fn status() -> int
+  }
+  
+  struct DbError { }
+  
+  impl DbError {
+    fn Error(self) -> string { "db down" }
+    pub fn status(self) -> int { 500 }
+  }
+  
+  fn query(ok: bool) -> Result<string, DbError> {
+    if ok { Ok("row") } else { Err(DbError {}) }
+  }
+  
+  fn handler(ok: bool) -> Result<int, AppError> {
+    let row = query(ok)?
+    Ok(row.length())
+  }
+  
+  fn test() {
+    match handler(false) {
+      Ok(_) => panic("expected error"),
+      Err(e) => {
+        if e.status() != 500 || e.Error() != "db down" {
+          panic("wrong app error")
+        }
+      },
+    }
+    match handler(true) {
+      Ok(n) => {
+        if n != 3 {
+          panic("wrong ok length")
+        }
+      },
+      Err(_) => panic("expected ok"),
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type AppError interface {
+	Error() string
+	Status() int
+}
+
+type DbError struct{}
+
+func (d DbError) Error() string {
+	return "db down"
+}
+
+func (d DbError) Status() int {
+	return 500
+}
+
+func query(ok bool) lisette.Result[string, DbError] {
+	if ok {
+		return lisette.MakeResultOk[string, DbError]("row")
+	}
+	return lisette.MakeResultErr[string, DbError](DbError{})
+}
+
+func handler(ok bool) (int, AppError) {
+	check_1 := query(ok)
+	if check_1.Tag != lisette.ResultOk {
+		return 0, check_1.ErrVal
+	}
+	row := check_1.OkVal
+	return len(row), nil
+}
+
+func test() {
+	_, ret_1 := handler(false)
+	if ret_1 == nil {
+		panic("expected error")
+	} else {
+		e := ret_1
+		if e.Status() != 500 || e.Error() != "db down" {
+			panic("wrong app error")
+		}
+	}
+	ret_2, ret_3 := handler(true)
+	if ret_3 == nil {
+		n := ret_2
+		if n != 3 {
+			panic("wrong ok length")
+		}
+	} else {
+		panic("expected ok")
+	}
+}

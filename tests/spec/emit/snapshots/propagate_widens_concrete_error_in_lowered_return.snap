@@ -1,0 +1,90 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  struct ValidationError { field: string }
+  
+  impl ValidationError {
+    fn Error(self) -> string { f"{self.field}: required" }
+  }
+  
+  fn validate(name: string) -> Result<string, ValidationError> {
+    if name == "" { return Err(ValidationError { field: "name" }) }
+    Ok(name)
+  }
+  
+  fn load(name: string) -> Result<string, error> {
+    let n = validate(name)?
+    Ok(n)
+  }
+  
+  fn test() {
+    match load("") {
+      Ok(_) => panic("expected error"),
+      Err(e) => {
+        if e.Error() != "name: required" {
+          panic("wrong widened error")
+        }
+      },
+    }
+    match load("ada") {
+      Ok(v) => {
+        if v != "ada" {
+          panic("wrong ok value")
+        }
+      },
+      Err(_) => panic("expected ok"),
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type ValidationError struct {
+	field string
+}
+
+func (v ValidationError) Error() string {
+	return fmt.Sprintf("%s: required", v.field)
+}
+
+func validate(name string) lisette.Result[string, ValidationError] {
+	if name == "" {
+		return lisette.MakeResultErr[string, ValidationError](ValidationError{field: "name"})
+	}
+	return lisette.MakeResultOk[string, ValidationError](name)
+}
+
+func load(name string) (string, error) {
+	check_1 := validate(name)
+	if check_1.Tag != lisette.ResultOk {
+		return "", check_1.ErrVal
+	}
+	n := check_1.OkVal
+	return n, nil
+}
+
+func test() {
+	_, ret_1 := load("")
+	if ret_1 == nil {
+		panic("expected error")
+	} else {
+		e := ret_1
+		if e.Error() != "name: required" {
+			panic("wrong widened error")
+		}
+	}
+	ret_2, ret_3 := load("ada")
+	if ret_3 == nil {
+		v := ret_2
+		if v != "ada" {
+			panic("wrong ok value")
+		}
+	} else {
+		panic("expected ok")
+	}
+}

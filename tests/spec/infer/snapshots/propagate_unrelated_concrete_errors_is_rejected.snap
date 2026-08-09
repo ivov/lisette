@@ -1,0 +1,12 @@
+---
+source: tests/spec/infer/try.rs
+---
+  ✕ Cannot propagate error
+    ╭─[test.lis:17:15]
+ 16 │     fn load() -> Result<int, BError> {
+ 17 │       let n = do_a()?
+    ·               ───┬───
+    ·                  ╰── expected `BError`, found `AError`
+ 18 │       Ok(n)
+    ╰────
+  help: cannot propagate `AError` as `BError`. Convert with `.map_err(...)` · code: [infer.cannot_propagate_error]

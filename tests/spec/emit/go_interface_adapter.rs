@@ -1166,3 +1166,75 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn propagate_widens_error_slot_through_adapter() {
+    let input = r#"
+interface Failing<T> {
+  fn get() -> T
+}
+
+struct Boom {}
+
+impl Boom {
+  fn get(self) -> Result<int, error> {
+    Ok(1)
+  }
+}
+
+fn source() -> Result<int, Boom> {
+  Err(Boom {})
+}
+
+fn widen() -> Result<int, Failing<Result<int, error>>> {
+  let n = source()?
+  Ok(n)
+}
+
+fn main() {
+  match widen() {
+    Ok(_) => panic("expected error"),
+    Err(f) => {
+      match f.get() {
+        Ok(v) => {
+          if v != 1 {
+            panic("wrong adapted value")
+          }
+        },
+        Err(_) => panic("expected ok from get"),
+      }
+    },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn return_err_widens_error_slot_through_adapter() {
+    let input = r#"
+interface Failing<T> {
+  fn get() -> T
+}
+
+struct Boom {}
+
+impl Boom {
+  fn get(self) -> Result<int, error> {
+    Ok(1)
+  }
+}
+
+fn bail() -> Result<int, Failing<Result<int, error>>> {
+  return Err(Boom {})
+}
+
+fn main() {
+  match bail() {
+    Ok(_) => panic("expected error"),
+    Err(_) => {},
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

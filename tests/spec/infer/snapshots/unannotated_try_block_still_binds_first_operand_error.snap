@@ -1,0 +1,12 @@
+---
+source: tests/spec/infer/try.rs
+---
+  ✕ Cannot propagate error
+    ╭─[test.lis:20:17]
+ 19 │         let a = do_a()?
+ 20 │         let b = do_b()?
+    ·                 ───┬───
+    ·                    ╰── expected `AError`, found `BError`
+ 21 │         a + b
+    ╰────
+  help: cannot propagate `BError` as `AError`. Convert with `.map_err(...)` · code: [infer.cannot_propagate_error]

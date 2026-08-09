@@ -139,25 +139,42 @@ impl Planner<'_> {
         let err_field = if fallible.is_result() { ".ErrVal" } else { "" };
         let success_tag = fallible.success_tag();
         let err_expr = format!("{}{}", check_var, err_field);
-        let values = self.propagate_failure_values(fallible, &err_expr);
-        transition::tag_check(format!("{}.Tag != {}", check_var, success_tag), values)
+        let (setup, values) = self.propagate_failure_values(fallible, &err_expr);
+        transition::tag_check(
+            format!("{}.Tag != {}", check_var, success_tag),
+            setup,
+            values,
+        )
     }
 
-    fn propagate_failure_values(&mut self, fallible: &Fallible, err_expr: &str) -> Vec<String> {
+    fn propagate_failure_values(
+        &mut self,
+        fallible: &Fallible,
+        err_expr: &str,
+    ) -> (Vec<LoweredStatement>, Vec<String>) {
+        let mut setup = Vec::new();
         let return_ctx = self.return_ctx();
-        if let Some(shape) = return_ctx.lowered_shape() {
+        let values = if let Some(shape) = return_ctx.lowered_shape() {
             let return_ty = return_ctx.expect_ty();
             // Option propagation: failure carries no payload, so return a
             // shape-specific `None` rather than an err-return.
             if fallible.is_result() {
-                transition::lowered_err_values(self, &shape, &return_ty, err_expr)
+                let err_expr = self.convert_error_to_return_context(
+                    &mut setup,
+                    err_expr.to_string(),
+                    fallible,
+                );
+                transition::lowered_err_values(self, &shape, &return_ty, &err_expr)
             } else {
                 transition::lowered_none_values(self, &shape, &return_ty)
             }
         } else {
+            let err_expr =
+                self.convert_error_to_return_context(&mut setup, err_expr.to_string(), fallible);
             let mut fe = FalliblePlanner::new(self, fallible);
-            vec![fe.emit_contextual_failure(Some(err_expr))]
-        }
+            vec![fe.emit_contextual_failure(Some(&err_expr))]
+        };
+        (setup, values)
     }
 
     /// Fuse `go_call()?` into `v, err := call(); if err != nil { return ... }`,
@@ -218,9 +235,10 @@ impl Planner<'_> {
         };
         statements.push(LoweredStatement::RawGo(bind_line));
 
-        let failure_values = self.propagate_failure_values(fallible, &err_var);
+        let (failure_setup, failure_values) = self.propagate_failure_values(fallible, &err_var);
         statements.push(transition::tag_check(
             format!("{} != nil", err_var),
+            failure_setup,
             failure_values,
         ));
 
@@ -232,9 +250,13 @@ impl Planner<'_> {
                 self.require_stdlib();
             }
             self.require_errors();
-            let nil_failure =
+            let (nil_setup, nil_failure) =
                 self.propagate_failure_values(fallible, "errors.New(\"unexpected nil\")");
-            statements.push(transition::tag_check(guard.is_nil(val), nil_failure));
+            statements.push(transition::tag_check(
+                guard.is_nil(val),
+                nil_setup,
+                nil_failure,
+            ));
         }
 
         let value = match result_var_name {
@@ -535,8 +557,13 @@ impl Planner<'_> {
                 let (setup, err_expr) = self
                     .lower_composite_value(&args[0], ExpressionContext::value())
                     .into_parts();
-                let values = transition::lowered_err_values(self, shape, return_ty, &err_expr);
                 statements.extend(setup);
+                let from = args[0].get_type();
+                let to = self
+                    .contextual_err_ty(fallible)
+                    .expect("Result must have error type");
+                let err_expr = self.coerce_value(&mut statements, err_expr, &from, &to);
+                let values = transition::lowered_err_values(self, shape, return_ty, &err_expr);
                 statements.push(transition::multi_value_return(values));
             }
         } else {
@@ -545,6 +572,11 @@ impl Planner<'_> {
                     .lower_composite_value(&args[0], ExpressionContext::value())
                     .into_parts();
                 statements.extend(setup);
+                let from = args[0].get_type();
+                let to = self
+                    .contextual_err_ty(fallible)
+                    .expect("Result must have error type");
+                let arg = self.coerce_value(&mut statements, arg, &from, &to);
                 let mut fe = FalliblePlanner::new(self, fallible);
                 fe.emit_failure(Some(&arg))
             } else {

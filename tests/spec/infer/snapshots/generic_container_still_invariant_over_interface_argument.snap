@@ -1,0 +1,12 @@
+---
+source: tests/spec/infer/try.rs
+---
+  ✕ Type mismatch
+    ╭─[test.lis:18:16]
+ 17 │       let boxed = Box { value: Cat {} }
+ 18 │       take_box(boxed)
+    ·                ──┬──
+    ·                  ╰── expected `Box<Animal>`, found `Box<Cat>`
+ 19 │     }
+    ╰────
+  help: `take_box()` expects `Box<Animal>` for its first argument `b`. Convert the value to `Box<Animal>`, or change the parameter type · code: [infer.type_mismatch]

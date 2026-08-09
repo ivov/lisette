@@ -1,0 +1,99 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: |
+  
+  interface Failing<T> {
+    fn get() -> T
+  }
+  
+  struct Boom {}
+  
+  impl Boom {
+    fn get(self) -> Result<int, error> {
+      Ok(1)
+    }
+  }
+  
+  fn source() -> Result<int, Boom> {
+    Err(Boom {})
+  }
+  
+  fn widen() -> Result<int, Failing<Result<int, error>>> {
+    let n = source()?
+    Ok(n)
+  }
+  
+  fn main() {
+    match widen() {
+      Ok(_) => panic("expected error"),
+      Err(f) => {
+        match f.get() {
+          Ok(v) => {
+            if v != 1 {
+              panic("wrong adapted value")
+            }
+          },
+          Err(_) => panic("expected ok from get"),
+        }
+      },
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Failing[T any] interface {
+	get() T
+}
+
+type Boom struct{}
+
+func (b Boom) get() (int, error) {
+	return 1, nil
+}
+
+func source() lisette.Result[int, Boom] {
+	return lisette.MakeResultErr[int, Boom](Boom{})
+}
+
+func widen() (int, Failing[lisette.Result[int, error]]) {
+	check_1 := source()
+	if check_1.Tag != lisette.ResultOk {
+		return 0, _lisAdapter_Boom_Failing_0{inner: check_1.ErrVal}
+	}
+	n := check_1.OkVal
+	return n, nil
+}
+
+func main() {
+	_, ret_1 := widen()
+	if ret_1 == nil {
+		panic("expected error")
+	} else {
+		f := ret_1
+		subject_2 := f.get()
+		if subject_2.Tag == lisette.ResultOk {
+			if subject_2.OkVal != 1 {
+				panic("wrong adapted value")
+			}
+		} else {
+			panic("expected ok from get")
+		}
+	}
+}
+
+type _lisAdapter_Boom_Failing_0 struct {
+	inner Boom
+}
+
+func (a _lisAdapter_Boom_Failing_0) get() lisette.Result[int, error] {
+	ret_2, ret_3 := a.inner.get()
+	var result_4 lisette.Result[int, error]
+	if ret_3 != nil {
+		result_4 = lisette.MakeResultErr[int, error](ret_3)
+	} else {
+		result_4 = lisette.MakeResultOk[int, error](ret_2)
+	}
+	return result_4
+}

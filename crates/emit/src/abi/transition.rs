@@ -23,14 +23,18 @@ pub(crate) fn multi_value_return(values: Vec<String>) -> LoweredStatement {
     })
 }
 
-/// An `if <condition> { return <then_values...> }` tag-check leaf (no else).
-pub(crate) fn tag_check(condition: String, then_values: Vec<String>) -> LoweredStatement {
+/// An `if <condition> { <setup...> return <then_values...> }` tag-check leaf (no else).
+pub(crate) fn tag_check(
+    condition: String,
+    setup: Vec<LoweredStatement>,
+    then_values: Vec<String>,
+) -> LoweredStatement {
+    let mut statements = setup;
+    statements.push(multi_value_return(then_values));
     LoweredStatement::If(IfPlan {
         condition_setup: Vec::new(),
         condition,
-        then_body: LoweredBlock {
-            statements: vec![multi_value_return(then_values)],
-        },
+        then_body: LoweredBlock { statements },
         else_arm: ElseArm::None,
     })
 }
@@ -136,6 +140,7 @@ pub(crate) fn emit_lowered_result_return(
         CallableReturnAbi::BareError => vec![
             tag_check(
                 format!("{p}.Tag == {RESULT_OK_TAG}"),
+                Vec::new(),
                 vec!["nil".to_string()],
             ),
             multi_value_return(vec![format!("{p}.ErrVal")]),
@@ -145,6 +150,7 @@ pub(crate) fn emit_lowered_result_return(
             vec![
                 tag_check(
                     format!("{p}.Tag == {RESULT_OK_TAG}"),
+                    Vec::new(),
                     vec![format!("{p}.OkVal"), "nil".to_string()],
                 ),
                 multi_value_return(vec![zero, format!("{p}.ErrVal")]),
@@ -155,10 +161,12 @@ pub(crate) fn emit_lowered_result_return(
             vec![
                 tag_check(
                     format!("{p}.Tag == {PARTIAL_OK_TAG}"),
+                    Vec::new(),
                     vec![format!("{p}.OkVal"), "nil".to_string()],
                 ),
                 tag_check(
                     format!("{p}.Tag == {PARTIAL_ERR_TAG}"),
+                    Vec::new(),
                     vec![zero, format!("{p}.ErrVal")],
                 ),
                 multi_value_return(vec![format!("{p}.OkVal"), format!("{p}.ErrVal")]),
@@ -169,6 +177,7 @@ pub(crate) fn emit_lowered_result_return(
             vec![
                 tag_check(
                     format!("{p}.Tag == {OPTION_SOME_TAG}"),
+                    Vec::new(),
                     vec![format!("{p}.SomeVal"), "true".to_string()],
                 ),
                 multi_value_return(vec![zero, "false".to_string()]),
@@ -177,6 +186,7 @@ pub(crate) fn emit_lowered_result_return(
         CallableReturnAbi::Option(OptionReturnAbi::Nullable) => vec![
             tag_check(
                 format!("{p}.Tag == {OPTION_SOME_TAG}"),
+                Vec::new(),
                 vec![format!("{p}.SomeVal")],
             ),
             multi_value_return(vec!["nil".to_string()]),

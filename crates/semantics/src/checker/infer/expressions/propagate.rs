@@ -4,6 +4,7 @@ use syntax::ast::{Expression, Span};
 use syntax::types::Type;
 
 use crate::checker::infer::InferCtx;
+use crate::checker::infer::unify::UnifyError;
 
 struct TryBlockTypes {
     ok: Type,
@@ -103,7 +104,7 @@ impl InferCtx<'_> {
             self.propagate_as_error(expected_ty, span)
         } else if tried_ty.is_result() {
             let ok_ty = tried_ty.ok_type();
-            self.unify(&try_types.error, &tried_ty.err_type(), &span);
+            self.check_propagated_error(&try_types.error, &tried_ty.err_type(), &span);
             if ok_ty.resolve_in(&self.env).is_variable() {
                 self.unify(&try_types.ok, &ok_ty, &span);
             }
@@ -149,13 +150,14 @@ impl InferCtx<'_> {
             self.propagate_as_error(expected_ty, span)
         } else if tried_ty.is_result() {
             let ok_ty = tried_ty.ok_type();
-            let resolved_fn_return = fn_return_ty.resolve_in(&self.env);
+            let resolved_fn_return = self.resolve_carrier(&fn_return_ty);
 
             if resolved_fn_return.is_result() {
-                let err_ty = tried_ty.err_type();
-                let new_ok = self.new_type_var();
-                let expected_return = self.type_result(store, new_ok, err_ty);
-                self.unify(&expected_return, &fn_return_ty, &span);
+                self.check_propagated_error(
+                    &resolved_fn_return.err_type(),
+                    &tried_ty.err_type(),
+                    &span,
+                );
             } else {
                 self.sink.push(diagnostics::infer::try_return_type_mismatch(
                     "Result<T, E>",
@@ -199,6 +201,27 @@ impl InferCtx<'_> {
         }
     }
 
+    fn resolve_carrier(&self, ty: &Type) -> Type {
+        self.store.peel_alias(&ty.resolve_in(&self.env))
+    }
+
+    fn check_propagated_error(&mut self, declared_err: &Type, operand_err: &Type, span: &Span) {
+        match self.try_unify(declared_err, operand_err, span) {
+            Ok(()) | Err(UnifyError::AlreadyReported) => {}
+            Err(_) => {
+                let declared = declared_err.resolve_in(&self.env);
+                let operand = operand_err.resolve_in(&self.env);
+                let (types, _) = Type::remove_vars(&[&declared, &operand]);
+                let (declared_name, operand_name) = Type::stringify_pair(&types[0], &types[1]);
+                self.sink.push(diagnostics::infer::cannot_propagate_error(
+                    &declared_name,
+                    &operand_name,
+                    *span,
+                ));
+            }
+        }
+    }
+
     pub(super) fn infer_try_block(
         &mut self,
         items: Vec<Expression>,
@@ -224,6 +247,11 @@ impl InferCtx<'_> {
 
         let ok_ty = self.new_type_var();
         let err_ty = self.new_type_var();
+
+        let expected_resolved = self.resolve_carrier(expected_ty);
+        if expected_resolved.is_result() {
+            self.unify(&err_ty, &expected_resolved.err_type(), &try_keyword_span);
+        }
 
         let (new_items, usage) = self.with_scope(|this| {
             let entry_loop_depth = this.loop_depth();

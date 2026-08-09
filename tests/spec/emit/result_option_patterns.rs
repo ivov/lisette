@@ -1617,3 +1617,265 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn propagate_widens_concrete_error_in_lowered_return() {
+    let input = r#"
+struct ValidationError { field: string }
+
+impl ValidationError {
+  fn Error(self) -> string { f"{self.field}: required" }
+}
+
+fn validate(name: string) -> Result<string, ValidationError> {
+  if name == "" { return Err(ValidationError { field: "name" }) }
+  Ok(name)
+}
+
+fn load(name: string) -> Result<string, error> {
+  let n = validate(name)?
+  Ok(n)
+}
+
+fn test() {
+  match load("") {
+    Ok(_) => panic("expected error"),
+    Err(e) => {
+      if e.Error() != "name: required" {
+        panic("wrong widened error")
+      }
+    },
+  }
+  match load("ada") {
+    Ok(v) => {
+      if v != "ada" {
+        panic("wrong ok value")
+      }
+    },
+    Err(_) => panic("expected ok"),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_widens_in_annotated_try_block() {
+    let input = r#"
+struct AError { }
+
+impl AError {
+  fn Error(self) -> string { "a failed" }
+}
+
+struct BError { }
+
+impl BError {
+  fn Error(self) -> string { "b failed" }
+}
+
+fn do_a(ok: bool) -> Result<int, AError> {
+  if ok { Ok(1) } else { Err(AError {}) }
+}
+
+fn do_b(ok: bool) -> Result<int, BError> {
+  if ok { Ok(2) } else { Err(BError {}) }
+}
+
+fn test() {
+  let r: Result<int, error> = try {
+    let a = do_a(true)?
+    let b = do_b(false)?
+    a + b
+  }
+  match r {
+    Ok(_) => panic("expected error"),
+    Err(e) => {
+      if e.Error() != "b failed" {
+        panic("wrong try block error")
+      }
+    },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_widens_in_prelude_callback_lambda() {
+    let input = r#"
+struct ParseError { text: string }
+
+impl ParseError {
+  fn Error(self) -> string { f"bad: {self.text}" }
+}
+
+fn parse_word(w: string) -> Result<int, ParseError> {
+  if w == "x" { Err(ParseError { text: w }) } else { Ok(w.length()) }
+}
+
+fn test() {
+  let words = ["one", "x"]
+  let parsed = words.map(|w| -> Result<int, error> {
+    let n = parse_word(w)?
+    Ok(n)
+  })
+  match parsed[0] {
+    Ok(n) => {
+      if n != 3 {
+        panic("wrong parsed length")
+      }
+    },
+    Err(_) => panic("expected ok"),
+  }
+  match parsed[1] {
+    Ok(_) => panic("expected error"),
+    Err(e) => {
+      if e.Error() != "bad: x" {
+        panic("wrong lambda error")
+      }
+    },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_widens_to_custom_interface_with_different_ok_types() {
+    let input = r#"
+pub interface AppError {
+  fn Error() -> string
+  fn status() -> int
+}
+
+struct DbError { }
+
+impl DbError {
+  fn Error(self) -> string { "db down" }
+  pub fn status(self) -> int { 500 }
+}
+
+fn query(ok: bool) -> Result<string, DbError> {
+  if ok { Ok("row") } else { Err(DbError {}) }
+}
+
+fn handler(ok: bool) -> Result<int, AppError> {
+  let row = query(ok)?
+  Ok(row.length())
+}
+
+fn test() {
+  match handler(false) {
+    Ok(_) => panic("expected error"),
+    Err(e) => {
+      if e.status() != 500 || e.Error() != "db down" {
+        panic("wrong app error")
+      }
+    },
+  }
+  match handler(true) {
+    Ok(n) => {
+      if n != 3 {
+        panic("wrong ok length")
+      }
+    },
+    Err(_) => panic("expected ok"),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn err_literal_propagate_widens() {
+    let input = r#"
+struct AError { }
+
+impl AError {
+  fn Error(self) -> string { "a failed" }
+}
+
+fn bail(flag: bool) -> Result<int, error> {
+  if flag { Err(AError {})? }
+  Ok(1)
+}
+
+fn test() {
+  match bail(true) {
+    Ok(_) => panic("expected error"),
+    Err(e) => {
+      if e.Error() != "a failed" {
+        panic("wrong literal error")
+      }
+    },
+  }
+  match bail(false) {
+    Ok(v) => {
+      if v != 1 {
+        panic("wrong ok value")
+      }
+    },
+    Err(_) => panic("expected ok"),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn return_err_widens_concrete_error() {
+    let input = r#"
+struct AError { }
+
+impl AError {
+  fn Error(self) -> string { "a failed" }
+}
+
+fn bail() -> Result<int, error> {
+  return Err(AError {})
+}
+
+fn test() {
+  match bail() {
+    Ok(_) => panic("expected error"),
+    Err(e) => {
+      if e.Error() != "a failed" {
+        panic("wrong returned error")
+      }
+    },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_widens_ref_with_pointer_receiver_error_method() {
+    let input = r#"
+struct FileError { path: string }
+
+impl FileError {
+  fn Error(self: Ref<FileError>) -> string { f"cannot open {self.path}" }
+}
+
+fn read_value() -> Result<int, Ref<FileError>> { Err(&FileError { path: "a.txt" }) }
+
+fn load() -> Result<int, error> {
+  let n = read_value()?
+  Ok(n)
+}
+
+fn test() {
+  match load() {
+    Ok(_) => panic("expected error"),
+    Err(e) => {
+      if e.Error() != "cannot open a.txt" {
+        panic("wrong ref error")
+      }
+    },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
