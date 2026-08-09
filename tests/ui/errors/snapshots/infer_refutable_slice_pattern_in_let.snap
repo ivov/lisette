@@ -9,9 +9,4 @@ source: tests/ui/errors/mod.rs
    ·          ╰── only matches 2 elements
  4 │ }
    ╰────
-  help: Use `match` to handle slices of any length:
-            match slice {
-                [a, b] => ...,
-                _ => ...,
-            }
-  code: [infer.refutable_pattern]
+  help: Handle slices of any length with `match slice { [a, b] => ..., _ => ... }` · code: [infer.refutable_pattern]

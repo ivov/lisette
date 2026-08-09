@@ -81,35 +81,16 @@ fn describe_pattern_expectation(pattern: RefutablePattern<'_>) -> String {
 fn build_refutability_help(pattern: RefutablePattern<'_>) -> String {
     match pattern {
         RefutablePattern::ExactSlice(_) | RefutablePattern::SlicePrefix(_) => {
-            r#"Use `match` to handle slices of any length:
-    match slice {
-        [a, b] => ...,
-        _ => ...,
-    }"#
-            .to_string()
+            "Handle slices of any length with `match slice { [a, b] => ..., _ => ... }`".to_string()
         }
-        RefutablePattern::Some => r#"Use `if let` to handle only `Some`:
-    if let Some(x) = opt {
-        ...
-    }
-Or use `match` to also handle `None`:
-    match opt {
-        Some(x) => ...,
-        None => ...,
-    }"#
-        .to_string(),
-        RefutablePattern::Ok => r#"Use `if let` to handle only `Ok`:
-    if let Ok(x) = result {
-        ...
-    }
-Or use `match` to also handle `Err`:
-    match result {
-        Ok(x) => ...,
-        Err(e) => ...,
-    }"#
-        .to_string(),
+        RefutablePattern::Some => {
+            "Use `if let Some(x) = opt { ... }` to handle only `Some`, or `match opt { Some(x) => ..., None => ... }` to also handle `None`".to_string()
+        }
+        RefutablePattern::Ok => {
+            "Use `if let Ok(x) = result { ... }` to handle only `Ok`, or `match result { Ok(x) => ..., Err(e) => ... }` to also handle `Err`".to_string()
+        }
         RefutablePattern::Other(witness) => format!(
-            "Use `match` to handle all cases:\n    match value {{\n        {} => ...,\n        _ => ...,\n    }}",
+            "Handle all cases with `match value {{ {} => ..., _ => ... }}`",
             witness
         ),
     }
