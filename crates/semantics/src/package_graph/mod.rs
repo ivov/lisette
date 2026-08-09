@@ -195,8 +195,17 @@ impl ScannedFile {
         syntax::program::is_test_file(&self.name)
     }
 
-    pub fn parse(self, package_id: &str) -> (File, Vec<syntax::ParseError>) {
-        let result = syntax::build_ast(&self.source, self.file_id);
+    pub fn parse(
+        self,
+        package_id: &str,
+        recover: bool,
+    ) -> (File, Vec<syntax::ParseError>, syntax::FileParseStatus) {
+        let result = if recover {
+            syntax::build_ast_recovering(&self.source, self.file_id)
+        } else {
+            syntax::build_ast(&self.source, self.file_id)
+        };
+        let status = result.status;
         let file = File {
             id: self.file_id,
             package_id: package_id.to_string(),
@@ -207,7 +216,7 @@ impl ScannedFile {
             items: result.ast,
             file_comment: result.file_comment,
         };
-        (file, result.errors)
+        (file, result.errors, status)
     }
 }
 

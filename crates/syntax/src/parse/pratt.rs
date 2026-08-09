@@ -571,7 +571,7 @@ mod tests {
 
     fn parse_bounded(source: &str) -> u32 {
         let result = Parser::lex_and_parse_file(source, 0);
-        assert!(result.failed(), "expected a nesting error");
+        assert!(result.has_errors(), "expected a nesting error");
         result.ast.iter().map(depth).max().unwrap_or(0)
     }
 

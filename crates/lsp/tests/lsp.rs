@@ -13267,3 +13267,314 @@ fn completion_after_an_unknown_prefix_dot_offers_nothing() {
 
     client.shutdown();
 }
+
+fn project_with(root: &std::path::Path, files: &[(&str, &str)]) {
+    std::fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"example.com/you/app\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    for (relative, content) in files {
+        let path = root.join(relative);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, content).unwrap();
+    }
+}
+
+fn uri_of(root: &std::path::Path, relative: &str) -> String {
+    Url::from_file_path(root.join(relative))
+        .unwrap()
+        .to_string()
+}
+
+#[test]
+fn declarations_in_a_broken_sibling_still_resolve() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let caller = "fn main() {\n  let n = shared()\n}\n";
+    let broken = "fn shared() -> int { 42 }\n\nfn oops(\n";
+    project_with(
+        root,
+        &[("src/main.lis", caller), ("src/broken.lis", broken)],
+    );
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let caller_uri = uri_of(root, "src/main.lis");
+    client.open(&caller_uri, caller);
+    client.open(&uri_of(root, "src/broken.lis"), broken);
+
+    let diagnostics = client
+        .await_diagnostics_for(&caller_uri)
+        .unwrap_or_default();
+
+    assert!(
+        !diagnostics.iter().any(|d| d.message.contains("shared")),
+        "a declaration before a sibling's parse error stays visible: {diagnostics:?}"
+    );
+    client.shutdown();
+}
+
+#[test]
+fn a_document_with_parse_errors_keeps_its_own_partial_ast() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let partial = "pub fn intact() -> int { 7 }\n\nfn broken(\n";
+    project_with(
+        root,
+        &[
+            ("src/main.lis", "fn main() {}\n"),
+            ("src/partial.lis", partial),
+        ],
+    );
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let partial_uri = uri_of(root, "src/partial.lis");
+    client.open(&uri_of(root, "src/main.lis"), "fn main() {}\n");
+    client.open(&partial_uri, partial);
+
+    let hover = client.hover(&partial_uri, 0, 8);
+    let diagnostics = client
+        .await_diagnostics_for(&partial_uri)
+        .unwrap_or_default();
+
+    assert!(
+        hover.is_some(),
+        "declarations before a parse error stay hoverable"
+    );
+    assert!(
+        !diagnostics.is_empty(),
+        "the parse error is still reported: {diagnostics:?}"
+    );
+    client.shutdown();
+}
+
+#[test]
+fn a_document_broken_on_open_serves_no_stale_disk_features() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let on_disk = "pub fn helper() -> int { 42 }\n";
+    project_with(
+        root,
+        &[
+            ("src/main.lis", "fn main() {}\n"),
+            ("src/helper.lis", on_disk),
+        ],
+    );
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let helper_uri = uri_of(root, "src/helper.lis");
+    client.open(&uri_of(root, "src/main.lis"), "fn main() {}\n");
+    client.open(&helper_uri, "fn helper() -> int { \"unterminated\n");
+
+    let hover = client.hover(&helper_uri, 0, 8);
+
+    assert!(
+        hover.is_none(),
+        "a buffer that fails to lex must not be served from its disk contents: {hover:?}"
+    );
+    client.shutdown();
+}
+
+#[test]
+fn a_lexer_failure_falls_back_to_the_last_usable_snapshot() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let good = "pub fn helper() -> int { 42 }\n";
+    project_with(
+        root,
+        &[("src/main.lis", "fn main() {}\n"), ("src/helper.lis", good)],
+    );
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let helper_uri = uri_of(root, "src/helper.lis");
+    client.open(&uri_of(root, "src/main.lis"), "fn main() {}\n");
+    client.open(&helper_uri, good);
+    assert!(client.hover(&helper_uri, 0, 8).is_some());
+
+    client.change(&helper_uri, "pub fn helper() -> int { \"oops\n", 2);
+
+    assert!(
+        client.hover(&helper_uri, 0, 8).is_some(),
+        "features fall back to the snapshot this document was last usable in"
+    );
+    client.shutdown();
+}
+
+#[test]
+fn staggered_failures_keep_separate_fallbacks() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let b = "pub fn from_b() -> int { 1 }\n";
+    let c = "pub fn from_c() -> int { 2 }\n";
+    project_with(
+        root,
+        &[
+            ("src/main.lis", "fn main() {}\n"),
+            ("src/b.lis", b),
+            ("src/c.lis", c),
+        ],
+    );
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let b_uri = uri_of(root, "src/b.lis");
+    let c_uri = uri_of(root, "src/c.lis");
+    client.open(&uri_of(root, "src/main.lis"), "fn main() {}\n");
+    client.open(&b_uri, b);
+    client.open(&c_uri, c);
+    assert!(client.hover(&b_uri, 0, 8).is_some());
+    assert!(client.hover(&c_uri, 0, 8).is_some());
+
+    client.change(&b_uri, "pub fn from_b() -> int { \"broken\n", 2);
+    client.change(&c_uri, "pub fn from_c() -> int { 3 }\n", 2);
+    client.change(&c_uri, "pub fn from_c() -> int { \"broken\n", 3);
+
+    assert!(
+        client.hover(&b_uri, 0, 8).is_some(),
+        "b keeps the snapshot from before b broke"
+    );
+    assert!(
+        client.hover(&c_uri, 0, 8).is_some(),
+        "c keeps the snapshot from before c broke, a later one than b's"
+    );
+    client.shutdown();
+}
+
+#[test]
+fn an_invalid_external_test_file_does_not_stop_its_package() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let valid = "fn check() -> int { 1 }\n";
+    project_with(
+        root,
+        &[
+            ("src/main.lis", "fn main() {}\n"),
+            ("tests/valid.test.lis", valid),
+            ("tests/invalid.lis", "fn stray() -> int { 2 }\n"),
+        ],
+    );
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let invalid_uri = uri_of(root, "tests/invalid.lis");
+    let valid_uri = uri_of(root, "tests/valid.test.lis");
+    client.open(&invalid_uri, "fn stray() -> int { 2 }\n");
+    client.open(&valid_uri, valid);
+
+    let invalid_diagnostics = client
+        .await_diagnostics_for(&invalid_uri)
+        .unwrap_or_default();
+
+    assert!(
+        invalid_diagnostics
+            .iter()
+            .any(|d| d.message.contains("test file")),
+        "the invalidly named file reports its own problem: {invalid_diagnostics:?}"
+    );
+    assert!(
+        client.hover(&valid_uri, 0, 3).is_some(),
+        "its validly named sibling still analyzes"
+    );
+    client.shutdown();
+}
+
+#[test]
+fn a_production_test_suffix_file_still_analyzes() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let content = "fn helper() -> int { 42 }\n";
+    project_with(
+        root,
+        &[
+            ("src/main.lis", "fn main() {}\n"),
+            ("src/thing_test.lis", content),
+        ],
+    );
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let uri = uri_of(root, "src/thing_test.lis");
+    client.open(&uri, content);
+
+    let diagnostics = client.await_diagnostics_for(&uri).unwrap_or_default();
+
+    assert!(
+        diagnostics.iter().any(|d| d.message.contains("_test.lis")),
+        "the wrong-suffix diagnostic still reaches a file the package loader skips: {diagnostics:?}"
+    );
+    assert!(
+        client.hover(&uri, 0, 3).is_some(),
+        "and its features keep working"
+    );
+    client.shutdown();
+}
+
+#[test]
+fn a_project_typedef_file_still_analyzes() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let content = "pub struct Point { pub x: int }\n";
+    project_with(
+        root,
+        &[
+            ("src/main.lis", "fn main() {}\n"),
+            ("src/shapes.d.lis", content),
+        ],
+    );
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let uri = uri_of(root, "src/shapes.d.lis");
+    client.open(&uri, content);
+
+    assert!(
+        client.document_symbol(&uri).is_some(),
+        "a .d.lis the entry package skips is analyzed under its own key"
+    );
+    client.shutdown();
+}
+
+#[test]
+fn a_closed_document_gets_no_diagnostics_from_a_surviving_sibling_key() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let broken = "fn f() -> int {\n  missing_symbol()\n}\n";
+    project_with(
+        root,
+        &[
+            ("src/main.lis", "fn main() {}\n"),
+            ("src/other.lis", broken),
+        ],
+    );
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let main_uri = uri_of(root, "src/main.lis");
+    let other_uri = uri_of(root, "src/other.lis");
+    client.open(&main_uri, "fn main() {}\n");
+    client.open(&other_uri, broken);
+    assert!(
+        client
+            .await_diagnostics_for(&other_uri)
+            .is_some_and(|d| !d.is_empty())
+    );
+
+    client.close(&other_uri);
+    assert_eq!(
+        client.await_diagnostics_for(&other_uri),
+        Some(vec![]),
+        "closing clears the document's diagnostics"
+    );
+    client.save(&other_uri);
+
+    assert_eq!(
+        client.await_diagnostics_for(&other_uri),
+        None,
+        "a closed document must not be republished from disk through its package key"
+    );
+    client.shutdown();
+}

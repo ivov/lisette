@@ -1,5 +1,5 @@
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, PoisonError};
 
 use crate::protocol::*;
 use rustc_hash::FxHashMap;
@@ -7,17 +7,25 @@ use rustc_hash::FxHashMap;
 use deps::TypedefLocator;
 use diagnostics::LisetteDiagnostic;
 use passes::analyze;
-use semantics::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile, ProjectKind};
+use semantics::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile, ProjectKind, RecoverTarget};
 use syntax::types::{CompoundKind, Type};
 
 use crate::imports::PackageResolver;
+use crate::loader::ProjectAnalysis;
+use crate::paths::uri_to_package_file;
 use crate::position::LineIndex;
 use crate::snapshot::AnalysisSnapshot;
-use crate::state::{AnalysisRequest, DocumentState, SharedState};
+use crate::state::{AnalysisKey, SharedState, Workspace};
 
-enum AnalysisError {
+pub(crate) enum AnalysisError {
     Diagnostics(Vec<Diagnostic>),
     Superseded,
+}
+
+struct BuildInput {
+    project: ProjectAnalysis,
+    entry: Option<(String, String)>,
+    uri: Option<Url>,
 }
 
 fn dotted_directory_reaches_package_graph(uri: &Url, filename: &str, root: &Path) -> bool {
@@ -96,46 +104,80 @@ pub(crate) fn find_package_by_alias(
 }
 
 impl SharedState {
-    fn run_analysis(&self, uri: &Url) -> Result<AnalysisSnapshot, Vec<Diagnostic>> {
-        let project = self.project.for_analysis(uri).ok_or_else(Vec::new)?;
-        let config = project.config;
-        let filename = project.filename;
-        let loader = project.loader;
-        let external_test = project.external_test;
+    pub(crate) fn key_for(&self, uri: &Url) -> Option<AnalysisKey> {
+        let config = self.project.config_for(uri)?;
+        let (package_id, filename, external_test) = uri_to_package_file(&config, uri)?;
+        let filtered_from_package =
+            !external_test && (filename.ends_with("_test.lis") || filename.ends_with(".d.lis"));
+        if config.is_script() || filtered_from_package {
+            return Some(AnalysisKey::Document { uri: uri.clone() });
+        }
+        Some(AnalysisKey::Package {
+            external_test,
+            package_id,
+        })
+    }
 
-        let source = self
-            .documents()
-            .get(uri)
-            .map(|document| document.content().to_string())
-            .ok_or_else(Vec::new)?;
+    pub(crate) fn validate(&self, uri: &Url) -> Option<LisetteDiagnostic> {
+        let config = self.project.config_for(uri)?;
+        let (package_id, filename, external_test) = uri_to_package_file(&config, uri)?;
 
-        if let Some(dotted) = project
-            .package_id
+        if let Some(dotted) = package_id
             .split('/')
             .find(|segment| segment.contains('.'))
             .filter(|_| dotted_directory_reaches_package_graph(uri, &filename, config.root()))
         {
-            return Err(vec![convert_diagnostic(
-                &diagnostics::package_graph::dotted_package_directory(dotted),
-                &LineIndex::new(&source),
-            )]);
+            return Some(diagnostics::package_graph::dotted_package_directory(dotted));
         }
 
-        if external_test && let Some(issue) = semantics::loader::external_test_file_issue(&filename)
-        {
-            let diagnostic = match issue {
-                semantics::loader::ExternalTestFileIssue::WrongSuffix => {
-                    diagnostics::package_graph::wrong_test_file_suffix(&filename)
-                }
-                semantics::loader::ExternalTestFileIssue::NotATestFile => {
-                    diagnostics::package_graph::non_test_file_under_tests(&filename)
-                }
-            };
-            return Err(vec![convert_diagnostic(
-                &diagnostic,
-                &LineIndex::new(&source),
-            )]);
+        if external_test {
+            return semantics::loader::external_test_file_issue(&filename).map(
+                |issue| match issue {
+                    semantics::loader::ExternalTestFileIssue::WrongSuffix => {
+                        diagnostics::package_graph::wrong_test_file_suffix(&filename)
+                    }
+                    semantics::loader::ExternalTestFileIssue::NotATestFile => {
+                        diagnostics::package_graph::non_test_file_under_tests(&filename)
+                    }
+                },
+            );
         }
+
+        None
+    }
+
+    fn capture_build_input(&self, key: &AnalysisKey, workspace: &Workspace) -> Option<BuildInput> {
+        let project = self.project.for_key(key)?;
+        let (entry, uri) = match key {
+            AnalysisKey::Document { uri } => {
+                let config = self.project.config_for(uri)?;
+                let (_, filename, _) = uri_to_package_file(&config, uri)?;
+                let source = workspace.documents.get(uri)?.content().to_string();
+                (Some((source, filename)), Some(uri.clone()))
+            }
+            AnalysisKey::Package { .. } => (None, None),
+        };
+        Some(BuildInput {
+            project,
+            entry,
+            uri,
+        })
+    }
+
+    fn run_analysis(
+        &self,
+        key: &AnalysisKey,
+        input: BuildInput,
+    ) -> Result<AnalysisSnapshot, Vec<Diagnostic>> {
+        let BuildInput {
+            project,
+            entry,
+            uri,
+        } = input;
+        let config = project.config;
+        let loader = project.loader;
+        let external_test = project.external_test;
+        let entry_dir = project.entry_dir;
 
         let script = config.is_script();
         let (locator, manifest_error) = if script {
@@ -147,14 +189,15 @@ impl SharedState {
             }
         };
 
-        let script_path = uri.to_file_path().ok();
+        let script_path = uri.as_ref().and_then(|uri| uri.to_file_path().ok());
         let script_setup = self
             .bindgen_setup
             .as_ref()
             .filter(|_| script && manifest_error.is_none())
-            .zip(script_path.as_deref());
+            .zip(script_path.as_deref())
+            .zip(entry.as_ref());
         let (locator, script_session, script_error) = match script_setup {
-            Some((setup, path)) => match setup.for_script(&source, path) {
+            Some(((setup, path), (source, _))) => match setup.for_script(source, path) {
                 Ok((resolved, session)) => (resolved, session, None),
                 Err(msg) => (locator, None, Some(msg)),
             },
@@ -194,16 +237,15 @@ impl SharedState {
                 AnalysisScope::Project(config.root().to_path_buf())
             },
             loader: &loader,
-            entry: if external_test {
-                None
-            } else {
-                Some(EntryFile::recovering(source, filename.clone(), filename))
-            },
+            entry: entry.map(|(source, filename)| {
+                EntryFile::recovering(source, filename.clone(), filename)
+            }),
             compile_phase: CompilePhase::Check,
             project_kind,
             locator: &locator,
             go_module: "",
             disable_cache: external_test,
+            recover_target: recover_target(key),
         });
         let entry_parse_failed = analysis.entry_parse_failed();
 
@@ -254,37 +296,96 @@ impl SharedState {
         Ok(AnalysisSnapshot::new(
             analysis,
             &config,
-            uri,
+            &entry_dir,
             external_test,
             packages,
         ))
     }
 
-    fn run_analysis_cached(&self, uri: &Url) -> Result<Arc<AnalysisSnapshot>, AnalysisError> {
-        let documents = self.documents();
-        let document = documents.get(uri).ok_or(AnalysisError::Superseded)?;
-        let request = document.request_analysis();
-        drop(documents);
-
-        let revision = match request {
-            AnalysisRequest::Cached(snapshot) => return Ok(snapshot),
-            AnalysisRequest::Required(revision) => revision,
-        };
-
-        let snapshot = Arc::new(self.run_analysis(uri).map_err(AnalysisError::Diagnostics)?);
-
-        if let Some(document) = self.documents_mut().get_mut(uri)
-            && document.cache_analysis(&revision, Arc::clone(&snapshot))
-        {
+    pub(crate) fn analysis_for(
+        &self,
+        key: &AnalysisKey,
+    ) -> Result<Arc<AnalysisSnapshot>, AnalysisError> {
+        if let Some(snapshot) = self.workspace().snapshot(key) {
             return Ok(snapshot);
         }
 
-        Err(AnalysisError::Superseded)
+        let build = self
+            .workspace()
+            .build_lock(key)
+            .ok_or(AnalysisError::Superseded)?;
+        let _guard = build.lock().unwrap_or_else(PoisonError::into_inner);
+
+        let (generation, input) = {
+            let workspace = self.workspace();
+            if !workspace
+                .build_lock(key)
+                .is_some_and(|current| Arc::ptr_eq(&current, &build))
+            {
+                return Err(AnalysisError::Superseded);
+            }
+            if let Some(snapshot) = workspace.snapshot(key) {
+                return Ok(snapshot);
+            }
+            let input = self
+                .capture_build_input(key, &workspace)
+                .ok_or(AnalysisError::Superseded)?;
+            (workspace.generation(), input)
+        };
+
+        let built = self.run_analysis(key, input);
+
+        let mut workspace = self.workspace_mut();
+        if workspace.generation() != generation {
+            return Err(AnalysisError::Superseded);
+        }
+        let snapshot = Arc::new(built.map_err(AnalysisError::Diagnostics)?);
+        if !workspace.install(key, generation, Arc::clone(&snapshot)) {
+            return Err(AnalysisError::Superseded);
+        }
+
+        let recipients: Vec<Url> = workspace
+            .documents
+            .keys()
+            .filter(|uri| self.key_for(uri).as_ref() == Some(key))
+            .filter(|uri| self.validate(uri).is_none())
+            .filter(|uri| snapshot.is_usable(uri))
+            .cloned()
+            .collect();
+        for uri in recipients {
+            if let Some(document) = workspace.documents.get_mut(&uri) {
+                document.set_last_usable(Arc::clone(&snapshot));
+            }
+        }
+        Ok(snapshot)
     }
 
-    pub(crate) fn analyze_and_convert(&self, uri: &Url) -> Option<Vec<Diagnostic>> {
-        let snapshot = match self.run_analysis_cached(uri) {
-            Ok(s) => s,
+    pub(crate) fn get_snapshot(&self, uri: &Url) -> Option<Arc<AnalysisSnapshot>> {
+        let fallback = || self.workspace().documents.get(uri)?.last_usable();
+
+        if self.validate(uri).is_some() {
+            return fallback();
+        }
+
+        let key = self.key_for(uri)?;
+        match self.analysis_for(&key) {
+            Ok(snapshot) if snapshot.is_usable(uri) => Some(snapshot),
+            _ => fallback(),
+        }
+    }
+
+    pub(crate) fn diagnostics_for(&self, uri: &Url) -> Option<Vec<Diagnostic>> {
+        if let Some(diagnostic) = self.validate(uri) {
+            let source = self.workspace().documents.get(uri)?.content().to_string();
+            return Some(vec![convert_diagnostic(
+                &diagnostic,
+                &LineIndex::new(&source),
+            )]);
+        }
+
+        let key = self.key_for(uri)?;
+        let snapshot = match self.analysis_for(&key) {
+            Ok(snapshot) => snapshot,
             Err(AnalysisError::Diagnostics(diagnostics)) => return Some(diagnostics),
             Err(AnalysisError::Superseded) => return None,
         };
@@ -307,24 +408,36 @@ impl SharedState {
         )
     }
 
-    pub(crate) fn get_snapshot(&self, uri: &Url) -> Option<Arc<AnalysisSnapshot>> {
-        match self.run_analysis_cached(uri) {
-            Ok(snapshot) => Some(snapshot),
-            Err(_) => self
-                .documents()
-                .get(uri)
-                .and_then(DocumentState::last_valid_analysis),
-        }
-    }
-
     pub(crate) fn open_document_snapshots(&self) -> Vec<Arc<AnalysisSnapshot>> {
-        self.documents()
-            .values()
-            .filter_map(|document| match document.request_analysis() {
-                AnalysisRequest::Cached(snapshot) => Some(snapshot),
-                AnalysisRequest::Required(_) => None,
-            })
+        let uris: Vec<Url> = self.workspace().documents.keys().cloned().collect();
+        let mut keys: Vec<AnalysisKey> = Vec::new();
+        for uri in uris {
+            if self.validate(&uri).is_some() {
+                continue;
+            }
+            if let Some(key) = self.key_for(&uri)
+                && !keys.contains(&key)
+            {
+                keys.push(key);
+            }
+        }
+        keys.iter()
+            .filter_map(|key| self.analysis_for(key).ok())
             .collect()
+    }
+}
+
+fn recover_target(key: &AnalysisKey) -> RecoverTarget {
+    match key {
+        AnalysisKey::Package {
+            external_test: true,
+            package_id,
+        } => RecoverTarget::Package(package_id.clone()),
+        AnalysisKey::Package {
+            external_test: false,
+            ..
+        } => RecoverTarget::Package(crate::paths::ENTRY_PACKAGE_ID.to_string()),
+        AnalysisKey::Document { .. } => RecoverTarget::None,
     }
 }
 

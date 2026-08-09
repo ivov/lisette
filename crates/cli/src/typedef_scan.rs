@@ -75,7 +75,7 @@ fn scan_file_imports(path: PathBuf) -> Result<Vec<ScannedImport>, SourceScanErro
         Err(e) => return Err(SourceScanError::Read { path, error: e }),
     };
     let parse_result = Parser::lex_and_parse_file(&source, 0);
-    if parse_result.failed() {
+    if parse_result.has_errors() {
         return Err(SourceScanError::Parse {
             path,
             message: parse_result.errors[0].message.clone(),

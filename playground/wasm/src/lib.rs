@@ -8,7 +8,9 @@ use wasm_bindgen::prelude::*;
 
 use lisette_passes::{Analysis, analyze};
 use lisette_semantics::loader::MemoryLoader;
-use lisette_semantics::{AnalysisScope, AnalyzeInput, CompilePhase, EntryFile, ProjectKind};
+use lisette_semantics::{
+    AnalysisScope, AnalyzeInput, CompilePhase, EntryFile, ProjectKind, RecoverTarget,
+};
 use lisette_syntax::ast::{Expression, IdentifierResolution, Span};
 use lisette_syntax::program::{Definition, DefinitionBody};
 use lisette_syntax::types::{Type, unqualified_name};
@@ -166,6 +168,7 @@ fn run_analysis(code: &str) -> AnalysisResult {
         project_kind: ProjectKind::Binary,
         go_module: "",
         disable_cache: false,
+        recover_target: RecoverTarget::None,
     };
 
     let analysis = analyze(input);
@@ -206,6 +209,7 @@ fn run_pipeline(
         locator: &lisette_deps::TypedefLocator::default(),
         go_module: "",
         disable_cache: false,
+        recover_target: RecoverTarget::None,
     };
 
     let analysis = analyze(input);

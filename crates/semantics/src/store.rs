@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
+use syntax::FileParseStatus;
 use syntax::ast::{EnumVariant, Expression, StructFieldDefinition};
 use syntax::program::{
     Definition, DefinitionBody, EqualityIndex, File, Interface, Method, Methods, Package,
@@ -28,6 +29,8 @@ pub struct Store {
     next_file_id: AtomicU32,
     pub equality_index: EqualityIndex,
     pub test_index: TestIndex,
+    /// Files that parsed to less than their full contents. Absent means clean.
+    pub parse_statuses: HashMap<u32, FileParseStatus>,
 }
 
 impl Clone for Store {
@@ -39,6 +42,7 @@ impl Clone for Store {
             next_file_id: AtomicU32::new(self.next_file_id.load(Ordering::Relaxed)),
             equality_index: self.equality_index.clone(),
             test_index: self.test_index.clone(),
+            parse_statuses: self.parse_statuses.clone(),
         }
     }
 }
@@ -68,6 +72,13 @@ impl Store {
             next_file_id: AtomicU32::new(2), // 0 = entrypoint, 1 = prelude
             equality_index: Default::default(),
             test_index: Default::default(),
+            parse_statuses: Default::default(),
+        }
+    }
+
+    pub fn record_parse_status(&mut self, file_id: u32, status: FileParseStatus) {
+        if status != FileParseStatus::Clean {
+            self.parse_statuses.insert(file_id, status);
         }
     }
 
@@ -261,6 +272,7 @@ impl Store {
             next_file_id: AtomicU32::new(self.next_file_id.load(Ordering::Relaxed)),
             equality_index: EqualityIndex::default(),
             test_index: TestIndex::default(),
+            parse_statuses: HashMap::default(),
         }
     }
 

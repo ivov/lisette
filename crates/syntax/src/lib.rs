@@ -11,7 +11,7 @@ pub mod program;
 pub mod types;
 
 pub use ecow::EcoString;
-pub use parse::ParseError;
+pub use parse::{FileParseStatus, ParseError};
 
 pub const ENTRY_PACKAGE_ID: &str = "_entry_";
 pub const ROOT_IMPORT: &str = "root";
@@ -30,37 +30,49 @@ mod size_assertions {
 const MAX_SOURCE_BYTES: usize = 10 * 1024 * 1024; // 10 MiB
 
 pub fn build_ast(source: &str, file_id: u32) -> AstBuildResult {
-    if source.len() > MAX_SOURCE_BYTES {
-        return parse::ParseResult {
-            ast: vec![],
-            errors: vec![
-                ParseError::new(
-                    "File too large",
-                    ast::Span::new(file_id, 0, 0),
-                    format!(
-                        "file is {} bytes, maximum is {} bytes",
-                        source.len(),
-                        MAX_SOURCE_BYTES,
-                    ),
-                )
-                .with_parse_code("file_too_large"),
-            ],
-            file_comment: None,
-            truncated: true,
-        };
-    }
-
-    let parse_result = parse::Parser::lex_and_parse_file(source, file_id);
-    if parse_result.failed() {
+    let parse_result = match oversize(source, file_id) {
+        Some(result) => return result,
+        None => parse::Parser::lex_and_parse_file(source, file_id),
+    };
+    if parse_result.has_errors() {
         return parse::ParseResult {
             ast: vec![],
             errors: parse_result.errors,
             file_comment: None,
             truncated: true,
+            status: FileParseStatus::Failed,
         };
     }
 
     parse_result
+}
+
+pub fn build_ast_recovering(source: &str, file_id: u32) -> AstBuildResult {
+    match oversize(source, file_id) {
+        Some(result) => result,
+        None => parse::Parser::lex_and_parse_file(source, file_id),
+    }
+}
+
+fn oversize(source: &str, file_id: u32) -> Option<AstBuildResult> {
+    (source.len() > MAX_SOURCE_BYTES).then(|| parse::ParseResult {
+        ast: vec![],
+        errors: vec![
+            ParseError::new(
+                "File too large",
+                ast::Span::new(file_id, 0, 0),
+                format!(
+                    "file is {} bytes, maximum is {} bytes",
+                    source.len(),
+                    MAX_SOURCE_BYTES,
+                ),
+            )
+            .with_parse_code("file_too_large"),
+        ],
+        file_comment: None,
+        truncated: true,
+        status: FileParseStatus::Failed,
+    })
 }
 
 #[cfg(test)]
@@ -75,6 +87,29 @@ mod tests {
                 ..
             }
         ) || expression.children().into_iter().any(contains_pipeline)
+    }
+
+    #[test]
+    fn a_parser_error_before_any_item_is_recovered_not_failed() {
+        let result = super::build_ast_recovering(")", 0);
+
+        assert!(!result.errors.is_empty() && result.ast.is_empty());
+        assert_eq!(result.status, super::FileParseStatus::Recovered);
+    }
+
+    #[test]
+    fn a_lexer_failure_is_the_only_recovering_failure() {
+        let result = super::build_ast_recovering("fn main() { \"unterminated }", 0);
+
+        assert_eq!(result.status, super::FileParseStatus::Failed);
+    }
+
+    #[test]
+    fn a_strict_parse_error_discards_the_ast() {
+        let result = super::build_ast("fn valid() {}\nfn broken(", 0);
+
+        assert!(result.ast.is_empty());
+        assert_eq!(result.status, super::FileParseStatus::Failed);
     }
 
     #[test]

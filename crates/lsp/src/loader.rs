@@ -6,8 +6,9 @@ use std::sync::{PoisonError, RwLock, RwLockWriteGuard};
 use crate::protocol::Url;
 use semantics::loader::{DiscoveredPackages, FileContent, Files, Loader};
 
-use crate::paths::{ENTRY_PACKAGE_ID, package_id_to_dir, uri_to_package_file};
+use crate::paths::{ENTRY_PACKAGE_ID, package_id_to_dir, source_package_dir, uri_to_package_file};
 use crate::project::{ProjectConfig, find_project_root, resolve_script_root};
+use crate::state::AnalysisKey;
 
 pub(crate) struct ProjectState {
     loader: RwLock<Option<OverlayLoader>>,
@@ -15,8 +16,7 @@ pub(crate) struct ProjectState {
 
 pub(crate) struct ProjectAnalysis {
     pub(crate) config: ProjectConfig,
-    pub(crate) package_id: String,
-    pub(crate) filename: String,
+    pub(crate) entry_dir: PathBuf,
     pub(crate) external_test: bool,
     pub(crate) loader: AnalysisLoader,
 }
@@ -68,31 +68,48 @@ impl ProjectState {
         true
     }
 
-    pub(crate) fn for_analysis(&self, uri: &Url) -> Option<ProjectAnalysis> {
+    pub(crate) fn config_for(&self, uri: &Url) -> Option<ProjectConfig> {
         let guard = self.loader_for(uri)?;
         let project = guard.as_ref().expect("loader_for initializes the loader");
-        let (package_id, filename, external_test) = uri_to_package_file(&project.config, uri)?;
+        Some(project.config.clone())
+    }
 
-        let (entry_package_path, external_test_root) = if external_test {
-            (
-                package_id_to_dir(&project.config, ENTRY_PACKAGE_ID),
+    pub(crate) fn for_key(&self, key: &AnalysisKey) -> Option<ProjectAnalysis> {
+        let guard = match key {
+            AnalysisKey::Document { uri } => self.loader_for(uri)?,
+            AnalysisKey::Package { .. } => {
+                self.loader.write().unwrap_or_else(PoisonError::into_inner)
+            }
+        };
+        let project = guard.as_ref()?;
+
+        let (entry_dir, external_test_root, external_test) = match key {
+            AnalysisKey::Package {
+                external_test: true,
+                package_id,
+            } => (
+                source_package_dir(&project.config, ENTRY_PACKAGE_ID),
                 Some(package_id.clone()),
-            )
-        } else {
-            let dir = uri
-                .to_file_path()
-                .ok()
-                .and_then(|path| path.parent().map(Path::to_path_buf))
-                .unwrap_or_else(|| package_id_to_dir(&project.config, &package_id));
-            (dir, None)
+                true,
+            ),
+            AnalysisKey::Package {
+                external_test: false,
+                package_id,
+            } => (source_package_dir(&project.config, package_id), None, false),
+            AnalysisKey::Document { uri } => {
+                let dir = uri
+                    .to_file_path()
+                    .ok()
+                    .and_then(|path| path.parent().map(Path::to_path_buf))?;
+                (dir, None, false)
+            }
         };
 
         Some(ProjectAnalysis {
             config: project.config.clone(),
-            package_id,
-            filename,
+            entry_dir: entry_dir.clone(),
             external_test,
-            loader: project.for_analysis(entry_package_path, external_test_root),
+            loader: project.for_analysis(entry_dir, external_test_root),
         })
     }
 }
@@ -250,15 +267,22 @@ mod tests {
         let project = ProjectState::new();
         project.update_overlay(&first_uri, "memory".to_string());
 
-        let analysis = project.for_analysis(&first_uri).unwrap();
+        let key = AnalysisKey::Document {
+            uri: first_uri.clone(),
+        };
+        let analysis = project.for_key(&key).unwrap();
         assert_eq!(
             analysis.loader.scan_folder(ENTRY_PACKAGE_ID)["main.lis"].source,
             "memory"
         );
-        assert!(project.for_analysis(&second_uri).is_none());
+        assert_eq!(
+            project.config_for(&second_uri).unwrap().root(),
+            first_root,
+            "the loader stays rooted where it was initialized"
+        );
 
         assert!(project.remove_overlay(&first_uri));
-        let analysis = project.for_analysis(&first_uri).unwrap();
+        let analysis = project.for_key(&key).unwrap();
         assert_eq!(
             analysis.loader.scan_folder(ENTRY_PACKAGE_ID)["main.lis"].source,
             "disk"

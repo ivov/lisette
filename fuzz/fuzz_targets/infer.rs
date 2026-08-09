@@ -9,7 +9,7 @@ fuzz_target!(|data: &[u8]| {
     };
 
     let mut ast_result = lisette_syntax::build_ast(source, 0);
-    if ast_result.failed() {
+    if ast_result.has_errors() {
         return;
     }
 

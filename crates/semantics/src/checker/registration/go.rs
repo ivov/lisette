@@ -29,7 +29,7 @@ impl TaskState {
         let filename = format!("{}.d.lis", package_id.replace('/', "_"));
 
         let build_result = syntax::build_ast(source, file_id);
-        if build_result.failed() {
+        if build_result.has_errors() {
             let discarded = cache_path.as_deref().is_some_and(|path| {
                 locator.discard_typedef(path);
                 !path.exists()

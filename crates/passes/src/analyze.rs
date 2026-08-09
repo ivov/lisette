@@ -3,6 +3,7 @@ use std::sync::Arc;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::LisetteDiagnostic;
+use syntax::FileParseStatus;
 use syntax::ast::BindingId;
 use syntax::program::{EmitInput, MutationInfo, UnusedInfo, is_internal_package_id};
 
@@ -22,6 +23,7 @@ pub struct Analysis {
     usages: HashSet<Usage>,
     diagnostics: Vec<LisetteDiagnostic>,
     entry_parse_status: semantics::EntryParseStatus,
+    parse_statuses: HashMap<u32, FileParseStatus>,
 }
 
 impl Analysis {
@@ -66,6 +68,13 @@ impl Analysis {
 
     pub fn has_parse_errors(&self) -> bool {
         self.entry_parse_status != semantics::EntryParseStatus::Clean
+    }
+
+    pub fn parse_status(&self, file_id: u32) -> FileParseStatus {
+        self.parse_statuses
+            .get(&file_id)
+            .copied()
+            .unwrap_or_default()
     }
 
     pub fn entry_parse_failed(&self) -> bool {
@@ -157,6 +166,7 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
         }
     }
 
+    let parse_statuses = store.parse_statuses.clone();
     let mut files = HashMap::default();
     let mut definitions = HashMap::default();
 
@@ -207,6 +217,7 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
         usages,
         diagnostics: order_diagnostics_by_severity(all_diagnostics),
         entry_parse_status,
+        parse_statuses,
     }
 }
 
@@ -263,6 +274,7 @@ mod tests {
             locator: &locator,
             go_module: "",
             disable_cache: true,
+            recover_target: semantics::RecoverTarget::None,
         });
 
         let value_span = analysis

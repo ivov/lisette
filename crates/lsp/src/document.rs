@@ -4,18 +4,65 @@ use std::time::Duration;
 
 use crate::protocol::Url;
 
-use crate::state::{CancellationToken, DocumentState, SharedState};
+use crate::state::{AnalysisKey, CancellationToken, DocumentState, SharedState};
 
 impl SharedState {
-    pub(crate) fn update_document(&self, uri: Url, content: String, version: i32) {
+    pub(crate) fn open_document(self: &Arc<Self>, uri: Url, content: String, version: i32) {
+        let mut workspace = self.workspace_mut();
         self.project.update_overlay(&uri, content.clone());
-
-        let mut documents = self.documents_mut();
-        if let Some(document) = documents.get_mut(&uri) {
-            document.update(content, version);
-        } else {
-            documents.insert(uri, DocumentState::new(content, version));
+        let key = self.key_for(&uri);
+        workspace
+            .documents
+            .insert(uri, DocumentState::new(content, version));
+        if let Some(key) = key {
+            workspace.ensure(&key);
         }
+        workspace.invalidate_all();
+        drop(workspace);
+
+        self.reschedule_all();
+    }
+
+    pub(crate) fn change_document(self: &Arc<Self>, uri: Url, content: String, version: i32) {
+        let mut workspace = self.workspace_mut();
+        self.project.update_overlay(&uri, content.clone());
+        let key = self.key_for(&uri);
+        match workspace.documents.get_mut(&uri) {
+            Some(document) => document.update(content, version),
+            None => {
+                workspace
+                    .documents
+                    .insert(uri.clone(), DocumentState::new(content, version));
+            }
+        }
+        if let Some(key) = key {
+            workspace.ensure(&key);
+        }
+        workspace.invalidate_all();
+        drop(workspace);
+
+        self.reschedule_all();
+    }
+
+    pub(crate) fn close_document(self: &Arc<Self>, uri: &Url) {
+        let mut workspace = self.workspace_mut();
+        let key = self.key_for(uri);
+        self.project.remove_overlay(uri);
+        workspace.documents.remove(uri);
+        if let Some(key) = key {
+            let still_open = workspace
+                .documents
+                .keys()
+                .any(|open| self.key_for(open).as_ref() == Some(&key));
+            if !still_open {
+                workspace.evict(&key);
+            }
+        }
+        workspace.invalidate_all();
+        drop(workspace);
+
+        self.client.publish_diagnostics(uri.clone(), vec![], None);
+        self.reschedule_all();
     }
 
     pub(crate) fn publish_diagnostics(&self, uri: Url) {
@@ -27,53 +74,60 @@ impl SharedState {
             return;
         }
 
-        let version = self.documents().get(&uri).map(DocumentState::version);
+        let (version, generation) = {
+            let workspace = self.workspace();
+            let Some(document) = workspace.documents.get(&uri) else {
+                return;
+            };
+            (document.version(), workspace.generation())
+        };
 
-        let Some(diagnostics) = self.analyze_and_convert(&uri) else {
+        let Some(diagnostics) = self.diagnostics_for(&uri) else {
             return;
         };
 
-        let current_version = self.documents().get(&uri).map(DocumentState::version);
-        if version != current_version {
-            return; // Discard stale results
-        }
-
-        self.client.publish_diagnostics(uri, diagnostics, version);
-    }
-
-    pub(crate) fn recheck_open_documents(self: &Arc<Self>) {
-        let mut documents = self.documents_mut();
-        let mut uris = Vec::with_capacity(documents.len());
-        for (uri, document) in documents.iter_mut() {
-            document.invalidate_analysis();
-            uris.push(uri.clone());
-        }
-        drop(documents);
-        for uri in uris {
-            self.schedule_diagnostics(uri);
-        }
-    }
-
-    fn schedule_diagnostics(self: &Arc<Self>, uri: Url) {
-        let mut documents = self.documents_mut();
-        let Some(document) = documents.get_mut(&uri) else {
+        let workspace = self.workspace();
+        if workspace.generation() != generation || !workspace.documents.contains_key(&uri) {
             return;
-        };
+        }
+        self.client
+            .publish_diagnostics(uri, diagnostics, Some(version));
+    }
 
+    fn reschedule_all(self: &Arc<Self>) {
+        let keys = self.workspace().keys();
+        for key in keys {
+            self.schedule_diagnostics(key);
+        }
+    }
+
+    fn schedule_diagnostics(self: &Arc<Self>, key: AnalysisKey) {
         let state = Arc::clone(self);
-        let diagnostics_uri = uri.clone();
         let token = CancellationToken::new();
         let run_token = token.clone();
+        let run_key = key.clone();
         thread::spawn(move || {
             thread::sleep(Duration::from_millis(300));
             if run_token.is_cancelled() {
                 return;
             }
-            state.publish_diagnostics(diagnostics_uri.clone());
-            if let Some(document) = state.documents_mut().get_mut(&diagnostics_uri) {
-                document.finish_diagnostics(&run_token);
+            for uri in state.documents_for(&run_key) {
+                if run_token.is_cancelled() {
+                    return;
+                }
+                state.publish_diagnostics(uri);
             }
+            state
+                .workspace_mut()
+                .finish_diagnostics(&run_key, &run_token);
         });
-        document.set_pending_diagnostics(token);
+        self.workspace_mut().set_pending_diagnostics(&key, token);
+    }
+
+    fn documents_for(&self, key: &AnalysisKey) -> Vec<Url> {
+        let uris: Vec<Url> = self.workspace().documents.keys().cloned().collect();
+        uris.into_iter()
+            .filter(|uri| self.key_for(uri).as_ref() == Some(key))
+            .collect()
     }
 }

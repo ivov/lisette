@@ -61,7 +61,7 @@ impl TestPipeline {
         }
 
         let parse_result = Parser::new(lex_result.tokens, &self.source).parse();
-        if parse_result.failed() {
+        if parse_result.has_errors() {
             panic!("Parsing failed in test: {:?}", parse_result.errors);
         }
 
