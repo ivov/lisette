@@ -14,7 +14,7 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test(a, b bool) string {
-	subject_1 := lisette.MakeTuple2(a, b)
+	subject_1 := lisette.MakeTuple2[bool, bool](a, b)
 	if (subject_1.First && subject_1.Second) || (!subject_1.First && !subject_1.Second) {
 		return "same"
 	}

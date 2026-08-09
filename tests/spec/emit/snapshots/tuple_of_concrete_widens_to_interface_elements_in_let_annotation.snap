@@ -36,7 +36,7 @@ func describe(pair lisette.Tuple2[error, int]) string {
 }
 
 func test() {
-	tup_1 := lisette.MakeTuple2(Boom{}, 1)
+	tup_1 := lisette.MakeTuple2[Boom, int](Boom{}, 1)
 	widened := lisette.MakeTuple2[error, int](tup_1.First, tup_1.Second)
 	if describe(widened) != "boom" {
 		panic("annotated tuple binding lost its interface elements")

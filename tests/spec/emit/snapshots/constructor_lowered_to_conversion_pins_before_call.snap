@@ -24,6 +24,6 @@ func run() int {
 		return v
 	}
 	_v_1 := Box(x)
-	r := lisette.MakeTuple2(_v_1, bump(5))
+	r := lisette.MakeTuple2[Box, int](_v_1, bump(5))
 	return int(r.First) + r.Second
 }

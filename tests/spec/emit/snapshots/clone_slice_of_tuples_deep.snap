@@ -18,12 +18,12 @@ import (
 )
 
 func main() {
-	a := []lisette.Tuple2[int, []int]{lisette.MakeTuple2(1, []int{2, 3})}
+	a := []lisette.Tuple2[int, []int]{lisette.MakeTuple2[int, []int](1, []int{2, 3})}
 	b := lisette.SliceCloneFunc(a, func(e_1 lisette.Tuple2[int, []int]) lisette.Tuple2[int, []int] {
 		e_1.Second = slices.Clone(e_1.Second)
 		return e_1
 	})
-	b[0] = lisette.MakeTuple2(4, []int{5})
+	b[0] = lisette.MakeTuple2[int, []int](4, []int{5})
 	_ = a
 	_ = b
 }

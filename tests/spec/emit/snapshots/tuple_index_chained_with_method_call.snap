@@ -12,7 +12,7 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test() (int, bool) {
-	items := lisette.MakeTuple2([]int{1, 2, 3}, []int{4, 5, 6})
+	items := lisette.MakeTuple2[[]int, []int]([]int{1, 2, 3}, []int{4, 5, 6})
 	v_1 := lisette.SliceGet(items.First, 0)
 	if v_1.Tag == lisette.OptionSome {
 		return v_1.SomeVal, true

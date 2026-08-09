@@ -16,7 +16,7 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test() int {
-	pair := lisette.MakeTuple2(1, 2)
+	pair := lisette.MakeTuple2[int, int](1, 2)
 	if pair.First == 0 && pair.Second == 0 {
 		return 0
 	} else if pair.First == 1 && pair.Second == 2 {

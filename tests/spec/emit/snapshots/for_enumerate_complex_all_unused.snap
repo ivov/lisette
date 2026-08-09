@@ -14,7 +14,10 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test() {
-	items := []lisette.Tuple2[int, int]{lisette.MakeTuple2(1, 2), lisette.MakeTuple2(3, 4)}
+	items := []lisette.Tuple2[int, int]{
+		lisette.MakeTuple2[int, int](1, 2),
+		lisette.MakeTuple2[int, int](3, 4),
+	}
 	for key_1, value_2 := range items {
 		_ = value_2
 		_ = key_1

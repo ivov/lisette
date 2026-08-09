@@ -21,7 +21,7 @@ type Box struct {
 }
 
 func main() {
-	m := lisette.MapFrom([]lisette.Tuple2[string, Box]{lisette.MakeTuple2("k", Box{x: 0})})
+	m := lisette.MapFrom([]lisette.Tuple2[string, Box]{lisette.MakeTuple2[string, Box]("k", Box{x: 0})})
 	r := &m
 	entry := (*r)["k"]
 	entry.x = 1

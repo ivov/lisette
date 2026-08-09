@@ -63,7 +63,7 @@ func eval(e E) int {
 }
 
 func test() {
-	if eval(MakeEB(lisette.MakeTuple2(4, 9))) != 4 {
+	if eval(MakeEB(lisette.MakeTuple2[int, int](4, 9))) != 4 {
 		panic("bad")
 	}
 }

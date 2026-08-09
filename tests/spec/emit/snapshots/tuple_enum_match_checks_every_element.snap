@@ -55,7 +55,7 @@ type Hand struct {
 }
 
 func (h Hand) LeftRight(other Hand) bool {
-	subject_1 := lisette.MakeTuple2(h, other)
+	subject_1 := lisette.MakeTuple2[Hand, Hand](h, other)
 	if subject_1.First.Tag == HandLeft {
 		if subject_1.Second.Tag == HandRight {
 			return true
@@ -66,7 +66,7 @@ func (h Hand) LeftRight(other Hand) bool {
 }
 
 func (h Hand) LeftLeft(other Hand) bool {
-	subject_1 := lisette.MakeTuple2(h, other)
+	subject_1 := lisette.MakeTuple2[Hand, Hand](h, other)
 	if subject_1.First.Tag == HandLeft {
 		if subject_1.Second.Tag == HandLeft {
 			return true
@@ -77,7 +77,7 @@ func (h Hand) LeftLeft(other Hand) bool {
 }
 
 func (h Hand) Eq(other Hand) bool {
-	subject_1 := lisette.MakeTuple2(h, other)
+	subject_1 := lisette.MakeTuple2[Hand, Hand](h, other)
 	switch subject_1.First.Tag {
 	case HandLeft:
 		if subject_1.Second.Tag == HandLeft {

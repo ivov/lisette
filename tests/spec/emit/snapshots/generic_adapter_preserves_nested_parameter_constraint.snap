@@ -58,7 +58,7 @@ func pass[K comparable, V any](b Bar[map[K]V]) {
 }
 
 func main() {
-	pass(Bar[map[string]int]{m: lisette.MapFrom([]lisette.Tuple2[string, int]{lisette.MakeTuple2("a", 1)})})
+	pass(Bar[map[string]int]{m: lisette.MapFrom([]lisette.Tuple2[string, int]{lisette.MakeTuple2[string, int]("a", 1)})})
 }
 
 type _lisAdapter_Bar_Box_0[K comparable, V any] struct {

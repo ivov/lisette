@@ -1,0 +1,18 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	runes := []lisette.Tuple2[int, int]{lisette.MakeTuple2[int, int]('A', 2)}
+	wide := []lisette.Tuple2[float64, int]{lisette.MakeTuple2[float64, int](90071992547409, 1)}
+	narrow := []lisette.Tuple2[uint8, int]{lisette.MakeTuple2[uint8, int](200, 1)}
+	single := []lisette.Tuple2[float32, int]{lisette.MakeTuple2[float32, int](1.5, 1)}
+	fmt.Println(runes, wide, narrow, single)
+}

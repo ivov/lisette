@@ -15,7 +15,7 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test() int {
-	nested := lisette.MakeTuple2(lisette.MakeTuple2(1, 2), 3)
+	nested := lisette.MakeTuple2[lisette.Tuple2[int, int], int](lisette.MakeTuple2[int, int](1, 2), 3)
 	if nested.First.First == 1 && nested.First.Second == 2 && nested.Second == 3 {
 		return 6
 	}

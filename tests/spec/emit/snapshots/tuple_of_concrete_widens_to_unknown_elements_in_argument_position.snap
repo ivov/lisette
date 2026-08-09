@@ -28,7 +28,7 @@ func describe(pair lisette.Tuple2[int, any]) string {
 }
 
 func test() {
-	tup_1 := lisette.MakeTuple2(1, "two")
+	tup_1 := lisette.MakeTuple2[int, string](1, "two")
 	if describe(lisette.MakeTuple2[int, any](tup_1.First, tup_1.Second)) != "two" {
 		panic("tuple argument lost its Unknown element")
 	}
