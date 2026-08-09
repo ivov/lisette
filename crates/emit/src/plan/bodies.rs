@@ -428,6 +428,15 @@ pub(crate) enum ElseArm {
     },
 }
 
+impl ElseArm {
+    pub(crate) fn from_body(body: LoweredBlock, inline: bool) -> Self {
+        if body.renders_empty() {
+            return ElseArm::None;
+        }
+        ElseArm::Else { body, inline }
+    }
+}
+
 impl LoweredBlock {
     /// Whether the block's last rendered line is `break`, `continue`,
     /// `return`, or `panic(...)`.

@@ -52,6 +52,5 @@ func main() {
 	if ret_2 == nil {
 		n := ret_1
 		_ = n
-	} else {
 	}
 }

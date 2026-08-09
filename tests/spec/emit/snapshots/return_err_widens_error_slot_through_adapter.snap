@@ -47,7 +47,6 @@ func main() {
 	_, ret_1 := bail()
 	if ret_1 == nil {
 		panic("expected error")
-	} else {
 	}
 }
 

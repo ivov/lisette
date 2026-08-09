@@ -58,6 +58,5 @@ func main() {
 	r := result_5
 	if r.Tag == lisette.ResultOk {
 		_ = r.OkVal
-	} else {
 	}
 }

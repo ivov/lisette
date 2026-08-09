@@ -26,6 +26,5 @@ func main() {
 	r := option_1
 	if r.Tag == lisette.OptionSome {
 		_ = r.SomeVal
-	} else {
 	}
 }

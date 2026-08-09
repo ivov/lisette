@@ -254,10 +254,7 @@ impl Planner<'_> {
             }
         } else {
             let else_arm = match else_block {
-                Some(body) => ElseArm::Else {
-                    body,
-                    inline: false,
-                },
+                Some(body) => ElseArm::from_body(body, false),
                 None => ElseArm::None,
             };
             IfPlan {
@@ -324,10 +321,7 @@ impl Planner<'_> {
         });
 
         let else_arm = match self.build_ok_else_block(ctx) {
-            Some(body) => ElseArm::Else {
-                body,
-                inline: false,
-            },
+            Some(body) => ElseArm::from_body(body, false),
             None => ElseArm::None,
         };
         let receive_vars = format!("{}, {}", receiver_var, ok_var);
@@ -625,10 +619,7 @@ fn build_receive_arms_plan(
             condition_setup: Vec::new(),
             condition: ok_var.to_string(),
             then_body: some,
-            else_arm: ElseArm::Else {
-                body: none,
-                inline: false,
-            },
+            else_arm: ElseArm::from_body(none, false),
         }),
         (Some(some), None) => Some(IfPlan {
             condition_setup: Vec::new(),

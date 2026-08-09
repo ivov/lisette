@@ -33,6 +33,5 @@ func main() {
 	subject_3 := ys[0]
 	if subject_3.Tag == lisette.ResultOk {
 		_ = subject_3.OkVal
-	} else {
 	}
 }

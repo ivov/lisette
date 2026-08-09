@@ -46,6 +46,5 @@ func main() {
 	option_2 := lisette.OptionFromCommaOk[string](lookup("HOME"))
 	if option_2.Tag == lisette.OptionSome {
 		_ = option_2.SomeVal
-	} else {
 	}
 }

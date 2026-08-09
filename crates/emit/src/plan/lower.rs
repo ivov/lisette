@@ -974,13 +974,6 @@ impl Planner<'_> {
         let Some(alternative) = alternative else {
             return ElseArm::None;
         };
-        let is_empty_alternative = match alternative {
-            Expression::Block { items, .. } => items.is_empty(),
-            _ => false,
-        };
-        if is_empty_alternative {
-            return ElseArm::None;
-        }
 
         if let Expression::If {
             condition,
@@ -1030,13 +1023,10 @@ impl Planner<'_> {
         } else if preceding_diverges {
             let body =
                 self.with_binding_frame(|this| this.lower_block_to_place(alternative, place));
-            ElseArm::Else { body, inline: true }
+            ElseArm::from_body(body, true)
         } else {
             let body = self.with_scope(|this| this.lower_block_to_place(alternative, place));
-            ElseArm::Else {
-                body,
-                inline: false,
-            }
+            ElseArm::from_body(body, false)
         }
     }
 }

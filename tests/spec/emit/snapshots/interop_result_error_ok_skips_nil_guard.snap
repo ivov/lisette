@@ -20,6 +20,5 @@ func main() {
 	if ret_2 == nil {
 		stored := ret_1
 		_ = stored
-	} else {
 	}
 }
