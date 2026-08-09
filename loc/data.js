@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786271446734,
+  "lastUpdate": 1786276246240,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -20868,6 +20868,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "deps",
             "value": 1826,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 713,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7823,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f3ce3d65ef50cda8b1664d80bf9129ba40fb4744",
+          "message": "refactor: make bindgen failure messages clearer (#1239)",
+          "timestamp": "2026-08-09T13:50:25+02:00",
+          "tree_id": "1d2d6de7363c2a80df293b87a7d2e251057022ed",
+          "url": "https://github.com/ivov/lisette/commit/f3ce3d65ef50cda8b1664d80bf9129ba40fb4744"
+        },
+        "date": 1786276245371,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 129908,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30442,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 25904,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18583,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14124,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 12980,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 7749,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5943,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2901,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1830,
             "unit": "lines"
           },
           {
