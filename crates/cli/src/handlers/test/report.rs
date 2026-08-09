@@ -1100,7 +1100,7 @@ fn render_failure(
     } else {
         let label = match values.as_slice() {
             [] => record.message.clone(),
-            [only] => only.clone(),
+            [only] => format!("`{}`", only),
             _ => stacked_operand_label(&record.operands, &values),
         };
         diagnostic = diagnostic.with_span_primary_label(&span, label);
@@ -1145,7 +1145,7 @@ fn stacked_operand_label(operands: &[Operand], values: &[String]) -> String {
         .zip(values)
         .map(|(operand, value)| {
             let token = format!("{}:", operand.label);
-            format!("{token:<label_width$} {value}")
+            format!("{token:<label_width$} `{value}`")
         })
         .collect::<Vec<_>>()
         .join("\n")
