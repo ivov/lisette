@@ -324,15 +324,15 @@ impl Planner<'_> {
             then_body: LoweredBlock {
                 statements: then_body,
             },
-            else_arm: ElseArm::Else {
-                body: LoweredBlock {
+            else_arm: ElseArm::from_body(
+                LoweredBlock {
                     statements: vec![LoweredStatement::Break(
                         self.current_loop_id()
                             .map_or(LoopTransfer::Unlabeled, LoopTransfer::Source),
                     )],
                 },
-                inline: false,
-            },
+                false,
+            ),
         }));
 
         let plan = self.build_source_loop(
@@ -702,10 +702,7 @@ impl Planner<'_> {
             },
         );
         let else_arm = match failure(self) {
-            Some(body) => ElseArm::Else {
-                body,
-                inline: false,
-            },
+            Some(body) => ElseArm::from_body(body, false),
             None => ElseArm::None,
         };
         statements.push(LoweredStatement::If(IfPlan {
@@ -788,10 +785,7 @@ fn assemble_if_else_chain(
     mut pieces: Vec<(String, LoweredBlock)>,
     terminal: LoweredBlock,
 ) -> LoweredStatement {
-    let mut else_arm = ElseArm::Else {
-        body: terminal,
-        inline: false,
-    };
+    let mut else_arm = ElseArm::from_body(terminal, false);
     while pieces.len() > 1 {
         let (condition, then_body) = pieces.pop().expect("len > 1");
         else_arm = ElseArm::ElseIf(Box::new(IfPlan {

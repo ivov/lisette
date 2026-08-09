@@ -86,7 +86,12 @@ fn walk_else(arm: &ElseArm, issues: &mut Vec<String>, path: &str) {
     match arm {
         ElseArm::None => {}
         ElseArm::ElseIf(plan) => walk_if(plan, issues, path),
-        ElseArm::Else { body, .. } => walk_block(body, issues, path),
+        ElseArm::Else { body, .. } => {
+            if body.renders_empty() {
+                issues.push(format!("{}: else arm renders no output", path));
+            }
+            walk_block(body, issues, path)
+        }
     }
 }
 

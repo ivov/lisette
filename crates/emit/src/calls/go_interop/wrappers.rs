@@ -360,10 +360,7 @@ impl Planner<'_> {
                     &sink,
                     &format!("{PARTIAL_ERR_CTOR}[{type_params}]({err_var})"),
                 ),
-                else_arm: ElseArm::Else {
-                    body: both_body,
-                    inline: false,
-                },
+                else_arm: ElseArm::from_body(both_body, false),
             };
             LoweredBlock {
                 statements: vec![LoweredStatement::If(inner)],
@@ -372,10 +369,7 @@ impl Planner<'_> {
             both_body
         };
 
-        let else_arm = ElseArm::Else {
-            body: ok_body,
-            inline: false,
-        };
+        let else_arm = ElseArm::from_body(ok_body, false);
 
         statements.push(LoweredStatement::If(IfPlan {
             condition_setup: Vec::new(),
@@ -493,16 +487,10 @@ impl Planner<'_> {
                 condition_setup: Vec::new(),
                 condition: nil_condition,
                 then_body: leaf_block(&sink, &nil_err),
-                else_arm: ElseArm::Else {
-                    body: ok_body,
-                    inline: false,
-                },
+                else_arm: ElseArm::from_body(ok_body, false),
             }))
         } else {
-            ElseArm::Else {
-                body: ok_body,
-                inline: false,
-            }
+            ElseArm::from_body(ok_body, false)
         };
 
         statements.push(LoweredStatement::If(IfPlan {
@@ -566,10 +554,7 @@ impl Planner<'_> {
             let mut fe = FalliblePlanner::new(self, fallible);
             fe.emit_success("struct{}{}")
         };
-        let else_arm = ElseArm::Else {
-            body: leaf_block(&sink, &ok_wrapper),
-            inline: false,
-        };
+        let else_arm = ElseArm::from_body(leaf_block(&sink, &ok_wrapper), false);
 
         statements.push(LoweredStatement::If(IfPlan {
             condition_setup: Vec::new(),

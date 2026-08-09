@@ -28,6 +28,5 @@ func main() {
 	}
 	if option_4.Tag == lisette.OptionSome {
 		_ = len(option_4.SomeVal)
-	} else {
 	}
 }

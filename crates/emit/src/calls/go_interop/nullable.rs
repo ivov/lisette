@@ -130,10 +130,7 @@ impl Planner<'_> {
             then_body: LoweredBlock {
                 statements: payload_setup,
             },
-            else_arm: ElseArm::Else {
-                body: leaf_block(&sink, &none_wrapper),
-                inline: false,
-            },
+            else_arm: ElseArm::from_body(leaf_block(&sink, &none_wrapper), false),
         }));
         (statements, outcome)
     }
@@ -407,12 +404,12 @@ impl Planner<'_> {
             then_body: LoweredBlock {
                 statements: then_statements,
             },
-            else_arm: ElseArm::Else {
-                body: LoweredBlock {
+            else_arm: ElseArm::from_body(
+                LoweredBlock {
                     statements: vec![LoweredStatement::RawGo(format!("{option} = {none}\n"))],
                 },
-                inline: false,
-            },
+                false,
+            ),
         }));
         option
     }
@@ -521,14 +518,14 @@ impl Planner<'_> {
                 )));
                 let needs_nil_else = matches!(source_layout, ValueLayout::Map { .. }) || pointer;
                 let else_arm = if needs_nil_else {
-                    ElseArm::Else {
-                        body: LoweredBlock {
+                    ElseArm::from_body(
+                        LoweredBlock {
                             statements: vec![LoweredStatement::RawGo(format!(
                                 "{output}[{index}] = nil\n"
                             ))],
                         },
-                        inline: false,
-                    }
+                        false,
+                    )
                 } else {
                     ElseArm::None
                 };
@@ -589,14 +586,14 @@ impl Planner<'_> {
                         then_body: LoweredBlock {
                             statements: then_statements,
                         },
-                        else_arm: ElseArm::Else {
-                            body: LoweredBlock {
+                        else_arm: ElseArm::from_body(
+                            LoweredBlock {
                                 statements: vec![LoweredStatement::RawGo(format!(
                                     "{output}[{index}] = {none}\n"
                                 ))],
                             },
-                            inline: false,
-                        },
+                            false,
+                        ),
                     })],
                 }
             }

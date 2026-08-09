@@ -39,7 +39,6 @@ func test() {
 			result_3 = lisette.MakeResultOk[int, error](ret_1)
 		}
 		if result_3.IsOk() {
-		} else {
 		}
 	}
 }

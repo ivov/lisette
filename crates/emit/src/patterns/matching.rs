@@ -221,10 +221,7 @@ impl Planner<'_> {
             condition_setup: Vec::new(),
             condition,
             then_body,
-            else_arm: ElseArm::Else {
-                body: else_body,
-                inline: false,
-            },
+            else_arm: ElseArm::from_body(else_body, false),
         }));
         Some(statements)
     }
@@ -316,16 +313,10 @@ impl Planner<'_> {
                     condition_setup: Vec::new(),
                     condition: check,
                     then_body: err_body,
-                    else_arm: ElseArm::Else {
-                        body: both_body,
-                        inline: false,
-                    },
+                    else_arm: ElseArm::from_body(both_body, false),
                 }))
             }
-            None => ElseArm::Else {
-                body: both_body,
-                inline: false,
-            },
+            None => ElseArm::from_body(both_body, false),
         };
 
         statements.push(LoweredStatement::If(IfPlan {

@@ -64,6 +64,5 @@ func main() {
 	if ret_2 == nil {
 		v := ret_1
 		_ = v
-	} else {
 	}
 }

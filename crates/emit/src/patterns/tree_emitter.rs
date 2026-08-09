@@ -597,20 +597,14 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         if preceding_diverges {
             let mut body: Vec<LoweredStatement> = Vec::new();
             self.walk(&mut body, decision, ctx);
-            return ElseArm::Else {
-                body: LoweredBlock { statements: body },
-                inline: true,
-            };
+            return ElseArm::from_body(LoweredBlock { statements: body }, true);
         }
         let body = self.with_scope(|this| {
             let mut body: Vec<LoweredStatement> = Vec::new();
             this.walk(&mut body, decision, ctx);
             body
         });
-        ElseArm::Else {
-            body: LoweredBlock { statements: body },
-            inline: false,
-        }
+        ElseArm::from_body(LoweredBlock { statements: body }, false)
     }
 
     fn is_empty_leaf(&self, decision: &Decision) -> bool {
