@@ -2,6 +2,55 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.11.2](https://github.com/ivov/lisette/compare/lisette-v0.11.1...lisette-v0.11.2) - 2026-08-09
+
+### Features
+
+- feat: widen concrete error types through `?` [#1237](https://github.com/ivov/lisette/pull/1237) [`a816e9b`](https://github.com/ivov/lisette/commit/a816e9b059331eb40244bbf4a4fab3f6bb3020b4)
+- feat: third-party Go dependencies for scripts [#1234](https://github.com/ivov/lisette/pull/1234) [`3a3ed27`](https://github.com/ivov/lisette/commit/3a3ed27408cedde269f6ac2b2ce397719e80e396)
+- feat: auto-import Go package completions in LSP [#1229](https://github.com/ivov/lisette/pull/1229) [`f5ee837`](https://github.com/ivov/lisette/commit/f5ee837b6e587926bc292684b843c6dd3746b7b2)
+- feat: SSA parameter nilability analysis for bindgen [#1226](https://github.com/ivov/lisette/pull/1226) [`4334810`](https://github.com/ivov/lisette/commit/43348100ae5640427e49f94960ab92d8a62c4d90)
+- feat: allow same-named enum payload fields across variants [#1220](https://github.com/ivov/lisette/pull/1220) [`0e77c71`](https://github.com/ivov/lisette/commit/0e77c71497ffd8cbcc24f035136b454b14f3a075)
+- feat: allow bare constants as match patterns [#1219](https://github.com/ivov/lisette/pull/1219) [`7b80e14`](https://github.com/ivov/lisette/commit/7b80e14fd399926168d8d8c3eb5c866a6cf0045b)
+- feat: shebang line for scripts [#1218](https://github.com/ivov/lisette/pull/1218) [`ff0c6e2`](https://github.com/ivov/lisette/commit/ff0c6e2fa495e1fddb62080194e8cfff12291898)
+- feat: qualify type names in diagnostics [#1214](https://github.com/ivov/lisette/pull/1214) [`894a7d6`](https://github.com/ivov/lisette/commit/894a7d61aca5871de2e3b0145b750b1e7ded8c36)
+- feat: diagnostic for unprefixed f-strings [#1208](https://github.com/ivov/lisette/pull/1208) [`76de974`](https://github.com/ivov/lisette/commit/76de9745ed3bade65f0c286b183f6a3179e5541e)
+- feat: `lis build` and `lis emit` for scripts [#1207](https://github.com/ivov/lisette/pull/1207) [`28d2f13`](https://github.com/ivov/lisette/commit/28d2f13ba74ce6b49b14b882c8ea9f4e67db5458)
+
+### Fixes
+
+- fix: drop `else` arms that render no output [#1240](https://github.com/ivov/lisette/pull/1240) [`23300c4`](https://github.com/ivov/lisette/commit/23300c4d79a33fb2e0f68e21baf07789c4fecacb)
+- fix: prevent cascading parse errors from missing tokens [#1236](https://github.com/ivov/lisette/pull/1236) [`3332ef1`](https://github.com/ivov/lisette/commit/3332ef1f6ada1958936644e7fd35bfe71dcc4cdc)
+- fix: reject dependency paths Go would refuse [#1230](https://github.com/ivov/lisette/pull/1230) [`2dff0c8`](https://github.com/ivov/lisette/commit/2dff0c800dae2f124cea8445987056fb8aa04299)
+- fix: treat `Unknown` as a Go interface when emitting [#1222](https://github.com/ivov/lisette/pull/1222) [`037ddb8`](https://github.com/ivov/lisette/commit/037ddb889f0ed1ca6fddeb7135e9bbdf46ad3ccb)
+- fix: ignore local-only `mut` in function unification [#1223](https://github.com/ivov/lisette/pull/1223) [`6413acf`](https://github.com/ivov/lisette/commit/6413acf1f7d4b53bafdfa04952e483e1d089e5b5)
+- fix: prune a script build dir against its own emit [#1217](https://github.com/ivov/lisette/pull/1217) [`8970c34`](https://github.com/ivov/lisette/commit/8970c340849742c83c88da6cb9933e4a9a245ab3)
+- fix: stop suggesting `let mut` on function parameters [#1212](https://github.com/ivov/lisette/pull/1212) [`55132fd`](https://github.com/ivov/lisette/commit/55132fdb1b98a1df6474dfd3a5fb67e4a9a710b4)
+- fix: suggest `?` in diagnostic only for matching error types [#1211](https://github.com/ivov/lisette/pull/1211) [`671178b`](https://github.com/ivov/lisette/commit/671178b2df91365ddaeec68a046f5adde0caa665)
+- fix: reject dot-named package dirs [#1210](https://github.com/ivov/lisette/pull/1210) [`f67d36d`](https://github.com/ivov/lisette/commit/f67d36d59e304a1e199c9520735e9ce76d4eb27e)
+- fix: anchor import cycle diagnostic on its imports [#1206](https://github.com/ivov/lisette/pull/1206) [`d2625ee`](https://github.com/ivov/lisette/commit/d2625eeb3f80fa02916eb54afa7995ae22de53ec)
+
+### Internals
+
+- refactor: flatten multi-line help in three diagnostics [#1244](https://github.com/ivov/lisette/pull/1244) [`3156b02`](https://github.com/ivov/lisette/commit/3156b02d568f51dbb68a4320f6e556917446ed06)
+- refactor: reshape interface conformance diagnostics [#1243](https://github.com/ivov/lisette/pull/1243) [`988fe65`](https://github.com/ivov/lisette/commit/988fe65ad0b4e45fa4ccc46f7880f101985f3cc4)
+- refactor: color operands in test failure labels [#1241](https://github.com/ivov/lisette/pull/1241) [`af53422`](https://github.com/ivov/lisette/commit/af534224f9a277ff515cffc77c8afea21f43ffea)
+- refactor: make bindgen failure messages clearer [#1239](https://github.com/ivov/lisette/pull/1239) [`f3ce3d6`](https://github.com/ivov/lisette/commit/f3ce3d65ef50cda8b1664d80bf9129ba40fb4744)
+- perf: share one LSP analysis per package [#1238](https://github.com/ivov/lisette/pull/1238) [`93ae3e6`](https://github.com/ivov/lisette/commit/93ae3e6450232b78febfe94679b2d4454fda3a65)
+- refactor: consolidate semantic state into single owners [#1233](https://github.com/ivov/lisette/pull/1233) [`b14b667`](https://github.com/ivov/lisette/commit/b14b6673fe4c6098db47e735f272b2fb603d5d01)
+- refactor: resolve script imports from declared dependencies [#1232](https://github.com/ivov/lisette/pull/1232) [`f4601b1`](https://github.com/ivov/lisette/commit/f4601b11f2cd6ead96573e9f8a1c09c318d20eff)
+- refactor: separate manifest writes from reconciliation [#1231](https://github.com/ivov/lisette/pull/1231) [`4d22a43`](https://github.com/ivov/lisette/commit/4d22a43e3c050a831f5d72dc3630e452c538cc1c)
+- refactor: move the typedef package directive into stdlib [#1228](https://github.com/ivov/lisette/pull/1228) [`d5d1b38`](https://github.com/ivov/lisette/commit/d5d1b380fb7721186ad4b60875583f48bed0fffd)
+- perf: index file IDs by owning package in large stores [#1227](https://github.com/ivov/lisette/pull/1227) [`e588a41`](https://github.com/ivov/lisette/commit/e588a41009417550f604d432823077bf17e81a94)
+- refactor: move brace scanning into lexer [#1216](https://github.com/ivov/lisette/pull/1216) [`c6917d2`](https://github.com/ivov/lisette/commit/c6917d2fc4740fd5f5847bc1f51cbc3a48129bab)
+- test: locate `lis` binary via cargo in `lis learn` test [#1213](https://github.com/ivov/lisette/pull/1213) [`18b3f84`](https://github.com/ivov/lisette/commit/18b3f84d5487da0130356dcea2a4e0857e5982b9)
+- refactor: align package and module terminology with Go [#1209](https://github.com/ivov/lisette/pull/1209) [`251750a`](https://github.com/ivov/lisette/commit/251750a8e1eb3b39a6da4db8d6a108698170cbc6)
+- docs: update stale type param bounds section [#1205](https://github.com/ivov/lisette/pull/1205) [`350e190`](https://github.com/ivov/lisette/commit/350e190dc2e75af07b60e2bf500317686c7ee717)
+- refactor: consolidate type-argument scanning [#1203](https://github.com/ivov/lisette/pull/1203) [`86afd24`](https://github.com/ivov/lisette/commit/86afd242fc2dee3dd21a3c555bb0effb8828e4d9)
+- ci: mark breaking release via PR label [#1201](https://github.com/ivov/lisette/pull/1201) [`0a7fe2b`](https://github.com/ivov/lisette/commit/0a7fe2b72e5803efc084a523a578131e2fb26907)
+- refactor: rename single-file compilation from standalone to script [#1199](https://github.com/ivov/lisette/pull/1199) [`c55b6a6`](https://github.com/ivov/lisette/commit/c55b6a6bcc616ffb3d17a7413dc642abcaa6d68d)
+
+
 ## [0.11.1](https://github.com/ivov/lisette/compare/lisette-v0.11.0...lisette-v0.11.1) - 2026-08-02
 
 ### Fixes
