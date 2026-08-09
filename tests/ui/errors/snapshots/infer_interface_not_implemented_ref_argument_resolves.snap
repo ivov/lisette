@@ -1,15 +1,15 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Interface not implemented
+  ✕ `Sink` does not implement `Writer`
    ╭─[test.lis:8:15]
  7 │   let mut sink = Sink {}
  8 │   fmt.Fprintf(&sink, "x")
    ·               ──┬──
-   ·                 ╰── `Sink` does not implement `Writer`
+   ·                 ╰── `Writer` needed here
  9 │ }
    ╰────
-  help: Missing methods:
-          From `Writer`
-            - Write: fn (Slice<byte>) -> Partial<int, error>
-        code: [infer.interface_not_implemented]
+  help: One method does not satisfy `Writer`:
+        Missing:
+          fn Write(self: Sink, p: Slice<byte>) -> Partial<int, error>
+  code: [infer.interface_not_implemented]

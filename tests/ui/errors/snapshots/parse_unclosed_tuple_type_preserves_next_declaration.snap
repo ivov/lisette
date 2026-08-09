@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·  ╰── expected `)`
  5 │   let _ = 1
    ╰────
-  help:  · code: [parse.unexpected_token]
+  code: [parse.unexpected_token]

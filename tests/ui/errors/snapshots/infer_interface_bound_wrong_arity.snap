@@ -1,15 +1,19 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Interface not implemented
+  ✕ `File` does not implement `Writer`
+    ╭─[test.lis:9:6]
+  8 │ impl File {
+  9 │   fn write(self: File) -> int {
+    ·      ──┬──
+    ·        ╰── `Writer` requires `fn (string) -> int`
+ 10 │     return 0;
+    ╰────
     ╭─[test.lis:19:14]
  18 │ fn test() {
  19 │   use_writer(File { path: "test.txt" })
     ·              ────────────┬────────────
-    ·                          ╰── `File` does not implement `Writer`
+    ·                          ╰── `Writer` needed here
  20 │ }
     ╰────
-  help: Incompatible methods:
-          From `Writer`
-            - write: expected `fn (string) -> int`, found `fn () -> int`
-        code: [infer.interface_not_implemented]
+  help: `Writer` requires `write` to take 1 parameter, not 0 · code: [infer.interface_not_implemented]

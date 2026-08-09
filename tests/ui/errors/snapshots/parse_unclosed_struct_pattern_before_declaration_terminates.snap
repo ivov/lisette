@@ -8,4 +8,4 @@ source: tests/ui/errors/mod.rs
    · ─┬
    ·  ╰── expected identifier
    ╰────
-  help:  · code: [parse.unexpected_token]
+  code: [parse.unexpected_token]

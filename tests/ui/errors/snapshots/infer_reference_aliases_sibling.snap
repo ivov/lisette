@@ -12,4 +12,5 @@ source: tests/ui/errors/mod.rs
     ╰────
   help: Make evaluation order explicit by choosing which value the read should see:
         - for the value before `&total` runs, copy it first with `let before = total` and read `before`
-        - for the value after, bind the reference-taking operand to a variable first, then read `total` · code: [infer.reference_aliases_sibling]
+        - for the value after, bind the reference-taking operand to a variable first, then read `total`
+  code: [infer.reference_aliases_sibling]

@@ -349,7 +349,7 @@ pub interface Wrap<T: box.Box<Plain>> {}
         "import \"wrap\"\n\nfn main() {}\n",
     )
     .unwrap();
-    assert_rejected_at_check(&lis(&project, "check"), "Interface not implemented");
+    assert_rejected_at_check(&lis(&project, "check"), "does not implement");
 }
 
 #[test]
@@ -404,7 +404,7 @@ pub fn call() {
     )
     .unwrap();
 
-    assert_rejected_at_check(&lis(&project, "check"), "Interface not implemented");
+    assert_rejected_at_check(&lis(&project, "check"), "does not implement");
 }
 
 #[test]
@@ -463,7 +463,7 @@ pub fn call() {
     )
     .unwrap();
 
-    assert_rejected_at_check(&lis(&project, "check"), "Interface not implemented");
+    assert_rejected_at_check(&lis(&project, "check"), "does not implement");
 }
 
 #[test]

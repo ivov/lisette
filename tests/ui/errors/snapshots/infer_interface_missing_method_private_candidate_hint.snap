@@ -1,16 +1,16 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Interface not implemented
+  ✕ `Shouter` does not implement `Writer`
     ╭─[test.lis:14:15]
  13 │   let mut shouter = Shouter { written: [] }
  14 │   fmt.Fprintf(&shouter, "x")
     ·               ────┬───
-    ·                   ╰── `Shouter` does not implement `Writer`
+    ·                   ╰── `Writer` needed here
  15 │ }
     ╰────
-  help: Missing methods:
-          From `Writer`
-            - Write: fn (Slice<byte>) -> Partial<int, error>
-              (add `pub` to the private method `write` to satisfy this)
-        code: [infer.interface_not_implemented]
+  help: One method does not satisfy `Writer`:
+        Missing:
+          fn Write(self: Shouter, p: Slice<byte>) -> Partial<int, error>
+            (add `pub` to the private method `write` to satisfy this)
+  code: [infer.interface_not_implemented]

@@ -403,7 +403,7 @@ impl SharedState {
                     let fid = d.file_id();
                     fid == Some(document.file_id) || fid.is_none()
                 })
-                .map(|d| convert_diagnostic(d, document.line_index))
+                .map(|d| convert_diagnostic_in(d, document.line_index, Some(uri)))
                 .collect(),
         )
     }
@@ -442,12 +442,44 @@ fn recover_target(key: &AnalysisKey) -> RecoverTarget {
 }
 
 pub(crate) fn convert_diagnostic(d: &LisetteDiagnostic, index: &LineIndex) -> Diagnostic {
+    convert_diagnostic_in(d, index, None)
+}
+
+fn related_information(
+    d: &LisetteDiagnostic,
+    index: &LineIndex,
+    uri: &Url,
+    anchor_file: Option<u32>,
+) -> Option<Vec<serde_json::Value>> {
+    let related: Vec<serde_json::Value> = d
+        .secondary_labels()
+        .filter(|(span, text)| !text.is_empty() && Some(span.file_id) == anchor_file)
+        .map(|(span, text)| {
+            serde_json::json!({
+                "location": {
+                    "uri": uri.to_string(),
+                    "range": index.span_to_range(span),
+                },
+                "message": text,
+            })
+        })
+        .collect();
+    (!related.is_empty()).then_some(related)
+}
+
+pub(crate) fn convert_diagnostic_in(
+    d: &LisetteDiagnostic,
+    index: &LineIndex,
+    uri: Option<&Url>,
+) -> Diagnostic {
     let range = d
         .first_label_span()
         .map(|(offset, length)| index.offset_len_to_range(offset, length))
         .unwrap_or_default();
+    let related = uri.and_then(|uri| related_information(d, index, uri, d.file_id()));
 
     Diagnostic {
+        related_information: related,
         range,
         severity: Some(if d.is_error() {
             DiagnosticSeverity::ERROR
@@ -457,9 +489,11 @@ pub(crate) fn convert_diagnostic(d: &LisetteDiagnostic, index: &LineIndex) -> Di
             DiagnosticSeverity::WARNING
         }),
         message: {
+            let structured =
+                d.label_count() >= 2 || d.plain_help().is_some_and(|help| help.contains('\n'));
             let mut msg = match d.plain_label() {
-                Some(label) => label.to_string(),
-                None => d.plain_message().to_string(),
+                Some(label) if !structured => label.to_string(),
+                _ => d.plain_message().to_string(),
             };
             if let Some(first) = msg.chars().next()
                 && first.is_ascii_lowercase()
@@ -512,6 +546,48 @@ mod tests {
         assert_eq!(
             diagnostic.message,
             "Never called · Call or remove this function"
+        );
+    }
+
+    #[test]
+    fn multi_label_diagnostic_leads_with_the_message_and_reports_related_locations() {
+        let index = LineIndex::new("fn write() {}\nfn call() {}\n");
+        let uri = Url::parse("file:///x.lis").unwrap();
+        let diagnostic = convert_diagnostic_in(
+            &LisetteDiagnostic::error("`File` does not implement `Writer`")
+                .with_span_label(&syntax::ast::Span::new(0, 17, 4), "`Writer` needed here")
+                .with_span_label(
+                    &syntax::ast::Span::new(0, 3, 5),
+                    "`Writer` requires `fn () -> int`",
+                ),
+            &index,
+            Some(&uri),
+        );
+
+        assert_eq!(diagnostic.message, "`File` does not implement `Writer`");
+        let related = diagnostic
+            .related_information
+            .expect("a second label should become related information");
+        assert_eq!(related.len(), 1);
+        assert_eq!(related[0]["message"], "`Writer` requires `fn () -> int`");
+        assert_eq!(related[0]["location"]["uri"], "file:///x.lis");
+    }
+
+    #[test]
+    fn multi_line_help_leads_with_the_message() {
+        let span = syntax::ast::Span::new(0, 0, 1);
+        let diagnostic = convert_diagnostic(
+            &LisetteDiagnostic::error("`File` does not implement `ReadWriter`")
+                .with_span_label(&span, "`ReadWriter` needed here")
+                .with_help("Two methods do not satisfy `ReadWriter`:\nMissing:\n  fn read(self: File) -> string"),
+            &LineIndex::new("x"),
+        );
+        assert!(
+            diagnostic
+                .message
+                .starts_with("`File` does not implement `ReadWriter` · Two methods"),
+            "got: {}",
+            diagnostic.message
         );
     }
 

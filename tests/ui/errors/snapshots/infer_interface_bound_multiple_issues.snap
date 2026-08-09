@@ -1,18 +1,17 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Interface not implemented
+  ✕ `File` does not implement `ReadWriter`
     ╭─[test.lis:20:10]
  19 │ fn test() {
  20 │   use_rw(File { path: "test.txt" })
     ·          ────────────┬────────────
-    ·                      ╰── `File` does not implement `ReadWriter`
+    ·                      ╰── `ReadWriter` needed here
  21 │ }
     ╰────
-  help: Missing methods:
-          From `ReadWriter`
-            - read: fn () -> string
-        Incompatible methods:
-          From `ReadWriter`
-            - write: expected `fn (string) -> int`, found `fn (string) -> string`
-        code: [infer.interface_not_implemented]
+  help: Two methods do not satisfy `ReadWriter`:
+        Missing:
+          fn read(self: File) -> string
+        Incompatible:
+          write: expected `fn (string) -> int`, found `fn (string) -> string`
+  code: [infer.interface_not_implemented]

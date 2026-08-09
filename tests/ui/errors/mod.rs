@@ -4603,6 +4603,25 @@ fn test() {
 }
 
 #[test]
+fn infer_go_type_cannot_implement_local_interface() {
+    let input = r#"
+import "go:strings"
+
+interface Show {
+  fn show() -> string;
+}
+
+fn use_show(s: Show) {}
+
+fn test() {
+  let builder = strings.Builder {}
+  use_show(builder)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_interface_bound_incompatible_signature() {
     let input = r#"
 interface Writer {
