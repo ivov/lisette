@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786276549757,
+  "lastUpdate": 1786277156875,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -20996,6 +20996,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/23300c4d79a33fb2e0f68e21baf07789c4fecacb"
         },
         "date": 1786276547406,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 129863,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30397,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 25904,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18583,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14124,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 12980,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 7749,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5943,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2901,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1830,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 713,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7823,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "af534224f9a277ff515cffc77c8afea21f43ffea",
+          "message": "refactor: color operands in test failure labels (#1241)",
+          "timestamp": "2026-08-09T14:05:28+02:00",
+          "tree_id": "4e86f07afcc409ae0bf8227749b7d0d4dfe60e92",
+          "url": "https://github.com/ivov/lisette/commit/af534224f9a277ff515cffc77c8afea21f43ffea"
+        },
+        "date": 1786277155776,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
