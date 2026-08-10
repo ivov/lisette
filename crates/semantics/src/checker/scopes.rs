@@ -91,12 +91,52 @@ struct GenericParameter {
 }
 
 #[derive(Debug)]
+enum FunctionContext {
+    LambdaPendingReturn,
+    Lambda(FunctionBodyContext),
+    Named(FunctionBodyContext),
+}
+
+#[derive(Debug)]
+struct FunctionBodyContext {
+    return_type: Type,
+    deferred_map_key_checks: Vec<DeferredMapKeyCheck>,
+}
+
+impl FunctionBodyContext {
+    fn new(return_type: Type) -> Self {
+        Self {
+            return_type,
+            deferred_map_key_checks: Vec::new(),
+        }
+    }
+}
+
+impl FunctionContext {
+    fn return_type(&self) -> Option<&Type> {
+        match self {
+            Self::LambdaPendingReturn => None,
+            Self::Lambda(body) | Self::Named(body) => Some(&body.return_type),
+        }
+    }
+
+    fn body_mut(&mut self) -> Option<&mut FunctionBodyContext> {
+        match self {
+            Self::LambdaPendingReturn => None,
+            Self::Lambda(body) | Self::Named(body) => Some(body),
+        }
+    }
+
+    fn is_lambda(&self) -> bool {
+        matches!(self, Self::LambdaPendingReturn | Self::Lambda(_))
+    }
+}
+
+#[derive(Debug)]
 pub struct Scope {
     values: HashMap<String, ScopedValue>,
     generic_parameters: HashMap<String, GenericParameter>,
-    pub(crate) fn_return_type: Option<Type>,
-    is_lambda: bool,
-    deferred_map_key_checks: Vec<DeferredMapKeyCheck>,
+    function: Option<FunctionContext>,
     propagation_context: PropagationContext,
     impl_receiver_type: Option<Type>,
     test_context: Option<TestContext>,
@@ -113,9 +153,7 @@ impl Scope {
         Scope {
             values: HashMap::default(),
             generic_parameters: HashMap::default(),
-            fn_return_type: None,
-            is_lambda: false,
-            deferred_map_key_checks: Vec::new(),
+            function: None,
             propagation_context: PropagationContext::None,
             impl_receiver_type: None,
             test_context: None,
@@ -157,6 +195,22 @@ impl Scope {
                 kind: ScopedValueKind::Const,
             },
         );
+    }
+
+    fn fn_return_type(&self) -> Option<&Type> {
+        self.function
+            .as_ref()
+            .and_then(FunctionContext::return_type)
+    }
+
+    fn is_function_boundary(&self) -> bool {
+        self.fn_return_type().is_some()
+    }
+
+    fn is_lambda(&self) -> bool {
+        self.function
+            .as_ref()
+            .is_some_and(FunctionContext::is_lambda)
     }
 }
 
@@ -226,7 +280,22 @@ impl Scopes {
     }
 
     pub(crate) fn mark_lambda_scope(&mut self) {
-        self.current_mut().is_lambda = true;
+        let function = &mut self.current_mut().function;
+        assert!(function.is_none(), "a scope can contain only one function");
+        *function = Some(FunctionContext::LambdaPendingReturn);
+    }
+
+    pub(crate) fn set_fn_return_type(&mut self, ty: Type) {
+        let function = &mut self.current_mut().function;
+        *function = Some(match function.take() {
+            None => FunctionContext::Named(FunctionBodyContext::new(ty)),
+            Some(FunctionContext::LambdaPendingReturn) => {
+                FunctionContext::Lambda(FunctionBodyContext::new(ty))
+            }
+            Some(FunctionContext::Lambda(_) | FunctionContext::Named(_)) => {
+                panic!("a function return type can be set only once")
+            }
+        });
     }
 
     pub(crate) fn shadowed_capturable_binding(&self, name: &str) -> Option<BindingId> {
@@ -238,7 +307,7 @@ impl Scopes {
                     _ => None,
                 };
             }
-            crossed_lambda |= scope.is_lambda;
+            crossed_lambda |= scope.is_lambda();
         }
         None
     }
@@ -250,7 +319,7 @@ impl Scopes {
             if let Some(value) = scope.values.get(name) {
                 return crossed && matches!(value.kind, ScopedValueKind::Binding { .. });
             }
-            if scope.fn_return_type.is_some() {
+            if scope.is_function_boundary() {
                 crossed = true;
             }
         }
@@ -301,7 +370,7 @@ impl Scopes {
     /// Look up the enclosing function's return type.
     pub(crate) fn lookup_fn_return_type(&self) -> Option<&Type> {
         for scope in self.stack.iter().rev() {
-            if let Some(ref ty) = scope.fn_return_type {
+            if let Some(ty) = scope.fn_return_type() {
                 return Some(ty);
             }
         }
@@ -309,18 +378,23 @@ impl Scopes {
     }
 
     pub(crate) fn defer_map_key_check(&mut self, check: DeferredMapKeyCheck) {
-        if let Some(scope) = self
+        if let Some(body) = self
             .stack
             .iter_mut()
             .rev()
-            .find(|scope| scope.fn_return_type.is_some())
+            .find_map(|scope| scope.function.as_mut()?.body_mut())
         {
-            scope.deferred_map_key_checks.push(check);
+            body.deferred_map_key_checks.push(check);
         }
     }
 
     pub(crate) fn take_deferred_map_key_checks(&mut self) -> Vec<DeferredMapKeyCheck> {
-        std::mem::take(&mut self.current_mut().deferred_map_key_checks)
+        self.current_mut()
+            .function
+            .as_mut()
+            .and_then(FunctionContext::body_mut)
+            .map(|body| std::mem::take(&mut body.deferred_map_key_checks))
+            .unwrap_or_default()
     }
 
     /// Look up the enclosing try block context, stopping at function boundaries.
@@ -329,7 +403,7 @@ impl Scopes {
             if let PropagationContext::Try(context) = &scope.propagation_context {
                 return Some(context);
             }
-            if scope.fn_return_type.is_some() {
+            if scope.is_function_boundary() {
                 return None;
             }
         }
@@ -338,10 +412,11 @@ impl Scopes {
 
     pub(crate) fn lookup_try_block_context_mut(&mut self) -> Option<&mut TryBlockContext> {
         for scope in self.stack.iter_mut().rev() {
+            let is_function_boundary = scope.is_function_boundary();
             if let PropagationContext::Try(context) = &mut scope.propagation_context {
                 return Some(context);
             }
-            if scope.fn_return_type.is_some() {
+            if is_function_boundary {
                 return None;
             }
         }
@@ -354,7 +429,7 @@ impl Scopes {
             if let PropagationContext::Recover(context) = &scope.propagation_context {
                 return Some(context);
             }
-            if scope.fn_return_type.is_some() {
+            if scope.is_function_boundary() {
                 return None;
             }
         }
@@ -490,7 +565,7 @@ mod tests {
             .insert_binding("value".into(), Type::Error, 1, true);
 
         scopes.push();
-        scopes.current_mut().fn_return_type = Some(Type::Error);
+        scopes.set_fn_return_type(Type::Error);
         scopes
             .current_mut()
             .insert_value("value".into(), Type::Error);

@@ -99,7 +99,7 @@ impl InferCtx<'_> {
             let return_ty =
                 this.infer_return_type(&return_annotation, &resolved_expected, &span, unit_ty);
 
-            this.scopes.current_mut().fn_return_type = Some(return_ty.clone());
+            this.scopes.set_fn_return_type(return_ty.clone());
 
             let base_fn_ty = Type::function(
                 new_params
@@ -202,7 +202,7 @@ impl InferCtx<'_> {
                 default_return,
             );
 
-            this.scopes.current_mut().fn_return_type = Some(return_ty.clone());
+            this.scopes.set_fn_return_type(return_ty.clone());
 
             let base_fn_ty = Type::function(
                 new_params

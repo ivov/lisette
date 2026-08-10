@@ -16,7 +16,6 @@ pub(crate) struct ScopeState {
     return_ctx_stack: Vec<ReturnContext>,
     test_handle_stack: Vec<String>,
     assign_targets: HashSet<String>,
-    go_const_bindings: Vec<HashSet<String>>,
     /// Go identifiers referenced during lowering, for structural liveness.
     use_frames: Vec<HashSet<String>>,
 }
@@ -37,7 +36,6 @@ impl ScopeState {
             return_ctx_stack: Vec::new(),
             test_handle_stack: Vec::new(),
             assign_targets: HashSet::default(),
-            go_const_bindings: vec![HashSet::default()],
             use_frames: Vec::new(),
         }
     }
@@ -71,7 +69,6 @@ impl ScopeState {
         self.declared.clear();
         self.declared.push(HashSet::default());
         self.type_param_go_names.clear();
-        self.go_const_bindings.truncate(1);
     }
 
     pub(crate) fn declare_type_param(&mut self, go_name: &str) {
@@ -89,6 +86,14 @@ impl ScopeState {
 
     pub(crate) fn bind_inline_expr(&mut self, lisette_name: impl Into<String>, expr: InlineExpr) {
         self.bindings.bind_inline_expr(lisette_name, expr);
+    }
+
+    pub(crate) fn bind_value(&mut self, lisette_name: impl Into<String>, value: BindingValue) {
+        self.bindings.bind_value(lisette_name, value);
+    }
+
+    pub(crate) fn mark_go_const(&mut self, lisette_name: &str) {
+        self.bindings.mark_go_const(lisette_name);
     }
 
     pub(crate) fn remove_binding(&mut self, lisette_name: &str) {
@@ -159,13 +164,11 @@ impl ScopeState {
     pub(crate) fn enter_block(&mut self) {
         self.bindings.save();
         self.declared.push(HashSet::default());
-        self.go_const_bindings.push(HashSet::default());
     }
 
     pub(crate) fn exit_block(&mut self) {
         self.bindings.restore();
         pop_keep_base(&mut self.declared);
-        pop_keep_base(&mut self.go_const_bindings);
     }
 
     pub(crate) fn enter_isolated_function(&mut self) -> IsolatedFunctionFrame {
@@ -261,27 +264,6 @@ impl ScopeState {
 
     pub(crate) fn is_active_assign_target(&self, var: &str) -> bool {
         self.assign_targets.contains(var)
-    }
-
-    pub(crate) fn push_const_frame(&mut self) {
-        self.go_const_bindings.push(HashSet::default());
-    }
-
-    pub(crate) fn pop_const_frame(&mut self) {
-        pop_keep_base(&mut self.go_const_bindings);
-    }
-
-    pub(crate) fn record_go_const_binding(&mut self, go_identifier: String) {
-        self.go_const_bindings
-            .last_mut()
-            .expect("scope state always retains a const frame")
-            .insert(go_identifier);
-    }
-
-    pub(crate) fn is_go_const_binding(&self, go_identifier: &str) -> bool {
-        self.go_const_bindings
-            .iter()
-            .any(|frame| frame.contains(go_identifier))
     }
 }
 

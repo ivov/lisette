@@ -154,7 +154,9 @@ impl Planner<'_> {
         source_ty: &Type,
         methods: &[AdapterMethod],
     ) -> Vec<(EcoString, Vec<Type>)> {
-        let context = self.function_state.generic_context();
+        let context = self
+            .current_function_context()
+            .map_or(&[][..], |context| context.generic_context());
         if context
             .iter()
             .any(|(name, _)| adapter_uses_type_parameter(source_ty, methods, name))

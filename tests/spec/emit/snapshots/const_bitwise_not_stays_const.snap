@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  const MASK = ^1
+  
+  fn main() {
+    let _ = MASK
+  }
+---
+package main
+
+const Mask int = ^1
+
+func main() {
+	_ = Mask
+}

@@ -4,9 +4,14 @@ use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::plan::bodies::ConstPlan;
 use crate::plan::values::ValuePlan;
-use crate::state::bindings::BindingValue;
-use syntax::ast::{Expression, Generic, Literal, UnaryOperator};
-use syntax::types::{Symbol, Type};
+use syntax::ast::{Expression, Generic};
+use syntax::types::Type;
+
+#[derive(Clone, Copy)]
+pub(crate) enum ConstScope {
+    Package,
+    Local,
+}
 
 impl Planner<'_> {
     pub(crate) fn emit_type_alias(
@@ -60,6 +65,7 @@ impl Planner<'_> {
         identifier: &str,
         expression: &Expression,
         ty: &Type,
+        scope: ConstScope,
     ) -> ConstPlan {
         let target_name = self
             .package
@@ -77,7 +83,7 @@ impl Planner<'_> {
         };
         let ty_str = self.go_type_string(ty);
 
-        // `is_go_const_eligible` admits only literals, identifiers, and
+        // `is_go_constant_expression` admits only literals, identifiers, and
         // constexpr unary/binary, none of which carry setup statements.
         let raw_value = self.plan_value(expression, ExpressionContext::value());
         let value_text = raw_value.rendered();
@@ -86,9 +92,12 @@ impl Planner<'_> {
         } else {
             ValuePlan::opaque(value_text)
         };
-        let is_const = self.is_go_const_eligible(expression);
+        let is_const = self.is_go_constant_expression(expression);
         if is_const {
-            self.record_go_const(go_identifier.clone());
+            match scope {
+                ConstScope::Package => self.package.record_go_const_binding(identifier.to_string()),
+                ConstScope::Local => self.scope.mark_go_const(identifier),
+            }
         }
         ConstPlan {
             is_const,
@@ -104,53 +113,9 @@ impl Planner<'_> {
         expression: &Expression,
         ty: &Type,
     ) -> String {
-        let plan = self.build_const_plan(identifier, expression, ty);
+        let plan = self.build_const_plan(identifier, expression, ty, ConstScope::Package);
         let mut out = String::new();
         Renderer.render_const_declaration(&mut out, &plan);
         out.trim_end_matches('\n').to_string()
-    }
-
-    fn is_go_const_eligible(&self, expression: &Expression) -> bool {
-        match expression.unwrap_parens() {
-            Expression::Literal { literal, .. } => matches!(
-                literal,
-                Literal::Integer { .. }
-                    | Literal::Float { .. }
-                    | Literal::Imaginary(_)
-                    | Literal::Boolean(_)
-                    | Literal::String { .. }
-                    | Literal::Char(_)
-            ),
-            Expression::Identifier { value, .. } => {
-                match self.scope.resolve_identifier_binding(value.as_str()) {
-                    Some(BindingValue::GoName(name)) => self.is_go_const_binding(name),
-                    Some(BindingValue::InlineExpr(_)) => false,
-                    None => {
-                        let go = self.package.escape_remap(value).unwrap_or(value);
-                        self.is_go_const_binding(go)
-                    }
-                }
-            }
-            Expression::Binary { left, right, .. } => {
-                self.is_go_const_eligible(left) && self.is_go_const_eligible(right)
-            }
-            Expression::Unary {
-                operator: UnaryOperator::Negative | UnaryOperator::Not,
-                expression,
-                ..
-            } => self.is_go_const_eligible(expression),
-            Expression::DotAccess {
-                expression: inner,
-                member,
-                ..
-            } => {
-                let inner_ty = inner.get_type();
-                inner_ty.as_import_namespace().is_some_and(|package_id| {
-                    let qualified = Symbol::from_parts(package_id, member.as_str());
-                    self.facts.is_const(qualified.as_str())
-                })
-            }
-            _ => false,
-        }
     }
 }

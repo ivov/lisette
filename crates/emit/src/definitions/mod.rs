@@ -7,3 +7,5 @@ mod interfaces;
 pub(crate) mod structs;
 mod tags;
 mod toplevel;
+
+pub(crate) use toplevel::ConstScope;

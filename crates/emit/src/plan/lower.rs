@@ -271,7 +271,12 @@ impl Planner<'_> {
                 let Some(value) = value.value() else {
                     return LoweredStatement::Block(LoweredBlock { statements: vec![] });
                 };
-                let plan = self.build_const_plan(identifier, value, ty);
+                let plan = self.build_const_plan(
+                    identifier,
+                    value,
+                    ty,
+                    crate::definitions::ConstScope::Local,
+                );
                 self.directed_at(expression, LoweredStatement::Const(plan))
             }
             Expression::Return {

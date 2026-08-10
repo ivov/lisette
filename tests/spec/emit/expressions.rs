@@ -675,6 +675,18 @@ fn main() {
 }
 
 #[test]
+fn const_bitwise_not_stays_const() {
+    let input = r#"
+const MASK = ^1
+
+fn main() {
+  let _ = MASK
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn const_imported_constant_stays_const() {
     let input = r#"
 import "go:fmt"

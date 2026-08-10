@@ -89,7 +89,7 @@ impl<'a> WalkCtx<'a> {
 pub(crate) struct TreePlanner<'a, 'e> {
     planner: &'a mut Planner<'e>,
     arms: &'a [MatchArm],
-    current_subject: String,
+    subject: String,
     subject_ty: Type,
 }
 
@@ -103,7 +103,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         Self {
             planner,
             arms,
-            current_subject: subject_var,
+            subject: subject_var,
             subject_ty,
         }
     }
@@ -136,13 +136,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         LoweredBlock { statements }
     }
 
-    fn with_subject<R>(&mut self, subject: String, f: impl FnOnce(&mut Self) -> R) -> R {
-        let previous = std::mem::replace(&mut self.current_subject, subject);
-        let result = f(self);
-        self.current_subject = previous;
-        result
-    }
-
     fn with_scope<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
         self.planner.enter_scope();
         let result = f(self);
@@ -152,16 +145,6 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
 
     fn with_optional_scope<R>(&mut self, scoped: bool, f: impl FnOnce(&mut Self) -> R) -> R {
         if scoped { self.with_scope(f) } else { f(self) }
-    }
-
-    fn capture_go_uses<R>(
-        &mut self,
-        f: impl FnOnce(&mut Self) -> R,
-    ) -> (R, rustc_hash::FxHashSet<String>) {
-        self.planner.scope.enter_use_region();
-        let result = f(self);
-        let uses = self.planner.scope.exit_use_region();
-        (result, uses)
     }
 
     fn render_single_catchall(
@@ -267,7 +250,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let mut last_diverges = false;
         for (test, condition) in tests[..regular_len].iter().zip(&conditions) {
             if condition.is_some() {
-                self.planner.scope.record_go_use(&self.current_subject);
+                self.planner.scope.record_go_use(&self.subject);
             }
             let condition = condition.as_deref().unwrap_or("true").to_string();
             let walk_ctx = if matches!(test.decision, Decision::Guard { .. }) {
@@ -409,10 +392,10 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             unreachable!("walk_switch requires a Switch decision");
         };
         let fallback = fallback.as_deref();
-        let rendered_path = path.render(&self.current_subject);
+        let rendered_path = path.render(&self.subject);
         match shape {
             SwitchShape::TypeSwitch => {
-                self.planner.scope.record_go_use(&self.current_subject);
+                self.planner.scope.record_go_use(&self.subject);
                 let plan = self.lower_type_switch(rendered_path, branches, fallback, ctx.arm_place);
                 let body_diverges =
                     capture_diverge(vec![LoweredStatement::Switch(plan)], statements);
@@ -467,7 +450,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 self.walk_condition_branch(statements, condition, &branch.decision, fallback, ctx);
             }
             SwitchShape::Multi => {
-                self.planner.scope.record_go_use(&self.current_subject);
+                self.planner.scope.record_go_use(&self.subject);
                 let expr = render_switch_expression(&rendered_path, kind);
                 let plan = self.lower_value_switch(expr, branches, fallback, ctx.arm_place);
                 let body_diverges =
@@ -485,7 +468,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         else_branch: &Decision,
         ctx: &WalkCtx,
     ) {
-        self.planner.scope.record_go_use(&self.current_subject);
+        self.planner.scope.record_go_use(&self.subject);
         let inner = WalkCtx::switch_case(ctx.arm_place);
         let then_statements = self.with_scope(|this| {
             let mut then_statements: Vec<LoweredStatement> = Vec::new();
@@ -643,12 +626,13 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         place: &PlacePlan,
     ) -> SwitchStatementPlan {
         let (regular, default) = split_with_default_lift(branches, fallback);
-        let ((case_plans, default_block), used) = self.capture_go_uses(|this| {
-            this.with_subject(base.clone(), |this| {
-                let case_plans = this.lower_switch_cases(regular, place);
-                let default_block = this.lower_switch_default(default, place);
-                (case_plans, default_block)
-            })
+        let arms = self.arms;
+        let subject_ty = self.subject_ty.clone();
+        let ((case_plans, default_block), used) = self.planner.capture_go_uses(|planner| {
+            let mut nested = TreePlanner::new(planner, arms, base.clone(), subject_ty);
+            let case_plans = nested.lower_switch_cases(regular, place);
+            let default_block = nested.lower_switch_default(default, place);
+            (case_plans, default_block)
         });
 
         // Keep the `base :=` type-switch binding only when a case references it;
@@ -768,7 +752,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let body = LoweredBlock { statements: body };
         let first_condition = &conditions[indices[0]];
         if first_condition.is_some() {
-            self.planner.scope.record_go_use(&self.current_subject);
+            self.planner.scope.record_go_use(&self.subject);
         }
         match first_condition {
             Some(condition) => statements.push(LoweredStatement::If(IfPlan {
@@ -921,7 +905,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             self.planner,
             statements,
             bindings,
-            &self.current_subject,
+            &self.subject,
             consumers,
             &failure_trees,
         )
@@ -970,8 +954,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         tests
             .iter()
             .map(|test| {
-                (!test.checks.is_empty())
-                    .then(|| render_condition(&test.checks, &self.current_subject))
+                (!test.checks.is_empty()).then(|| render_condition(&test.checks, &self.subject))
             })
             .collect()
     }
