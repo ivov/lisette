@@ -361,7 +361,9 @@ impl Planner<'_> {
         expression_ty.is_ref()
             && expression_ty.inner().is_some_and(|inner| {
                 matches!(inner, Type::Parameter(name)
-                    if self.function_state.is_absorbed_ref_generic(name.as_ref()))
+                    if self
+                        .current_function_context()
+                        .is_some_and(|context| context.is_absorbed_ref_generic(name.as_ref())))
             })
     }
 

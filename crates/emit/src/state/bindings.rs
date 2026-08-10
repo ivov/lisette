@@ -39,6 +39,7 @@ impl InlineExpr {
 #[derive(Clone, Debug)]
 pub(crate) enum BindingValue {
     GoName(String),
+    GoConst(String),
     InlineExpr(InlineExpr),
 }
 
@@ -47,9 +48,13 @@ pub(crate) struct BindingSnapshot(HashMap<String, BindingValue>);
 impl BindingValue {
     pub(crate) fn as_go_name(&self) -> Option<&str> {
         match self {
-            BindingValue::GoName(name) => Some(name.as_str()),
+            BindingValue::GoName(name) | BindingValue::GoConst(name) => Some(name.as_str()),
             BindingValue::InlineExpr(_) => None,
         }
+    }
+
+    pub(crate) fn is_go_const(&self) -> bool {
+        matches!(self, BindingValue::GoConst(_))
     }
 }
 
@@ -84,6 +89,20 @@ impl Bindings {
         self.current_mut()
             .insert(key.into(), BindingValue::GoName(go_value.clone()));
         go_value
+    }
+
+    pub(crate) fn bind_value(&mut self, key: impl Into<String>, value: BindingValue) {
+        self.current_mut().insert(key.into(), value);
+    }
+
+    pub(crate) fn mark_go_const(&mut self, key: &str) {
+        let Some(value) = self.current_mut().get_mut(key) else {
+            return;
+        };
+        if let BindingValue::GoName(name) = value {
+            let name = std::mem::take(name);
+            *value = BindingValue::GoConst(name);
+        }
     }
 
     pub(crate) fn bind_inline_expr(&mut self, key: impl Into<String>, expression_text: InlineExpr) {

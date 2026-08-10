@@ -116,6 +116,7 @@ impl TaskState {
                     source_name: "to_string".into(),
                     ty: method_ty,
                     visibility,
+                    origin: syntax::program::MethodOrigin::Synthesized,
                     name_span,
                     doc: None,
                     allowed_lints: vec![],

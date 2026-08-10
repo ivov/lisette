@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::*;
 use rayon::prelude::*;
 use rustc_hash::FxHashMap as HashMap;
@@ -259,28 +261,21 @@ pub(super) fn infer_all_packages(
     let uninferred = input.files;
     store_uninferred_packages(&mut checker, store, uninferred, input.recover_target);
 
-    for pending in &to_infer {
-        checker.predeclare_package_types(store, pending.package_id());
-    }
     to_infer.sort_by_key(PendingPackage::topo_rank);
     let mut compiled_packages = Vec::new();
-    let to_infer: Vec<String> = to_infer
+    let predeclared: Vec<PredeclaredPackage> = to_infer
         .into_iter()
-        .map(|pending| match pending {
-            PendingPackage::Entry { .. } => ENTRY_PACKAGE_ID.to_string(),
-            PendingPackage::Compiled(pending) => {
-                let package_id = pending.package.package_id.clone();
-                compiled_packages.push(pending.package);
-                package_id
+        .map(|pending| {
+            let package_id = pending.package_id().to_string();
+            let package = checker.predeclare_package(store, &package_id);
+            match pending {
+                PendingPackage::Entry { .. } => {}
+                PendingPackage::Compiled(pending) => compiled_packages.push(pending.package),
             }
+            package
         })
         .collect();
-
-    let unregistered = to_infer
-        .iter()
-        .map(|package_id| TaskState::take_unregistered_package(store, package_id))
-        .collect();
-    let registered = register_packages(&mut checker, store, unregistered, dependencies);
+    let registered = register_packages(&mut checker, store, predeclared, dependencies);
     infer_packages(&mut checker, store, registered);
 
     if !input.cache.is_disabled() {
@@ -519,7 +514,7 @@ fn load_cache_candidates(
 fn register_packages(
     checker: &mut TaskState,
     store: &mut Store,
-    packages: Vec<UnregisteredPackage>,
+    packages: Vec<PredeclaredPackage>,
     dependencies: &DependencyGraph,
 ) -> Vec<RegisteredPackage> {
     if packages.len() < PARALLEL_THRESHOLD {
@@ -547,7 +542,7 @@ fn register_packages(
             continue;
         }
 
-        let detached: Vec<(Arc<Package>, UnregisteredPackage)> = wave
+        let detached: Vec<(Arc<Package>, PredeclaredPackage)> = wave
             .into_iter()
             .map(|package_id| {
                 let package = store

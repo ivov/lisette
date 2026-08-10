@@ -305,6 +305,7 @@ impl TaskState {
                     source_name: "equals".into(),
                     ty: method_ty,
                     visibility,
+                    origin: syntax::program::MethodOrigin::Synthesized,
                     name_span,
                     doc: None,
                     allowed_lints: vec![],

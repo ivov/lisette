@@ -5,20 +5,12 @@ use syntax::types::Type;
 
 #[derive(Default)]
 pub(crate) struct PackageState {
-    user_to_string_types: HashSet<String>,
     escape_remap: HashMap<String, String>,
     generic_renames: HashMap<String, String>,
+    go_const_bindings: HashSet<String>,
 }
 
 impl PackageState {
-    pub(crate) fn record_user_to_string_type(&mut self, type_name: impl Into<String>) {
-        self.user_to_string_types.insert(type_name.into());
-    }
-
-    pub(crate) fn has_user_to_string(&self, type_name: &str) -> bool {
-        self.user_to_string_types.contains(type_name)
-    }
-
     pub(crate) fn record_escape_remap(
         &mut self,
         lisette_name: impl Into<String>,
@@ -44,15 +36,22 @@ impl PackageState {
     pub(crate) fn generic_rename(&self, source_name: &str) -> Option<&str> {
         self.generic_renames.get(source_name).map(String::as_str)
     }
+
+    pub(crate) fn record_go_const_binding(&mut self, lisette_name: String) {
+        self.go_const_bindings.insert(lisette_name);
+    }
+
+    pub(crate) fn is_go_const_binding(&self, lisette_name: &str) -> bool {
+        self.go_const_bindings.contains(lisette_name)
+    }
 }
 
-#[derive(Default)]
-pub(crate) struct FunctionEmissionState {
+pub(crate) struct FunctionEmissionContext {
     absorbed_ref_generics: HashSet<String>,
     generic_context: Vec<(EcoString, Vec<Type>)>,
 }
 
-impl FunctionEmissionState {
+impl FunctionEmissionContext {
     pub(crate) fn for_function(
         generic_context: &[(EcoString, Vec<Type>)],
         absorbed_ref_generics: HashSet<String>,

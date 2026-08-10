@@ -341,26 +341,8 @@ fn is_literal_expression(expression: &Expression) -> bool {
     }
 }
 
-fn is_constant_binary_op(operator: &BinaryOperator) -> bool {
-    use BinaryOperator::*;
-    matches!(
-        operator,
-        Addition
-            | Subtraction
-            | Multiplication
-            | Division
-            | Remainder
-            | BitwiseAnd
-            | BitwiseOr
-            | BitwiseXor
-            | BitwiseAndNot
-            | ShiftLeft
-            | ShiftRight
-    )
-}
-
 impl Planner<'_> {
-    fn is_go_constant(&self, expression: &Expression) -> bool {
+    pub(crate) fn is_go_constant_expression(&self, expression: &Expression) -> bool {
         match expression {
             Expression::Literal { literal, .. } => {
                 !matches!(literal, Literal::FormatString(_) | Literal::Slice(_))
@@ -371,21 +353,21 @@ impl Planner<'_> {
                 member,
                 ..
             } => self.imported_member_is_const(package, member),
-            Expression::Paren { expression, .. } => self.is_go_constant(expression),
+            Expression::Paren { expression, .. } => self.is_go_constant_expression(expression),
             Expression::Unary {
-                operator: UnaryOperator::Negative | UnaryOperator::BitwiseNot,
+                operator: UnaryOperator::Negative | UnaryOperator::Not | UnaryOperator::BitwiseNot,
                 expression,
                 ..
-            } => self.is_go_constant(expression),
+            } => self.is_go_constant_expression(expression),
             Expression::Binary {
                 operator,
                 left,
                 right,
                 ..
             } => {
-                is_constant_binary_op(operator)
-                    && self.is_go_constant(left)
-                    && self.is_go_constant(right)
+                !matches!(operator, BinaryOperator::Pipeline)
+                    && self.is_go_constant_expression(left)
+                    && self.is_go_constant_expression(right)
             }
             _ => false,
         }
@@ -393,13 +375,8 @@ impl Planner<'_> {
 
     fn identifier_is_const(&self, value: &str) -> bool {
         match self.scope.resolve_identifier_binding(value) {
-            Some(binding) => binding
-                .as_go_name()
-                .is_some_and(|name| self.is_go_const_binding(name)),
-            None => {
-                let go = self.package.escape_remap(value).unwrap_or(value);
-                self.is_go_const_binding(go)
-            }
+            Some(binding) => binding.is_go_const(),
+            None => self.package.is_go_const_binding(value),
         }
     }
 
@@ -442,8 +419,8 @@ impl Planner<'_> {
                 (matches!(
                     operator,
                     BinaryOperator::ShiftLeft | BinaryOperator::ShiftRight
-                ) && self.is_go_constant(left)
-                    && !self.is_go_constant(right))
+                ) && self.is_go_constant_expression(left)
+                    && !self.is_go_constant_expression(right))
                     || self.contains_untyped_constant_shift(left)
                     || self.contains_untyped_constant_shift(right)
             }

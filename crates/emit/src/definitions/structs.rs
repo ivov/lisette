@@ -391,7 +391,19 @@ impl Planner<'_> {
     }
 
     pub(crate) fn should_synthesize_to_string(&self, name: &str, attributes: &[Attribute]) -> bool {
-        attributes.iter().any(|a| a.name == "display") && !self.package.has_user_to_string(name)
+        if !attributes.iter().any(|a| a.name == "display") {
+            return false;
+        }
+        let qualified = self.facts.qualified_current(name);
+        let has_user_method = self
+            .facts
+            .method(&qualified, "to_string")
+            .is_some_and(|method| {
+                matches!(method.origin, syntax::program::MethodOrigin::Declared)
+                    && method.ty.is_stringer_signature()
+            })
+            && !self.facts.is_ufcs_method(&qualified, "to_string");
+        !has_user_method
     }
 
     pub(crate) fn should_synthesize_equals(&self, name: &str) -> bool {

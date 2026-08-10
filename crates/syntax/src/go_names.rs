@@ -460,13 +460,14 @@ fn contested_slots(variants: &[EnumVariant], slots: &[Vec<String>]) -> HashSet<S
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::program::{Method, Visibility};
+    use crate::program::{Method, MethodOrigin, Visibility};
 
     fn method(visibility: Visibility) -> Method {
         Method {
             source_name: "method".into(),
             ty: Type::Error,
             visibility,
+            origin: MethodOrigin::Declared,
             name_span: None,
             doc: None,
             allowed_lints: vec![],

@@ -47,9 +47,9 @@ use plan::bodies::{LoopId, LoweredBlock, LoweredStatement};
 use state::adapter_registry::AdapterRegistry;
 use state::bindings::BindingSnapshot;
 use state::file_namespace::FileNamespace;
-use state::package_state::{FunctionEmissionState, PackageState};
+use state::package_state::{FunctionEmissionContext, PackageState};
 use state::scope::ScopeState;
-use syntax::ast::Span;
+use syntax::ast::{Expression, Span};
 use syntax::program::{
     Definition, DefinitionBody, EmitInput, EqualityIndex, File, MutationInfo, TestIndex, UnusedInfo,
 };
@@ -200,27 +200,19 @@ pub struct TestEmitConfig<'a> {
 pub struct Planner<'a> {
     facts: EmitFacts<'a>,
     package: PackageState,
-    function_state: FunctionEmissionState,
+    function_contexts: Vec<FunctionEmissionContext>,
     scope: ScopeState,
     adapter_registry: AdapterRegistry,
-    namespace: RefCell<Option<FileNamespace>>,
+    namespace: RefCell<FileNamespace>,
 }
 
 impl Planner<'_> {
     fn file_namespace(&self) -> Ref<'_, FileNamespace> {
-        Ref::map(self.namespace.borrow(), |namespace| {
-            namespace
-                .as_ref()
-                .expect("package resolution requires an active file namespace")
-        })
+        self.namespace.borrow()
     }
 
     fn file_namespace_mut(&self) -> RefMut<'_, FileNamespace> {
-        RefMut::map(self.namespace.borrow_mut(), |namespace| {
-            namespace
-                .as_mut()
-                .expect("package resolution requires an active file namespace")
-        })
+        self.namespace.borrow_mut()
     }
 
     fn require_stdlib(&self) {
@@ -375,7 +367,11 @@ impl<'a> Planner<'a> {
         }
     }
 
-    pub fn new_for_tests(config: &TestEmitConfig<'a>, source: Option<&str>) -> Self {
+    pub fn emit_files_for_tests(
+        config: &TestEmitConfig<'a>,
+        source: Option<&str>,
+        files: &[&File],
+    ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
         let (sourcemap, line_indexes) = match source {
             Some(src) => (
                 true,
@@ -406,17 +402,23 @@ impl<'a> Planner<'a> {
             globals,
             current_package: config.package_id.to_string(),
         });
-        Self::new(facts)
+        Self::emit_files_with_facts(facts, files, config.package_id)
     }
 
-    fn new(facts: EmitFacts<'a>) -> Self {
+    fn new(facts: EmitFacts<'a>, first_file: &File) -> Self {
+        let namespace = FileNamespace::build(
+            first_file,
+            facts.go_module(),
+            facts.unused_imports_for_current_package(),
+            facts.go_package_names(),
+        );
         Self {
             facts,
             package: PackageState::default(),
-            function_state: FunctionEmissionState::default(),
+            function_contexts: Vec::new(),
             scope: ScopeState::new(),
             adapter_registry: AdapterRegistry::default(),
-            namespace: RefCell::new(None),
+            namespace: RefCell::new(namespace),
         }
     }
 
@@ -574,25 +576,8 @@ impl<'a> Planner<'a> {
         self.scope.fresh_go_name(hint)
     }
 
-    fn with_function_body_context<R>(
-        &mut self,
-        return_ctx: ReturnContext,
-        f: impl FnOnce(&mut Self) -> R,
-    ) -> R {
-        self.scope.push_const_frame();
-        self.scope.push_return_ctx(return_ctx);
-        let result = f(self);
-        self.scope.pop_return_ctx();
-        self.scope.pop_const_frame();
-        result
-    }
-
-    fn record_go_const(&mut self, go_identifier: String) {
-        self.scope.record_go_const_binding(go_identifier);
-    }
-
-    fn is_go_const_binding(&self, go_identifier: &str) -> bool {
-        self.scope.is_go_const_binding(go_identifier)
+    fn current_function_context(&self) -> Option<&FunctionEmissionContext> {
+        self.function_contexts.last()
     }
 
     fn maybe_line_directive(&self, span: &Span) -> String {
@@ -610,8 +595,19 @@ impl<'a> Planner<'a> {
         format!("//line {}:{}:{}\n", source.path, line, col)
     }
 
-    pub fn emit_files(
-        &mut self,
+    fn emit_files_with_facts(
+        facts: EmitFacts<'a>,
+        files: &[&File],
+        package_id: &str,
+    ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
+        let Some(first_file) = files.first() else {
+            return Ok(Vec::new());
+        };
+        Self::new(facts, first_file).emit_files(files, package_id)
+    }
+
+    fn emit_files(
+        mut self,
         files: &[&File],
         package_id: &str,
     ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
@@ -620,44 +616,29 @@ impl<'a> Planner<'a> {
     }
 
     fn render_package_plan(
-        &mut self,
+        mut self,
         files: &[&File],
         plan: PackagePlan,
     ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
         let PackagePlan {
             package_name,
-            files: file_plans,
             mut collision_diagnostics,
         } = plan;
         let mut output_files = Vec::new();
         let mut all_diagnostics = Vec::new();
 
-        for (i, (file, file_plan)) in files.iter().zip(file_plans).enumerate() {
-            *self.namespace.borrow_mut() = Some(file_plan.namespace);
-            let mut source = OutputCollector::new();
-
-            for function in &file_plan.make_functions {
-                source.collect_with_blank(
-                    self.create_make_function_code(&function.enum_id, &function.variant_name),
-                );
-            }
-
-            for expression in &file.items {
-                self.scope.reset_for_top_level();
-                let code = self.emit_top_item(expression);
-                if !code.is_empty() {
-                    source.collect_with_blank(code);
-                }
-            }
-
-            self.drain_file_emission_into(&mut source);
-            let rendered_source = source.render();
-
-            let namespace = self
-                .namespace
-                .borrow_mut()
-                .take()
-                .expect("file namespace was installed before rendering");
+        let (last_file, preceding_files) = files
+            .split_last()
+            .expect("a planner is created only for a nonempty file set");
+        for (i, file) in preceding_files.iter().enumerate() {
+            let rendered_source = self.render_file_source(file);
+            let next_namespace = FileNamespace::build(
+                files[i + 1],
+                self.facts.go_module(),
+                self.facts.unused_imports_for_current_package(),
+                self.facts.go_package_names(),
+            );
+            let namespace = self.namespace.replace(next_namespace);
             let (imports, mut diagnostics) =
                 namespace.finish(self.facts.go_package_names(), self.facts.go_package_ids());
             if i == 0 {
@@ -673,12 +654,59 @@ impl<'a> Planner<'a> {
             });
         }
 
+        let rendered_source = self.render_file_source(last_file);
+        let Planner {
+            facts, namespace, ..
+        } = self;
+        let (imports, mut diagnostics) = namespace
+            .into_inner()
+            .finish(facts.go_package_names(), facts.go_package_ids());
+        if preceding_files.is_empty() {
+            diagnostics.append(&mut collision_diagnostics);
+        }
+        all_diagnostics.append(&mut diagnostics);
+        output_files.push(OutputFile {
+            name: last_file.go_filename(),
+            imports,
+            source: rendered_source,
+            package_name,
+            file_comment: last_file.file_comment.clone(),
+        });
+
         if all_diagnostics.is_empty() {
             Ok(output_files)
         } else {
             all_diagnostics.sort_by(LisetteDiagnostic::sort_key);
             Err(all_diagnostics)
         }
+    }
+
+    fn render_file_source(&mut self, file: &File) -> String {
+        let mut source = OutputCollector::new();
+
+        for expression in &file.items {
+            let Expression::Enum { name, variants, .. } = expression else {
+                continue;
+            };
+            if PreludeType::from_name(name).is_some() {
+                continue;
+            }
+            let enum_id = self.facts.qualified_current(name);
+            for variant in variants {
+                source.collect_with_blank(self.create_make_function_code(&enum_id, &variant.name));
+            }
+        }
+
+        for expression in &file.items {
+            self.scope.reset_for_top_level();
+            let code = self.emit_top_item(expression);
+            if !code.is_empty() {
+                source.collect_with_blank(code);
+            }
+        }
+
+        self.drain_file_emission_into(&mut source);
+        source.render()
     }
 }
 
@@ -713,16 +741,12 @@ fn emit_package<'a>(
         globals: shared_emit_ctx.globals.clone(),
         current_package: package_id.to_string(),
     });
-    let mut planner: Planner<'a> = Planner::new(facts);
-
-    planner
-        .emit_files(files, package_id)
-        .map(|mut package_output| {
-            if package_id != analysis.entry_package_id.as_str() {
-                for file in &mut package_output {
-                    file.name = format!("{}/{}", package_id, file.name);
-                }
+    Planner::emit_files_with_facts(facts, files, package_id).map(|mut package_output| {
+        if package_id != analysis.entry_package_id.as_str() {
+            for file in &mut package_output {
+                file.name = format!("{}/{}", package_id, file.name);
             }
-            package_output
-        })
+        }
+        package_output
+    })
 }

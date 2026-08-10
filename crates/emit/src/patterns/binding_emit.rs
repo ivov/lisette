@@ -173,8 +173,8 @@ pub(crate) fn drop_inline_overlays(
 ) {
     for (name, previous) in installed {
         match previous {
-            Some(BindingValue::GoName(go)) => {
-                planner.scope.bind(name.as_str(), go.as_str());
+            Some(value @ (BindingValue::GoName(_) | BindingValue::GoConst(_))) => {
+                planner.scope.bind_value(name.as_str(), value.clone());
             }
             Some(BindingValue::InlineExpr(expr)) => {
                 planner.scope.bind_inline_expr(name.as_str(), expr.clone());

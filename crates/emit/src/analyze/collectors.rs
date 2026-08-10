@@ -1,38 +1,12 @@
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::FxHashSet as HashSet;
 
+use crate::Planner;
 use crate::names::go_name;
-use crate::plan::MakeFunctionPlan;
-use crate::{Planner, PreludeType};
 use syntax::EcoString;
 use syntax::ast::{Expression, Generic, Visibility};
-use syntax::program::{DefinitionBody, File};
+use syntax::program::File;
 
 impl Planner<'_> {
-    pub(crate) fn collect_user_to_string_facts(&mut self, files: &[&File]) {
-        for (receiver_name, methods) in
-            files
-                .iter()
-                .flat_map(|file| &file.items)
-                .filter_map(|item| match item {
-                    Expression::ImplBlock {
-                        receiver_name,
-                        methods,
-                        ..
-                    } => Some((receiver_name, methods)),
-                    _ => None,
-                })
-        {
-            if methods.iter().any(is_display_to_string)
-                && !self
-                    .facts
-                    .is_ufcs_method(&self.facts.qualified_current(receiver_name), "to_string")
-            {
-                self.package
-                    .record_user_to_string_type(receiver_name.to_string());
-            }
-        }
-    }
-
     /// Record the emitted Go names of top-level private functions and
     /// constants that differ from their source spelling. Colliding private
     /// functions freshen to `name_2`, `name_3`, etc. Constants never
@@ -122,49 +96,6 @@ impl Planner<'_> {
             self.package.record_generic_rename(name.to_string(), fresh);
         }
     }
-
-    pub(crate) fn collect_local_make_function_plans(&self) -> HashMap<u32, Vec<MakeFunctionPlan>> {
-        let package_prefix = format!("{}.", self.facts.current_package());
-        let mut code: HashMap<u32, Vec<MakeFunctionPlan>> = HashMap::default();
-
-        let local_enums: Vec<_> = self
-            .facts
-            .iter_definitions()
-            .filter_map(|(key, definition)| {
-                let syntax::program::Definition {
-                    name_span: Some(name_span),
-                    body: DefinitionBody::Enum { variants, .. },
-                    ..
-                } = definition
-                else {
-                    return None;
-                };
-                let name = key.last_segment();
-                if PreludeType::from_name(name).is_some() {
-                    return None;
-                }
-                if !key.starts_with(&package_prefix) {
-                    return None;
-                }
-                let rest = &key[package_prefix.len()..];
-                if rest.contains('.') {
-                    return None;
-                }
-                Some((key.to_string(), variants.clone(), name_span.file_id))
-            })
-            .collect();
-
-        for (enum_id, variants, file_id) in local_enums {
-            for variant in variants {
-                code.entry(file_id).or_default().push(MakeFunctionPlan {
-                    enum_id: enum_id.clone(),
-                    variant_name: variant.name.to_string(),
-                });
-            }
-        }
-
-        code
-    }
 }
 
 fn collect_item_generic_names(item: &Expression, out: &mut HashSet<EcoString>) {
@@ -200,21 +131,4 @@ fn collect_item_generic_names(item: &Expression, out: &mut HashSet<EcoString>) {
         }
         _ => {}
     }
-}
-
-fn is_display_to_string(method: &Expression) -> bool {
-    if !matches!(method, Expression::Function { .. }) {
-        return false;
-    }
-    let func = method.function_definition_view();
-    func.name.as_str() == "to_string"
-        && func.params.len() == 1
-        && matches!(
-            &func.params[0].pattern,
-            syntax::ast::Pattern::Identifier { identifier, .. } if identifier == "self"
-        )
-        && matches!(
-            func.return_type,
-            syntax::types::Type::Simple(syntax::types::SimpleKind::String)
-        )
 }

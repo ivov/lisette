@@ -68,9 +68,7 @@ pub fn compile_e2e_suite_test(input: &str, package_name: &str) -> Result<Emitted
         go_package_names: &result.go_package_names,
         go_package_ids: &result.go_package_ids,
     };
-    let mut emitter = Planner::new_for_tests(&config, None);
-    let mut emitted_files = emitter
-        .emit_files(&[&file], &result.package_id)
+    let mut emitted_files = Planner::emit_files_for_tests(&config, None, &[&file])
         .map_err(|diagnostics| format!("Emission failed: {diagnostics:?}"))?;
 
     if emitted_files.is_empty() {

@@ -45,7 +45,7 @@ pub(crate) struct RegistrationFile {
     pub(crate) items: Vec<Expression>,
 }
 
-pub(crate) struct UnregisteredPackage {
+pub(crate) struct PredeclaredPackage {
     pub(crate) id: String,
     files: Vec<RegistrationFile>,
 }
@@ -86,12 +86,14 @@ impl TaskState {
     }
 
     pub fn register_package(&mut self, store: &mut Store, id: &str) -> RegisteredPackage {
-        self.predeclare_package_types(store, id);
-        let package = Self::take_unregistered_package(store, id);
+        let package = self.predeclare_package(store, id);
         self.register_predeclared_package(store, package)
     }
 
-    pub(crate) fn take_unregistered_package(store: &mut Store, id: &str) -> UnregisteredPackage {
+    pub(crate) fn predeclare_package(&mut self, store: &mut Store, id: &str) -> PredeclaredPackage {
+        let type_name_entries = self.collect_package_type_name_entries(store, id);
+        self.insert_type_name_entries(store, id, type_name_entries);
+
         let files = {
             let package = store
                 .get_package_mut(id)
@@ -106,7 +108,7 @@ impl TaskState {
                 })
                 .collect::<Vec<_>>()
         };
-        UnregisteredPackage {
+        PredeclaredPackage {
             id: id.to_string(),
             files,
         }
@@ -115,9 +117,9 @@ impl TaskState {
     pub(crate) fn register_predeclared_package(
         &mut self,
         store: &mut Store,
-        package: UnregisteredPackage,
+        package: PredeclaredPackage,
     ) -> RegisteredPackage {
-        let UnregisteredPackage { id, mut files } = package;
+        let PredeclaredPackage { id, mut files } = package;
 
         for file in &mut files {
             self.with_file_context_mut(
@@ -165,10 +167,5 @@ impl TaskState {
 
         self.register_package_tests(store, &id, &files);
         RegisteredPackage { id, files }
-    }
-
-    pub(crate) fn predeclare_package_types(&mut self, store: &mut Store, id: &str) {
-        let type_name_entries = self.collect_package_type_name_entries(store, id);
-        self.insert_type_name_entries(store, id, type_name_entries);
     }
 }

@@ -27,8 +27,8 @@ use syntax::types::{Bound, SubstitutionMap, Symbol, Type, substitute};
 
 pub(crate) use context::FileContext;
 pub use infer::expressions::comparison::{check_never_comparable, check_not_comparable};
+pub(crate) use registration::PredeclaredPackage;
 pub use registration::RegisteredPackage;
-pub(crate) use registration::UnregisteredPackage;
 pub use state::{Cursor, TaskState};
 pub(crate) use state::{InferredFile, TaskOutput};
 pub use type_env::{EnvResolve, TypeEnv, VarState};

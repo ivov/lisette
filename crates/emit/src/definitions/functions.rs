@@ -45,7 +45,7 @@ impl Planner<'_> {
         should_return: bool,
         return_ctx: &ReturnContext,
     ) {
-        self.with_function_body_context(return_ctx.clone(), |this| {
+        self.with_return_context(return_ctx.clone(), |this| {
             this.emit_function_body_inner(output, body, should_return);
         });
     }
@@ -543,13 +543,15 @@ impl Planner<'_> {
                     .then(|| name.to_string())
             })
             .collect();
-        let state = crate::state::package_state::FunctionEmissionState::for_function(
+        let context = crate::state::package_state::FunctionEmissionContext::for_function(
             generic_context,
             absorbed_ref_generics,
         );
-        let saved = std::mem::replace(&mut self.function_state, state);
+        self.function_contexts.push(context);
         let result = f(self);
-        self.function_state = saved;
+        self.function_contexts
+            .pop()
+            .expect("a function context must be pushed before it is popped");
         result
     }
 
@@ -581,7 +583,9 @@ impl Planner<'_> {
                 if param.ty.is_ref()
                     && let Some(inner) = param.ty.inner()
                     && let Type::Parameter(name) = &inner
-                    && self.function_state.is_absorbed_ref_generic(name.as_ref())
+                    && self
+                        .current_function_context()
+                        .is_some_and(|context| context.is_absorbed_ref_generic(name.as_ref()))
                 {
                     inner
                 } else {

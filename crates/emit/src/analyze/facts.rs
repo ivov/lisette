@@ -94,10 +94,6 @@ impl<'a> EmitFacts<'a> {
             .is_some_and(Definition::is_const)
     }
 
-    pub(crate) fn iter_definitions(&self) -> impl Iterator<Item = (&'a Symbol, &'a Definition)> {
-        self.definitions.iter()
-    }
-
     pub(crate) fn classify_go_return_type(
         &self,
         return_ty: &Type,

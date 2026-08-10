@@ -403,12 +403,20 @@ fn is_ufcs_method_type(method_ty: &Type, base_generics_count: usize) -> bool {
     false
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum MethodOrigin {
+    Declared,
+    Synthesized,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Method {
     pub source_name: EcoString,
     pub ty: Type,
     pub visibility: Visibility,
+    pub origin: MethodOrigin,
     pub name_span: Option<Span>,
     pub doc: Option<String>,
     pub allowed_lints: Vec<String>,
@@ -425,6 +433,7 @@ impl Method {
             source_name,
             ty,
             visibility,
+            origin,
             name_span,
             doc,
             allowed_lints,
@@ -434,6 +443,7 @@ impl Method {
             source_name,
             ty: ty.with_receiver_placeholder(),
             visibility,
+            origin,
             name_span,
             doc,
             allowed_lints,
@@ -708,6 +718,7 @@ mod tests {
                         source_name: "map".into(),
                         ty: method_ty,
                         visibility: Visibility::Public,
+                        origin: MethodOrigin::Declared,
                         name_span: None,
                         doc: None,
                         allowed_lints: vec![],

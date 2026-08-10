@@ -9,7 +9,6 @@ use entry::{compute_roots, find_unreachable_packages, load_sibling_files, regist
 use packages::{PackageInferenceInput, infer_all_packages};
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use diagnostics::LocalSink;
 use syntax::FileParseStatus;
@@ -25,7 +24,7 @@ use crate::cache::{
     hash_package_source_pair, is_cache_disabled, prelude as prelude_cache, try_load_cache,
 };
 use crate::checker::infer::InferCtx;
-use crate::checker::{RegisteredPackage, TaskOutput, TaskState, UnregisteredPackage};
+use crate::checker::{PredeclaredPackage, RegisteredPackage, TaskOutput, TaskState};
 use crate::diagnostics::{GoImportSite, emit_for_locator_result};
 use crate::facts::Facts;
 use crate::loader::{DiscoveredPackages, Loader};

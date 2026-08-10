@@ -15,7 +15,7 @@ pub(crate) fn analyze_inline_candidate(
 ) -> InlineDecision {
     let mut walker = Walker::new(lisette_name);
     for consumer in consumers {
-        walker.walk(consumer);
+        walker.walk(consumer, WalkContext::default());
     }
     walker.decide()
 }
@@ -26,7 +26,7 @@ where
 {
     let mut walker = Walker::new(lisette_name);
     for tree in trees {
-        walker.walk(tree);
+        walker.walk(tree, WalkContext::default());
     }
     walker.any_use_or_opacity()
 }
@@ -34,12 +34,46 @@ where
 struct Walker<'a> {
     name: &'a str,
     barriers_seen: u32,
-    inside_reference_operand: u32,
-    inside_assignment_target: u32,
-    enclosure_depth: u32,
-    shadow_depth: u32,
     uses: Vec<UseRecord>,
     opaque_raw_go_in_region: bool,
+}
+
+#[derive(Clone, Copy, Default)]
+struct WalkContext {
+    inside_reference_operand: bool,
+    inside_assignment_target: bool,
+    inside_enclosure: bool,
+    shadowed: bool,
+}
+
+impl WalkContext {
+    fn reference_operand(self) -> Self {
+        Self {
+            inside_reference_operand: true,
+            ..self
+        }
+    }
+
+    fn assignment_target(self) -> Self {
+        Self {
+            inside_assignment_target: true,
+            ..self
+        }
+    }
+
+    fn enclosure(self) -> Self {
+        Self {
+            inside_enclosure: true,
+            ..self
+        }
+    }
+
+    fn shadowed_if(self, shadowed: bool) -> Self {
+        Self {
+            shadowed: self.shadowed || shadowed,
+            ..self
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -55,10 +89,6 @@ impl<'a> Walker<'a> {
         Self {
             name,
             barriers_seen: 0,
-            inside_reference_operand: 0,
-            inside_assignment_target: 0,
-            enclosure_depth: 0,
-            shadow_depth: 0,
             uses: Vec::new(),
             opaque_raw_go_in_region: false,
         }
@@ -92,23 +122,23 @@ impl<'a> Walker<'a> {
         InlineDecision::Inline
     }
 
-    fn record_use(&mut self) {
+    fn record_use(&mut self, ctx: WalkContext) {
         self.uses.push(UseRecord {
-            inside_reference_operand: self.inside_reference_operand > 0,
-            inside_assignment_target: self.inside_assignment_target > 0,
-            inside_enclosure: self.enclosure_depth > 0,
+            inside_reference_operand: ctx.inside_reference_operand,
+            inside_assignment_target: ctx.inside_assignment_target,
+            inside_enclosure: ctx.inside_enclosure,
             preceding_barriers: self.barriers_seen,
         });
     }
 
-    fn walk(&mut self, expression: &Expression) {
-        if self.shadow_depth > 0 {
+    fn walk(&mut self, expression: &Expression, ctx: WalkContext) {
+        if ctx.shadowed {
             return;
         }
         match expression {
             Expression::Identifier { value, .. } => {
                 if value.as_str() == self.name {
-                    self.record_use();
+                    self.record_use(ctx);
                 }
             }
             Expression::Literal { .. }
@@ -122,47 +152,40 @@ impl<'a> Walker<'a> {
                 spread,
                 ..
             } => {
-                self.walk(callee);
+                self.walk(callee, ctx);
                 for arg in args {
-                    self.walk(arg);
+                    self.walk(arg, ctx);
                 }
                 if let Some(spread_arg) = spread.as_ref() {
-                    self.walk(spread_arg);
+                    self.walk(spread_arg, ctx);
                 }
                 self.barriers_seen += 1;
             }
             Expression::Propagate { expression, .. } => {
-                self.walk(expression);
+                self.walk(expression, ctx);
                 self.barriers_seen += 1;
             }
             Expression::Assignment { target, value, .. } => {
-                self.inside_assignment_target += 1;
-                self.walk(target);
-                self.inside_assignment_target -= 1;
-                self.walk(value);
+                self.walk(target, ctx.assignment_target());
+                self.walk(value, ctx);
                 self.barriers_seen += 1;
             }
             Expression::Reference { expression, .. } => {
-                self.inside_reference_operand += 1;
-                self.walk(expression);
-                self.inside_reference_operand -= 1;
+                self.walk(expression, ctx.reference_operand());
             }
 
             Expression::Block { items, .. } => {
-                self.walk_block(items);
+                self.walk_block(items, ctx);
             }
             Expression::Let {
-                binding,
+                binding: _,
                 value,
                 mode,
                 ..
             } => {
-                self.walk(value);
+                self.walk(value, ctx);
                 if let Some(else_b) = mode.else_block() {
-                    self.walk(else_b);
-                }
-                if pattern_binds_name(&binding.pattern, self.name) {
-                    self.shadow_depth += 1;
+                    self.walk(else_b, ctx);
                 }
             }
 
@@ -172,10 +195,10 @@ impl<'a> Walker<'a> {
                 alternative,
                 ..
             } => {
-                self.walk(condition);
-                self.walk(consequence);
+                self.walk(condition, ctx);
+                self.walk(consequence, ctx);
                 if let Some(alternative) = alternative {
-                    self.walk(alternative);
+                    self.walk(alternative, ctx);
                 }
             }
             Expression::IfLet {
@@ -185,73 +208,72 @@ impl<'a> Walker<'a> {
                 alternative,
                 ..
             } => {
-                self.walk(scrutinee);
-                self.with_shadow(pattern_binds_name(pattern, self.name), |w| {
-                    w.walk(consequence)
-                });
+                self.walk(scrutinee, ctx);
+                self.walk(
+                    consequence,
+                    ctx.shadowed_if(pattern_binds_name(pattern, self.name)),
+                );
                 if let Some(alternative) = alternative.expression() {
-                    self.walk(alternative);
+                    self.walk(alternative, ctx);
                 }
             }
             Expression::Match { subject, arms, .. } => {
-                self.walk(subject);
+                self.walk(subject, ctx);
                 for arm in arms {
-                    self.with_shadow(pattern_binds_name(&arm.pattern, self.name), |w| {
-                        if let Some(guard) = arm.guard.as_ref() {
-                            w.walk(guard);
-                        }
-                        w.walk(&arm.expression);
-                    });
+                    let arm_ctx = ctx.shadowed_if(pattern_binds_name(&arm.pattern, self.name));
+                    if let Some(guard) = arm.guard.as_ref() {
+                        self.walk(guard, arm_ctx);
+                    }
+                    self.walk(&arm.expression, arm_ctx);
                 }
             }
 
             Expression::Tuple { elements, .. } => {
                 for el in elements {
-                    self.walk(el);
+                    self.walk(el, ctx);
                 }
             }
             Expression::StructCall {
                 field_assignments, ..
             } => {
                 for fa in field_assignments {
-                    self.walk(&fa.value);
+                    self.walk(&fa.value, ctx);
                 }
             }
             Expression::IndexedAccess {
                 expression, index, ..
             } => {
-                self.walk(expression);
-                self.walk(index);
+                self.walk(expression, ctx);
+                self.walk(index, ctx);
             }
             Expression::Binary { left, right, .. } => {
-                self.walk(left);
-                self.walk(right);
+                self.walk(left, ctx);
+                self.walk(right, ctx);
             }
             Expression::Range { start, end, .. } => {
                 if let Some(s) = start.as_ref() {
-                    self.walk(s);
+                    self.walk(s, ctx);
                 }
                 if let Some(e) = end.as_ref() {
-                    self.walk(e);
+                    self.walk(e, ctx);
                 }
             }
             Expression::DotAccess { expression, .. }
             | Expression::Unary { expression, .. }
             | Expression::Paren { expression, .. }
             | Expression::Cast { expression, .. }
-            | Expression::Return { expression, .. } => self.walk(expression),
+            | Expression::Return { expression, .. } => self.walk(expression, ctx),
             Expression::Break {
                 value: Some(value), ..
-            } => self.walk(value),
+            } => self.walk(value, ctx),
 
-            Expression::Loop { body, .. } => self.walk_in_enclosure(body),
+            Expression::Loop { body, .. } => self.walk(body, ctx.enclosure()),
             Expression::While {
                 condition, body, ..
             } => {
-                self.enclosure_depth += 1;
-                self.walk(condition);
-                self.walk(body);
-                self.enclosure_depth -= 1;
+                let ctx = ctx.enclosure();
+                self.walk(condition, ctx);
+                self.walk(body, ctx);
             }
             Expression::WhileLet {
                 pattern,
@@ -259,10 +281,12 @@ impl<'a> Walker<'a> {
                 body,
                 ..
             } => {
-                self.enclosure_depth += 1;
-                self.walk(scrutinee);
-                self.with_shadow(pattern_binds_name(pattern, self.name), |w| w.walk(body));
-                self.enclosure_depth -= 1;
+                let ctx = ctx.enclosure();
+                self.walk(scrutinee, ctx);
+                self.walk(
+                    body,
+                    ctx.shadowed_if(pattern_binds_name(pattern, self.name)),
+                );
             }
             Expression::For {
                 binding,
@@ -270,49 +294,45 @@ impl<'a> Walker<'a> {
                 body,
                 ..
             } => {
-                self.walk(iterable);
-                self.enclosure_depth += 1;
-                self.with_shadow(pattern_binds_name(&binding.pattern, self.name), |w| {
-                    w.walk(body)
-                });
-                self.enclosure_depth -= 1;
+                self.walk(iterable, ctx);
+                self.walk(
+                    body,
+                    ctx.enclosure()
+                        .shadowed_if(pattern_binds_name(&binding.pattern, self.name)),
+                );
             }
 
             Expression::Lambda { params, body, .. } => {
-                self.enclosure_depth += 1;
                 let shadowed = params
                     .iter()
                     .any(|p| pattern_binds_name(&p.pattern, self.name));
-                self.with_shadow(shadowed, |w| w.walk(body));
-                self.enclosure_depth -= 1;
+                self.walk(body, ctx.enclosure().shadowed_if(shadowed));
             }
             Expression::Function { params, body, .. } => {
-                self.enclosure_depth += 1;
                 let shadowed = params
                     .iter()
                     .any(|p| pattern_binds_name(&p.pattern, self.name));
                 if let Some(body) = body.definition() {
-                    self.with_shadow(shadowed, |w| w.walk(body));
+                    self.walk(body, ctx.enclosure().shadowed_if(shadowed));
                 }
-                self.enclosure_depth -= 1;
             }
             Expression::Task { expression, .. } | Expression::Defer { expression, .. } => {
-                self.walk_in_enclosure(expression);
+                self.walk(expression, ctx.enclosure());
                 self.barriers_seen += 1;
             }
 
-            Expression::Assert { expression, .. } => self.walk(expression),
+            Expression::Assert { expression, .. } => self.walk(expression, ctx),
 
             Expression::Select { arms, .. } => {
                 // Mark the barrier before walking arms so uses inside any arm
                 // see the select wait as preceding.
                 self.barriers_seen += 1;
                 for arm in arms {
-                    self.walk_select_arm(arm);
+                    self.walk_select_arm(arm, ctx);
                 }
             }
             Expression::TryBlock { items, .. } | Expression::RecoverBlock { items, .. } => {
-                self.walk_block(items);
+                self.walk_block(items, ctx);
                 self.barriers_seen += 1;
             }
             Expression::RawGo { .. } => {
@@ -323,14 +343,14 @@ impl<'a> Walker<'a> {
             // Block-local `Const`/`Function` shadowing is applied in `walk_block`.
             Expression::Const { expression, .. } => {
                 if let Some(value) = expression.value() {
-                    self.walk(value);
+                    self.walk(value, ctx);
                 }
             }
             Expression::VariableDeclaration { .. } => {}
 
             Expression::ImplBlock { methods, .. } => {
                 for m in methods {
-                    self.walk(m);
+                    self.walk(m, ctx);
                 }
             }
 
@@ -342,41 +362,22 @@ impl<'a> Walker<'a> {
         }
     }
 
-    fn walk_in_enclosure(&mut self, expression: &Expression) {
-        self.enclosure_depth += 1;
-        self.walk(expression);
-        self.enclosure_depth -= 1;
-    }
-
-    /// Run `f` with `shadow_depth` raised while `shadowed` is true.
-    fn with_shadow(&mut self, shadowed: bool, f: impl FnOnce(&mut Self)) {
-        if shadowed {
-            self.shadow_depth += 1;
-        }
-        f(self);
-        if shadowed {
-            self.shadow_depth -= 1;
-        }
-    }
-
-    fn walk_block(&mut self, items: &[Expression]) {
-        let pre_shadow = self.shadow_depth;
-        let block_shadows: u32 = items
-            .iter()
-            .filter(|item| match item {
-                Expression::Const { identifier, .. } => identifier.as_str() == self.name,
-                Expression::Function { name, .. } => name.as_str() == self.name,
-                _ => false,
-            })
-            .count() as u32;
-        self.shadow_depth += block_shadows;
+    fn walk_block(&mut self, items: &[Expression], ctx: WalkContext) {
+        let block_shadows = items.iter().any(|item| match item {
+            Expression::Const { identifier, .. } => identifier.as_str() == self.name,
+            Expression::Function { name, .. } => name.as_str() == self.name,
+            _ => false,
+        });
+        let mut item_ctx = ctx.shadowed_if(block_shadows);
         for item in items {
-            self.walk(item);
+            self.walk(item, item_ctx);
+            if let Expression::Let { binding, .. } = item {
+                item_ctx = item_ctx.shadowed_if(pattern_binds_name(&binding.pattern, self.name));
+            }
         }
-        self.shadow_depth = pre_shadow;
     }
 
-    fn walk_select_arm(&mut self, pattern: &SelectArm) {
+    fn walk_select_arm(&mut self, pattern: &SelectArm, ctx: WalkContext) {
         match pattern {
             SelectArm::Receive {
                 binding,
@@ -384,46 +385,36 @@ impl<'a> Walker<'a> {
                 body,
                 ..
             } => {
-                self.walk(receive_expression);
-                let shadow = pattern_binds_name(binding, self.name);
-                if shadow {
-                    self.shadow_depth += 1;
-                }
-                self.walk_in_enclosure(body);
-                if shadow {
-                    self.shadow_depth -= 1;
-                }
+                self.walk(receive_expression, ctx);
+                self.walk(
+                    body,
+                    ctx.enclosure()
+                        .shadowed_if(pattern_binds_name(binding, self.name)),
+                );
             }
             SelectArm::Send {
                 send_expression,
                 body,
             } => {
-                self.walk(send_expression);
-                self.walk_in_enclosure(body);
+                self.walk(send_expression, ctx);
+                self.walk(body, ctx.enclosure());
             }
             SelectArm::MatchReceive {
                 receive_expression,
                 arms,
             } => {
-                self.walk(receive_expression);
-                self.enclosure_depth += 1;
+                self.walk(receive_expression, ctx);
+                let ctx = ctx.enclosure();
                 for arm in arms {
-                    let shadow = pattern_binds_name(&arm.pattern, self.name);
-                    if shadow {
-                        self.shadow_depth += 1;
-                    }
+                    let arm_ctx = ctx.shadowed_if(pattern_binds_name(&arm.pattern, self.name));
                     if let Some(guard) = arm.guard.as_ref() {
-                        self.walk(guard);
+                        self.walk(guard, arm_ctx);
                     }
-                    self.walk(&arm.expression);
-                    if shadow {
-                        self.shadow_depth -= 1;
-                    }
+                    self.walk(&arm.expression, arm_ctx);
                 }
-                self.enclosure_depth -= 1;
             }
             SelectArm::WildCard { body } => {
-                self.walk_in_enclosure(body);
+                self.walk(body, ctx.enclosure());
             }
         }
     }
