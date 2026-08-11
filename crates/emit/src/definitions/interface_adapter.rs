@@ -410,21 +410,21 @@ impl Planner<'_> {
 
         let logical_ty = self.facts.peel_alias(return_type);
         let go_ret = self.render_lowered_return_ty(interface_abi, return_type);
+        if interface_abi.is_passthrough() {
+            let statements = self.lower_abi_to_tagged_return(inner_call, user_abi, &logical_ty);
+            return (go_ret, crate::Renderer.render_setup(&statements));
+        }
         let (setup, tagged) = self.lower_abi_to_tagged(inner_call, user_abi, &logical_ty);
         let mut body = crate::Renderer.render_setup(&setup);
-        if interface_abi.is_passthrough() {
-            write_line!(body, "return {}", tagged);
+        let subject = if user_abi.is_passthrough() {
+            let res = self.fresh_var(Some("res"));
+            self.declare(&res);
+            write_line!(body, "{} := {}", res, tagged);
+            res
         } else {
-            let subject = if user_abi.is_passthrough() {
-                let res = self.fresh_var(Some("res"));
-                self.declare(&res);
-                write_line!(body, "{} := {}", res, tagged);
-                res
-            } else {
-                tagged
-            };
-            render_lowered_result_return(self, &mut body, &subject, &logical_ty, interface_abi);
-        }
+            tagged
+        };
+        render_lowered_result_return(self, &mut body, &subject, &logical_ty, interface_abi);
         (go_ret, body)
     }
 }

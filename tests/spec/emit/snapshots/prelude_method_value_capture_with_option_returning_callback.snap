@@ -15,19 +15,18 @@ import lisette "github.com/ivov/lisette/prelude"
 func main() {
 	cb_1 := lisette.OptionAndThen[int, int]
 	f := func(arg0 lisette.Option[int], arg1 func(int) (int, bool)) (int, bool) {
-		tagged_3 := func(arg0 int) lisette.Option[int] {
-			option_2 := lisette.OptionFromCommaOk[int](arg1(arg0))
-			return option_2
+		tagged_2 := func(arg0 int) lisette.Option[int] {
+			return lisette.OptionFromCommaOk[int](arg1(arg0))
 		}
-		opt_4 := cb_1(arg0, tagged_3)
-		if opt_4.Tag == lisette.OptionSome {
-			return opt_4.SomeVal, true
+		opt_3 := cb_1(arg0, tagged_2)
+		if opt_3.Tag == lisette.OptionSome {
+			return opt_3.SomeVal, true
 		}
 		return 0, false
 	}
-	option_5 := lisette.OptionFromCommaOk[int](f(lisette.MakeOptionSome(1), func(v int) (int, bool) {
+	option_4 := lisette.OptionFromCommaOk[int](f(lisette.MakeOptionSome(1), func(v int) (int, bool) {
 		return v * 2, true
 	}))
-	x := option_5
+	x := option_4
 	_ = x
 }

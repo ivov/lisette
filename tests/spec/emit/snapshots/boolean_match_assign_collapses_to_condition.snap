@@ -1,0 +1,43 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  enum Node {
+    Number(int),
+    Null,
+  }
+  
+  fn test(node: Node) -> bool {
+    let matched = match node {
+      Number(n) => n == 42,
+      _ => false,
+    }
+    matched
+  }
+---
+package main
+
+func MakeNodeNumber(arg0 int) Node {
+	return Node{Tag: NodeNumber, Number: arg0}
+}
+
+func MakeNodeNull() Node {
+	return Node{Tag: NodeNull}
+}
+
+type NodeTag int
+
+const (
+	NodeNumber NodeTag = iota
+	NodeNull
+)
+
+type Node struct {
+	Tag    NodeTag
+	Number int
+}
+
+func test(node Node) bool {
+	matched := (node.Tag == NodeNumber) && (node.Number == 42)
+	return matched
+}

@@ -89,11 +89,9 @@ type _lisAdapter_Boom_Failing_0 struct {
 
 func (a _lisAdapter_Boom_Failing_0) get() lisette.Result[int, error] {
 	ret_2, ret_3 := a.inner.get()
-	var result_4 lisette.Result[int, error]
 	if ret_3 != nil {
-		result_4 = lisette.MakeResultErr[int, error](ret_3)
+		return lisette.MakeResultErr[int, error](ret_3)
 	} else {
-		result_4 = lisette.MakeResultOk[int, error](ret_2)
+		return lisette.MakeResultOk[int, error](ret_2)
 	}
-	return result_4
 }

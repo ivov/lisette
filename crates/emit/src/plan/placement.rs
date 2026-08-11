@@ -6,7 +6,7 @@ use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
 use crate::definitions::functions::{is_breakless_loop, is_go_never};
 use crate::expressions::staging::SpreadSequenceOptions;
 use crate::plan::bodies::{
-    AssignForm, AssignPlan, BreakValueAction, BreakValuePlan, LoopTransfer, LoweredBlock,
+    AssignForm, AssignPlan, BreakValueAction, BreakValuePlan, ElseArm, LoopTransfer, LoweredBlock,
     LoweredStatement, PlacePlan,
 };
 use crate::plan::calls::plan_variadic_spread;
@@ -58,6 +58,140 @@ pub(crate) fn simple_assign(target_var: &str, value: ValuePlan) -> LoweredStatem
             value,
         },
     })
+}
+
+/// Collapse `var x T` + one unconditional `x = v` into `x := v`, when `:=`
+/// infers T identically (a `float64` context can hold an untyped int literal).
+pub(crate) fn collapse_declare_assign(statements: &mut Vec<LoweredStatement>, name: &str) {
+    let [
+        LoweredStatement::VarDecl {
+            name: declared,
+            go_type,
+            value: None,
+        },
+        LoweredStatement::Assign(assign),
+    ] = statements.as_slice()
+    else {
+        return;
+    };
+    if declared != name || !matches!(go_type.as_str(), "int" | "string" | "bool") {
+        return;
+    }
+    let AssignForm::Simple {
+        target_capture,
+        target_str,
+        value,
+    } = &assign.form
+    else {
+        return;
+    };
+    if target_str != name
+        || !target_capture.is_empty()
+        || !value.setup.is_empty()
+        || value.expression.contains_deferred_evaluation()
+    {
+        return;
+    }
+    let Some(LoweredStatement::Assign(assign)) = statements.pop() else {
+        unreachable!("shape checked above");
+    };
+    let AssignForm::Simple { value, .. } = assign.form else {
+        unreachable!("shape checked above");
+    };
+    statements[0] = LoweredStatement::TempBind {
+        name: name.to_string(),
+        value: value.expression.rendered(),
+    };
+}
+
+/// Collapse `var x bool` + `if c { x = a } else { x = b }` with a literal arm
+/// into `x := <condition>`. Short-circuit keeps the other arm conditional.
+pub(crate) fn collapse_boolean_branch_assign(statements: &mut Vec<LoweredStatement>, name: &str) {
+    let [
+        LoweredStatement::VarDecl {
+            name: declared,
+            go_type,
+            value: None,
+        },
+        LoweredStatement::If(plan),
+    ] = statements.as_slice()
+    else {
+        return;
+    };
+    if declared != name || go_type != "bool" || !plan.condition_setup.is_empty() {
+        return;
+    }
+    let ElseArm::Else {
+        body: else_body, ..
+    } = &plan.else_arm
+    else {
+        return;
+    };
+    let Some(then_value) = single_simple_assign_value(&plan.then_body, name) else {
+        return;
+    };
+    let Some(else_value) = single_simple_assign_value(else_body, name) else {
+        return;
+    };
+    let Some(joined) = join_boolean_branches(&plan.condition, &then_value, &else_value) else {
+        return;
+    };
+    statements.pop();
+    statements[0] = LoweredStatement::TempBind {
+        name: name.to_string(),
+        value: joined,
+    };
+}
+
+/// The rendered value of a body that is exactly one plain `name = value`.
+fn single_simple_assign_value(body: &LoweredBlock, name: &str) -> Option<String> {
+    let [LoweredStatement::Assign(assign)] = body.statements.as_slice() else {
+        return None;
+    };
+    let AssignForm::Simple {
+        target_capture,
+        target_str,
+        value,
+    } = &assign.form
+    else {
+        return None;
+    };
+    (target_str == name
+        && target_capture.is_empty()
+        && value.setup.is_empty()
+        && !value.expression.contains_deferred_evaluation())
+    .then(|| value.expression.rendered())
+}
+
+fn join_boolean_branches(condition: &str, then_value: &str, else_value: &str) -> Option<String> {
+    Some(match (then_value, else_value) {
+        ("true", "false") => condition.to_string(),
+        ("false", "true") => negate_condition(condition),
+        // Both-literal same-value arms would drop the condition's evaluation.
+        ("true", "true") | ("false", "false") => return None,
+        (value, "false") => format!("{} && {}", and_operand(condition), and_operand(value)),
+        ("true", value) => format!("{} || {}", condition, value),
+        ("false", value) => format!("{} && {}", negate_condition(condition), and_operand(value)),
+        (value, "true") => format!("{} || {}", negate_condition(condition), value),
+        _ => return None,
+    })
+}
+
+fn negate_condition(condition: &str) -> String {
+    if crate::names::go_name::is_plain_identifier(condition) {
+        format!("!{}", condition)
+    } else {
+        format!("!({})", condition)
+    }
+}
+
+/// Parenthesize a synthesized `&&` operand, keeping bare identifiers bare.
+fn and_operand(operand: &str) -> String {
+    if crate::names::go_name::is_plain_identifier(operand) {
+        operand.to_string()
+    } else {
+        format!("({})", operand)
+    }
 }
 
 pub(crate) fn requires_temp_var(expression: &Expression) -> bool {

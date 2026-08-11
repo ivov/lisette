@@ -66,11 +66,9 @@ type _lisAdapter_Bar_Foo_0 struct {
 
 func (a _lisAdapter_Bar_Foo_0) get(arg0 bool) lisette.Result[int, error] {
 	ret_1, ret_2 := a.inner.get(arg0)
-	var result_3 lisette.Result[int, error]
 	if ret_2 != nil {
-		result_3 = lisette.MakeResultErr[int, error](ret_2)
+		return lisette.MakeResultErr[int, error](ret_2)
 	} else {
-		result_3 = lisette.MakeResultOk[int, error](ret_1)
+		return lisette.MakeResultOk[int, error](ret_1)
 	}
-	return result_3
 }
