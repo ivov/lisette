@@ -93,6 +93,5 @@ type _lisAdapter_Wrap_Box_0[A any, B Holder[A]] struct {
 }
 
 func (a _lisAdapter_Wrap_Box_0[A, B]) get() lisette.Option[A] {
-	option_1 := lisette.OptionFromCommaOk[A](a.inner.get())
-	return option_1
+	return lisette.OptionFromCommaOk[A](a.inner.get())
 }

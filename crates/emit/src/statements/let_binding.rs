@@ -8,7 +8,10 @@ use crate::escape_reserved;
 use crate::patterns::sites::{AnnotatedPattern, PatternSubject};
 use crate::plan::bodies::{LetForm, LetPlan, LoweredBlock, LoweredStatement};
 use crate::plan::calls::CallableOrigin;
-use crate::plan::placement::{expression_contains_binding, is_unit_call, requires_temp_var};
+use crate::plan::placement::{
+    collapse_boolean_branch_assign, collapse_declare_assign, expression_contains_binding,
+    is_unit_call, requires_temp_var,
+};
 use syntax::ast::{Binding, Expression, Literal, Pattern, UnaryOperator};
 use syntax::types::Type;
 
@@ -310,6 +313,8 @@ impl Planner<'_> {
             self.try_declare(name);
         }
         statements.extend(self.lower_assign(value, name, Some(binding_ty)));
+        collapse_declare_assign(&mut statements, name);
+        collapse_boolean_branch_assign(&mut statements, name);
         statements
     }
 

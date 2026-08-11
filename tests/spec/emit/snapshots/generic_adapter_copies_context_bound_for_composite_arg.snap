@@ -68,6 +68,5 @@ type _lisAdapter_Keyed_Box_0[T comparable] struct {
 }
 
 func (a _lisAdapter_Keyed_Box_0[T]) get() lisette.Option[[2]T] {
-	option_1 := lisette.OptionFromCommaOk[[2]T](a.inner.get())
-	return option_1
+	return lisette.OptionFromCommaOk[[2]T](a.inner.get())
 }

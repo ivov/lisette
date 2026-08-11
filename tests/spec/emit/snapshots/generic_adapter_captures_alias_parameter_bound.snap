@@ -72,6 +72,5 @@ type _lisAdapter_Bar_Box_0[T comparable] struct {
 }
 
 func (a _lisAdapter_Bar_Box_0[T]) get() lisette.Option[Wrapped[T]] {
-	option_1 := lisette.OptionFromCommaOk[Wrapped[T]](a.inner.get())
-	return option_1
+	return lisette.OptionFromCommaOk[Wrapped[T]](a.inner.get())
 }

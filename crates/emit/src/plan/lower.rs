@@ -11,7 +11,9 @@ use crate::plan::bodies::{
     LoopTransfer, LoweredBlock, LoweredStatement, MatchStatementPlan, PlacePlan, WhileLetPlan,
     directed,
 };
-use crate::plan::placement::{requires_temp_var, try_elide_tail_let};
+use crate::plan::placement::{
+    collapse_boolean_branch_assign, collapse_declare_assign, requires_temp_var, try_elide_tail_let,
+};
 use crate::plan::values::ValuePlan;
 use crate::utils::wrap_if_struct_literal;
 use syntax::ast::{
@@ -91,11 +93,9 @@ impl Planner<'_> {
                 target_ty: Some(ty),
             },
         );
-        ValuePlan::name(
-            vec![declaration, LoweredStatement::If(plan)],
-            result_var,
-            false,
-        )
+        let mut setup = vec![declaration, LoweredStatement::If(plan)];
+        collapse_boolean_branch_assign(&mut setup, &result_var);
+        ValuePlan::name(setup, result_var, false)
     }
 
     /// Lower a value-position `if let`/`match`/`select` to a fresh operand-temp
@@ -116,6 +116,8 @@ impl Planner<'_> {
         );
         let mut setup = vec![declaration];
         setup.extend(block.statements);
+        collapse_declare_assign(&mut setup, &result_var);
+        collapse_boolean_branch_assign(&mut setup, &result_var);
         ValuePlan::name(setup, result_var, false)
     }
 

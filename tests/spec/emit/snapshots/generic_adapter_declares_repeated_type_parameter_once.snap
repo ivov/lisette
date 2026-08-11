@@ -71,6 +71,5 @@ type _lisAdapter_Pair_Box_0[T any] struct {
 }
 
 func (a _lisAdapter_Pair_Box_0[T]) get() lisette.Option[T] {
-	option_1 := lisette.OptionFromCommaOk[T](a.inner.get())
-	return option_1
+	return lisette.OptionFromCommaOk[T](a.inner.get())
 }

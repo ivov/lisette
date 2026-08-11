@@ -21,12 +21,10 @@ func main() {
 	cb_1 := Resultant
 	_ = Resolve(0, func(arg0 int) lisette.Result[int, Face] {
 		ret_2, ret_3 := cb_1(arg0)
-		var result_4 lisette.Result[int, Face]
 		if ret_3 != nil {
-			result_4 = lisette.MakeResultErr[int, Face](ret_3)
+			return lisette.MakeResultErr[int, Face](ret_3)
 		} else {
-			result_4 = lisette.MakeResultOk[int, Face](ret_2)
+			return lisette.MakeResultOk[int, Face](ret_2)
 		}
-		return result_4
 	})
 }

@@ -13,13 +13,11 @@ func main() {
 	cb_1 := resolver.Resultant
 	rez := resolver.Resolve(42, func(arg0 int) lisette.Result[int, resolver.Face] {
 		ret_2, ret_3 := cb_1(arg0)
-		var result_4 lisette.Result[int, resolver.Face]
 		if ret_3 != nil {
-			result_4 = lisette.MakeResultErr[int, resolver.Face](ret_3)
+			return lisette.MakeResultErr[int, resolver.Face](ret_3)
 		} else {
-			result_4 = lisette.MakeResultOk[int, resolver.Face](ret_2)
+			return lisette.MakeResultOk[int, resolver.Face](ret_2)
 		}
-		return result_4
 	})
 	_ = rez
 }

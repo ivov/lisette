@@ -49,8 +49,7 @@ type _lisAdapter_Bar_Box_0_[_lisAdapter_Bar_Box_0 any] struct {
 }
 
 func (a _lisAdapter_Bar_Box_0_[_lisAdapter_Bar_Box_0]) get() lisette.Option[_lisAdapter_Bar_Box_0] {
-	option_1 := lisette.OptionFromCommaOk[_lisAdapter_Bar_Box_0](a.inner.get())
-	return option_1
+	return lisette.OptionFromCommaOk[_lisAdapter_Bar_Box_0](a.inner.get())
 }
 
 type _lisAdapter_Bar_Box_1 struct {
@@ -58,8 +57,7 @@ type _lisAdapter_Bar_Box_1 struct {
 }
 
 func (a _lisAdapter_Bar_Box_1) get() lisette.Option[int] {
-	option_1 := lisette.OptionFromCommaOk[int](a.inner.get())
-	return option_1
+	return lisette.OptionFromCommaOk[int](a.inner.get())
 }
 
 type _lisAdapter_Bar_Box_2 struct {
@@ -67,6 +65,5 @@ type _lisAdapter_Bar_Box_2 struct {
 }
 
 func (a _lisAdapter_Bar_Box_2) get() lisette.Option[int] {
-	option_1 := lisette.OptionFromCommaOk[int](a.inner.get())
-	return option_1
+	return lisette.OptionFromCommaOk[int](a.inner.get())
 }

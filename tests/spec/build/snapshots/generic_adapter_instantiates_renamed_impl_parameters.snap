@@ -33,6 +33,5 @@ type _lisAdapter_Bar_Box_0 struct {
 }
 
 func (a _lisAdapter_Bar_Box_0) get() lisette.Option[int] {
-	option_1 := lisette.OptionFromCommaOk[int](a.inner.get())
-	return option_1
+	return lisette.OptionFromCommaOk[int](a.inner.get())
 }

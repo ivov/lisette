@@ -665,11 +665,11 @@ impl Planner<'_> {
         if let Some(plan) = self.plan_call(expression)
             && !plan.resolved.abi.result.is_passthrough()
         {
-            let (setup, result_var) = self
-                .lower_go_abi_wrapped_call(expression, &plan.resolved.abi, return_ty)
-                .into_parts();
-            statements.extend(setup);
             if let Some(shape) = lowered {
+                let (setup, result_var) = self
+                    .lower_go_abi_wrapped_call(expression, &plan.resolved.abi, return_ty)
+                    .into_parts();
+                statements.extend(setup);
                 statements.extend(transition::emit_lowered_result_return(
                     self,
                     &result_var,
@@ -677,7 +677,27 @@ impl Planner<'_> {
                     shape,
                 ));
             } else {
-                statements.push(plain_return(result_var));
+                let abi = plan.resolved.abi.clone();
+                let unbridged = self.go_tuple_result_bridges(&abi, return_ty).is_none()
+                    && self.go_result_layout_bridge(&abi, return_ty).is_none()
+                    && self.go_return_payload_bridge(&abi, return_ty).is_none();
+                if unbridged {
+                    let (setup, call_str) = self
+                        .lower_call(expression, None, ExpressionContext::value())
+                        .into_parts();
+                    statements.extend(setup);
+                    statements.extend(self.lower_abi_to_tagged_return(
+                        &call_str,
+                        &abi.result,
+                        return_ty,
+                    ));
+                } else {
+                    let (setup, result_var) = self
+                        .lower_go_abi_wrapped_call(expression, &abi, return_ty)
+                        .into_parts();
+                    statements.extend(setup);
+                    statements.push(plain_return(result_var));
+                }
             }
             return statements;
         }

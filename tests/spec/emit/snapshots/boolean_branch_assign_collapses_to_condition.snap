@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  fn test(a: int, b: int) -> bool {
+    let direct = if a > 0 { true } else { false }
+    let and_arm = if a > 0 { b > 1 } else { false }
+    let or_arm = if a > 0 { true } else { b > 1 }
+    let negated = if a > 0 { false } else { true }
+    direct && and_arm && or_arm && negated
+  }
+---
+package main
+
+func test(a, b int) bool {
+	direct := a > 0
+	and_arm := (a > 0) && (b > 1)
+	or_arm := a > 0 || b > 1
+	negated := !(a > 0)
+	return direct && and_arm && or_arm && negated
+}

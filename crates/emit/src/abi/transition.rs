@@ -9,6 +9,7 @@ use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{
     OPTION_SOME_TAG, PARTIAL_ERR_TAG, PARTIAL_OK_TAG, RESULT_OK_TAG,
 };
+use crate::control_flow::propagation::plain_return;
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoweredBlock, LoweredStatement, ReturnForm, ReturnStatementPlan,
 };
@@ -278,6 +279,24 @@ impl Planner<'_> {
             self.lower_abi_wrapping(raw_value, abi, result_ty, WrapperTarget::FreshSlot);
         (wrap, outcome.expect("wrapper produced no slot"))
     }
+
+    /// Wrap a callable's physical Go result and return it in each wrapper branch.
+    pub(crate) fn lower_abi_to_tagged_return(
+        &mut self,
+        raw_value: &str,
+        abi: &CallableReturnAbi,
+        result_ty: &Type,
+    ) -> Vec<LoweredStatement> {
+        if abi.is_passthrough() || matches!(abi, CallableReturnAbi::Tuple { .. }) {
+            let (mut statements, value) = self.lower_abi_to_tagged(raw_value, abi, result_ty);
+            statements.push(plain_return(value));
+            return statements;
+        }
+        let (statements, outcome) =
+            self.lower_abi_wrapping(raw_value, abi, result_ty, WrapperTarget::Return);
+        debug_assert!(outcome.is_none(), "Return target emits its own returns");
+        statements
+    }
 }
 
 /// Wrap a tagged-return callback into a Go body producing the lowered Go
@@ -512,13 +531,15 @@ pub(crate) fn emit_fn_arg_shape_adapter(
 
     let outer_ret = planner.render_lowered_return_ty(target_abi, arg_ret);
 
-    let (wrap_statements, tagged) = planner.lower_abi_to_tagged(&inner_call, arg_abi, arg_ret);
-    let mut body = Renderer.render_setup(&wrap_statements);
-    if target_abi.is_passthrough() {
-        write_line!(body, "return {}", tagged);
+    let body = if target_abi.is_passthrough() {
+        let statements = planner.lower_abi_to_tagged_return(&inner_call, arg_abi, arg_ret);
+        Renderer.render_setup(&statements)
     } else {
+        let (wrap_statements, tagged) = planner.lower_abi_to_tagged(&inner_call, arg_abi, arg_ret);
+        let mut body = Renderer.render_setup(&wrap_statements);
         render_lowered_result_return(planner, &mut body, &tagged, arg_ret, target_abi);
-    }
+        body
+    };
 
     Some(format!(
         "func({}) {} {{\n{}}}",
@@ -552,9 +573,8 @@ pub(crate) fn lower_arg_to_tagged(
     let inner_call = format!("{}({})", arg_name, inner_arg_names.join(", "));
     let tagged_ret = planner.go_type_string(inner_ret);
 
-    let (wrap_statements, result_var) = planner.lower_abi_to_tagged(&inner_call, &abi, inner_ret);
-    let mut body = Renderer.render_setup(&wrap_statements);
-    write_line!(body, "return {}", result_var);
+    let wrap_statements = planner.lower_abi_to_tagged_return(&inner_call, &abi, inner_ret);
+    let body = Renderer.render_setup(&wrap_statements);
 
     let tagged_var = planner.fresh_var(Some("tagged"));
     planner.declare(&tagged_var);

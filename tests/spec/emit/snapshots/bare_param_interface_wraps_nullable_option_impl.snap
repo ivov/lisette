@@ -64,6 +64,5 @@ type _lisAdapter_Bar_Box_0 struct {
 
 func (a _lisAdapter_Bar_Box_0) get() lisette.Option[*Thing] {
 	raw_1 := a.inner.get()
-	option_2 := lisette.OptionFromNilable[*Thing](raw_1, raw_1 == nil)
-	return option_2
+	return lisette.OptionFromNilable[*Thing](raw_1, raw_1 == nil)
 }

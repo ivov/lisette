@@ -949,6 +949,50 @@ fn test() -> int {
 }
 
 #[test]
+fn boolean_branch_assign_collapses_to_condition() {
+    let input = r#"
+fn test(a: int, b: int) -> bool {
+  let direct = if a > 0 { true } else { false }
+  let and_arm = if a > 0 { b > 1 } else { false }
+  let or_arm = if a > 0 { true } else { b > 1 }
+  let negated = if a > 0 { false } else { true }
+  direct && and_arm && or_arm && negated
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn float_binding_from_block_keeps_var_declaration() {
+    let input = r#"
+fn test() -> float64 {
+  let scaled: float64 = { 42 }
+  scaled
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn boolean_match_assign_collapses_to_condition() {
+    let input = r#"
+enum Node {
+  Number(int),
+  Null,
+}
+
+fn test(node: Node) -> bool {
+  let matched = match node {
+    Number(n) => n == 42,
+    _ => false,
+  }
+  matched
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn match_multiple_with_same_vars() {
     let input = r#"
 fn test() -> int {

@@ -25,13 +25,11 @@ func main() {
 		cb_4 := cb_3
 		adapted_2[i] = func(arg0 int) lisette.Result[int, Face] {
 			ret_5, ret_6 := cb_4(arg0)
-			var result_7 lisette.Result[int, Face]
 			if ret_6 != nil {
-				result_7 = lisette.MakeResultErr[int, Face](ret_6)
+				return lisette.MakeResultErr[int, Face](ret_6)
 			} else {
-				result_7 = lisette.MakeResultOk[int, Face](ret_5)
+				return lisette.MakeResultOk[int, Face](ret_5)
 			}
-			return result_7
 		}
 	}
 	_ = Resolve[int, Face](0, adapted_2...)
