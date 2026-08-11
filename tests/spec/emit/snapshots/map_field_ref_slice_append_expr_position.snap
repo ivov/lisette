@@ -15,8 +15,6 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
 type Outer struct {
 	items *[]int
 }
@@ -25,11 +23,10 @@ func main() {
 	items := []int{1}
 	m := make(map[string]Outer)
 	m["a"] = Outer{items: &items}
-	subject_1 := lisette.MapGet(m, "a")
-	if subject_1.Tag != lisette.OptionSome {
+	o, ok_1 := m["a"]
+	if !ok_1 {
 		return
 	}
-	o := subject_1.SomeVal
 	var tmp_2 []int
 	recv_3 := *o.items
 	tmp_2 = append(recv_3[:len(recv_3):len(recv_3)], 2)

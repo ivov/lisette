@@ -5,6 +5,7 @@ use syntax::ast::{Expression, MatchArm, Pattern, Span};
 use syntax::types::Type;
 
 use crate::Planner;
+use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name::{self, prelude_qualifier, testkit_qualifier};
 use crate::patterns::binding_decls::pattern_binds_name;
@@ -13,6 +14,7 @@ use crate::patterns::binding_emit::{
     tree_assignment_statements, tree_binding_statements, with_tree_bindings,
 };
 use crate::patterns::decision_tree::{self, PatternInfo, render_condition};
+use crate::patterns::matching::{field_binding, some_pattern_field};
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan,
 };
@@ -201,6 +203,13 @@ impl Planner<'_> {
         scrutinee: &Expression,
         fail: RefutableFail,
     ) -> Vec<LoweredStatement> {
+        if let RefutableFail::ElseBlock(else_block) = fail
+            && let Some(statements) =
+                self.lower_fused_option_let_else(ap.pattern, scrutinee, else_block)
+        {
+            return statements;
+        }
+
         let value_ty = scrutinee.get_type();
         let mut statements = Vec::new();
         let resolved = self.resolve_pattern_subject(
@@ -229,6 +238,48 @@ impl Planner<'_> {
         }
         statements.extend(body_block.statements);
         statements
+    }
+
+    /// Fuse `let Some(x) = <comma-ok source> else { ... }` into a direct pair test.
+    fn lower_fused_option_let_else(
+        &mut self,
+        pattern: &Pattern,
+        scrutinee: &Expression,
+        else_block: &Expression,
+    ) -> Option<Vec<LoweredStatement>> {
+        let source = self.comma_ok_source(scrutinee)?;
+        let field = some_pattern_field(pattern)?;
+
+        let binding = self.go_name_for_binding(field).map(|name| {
+            let escaped = go_name::escape_reserved(&name).into_owned();
+            let go_name = if self.is_declared(&escaped) {
+                self.fresh_var(Some(&name))
+            } else {
+                escaped
+            };
+            self.declare(&go_name);
+            (name, go_name)
+        });
+        let slot = match &binding {
+            Some((_, go_name)) => CommaOkValueSlot::Named(go_name.clone()),
+            None => CommaOkValueSlot::Unused,
+        };
+        let pair = self.bind_comma_ok_pair(scrutinee, source, slot);
+
+        let fail_condition = self.comma_ok_none_condition(&pair);
+        // The else block sees the enclosing scope, so it lowers before the binding installs.
+        let fail_body = self.lower_block_as_body(else_block);
+        let mut statements = pair.statements;
+        statements.push(LoweredStatement::If(IfPlan {
+            condition_setup: Vec::new(),
+            condition: fail_condition,
+            then_body: fail_body,
+            else_arm: ElseArm::None,
+        }));
+        if let Some((name, go_name)) = binding {
+            self.scope.bind(name, go_name);
+        }
+        Some(statements)
     }
 
     /// Resolve a while-let scrutinee to its loop-subject var, returning any
@@ -264,6 +315,10 @@ impl Planner<'_> {
         scrutinee: &Expression,
         body: &Expression,
     ) -> LoweredBlock {
+        if let Some(fused) = self.lower_fused_option_while_let(pattern, scrutinee, body) {
+            return fused;
+        }
+
         let scrutinee_ty = scrutinee.get_type();
         let (subject_var, subject_setup) = self.while_let_subject(pattern, scrutinee);
 
@@ -345,6 +400,56 @@ impl Planner<'_> {
         LoweredBlock {
             statements: vec![LoweredStatement::Loop(plan)],
         }
+    }
+
+    /// Fuse `while let Some(x) = <comma-ok source>` into a per-iteration pair test.
+    fn lower_fused_option_while_let(
+        &mut self,
+        pattern: &Pattern,
+        scrutinee: &Expression,
+        body: &Expression,
+    ) -> Option<LoweredBlock> {
+        let source = self.comma_ok_source(scrutinee)?;
+        let field = some_pattern_field(pattern)?;
+        let binding = field_binding(field).filter(|b| *b != "_");
+
+        let slot = if binding.is_some() {
+            CommaOkValueSlot::Temp
+        } else {
+            CommaOkValueSlot::Unused
+        };
+        let pair = self.bind_comma_ok_pair(scrutinee, source, slot);
+
+        let condition = self.comma_ok_none_condition(&pair);
+        let mut loop_body = pair.statements;
+        loop_body.push(LoweredStatement::If(IfPlan {
+            condition_setup: Vec::new(),
+            condition,
+            then_body: LoweredBlock {
+                statements: vec![LoweredStatement::Break(
+                    self.current_loop_id()
+                        .map_or(LoopTransfer::Unlabeled, LoopTransfer::Source),
+                )],
+            },
+            else_arm: ElseArm::None,
+        }));
+        let (body_block, _) = self.lower_fused_arm(
+            &[binding.zip(pair.value.as_deref())],
+            body,
+            &PlacePlan::Statement,
+        );
+        loop_body.extend(body_block.statements);
+
+        let plan = self.build_source_loop(
+            Vec::new(),
+            "for {\n".to_string(),
+            LoweredBlock {
+                statements: loop_body,
+            },
+        );
+        Some(LoweredBlock {
+            statements: vec![LoweredStatement::Loop(plan)],
+        })
     }
 
     fn lower_refutable_fail(&mut self, fail: RefutableFail, subject_var: &str) -> LoweredBlock {

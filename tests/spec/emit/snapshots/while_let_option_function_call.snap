@@ -18,10 +18,7 @@ description: |
 ---
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "fmt"
 
 func nextItem(counter int) (int, bool) {
 	if counter < 5 {
@@ -33,14 +30,12 @@ func nextItem(counter int) (int, bool) {
 func test() {
 	i := 0
 	for {
-		option_2 := lisette.OptionFromCommaOk[int](nextItem(i))
-		subject_1 := option_2
-		if subject_1.Tag == lisette.OptionSome {
-			x := subject_1.SomeVal
-			fmt.Printf("Got: %d\n", x)
-			i++
-		} else {
+		ret_1, ok_2 := nextItem(i)
+		if !ok_2 {
 			break
 		}
+		x := ret_1
+		fmt.Printf("Got: %d\n", x)
+		i++
 	}
 }

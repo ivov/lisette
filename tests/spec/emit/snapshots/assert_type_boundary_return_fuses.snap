@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn test(value: Unknown) -> Option<int> {
+    assert_type<int>(value)
+  }
+---
+package main
+
+func test(value any) (int, bool) {
+	ret_1, ok_2 := value.(int)
+	return ret_1, ok_2
+}

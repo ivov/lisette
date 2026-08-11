@@ -13,20 +13,12 @@ description: |
 ---
 package main
 
-import (
-	"example.com/reg"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "example.com/reg"
 
 func main() {
-	ret_2, ret_3 := reg.Lookup("a")
-	var option_4 lisette.Option[map[string]int]
-	if ret_3 && ret_2 != nil {
-		option_4 = lisette.MakeOptionSome[map[string]int](ret_2)
-	} else {
-		option_4 = lisette.MakeOptionNone[map[string]int]()
-	}
-	if option_4.Tag == lisette.OptionSome {
-		_ = len(option_4.SomeVal)
+	ret_1, ok_2 := reg.Lookup("a")
+	if ok_2 && ret_1 != nil {
+		m := ret_1
+		_ = len(m)
 	}
 }

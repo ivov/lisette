@@ -2029,6 +2029,24 @@ fn test() {
 }
 
 #[test]
+fn if_let_none_on_comma_ok_call() {
+    let input = r#"
+import "go:fmt"
+
+fn divide(a: int, b: int) -> Option<int> {
+  if b == 0 { None } else { Some(a / b) }
+}
+
+fn test() {
+  if let None = divide(100, 0) {
+    let _ = fmt.Print("division by zero\n");
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn if_let_result_without_else_branch() {
     let input = r#"
 import "go:fmt"

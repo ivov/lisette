@@ -8,12 +8,7 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
 func test(m map[string]int, key string) (int, bool) {
-	v_1 := lisette.MapGet(m, key)
-	if v_1.Tag == lisette.OptionSome {
-		return v_1.SomeVal, true
-	}
-	return 0, false
+	ret_1, ok_2 := m[key]
+	return ret_1, ok_2
 }

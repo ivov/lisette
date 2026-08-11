@@ -18,8 +18,6 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
 type Inner struct {
 	x int
 }
@@ -30,11 +28,10 @@ func main() {
 	w := Wrap(Inner{x: 0})
 	m := make(map[string]*Wrap)
 	m["a"] = &w
-	subject_1 := lisette.MapGet(m, "a")
-	if subject_1.Tag != lisette.OptionSome {
+	r, ok_1 := m["a"]
+	if !ok_1 {
 		return
 	}
-	r := subject_1.SomeVal
 	inner := Inner(*r)
 	inner.x = 1
 	*r = Wrap(inner)

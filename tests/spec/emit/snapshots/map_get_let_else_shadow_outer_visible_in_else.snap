@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn test(m: Map<string, string>, x: int) -> string {
+    let Some(x) = m.get("a") else {
+      if x > 0 {
+        return "positive"
+      }
+      return "negative"
+    }
+    x
+  }
+---
+package main
+
+func test(m map[string]string, x int) string {
+	x_1, ok_2 := m["a"]
+	if !ok_2 {
+		if x > 0 {
+			return "positive"
+		}
+		return "negative"
+	}
+	return x_1
+}

@@ -17,8 +17,6 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
 func noop() {}
 
 func maybe(b bool) (int, bool) {
@@ -29,8 +27,8 @@ func maybe(b bool) (int, bool) {
 }
 
 func test() {
-	option_2 := lisette.OptionFromCommaOk[int](maybe(true))
-	if option_2.Tag == lisette.OptionSome {
+	_, ok_1 := maybe(true)
+	if ok_1 {
 		noop()
 	} else {
 		noop()

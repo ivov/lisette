@@ -23,18 +23,18 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
 func identity(value int) int {
 	return value
 }
 
 func describe(value any) string {
-	subject_1 := lisette.AssertType[string](value)
-	if subject_1.Tag == lisette.OptionSome {
-		return subject_1.SomeVal
+	ret_1, ok_2 := value.(string)
+	if ok_2 {
+		text := ret_1
+		return text
+	} else {
+		return ""
 	}
-	return ""
 }
 
 func test() {

@@ -18,17 +18,16 @@ description: |
 ---
 package main
 
-import (
-	"example.com/idx"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "example.com/idx"
 
 func apply(f func(string, string) (int, bool), s string) int {
-	option_2 := lisette.OptionFromCommaOk[int](f(s, "ll"))
-	if option_2.Tag == lisette.OptionSome {
-		return option_2.SomeVal
+	ret_1, ok_2 := f(s, "ll")
+	if ok_2 {
+		v := ret_1
+		return v
+	} else {
+		return -2
 	}
-	return -2
 }
 
 func main() {

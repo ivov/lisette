@@ -14,16 +14,15 @@ description: |
 ---
 package main
 
-import (
-	"container/ring"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "container/ring"
 
 func test() int {
 	r := ring.Ring{Value: 1}
-	subject_1 := lisette.AssertType[int](r.Value)
-	if subject_1.Tag == lisette.OptionSome {
-		return subject_1.SomeVal
+	ret_1, ok_2 := r.Value.(int)
+	if ok_2 {
+		n := ret_1
+		return n
+	} else {
+		return 0
 	}
-	return 0
 }

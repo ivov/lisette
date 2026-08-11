@@ -19,10 +19,7 @@ description: |
 ---
 package main
 
-import (
-	lisette "github.com/ivov/lisette/prelude"
-	"slices"
-)
+import "slices"
 
 type Inner struct {
 	items []int
@@ -38,11 +35,10 @@ func main() {
 	w := Wrap(Inner{items: []int{1}})
 	m := make(map[string]Outer)
 	m["a"] = Outer{w: &w}
-	subject_1 := lisette.MapGet(m, "a")
-	if subject_1.Tag != lisette.OptionSome {
+	o, ok_1 := m["a"]
+	if !ok_1 {
 		return
 	}
-	o := subject_1.SomeVal
 	inner := Inner{items: slices.Clone(Inner(*o.w).items)}
 	inner.items = append(inner.items, 2)
 	*o.w = Wrap(inner)

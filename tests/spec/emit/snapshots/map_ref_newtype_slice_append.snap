@@ -15,19 +15,16 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
 type Wrap []int
 
 func main() {
 	w := Wrap([]int{1})
 	m := make(map[string]*Wrap)
 	m["a"] = &w
-	subject_1 := lisette.MapGet(m, "a")
-	if subject_1.Tag != lisette.OptionSome {
+	r, ok_1 := m["a"]
+	if !ok_1 {
 		return
 	}
-	r := subject_1.SomeVal
 	ref_3 := r
 	recv_2 := []int(*r)
 	*ref_3 = Wrap(append(recv_2[:len(recv_2):len(recv_2)], 2))

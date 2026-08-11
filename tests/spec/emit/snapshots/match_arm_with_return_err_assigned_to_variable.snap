@@ -30,9 +30,10 @@ func safeDivide(a, b float64) (float64, bool) {
 
 func parseAndDivide(a, b float64) lisette.Result[string, string] {
 	var result float64
-	option_2 := lisette.OptionFromCommaOk[float64](safeDivide(a, b))
-	if option_2.Tag == lisette.OptionSome {
-		result = option_2.SomeVal
+	ret_1, ok_2 := safeDivide(a, b)
+	if ok_2 {
+		v := ret_1
+		result = v
 	} else {
 		return lisette.MakeResultErr[string, string]("division by zero")
 	}

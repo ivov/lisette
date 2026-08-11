@@ -35,19 +35,17 @@ type Holder struct {
 func main() {
 	m := make(map[string]Holder)
 	m["a"] = Holder{f: strconv.Atoi}
-	subject_1 := lisette.MapGet(m, "a")
-	if subject_1.Tag != lisette.OptionSome {
+	found, ok_1 := m["a"]
+	if !ok_1 {
 		return
 	}
-	found := subject_1.SomeVal
 	entry := found
 	entry.f = strconv.Atoi
 	m["a"] = entry
-	subject_2 := lisette.MapGet(m, "a")
-	if subject_2.Tag != lisette.OptionSome {
+	h, ok_2 := m["a"]
+	if !ok_2 {
 		return
 	}
-	h := subject_2.SomeVal
 	ret_3, ret_4 := h.f("1")
 	var result_5 lisette.Result[int, error]
 	if ret_4 != nil {

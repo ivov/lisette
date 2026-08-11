@@ -1,5 +1,6 @@
 use crate::Planner;
 use crate::abi::callable::CallableReturnAbi;
+use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::calls::go_interop::NilGuard;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name::is_plain_identifier;
@@ -54,6 +55,11 @@ impl Planner<'_> {
             return LoweredBlock { statements };
         }
 
+        if let Some(fused) = self.lower_fused_option_match(subject, arms, place) {
+            statements.extend(fused);
+            return LoweredBlock { statements };
+        }
+
         let subject_ty = subject.get_type();
         let (subject_var, declaration) =
             self.lower_match_subject_var(&mut statements, subject, arms);
@@ -98,8 +104,8 @@ impl Planner<'_> {
     }
 
     /// The shape a match subject fuses against: lowered Lisette `Result` callees
-    /// and single-value Go `(T, error)` calls. `None` keeps the lift-then-match
-    /// path (Partial, Option, comma-ok, flattened multi-returns).
+    /// and single-value Go `(T, error)` calls. `None` falls through to the
+    /// Partial and Option fuses or the lift-then-match path.
     fn fusable_result_shape(
         &self,
         subject: &Expression,
@@ -328,7 +334,51 @@ impl Planner<'_> {
         Some(statements)
     }
 
-    fn lower_fused_arm(
+    /// Fuse the wrap+match into a direct pair test for simple `Some`/`None` arms.
+    fn lower_fused_option_match(
+        &mut self,
+        subject: &Expression,
+        arms: &[MatchArm],
+        place: &PlacePlan,
+    ) -> Option<Vec<LoweredStatement>> {
+        let source = self.comma_ok_source(subject)?;
+        let arms = classify_option_arms(arms)?;
+
+        let slot = if arms.some_binding.is_some() {
+            CommaOkValueSlot::Temp
+        } else {
+            CommaOkValueSlot::Unused
+        };
+        let pair = self.bind_comma_ok_pair(subject, source, slot);
+
+        let (then_body, _) = self.lower_fused_arm(
+            &[arms.some_binding.zip(pair.value.as_deref())],
+            arms.some_body,
+            place,
+        );
+        let (else_body, _) = self.lower_fused_arm(&[], arms.none_body, place);
+
+        let plan = if then_body.renders_empty() && !else_body.renders_empty() {
+            IfPlan {
+                condition_setup: Vec::new(),
+                condition: self.comma_ok_none_condition(&pair),
+                then_body: else_body,
+                else_arm: ElseArm::None,
+            }
+        } else {
+            IfPlan {
+                condition_setup: Vec::new(),
+                condition: self.comma_ok_some_condition(&pair),
+                then_body,
+                else_arm: ElseArm::from_body(else_body, false),
+            }
+        };
+        let mut statements = pair.statements;
+        statements.push(LoweredStatement::If(plan));
+        Some(statements)
+    }
+
+    pub(super) fn lower_fused_arm(
         &mut self,
         bindings: &[Option<(&str, &str)>],
         body: &Expression,
@@ -476,7 +526,88 @@ fn classify_partial_arms(arms: &[MatchArm]) -> Option<(&MatchArm, &MatchArm, &Ma
     Some((ok?, both?, err?))
 }
 
-fn field_binding(pattern: &Pattern) -> Option<&str> {
+struct OptionArms<'a> {
+    /// `None` when the Some arm binds no payload.
+    some_binding: Option<&'a str>,
+    some_body: &'a Expression,
+    none_body: &'a Expression,
+}
+
+enum OptionArmKind<'a> {
+    Some(Option<&'a str>),
+    None,
+    WildCard,
+}
+
+fn option_arm_kind(arm: &MatchArm) -> Option<OptionArmKind<'_>> {
+    use OptionArmKind as ArmKind;
+    if matches!(arm.pattern, Pattern::WildCard { .. }) {
+        return Some(ArmKind::WildCard);
+    }
+    if let Some(field) = some_pattern_field(&arm.pattern) {
+        let binding = field_binding(field)?;
+        return Some(ArmKind::Some((binding != "_").then_some(binding)));
+    }
+    let Pattern::EnumVariant {
+        identifier,
+        fields,
+        rest,
+        ..
+    } = &arm.pattern
+    else {
+        return None;
+    };
+    (!*rest && fields.is_empty() && matches!(identifier.as_str(), "None" | "Option.None"))
+        .then_some(ArmKind::None)
+}
+
+/// `[Some(<binding>), None]` in either order, plus the if-let wildcard desugars.
+fn classify_option_arms(arms: &[MatchArm]) -> Option<OptionArms<'_>> {
+    use OptionArmKind as ArmKind;
+    if arms.len() != 2 || arms.iter().any(|a| a.has_guard()) {
+        return None;
+    }
+    match (option_arm_kind(&arms[0])?, option_arm_kind(&arms[1])?) {
+        (ArmKind::Some(binding), ArmKind::None | ArmKind::WildCard) => Some(OptionArms {
+            some_binding: binding,
+            some_body: &arms[0].expression,
+            none_body: &arms[1].expression,
+        }),
+        (ArmKind::None, ArmKind::Some(binding)) => Some(OptionArms {
+            some_binding: binding,
+            some_body: &arms[1].expression,
+            none_body: &arms[0].expression,
+        }),
+        (ArmKind::None, ArmKind::WildCard) => Some(OptionArms {
+            some_binding: None,
+            some_body: &arms[1].expression,
+            none_body: &arms[0].expression,
+        }),
+        _ => None,
+    }
+}
+
+/// The single payload field of a `Some(<identifier|_>)` pattern.
+pub(super) fn some_pattern_field(pattern: &Pattern) -> Option<&Pattern> {
+    let Pattern::EnumVariant {
+        identifier,
+        fields,
+        rest,
+        ..
+    } = pattern
+    else {
+        return None;
+    };
+    if *rest || !matches!(identifier.as_str(), "Some" | "Option.Some") {
+        return None;
+    }
+    let [field] = fields.as_slice() else {
+        return None;
+    };
+    matches!(field, Pattern::Identifier { .. } | Pattern::WildCard { .. }).then_some(field)
+}
+
+pub(super) fn field_binding(pattern: &Pattern) -> Option<&str> {
     match pattern {
         Pattern::Identifier { identifier, .. } => Some(identifier.as_str()),
         Pattern::WildCard { .. } => Some("_"),
