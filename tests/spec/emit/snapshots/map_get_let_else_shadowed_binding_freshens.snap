@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn test(m: Map<string, string>, v: int) -> string {
+    let _ = v + 1
+    let Some(v) = m.get("a") else {
+      return ""
+    }
+    v
+  }
+---
+package main
+
+func test(m map[string]string, v int) string {
+	_ = v + 1
+	v_1, ok_2 := m["a"]
+	if !ok_2 {
+		return ""
+	}
+	return v_1
+}

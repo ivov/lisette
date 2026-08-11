@@ -21,11 +21,13 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func second(pair lisette.Tuple2[string, any]) int {
-	subject_1 := lisette.AssertType[int](pair.Second)
-	if subject_1.Tag == lisette.OptionSome {
-		return subject_1.SomeVal
+	ret_1, ok_2 := pair.Second.(int)
+	if ok_2 {
+		value := ret_1
+		return value
+	} else {
+		return 0
 	}
-	return 0
 }
 
 func test() {

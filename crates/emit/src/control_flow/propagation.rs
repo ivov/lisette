@@ -1,6 +1,7 @@
 use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::transition;
+use crate::calls::comma_ok::CommaOkValueSlot;
 use crate::calls::go_interop::NilGuard;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
@@ -647,6 +648,18 @@ impl Planner<'_> {
                 .into_parts();
             statements.extend(setup);
             statements.push(plain_return(call));
+            return statements;
+        }
+        if let Some(CallableReturnAbi::Option(OptionReturnAbi::CommaOk {
+            payload: PayloadLayout::Packed,
+        })) = lowered
+            && let Some(source) = self.comma_ok_source(expression)
+            && !source.has_nil_guard()
+        {
+            let pair = self.bind_comma_ok_pair(expression, source, CommaOkValueSlot::Temp);
+            let value = pair.value.expect("Temp slot always captures the value");
+            let mut statements = pair.statements;
+            statements.push(transition::multi_value_return(vec![value, pair.ok]));
             return statements;
         }
         if let Some(plan) = self.plan_call(expression)

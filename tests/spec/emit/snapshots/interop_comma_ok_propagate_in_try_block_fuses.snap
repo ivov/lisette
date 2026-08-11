@@ -42,8 +42,9 @@ func lookup(k string) (string, bool) {
 }
 
 func main() {
-	option_2 := lisette.OptionFromCommaOk[string](lookup("HOME"))
-	if option_2.Tag == lisette.OptionSome {
-		_ = option_2.SomeVal
+	ret_1, ok_2 := lookup("HOME")
+	if ok_2 {
+		v := ret_1
+		_ = v
 	}
 }

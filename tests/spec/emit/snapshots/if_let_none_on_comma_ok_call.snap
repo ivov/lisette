@@ -9,8 +9,8 @@ description: |
   }
   
   fn test() {
-    if let Some(x) = divide(100, 10) {
-      let _ = fmt.Print(f"Result: {x}\n");
+    if let None = divide(100, 0) {
+      let _ = fmt.Print("division by zero\n");
     }
   }
 ---
@@ -26,9 +26,8 @@ func divide(a, b int) (int, bool) {
 }
 
 func test() {
-	ret_1, ok_2 := divide(100, 10)
-	if ok_2 {
-		x := ret_1
-		fmt.Printf("Result: %d\n", x)
+	_, ok_1 := divide(100, 0)
+	if !ok_1 {
+		fmt.Print("division by zero\n")
 	}
 }

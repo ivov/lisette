@@ -447,6 +447,66 @@ fn test(m: Map<string, int>, key: string) -> Option<int> {
 }
 
 #[test]
+fn map_get_match_subject_fuses() {
+    let input = r#"
+import "go:fmt"
+
+fn test(m: Map<string, int>, key: string) -> int {
+  match m.get(key) {
+    Some(v) => v,
+    None => { fmt.Print("missing\n"); 0 },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_get_let_else_shadowed_binding_freshens() {
+    let input = r#"
+fn test(m: Map<string, string>, v: int) -> string {
+  let _ = v + 1
+  let Some(v) = m.get("a") else {
+    return ""
+  }
+  v
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_get_let_else_shadow_outer_visible_in_else() {
+    let input = r#"
+fn test(m: Map<string, string>, x: int) -> string {
+  let Some(x) = m.get("a") else {
+    if x > 0 {
+      return "positive"
+    }
+    return "negative"
+  }
+  x
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_get_let_else_reserved_name_binding() {
+    let input = r#"
+fn test(m: Map<string, int>) -> int {
+  let len = 3
+  let _ = len + 1
+  let Some(len) = m.get("a") else {
+    return 0
+  }
+  len
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn slice_append() {
     let input = r#"
 fn test(s: Slice<int>) -> Slice<int> {

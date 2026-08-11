@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:os"
+  
+  fn main() {
+    match os.LookupEnv("HOME") {
+      Some(v) => { let _ = v },
+      None => { let _ = "" },
+    }
+  }
+---
+package main
+
+import "os"
+
+func main() {
+	ret_1, ok_2 := os.LookupEnv("HOME")
+	if ok_2 {
+		v := ret_1
+		_ = v
+	}
+}

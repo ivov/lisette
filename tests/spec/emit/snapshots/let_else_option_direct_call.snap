@@ -13,8 +13,6 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
 func getValue(s string) (int, bool) {
 	if s == "ok" {
 		return 42, true
@@ -23,11 +21,9 @@ func getValue(s string) (int, bool) {
 }
 
 func test() int {
-	option_2 := lisette.OptionFromCommaOk[int](getValue("ok"))
-	subject_1 := option_2
-	if subject_1.Tag != lisette.OptionSome {
+	x, ok_1 := getValue("ok")
+	if !ok_1 {
 		return 0
 	}
-	x := subject_1.SomeVal
 	return x
 }

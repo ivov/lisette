@@ -4168,6 +4168,16 @@ fn main() {
 }
 
 #[test]
+fn assert_type_boundary_return_fuses() {
+    let input = r#"
+fn test(value: Unknown) -> Option<int> {
+  assert_type<int>(value)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn unit_call_as_map_index_key() {
     let input = r#"
 fn noop() {}

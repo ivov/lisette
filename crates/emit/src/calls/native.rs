@@ -722,6 +722,40 @@ impl Planner<'_> {
         )
     }
 
+    /// Lower `m.get(k)` to the native comma-ok index expression `m[k]`.
+    pub(super) fn lower_map_index_pair(
+        &mut self,
+        expression: &Expression,
+    ) -> (Vec<LoweredStatement>, String) {
+        let Expression::Call {
+            expression: function,
+            args,
+            type_arguments,
+            ..
+        } = expression
+        else {
+            unreachable!("lower_map_index_pair requires a Call expression");
+        };
+        let resolved_type_args = type_arguments
+            .resolved_types()
+            .expect("emission requires checked call type arguments");
+        let native_type = NativeGoType::Map;
+        let ctx = NativeCallContext {
+            function,
+            args,
+            spread: None,
+            resolved_type_args,
+            call_ty: None,
+            native_type: &native_type,
+            method: "get",
+            capture_boundary: CaptureBoundary::SiblingSequence,
+            retired_receiver: None,
+        };
+        let (setup, receiver, emitted_args, _, _) = self.stage_native_dot_access_call(&ctx);
+        let receiver = super::comma_ok::parenthesize_prefixed(receiver);
+        (setup, format!("{}[{}]", receiver, emitted_args[0]))
+    }
+
     pub(super) fn lower_native_method_identifier(
         &mut self,
         ctx: &NativeCallContext,

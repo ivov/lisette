@@ -165,6 +165,21 @@ fn main() {
 }
 
 #[test]
+fn interop_comma_ok_match_subject_fuses() {
+    let input = r#"
+import "go:os"
+
+fn main() {
+  match os.LookupEnv("HOME") {
+    Some(v) => { let _ = v },
+    None => { let _ = "" },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn interop_comma_ok_let_call() {
     let input = r#"
 import "go:os"

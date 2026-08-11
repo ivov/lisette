@@ -17,8 +17,6 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
 type Counter struct {
 	count int
 }
@@ -28,10 +26,9 @@ func (c *Counter) increment() {
 }
 
 func test(m map[string]*Counter) {
-	subject_1 := lisette.MapGet(m, "a")
-	if subject_1.Tag != lisette.OptionSome {
+	c, ok_1 := m["a"]
+	if !ok_1 {
 		return
 	}
-	c := subject_1.SomeVal
 	c.increment()
 }
