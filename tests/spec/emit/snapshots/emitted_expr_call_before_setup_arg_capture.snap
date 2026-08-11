@@ -14,8 +14,6 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
 func side() int {
 	return 1
 }
@@ -29,17 +27,10 @@ func add(_, _ int) int {
 }
 
 func run() (int, error) {
-	_arg_5 := side()
+	_arg_3 := side()
 	ret_1, ret_2 := getY()
-	var result_3 lisette.Result[int, error]
 	if ret_2 != nil {
-		result_3 = lisette.MakeResultErr[int, error](ret_2)
-	} else {
-		result_3 = lisette.MakeResultOk[int, error](ret_1)
+		return 0, ret_2
 	}
-	check_4 := result_3
-	if check_4.Tag != lisette.ResultOk {
-		return 0, check_4.ErrVal
-	}
-	return add(_arg_5, check_4.OkVal), nil
+	return add(_arg_3, ret_1), nil
 }

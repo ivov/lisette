@@ -717,7 +717,7 @@ fn main() {
 }
 
 #[test]
-fn interop_comma_ok_propagate_in_try_block_stays_boxed() {
+fn interop_comma_ok_propagate_in_try_block_fuses() {
     let input = r#"
 import "go:os"
 
