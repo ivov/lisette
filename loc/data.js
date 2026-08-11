@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786389100716,
+  "lastUpdate": 1786482502015,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -21718,6 +21718,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 30346,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 25982,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18583,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14133,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 12980,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 7930,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5975,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2901,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1830,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 713,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7823,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "314a555a13ba336d4ef912b81d5ff26cefb89a33",
+          "message": "refactor: emit `if err != nil` when propagating with `?` (#1251)",
+          "timestamp": "2026-08-11T23:07:51+02:00",
+          "tree_id": "945d7b61f90d5dcf0532ad706f2cb0c8c634e75c",
+          "url": "https://github.com/ivov/lisette/commit/314a555a13ba336d4ef912b81d5ff26cefb89a33"
+        },
+        "date": 1786482500494,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 130157,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30391,
             "unit": "lines"
           },
           {
