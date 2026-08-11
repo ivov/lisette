@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786482502015,
+  "lastUpdate": 1786487141922,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -21807,6 +21807,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 30391,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 25982,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18583,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14133,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 12980,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 7930,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5975,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2901,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1830,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 713,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7823,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "ce2c0a54226d682cb30365a2f38ee0eab8d688d2",
+          "message": "refactor: emit `v, ok :=` when matching on comma-ok calls (#1252)",
+          "timestamp": "2026-08-12T00:25:17+02:00",
+          "tree_id": "24cff299e508b573615b88e7af1de73682091e7f",
+          "url": "https://github.com/ivov/lisette/commit/ce2c0a54226d682cb30365a2f38ee0eab8d688d2"
+        },
+        "date": 1786487139924,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 130611,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 30845,
             "unit": "lines"
           },
           {
