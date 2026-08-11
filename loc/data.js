@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786487141922,
+  "lastUpdate": 1786491906602,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -21896,6 +21896,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 30845,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 25982,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18583,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14133,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 12980,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 7930,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5975,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2901,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1830,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 713,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 7823,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0827ae334bc10897cd551897836ea4bfd9115180",
+          "message": "refactor: lower branch-assigned temps to direct returns and `:=` (#1253)",
+          "timestamp": "2026-08-12T01:44:38+02:00",
+          "tree_id": "1cfd2cd97bd0cbafb098b2ae328e3134e6db38a2",
+          "url": "https://github.com/ivov/lisette/commit/0827ae334bc10897cd551897836ea4bfd9115180"
+        },
+        "date": 1786491904953,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 130776,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 31010,
             "unit": "lines"
           },
           {
