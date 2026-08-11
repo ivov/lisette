@@ -48,17 +48,10 @@ func describe(value any) string {
 func run() (string, error) {
 	var value any
 	ret_1, ret_2 := fallible()
-	var result_3 lisette.Result[int, error]
 	if ret_2 != nil {
-		result_3 = lisette.MakeResultErr[int, error](ret_2)
-	} else {
-		result_3 = lisette.MakeResultOk[int, error](ret_1)
+		return "", ret_2
 	}
-	check_4 := result_3
-	if check_4.Tag != lisette.ResultOk {
-		return "", check_4.ErrVal
-	}
-	value = check_4.OkVal
+	value = ret_1
 	value = "two"
 	return describe(value), nil
 }

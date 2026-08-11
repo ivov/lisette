@@ -27,12 +27,11 @@ import (
 
 func lookup(k string) (string, bool) {
 	tryResult_1 := func() lisette.Option[string] {
-		option_2 := lisette.OptionFromCommaOk[string](os.LookupEnv(k))
-		check_3 := option_2
-		if check_3.Tag != lisette.OptionSome {
+		ret_2, ret_3 := os.LookupEnv(k)
+		if !ret_3 {
 			return lisette.MakeOptionNone[string]()
 		}
-		v := check_3.SomeVal
+		v := ret_2
 		return lisette.MakeOptionSome[string](v)
 	}()
 	v_4 := tryResult_1

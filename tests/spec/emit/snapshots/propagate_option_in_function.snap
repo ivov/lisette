@@ -13,18 +13,15 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
 func maybeGet() (int, bool) {
 	return 0, false
 }
 
 func process() (int, bool) {
-	option_1 := lisette.OptionFromCommaOk[int](maybeGet())
-	check_2 := option_1
-	if check_2.Tag != lisette.OptionSome {
+	ret_1, ret_2 := maybeGet()
+	if !ret_2 {
 		return 0, false
 	}
-	x := check_2.SomeVal
+	x := ret_1
 	return x + 1, true
 }

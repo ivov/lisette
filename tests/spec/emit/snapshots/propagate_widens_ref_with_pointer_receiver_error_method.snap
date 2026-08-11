@@ -28,10 +28,7 @@ description: |
 ---
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "fmt"
 
 type FileError struct {
 	path string
@@ -47,17 +44,10 @@ func readValue() (int, *FileError) {
 
 func load() (int, error) {
 	ret_1, ret_2 := readValue()
-	var result_3 lisette.Result[int, *FileError]
 	if ret_2 != nil {
-		result_3 = lisette.MakeResultErr[int, *FileError](ret_2)
-	} else {
-		result_3 = lisette.MakeResultOk[int, *FileError](ret_1)
+		return 0, ret_2
 	}
-	check_4 := result_3
-	if check_4.Tag != lisette.ResultOk {
-		return 0, check_4.ErrVal
-	}
-	n := check_4.OkVal
+	n := ret_1
 	return n, nil
 }
 

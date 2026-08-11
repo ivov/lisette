@@ -1,6 +1,7 @@
 use crate::Planner;
-use crate::abi::callable::{CallableReturnAbi, PayloadLayout};
+use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
 use crate::abi::transition;
+use crate::calls::go_interop::NilGuard;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
 use crate::definitions::functions::is_go_never;
@@ -8,7 +9,6 @@ use crate::plan::bodies::{
     AssignForm, AssignPlan, LoweredBlock, LoweredStatement, PlacePlan, ReturnForm,
     ReturnStatementPlan,
 };
-use crate::plan::calls::CallableOrigin;
 use crate::plan::values::{GoExpression, ValuePlan};
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -62,8 +62,7 @@ impl Planner<'_> {
             return (statements, String::new());
         }
 
-        if let Some(fused) =
-            self.try_lower_fused_go_propagate(expression, &fallible, result_var_name)
+        if let Some(fused) = self.try_lower_fused_propagate(expression, &fallible, result_var_name)
         {
             return fused;
         }
@@ -177,36 +176,50 @@ impl Planner<'_> {
         (setup, values)
     }
 
-    /// Fuse `go_call()?` into `v, err := call(); if err != nil { return ... }`,
-    /// skipping the `lisette.Result`.
-    fn try_lower_fused_go_propagate(
+    /// Fuse `call()?` on a lowered-ABI callee into a direct failure check
+    /// (`if err != nil` / `if !ok`), skipping the tagged round trip.
+    fn try_lower_fused_propagate(
         &mut self,
         expression: &Expression,
         fallible: &Fallible,
         result_var_name: Option<&str>,
     ) -> Option<(Vec<LoweredStatement>, String)> {
         let plan = self.plan_call(expression)?;
-        if !matches!(plan.resolved.origin, CallableOrigin::GoInterop)
-            || !matches!(
-                plan.resolved.abi.result,
-                CallableReturnAbi::Result {
-                    payload: PayloadLayout::Packed,
-                    ..
+        let expression_ty = expression.get_type();
+        let ok_ty = self.facts.peel_alias(&expression_ty).ok_type();
+        let shape = plan.resolved.abi.result.clone();
+        let comma_ok = match shape {
+            CallableReturnAbi::Result {
+                payload: PayloadLayout::Packed,
+            } => {
+                if ok_ty.is_unit() {
+                    return None;
                 }
-            )
-        {
-            return None;
-        }
-        let ok_ty = self.facts.peel_alias(&expression.get_type()).ok_type();
-        if ok_ty.is_unit() || matches!(self.facts.peel_alias(&ok_ty), Type::Tuple(_)) {
-            return None;
-        }
-        if self
-            .go_return_payload_bridge(&plan.resolved.abi, &expression.get_type())
-            .is_some()
-        {
-            return None;
-        }
+                false
+            }
+            CallableReturnAbi::BareError => false,
+            CallableReturnAbi::Option(OptionReturnAbi::CommaOk {
+                payload: PayloadLayout::Packed,
+            }) => true,
+            _ => return None,
+        };
+        let has_value_slot = !matches!(shape, CallableReturnAbi::BareError);
+        let nil_guard = if comma_ok {
+            if self.is_interface_option(&expression_ty) {
+                Some(NilGuard::Interface)
+            } else if self.facts.is_nullable_option(&expression_ty) {
+                Some(NilGuard::Pointer)
+            } else {
+                None
+            }
+        } else if has_value_slot {
+            self.result_nil_guard(&ok_ty)
+        } else {
+            None
+        };
+        let payload_bridge = has_value_slot
+            .then(|| self.go_return_payload_bridge(&plan.resolved.abi, &expression_ty))
+            .flatten();
         let return_ctx = self.return_ctx();
         let has_fallible_return = return_ctx.lowered_shape().is_some()
             || return_ctx
@@ -215,55 +228,85 @@ impl Planner<'_> {
         if !has_fallible_return {
             return None;
         }
-        let nil_guard = self.result_nil_guard(&ok_ty);
 
         let want_value = !matches!(result_var_name, Some("_"));
-        let val_var = (want_value || nil_guard.is_some()).then(|| {
+        let value_var = (has_value_slot && (want_value || nil_guard.is_some())).then(|| {
             let v = self.fresh_var(Some("ret"));
             self.declare(&v);
             v
         });
-        let err_var = self.fresh_var(Some("ret"));
-        self.declare(&err_var);
+        let outcome_var = self.fresh_var(Some("ret"));
+        self.declare(&outcome_var);
 
         let (mut statements, call_str) = self
             .lower_call(expression, None, ExpressionContext::value())
             .into_parts();
-        let bind_line = match &val_var {
-            Some(v) => format!("{}, {} := {}\n", v, err_var, call_str),
-            None => format!("_, {} := {}\n", err_var, call_str),
+        let bind_line = if has_value_slot {
+            match &value_var {
+                Some(v) => format!("{}, {} := {}\n", v, outcome_var, call_str),
+                None => format!("_, {} := {}\n", outcome_var, call_str),
+            }
+        } else {
+            format!("{} := {}\n", outcome_var, call_str)
         };
         statements.push(LoweredStatement::RawGo(bind_line));
 
-        let (failure_setup, failure_values) = self.propagate_failure_values(fallible, &err_var);
-        statements.push(transition::tag_check(
-            format!("{} != nil", err_var),
-            failure_setup,
-            failure_values,
-        ));
-
-        if let Some(guard) = nil_guard {
-            let val = val_var
-                .as_deref()
-                .expect("nil guard requires the value var");
-            if guard.is_interface() {
-                self.require_stdlib();
-            }
-            self.require_errors();
-            let (nil_setup, nil_failure) =
-                self.propagate_failure_values(fallible, "errors.New(\"unexpected nil\")");
+        if comma_ok {
+            let failure_condition = match nil_guard {
+                Some(guard) => {
+                    if guard.is_interface() {
+                        self.require_stdlib();
+                    }
+                    let val = value_var
+                        .as_deref()
+                        .expect("nil guard requires the value var");
+                    format!("!{} || {}", outcome_var, guard.is_nil(val))
+                }
+                None => format!("!{}", outcome_var),
+            };
+            let (failure_setup, failure_values) =
+                self.propagate_failure_values(fallible, &outcome_var);
             statements.push(transition::tag_check(
-                guard.is_nil(val),
-                nil_setup,
-                nil_failure,
+                failure_condition,
+                failure_setup,
+                failure_values,
             ));
+        } else {
+            let (failure_setup, failure_values) =
+                self.propagate_failure_values(fallible, &outcome_var);
+            statements.push(transition::tag_check(
+                format!("{} != nil", outcome_var),
+                failure_setup,
+                failure_values,
+            ));
+            if let Some(guard) = nil_guard {
+                let val = value_var
+                    .as_deref()
+                    .expect("nil guard requires the value var");
+                if guard.is_interface() {
+                    self.require_stdlib();
+                }
+                self.require_errors();
+                let (nil_setup, nil_failure) =
+                    self.propagate_failure_values(fallible, "errors.New(\"unexpected nil\")");
+                statements.push(transition::tag_check(
+                    guard.is_nil(val),
+                    nil_setup,
+                    nil_failure,
+                ));
+            }
         }
 
+        let ok_value = value_var.map(|val| match &payload_bridge {
+            Some(bridge) if want_value => self.plan_layout_bridge(&mut statements, &val, bridge),
+            _ => val,
+        });
+
         let value = match result_var_name {
-            None => val_var.expect("ok value requested when result_var_name is None"),
+            None => ok_value.unwrap_or_else(|| "struct{}{}".to_string()),
             Some("_") => "_".to_string(),
             Some(name) => {
-                let v = val_var.expect("ok value requested for a named binding");
+                let v = ok_value.unwrap_or_else(|| "struct{}{}".to_string());
                 statements.push(self.bind_propagate_ok(name, &v));
                 name.to_string()
             }

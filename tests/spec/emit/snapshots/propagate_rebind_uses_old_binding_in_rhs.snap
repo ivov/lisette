@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
 	"strconv"
 )
 
@@ -29,16 +28,9 @@ func parse(s string) (int, error) {
 func process() (int, error) {
 	x := 42
 	ret_2, ret_3 := parse(fmt.Sprint(x))
-	var result_4 lisette.Result[int, error]
 	if ret_3 != nil {
-		result_4 = lisette.MakeResultErr[int, error](ret_3)
-	} else {
-		result_4 = lisette.MakeResultOk[int, error](ret_2)
+		return 0, ret_3
 	}
-	check_5 := result_4
-	if check_5.Tag != lisette.ResultOk {
-		return 0, check_5.ErrVal
-	}
-	x_1 := check_5.OkVal
+	x_1 := ret_2
 	return x_1 + 1, nil
 }
