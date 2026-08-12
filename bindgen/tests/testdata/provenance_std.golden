@@ -1,0 +1,1738 @@
+archive/tar.FileInfoHeader (opaque r0): r0<-fi
+archive/tar.Header.FileInfo: r0<-[recv]
+archive/tar.NewReader: r0<-[r]
+archive/tar.NewWriter: r0<-[w]
+archive/tar.Reader.Next (opaque r1) (shared r0 r1): r1<-recv
+archive/tar.Reader.Read: r1<-recv
+archive/tar.Writer.Close: r0<-recv
+archive/tar.Writer.Flush: r0<-recv
+archive/tar.Writer.Write: r1<-recv
+archive/tar.Writer.WriteHeader: r0<-recv
+archive/zip.File.DataOffset (shared r1): 
+archive/zip.File.Open (shared r0 r1): r0<-[recv]
+archive/zip.File.OpenRaw (shared r1): r0<-[recv]
+archive/zip.FileHeader.FileInfo: r0<-[recv]
+archive/zip.FileHeader.ModTime (opaque r0) (shared r0): r0<-recv
+archive/zip.FileInfoHeader (opaque r0): r0<-fi
+archive/zip.NewReader (opaque r0) (shared r1): r0<-r
+archive/zip.NewWriter: r0<-[w]
+archive/zip.OpenReader (opaque r0) (shared r1): 
+archive/zip.ReadCloser.Close (shared r0): 
+archive/zip.Reader.Open (shared r0 r1): r0<-[recv]
+archive/zip.Writer.Close (shared r0): r0<-recv
+archive/zip.Writer.Copy (shared r0): 
+archive/zip.Writer.Create (opaque r0) (shared r1): r0<-recv
+archive/zip.Writer.CreateHeader (opaque r0) (shared r1): r0<-fh r0<-recv
+archive/zip.Writer.CreateRaw (opaque r0) (shared r1): r0<-fh r0<-recv
+archive/zip.Writer.Flush (shared r0): r0<-recv
+bufio.NewReadWriter: r0<-[r] r0<-[w]
+bufio.NewReader (opaque r0): r0<-rd
+bufio.NewReaderSize (opaque r0): r0<-rd
+bufio.NewScanner: r0<-[r]
+bufio.NewWriter: r0<-w
+bufio.NewWriterSize: r0<-w
+bufio.Reader.Discard (shared r1): r1<-recv
+bufio.Reader.Peek (shared r1): r0<-recv r1<-recv
+bufio.Reader.Read: r1<-recv
+bufio.Reader.ReadByte: r1<-recv
+bufio.Reader.ReadBytes (shared r1): r1<-recv
+bufio.Reader.ReadLine (shared r2): r0<-recv r2<-recv
+bufio.Reader.ReadRune: r2<-recv
+bufio.Reader.ReadSlice (shared r1): r0<-recv r1<-recv
+bufio.Reader.ReadString (shared r1): r1<-recv
+bufio.Reader.UnreadByte (shared r0): 
+bufio.Reader.UnreadRune (shared r0): 
+bufio.Reader.WriteTo: r1<-recv
+bufio.ScanBytes: r1<-data
+bufio.ScanLines: r1<-data
+bufio.ScanRunes (shared r1): r1<-data
+bufio.ScanWords: r1<-data
+bufio.Scanner.Bytes: r0<-recv
+bufio.Scanner.Err: r0<-recv
+bufio.Writer.AvailableBuffer: r0<-recv
+bufio.Writer.Flush (shared r0): r0<-recv
+bufio.Writer.ReadFrom (shared r1): r1<-recv
+bufio.Writer.Write: r1<-recv
+bufio.Writer.WriteByte: r0<-recv
+bufio.Writer.WriteRune: r1<-recv
+bufio.Writer.WriteString: r1<-recv
+bytes.Buffer.AvailableBuffer: r0<-recv
+bytes.Buffer.Bytes: r0<-recv
+bytes.Buffer.Next: r0<-recv
+bytes.Buffer.Read (shared r1): 
+bytes.Buffer.ReadByte (shared r1): 
+bytes.Buffer.ReadBytes (shared r1): 
+bytes.Buffer.ReadRune (shared r2): 
+bytes.Buffer.ReadString (shared r1): 
+bytes.Buffer.UnreadByte (shared r0): 
+bytes.Buffer.WriteTo (shared r1): 
+bytes.Cut: r0<-s r1<-s
+bytes.CutPrefix: r0<-s
+bytes.CutSuffix: r0<-s
+bytes.Fields: r0<-[s]
+bytes.FieldsFunc: r0<-[s]
+bytes.FieldsFuncSeq: r0<-[s]
+bytes.FieldsSeq: r0<-[s]
+bytes.Join (opaque r0): r0<-s r0<-sep
+bytes.Lines: r0<-[s]
+bytes.NewBuffer: r0<-[buf]
+bytes.NewReader: r0<-[b]
+bytes.Reader.Read (shared r1): 
+bytes.Reader.ReadAt (shared r1): 
+bytes.Reader.ReadByte (shared r1): 
+bytes.Reader.ReadRune (shared r2): 
+bytes.Reader.WriteTo (shared r1): 
+bytes.Repeat (opaque r0): r0<-b
+bytes.Split: r0<-[s]
+bytes.SplitAfter: r0<-[s]
+bytes.SplitAfterN: r0<-[s]
+bytes.SplitAfterSeq: r0<-[s] r0<-[sep]
+bytes.SplitN: r0<-[s]
+bytes.SplitSeq: r0<-[s] r0<-[sep]
+bytes.ToLower (opaque r0): r0<-s
+bytes.ToUpper (opaque r0): r0<-s
+bytes.Trim: r0<-s
+bytes.TrimFunc: r0<-s
+bytes.TrimLeft: r0<-s
+bytes.TrimLeftFunc: r0<-s
+bytes.TrimPrefix: r0<-s
+bytes.TrimRight: r0<-s
+bytes.TrimRightFunc: r0<-s
+bytes.TrimSpace: r0<-s
+bytes.TrimSuffix: r0<-s
+cmp.Or: r0<-vals
+compress/bzip2.NewReader (opaque r0): r0<-r
+compress/flate.NewReader (opaque r0): r0<-r
+compress/flate.NewReaderDict (opaque r0): r0<-dict r0<-r
+compress/flate.NewWriter (opaque r0): r0<-w
+compress/flate.NewWriterDict (opaque r0): r0<-dict r0<-w
+compress/flate.Writer.Close: r0<-recv
+compress/flate.Writer.Flush: r0<-recv
+compress/flate.Writer.Write: r1<-recv
+compress/gzip.NewReader (opaque r0 r1): r0<-r r1<-r
+compress/gzip.NewWriter (opaque r0): r0<-w
+compress/gzip.NewWriterLevel (opaque r0): r0<-w
+compress/gzip.Reader.Read (shared r1): r1<-recv
+compress/gzip.Reader.Reset: r0<-recv
+compress/gzip.Writer.Close: r0<-recv
+compress/gzip.Writer.Flush: r0<-recv
+compress/gzip.Writer.Write: r1<-recv
+compress/lzw.NewReader (opaque r0): r0<-r
+compress/lzw.NewWriter (opaque r0): r0<-w
+compress/lzw.Reader.Read: r1<-recv
+compress/lzw.Writer.Close (shared r0): r0<-recv
+compress/lzw.Writer.Write: r1<-recv
+compress/zlib.NewReader (opaque r0 r1): r0<-r r1<-r
+compress/zlib.NewReaderDict (opaque r0 r1): r0<-dict r0<-r r1<-dict r1<-r
+compress/zlib.NewWriter: r0<-[w]
+compress/zlib.NewWriterLevel: r0<-[w]
+compress/zlib.NewWriterLevelDict: r0<-[dict] r0<-[w]
+compress/zlib.Writer.Close: r0<-recv
+compress/zlib.Writer.Flush: r0<-recv
+compress/zlib.Writer.Write: r1<-recv
+container/list.Element.Next: r0<-recv
+container/list.Element.Prev: r0<-recv
+container/list.List.Back: r0<-recv
+container/list.List.Front: r0<-recv
+container/list.List.Init: r0<-recv
+container/list.List.InsertAfter (opaque r0): r0<-mark r0<-recv r0<-v
+container/list.List.InsertBefore (opaque r0): r0<-mark r0<-recv r0<-v
+container/list.List.PushBack (opaque r0): r0<-recv r0<-v
+container/list.List.PushFront (opaque r0): r0<-recv r0<-v
+container/list.List.Remove: r0<-e
+container/list.New (opaque r0): 
+container/ring.New (opaque r0): 
+container/ring.Ring.Link: r0<-recv
+container/ring.Ring.Move (opaque r0): r0<-recv
+container/ring.Ring.Next: r0<-recv
+container/ring.Ring.Prev: r0<-recv
+container/ring.Ring.Unlink: r0<-recv
+context.AfterFunc (opaque r0) (shared r0): r0<-ctx
+context.WithCancel (opaque r0 r1) (shared r1): r0<-parent r1<-parent
+context.WithCancelCause (opaque r0 r1) (shared r1): r0<-parent r1<-parent
+context.WithDeadline (opaque r0 r1) (shared r1): r0<-d r0<-parent r1<-d r1<-parent
+context.WithDeadlineCause (opaque r0 r1) (shared r1): r0<-cause r0<-d r0<-parent r1<-cause r1<-d r1<-parent
+context.WithTimeout (opaque r0 r1) (shared r0 r1): r0<-parent r1<-parent
+context.WithTimeoutCause (opaque r0 r1) (shared r0 r1): r0<-cause r0<-parent r1<-cause r1<-parent
+context.WithValue: r0<-[key] r0<-[parent] r0<-[val]
+context.WithoutCancel: r0<-[parent]
+crypto/cipher.NewCBCDecrypter: r0<-[b]
+crypto/cipher.NewCBCEncrypter: r0<-[b]
+crypto/cipher.NewCFBDecrypter: r0<-[block]
+crypto/cipher.NewCFBEncrypter: r0<-[block]
+crypto/cipher.NewCTR: r0<-[block]
+crypto/cipher.NewGCM: r0<-[cipher]
+crypto/cipher.NewGCMWithNonceSize: r0<-[cipher]
+crypto/cipher.NewGCMWithTagSize: r0<-[cipher]
+crypto/cipher.NewOFB: r0<-[b]
+crypto/cipher.StreamWriter.Write (shared r1): 
+crypto/dsa.GenerateKey (shared r0): 
+crypto/dsa.GenerateParameters (shared r0): 
+crypto/dsa.Sign (opaque r0 r1) (shared r2): r0<-hash r0<-priv r0<-rand r1<-hash r1<-priv r1<-rand
+crypto/ecdh.P256 (shared r0): 
+crypto/ecdh.P384 (shared r0): 
+crypto/ecdh.P521 (shared r0): 
+crypto/ecdh.PrivateKey.Curve: r0<-recv
+crypto/ecdh.PrivateKey.Public: r0<-recv
+crypto/ecdh.PrivateKey.PublicKey: r0<-recv
+crypto/ecdh.PublicKey.Curve: r0<-recv
+crypto/ecdsa.GenerateKey (opaque r0) (shared r1): r0<-c r0<-rand
+crypto/ecdsa.ParseRawPrivateKey (opaque r0): r0<-curve r0<-data
+crypto/ecdsa.ParseUncompressedPublicKey (opaque r0): r0<-curve r0<-data
+crypto/ecdsa.PrivateKey.Public: r0<-recv
+crypto/ecdsa.PrivateKey.Sign (opaque r0 r1) (shared r1): r0<-digest r0<-opts r0<-rand r0<-recv r1<-digest r1<-opts r1<-rand r1<-recv
+crypto/ecdsa.PublicKey.Bytes (opaque r0): r0<-recv
+crypto/ecdsa.Sign (opaque r0 r1 r2) (shared r2): r0<-hash r0<-priv r0<-rand r1<-hash r1<-priv r1<-rand r2<-hash r2<-priv r2<-rand
+crypto/ecdsa.SignASN1 (opaque r0 r1) (shared r1): r0<-hash r0<-priv r0<-rand r1<-hash r1<-priv r1<-rand
+crypto/ed25519.GenerateKey (shared r2): 
+crypto/elliptic.CurveParams.Add (opaque r0 r1): r0<-recv r0<-x1 r0<-x2 r0<-y1 r0<-y2 r1<-recv r1<-x1 r1<-x2 r1<-y1 r1<-y2
+crypto/elliptic.CurveParams.Double (opaque r0 r1): r0<-recv r0<-x1 r0<-y1 r1<-recv r1<-x1 r1<-y1
+crypto/elliptic.CurveParams.Params: r0<-recv
+crypto/elliptic.CurveParams.ScalarBaseMult (opaque r0 r1): r0<-k r0<-recv r1<-k r1<-recv
+crypto/elliptic.CurveParams.ScalarMult (opaque r0 r1): r0<-Bx r0<-By r0<-k r0<-recv r1<-Bx r1<-By r1<-k r1<-recv
+crypto/elliptic.GenerateKey (shared r3): 
+crypto/elliptic.Marshal (opaque r0): r0<-curve r0<-x r0<-y
+crypto/elliptic.MarshalCompressed (opaque r0): r0<-curve r0<-x r0<-y
+crypto/elliptic.P224 (shared r0): 
+crypto/elliptic.P256 (shared r0): 
+crypto/elliptic.P384 (shared r0): 
+crypto/elliptic.P521 (shared r0): 
+crypto/elliptic.Unmarshal (opaque r0 r1): r0<-curve r0<-data r1<-curve r1<-data
+crypto/elliptic.UnmarshalCompressed (opaque r0 r1): r0<-curve r0<-data r1<-curve r1<-data
+crypto/hmac.New (opaque r0): r0<-key
+crypto/mlkem.EncapsulationKey1024.Encapsulate (opaque r0): 
+crypto/mlkem.EncapsulationKey768.Encapsulate (opaque r0): 
+crypto/rand.Int (opaque r0) (shared r1): r0<-max r0<-rand
+crypto/rand.Prime (opaque r0) (shared r1): r0<-rand
+crypto/rsa.DecryptOAEP (shared r1): 
+crypto/rsa.DecryptPKCS1v15 (shared r1): 
+crypto/rsa.DecryptPKCS1v15SessionKey (shared r0): 
+crypto/rsa.EncryptOAEP (shared r1): 
+crypto/rsa.EncryptPKCS1v15 (shared r1): 
+crypto/rsa.GenerateKey (opaque r0) (shared r1): r0<-random
+crypto/rsa.GenerateMultiPrimeKey (opaque r0) (shared r1): r0<-random
+crypto/rsa.PrivateKey.Decrypt (opaque r0) (shared r1): r0<-ciphertext r0<-opts r0<-rand r0<-recv
+crypto/rsa.PrivateKey.Public: r0<-recv
+crypto/rsa.PrivateKey.Sign (shared r1): 
+crypto/rsa.SignPKCS1v15 (shared r1): 
+crypto/rsa.SignPSS (shared r1): 
+crypto/rsa.VerifyPKCS1v15 (shared r0): 
+crypto/rsa.VerifyPSS (shared r0): 
+crypto/sha3.NewCSHAKE128 (opaque r0): r0<-N r0<-S
+crypto/sha3.NewCSHAKE256 (opaque r0): r0<-N r0<-S
+crypto/sha3.SHA3.AppendBinary: r0<-p
+crypto/sha3.SHA3.Sum (opaque r0): r0<-b
+crypto/sha3.SHAKE.AppendBinary: r0<-p
+crypto/sha3.SHAKE.MarshalBinary (opaque r0): r0<-recv
+crypto/tls.CertificateRequestInfo.Context: r0<-recv
+crypto/tls.CertificateRequestInfo.SupportsCertificate (opaque r0): r0<-c r0<-recv
+crypto/tls.CertificateVerificationError.Unwrap: r0<-recv
+crypto/tls.CipherSuites (shared r0): 
+crypto/tls.Client (opaque r0) (shared r0): r0<-config r0<-conn
+crypto/tls.ClientHelloInfo.Context: r0<-recv
+crypto/tls.ClientHelloInfo.SupportsCertificate (opaque r0) (shared r0): r0<-c r0<-recv
+crypto/tls.ClientSessionState.ResumptionState: r0<-recv r1<-recv
+crypto/tls.Config.Clone: r0<-[recv]
+crypto/tls.Config.DecryptTicket (opaque r0) (shared r0): r0<-cs r0<-identity r0<-recv
+crypto/tls.Config.EncryptTicket (opaque r1) (shared r1): r1<-cs r1<-recv r1<-ss
+crypto/tls.Conn.Close (shared r0): r0<-[recv]
+crypto/tls.Conn.CloseWrite (shared r0): r0<-recv
+crypto/tls.Conn.ConnectionState (opaque r0): r0<-recv
+crypto/tls.Conn.Handshake (opaque r0): r0<-recv
+crypto/tls.Conn.HandshakeContext (opaque r0): r0<-ctx r0<-recv
+crypto/tls.Conn.NetConn: r0<-recv
+crypto/tls.Conn.OCSPResponse: r0<-recv
+crypto/tls.Conn.Read (opaque r1) (shared r1): r1<-b r1<-recv
+crypto/tls.Conn.VerifyHostname: r0<-[recv]
+crypto/tls.Conn.Write (opaque r1) (shared r1): r1<-b r1<-recv
+crypto/tls.Dial (opaque r0 r1) (shared r0 r1): r0<-config r1<-config
+crypto/tls.DialWithDialer (opaque r0 r1) (shared r0 r1): r0<-config r0<-dialer r1<-config r1<-dialer
+crypto/tls.Dialer.Dial (opaque r0 r1) (shared r0 r1): r0<-recv r1<-recv
+crypto/tls.Dialer.DialContext (opaque r0 r1) (shared r0 r1): r0<-ctx r0<-recv r1<-ctx r1<-recv
+crypto/tls.InsecureCipherSuites (shared r0): 
+crypto/tls.Listen (opaque r1) (shared r1): r0<-[config] r1<-config
+crypto/tls.LoadX509KeyPair (opaque r0 r1) (shared r0 r1): 
+crypto/tls.NewLRUClientSessionCache (opaque r0): 
+crypto/tls.NewListener: r0<-[config] r0<-[inner]
+crypto/tls.NewResumptionState: r0<-[state]
+crypto/tls.ParseSessionState (opaque r0 r1) (shared r0): r0<-data r1<-data
+crypto/tls.QUICClient (opaque r0) (shared r0): r0<-config
+crypto/tls.QUICConn.Close: r0<-recv
+crypto/tls.QUICConn.ConnectionState (opaque r0): r0<-recv
+crypto/tls.QUICConn.HandleData: r0<-recv
+crypto/tls.QUICConn.NextEvent (opaque r0): r0<-recv
+crypto/tls.QUICConn.SendSessionTicket (opaque r0) (shared r0): r0<-opts r0<-recv
+crypto/tls.QUICConn.Start: r0<-recv
+crypto/tls.QUICServer (opaque r0) (shared r0): r0<-config
+crypto/tls.Server (opaque r0) (shared r0): r0<-config r0<-conn
+crypto/tls.SessionState.Bytes (opaque r0 r1): r0<-recv r1<-recv
+crypto/tls.X509KeyPair (opaque r0 r1) (shared r0): r0<-certPEMBlock r0<-keyPEMBlock r1<-certPEMBlock r1<-keyPEMBlock
+crypto/x509.CertPool.Clone (opaque r0): r0<-recv
+crypto/x509.CertPool.Subjects: r0<-[recv]
+crypto/x509.Certificate.CheckCRLSignature (shared r0): r0<-[recv]
+crypto/x509.Certificate.CheckSignature (shared r0): r0<-[recv]
+crypto/x509.Certificate.CheckSignatureFrom (shared r0): r0<-[parent]
+crypto/x509.Certificate.CreateCRL (shared r1): 
+crypto/x509.Certificate.Verify (opaque r0) (shared r1): r0<-opts r0<-recv r1<-[opts] r1<-[recv]
+crypto/x509.Certificate.VerifyHostname: r0<-[recv]
+crypto/x509.CertificateRequest.CheckSignature (shared r0): r0<-[recv]
+crypto/x509.CreateCertificate (opaque r1) (shared r1): r1<-parent r1<-priv r1<-pub r1<-rand r1<-template
+crypto/x509.CreateCertificateRequest (shared r1): 
+crypto/x509.CreateRevocationList (shared r1): 
+crypto/x509.DecryptPEMBlock (shared r1): 
+crypto/x509.MarshalPKCS8PrivateKey: r1<-[key]
+crypto/x509.MarshalPKIXPublicKey: r1<-[pub]
+crypto/x509.OID.AppendBinary: r0<-b
+crypto/x509.OID.AppendText: r0<-b
+crypto/x509.OID.UnmarshalBinary (shared r0): 
+crypto/x509.OID.UnmarshalText (shared r0): 
+crypto/x509.OIDFromInts (opaque r0) (shared r1): r0<-oid
+crypto/x509.ParseCertificate (opaque r0 r1) (shared r0): r0<-der r1<-der
+crypto/x509.ParseCertificateRequest (opaque r0) (shared r0): r0<-asn1Data
+crypto/x509.ParseCertificates (opaque r0 r1) (shared r0): r0<-der r1<-der
+crypto/x509.ParseECPrivateKey (opaque r0) (shared r0): r0<-der
+crypto/x509.ParseOID (opaque r0) (shared r1): 
+crypto/x509.ParsePKCS1PrivateKey (opaque r0): r0<-der
+crypto/x509.ParsePKCS8PrivateKey (opaque r0) (shared r0): r0<-der
+crypto/x509.ParsePKIXPublicKey (opaque r0) (shared r0): r0<-derBytes
+crypto/x509.ParseRevocationList (opaque r0): r0<-der
+crypto/x509.RevocationList.CheckSignatureFrom (shared r0): r0<-[parent]
+crypto/x509.SystemCertPool (opaque r0) (shared r0 r1): 
+crypto/x509.SystemRootsError.Unwrap: r0<-recv
+crypto/x509/pkix.Name.ToRDNSequence (shared r0): r0<-[recv]
+database/sql.ColumnType.ScanType: r0<-recv
+database/sql.Conn.BeginTx (opaque r0) (shared r0 r1): r0<-ctx r0<-recv
+database/sql.Conn.Close (shared r0): 
+database/sql.Conn.ExecContext (opaque r0) (shared r1): r0<-args r0<-ctx r0<-recv
+database/sql.Conn.PingContext (shared r0): 
+database/sql.Conn.PrepareContext (opaque r0) (shared r1): r0<-ctx r0<-recv
+database/sql.Conn.QueryContext (opaque r0) (shared r1): r0<-args r0<-ctx r0<-recv
+database/sql.Conn.QueryRowContext (opaque r0) (shared r0): r0<-args r0<-ctx r0<-recv
+database/sql.Conn.Raw (shared r0): 
+database/sql.DB.Begin (opaque r0 r1) (shared r0 r1): r0<-recv r1<-recv
+database/sql.DB.BeginTx (opaque r0 r1) (shared r0 r1): r0<-ctx r0<-recv r1<-ctx r1<-recv
+database/sql.DB.Conn (opaque r0 r1) (shared r1): r0<-ctx r0<-recv r1<-ctx r1<-recv
+database/sql.DB.Exec (opaque r0 r1) (shared r1): r0<-args r0<-recv r1<-args r1<-recv
+database/sql.DB.ExecContext (opaque r0 r1) (shared r1): r0<-args r0<-ctx r0<-recv r1<-args r1<-ctx r1<-recv
+database/sql.DB.Ping (opaque r0) (shared r0): r0<-recv
+database/sql.DB.PingContext (opaque r0) (shared r0): r0<-ctx r0<-recv
+database/sql.DB.Prepare (opaque r0 r1) (shared r1): r0<-recv r1<-recv
+database/sql.DB.PrepareContext (opaque r0 r1) (shared r1): r0<-ctx r0<-recv r1<-ctx r1<-recv
+database/sql.DB.Query (opaque r0 r1) (shared r1): r0<-args r0<-recv r1<-args r1<-recv
+database/sql.DB.QueryContext (opaque r0 r1) (shared r1): r0<-args r0<-ctx r0<-recv r1<-args r1<-ctx r1<-recv
+database/sql.DB.QueryRow (opaque r0) (shared r0): r0<-args r0<-recv
+database/sql.DB.QueryRowContext (opaque r0) (shared r0): r0<-args r0<-ctx r0<-recv
+database/sql.Named: r0<-[value]
+database/sql.Null.Scan (shared r0): r0<-[recv] r0<-[value]
+database/sql.Null.Value (opaque r0): r0<-recv r1<-[recv]
+database/sql.NullBool.Scan (shared r0): r0<-[value]
+database/sql.NullByte.Scan (shared r0): r0<-[value]
+database/sql.NullFloat64.Scan (shared r0): r0<-[value]
+database/sql.NullInt16.Scan (shared r0): r0<-[value]
+database/sql.NullInt32.Scan (shared r0): r0<-[value]
+database/sql.NullInt64.Scan (shared r0): r0<-[value]
+database/sql.NullString.Scan (shared r0): r0<-[value]
+database/sql.NullTime.Scan (shared r0): r0<-[recv] r0<-[value]
+database/sql.NullTime.Value: r0<-[recv]
+database/sql.Open (opaque r0) (shared r0): 
+database/sql.OpenDB (opaque r0) (shared r0): r0<-c
+database/sql.Row.Err: r0<-recv
+database/sql.Row.Scan (opaque r0) (shared r0): r0<-dest r0<-recv
+database/sql.Rows.Close (opaque r0): r0<-recv
+database/sql.Rows.ColumnTypes (shared r1): r1<-recv
+database/sql.Rows.Columns (shared r1): r1<-recv
+database/sql.Rows.Err: r0<-recv
+database/sql.Rows.Scan (shared r0): r0<-[dest] r0<-recv
+database/sql.Stmt.Close: r0<-recv
+database/sql.Stmt.Exec (opaque r0) (shared r0): r0<-args r0<-recv
+database/sql.Stmt.ExecContext (opaque r0) (shared r0): r0<-args r0<-ctx r0<-recv
+database/sql.Stmt.Query (opaque r0) (shared r0): r0<-args r0<-recv
+database/sql.Stmt.QueryContext (opaque r0) (shared r0): r0<-args r0<-ctx r0<-recv
+database/sql.Stmt.QueryRow (opaque r0) (shared r0): r0<-args r0<-recv
+database/sql.Stmt.QueryRowContext (opaque r0) (shared r0): r0<-args r0<-ctx r0<-recv
+database/sql.Tx.Commit (shared r0): 
+database/sql.Tx.Exec (opaque r0) (shared r1): r0<-args r0<-recv
+database/sql.Tx.ExecContext (opaque r0) (shared r1): r0<-args r0<-ctx r0<-recv
+database/sql.Tx.Prepare (opaque r0) (shared r1): r0<-recv
+database/sql.Tx.PrepareContext (opaque r0) (shared r1): r0<-ctx r0<-recv
+database/sql.Tx.Query (opaque r0) (shared r1): r0<-args r0<-recv
+database/sql.Tx.QueryContext (opaque r0) (shared r1): r0<-args r0<-ctx r0<-recv
+database/sql.Tx.QueryRow (opaque r0) (shared r0): r0<-args r0<-recv
+database/sql.Tx.QueryRowContext (opaque r0) (shared r0): r0<-args r0<-ctx r0<-recv
+database/sql.Tx.Rollback (shared r0): 
+database/sql.Tx.Stmt (opaque r0) (shared r0): r0<-recv r0<-stmt
+database/sql.Tx.StmtContext (opaque r0) (shared r0): r0<-ctx r0<-recv r0<-stmt
+debug/buildinfo.Read (shared r1): 
+debug/buildinfo.ReadFile (shared r1): 
+debug/dwarf.Data.AddTypes (opaque r0): r0<-recv r0<-types
+debug/dwarf.Data.LineReader (opaque r0 r1): r0<-cu r0<-recv r1<-cu r1<-recv
+debug/dwarf.Data.Ranges (opaque r1): r1<-e r1<-recv
+debug/dwarf.Data.Reader (opaque r0): r0<-recv
+debug/dwarf.Data.Type (opaque r0 r1): r0<-recv r1<-recv
+debug/dwarf.Entry.AttrField: r0<-recv
+debug/dwarf.Entry.Val: r0<-recv
+debug/dwarf.LineReader.Files: r0<-recv
+debug/dwarf.LineReader.Next (shared r0): r0<-recv
+debug/dwarf.LineReader.SeekPC (shared r0): r0<-recv
+debug/dwarf.New (opaque r0 r1): r0<-abbrev r0<-aranges r0<-frame r0<-info r0<-line r0<-pubnames r0<-ranges r0<-str r1<-abbrev r1<-aranges r1<-frame r1<-info r1<-line r1<-pubnames r1<-ranges r1<-str
+debug/dwarf.Reader.ByteOrder: r0<-recv
+debug/dwarf.Reader.Next (opaque r0): r0<-recv r1<-recv
+debug/dwarf.Reader.SeekPC (opaque r0 r1) (shared r1): r0<-recv r1<-recv
+debug/elf.File.DWARF (opaque r0 r1) (shared r1): r0<-recv r1<-recv
+debug/elf.File.DynString (shared r1): 
+debug/elf.File.DynValue (shared r1): 
+debug/elf.File.DynamicSymbols (shared r1): 
+debug/elf.File.DynamicVersionNeeds (shared r1): r0<-recv
+debug/elf.File.DynamicVersions (shared r1): r0<-recv
+debug/elf.File.ImportedLibraries (shared r1): 
+debug/elf.File.ImportedSymbols (shared r1): 
+debug/elf.File.Section: r0<-recv
+debug/elf.File.SectionByType: r0<-recv
+debug/elf.File.Symbols (shared r1): 
+debug/elf.NewFile (opaque r0) (shared r1): r0<-r
+debug/elf.Open (opaque r0) (shared r1): 
+debug/elf.Prog.Open: r0<-[recv]
+debug/elf.Section.Data (shared r1): 
+debug/elf.Section.Open (opaque r0): r0<-recv
+debug/gosym.NewLineTable: r0<-[data]
+debug/gosym.NewTable (opaque r0): r0<-pcln r0<-symtab
+debug/gosym.Table.LineToPC (opaque r1): r1<-recv
+debug/gosym.Table.LookupFunc: r0<-recv
+debug/gosym.Table.LookupSym: r0<-recv
+debug/gosym.Table.PCToFunc: r0<-recv
+debug/gosym.Table.PCToLine: r2<-recv
+debug/gosym.Table.SymByAddr: r0<-recv
+debug/macho.File.DWARF (opaque r0 r1) (shared r1): r0<-recv r1<-recv
+debug/macho.File.Section: r0<-recv
+debug/macho.File.Segment: r0<-recv
+debug/macho.LoadBytes.Raw: r0<-recv
+debug/macho.NewFatFile (opaque r0) (shared r1): r0<-r
+debug/macho.NewFile (opaque r0) (shared r1): r0<-r
+debug/macho.Open (opaque r0) (shared r1): 
+debug/macho.OpenFat (opaque r0) (shared r1): 
+debug/macho.Section.Data (shared r1): 
+debug/macho.Section.Open: r0<-[recv]
+debug/macho.Segment.Data (shared r1): 
+debug/macho.Segment.Open: r0<-[recv]
+debug/pe.File.DWARF (opaque r0 r1) (shared r1): r0<-recv r1<-recv
+debug/pe.File.ImportedSymbols (shared r1): 
+debug/pe.File.Section: r0<-recv
+debug/pe.NewFile (opaque r0) (shared r1): r0<-r
+debug/pe.Open (opaque r0) (shared r1): 
+debug/pe.Section.Data (shared r1): 
+debug/pe.Section.Open: r0<-[recv]
+debug/plan9obj.File.Section: r0<-recv
+debug/plan9obj.File.Symbols (opaque r0) (shared r1): r0<-recv
+debug/plan9obj.NewFile (opaque r0) (shared r1): r0<-r
+debug/plan9obj.Open (opaque r0) (shared r1): 
+debug/plan9obj.Section.Data (shared r1): 
+debug/plan9obj.Section.Open: r0<-[recv]
+embed.FS.Open (shared r1): r0<-[recv]
+embed.FS.ReadDir (shared r1): 
+embed.FS.ReadFile (shared r1): 
+encoding/ascii85.NewDecoder: r0<-[r]
+encoding/ascii85.NewEncoder: r0<-[w]
+encoding/asn1.BitString.RightAlign: r0<-recv
+encoding/asn1.Unmarshal: r0<-b
+encoding/asn1.UnmarshalWithParams: r0<-b
+encoding/base32.Encoding.AppendDecode: r0<-dst
+encoding/base32.Encoding.AppendEncode: r0<-dst
+encoding/base32.NewDecoder: r0<-[r]
+encoding/base32.NewEncoder: r0<-[w]
+encoding/base64.Encoding.AppendDecode: r0<-dst
+encoding/base64.Encoding.AppendEncode: r0<-dst
+encoding/base64.Encoding.DecodeString (opaque r0): 
+encoding/base64.NewDecoder: r0<-[r]
+encoding/base64.NewEncoder: r0<-[w]
+encoding/binary.Append: r0<-buf
+encoding/binary.AppendUvarint: r0<-buf
+encoding/binary.AppendVarint: r0<-buf
+encoding/binary.Decode (shared r1): 
+encoding/binary.Encode (shared r1): 
+encoding/binary.Read (shared r0): 
+encoding/binary.ReadUvarint (shared r1): 
+encoding/binary.ReadVarint (shared r1): 
+encoding/csv.NewReader (opaque r0): r0<-r
+encoding/csv.NewWriter: r0<-[w]
+encoding/csv.ParseError.Unwrap: r0<-recv
+encoding/csv.Reader.Read (shared r1): r0<-recv r1<-recv
+encoding/csv.Reader.ReadAll (shared r1): r1<-recv
+encoding/csv.Writer.Error: r0<-recv
+encoding/csv.Writer.Write (shared r0): r0<-recv
+encoding/csv.Writer.WriteAll (shared r0): r0<-recv
+encoding/gob.Decoder.Decode: r0<-recv
+encoding/gob.Decoder.DecodeValue: r0<-recv
+encoding/gob.Encoder.Encode: r0<-recv
+encoding/gob.Encoder.EncodeValue: r0<-recv
+encoding/gob.NewDecoder (opaque r0): r0<-r
+encoding/gob.NewEncoder (opaque r0): r0<-w
+encoding/hex.AppendDecode (shared r1): r0<-dst
+encoding/hex.AppendEncode: r0<-dst
+encoding/hex.Decode (shared r1): 
+encoding/hex.DecodeString (opaque r0) (shared r1): 
+encoding/hex.Dumper: r0<-[w]
+encoding/hex.NewDecoder: r0<-[r]
+encoding/hex.NewEncoder: r0<-[w]
+encoding/json.Compact (opaque r0): r0<-dst r0<-src
+encoding/json.Decoder.Buffered: r0<-[recv]
+encoding/json.Decoder.Decode (shared r0): r0<-recv
+encoding/json.Decoder.Token (shared r1): r1<-recv
+encoding/json.Encoder.Encode (opaque r0): r0<-recv r0<-v
+encoding/json.Indent (opaque r0): r0<-dst r0<-src
+encoding/json.Marshal (opaque r1): r1<-v
+encoding/json.MarshalIndent (opaque r0 r1): r0<-v r1<-v
+encoding/json.MarshalerError.Unwrap: r0<-recv
+encoding/json.NewDecoder: r0<-[r]
+encoding/json.NewEncoder: r0<-[w]
+encoding/json.Number.Float64 (shared r1): 
+encoding/json.Number.Int64 (shared r1): 
+encoding/json.RawMessage.MarshalJSON: r0<-recv
+encoding/json.Unmarshal (opaque r0) (shared r0): r0<-data r0<-v
+encoding/pem.Decode: r1<-data
+encoding/xml.CopyToken: r0<-t
+encoding/xml.Decoder.Decode (shared r0): r0<-recv
+encoding/xml.Decoder.DecodeElement (shared r0): r0<-recv
+encoding/xml.Decoder.RawToken (shared r1): r0<-recv r1<-recv
+encoding/xml.Decoder.Skip (shared r0): r0<-recv
+encoding/xml.Decoder.Token (opaque r0) (shared r1): r0<-recv r1<-recv
+encoding/xml.Encoder.Close (shared r0): r0<-recv
+encoding/xml.Encoder.Encode (shared r0): r0<-recv
+encoding/xml.Encoder.EncodeElement (shared r0): r0<-recv
+encoding/xml.Encoder.EncodeToken: r0<-recv
+encoding/xml.Encoder.Flush (shared r0): r0<-recv
+encoding/xml.Marshal (shared r1): 
+encoding/xml.MarshalIndent (shared r1): 
+encoding/xml.NewDecoder (opaque r0): r0<-r
+encoding/xml.NewEncoder: r0<-[w]
+encoding/xml.NewTokenDecoder: r0<-t
+encoding/xml.ProcInst.Copy: r0<-[recv]
+encoding/xml.StartElement.Copy: r0<-[recv]
+encoding/xml.Unmarshal (opaque r0) (shared r0): r0<-data r0<-v
+errors.Join: r0<-[errs]
+expvar.Handler (opaque r0): 
+expvar.Map.Init: r0<-recv
+expvar.NewMap (opaque r0): 
+flag.Args (shared r0): 
+flag.FlagSet.Args: r0<-recv
+flag.FlagSet.Lookup: r0<-recv
+flag.FlagSet.Output (shared r0): r0<-recv
+flag.FlagSet.Parse (shared r0): 
+flag.Lookup (opaque r0): 
+flag.NewFlagSet (opaque r0): 
+fmt.Append: r0<-b
+fmt.Appendf: r0<-b
+fmt.Appendln: r0<-b
+fmt.Errorf: r0<-[a]
+fmt.Fscan (opaque r1): r1<-a r1<-r
+fmt.Fscanf (opaque r1): r1<-a r1<-r
+fmt.Fscanln (opaque r1): r1<-a r1<-r
+fmt.Scan (opaque r1): r1<-a
+fmt.Scanf (opaque r1): r1<-a
+fmt.Scanln (opaque r1): r1<-a
+fmt.Sscan (opaque r1): r1<-a
+fmt.Sscanf (opaque r1): r1<-a
+fmt.Sscanln (opaque r1): r1<-a
+go/ast.CommentMap.Comments (opaque r0): r0<-recv
+go/ast.CommentMap.Filter: r0<-[recv]
+go/ast.CommentMap.Update: r0<-new
+go/ast.Fprint (opaque r0): r0<-fset r0<-w r0<-x
+go/ast.MergePackageFiles (opaque r0): r0<-pkg
+go/ast.NewCommentMap (opaque r0): r0<-comments r0<-fset r0<-node
+go/ast.NewPackage (opaque r1): r0<-[files] r0<-[universe] r1<-files r1<-fset r1<-universe
+go/ast.NewScope: r0<-[outer]
+go/ast.Preorder (opaque r0): r0<-root
+go/ast.Print (opaque r0): r0<-fset r0<-x
+go/ast.Scope.Insert: r0<-recv
+go/ast.Scope.Lookup: r0<-recv
+go/ast.Unparen (opaque r0): r0<-e
+go/build.Context.Import (opaque r0 r1) (shared r1): r0<-recv r1<-recv
+go/build.Context.ImportDir (opaque r0 r1) (shared r1): r0<-recv r1<-recv
+go/build.Context.MatchFile (opaque r1) (shared r1): r1<-recv
+go/build.Import (opaque r0 r1) (shared r1): 
+go/build.ImportDir (opaque r0 r1) (shared r1): 
+go/build/constraint.Parse (shared r1): 
+go/build/constraint.PlusBuildLines (shared r1): 
+go/constant.BinaryOp (opaque r0) (shared r0): r0<-x_ r0<-y_
+go/constant.Denom (opaque r0): r0<-x
+go/constant.Imag: r0<-x
+go/constant.Make (opaque r0) (shared r0): r0<-x
+go/constant.MakeFloat64 (opaque r0): 
+go/constant.MakeFromLiteral (opaque r0) (shared r0): 
+go/constant.MakeImag: r0<-x
+go/constant.Num (opaque r0): r0<-x
+go/constant.Real: r0<-x
+go/constant.Shift: r0<-[x]
+go/constant.ToComplex: r0<-[x]
+go/constant.ToFloat (opaque r0): r0<-x
+go/constant.ToInt (opaque r0): r0<-x
+go/constant.UnaryOp (opaque r0) (shared r0): r0<-y
+go/constant.Val: r0<-x
+go/doc.Examples (opaque r0): r0<-testFiles
+go/doc.New (opaque r0): r0<-pkg
+go/doc.NewFromFiles (opaque r0): r0<-files r0<-fset r0<-opts
+go/doc.Package.HTML (opaque r0): r0<-recv
+go/doc.Package.Markdown (opaque r0): r0<-recv
+go/doc.Package.Parser: r0<-[recv]
+go/doc.Package.Text (opaque r0): r0<-recv
+go/doc/comment.Parser.Parse (opaque r0): r0<-recv
+go/doc/comment.Printer.Comment (opaque r0): r0<-d
+go/doc/comment.Printer.HTML (opaque r0): r0<-d
+go/doc/comment.Printer.Markdown (opaque r0): r0<-d
+go/doc/comment.Printer.Text (opaque r0): r0<-d
+go/format.Node (opaque r0) (shared r0): r0<-dst r0<-fset r0<-node
+go/format.Source (opaque r1) (shared r1): r0<-src r1<-src
+go/importer.Default (opaque r0) (shared r0): 
+go/importer.For (opaque r0) (shared r0): 
+go/importer.ForCompiler (opaque r0) (shared r0): r0<-fset
+go/parser.ParseDir (opaque r0) (shared r1): r0<-fset
+go/parser.ParseExpr (opaque r0) (shared r1): 
+go/parser.ParseExprFrom (opaque r0) (shared r1): r0<-fset r0<-src
+go/parser.ParseFile (opaque r0) (shared r1): r0<-fset r0<-src
+go/printer.Config.Fprint (opaque r0): r0<-fset r0<-node r0<-output
+go/printer.Fprint (opaque r0): r0<-fset r0<-node r0<-output
+go/scanner.ErrorList.Err: r0<-recv
+go/token.File.Lines: r0<-recv
+go/token.FileSet.File (opaque r0): r0<-recv
+go/types.Alias.Obj: r0<-recv
+go/types.Alias.Origin: r0<-recv
+go/types.Alias.Rhs: r0<-recv
+go/types.Alias.TypeArgs: r0<-recv
+go/types.Alias.TypeParams: r0<-recv
+go/types.ArgumentError.Unwrap: r0<-recv
+go/types.Array.Elem: r0<-recv
+go/types.Array.Underlying: r0<-recv
+go/types.Chan.Elem: r0<-recv
+go/types.Chan.Underlying: r0<-recv
+go/types.CheckExpr (opaque r0): r0<-expr r0<-fset r0<-info r0<-pkg
+go/types.Checker.Files (opaque r0): r0<-files r0<-recv
+go/types.Config.Check (opaque r1) (shared r0): r1<-files r1<-fset r1<-info r1<-recv
+go/types.Const.Val: r0<-recv
+go/types.Default (shared r0): r0<-t
+go/types.Eval (opaque r1) (shared r1): r1<-fset r1<-pkg
+go/types.Func.Origin: r0<-recv
+go/types.Func.Pkg: r0<-recv
+go/types.Func.Scope: r0<-recv
+go/types.Func.Signature: r0<-recv
+go/types.Info.ObjectOf: r0<-recv
+go/types.Info.PkgNameOf: r0<-recv
+go/types.Info.TypeOf: r0<-recv
+go/types.Instantiate (opaque r0): r0<-ctxt r0<-orig r0<-targs r1<-[orig]
+go/types.Interface.Complete: r0<-recv
+go/types.Interface.Embedded (opaque r0): r0<-recv
+go/types.Interface.EmbeddedType: r0<-recv
+go/types.Interface.EmbeddedTypes: r0<-[recv]
+go/types.Interface.ExplicitMethod: r0<-recv
+go/types.Interface.ExplicitMethods: r0<-[recv]
+go/types.Interface.Method (opaque r0) (shared r0): r0<-recv
+go/types.Interface.Methods (opaque r0) (shared r0): r0<-recv
+go/types.Interface.Underlying: r0<-recv
+go/types.LookupFieldOrMethod (opaque r0) (shared r0): r0<-T r0<-pkg
+go/types.LookupSelection (opaque r0) (shared r0): r0<-T r0<-pkg
+go/types.Map.Elem: r0<-recv
+go/types.Map.Key: r0<-recv
+go/types.Map.Underlying: r0<-recv
+go/types.MethodSet.At: r0<-recv
+go/types.MethodSet.Lookup: r0<-recv
+go/types.MethodSet.Methods: r0<-[recv]
+go/types.MissingMethod (opaque r0) (shared r0): r0<-T r0<-V
+go/types.Named.Method: r0<-recv
+go/types.Named.Methods (opaque r0) (shared r0): r0<-recv
+go/types.Named.Obj (opaque r0): r0<-recv
+go/types.Named.Origin: r0<-recv
+go/types.Named.TypeArgs: r0<-recv
+go/types.Named.TypeParams: r0<-recv
+go/types.Named.Underlying (opaque r0): r0<-recv
+go/types.NewAlias (opaque r0): r0<-obj r0<-rhs
+go/types.NewArray: r0<-[elem]
+go/types.NewChan: r0<-[elem]
+go/types.NewChecker: r0<-[conf] r0<-[fset] r0<-[info] r0<-[pkg]
+go/types.NewConst: r0<-[pkg] r0<-[typ] r0<-[val]
+go/types.NewField: r0<-[pkg] r0<-[typ]
+go/types.NewFunc: r0<-[pkg] r0<-[sig]
+go/types.NewInterface (shared r0): 
+go/types.NewInterfaceType (shared r0): 
+go/types.NewLabel: r0<-[pkg]
+go/types.NewMap: r0<-[elem] r0<-[key]
+go/types.NewMethodSet (opaque r0) (shared r0): r0<-T
+go/types.NewNamed (opaque r0): r0<-methods r0<-obj r0<-underlying
+go/types.NewPackage (shared r0): 
+go/types.NewParam: r0<-[pkg] r0<-[typ]
+go/types.NewPkgName: r0<-[imported] r0<-[pkg]
+go/types.NewPointer: r0<-[elem]
+go/types.NewScope: r0<-[parent]
+go/types.NewSignature: r0<-[params] r0<-[recv] r0<-[results]
+go/types.NewSignatureType: r0<-[params] r0<-[recvTypeParams] r0<-[recv] r0<-[results] r0<-[typeParams]
+go/types.NewSlice: r0<-[elem]
+go/types.NewStruct (opaque r0): r0<-fields r0<-tags
+go/types.NewTerm: r0<-[typ]
+go/types.NewTuple: r0<-[x]
+go/types.NewTypeName: r0<-[pkg] r0<-[typ]
+go/types.NewTypeParam (opaque r0): r0<-constraint r0<-obj
+go/types.NewUnion: r0<-[terms]
+go/types.NewVar: r0<-[pkg] r0<-[typ]
+go/types.Package.Imports: r0<-recv
+go/types.Package.Scope (shared r0): r0<-recv
+go/types.PkgName.Imported: r0<-recv
+go/types.Pointer.Elem: r0<-recv
+go/types.Pointer.Underlying: r0<-recv
+go/types.RelativeTo: r0<-[pkg]
+go/types.Scope.Child: r0<-recv
+go/types.Scope.Children: r0<-[recv]
+go/types.Scope.Innermost: r0<-recv
+go/types.Scope.Insert (opaque r0) (shared r0): r0<-obj r0<-recv
+go/types.Scope.Lookup (opaque r0) (shared r0): r0<-recv
+go/types.Scope.LookupParent (opaque r0 r1) (shared r1): r0<-recv r1<-recv
+go/types.Scope.Names (opaque r0): r0<-recv
+go/types.Scope.Parent: r0<-recv
+go/types.Selection.Index: r0<-recv
+go/types.Selection.Obj: r0<-recv
+go/types.Selection.Recv: r0<-recv
+go/types.Selection.Type (opaque r0): r0<-recv
+go/types.Signature.Params: r0<-recv
+go/types.Signature.Recv: r0<-recv
+go/types.Signature.RecvTypeParams: r0<-recv
+go/types.Signature.Results: r0<-recv
+go/types.Signature.TypeParams: r0<-recv
+go/types.Signature.Underlying: r0<-recv
+go/types.Slice.Elem: r0<-recv
+go/types.Slice.Underlying: r0<-recv
+go/types.Struct.Field: r0<-recv
+go/types.Struct.Fields: r0<-[recv]
+go/types.Struct.Underlying: r0<-recv
+go/types.Term.Type: r0<-recv
+go/types.Tuple.At: r0<-recv
+go/types.Tuple.Underlying: r0<-recv
+go/types.Tuple.Variables: r0<-[recv]
+go/types.TypeList.At: r0<-recv
+go/types.TypeList.Types: r0<-[recv]
+go/types.TypeParam.Constraint: r0<-recv
+go/types.TypeParam.Obj: r0<-recv
+go/types.TypeParam.Underlying (opaque r0) (shared r0): r0<-recv
+go/types.TypeParamList.At: r0<-recv
+go/types.TypeParamList.TypeParams: r0<-[recv]
+go/types.Unalias (opaque r0): r0<-t
+go/types.Union.Term: r0<-recv
+go/types.Union.Terms: r0<-[recv]
+go/types.Union.Underlying: r0<-recv
+go/types.Var.Origin: r0<-recv
+go/types.object.Parent: r0<-recv
+go/types.object.Pkg: r0<-recv
+go/types.object.Type: r0<-recv
+hash/maphash.Hash.Sum: r0<-b
+html/template.Must: r0<-t
+html/template.New (opaque r0): 
+html/template.ParseFS (opaque r0 r1) (shared r1): r0<-fs r0<-patterns r1<-fs r1<-patterns
+html/template.ParseFiles (opaque r0 r1): r0<-filenames r1<-filenames
+html/template.ParseGlob (opaque r0 r1) (shared r1): 
+html/template.Template.AddParseTree (opaque r0): r0<-recv r0<-tree
+html/template.Template.Clone (opaque r0): r0<-recv
+html/template.Template.Delims: r0<-recv
+html/template.Template.Execute (opaque r0): r0<-data r0<-recv r0<-wr
+html/template.Template.ExecuteTemplate (opaque r0): r0<-data r0<-recv r0<-wr
+html/template.Template.Funcs: r0<-recv
+html/template.Template.Lookup (opaque r0): r0<-recv
+html/template.Template.New (opaque r0): r0<-recv
+html/template.Template.Option: r0<-recv
+html/template.Template.Parse (opaque r1): r0<-recv r1<-recv
+html/template.Template.ParseFS (opaque r0 r1) (shared r1): r0<-fs r0<-patterns r0<-recv r1<-fs r1<-patterns r1<-recv
+html/template.Template.ParseFiles (opaque r0 r1): r0<-filenames r0<-recv r1<-filenames r1<-recv
+html/template.Template.ParseGlob (opaque r0 r1) (shared r1): r0<-recv r1<-recv
+html/template.Template.Templates (opaque r0): r0<-recv
+image.Alpha.ColorModel (shared r0): 
+image.Alpha.SubImage: r0<-[recv]
+image.Alpha16.ColorModel (shared r0): 
+image.Alpha16.SubImage: r0<-[recv]
+image.CMYK.ColorModel (shared r0): 
+image.CMYK.SubImage: r0<-[recv]
+image.Decode (shared r2): 
+image.DecodeConfig (shared r2): 
+image.Gray.ColorModel (shared r0): 
+image.Gray.SubImage: r0<-[recv]
+image.Gray16.ColorModel (shared r0): 
+image.Gray16.SubImage: r0<-[recv]
+image.NRGBA.ColorModel (shared r0): 
+image.NRGBA.SubImage: r0<-[recv]
+image.NRGBA64.ColorModel (shared r0): 
+image.NRGBA64.SubImage: r0<-[recv]
+image.NYCbCrA.ColorModel (shared r0): 
+image.NYCbCrA.SubImage: r0<-[recv]
+image.NewPaletted: r0<-[p]
+image.NewUniform: r0<-[c]
+image.Paletted.At: r0<-recv
+image.Paletted.ColorModel: r0<-recv
+image.Paletted.SubImage: r0<-[recv]
+image.RGBA.ColorModel (shared r0): 
+image.RGBA.SubImage: r0<-[recv]
+image.RGBA64.ColorModel (shared r0): 
+image.RGBA64.SubImage: r0<-[recv]
+image.Rectangle.ColorModel (shared r0): 
+image.Uniform.At: r0<-recv
+image.Uniform.ColorModel: r0<-recv
+image.Uniform.Convert: r0<-recv
+image.YCbCr.ColorModel (shared r0): 
+image.YCbCr.SubImage: r0<-[recv]
+image/color.Palette.Convert: r0<-recv
+image/gif.Decode (opaque r0 r1) (shared r1): r0<-r r1<-r
+image/gif.DecodeAll (opaque r0 r1) (shared r1): r0<-r r1<-r
+image/gif.DecodeConfig (opaque r0 r1) (shared r1): r0<-r r1<-r
+image/gif.Encode (opaque r0): r0<-m r0<-o r0<-w
+image/gif.EncodeAll (opaque r0): r0<-g r0<-w
+image/jpeg.Decode (opaque r0) (shared r1): r0<-r
+image/jpeg.DecodeConfig (shared r0 r1): 
+image/jpeg.Encode (opaque r0): r0<-m r0<-w
+image/png.Decode (opaque r0 r1) (shared r1): r0<-r r1<-r
+image/png.DecodeConfig (opaque r0 r1) (shared r0 r1): r0<-r r1<-r
+image/png.Encode (opaque r0): r0<-m r0<-w
+image/png.Encoder.Encode (opaque r0): r0<-m r0<-recv r0<-w
+index/suffixarray.Index.Bytes: r0<-recv
+index/suffixarray.Index.Read (shared r0): 
+index/suffixarray.New: r0<-[data]
+io.Copy (shared r1): 
+io.CopyBuffer (shared r1): 
+io.CopyN (shared r1): 
+io.LimitReader: r0<-[r]
+io.LimitedReader.Read (shared r1): 
+io.MultiReader: r0<-[readers]
+io.MultiWriter: r0<-[writers]
+io.NewOffsetWriter: r0<-[w]
+io.NewSectionReader: r0<-[r]
+io.NopCloser: r0<-[r]
+io.OffsetWriter.Seek (shared r1): 
+io.OffsetWriter.WriteAt (shared r1): 
+io.PipeReader.Read (shared r1): r1<-recv
+io.PipeWriter.Write (shared r1): r1<-recv
+io.ReadAtLeast (shared r1): 
+io.ReadFull (shared r1): 
+io.SectionReader.Outer: r0<-recv
+io.SectionReader.Read (shared r1): 
+io.SectionReader.ReadAt (shared r1): 
+io.SectionReader.Seek (shared r1): 
+io.TeeReader: r0<-[r] r0<-[w]
+io/fs.FileInfoToDirEntry: r0<-[info]
+io/fs.Glob (shared r1): 
+io/fs.PathError.Unwrap: r0<-recv
+io/fs.ReadLink (shared r1): 
+io/fs.Sub (shared r1): r0<-fsys
+io/ioutil.NopCloser: r0<-[r]
+io/ioutil.ReadDir (opaque r0) (shared r1): 
+io/ioutil.ReadFile (shared r1): 
+io/ioutil.TempDir (shared r1): 
+io/ioutil.TempFile (opaque r0) (shared r1): 
+io/ioutil.WriteFile (shared r0): 
+iter.Pull (opaque r0 r1): 
+iter.Pull2 (opaque r0 r1): 
+log.Default (shared r0): 
+log.Logger.Writer: r0<-recv
+log.New (opaque r0): r0<-out
+log.Writer (shared r0): 
+log/slog.Any (opaque r0) (shared r0): r0<-value
+log/slog.AnyValue (opaque r0) (shared r0): r0<-v
+log/slog.Group (opaque r0): r0<-args
+log/slog.GroupAttrs (opaque r0): r0<-attrs
+log/slog.GroupValue (opaque r0): r0<-as
+log/slog.JSONHandler.WithAttrs: r0<-[recv]
+log/slog.JSONHandler.WithGroup: r0<-[recv]
+log/slog.Level.AppendText: r0<-b
+log/slog.Level.UnmarshalJSON (shared r0): 
+log/slog.Level.UnmarshalText (shared r0): 
+log/slog.LevelVar.AppendText: r0<-b
+log/slog.LevelVar.UnmarshalText (shared r0): 
+log/slog.Logger.Handler: r0<-recv
+log/slog.Logger.With: r0<-recv
+log/slog.Logger.WithGroup: r0<-recv
+log/slog.New: r0<-[h]
+log/slog.NewJSONHandler: r0<-[opts] r0<-[w]
+log/slog.NewLogLogger (opaque r0): r0<-h
+log/slog.NewRecord: r0<-[t]
+log/slog.NewTextHandler: r0<-[opts] r0<-[w]
+log/slog.Record.Clone: r0<-[recv]
+log/slog.TextHandler.WithAttrs: r0<-[recv]
+log/slog.TextHandler.WithGroup: r0<-[recv]
+log/slog.Time (opaque r0) (shared r0): r0<-v
+log/slog.TimeValue (opaque r0) (shared r0): r0<-v
+log/slog.Value.Any (opaque r0) (shared r0): r0<-recv
+log/slog.Value.Group (opaque r0): r0<-recv
+log/slog.Value.LogValuer: r0<-recv
+log/slog.Value.Resolve (opaque r0) (shared r0): r0<-recv
+log/slog.Value.Time (opaque r0) (shared r0): r0<-recv
+log/syslog.Dial (opaque r0 r1) (shared r1): 
+log/syslog.New (opaque r0 r1) (shared r1): 
+log/syslog.NewLogger (opaque r0 r1) (shared r1): 
+log/syslog.Writer.Alert (opaque r0) (shared r0): r0<-recv
+log/syslog.Writer.Crit (opaque r0) (shared r0): r0<-recv
+log/syslog.Writer.Debug (opaque r0) (shared r0): r0<-recv
+log/syslog.Writer.Emerg (opaque r0) (shared r0): r0<-recv
+log/syslog.Writer.Err (opaque r0) (shared r0): r0<-recv
+log/syslog.Writer.Info (opaque r0) (shared r0): r0<-recv
+log/syslog.Writer.Notice (opaque r0) (shared r0): r0<-recv
+log/syslog.Writer.Warning (opaque r0) (shared r0): r0<-recv
+log/syslog.Writer.Write (opaque r1) (shared r1): r1<-b r1<-recv
+maps.All (opaque r0): r0<-m
+maps.Clone (opaque r0): r0<-m
+maps.Collect (opaque r0): 
+maps.Keys (opaque r0): r0<-m
+maps.Values: r0<-[m]
+math/big.Float.Abs: r0<-recv
+math/big.Float.Add: r0<-recv
+math/big.Float.Append: r0<-buf
+math/big.Float.AppendText: r0<-b
+math/big.Float.Copy: r0<-recv
+math/big.Float.GobEncode (opaque r0): r0<-recv
+math/big.Float.Int (opaque r0): r0<-recv r0<-z
+math/big.Float.Mul: r0<-recv
+math/big.Float.Neg: r0<-recv
+math/big.Float.Parse (shared r2): r0<-recv
+math/big.Float.Quo: r0<-recv
+math/big.Float.Rat (opaque r0): r0<-recv r0<-z
+math/big.Float.Scan (shared r0): 
+math/big.Float.Set: r0<-recv
+math/big.Float.SetFloat64: r0<-recv
+math/big.Float.SetInf: r0<-recv
+math/big.Float.SetInt64: r0<-recv
+math/big.Float.SetInt: r0<-recv
+math/big.Float.SetMantExp: r0<-recv
+math/big.Float.SetMode: r0<-recv
+math/big.Float.SetPrec: r0<-recv
+math/big.Float.SetRat: r0<-recv
+math/big.Float.SetString: r0<-recv
+math/big.Float.SetUint64: r0<-recv
+math/big.Float.Sqrt: r0<-recv
+math/big.Float.Sub: r0<-recv
+math/big.Float.UnmarshalText (shared r0): r0<-[text]
+math/big.Int.Abs: r0<-recv
+math/big.Int.Add: r0<-recv
+math/big.Int.And: r0<-recv
+math/big.Int.AndNot: r0<-recv
+math/big.Int.Append: r0<-buf
+math/big.Int.AppendText: r0<-b
+math/big.Int.Binomial: r0<-recv
+math/big.Int.Bits: r0<-recv
+math/big.Int.Bytes (opaque r0): r0<-recv
+math/big.Int.Div: r0<-recv
+math/big.Int.DivMod: r0<-recv r1<-m
+math/big.Int.Exp: r0<-recv
+math/big.Int.FillBytes: r0<-buf
+math/big.Int.GCD: r0<-recv
+math/big.Int.GobEncode (opaque r0): r0<-recv
+math/big.Int.Lsh: r0<-recv
+math/big.Int.MarshalJSON (opaque r0): r0<-recv
+math/big.Int.Mod: r0<-recv
+math/big.Int.ModInverse: r0<-recv
+math/big.Int.ModSqrt: r0<-recv
+math/big.Int.Mul: r0<-recv
+math/big.Int.MulRange: r0<-recv
+math/big.Int.Neg: r0<-recv
+math/big.Int.Not: r0<-recv
+math/big.Int.Or: r0<-recv
+math/big.Int.Quo: r0<-recv
+math/big.Int.QuoRem: r0<-recv r1<-r
+math/big.Int.Rand: r0<-recv
+math/big.Int.Rem: r0<-recv
+math/big.Int.Rsh: r0<-recv
+math/big.Int.Scan (shared r0): 
+math/big.Int.Set: r0<-recv
+math/big.Int.SetBit: r0<-recv
+math/big.Int.SetBits: r0<-recv
+math/big.Int.SetBytes: r0<-recv
+math/big.Int.SetInt64: r0<-recv
+math/big.Int.SetString: r0<-recv
+math/big.Int.SetUint64: r0<-recv
+math/big.Int.Sqrt: r0<-recv
+math/big.Int.Sub: r0<-recv
+math/big.Int.UnmarshalJSON: r0<-[text]
+math/big.Int.UnmarshalText: r0<-[text]
+math/big.Int.Xor: r0<-recv
+math/big.NewFloat (opaque r0): 
+math/big.NewRat (opaque r0): 
+math/big.ParseFloat (opaque r0) (shared r2): 
+math/big.Rat.Abs: r0<-recv
+math/big.Rat.Add: r0<-recv
+math/big.Rat.AppendText: r0<-b
+math/big.Rat.Denom: r0<-recv
+math/big.Rat.GobEncode (opaque r0): r0<-recv
+math/big.Rat.Inv: r0<-recv
+math/big.Rat.Mul: r0<-recv
+math/big.Rat.Neg: r0<-recv
+math/big.Rat.Num: r0<-recv
+math/big.Rat.Quo: r0<-recv
+math/big.Rat.Set: r0<-recv
+math/big.Rat.SetFloat64: r0<-recv
+math/big.Rat.SetFrac64: r0<-recv
+math/big.Rat.SetFrac: r0<-recv
+math/big.Rat.SetInt64: r0<-recv
+math/big.Rat.SetInt: r0<-recv
+math/big.Rat.SetString: r0<-recv
+math/big.Rat.SetUint64: r0<-recv
+math/big.Rat.Sub: r0<-recv
+math/big.Rat.UnmarshalText: r0<-[text]
+math/rand.New: r0<-[src]
+math/rand.NewZipf: r0<-[r]
+math/rand/v2.ChaCha8.AppendBinary: r0<-b
+math/rand/v2.New: r0<-[src]
+math/rand/v2.NewZipf: r0<-[r]
+math/rand/v2.PCG.AppendBinary: r0<-b
+math/rand/v2.PCG.UnmarshalBinary (shared r0): 
+mime.AddExtensionType (shared r0): 
+mime.ExtensionsByType (shared r1): 
+mime.ParseMediaType (shared r2): 
+mime.WordDecoder.Decode (shared r1): 
+mime.WordDecoder.DecodeHeader (shared r1): 
+mime/multipart.FileHeader.Open (opaque r0) (shared r1): r0<-recv
+mime/multipart.NewReader (opaque r0): r0<-r
+mime/multipart.NewWriter: r0<-[w]
+mime/multipart.Reader.NextPart (opaque r0 r1) (shared r1): r0<-recv r1<-recv
+mime/multipart.Reader.NextRawPart (opaque r0 r1) (shared r1): r0<-recv r1<-recv
+mime/multipart.Reader.ReadForm (opaque r0 r1) (shared r1): r0<-recv r1<-recv
+mime/multipart.Writer.Close: r0<-recv
+mime/multipart.Writer.CreateFormField (opaque r0) (shared r1): r0<-recv r1<-recv
+mime/multipart.Writer.CreateFormFile (opaque r0) (shared r1): r0<-recv r1<-recv
+mime/multipart.Writer.CreatePart (opaque r0) (shared r1): r0<-header r0<-recv r1<-recv
+mime/multipart.Writer.WriteField (shared r0): r0<-recv
+mime/quotedprintable.NewReader (opaque r0): r0<-r
+mime/quotedprintable.NewWriter: r0<-[w]
+mime/quotedprintable.Reader.Read (shared r1): r1<-recv
+net.Buffers.Read (shared r1): 
+net.DNSConfigError.Unwrap: r0<-recv
+net.DNSError.Unwrap: r0<-recv
+net.Dial (opaque r0 r1) (shared r1): 
+net.DialIP (opaque r1) (shared r1): r1<-laddr r1<-raddr
+net.DialTCP (opaque r1) (shared r1): r1<-laddr r1<-raddr
+net.DialTimeout (opaque r0 r1) (shared r1): 
+net.DialUDP (opaque r1) (shared r1): r1<-laddr r1<-raddr
+net.DialUnix (opaque r1) (shared r1): 
+net.Dialer.Dial (opaque r0 r1) (shared r1): r0<-recv r1<-recv
+net.Dialer.DialContext (opaque r0 r1) (shared r1): r0<-ctx r0<-recv r1<-ctx r1<-recv
+net.FileConn (shared r1): 
+net.FileListener (shared r1): 
+net.FilePacketConn (shared r1): 
+net.IP.AppendText: r0<-b
+net.IP.DefaultMask (shared r0): 
+net.IP.To16: r0<-recv
+net.IP.To4: r0<-recv
+net.IPConn.ReadFrom (shared r2): r2<-[recv]
+net.IPConn.ReadFromIP (shared r2): r2<-[recv]
+net.IPConn.ReadMsgIP (shared r4): r4<-[recv]
+net.IPConn.SyscallConn: r0<-[recv]
+net.IPConn.WriteMsgIP (shared r2): r2<-[addr] r2<-[recv]
+net.IPConn.WriteTo (shared r1): r1<-[addr] r1<-[recv]
+net.IPConn.WriteToIP (shared r1): r1<-[addr] r1<-[recv]
+net.Interface.Addrs (shared r1): 
+net.Interface.MulticastAddrs (shared r1): 
+net.InterfaceAddrs (shared r1): 
+net.InterfaceByIndex (opaque r0) (shared r1): 
+net.InterfaceByName (opaque r0) (shared r1): 
+net.Interfaces (opaque r0) (shared r1): 
+net.Listen (opaque r1) (shared r1): 
+net.ListenConfig.Listen (opaque r1) (shared r1): r1<-ctx
+net.ListenConfig.ListenPacket (opaque r1) (shared r1): r1<-ctx
+net.ListenIP (opaque r1) (shared r1): r1<-laddr
+net.ListenMulticastUDP (opaque r1) (shared r1): r1<-gaddr r1<-ifi
+net.ListenPacket (opaque r1) (shared r1): 
+net.ListenTCP (opaque r1) (shared r1): r1<-laddr
+net.ListenUDP (opaque r1) (shared r1): r1<-laddr
+net.ListenUnix (opaque r1) (shared r1): 
+net.ListenUnixgram (opaque r1) (shared r1): 
+net.LookupAddr (opaque r1) (shared r1): 
+net.LookupCNAME (opaque r1) (shared r1): 
+net.LookupHost (opaque r1) (shared r1): 
+net.LookupIP (opaque r0 r1) (shared r1): 
+net.LookupMX (opaque r1) (shared r1): 
+net.LookupNS (opaque r1) (shared r1): 
+net.LookupSRV (opaque r2) (shared r2): 
+net.LookupTXT (opaque r1) (shared r1): 
+net.OpError.Unwrap: r0<-recv
+net.ResolveIPAddr (opaque r1) (shared r1): 
+net.ResolveTCPAddr (opaque r1) (shared r1): 
+net.ResolveUDPAddr (opaque r1) (shared r1): 
+net.Resolver.LookupAddr (opaque r1) (shared r1): r1<-ctx r1<-recv
+net.Resolver.LookupCNAME (opaque r1) (shared r1): r1<-ctx r1<-recv
+net.Resolver.LookupHost (opaque r1) (shared r1): r1<-ctx r1<-recv
+net.Resolver.LookupIP (opaque r1) (shared r1): r1<-ctx r1<-recv
+net.Resolver.LookupIPAddr (opaque r0 r1) (shared r1): r0<-ctx r0<-recv r1<-ctx r1<-recv
+net.Resolver.LookupMX (opaque r1) (shared r1): r1<-ctx r1<-recv
+net.Resolver.LookupNS (opaque r1) (shared r1): r1<-ctx r1<-recv
+net.Resolver.LookupNetIP (opaque r1) (shared r1): r1<-ctx r1<-recv
+net.Resolver.LookupSRV (opaque r2) (shared r2): r2<-ctx r2<-recv
+net.Resolver.LookupTXT (opaque r1) (shared r1): r1<-ctx r1<-recv
+net.TCPConn.CloseRead (shared r0): r0<-[recv]
+net.TCPConn.CloseWrite (shared r0): r0<-[recv]
+net.TCPConn.ReadFrom (shared r1): r1<-[recv]
+net.TCPConn.SetKeepAlive (shared r0): r0<-[recv]
+net.TCPConn.SetKeepAliveConfig (shared r0): r0<-[recv]
+net.TCPConn.SetKeepAlivePeriod (shared r0): r0<-[recv]
+net.TCPConn.SetLinger (shared r0): r0<-[recv]
+net.TCPConn.SetNoDelay (shared r0): r0<-[recv]
+net.TCPConn.SyscallConn: r0<-[recv]
+net.TCPConn.WriteTo (shared r1): r1<-[recv]
+net.TCPListener.Accept (shared r1): r1<-[recv]
+net.TCPListener.AcceptTCP (shared r1): r1<-[recv]
+net.TCPListener.Addr: r0<-recv
+net.TCPListener.Close (shared r0): r0<-[recv]
+net.TCPListener.File (opaque r0) (shared r1): r0<-recv r1<-[recv]
+net.TCPListener.SetDeadline (shared r0): 
+net.TCPListener.SyscallConn: r0<-[recv]
+net.UDPConn.ReadFrom (opaque r1 r2) (shared r2): r1<-b r1<-recv r2<-b r2<-recv
+net.UDPConn.ReadFromUDP (opaque r1 r2) (shared r2): r1<-b r1<-recv r2<-b r2<-recv
+net.UDPConn.ReadFromUDPAddrPort (opaque r2) (shared r2): r2<-b r2<-recv
+net.UDPConn.ReadMsgUDP (opaque r4) (shared r4): r4<-b r4<-oob r4<-recv
+net.UDPConn.ReadMsgUDPAddrPort (opaque r4) (shared r4): r4<-b r4<-oob r4<-recv
+net.UDPConn.SyscallConn: r0<-[recv]
+net.UDPConn.WriteMsgUDP (shared r2): r2<-[addr] r2<-[recv]
+net.UDPConn.WriteMsgUDPAddrPort (opaque r2) (shared r2): r2<-b r2<-oob r2<-recv
+net.UDPConn.WriteTo (opaque r1) (shared r1): r1<-addr r1<-b r1<-recv
+net.UDPConn.WriteToUDP (opaque r1) (shared r1): r1<-addr r1<-b r1<-recv
+net.UDPConn.WriteToUDPAddrPort (opaque r1) (shared r1): r1<-b r1<-recv
+net.UnixConn.CloseRead (shared r0): r0<-[recv]
+net.UnixConn.CloseWrite (shared r0): r0<-[recv]
+net.UnixConn.ReadFrom (shared r2): r2<-[recv]
+net.UnixConn.ReadFromUnix (shared r2): r2<-[recv]
+net.UnixConn.ReadMsgUnix (shared r4): r4<-[recv]
+net.UnixConn.SyscallConn: r0<-[recv]
+net.UnixConn.WriteMsgUnix (shared r2): r2<-[recv]
+net.UnixConn.WriteTo (shared r1): r1<-[addr] r1<-[recv]
+net.UnixConn.WriteToUnix (shared r1): r1<-[recv]
+net.UnixListener.Accept (shared r1): r1<-[recv]
+net.UnixListener.AcceptUnix (shared r1): r1<-[recv]
+net.UnixListener.Addr: r0<-recv
+net.UnixListener.Close (shared r0): r0<-[recv]
+net.UnixListener.File (opaque r0) (shared r1): r0<-recv r1<-[recv]
+net.UnixListener.SetDeadline (shared r0): 
+net.UnixListener.SyscallConn: r0<-[recv]
+net.conn.Close (shared r0): r0<-[recv]
+net.conn.File (opaque r0) (shared r1): r0<-recv r1<-[recv]
+net.conn.LocalAddr: r0<-recv
+net.conn.Read (shared r1): r1<-[recv]
+net.conn.RemoteAddr: r0<-recv
+net.conn.SetDeadline (shared r0): r0<-[recv]
+net.conn.SetReadBuffer (shared r0): r0<-[recv]
+net.conn.SetReadDeadline (shared r0): r0<-[recv]
+net.conn.SetWriteBuffer (shared r0): r0<-[recv]
+net.conn.SetWriteDeadline (shared r0): r0<-[recv]
+net.conn.Write (shared r1): r1<-[recv]
+net/http.AllowQuerySemicolons: r0<-[h]
+net/http.Client.Do (shared r1): r1<-[recv]
+net/http.Client.Get (shared r1): r1<-[recv]
+net/http.Client.Head (shared r1): r1<-[recv]
+net/http.Client.Post (shared r1): r1<-[recv]
+net/http.Client.PostForm (shared r1): r1<-[recv]
+net/http.CrossOriginProtection.Check (shared r0): 
+net/http.CrossOriginProtection.Handler (opaque r0): r0<-h r0<-recv
+net/http.Dir.Open (opaque r0) (shared r1): 
+net/http.FS: r0<-[fsys]
+net/http.FileServer: r0<-[root]
+net/http.FileServerFS: r0<-[root]
+net/http.Get (shared r1): 
+net/http.Head (shared r1): 
+net/http.Header.Values: r0<-recv
+net/http.ListenAndServe (opaque r0) (shared r0): r0<-handler
+net/http.ListenAndServeTLS (opaque r0) (shared r0): r0<-handler
+net/http.MaxBytesHandler: r0<-[h]
+net/http.MaxBytesReader: r0<-[r] r0<-[w]
+net/http.NewFileTransport: r0<-[fs]
+net/http.NewFileTransportFS: r0<-[fsys]
+net/http.NewRequest: r0<-[body]
+net/http.NewRequestWithContext: r0<-[body] r0<-[ctx]
+net/http.NewResponseController: r0<-[rw]
+net/http.NotFoundHandler (opaque r0): 
+net/http.ParseCookie (shared r1): 
+net/http.ParseSetCookie (opaque r0) (shared r0 r1): 
+net/http.ParseTime (opaque r0) (shared r0): 
+net/http.Post (shared r1): 
+net/http.PostForm (shared r1): 
+net/http.ReadRequest (opaque r0 r1) (shared r1): r0<-b r1<-b
+net/http.ReadResponse (opaque r0 r1) (shared r1): r0<-r r0<-req r1<-r r1<-req
+net/http.Request.Clone (opaque r0): r0<-ctx r0<-recv
+net/http.Request.Context: r0<-recv
+net/http.Request.Cookie (shared r1): 
+net/http.Request.FormFile (opaque r0 r1 r2) (shared r2): r0<-recv r1<-recv r2<-recv
+net/http.Request.MultipartReader (opaque r0): r0<-recv
+net/http.Request.ParseForm (shared r0): 
+net/http.Request.ParseMultipartForm (opaque r0) (shared r0): r0<-recv
+net/http.Request.WithContext: r0<-[ctx] r0<-[recv]
+net/http.Request.Write (opaque r0) (shared r0): r0<-recv r0<-w
+net/http.Request.WriteProxy (opaque r0) (shared r0): r0<-recv r0<-w
+net/http.Response.Cookies (opaque r0) (shared r0): r0<-recv
+net/http.Response.Location (shared r1): 
+net/http.Response.Write (opaque r0) (shared r0): r0<-recv r0<-w
+net/http.Serve (opaque r0) (shared r0): r0<-handler r0<-l
+net/http.ServeMux.Handler (opaque r0): r0<-r r0<-recv
+net/http.ServeTLS (opaque r0) (shared r0): r0<-handler r0<-l
+net/http.Server.ListenAndServe (opaque r0) (shared r0): r0<-recv
+net/http.Server.ListenAndServeTLS (opaque r0) (shared r0): r0<-recv
+net/http.Server.Serve (shared r0): r0<-recv
+net/http.Server.ServeTLS (opaque r0) (shared r0): r0<-l r0<-recv
+net/http.StripPrefix (opaque r0): r0<-h
+net/http.TimeoutHandler: r0<-[h]
+net/http.Transport.Clone (opaque r0): r0<-recv
+net/http.Transport.RoundTrip (opaque r0 r1) (shared r1): r0<-recv r0<-req r1<-recv r1<-req
+net/http/cgi.Request (opaque r0): 
+net/http/cgi.RequestFromMap (opaque r0): r0<-params
+net/http/cgi.Serve (opaque r0) (shared r0): r0<-handler
+net/http/cookiejar.New: r0<-[o]
+net/http/fcgi.Serve (shared r0): 
+net/http/httptest.NewRequest (opaque r0): r0<-body
+net/http/httptest.NewRequestWithContext (opaque r0): r0<-body r0<-ctx
+net/http/httptest.NewServer: r0<-[handler]
+net/http/httptest.NewTLSServer: r0<-[handler]
+net/http/httptest.NewUnstartedServer: r0<-[handler]
+net/http/httptest.ResponseRecorder.Header (opaque r0): r0<-recv
+net/http/httptest.ResponseRecorder.Result (opaque r0): r0<-recv
+net/http/httptest.Server.Certificate: r0<-recv
+net/http/httptest.Server.Client: r0<-recv
+net/http/httptrace.WithClientTrace: r0<-[ctx]
+net/http/httputil.ClientConn.Do (opaque r0 r1) (shared r1): r0<-recv r0<-req r1<-recv r1<-req
+net/http/httputil.ClientConn.Hijack: r0<-recv r1<-recv
+net/http/httputil.ClientConn.Read (opaque r0 r1) (shared r1): r0<-recv r0<-req r1<-recv r1<-req
+net/http/httputil.ClientConn.Write (opaque r0) (shared r0): r0<-recv r0<-req
+net/http/httputil.DumpRequest (shared r1): 
+net/http/httputil.DumpRequestOut (opaque r1) (shared r1): r1<-req
+net/http/httputil.DumpResponse (opaque r1) (shared r1): r1<-resp
+net/http/httputil.NewChunkedReader (opaque r0): r0<-r
+net/http/httputil.NewChunkedWriter: r0<-[w]
+net/http/httputil.NewClientConn (opaque r0) (shared r0): r0<-c r0<-r
+net/http/httputil.NewProxyClientConn (opaque r0) (shared r0): r0<-c r0<-r
+net/http/httputil.NewServerConn (opaque r0): r0<-c r0<-r
+net/http/httputil.ServerConn.Hijack: r0<-recv r1<-recv
+net/http/httputil.ServerConn.Read (opaque r0 r1) (shared r1): r0<-recv r1<-recv
+net/http/httputil.ServerConn.Write (opaque r0) (shared r0): r0<-recv r0<-req r0<-resp
+net/mail.AddressParser.Parse (shared r1): 
+net/mail.AddressParser.ParseList (shared r1): 
+net/mail.Header.AddressList (shared r1): 
+net/mail.Header.Date (opaque r0) (shared r0 r1): r0<-recv
+net/mail.ParseAddress (shared r1): 
+net/mail.ParseAddressList (shared r1): 
+net/mail.ParseDate (opaque r0) (shared r0): 
+net/mail.ReadMessage (opaque r0 r1) (shared r1): r0<-r r1<-r
+net/netip.Addr.AppendBinary: r0<-b
+net/netip.Addr.AppendText: r0<-b
+net/netip.Addr.AppendTo: r0<-b
+net/netip.Addr.MarshalBinary (opaque r0): 
+net/netip.AddrPort.AppendBinary: r0<-b
+net/netip.AddrPort.AppendText: r0<-b
+net/netip.AddrPort.AppendTo: r0<-b
+net/netip.AddrPort.MarshalBinary (opaque r0): 
+net/netip.Prefix.AppendBinary: r0<-b
+net/netip.Prefix.AppendText: r0<-b
+net/netip.Prefix.AppendTo: r0<-b
+net/netip.Prefix.MarshalBinary (opaque r0): 
+net/rpc.Client.Call (opaque r0): r0<-args r0<-recv r0<-reply
+net/rpc.Client.Close (shared r0): 
+net/rpc.Client.Go (opaque r0): r0<-args r0<-recv r0<-reply
+net/rpc.Dial (opaque r0 r1) (shared r1): 
+net/rpc.DialHTTP (opaque r0 r1) (shared r1): 
+net/rpc.DialHTTPPath (opaque r0 r1) (shared r1): 
+net/rpc.NewClient (opaque r0): r0<-conn
+net/rpc.NewClientWithCodec (opaque r0): r0<-codec
+net/rpc/jsonrpc.Dial (opaque r0 r1) (shared r1): 
+net/rpc/jsonrpc.NewClient (opaque r0): r0<-conn
+net/rpc/jsonrpc.NewClientCodec: r0<-[conn]
+net/rpc/jsonrpc.NewServerCodec: r0<-[conn]
+net/smtp.Client.Auth (shared r0): r0<-recv
+net/smtp.Client.Data (shared r1): r0<-[recv] r1<-recv
+net/smtp.Client.Hello: r0<-recv
+net/smtp.Client.Mail (shared r0): r0<-recv
+net/smtp.Client.Noop (shared r0): r0<-recv
+net/smtp.Client.Quit (shared r0): r0<-recv
+net/smtp.Client.Rcpt (shared r0): r0<-recv
+net/smtp.Client.Reset (shared r0): r0<-recv
+net/smtp.Client.StartTLS (shared r0): r0<-recv
+net/smtp.Client.TLSConnectionState (opaque r0): r0<-recv
+net/smtp.Client.Verify (shared r0): r0<-recv
+net/smtp.Dial (opaque r0 r1) (shared r1): 
+net/smtp.NewClient (opaque r0 r1) (shared r1): r0<-conn r1<-conn
+net/smtp.SendMail (opaque r0) (shared r0): r0<-a r0<-msg r0<-to
+net/textproto.Conn.Cmd (shared r1): r1<-recv
+net/textproto.Dial (opaque r0 r1) (shared r1): 
+net/textproto.MIMEHeader.Values: r0<-recv
+net/textproto.NewConn (opaque r0): r0<-conn
+net/textproto.NewReader: r0<-[r]
+net/textproto.NewWriter: r0<-[w]
+net/textproto.Reader.DotReader: r0<-recv
+net/textproto.Reader.ReadCodeLine (shared r2): r2<-recv
+net/textproto.Reader.ReadContinuedLine (shared r1): r1<-recv
+net/textproto.Reader.ReadContinuedLineBytes (shared r1): r0<-recv r1<-recv
+net/textproto.Reader.ReadDotLines (shared r1): r1<-recv
+net/textproto.Reader.ReadLine (shared r1): r1<-recv
+net/textproto.Reader.ReadLineBytes (shared r1): r0<-recv r1<-recv
+net/textproto.Reader.ReadMIMEHeader (shared r1): r1<-recv
+net/textproto.Reader.ReadResponse (shared r2): r2<-recv
+net/textproto.TrimBytes: r0<-b
+net/textproto.Writer.DotWriter: r0<-recv
+net/textproto.Writer.PrintfLine (shared r0): r0<-recv
+net/url.Error.Unwrap: r0<-recv
+net/url.ParseQuery (opaque r0): 
+net/url.URL.AppendBinary: r0<-b
+net/url.URL.Query (opaque r0): 
+os.Chdir (shared r0): 
+os.Chtimes (shared r0): 
+os.Create (opaque r0) (shared r1): 
+os.CreateTemp (opaque r0) (shared r1): 
+os.File.Chdir (shared r0): 
+os.File.Chmod (shared r0): 
+os.File.Chown (shared r0): 
+os.File.Close (shared r0): 
+os.File.Read (shared r1): 
+os.File.ReadAt (shared r1): 
+os.File.ReadDir (opaque r0) (shared r1): r0<-recv
+os.File.ReadFrom (shared r1): 
+os.File.Readdir (opaque r0) (shared r1): r0<-recv
+os.File.Readdirnames (shared r1): 
+os.File.Seek (shared r1): 
+os.File.SetDeadline (shared r0): 
+os.File.SetReadDeadline (shared r0): 
+os.File.SetWriteDeadline (shared r0): 
+os.File.Stat (opaque r0) (shared r1): r0<-recv
+os.File.Sync (shared r0): 
+os.File.SyscallConn (shared r1): r0<-[recv]
+os.File.Truncate (shared r0): 
+os.File.Write (shared r1): 
+os.File.WriteAt (shared r1): 
+os.File.WriteString (shared r1): 
+os.File.WriteTo (shared r1): 
+os.Getgroups (shared r1): 
+os.Getwd (shared r1): 
+os.Hostname (shared r1): 
+os.LinkError.Unwrap: r0<-recv
+os.Lstat (opaque r0): 
+os.MkdirTemp (shared r1): 
+os.NewFile (opaque r0): 
+os.NewSyscallError: r0<-[err]
+os.Open (opaque r0) (shared r1): 
+os.OpenFile (opaque r0) (shared r1): 
+os.OpenInRoot (opaque r0) (shared r1): 
+os.Pipe (opaque r0 r1) (shared r2): 
+os.Process.Kill (shared r0): 
+os.Process.Signal (shared r0): 
+os.ReadDir (opaque r0) (shared r1): 
+os.ReadFile (shared r1): 
+os.RemoveAll (shared r0): 
+os.Root.Chmod (shared r0): 
+os.Root.Chown (shared r0): 
+os.Root.Chtimes (shared r0): 
+os.Root.Create (opaque r0) (shared r1): 
+os.Root.Lchown (shared r0): 
+os.Root.Link (shared r0): 
+os.Root.Lstat (shared r1): 
+os.Root.Mkdir (shared r0): 
+os.Root.MkdirAll (shared r0): 
+os.Root.Open (opaque r0) (shared r1): 
+os.Root.OpenFile (opaque r0) (shared r1): 
+os.Root.OpenRoot (shared r1): 
+os.Root.ReadFile (shared r1): 
+os.Root.Readlink (shared r1): 
+os.Root.Remove (shared r0): 
+os.Root.RemoveAll (shared r0): 
+os.Root.Rename (shared r0): 
+os.Root.Stat (shared r1): 
+os.Root.Symlink (shared r0): 
+os.Root.WriteFile (shared r0): 
+os.StartProcess (shared r1): 
+os.Stat (opaque r0): 
+os.SyscallError.Unwrap: r0<-recv
+os.WriteFile (shared r0): 
+os/exec.Cmd.CombinedOutput (opaque r0 r1) (shared r1): r0<-recv r1<-recv
+os/exec.Cmd.Output (opaque r0 r1) (shared r1): r0<-recv r1<-recv
+os/exec.Cmd.Run (opaque r0) (shared r0): r0<-recv
+os/exec.Cmd.Start (opaque r0) (shared r0): r0<-recv
+os/exec.Cmd.StderrPipe (opaque r0) (shared r1): r0<-recv
+os/exec.Cmd.StdinPipe (opaque r0) (shared r1): r0<-recv
+os/exec.Cmd.StdoutPipe (opaque r0) (shared r1): r0<-recv
+os/exec.Cmd.Wait (opaque r0) (shared r0): r0<-recv
+os/exec.Command (shared r0): 
+os/exec.CommandContext (shared r0): r0<-[ctx]
+os/exec.Error.Unwrap: r0<-recv
+os/exec.LookPath (shared r1): 
+os/signal.NotifyContext (opaque r0 r1) (shared r0 r1): r0<-parent r0<-signals r1<-parent r1<-signals
+os/user.Current (shared r1): 
+os/user.Lookup (opaque r1) (shared r1): 
+os/user.LookupGroup (opaque r1) (shared r1): 
+os/user.LookupGroupId (opaque r1) (shared r1): 
+os/user.LookupId (opaque r1) (shared r1): 
+os/user.User.GroupIds (opaque r1) (shared r1): 
+path.Match (shared r1): 
+path/filepath.Abs (shared r1): 
+path/filepath.Glob (shared r1): 
+path/filepath.Localize (shared r1): 
+path/filepath.Match (shared r1): 
+reflect.MakeSlice: r0<-[typ]
+reflect.Swapper (opaque r0): r0<-slice
+reflect.Value.Bytes (opaque r0): 
+reflect.Value.Index (shared r0): 
+reflect.Value.Recv (opaque r0): 
+reflect.Value.Seq (opaque r0): 
+reflect.Value.Seq2 (opaque r0) (shared r0): 
+reflect.Value.TryRecv (opaque r0): 
+reflect.VisibleFields (opaque r0): r0<-t
+reflect.Zero: r0<-[typ]
+regexp.Compile (opaque r0) (shared r0): 
+regexp.CompilePOSIX (opaque r0) (shared r0): 
+regexp.MustCompile (opaque r0) (shared r0): 
+regexp.MustCompilePOSIX (opaque r0) (shared r0): 
+regexp.Regexp.AppendText: r0<-b
+regexp.Regexp.Copy: r0<-[recv]
+regexp.Regexp.Expand: r0<-dst
+regexp.Regexp.ExpandString: r0<-dst
+regexp.Regexp.Find: r0<-b
+regexp.Regexp.FindAll: r0<-[b]
+regexp.Regexp.FindAllSubmatch: r0<-[b]
+regexp.Regexp.FindSubmatch: r0<-[b]
+regexp.Regexp.SubexpNames: r0<-recv
+regexp/syntax.Compile (opaque r0): r0<-re
+regexp/syntax.Parse (opaque r0): 
+regexp/syntax.Regexp.CapNames (opaque r0): r0<-recv
+regexp/syntax.Regexp.Simplify (opaque r0): r0<-recv
+runtime.CallersFrames: r0<-[callers]
+runtime.Frames.Next: r0<-[recv]
+runtime/coverage.WriteCounters (opaque r0) (shared r0): r0<-w
+runtime/coverage.WriteCountersDir (opaque r0) (shared r0): 
+runtime/coverage.WriteMeta (opaque r0) (shared r0): r0<-w
+runtime/coverage.WriteMetaDir (opaque r0) (shared r0): 
+runtime/debug.SetCrashOutput (shared r0): 
+runtime/metrics.All (shared r0): 
+runtime/pprof.Lookup (shared r0): 
+runtime/pprof.NewProfile (opaque r0): 
+runtime/pprof.Profile.WriteTo (opaque r0) (shared r0): r0<-recv r0<-w
+runtime/pprof.Profiles (opaque r0) (shared r0): 
+runtime/pprof.WithLabels: r0<-[ctx] r0<-[labels]
+runtime/pprof.WriteHeapProfile (opaque r0) (shared r0): r0<-w
+runtime/trace.NewTask: r0<-[pctx]
+slices.All: r0<-[s]
+slices.AppendSeq: r0<-s
+slices.Backward: r0<-[s]
+slices.Chunk: r0<-[s]
+slices.Clip: r0<-s
+slices.Clone: r0<-[s]
+slices.Compact: r0<-s
+slices.CompactFunc: r0<-s
+slices.Concat: r0<-[slices]
+slices.Delete: r0<-s
+slices.DeleteFunc: r0<-s
+slices.Grow: r0<-s
+slices.Insert: r0<-[v] r0<-s
+slices.Max (opaque r0): r0<-x
+slices.MaxFunc: r0<-x
+slices.Min (opaque r0): r0<-x
+slices.MinFunc: r0<-x
+slices.Repeat: r0<-[x]
+slices.Replace: r0<-[v] r0<-s
+slices.Values: r0<-[s]
+sort.Reverse: r0<-[data]
+strconv.AppendBool: r0<-dst
+strconv.AppendFloat: r0<-dst
+strconv.AppendInt: r0<-dst
+strconv.AppendQuote: r0<-dst
+strconv.AppendQuoteRune: r0<-dst
+strconv.AppendQuoteRuneToASCII: r0<-dst
+strconv.AppendQuoteRuneToGraphic: r0<-dst
+strconv.AppendQuoteToASCII: r0<-dst
+strconv.AppendQuoteToGraphic: r0<-dst
+strconv.AppendUint: r0<-dst
+strconv.Atoi (shared r1): 
+strconv.NumError.Unwrap: r0<-recv
+strconv.ParseBool (shared r1): 
+strconv.ParseComplex (shared r1): 
+strconv.ParseFloat (shared r1): 
+strconv.ParseInt (shared r1): 
+strconv.ParseUint (shared r1): 
+strconv.QuotedPrefix (shared r1): 
+strconv.Unquote (shared r1): 
+strconv.UnquoteChar (shared r3): 
+strings.Reader.Read (shared r1): 
+strings.Reader.ReadAt (shared r1): 
+strings.Reader.ReadByte (shared r1): 
+strings.Reader.ReadRune (shared r2): 
+strings.Reader.WriteTo (shared r1): 
+sync.Map.LoadOrStore: r0<-value
+sync.NewCond: r0<-[l]
+sync.OnceFunc (opaque r0): 
+sync.OnceValue (opaque r0): 
+sync.OnceValues (opaque r0): 
+sync.Pool.Get (opaque r0): 
+sync/atomic.Value.Load (opaque r0): r0<-recv
+sync/atomic.Value.Swap (opaque r0): r0<-new r0<-recv
+syscall.Accept (shared r2): 
+syscall.Accept4 (shared r2): 
+syscall.Access (shared r0): 
+syscall.Acct (shared r0): 
+syscall.Adjtimex (shared r1): 
+syscall.AttachLsf (shared r0): 
+syscall.Bind (shared r0): 
+syscall.BindToDevice (shared r0): 
+syscall.Chdir (shared r0): 
+syscall.Chmod (shared r0): 
+syscall.Chown (shared r0): 
+syscall.Chroot (shared r0): 
+syscall.Close (shared r0): 
+syscall.Connect (shared r0): 
+syscall.Creat (shared r1): 
+syscall.DetachLsf (shared r0): 
+syscall.Dup (shared r1): 
+syscall.Dup2 (shared r0): 
+syscall.Dup3 (shared r0): 
+syscall.EpollCreate (shared r1): 
+syscall.EpollCreate1 (shared r1): 
+syscall.EpollCtl (shared r0): 
+syscall.EpollWait (shared r1): 
+syscall.Faccessat (shared r0): 
+syscall.Fallocate (shared r0): 
+syscall.Fchdir (shared r0): 
+syscall.Fchmod (shared r0): 
+syscall.Fchmodat (shared r0): 
+syscall.Fchown (shared r0): 
+syscall.Fchownat (shared r0): 
+syscall.Fdatasync (shared r0): 
+syscall.Flock (shared r0): 
+syscall.ForkExec (shared r1): 
+syscall.Fstat (shared r0): 
+syscall.Fstatfs (shared r0): 
+syscall.Fsync (shared r0): 
+syscall.Ftruncate (shared r0): 
+syscall.Futimes (shared r0): 
+syscall.Futimesat (shared r0): 
+syscall.Getcwd (shared r1): 
+syscall.Getdents (shared r1): 
+syscall.Getgroups (shared r1): 
+syscall.Getpeername (shared r1): 
+syscall.Getpgid (shared r1): 
+syscall.Getpriority (shared r1): 
+syscall.Getrlimit (shared r0): 
+syscall.Getrusage (shared r0): 
+syscall.Getsockname (shared r1): 
+syscall.GetsockoptICMPv6Filter (shared r1): 
+syscall.GetsockoptIPMreq (shared r1): 
+syscall.GetsockoptIPMreqn (shared r1): 
+syscall.GetsockoptIPv6MTUInfo (shared r1): 
+syscall.GetsockoptIPv6Mreq (shared r1): 
+syscall.GetsockoptInet4Addr (shared r1): 
+syscall.GetsockoptInt (shared r1): 
+syscall.GetsockoptUcred (shared r1): 
+syscall.Getwd (shared r1): 
+syscall.Getxattr (shared r1): 
+syscall.InotifyAddWatch (shared r1): 
+syscall.InotifyInit (shared r1): 
+syscall.InotifyInit1 (shared r1): 
+syscall.InotifyRmWatch (shared r1): 
+syscall.Ioperm (shared r0): 
+syscall.Iopl (shared r0): 
+syscall.Kill (shared r0): 
+syscall.Klogctl (shared r1): 
+syscall.Lchown (shared r0): 
+syscall.Link (shared r0): 
+syscall.Listen (shared r0): 
+syscall.Listxattr (shared r1): 
+syscall.LsfSocket (shared r1): 
+syscall.Lstat (shared r0): 
+syscall.Madvise (shared r0): 
+syscall.Mkdir (shared r0): 
+syscall.Mkdirat (shared r0): 
+syscall.Mkfifo (shared r0): 
+syscall.Mknod (shared r0): 
+syscall.Mknodat (shared r0): 
+syscall.Mlock (shared r0): 
+syscall.Mlockall (shared r0): 
+syscall.Mmap (opaque r0): 
+syscall.Mount (shared r0): 
+syscall.Mprotect (shared r0): 
+syscall.Munlock (shared r0): 
+syscall.Munlockall (shared r0): 
+syscall.Nanosleep (shared r0): 
+syscall.NetlinkRIB (shared r1): 
+syscall.Open (shared r1): 
+syscall.Openat (shared r1): 
+syscall.ParseDirent: r2<-names
+syscall.ParseNetlinkMessage: r0<-[b]
+syscall.ParseNetlinkRouteAttr: r0<-[m]
+syscall.ParseSocketControlMessage: r0<-[b]
+syscall.Pause (shared r0): 
+syscall.Pipe (shared r0): 
+syscall.Pipe2 (shared r0): 
+syscall.PivotRoot (shared r0): 
+syscall.Pread (shared r1): 
+syscall.PtraceAttach (shared r0): 
+syscall.PtraceCont (shared r0): 
+syscall.PtraceDetach (shared r0): 
+syscall.PtraceGetEventMsg (shared r1): 
+syscall.PtraceGetRegs (shared r0): 
+syscall.PtracePeekData (shared r1): 
+syscall.PtracePeekText (shared r1): 
+syscall.PtracePokeData (shared r1): 
+syscall.PtracePokeText (shared r1): 
+syscall.PtraceSetOptions (shared r0): 
+syscall.PtraceSetRegs (shared r0): 
+syscall.PtraceSingleStep (shared r0): 
+syscall.PtraceSyscall (shared r0): 
+syscall.Pwrite (shared r1): 
+syscall.Read (shared r1): 
+syscall.ReadDirent (shared r1): 
+syscall.Readlink (shared r1): 
+syscall.Reboot (shared r0): 
+syscall.Recvfrom (shared r2): 
+syscall.Recvmsg (shared r4): 
+syscall.Removexattr (shared r0): 
+syscall.Rename (shared r0): 
+syscall.Renameat (shared r0): 
+syscall.Rmdir (shared r0): 
+syscall.Seek (shared r1): 
+syscall.Select (shared r1): 
+syscall.Sendfile (shared r1): 
+syscall.Sendmsg (shared r0): 
+syscall.SendmsgN (shared r1): 
+syscall.Sendto (shared r0): 
+syscall.SetLsfPromisc (shared r0): 
+syscall.SetNonblock (shared r0): 
+syscall.Setdomainname (shared r0): 
+syscall.Setegid (shared r0): 
+syscall.Seteuid (shared r0): 
+syscall.Setfsgid (shared r0): 
+syscall.Setfsuid (shared r0): 
+syscall.Setgid (shared r0): 
+syscall.Setgroups (shared r0): 
+syscall.Sethostname (shared r0): 
+syscall.Setpgid (shared r0): 
+syscall.Setpriority (shared r0): 
+syscall.Setregid (shared r0): 
+syscall.Setresgid (shared r0): 
+syscall.Setresuid (shared r0): 
+syscall.Setreuid (shared r0): 
+syscall.Setrlimit (shared r0): 
+syscall.Setsid (shared r1): 
+syscall.SetsockoptByte (shared r0): 
+syscall.SetsockoptICMPv6Filter (shared r0): 
+syscall.SetsockoptIPMreq (shared r0): 
+syscall.SetsockoptIPMreqn (shared r0): 
+syscall.SetsockoptIPv6Mreq (shared r0): 
+syscall.SetsockoptInet4Addr (shared r0): 
+syscall.SetsockoptInt (shared r0): 
+syscall.SetsockoptLinger (shared r0): 
+syscall.SetsockoptString (shared r0): 
+syscall.SetsockoptTimeval (shared r0): 
+syscall.Settimeofday (shared r0): 
+syscall.Setuid (shared r0): 
+syscall.Setxattr (shared r0): 
+syscall.Shutdown (shared r0): 
+syscall.Socket (shared r1): 
+syscall.Socketpair (shared r1): 
+syscall.Splice (shared r1): 
+syscall.StartProcess (shared r2): 
+syscall.Stat (shared r0): 
+syscall.Statfs (shared r0): 
+syscall.Symlink (shared r0): 
+syscall.SyncFileRange (shared r0): 
+syscall.Sysinfo (shared r0): 
+syscall.Tee (shared r1): 
+syscall.Tgkill (shared r0): 
+syscall.Times (shared r1): 
+syscall.Truncate (shared r0): 
+syscall.Uname (shared r0): 
+syscall.UnixCredentials (opaque r0): 
+syscall.UnixRights (opaque r0): r0<-fds
+syscall.Unlink (shared r0): 
+syscall.Unlinkat (shared r0): 
+syscall.Unmount (shared r0): 
+syscall.Unshare (shared r0): 
+syscall.Ustat (shared r0): 
+syscall.Utime (shared r0): 
+syscall.Utimes (shared r0): 
+syscall.UtimesNano (shared r0): 
+syscall.Wait4 (shared r1): 
+syscall.Write (shared r1): 
+testing.Benchmark (opaque r0): 
+testing.MainStart: r0<-[benchmarks] r0<-[deps] r0<-[examples] r0<-[fuzzTargets] r0<-[tests]
+testing.T.Deadline: r0<-[recv]
+testing.common.Context: r0<-recv
+testing.common.Output (opaque r0): r0<-recv
+testing/fstest.MapFS.Glob (shared r1): 
+testing/fstest.MapFS.Lstat (shared r1): r0<-[recv]
+testing/fstest.MapFS.Open (shared r1): r0<-[recv]
+testing/fstest.MapFS.ReadLink (shared r1): 
+testing/fstest.MapFS.Sub (shared r1): r0<-[recv]
+testing/fstest.TestFS (opaque r0) (shared r0): r0<-expected r0<-fsys
+testing/iotest.DataErrReader: r0<-[r]
+testing/iotest.ErrReader: r0<-[err]
+testing/iotest.HalfReader: r0<-[r]
+testing/iotest.NewReadLogger: r0<-[r]
+testing/iotest.NewWriteLogger: r0<-[w]
+testing/iotest.OneByteReader: r0<-[r]
+testing/iotest.TestReader: r0<-[content]
+testing/iotest.TimeoutReader: r0<-[r]
+testing/iotest.TruncateWriter: r0<-[w]
+text/scanner.Scanner.Init: r0<-recv
+text/tabwriter.NewWriter (opaque r0): r0<-output
+text/tabwriter.Writer.Flush (opaque r0): r0<-recv
+text/tabwriter.Writer.Init: r0<-recv
+text/tabwriter.Writer.Write (opaque r1): r1<-buf r1<-recv
+text/template.ExecError.Unwrap: r0<-recv
+text/template.Must: r0<-t
+text/template.New (opaque r0): 
+text/template.ParseFS (opaque r0 r1) (shared r1): r0<-fsys r0<-patterns r1<-fsys r1<-patterns
+text/template.ParseFiles (opaque r0 r1): r0<-filenames r1<-filenames
+text/template.ParseGlob (opaque r0 r1) (shared r1): 
+text/template.Template.AddParseTree: r0<-recv
+text/template.Template.Clone: r0<-[recv]
+text/template.Template.Delims: r0<-recv
+text/template.Template.Execute (opaque r0): r0<-data r0<-recv r0<-wr
+text/template.Template.ExecuteTemplate (opaque r0): r0<-data r0<-recv r0<-wr
+text/template.Template.Funcs: r0<-recv
+text/template.Template.Lookup (opaque r0): r0<-recv
+text/template.Template.New: r0<-[recv]
+text/template.Template.Option: r0<-recv
+text/template.Template.Parse (opaque r1): r0<-recv r1<-recv
+text/template.Template.ParseFS (opaque r0 r1) (shared r1): r0<-fsys r0<-patterns r0<-recv r1<-fsys r1<-patterns r1<-recv
+text/template.Template.ParseFiles (opaque r0 r1): r0<-filenames r0<-recv r1<-filenames r1<-recv
+text/template.Template.ParseGlob (opaque r0 r1) (shared r1): r0<-recv r1<-recv
+text/template.Template.Templates (opaque r0): r0<-recv
+text/template/parse.ActionNode.Copy: r0<-[recv]
+text/template/parse.BoolNode.Copy: r0<-[recv]
+text/template/parse.BranchNode.Copy: r0<-[recv]
+text/template/parse.BreakNode.Copy: r0<-[recv]
+text/template/parse.ChainNode.Copy: r0<-[recv]
+text/template/parse.CommandNode.Copy: r0<-recv
+text/template/parse.CommentNode.Copy: r0<-[recv]
+text/template/parse.ContinueNode.Copy: r0<-[recv]
+text/template/parse.DotNode.Copy: r0<-[recv]
+text/template/parse.FieldNode.Copy: r0<-[recv]
+text/template/parse.IdentifierNode.SetPos: r0<-recv
+text/template/parse.IdentifierNode.SetTree: r0<-recv
+text/template/parse.IfNode.Copy: r0<-[recv]
+text/template/parse.ListNode.Copy: r0<-recv
+text/template/parse.ListNode.CopyList: r0<-recv
+text/template/parse.New: r0<-[funcs]
+text/template/parse.NilNode.Copy: r0<-[recv]
+text/template/parse.NumberNode.Copy: r0<-[recv]
+text/template/parse.Parse (opaque r1): r1<-funcs
+text/template/parse.PipeNode.Copy: r0<-recv
+text/template/parse.PipeNode.CopyPipe: r0<-recv
+text/template/parse.RangeNode.Copy: r0<-[recv]
+text/template/parse.StringNode.Copy: r0<-[recv]
+text/template/parse.TemplateNode.Copy: r0<-[recv]
+text/template/parse.TextNode.Copy: r0<-[recv]
+text/template/parse.Tree.Copy: r0<-[recv]
+text/template/parse.Tree.Parse (opaque r1): r0<-recv r1<-funcs r1<-recv r1<-treeSet
+text/template/parse.VariableNode.Copy: r0<-[recv]
+text/template/parse.WithNode.Copy: r0<-[recv]
+time.Date (opaque r0) (shared r0): r0<-loc
+time.FixedZone (shared r0): 
+time.LoadLocation (shared r0 r1): 
+time.LoadLocationFromTZData (shared r1): 
+time.Now (shared r0): 
+time.Parse (opaque r0) (shared r0): 
+time.ParseInLocation (opaque r0) (shared r0): r0<-loc
+time.Time.Add (opaque r0): r0<-recv
+time.Time.AddDate (opaque r0) (shared r0): r0<-recv
+time.Time.AppendBinary: r0<-b
+time.Time.AppendFormat: r0<-b
+time.Time.AppendText: r0<-b
+time.Time.In (opaque r0): r0<-loc r0<-recv
+time.Time.Local (opaque r0): r0<-recv
+time.Time.Location (shared r0): r0<-recv
+time.Time.Round (opaque r0): r0<-recv
+time.Time.Truncate (opaque r0): r0<-recv
+time.Time.UTC (opaque r0): r0<-recv
+time.Time.ZoneBounds (opaque r0 r1) (shared r0 r1): r0<-recv r1<-recv
+time.Unix (shared r0): 
+time.UnixMicro (shared r0): 
+time.UnixMilli (shared r0): 
+unicode/utf16.AppendRune: r0<-a
+unicode/utf8.AppendRune: r0<-p
+unique.Handle.Value: r0<-recv
+unique.Make (opaque r0): r0<-value

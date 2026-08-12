@@ -36,6 +36,10 @@ type TypeOverrides struct {
 	NeverReturn      map[string][]string            `json:"never_return"`
 	PartialResult    map[string][]string            `json:"partial_result"`
 	MutatesParam     map[string]map[string][]string `json:"mutates_param"`
+	// ReturnsViewOf curates view aliasing the SSA result walk cannot see:
+	// "<result>:<param>" for whole-value sharing, "<result>:[<param>]" for
+	// element-level, "recv" for the receiver, an empty list for fresh.
+	ReturnsViewOf map[string]map[string][]string `json:"returns_view_of"`
 	// NilableParam declares pointer/interface parameters that accept nil in Go
 	// (e.g. `nil` means "use the default"), so they should be `Option<Ref<T>>`
 	// instead of `Ref<T>`.
@@ -208,6 +212,20 @@ func (c *Config) MutatingParams(pkg, name string) []string {
 		return nil
 	}
 	return nestedParams(c.Overrides.Types.MutatesParam, pkg, name)
+}
+
+// ViewOverrides returns the curated view-aliasing entries, and whether an
+// entry exists at all, since an empty entry asserts freshness.
+func (c *Config) ViewOverrides(pkg, name string) ([]string, bool) {
+	if c == nil {
+		return nil, false
+	}
+	funcs, ok := lookupWithGlobNested(c.Overrides.Types.ReturnsViewOf, pkg)
+	if !ok {
+		return nil, false
+	}
+	entries, ok := funcs[name]
+	return entries, ok
 }
 
 // NilableParams returns the list of parameter names that should be wrapped in
