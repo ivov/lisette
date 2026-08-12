@@ -20,8 +20,7 @@ func g[T any](_ int, _ ...T) (T, bool) {
 }
 
 func test() {
-	option_1 := lisette.OptionFromCommaOk[int](g[int](5))
-	r := option_1
+	r := lisette.OptionFromCommaOk[int](g[int](5))
 	if r.UnwrapOr(9) != 9 {
 		panic("expected 9")
 	}

@@ -44,15 +44,14 @@ type E struct {
 }
 
 func eval(e E) int {
-	subject_1 := e
-	if subject_1.Tag == EA {
-		x := subject_1.A.First
+	if e.Tag == EA {
+		x := e.A.First
 		if x > 0 {
 			return x
 		}
 	}
-	if subject_1.Tag == EB {
-		x := subject_1.B.First
+	if e.Tag == EB {
+		x := e.B.First
 		if x > 0 {
 			return x
 		}

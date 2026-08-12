@@ -27,18 +27,16 @@ func main() {
 			wrapped_3[i_4] = lisette.MakeOptionNone[string]()
 		}
 	}
-	ref_6 := &wrapped_3
-	xs := ref_6
-	src_7 := xs
-	src_8 := *src_7
-	unwrapped_9 := make([]*string, len(src_8))
-	for i_10, v_11 := range src_8 {
-		if v_11.Tag == lisette.OptionSome {
-			unwrapped_9[i_10] = &v_11.SomeVal
+	xs := &wrapped_3
+	src_7 := *xs
+	unwrapped_8 := make([]*string, len(src_7))
+	for i_9, v_10 := range src_7 {
+		if v_10.Tag == lisette.OptionSome {
+			unwrapped_8[i_9] = &v_10.SomeVal
 		} else {
-			unwrapped_9[i_10] = nil
+			unwrapped_8[i_9] = nil
 		}
 	}
-	ref_12 := &unwrapped_9
-	aws.Use(ref_12)
+	ref_11 := &unwrapped_8
+	aws.Use(ref_11)
 }

@@ -20,21 +20,20 @@ import "fmt"
 
 func main() {
 	for i := 0; i < 10; i++ {
-		subject_1 := i
-	match_2:
+	match_1:
 		for {
 			{
-				if subject_1 < 5 {
+				if i < 5 {
 					fmt.Println("low")
-					break match_2
+					break match_1
 				}
 			}
-			if subject_1 == 5 {
+			if i == 5 {
 				fmt.Println("five")
 			} else {
 				fmt.Println("high")
 			}
-			break match_2
+			break match_1
 		}
 	}
 }

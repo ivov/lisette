@@ -35,15 +35,14 @@ type Res struct {
 }
 
 func test(r Res, threshold int) int {
-	subject_1 := r
-	if subject_1.Tag == ResOk {
-		x := subject_1.Ok
+	if r.Tag == ResOk {
+		x := r.Ok
 		if x > threshold {
 			return 100
 		}
 	}
-	if subject_1.Tag == ResErr {
-		if subject_1.Err > threshold {
+	if r.Tag == ResErr {
+		if r.Err > threshold {
 			return 100
 		}
 	}

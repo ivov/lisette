@@ -234,9 +234,8 @@ impl Planner<'_> {
                 ..
             } => {
                 let go_expression = self.emit_identifier(value, resolution.definition(), ty, ctx);
-                let stable_across_calls = self.identifier_immune_to_calls(expression);
-                let plan =
-                    ValuePlan::from_identifier_expression(go_expression, stable_across_calls);
+                let stability = self.identifier_read_stability(expression);
+                let plan = ValuePlan::from_identifier_expression(go_expression, stability);
                 let mut adapter_setup = Vec::new();
                 let value = self.maybe_lower_tagged_fn_ref(
                     &mut adapter_setup,

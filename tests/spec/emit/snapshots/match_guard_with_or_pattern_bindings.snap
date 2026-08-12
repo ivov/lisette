@@ -41,18 +41,17 @@ type E struct {
 }
 
 func test(e E) int {
-	subject_1 := e
-	if subject_1.Tag == EC {
-		x := subject_1.C
+	if e.Tag == EC {
+		x := e.C
 		if x > 0 {
 			return x * 100
 		}
 	}
-	if subject_1.Tag == EA {
-		return subject_1.A
+	if e.Tag == EA {
+		return e.A
 	}
-	if subject_1.Tag == EB {
-		return subject_1.B
+	if e.Tag == EB {
+		return e.B
 	}
-	return subject_1.C
+	return e.C
 }

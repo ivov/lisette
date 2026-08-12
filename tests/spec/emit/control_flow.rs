@@ -1477,6 +1477,39 @@ fn test(opt: Option<int>) -> string {
 }
 
 #[test]
+fn match_guard_pins_mutated_subject() {
+    let input = r#"
+fn test(opt: Option<int>) -> int {
+  let mut current = opt
+  let clear = || -> bool { current = None; true }
+  match current {
+    Some(x) if clear() => x,
+    Some(_) => 1,
+    None => 0,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn match_guard_pins_shadowed_mutated_subject() {
+    let input = r#"
+fn test(opt: Option<int>) -> int {
+  let current = opt
+  let mut current = current
+  let clear = || -> bool { current = None; false }
+  match current {
+    Some(x) if clear() => x,
+    Some(y) => y,
+    None => 0,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn match_guard_with_binding() {
     let input = r#"
 fn test(opt: Option<int>) -> int {

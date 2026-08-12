@@ -15,8 +15,7 @@ type MyString = string
 
 func test() {
 	s := "hi"
-	_arg_1 := s
 	defer func() {
-		_ = len(_arg_1)
+		_ = len(s)
 	}()
 }

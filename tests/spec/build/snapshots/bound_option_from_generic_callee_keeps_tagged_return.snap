@@ -27,12 +27,11 @@ func main() {
 		}
 		return nil, false
 	})
-	var option_6 lisette.Option[Face]
+	var rez lisette.Option[Face]
 	if ret_5 && !lisette.IsNilInterface(ret_4) {
-		option_6 = lisette.MakeOptionSome[Face](ret_4)
+		rez = lisette.MakeOptionSome[Face](ret_4)
 	} else {
-		option_6 = lisette.MakeOptionNone[Face]()
+		rez = lisette.MakeOptionNone[Face]()
 	}
-	rez := option_6
 	_ = rez
 }

@@ -20,7 +20,6 @@ import (
 func main() {
 	input := aws.ListInput{}
 	raw_1 := input.MaxItems
-	option_2 := lisette.OptionFromPointer[int32](raw_1)
-	n := option_2
+	n := lisette.OptionFromPointer[int32](raw_1)
 	_ = n
 }

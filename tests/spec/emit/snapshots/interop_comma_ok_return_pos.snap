@@ -30,8 +30,7 @@ func makeLookup() func(string) (string, bool) {
 
 func main() {
 	f := makeLookup()
-	option_1 := lisette.OptionFromCommaOk[string](f("HOME"))
-	r := option_1
+	r := lisette.OptionFromCommaOk[string](f("HOME"))
 	if r.Tag == lisette.OptionSome {
 		_ = r.SomeVal
 	}

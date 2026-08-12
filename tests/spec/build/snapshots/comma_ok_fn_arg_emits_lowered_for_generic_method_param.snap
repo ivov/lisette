@@ -15,9 +15,8 @@ func Holder_Resolve[R any](self Holder, f func(int) (R, bool)) (R, bool) {
 }
 
 func main() {
-	option_1 := lisette.OptionFromCommaOk[int](Holder_Resolve(Holder{N: 5}, func(x int) (int, bool) {
+	rez := lisette.OptionFromCommaOk[int](Holder_Resolve(Holder{N: 5}, func(x int) (int, bool) {
 		return x, true
 	}))
-	rez := option_1
 	_ = rez
 }

@@ -52,7 +52,7 @@ impl Planner<'_> {
         let expression_ty = expression.get_type();
 
         let base_plan = if let Some(package) = expression_ty.as_import_namespace() {
-            ValuePlan::name(Vec::new(), self.require_package_import(package), true)
+            ValuePlan::captured(Vec::new(), self.require_package_import(package))
         } else {
             self.plan_coerced_expression(expression, receiver_coercion, ctx)
         };

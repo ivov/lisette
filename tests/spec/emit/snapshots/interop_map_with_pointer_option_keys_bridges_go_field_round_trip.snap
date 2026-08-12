@@ -24,24 +24,21 @@ func main() {
 	values := make(map[lisette.Option[int]]string)
 	values[lisette.MakeOptionSome(1)] = "one"
 	values[lisette.MakeOptionNone[int]()] = "none"
-	src_1 := values
-	unwrapped_2 := make(map[*int]string, len(src_1))
-	for i_3, v_4 := range src_1 {
-		opt_5 := i_3
-		var ptr_6 *int
-		if opt_5.Tag == lisette.OptionSome {
-			ptr_6 = &opt_5.SomeVal
+	unwrapped_1 := make(map[*int]string, len(values))
+	for i_2, v_3 := range values {
+		var ptr_4 *int
+		if i_2.Tag == lisette.OptionSome {
+			ptr_4 = &i_2.SomeVal
 		}
-		unwrapped_2[ptr_6] = v_4
+		unwrapped_1[ptr_4] = v_3
 	}
-	container := maps.Container{Values: unwrapped_2}
-	raw_7 := container.Values
-	src_8 := raw_7
-	wrapped_9 := make(map[lisette.Option[int]]string, len(src_8))
-	for i_10, v_11 := range src_8 {
-		option_12 := lisette.OptionFromPointer[int](i_10)
-		wrapped_9[option_12] = v_11
+	container := maps.Container{Values: unwrapped_1}
+	raw_5 := container.Values
+	wrapped_6 := make(map[lisette.Option[int]]string, len(raw_5))
+	for i_7, v_8 := range raw_5 {
+		option_9 := lisette.OptionFromPointer[int](i_7)
+		wrapped_6[option_9] = v_8
 	}
-	roundtrip := wrapped_9
+	roundtrip := wrapped_6
 	_ = roundtrip
 }

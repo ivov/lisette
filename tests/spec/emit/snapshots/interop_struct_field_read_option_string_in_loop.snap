@@ -26,10 +26,10 @@ import (
 func main() {
 	buckets := []aws.Bucket{}
 	for _, bucket := range buckets {
-		raw_2 := bucket.Name
-		option_3 := lisette.OptionFromPointer[string](raw_2)
-		if option_3.Tag == lisette.OptionSome {
-			fmt.Println(option_3.SomeVal)
+		raw_1 := bucket.Name
+		option_2 := lisette.OptionFromPointer[string](raw_1)
+		if option_2.Tag == lisette.OptionSome {
+			fmt.Println(option_2.SomeVal)
 		}
 	}
 }

@@ -20,16 +20,15 @@ type Point struct {
 }
 
 func test(p Point) string {
-	subject_1 := p
 	{
-		x := subject_1.x
-		y := subject_1.y
+		x := p.x
+		y := p.y
 		if x == y {
 			return "diagonal"
 		}
 	}
 	{
-		if subject_1.x > subject_1.y {
+		if p.x > p.y {
 			return "above"
 		}
 	}

@@ -17,13 +17,13 @@ func g() lisette.Result[lisette.Option[int], string] {
 }
 
 func f() lisette.Result[int, string] {
-	check_2 := g()
-	if check_2.Tag != lisette.ResultOk {
-		return lisette.MakeResultErr[int, string](check_2.ErrVal)
+	check_1 := g()
+	if check_1.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[int, string](check_1.ErrVal)
 	}
-	subject_1 := check_2.OkVal
-	if subject_1.Tag == lisette.OptionSome {
-		return lisette.MakeResultOk[int, string](subject_1.SomeVal)
+	subject_2 := check_1.OkVal
+	if subject_2.Tag == lisette.OptionSome {
+		return lisette.MakeResultOk[int, string](subject_2.SomeVal)
 	}
 	return lisette.MakeResultOk[int, string](0)
 }

@@ -33,16 +33,15 @@ func run() error {
 	if ret_2 != nil {
 		return ret_2
 	}
-	src_3 := ret_1
-	wrapped_4 := make([]lisette.Option[string], len(src_3))
-	for i_5, v_6 := range src_3 {
-		if v_6 != nil {
-			wrapped_4[i_5] = lisette.MakeOptionSome[string](*v_6)
+	wrapped_3 := make([]lisette.Option[string], len(ret_1))
+	for i_4, v_5 := range ret_1 {
+		if v_5 != nil {
+			wrapped_3[i_4] = lisette.MakeOptionSome[string](*v_5)
 		} else {
-			wrapped_4[i_5] = lisette.MakeOptionNone[string]()
+			wrapped_3[i_4] = lisette.MakeOptionNone[string]()
 		}
 	}
-	xs := wrapped_4
+	xs := wrapped_3
 	for _, x := range xs {
 		if x.Tag == lisette.OptionSome {
 			fmt.Println(x.SomeVal)

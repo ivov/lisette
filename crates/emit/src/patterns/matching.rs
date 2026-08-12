@@ -444,14 +444,21 @@ impl Planner<'_> {
             setup.extend(subject_setup);
             return (value, SubjectDeclaration::None);
         }
-        let var = self.fresh_var(Some("subject"));
-        self.declare(&var);
         let staged = self.stage_composite(subject, ExpressionContext::value());
+        let rests_in_stable_name = self.plan_rests_in_stable_name(&staged);
         let (subject_setup, value) = staged.into_parts();
         setup.extend(subject_setup);
         if !any_guard && is_plain_identifier(&value) {
             return (value, SubjectDeclaration::None);
         }
+        if any_guard && rests_in_stable_name {
+            return (
+                value.clone(),
+                SubjectDeclaration::PlainDiscard { var: value },
+            );
+        }
+        let var = self.fresh_var(Some("subject"));
+        self.declare(&var);
         let declaration = SubjectDeclaration::Deferred {
             var: var.clone(),
             expression: value,

@@ -1236,6 +1236,18 @@ fn test() {
 }
 
 #[test]
+fn task_captures_reassigned_local_before_the_goroutine_runs() {
+    let input = r#"
+fn test() {
+  let mut xs = [1]
+  task xs.length()
+  xs = [1, 2]
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn defer_native_method_inlined_to_builtin_wraps_in_iife() {
     let input = r#"
 fn test() {

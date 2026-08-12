@@ -3,15 +3,18 @@ source: tests/spec/emit/concurrency.rs
 description: |
   
   fn test() {
-    let xs = [1]
+    let mut xs = [1]
     task xs.length()
+    xs = [1, 2]
   }
 ---
 package main
 
 func test() {
 	xs := []int{1}
+	_arg_1 := xs
 	go func() {
-		_ = len(xs)
+		_ = len(_arg_1)
 	}()
+	xs = []int{1, 2}
 }

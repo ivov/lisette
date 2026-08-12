@@ -21,18 +21,17 @@ import (
 
 func main() {
 	b := aws.Bucket{Annotations: map[string]*string{}}
-	raw_2 := b.Annotations
-	src_3 := raw_2
-	wrapped_4 := make(map[string]lisette.Option[string], len(src_3))
-	for i_5, v_6 := range src_3 {
-		if v_6 != nil {
-			wrapped_4[i_5] = lisette.MakeOptionSome[string](*v_6)
+	raw_1 := b.Annotations
+	wrapped_2 := make(map[string]lisette.Option[string], len(raw_1))
+	for i_3, v_4 := range raw_1 {
+		if v_4 != nil {
+			wrapped_2[i_3] = lisette.MakeOptionSome[string](*v_4)
 		} else {
-			wrapped_4[i_5] = lisette.MakeOptionNone[string]()
+			wrapped_2[i_3] = lisette.MakeOptionNone[string]()
 		}
 	}
-	subject_1 := wrapped_4["k"]
-	if subject_1.Tag == lisette.OptionSome {
-		_ = subject_1.SomeVal
+	subject_5 := wrapped_2["k"]
+	if subject_5.Tag == lisette.OptionSome {
+		_ = subject_5.SomeVal
 	}
 }

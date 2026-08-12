@@ -21,10 +21,9 @@ func mayPanic() int {
 }
 
 func test() int {
-	recoverResult_1 := lisette.RecoverBlock(func() int {
+	result := lisette.RecoverBlock(func() int {
 		return mayPanic()
 	})
-	result := recoverResult_1
 	if result.Tag == lisette.ResultOk {
 		return result.OkVal
 	}

@@ -22,19 +22,18 @@ import (
 
 func test() {
 	result := lisette.MakeResultOk[int, string](42)
-	subject_1 := result
-match_2:
+match_1:
 	for {
-		if subject_1.Tag == lisette.ResultOk {
-			if subject_1.OkVal > 0 {
-				fmt.Printf("positive: %d\n", subject_1.OkVal)
-				break match_2
+		if result.Tag == lisette.ResultOk {
+			if result.OkVal > 0 {
+				fmt.Printf("positive: %d\n", result.OkVal)
+				break match_1
 			}
-			fmt.Printf("non-positive: %d\n", subject_1.OkVal)
-			break match_2
+			fmt.Printf("non-positive: %d\n", result.OkVal)
+			break match_1
 		}
-		e := subject_1.ErrVal
+		e := result.ErrVal
 		fmt.Printf("error: %s\n", e)
-		break match_2
+		break match_1
 	}
 }

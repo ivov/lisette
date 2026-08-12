@@ -21,11 +21,10 @@ func fail(msg string) struct{} {
 }
 
 func test() string {
-	recoverResult_1 := lisette.RecoverBlock(func() struct{} {
+	result := lisette.RecoverBlock(func() struct{} {
 		fail("intentional")
 		panic("unreachable")
 	})
-	result := recoverResult_1
 	if result.Tag == lisette.ResultOk {
 		return "ok"
 	}

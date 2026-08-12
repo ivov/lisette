@@ -17,14 +17,13 @@ package main
 import "example.com/events"
 
 func handle(e events.Event, threshold int) int {
-	subject_1 := e
-	switch subject_1 := subject_1.(type) {
+	switch e := e.(type) {
 	case events.Click:
-		x := subject_1.X
+		x := e.X
 		if x > threshold {
 			return x
 		}
-		return subject_1.X + 1
+		return e.X + 1
 	default:
 		return 0
 	}

@@ -16,15 +16,14 @@ package main
 
 func categorize(items []int) string {
 	len_ := len(items)
-	subject_1 := len_
-	if subject_1 == 0 {
+	if len_ == 0 {
 		return "empty"
 	}
-	n := subject_1
+	n := len_
 	if n == 1 {
 		return "single"
 	}
-	if subject_1 <= 3 {
+	if len_ <= 3 {
 		return "few"
 	}
 	return "many"

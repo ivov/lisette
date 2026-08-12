@@ -22,7 +22,6 @@ func maybePair(n int) (lisette.Tuple2[int, int], bool) {
 }
 
 func main() {
-	option_1 := lisette.OptionFromCommaOk[lisette.Tuple2[int, int]](maybePair(5))
-	r := option_1
+	r := lisette.OptionFromCommaOk[lisette.Tuple2[int, int]](maybePair(5))
 	_ = r
 }

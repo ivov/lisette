@@ -47,13 +47,12 @@ func main() {
 		return
 	}
 	ret_3, ret_4 := h.f("1")
-	var result_5 lisette.Result[int, error]
+	var r lisette.Result[int, error]
 	if ret_4 != nil {
-		result_5 = lisette.MakeResultErr[int, error](ret_4)
+		r = lisette.MakeResultErr[int, error](ret_4)
 	} else {
-		result_5 = lisette.MakeResultOk[int, error](ret_3)
+		r = lisette.MakeResultOk[int, error](ret_3)
 	}
-	r := result_5
 	if r.Tag == lisette.ResultOk {
 		_ = r.OkVal
 	}

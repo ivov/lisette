@@ -1,5 +1,5 @@
 use crate::Planner;
-use crate::abi::callable::CallableReturnAbi;
+use crate::abi::callable::{AbiTransition, CallableReturnAbi};
 use crate::abi::coercion::CoercionPlan;
 use crate::calls::go_interop::WrapperTarget;
 use crate::context::expression::ExpressionContext;
@@ -10,7 +10,7 @@ use crate::plan::bodies::{LetForm, LetPlan, LoweredBlock, LoweredStatement};
 use crate::plan::calls::CallableOrigin;
 use crate::plan::placement::{
     collapse_boolean_branch_assign, collapse_declare_assign, expression_contains_binding,
-    is_unit_call, requires_temp_var,
+    is_unit_call, rebind_trailing_temp, requires_temp_var,
 };
 use syntax::ast::{Binding, Expression, Literal, Pattern, UnaryOperator};
 use syntax::types::Type;
@@ -243,26 +243,30 @@ impl Planner<'_> {
             bound
         };
 
-        statements.push(
-            if needs_explicit_type_declaration(self, value, binding_ty) {
-                let var_ty = self.go_type_string(binding_ty);
-                LoweredStatement::VarDecl {
-                    name: go_identifier,
-                    go_type: var_ty,
-                    value: Some(value_expression),
-                }
-            } else {
-                LoweredStatement::TempBind {
-                    name: go_identifier,
-                    value: value_expression,
-                }
-            },
-        );
+        if needs_explicit_type_declaration(self, value, binding_ty) {
+            let var_ty = self.go_type_string(binding_ty);
+            statements.push(LoweredStatement::VarDecl {
+                name: go_identifier,
+                go_type: var_ty,
+                value: Some(value_expression),
+            });
+            return statements;
+        }
+        // A temp no source binding answers to has no other reader to break.
+        if !self.scope.has_binding_for_go_name(&value_expression)
+            && rebind_trailing_temp(&mut statements, &go_identifier, &value_expression)
+        {
+            return statements;
+        }
+        statements.push(LoweredStatement::TempBind {
+            name: go_identifier,
+            value: value_expression,
+        });
         statements
     }
 
-    /// Route a slot-style Go-interop wrapper into the let's Go name, removing
-    /// the `name := result_N` alias.
+    /// Route a slot-style ABI wrapper into the let's Go name, removing the
+    /// `name := result_N` alias.
     fn try_lower_let_into_wrapper_slot(
         &mut self,
         identifier: &str,
@@ -281,7 +285,7 @@ impl Planner<'_> {
             return None;
         }
         let plan = self.plan_call(value)?;
-        if !matches!(plan.resolved.origin, CallableOrigin::GoInterop) {
+        if !matches!(plan.result_transition, AbiTransition::WrapToTagged) {
             return None;
         }
         if matches!(plan.resolved.abi.result, CallableReturnAbi::Tuple { .. }) {

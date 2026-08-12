@@ -29,27 +29,26 @@ func main() {
 		if ret_2 == nil {
 			return nil, ret_3
 		}
-		src_4 := ret_2
-		wrapped_5 := make([]lisette.Option[string], len(src_4))
-		for i_6, v_7 := range src_4 {
-			if v_7 != nil {
-				wrapped_5[i_6] = lisette.MakeOptionSome[string](*v_7)
+		wrapped_4 := make([]lisette.Option[string], len(ret_2))
+		for i_5, v_6 := range ret_2 {
+			if v_6 != nil {
+				wrapped_4[i_5] = lisette.MakeOptionSome[string](*v_6)
 			} else {
-				wrapped_5[i_6] = lisette.MakeOptionNone[string]()
+				wrapped_4[i_5] = lisette.MakeOptionNone[string]()
 			}
 		}
-		return wrapped_5, ret_3
+		return wrapped_4, ret_3
 	}
-	ret_8, ret_9 := f()
-	if ret_9 == nil {
-		xs := ret_8
+	ret_7, ret_8 := f()
+	if ret_8 == nil {
+		xs := ret_7
 		fmt.Println("ok", len(xs))
-	} else if ret_8 == nil {
-		e := ret_9
+	} else if ret_7 == nil {
+		e := ret_8
 		fmt.Println("err", e)
 	} else {
-		xs := ret_8
-		e := ret_9
+		xs := ret_7
+		e := ret_8
 		fmt.Println("both", len(xs), e)
 	}
 }

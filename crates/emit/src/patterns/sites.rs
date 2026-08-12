@@ -124,12 +124,15 @@ impl Planner<'_> {
                     let var = self.reference_go_name(value);
                     return ResolvedSubject::Existing { var };
                 }
+                let plan = self.lower_value(scrutinee, ExpressionContext::value());
+                let rests_in_stable_name = self.plan_rests_in_stable_name(&plan);
+                let (op_setup, expression) = plan.into_parts();
+                setup.extend(op_setup);
+                if rests_in_stable_name {
+                    return ResolvedSubject::Existing { var: expression };
+                }
                 let var = self.fresh_var(temp_hint);
                 self.declare(&var);
-                let (op_setup, expression) = self
-                    .lower_value(scrutinee, ExpressionContext::value())
-                    .into_parts();
-                setup.extend(op_setup);
                 ResolvedSubject::Composite { var, expression }
             }
         }

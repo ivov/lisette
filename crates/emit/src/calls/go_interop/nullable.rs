@@ -168,7 +168,7 @@ impl Planner<'_> {
         slot_ty: &str,
         address: bool,
     ) -> String {
-        let opt_var = self.hoist_tmp_value_statement(statements, "opt", option_value);
+        let opt_var = self.stable_source(statements, "opt", option_value);
         let slot_var = self.fresh_var(Some(slot_hint));
         self.declare(&slot_var);
         statements.push(LoweredStatement::VarDecl {
@@ -294,7 +294,7 @@ impl Planner<'_> {
                 }
             }
             LayoutBridge::Reference { pointee } => {
-                let source = self.hoist_tmp_value_statement(statements, "src", value);
+                let source = self.stable_source(statements, "src", value);
                 let pointee = self.plan_layout_bridge(statements, &format!("*{source}"), pointee);
                 self.hoist_tmp_value_statement(statements, "ref", &format!("&{pointee}"))
             }
@@ -315,7 +315,7 @@ impl Planner<'_> {
         payload_bridge: &LayoutBridge,
         address: bool,
     ) -> String {
-        let option = self.hoist_tmp_value_statement(statements, "opt", option_value);
+        let option = self.stable_source(statements, "opt", option_value);
         let target_type = target_payload.go_type(self);
         let slot_type = if address {
             format!("*{target_type}")
@@ -363,7 +363,7 @@ impl Planner<'_> {
         pointer: bool,
     ) -> String {
         self.require_stdlib();
-        let source = self.hoist_tmp_value_statement(statements, "raw", raw_value);
+        let source = self.stable_source(statements, "raw", raw_value);
         let fallible = Fallible::from_type(option_type).expect("Option type expected");
         let option_type_string = {
             let mut planner = FalliblePlanner::new(self, &fallible);
@@ -434,7 +434,7 @@ impl Planner<'_> {
         let element_bridge: &LayoutBridge = element;
         let key_bridge = key.as_deref();
         self.require_stdlib();
-        let source = self.hoist_tmp_value_statement(statements, "src", value);
+        let source = self.stable_source(statements, "src", value);
         let direction = key_bridge
             .and_then(LayoutBridge::direction)
             .or_else(|| element_bridge.direction())

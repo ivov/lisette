@@ -19,20 +19,19 @@ import "fmt"
 
 func test(x int) string {
 	var result string
-	subject_1 := x
-match_2:
+match_1:
 	for {
 		{
-			n := subject_1
+			n := x
 			if n < 10 {
-				result_3 := n * n
-				result = fmt.Sprintf("small(%d)", result_3)
-				break match_2
+				result_2 := n * n
+				result = fmt.Sprintf("small(%d)", result_2)
+				break match_1
 			}
 		}
 		{
 			result = "other"
-			break match_2
+			break match_1
 		}
 	}
 	return result

@@ -14,8 +14,7 @@ package main
 
 func test(start, end int) int {
 	sum := 0
-	_bound_1 := end
-	for i := start; i < _bound_1; i++ {
+	for i := start; i < end; i++ {
 		sum += i
 	}
 	return sum

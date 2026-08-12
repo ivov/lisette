@@ -21,11 +21,10 @@ func doubler(x int) (int, bool) {
 func main() {
 	g := doubler
 	opt := lisette.MakeOptionSome(1)
-	_arg_3 := opt
 	cb_1 := g
 	tagged_2 := func(arg0 int) lisette.Option[int] {
 		return lisette.OptionFromCommaOk[int](cb_1(arg0))
 	}
-	r := lisette.OptionAndThen(_arg_3, tagged_2)
+	r := lisette.OptionAndThen(opt, tagged_2)
 	_ = r
 }

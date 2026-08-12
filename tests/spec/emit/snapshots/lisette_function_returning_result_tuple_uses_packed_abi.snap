@@ -27,17 +27,17 @@ func pair[A any, B any](a A, b B) (lisette.Tuple2[A, B], error) {
 }
 
 func test() {
-	ret_2, ret_3 := pair[int, string](1, "x")
-	var result_4 lisette.Result[lisette.Tuple2[int, string], error]
-	if ret_3 != nil {
-		result_4 = lisette.MakeResultErr[lisette.Tuple2[int, string], error](ret_3)
+	ret_1, ret_2 := pair[int, string](1, "x")
+	var result_3 lisette.Result[lisette.Tuple2[int, string], error]
+	if ret_2 != nil {
+		result_3 = lisette.MakeResultErr[lisette.Tuple2[int, string], error](ret_2)
 	} else {
-		result_4 = lisette.MakeResultOk[lisette.Tuple2[int, string], error](ret_2)
+		result_3 = lisette.MakeResultOk[lisette.Tuple2[int, string], error](ret_1)
 	}
-	if result_4.Tag == lisette.ResultOk {
-		_ = result_4.OkVal.First
-		_ = result_4.OkVal.Second
+	if result_3.Tag == lisette.ResultOk {
+		_ = result_3.OkVal.First
+		_ = result_3.OkVal.Second
 	} else {
-		_ = result_4.ErrVal
+		_ = result_3.ErrVal
 	}
 }

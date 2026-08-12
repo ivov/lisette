@@ -26,18 +26,18 @@ import (
 )
 
 func main() {
-	ret_2, ret_3, ret_4 := net.SplitHostPort("localhost:8080")
-	tup_5 := lisette.MakeTuple2(ret_2, ret_3)
-	var result_6 lisette.Result[lisette.Tuple2[string, string], error]
-	if ret_4 != nil {
-		result_6 = lisette.MakeResultErr[lisette.Tuple2[string, string], error](ret_4)
+	ret_1, ret_2, ret_3 := net.SplitHostPort("localhost:8080")
+	tup_4 := lisette.MakeTuple2(ret_1, ret_2)
+	var result_5 lisette.Result[lisette.Tuple2[string, string], error]
+	if ret_3 != nil {
+		result_5 = lisette.MakeResultErr[lisette.Tuple2[string, string], error](ret_3)
 	} else {
-		result_6 = lisette.MakeResultOk[lisette.Tuple2[string, string], error](tup_5)
+		result_5 = lisette.MakeResultOk[lisette.Tuple2[string, string], error](tup_4)
 	}
-	if result_6.Tag == lisette.ResultOk {
-		_ = result_6.OkVal.First
-		_ = result_6.OkVal.Second
+	if result_5.Tag == lisette.ResultOk {
+		_ = result_5.OkVal.First
+		_ = result_5.OkVal.Second
 	} else {
-		_ = result_6.ErrVal
+		_ = result_5.ErrVal
 	}
 }

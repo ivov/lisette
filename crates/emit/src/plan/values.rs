@@ -1,5 +1,6 @@
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
+use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
 use std::fmt::{self, Display, Formatter};
 use syntax::ast::Expression;
@@ -242,17 +243,19 @@ pub(crate) enum OperandForm {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Stability {
     Literal,
+    /// A name nothing can rebind before its readers run.
+    Fixed,
     Observable,
     StableAcrossCalls,
 }
 
 impl Stability {
-    pub(crate) fn is_literal(self) -> bool {
-        matches!(self, Stability::Literal)
+    pub(crate) fn is_fixed(self) -> bool {
+        matches!(self, Stability::Literal | Stability::Fixed)
     }
 
     pub(crate) fn is_observable(self) -> bool {
-        !self.is_literal()
+        !self.is_fixed()
     }
 
     pub(crate) fn is_stable_across_calls(self) -> bool {
@@ -317,18 +320,6 @@ impl EvaluationFacts {
         Self::new(
             OperandForm::Literal,
             Stability::Literal,
-            EvaluationEffect::Pure,
-        )
-    }
-
-    const fn name(stable_across_calls: bool) -> Self {
-        Self::new(
-            OperandForm::Name,
-            if stable_across_calls {
-                Stability::StableAcrossCalls
-            } else {
-                Stability::Observable
-            },
             EvaluationEffect::Pure,
         )
     }
@@ -417,27 +408,12 @@ impl ValuePlan {
         )
     }
 
-    pub(crate) fn name(
-        setup: Vec<LoweredStatement>,
-        name: String,
-        stable_across_calls: bool,
-    ) -> Self {
-        Self::from_facts(
-            setup,
-            GoExpression::name(name),
-            EvaluationFacts::name(stable_across_calls),
-        )
-    }
-
+    /// A name the setup just bound, or which nothing can rebind.
     pub(crate) fn captured(setup: Vec<LoweredStatement>, name: String) -> Self {
         Self::from_facts(
             setup,
             GoExpression::name(name),
-            EvaluationFacts::new(
-                OperandForm::Name,
-                Stability::Literal,
-                EvaluationEffect::Pure,
-            ),
+            EvaluationFacts::new(OperandForm::Name, Stability::Fixed, EvaluationEffect::Pure),
         )
     }
 
@@ -449,21 +425,25 @@ impl ValuePlan {
         Self::from_facts(setup, expression, EvaluationFacts::value(effect))
     }
 
+    /// `stability` describes the binding, so only a bare name inherits it
+    /// whole: a composite form re-reads whatever it is built from.
     pub(crate) fn from_identifier_expression(
         expression: GoExpression,
-        stable_across_calls: bool,
+        stability: Stability,
     ) -> Self {
         let evaluation = match &expression {
             GoExpression::Literal(_) | GoExpression::CompositeLiteral { .. } => {
                 EvaluationFacts::literal()
             }
             GoExpression::Call { .. } => EvaluationFacts::call(EvaluationEffect::PureCall),
-            GoExpression::Name(_) => EvaluationFacts::name(stable_across_calls),
+            GoExpression::Name(_) => {
+                EvaluationFacts::new(OperandForm::Name, stability, EvaluationEffect::Pure)
+            }
             _ => EvaluationFacts::value(EvaluationEffect::Pure).with_stability(
-                if stable_across_calls {
-                    Stability::StableAcrossCalls
-                } else {
+                if stability.is_observable() {
                     Stability::Observable
+                } else {
+                    Stability::StableAcrossCalls
                 },
             ),
         };
@@ -583,6 +563,20 @@ impl ValuePlan {
 
     pub(crate) fn rendered(&self) -> String {
         self.expression.rendered()
+    }
+
+    /// `rendered` is a name this plan's own setup bound. Callers must also
+    /// check that no source binding answers to it.
+    pub(crate) fn rests_in_own_temp(&self, rendered: &str) -> bool {
+        go_name::is_plain_identifier(rendered)
+            && self
+                .setup
+                .last()
+                .is_some_and(|statement| statement.binds_name(rendered))
+    }
+
+    pub(crate) fn rests_in_fixed_name(&self) -> bool {
+        matches!(self.expression, GoExpression::Name(_)) && self.evaluation.stability.is_fixed()
     }
 
     pub(crate) fn is_empty(&self) -> bool {

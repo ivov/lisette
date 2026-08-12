@@ -26,28 +26,26 @@ func main() {
 	if opt_1.Tag == lisette.OptionSome {
 		unwrap_2 = opt_1.SomeVal
 	}
-	src_3 := objects
-	unwrapped_4 := make(map[string]*ast.Object, len(src_3))
-	for i_5, v_6 := range src_3 {
-		if v_6.Tag == lisette.OptionSome {
-			unwrapped_4[i_5] = v_6.SomeVal
+	unwrapped_3 := make(map[string]*ast.Object, len(objects))
+	for i_4, v_5 := range objects {
+		if v_5.Tag == lisette.OptionSome {
+			unwrapped_3[i_4] = v_5.SomeVal
 		} else {
-			unwrapped_4[i_5] = nil
+			unwrapped_3[i_4] = nil
 		}
 	}
 	scope := ast.Scope{
 		Outer:   unwrap_2,
-		Objects: unwrapped_4,
+		Objects: unwrapped_3,
 	}
-	raw_7 := scope.Objects
-	src_8 := raw_7
-	wrapped_9 := make(map[string]lisette.Option[*ast.Object], len(src_8))
-	for i_10, v_11 := range src_8 {
-		if v_11 != nil {
-			wrapped_9[i_10] = lisette.MakeOptionSome[*ast.Object](v_11)
+	raw_6 := scope.Objects
+	wrapped_7 := make(map[string]lisette.Option[*ast.Object], len(raw_6))
+	for i_8, v_9 := range raw_6 {
+		if v_9 != nil {
+			wrapped_7[i_8] = lisette.MakeOptionSome[*ast.Object](v_9)
 		} else {
-			wrapped_9[i_10] = lisette.MakeOptionNone[*ast.Object]()
+			wrapped_7[i_8] = lisette.MakeOptionNone[*ast.Object]()
 		}
 	}
-	fmt.Print(wrapped_9)
+	fmt.Print(wrapped_7)
 }

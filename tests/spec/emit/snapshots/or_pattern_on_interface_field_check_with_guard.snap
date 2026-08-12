@@ -16,10 +16,9 @@ package main
 import "example.com/events"
 
 func handle(e events.Event, active bool) int {
-	subject_1 := e
-	switch subject_1 := subject_1.(type) {
+	switch e := e.(type) {
 	case events.Click:
-		if subject_1.X == 5 {
+		if e.X == 5 {
 			if active {
 				return 1
 			}

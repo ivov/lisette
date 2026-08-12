@@ -53,16 +53,15 @@ func main() {
 		Incomplete: false,
 	}
 	raw_7 := lit.Elts
-	src_8 := raw_7
-	wrapped_9 := make([]lisette.Option[ast.Expr], len(src_8))
-	for i_10, v_11 := range src_8 {
-		if !lisette.IsNilInterface(v_11) {
-			wrapped_9[i_10] = lisette.MakeOptionSome[ast.Expr](v_11)
+	wrapped_8 := make([]lisette.Option[ast.Expr], len(raw_7))
+	for i_9, v_10 := range raw_7 {
+		if !lisette.IsNilInterface(v_10) {
+			wrapped_8[i_9] = lisette.MakeOptionSome[ast.Expr](v_10)
 		} else {
-			wrapped_9[i_10] = lisette.MakeOptionNone[ast.Expr]()
+			wrapped_8[i_9] = lisette.MakeOptionNone[ast.Expr]()
 		}
 	}
-	elts := wrapped_9
+	elts := wrapped_8
 	for _, elt := range elts {
 		if elt.Tag == lisette.OptionSome {
 			fmt.Println(elt.SomeVal.Pos())

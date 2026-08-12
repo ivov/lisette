@@ -172,19 +172,6 @@ impl Planner<'_> {
         value
     }
 
-    /// Bind `value` to a name that can be read more than once.
-    fn stable_source(
-        &mut self,
-        statements: &mut Vec<LoweredStatement>,
-        hint: &str,
-        value: &str,
-    ) -> String {
-        if go_name::is_plain_identifier(value) {
-            return value.to_string();
-        }
-        self.hoist_tmp_value_statement(statements, hint, value)
-    }
-
     fn plan_array_rebuild(
         &mut self,
         statements: &mut Vec<LoweredStatement>,

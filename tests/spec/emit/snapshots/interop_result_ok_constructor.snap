@@ -35,22 +35,20 @@ func make_() (func(string) (int, error), error) {
 
 func main() {
 	ret_1, ret_2 := make_()
-	var result_3 lisette.Result[func(string) (int, error), error]
+	var r lisette.Result[func(string) (int, error), error]
 	if ret_2 != nil {
-		result_3 = lisette.MakeResultErr[func(string) (int, error), error](ret_2)
+		r = lisette.MakeResultErr[func(string) (int, error), error](ret_2)
 	} else {
-		result_3 = lisette.MakeResultOk[func(string) (int, error), error](ret_1)
+		r = lisette.MakeResultOk[func(string) (int, error), error](ret_1)
 	}
-	r := result_3
 	if r.Tag == lisette.ResultOk {
-		ret_4, ret_5 := r.OkVal("1")
-		var result_6 lisette.Result[int, error]
-		if ret_5 != nil {
-			result_6 = lisette.MakeResultErr[int, error](ret_5)
+		ret_3, ret_4 := r.OkVal("1")
+		var r2 lisette.Result[int, error]
+		if ret_4 != nil {
+			r2 = lisette.MakeResultErr[int, error](ret_4)
 		} else {
-			result_6 = lisette.MakeResultOk[int, error](ret_4)
+			r2 = lisette.MakeResultOk[int, error](ret_3)
 		}
-		r2 := result_6
 		if r2.Tag == lisette.ResultOk {
 			_ = r2.OkVal
 		}
