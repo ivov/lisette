@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786562709731,
+  "lastUpdate": 1786565991095,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -22430,6 +22430,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 31203,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 26050,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18586,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14377,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 12980,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 7930,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5981,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2911,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1830,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 713,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9074,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "90b0ede516eecf96994a1ea720c5c4614e6a91b4",
+          "message": "refactor: emit guarded matches as a `switch` without a jump target (#1259)",
+          "timestamp": "2026-08-12T22:19:24+02:00",
+          "tree_id": "1a4442bf37e914f9d650240246085c7c8ffd9235",
+          "url": "https://github.com/ivov/lisette/commit/90b0ede516eecf96994a1ea720c5c4614e6a91b4"
+        },
+        "date": 1786565989203,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 132900,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 31552,
             "unit": "lines"
           },
           {
