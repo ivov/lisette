@@ -1,0 +1,48 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  fn label(n: int) -> Result<string, string> { Ok("x") }
+  
+  fn test(opt: Option<int>) -> Result<int, string> {
+    let mut out = 0
+    match opt {
+      Some(x) if f"v{label(x)?}" == "vx" => { out = 1 },
+      Some(_) => { out = 2 },
+      None => { out = 3 },
+    }
+    Ok(out)
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func label(_ int) lisette.Result[string, string] {
+	return lisette.MakeResultOk[string, string]("x")
+}
+
+func test(opt lisette.Option[int]) lisette.Result[int, string] {
+	out := 0
+match_1:
+	for {
+		if opt.Tag == lisette.OptionSome {
+			check_2 := label(opt.SomeVal)
+			if check_2.Tag != lisette.ResultOk {
+				return lisette.MakeResultErr[int, string](check_2.ErrVal)
+			}
+			if fmt.Sprintf("v%s", check_2.OkVal) == "vx" {
+				out = 1
+				break match_1
+			}
+			out = 2
+			break match_1
+		}
+		out = 3
+		break match_1
+	}
+	return lisette.MakeResultOk[int, string](out)
+}

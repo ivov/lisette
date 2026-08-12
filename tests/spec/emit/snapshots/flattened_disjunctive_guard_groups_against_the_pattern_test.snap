@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  fn test(opt: Option<int>, flag: bool) -> int {
+    let mut out = 0
+    match opt {
+      Some(x) if x > 10 || flag => { out = 1 },
+      Some(_) => { out = 2 },
+      None => { out = 3 },
+    }
+    out
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(opt lisette.Option[int], flag bool) int {
+	out := 0
+	switch {
+	case opt.Tag == lisette.OptionSome && (opt.SomeVal > 10 || flag):
+		out = 1
+	case opt.Tag == lisette.OptionSome:
+		out = 2
+	default:
+		out = 3
+	}
+	return out
+}

@@ -1,0 +1,34 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn test(opt: Option<int>) {
+    match opt {
+      Some(a) if a > 10 => fmt.Println("big"),
+      Some(b) if b > 0 => fmt.Print(f"small: {b}\n"),
+      Some(c) => fmt.Println(c),
+      None => fmt.Println("none"),
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func test(opt lisette.Option[int]) {
+	switch {
+	case opt.Tag == lisette.OptionSome && opt.SomeVal > 10:
+		fmt.Println("big")
+	case opt.Tag == lisette.OptionSome && opt.SomeVal > 0:
+		fmt.Printf("small: %d\n", opt.SomeVal)
+	case opt.Tag == lisette.OptionSome:
+		fmt.Println(opt.SomeVal)
+	default:
+		fmt.Println("none")
+	}
+}

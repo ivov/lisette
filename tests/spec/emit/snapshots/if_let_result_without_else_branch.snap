@@ -31,7 +31,6 @@ func tryParse(s string) lisette.Result[int, string] {
 func test() {
 	subject_1 := tryParse("42")
 	if subject_1.Tag == lisette.ResultOk {
-		x := subject_1.OkVal
-		fmt.Printf("Parsed: %d\n", x)
+		fmt.Printf("Parsed: %d\n", subject_1.OkVal)
 	}
 }

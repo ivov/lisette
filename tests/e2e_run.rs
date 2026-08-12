@@ -917,6 +917,103 @@ fn main() {
 }
 
 #[test]
+fn run_guarded_match_picks_the_first_arm_whose_guard_holds() {
+    if !go_available() {
+        eprintln!(
+            "skipping run_guarded_match_picks_the_first_arm_whose_guard_holds: `go` not found"
+        );
+        return;
+    }
+
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    let invocation = scratch.path().join("invocation");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::create_dir_all(&invocation).unwrap();
+
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"guardarms\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        r#"import "go:fmt"
+
+fn classify(r: Result<int, string>) -> string {
+  let mut out = ""
+  match r {
+    Ok(n) if n > 10 => { out = f"big {n}" },
+    Ok(n) if n > 0 => { out = f"small {n}" },
+    Ok(n) => { out = f"zero {n}" },
+    Err(e) => { out = f"err {e}" },
+  }
+  out
+}
+
+fn first_negative(items: Slice<int>) -> int {
+  let mut found = 0
+  for item in items {
+    match item {
+      n if n < 0 => { found = n; break },
+      _ => (),
+    }
+  }
+  found
+}
+
+fn either(opt: Option<int>, flag: bool) -> int {
+  let mut out = 0
+  match opt {
+    Some(n) if n > 10 || flag => { out = 1 },
+    Some(_) => { out = 2 },
+    None => { out = 3 },
+  }
+  out
+}
+
+fn skip_negatives(items: Slice<int>) -> int {
+  let mut sum = 0
+  for item in items {
+    match item {
+      n if n > 0 => { sum = sum + n },
+      _ => { continue },
+    }
+  }
+  sum
+}
+
+fn main() {
+  fmt.Println(classify(Ok(42)))
+  fmt.Println(classify(Ok(5)))
+  fmt.Println(classify(Ok(0)))
+  fmt.Println(classify(Err("bad")))
+  fmt.Println(first_negative([3, 1, -7, -2]))
+  fmt.Println(skip_negatives([3, -1, 4]))
+  fmt.Println(either(None, true))
+  fmt.Println(either(Some(20), false))
+  fmt.Println(either(Some(1), false))
+}
+"#,
+    )
+    .unwrap();
+
+    let output = lis_run(&project, &invocation, &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "lis run failed:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+    assert_eq!(
+        stdout.trim(),
+        "big 42\nsmall 5\nzero 0\nerr bad\n-7\n7\n3\n1\n2",
+        "stderr: {stderr}"
+    );
+}
+
+#[test]
 fn run_equality_matching_parametrized_interface_bound_builds() {
     if !go_available() {
         eprintln!(

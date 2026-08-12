@@ -1,7 +1,8 @@
-use syntax::ast::{Expression, MatchArm};
+use syntax::ast::{BinaryOperator, Expression, Literal, MatchArm, UnaryOperator};
 use syntax::types::Type;
 
 use crate::Planner;
+use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate};
 use crate::context::expression::ExpressionContext;
 use crate::patterns::binding_decls::{is_catchall_pattern, is_unconditional_catchall};
 use crate::patterns::binding_emit::{drop_inline_overlays, tree_binding_statements};
@@ -15,7 +16,70 @@ use crate::plan::bodies::{
     SwitchCasePlan, SwitchKind, SwitchStatementPlan,
 };
 use crate::plan::placement::unreachable_panic_if_needed;
+use crate::state::bindings::{BindingValue, InlineExpr};
 use crate::utils::wrap_if_struct_literal;
+
+struct FlatCase<'d> {
+    conditions: Vec<String>,
+    bindings: &'d [PatternBinding],
+    decision: &'d Decision,
+}
+
+fn decision_arm_index(decision: &Decision) -> usize {
+    match decision {
+        Decision::Success { arm_index, .. } | Decision::Guard { arm_index, .. } => *arm_index,
+        _ => unreachable!("a flattened case body lowers from an arm leaf"),
+    }
+}
+
+fn binds_looser_than_conjunction(guard: &Expression) -> bool {
+    matches!(
+        guard,
+        Expression::Binary {
+            operator: BinaryOperator::Or,
+            ..
+        }
+    )
+}
+
+fn guard_renders_inline(guard: &Expression) -> bool {
+    match guard {
+        Expression::Literal { literal, ty, .. } => {
+            matches!(
+                literal,
+                Literal::Integer { .. }
+                    | Literal::Float { .. }
+                    | Literal::Imaginary(_)
+                    | Literal::Boolean(_)
+                    | Literal::String { .. }
+                    | Literal::Char(_)
+            ) && ty.as_simple().is_some()
+        }
+        Expression::Identifier { ty, .. } => ty.as_simple().is_some(),
+        Expression::Paren { expression, .. } => guard_renders_inline(expression),
+        Expression::Unary {
+            operator,
+            expression,
+            ..
+        } => {
+            matches!(
+                operator,
+                UnaryOperator::Not | UnaryOperator::Negative | UnaryOperator::BitwiseNot
+            ) && guard_renders_inline(expression)
+        }
+        Expression::Binary {
+            left,
+            operator,
+            right,
+            ..
+        } => {
+            !matches!(operator, BinaryOperator::Pipeline)
+                && guard_renders_inline(left)
+                && guard_renders_inline(right)
+        }
+        _ => false,
+    }
+}
 
 #[derive(Clone, Copy)]
 struct ChainGroup<'a> {
@@ -320,6 +384,12 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             return;
         }
 
+        if self.guarded_tree_flattens(tree)
+            && self.render_conditional_switch(statements, tree, place)
+        {
+            return;
+        }
+
         // Wrap the tree in a labeled `for { ... }` retry loop.
         let label = self.planner.fresh_var(Some("match"));
         let ctx = WalkCtx::retry_loop(place, Some(label.as_str()));
@@ -336,6 +406,258 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             header: "for {\n".to_string(),
             body: LoweredBlock { statements: body },
         }));
+    }
+
+    fn guarded_tree_flattens(&self, tree: &Decision) -> bool {
+        match tree {
+            Decision::Success { .. } | Decision::Unreachable => true,
+            Decision::Guard {
+                arm_index,
+                bindings,
+                success,
+                failure,
+            } => {
+                self.arms[*arm_index]
+                    .guard
+                    .as_deref()
+                    .is_some_and(guard_renders_inline)
+                    && bindings
+                        .iter()
+                        .all(|binding| !binding.path.contains_deferred_evaluation())
+                    && self.guarded_tree_flattens(success)
+                    && self.guarded_tree_flattens(failure)
+            }
+            Decision::Chain { tests, fallback } => {
+                tests
+                    .iter()
+                    .all(|test| self.guarded_tree_flattens(&test.decision))
+                    && self.guarded_tree_flattens(fallback)
+            }
+            Decision::Switch {
+                shape: SwitchShape::TypeSwitch,
+                ..
+            } => false,
+            Decision::Switch {
+                branches, fallback, ..
+            } => {
+                branches
+                    .iter()
+                    .all(|branch| self.guarded_tree_flattens(&branch.decision))
+                    && fallback
+                        .as_deref()
+                        .is_none_or(|fallback| self.guarded_tree_flattens(fallback))
+            }
+        }
+    }
+
+    fn render_conditional_switch(
+        &mut self,
+        statements: &mut Vec<LoweredStatement>,
+        tree: &Decision,
+        place: &PlacePlan,
+    ) -> bool {
+        let mut collected: Vec<FlatCase> = Vec::new();
+        if !self.collect_flat_cases(tree, &mut Vec::new(), &mut collected, true) {
+            return false;
+        }
+        let default_at = collected.iter().position(|case| case.conditions.is_empty());
+        let default_case = default_at.map(|at| collected.split_off(at).remove(0));
+        let has_default = default_case.is_some();
+
+        let cases = collected
+            .into_iter()
+            .map(|case| SwitchCasePlan {
+                labels: case.conditions.join(" && "),
+                body: self.lower_flat_case_body(&case, place),
+            })
+            .collect::<Vec<_>>();
+        let default = default_case
+            .map(|case| self.lower_flat_case_body(&case, place))
+            .filter(|body| !body.renders_empty());
+
+        if cases.is_empty() {
+            if let Some(body) = default {
+                statements.extend(body.statements);
+            }
+            return true;
+        }
+
+        let postlude = switch_postlude(place, has_default);
+        statements.push(LoweredStatement::Switch(SwitchStatementPlan {
+            kind: SwitchKind::Conditional,
+            cases,
+            default,
+            postlude,
+        }));
+        true
+    }
+
+    fn collect_flat_cases<'d>(
+        &mut self,
+        decision: &'d Decision,
+        conditions: &mut Vec<String>,
+        out: &mut Vec<FlatCase<'d>>,
+        tail: bool,
+    ) -> bool {
+        match decision {
+            Decision::Unreachable => true,
+            Decision::Success { .. } => {
+                out.push(FlatCase {
+                    conditions: conditions.clone(),
+                    bindings: &[],
+                    decision,
+                });
+                true
+            }
+            Decision::Guard {
+                arm_index,
+                bindings,
+                success,
+                failure,
+            } => {
+                let Some(condition) = self.guard_condition_over_paths(*arm_index, bindings) else {
+                    return false;
+                };
+                conditions.push(condition);
+                out.push(FlatCase {
+                    conditions: conditions.clone(),
+                    bindings,
+                    decision: success,
+                });
+                conditions.pop();
+                if !tail {
+                    return true;
+                }
+                self.collect_flat_cases(failure, conditions, out, tail)
+            }
+            Decision::Chain { tests, fallback } => {
+                let (cased, lifted) = split_chain_with_catchall_lift(tests, fallback);
+                for test in cased {
+                    if test.checks.is_empty() {
+                        if !self.collect_flat_cases(&test.decision, conditions, out, false) {
+                            return false;
+                        }
+                        continue;
+                    }
+                    self.planner.scope.record_go_use(&self.subject);
+                    conditions.push(render_condition(&test.checks, &self.subject));
+                    let flattened = self.collect_flat_cases(&test.decision, conditions, out, false);
+                    conditions.pop();
+                    if !flattened {
+                        return false;
+                    }
+                }
+                match lifted {
+                    Some(lifted) => self.collect_flat_cases(lifted, conditions, out, tail),
+                    None => self.collect_flat_cases(fallback, conditions, out, tail),
+                }
+            }
+            Decision::Switch {
+                path,
+                kind,
+                shape,
+                branches,
+                fallback,
+            } => {
+                let rendered_path = path.render(&self.subject);
+                let (cased, lifted) = split_with_default_lift(branches, fallback.as_deref());
+                for branch in cased {
+                    self.planner.scope.record_go_use(&self.subject);
+                    conditions.push(switch_branch_condition(
+                        &rendered_path,
+                        kind,
+                        shape,
+                        &branch.case_label,
+                    ));
+                    let flattened =
+                        self.collect_flat_cases(&branch.decision, conditions, out, false);
+                    conditions.pop();
+                    if !flattened {
+                        return false;
+                    }
+                }
+                match lifted {
+                    Some(lifted) => self.collect_flat_cases(lifted, conditions, out, tail),
+                    None => true,
+                }
+            }
+        }
+    }
+
+    fn guard_condition_over_paths(
+        &mut self,
+        arm_index: usize,
+        bindings: &[PatternBinding],
+    ) -> Option<String> {
+        let overlays = self.install_path_overlays(bindings);
+        let lowered = self.lower_guard_condition(arm_index);
+        drop_inline_overlays(self.planner, &overlays);
+        let (setup, condition) = lowered?;
+        if !setup.is_empty() {
+            return None;
+        }
+        let guard = self.arms[arm_index]
+            .guard
+            .as_deref()
+            .expect("a Guard decision has a guard expression");
+        Some(if binds_looser_than_conjunction(guard) {
+            format!("({condition})")
+        } else {
+            condition
+        })
+    }
+
+    fn install_path_overlays(
+        &mut self,
+        bindings: &[PatternBinding],
+    ) -> Vec<(String, Option<BindingValue>)> {
+        let mut overlays = Vec::with_capacity(bindings.len());
+        for binding in bindings {
+            if binding.go_name.is_none() {
+                continue;
+            }
+            let previous = self
+                .planner
+                .scope
+                .resolve_identifier_binding(&binding.lisette_name)
+                .cloned();
+            let text = binding.path.render_composable(&self.subject);
+            self.planner.scope.bind_inline_expr(
+                &binding.lisette_name,
+                InlineExpr::new(
+                    text,
+                    vec![self.subject.clone()],
+                    binding.path.contains_deferred_evaluation(),
+                ),
+            );
+            overlays.push((binding.lisette_name.clone(), previous));
+        }
+        overlays
+    }
+
+    fn lower_flat_case_body(&mut self, case: &FlatCase, place: &PlacePlan) -> LoweredBlock {
+        let ctx = WalkCtx::switch_case(place);
+        self.with_scope(|this| {
+            let mut body: Vec<LoweredStatement> = Vec::new();
+            if case.bindings.is_empty() {
+                this.walk(&mut body, case.decision, &ctx);
+                return LoweredBlock { statements: body };
+            }
+            let arm_body = &*this.arms[decision_arm_index(case.decision)].expression;
+            let bindings: Vec<PatternBinding> = case
+                .bindings
+                .iter()
+                .filter(|binding| {
+                    analyze_inline_candidate(&binding.lisette_name, &[arm_body])
+                        != InlineDecision::Unused
+                })
+                .cloned()
+                .collect();
+            this.with_bindings(&mut body, &bindings, &[arm_body], None, |this, body| {
+                this.walk(body, case.decision, &ctx);
+            });
+            LoweredBlock { statements: body }
+        })
     }
 
     fn walk(&mut self, statements: &mut Vec<LoweredStatement>, decision: &Decision, ctx: &WalkCtx) {
@@ -964,6 +1286,21 @@ fn chain_last_is_catchall(tests: &[ChainTest], fallback: &Decision) -> bool {
     matches!(fallback, Decision::Unreachable) && tests.len() > 1
 }
 
+fn split_chain_with_catchall_lift<'t>(
+    tests: &'t [ChainTest],
+    fallback: &Decision,
+) -> (&'t [ChainTest], Option<&'t Decision>) {
+    if !chain_last_is_catchall(tests, fallback) {
+        return (tests, None);
+    }
+    match tests.split_last() {
+        Some((last, rest)) if !matches!(last.decision, Decision::Guard { .. }) => {
+            (rest, Some(&last.decision))
+        }
+        _ => (tests, None),
+    }
+}
+
 fn split_with_default_lift<'t>(
     branches: &'t [SwitchBranch],
     fallback: Option<&'t Decision>,
@@ -972,6 +1309,22 @@ fn split_with_default_lift<'t>(
         (None, Some((last, rest))) => (rest, Some(&last.decision)),
         _ => (branches, fallback),
     }
+}
+
+fn switch_branch_condition(
+    rendered_path: &str,
+    kind: &PatternSwitchKind,
+    shape: &SwitchShape,
+    case_label: &str,
+) -> String {
+    if matches!(shape, SwitchShape::Bool) && case_label == "true" {
+        return wrap_if_struct_literal(rendered_path.to_string());
+    }
+    format!(
+        "{} == {}",
+        render_switch_expression(rendered_path, kind),
+        case_label
+    )
 }
 
 fn render_switch_expression(rendered_path: &str, kind: &PatternSwitchKind) -> String {

@@ -1510,6 +1510,90 @@ fn test(opt: Option<int>) -> int {
 }
 
 #[test]
+fn format_string_guard_keeps_the_jump_target() {
+    let input = r#"
+fn label(n: int) -> Result<string, string> { Ok("x") }
+
+fn test(opt: Option<int>) -> Result<int, string> {
+  let mut out = 0
+  match opt {
+    Some(x) if f"v{label(x)?}" == "vx" => { out = 1 },
+    Some(_) => { out = 2 },
+    None => { out = 3 },
+  }
+  Ok(out)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn flattened_disjunctive_guard_groups_against_the_pattern_test() {
+    let input = r#"
+fn test(opt: Option<int>, flag: bool) -> int {
+  let mut out = 0
+  match opt {
+    Some(x) if x > 10 || flag => { out = 1 },
+    Some(_) => { out = 2 },
+    None => { out = 3 },
+  }
+  out
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn flattened_guard_binding_shadowed_by_the_arm_body_is_dropped() {
+    let input = r#"
+import "go:fmt"
+
+fn test(opt: Option<int>) {
+  match opt {
+    Some(x) if x > 0 => { let x = 5; fmt.Println(x) },
+    _ => (),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn flattened_guard_binds_only_what_the_arm_body_reads() {
+    let input = r#"
+import "go:fmt"
+
+fn test(opt: Option<int>) {
+  match opt {
+    Some(a) if a > 10 => fmt.Println("big"),
+    Some(b) if b > 0 => fmt.Print(f"small: {b}\n"),
+    Some(c) => fmt.Println(c),
+    None => fmt.Println("none"),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn guard_needing_statement_lowering_keeps_the_jump_target() {
+    let input = r#"
+fn check(n: int) -> Result<bool, string> { Ok(n > 0) }
+
+fn test(opt: Option<int>) -> Result<int, string> {
+  let mut out = 0
+  match opt {
+    Some(x) if check(x)? => { out = 1 },
+    Some(_) => { out = 2 },
+    None => { out = 0 },
+  }
+  Ok(out)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn match_guard_with_binding() {
     let input = r#"
 fn test(opt: Option<int>) -> int {

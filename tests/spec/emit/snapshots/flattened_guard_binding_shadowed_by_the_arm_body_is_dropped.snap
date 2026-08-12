@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn test(opt: Option<int>) {
+    match opt {
+      Some(x) if x > 0 => { let x = 5; fmt.Println(x) },
+      _ => (),
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func test(opt lisette.Option[int]) {
+	switch {
+	case opt.Tag == lisette.OptionSome && opt.SomeVal > 0:
+		x := 5
+		fmt.Println(x)
+	}
+}
