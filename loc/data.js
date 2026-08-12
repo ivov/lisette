@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786565991095,
+  "lastUpdate": 1786567545773,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -22519,6 +22519,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 31552,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 26050,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18586,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14377,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 12980,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 7930,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5981,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2911,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1830,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 713,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9074,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "17a278947dce3486a3990bb59a88c1a2cf5c3a77",
+          "message": "refactor: emit counted loops as `for i := range n` (#1260)",
+          "timestamp": "2026-08-12T22:45:16+02:00",
+          "tree_id": "8ccd852422c5f01652b2da267bb4d5f97bde87b2",
+          "url": "https://github.com/ivov/lisette/commit/17a278947dce3486a3990bb59a88c1a2cf5c3a77"
+        },
+        "date": 1786567543297,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 132912,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 31564,
             "unit": "lines"
           },
           {
