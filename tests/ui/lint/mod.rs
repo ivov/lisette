@@ -21110,8 +21110,11 @@ fn main() {
 }
 
 #[test]
-fn float_cmp_alias_to_newtype() {
-    assert_lint_snapshot!(
+fn float_cmp_alias_to_newtype_no_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
         r#"
 type A = float64
 struct Distance(float64)
@@ -21120,7 +21123,16 @@ fn main() {
   let d = Distance(2.0)
   let _ = a == d
 }
-"#
+"#,
+    );
+    let result = compile_check(fs);
+    assert!(
+        !result
+            .lints()
+            .iter()
+            .any(|d| d.plain_message() == "Exact float comparison"),
+        "must not fire on a checker-rejected alias-to-newtype comparison: {:?}",
+        result.lints()
     );
 }
 
