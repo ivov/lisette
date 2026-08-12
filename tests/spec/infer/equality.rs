@@ -1033,6 +1033,145 @@ fn numeric_does_not_unify_with_bool() {
 }
 
 #[test]
+fn comparison_rejects_mixed_float_widths() {
+    infer(
+        r#"
+    fn main() -> bool {
+      let a: float32 = 1.5;
+      let b: float64 = 1.25;
+      a > b
+    }
+        "#,
+    )
+    .assert_type_mismatch();
+}
+
+#[test]
+fn equality_rejects_mixed_signed_int_widths() {
+    infer(
+        r#"
+    fn main() -> bool {
+      let a: int32 = 1;
+      let b: int64 = 2;
+      a == b
+    }
+        "#,
+    )
+    .assert_type_mismatch();
+}
+
+#[test]
+fn comparison_rejects_mixed_unsigned_int_widths() {
+    infer(
+        r#"
+    fn main() -> bool {
+      let a: uint32 = 1;
+      let b: uint64 = 2;
+      a >= b
+    }
+        "#,
+    )
+    .assert_type_mismatch();
+}
+
+#[test]
+fn comparison_rejects_machine_int_against_sized_int() {
+    infer(
+        r#"
+    fn main() -> bool {
+      let a: int = 1;
+      let b: int64 = 2;
+      a < b
+    }
+        "#,
+    )
+    .assert_type_mismatch();
+}
+
+#[test]
+fn comparison_rejects_aliases_over_mixed_int_widths() {
+    infer(
+        r#"
+    type Narrow = int32
+    type Wide = int64
+    fn main() -> bool {
+      let a: Narrow = 1;
+      let b: Wide = 2;
+      a == b
+    }
+        "#,
+    )
+    .assert_type_mismatch();
+}
+
+#[test]
+fn comparison_accepts_cast_between_float_widths() {
+    infer(
+        r#"
+    fn main() -> bool {
+      let a: float32 = 1.5;
+      let b: float64 = 1.25;
+      a as float64 > b
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn comparison_accepts_go_aliased_scalars() {
+    infer(
+        r#"
+    fn main() -> bool {
+      let a: byte = 1;
+      let b: uint8 = 2;
+      let c: rune = 'x';
+      let d: int32 = 3;
+      a == b && c > d
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn comparison_accepts_distinct_aliases_over_one_type() {
+    infer(
+        r#"
+    type Score = int
+    type Points = int
+    fn main() -> bool {
+      let a: Score = 1;
+      let b: Points = 2;
+      let c: int = 3;
+      a == b && a > c
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn comparison_accepts_aliases_over_go_aliased_scalars() {
+    infer(
+        r#"
+    type ByteAlias = byte
+    type Uint8Alias = uint8
+    type RuneAlias = rune
+    type Int32Alias = int32
+    fn main() -> bool {
+      let a: ByteAlias = 1;
+      let b: Uint8Alias = 2;
+      let c: RuneAlias = 'x';
+      let d: Int32Alias = 3;
+      a == b && c > d
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn constructor_same_type() {
     infer(
         r#"

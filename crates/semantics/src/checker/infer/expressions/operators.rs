@@ -509,7 +509,11 @@ impl InferCtx<'_> {
     fn numeric_compat(&self, left: &Type, right: &Type) -> NumericCompat {
         if left == right && self.store.is_aliased_numeric_type(left) {
             NumericCompat::SameAliased
-        } else if left != right && self.store.is_numeric_compatible_with(left, right) {
+        } else if left != right
+            && self.store.is_numeric_compatible_with(left, right)
+            && (self.store.is_aliased_numeric_type(left)
+                ^ self.store.is_aliased_numeric_type(right))
+        {
             NumericCompat::DifferentCompatible
         } else {
             NumericCompat::Neither
