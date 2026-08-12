@@ -21,7 +21,7 @@ func getEnd() int {
 func test() int {
 	sum := 0
 	_bound_1 := getEnd()
-	for i := 0; i < _bound_1; i++ {
+	for i := range _bound_1 {
 		sum += i
 	}
 	return sum

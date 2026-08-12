@@ -40,7 +40,7 @@ func main() {
 	_ = lisette.ChannelSend(ch, 1)
 	_ = lisette.ChannelSend(ch, 2)
 	total := 0
-	for _i_1 := 0; _i_1 < 2; _i_1++ {
+	for range 2 {
 		select {
 		case x, ok := <-ch:
 			if ok {

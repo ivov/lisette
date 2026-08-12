@@ -481,20 +481,32 @@ impl Planner<'_> {
             start_expression = var;
         }
 
+        let counts_from_zero = !*inclusive && start_expression == "0";
         let (header, lowered_body) = self.with_scope(|this| {
-            let loop_var = this.bind_loop_pattern(&binding.pattern, Some("_i"));
             let header = match end_expression {
+                Some(end_expression) if counts_from_zero => {
+                    let loop_var = this.bind_loop_pattern(&binding.pattern, None);
+                    if loop_var == "_" {
+                        format!("for range {} {{\n", end_expression)
+                    } else {
+                        format!("for {} := range {} {{\n", loop_var, end_expression)
+                    }
+                }
                 Some(end_expression) => {
+                    let loop_var = this.bind_loop_pattern(&binding.pattern, Some("_i"));
                     let operator = if *inclusive { "<=" } else { "<" };
                     format!(
                         "for {} := {}; {} {} {}; {}++ {{\n",
                         loop_var, start_expression, loop_var, operator, end_expression, loop_var
                     )
                 }
-                None => format!(
-                    "for {} := {}; ; {}++ {{\n",
-                    loop_var, start_expression, loop_var
-                ),
+                None => {
+                    let loop_var = this.bind_loop_pattern(&binding.pattern, Some("_i"));
+                    format!(
+                        "for {} := {}; ; {}++ {{\n",
+                        loop_var, start_expression, loop_var
+                    )
+                }
             };
             (header, this.lower_block_as_body(body))
         });

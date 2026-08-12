@@ -19,7 +19,7 @@ import "fmt"
 func main() {
 	_bound_0 := 10
 	_bound_1 := (1 + 2)
-	for i := 0; i < _bound_1; i++ {
+	for i := range _bound_1 {
 		fmt.Println(i)
 	}
 	fmt.Println(_bound_0)

@@ -841,6 +841,37 @@ fn test() {
 }
 
 #[test]
+fn for_loop_range_with_unread_binding_drops_the_clause() {
+    let input = r#"
+fn do_work() {}
+
+fn test() {
+  for i in 0..3 {
+    do_work();
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn for_loop_nonzero_start_keeps_the_counted_form() {
+    let input = r#"
+fn test(from: int) -> int {
+  let mut sum = 0
+  for i in 1..5 {
+    sum = sum + i
+  }
+  for j in from..5 {
+    sum = sum + j
+  }
+  sum
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn for_loop_stored_range_mutation_captured() {
     let input = r#"
 fn main() {

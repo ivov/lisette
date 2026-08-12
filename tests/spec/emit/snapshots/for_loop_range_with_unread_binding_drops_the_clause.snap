@@ -5,7 +5,7 @@ description: |
   fn do_work() {}
   
   fn test() {
-    for _ in 0..3 {
+    for i in 0..3 {
       do_work();
     }
   }

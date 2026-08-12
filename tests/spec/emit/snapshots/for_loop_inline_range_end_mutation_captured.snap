@@ -19,7 +19,7 @@ func main() {
 	n := 3
 	iters := 0
 	_bound_1 := n
-	for i := 0; i < _bound_1; i++ {
+	for i := range _bound_1 {
 		iters++
 		n = 0
 		_ = i
