@@ -92,4 +92,37 @@ func TestNilConfigAccessorsDoNotPanic(t *testing.T) {
 	if cfg.IsClosedDomain("io", "Foo") {
 		t.Error("IsClosedDomain")
 	}
+	if _, ok := cfg.ViewOverrides("io", "Foo"); ok {
+		t.Error("ViewOverrides")
+	}
+}
+
+func TestViewOverridesDistinguishEmptyFromAbsent(t *testing.T) {
+	cfg := &Config{
+		Overrides: Overrides{
+			Types: TypeOverrides{
+				ReturnsViewOf: map[string]map[string][]string{
+					"syscall": {
+						"Aliasing": {"0:buf", "1:[recv]"},
+						"Fresh":    {},
+					},
+				},
+			},
+		},
+	}
+
+	entries, ok := cfg.ViewOverrides("syscall", "Aliasing")
+	if !ok || len(entries) != 2 {
+		t.Errorf("Aliasing: got %v, %v", entries, ok)
+	}
+	entries, ok = cfg.ViewOverrides("syscall", "Fresh")
+	if !ok || len(entries) != 0 {
+		t.Errorf("Fresh: got %v, %v", entries, ok)
+	}
+	if _, ok := cfg.ViewOverrides("syscall", "Absent"); ok {
+		t.Error("Absent: expected no entry")
+	}
+	if _, ok := cfg.ViewOverrides("os", "Aliasing"); ok {
+		t.Error("wrong package: expected no entry")
+	}
 }

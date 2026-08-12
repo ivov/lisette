@@ -53,7 +53,7 @@ func GenerateStd(ctx context.Context, outDir, lisetteVersion, goVersion string, 
 	for _, target := range targets {
 		targetGroup.Go(func() error {
 			loadStart := time.Now()
-			pkgs, err := extract.LoadStdPackages(target.goos, target.goarch, shouldSkipPackage)
+			pkgs, err := extract.LoadStdPackages(target.goos, target.goarch, SkipStdPackage)
 			if err != nil {
 				return fmt.Errorf("target %s: failed to load packages: %w", target, err)
 			}
@@ -129,7 +129,8 @@ func GenerateStd(ctx context.Context, outDir, lisetteVersion, goVersion string, 
 	}, nil
 }
 
-func shouldSkipPackage(pkg string) bool {
+// SkipStdPackage drops the std packages bindgen never binds.
+func SkipStdPackage(pkg string) bool {
 	return strings.Contains(pkg, "/internal") ||
 		strings.HasPrefix(pkg, "internal/") ||
 		strings.Contains(pkg, "/vendor/") ||
