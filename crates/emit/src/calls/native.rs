@@ -1001,18 +1001,41 @@ impl Planner<'_> {
         ty: &Type,
         generics: &[Generic],
     ) -> String {
+        self.render_equality_test(lhs, rhs, ty, generics, false)
+    }
+
+    /// `!=` where equality is an operator, a `!` prefix where it is a call.
+    pub(crate) fn render_inequality(
+        &mut self,
+        lhs: &str,
+        rhs: &str,
+        ty: &Type,
+        generics: &[Generic],
+    ) -> String {
+        self.render_equality_test(lhs, rhs, ty, generics, true)
+    }
+
+    fn render_equality_test(
+        &mut self,
+        lhs: &str,
+        rhs: &str,
+        ty: &Type,
+        generics: &[Generic],
+        negated: bool,
+    ) -> String {
+        let (operator, prefix) = if negated { ("!=", "!") } else { ("==", "") };
         let peeled = self.facts.peel_alias(ty);
         if peeled.is_ref() {
-            return format!("{lhs} == {rhs}");
+            return format!("{lhs} {operator} {rhs}");
         }
         if peeled.is_slice() {
             self.require_slices();
             return match peeled.inner() {
                 Some(elem) if self.needs_custom_equality(&elem, generics) => {
                     let eq = self.equality_closure(&elem, generics);
-                    format!("slices.EqualFunc({lhs}, {rhs}, {eq})")
+                    format!("{prefix}slices.EqualFunc({lhs}, {rhs}, {eq})")
                 }
-                _ => format!("slices.Equal({lhs}, {rhs})"),
+                _ => format!("{prefix}slices.Equal({lhs}, {rhs})"),
             };
         }
         if peeled.is_map() {
@@ -1023,15 +1046,15 @@ impl Planner<'_> {
             return match value {
                 Some(value) if self.needs_custom_equality(&value, generics) => {
                     let eq = self.equality_closure(&value, generics);
-                    format!("maps.EqualFunc({lhs}, {rhs}, {eq})")
+                    format!("{prefix}maps.EqualFunc({lhs}, {rhs}, {eq})")
                 }
-                _ => format!("maps.Equal({lhs}, {rhs})"),
+                _ => format!("{prefix}maps.Equal({lhs}, {rhs})"),
             };
         }
         if self.type_has_equals(&peeled, generics) {
-            return format!("{lhs}.{}({rhs})", self.equals_method_go_name());
+            return format!("{prefix}{lhs}.{}({rhs})", self.equals_method_go_name());
         }
-        format!("{lhs} == {rhs}")
+        format!("{lhs} {operator} {rhs}")
     }
 
     fn equality_closure(&mut self, ty: &Type, generics: &[Generic]) -> String {

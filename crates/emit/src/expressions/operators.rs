@@ -217,7 +217,11 @@ impl Planner<'_> {
 
     /// Plan `!` (logical-not). Comparisons flip operator because `!` binds
     /// tighter than `==` in Go (`!(a == b)` must not emit as `!a == b`).
-    fn plan_unary_not(&mut self, expression: &Expression, ctx: ExpressionContext<'_>) -> ValuePlan {
+    pub(crate) fn plan_unary_not(
+        &mut self,
+        expression: &Expression,
+        ctx: ExpressionContext<'_>,
+    ) -> ValuePlan {
         let target = expression.unwrap_parens();
         let preserve_parens = matches!(expression, Expression::Paren { .. });
         let wrap = |s: String| {
@@ -300,7 +304,9 @@ impl Planner<'_> {
     }
 }
 
-fn flip_preserves_nan(
+/// `!(a < b)` holds for a NaN operand where `a >= b` does not, so only `==`
+/// and `!=` flip unconditionally.
+pub(crate) fn flip_preserves_nan(
     facts: &EmitFacts<'_>,
     operator: &BinaryOperator,
     left: &Expression,
@@ -316,7 +322,7 @@ fn is_non_float(facts: &EmitFacts<'_>, expression: &Expression) -> bool {
         .is_some_and(|kind| !kind.is_float())
 }
 
-fn flip_comparison(operator: &BinaryOperator) -> Option<BinaryOperator> {
+pub(crate) fn flip_comparison(operator: &BinaryOperator) -> Option<BinaryOperator> {
     match operator {
         BinaryOperator::Equal => Some(BinaryOperator::NotEqual),
         BinaryOperator::NotEqual => Some(BinaryOperator::Equal),
