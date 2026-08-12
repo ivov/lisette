@@ -1,4 +1,4 @@
-use crate::assert_parse_snapshot;
+use crate::{assert_parse_error_snapshot, assert_parse_snapshot};
 
 #[test]
 fn array_literal_operand() {
@@ -3728,4 +3728,44 @@ fn parse_raw_string_crlf_normalised() {
 fn parse_pattern_string_multiline() {
     let input = "fn test() { match s { \"a\nb\" => 1, _ => 0 } }";
     assert_parse_snapshot!(input);
+}
+
+#[test]
+fn writable_qualifier_positions() {
+    let input = r#"
+struct Batch { items: mut Slice<int>, tags: Slice<string> }
+fn fill(data: mut Slice<int>) -> mut Slice<int> { data }
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
+fn writable_qualifier_nested_type_argument() {
+    let input = r#"
+fn rows(data: mut Slice<mut Slice<int>>) -> int { 0 }
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
+fn writable_qualifier_enum_payload() {
+    let input = r#"
+enum Holder { Tags(mut Slice<string>), None }
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
+fn writable_qualifier_duplicate_mut_error() {
+    assert_parse_error_snapshot!("fn f(x: mut mut Slice<int>) -> int { 0 }");
+}
+
+#[test]
+fn writable_qualifier_on_tuple_error() {
+    assert_parse_error_snapshot!("fn f(x: mut (int, string)) -> int { 0 }");
+}
+
+#[test]
+fn struct_field_name_position_mut_error() {
+    assert_parse_error_snapshot!("struct S { mut items: Slice<int> }");
 }

@@ -16,7 +16,7 @@ use crate::store::Store;
 pub struct NoZero {
     pub(crate) chain: Vec<EcoString>,
     pub(crate) reason: NoZeroReason,
-    pub leaf_ty: Type,
+    pub leaf_ty: Box<Type>,
 }
 
 impl NoZero {
@@ -91,7 +91,7 @@ fn has_zero_seen(
             | CompoundKind::VarArgs => Err(NoZero {
                 chain: vec![],
                 reason: NoZeroReason::NoZeroForType,
-                leaf_ty: ty.clone(),
+                leaf_ty: Box::new(ty.clone()),
             }),
         },
         Type::Tuple(elements) => {
@@ -115,7 +115,7 @@ fn has_zero_seen(
         Type::Function(_) => Err(NoZero {
             chain: vec![],
             reason: NoZeroReason::NoZeroForType,
-            leaf_ty: ty.clone(),
+            leaf_ty: Box::new(ty.clone()),
         }),
         Type::Nominal { id, params, .. } => {
             if id.as_str() == "prelude.Option" {
@@ -134,13 +134,13 @@ fn has_zero_seen(
             Err(NoZero {
                 chain: vec![],
                 reason: NoZeroReason::NoZeroForType,
-                leaf_ty: ty.clone(),
+                leaf_ty: Box::new(ty.clone()),
             })
         }
         Type::Never | Type::Error | Type::ImportNamespace(_) => Err(NoZero {
             chain: vec![],
             reason: NoZeroReason::NoZeroForType,
-            leaf_ty: ty.clone(),
+            leaf_ty: Box::new(ty.clone()),
         }),
     }
 }
@@ -169,7 +169,7 @@ fn has_zero_nominal(
         return Err(NoZero {
             chain: vec![],
             reason: NoZeroReason::NoZeroForType,
-            leaf_ty: original_ty.clone(),
+            leaf_ty: Box::new(original_ty.clone()),
         });
     }
     visited.push(original_ty.clone());
@@ -199,7 +199,7 @@ fn has_zero_nominal_fields(
         return Err(NoZero {
             chain: vec![],
             reason: NoZeroReason::NoZeroForType,
-            leaf_ty: original_ty.clone(),
+            leaf_ty: Box::new(original_ty.clone()),
         });
     };
 
@@ -212,7 +212,7 @@ fn has_zero_nominal_fields(
                     reason: NoZeroReason::HiddenGoState {
                         go_type: go_display_name(id),
                     },
-                    leaf_ty: original_ty.clone(),
+                    leaf_ty: Box::new(original_ty.clone()),
                 });
             }
             let def_ty = &def.ty;
@@ -235,7 +235,7 @@ fn has_zero_nominal_fields(
                             field: f.name.clone(),
                             owning_package: EcoString::from(struct_package),
                         },
-                        leaf_ty: f.ty.clone(),
+                        leaf_ty: Box::new(f.ty.clone()),
                     });
                 }
                 let resolved = if map.is_empty() {
@@ -260,11 +260,11 @@ fn has_zero_nominal_fields(
                 return Err(NoZero {
                     chain: vec![],
                     reason: NoZeroReason::NoZeroForType,
-                    leaf_ty: original_ty.clone(),
+                    leaf_ty: Box::new(original_ty.clone()),
                 });
             }
             let resolved = def
-                .instantiate_alias_target(params)
+                .instantiate_alias_target(params, false)
                 .expect("transparent alias has a target");
             has_zero_seen(store, &resolved, from_package, visited)
         }
@@ -273,7 +273,7 @@ fn has_zero_nominal_fields(
         _ => Err(NoZero {
             chain: vec![],
             reason: NoZeroReason::NoZeroForType,
-            leaf_ty: original_ty.clone(),
+            leaf_ty: Box::new(original_ty.clone()),
         }),
     }
 }

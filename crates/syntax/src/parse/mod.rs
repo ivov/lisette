@@ -780,7 +780,7 @@ impl<'source> Parser<'source> {
     fn can_start_annotation(&self) -> bool {
         matches!(
             self.current_token().kind,
-            Identifier | Function | LeftParen | Integer
+            Identifier | Function | LeftParen | Integer | Mut
         )
     }
 

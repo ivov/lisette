@@ -69,7 +69,7 @@ impl Planner<'_> {
                     GoType::new(kind.leaf_name().to_string())
                 }
             }
-            Type::Compound { kind, args } => self.emit_compound(*kind, args, ty),
+            Type::Compound { kind, args, .. } => self.emit_compound(*kind, args, ty),
             Type::Function(f) => self.emit_function_type(&f.params, &f.return_type),
             Type::Var { .. } | Type::Uninferred | Type::Ignored => GoType::new("any"),
             Type::Forall { .. } => GoType::new("any"),

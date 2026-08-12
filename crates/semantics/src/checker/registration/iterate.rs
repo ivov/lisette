@@ -75,10 +75,7 @@ impl TaskState {
             return;
         };
 
-        let slice_ty = Type::Compound {
-            kind: CompoundKind::Slice,
-            args: vec![enum_ty],
-        };
+        let slice_ty = Type::compound(CompoundKind::Slice, vec![enum_ty]);
         let fn_ty = Type::function(vec![], Default::default(), Box::new(slice_ty));
 
         let package = store

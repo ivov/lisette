@@ -422,6 +422,7 @@ impl InferCtx<'_> {
         let interface_ty = Type::Nominal {
             id: interface_qualified_id.into(),
             params: vec![],
+            writable: false,
         };
         interface_requirements(&interface_ty, |id| store.get_definition(id))
             .into_iter()
@@ -769,6 +770,7 @@ pub(crate) fn interface_requires_methods(store: &Store, id: &str) -> bool {
     let interface_ty = Type::Nominal {
         id: id.into(),
         params: vec![],
+        writable: false,
     };
     !interface_requirements(&interface_ty, |id| store.get_definition(id)).is_empty()
 }

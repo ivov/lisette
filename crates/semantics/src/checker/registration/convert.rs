@@ -221,11 +221,13 @@ impl TaskState {
         let Annotation::Constructor {
             name: type_name,
             params,
+            writable,
             span: annotation_span,
         } = annotation
         else {
             unreachable!("convert_constructor_annotation called with non-Constructor annotation");
         };
+        let writable = *writable;
         let annotation_span = *annotation_span;
         let ConvertMode {
             variadic_allowed,
@@ -317,6 +319,9 @@ impl TaskState {
             Type::Forall { vars, body } => (vars, *body),
             other => (vec![], other),
         };
+        // Applied before substitution, so a read-only template does not
+        // demote writable type arguments.
+        let body = if writable { body.make_writable() } else { body };
 
         let concrete_args: Vec<Type> = params
             .iter()
@@ -389,6 +394,7 @@ impl TaskState {
             return Type::Nominal {
                 id: Symbol::from_parts("prelude", "Array"),
                 params: vec![element],
+                writable: false,
             };
         }
 
@@ -577,6 +583,7 @@ impl TaskState {
                     name,
                     params: sub_params,
                     span: param_span,
+                    ..
                 } = param
                 else {
                     return None;

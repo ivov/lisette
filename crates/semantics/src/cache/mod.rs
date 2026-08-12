@@ -440,6 +440,7 @@ mod tests {
             ty: Type::Nominal {
                 id: Symbol::from_raw("package.Box"),
                 params: vec![Type::Parameter("T".into())],
+                writable: false,
             },
             name_span: Some(Span::new(file_id, 0, 3)),
             doc: None,
@@ -450,11 +451,13 @@ mod tests {
                         Annotation::Constructor {
                             name: "Comparable".into(),
                             params: Vec::new(),
+                            writable: false,
                             span: bound_span,
                         },
                         Type::Nominal {
                             id: Symbol::from_raw("prelude.Comparable"),
                             params: Vec::new(),
+                            writable: false,
                         },
                     )],
                     Span::new(file_id, 4, 13),
@@ -598,6 +601,7 @@ mod tests {
             ty: Type::Nominal {
                 id: Symbol::from_raw("int"),
                 params: vec![],
+                writable: false,
             },
             name_span: None,
             doc: None,
@@ -693,6 +697,7 @@ mod tests {
             ty: Type::Nominal {
                 id: Symbol::from_raw("dep.Inner"),
                 params: vec![],
+                writable: false,
             },
             name_span: None,
             doc: None,
@@ -740,6 +745,7 @@ mod tests {
                 Some(Type::Nominal {
                     id: Symbol::from_raw("prelude.Comparable"),
                     params: Vec::new(),
+                    writable: false,
                 }),
             )
         );
@@ -775,6 +781,7 @@ mod tests {
                 Type::Nominal {
                     id: Symbol::from_raw("int"),
                     params: vec![],
+                    writable: false,
                 },
                 false,
             )],
@@ -782,6 +789,7 @@ mod tests {
             Box::new(Type::Nominal {
                 id: Symbol::from_raw("main.MyType"),
                 params: vec![Type::Tuple(vec![Type::Never])],
+                writable: false,
             }),
         );
 

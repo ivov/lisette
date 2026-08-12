@@ -903,6 +903,7 @@ pub(super) fn equals_targets(
         Type::Compound {
             kind: CompoundKind::Slice,
             args,
+            ..
         } => {
             if let Some(element) = args.first() {
                 equals_targets(element, package, store, index, out);
@@ -911,6 +912,7 @@ pub(super) fn equals_targets(
         Type::Compound {
             kind: CompoundKind::Map,
             args,
+            ..
         } => {
             if let Some(value) = args.get(1) {
                 equals_targets(value, package, store, index, out);

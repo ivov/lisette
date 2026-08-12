@@ -220,6 +220,7 @@ pub(crate) fn get_instance_completions(
     let ty = Type::Nominal {
         id: type_id.into(),
         params: vec![],
+        writable: false,
     };
     for method in syntax::program::methods_for_type(&ty, &Default::default(), |id| {
         snapshot.definitions().get(id)

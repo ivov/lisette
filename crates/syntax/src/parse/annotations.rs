@@ -22,6 +22,10 @@ impl<'source> Parser<'source> {
             return Annotation::Unknown;
         }
 
+        if self.is(Mut) {
+            return self.parse_writable_annotation();
+        }
+
         match self.current_token().kind {
             Function if self.stream.peek_ahead(1).kind == LeftParen => {
                 self.parse_function_annotation()
@@ -72,6 +76,7 @@ impl<'source> Parser<'source> {
                     return Annotation::Constructor {
                         name: "Slice".into(),
                         params: vec![],
+                        writable: false,
                         span: error_span,
                     };
                 }
@@ -80,6 +85,7 @@ impl<'source> Parser<'source> {
                 Annotation::Constructor {
                     name: "".into(),
                     params: vec![],
+                    writable: false,
                     span,
                 }
             }
@@ -97,6 +103,38 @@ impl<'source> Parser<'source> {
         };
         self.next();
         Annotation::Constant { value, text, span }
+    }
+
+    fn parse_writable_annotation(&mut self) -> Annotation {
+        let mut_token = self.current_token();
+        self.next();
+        while self.is(Mut) {
+            self.track_error("duplicate `mut` qualifier", "Write `mut` once.");
+            self.next();
+        }
+        let inner = self.parse_annotation_inner();
+        match inner {
+            Annotation::Constructor {
+                name,
+                params,
+                writable: _,
+                span,
+            } => Annotation::Constructor {
+                name,
+                params,
+                writable: true,
+                span,
+            },
+            other => {
+                self.track_error_at(
+                    Span::new(self.file_id, mut_token.byte_offset, mut_token.byte_length),
+                    "`mut` does not apply to this type",
+                    "Write `mut` on the reference type it protects, as in `mut Slice<int>`. \
+                     A tuple or function type cannot carry it.",
+                );
+                other
+            }
+        }
     }
 
     fn parse_named_annotation(&mut self) -> Annotation {
@@ -130,6 +168,7 @@ impl<'source> Parser<'source> {
             return Annotation::Constructor {
                 name,
                 params: type_params,
+                writable: false,
                 span: self.span_from_offset(start.byte_offset),
             };
         }
@@ -141,6 +180,7 @@ impl<'source> Parser<'source> {
         Annotation::Constructor {
             name,
             params: vec![],
+            writable: false,
             span: self.span_from_offset(start.byte_offset),
         }
     }
@@ -200,6 +240,7 @@ impl<'source> Parser<'source> {
         Annotation::Constructor {
             name,
             params: type_params,
+            writable: false,
             span: self.span_from_offset(start.byte_offset),
         }
     }

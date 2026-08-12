@@ -204,6 +204,7 @@ fn receiver_type_id(ty: &Type) -> Option<EcoString> {
         Type::Compound {
             kind: CompoundKind::Ref,
             args,
+            ..
         } => args.first().and_then(receiver_type_id),
         Type::Nominal { id, .. } => Some(id.as_eco().clone()),
         _ => None,

@@ -861,11 +861,16 @@ impl InferCtx<'_> {
 
     fn try_as_type_conversion(&self, callee: &Expression, callee_ty: &Type) -> Option<Type> {
         let store = self.store;
-        let Type::Nominal { id, params } = callee_ty else {
+        let Type::Nominal {
+            id,
+            params,
+            writable,
+        } = callee_ty
+        else {
             return None;
         };
         let definition = store.get_definition(id)?;
-        let underlying = definition.instantiate_alias_target(params)?;
+        let underlying = definition.instantiate_alias_target(params, *writable)?;
         if !matches!(underlying, Type::Function(_)) {
             return None;
         }

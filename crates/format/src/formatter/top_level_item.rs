@@ -508,8 +508,13 @@ impl<'a> Formatter<'a> {
 
     pub(super) fn annotation(annotation: &'a Annotation) -> Document<'a> {
         match annotation {
-            Annotation::Constructor { name, params, .. } => {
-                if params.is_empty() {
+            Annotation::Constructor {
+                name,
+                params,
+                writable,
+                ..
+            } => {
+                let base = if params.is_empty() {
                     if name == "Unit" {
                         Document::str("()")
                     } else {
@@ -521,6 +526,11 @@ impl<'a> Formatter<'a> {
                         .append("<")
                         .append(join(param_docs, Document::str(", ")))
                         .append(">")
+                };
+                if *writable {
+                    Document::str("mut ").append(base)
+                } else {
+                    base
                 }
             }
             Annotation::Function {

@@ -353,10 +353,7 @@ fn method_has_pointer_receiver(method_ty: &Type) -> bool {
 }
 
 fn ref_of(ty: &Type) -> Type {
-    Type::Compound {
-        kind: CompoundKind::Ref,
-        args: vec![ty.clone()],
-    }
+    Type::compound(CompoundKind::Ref, vec![ty.clone()])
 }
 
 fn declaring_generics<'a>(store: &'a Store, id: &str) -> &'a [Generic] {
@@ -415,6 +412,7 @@ mod tests {
         Type::Nominal {
             id: Symbol::from_parts(PACKAGE, name),
             params: vec![],
+            writable: false,
         }
     }
 
@@ -597,6 +595,7 @@ mod tests {
         Type::Nominal {
             id: Symbol::from_parts(PACKAGE, name),
             params: args,
+            writable: false,
         }
     }
 
@@ -967,6 +966,7 @@ mod tests {
                         vec![Type::Compound {
                             kind: CompoundKind::Slice,
                             args: vec![param("V")],
+                            writable: false,
                         }],
                     ),
                     false,

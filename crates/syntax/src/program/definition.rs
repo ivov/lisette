@@ -147,7 +147,7 @@ impl Definition {
             )
     }
 
-    pub fn instantiate_alias_target(&self, params: &[Type]) -> Option<Type> {
+    pub fn instantiate_alias_target(&self, params: &[Type], writable: bool) -> Option<Type> {
         let DefinitionBody::TypeAlias {
             generics,
             alias: AliasKind::Transparent { target, .. },
@@ -156,21 +156,27 @@ impl Definition {
         else {
             return None;
         };
-        Some(substitute(
-            target,
-            &build_substitution_map(generics, params),
-        ))
+        let map = build_substitution_map(generics, params);
+        if writable {
+            Some(substitute(&target.clone().make_writable(), &map))
+        } else {
+            Some(substitute(target, &map))
+        }
     }
 
-    pub fn instantiate_underlying(&self, params: &[Type]) -> Option<Type> {
-        if let Some(target) = self.instantiate_alias_target(params) {
+    pub fn instantiate_underlying(&self, params: &[Type], writable: bool) -> Option<Type> {
+        if let Some(target) = self.instantiate_alias_target(params, writable) {
             return Some(target);
         }
         match &self.body {
             DefinitionBody::Struct {
                 fields: StructFields::Tuple(fields),
                 ..
-            } if self.is_newtype() => Some(fields[0].ty.clone()),
+            } if self.is_newtype() => Some(if writable {
+                fields[0].ty.clone()
+            } else {
+                fields[0].ty.demoted()
+            }),
             _ => None,
         }
     }
@@ -478,7 +484,7 @@ where
         F: Copy + Fn(&str) -> Option<&'d Definition>,
     {
         let resolved = crate::types::peel_alias(interface_ty, lookup);
-        let Type::Nominal { id, params } = &resolved else {
+        let Type::Nominal { id, params, .. } = &resolved else {
             return;
         };
         // `Display` intentionally omits package qualification, so it cannot
@@ -546,7 +552,7 @@ where
 {
     let mut requirements = Vec::new();
     for instance in interface_instances(interface_ty, lookup) {
-        let Type::Nominal { id, params } = instance.ty else {
+        let Type::Nominal { id, params, .. } = instance.ty else {
             continue;
         };
         let Some(Definition {
@@ -688,6 +694,7 @@ mod tests {
         Type::Nominal {
             id: Symbol::from_raw("m.Box"),
             params,
+            writable: false,
         }
     }
 

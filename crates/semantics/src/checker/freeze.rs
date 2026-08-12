@@ -27,7 +27,11 @@ impl<'a> FreezeFolder<'a> {
 
     fn normalize_ref_aliases(&self, ty: &Type) -> Type {
         match ty {
-            Type::Nominal { id, params } => {
+            Type::Nominal {
+                id,
+                params,
+                writable,
+            } => {
                 let peeled = self.store.peel_alias(ty);
                 if peeled.is_ref() {
                     return self.normalize_ref_aliases(&peeled);
@@ -38,12 +42,18 @@ impl<'a> FreezeFolder<'a> {
                         .iter()
                         .map(|p| self.normalize_ref_aliases(p))
                         .collect(),
+                    writable: *writable,
                 }
             }
-            Type::Compound { kind, args } => Type::Compound {
-                kind: *kind,
-                args: args.iter().map(|a| self.normalize_ref_aliases(a)).collect(),
-            },
+            Type::Compound {
+                kind,
+                args,
+                writable,
+            } => Type::qualified_compound(
+                *kind,
+                args.iter().map(|a| self.normalize_ref_aliases(a)).collect(),
+                *writable,
+            ),
             Type::Tuple(elements) => Type::Tuple(
                 elements
                     .iter()

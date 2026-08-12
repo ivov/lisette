@@ -2091,3 +2091,15 @@ fn shebang_above_a_file_comment() {
 fn shebang_only() {
     assert_format_snapshot!("#!/usr/bin/env -S lis run");
 }
+
+#[test]
+fn writable_qualifier_types() {
+    assert_format_snapshot!(
+        "struct Batch { items: mut Slice<int>, tags: Slice<string> }\nfn fill(data: mut Slice<int>) -> mut Slice<int> { data }"
+    );
+}
+
+#[test]
+fn writable_qualifier_nested_type_argument() {
+    assert_format_snapshot!("fn rows(data: mut Slice<mut Slice<int>>) -> int { 0 }");
+}

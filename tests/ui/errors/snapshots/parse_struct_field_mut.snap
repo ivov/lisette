@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  2 │ struct Foo {
  3 │   mut diffs: Slice<string>,
    ·   ─┬─
-   ·    ╰── fields cannot be marked `mut`
+   ·    ╰── `mut` goes on the field's type
  4 │ }
    ╰────
-  help: Fields cannot be marked `mut`; mutability applies to bindings (`let mut x = ...`) · code: [parse.syntax_error]
+  help: Write the permission in the type, as in `items: mut Slice<int>` · code: [parse.syntax_error]

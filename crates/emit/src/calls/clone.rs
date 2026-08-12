@@ -11,6 +11,7 @@ impl Planner<'_> {
             Type::Compound {
                 kind: CompoundKind::Slice | CompoundKind::EnumeratedSlice,
                 args,
+                ..
             } => match args.first().and_then(|elem| self.element_clone(elem)) {
                 Some(clone) => {
                     self.require_stdlib();
@@ -27,6 +28,7 @@ impl Planner<'_> {
             Type::Compound {
                 kind: CompoundKind::Map,
                 args,
+                ..
             } => match args.get(1).and_then(|v| self.element_clone(v)) {
                 Some(clone) => {
                     self.require_stdlib();

@@ -114,6 +114,7 @@ mod tests {
     fn unbound_slice(id: u32) -> Type {
         Type::Compound {
             kind: CompoundKind::Slice,
+            writable: false,
             args: vec![Type::Var {
                 id: TypeVarId::new(id),
                 hint: Some("T".into()),

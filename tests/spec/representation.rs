@@ -303,14 +303,17 @@ fn native_type_classification_uses_the_canonical_type_variant() {
     let merely_named_like_native = Type::Nominal {
         id: Symbol::from_parts("example", "Slice"),
         params: vec![Type::int()],
+        writable: false,
     };
     let noncanonical_prelude_name = Type::Nominal {
         id: Symbol::from_parts("prelude", "Slice"),
         params: vec![Type::int()],
+        writable: false,
     };
     let merely_named_like_simple = Type::Nominal {
         id: Symbol::from_parts("example", "int"),
         params: vec![],
+        writable: false,
     };
 
     assert_eq!(
@@ -486,7 +489,7 @@ fn identity(value: UserId) -> UserId { value }
 
     for ty in [&parameter.ty, function_ty.return_type.as_ref()] {
         assert!(
-            matches!(ty, Type::Nominal { id, params } if id.last_segment() == "UserId" && params.is_empty()),
+            matches!(ty, Type::Nominal { id, params, .. } if id.last_segment() == "UserId" && params.is_empty()),
             "transparent alias identity was lost: {ty:?}"
         );
     }
@@ -542,4 +545,106 @@ fn recursion_depth_is_scoped_to_each_top_level_item() {
 
     assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
     assert_eq!(parsed.ast.len(), 80);
+}
+
+#[test]
+fn writable_flag_participates_in_type_identity() {
+    let plain = Type::compound(CompoundKind::Slice, vec![Type::int()]);
+    let writable = Type::qualified_compound(CompoundKind::Slice, vec![Type::int()], true);
+    assert_ne!(plain, writable);
+    assert_eq!(plain, writable.demoted());
+    assert!(writable.is_writable());
+    assert!(!plain.is_writable());
+}
+
+#[test]
+fn qualified_compound_demotes_beneath_a_read_only_hop() {
+    let inner = Type::qualified_compound(CompoundKind::Slice, vec![Type::int()], true);
+    let outer = Type::qualified_compound(CompoundKind::Slice, vec![inner.clone()], false);
+    let Type::Compound { args, writable, .. } = &outer else {
+        panic!("expected a compound type");
+    };
+    assert!(!writable);
+    assert_eq!(args[0], inner.demoted());
+
+    let kept = Type::qualified_compound(CompoundKind::Slice, vec![inner.clone()], true);
+    let Type::Compound { args, .. } = &kept else {
+        panic!("expected a compound type");
+    };
+    assert_eq!(args[0], inner);
+}
+
+#[test]
+fn writable_type_renders_with_the_qualifier() {
+    let writable = Type::qualified_compound(CompoundKind::Slice, vec![Type::int()], true);
+    assert_eq!(writable.to_string(), "mut Slice<int>");
+    assert_eq!(writable.demoted().to_string(), "Slice<int>");
+}
+
+#[test]
+fn substitution_restores_canonical_form() {
+    let writable_slice = Type::qualified_compound(CompoundKind::Slice, vec![Type::int()], true);
+    let map: SubstitutionMap = [("T".into(), writable_slice.clone())].into_iter().collect();
+
+    let through_plain = substitute(
+        &Type::compound(CompoundKind::Slice, vec![Type::Parameter("T".into())]),
+        &map,
+    );
+    assert_eq!(
+        through_plain,
+        Type::compound(CompoundKind::Slice, vec![writable_slice.demoted()]),
+    );
+
+    let through_writable = substitute(
+        &Type::qualified_compound(CompoundKind::Slice, vec![Type::Parameter("T".into())], true),
+        &map,
+    );
+    assert_eq!(
+        through_writable,
+        Type::qualified_compound(CompoundKind::Slice, vec![writable_slice], true),
+    );
+}
+
+#[test]
+fn nested_writable_annotation_survives_template_substitution() {
+    let result = infer(
+        r#"
+fn rows(data: mut Slice<mut Slice<int>>) -> int { 0 }
+"#,
+    )
+    .assert_no_errors();
+
+    let function_ty = result
+        .ast
+        .iter()
+        .find_map(|expression| match expression {
+            Expression::Function { name, ty, .. } if name == "rows" => ty.as_function_type(),
+            _ => None,
+        })
+        .expect("expected rows's function type");
+    let [parameter] = function_ty.params.as_slice() else {
+        panic!("expected one parameter");
+    };
+
+    let inner = Type::qualified_compound(CompoundKind::Slice, vec![Type::int()], true);
+    let expected = Type::qualified_compound(CompoundKind::Slice, vec![inner], true);
+    assert_eq!(parameter.ty, expected);
+}
+
+#[test]
+fn writable_constructor_span_starts_at_the_type_name() {
+    let source = "fn f(x: mut Slice<int>) -> int { 0 }";
+    let lexed = Lexer::new(source, 0).lex();
+    let parsed = Parser::new(lexed.tokens, source).parse();
+    assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+
+    let Expression::Function { params, .. } = &parsed.ast[0] else {
+        panic!("expected a function");
+    };
+    let annotation = params[0].annotation.as_ref().expect("expected annotation");
+    let Annotation::Constructor { span, .. } = annotation else {
+        panic!("expected a constructor annotation");
+    };
+    let name_offset = source.find("Slice").unwrap() as u32;
+    assert_eq!(span.byte_offset, name_offset);
 }

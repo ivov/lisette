@@ -48,7 +48,7 @@ fn type_key(ty: &Type) -> String {
         Type::ImportNamespace(m) => format!("<import:{}>", m),
         Type::ReceiverPlaceholder => "<receiver>".to_string(),
         Type::Simple(kind) => kind.leaf_name().to_string(),
-        Type::Compound { kind, args } => {
+        Type::Compound { kind, args, .. } => {
             if args.is_empty() {
                 kind.leaf_name().to_string()
             } else {

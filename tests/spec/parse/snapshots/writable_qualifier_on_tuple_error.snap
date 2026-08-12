@@ -1,0 +1,10 @@
+---
+source: tests/spec/parse/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:1:9]
+ 1 │ fn f(x: mut (int, string)) -> int { 0 }
+   ·         ─┬─
+   ·          ╰── `mut` does not apply to this type
+   ╰────
+  help: Write `mut` on the reference type it protects, as in `mut Slice<int>`. A tuple or function type cannot carry it · code: [parse.syntax_error]

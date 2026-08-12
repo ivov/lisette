@@ -26,7 +26,7 @@ pub(crate) fn resolve_declaration_hover(
         let qualified = format!("{}.{}", file.package_id, name);
         let definition = snapshot.definitions().get(qualified.as_str())?;
         let ty = definition
-            .instantiate_alias_target(&[])
+            .instantiate_alias_target(&[], false)
             .unwrap_or_else(|| definition.ty.clone());
         Some((ty, name_span))
     };
@@ -75,7 +75,9 @@ fn resolve_annotation_hover(
     }
     let recurse = |child| resolve_annotation_hover(child, offset, file, snapshot);
     match annotation {
-        Annotation::Constructor { name, params, span } => params
+        Annotation::Constructor {
+            name, params, span, ..
+        } => params
             .iter()
             .find_map(recurse)
             .or_else(|| resolve_constructor_name_hover(name, *span, offset, file, snapshot)),
