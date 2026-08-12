@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786552725123,
+  "lastUpdate": 1786558697145,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -22163,6 +22163,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 31143,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 25982,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18583,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14133,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 12980,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 7930,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5975,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2901,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1830,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 713,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9074,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "04e69957ffb1f569ce86feeb99de27d502ecce20",
+          "message": "refactor: reuse stable names instead of copying them into temps (#1256)",
+          "timestamp": "2026-08-12T20:17:53+02:00",
+          "tree_id": "699ae45b53bc2aec3d285cde89abe2d933e9bb62",
+          "url": "https://github.com/ivov/lisette/commit/04e69957ffb1f569ce86feeb99de27d502ecce20"
+        },
+        "date": 1786558695221,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 132211,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 31194,
             "unit": "lines"
           },
           {
