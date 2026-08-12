@@ -28,8 +28,7 @@ func Box_first[T any](_ Box, _ ...T) (T, bool) {
 
 func test() {
 	b := Box{}
-	option_1 := lisette.OptionFromCommaOk[int](Box_first[int](b))
-	r := option_1
+	r := lisette.OptionFromCommaOk[int](Box_first[int](b))
 	if r.UnwrapOr(7) != 7 {
 		panic("expected 7")
 	}

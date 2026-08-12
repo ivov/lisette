@@ -24,9 +24,8 @@ func main() {
 		}
 		return 0, false
 	}
-	option_4 := lisette.OptionFromCommaOk[int](f(lisette.MakeOptionSome(1), func(v int) (int, bool) {
+	x := lisette.OptionFromCommaOk[int](f(lisette.MakeOptionSome(1), func(v int) (int, bool) {
 		return v * 2, true
 	}))
-	x := option_4
 	_ = x
 }

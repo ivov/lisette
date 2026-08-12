@@ -21,10 +21,10 @@ import (
 )
 
 func main() {
-	raw_2 := evts.Peek()
-	option_3 := lisette.OptionFromNilable[evts.Msg](raw_2, lisette.IsNilInterface(raw_2))
-	if option_3.Tag == lisette.OptionSome {
-		fmt.Println(option_3.SomeVal)
+	raw_1 := evts.Peek()
+	option_2 := lisette.OptionFromNilable[evts.Msg](raw_1, lisette.IsNilInterface(raw_1))
+	if option_2.Tag == lisette.OptionSome {
+		fmt.Println(option_2.SomeVal)
 	} else {
 		fmt.Println("none")
 	}

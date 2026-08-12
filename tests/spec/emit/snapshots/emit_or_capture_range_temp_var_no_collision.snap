@@ -25,10 +25,9 @@ func makeRange() lisette.Range[int] {
 
 func main() {
 	s := []int{1, 2, 3}
-	_base_2 := s
 	range_1 := makeRange()
-	sub := _base_2[range_1.Start:range_1.End:range_1.End]
-	range_1_3 := 7
+	sub := s[range_1.Start:range_1.End:range_1.End]
+	range_1_2 := 7
 	_ = sub
-	_ = range_1_3
+	_ = range_1_2
 }

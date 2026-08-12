@@ -33,18 +33,18 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		var r_1 rune
-		ret_3, ret_4, ret_5 := reader.ReadRune()
-		tup_6 := lisette.MakeTuple2(ret_3, ret_4)
-		var result_7 lisette.Result[lisette.Tuple2[rune, int], error]
-		if ret_5 != nil {
-			result_7 = lisette.MakeResultErr[lisette.Tuple2[rune, int], error](ret_5)
+		ret_2, ret_3, ret_4 := reader.ReadRune()
+		tup_5 := lisette.MakeTuple2(ret_2, ret_3)
+		var result_6 lisette.Result[lisette.Tuple2[rune, int], error]
+		if ret_4 != nil {
+			result_6 = lisette.MakeResultErr[lisette.Tuple2[rune, int], error](ret_4)
 		} else {
-			result_7 = lisette.MakeResultOk[lisette.Tuple2[rune, int], error](tup_6)
+			result_6 = lisette.MakeResultOk[lisette.Tuple2[rune, int], error](tup_5)
 		}
-		if result_7.Tag == lisette.ResultOk {
-			r_1 = result_7.OkVal.First
+		if result_6.Tag == lisette.ResultOk {
+			r_1 = result_6.OkVal.First
 		} else {
-			if result_7.ErrVal == io.EOF {
+			if result_6.ErrVal == io.EOF {
 				break
 			}
 			panic("error")

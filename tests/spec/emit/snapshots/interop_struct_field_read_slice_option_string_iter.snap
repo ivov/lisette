@@ -24,16 +24,15 @@ import (
 func main() {
 	b := aws.Bucket{}
 	raw_1 := b.Tags
-	src_2 := raw_1
-	wrapped_3 := make([]lisette.Option[string], len(src_2))
-	for i_4, v_5 := range src_2 {
-		if v_5 != nil {
-			wrapped_3[i_4] = lisette.MakeOptionSome[string](*v_5)
+	wrapped_2 := make([]lisette.Option[string], len(raw_1))
+	for i_3, v_4 := range raw_1 {
+		if v_4 != nil {
+			wrapped_2[i_3] = lisette.MakeOptionSome[string](*v_4)
 		} else {
-			wrapped_3[i_4] = lisette.MakeOptionNone[string]()
+			wrapped_2[i_3] = lisette.MakeOptionNone[string]()
 		}
 	}
-	for _, tag := range wrapped_3 {
+	for _, tag := range wrapped_2 {
 		if tag.Tag == lisette.OptionSome {
 			_ = tag.SomeVal
 		}

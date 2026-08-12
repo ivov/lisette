@@ -39,13 +39,12 @@ func make_() ([]lisette.Option[string], error) {
 
 func main() {
 	ret_1, ret_2 := make_()
-	var result_3 lisette.Result[[]lisette.Option[string], error]
+	var r lisette.Result[[]lisette.Option[string], error]
 	if ret_2 != nil {
-		result_3 = lisette.MakeResultErr[[]lisette.Option[string], error](ret_2)
+		r = lisette.MakeResultErr[[]lisette.Option[string], error](ret_2)
 	} else {
-		result_3 = lisette.MakeResultOk[[]lisette.Option[string], error](ret_1)
+		r = lisette.MakeResultOk[[]lisette.Option[string], error](ret_1)
 	}
-	r := result_3
 	if r.Tag == lisette.ResultOk {
 		for _, x := range r.OkVal {
 			if x.Tag == lisette.OptionSome {

@@ -14,10 +14,9 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func test() int {
 	opt := lisette.MakeOptionSome(99)
-	subject_1 := opt
-	if subject_1.Tag != lisette.OptionSome {
+	if opt.Tag != lisette.OptionSome {
 		return 0
 	}
-	opt_2 := subject_1.SomeVal
-	return opt_2
+	opt_1 := opt.SomeVal
+	return opt_1
 }

@@ -15,16 +15,15 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test(pair lisette.Tuple2[int, int]) string {
-	subject_1 := pair
 	{
-		x := subject_1.First
-		y := subject_1.Second
+		x := pair.First
+		y := pair.Second
 		if x == y {
 			return "equal"
 		}
 	}
 	{
-		if subject_1.First > subject_1.Second {
+		if pair.First > pair.Second {
 			return "greater"
 		}
 	}

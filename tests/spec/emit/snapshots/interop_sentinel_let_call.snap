@@ -25,8 +25,7 @@ func main() {
 		ret_1 := idx.Find(arg0, arg1)
 		return ret_1, ret_1 != -1
 	}
-	option_2 := lisette.OptionFromCommaOk[int](f("hello", "ll"))
-	r := option_2
+	r := lisette.OptionFromCommaOk[int](f("hello", "ll"))
 	if r.Tag == lisette.OptionSome {
 		_ = r.SomeVal
 	} else {

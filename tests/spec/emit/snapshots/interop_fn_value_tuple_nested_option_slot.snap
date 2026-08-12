@@ -32,31 +32,29 @@ func apply(f func() (lisette.Option[[]lisette.Option[string]], int)) (lisette.Op
 }
 
 func main() {
-	cb_2 := aws.Make
-	ret_11, ret_12 := apply(func() (lisette.Option[[]lisette.Option[string]], int) {
-		ret_3, ret_4 := cb_2()
-		raw_5 := ret_3
-		var option_6 lisette.Option[[]lisette.Option[string]]
-		if raw_5 != nil {
-			src_7 := *raw_5
-			wrapped_8 := make([]lisette.Option[string], len(src_7))
-			for i_9, v_10 := range src_7 {
-				if v_10 != nil {
-					wrapped_8[i_9] = lisette.MakeOptionSome[string](*v_10)
+	cb_1 := aws.Make
+	ret_9, ret_10 := apply(func() (lisette.Option[[]lisette.Option[string]], int) {
+		ret_2, ret_3 := cb_1()
+		var option_4 lisette.Option[[]lisette.Option[string]]
+		if ret_2 != nil {
+			src_5 := *ret_2
+			wrapped_6 := make([]lisette.Option[string], len(src_5))
+			for i_7, v_8 := range src_5 {
+				if v_8 != nil {
+					wrapped_6[i_7] = lisette.MakeOptionSome[string](*v_8)
 				} else {
-					wrapped_8[i_9] = lisette.MakeOptionNone[string]()
+					wrapped_6[i_7] = lisette.MakeOptionNone[string]()
 				}
 			}
-			option_6 = lisette.MakeOptionSome[[]lisette.Option[string]](wrapped_8)
+			option_4 = lisette.MakeOptionSome[[]lisette.Option[string]](wrapped_6)
 		} else {
-			option_6 = lisette.MakeOptionNone[[]lisette.Option[string]]()
+			option_4 = lisette.MakeOptionNone[[]lisette.Option[string]]()
 		}
-		return option_6, ret_4
+		return option_4, ret_3
 	})
-	tup_13 := lisette.MakeTuple2(ret_11, ret_12)
-	tmp_1 := tup_13
-	xs := tmp_1.First
-	n := tmp_1.Second
+	tup_11 := lisette.MakeTuple2(ret_9, ret_10)
+	xs := tup_11.First
+	n := tup_11.Second
 	_ = n
 	if xs.Tag == lisette.OptionSome {
 		for _, x := range xs.SomeVal {

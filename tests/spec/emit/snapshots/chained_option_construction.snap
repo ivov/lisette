@@ -20,11 +20,10 @@ func getValue() (int, bool) {
 }
 
 func test() (int, bool) {
-	option_1 := lisette.OptionFromCommaOk[int](getValue())
-	x := option_1
-	v_2 := x
-	if v_2.Tag == lisette.OptionSome {
-		return v_2.SomeVal, true
+	x := lisette.OptionFromCommaOk[int](getValue())
+	v_1 := x
+	if v_1.Tag == lisette.OptionSome {
+		return v_1.SomeVal, true
 	}
 	return 0, false
 }

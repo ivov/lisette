@@ -33,8 +33,7 @@ func makeFinder() func(string, string) (int, bool) {
 
 func main() {
 	f := makeFinder()
-	option_1 := lisette.OptionFromCommaOk[int](f("hello", "ll"))
-	r := option_1
+	r := lisette.OptionFromCommaOk[int](f("hello", "ll"))
 	if r.Tag == lisette.OptionSome {
 		_ = r.SomeVal
 	} else {

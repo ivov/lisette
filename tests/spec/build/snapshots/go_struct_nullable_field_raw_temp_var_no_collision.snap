@@ -23,8 +23,7 @@ func main() {
 		Replace: unwrap_2,
 	}
 	raw_3 := mod_.Replace
-	option_4 := lisette.OptionFromNilable[*debug.Module](raw_3, raw_3 == nil)
-	r := option_4
+	r := lisette.OptionFromNilable[*debug.Module](raw_3, raw_3 == nil)
 	raw_1 := 3
 	fmt.Println(r)
 	fmt.Println(raw_1)

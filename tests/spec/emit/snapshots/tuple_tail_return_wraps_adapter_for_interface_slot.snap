@@ -54,8 +54,7 @@ func make_() (Box[lisette.Option[*Thing]], int) {
 
 func test() {
 	ret_1, ret_2 := make_()
-	tup_3 := lisette.MakeTuple2(ret_1, ret_2)
-	pair := tup_3
+	pair := lisette.MakeTuple2(ret_1, ret_2)
 	subject_4 := pair.First.get()
 	if subject_4.Tag == lisette.OptionSome {
 		panic("expected None")

@@ -1,0 +1,38 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  fn test(opt: Option<int>) -> int {
+    let current = opt
+    let mut current = current
+    let clear = || -> bool { current = None; false }
+    match current {
+      Some(x) if clear() => x,
+      Some(y) => y,
+      None => 0,
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(opt lisette.Option[int]) int {
+	current := opt
+	current_1 := current
+	clear_ := func() bool {
+		current_1 = lisette.MakeOptionNone[int]()
+		return false
+	}
+	subject_2 := current_1
+	if subject_2.Tag == lisette.OptionSome {
+		{
+			x := subject_2.SomeVal
+			if clear_() {
+				return x
+			}
+		}
+		return subject_2.SomeVal
+	}
+	return 0
+}

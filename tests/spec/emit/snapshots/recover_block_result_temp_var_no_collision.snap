@@ -14,10 +14,9 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func main() {
-	recoverResult_1 := lisette.RecoverBlock(func() int {
+	result := lisette.RecoverBlock(func() int {
 		return 1
 	})
-	result := recoverResult_1
 	recoverResult_1_2 := 7
 	_ = recoverResult_1_2
 	_ = result

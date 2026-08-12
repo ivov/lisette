@@ -20,13 +20,13 @@ func g() lisette.Result[int, string] {
 }
 
 func f() lisette.Result[int, string] {
-	check_2 := g()
-	if check_2.Tag != lisette.ResultOk {
-		return lisette.MakeResultErr[int, string](check_2.ErrVal)
+	check_1 := g()
+	if check_1.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[int, string](check_1.ErrVal)
 	}
-	subject_1 := check_2.OkVal
-	if subject_1 == 0 {
+	subject_2 := check_1.OkVal
+	if subject_2 == 0 {
 		return lisette.MakeResultOk[int, string](10)
 	}
-	return lisette.MakeResultOk[int, string](subject_1)
+	return lisette.MakeResultOk[int, string](subject_2)
 }

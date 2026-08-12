@@ -20,26 +20,24 @@ import (
 
 func main() {
 	values := [2]lisette.Option[int]{lisette.MakeOptionSome(1), lisette.MakeOptionNone[int]()}
-	src_1 := values
-	var unwrapped_2 [2]*int
-	for i_3, v_4 := range src_1 {
-		if v_4.Tag == lisette.OptionSome {
-			unwrapped_2[i_3] = &v_4.SomeVal
+	var unwrapped_1 [2]*int
+	for i_2, v_3 := range values {
+		if v_3.Tag == lisette.OptionSome {
+			unwrapped_1[i_2] = &v_3.SomeVal
 		} else {
-			unwrapped_2[i_3] = nil
+			unwrapped_1[i_2] = nil
 		}
 	}
-	container := arrays.Container{Values: unwrapped_2}
-	raw_5 := container.Values
-	src_6 := raw_5
-	var wrapped_7 [2]lisette.Option[int]
-	for i_8, v_9 := range src_6 {
-		if v_9 != nil {
-			wrapped_7[i_8] = lisette.MakeOptionSome[int](*v_9)
+	container := arrays.Container{Values: unwrapped_1}
+	raw_4 := container.Values
+	var wrapped_5 [2]lisette.Option[int]
+	for i_6, v_7 := range raw_4 {
+		if v_7 != nil {
+			wrapped_5[i_6] = lisette.MakeOptionSome[int](*v_7)
 		} else {
-			wrapped_7[i_8] = lisette.MakeOptionNone[int]()
+			wrapped_5[i_6] = lisette.MakeOptionNone[int]()
 		}
 	}
-	roundtrip := wrapped_7
+	roundtrip := wrapped_5
 	_ = roundtrip
 }

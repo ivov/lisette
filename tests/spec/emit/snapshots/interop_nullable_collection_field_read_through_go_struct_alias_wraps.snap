@@ -53,16 +53,15 @@ func main() {
 		PublicKey: 0,
 	}
 	raw_5 := cert.URIs
-	src_6 := raw_5
-	wrapped_7 := make([]lisette.Option[*url.URL], len(src_6))
-	for i_8, v_9 := range src_6 {
-		if v_9 != nil {
-			wrapped_7[i_8] = lisette.MakeOptionSome[*url.URL](v_9)
+	wrapped_6 := make([]lisette.Option[*url.URL], len(raw_5))
+	for i_7, v_8 := range raw_5 {
+		if v_8 != nil {
+			wrapped_6[i_7] = lisette.MakeOptionSome[*url.URL](v_8)
 		} else {
-			wrapped_7[i_8] = lisette.MakeOptionNone[*url.URL]()
+			wrapped_6[i_7] = lisette.MakeOptionNone[*url.URL]()
 		}
 	}
-	urls := wrapped_7
+	urls := wrapped_6
 	first := urls[0]
 	if first.Tag == lisette.OptionSome {
 		_ = first.SomeVal

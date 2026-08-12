@@ -40,7 +40,7 @@ impl Planner<'_> {
             body,
             closure_close: "}()\n".to_string(),
         }];
-        ValuePlan::name(setup, result_var, false)
+        ValuePlan::captured(setup, result_var)
     }
 
     fn lower_try_body(&mut self, items: &[Expression], fallible: &Fallible) -> LoweredBlock {
@@ -196,7 +196,7 @@ impl Planner<'_> {
             body,
             closure_close: "})\n".to_string(),
         }];
-        ValuePlan::name(setup, result_var, false)
+        ValuePlan::captured(setup, result_var)
     }
 
     fn lower_recover_body_block(

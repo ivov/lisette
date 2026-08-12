@@ -96,7 +96,7 @@ impl Planner<'_> {
         );
         let mut setup = vec![declaration, LoweredStatement::If(plan)];
         collapse_boolean_branch_assign(&mut setup, &result_var);
-        ValuePlan::name(setup, result_var, false)
+        ValuePlan::captured(setup, result_var)
     }
 
     /// Lower a value-position `if let`/`match`/`select` to a fresh operand-temp
@@ -119,7 +119,7 @@ impl Planner<'_> {
         setup.extend(block.statements);
         collapse_declare_assign(&mut setup, &result_var);
         collapse_boolean_branch_assign(&mut setup, &result_var);
-        ValuePlan::name(setup, result_var, false)
+        ValuePlan::captured(setup, result_var)
     }
 
     /// Lower a value-position `loop` to a fresh operand-temp variable.
@@ -137,11 +137,7 @@ impl Planner<'_> {
         let plan = self.with_loop(result_var.clone(), |this| {
             this.lower_loop_with_header("for {\n".to_string(), body)
         });
-        ValuePlan::name(
-            vec![declaration, LoweredStatement::Loop(plan)],
-            result_var,
-            false,
-        )
+        ValuePlan::captured(vec![declaration, LoweredStatement::Loop(plan)], result_var)
     }
 
     fn lower_body_until_diverge(

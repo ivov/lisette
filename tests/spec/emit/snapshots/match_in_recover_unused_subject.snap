@@ -20,11 +20,10 @@ type P struct {
 }
 
 func test() {
-	recoverResult_1 := lisette.RecoverBlock(func() struct{} {
+	out := lisette.RecoverBlock(func() struct{} {
 		p := P{v: 1}
 		_ = p
 		return struct{}{}
 	})
-	out := recoverResult_1
 	_ = out
 }

@@ -28,24 +28,23 @@ import (
 )
 
 func main() {
-	ret_2, ret_3 := aws.Make()
-	var result_4 lisette.Result[[]lisette.Option[string], error]
-	if ret_3 != nil {
-		result_4 = lisette.MakeResultErr[[]lisette.Option[string], error](ret_3)
+	ret_1, ret_2 := aws.Make()
+	var result_3 lisette.Result[[]lisette.Option[string], error]
+	if ret_2 != nil {
+		result_3 = lisette.MakeResultErr[[]lisette.Option[string], error](ret_2)
 	} else {
-		src_5 := ret_2
-		wrapped_6 := make([]lisette.Option[string], len(src_5))
-		for i_7, v_8 := range src_5 {
-			if v_8 != nil {
-				wrapped_6[i_7] = lisette.MakeOptionSome[string](*v_8)
+		wrapped_4 := make([]lisette.Option[string], len(ret_1))
+		for i_5, v_6 := range ret_1 {
+			if v_6 != nil {
+				wrapped_4[i_5] = lisette.MakeOptionSome[string](*v_6)
 			} else {
-				wrapped_6[i_7] = lisette.MakeOptionNone[string]()
+				wrapped_4[i_5] = lisette.MakeOptionNone[string]()
 			}
 		}
-		result_4 = lisette.MakeResultOk[[]lisette.Option[string], error](wrapped_6)
+		result_3 = lisette.MakeResultOk[[]lisette.Option[string], error](wrapped_4)
 	}
-	if result_4.Tag == lisette.ResultOk {
-		for _, x := range result_4.OkVal {
+	if result_3.Tag == lisette.ResultOk {
+		for _, x := range result_3.OkVal {
 			if x.Tag == lisette.OptionSome {
 				fmt.Println(x.SomeVal)
 			} else {
@@ -53,6 +52,6 @@ func main() {
 			}
 		}
 	} else {
-		_ = result_4.ErrVal
+		_ = result_3.ErrVal
 	}
 }

@@ -22,14 +22,13 @@ func main() {
 	xs := make(map[string]lisette.Option[string])
 	xs["k"] = lisette.MakeOptionSome("hi")
 	xs["gone"] = lisette.MakeOptionNone[string]()
-	src_1 := xs
-	unwrapped_2 := make(map[string]*string, len(src_1))
-	for i_3, v_4 := range src_1 {
-		if v_4.Tag == lisette.OptionSome {
-			unwrapped_2[i_3] = &v_4.SomeVal
+	unwrapped_1 := make(map[string]*string, len(xs))
+	for i_2, v_3 := range xs {
+		if v_3.Tag == lisette.OptionSome {
+			unwrapped_1[i_2] = &v_3.SomeVal
 		} else {
-			unwrapped_2[i_3] = nil
+			unwrapped_1[i_2] = nil
 		}
 	}
-	aws.Use(unwrapped_2)
+	aws.Use(unwrapped_1)
 }

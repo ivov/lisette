@@ -145,6 +145,26 @@ impl Planner<'_> {
         }
     }
 
+    /// Whether readers can name the value where it sits instead of pinning it.
+    pub(crate) fn plan_rests_in_stable_name(&self, plan: &ValuePlan) -> bool {
+        if plan.rests_in_fixed_name() {
+            return true;
+        }
+        let rendered = plan.rendered();
+        plan.rests_in_own_temp(&rendered) && !self.scope.has_binding_for_go_name(&rendered)
+    }
+
+    /// How much of a read's surroundings can change the value it observes.
+    pub(crate) fn identifier_read_stability(&self, expression: &Expression) -> Stability {
+        if self.is_unmutated_identifier(expression) {
+            Stability::Fixed
+        } else if self.identifier_immune_to_calls(expression) {
+            Stability::StableAcrossCalls
+        } else {
+            Stability::Observable
+        }
+    }
+
     /// Only a binding mutated through an alias can be rebound by a call, so
     /// reads of alias-free bindings commute with sibling calls.
     pub(crate) fn identifier_immune_to_calls(&self, expression: &Expression) -> bool {
@@ -349,7 +369,7 @@ impl Planner<'_> {
         let mut setup: Vec<LoweredStatement> = Vec::new();
         let mut results = Vec::with_capacity(stages.len());
         for i in 0..stages.len() {
-            let s_non_literal = !stages[i].evaluation.stability.is_literal();
+            let s_non_literal = !stages[i].evaluation.stability.is_fixed();
             let s_expression = std::mem::replace(
                 &mut stages[i].expression,
                 GoExpression::opaque(String::new()),

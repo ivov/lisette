@@ -34,8 +34,7 @@ type Dir struct {
 }
 
 func check(d Dir, urgent bool) string {
-	subject_1 := d
-	if subject_1.Tag == DirNorth {
+	if d.Tag == DirNorth {
 		if urgent {
 			return "NORTH!"
 		}

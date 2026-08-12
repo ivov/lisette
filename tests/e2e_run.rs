@@ -851,6 +851,72 @@ fn main() {
 }
 
 #[test]
+fn run_match_arm_after_a_failing_guard_sees_the_original_subject() {
+    if !go_available() {
+        eprintln!(
+            "skipping run_match_arm_after_a_failing_guard_sees_the_original_subject: `go` not found"
+        );
+        return;
+    }
+
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    let invocation = scratch.path().join("invocation");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::create_dir_all(&invocation).unwrap();
+
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"guardsubject\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        r#"import "go:fmt"
+
+fn shadowed(opt: Option<int>) -> int {
+  let current = opt
+  let mut current = current
+  let clear = || -> bool { current = None; false }
+  match current {
+    Some(x) if clear() => x,
+    Some(y) => y,
+    None => 0,
+  }
+}
+
+fn plain(opt: Option<int>) -> int {
+  let mut current = opt
+  let clear = || -> bool { current = None; false }
+  match current {
+    Some(x) if clear() => x,
+    Some(y) => y,
+    None => 0,
+  }
+}
+
+fn main() {
+  fmt.Println(shadowed(Some(7)), plain(Some(9)))
+}
+"#,
+    )
+    .unwrap();
+
+    let output = lis_run(&project, &invocation, &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "lis run failed:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+    assert!(
+        stdout.lines().any(|line| line == "7 9"),
+        "a guard that clears the subject must not change what later arms read:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+}
+
+#[test]
 fn run_equality_matching_parametrized_interface_bound_builds() {
     if !go_available() {
         eprintln!(

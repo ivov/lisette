@@ -60,6 +60,17 @@ pub(crate) fn simple_assign(target_var: &str, value: ValuePlan) -> LoweredStatem
     })
 }
 
+/// Bind the setup's trailing temp under `name` instead of copying it.
+pub(crate) fn rebind_trailing_temp(
+    statements: &mut [LoweredStatement],
+    name: &str,
+    temp: &str,
+) -> bool {
+    statements
+        .last_mut()
+        .is_some_and(|statement| statement.binds_name(temp) && statement.rename_bound_name(name))
+}
+
 /// Collapse `var x T` + one unconditional `x = v` into `x := v`, when `:=`
 /// infers T identically (a `float64` context can hold an untyped int literal).
 pub(crate) fn collapse_declare_assign(statements: &mut Vec<LoweredStatement>, name: &str) {
@@ -782,7 +793,7 @@ impl Planner<'_> {
             } else {
                 statements.extend(body);
             }
-            return ValuePlan::name(statements, result_var, false);
+            return ValuePlan::captured(statements, result_var);
         }
         if let Expression::Loop { .. } = expression {
             return self.plan_loop_as_operand_temp(expression, ty);
@@ -790,7 +801,7 @@ impl Planner<'_> {
         let (result_var, declaration) = self.operand_temp_declaration(ty);
         let mut statements = vec![declaration];
         statements.extend(self.lower_assign(expression, &result_var, Some(ty)));
-        ValuePlan::name(statements, result_var, false)
+        ValuePlan::captured(statements, result_var)
     }
 
     /// Build a `BreakValuePlan` for a `break value` statement.

@@ -16,8 +16,7 @@ package main
 import "example.com/events"
 
 func handle(e events.Event, active bool) int {
-	subject_1 := e
-	switch subject_1.(type) {
+	switch e.(type) {
 	case events.Click, events.Scroll:
 		if active {
 			return 1

@@ -15,10 +15,9 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test() {
-	recoverResult_1 := lisette.RecoverBlock(func() struct{} {
+	result := lisette.RecoverBlock(func() struct{} {
 		panic("boom")
 	})
-	result := recoverResult_1
 	if result.Tag == lisette.ResultOk {
 	}
 }

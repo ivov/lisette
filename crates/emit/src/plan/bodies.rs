@@ -459,6 +459,42 @@ impl LoweredBlock {
 }
 
 impl LoweredStatement {
+    /// The Go name this statement binds, seeing through a sourcemap directive.
+    pub(crate) fn bound_name(&self) -> Option<&str> {
+        match self {
+            LoweredStatement::Directed { inner, .. } => inner.bound_name(),
+            LoweredStatement::TempBind { name, .. }
+            | LoweredStatement::ClosureBind { name, .. }
+            | LoweredStatement::VarDecl {
+                name,
+                value: Some(_),
+                ..
+            } => Some(name),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn binds_name(&self, go_name: &str) -> bool {
+        self.bound_name() == Some(go_name)
+    }
+
+    /// `false` when the statement binds nothing.
+    pub(crate) fn rename_bound_name(&mut self, go_name: &str) -> bool {
+        let bound = match self {
+            LoweredStatement::Directed { inner, .. } => return inner.rename_bound_name(go_name),
+            LoweredStatement::TempBind { name, .. }
+            | LoweredStatement::ClosureBind { name, .. }
+            | LoweredStatement::VarDecl {
+                name,
+                value: Some(_),
+                ..
+            } => name,
+            _ => return false,
+        };
+        *bound = go_name.to_string();
+        true
+    }
+
     fn emits_output(&self) -> bool {
         match self {
             LoweredStatement::If(_)

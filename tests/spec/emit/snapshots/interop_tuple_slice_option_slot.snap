@@ -25,20 +25,18 @@ import (
 )
 
 func main() {
-	ret_2, ret_3 := aws.Make()
-	src_4 := ret_2
-	wrapped_5 := make([]lisette.Option[string], len(src_4))
-	for i_6, v_7 := range src_4 {
-		if v_7 != nil {
-			wrapped_5[i_6] = lisette.MakeOptionSome[string](*v_7)
+	ret_1, ret_2 := aws.Make()
+	wrapped_3 := make([]lisette.Option[string], len(ret_1))
+	for i_4, v_5 := range ret_1 {
+		if v_5 != nil {
+			wrapped_3[i_4] = lisette.MakeOptionSome[string](*v_5)
 		} else {
-			wrapped_5[i_6] = lisette.MakeOptionNone[string]()
+			wrapped_3[i_4] = lisette.MakeOptionNone[string]()
 		}
 	}
-	tup_8 := lisette.MakeTuple2(wrapped_5, ret_3)
-	tmp_1 := tup_8
-	xs := tmp_1.First
-	n := tmp_1.Second
+	tup_6 := lisette.MakeTuple2(wrapped_3, ret_2)
+	xs := tup_6.First
+	n := tup_6.Second
 	fmt.Println(n)
 	for _, x := range xs {
 		if x.Tag == lisette.OptionSome {

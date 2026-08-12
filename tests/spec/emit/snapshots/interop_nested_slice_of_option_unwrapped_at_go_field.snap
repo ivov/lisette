@@ -27,14 +27,13 @@ func main() {
 	src_1 := [][]lisette.Option[*cli.Flag]{[]lisette.Option[*cli.Flag]{lisette.MakeOptionSome(f1), lisette.MakeOptionSome(f2)}}
 	unwrapped_2 := make([][]*cli.Flag, len(src_1))
 	for i_3, v_4 := range src_1 {
-		src_5 := v_4
-		unwrapped_6 := make([]*cli.Flag, len(src_5))
-		for i_7, v_8 := range src_5 {
-			if v_8.Tag == lisette.OptionSome {
-				unwrapped_6[i_7] = v_8.SomeVal
+		unwrapped_5 := make([]*cli.Flag, len(v_4))
+		for i_6, v_7 := range v_4 {
+			if v_7.Tag == lisette.OptionSome {
+				unwrapped_5[i_6] = v_7.SomeVal
 			}
 		}
-		unwrapped_2[i_3] = unwrapped_6
+		unwrapped_2[i_3] = unwrapped_5
 	}
 	g := cli.Group{Flags: unwrapped_2}
 	_ = g

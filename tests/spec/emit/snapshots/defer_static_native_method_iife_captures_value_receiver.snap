@@ -11,8 +11,7 @@ package main
 
 func test() {
 	items := []int{1, 2, 3}
-	_arg_1 := items
 	defer func() {
-		_ = len(_arg_1)
+		_ = len(items)
 	}()
 }
