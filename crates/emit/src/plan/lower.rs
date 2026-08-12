@@ -5,6 +5,7 @@ use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
 use crate::control_flow::targets::legalize_source_loop;
 use crate::definitions::functions::{is_breakless_loop, is_go_never, is_test_context_ty};
+use crate::expressions::{flip_comparison, flip_preserves_nan};
 use crate::names::go_name::{prelude_qualifier, testkit_qualifier};
 use crate::plan::bodies::{
     ElseArm, ExpressionStatementForm, ExpressionStatementPlan, IfPlan, LoopKind, LoopPlan,
@@ -14,11 +15,11 @@ use crate::plan::bodies::{
 use crate::plan::placement::{
     collapse_boolean_branch_assign, collapse_declare_assign, requires_temp_var, try_elide_tail_let,
 };
-use crate::plan::values::ValuePlan;
+use crate::plan::values::{OperandForm, ValuePlan};
 use crate::utils::wrap_if_struct_literal;
 use syntax::ast::{
     BinaryOperator, Expression, IdentifierResolution, IfLetAlternative, Literal, MatchArm, Pattern,
-    Span,
+    Span, UnaryOperator,
 };
 use syntax::types::Type;
 
@@ -415,8 +416,6 @@ impl Planner<'_> {
         let operand = operand.unwrap_parens();
         self.require_testkit();
 
-        // Each shape stages its operands into `statements` and returns the
-        // condition, the record kind, and any operand arguments for the call.
         let mut statements = Vec::new();
         let shape = if let Expression::Binary {
             operator,
@@ -434,7 +433,7 @@ impl Planner<'_> {
         };
 
         let AssertShape {
-            condition,
+            failure_condition,
             kind,
             message,
             operands,
@@ -443,12 +442,17 @@ impl Planner<'_> {
             .current_test_handle()
             .expect("assert without a test handle should be rejected by semantics");
         let span = operand.get_span();
-        statements.push(LoweredStatement::RawGo(format!(
-            "if !({condition}) {{\n{handle}.FailAssert({}, {}, {}, \"{kind}\", \"{message}\"{operands})\n}}\n",
+        let test = LoweredStatement::RawGo(format!(
+            "if {failure_condition} {{\n{handle}.FailAssert({}, {}, {}, \"{kind}\", \"{message}\"{operands})\n}}\n",
             span.file_id,
             span.byte_offset,
             span.byte_offset + span.byte_length,
-        )));
+        ));
+        // The block exists only to scope the temps.
+        if statements.is_empty() {
+            return test;
+        }
+        statements.push(test);
         LoweredStatement::Block(LoweredBlock { statements })
     }
 
@@ -524,8 +528,8 @@ impl Planner<'_> {
         (statements, call)
     }
 
-    /// `assert a <op> b`: compare the captured temps via the normal binary
-    /// lowering, reporting both as `left`/`right`.
+    /// `assert a <op> b`: compare the operands via the normal binary lowering,
+    /// reporting both as `left`/`right`.
     fn lower_relation_assert(
         &mut self,
         operator: &BinaryOperator,
@@ -534,19 +538,27 @@ impl Planner<'_> {
         statements: &mut Vec<LoweredStatement>,
     ) -> AssertShape {
         self.require_stdlib();
-        let lhs = self.stage_assert_operand(left, "assertLeft", statements);
-        let rhs = self.stage_assert_operand(right, "assertRight", statements);
-        let left_ref = temp_identifier(&lhs, left);
-        let right_ref = temp_identifier(&rhs, right);
+        let (lhs, rhs) =
+            self.stage_assert_operands(left, right, LiteralInlining::Allowed, statements);
+        let flipped = flip_comparison(operator)
+            .filter(|_| flip_preserves_nan(&self.facts, operator, left, right));
         let (cond_setup, condition) = self
-            .plan_binary(operator, &left_ref, &right_ref, ExpressionContext::value())
+            .plan_binary(
+                flipped.as_ref().unwrap_or(operator),
+                &lhs.expression,
+                &rhs.expression,
+                ExpressionContext::value(),
+            )
             .into_parts();
         statements.extend(cond_setup);
         AssertShape {
-            condition,
+            failure_condition: match flipped {
+                Some(_) => condition,
+                None => format!("!({condition})"),
+            },
             kind: "relation",
             message: format!("expected {operator}"),
-            operands: paired_operands(&lhs, &rhs),
+            operands: paired_operands(&lhs.rendered, &rhs.rendered),
         }
     }
 
@@ -559,56 +571,132 @@ impl Planner<'_> {
     ) -> AssertShape {
         self.require_stdlib();
         let recv_ty = recv.get_type();
-        let lhs = self.stage_assert_operand(recv, "assertLeft", statements);
-        let rhs = self.stage_assert_operand(arg, "assertRight", statements);
-        let condition = self.render_equality(&lhs, &rhs, &recv_ty, &[]);
+        let (lhs, rhs) = self.stage_assert_operands(recv, arg, LiteralInlining::Denied, statements);
+        let failure_condition = self.render_inequality(&lhs.rendered, &rhs.rendered, &recv_ty, &[]);
         AssertShape {
-            condition,
+            failure_condition,
             kind: "labeled",
             message: "expected ==".to_string(),
-            operands: paired_operands(&lhs, &rhs),
+            operands: paired_operands(&lhs.rendered, &rhs.rendered),
         }
     }
 
-    /// `assert <expr>`: any other boolean, lowered as-is (no decomposition).
+    /// `assert <expr>`: any other boolean, tested through its negation.
     fn lower_bare_assert(
         &mut self,
         operand: &Expression,
         statements: &mut Vec<LoweredStatement>,
     ) -> AssertShape {
-        let (setup, condition) = self.lower_condition(operand);
-        statements.extend(setup);
+        let ctx = ExpressionContext::value().condition();
+        let failure_condition = if let Expression::Unary {
+            operator: UnaryOperator::Not,
+            expression: negated,
+            ..
+        } = operand
+        {
+            let (setup, condition) = self.plan_operand(negated, ctx).into_parts();
+            statements.extend(setup);
+            wrap_if_struct_literal(condition)
+        } else if matches!(operand, Expression::Binary { .. }) {
+            // `!` binds tighter than `&&` and `||`, so a binary predicate keeps
+            // its parentheses.
+            let (setup, condition) = self.lower_condition(operand);
+            statements.extend(setup);
+            format!("!({condition})")
+        } else {
+            let (setup, condition) = self.plan_unary_not(operand, ctx).into_parts();
+            statements.extend(setup);
+            wrap_if_struct_literal(condition)
+        };
         AssertShape {
-            condition,
+            failure_condition,
             kind: "bare",
             message: "assertion failed".to_string(),
             operands: String::new(),
         }
     }
 
-    /// Capture an `assert` operand into a fresh temp, declared with its inferred
-    /// type so an untyped constant (e.g. a large `uint64` literal) keeps its type.
-    fn stage_assert_operand(
+    /// A name reads the same twice unless the other operand calls something.
+    fn stage_assert_operands(
+        &mut self,
+        left: &Expression,
+        right: &Expression,
+        literals: LiteralInlining,
+        statements: &mut Vec<LoweredStatement>,
+    ) -> (AssertOperand, AssertOperand) {
+        let left_plan = self.lower_value(left, ExpressionContext::value());
+        let right_plan = self.lower_value(right, ExpressionContext::value());
+        let names_inline = left_plan.setup.is_empty()
+            && right_plan.setup.is_empty()
+            && !left_plan.evaluation.effect.has_call()
+            && !right_plan.evaluation.effect.has_call();
+        let left_temp = self.assert_operand_temp_type(left, &left_plan, literals, names_inline);
+        let right_temp = self.assert_operand_temp_type(right, &right_plan, literals, names_inline);
+        let lhs = self.bind_assert_operand(left, left_plan, "assertLeft", left_temp, statements);
+        let rhs =
+            self.bind_assert_operand(right, right_plan, "assertRight", right_temp, statements);
+        (lhs, rhs)
+    }
+
+    /// The Go type to declare an operand's temp with, or `None` to render the
+    /// operand twice instead.
+    fn assert_operand_temp_type(
         &mut self,
         expression: &Expression,
+        plan: &ValuePlan,
+        literals: LiteralInlining,
+        names_inline: bool,
+    ) -> Option<String> {
+        let go_type = self.go_type_string(&expression.get_type());
+        let inlines = plan.setup.is_empty()
+            && match plan.evaluation.form {
+                OperandForm::Name => names_inline,
+                _ => {
+                    matches!(literals, LiteralInlining::Allowed)
+                        && constant_default_go_type(expression) == Some(go_type.as_str())
+                }
+            };
+        (!inlines).then_some(go_type)
+    }
+
+    fn bind_assert_operand(
+        &mut self,
+        expression: &Expression,
+        plan: ValuePlan,
         hint: &str,
+        temp_type: Option<String>,
         statements: &mut Vec<LoweredStatement>,
-    ) -> String {
-        let (setup, value) = self
-            .lower_value(expression, ExpressionContext::value())
-            .into_parts();
+    ) -> AssertOperand {
+        let (setup, value) = plan.into_parts();
         statements.extend(setup);
+        let Some(go_type) = temp_type else {
+            return AssertOperand {
+                expression: expression.clone(),
+                rendered: value,
+            };
+        };
         let name = self.fresh_var(Some(hint));
         self.declare(&name);
         // Bind the temp to itself so the relation shape's synthetic identifier resolves.
         self.scope.bind(name.clone(), name.clone());
-        let go_type = self.go_type_string(&expression.get_type());
-        statements.push(LoweredStatement::VarDecl {
-            name: name.clone(),
-            go_type,
-            value: Some(value),
+        // Under `:=` a Go constant may take its own default type, so a large
+        // `uint64` literal would come back as an overflowing `int`.
+        statements.push(if self.is_go_constant_expression(expression) {
+            LoweredStatement::VarDecl {
+                name: name.clone(),
+                go_type,
+                value: Some(value),
+            }
+        } else {
+            LoweredStatement::TempBind {
+                name: name.clone(),
+                value,
+            }
         });
-        name
+        AssertOperand {
+            expression: temp_identifier(&name, expression),
+            rendered: name,
+        }
     }
 
     /// A `recv.equals(arg)` whose receiver has an `equals` the compiler can lower
@@ -1038,13 +1126,49 @@ impl Planner<'_> {
     }
 }
 
-/// The lowered pieces of an `assert`: the boolean condition, the record kind,
-/// and any `, Operand{...}` arguments appended to the failure call.
+/// The lowered pieces of an `assert`: the condition under which it fails, the
+/// record kind, and any `, Operand{...}` arguments appended to the failure call.
 struct AssertShape {
-    condition: String,
+    failure_condition: String,
     kind: &'static str,
     message: String,
     operands: String,
+}
+
+/// An `assert` operand: the expression the test reads, and the Go text the
+/// failure call reports.
+struct AssertOperand {
+    expression: Expression,
+    rendered: String,
+}
+
+/// The equals lowering can read its left operand as a method receiver, where a
+/// bare literal is not valid Go.
+#[derive(Clone, Copy)]
+enum LiteralInlining {
+    Allowed,
+    Denied,
+}
+
+/// The Go type an operand takes on its own when it emits as an untyped
+/// constant. `None` for anything typed, or whose default is not knowable here.
+fn constant_default_go_type(expression: &Expression) -> Option<&'static str> {
+    match expression {
+        Expression::Paren { expression, .. }
+        | Expression::Unary {
+            operator: UnaryOperator::Negative,
+            expression,
+            ..
+        } => constant_default_go_type(expression),
+        Expression::Literal { literal, .. } => match literal {
+            Literal::Integer { .. } => Some("int"),
+            Literal::Float { .. } => Some("float64"),
+            Literal::String { .. } => Some("string"),
+            Literal::Boolean(_) => Some("bool"),
+            _ => None,
+        },
+        _ => None,
+    }
 }
 
 fn paired_operands(lhs: &str, rhs: &str) -> String {

@@ -8597,6 +8597,123 @@ fn assert_lowers_to_decomposed_failure_call() {
     );
 }
 
+fn compile_test_source(source: &str) -> String {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        "import \"math\"\n\nfn main() {\n  let _ = math.add(1, 2)\n}",
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file("math", "core.test.lis", source);
+
+    compile_project_files_with_tests(fs, "github.com/user/p", false, true)
+        .iter()
+        .find(|f| f.name.ends_with("core_test.go"))
+        .expect("expected a core_test.go output")
+        .to_go()
+}
+
+#[test]
+fn assert_relation_reads_local_and_literal_operands_directly() {
+    let go = compile_test_source(
+        "#[test]\nfn totals() {\n  let result = add(40, 60)\n  assert result == 100\n}",
+    );
+
+    assert!(
+        go.contains("if result != 100 {"),
+        "operands safe to read twice must be compared in place, got:\n{go}"
+    );
+    assert!(
+        !go.contains("assertLeft"),
+        "an `assert` over such operands must bind no temps, got:\n{go}"
+    );
+    assert!(
+        go.contains("lisette.Debug(result)") && go.contains("lisette.Debug(100)"),
+        "the failure call must report the operands themselves, got:\n{go}"
+    );
+}
+
+#[test]
+fn assert_relation_binds_a_call_operand_with_short_declaration() {
+    let go = compile_test_source("#[test]\nfn smallest() {\n  assert min(3, 1, 2) == 1\n}");
+
+    assert!(
+        go.contains("assertLeft_1 := min(3, 1, 2)"),
+        "a called operand must bind through `:=`, got:\n{go}"
+    );
+    assert!(
+        go.contains("if assertLeft_1 != 1 {"),
+        "the failure test must negate the relation directly, got:\n{go}"
+    );
+}
+
+#[test]
+fn assert_relation_declares_an_imported_constant_operand() {
+    let go = compile_test_source(
+        "import \"go:time\"\n\n#[test]\nfn waits() {\n  let d: time.Duration = time.Second\n  assert d == time.Second\n}",
+    );
+
+    assert!(
+        go.contains("var assertRight_1 time.Duration = time.Second"),
+        "emit does not tell a typed Go constant from an untyped one, so every Go constant keeps its declaration, got:\n{go}"
+    );
+}
+
+#[test]
+fn assert_relation_binds_a_local_beside_a_called_operand() {
+    let go = compile_test_source("#[test]\nfn totals() {\n  let n = 3\n  assert n == add(1, 2)\n}");
+
+    assert!(
+        go.contains("assertLeft_1 := n"),
+        "a local read before a call must keep its temp, got:\n{go}"
+    );
+}
+
+#[test]
+fn assert_ordering_flips_only_where_a_nan_cannot_differ() {
+    let go = compile_test_source(
+        "#[test]\nfn ints() {\n  let a = 1\n  let b = 2\n  assert a < b\n}\n\n#[test]\nfn floats() {\n  let x: float64 = 1.0\n  let y: float64 = 2.0\n  assert x < y\n}",
+    );
+
+    assert!(
+        go.contains("if a >= b {"),
+        "an integer ordering must test the flipped operator, got:\n{go}"
+    );
+    assert!(
+        go.contains("if !(x < y) {"),
+        "a float ordering must keep the negation, got:\n{go}"
+    );
+}
+
+#[test]
+fn assert_bare_predicate_tests_its_negation() {
+    let go = compile_test_source(
+        "#[test]\nfn filled() {\n  let xs = [1, 2]\n  assert !xs.is_empty()\n}",
+    );
+
+    assert!(
+        go.contains("if len(xs) == 0 {"),
+        "a negated predicate must test the predicate itself, got:\n{go}"
+    );
+}
+
+#[test]
+fn assert_bare_predicate_parenthesizes_a_struct_literal() {
+    let go = compile_test_source(
+        "struct Point {\n  x: int,\n}\n\nimpl Point {\n  fn is_origin(self) -> bool { self.x == 0 }\n}\n\n#[test]\nfn origin() {\n  assert Point { x: 0 }.is_origin()\n}",
+    );
+
+    assert!(
+        go.contains("if (!Point{"),
+        "a condition opening with a composite literal must be parenthesized, got:\n{go}"
+    );
+}
+
 #[test]
 fn test_log_in_value_position_keeps_span_arguments() {
     let mut fs = MockFileSystem::new();
@@ -8801,8 +8918,8 @@ fn assert_equals_lowers_to_labeled_failure() {
         .to_go();
 
     assert!(
-        go.contains("\"labeled\"") && go.contains("slices.Equal("),
-        "a `.equals()` assert must lower to a labeled record via `slices.Equal`, got:\n{go}"
+        go.contains("\"labeled\"") && go.contains("if !slices.Equal(xs, ys) {"),
+        "a `.equals()` assert must lower to a labeled record via a negated `slices.Equal`, got:\n{go}"
     );
     assert!(
         go.contains("Label: \"left\"") && go.contains("Label: \"right\""),
