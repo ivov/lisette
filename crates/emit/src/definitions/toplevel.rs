@@ -27,7 +27,7 @@ impl Planner<'_> {
         let declared_target = self
             .facts
             .definition(&self.facts.qualified_current(name))
-            .and_then(|definition| definition.instantiate_alias_target(&params));
+            .and_then(|definition| definition.instantiate_alias_target(&params, false));
         let function_target = declared_target
             .as_ref()
             .and_then(|target| self.facts.resolve_to_function_type(target));

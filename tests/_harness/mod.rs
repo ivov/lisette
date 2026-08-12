@@ -74,11 +74,9 @@ fn register_test_builtins(store: &mut Store) {
     let unknown = Type::Nominal {
         id: "prelude.Unknown".into(),
         params: vec![],
+        writable: false,
     };
-    let unknown_map = Type::Compound {
-        kind: CompoundKind::Map,
-        args: vec![string_type(), unknown.clone()],
-    };
+    let unknown_map = Type::compound(CompoundKind::Map, vec![string_type(), unknown.clone()]);
     let unknown_slice = slice_type(unknown.clone());
 
     define("get_unknown", vec![], unknown.clone());

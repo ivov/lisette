@@ -58,6 +58,7 @@ enum CachedAnnotation {
     Constructor {
         name: EcoString,
         params: Vec<Self>,
+        writable: bool,
         span: CachedSpan,
     },
     Function {
@@ -89,7 +90,13 @@ struct CachedFunctionAnnotationParameter {
 impl CachedAnnotation {
     fn from_annotation(annotation: &Annotation, file_id_to_index: &HashMap<u32, u32>) -> Self {
         match annotation {
-            Annotation::Constructor { name, params, span } => Self::Constructor {
+            Annotation::Constructor {
+                name,
+                params,
+                writable,
+                span,
+            } => Self::Constructor {
+                writable: *writable,
                 name: name.clone(),
                 params: params
                     .iter()
@@ -133,7 +140,13 @@ impl CachedAnnotation {
 
     fn to_annotation(&self, file_ids: &[u32]) -> Annotation {
         match self {
-            Self::Constructor { name, params, span } => Annotation::Constructor {
+            Self::Constructor {
+                name,
+                params,
+                writable,
+                span,
+            } => Annotation::Constructor {
+                writable: *writable,
                 name: name.clone(),
                 params: params
                     .iter()

@@ -30,12 +30,14 @@ pub(super) fn clone_severs_alias(ty: &Type, env: &TypeEnv, store: &Store) -> boo
         Type::Compound {
             kind: CompoundKind::Slice | CompoundKind::EnumeratedSlice,
             args,
+            ..
         } => args
             .first()
             .is_some_and(|elem| element_severed(elem, env, store)),
         Type::Compound {
             kind: CompoundKind::Map,
             args,
+            ..
         } => args
             .get(1)
             .is_some_and(|value| element_severed(value, env, store)),
@@ -54,12 +56,14 @@ fn element_severed(ty: &Type, env: &TypeEnv, store: &Store) -> bool {
         Type::Compound {
             kind: CompoundKind::Slice | CompoundKind::EnumeratedSlice,
             args,
+            ..
         } => args
             .first()
             .is_some_and(|elem| element_severed(elem, env, store)),
         Type::Compound {
             kind: CompoundKind::Map,
             args,
+            ..
         } => args
             .get(1)
             .is_some_and(|value| element_severed(value, env, store)),
@@ -91,7 +95,7 @@ fn can_carry_mutation(
 ) -> bool {
     let resolved = ty.resolve_in(env);
     match &resolved {
-        Type::Compound { kind, args } => match kind {
+        Type::Compound { kind, args, .. } => match kind {
             CompoundKind::Slice | CompoundKind::Map | CompoundKind::EnumeratedSlice => true,
             CompoundKind::Ref
             | CompoundKind::Channel

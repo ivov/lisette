@@ -221,7 +221,9 @@ pub(crate) fn resolve_annotation_definition(
     let recurse = |child| resolve_annotation_definition(child, offset, file, snapshot);
 
     match annotation {
-        Annotation::Constructor { name, span, params } => params
+        Annotation::Constructor {
+            name, span, params, ..
+        } => params
             .iter()
             .find_map(recurse)
             .or_else(|| resolve_constructor_name(name, *span, offset, file, snapshot)),

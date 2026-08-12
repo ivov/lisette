@@ -518,17 +518,20 @@ impl TaskState {
                         Type::Compound {
                             kind: compound,
                             args: params,
+                            writable: false,
                         }
                     } else {
                         Type::Nominal {
                             id: qualified_name.clone(),
                             params,
+                            writable: false,
                         }
                     }
                 } else {
                     Type::Nominal {
                         id: qualified_name.clone(),
                         params,
+                        writable: false,
                     }
                 };
 
@@ -589,6 +592,7 @@ impl TaskState {
         let alias_reference = Type::Nominal {
             id: qualified_name.clone(),
             params,
+            writable: false,
         };
         let alias_ty = if generics.is_empty() {
             alias_reference

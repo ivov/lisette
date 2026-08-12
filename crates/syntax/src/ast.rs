@@ -895,12 +895,13 @@ impl Default for CallTypeArguments {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Annotation {
     Constructor {
         name: EcoString,
         params: Vec<Self>,
+        writable: bool,
         span: Span,
     },
     Function {
@@ -925,11 +926,55 @@ pub enum Annotation {
     },
 }
 
+impl std::fmt::Debug for Annotation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Constructor {
+                name,
+                params,
+                writable,
+                span,
+            } => {
+                let mut s = f.debug_struct("Constructor");
+                s.field("name", name).field("params", params);
+                if *writable {
+                    s.field("writable", writable);
+                }
+                s.field("span", span).finish()
+            }
+            Self::Function {
+                params,
+                return_type,
+                span,
+            } => f
+                .debug_struct("Function")
+                .field("params", params)
+                .field("return_type", return_type)
+                .field("span", span)
+                .finish(),
+            Self::Tuple { elements, span } => f
+                .debug_struct("Tuple")
+                .field("elements", elements)
+                .field("span", span)
+                .finish(),
+            Self::Unknown => write!(f, "Unknown"),
+            Self::Opaque { span } => f.debug_struct("Opaque").field("span", span).finish(),
+            Self::Constant { value, text, span } => f
+                .debug_struct("Constant")
+                .field("value", value)
+                .field("text", text)
+                .field("span", span)
+                .finish(),
+        }
+    }
+}
+
 impl Annotation {
     pub(crate) fn unit() -> Self {
         Self::Constructor {
             name: "Unit".into(),
             params: vec![],
+            writable: false,
             span: Span::dummy(),
         }
     }

@@ -252,6 +252,7 @@ mod tests {
         Type::Nominal {
             id: Symbol::from_raw(id),
             params,
+            writable: false,
         }
     }
 

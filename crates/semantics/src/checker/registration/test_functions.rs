@@ -11,6 +11,7 @@ fn test_context_type() -> Type {
     Type::Nominal {
         id: Symbol::from_parts(crate::prelude::TEST_PRELUDE_PACKAGE_ID, "TestContext"),
         params: vec![],
+        writable: false,
     }
 }
 

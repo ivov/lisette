@@ -230,9 +230,14 @@ pub fn substitute(ty: &Type, map: &HashMap<EcoString, Type>) -> Type {
     }
     match ty {
         Type::Parameter(name) => map.get(name).cloned().unwrap_or_else(|| ty.clone()),
-        Type::Nominal { id, params } => Type::Nominal {
+        Type::Nominal {
+            id,
+            params,
+            writable,
+        } => Type::Nominal {
             id: id.clone(),
             params: params.iter().map(|p| substitute(p, map)).collect(),
+            writable: *writable,
         },
         Type::Function(f) => f.rebuild(
             f.params
@@ -272,10 +277,15 @@ pub fn substitute(ty: &Type, map: &HashMap<EcoString, Type>) -> Type {
             length: *length,
             element: Box::new(substitute(element, map)),
         },
-        Type::Compound { kind, args } => Type::Compound {
-            kind: *kind,
-            args: args.iter().map(|a| substitute(a, map)).collect(),
-        },
+        Type::Compound {
+            kind,
+            args,
+            writable,
+        } => Type::qualified_compound(
+            *kind,
+            args.iter().map(|a| substitute(a, map)).collect(),
+            *writable,
+        ),
         Type::Simple(_) | Type::Never | Type::ImportNamespace(_) | Type::ReceiverPlaceholder => {
             ty.clone()
         }
@@ -393,11 +403,15 @@ pub enum Type {
     Compound {
         kind: CompoundKind,
         args: Vec<Type>,
+        /// Write permission through this reference hop. Only `Slice`, `Map`,
+        /// and `Ref` can carry it.
+        writable: bool,
     },
 
     Nominal {
         id: Symbol,
         params: Vec<Type>,
+        writable: bool,
     },
 
     /// Package namespace handle. Produced by imports (e.g. `import http "net/http"`
@@ -461,11 +475,18 @@ impl std::fmt::Debug for TypePlaceholder {
 impl std::fmt::Debug for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Type::Nominal { id, params, .. } => f
-                .debug_struct("Nominal")
-                .field("id", id)
-                .field("params", params)
-                .finish(),
+            Type::Nominal {
+                id,
+                params,
+                writable,
+            } => {
+                let mut s = f.debug_struct("Nominal");
+                s.field("id", id).field("params", params);
+                if *writable {
+                    s.field("writable", writable);
+                }
+                s.finish()
+            }
             Type::Function(f_ty) => {
                 let mut s = f.debug_struct("Function");
                 s.field("params", &f_ty.params)
@@ -508,11 +529,18 @@ impl std::fmt::Debug for Type {
             }
             Type::ReceiverPlaceholder => write!(f, "ReceiverPlaceholder"),
             Type::Simple(kind) => f.debug_tuple("Simple").field(kind).finish(),
-            Type::Compound { kind, args } => f
-                .debug_struct("Compound")
-                .field("kind", kind)
-                .field("args", args)
-                .finish(),
+            Type::Compound {
+                kind,
+                args,
+                writable,
+            } => {
+                let mut s = f.debug_struct("Compound");
+                s.field("kind", kind).field("args", args);
+                if *writable {
+                    s.field("writable", writable);
+                }
+                s.finish()
+            }
         }
     }
 }
@@ -524,14 +552,14 @@ impl PartialEq for Type {
                 Type::Nominal {
                     id: id1,
                     params: params1,
-                    ..
+                    writable: w1,
                 },
                 Type::Nominal {
                     id: id2,
                     params: params2,
-                    ..
+                    writable: w2,
                 },
-            ) => id1 == id2 && params1 == params2,
+            ) => id1 == id2 && params1 == params2 && w1 == w2,
             (Type::Function(f1), Type::Function(f2)) => f1 == f2,
             (Type::Var { id: id1, .. }, Type::Var { id: id2, .. }) => id1 == id2,
             (Type::Uninferred, Type::Uninferred) | (Type::Ignored, Type::Ignored) => true,
@@ -561,9 +589,18 @@ impl PartialEq for Type {
             (Type::ImportNamespace(m1), Type::ImportNamespace(m2)) => m1 == m2,
             (Type::ReceiverPlaceholder, Type::ReceiverPlaceholder) => true,
             (Type::Simple(k1), Type::Simple(k2)) => k1 == k2,
-            (Type::Compound { kind: k1, args: a1 }, Type::Compound { kind: k2, args: a2 }) => {
-                k1 == k2 && a1 == a2
-            }
+            (
+                Type::Compound {
+                    kind: k1,
+                    args: a1,
+                    writable: w1,
+                },
+                Type::Compound {
+                    kind: k2,
+                    args: a2,
+                    writable: w2,
+                },
+            ) => k1 == k2 && a1 == a2 && w1 == w2,
             _ => false,
         }
     }
@@ -575,7 +612,92 @@ impl Type {
     }
 
     pub fn compound(kind: CompoundKind, args: Vec<Type>) -> Type {
-        Self::Compound { kind, args }
+        Self::qualified_compound(kind, args, false)
+    }
+
+    pub fn qualified_compound(kind: CompoundKind, args: Vec<Type>, writable: bool) -> Type {
+        debug_assert!(
+            !writable || kind.carries_write_permission(),
+            "writable flag is restricted to Slice, Map, and Ref"
+        );
+        let args = if kind.carries_write_permission()
+            && !writable
+            && args.iter().any(Type::contains_write_permission)
+        {
+            args.iter().map(Type::demoted).collect()
+        } else {
+            args
+        };
+        Self::Compound {
+            kind,
+            args,
+            writable,
+        }
+    }
+
+    /// Whether a write permission appears anywhere in this type.
+    fn contains_write_permission(&self) -> bool {
+        match self {
+            Type::Compound { args, writable, .. } => {
+                *writable || args.iter().any(Type::contains_write_permission)
+            }
+            Type::Nominal {
+                params, writable, ..
+            } => *writable || params.iter().any(Type::contains_write_permission),
+            Type::Tuple(elements) => elements.iter().any(Type::contains_write_permission),
+            Type::Array { element, .. } => element.contains_write_permission(),
+            _ => false,
+        }
+    }
+
+    pub fn is_writable(&self) -> bool {
+        matches!(
+            self,
+            Type::Compound { writable: true, .. } | Type::Nominal { writable: true, .. }
+        )
+    }
+
+    pub fn make_writable(self) -> Type {
+        match self {
+            Type::Compound { kind, args, .. } if kind.carries_write_permission() => {
+                Type::qualified_compound(kind, args, true)
+            }
+            Type::Nominal { id, params, .. } => Type::Nominal {
+                id,
+                params,
+                writable: true,
+            },
+            other => other,
+        }
+    }
+
+    pub fn demoted(&self) -> Type {
+        match self {
+            Type::Compound {
+                kind,
+                args,
+                writable: _,
+            } => Type::Compound {
+                kind: *kind,
+                args: args.iter().map(Type::demoted).collect(),
+                writable: false,
+            },
+            Type::Nominal {
+                id,
+                params,
+                writable: _,
+            } => Type::Nominal {
+                id: id.clone(),
+                params: params.iter().map(Type::demoted).collect(),
+                writable: false,
+            },
+            Type::Tuple(elements) => Type::Tuple(elements.iter().map(Type::demoted).collect()),
+            Type::Array { length, element } => Type::Array {
+                length: *length,
+                element: Box::new(element.demoted()),
+            },
+            _ => self.clone(),
+        }
     }
 
     pub fn function(
@@ -667,6 +789,13 @@ pub enum CompoundKind {
 }
 
 impl CompoundKind {
+    pub fn carries_write_permission(self) -> bool {
+        matches!(
+            self,
+            CompoundKind::Slice | CompoundKind::Map | CompoundKind::Ref
+        )
+    }
+
     pub fn leaf_name(self) -> &'static str {
         match self {
             CompoundKind::Ref => "Ref",
@@ -992,7 +1121,7 @@ impl Type {
 
     pub fn as_compound(&self) -> Option<(CompoundKind, &[Type])> {
         match self {
-            Type::Compound { kind, args } => Some((*kind, args.as_slice())),
+            Type::Compound { kind, args, .. } => Some((*kind, args.as_slice())),
             _ => None,
         }
     }
@@ -1238,7 +1367,7 @@ impl Type {
                     element.remove_found_type_names(names);
                 }
             }
-            Type::Compound { kind, args } => {
+            Type::Compound { kind, args, .. } => {
                 names.remove(kind.leaf_name());
                 for arg in args {
                     arg.remove_found_type_names(names);
@@ -1265,7 +1394,7 @@ impl Type {
     pub fn get_name(&self) -> Option<&str> {
         match self {
             Type::Simple(kind) => Some(kind.leaf_name()),
-            Type::Compound { kind, args } => match kind {
+            Type::Compound { kind, args, .. } => match kind {
                 CompoundKind::Ref => args.first().and_then(|inner| inner.get_name()),
                 _ => Some(kind.leaf_name()),
             },
@@ -1373,12 +1502,18 @@ where
 {
     let mut current = ty.unwrap_forall().clone();
     let mut seen: HashSet<Symbol> = HashSet::default();
-    while let Type::Nominal { id, params } = &current {
+    while let Type::Nominal {
+        id,
+        params,
+        writable,
+    } = &current
+    {
+        let writable = *writable;
         if !seen.insert(id.clone()) {
             break;
         }
-        let Some(target) =
-            lookup(id.as_str()).and_then(|definition| definition.instantiate_alias_target(params))
+        let Some(target) = lookup(id.as_str())
+            .and_then(|definition| definition.instantiate_alias_target(params, writable))
         else {
             break;
         };
@@ -1393,10 +1528,15 @@ pub fn underlying_type<'d, F>(ty: &Type, lookup: F) -> Option<Type>
 where
     F: Fn(&str) -> Option<&'d Definition>,
 {
-    let Type::Nominal { id, params } = ty.unwrap_forall() else {
+    let Type::Nominal {
+        id,
+        params,
+        writable,
+    } = ty.unwrap_forall()
+    else {
         return None;
     };
-    lookup(id.as_str())?.instantiate_underlying(params)
+    lookup(id.as_str())?.instantiate_underlying(params, *writable)
 }
 
 /// Follow transparent aliases and newtype fields to their canonical
@@ -1408,12 +1548,18 @@ where
 {
     let mut current = ty.unwrap_forall().clone();
     let mut seen: HashSet<Symbol> = HashSet::default();
-    while let Type::Nominal { id, params } = &current {
+    while let Type::Nominal {
+        id,
+        params,
+        writable,
+    } = &current
+    {
+        let writable = *writable;
         if !seen.insert(id.clone()) {
             break;
         }
-        let Some(underlying) =
-            lookup(id.as_str()).and_then(|definition| definition.instantiate_underlying(params))
+        let Some(underlying) = lookup(id.as_str())
+            .and_then(|definition| definition.instantiate_underlying(params, writable))
         else {
             break;
         };
@@ -1632,12 +1778,14 @@ impl Type {
             Type::Nominal {
                 id: name,
                 params: args,
+                writable,
             } => Type::Nominal {
                 id: name.clone(),
                 params: args
                     .iter()
                     .map(|a| Self::remove_vars_impl(a, vars))
                     .collect(),
+                writable: *writable,
             },
 
             Type::Function(f) => Type::function(
@@ -1675,8 +1823,13 @@ impl Type {
                     .map(|e| Self::remove_vars_impl(e, vars))
                     .collect(),
             ),
-            Type::Compound { kind, args } => Type::Compound {
+            Type::Compound {
+                kind,
+                args,
+                writable,
+            } => Type::Compound {
                 kind: *kind,
+                writable: *writable,
                 args: args
                     .iter()
                     .map(|a| Self::remove_vars_impl(a, vars))

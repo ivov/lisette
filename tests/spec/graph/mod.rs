@@ -837,6 +837,7 @@ fn store_get_definition_domain_style_go_package() {
             ty: syntax::types::Type::Nominal {
                 id: "go:github.com/gorilla/mux.Router".into(),
                 params: vec![],
+                writable: false,
             },
             name_span: Some(syntax::ast::Span::dummy()),
             doc: None,

@@ -140,17 +140,20 @@ impl TaskState {
                     Type::Compound {
                         kind: compound,
                         args,
+                        writable: false,
                     }
                 } else {
                     Type::Nominal {
                         id: qualified_name.clone(),
                         params: args,
+                        writable: false,
                     }
                 }
             } else {
                 Type::Nominal {
                     id: qualified_name.clone(),
                     params: args,
+                    writable: false,
                 }
             };
 

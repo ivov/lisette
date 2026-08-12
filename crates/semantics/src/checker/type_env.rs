@@ -121,15 +121,22 @@ impl TypeEnv {
                     }
                 }
             },
-            Type::Nominal { id, params } => {
-                self.resolve_slice(params).map(|params| Type::Nominal {
-                    id: id.clone(),
-                    params,
-                })
-            }
-            Type::Compound { kind, args } => self
+            Type::Nominal {
+                id,
+                params,
+                writable,
+            } => self.resolve_slice(params).map(|params| Type::Nominal {
+                id: id.clone(),
+                params,
+                writable: *writable,
+            }),
+            Type::Compound {
+                kind,
+                args,
+                writable,
+            } => self
                 .resolve_slice(args)
-                .map(|args| Type::Compound { kind: *kind, args }),
+                .map(|args| Type::qualified_compound(*kind, args, *writable)),
             Type::Function(f) => {
                 let new_params = self.resolve_function_params(&f.params);
                 let new_return = self.resolve_changed(&f.return_type).map(Box::new);

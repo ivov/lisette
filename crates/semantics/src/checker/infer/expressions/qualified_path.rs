@@ -136,11 +136,13 @@ impl InferCtx<'_> {
             return None;
         }
         match store.peel_alias(&definition.ty) {
-            Type::Nominal { id, params } if params.is_empty() && id.as_str() != qualified_root => {
+            Type::Nominal { id, params, .. }
+                if params.is_empty() && id.as_str() != qualified_root =>
+            {
                 Some(id.to_string())
             }
             Type::Simple(kind) => Some(format!("prelude.{}", kind.leaf_name())),
-            Type::Compound { kind, args } if args.is_empty() => {
+            Type::Compound { kind, args, .. } if args.is_empty() => {
                 Some(format!("prelude.{}", kind.leaf_name()))
             }
             _ => None,

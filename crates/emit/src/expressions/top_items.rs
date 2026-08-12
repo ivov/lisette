@@ -170,6 +170,7 @@ impl Planner<'_> {
             ty: Type::Nominal {
                 id: Symbol::from_parts(go_name::TEST_PRELUDE_PACKAGE, "TestContext"),
                 params: vec![],
+                writable: false,
             },
             mut_span: None,
         }])

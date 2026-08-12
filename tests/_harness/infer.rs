@@ -435,6 +435,7 @@ fn is_slice_with_type_var(ty: &Type) -> bool {
         Type::Compound {
             kind: syntax::types::CompoundKind::Slice,
             args,
+            ..
         } => args.len() == 1 && matches!(args[0], Type::Var { .. }),
         _ => false,
     }
@@ -492,8 +493,8 @@ fn types_equal_with(
     }
 
     match (t1, t2) {
-        (Type::Compound { kind, args }, Type::Nominal { id, params, .. })
-        | (Type::Nominal { id, params, .. }, Type::Compound { kind, args }) => {
+        (Type::Compound { kind, args, .. }, Type::Nominal { id, params, .. })
+        | (Type::Nominal { id, params, .. }, Type::Compound { kind, args, .. }) => {
             let leaf = id.rsplit('.').next().unwrap_or("");
             if kind.leaf_name() == leaf && args.len() == params.len() {
                 return args
@@ -519,6 +520,7 @@ fn types_equal_with(
             Type::Nominal {
                 id: id1,
                 params: args1,
+                ..
             },
             Type::Nominal {
                 id: id2,
@@ -558,7 +560,14 @@ fn types_equal_with(
 
         (Type::Simple(k1), Type::Simple(k2)) => k1 == k2,
 
-        (Type::Compound { kind: k1, args: a1 }, Type::Compound { kind: k2, args: a2 }) => {
+        (
+            Type::Compound {
+                kind: k1, args: a1, ..
+            },
+            Type::Compound {
+                kind: k2, args: a2, ..
+            },
+        ) => {
             k1 == k2
                 && a1.len() == a2.len()
                 && a1

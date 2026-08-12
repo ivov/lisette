@@ -1,0 +1,10 @@
+---
+source: tests/spec/parse/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:1:13]
+ 1 │ fn f(x: mut mut Slice<int>) -> int { 0 }
+   ·             ─┬─
+   ·              ╰── duplicate `mut` qualifier
+   ╰────
+  help: Write `mut` once · code: [parse.syntax_error]

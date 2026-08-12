@@ -1,0 +1,11 @@
+---
+source: tests/spec/format/mod.rs
+description: |-
+  struct Batch { items: mut Slice<int>, tags: Slice<string> }
+  fn fill(data: mut Slice<int>) -> mut Slice<int> { data }
+---
+struct Batch { items: mut Slice<int>, tags: Slice<string> }
+
+fn fill(data: mut Slice<int>) -> mut Slice<int> {
+  data
+}

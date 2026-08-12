@@ -76,6 +76,7 @@ pub(crate) fn type_name(ty: &Type, snapshot: &AnalysisSnapshot) -> Option<String
         Type::Compound {
             kind: CompoundKind::Ref,
             args,
+            ..
         } => args.first().and_then(|ty| type_name(ty, snapshot)),
         Type::Compound { kind, .. } => Some(format!("prelude.{}", kind.leaf_name())),
         Type::Simple(kind) => Some(format!("prelude.{}", kind.leaf_name())),

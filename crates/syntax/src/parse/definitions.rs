@@ -523,8 +523,8 @@ impl<'source> Parser<'source> {
 
         if self.is(Mut) {
             self.track_error(
-                "fields cannot be marked `mut`",
-                "Fields cannot be marked `mut`; mutability applies to bindings (`let mut x = ...`).",
+                "`mut` goes on the field's type",
+                "Write the permission in the type, as in `items: mut Slice<int>`.",
             );
             self.next();
         }

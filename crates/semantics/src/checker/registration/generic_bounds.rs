@@ -76,6 +76,7 @@ impl TaskState {
             && let Type::Compound {
                 kind: CompoundKind::Map,
                 args,
+                ..
             } = ty
             && let Some(key) = args.first()
         {

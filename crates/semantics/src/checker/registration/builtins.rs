@@ -44,10 +44,7 @@ impl TaskState {
     }
 
     pub(crate) fn type_slice(&mut self, element_type: Type) -> Type {
-        Type::Compound {
-            kind: CompoundKind::Slice,
-            args: vec![element_type],
-        }
+        Type::compound(CompoundKind::Slice, vec![element_type])
     }
 
     pub(crate) fn type_array(&mut self, length: u64, element_type: Type) -> Type {
@@ -58,23 +55,18 @@ impl TaskState {
     }
 
     pub(crate) fn type_reference(&mut self, inner_type: Type) -> Type {
-        Type::Compound {
-            kind: CompoundKind::Ref,
-            args: vec![inner_type],
-        }
+        Type::compound(CompoundKind::Ref, vec![inner_type])
     }
 
     pub(crate) fn type_map(&mut self, key_type: Type, value_type: Type) -> Type {
-        Type::Compound {
-            kind: CompoundKind::Map,
-            args: vec![key_type, value_type],
-        }
+        Type::compound(CompoundKind::Map, vec![key_type, value_type])
     }
 
     pub(crate) fn type_result(&mut self, store: &Store, ok_type: Type, error_type: Type) -> Type {
         Type::Nominal {
             id: self.builtin_qualified_name(store, "Result"),
             params: vec![ok_type, error_type],
+            writable: false,
         }
     }
 
@@ -82,6 +74,7 @@ impl TaskState {
         Type::Nominal {
             id: self.builtin_qualified_name(store, "Option"),
             params: vec![some_type],
+            writable: false,
         }
     }
 
@@ -89,6 +82,7 @@ impl TaskState {
         Type::Nominal {
             id: self.builtin_qualified_name(store, "PanicValue"),
             params: vec![],
+            writable: false,
         }
     }
 
@@ -96,6 +90,7 @@ impl TaskState {
         Type::Nominal {
             id: self.builtin_qualified_name(store, "Range"),
             params: vec![element_type],
+            writable: false,
         }
     }
 
@@ -103,6 +98,7 @@ impl TaskState {
         Type::Nominal {
             id: self.builtin_qualified_name(store, "RangeInclusive"),
             params: vec![element_type],
+            writable: false,
         }
     }
 
@@ -110,6 +106,7 @@ impl TaskState {
         Type::Nominal {
             id: self.builtin_qualified_name(store, "RangeFrom"),
             params: vec![element_type],
+            writable: false,
         }
     }
 
@@ -117,6 +114,7 @@ impl TaskState {
         Type::Nominal {
             id: self.builtin_qualified_name(store, "RangeTo"),
             params: vec![element_type],
+            writable: false,
         }
     }
 
@@ -124,6 +122,7 @@ impl TaskState {
         Type::Nominal {
             id: self.builtin_qualified_name(store, "RangeToInclusive"),
             params: vec![element_type],
+            writable: false,
         }
     }
 

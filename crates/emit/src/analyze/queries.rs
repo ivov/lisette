@@ -188,6 +188,7 @@ impl Planner<'_> {
         let nominal = Type::Nominal {
             id: id.into(),
             params: Vec::new(),
+            writable: false,
         };
         self.facts
             .peel_alias(&nominal)

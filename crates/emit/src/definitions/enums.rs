@@ -246,6 +246,7 @@ impl Planner<'_> {
 
         let return_type = Type::Nominal {
             id: Symbol::from_raw(enum_name.clone()),
+            writable: false,
             params: generics
                 .iter()
                 .map(|g| Type::Parameter(g.name.clone()))

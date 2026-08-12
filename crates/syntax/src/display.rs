@@ -33,6 +33,15 @@ impl Type {
     }
 
     fn stringify_as(&self, qualifier: Qualifier) -> String {
+        let body = self.stringify_body(qualifier);
+        if self.is_writable() {
+            format!("mut {}", body)
+        } else {
+            body
+        }
+    }
+
+    fn stringify_body(&self, qualifier: Qualifier) -> String {
         match self {
             Type::Nominal {
                 id, params: args, ..
@@ -139,7 +148,7 @@ impl Type {
                 _ => kind.leaf_name().to_string(),
             },
 
-            Type::Compound { kind, args } => {
+            Type::Compound { kind, args, .. } => {
                 let args_formatted = args
                     .iter()
                     .map(|a| a.stringify_as(qualifier))

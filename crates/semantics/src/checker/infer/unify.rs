@@ -222,9 +222,14 @@ impl InferCtx<'_> {
                 }
             }
 
-            (Type::Compound { kind: k1, args: a1 }, Type::Compound { kind: k2, args: a2 })
-                if k1 == k2 && a1.len() == a2.len() =>
-            {
+            (
+                Type::Compound {
+                    kind: k1, args: a1, ..
+                },
+                Type::Compound {
+                    kind: k2, args: a2, ..
+                },
+            ) if k1 == k2 && a1.len() == a2.len() => {
                 // Compound type arguments are invariant (same rule as generic
                 // user types). Track depth so that interface coercion is
                 // rejected inside generic positions.

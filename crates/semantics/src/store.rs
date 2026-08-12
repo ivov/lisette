@@ -473,10 +473,15 @@ impl Store {
 
     pub(crate) fn peel_alias_deep(&self, ty: &Type) -> Type {
         match self.peel_alias(ty) {
-            Type::Compound { kind, args } => Type::Compound {
+            Type::Compound {
                 kind,
-                args: args.iter().map(|a| self.peel_alias_deep(a)).collect(),
-            },
+                args,
+                writable,
+            } => Type::qualified_compound(
+                kind,
+                args.iter().map(|a| self.peel_alias_deep(a)).collect(),
+                writable,
+            ),
             Type::Tuple(elements) => {
                 Type::Tuple(elements.iter().map(|e| self.peel_alias_deep(e)).collect())
             }
@@ -484,9 +489,14 @@ impl Store {
                 length,
                 element: Box::new(self.peel_alias_deep(&element)),
             },
-            Type::Nominal { id, params } => Type::Nominal {
+            Type::Nominal {
+                id,
+                params,
+                writable,
+            } => Type::Nominal {
                 id,
                 params: params.iter().map(|p| self.peel_alias_deep(p)).collect(),
+                writable,
             },
             Type::Function(f) => {
                 let new_params = f
@@ -666,6 +676,7 @@ mod closed_domain_tests {
         Type::Nominal {
             id: Symbol::from_raw(id),
             params: vec![],
+            writable: false,
         }
     }
 
@@ -823,6 +834,7 @@ mod closed_domain_tests {
         let alias_ref = Type::Nominal {
             id: Symbol::from_raw("m.Items"),
             params: vec![Type::Parameter("T".into())],
+            writable: false,
         };
         insert(
             &mut store,
@@ -843,6 +855,7 @@ mod closed_domain_tests {
                         target: Type::Compound {
                             kind: CompoundKind::Slice,
                             args: vec![Type::Parameter("T".into())],
+                            writable: false,
                         },
                     },
                     methods: Default::default(),
@@ -854,13 +867,171 @@ mod closed_domain_tests {
         let occurrence = Type::Nominal {
             id: Symbol::from_raw("m.Items"),
             params: vec![Type::int()],
+            writable: false,
         };
         let expected = Type::Compound {
             kind: CompoundKind::Slice,
             args: vec![Type::int()],
+            writable: false,
         };
 
         assert_eq!(store.underlying_type(&occurrence), Some(expected.clone()));
+        assert_eq!(store.peel_alias(&occurrence), expected);
+    }
+
+    #[test]
+    fn alias_peeling_transfers_the_occurrence_qualifier() {
+        let mut store = Store::new();
+        insert(
+            &mut store,
+            "m",
+            "m.Bytes",
+            Definition {
+                visibility: Visibility::Public,
+                ty: Type::Nominal {
+                    id: Symbol::from_raw("m.Bytes"),
+                    params: vec![],
+                    writable: false,
+                },
+                name_span: None,
+                doc: None,
+                body: DefinitionBody::TypeAlias {
+                    generics: vec![],
+                    alias: AliasKind::Transparent {
+                        annotation: Annotation::Unknown,
+                        target: Type::compound(CompoundKind::Slice, vec![Type::int()]),
+                    },
+                    methods: Default::default(),
+                    attributes: Default::default(),
+                },
+            },
+        );
+
+        let writable_occurrence = Type::Nominal {
+            id: Symbol::from_raw("m.Bytes"),
+            params: vec![],
+            writable: true,
+        };
+        let expected = Type::qualified_compound(CompoundKind::Slice, vec![Type::int()], true);
+        assert_eq!(store.peel_alias(&writable_occurrence), expected);
+        assert_eq!(store.underlying_type(&writable_occurrence), Some(expected));
+
+        let plain_occurrence = Type::Nominal {
+            id: Symbol::from_raw("m.Bytes"),
+            params: vec![],
+            writable: false,
+        };
+        assert!(!store.peel_alias(&plain_occurrence).is_writable());
+    }
+
+    #[test]
+    fn newtype_underlying_applies_the_projection_meet() {
+        fn newtype_wrapping(name: &str, field_ty: Type) -> Definition {
+            Definition {
+                visibility: Visibility::Public,
+                ty: nominal_int(name),
+                name_span: None,
+                doc: None,
+                body: DefinitionBody::Struct {
+                    generics: vec![],
+                    fields: StructFields::Tuple(vec![StructFieldDefinition {
+                        doc: None,
+                        name: "0".into(),
+                        name_span: syntax::ast::Span::dummy(),
+                        annotation: syntax::ast::Annotation::Unknown,
+                        visibility: syntax::ast::Visibility::Private,
+                        ty: field_ty,
+                        kind: StructFieldKind::Named { attributes: vec![] },
+                    }]),
+                    methods: Default::default(),
+                    attributes: Default::default(),
+                },
+            }
+        }
+
+        let writable_slice = Type::qualified_compound(CompoundKind::Slice, vec![Type::int()], true);
+        let plain_slice = Type::compound(CompoundKind::Slice, vec![Type::int()]);
+
+        let mut store = Store::new();
+        insert(
+            &mut store,
+            "m",
+            "m.Writable",
+            newtype_wrapping("m.Writable", writable_slice.clone()),
+        );
+        insert(
+            &mut store,
+            "m",
+            "m.Plain",
+            newtype_wrapping("m.Plain", plain_slice.clone()),
+        );
+
+        let occurrence = |id: &str, writable: bool| Type::Nominal {
+            id: Symbol::from_raw(id),
+            params: vec![],
+            writable,
+        };
+
+        // Writable owner exposes the field as declared.
+        assert_eq!(
+            store.peel_underlying(&occurrence("m.Writable", true)),
+            writable_slice,
+        );
+        // Read-only owner demotes a writable field.
+        assert_eq!(
+            store.peel_underlying(&occurrence("m.Writable", false)),
+            plain_slice,
+        );
+        // Writable owner never promotes a read-only field.
+        assert_eq!(
+            store.peel_underlying(&occurrence("m.Plain", true)),
+            plain_slice,
+        );
+    }
+
+    #[test]
+    fn generic_alias_peeling_keeps_writable_type_arguments() {
+        let mut store = Store::new();
+        let generic = Generic::new("T", Vec::new(), Span::dummy());
+        let alias_ref = Type::Nominal {
+            id: Symbol::from_raw("m.Rows"),
+            params: vec![Type::Parameter("T".into())],
+            writable: false,
+        };
+        insert(
+            &mut store,
+            "m",
+            "m.Rows",
+            Definition {
+                visibility: Visibility::Public,
+                ty: Type::Forall {
+                    vars: vec!["T".into()],
+                    body: Box::new(alias_ref),
+                },
+                name_span: None,
+                doc: None,
+                body: DefinitionBody::TypeAlias {
+                    generics: vec![generic],
+                    alias: AliasKind::Transparent {
+                        annotation: Annotation::Unknown,
+                        target: Type::compound(
+                            CompoundKind::Slice,
+                            vec![Type::Parameter("T".into())],
+                        ),
+                    },
+                    methods: Default::default(),
+                    attributes: Default::default(),
+                },
+            },
+        );
+
+        let writable_arg = Type::qualified_compound(CompoundKind::Slice, vec![Type::int()], true);
+        let occurrence = Type::Nominal {
+            id: Symbol::from_raw("m.Rows"),
+            params: vec![writable_arg.clone()],
+            writable: true,
+        };
+        let expected = Type::qualified_compound(CompoundKind::Slice, vec![writable_arg], true);
         assert_eq!(store.peel_alias(&occurrence), expected);
     }
 
@@ -893,6 +1064,7 @@ mod closed_domain_tests {
                         target: Type::Compound {
                             kind: CompoundKind::Ref,
                             args: vec![nominal_int(target)],
+                            writable: false,
                         },
                     },
                     methods: Default::default(),

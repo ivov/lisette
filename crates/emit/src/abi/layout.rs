@@ -443,6 +443,7 @@ impl Planner<'_> {
             Type::Compound {
                 kind: CompoundKind::Ref,
                 args,
+                ..
             } => {
                 let Some(pointee) = args.first() else {
                     return ValueLayout::Plain(ty);
@@ -459,6 +460,7 @@ impl Planner<'_> {
             Type::Compound {
                 kind: kind @ (CompoundKind::Slice | CompoundKind::EnumeratedSlice),
                 args,
+                ..
             } => {
                 let Some(element) = args.first() else {
                     return ValueLayout::Plain(ty);
@@ -475,6 +477,7 @@ impl Planner<'_> {
             Type::Compound {
                 kind: CompoundKind::Map,
                 args,
+                ..
             } => {
                 let [key, value] = args.as_slice() else {
                     return ValueLayout::Plain(ty);
@@ -597,7 +600,7 @@ fn compound_hint(
     expected_kind: CompoundKind,
     index: usize,
 ) -> Option<&Type> {
-    let Type::Compound { kind, args } = declaration? else {
+    let Type::Compound { kind, args, .. } = declaration? else {
         return None;
     };
     (*kind == expected_kind).then(|| args.get(index)).flatten()

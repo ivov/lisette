@@ -41,17 +41,11 @@ pub fn unit_type() -> Type {
 }
 
 pub fn slice_type(inner: Type) -> Type {
-    Type::Compound {
-        kind: CompoundKind::Slice,
-        args: vec![inner],
-    }
+    Type::compound(CompoundKind::Slice, vec![inner])
 }
 
 pub fn ref_type(inner: Type) -> Type {
-    Type::Compound {
-        kind: CompoundKind::Ref,
-        args: vec![inner],
-    }
+    Type::compound(CompoundKind::Ref, vec![inner])
 }
 
 pub fn tuple_type(types: Vec<Type>) -> Type {
@@ -69,6 +63,7 @@ pub fn con_type(name: &str, args: Vec<Type>) -> Type {
     Type::Nominal {
         id: format!("_entry_.{}", name).into(),
         params: args,
+        writable: false,
     }
 }
 

@@ -161,6 +161,7 @@ impl Planner<'_> {
         let interface_ty = Type::Nominal {
             id: id.into(),
             params: vec![],
+            writable: false,
         };
         interface_requirements(&interface_ty, |id| self.facts.definition(id))
             .iter()

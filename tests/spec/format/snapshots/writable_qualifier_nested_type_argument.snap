@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "fn rows(data: mut Slice<mut Slice<int>>) -> int { 0 }"
+---
+fn rows(data: mut Slice<mut Slice<int>>) -> int {
+  0
+}
