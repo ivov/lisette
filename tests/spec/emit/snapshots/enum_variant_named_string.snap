@@ -49,11 +49,9 @@ type ASTNode struct {
 func visit(node ASTNode) string {
 	switch node.Tag {
 	case ASTNodeNumber:
-		n := node.Number
-		return fmt.Sprintf("number:%d", n)
+		return fmt.Sprintf("number:%d", node.Number)
 	case ASTNodeString:
-		s := node.ASTNodeString_
-		return fmt.Sprintf("string:%s", s)
+		return fmt.Sprintf("string:%s", node.ASTNodeString_)
 	default:
 		return "null"
 	}

@@ -20,20 +20,13 @@ import "fmt"
 
 func main() {
 	for i := 0; i < 10; i++ {
-	match_1:
-		for {
-			{
-				if i < 5 {
-					fmt.Println("low")
-					break match_1
-				}
-			}
-			if i == 5 {
-				fmt.Println("five")
-			} else {
-				fmt.Println("high")
-			}
-			break match_1
+		switch {
+		case i < 5:
+			fmt.Println("low")
+		case i == 5:
+			fmt.Println("five")
+		default:
+			fmt.Println("high")
 		}
 	}
 }

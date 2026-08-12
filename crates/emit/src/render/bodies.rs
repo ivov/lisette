@@ -65,6 +65,7 @@ impl Renderer {
     /// `case`/`default:` plus body, the closing brace, and any postlude.
     fn render_switch(&self, output: &mut String, plan: &SwitchStatementPlan) {
         match &plan.kind {
+            SwitchKind::Conditional => output.push_str("switch {\n"),
             SwitchKind::Value { subject } => write_line!(output, "switch {} {{", subject),
             SwitchKind::Type {
                 subject,

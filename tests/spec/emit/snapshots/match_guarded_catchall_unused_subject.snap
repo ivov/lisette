@@ -24,13 +24,7 @@ func mk() P {
 
 func test() {
 	_ = mk()
-match_2:
-	for {
-		if false {
-			break match_2
-		}
-		{
-			break match_2
-		}
+	switch {
+	case false:
 	}
 }

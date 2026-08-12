@@ -1,4 +1,4 @@
-use syntax::ast::{Expression, SelectArm};
+use syntax::ast::{Expression, FormatStringPart, Literal, SelectArm};
 
 use crate::patterns::binding_decls::pattern_binds_name;
 
@@ -141,8 +141,17 @@ impl<'a> Walker<'a> {
                     self.record_use(ctx);
                 }
             }
-            Expression::Literal { .. }
-            | Expression::Unit { .. }
+            Expression::Literal { literal, .. } => {
+                if let Literal::FormatString(parts) = literal {
+                    for part in parts {
+                        if let FormatStringPart::Expression(expression) = part {
+                            self.walk(expression, ctx);
+                        }
+                    }
+                    self.barriers_seen += 1;
+                }
+            }
+            Expression::Unit { .. }
             | Expression::Break { value: None, .. }
             | Expression::Continue { .. } => {}
 

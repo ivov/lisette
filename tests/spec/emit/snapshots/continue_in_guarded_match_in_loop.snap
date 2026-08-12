@@ -17,20 +17,12 @@ package main
 
 func sumPositives(items []int) int {
 	sum := 0
-loop_1:
 	for _, item := range items {
-	match_1:
-		for {
-			{
-				n := item
-				if n > 0 {
-					sum += n
-					break match_1
-				}
-			}
-			{
-				continue loop_1
-			}
+		switch {
+		case item > 0:
+			sum += item
+		default:
+			continue
 		}
 	}
 	return sum

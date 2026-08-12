@@ -19,20 +19,13 @@ import "fmt"
 
 func test(x int) string {
 	var result string
-match_1:
-	for {
-		{
-			n := x
-			if n < 10 {
-				result_2 := n * n
-				result = fmt.Sprintf("small(%d)", result_2)
-				break match_1
-			}
-		}
-		{
-			result = "other"
-			break match_1
-		}
+	switch {
+	case x < 10:
+		n := x
+		result_1 := n * n
+		result = fmt.Sprintf("small(%d)", result_1)
+	default:
+		result = "other"
 	}
 	return result
 }

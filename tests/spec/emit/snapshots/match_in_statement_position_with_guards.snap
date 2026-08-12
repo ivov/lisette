@@ -22,18 +22,12 @@ import (
 
 func test() {
 	result := lisette.MakeResultOk[int, string](42)
-match_1:
-	for {
-		if result.Tag == lisette.ResultOk {
-			if result.OkVal > 0 {
-				fmt.Printf("positive: %d\n", result.OkVal)
-				break match_1
-			}
-			fmt.Printf("non-positive: %d\n", result.OkVal)
-			break match_1
-		}
-		e := result.ErrVal
-		fmt.Printf("error: %s\n", e)
-		break match_1
+	switch {
+	case result.Tag == lisette.ResultOk && result.OkVal > 0:
+		fmt.Printf("positive: %d\n", result.OkVal)
+	case result.Tag == lisette.ResultOk:
+		fmt.Printf("non-positive: %d\n", result.OkVal)
+	default:
+		fmt.Printf("error: %s\n", result.ErrVal)
 	}
 }

@@ -20,15 +20,7 @@ type P struct {
 func test() {
 	p := P{v: 1}
 	_ = p
-match_1:
-	for {
-		{
-			if false {
-				break match_1
-			}
-		}
-		{
-			break match_1
-		}
+	switch {
+	case false:
 	}
 }

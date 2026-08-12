@@ -293,8 +293,11 @@ pub(crate) struct SwitchStatementPlan {
 }
 
 pub(crate) enum SwitchKind {
+    Conditional,
     /// `switch <subject> {`
-    Value { subject: String },
+    Value {
+        subject: String,
+    },
     /// `switch <binding> := <subject>.(type) {` when `binding` is set,
     /// otherwise `switch <subject>.(type) {`.
     Type {

@@ -41,20 +41,8 @@ type E struct {
 
 func test() {
 	e := MakeEC()
-match_1:
-	for {
-		if e.Tag == EA {
-			if false {
-				break match_1
-			}
-		}
-		if e.Tag == EB {
-			if false {
-				break match_1
-			}
-		}
-		{
-			break match_1
-		}
+	switch {
+	case e.Tag == EA && false:
+	case e.Tag == EB && false:
 	}
 }

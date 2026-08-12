@@ -24,10 +24,6 @@ func test() string {
 	s := "original"
 	pair := lisette.MakeTuple2[int, string](100, "replaced")
 	var r string
-	{
-		n_1 := pair.First
-		s_2 := pair.Second
-		r = fmt.Sprintf("%d-%s", n_1, s_2)
-	}
+	r = fmt.Sprintf("%d-%s", pair.First, pair.Second)
 	return fmt.Sprintf("%d %s %s", n, s, r)
 }
