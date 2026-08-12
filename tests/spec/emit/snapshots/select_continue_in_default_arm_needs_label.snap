@@ -33,7 +33,7 @@ func main() {
 	ch := make(chan int, 1)
 	skipped := 0
 loop_1:
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		if i == 1 {
 			_ = lisette.ChannelSend(ch, 7)
 		}

@@ -43,7 +43,7 @@ loop_1:
 			select {
 			case _, ok := <-ch_1:
 				if ok {
-					for i := 0; i < 2; i++ {
+					for i := range 2 {
 						if i == 0 {
 							continue
 						}

@@ -23,7 +23,7 @@ func makeBound() int {
 func main() {
 	sum := 0
 	_bound_1 := makeBound()
-	for i := 0; i < _bound_1; i++ {
+	for i := range _bound_1 {
 		sum += i
 	}
 	_bound_1_2 := 7

@@ -1014,6 +1014,81 @@ fn main() {
 }
 
 #[test]
+fn run_counted_loops_iterate_from_zero_up_to_the_bound() {
+    if !go_available() {
+        eprintln!("skipping run_counted_loops_iterate_from_zero_up_to_the_bound: `go` not found");
+        return;
+    }
+
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    let invocation = scratch.path().join("invocation");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::create_dir_all(&invocation).unwrap();
+
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"counted\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        r#"import "go:fmt"
+
+fn counted(n: int) -> int {
+  let mut sum = 0
+  for i in 0..n {
+    sum += i
+  }
+  sum
+}
+
+fn repeats(n: int) -> int {
+  let mut count = 0
+  for _ in 0..n {
+    count += 1
+  }
+  count
+}
+
+fn inclusive() -> int {
+  let mut sum = 0
+  for i in 0..=3 {
+    sum += i
+  }
+  sum
+}
+
+fn breaks() -> int {
+  let mut last = -1
+  for i in 0..10 {
+    if i == 4 { break }
+    last = i
+  }
+  last
+}
+
+fn main() {
+  fmt.Println(counted(4), counted(0), counted(-3))
+  fmt.Println(repeats(3), repeats(-1))
+  fmt.Println(inclusive(), breaks())
+}
+"#,
+    )
+    .unwrap();
+
+    let output = lis_run(&project, &invocation, &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "lis run failed:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+    assert_eq!(stdout.trim(), "6 0 0\n3 0\n6 3", "stderr: {stderr}");
+}
+
+#[test]
 fn run_equality_matching_parametrized_interface_bound_builds() {
     if !go_available() {
         eprintln!(

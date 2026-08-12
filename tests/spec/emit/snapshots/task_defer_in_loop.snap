@@ -21,7 +21,7 @@ import "sync"
 
 func test() {
 	wg := sync.WaitGroup{}
-	for _i_1 := 0; _i_1 < 5; _i_1++ {
+	for range 5 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
