@@ -483,6 +483,11 @@ impl<'a> Planner<'a> {
         self.scope.is_go_name_declared(go_name)
     }
 
+    /// Whether an enclosing branch already tested this exact condition.
+    fn is_condition_established(&self, condition: &str) -> bool {
+        self.scope.is_condition_established(condition)
+    }
+
     /// Unconditionally marks `go_name` as declared in the current block.
     fn declare(&mut self, go_name: &str) {
         self.scope.declare_go_name(go_name);

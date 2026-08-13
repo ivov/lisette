@@ -142,7 +142,7 @@ pub(crate) enum Check {
 }
 
 impl Check {
-    fn render(&self, subject: &str) -> String {
+    pub(crate) fn render(&self, subject: &str) -> String {
         match self {
             Check::EnumTag {
                 path, tag_constant, ..

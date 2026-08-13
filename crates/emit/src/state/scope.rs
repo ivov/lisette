@@ -18,10 +18,13 @@ pub(crate) struct ScopeState {
     assign_targets: HashSet<String>,
     /// Go identifiers referenced during lowering, for structural liveness.
     use_frames: Vec<HashSet<String>>,
+    /// Conditions the branch being lowered has already tested, per block.
+    established: Vec<Vec<String>>,
 }
 
 pub(crate) struct IsolatedFunctionFrame {
     declared: Vec<HashSet<String>>,
+    established: Vec<Vec<String>>,
 }
 
 impl ScopeState {
@@ -37,6 +40,7 @@ impl ScopeState {
             test_handle_stack: Vec::new(),
             assign_targets: HashSet::default(),
             use_frames: Vec::new(),
+            established: vec![Vec::new()],
         }
     }
 
@@ -68,6 +72,8 @@ impl ScopeState {
         self.bindings.reset();
         self.declared.clear();
         self.declared.push(HashSet::default());
+        self.established.clear();
+        self.established.push(Vec::new());
         self.type_param_go_names.clear();
     }
 
@@ -164,18 +170,37 @@ impl ScopeState {
     pub(crate) fn enter_block(&mut self) {
         self.bindings.save();
         self.declared.push(HashSet::default());
+        self.established.push(Vec::new());
     }
 
     pub(crate) fn exit_block(&mut self) {
         self.bindings.restore();
         pop_keep_base(&mut self.declared);
+        pop_keep_base(&mut self.established);
+    }
+
+    /// Record that the block being lowered runs only when `condition` holds.
+    pub(crate) fn establish_condition(&mut self, condition: String) {
+        self.established
+            .last_mut()
+            .expect("scope state always retains an established frame")
+            .push(condition);
+    }
+
+    pub(crate) fn is_condition_established(&self, condition: &str) -> bool {
+        self.established
+            .iter()
+            .flatten()
+            .any(|established| established == condition)
     }
 
     pub(crate) fn enter_isolated_function(&mut self) -> IsolatedFunctionFrame {
         let saved = IsolatedFunctionFrame {
             declared: std::mem::take(&mut self.declared),
+            established: std::mem::take(&mut self.established),
         };
         self.declared = vec![self.type_param_go_names.clone()];
+        self.established = vec![Vec::new()];
         self.bindings.save();
         saved
     }
@@ -183,6 +208,7 @@ impl ScopeState {
     pub(crate) fn exit_isolated_function(&mut self, frame: IsolatedFunctionFrame) {
         self.bindings.restore();
         self.declared = frame.declared;
+        self.established = frame.established;
     }
 
     pub(crate) fn fresh_go_name(&mut self, hint: Option<&str>) -> String {
