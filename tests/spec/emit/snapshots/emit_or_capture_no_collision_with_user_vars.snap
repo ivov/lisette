@@ -5,11 +5,11 @@ description: |
   import "go:fmt"
   
   fn main() {
-    let _bound_0 = 10
+    let bound_0 = 10
     for i in 0..(1 + 2) {
       fmt.Println(i)
     }
-    fmt.Println(_bound_0)
+    fmt.Println(bound_0)
   }
 ---
 package main
@@ -17,10 +17,10 @@ package main
 import "fmt"
 
 func main() {
-	_bound_0 := 10
-	_bound_1 := (1 + 2)
-	for i := range _bound_1 {
+	bound_0 := 10
+	bound_1 := (1 + 2)
+	for i := range bound_1 {
 		fmt.Println(i)
 	}
-	fmt.Println(_bound_0)
+	fmt.Println(bound_0)
 }

@@ -35,13 +35,13 @@ impl Planner<'_> {
         {
             let needs_cap = self.is_native_shape(&expression.get_type(), NativeGoType::Slice);
             if base_staged.evaluation.effect.has_call() {
-                self.pin_staged(&mut base_staged, "_base");
+                self.pin_staged(&mut base_staged, "base");
             }
             let index_staged = self.stage_or_capture(index, "range");
             let sequenced = self.sequence_values(
                 vec![base_staged, index_staged],
                 CaptureBoundary::SiblingSequence,
-                "_base",
+                "base",
             );
             let effect = sequenced.effect;
             let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
@@ -54,7 +54,7 @@ impl Planner<'_> {
             );
         }
 
-        self.sequence_indexed_access(expression, base_staged, index, "_base")
+        self.sequence_indexed_access(expression, base_staged, index, "base")
     }
 
     pub(crate) fn sequence_indexed_access(
@@ -117,7 +117,7 @@ impl Planner<'_> {
         if let Some(e) = end {
             all_stages.push(self.stage_operand(e, ExpressionContext::value()));
         }
-        let sequenced = self.sequence_values(all_stages, CaptureBoundary::SiblingSequence, "_base");
+        let sequenced = self.sequence_values(all_stages, CaptureBoundary::SiblingSequence, "base");
         let effect = sequenced.effect;
         let mut setup = sequenced.setup;
         let mut values = sequenced.values.into_iter();

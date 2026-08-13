@@ -23,8 +23,8 @@ func main() {
 		End:   3,
 	}
 	n := 0
-	_range_1 := r
-	for i := _range_1.Start; i < _range_1.End; i++ {
+	range_1 := r
+	for i := range_1.Start; i < range_1.End; i++ {
 		n++
 		r = lisette.Range[int]{
 			Start: 0,

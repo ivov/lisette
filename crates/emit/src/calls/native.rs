@@ -703,7 +703,7 @@ impl Planner<'_> {
 
         let combine =
             plan_variadic_spread(&self.facts, ctx.function, ctx.spread).map(|p| p.combine(1));
-        let mut sequenced = self.sequence_values(all_stages, ctx.capture_boundary, "_arg");
+        let mut sequenced = self.sequence_values(all_stages, ctx.capture_boundary, "arg");
         if let Some(spread_index) = spread_index {
             self.finalize_spread_stage(&mut sequenced.values, spread_index, false, combine);
         }
@@ -904,7 +904,7 @@ impl Planner<'_> {
         });
         let combine =
             plan_variadic_spread(&self.facts, ctx.function, ctx.spread).map(|p| p.combine(0));
-        let mut sequenced = self.sequence_values(stages, ctx.capture_boundary, "_arg");
+        let mut sequenced = self.sequence_values(stages, ctx.capture_boundary, "arg");
         if let Some(spread_index) = spread_index {
             self.finalize_spread_stage(&mut sequenced.values, spread_index, false, combine);
         }
@@ -945,7 +945,7 @@ impl Planner<'_> {
             if let Some(e) = end.as_deref() {
                 stages.push(self.stage_operand(e, ExpressionContext::value()));
             }
-            let sequenced = self.sequence_values(stages, capture_boundary, "_arg");
+            let sequenced = self.sequence_values(stages, capture_boundary, "arg");
             let effect = sequenced.effect;
             let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
             let (setup, values) = sequenced.into_rendered();
@@ -977,11 +977,8 @@ impl Planner<'_> {
             .expect("substring arg should resolve to a known range type");
         let receiver_staged = self.stage_operand(receiver_expr, ExpressionContext::value());
         let range_staged = self.stage_or_capture(arg, "range");
-        let sequenced = self.sequence_values(
-            vec![receiver_staged, range_staged],
-            capture_boundary,
-            "_arg",
-        );
+        let sequenced =
+            self.sequence_values(vec![receiver_staged, range_staged], capture_boundary, "arg");
         let effect = sequenced.effect;
         let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
         let (setup, values) = sequenced.into_rendered();

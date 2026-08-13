@@ -31,6 +31,6 @@ func main() {
 	empty := slices.Concat[[]byte, byte]()
 	value := slices.Clone[[]byte, byte]
 	out := apply(slices.Clone[[]byte, byte], empty)
-	_arg_1 := len(empty)
-	fmt.Println(_arg_1, len(value(empty)), len(out))
+	arg_1 := len(empty)
+	fmt.Println(arg_1, len(value(empty)), len(out))
 }

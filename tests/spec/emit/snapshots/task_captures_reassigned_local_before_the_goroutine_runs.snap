@@ -12,9 +12,9 @@ package main
 
 func test() {
 	xs := []int{1}
-	_arg_1 := xs
+	arg_1 := xs
 	go func() {
-		_ = len(_arg_1)
+		_ = len(arg_1)
 	}()
 	xs = []int{1, 2}
 }

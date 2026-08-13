@@ -17,8 +17,8 @@ func getItems() []int {
 }
 
 func test() {
-	_arg_1 := getItems()
+	arg_1 := getItems()
 	defer func() {
-		_ = len(_arg_1)
+		_ = len(arg_1)
 	}()
 }

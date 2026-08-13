@@ -32,8 +32,8 @@ func main() {
 	i := 0
 	m := [][]int{{10}, {20}}
 	ip := &i
-	_arg_2 := m[i][0]
-	_base_1 := []int{bump(ip)}
-	x := first(_arg_2, _base_1[0])
+	arg_2 := m[i][0]
+	base_1 := []int{bump(ip)}
+	x := first(arg_2, base_1[0])
 	_ = x
 }

@@ -24,8 +24,8 @@ func f() lisette.Result[int, string] {
 	if check_2.Tag != lisette.ResultOk {
 		return lisette.MakeResultErr[int, string](check_2.ErrVal)
 	}
-	_bound_1 := check_2.OkVal
-	for i := range _bound_1 {
+	bound_1 := check_2.OkVal
+	for i := range bound_1 {
 		s += i
 	}
 	return lisette.MakeResultOk[int, string](s)

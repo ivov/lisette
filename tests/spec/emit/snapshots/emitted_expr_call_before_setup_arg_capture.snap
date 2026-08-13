@@ -27,10 +27,10 @@ func add(_, _ int) int {
 }
 
 func run() (int, error) {
-	_arg_3 := side()
+	arg_3 := side()
 	ret_1, ret_2 := getY()
 	if ret_2 != nil {
 		return 0, ret_2
 	}
-	return add(_arg_3, ret_1), nil
+	return add(arg_3, ret_1), nil
 }

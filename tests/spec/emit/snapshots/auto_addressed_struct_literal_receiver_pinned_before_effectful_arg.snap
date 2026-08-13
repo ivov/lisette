@@ -37,6 +37,6 @@ func bump(i *int) int {
 
 func run() {
 	i := 0
-	_arg_1 := &Cell{v: i}
-	Cell_add[int](_arg_1, bump(&i))
+	arg_1 := &Cell{v: i}
+	Cell_add[int](arg_1, bump(&i))
 }

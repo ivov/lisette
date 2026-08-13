@@ -17,7 +17,7 @@ func run() int {
 		x = 100
 		return 5
 	}
-	_left_1 := x
-	x = _left_1 + bump()
+	left_1 := x
+	x = left_1 + bump()
 	return x
 }
