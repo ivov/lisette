@@ -92,11 +92,11 @@ impl Planner<'_> {
                 this.capture_value_at_boundary(
                     &mut prologue,
                     iterable,
-                    "_range",
+                    "range",
                     CaptureBoundary::LoopLifetime,
                 )
             };
-            let loop_var = this.bind_loop_pattern(&binding.pattern, Some("_i"));
+            let loop_var = this.bind_loop_pattern(&binding.pattern, Some("i"));
             let header = match range_shape {
                 RangeShape::Range => format!(
                     "for {} := {}.Start; {} < {}.End; {}++ {{\n",
@@ -155,11 +155,11 @@ impl Planner<'_> {
                 this.capture_value_at_boundary(
                     &mut prologue,
                     receiver,
-                    "_s",
+                    "s",
                     CaptureBoundary::LoopLifetime,
                 )
             };
-            let index_var = this.fresh_var(Some("_i"));
+            let index_var = this.fresh_var(Some("i"));
             let loop_var = this.bind_loop_pattern(&binding.pattern, None);
             let mut header = format!(
                 "for {} := 0; {} < len({}); {}++ {{\n",
@@ -458,7 +458,7 @@ impl Planner<'_> {
             self.capture_value_at_boundary(
                 &mut prologue,
                 end,
-                "_bound",
+                "bound",
                 CaptureBoundary::LoopLifetime,
             )
         });
@@ -493,7 +493,7 @@ impl Planner<'_> {
                     }
                 }
                 Some(end_expression) => {
-                    let loop_var = this.bind_loop_pattern(&binding.pattern, Some("_i"));
+                    let loop_var = this.bind_loop_pattern(&binding.pattern, Some("i"));
                     let operator = if *inclusive { "<=" } else { "<" };
                     format!(
                         "for {} := {}; {} {} {}; {}++ {{\n",
@@ -501,7 +501,7 @@ impl Planner<'_> {
                     )
                 }
                 None => {
-                    let loop_var = this.bind_loop_pattern(&binding.pattern, Some("_i"));
+                    let loop_var = this.bind_loop_pattern(&binding.pattern, Some("i"));
                     format!(
                         "for {} := {}; ; {}++ {{\n",
                         loop_var, start_expression, loop_var
@@ -556,7 +556,9 @@ impl Planner<'_> {
         if let Pattern::Identifier { identifier, .. } = pattern
             && let Some(mut go_name) = self.go_name_for_binding(pattern)
         {
-            if self.scope.has_binding_for_go_name(&go_name) {
+            if self.scope.has_binding_for_go_name(&go_name)
+                || self.scope.is_go_name_declared(&go_name)
+            {
                 go_name = self.fresh_var(Some(&go_name));
             }
             return self.scope.bind(identifier, go_name);

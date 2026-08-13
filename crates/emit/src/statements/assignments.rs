@@ -124,7 +124,7 @@ impl Planner<'_> {
             || (right_hand_side_has_effectful_call
                 && !self.identifier_immune_to_calls(target.unwrap_parens()));
         let pinned_left = needs_left_pin.then(|| {
-            let tmp = self.fresh_var(Some("_left"));
+            let tmp = self.fresh_var(Some("left"));
             self.declare(&tmp);
             target_capture.push(LoweredStatement::TempBind {
                 name: tmp.clone(),

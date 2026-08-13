@@ -23,8 +23,8 @@ type Container[T interface {
 }
 
 func (c Container[T]) display() string {
-	_fmtarg_1 := c.label
-	return fmt.Sprintf("[%s] %s", _fmtarg_1, c.value.PrintVal())
+	fmtarg_1 := c.label
+	return fmt.Sprintf("[%s] %s", fmtarg_1, c.value.PrintVal())
 }
 
 func (c Container[T]) total() int {

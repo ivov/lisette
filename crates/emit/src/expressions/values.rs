@@ -364,7 +364,7 @@ impl Planner<'_> {
                 self.stage_composite(e, element_ctx)
             })
             .collect();
-        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "_v");
+        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "v");
         let effect = sequenced.effect;
         let (mut setup, element_expressions) = sequenced.into_rendered();
 
@@ -561,7 +561,7 @@ impl Planner<'_> {
             );
         }
 
-        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "_range");
+        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "range");
         let effect = sequenced.effect;
         let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
         let (setup, values) = sequenced.into_rendered();

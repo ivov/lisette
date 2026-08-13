@@ -6,12 +6,10 @@ description: |
   
   fn main() {
     let mut sum = 0;
-    for i in 0..make_bound() {
-      sum = sum + i;
+    for bound_1 in 0..=make_bound() {
+      sum = sum + bound_1;
     }
-    let bound_1 = 7;
     let _ = sum;
-    let _ = bound_1;
   }
 ---
 package main
@@ -23,10 +21,8 @@ func makeBound() int {
 func main() {
 	sum := 0
 	bound_1 := makeBound()
-	for i := range bound_1 {
-		sum += i
+	for bound_1_2 := 0; bound_1_2 <= bound_1; bound_1_2++ {
+		sum += bound_1_2
 	}
-	bound_1_2 := 7
 	_ = sum
-	_ = bound_1_2
 }

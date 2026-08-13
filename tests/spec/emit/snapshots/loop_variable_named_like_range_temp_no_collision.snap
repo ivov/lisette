@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  fn make_range() -> Range<int> { 0..3 }
+  
+  fn main() {
+    let mut sum = 0;
+    for range_1 in make_range() {
+      sum = sum + range_1;
+    }
+    let _ = sum;
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func makeRange() lisette.Range[int] {
+	return lisette.Range[int]{
+		Start: 0,
+		End:   3,
+	}
+}
+
+func main() {
+	sum := 0
+	range_1 := makeRange()
+	for range_1_2 := range_1.Start; range_1_2 < range_1.End; range_1_2++ {
+		sum += range_1_2
+	}
+	_ = sum
+}

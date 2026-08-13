@@ -23,8 +23,8 @@ func bound() int {
 
 func main() {
 	start_2 := start()
-	_bound_1 := bound()
-	for i := start_2; i < _bound_1; i++ {
+	bound_1 := bound()
+	for i := start_2; i < bound_1; i++ {
 		_ = i
 	}
 }

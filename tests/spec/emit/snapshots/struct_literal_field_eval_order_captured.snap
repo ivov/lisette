@@ -29,9 +29,9 @@ func bump(i *int) int {
 
 func main() {
 	i := 0
-	_field_1 := i
+	field_1 := i
 	p := Pair{
-		a: _field_1,
+		a: field_1,
 		b: bump(&i),
 	}
 	_ = p

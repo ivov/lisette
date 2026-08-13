@@ -20,7 +20,7 @@ func make_() []int {
 
 func run() int {
 	r := lisette.RangeFrom[int]{Start: 1}
-	_base_1 := make_()
-	s := _base_1[r.Start:len(_base_1):len(_base_1)]
+	base_1 := make_()
+	s := base_1[r.Start:len(base_1):len(base_1)]
 	return len(s)
 }

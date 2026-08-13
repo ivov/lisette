@@ -39,7 +39,7 @@ func makeRange() lisette.Range[int] {
 }
 
 func main() {
-	_arg_2 := makeS()
+	arg_2 := makeS()
 	range_1 := makeRange()
-	fmt.Println(lisette.Substring(_arg_2, range_1.Start, range_1.End))
+	fmt.Println(lisette.Substring(arg_2, range_1.Start, range_1.End))
 }

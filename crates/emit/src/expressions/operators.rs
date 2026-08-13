@@ -115,7 +115,7 @@ impl Planner<'_> {
             self.stage_composite(left_expression, ctx),
             self.stage_composite(right_expression, ctx),
         ];
-        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "_left");
+        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "left");
         let effect = sequenced.effect;
         let setup = sequenced.setup;
         let mut values = sequenced.values.into_iter();
@@ -274,7 +274,7 @@ impl Planner<'_> {
             self.stage_operand(left_expression, ctx),
             self.stage_operand(right_expression, ctx),
         ];
-        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "_left");
+        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "left");
         let effect = sequenced.effect;
         let setup = sequenced.setup;
         let mut values = sequenced.values.into_iter();

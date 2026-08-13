@@ -27,10 +27,10 @@ func variadic(_ int, _ ...int) int {
 }
 
 func run() (int, error) {
-	_arg_3 := sideA()
+	arg_3 := sideA()
 	ret_1, ret_2 := getXs()
 	if ret_2 != nil {
 		return 0, ret_2
 	}
-	return variadic(_arg_3, ret_1...), nil
+	return variadic(arg_3, ret_1...), nil
 }

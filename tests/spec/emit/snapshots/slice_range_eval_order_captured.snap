@@ -24,8 +24,8 @@ func bump(i *int) int {
 func main() {
 	items := []int{10, 20, 30, 40, 50}
 	i := 1
-	_base_1 := i
+	base_1 := i
 	end_2 := bump(&i)
-	s := items[_base_1:end_2:end_2]
+	s := items[base_1:end_2:end_2]
 	_ = s
 }

@@ -24,7 +24,7 @@ func bump(i *int) int {
 
 func main() {
 	i := 0
-	_v_1 := i
-	t := lisette.MakeTuple2[int, int](_v_1, bump(&i))
+	v_1 := i
+	t := lisette.MakeTuple2[int, int](v_1, bump(&i))
 	_ = t
 }

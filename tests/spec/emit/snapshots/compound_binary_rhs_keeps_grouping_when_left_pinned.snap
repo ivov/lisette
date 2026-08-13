@@ -19,8 +19,8 @@ func run() int {
 		y = 10
 		return 4
 	}
-	_left_2 := x
-	_left_1 := y
-	x = _left_2 * (_left_1 + bump())
+	left_2 := x
+	left_1 := y
+	x = left_2 * (left_1 + bump())
 	return x
 }

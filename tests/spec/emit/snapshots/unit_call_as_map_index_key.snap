@@ -18,8 +18,8 @@ func noop() {}
 func main() {
 	m := make(map[struct{}]int)
 	m[struct{}{}] = 7
-	_base_1 := m
+	base_1 := m
 	noop()
-	x := _base_1[struct{}{}]
+	x := base_1[struct{}{}]
 	_ = x
 }

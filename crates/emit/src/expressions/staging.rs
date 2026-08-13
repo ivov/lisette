@@ -407,7 +407,7 @@ impl Planner<'_> {
             stages.push(self.stage_operand(s, ExpressionContext::value()));
             stages.len() - 1
         });
-        let mut sequenced = self.sequence_values(stages, options.boundary, "_arg");
+        let mut sequenced = self.sequence_values(stages, options.boundary, "arg");
         if let Some(i) = spread_index {
             self.finalize_spread_stage(
                 &mut sequenced.values,
@@ -432,7 +432,7 @@ impl Planner<'_> {
         {
             stages.push(adapter_stage);
             let spread_index = stages.len() - 1;
-            let mut sequenced = self.sequence_values(stages, options.boundary, "_arg");
+            let mut sequenced = self.sequence_values(stages, options.boundary, "arg");
             self.finalize_spread_stage(
                 &mut sequenced.values,
                 spread_index,

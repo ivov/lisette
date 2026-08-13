@@ -312,7 +312,7 @@ impl<'a> Planner<'a> {
         }
         let staged = self.stage_operand(argument, ExpressionContext::value());
         let mut sequenced =
-            self.sequence_values(vec![staged], expression_ctx.capture_boundary(), "_arg");
+            self.sequence_values(vec![staged], expression_ctx.capture_boundary(), "arg");
         let effect = self.regular_call_effect(function, sequenced.effect);
         let value = sequenced
             .values
@@ -451,7 +451,7 @@ impl<'a> Planner<'a> {
         {
             stages.push(stage);
             let spread_index = stages.len() - 1;
-            let mut sequenced = self.sequence_values(stages, ctx.capture_boundary, "_arg");
+            let mut sequenced = self.sequence_values(stages, ctx.capture_boundary, "arg");
             self.finalize_spread_stage(
                 &mut sequenced.values,
                 spread_index,

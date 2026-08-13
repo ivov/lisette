@@ -82,8 +82,8 @@ type Tagged[T traits.Showable] struct {
 }
 
 func (t Tagged[T]) Show() string {
-	_fmtarg_1 := t.Label
-	return fmt.Sprintf("[%s] %s", _fmtarg_1, t.Value.Show())
+	fmtarg_1 := t.Label
+	return fmt.Sprintf("[%s] %s", fmtarg_1, t.Value.Show())
 }
 
 func (t Tagged[T]) Display() string {

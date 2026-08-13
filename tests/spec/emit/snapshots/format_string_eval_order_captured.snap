@@ -24,7 +24,7 @@ func bump(i *int) int {
 
 func main() {
 	i := 0
-	_fmtarg_1 := i
-	s := fmt.Sprintf("%d,%d", _fmtarg_1, bump(&i))
+	fmtarg_1 := i
+	s := fmt.Sprintf("%d,%d", fmtarg_1, bump(&i))
 	_ = s
 }

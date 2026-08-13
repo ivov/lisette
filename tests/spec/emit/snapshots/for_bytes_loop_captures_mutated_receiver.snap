@@ -20,9 +20,9 @@ package main
 func main() {
 	s := "ab"
 	count := 0
-	_s_1 := s
-	for _i_2 := 0; _i_2 < len(_s_1); _i_2++ {
-		b := _s_1[_i_2]
+	s_1 := s
+	for i_2 := 0; i_2 < len(s_1); i_2++ {
+		b := s_1[i_2]
 		count++
 		s = ""
 		_ = b

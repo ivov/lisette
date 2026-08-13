@@ -55,8 +55,8 @@ func total(c Cycle[int]) int {
 		return 0
 	}
 	l := *c.Next
-	_left_1 := l.Value
-	return _left_1 + total(l.Next)
+	left_1 := l.Value
+	return left_1 + total(l.Next)
 }
 
 func test() int {

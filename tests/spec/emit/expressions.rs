@@ -2265,11 +2265,11 @@ fn emit_or_capture_no_collision_with_user_vars() {
 import "go:fmt"
 
 fn main() {
-  let _bound_0 = 10
+  let bound_0 = 10
   for i in 0..(1 + 2) {
     fmt.Println(i)
   }
-  fmt.Println(_bound_0)
+  fmt.Println(bound_0)
 }
 "#;
     assert_emit_snapshot!(input);
@@ -2919,9 +2919,41 @@ fn main() {
   for i in 0..make_bound() {
     sum = sum + i;
   }
-  let _bound_1 = 7;
+  let bound_1 = 7;
   let _ = sum;
-  let _ = _bound_1;
+  let _ = bound_1;
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn loop_variable_named_like_bound_temp_no_collision() {
+    let input = r#"
+fn make_bound() -> int { 3 }
+
+fn main() {
+  let mut sum = 0;
+  for bound_1 in 0..=make_bound() {
+    sum = sum + bound_1;
+  }
+  let _ = sum;
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn loop_variable_named_like_range_temp_no_collision() {
+    let input = r#"
+fn make_range() -> Range<int> { 0..3 }
+
+fn main() {
+  let mut sum = 0;
+  for range_1 in make_range() {
+    sum = sum + range_1;
+  }
+  let _ = sum;
 }
 "#;
     assert_emit_snapshot!(input);

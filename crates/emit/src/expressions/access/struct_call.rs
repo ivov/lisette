@@ -70,7 +70,7 @@ impl Planner<'_> {
         if ctx.enum_ctx.is_some() {
             field_side_effects.insert(0, false);
         }
-        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "_field");
+        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "field");
         let mut effect = sequenced.effect;
         let fields_contain_deferred_evaluation = sequenced.contains_deferred_evaluation();
         let (mut setup, emitted_values) = sequenced.into_rendered();

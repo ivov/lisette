@@ -20,7 +20,7 @@ func run() int {
 		return 5
 	}
 	idx_1 := i
-	_left_2 := xs[idx_1]
-	xs[idx_1] = _left_2 + bump()
+	left_2 := xs[idx_1]
+	xs[idx_1] = left_2 + bump()
 	return xs[0]
 }
