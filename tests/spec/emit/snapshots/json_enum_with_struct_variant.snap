@@ -12,6 +12,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
@@ -60,7 +61,7 @@ func (m *Message) UnmarshalJSON(data []byte) error {
 	}
 	var obj map[string]json.RawMessage
 	if err := json.Unmarshal(data, &obj); err != nil {
-		return fmt.Errorf("invalid Message JSON")
+		return errors.New("invalid Message JSON")
 	}
 	for key, val := range obj {
 		switch key {
@@ -85,5 +86,5 @@ func (m *Message) UnmarshalJSON(data []byte) error {
 			return fmt.Errorf("unknown Message variant: %s", key)
 		}
 	}
-	return fmt.Errorf("empty Message JSON object")
+	return errors.New("empty Message JSON object")
 }

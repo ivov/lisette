@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  #[json]
+  enum Nothing {}
+---
+package main
+
+import (
+	"errors"
+	"fmt"
+)
+
+type NothingTag int
+type Nothing struct {
+	Tag NothingTag
+}
+
+func (n Nothing) MarshalJSON() ([]byte, error) {
+	switch n.Tag {
+	default:
+		return nil, fmt.Errorf("unknown Nothing tag: %d", n.Tag)
+	}
+}
+
+func (n *Nothing) UnmarshalJSON(data []byte) error {
+	return errors.New("invalid Nothing JSON")
+}

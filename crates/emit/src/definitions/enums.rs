@@ -85,7 +85,10 @@ impl Planner<'_> {
             self.require_fmt();
         }
         if has_json {
-            self.require_json();
+            self.require_errors();
+            if !layout.variants.is_empty() {
+                self.require_json();
+            }
         }
 
         Some(result)
