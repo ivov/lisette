@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786641481476,
+  "lastUpdate": 1786643811443,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -22786,6 +22786,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 31607,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 26050,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18586,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14377,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 12980,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 7930,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5981,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2911,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1830,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 713,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9074,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b45f842b3b3c59411db850bb9beff889ae1b05a6",
+          "message": "refactor: drop the underscore prefix on live emit temps (#1263)",
+          "timestamp": "2026-08-13T19:56:25+02:00",
+          "tree_id": "52dd488825439a1ff4b242fdeb4aec42093f5e2b",
+          "url": "https://github.com/ivov/lisette/commit/b45f842b3b3c59411db850bb9beff889ae1b05a6"
+        },
+        "date": 1786643809916,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 132953,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 31605,
             "unit": "lines"
           },
           {
