@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786567545773,
+  "lastUpdate": 1786637875034,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -22608,6 +22608,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 31564,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 26050,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18586,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14377,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 12980,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 7930,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5981,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2911,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1830,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 713,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9074,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e6b7e216651ed12f6df407dc68db7b417f272464",
+          "message": "refactor: elide redundant element types in Go composite literals (#1261)",
+          "timestamp": "2026-08-13T18:17:24+02:00",
+          "tree_id": "07f6350a8c8da1ebf360b1ad3093b33238204313",
+          "url": "https://github.com/ivov/lisette/commit/e6b7e216651ed12f6df407dc68db7b417f272464"
+        },
+        "date": 1786637873244,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 132944,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 31596,
             "unit": "lines"
           },
           {
