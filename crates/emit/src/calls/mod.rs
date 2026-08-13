@@ -4,6 +4,7 @@ pub(crate) mod dispatch;
 pub(crate) mod go_interop;
 pub(crate) mod native;
 mod regular;
+mod slice_loop;
 mod ufcs;
 
 use crate::plan::values::CaptureBoundary;

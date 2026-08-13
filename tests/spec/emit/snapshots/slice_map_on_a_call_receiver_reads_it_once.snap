@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn source() -> Slice<int> { [1, 2] }
+  
+  fn test() -> Slice<int> {
+    source().map(|x| x * 2)
+  }
+---
+package main
+
+func source() []int {
+	return []int{1, 2}
+}
+
+func test() []int {
+	src_1 := source()
+	result_2 := make([]int, len(src_1))
+	for i_3, x := range src_1 {
+		result_2[i_3] = x * 2
+	}
+	return result_2
+}

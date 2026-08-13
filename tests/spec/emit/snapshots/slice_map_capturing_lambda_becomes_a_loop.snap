@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn test(s: Slice<int>, factor: int) -> Slice<int> {
+    let mut seen = 0
+    let doubled = s.map(|x| {
+      seen += 1
+      x * factor
+    })
+    doubled.append(seen)
+  }
+---
+package main
+
+func test(s []int, factor int) []int {
+	seen := 0
+	result_1 := make([]int, len(s))
+	for i_2, x := range s {
+		seen++
+		result_1[i_2] = x * factor
+	}
+	doubled := result_1
+	return append(doubled[:len(doubled):len(doubled)], seen)
+}

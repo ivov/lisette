@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn test(s: Slice<int>) -> Slice<int> {
+    s.map(|x| {
+      if x > 0 {
+        return x
+      }
+      0
+    })
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(s []int) []int {
+	return lisette.SliceMap(s, func(x int) int {
+		if x > 0 {
+			return x
+		}
+		return 0
+	})
+}

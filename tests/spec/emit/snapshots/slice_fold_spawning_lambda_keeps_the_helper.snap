@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn test(s: Slice<int>) -> int {
+    s.fold(0, |acc, x| {
+      task {
+        fmt.Println(acc)
+      }
+      acc + x
+    })
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func test(s []int) int {
+	return lisette.SliceFold(s, 0, func(acc, x int) int {
+		go func() {
+			fmt.Println(acc)
+		}()
+		return acc + x
+	})
+}

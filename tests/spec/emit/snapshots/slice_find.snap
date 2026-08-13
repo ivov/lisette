@@ -11,11 +11,16 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test(s []int) (int, bool) {
-	v_1 := lisette.SliceFind(s, func(x int) bool {
-		return x > 0
-	})
-	if v_1.Tag == lisette.OptionSome {
-		return v_1.SomeVal, true
+	result_1 := lisette.MakeOptionNone[int]()
+	for _, x := range s {
+		if x > 0 {
+			result_1 = lisette.MakeOptionSome[int](x)
+			break
+		}
+	}
+	v_2 := result_1
+	if v_2.Tag == lisette.OptionSome {
+		return v_2.SomeVal, true
 	}
 	return 0, false
 }

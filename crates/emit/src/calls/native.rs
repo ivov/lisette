@@ -22,7 +22,7 @@ pub(super) struct NativeCallResult {
 }
 
 impl NativeCallResult {
-    fn new(
+    pub(super) fn new(
         setup: Vec<LoweredStatement>,
         value: String,
         argument_effect: EvaluationEffect,
@@ -457,6 +457,12 @@ impl Planner<'_> {
             return result;
         }
 
+        if matches!(ctx.native_type, NativeGoType::Slice)
+            && let Some(result) = self.try_lower_slice_loop(ctx, expression, ctx.args)
+        {
+            return result;
+        }
+
         if ctx.method == "clone" {
             let receiver_ty = self.facts.strip_and_peel(&expression.get_type());
             if is_cloneable_container(&receiver_ty) {
@@ -786,6 +792,13 @@ impl Planner<'_> {
                     );
                 }
             }
+        }
+
+        if matches!(ctx.native_type, NativeGoType::Slice)
+            && let Some((receiver, args)) = ctx.args.split_first()
+            && let Some(result) = self.try_lower_slice_loop(ctx, receiver, args)
+        {
+            return result;
         }
 
         if ctx.method == "clone"

@@ -11,15 +11,18 @@ description: |
 ---
 package main
 
-import (
-	lisette "github.com/ivov/lisette/prelude"
-	"strings"
-)
+import "strings"
 
 func test(items []string) string {
-	return strings.Join(lisette.SliceFilter(lisette.SliceMap(items, func(s string) string {
-		return s + "!"
-	}), func(s string) bool {
-		return len(s) > 2
-	}), ", ")
+	result_1 := make([]string, len(items))
+	for i_2, s := range items {
+		result_1[i_2] = s + "!"
+	}
+	var result_3 []string
+	for _, s := range result_1 {
+		if len(s) > 2 {
+			result_3 = append(result_3, s)
+		}
+	}
+	return strings.Join(result_3, ", ")
 }
