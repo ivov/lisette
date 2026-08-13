@@ -612,6 +612,122 @@ fn test(s: Slice<int>, f: fn(int) -> string) -> Slice<string> {
 }
 
 #[test]
+fn slice_map_lambda_becomes_a_loop() {
+    let input = r#"
+fn test(s: Slice<int>) -> Slice<int> {
+  s.map(|x| x * 2)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_map_capturing_lambda_becomes_a_loop() {
+    let input = r#"
+fn test(s: Slice<int>, factor: int) -> Slice<int> {
+  let mut seen = 0
+  let doubled = s.map(|x| {
+    seen += 1
+    x * factor
+  })
+  doubled.append(seen)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_map_on_a_call_receiver_reads_it_once() {
+    let input = r#"
+fn source() -> Slice<int> { [1, 2] }
+
+fn test() -> Slice<int> {
+  source().map(|x| x * 2)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_filter_with_an_unused_parameter_names_the_element() {
+    let input = r#"
+fn test(s: Slice<int>) -> Slice<int> {
+  s.filter(|_x| true)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_map_with_an_unused_parameter_drops_the_element() {
+    let input = r#"
+fn test(s: Slice<int>) -> Slice<int> {
+  s.map(|_x| 7)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_map_deferring_lambda_keeps_the_helper() {
+    let input = r#"
+import "go:fmt"
+
+fn test(s: Slice<int>) -> Slice<int> {
+  s.map(|x| {
+    defer fmt.Println(x)
+    x * 2
+  })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_fold_capturing_lambda_keeps_the_helper() {
+    let input = r#"
+fn test(s: Slice<int>) -> fn(int) -> int {
+  s.fold(|y| y, |acc, x| {
+    |y| acc(y) + x
+  })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_fold_spawning_lambda_keeps_the_helper() {
+    let input = r#"
+import "go:fmt"
+
+fn test(s: Slice<int>) -> int {
+  s.fold(0, |acc, x| {
+    task {
+      fmt.Println(acc)
+    }
+    acc + x
+  })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_map_returning_lambda_keeps_the_helper() {
+    let input = r#"
+fn test(s: Slice<int>) -> Slice<int> {
+  s.map(|x| {
+    if x > 0 {
+      return x
+    }
+    0
+  })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn slice_contains() {
     let input = r#"
 fn test(s: Slice<int>, v: int) -> bool {

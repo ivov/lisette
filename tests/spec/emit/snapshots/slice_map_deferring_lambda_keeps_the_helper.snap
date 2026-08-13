@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn test(s: Slice<int>) -> Slice<int> {
+    s.map(|x| {
+      defer fmt.Println(x)
+      x * 2
+    })
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func test(s []int) []int {
+	return lisette.SliceMap(s, func(x int) int {
+		defer fmt.Println(x)
+		return x * 2
+	})
+}

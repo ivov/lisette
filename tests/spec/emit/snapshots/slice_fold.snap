@@ -8,10 +8,10 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
 func test(s []int) int {
-	return lisette.SliceFold(s, 0, func(acc, x int) int {
-		return acc + x
-	})
+	result_1 := 0
+	for _, x := range s {
+		result_1 = result_1 + x
+	}
+	return result_1
 }

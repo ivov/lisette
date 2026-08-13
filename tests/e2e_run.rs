@@ -1082,6 +1082,87 @@ fn main() {
 }
 
 #[test]
+fn run_inlined_slice_helpers_match_the_prelude_bodies() {
+    if !go_available() {
+        eprintln!("skipping run_inlined_slice_helpers_match_the_prelude_bodies: `go` not found");
+        return;
+    }
+
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    let invocation = scratch.path().join("invocation");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::create_dir_all(&invocation).unwrap();
+
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"slicehelpers\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        r#"import "go:fmt"
+import "go:encoding/json"
+
+fn mapped(xs: Slice<int>) -> Slice<int> {
+  xs.map(|x| x * 2)
+}
+
+fn kept(xs: Slice<int>) -> Slice<int> {
+  xs.filter(|x| x > 2)
+}
+
+fn total(xs: Slice<int>) -> int {
+  xs.fold(100, |acc, x| acc + x)
+}
+
+fn first_big(xs: Slice<int>) -> int {
+  match xs.find(|x| x > 2) {
+    Some(found) => found,
+    None => -1,
+  }
+}
+
+fn encoded(xs: Slice<int>) -> string {
+  match json.Marshal(xs) {
+    Ok(bytes) => bytes as string,
+    Err(_) => "err",
+  }
+}
+
+fn source() -> Slice<int> {
+  fmt.Println("src")
+  [1, 2, 3]
+}
+
+fn main() {
+  let xs: Slice<int> = [1, 2, 3, 4]
+  let empty: Slice<int> = []
+  fmt.Println(mapped(xs), kept(xs), total(xs), first_big(xs))
+  fmt.Println(mapped(empty), kept(empty), total(empty), first_big(empty))
+  fmt.Println(encoded(mapped(empty)), encoded(kept(empty)))
+  fmt.Println(source().map(|x| x * 10))
+}
+"#,
+    )
+    .unwrap();
+
+    let output = lis_run(&project, &invocation, &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "lis run failed:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+    assert_eq!(
+        stdout.trim(),
+        "[2 4 6 8] [3 4] 110 3\n[] [] 100 -1\n[] null\nsrc\n[10 20 30]",
+        "stderr: {stderr}"
+    );
+}
+
+#[test]
 fn run_counted_loops_iterate_from_zero_up_to_the_bound() {
     if !go_available() {
         eprintln!("skipping run_counted_loops_iterate_from_zero_up_to_the_bound: `go` not found");

@@ -4,16 +4,15 @@ source: tests/spec/build/mod.rs
 // === main.go ===
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "fmt"
 
 func main() {
 	nums := []int{1, 2, 3}
-	strs := lisette.SliceMap[int, string](nums, func(x int) string {
-		return fmt.Sprintf("n=%d", x)
-	})
+	result_1 := make([]string, len(nums))
+	for i_2, x := range nums {
+		result_1[i_2] = fmt.Sprintf("n=%d", x)
+	}
+	strs := result_1
 	for _, s := range strs {
 		fmt.Println(s)
 	}

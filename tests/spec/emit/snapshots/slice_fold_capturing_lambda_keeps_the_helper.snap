@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn test(s: Slice<int>) -> fn(int) -> int {
+    s.fold(|y| y, |acc, x| {
+      |y| acc(y) + x
+    })
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(s []int) func(int) int {
+	return lisette.SliceFold(s, func(y int) int {
+		return y
+	}, func(acc func(int) int, x int) func(int) int {
+		return func(y int) int {
+			return acc(y) + x
+		}
+	})
+}

@@ -3,17 +3,15 @@ source: tests/spec/emit/prelude.rs
 description: |
   
   fn test(s: Slice<int>) -> Slice<int> {
-    s.filter(|x| x > 0)
+    s.map(|_x| 7)
   }
 ---
 package main
 
 func test(s []int) []int {
-	var result_1 []int
-	for _, x := range s {
-		if x > 0 {
-			result_1 = append(result_1, x)
-		}
+	result_1 := make([]int, len(s))
+	for i_2 := range s {
+		result_1[i_2] = 7
 	}
 	return result_1
 }
