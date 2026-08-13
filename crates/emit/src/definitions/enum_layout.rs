@@ -140,27 +140,29 @@ impl EnumLayout {
         let mut output = Vec::new();
 
         output.push(format!("type {} int", self.tag_type));
-        output.push("const (".to_string());
+        if !self.variants.is_empty() {
+            output.push("const (".to_string());
 
-        for (i, variant) in self.variants.iter().enumerate() {
-            if let Some(doc) = &variant.doc {
-                for line in doc.lines() {
-                    if line.is_empty() {
-                        output.push("//".to_string());
-                    } else {
-                        output.push(format!("// {}", line));
+            for (i, variant) in self.variants.iter().enumerate() {
+                if let Some(doc) = &variant.doc {
+                    for line in doc.lines() {
+                        if line.is_empty() {
+                            output.push("//".to_string());
+                        } else {
+                            output.push(format!("// {}", line));
+                        }
                     }
+                }
+
+                if i == 0 {
+                    output.push(format!("{} {} = iota", variant.tag_constant, self.tag_type));
+                } else {
+                    output.push(variant.tag_constant.clone());
                 }
             }
 
-            if i == 0 {
-                output.push(format!("{} {} = iota", variant.tag_constant, self.tag_type));
-            } else {
-                output.push(variant.tag_constant.clone());
-            }
+            output.push(")".to_string());
         }
-
-        output.push(")".to_string());
 
         let go_type_name = go_name::escape_type_name(&self.enum_name);
         output.push(format!(
@@ -453,6 +455,14 @@ impl EnumLayout {
             self.emit_unmarshal_with_payload_block(&mut lines, &with_payload, receiver, names);
         }
 
+        // No variant means no shape can decode, and Go needs a return anyway.
+        if self.variants.is_empty() {
+            lines.push(format!(
+                "return errors.New(\"invalid {} JSON\")",
+                self.enum_name
+            ));
+        }
+
         lines.push("}".to_string());
 
         lines.join("\n")
@@ -480,7 +490,7 @@ impl EnumLayout {
                 "if err := json.Unmarshal({data}, &{name}); err != nil {{"
             ));
             lines.push(format!(
-                "return fmt.Errorf(\"invalid {} JSON: expected string\")",
+                "return errors.New(\"invalid {} JSON: expected string\")",
                 self.enum_name
             ));
             lines.push("}".to_string());
@@ -516,7 +526,7 @@ impl EnumLayout {
             "if err := json.Unmarshal({data}, &{obj}); err != nil {{"
         ));
         lines.push(format!(
-            "return fmt.Errorf(\"invalid {} JSON\")",
+            "return errors.New(\"invalid {} JSON\")",
             self.enum_name
         ));
         lines.push("}".to_string());
@@ -537,7 +547,7 @@ impl EnumLayout {
         lines.push("}".to_string());
         lines.push("}".to_string());
         lines.push(format!(
-            "return fmt.Errorf(\"empty {} JSON object\")",
+            "return errors.New(\"empty {} JSON object\")",
             self.enum_name
         ));
     }

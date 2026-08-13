@@ -17,6 +17,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
@@ -48,7 +49,7 @@ func (v Vault) MarshalJSON() ([]byte, error) {
 func (v *Vault) UnmarshalJSON(data []byte) error {
 	var obj map[string]json.RawMessage
 	if err := json.Unmarshal(data, &obj); err != nil {
-		return fmt.Errorf("invalid Vault JSON")
+		return errors.New("invalid Vault JSON")
 	}
 	for key, val := range obj {
 		switch key {
@@ -73,7 +74,7 @@ func (v *Vault) UnmarshalJSON(data []byte) error {
 			return fmt.Errorf("unknown Vault variant: %s", key)
 		}
 	}
-	return fmt.Errorf("empty Vault JSON object")
+	return errors.New("empty Vault JSON object")
 }
 
 func test() int {

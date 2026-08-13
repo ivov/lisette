@@ -9,6 +9,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
@@ -52,7 +53,7 @@ func (s Status) MarshalJSON() ([]byte, error) {
 func (s *Status) UnmarshalJSON(data []byte) error {
 	var name string
 	if err := json.Unmarshal(data, &name); err != nil {
-		return fmt.Errorf("invalid Status JSON: expected string")
+		return errors.New("invalid Status JSON: expected string")
 	}
 	switch name {
 	case "Active":

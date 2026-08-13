@@ -3640,6 +3640,15 @@ enum Status { Active, Inactive, Suspended }
 }
 
 #[test]
+fn json_enum_without_variants() {
+    let input = r#"
+#[json]
+enum Nothing {}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn json_enum_with_single_payload() {
     let input = r#"
 #[json]
