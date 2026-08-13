@@ -1,0 +1,37 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  struct Point {
+    x: int,
+    y: int
+  }
+  
+  impl Point {
+    fn scaled(self) -> Point { Point { x: self.x * 2, y: self.y * 2 } }
+  }
+  
+  fn test() -> Map<string, Point> {
+    Map.from([("a", Point { x: 1, y: 2 }.scaled())])
+  }
+---
+package main
+
+type Point struct {
+	x int
+	y int
+}
+
+func (p Point) scaled() Point {
+	return Point{
+		x: p.x * 2,
+		y: p.y * 2,
+	}
+}
+
+func test() map[string]Point {
+	return map[string]Point{"a": Point{
+		x: 1,
+		y: 2,
+	}.scaled()}
+}

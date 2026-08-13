@@ -79,18 +79,26 @@ impl Planner<'_> {
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "_v");
         let effect = sequenced.effect;
         let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
-        let (mut setup, rendered) = sequenced.into_rendered();
+        let mut setup = sequenced.setup;
+        let values = sequenced.values;
 
-        let mut wrapped: Vec<String> = Vec::with_capacity(rendered.len());
-        for (expr, emitted) in elements.iter().zip(rendered) {
+        let mut wrapped: Vec<String> = Vec::with_capacity(values.len());
+        let mut widest = 0;
+        for (expr, value) in elements.iter().zip(&values) {
             let coercion = CoercionPlan::internal(self, &expr.get_type(), &element_lisette_ty);
-            let (coercion_setup, coerced) = coercion.lower(self, emitted);
+            let is_whole_literal = coercion.is_identity() && value.is_composite_literal();
+            let (coercion_setup, coerced) = coercion.lower(self, value.rendered());
             setup.extend(coercion_setup);
-            wrapped.push(coerced);
+            widest = widest.max(coerced.len());
+            wrapped.push(if is_whole_literal {
+                elide_element_type(&element_ty, coerced)
+            } else {
+                coerced
+            });
         }
         let elements = wrapped;
 
-        let value = if elements.len() > 1 && elements.iter().any(|e| e.len() > 30) {
+        let value = if elements.len() > 1 && widest > 30 {
             let indented = elements
                 .iter()
                 .map(|e| format!("\t{}", e))
@@ -207,6 +215,13 @@ fn format_verb_for(ty: &Type) -> &'static str {
         Some(k) if k.is_signed_int() || k.is_unsigned_int() => "%d",
         Some(k) if k.is_float() => "%g",
         _ => "%v",
+    }
+}
+
+pub(crate) fn elide_element_type(element_ty: &str, rendered: String) -> String {
+    match rendered.strip_prefix(element_ty) {
+        Some(literal) if literal.starts_with('{') => literal.to_string(),
+        _ => rendered,
     }
 }
 

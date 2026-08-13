@@ -34,7 +34,7 @@ func first(errs [2]error) string {
 }
 
 func test() {
-	concrete := [2]Boom{Boom{}, Boom{}}
+	concrete := [2]Boom{{}, {}}
 	var boxed_1 [2]error
 	for i_2 := range concrete {
 		boxed_1[i_2] = concrete[i_2]

@@ -30,6 +30,6 @@ func (n Name) Display() string {
 }
 
 func main() {
-	names := []Name{Name{value: "alice"}}
+	names := []Name{{value: "alice"}}
 	fmt.Println(lib.PrintAll(names))
 }

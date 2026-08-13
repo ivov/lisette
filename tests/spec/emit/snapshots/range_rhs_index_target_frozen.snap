@@ -22,11 +22,11 @@ func lo() int {
 
 func run() int {
 	rs := []lisette.Range[int]{
-		lisette.Range[int]{
+		{
 			Start: 0,
 			End:   0,
 		},
-		lisette.Range[int]{
+		{
 			Start: 0,
 			End:   0,
 		},

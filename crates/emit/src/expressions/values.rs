@@ -258,7 +258,11 @@ impl Planner<'_> {
             }
             Expression::Call { ty, .. } => self.lower_call_value(expression, ty, ctx),
             Expression::RawGo { text } => ValuePlan::opaque(text.clone()),
-            Expression::Unit { .. } => ValuePlan::opaque("struct{}{}".to_string()),
+            Expression::Unit { .. } => ValuePlan::computed(
+                Vec::new(),
+                GoExpression::composite_literal("struct{}{}".to_string(), false),
+                EvaluationEffect::Pure,
+            ),
             Expression::Lambda {
                 params, body, ty, ..
             } => ValuePlan::opaque(self.emit_lambda(params, body, ty, ctx)),

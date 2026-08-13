@@ -54,7 +54,7 @@ func first(a, _ int) int {
 
 func main() {
 	i := 0
-	m := [][]int{[]int{10}, []int{20}}
+	m := [][]int{{10}, {20}}
 	c := Carrier{
 		Tag: CarrierC,
 		P:   &i,

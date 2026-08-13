@@ -30,7 +30,7 @@ type Point struct {
 }
 
 func main() {
-	points := []Point{Point{
+	points := []Point{{
 		x: 1,
 		y: 2,
 	}}

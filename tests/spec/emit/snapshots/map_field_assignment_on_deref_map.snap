@@ -19,7 +19,7 @@ type Box struct {
 }
 
 func main() {
-	m := map[string]Box{"k": Box{x: 0}}
+	m := map[string]Box{"k": {x: 0}}
 	r := &m
 	entry := (*r)["k"]
 	entry.x = 1

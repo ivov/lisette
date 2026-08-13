@@ -31,7 +31,7 @@ type Handler struct {
 }
 
 func run() lisette.Result[int, string] {
-	hs := []Handler{Handler{f: f0}, Handler{f: f1}}
+	hs := []Handler{{f: f0}, {f: f1}}
 	i := 0
 	get := func() lisette.Result[int, string] {
 		i = 1

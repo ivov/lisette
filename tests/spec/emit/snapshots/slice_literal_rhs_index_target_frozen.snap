@@ -13,7 +13,7 @@ description: |
 package main
 
 func run() int {
-	xs := [][]int{[]int{0}, []int{0}}
+	xs := [][]int{{0}, {0}}
 	i := 0
 	bump := func() int {
 		i = 1

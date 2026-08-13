@@ -18,7 +18,7 @@ type Box struct {
 }
 
 func main() {
-	m := map[string]Box{"a": Box{x: 1}}
+	m := map[string]Box{"a": {x: 1}}
 	entry := m["a"]
 	entry.x = 2
 	m["a"] = entry

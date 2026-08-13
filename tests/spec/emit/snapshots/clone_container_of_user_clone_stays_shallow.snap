@@ -30,7 +30,7 @@ func (d Doc) clone() Doc {
 }
 
 func main() {
-	docs := []Doc{Doc{tags: []string{"x"}}}
+	docs := []Doc{{tags: []string{"x"}}}
 	copy_ := slices.Clone(docs)
 	_ = docs
 	_ = copy_

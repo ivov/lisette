@@ -41,7 +41,7 @@ func makeKey(counter *int) Key {
 
 func main() {
 	counter := 0
-	m := map[string]Box{"a": Box{x: 1}}
+	m := map[string]Box{"a": {x: 1}}
 	key := makeKey(&counter).k
 	entry := m[key]
 	entry.x = 2
