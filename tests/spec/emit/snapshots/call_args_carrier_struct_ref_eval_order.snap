@@ -36,7 +36,7 @@ func first(a, _ int) int {
 
 func main() {
 	i := 0
-	m := [][]int{[]int{10}, []int{20}}
+	m := [][]int{{10}, {20}}
 	c := Carrier{p: &i}
 	_arg_2 := m[i][0]
 	_base_1 := []int{bump(c)}

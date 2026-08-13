@@ -160,6 +160,10 @@ impl GoExpression {
     pub(crate) fn rendered(&self) -> String {
         self.to_string()
     }
+
+    pub(crate) fn is_composite_literal(&self) -> bool {
+        matches!(self, Self::CompositeLiteral { .. })
+    }
 }
 
 impl Display for GoExpression {

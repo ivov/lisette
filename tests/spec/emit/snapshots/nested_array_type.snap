@@ -9,5 +9,5 @@ description: |
 package main
 
 func grid() [2][3]int {
-	return [2][3]int{[3]int{1, 2, 3}, [3]int{4, 5, 6}}
+	return [2][3]int{{1, 2, 3}, {4, 5, 6}}
 }

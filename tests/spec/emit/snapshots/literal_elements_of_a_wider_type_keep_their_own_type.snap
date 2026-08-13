@@ -1,0 +1,39 @@
+---
+source: tests/spec/emit/arrays.rs
+description: |
+  
+  interface Shape {
+    fn area() -> int
+  }
+  
+  struct Circle {
+    r: int
+  }
+  
+  impl Circle {
+    fn area(self) -> int { self.r }
+  }
+  
+  fn test() -> int {
+    let shapes: Slice<Shape> = [Circle { r: 1 }, Circle { r: 2 }]
+    shapes[0].area() + shapes[1].area()
+  }
+---
+package main
+
+type Shape interface {
+	area() int
+}
+
+type Circle struct {
+	r int
+}
+
+func (c Circle) area() int {
+	return c.r
+}
+
+func test() int {
+	shapes := []Shape{Circle{r: 1}, Circle{r: 2}}
+	return shapes[0].area() + shapes[1].area()
+}

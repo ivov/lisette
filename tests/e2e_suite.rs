@@ -10,8 +10,8 @@ use rayon::prelude::*;
 
 use harness::{
     EmittedTest, HarvestedTest, compile_e2e_suite_test, harvest_snapshots, prelude_dir,
-    read_go_version, read_skip_list, run_go_test, run_go_vet, skip_reason_for_imports,
-    snapshots_dir, target_dir, write_go_mod, write_subpackage,
+    read_go_version, read_skip_list, run_go_test, run_go_vet, run_gofmt_simplify,
+    skip_reason_for_imports, snapshots_dir, target_dir, write_go_mod, write_subpackage,
 };
 
 #[test]
@@ -131,5 +131,11 @@ fn e2e_suite() {
     if let Err(out) = run_go_vet(&target) {
         eprintln!("{out}");
         panic!("go vet failed");
+    }
+
+    eprintln!("running `gofmt -s -l .` in {}", target.display());
+    if let Err(out) = run_gofmt_simplify(&target) {
+        eprintln!("{out}");
+        panic!("gofmt -s would rewrite the files listed above");
     }
 }

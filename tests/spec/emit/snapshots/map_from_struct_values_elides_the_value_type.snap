@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  struct Point {
+    x: int,
+    y: int
+  }
+  
+  fn test() -> Map<string, Point> {
+    Map.from([("a", Point { x: 1, y: 2 }), ("b", Point { x: 3, y: 4 })])
+  }
+---
+package main
+
+type Point struct {
+	x int
+	y int
+}
+
+func test() map[string]Point {
+	return map[string]Point{"a": {
+		x: 1,
+		y: 2,
+	}, "b": {
+		x: 3,
+		y: 4,
+	}}
+}

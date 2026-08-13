@@ -321,6 +321,25 @@ pub fn run_go_vet(target_dir: &Path) -> Result<String, String> {
     }
 }
 
+pub fn run_gofmt_simplify(target_dir: &Path) -> Result<String, String> {
+    let output = Command::new("gofmt")
+        .args(["-s", "-l", "."])
+        .current_dir(target_dir)
+        .env("NO_COLOR", "1")
+        .output()
+        .map_err(|e| format!("failed to spawn gofmt: {e}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    if !output.status.success() {
+        return Err(format!("{stdout}{stderr}"));
+    }
+    if stdout.trim().is_empty() {
+        Ok(stdout)
+    } else {
+        Err(stdout)
+    }
+}
+
 pub fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()

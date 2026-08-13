@@ -110,6 +110,96 @@ fn grid() -> Array<Array<int, 3>, 2> {
 }
 
 #[test]
+fn literal_elements_of_a_wider_type_keep_their_own_type() {
+    let input = r#"
+interface Shape {
+  fn area() -> int
+}
+
+struct Circle {
+  r: int
+}
+
+impl Circle {
+  fn area(self) -> int { self.r }
+}
+
+fn test() -> int {
+  let shapes: Slice<Shape> = [Circle { r: 1 }, Circle { r: 2 }]
+  shapes[0].area() + shapes[1].area()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn element_calling_a_method_on_a_literal_keeps_its_type() {
+    let input = r#"
+struct Point {
+  x: int,
+  y: int
+}
+
+impl Point {
+  fn scaled(self) -> Point { Point { x: self.x * 2, y: self.y * 2 } }
+}
+
+fn test() -> int {
+  let pts: Slice<Point> = [Point { x: 1, y: 2 }.scaled(), Point { x: 3, y: 4 }]
+  pts[0].x + pts[1].y
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn element_slicing_a_literal_keeps_its_type() {
+    let input = r#"
+fn test() -> int {
+  let rows: Slice<Slice<int>> = [[1, 2, 3][..2], [4, 5]]
+  rows[0][0] + rows[1][1]
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn element_spreading_a_call_result_keeps_its_type() {
+    let input = r#"
+struct Point {
+  x: int,
+  y: int
+}
+
+impl Point {
+  fn scaled(self) -> Point { Point { x: self.x * 2, y: self.y * 2 } }
+}
+
+fn test() -> int {
+  let pts: Slice<Point> = [Point { ..Point { x: 1, y: 2 }.scaled() }]
+  pts[0].x
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn element_spreading_a_literal_elides_its_type() {
+    let input = r#"
+struct Point {
+  x: int,
+  y: int
+}
+
+fn test() -> int {
+  let pts: Slice<Point> = [Point { ..Point { x: 5, y: 6 } }]
+  pts[0].x
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn array_zero_value() {
     let input = r#"
 struct Buf {

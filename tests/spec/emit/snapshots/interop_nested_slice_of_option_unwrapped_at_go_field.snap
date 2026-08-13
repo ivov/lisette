@@ -24,7 +24,7 @@ import (
 func main() {
 	f1 := &cli.Flag{Name: "a"}
 	f2 := &cli.Flag{Name: "b"}
-	src_1 := [][]lisette.Option[*cli.Flag]{[]lisette.Option[*cli.Flag]{lisette.MakeOptionSome(f1), lisette.MakeOptionSome(f2)}}
+	src_1 := [][]lisette.Option[*cli.Flag]{{lisette.MakeOptionSome(f1), lisette.MakeOptionSome(f2)}}
 	unwrapped_2 := make([][]*cli.Flag, len(src_1))
 	for i_3, v_4 := range src_1 {
 		unwrapped_5 := make([]*cli.Flag, len(v_4))

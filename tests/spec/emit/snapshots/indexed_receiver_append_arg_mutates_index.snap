@@ -22,7 +22,7 @@ func bump(i *int) int {
 }
 
 func test() int {
-	xss := [][]int{[]int{10}, []int{20}}
+	xss := [][]int{{10}, {20}}
 	i := 0
 	recv_1 := xss[i]
 	ys := append(recv_1[:len(recv_1):len(recv_1)], bump(&i))

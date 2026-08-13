@@ -1,4 +1,5 @@
 use crate::expressions::access::struct_call::emit_struct_literal;
+use crate::expressions::literals::elide_element_type;
 use crate::names::generics::extract_type_mapping;
 use rustc_hash::FxHashMap as HashMap;
 use std::borrow::Cow;
@@ -262,7 +263,7 @@ impl Planner<'_> {
                 if let Some(Type::Array { length, element }) = &peeled {
                     Some(ValuePlan::computed(
                         Vec::new(),
-                        GoExpression::composite_literal(self.array_zero(*length, element), false),
+                        self.array_zero(*length, element),
                         self.native_constructor_effect(ctx, EvaluationEffect::Pure),
                     ))
                 } else {
@@ -304,11 +305,9 @@ impl Planner<'_> {
 
         let (key_ty, value_ty) =
             self.resolve_map_lisette_types(ctx.function, ctx.resolved_type_args, ctx.call_ty);
-        let map_ty = format!(
-            "map[{}]{}",
-            self.go_type_string(&key_ty),
-            self.go_type_string(&value_ty)
-        );
+        let key_go_ty = self.go_type_string(&key_ty);
+        let value_go_ty = self.go_type_string(&value_ty);
+        let map_ty = format!("map[{}]{}", key_go_ty, value_go_ty);
 
         if pairs.is_empty() {
             return Some(ValuePlan::computed(
@@ -326,24 +325,33 @@ impl Planner<'_> {
         let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "_entry");
         let effect = sequenced.effect;
         let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
-        let (mut setup, rendered) = sequenced.into_rendered();
+        let mut setup = sequenced.setup;
+        let values = sequenced.values;
 
         let mut lowered = Vec::with_capacity(pairs.len());
-        for ((key, value), staged) in pairs.iter().zip(rendered.chunks_exact(2)) {
+        let mut widest = 0;
+        for ((key, value), staged) in pairs.iter().zip(values.chunks_exact(2)) {
             let [staged_key, staged_value] = staged else {
                 unreachable!("each pair stages exactly two values")
             };
             let (key_setup, coerced_key) = CoercionPlan::internal(self, &key.get_type(), &key_ty)
-                .lower(self, staged_key.clone());
+                .lower(self, staged_key.rendered());
             setup.extend(key_setup);
-            let (value_setup, coerced_value) =
-                CoercionPlan::internal(self, &value.get_type(), &value_ty)
-                    .lower(self, staged_value.clone());
+            let value_coercion = CoercionPlan::internal(self, &value.get_type(), &value_ty);
+            let is_whole_literal =
+                value_coercion.is_identity() && staged_value.is_composite_literal();
+            let (value_setup, coerced_value) = value_coercion.lower(self, staged_value.rendered());
             setup.extend(value_setup);
+            widest = widest.max(coerced_key.len() + coerced_value.len() + ": ".len());
+            let coerced_value = if is_whole_literal {
+                elide_element_type(&value_go_ty, coerced_value)
+            } else {
+                coerced_value
+            };
             lowered.push(format!("{coerced_key}: {coerced_value}"));
         }
 
-        let value = if lowered.len() > 1 && lowered.iter().any(|entry| entry.len() > 30) {
+        let value = if lowered.len() > 1 && widest > 30 {
             let indented = lowered
                 .iter()
                 .map(|entry| format!("\t{}", entry))

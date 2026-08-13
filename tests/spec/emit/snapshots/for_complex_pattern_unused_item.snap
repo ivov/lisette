@@ -16,7 +16,7 @@ type P struct {
 }
 
 func test() {
-	for _, item_1 := range []P{P{v: 1}} {
+	for _, item_1 := range []P{{v: 1}} {
 		_ = item_1
 	}
 }

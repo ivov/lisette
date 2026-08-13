@@ -18,7 +18,7 @@ type Foo struct {
 }
 
 func main() {
-	items := []Foo{Foo{x: 1}, Foo{x: 2}}
+	items := []Foo{{x: 1}, {x: 2}}
 	for range items {
 	}
 }

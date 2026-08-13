@@ -16,7 +16,7 @@ func makeI() int {
 }
 
 func main() {
-	outer := [][]int{[]int{1}, []int{2}, []int{3}}
+	outer := [][]int{{1}, {2}, {3}}
 	base_2 := outer
 	idx_3 := makeI()
 	recv_1 := outer[makeI()]

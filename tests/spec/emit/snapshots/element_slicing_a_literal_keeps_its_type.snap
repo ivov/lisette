@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/arrays.rs
+description: |
+  
+  fn test() -> int {
+    let rows: Slice<Slice<int>> = [[1, 2, 3][..2], [4, 5]]
+    rows[0][0] + rows[1][1]
+  }
+---
+package main
+
+func test() int {
+	rows := [][]int{[]int{1, 2, 3}[:2:2], {4, 5}}
+	return rows[0][0] + rows[1][1]
+}

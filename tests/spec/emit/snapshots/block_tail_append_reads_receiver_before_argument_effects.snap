@@ -29,7 +29,7 @@ type Holder struct {
 func main() {
 	h := Holder{slc: []struct{}{}}
 	bump := func() {
-		h.slc = []struct{}{struct{}{}, struct{}{}, struct{}{}}
+		h.slc = []struct{}{{}, {}, {}}
 	}
 	var ys []struct{}
 	recv_1 := h.slc

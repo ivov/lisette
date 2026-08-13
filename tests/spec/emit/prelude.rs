@@ -892,6 +892,40 @@ fn test() {
 }
 
 #[test]
+fn map_from_struct_values_elides_the_value_type() {
+    let input = r#"
+struct Point {
+  x: int,
+  y: int
+}
+
+fn test() -> Map<string, Point> {
+  Map.from([("a", Point { x: 1, y: 2 }), ("b", Point { x: 3, y: 4 })])
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_value_calling_a_method_on_a_literal_keeps_its_type() {
+    let input = r#"
+struct Point {
+  x: int,
+  y: int
+}
+
+impl Point {
+  fn scaled(self) -> Point { Point { x: self.x * 2, y: self.y * 2 } }
+}
+
+fn test() -> Map<string, Point> {
+  Map.from([("a", Point { x: 1, y: 2 }.scaled())])
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn map_from_non_literal_keys_keeps_prelude_call() {
     let input = r#"
 const KEY = "a"

@@ -1,0 +1,42 @@
+---
+source: tests/spec/emit/arrays.rs
+description: |
+  
+  struct Point {
+    x: int,
+    y: int
+  }
+  
+  impl Point {
+    fn scaled(self) -> Point { Point { x: self.x * 2, y: self.y * 2 } }
+  }
+  
+  fn test() -> int {
+    let pts: Slice<Point> = [Point { x: 1, y: 2 }.scaled(), Point { x: 3, y: 4 }]
+    pts[0].x + pts[1].y
+  }
+---
+package main
+
+type Point struct {
+	x int
+	y int
+}
+
+func (p Point) scaled() Point {
+	return Point{
+		x: p.x * 2,
+		y: p.y * 2,
+	}
+}
+
+func test() int {
+	pts := []Point{Point{
+		x: 1,
+		y: 2,
+	}.scaled(), {
+		x: 3,
+		y: 4,
+	}}
+	return pts[0].x + pts[1].y
+}

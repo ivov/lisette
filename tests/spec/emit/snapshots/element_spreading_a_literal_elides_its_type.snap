@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/arrays.rs
+description: |
+  
+  struct Point {
+    x: int,
+    y: int
+  }
+  
+  fn test() -> int {
+    let pts: Slice<Point> = [Point { ..Point { x: 5, y: 6 } }]
+    pts[0].x
+  }
+---
+package main
+
+type Point struct {
+	x int
+	y int
+}
+
+func test() int {
+	pts := []Point{{
+		x: 5,
+		y: 6,
+	}}
+	return pts[0].x
+}

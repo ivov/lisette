@@ -19,6 +19,7 @@ struct SpreadInput<'a> {
     base: &'a Expression,
     base_staged: ValuePlan,
     field_pairs: Vec<(String, String)>,
+    fields_contain_deferred_evaluation: bool,
 }
 
 struct StructCallContext<'a> {
@@ -102,7 +103,6 @@ impl Planner<'_> {
             field_pairs.insert(0, tag);
         }
 
-        let mut base_contains_deferred_evaluation = false;
         let value = match spread {
             StructSpread::From(base) => {
                 // Never-typed spread base diverges, emit as statement and
@@ -112,47 +112,48 @@ impl Planner<'_> {
                         effect = effect.combine(EvaluationEffect::EffectfulCall);
                     }
                     setup.push(self.lower_statement(base));
-                    format!("{}{{}}", ctx.go_type)
+                    GoExpression::composite_literal(
+                        format!("{}{{}}", ctx.go_type),
+                        fields_contain_deferred_evaluation,
+                    )
                 } else {
                     let base_staged = self.stage_operand(base, ExpressionContext::value());
                     effect = effect.combine(base_staged.evaluation.effect);
                     let field_pairs =
                         self.hoist_observable_fields(&mut setup, field_pairs, &field_side_effects);
-                    let (spread_setup, value, contains_deferred_evaluation) =
-                        if ctx.enum_ctx.is_some() {
-                            self.lower_enum_variant_spread(
-                                SpreadInput {
-                                    base,
-                                    base_staged,
-                                    field_pairs,
-                                },
-                                &ctx,
-                                field_assignments,
-                                expression_ctx,
-                            )
-                        } else {
-                            self.lower_struct_update(base_staged, &field_pairs)
-                        };
+                    let (spread_setup, value) = if ctx.enum_ctx.is_some() {
+                        self.lower_enum_variant_spread(
+                            SpreadInput {
+                                base,
+                                base_staged,
+                                field_pairs,
+                                fields_contain_deferred_evaluation,
+                            },
+                            &ctx,
+                            field_assignments,
+                            expression_ctx,
+                        )
+                    } else {
+                        self.lower_struct_update(base_staged, &field_pairs)
+                    };
                     setup.extend(spread_setup);
-                    base_contains_deferred_evaluation = contains_deferred_evaluation;
                     value
                 }
             }
             StructSpread::Autofill { .. } => {
                 self.append_autofills(&mut field_pairs, field_assignments, &ctx, is_go_struct);
-                emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx)
+                GoExpression::composite_literal(
+                    emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx),
+                    fields_contain_deferred_evaluation,
+                )
             }
-            StructSpread::None => emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx),
+            StructSpread::None => GoExpression::composite_literal(
+                emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx),
+                fields_contain_deferred_evaluation,
+            ),
         };
 
-        ValuePlan::computed(
-            setup,
-            GoExpression::composite_literal(
-                value,
-                fields_contain_deferred_evaluation || base_contains_deferred_evaluation,
-            ),
-            effect,
-        )
+        ValuePlan::computed(setup, value, effect)
     }
 
     /// Apply Go-boundary coercion followed by internal coercion. The Go-boundary
@@ -371,7 +372,7 @@ impl Planner<'_> {
                 ValueLayout::Array {
                     length, element, ..
                 },
-            ) => self.array_zero(*length, element.logical_type()),
+            ) => self.array_zero(*length, element.logical_type()).rendered(),
             _ => format!("{}{{}}", self.go_type_string(ty)),
         }
     }
@@ -423,16 +424,16 @@ impl Planner<'_> {
 
     /// Array zero value, filling per index with `lisette_zero` when Go's own
     /// `[N]E{}` zero differs from Lisette's (e.g. `Option<T>`).
-    pub(crate) fn array_zero(&mut self, len: u64, elem: &Type) -> String {
+    pub(crate) fn array_zero(&mut self, len: u64, elem: &Type) -> GoExpression {
         let elem_go = self.go_type_string(elem);
         if len == 0 || self.element_go_zero_ok(elem) {
-            return format!("[{}]{}{{}}", len, elem_go);
+            return GoExpression::composite_literal(format!("[{}]{}{{}}", len, elem_go), false);
         }
         let zero = self.lisette_zero(elem);
         // Go has no syntax to repeat a value across all N slots, so fill each index.
-        format!(
+        GoExpression::opaque(format!(
             "func() [{len}]{elem_go} {{ var arr [{len}]{elem_go}; for i := range arr {{ arr[i] = {zero} }}; return arr }}()"
-        )
+        ))
     }
 
     /// True when Go's zero for the element already matches Lisette's.
@@ -631,12 +632,10 @@ impl Planner<'_> {
         &mut self,
         base_staged: ValuePlan,
         fields: &[(String, String)],
-    ) -> (Vec<LoweredStatement>, String, bool) {
+    ) -> (Vec<LoweredStatement>, GoExpression) {
+        // A spread that assigns nothing is its base, whatever shape that has.
         if fields.is_empty() {
-            let contains_deferred_evaluation =
-                base_staged.expression.contains_deferred_evaluation();
-            let (setup, value) = base_staged.into_parts();
-            return (setup, value, contains_deferred_evaluation);
+            return (base_staged.setup, base_staged.expression);
         }
 
         let (mut statements, base_value) = base_staged.into_parts();
@@ -649,7 +648,7 @@ impl Planner<'_> {
             )));
         }
 
-        (statements, tmp, false)
+        (statements, GoExpression::name(tmp))
     }
 
     fn lower_enum_variant_spread(
@@ -658,11 +657,12 @@ impl Planner<'_> {
         ctx: &StructCallContext<'_>,
         field_assignments: &[StructFieldAssignment],
         expression_ctx: ExpressionContext<'_>,
-    ) -> (Vec<LoweredStatement>, String, bool) {
+    ) -> (Vec<LoweredStatement>, GoExpression) {
         let SpreadInput {
             base,
             base_staged,
             mut field_pairs,
+            fields_contain_deferred_evaluation,
         } = input;
         let assigned: HashSet<&str> = field_assignments.iter().map(|f| f.name.as_str()).collect();
         let carried = self
@@ -675,8 +675,10 @@ impl Planner<'_> {
             statements.push(LoweredStatement::RawGo(format!("_ = {}\n", base_value)));
             return (
                 statements,
-                emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx),
-                false,
+                GoExpression::composite_literal(
+                    emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx),
+                    fields_contain_deferred_evaluation,
+                ),
             );
         }
 
@@ -691,8 +693,10 @@ impl Planner<'_> {
         }
         (
             statements,
-            emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx),
-            false,
+            GoExpression::composite_literal(
+                emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx),
+                fields_contain_deferred_evaluation,
+            ),
         )
     }
 }
