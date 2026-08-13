@@ -793,6 +793,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         self.planner.scope.record_go_use(&self.subject);
         let inner = WalkCtx::switch_case(ctx.arm_place);
         let then_statements = self.with_scope(|this| {
+            this.planner.scope.establish_condition(condition.clone());
             let mut then_statements: Vec<LoweredStatement> = Vec::new();
             this.walk(&mut then_statements, then_branch, &inner);
             then_statements
@@ -930,7 +931,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         place: &PlacePlan,
     ) -> SwitchStatementPlan {
         let (regular, default) = split_with_default_lift(branches, fallback);
-        let case_plans = self.lower_switch_cases(regular, place);
+        let case_plans = self.lower_switch_cases(regular, place, Some(&expr));
         let default_block = self.lower_switch_default(default, place);
         SwitchStatementPlan {
             kind: SwitchKind::Value { subject: expr },
@@ -952,7 +953,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let subject_ty = self.subject_ty.clone();
         let ((case_plans, default_block), used) = self.planner.capture_go_uses(|planner| {
             let mut nested = TreePlanner::new(planner, arms, base.clone(), subject_ty);
-            let case_plans = nested.lower_switch_cases(regular, place);
+            let case_plans = nested.lower_switch_cases(regular, place, None);
             let default_block = nested.lower_switch_default(default, place);
             (case_plans, default_block)
         });
@@ -977,11 +978,19 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         &mut self,
         branches: &[SwitchBranch],
         place: &PlacePlan,
+        subject: Option<&str>,
     ) -> Vec<SwitchCasePlan> {
         let ctx = WalkCtx::switch_case(place);
         let mut case_plans = Vec::with_capacity(branches.len());
         for branch in branches {
+            // A case listing several labels establishes none of them on its own.
+            let established = subject
+                .filter(|_| !branch.case_label.contains(','))
+                .map(|subject| format!("{} == {}", subject, branch.case_label));
             let body = self.with_scope(|this| {
+                if let Some(condition) = established {
+                    this.planner.scope.establish_condition(condition);
+                }
                 let mut body: Vec<LoweredStatement> = Vec::new();
                 this.walk(&mut body, &branch.decision, &ctx);
                 body

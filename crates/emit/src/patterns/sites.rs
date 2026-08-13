@@ -224,11 +224,12 @@ impl Planner<'_> {
             ty: &value_ty,
         };
 
+        let subject_is_fixed = self.is_unmutated_identifier(scrutinee);
         let (body, used) = self.capture_go_uses(|this| {
             if matches!(ap.pattern, Pattern::Or { .. }) {
                 this.lower_let_else_or_pattern(ap, binding_ty, subject, fail)
             } else {
-                this.lower_let_else_single_pattern(ap, subject, fail)
+                this.lower_let_else_single_pattern(ap, subject, fail, subject_is_fixed)
             }
         });
         let body_block = LoweredBlock { statements: body };
@@ -487,18 +488,24 @@ impl Planner<'_> {
         ap: AnnotatedPattern,
         subject: TypedSubject,
         fail: RefutableFail,
+        subject_is_fixed: bool,
     ) -> Vec<LoweredStatement> {
         let AnnotatedPattern { pattern } = ap;
         let TypedSubject {
             var: subject_var,
             ty: subject_ty,
         } = subject;
-        let info = decision_tree::collect_pattern_info(self, pattern, subject_ty);
+        let mut info = decision_tree::collect_pattern_info(self, pattern, subject_ty);
         self.require_packages(&info.packages);
 
         let mut statements = Vec::new();
         let (effective_subject, assert_ok_var) =
             apply_refutable_root_assertion(self, &mut statements, &info, subject_var);
+
+        if subject_is_fixed {
+            info.checks
+                .retain(|check| !self.is_condition_established(&check.render(&effective_subject)));
+        }
 
         if info.checks.is_empty() && assert_ok_var.is_none() {
             tree_binding_statements(

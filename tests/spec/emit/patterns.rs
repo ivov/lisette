@@ -566,6 +566,115 @@ fn test(s: string) -> int {
 }
 
 #[test]
+fn let_else_in_arm_drops_the_test_the_arm_made() {
+    let input = r#"
+enum Event {
+  Click { x: int, y: int },
+  Close,
+}
+
+fn test(e: Event) -> int {
+  match e {
+    Event.Click { x, y } => {
+      let Event.Click { x: a, y: b } = e else { return 0 }
+      a + b + x + y
+    },
+    _ => 0,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_else_in_switch_case_drops_the_test_the_case_made() {
+    let input = r#"
+enum Event {
+  Click { x: int, y: int },
+  Move { dx: int },
+  Close,
+}
+
+fn test(e: Event) -> int {
+  match e {
+    Event.Click { x, y } => {
+      let Event.Click { x: a, y: b } = e else { return 0 }
+      a + b + x + y
+    },
+    Event.Move { dx } => dx,
+    Event.Close => 0,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_else_on_reassigned_subject_keeps_its_test() {
+    let input = r#"
+enum Event {
+  Click { x: int, y: int },
+  Close,
+}
+
+fn test(start: Event) -> int {
+  let mut e = start
+  match e {
+    Event.Click { x, y } => {
+      e = Event.Close
+      let Event.Click { x: a, y: b } = e else { return 7 }
+      a + b + x + y
+    },
+    _ => 0,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_else_in_the_else_arm_keeps_its_test() {
+    let input = r#"
+enum Event {
+  Click { x: int, y: int },
+  Close,
+}
+
+fn test(e: Event) -> int {
+  match e {
+    Event.Click { x, y } => x + y,
+    _ => {
+      let Event.Click { x: a, y: b } = e else { return 5 }
+      a + b
+    },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_else_on_another_variant_keeps_its_test() {
+    let input = r#"
+enum Event {
+  Click { x: int, y: int },
+  Close,
+}
+
+fn test(e: Event) -> int {
+  match e {
+    Event.Click { x, y } => {
+      let Event.Close = e else { return x + y }
+      1
+    },
+    _ => 0,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn or_pattern_let_else_shadow() {
     let input = r#"
 enum E { A(int), B(int), C }

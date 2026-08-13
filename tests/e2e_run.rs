@@ -1014,6 +1014,74 @@ fn main() {
 }
 
 #[test]
+fn run_let_else_in_arm_still_tests_a_reassigned_subject() {
+    if !go_available() {
+        eprintln!("skipping run_let_else_in_arm_still_tests_a_reassigned_subject: `go` not found");
+        return;
+    }
+
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    let invocation = scratch.path().join("invocation");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::create_dir_all(&invocation).unwrap();
+
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"letelse\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        r#"import "go:fmt"
+
+enum Event {
+  Click { x: int, y: int },
+  Close,
+}
+
+fn reassigned(start: Event) -> int {
+  let mut e = start
+  match e {
+    Event.Click { x, y } => {
+      e = Event.Close
+      let Event.Click { x: a, y: b } = e else { return 7 }
+      a + b + x + y
+    },
+    _ => 0,
+  }
+}
+
+fn kept(e: Event) -> int {
+  match e {
+    Event.Click { x, y } => {
+      let Event.Click { x: a, y: b } = e else { return 0 }
+      a + b + x + y
+    },
+    _ => 0,
+  }
+}
+
+fn main() {
+  let click = Event.Click { x: 30, y: 12 }
+  fmt.Println(reassigned(click), kept(click), kept(Event.Close))
+}
+"#,
+    )
+    .unwrap();
+
+    let output = lis_run(&project, &invocation, &[]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "lis run failed:\nstdout: {stdout}\nstderr: {stderr}"
+    );
+    assert_eq!(stdout.trim(), "7 84 0", "stderr: {stderr}");
+}
+
+#[test]
 fn run_counted_loops_iterate_from_zero_up_to_the_bound() {
     if !go_available() {
         eprintln!("skipping run_counted_loops_iterate_from_zero_up_to_the_bound: `go` not found");

@@ -1,0 +1,59 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  enum Event {
+    Click { x: int, y: int },
+    Close,
+  }
+  
+  fn test(start: Event) -> int {
+    let mut e = start
+    match e {
+      Event.Click { x, y } => {
+        e = Event.Close
+        let Event.Click { x: a, y: b } = e else { return 7 }
+        a + b + x + y
+      },
+      _ => 0,
+    }
+  }
+---
+package main
+
+func MakeEventClick(arg0 int, arg1 int) Event {
+	return Event{Tag: EventClick, X: arg0, Y: arg1}
+}
+
+func MakeEventClose() Event {
+	return Event{Tag: EventClose}
+}
+
+type EventTag int
+
+const (
+	EventClick EventTag = iota
+	EventClose
+)
+
+type Event struct {
+	Tag EventTag
+	X   int
+	Y   int
+}
+
+func test(start Event) int {
+	e := start
+	if e.Tag == EventClick {
+		x := e.X
+		y := e.Y
+		e = MakeEventClose()
+		if e.Tag != EventClick {
+			return 7
+		}
+		a := e.X
+		b := e.Y
+		return a + b + x + y
+	}
+	return 0
+}
