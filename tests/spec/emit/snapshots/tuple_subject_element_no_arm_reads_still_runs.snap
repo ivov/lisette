@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  fn left() -> int { 1 }
+  
+  fn test(b: bool) -> string {
+    match (left(), b) {
+      (_, true) => "yes",
+      _ => "no",
+    }
+  }
+---
+package main
+
+func left() int {
+	return 1
+}
+
+func test(b bool) string {
+	_ = left()
+	if b == true {
+		return "yes"
+	}
+	return "no"
+}

@@ -13,7 +13,7 @@ use crate::patterns::binding_emit::{
     apply_refutable_root_assertion, apply_root_assertion, compose_refutable_condition,
     tree_assignment_statements, tree_binding_statements, with_tree_bindings,
 };
-use crate::patterns::decision_tree::{self, PatternInfo, render_condition};
+use crate::patterns::decision_tree::{self, PatternInfo, SubjectRoot, render_condition};
 use crate::patterns::matching::{field_binding, some_pattern_field};
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan,
@@ -503,8 +503,9 @@ impl Planner<'_> {
             apply_refutable_root_assertion(self, &mut statements, &info, subject_var);
 
         if subject_is_fixed {
-            info.checks
-                .retain(|check| !self.is_condition_established(&check.render(&effective_subject)));
+            info.checks.retain(|check| {
+                !self.is_condition_established(&check.render(SubjectRoot::Var(&effective_subject)))
+            });
         }
 
         if info.checks.is_empty() && assert_ok_var.is_none() {
@@ -526,8 +527,11 @@ impl Planner<'_> {
         if !info.checks.is_empty() {
             self.scope.record_go_use(effective_subject.as_ref());
             let negated = match info.checks.as_slice() {
-                [check] => check.render_negated(&effective_subject),
-                _ => format!("!({})", render_condition(&info.checks, &effective_subject)),
+                [check] => check.render_negated(SubjectRoot::Var(&effective_subject)),
+                _ => format!(
+                    "!({})",
+                    render_condition(&info.checks, SubjectRoot::Var(&effective_subject))
+                ),
             };
             guard_parts.push(wrap_if_struct_literal(negated));
         }

@@ -1,0 +1,38 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  enum Only { Single }
+  
+  fn test(o: Only, b: bool) -> string {
+    match (o, b) {
+      (Only.Single, true) => "yes",
+      _ => "no",
+    }
+  }
+---
+package main
+
+func MakeOnlySingle() Only {
+	return Only{Tag: OnlySingle}
+}
+
+type OnlyTag int
+
+const (
+	OnlySingle OnlyTag = iota
+)
+
+type Only struct {
+	Tag OnlyTag
+}
+
+func test(o Only, b bool) string {
+	if o.Tag == OnlySingle {
+		if b == true {
+			return "yes"
+		}
+		return "no"
+	}
+	return "no"
+}

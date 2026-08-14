@@ -1,0 +1,51 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  enum Event {
+    Click(int, int),
+    Close,
+  }
+  
+  fn test(e: Event, b: bool) -> int {
+    match (e, b) {
+      (Event.Click(x, y), true) => x + y,
+      _ => 0,
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func MakeEventClick(arg0 int, arg1 int) Event {
+	return Event{Tag: EventClick, Click0: arg0, Click1: arg1}
+}
+
+func MakeEventClose() Event {
+	return Event{Tag: EventClose}
+}
+
+type EventTag int
+
+const (
+	EventClick EventTag = iota
+	EventClose
+)
+
+type Event struct {
+	Tag    EventTag
+	Click0 int
+	Click1 int
+}
+
+func test(e Event, b bool) int {
+	subject_1 := lisette.MakeTuple2[Event, bool](e, b)
+	if subject_1.First.Tag == EventClick {
+		if subject_1.Second == true {
+			return subject_1.First.Click0 + subject_1.First.Click1
+		}
+		return 0
+	}
+	return 0
+}

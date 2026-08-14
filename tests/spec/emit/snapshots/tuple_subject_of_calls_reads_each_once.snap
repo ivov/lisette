@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  fn left() -> int { 1 }
+  
+  fn right() -> int { 2 }
+  
+  fn test() -> string {
+    match (left(), right()) {
+      (1, 2) => "one two",
+      _ => "other",
+    }
+  }
+---
+package main
+
+func left() int {
+	return 1
+}
+
+func right() int {
+	return 2
+}
+
+func test() string {
+	arg_1 := left()
+	arg_2 := right()
+	if arg_1 == 1 && arg_2 == 2 {
+		return "one two"
+	}
+	return "other"
+}

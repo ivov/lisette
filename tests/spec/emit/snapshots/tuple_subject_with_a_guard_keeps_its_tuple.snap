@@ -1,0 +1,44 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  fn bump(mut n: int) -> bool {
+    n = n + 1
+    true
+  }
+  
+  fn test(start: int, b: int) -> string {
+    let mut a = start
+    a = a + 1
+    match (a, b) {
+      (1, _) if bump(a) => "first",
+      (2, _) => "second",
+      _ => "none",
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func bump(n int) bool {
+	n++
+	return true
+}
+
+func test(start, b int) string {
+	a := start
+	a++
+	subject_1 := lisette.MakeTuple2[int, int](a, b)
+	if subject_1.First == 1 {
+		if bump(a) {
+			return "first"
+		}
+	}
+	if subject_1.First == 2 {
+		return "second"
+	}
+	{
+		return "none"
+	}
+}

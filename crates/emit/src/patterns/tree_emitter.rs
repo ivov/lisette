@@ -7,9 +7,9 @@ use crate::context::expression::ExpressionContext;
 use crate::patterns::binding_decls::{is_catchall_pattern, is_unconditional_catchall};
 use crate::patterns::binding_emit::{drop_inline_overlays, tree_binding_statements};
 use crate::patterns::decision_tree::{
-    ChainTest, Decision, PatternBinding, SwitchBranch, SwitchKind as PatternSwitchKind,
-    SwitchShape, compile_expanded_arms, decision_is_exhaustive, expand_or_patterns,
-    render_condition, tree_has_unguarded_terminal,
+    ChainTest, Decision, PatternBinding, SubjectRoot, SwitchBranch,
+    SwitchKind as PatternSwitchKind, SwitchShape, compile_expanded_arms, decision_is_exhaustive,
+    expand_or_patterns, render_condition, tree_has_unguarded_terminal,
 };
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopKind, LoopPlan, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan,
@@ -150,10 +150,36 @@ impl<'a> WalkCtx<'a> {
     }
 }
 
+pub(crate) enum MatchSubject {
+    Var(String),
+    Elements(Vec<String>),
+}
+
+impl MatchSubject {
+    /// The one name a binding resolves against.
+    fn var(&self) -> &str {
+        match self {
+            Self::Var(var) => var,
+            Self::Elements(_) => unreachable!("tuple elements carry no bindings"),
+        }
+    }
+
+    pub(crate) fn root(&self) -> SubjectRoot<'_> {
+        match self {
+            Self::Var(var) => SubjectRoot::Var(var),
+            Self::Elements(names) => SubjectRoot::Elements(names),
+        }
+    }
+
+    fn names(&self) -> Vec<&str> {
+        self.root().names()
+    }
+}
+
 pub(crate) struct TreePlanner<'a, 'e> {
     planner: &'a mut Planner<'e>,
     arms: &'a [MatchArm],
-    subject: String,
+    subject: MatchSubject,
     subject_ty: Type,
 }
 
@@ -161,7 +187,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
     pub(crate) fn new(
         planner: &'a mut Planner<'e>,
         arms: &'a [MatchArm],
-        subject_var: String,
+        subject_var: MatchSubject,
         subject_ty: Type,
     ) -> Self {
         Self {
@@ -198,6 +224,12 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             }
         }
         LoweredBlock { statements }
+    }
+
+    fn record_subject_use(&mut self) {
+        for name in self.subject.names().to_vec() {
+            self.planner.scope.record_go_use(name);
+        }
     }
 
     fn with_scope<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
@@ -314,7 +346,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let mut last_diverges = false;
         for (test, condition) in tests[..regular_len].iter().zip(&conditions) {
             if condition.is_some() {
-                self.planner.scope.record_go_use(&self.subject);
+                self.record_subject_use();
             }
             let condition = condition.as_deref().unwrap_or("true").to_string();
             let walk_ctx = if matches!(test.decision, Decision::Guard { .. }) {
@@ -539,8 +571,8 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                         }
                         continue;
                     }
-                    self.planner.scope.record_go_use(&self.subject);
-                    conditions.push(render_condition(&test.checks, &self.subject));
+                    self.record_subject_use();
+                    conditions.push(render_condition(&test.checks, self.subject.root()));
                     let flattened = self.collect_flat_cases(&test.decision, conditions, out, false);
                     conditions.pop();
                     if !flattened {
@@ -559,10 +591,10 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 branches,
                 fallback,
             } => {
-                let rendered_path = path.render(&self.subject);
+                let rendered_path = path.render(self.subject.root());
                 let (cased, lifted) = split_with_default_lift(branches, fallback.as_deref());
                 for branch in cased {
-                    self.planner.scope.record_go_use(&self.subject);
+                    self.record_subject_use();
                     conditions.push(switch_branch_condition(
                         &rendered_path,
                         kind,
@@ -621,12 +653,12 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 .scope
                 .resolve_identifier_binding(&binding.lisette_name)
                 .cloned();
-            let text = binding.path.render_composable(&self.subject);
+            let text = binding.path.render_composable(self.subject.root());
             self.planner.scope.bind_inline_expr(
                 &binding.lisette_name,
                 InlineExpr::new(
                     text,
-                    vec![self.subject.clone()],
+                    vec![self.subject.var().to_string()],
                     binding.path.contains_deferred_evaluation(),
                 ),
             );
@@ -714,10 +746,10 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             unreachable!("walk_switch requires a Switch decision");
         };
         let fallback = fallback.as_deref();
-        let rendered_path = path.render(&self.subject);
+        let rendered_path = path.render(self.subject.root());
         match shape {
             SwitchShape::TypeSwitch => {
-                self.planner.scope.record_go_use(&self.subject);
+                self.record_subject_use();
                 let plan = self.lower_type_switch(rendered_path, branches, fallback, ctx.arm_place);
                 let body_diverges =
                     capture_diverge(vec![LoweredStatement::Switch(plan)], statements);
@@ -772,7 +804,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 self.walk_condition_branch(statements, condition, &branch.decision, fallback, ctx);
             }
             SwitchShape::Multi => {
-                self.planner.scope.record_go_use(&self.subject);
+                self.record_subject_use();
                 let expr = render_switch_expression(&rendered_path, kind);
                 let plan = self.lower_value_switch(expr, branches, fallback, ctx.arm_place);
                 let body_diverges =
@@ -790,7 +822,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         else_branch: &Decision,
         ctx: &WalkCtx,
     ) {
-        self.planner.scope.record_go_use(&self.subject);
+        self.record_subject_use();
         let inner = WalkCtx::switch_case(ctx.arm_place);
         let then_statements = self.with_scope(|this| {
             this.planner.scope.establish_condition(condition.clone());
@@ -952,7 +984,8 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let arms = self.arms;
         let subject_ty = self.subject_ty.clone();
         let ((case_plans, default_block), used) = self.planner.capture_go_uses(|planner| {
-            let mut nested = TreePlanner::new(planner, arms, base.clone(), subject_ty);
+            let mut nested =
+                TreePlanner::new(planner, arms, MatchSubject::Var(base.clone()), subject_ty);
             let case_plans = nested.lower_switch_cases(regular, place, None);
             let default_block = nested.lower_switch_default(default, place);
             (case_plans, default_block)
@@ -1083,7 +1116,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         let body = LoweredBlock { statements: body };
         let first_condition = &conditions[indices[0]];
         if first_condition.is_some() {
-            self.planner.scope.record_go_use(&self.subject);
+            self.record_subject_use();
         }
         match first_condition {
             Some(condition) => statements.push(LoweredStatement::If(IfPlan {
@@ -1232,11 +1265,14 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             None => Vec::new(),
         };
 
+        if bindings.is_empty() {
+            return Vec::new();
+        }
         tree_binding_statements(
             self.planner,
             statements,
             bindings,
-            &self.subject,
+            self.subject.var(),
             consumers,
             &failure_trees,
         )
@@ -1285,7 +1321,8 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         tests
             .iter()
             .map(|test| {
-                (!test.checks.is_empty()).then(|| render_condition(&test.checks, &self.subject))
+                (!test.checks.is_empty())
+                    .then(|| render_condition(&test.checks, self.subject.root()))
             })
             .collect()
     }

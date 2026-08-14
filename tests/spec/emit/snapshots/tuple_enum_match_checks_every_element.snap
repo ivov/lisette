@@ -33,8 +33,6 @@ description: |
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
 func MakeHandLeft() Hand {
 	return Hand{Tag: HandLeft}
 }
@@ -55,9 +53,8 @@ type Hand struct {
 }
 
 func (h Hand) LeftRight(other Hand) bool {
-	subject_1 := lisette.MakeTuple2[Hand, Hand](h, other)
-	if subject_1.First.Tag == HandLeft {
-		if subject_1.Second.Tag == HandRight {
+	if h.Tag == HandLeft {
+		if other.Tag == HandRight {
 			return true
 		}
 		return false
@@ -66,9 +63,8 @@ func (h Hand) LeftRight(other Hand) bool {
 }
 
 func (h Hand) LeftLeft(other Hand) bool {
-	subject_1 := lisette.MakeTuple2[Hand, Hand](h, other)
-	if subject_1.First.Tag == HandLeft {
-		if subject_1.Second.Tag == HandLeft {
+	if h.Tag == HandLeft {
+		if other.Tag == HandLeft {
 			return true
 		}
 		return false
@@ -77,15 +73,14 @@ func (h Hand) LeftLeft(other Hand) bool {
 }
 
 func (h Hand) Eq(other Hand) bool {
-	subject_1 := lisette.MakeTuple2[Hand, Hand](h, other)
-	switch subject_1.First.Tag {
+	switch h.Tag {
 	case HandLeft:
-		if subject_1.Second.Tag == HandLeft {
+		if other.Tag == HandLeft {
 			return true
 		}
 		return false
 	case HandRight:
-		if subject_1.Second.Tag == HandRight {
+		if other.Tag == HandRight {
 			return true
 		}
 		return false

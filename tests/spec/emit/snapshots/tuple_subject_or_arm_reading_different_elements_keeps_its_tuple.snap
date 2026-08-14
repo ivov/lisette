@@ -1,0 +1,34 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  fn left() -> int { 2 }
+  
+  fn right() -> int { 1 }
+  
+  fn test() -> string {
+    match (left(), right()) {
+      (_, 1) | (2, _) => "hit",
+      _ => "miss",
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func left() int {
+	return 2
+}
+
+func right() int {
+	return 1
+}
+
+func test() string {
+	subject_1 := lisette.MakeTuple2[int, int](left(), right())
+	if subject_1.Second == 1 || subject_1.First == 2 {
+		return "hit"
+	}
+	return "miss"
+}
