@@ -40,9 +40,10 @@ pub fn parse_and_register_prelude(store: &mut Store, sink: &LocalSink) {
         }
 
         for file in package.files.values_mut().filter(|file| file.is_d_lis()) {
+            checker.register_constants(store, &file.items, &Visibility::Public);
             checker.register_type_definitions(store, &mut file.items);
             checker.register_impl_blocks(store, &mut file.items);
-            checker.register_values(store, &mut file.items, &Visibility::Public);
+            checker.register_non_const_values(store, &mut file.items, &Visibility::Public);
         }
         checker.finalize_registration(store);
     });
@@ -84,9 +85,10 @@ pub fn parse_and_register_test_prelude(store: &mut Store, sink: &LocalSink) {
             }
 
             for file in package.files.values_mut().filter(|file| file.is_d_lis()) {
+                checker.register_constants(store, &file.items, &Visibility::Public);
                 checker.register_type_definitions(store, &mut file.items);
                 checker.register_impl_blocks(store, &mut file.items);
-                checker.register_values(store, &mut file.items, &Visibility::Public);
+                checker.register_non_const_values(store, &mut file.items, &Visibility::Public);
             }
             checker.finalize_registration(store);
         },

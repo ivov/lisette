@@ -508,20 +508,8 @@ impl InferCtx<'_> {
             }
         } else if type_args.len() == 2 {
             let elem = self.convert_to_type(store, &type_args[0], &span);
-            match &type_args[1] {
-                Annotation::Constant {
-                    value,
-                    span: size_span,
-                    ..
-                } => self
-                    .check_array_size_in_bounds(*value, *size_span)
-                    .then_some((elem, *value)),
-                other => {
-                    self.sink
-                        .push(diagnostics::infer::array_size_not_literal(other.get_span()));
-                    None
-                }
-            }
+            self.resolve_array_size(store, &type_args[1])
+                .map(|length| (elem, length))
         } else {
             self.sink
                 .push(diagnostics::infer::array_type_arity(type_args.len(), span));

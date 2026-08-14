@@ -187,7 +187,7 @@ Run `lis doc Slice` for the full method list.
 
 ### `Array<T, N>`
 
-A fixed-size, indexable sequence of elements. The size is part of the type, so `Array<byte, 2>` and `Array<byte, 3>` are distinct types. The size must be an integer literal.
+A fixed-size, indexable sequence of elements. The size is part of the type, so `Array<byte, 2>` and `Array<byte, 3>` are distinct types.
 
 A literal creates an array from its elements and must list exactly `N` of them:
 

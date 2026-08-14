@@ -52,13 +52,14 @@ impl TaskState {
         items: &mut [Expression],
         visibility: &Visibility,
     ) {
+        let package_id = self.cursor.package_id().to_string();
         self.register_type_names(store, items, visibility);
+        self.register_constants(store, items, visibility);
         self.register_type_definitions(store, items);
         self.check_type_generic_bounds(store, items);
         self.register_impl_blocks(store, items);
-        self.register_values(store, items, visibility);
+        self.register_non_const_values(store, items, visibility);
         self.register_item_derived_attributes(store, items);
-        let package_id = self.cursor.package_id().to_string();
         self.validate_package_embeds(store, &package_id);
         self.check_package_recursive_types(store, &package_id);
     }

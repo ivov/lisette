@@ -375,7 +375,12 @@ impl Backend {
                     let qualified = format!("{}.{}", file.package_id, name);
                     find_struct_field_span(&qualified, &f.name, &snapshot)
                 })
-                .or_else(|| offset_in_span(offset, name_span).then_some(*name_span)),
+                .or_else(|| offset_in_span(offset, name_span).then_some(*name_span))
+                .or_else(|| {
+                    fields.iter().find_map(|f| {
+                        resolve_annotation_definition(&f.annotation, offset, file, &snapshot)
+                    })
+                }),
 
             syntax::ast::Expression::Enum {
                 name,

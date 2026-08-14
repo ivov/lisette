@@ -6750,6 +6750,62 @@ fn f(x: Array<int, 18000000000000000000>) {}
 }
 
 #[test]
+fn infer_array_size_unknown_constant() {
+    let input = r#"
+fn f(x: Array<int, NOPE>) {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_array_size_not_constant() {
+    let input = r#"
+fn size() -> int { 3 }
+fn f(x: Array<int, size>) {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_array_size_local_constant() {
+    let input = r#"
+fn f() -> int {
+  const N = 3
+  let xs: Array<int, N> = [1, 2, 3]
+  xs.length()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_array_size_not_integer_constant() {
+    let input = r#"
+const N = "three"
+fn f(x: Array<int, N>) {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_array_size_computed_constant() {
+    let input = r#"
+const N = 2 + 2
+fn f(x: Array<int, N>) {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_array_size_negative_constant() {
+    let input = r#"
+const N = -2
+fn f(x: Array<int, N>) {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_array_to_slice_type_mismatch_hint() {
     let input = r#"
 fn consume(items: Slice<int>) {}

@@ -7,14 +7,47 @@ use syntax::EcoString;
 use syntax::ast::{Annotation, Generic, Span};
 use syntax::program::DefinitionBody;
 use syntax::types::{
-    FunctionParameter, Symbol, Type, build_named_substitution_map, substitute, unqualified_name,
+    FunctionParameter, SimpleKind, Symbol, Type, build_named_substitution_map, substitute,
+    unqualified_name,
 };
 
 use crate::checker::TaskState;
 use crate::checker::scopes::DeferredMapKeyCheck;
+use crate::checker::state::PendingArraySizeCheck;
 use crate::generics::apply_bounds;
 use crate::prelude::PRELUDE_PACKAGE_ID;
 use crate::store::Store;
+
+enum ArraySizeError {
+    NotInteger,
+    Negative,
+    TooLarge,
+}
+
+impl ArraySizeError {
+    fn into_diagnostic(self, name: &str, value: u64, span: Span) -> diagnostics::LisetteDiagnostic {
+        match self {
+            Self::NotInteger => diagnostics::infer::array_size_not_integer_constant(name, span),
+            Self::Negative => diagnostics::infer::array_size_negative_constant(name, span),
+            Self::TooLarge => diagnostics::infer::array_size_too_large(value, span),
+        }
+    }
+}
+
+fn constant_size_of(kind: SimpleKind, value: u64) -> Result<u64, ArraySizeError> {
+    if kind.integer_range().is_none() {
+        return Err(ArraySizeError::NotInteger);
+    }
+    // Past `i64::MAX` a signed constant is a wrapped negative, not a huge size.
+    if value > i64::MAX as u64 {
+        return Err(if kind.is_signed_int() {
+            ArraySizeError::Negative
+        } else {
+            ArraySizeError::TooLarge
+        });
+    }
+    Ok(value)
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum TypePosition {
@@ -414,25 +447,126 @@ impl TaskState {
             return Type::Error;
         }
 
-        if let Annotation::Constant {
-            value,
-            span: size_span,
-            ..
-        } = &params[1]
-        {
-            if !self.check_array_size_in_bounds(*value, *size_span) {
-                return Type::Error;
-            }
-            return Type::Array {
-                length: *value,
+        match self.resolve_array_size(store, &params[1]) {
+            Some(length) => Type::Array {
+                length,
                 element: Box::new(element),
-            };
+            },
+            None => Type::Error,
+        }
+    }
+
+    pub(crate) fn resolve_array_size(
+        &mut self,
+        store: &Store,
+        annotation: &Annotation,
+    ) -> Option<u64> {
+        let span = annotation.get_span();
+        match annotation {
+            Annotation::Constant { value, .. } => self
+                .check_array_size_in_bounds(*value, span)
+                .then_some(*value),
+            Annotation::Constructor { name, params, .. }
+                if params.is_empty() && self.lookup_generic_index(name).is_none() =>
+            {
+                self.resolve_named_array_size(store, name, span)
+            }
+            _ => {
+                self.sink
+                    .push(diagnostics::infer::array_size_not_literal(span));
+                None
+            }
+        }
+    }
+
+    fn resolve_named_array_size(&mut self, store: &Store, name: &str, span: Span) -> Option<u64> {
+        if self.scopes.lookup_value(name).is_some() {
+            self.sink.push(if self.scopes.lookup_const(name) {
+                diagnostics::infer::array_size_local_constant(name, span)
+            } else {
+                diagnostics::infer::array_size_not_constant(name, span)
+            });
+            return None;
         }
 
-        self.sink.push(diagnostics::infer::array_size_not_literal(
-            params[1].get_span(),
-        ));
-        Type::Error
+        let Some(qualified_name) = self.lookup_qualified_name(store, name) else {
+            self.sink
+                .push(diagnostics::infer::array_size_unknown_constant(name, span));
+            return None;
+        };
+        let Some(definition) = store.get_definition(&qualified_name) else {
+            self.sink
+                .push(diagnostics::infer::array_size_unknown_constant(name, span));
+            return None;
+        };
+        if !definition.is_const() {
+            self.sink.push(if definition.is_value(&qualified_name) {
+                diagnostics::infer::array_size_not_constant(name, span)
+            } else {
+                // A type in size position, as in `Array<int, int>`.
+                diagnostics::infer::array_size_not_literal(span)
+            });
+            return None;
+        }
+        self.track_name_usage(store, &qualified_name, &span, name.len() as u32);
+
+        let Some(literal) = definition.const_value() else {
+            self.sink
+                .push(diagnostics::infer::array_size_computed_constant(name, span));
+            return None;
+        };
+        let syntax::ast::Literal::Integer { value, .. } = literal else {
+            self.sink
+                .push(diagnostics::infer::array_size_not_integer_constant(
+                    name, span,
+                ));
+            return None;
+        };
+        let value = *value;
+
+        // A type alias holding an array can read a constant before that constant's
+        // own type name resolves, so settle those after registration instead.
+        let Some(kind) = store.underlying_simple_kind(&definition.ty.resolve_in(&self.env)) else {
+            self.pending.array_size_checks.push(PendingArraySizeCheck {
+                qualified_name: qualified_name.to_string(),
+                name: name.into(),
+                span,
+            });
+            return (value <= i64::MAX as u64).then_some(value);
+        };
+
+        match constant_size_of(kind, value) {
+            Ok(length) => Some(length),
+            Err(error) => {
+                self.sink.push(error.into_diagnostic(name, value, span));
+                None
+            }
+        }
+    }
+
+    /// Settles the size constants whose type had not resolved at conversion time.
+    pub(super) fn check_pending_array_size_checks(&mut self, store: &Store) {
+        let mut seen = rustc_hash::FxHashSet::default();
+        for pending in std::mem::take(&mut self.pending.array_size_checks) {
+            if !seen.insert((pending.span, pending.qualified_name.clone())) {
+                continue;
+            }
+            let Some(definition) = store.get_definition(&pending.qualified_name) else {
+                continue;
+            };
+            let Some(syntax::ast::Literal::Integer { value, .. }) = definition.const_value() else {
+                continue;
+            };
+            let outcome = store
+                .underlying_simple_kind(&definition.ty.resolve_in(&self.env))
+                .map_or(Err(ArraySizeError::NotInteger), |kind| {
+                    constant_size_of(kind, *value)
+                });
+            if let Err(error) = outcome {
+                self.sink
+                    .push(error.into_diagnostic(&pending.name, *value, pending.span));
+            }
+        }
     }
 
     pub(crate) fn check_array_size_in_bounds(&mut self, value: u64, span: Span) -> bool {

@@ -13578,3 +13578,78 @@ fn a_closed_document_gets_no_diagnostics_from_a_surviving_sibling_key() {
     );
     client.shutdown();
 }
+
+#[test]
+fn goto_definition_array_size_constant_declared_later() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "fn take(xs: Array<int, SIZE>) -> int { xs.length() }\nconst SIZE = 3",
+    );
+
+    let response = client.goto_definition(TEST_URI, 0, 23);
+    assert!(response.is_some(), "forward-declared size should resolve");
+
+    let loc = definition_location(&response.unwrap());
+    assert!(loc.is_some());
+    assert_eq!(loc.unwrap().range.start.line, 1);
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_array_size_constant_in_struct_field() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "struct Holder {\n  pub data: Array<int, SIZE>\n}\nconst SIZE = 3",
+    );
+
+    let response = client.goto_definition(TEST_URI, 1, 23);
+    assert!(response.is_some(), "struct field size should resolve");
+
+    let loc = definition_location(&response.unwrap());
+    assert!(loc.is_some());
+    assert_eq!(loc.unwrap().range.start.line, 3);
+
+    client.shutdown();
+}
+
+#[test]
+fn hover_on_array_size_constant_shows_its_type() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "const SIZE = 3\nfn take(xs: Array<int, SIZE>) -> int { xs.length() }",
+    );
+
+    let hover = client.hover(TEST_URI, 1, 23);
+    assert!(hover.is_some(), "array size constant should hover");
+
+    let content = hover_content(&hover.unwrap());
+    assert!(content.contains("int"), "got: {content}");
+
+    client.shutdown();
+}
+
+#[test]
+fn goto_definition_array_size_constant() {
+    let mut client = TestClient::new();
+    client.initialize();
+    client.open(
+        TEST_URI,
+        "const SIZE = 3\nfn take(xs: Array<int, SIZE>) -> int { xs.length() }",
+    );
+
+    let response = client.goto_definition(TEST_URI, 1, 23);
+    assert!(response.is_some(), "array size constant should resolve");
+
+    let loc = definition_location(&response.unwrap());
+    assert!(loc.is_some());
+    assert_eq!(loc.unwrap().range.start.line, 0);
+
+    client.shutdown();
+}

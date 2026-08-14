@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ `N` is negative
+   ╭─[test.lis:3:20]
+ 2 │ const N = -2
+ 3 │ fn f(x: Array<int, N>) {}
+   ·                    ┬
+   ·                    ╰── an array size cannot be negative
+   ╰────
+  help: Array sizes count elements, so they start at zero · code: [infer.array_size_negative_constant]

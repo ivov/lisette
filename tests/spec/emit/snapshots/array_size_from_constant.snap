@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/arrays.rs
+description: |
+  
+  const SIZE = 3
+  
+  struct Holder {
+    pub data: Array<int, SIZE>
+  }
+  
+  fn take(xs: Array<int, SIZE>) -> int {
+    xs.length()
+  }
+  
+  fn build() -> Holder {
+    Holder { data: Array.new<int, SIZE>() }
+  }
+---
+package main
+
+const Size int = 3
+
+type Holder struct {
+	Data [3]int
+}
+
+func take(xs [3]int) int {
+	return len(xs)
+}
+
+func build() Holder {
+	return Holder{Data: [3]int{}}
+}

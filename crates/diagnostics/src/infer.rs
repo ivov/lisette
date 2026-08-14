@@ -4021,7 +4021,57 @@ pub fn array_size_not_literal(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Array size must be an integer literal")
         .with_infer_code("array_size_not_literal")
         .with_span_label(&span, "expected an integer literal here")
-        .with_help("Array sizes are part of the type and must be constant, e.g. `Array<int, 3>`")
+        .with_help(
+            "Array sizes are part of the type and must be constant, \
+             e.g. `Array<int, 3>` or `Array<int, SIZE>`",
+        )
+}
+
+pub fn array_size_unknown_constant(name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!("Cannot find constant `{name}`"))
+        .with_infer_code("array_size_unknown_constant")
+        .with_span_label(&span, "not found in this scope")
+        .with_help("An array size is an integer literal or the name of an integer constant")
+}
+
+pub fn array_size_not_constant(name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!("`{name}` is not a constant"))
+        .with_infer_code("array_size_not_constant")
+        .with_span_label(&span, "expected a constant here")
+        .with_help("An array size is part of the type, so it cannot come from a runtime value")
+}
+
+pub fn array_size_local_constant(name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!("`{name}` is not a package-level constant"))
+        .with_infer_code("array_size_local_constant")
+        .with_span_label(&span, "declared inside a function")
+        .with_help(format!(
+            "Move `{name}` out of the function body to use it as an array size"
+        ))
+}
+
+pub fn array_size_not_integer_constant(name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!("`{name}` is not an integer constant"))
+        .with_infer_code("array_size_not_integer_constant")
+        .with_span_label(&span, "expected an integer constant here")
+        .with_help("An array size must be a whole number, e.g. `const SIZE = 3`")
+}
+
+pub fn array_size_computed_constant(name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!("`{name}` is not a literal constant"))
+        .with_infer_code("array_size_computed_constant")
+        .with_span_label(&span, "its initializer is computed, not a literal")
+        .with_help(format!(
+            "An array size reads the constant's literal value, so `{name}` must be \
+             written as a single integer literal"
+        ))
+}
+
+pub fn array_size_negative_constant(name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!("`{name}` is negative"))
+        .with_infer_code("array_size_negative_constant")
+        .with_span_label(&span, "an array size cannot be negative")
+        .with_help("Array sizes count elements, so they start at zero")
 }
 
 pub fn array_size_too_large(size: u64, span: Span) -> LisetteDiagnostic {

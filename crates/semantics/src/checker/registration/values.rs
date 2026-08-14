@@ -55,7 +55,21 @@ impl TaskState {
         }
     }
 
-    pub(crate) fn register_values(
+    /// Runs before every other declaration, so `Array<int, N>` can resolve `N`.
+    pub(crate) fn register_constants(
+        &mut self,
+        store: &mut Store,
+        items: &[Expression],
+        visibility: &Visibility,
+    ) {
+        for item in items {
+            if matches!(item, Expression::Const { .. }) {
+                self.register_const_value(store, item, visibility);
+            }
+        }
+    }
+
+    pub(crate) fn register_non_const_values(
         &mut self,
         store: &mut Store,
         items: &mut [Expression],
@@ -66,7 +80,6 @@ impl TaskState {
                 Expression::Function { .. } => {
                     self.register_function_value(store, item, visibility)
                 }
-                Expression::Const { .. } => self.register_const_value(store, item, visibility),
                 Expression::VariableDeclaration { .. } => {
                     self.register_variable_declaration(store, item, visibility)
                 }
