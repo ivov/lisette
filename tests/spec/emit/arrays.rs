@@ -552,3 +552,23 @@ fn bump(a: Ref<Array<int, 3>>) {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn array_size_from_constant() {
+    let input = r#"
+const SIZE = 3
+
+struct Holder {
+  pub data: Array<int, SIZE>
+}
+
+fn take(xs: Array<int, SIZE>) -> int {
+  xs.length()
+}
+
+fn build() -> Holder {
+  Holder { data: Array.new<int, SIZE>() }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

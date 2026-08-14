@@ -61,6 +61,7 @@ impl TaskState {
     pub fn finalize_registration(&mut self, store: &mut Store) {
         self.finalize_equality(store);
         self.check_pending_generic_bounds(store);
+        self.check_pending_array_size_checks(store);
         self.finalize_tests(store);
     }
 
@@ -129,6 +130,18 @@ impl TaskState {
                     file_id: file.id,
                     imports: &file.imports,
                 },
+                |this, store| this.register_constants(store, &file.items, &Visibility::Private),
+            );
+        }
+
+        for file in &mut files {
+            self.with_file_context_mut(
+                store,
+                FileContext::Standard {
+                    package_id: &id,
+                    file_id: file.id,
+                    imports: &file.imports,
+                },
                 |this, store| this.register_type_aliases(store, &mut file.items),
             );
         }
@@ -156,7 +169,7 @@ impl TaskState {
                 |this, store| {
                     this.check_type_generic_bounds(store, &file.items);
                     this.register_impl_blocks(store, &mut file.items);
-                    this.register_values(store, &mut file.items, &Visibility::Private);
+                    this.register_non_const_values(store, &mut file.items, &Visibility::Private);
                 },
             );
         }

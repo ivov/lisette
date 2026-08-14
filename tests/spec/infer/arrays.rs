@@ -424,3 +424,328 @@ fn large_array_literal_arm_is_not_exhaustive() {
     infer("fn f(arr: Array<int, 1000>) -> int { match arr { [0, ..] => 1 } }")
         .assert_infer_code("non_exhaustive");
 }
+
+#[test]
+fn array_size_from_constant() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        "const SIZE = 3\nfn f(xs: Array<int, SIZE>) -> int { xs.length() }\n",
+    );
+    infer_package("main", fs).assert_no_errors();
+}
+
+#[test]
+fn array_size_from_constant_declared_later() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        "fn f(xs: Array<int, SIZE>) -> int { xs.length() }\nconst SIZE = 3\n",
+    );
+    infer_package("main", fs).assert_no_errors();
+}
+
+#[test]
+fn array_size_constant_reaches_struct_field_and_alias() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        "const SIZE = 3\nstruct Holder { pub data: Array<int, SIZE> }\ntype Buf = Array<int, SIZE>\nfn f(b: Buf) -> Holder { Holder { data: b } }\n",
+    );
+    infer_package("main", fs).assert_no_errors();
+}
+
+#[test]
+fn array_size_from_constant_in_another_package() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("sizes", "sizes.lis", "pub const WIDTH = 4\n");
+    fs.add_file(
+        "main",
+        "main.lis",
+        "import \"sizes\"\nfn f(xs: Array<int, sizes.WIDTH>) -> int { xs.length() }\n",
+    );
+    infer_package("main", fs).assert_no_errors();
+}
+
+#[test]
+fn array_size_constant_rejects_wrong_literal_length() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        "const SIZE = 3\nfn f() -> Array<int, SIZE> { [1, 2] }\n",
+    );
+    infer_package("main", fs).assert_infer_code("array_literal_length_mismatch");
+}
+
+#[test]
+fn array_new_turbofish_takes_a_constant() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        "const SIZE = 3\nfn f() -> Array<int, 3> { Array.new<int, SIZE>() }\n",
+    );
+    infer_package("main", fs).assert_no_errors();
+}
+
+#[test]
+fn array_size_constant_not_found() {
+    infer("let xs: Array<int, NOPE> = [1]; xs").assert_infer_code("array_size_unknown_constant");
+}
+
+#[test]
+fn array_size_constant_from_computed_initializer() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        "const SIZE = 2 + 1\nfn f(xs: Array<int, SIZE>) -> int { xs.length() }\n",
+    );
+    infer_package("main", fs).assert_infer_code("array_size_computed_constant");
+}
+
+#[test]
+fn array_size_constant_must_be_an_integer() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        "const SIZE = \"three\"\nfn f(xs: Array<int, SIZE>) -> int { xs.length() }\n",
+    );
+    infer_package("main", fs).assert_infer_code("array_size_not_integer_constant");
+}
+
+#[test]
+fn array_size_constant_must_not_be_negative() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        "const SIZE = -2\nfn f(xs: Array<int, SIZE>) -> int { xs.length() }\n",
+    );
+    infer_package("main", fs).assert_infer_code("array_size_negative_constant");
+}
+
+#[test]
+fn array_size_constant_must_not_be_function_local() {
+    infer("fn f() -> int { const SIZE = 3; let xs: Array<int, SIZE> = [1, 2, 3]; xs.length() }")
+        .assert_infer_code("array_size_local_constant");
+}
+
+#[test]
+fn array_size_rejects_a_runtime_value() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        "fn size() -> int { 3 }\nfn f(xs: Array<int, size>) -> int { xs.length() }\n",
+    );
+    infer_package("main", fs).assert_infer_code("array_size_not_constant");
+}
+
+#[test]
+fn array_size_constant_above_int_max_is_rejected() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        "const SIZE: uint = 18000000000000000000\nfn f(xs: Array<int, SIZE>) -> int { xs.length() }\n",
+    );
+    infer_package("main", fs).assert_infer_code("array_size_too_large");
+}
+
+#[test]
+fn array_size_constant_with_a_float_type_is_rejected() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        "const SIZE: float64 = 3\nfn f(xs: Array<int, SIZE>) -> int { xs.length() }\n",
+    );
+    infer_package("main", fs).assert_infer_code("array_size_not_integer_constant");
+}
+
+#[test]
+fn array_size_constant_typed_by_a_numeric_newtype() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        "struct Width(int)\nconst SIZE: Width = 3\nfn f(xs: Array<int, SIZE>) -> int { xs.length() }\n",
+    );
+    infer_package("main", fs).assert_no_errors();
+}
+
+#[test]
+fn array_size_constant_typed_by_a_newtype_declared_later() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        "type Buf = Array<int, SIZE>\nstruct Width(int)\nconst SIZE: Width = 3\nfn f(b: Buf) -> int { b.length() }\n",
+    );
+    infer_package("main", fs).assert_no_errors();
+}
+
+#[test]
+fn array_size_constant_typed_by_a_nested_numeric_newtype() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        "struct Inner(int)\nstruct Outer(Inner)\nconst SIZE: Outer = 3\nfn f(xs: Array<int, SIZE>) -> int { xs.length() }\n",
+    );
+    infer_package("main", fs).assert_no_errors();
+}
+
+#[test]
+fn array_size_constant_typed_by_a_uintptr_newtype() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        "struct Handle(uintptr)\nconst SIZE: Handle = 3\nfn f(xs: Array<int, SIZE>) -> int { xs.length() }\n",
+    );
+    infer_package("main", fs).assert_no_errors();
+}
+
+#[test]
+fn array_size_constant_typed_by_a_uintptr_alias() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        "type Slot = uintptr\nconst SIZE: Slot = 3\nfn f(xs: Array<int, SIZE>) -> int { xs.length() }\n",
+    );
+    infer_package("main", fs).assert_no_errors();
+}
+
+#[test]
+fn array_size_constant_typed_by_a_rune() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        "const SIZE: rune = 3\nfn f(xs: Array<int, SIZE>) -> int { xs.length() }\n",
+    );
+    infer_package("main", fs).assert_no_errors();
+}
+
+#[test]
+fn array_size_rejects_a_function_parameter() {
+    infer("fn f(n: int) -> int { let xs: Array<int, n> = [1]; xs.length() }")
+        .assert_infer_code("array_size_not_constant");
+}
+
+#[test]
+fn array_size_rejects_a_local_binding() {
+    infer("fn f() -> int { let m = 2; let xs: Array<int, m> = [1]; xs.length() }")
+        .assert_infer_code("array_size_not_constant");
+}
+
+#[test]
+fn array_size_constant_typed_by_a_float_newtype_is_rejected() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        "struct Weird(float64)\nconst SIZE: Weird = 3\nfn f(xs: Array<int, SIZE>) -> int { xs.length() }\n",
+    );
+    infer_package("main", fs).assert_infer_code("array_size_not_integer_constant");
+}
+
+#[test]
+fn array_size_constant_typed_by_an_alias_declared_later() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        "type Buf = Array<int, SIZE>\ntype Width = int\nconst SIZE: Width = 3\nfn f(b: Buf) -> int { b.length() }\n",
+    );
+    infer_package("main", fs).assert_no_errors();
+}
+
+#[test]
+fn array_size_constant_typed_by_an_alias_declared_first() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        "type Width = int\ntype Buf = Array<int, SIZE>\nconst SIZE: Width = 3\nfn f(b: Buf) -> int { b.length() }\n",
+    );
+    infer_package("main", fs).assert_no_errors();
+}
+
+#[test]
+fn array_size_constant_typed_by_a_later_float_alias_is_rejected() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        "type Buf = Array<int, SIZE>\ntype Weird = float64\nconst SIZE: Weird = 3\nfn f(b: Buf) -> int { b.length() }\n",
+    );
+    infer_package("main", fs).assert_infer_code("array_size_not_integer_constant");
+}
+
+#[test]
+fn array_size_constant_typed_by_an_alias_in_another_file() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("main", "width.lis", "pub type Width = int\n");
+    fs.add_file("main", "size.lis", "pub const SIZE: Width = 3\n");
+    fs.add_file(
+        "main",
+        "main.lis",
+        "type Buf = Array<int, SIZE>\nfn f(b: Buf) -> int { b.length() }\n",
+    );
+    infer_package("main", fs).assert_no_errors();
+}
+
+#[test]
+fn array_size_constant_through_an_integer_alias() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        "type Width = int\nconst SIZE: Width = 3\nfn f(xs: Array<int, SIZE>) -> int { xs.length() }\n",
+    );
+    infer_package("main", fs).assert_no_errors();
+}
+
+#[test]
+fn array_size_constant_with_a_narrow_integer_type() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        "const SIZE: int8 = 3\nfn f(xs: Array<int, SIZE>) -> int { xs.length() }\n",
+    );
+    infer_package("main", fs).assert_no_errors();
+}
+
+#[test]
+fn array_size_rejects_a_private_constant_from_another_package() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("sizes", "sizes.lis", "const WIDTH = 4\n");
+    fs.add_file(
+        "main",
+        "main.lis",
+        "import \"sizes\"\nfn f(xs: Array<int, sizes.WIDTH>) -> int { xs.length() }\n",
+    );
+    infer_package("main", fs).assert_infer_code("array_size_unknown_constant");
+}
+
+#[test]
+fn array_size_rejects_a_test_only_constant_from_a_production_file() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("main", "main.test.lis", "const TEST_SIZE = 4\n");
+    fs.add_file(
+        "main",
+        "main.lis",
+        "fn f(xs: Array<int, TEST_SIZE>) -> int { xs.length() }\n",
+    );
+    infer_package("main", fs).assert_infer_code("array_size_unknown_constant");
+}

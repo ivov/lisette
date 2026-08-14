@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ `N` is not a literal constant
+   ╭─[test.lis:3:20]
+ 2 │ const N = 2 + 2
+ 3 │ fn f(x: Array<int, N>) {}
+   ·                    ┬
+   ·                    ╰── its initializer is computed, not a literal
+   ╰────
+  help: An array size reads the constant's literal value, so `N` must be written as a single integer literal · code: [infer.array_size_computed_constant]

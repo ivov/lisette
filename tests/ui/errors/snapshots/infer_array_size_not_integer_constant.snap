@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ `N` is not an integer constant
+   ╭─[test.lis:3:20]
+ 2 │ const N = "three"
+ 3 │ fn f(x: Array<int, N>) {}
+   ·                    ┬
+   ·                    ╰── expected an integer constant here
+   ╰────
+  help: An array size must be a whole number, e.g. `const SIZE = 3` · code: [infer.array_size_not_integer_constant]

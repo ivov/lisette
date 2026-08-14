@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ `size` is not a constant
+   ╭─[test.lis:3:20]
+ 2 │ fn size() -> int { 3 }
+ 3 │ fn f(x: Array<int, size>) {}
+   ·                    ──┬─
+   ·                      ╰── expected a constant here
+   ╰────
+  help: An array size is part of the type, so it cannot come from a runtime value · code: [infer.array_size_not_constant]

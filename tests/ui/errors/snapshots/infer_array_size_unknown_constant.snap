@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot find constant `NOPE`
+   ╭─[test.lis:2:20]
+ 1 │ 
+ 2 │ fn f(x: Array<int, NOPE>) {}
+   ·                    ──┬─
+   ·                      ╰── not found in this scope
+   ╰────
+  help: An array size is an integer literal or the name of an integer constant · code: [infer.array_size_unknown_constant]

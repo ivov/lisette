@@ -106,6 +106,20 @@ fn string_range_slicing() {
 // Fixed-size arrays, exercised at runtime (the emit-only paths otherwise).
 type Vec3 = Array<int, 3>
 
+const LANE_COUNT = 3
+
+struct Mixer {
+  pub lanes: Array<int, LANE_COUNT>
+}
+
+#[test]
+fn array_size_from_constant() {
+  let mixer = Mixer { lanes: Array.new<int, LANE_COUNT>() }
+  assert mixer.lanes.length() == 3
+  let filled: Array<int, LANE_COUNT> = [7, 8, 9]
+  assert filled[1] == 8
+}
+
 #[test]
 fn array_index_length_get() {
   let a: Array<int, 3> = [10, 20, 30]

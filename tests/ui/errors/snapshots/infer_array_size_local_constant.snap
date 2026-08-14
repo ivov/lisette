@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ `N` is not a package-level constant
+   ╭─[test.lis:4:22]
+ 3 │   const N = 3
+ 4 │   let xs: Array<int, N> = [1, 2, 3]
+   ·                      ┬
+   ·                      ╰── declared inside a function
+ 5 │   xs.length()
+   ╰────
+  help: Move `N` out of the function body to use it as an array size · code: [infer.array_size_local_constant]
