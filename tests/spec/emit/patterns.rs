@@ -1493,6 +1493,238 @@ pub struct Rect { pub W: int, pub H: int }
 }
 
 #[test]
+fn tuple_subject_of_calls_reads_each_once() {
+    let input = r#"
+fn left() -> int { 1 }
+
+fn right() -> int { 2 }
+
+fn test() -> string {
+  match (left(), right()) {
+    (1, 2) => "one two",
+    _ => "other",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_subject_element_no_arm_reads_still_runs() {
+    let input = r#"
+fn left() -> int { 1 }
+
+fn test(b: bool) -> string {
+  match (left(), b) {
+    (_, true) => "yes",
+    _ => "no",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_subject_unit_element_runs_as_a_statement() {
+    let input = r#"
+import "go:fmt"
+
+fn ping() {
+  fmt.Println("ping")
+}
+
+fn test(b: bool) -> string {
+  match (ping(), b) {
+    (_, true) => "yes",
+    _ => "no",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_subject_untested_literal_keeps_its_call() {
+    let input = r#"
+struct Box { value: int }
+
+fn source() -> int { 1 }
+
+fn test(b: bool) -> string {
+  match (Box { value: source() }, b) {
+    (_, true) => "yes",
+    _ => "no",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_subject_with_a_tuple_struct_pattern_keeps_its_tuple() {
+    let input = r#"
+struct Pair(int, int)
+
+fn make_pair() -> Pair { Pair(1, 2) }
+
+fn test(b: bool) -> string {
+  match (make_pair(), b) {
+    (Pair(_, _), true) => "yes",
+    _ => "no",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_subject_or_arm_reading_different_elements_keeps_its_tuple() {
+    let input = r#"
+fn left() -> int { 2 }
+
+fn right() -> int { 1 }
+
+fn test() -> string {
+  match (left(), right()) {
+    (_, 1) | (2, _) => "hit",
+    _ => "miss",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_subject_with_a_variant_binding_keeps_its_tuple() {
+    let input = r#"
+enum Event {
+  Click(int, int),
+  Close,
+}
+
+fn test(e: Event, b: bool) -> int {
+  match (e, b) {
+    (Event.Click(x, y), true) => x + y,
+    _ => 0,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_subject_single_variant_enum_reads_its_tag() {
+    let input = r#"
+enum Only { Single }
+
+fn test(o: Only, b: bool) -> string {
+  match (o, b) {
+    (Only.Single, true) => "yes",
+    _ => "no",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_subject_with_a_struct_pattern_keeps_its_tuple() {
+    let input = r#"
+struct Box {}
+
+fn make_box() -> Box { Box {} }
+
+fn test(b: bool) -> string {
+  match (make_box(), b) {
+    (Box {}, true) => "yes",
+    _ => "no",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_subject_untested_literal_keeps_its_division() {
+    let input = r#"
+struct Box { value: int }
+
+fn test(n: int, b: bool) -> string {
+  match (Box { value: 1 / n }, b) {
+    (_, true) => "yes",
+    _ => "no",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_subject_unit_access_keeps_its_bounds_check() {
+    let input = r#"
+fn units() -> Slice<()> {
+  []
+}
+
+fn test(b: bool) -> string {
+  match (units()[0], b) {
+    (_, true) => "yes",
+    _ => "no",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_subject_with_a_binding_keeps_its_tuple() {
+    let input = r#"
+fn source() -> int { 1 }
+
+fn test(b: bool) -> string {
+  match (source(), b) {
+    (x, true) => "yes",
+    _ => "no",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_subject_bound_whole_keeps_its_tuple() {
+    let input = r#"
+fn test(a: int, b: int) -> int {
+  match (a, b) {
+    pair => pair.0 + pair.1,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_subject_with_a_guard_keeps_its_tuple() {
+    let input = r#"
+fn bump(mut n: int) -> bool {
+  n = n + 1
+  true
+}
+
+fn test(start: int, b: int) -> string {
+  let mut a = start
+  a = a + 1
+  match (a, b) {
+    (1, _) if bump(a) => "first",
+    (2, _) => "second",
+    _ => "none",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn tuple_enum_match_checks_every_element() {
     let input = r#"
 pub enum Hand {

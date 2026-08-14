@@ -1,0 +1,32 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  struct Box { value: int }
+  
+  fn source() -> int { 1 }
+  
+  fn test(b: bool) -> string {
+    match (Box { value: source() }, b) {
+      (_, true) => "yes",
+      _ => "no",
+    }
+  }
+---
+package main
+
+type Box struct {
+	value int
+}
+
+func source() int {
+	return 1
+}
+
+func test(b bool) string {
+	_ = Box{value: source()}
+	if b == true {
+		return "yes"
+	}
+	return "no"
+}

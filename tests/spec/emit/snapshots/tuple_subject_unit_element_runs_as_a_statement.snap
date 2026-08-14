@@ -1,0 +1,32 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  import "go:fmt"
+  
+  fn ping() {
+    fmt.Println("ping")
+  }
+  
+  fn test(b: bool) -> string {
+    match (ping(), b) {
+      (_, true) => "yes",
+      _ => "no",
+    }
+  }
+---
+package main
+
+import "fmt"
+
+func ping() {
+	fmt.Println("ping")
+}
+
+func test(b bool) string {
+	ping()
+	if b == true {
+		return "yes"
+	}
+	return "no"
+}

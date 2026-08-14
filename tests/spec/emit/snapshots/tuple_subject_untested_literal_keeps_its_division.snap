@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  struct Box { value: int }
+  
+  fn test(n: int, b: bool) -> string {
+    match (Box { value: 1 / n }, b) {
+      (_, true) => "yes",
+      _ => "no",
+    }
+  }
+---
+package main
+
+type Box struct {
+	value int
+}
+
+func test(n int, b bool) string {
+	_ = Box{value: 1 / n}
+	if b == true {
+		return "yes"
+	}
+	return "no"
+}

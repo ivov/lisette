@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  fn units() -> Slice<()> {
+    []
+  }
+  
+  fn test(b: bool) -> string {
+    match (units()[0], b) {
+      (_, true) => "yes",
+      _ => "no",
+    }
+  }
+---
+package main
+
+func units() []struct{} {
+	return []struct{}{}
+}
+
+func test(b bool) string {
+	base_1 := units()
+	_ = base_1[0]
+	if b == true {
+		return "yes"
+	}
+	return "no"
+}

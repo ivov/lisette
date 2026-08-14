@@ -34,6 +34,39 @@ pub(crate) enum PathSegment {
     AssertedAs(String),
 }
 
+fn element_index(segments: &[PathSegment]) -> usize {
+    let [PathSegment::Field(field), ..] = segments else {
+        unreachable!("a tuple-element subject only resolves field paths")
+    };
+    TUPLE_FIELDS
+        .iter()
+        .position(|tuple_field| tuple_field == field)
+        .expect("a tuple-element subject only resolves tuple fields")
+}
+
+/// One subject, or one name per element when the match never builds its tuple.
+#[derive(Clone, Copy)]
+pub(crate) enum SubjectRoot<'a> {
+    Var(&'a str),
+    Elements(&'a [String]),
+}
+
+impl<'a> SubjectRoot<'a> {
+    fn resolve<'p>(&self, segments: &'p [PathSegment]) -> (String, &'p [PathSegment]) {
+        match self {
+            Self::Var(var) => ((*var).to_string(), segments),
+            Self::Elements(names) => (names[element_index(segments)].clone(), &segments[1..]),
+        }
+    }
+
+    pub(crate) fn names(&self) -> Vec<&'a str> {
+        match self {
+            Self::Var(var) => vec![var],
+            Self::Elements(names) => names.iter().map(String::as_str).collect(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct AccessPath {
     pub segments: Vec<PathSegment>,
@@ -54,10 +87,10 @@ impl AccessPath {
         new
     }
 
-    pub(crate) fn render(&self, subject: &str) -> String {
-        let mut result = subject.to_string();
-        let last = self.segments.len().saturating_sub(1);
-        for (i, seg) in self.segments.iter().enumerate() {
+    pub(crate) fn render(&self, subject: SubjectRoot<'_>) -> String {
+        let (mut result, segments) = subject.resolve(&self.segments);
+        let last = segments.len().saturating_sub(1);
+        for (i, seg) in segments.iter().enumerate() {
             match seg {
                 PathSegment::Field(name) => result = format!("{}.{}", result, name),
                 PathSegment::Index(index) => result = format!("{}[{}]", result, index),
@@ -89,7 +122,7 @@ impl AccessPath {
 
     /// Like `render`, but a tail-`Deref` is parenthesized so the result is
     /// safe as a selector receiver, index target, or call callee.
-    pub(crate) fn render_composable(&self, subject: &str) -> String {
+    pub(crate) fn render_composable(&self, subject: SubjectRoot<'_>) -> String {
         let rendered = self.render(subject);
         if matches!(self.segments.last(), Some(PathSegment::Deref)) {
             format!("({})", rendered)
@@ -142,7 +175,7 @@ pub(crate) enum Check {
 }
 
 impl Check {
-    pub(crate) fn render(&self, subject: &str) -> String {
+    pub(crate) fn render(&self, subject: SubjectRoot<'_>) -> String {
         match self {
             Check::EnumTag {
                 path, tag_constant, ..
@@ -203,7 +236,7 @@ impl Check {
 
     /// Comparison-shaped checks flip their operator; `Or`/`TypeAssert` wrap
     /// in `!(...)`.
-    pub(crate) fn render_negated(&self, subject: &str) -> String {
+    pub(crate) fn render_negated(&self, subject: SubjectRoot<'_>) -> String {
         match self {
             Check::EnumTag {
                 path, tag_constant, ..
@@ -1673,7 +1706,7 @@ fn extract_root_assertion(checks: &mut Vec<Check>) -> Option<TypeAssertion> {
     }
 }
 
-pub(super) fn render_condition(checks: &[Check], subject_var: &str) -> String {
+pub(super) fn render_condition(checks: &[Check], subject_var: SubjectRoot<'_>) -> String {
     if checks.is_empty() {
         return "true".to_string();
     }

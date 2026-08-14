@@ -1,0 +1,32 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  struct Box {}
+  
+  fn make_box() -> Box { Box {} }
+  
+  fn test(b: bool) -> string {
+    match (make_box(), b) {
+      (Box {}, true) => "yes",
+      _ => "no",
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Box struct{}
+
+func makeBox() Box {
+	return Box{}
+}
+
+func test(b bool) string {
+	subject_1 := lisette.MakeTuple2[Box, bool](makeBox(), b)
+	if subject_1.Second == true {
+		return "yes"
+	}
+	return "no"
+}

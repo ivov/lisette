@@ -1,0 +1,38 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  struct Pair(int, int)
+  
+  fn make_pair() -> Pair { Pair(1, 2) }
+  
+  fn test(b: bool) -> string {
+    match (make_pair(), b) {
+      (Pair(_, _), true) => "yes",
+      _ => "no",
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Pair struct {
+	F0 int
+	F1 int
+}
+
+func makePair() Pair {
+	return Pair{
+		F0: 1,
+		F1: 2,
+	}
+}
+
+func test(b bool) string {
+	subject_1 := lisette.MakeTuple2[Pair, bool](makePair(), b)
+	if subject_1.Second == true {
+		return "yes"
+	}
+	return "no"
+}

@@ -1,6 +1,8 @@
 use crate::Planner;
 use crate::analyze::inline_uses::{InlineDecision, analyze_inline_candidate, region_blocks_inline};
-use crate::patterns::decision_tree::{Check, PatternBinding, PatternInfo, render_condition};
+use crate::patterns::decision_tree::{
+    Check, PatternBinding, PatternInfo, SubjectRoot, render_condition,
+};
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::placement::simple_assign;
 use crate::plan::values::ValuePlan;
@@ -94,7 +96,7 @@ pub(crate) fn compose_refutable_condition(
     checks: &[Check],
     effective_subject: &str,
 ) -> String {
-    let condition = render_condition(checks, effective_subject);
+    let condition = render_condition(checks, SubjectRoot::Var(effective_subject));
     match ok_var {
         None => condition,
         Some(ok) if condition == "true" => ok.to_string(),
@@ -119,7 +121,7 @@ pub(crate) fn tree_binding_statements(
             continue;
         };
 
-        let access_expression = binding.path.render(subject_var);
+        let access_expression = binding.path.render(SubjectRoot::Var(subject_var));
 
         if !consumers.is_empty()
             && analyze_inline_candidate(&binding.lisette_name, consumers) == InlineDecision::Inline
@@ -129,7 +131,9 @@ pub(crate) fn tree_binding_statements(
                 .scope
                 .resolve_identifier_binding(&binding.lisette_name)
                 .cloned();
-            let safe_text = binding.path.render_composable(subject_var);
+            let safe_text = binding
+                .path
+                .render_composable(SubjectRoot::Var(subject_var));
             planner.scope.bind_inline_expr(
                 &binding.lisette_name,
                 InlineExpr::new(
@@ -220,7 +224,7 @@ pub(crate) fn tree_assignment_statements(
         };
         let name = registered_name.to_string();
         planner.scope.record_go_use(subject_var);
-        let access_expression = binding.path.render(subject_var);
+        let access_expression = binding.path.render(SubjectRoot::Var(subject_var));
         statements.push(simple_assign(&name, ValuePlan::opaque(access_expression)));
     }
 }

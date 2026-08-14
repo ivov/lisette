@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  fn test(a: int, b: int) -> int {
+    match (a, b) {
+      pair => pair.0 + pair.1,
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(a, b int) int {
+	subject_1 := lisette.MakeTuple2[int, int](a, b)
+	{
+		pair := subject_1
+		return pair.First + pair.Second
+	}
+}

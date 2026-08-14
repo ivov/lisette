@@ -5,11 +5,13 @@ use crate::calls::go_interop::NilGuard;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name::is_plain_identifier;
 use crate::patterns::binding_decls::pattern_binds_name;
-use crate::patterns::tree_emitter::TreePlanner;
+use crate::patterns::tree_emitter::{MatchSubject, TreePlanner};
 use crate::plan::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan};
 use crate::plan::calls::{CallPlan, CallableOrigin};
+use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
 use crate::state::bindings::BindingValue;
-use syntax::ast::{Expression, MatchArm, Pattern};
+use syntax::ast::{ConstructorPatternResolution, Expression, MatchArm, Pattern};
+use syntax::parse::TUPLE_FIELDS;
 use syntax::types::Type;
 
 struct FusedShape {
@@ -60,12 +62,22 @@ impl Planner<'_> {
             return LoweredBlock { statements };
         }
 
+        if let Some(elementwise) = self.lower_tuple_subject_match(subject, arms, place) {
+            statements.extend(elementwise);
+            return LoweredBlock { statements };
+        }
+
         let subject_ty = subject.get_type();
         let (subject_var, declaration) =
             self.lower_match_subject_var(&mut statements, subject, arms);
 
         let (block, used_set) = self.capture_go_uses(|this| {
-            this.lower_match_tree(arms, subject_var.clone(), subject_ty, place)
+            this.lower_match_tree(
+                arms,
+                MatchSubject::Var(subject_var.clone()),
+                subject_ty,
+                place,
+            )
         });
         let used = used_set.contains(&subject_var);
 
@@ -92,10 +104,63 @@ impl Planner<'_> {
         LoweredBlock { statements }
     }
 
+    /// `match (a, b)` reads the operands where they sit, building no tuple.
+    fn lower_tuple_subject_match(
+        &mut self,
+        subject: &Expression,
+        arms: &[MatchArm],
+        place: &PlacePlan,
+    ) -> Option<Vec<LoweredStatement>> {
+        let Expression::Tuple { elements, .. } = subject.unwrap_parens() else {
+            return None;
+        };
+        if elements.len() > TUPLE_FIELDS.len() || arms.iter().any(MatchArm::has_guard) {
+            return None;
+        }
+        let mut tested = vec![false; elements.len()];
+        for arm in arms {
+            let arm_tested = arm_tested_elements(self, &arm.pattern, elements.len())?;
+            for (element, arm_element) in tested.iter_mut().zip(arm_tested) {
+                *element |= arm_element;
+            }
+        }
+
+        let subject_ty = subject.get_type();
+        let mut statements: Vec<LoweredStatement> = Vec::new();
+        let mut stages: Vec<ValuePlan> = elements
+            .iter()
+            .map(|element| self.stage_composite(element, ExpressionContext::value()))
+            .collect();
+        for ((stage, tested), element) in stages.iter_mut().zip(&tested).zip(elements) {
+            let rereadable = is_inert_value(element, &stage.expression)
+                || stage.evaluation.stability.is_fixed()
+                || self.plan_rests_in_stable_name(stage);
+            if *tested && !rereadable {
+                self.pin_staged(stage, "arg");
+            }
+        }
+        let sequenced = self.sequence_values(stages, CaptureBoundary::SiblingSequence, "arg");
+        statements.extend(sequenced.setup);
+
+        let mut names = Vec::with_capacity(elements.len());
+        for ((value, tested), element) in sequenced.values.iter().zip(&tested).zip(elements) {
+            let rendered = value.rendered();
+            // An untested element still runs, but nothing may name it.
+            if !tested && !is_inert_value(element, value) {
+                statements.push(LoweredStatement::RawGo(format!("_ = {}\n", rendered)));
+            }
+            names.push(rendered);
+        }
+
+        let block = self.lower_match_tree(arms, MatchSubject::Elements(names), subject_ty, place);
+        statements.extend(block.statements);
+        Some(statements)
+    }
+
     fn lower_match_tree(
         &mut self,
         arms: &[MatchArm],
-        subject_var: String,
+        subject_var: MatchSubject,
         subject_ty: syntax::types::Type,
         place: &PlacePlan,
     ) -> LoweredBlock {
@@ -464,6 +529,78 @@ impl Planner<'_> {
             expression: value,
         };
         (var, declaration)
+    }
+}
+
+/// Whether reading the value again costs nothing and skipping it loses nothing.
+fn is_inert_value(element: &Expression, value: &GoExpression) -> bool {
+    match value {
+        GoExpression::Literal(_) => true,
+        GoExpression::CompositeLiteral { .. } => element.get_type().is_unit(),
+        _ => false,
+    }
+}
+
+/// Whether an element pattern tests its element, or `None` for a shape whose
+/// checks this lowering does not predict.
+fn element_pattern_tests(planner: &Planner, pattern: &Pattern) -> Option<bool> {
+    match pattern {
+        Pattern::WildCard { .. } | Pattern::Unit { .. } => Some(false),
+        Pattern::Literal { .. } => Some(true),
+        // A tuple struct or a newtype carries no tag, so its checks come from
+        // fields this grammar does not read.
+        Pattern::EnumVariant {
+            resolution,
+            ty,
+            fields,
+            ..
+        } => {
+            for field in fields {
+                element_pattern_tests(planner, field)?;
+            }
+            match resolution {
+                ConstructorPatternResolution::Const { .. }
+                | ConstructorPatternResolution::ConstValue { .. } => Some(true),
+                ConstructorPatternResolution::EnumVariant { .. }
+                    if !planner.is_tuple_struct_type(ty) =>
+                {
+                    Some(true)
+                }
+                _ => None,
+            }
+        }
+        Pattern::Tuple { elements, .. } => elements.iter().try_fold(false, |tests, element| {
+            element_pattern_tests(planner, element).map(|element| tests || element)
+        }),
+        // A catchall alternative leaves the whole pattern untested.
+        Pattern::Or { patterns, .. } => patterns.iter().try_fold(true, |tests, alternative| {
+            element_pattern_tests(planner, alternative).map(|alternative| tests && alternative)
+        }),
+        _ => None,
+    }
+}
+
+/// Which elements an arm tests, or `None` when its shape leaves that open.
+/// Or-pattern alternatives have to agree, since each becomes its own arm.
+fn arm_tested_elements(planner: &Planner, pattern: &Pattern, arity: usize) -> Option<Vec<bool>> {
+    match pattern {
+        Pattern::WildCard { .. } => Some(vec![false; arity]),
+        Pattern::Tuple { elements, .. } if elements.len() == arity => elements
+            .iter()
+            .map(|element| element_pattern_tests(planner, element))
+            .collect(),
+        Pattern::Or { patterns, .. } => {
+            let mut alternatives = Vec::with_capacity(patterns.len());
+            for alternative in patterns {
+                alternatives.push(arm_tested_elements(planner, alternative, arity)?);
+            }
+            let first = alternatives.first()?.clone();
+            alternatives
+                .iter()
+                .all(|alternative| *alternative == first)
+                .then_some(first)
+        }
+        _ => None,
     }
 }
 

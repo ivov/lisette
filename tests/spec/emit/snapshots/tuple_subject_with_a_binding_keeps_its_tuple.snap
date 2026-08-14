@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/patterns.rs
+description: |
+  
+  fn source() -> int { 1 }
+  
+  fn test(b: bool) -> string {
+    match (source(), b) {
+      (x, true) => "yes",
+      _ => "no",
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func source() int {
+	return 1
+}
+
+func test(b bool) string {
+	subject_1 := lisette.MakeTuple2[int, bool](source(), b)
+	if subject_1.Second == true {
+		return "yes"
+	}
+	return "no"
+}
