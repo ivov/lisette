@@ -356,7 +356,7 @@ fn user_static_named_make_is_a_legal_value() {
 
 #[test]
 fn map_make_recovery_infers_spread() {
-    let result = crate::_harness::infer::infer(
+    let result = infer(
         r#"
     fn test(xs: Slice<int>) {
       let m = Map.make<string, int>(xs...);
@@ -395,7 +395,7 @@ fn empty_literal_in_generic_call_errors() {
 
 #[test]
 fn empty_literal_unresolved_binding_reports_once() {
-    let result = crate::_harness::infer::infer("fn test() { let xs = []; let _ = xs }");
+    let result = infer("fn test() { let xs = []; let _ = xs }");
     let errors: Vec<_> = result
         .errors
         .iter()
@@ -471,7 +471,7 @@ fn empty_literal_in_generic_return_position_succeeds() {
 
 #[test]
 fn empty_literal_against_non_slice_param_reports_only_mismatch() {
-    let result = crate::_harness::infer::infer(
+    let result = infer(
         r#"
     fn take(x: int) -> int {
       x
@@ -497,7 +497,7 @@ fn empty_literal_against_non_slice_param_reports_only_mismatch() {
 
 #[test]
 fn empty_literal_in_uninferred_generic_call_reports_only_call() {
-    let result = crate::_harness::infer::infer(
+    let result = infer(
         r#"
     fn keep<T>(items: Slice<T>) -> Slice<T> {
       items
@@ -523,7 +523,7 @@ fn empty_literal_in_uninferred_generic_call_reports_only_call() {
 
 #[test]
 fn empty_literal_with_unrelated_var_reports_inside_uninferred_call() {
-    let result = crate::_harness::infer::infer(
+    let result = infer(
         r#"
     fn count<U>(items: Slice<U>) -> int {
       items.length()

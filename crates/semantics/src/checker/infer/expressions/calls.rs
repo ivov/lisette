@@ -8,7 +8,7 @@ use syntax::types::{
     unqualified_name,
 };
 
-use super::super::context::{Expectation, ExpectationRole};
+use super::super::context::{Expectation, ExpectationRole, UseContext};
 use super::super::unify::Dispatched;
 use super::struct_call::same_nominal;
 use crate::checker::infer::InferCtx;
@@ -140,10 +140,9 @@ impl InferCtx<'_> {
         let store = self.store;
         let callee_ty = self.new_type_var();
 
-        let callee_expression = self.with_use_context(
-            crate::checker::infer::context::UseContext::Callee,
-            |state| state.infer_expression(*expression, &callee_ty),
-        );
+        let callee_expression = self.with_use_context(UseContext::Callee, |state| {
+            state.infer_expression(*expression, &callee_ty)
+        });
 
         let forall_ty = self.resolve_callee_forall_type(&callee_expression, &type_args);
         let (callee_ty, type_arguments) =

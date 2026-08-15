@@ -5,6 +5,7 @@ use syntax::types::{Symbol, Type, build_substitution_map, substitute, unqualifie
 use crate::checker::infer::BuiltinBound;
 use crate::checker::infer::InferCtx;
 use crate::checker::infer::expressions::comparison;
+use crate::checker::infer::interface::interface_requires_methods;
 use crate::checker::{EnvResolve, TaskState};
 use crate::facts::GenericBoundOrigin;
 use crate::store::Store;
@@ -122,8 +123,7 @@ pub fn bound_implied(store: &Store, available: &[Type], required: &Type) -> bool
 pub fn bound_requires_evidence(store: &Store, bound: &Type) -> bool {
     let resolved = store.deep_resolve_alias(bound);
     resolved.get_qualified_id().is_some_and(|id| {
-        BuiltinBound::from_qualified_id(id).is_some()
-            || crate::checker::infer::interface::interface_requires_methods(store, id)
+        BuiltinBound::from_qualified_id(id).is_some() || interface_requires_methods(store, id)
     })
 }
 

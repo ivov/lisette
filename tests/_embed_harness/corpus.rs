@@ -316,7 +316,7 @@ pub fn reject_cases() -> Vec<RejectCase> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::_embed_harness::lisette_answer::declarations_register_cleanly;
+    use crate::_embed_harness::lisette_answer::{check_codes, declarations_register_cleanly};
 
     #[test]
     fn some_reject_cases_are_deferred() {
@@ -342,7 +342,7 @@ mod tests {
     #[test]
     fn reject_cases_raise_their_codes() {
         for case in reject_cases() {
-            let codes = crate::_embed_harness::lisette_answer::check_codes(case.source)
+            let codes = check_codes(case.source)
                 .unwrap_or_else(|| panic!("{}: expected a rejection, but it compiled", case.name));
             assert!(
                 codes.iter().any(|c| c == case.code),

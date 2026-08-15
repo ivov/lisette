@@ -337,8 +337,7 @@ impl TaskState {
         );
 
         if position == TypePosition::Value
-            && let Some(builtin) =
-                crate::checker::infer::BuiltinBound::from_qualified_id(&qualified_name)
+            && let Some(builtin) = BuiltinBound::from_qualified_id(&qualified_name)
         {
             self.sink
                 .push(diagnostics::infer::bound_only_in_value_position(

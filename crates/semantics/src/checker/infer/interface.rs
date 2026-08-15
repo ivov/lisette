@@ -1,4 +1,6 @@
 use crate::checker::EnvResolve;
+use crate::checker::promotion;
+use crate::checker::sealing::is_unexported_key;
 use crate::store::Store;
 use diagnostics::infer::{InterfaceMethodViolation, InterfaceViolation, MissingMethod};
 use syntax::ast::Span;
@@ -55,10 +57,8 @@ impl InferCtx<'_> {
         let owner = if store.get_method(id, method).is_some() {
             id.to_string()
         } else {
-            match crate::checker::promotion::resolve_selector(store, &resolved, method) {
-                crate::checker::promotion::Resolution::Found(member) => {
-                    member.declaring_type.to_string()
-                }
+            match promotion::resolve_selector(store, &resolved, method) {
+                promotion::Resolution::Found(member) => member.declaring_type.to_string(),
                 _ => return false,
             }
         };
@@ -149,7 +149,7 @@ impl InferCtx<'_> {
                     InterfaceMethodViolation::Missing(method) => Some(method),
                     InterfaceMethodViolation::Incompatible { .. } => None,
                 })
-                .any(|method| crate::checker::sealing::is_unexported_key(&method.name))
+                .any(|method| is_unexported_key(&method.name))
         }) {
             let type_name = resolved
                 .get_name()
@@ -334,7 +334,6 @@ impl InferCtx<'_> {
         resolved: &Type,
         method: &str,
     ) -> Option<syntax::go_names::ConformanceCandidate> {
-        use crate::checker::promotion;
         let store = self.store;
         resolved.get_qualified_id()?;
         let promotion::Resolution::Found(member) =
@@ -342,7 +341,7 @@ impl InferCtx<'_> {
         else {
             return None;
         };
-        let crate::checker::promotion::MemberKind::Method(promoted) = &member.kind else {
+        let promotion::MemberKind::Method(promoted) = &member.kind else {
             return None;
         };
         let selector = if promoted.visibility.is_public() {
@@ -711,12 +710,12 @@ impl InferCtx<'_> {
         if resolved_ty.get_qualified_id().is_none() {
             return;
         }
-        let crate::checker::promotion::Resolution::Found(member) =
-            crate::checker::promotion::resolve_selector(store, &resolved_ty, impl_method_name)
+        let promotion::Resolution::Found(member) =
+            promotion::resolve_selector(store, &resolved_ty, impl_method_name)
         else {
             return;
         };
-        let crate::checker::promotion::MemberKind::Method(method) = member.kind else {
+        let promotion::MemberKind::Method(method) = member.kind else {
             return;
         };
         let selected_comma_ok = method.go_hints.iter().any(|hint| hint == "comma_ok");

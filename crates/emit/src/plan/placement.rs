@@ -5,6 +5,7 @@ use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
 use crate::definitions::functions::{is_breakless_loop, is_go_never};
 use crate::expressions::staging::SpreadSequenceOptions;
+use crate::names::go_name::is_plain_identifier;
 use crate::plan::bodies::{
     AssignForm, AssignPlan, BreakValueAction, BreakValuePlan, ElseArm, LoopTransfer, LoweredBlock,
     LoweredStatement, PlacePlan,
@@ -189,7 +190,7 @@ fn join_boolean_branches(condition: &str, then_value: &str, else_value: &str) ->
 }
 
 fn negate_condition(condition: &str) -> String {
-    if crate::names::go_name::is_plain_identifier(condition) {
+    if is_plain_identifier(condition) {
         format!("!{}", condition)
     } else {
         format!("!({})", condition)
@@ -198,7 +199,7 @@ fn negate_condition(condition: &str) -> String {
 
 /// Parenthesize a synthesized `&&` operand, keeping bare identifiers bare.
 fn and_operand(operand: &str) -> String {
-    if crate::names::go_name::is_plain_identifier(operand) {
+    if is_plain_identifier(operand) {
         operand.to_string()
     } else {
         format!("({})", operand)

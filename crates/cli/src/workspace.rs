@@ -13,6 +13,8 @@ use serde::Deserialize;
 use syntax::ast::{Expression, ImportAlias};
 use syntax::parse::Parser;
 
+use crate::handlers::reconciliation;
+
 const BINDGEN_GO_MODULE: &str = "github.com/ivov/lisette/bindgen";
 const BINDGEN_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -1120,12 +1122,7 @@ impl WorkspaceBindgen {
     fn local_child_remedy(&self, stderr: &str) -> Option<String> {
         let project_root = self.target_dir.parent()?;
         let manifest = deps::parse_manifest(project_root).ok()?;
-        crate::handlers::reconciliation::local_child_remedy(
-            stderr,
-            project_root,
-            &self.target_dir,
-            &manifest,
-        )
+        reconciliation::local_child_remedy(stderr, project_root, &self.target_dir, &manifest)
     }
 }
 

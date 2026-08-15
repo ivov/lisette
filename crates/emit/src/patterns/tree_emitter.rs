@@ -1247,7 +1247,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
         bindings: &[PatternBinding],
         consumers: &[&Expression],
         failure_blocker: Option<&Decision>,
-    ) -> Vec<(String, Option<crate::state::bindings::BindingValue>)> {
+    ) -> Vec<(String, Option<BindingValue>)> {
         let failure_trees: Vec<&Expression> = match failure_blocker {
             Some(failure) => {
                 let mut reached: Vec<usize> = Vec::new();

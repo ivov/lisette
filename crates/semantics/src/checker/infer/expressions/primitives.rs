@@ -8,6 +8,7 @@ use syntax::types::Type;
 use super::super::addressability::{
     check_is_non_addressable, check_non_addressable_assignment_target,
 };
+use super::super::context::UseContext;
 use super::calls::phantom_type_params;
 use super::operators::InferredOperand;
 use crate::checker::infer::InferCtx;
@@ -393,10 +394,9 @@ impl InferCtx<'_> {
         // Complex targets like `a[i]` or `r.*` have subexpressions that ARE being read.
         let is_simple_target = matches!(&*target, Expression::Identifier { .. });
         let new_target = if is_simple_target {
-            self.with_use_context(
-                crate::checker::infer::context::UseContext::AssignmentTarget,
-                |state| state.infer_expression(*target, &target_ty),
-            )
+            self.with_use_context(UseContext::AssignmentTarget, |state| {
+                state.infer_expression(*target, &target_ty)
+            })
         } else {
             self.infer_expression(*target, &target_ty)
         };
@@ -630,10 +630,9 @@ impl InferCtx<'_> {
             };
 
             let inferred_item = if !is_last {
-                self.with_use_context(
-                    crate::checker::infer::context::UseContext::Statement,
-                    |state| state.infer_root_expression(item, &expression_ty),
-                )
+                self.with_use_context(UseContext::Statement, |state| {
+                    state.infer_root_expression(item, &expression_ty)
+                })
             } else {
                 self.infer_root_expression(item, &expression_ty)
             };

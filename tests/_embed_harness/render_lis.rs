@@ -332,6 +332,7 @@ fn sink_name(interface: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::_embed_harness::corpus::{generic_embed_promotes, imported_struct_embed};
     use crate::_embed_harness::fixtures;
     use crate::_embed_harness::render_go::{GoMode, render_go};
 
@@ -464,7 +465,7 @@ mod tests {
 
     #[test]
     fn generic_node_renders_in_both_languages() {
-        let scenario = crate::_embed_harness::corpus::generic_embed_promotes();
+        let scenario = generic_embed_promotes();
 
         let lis = render_lis_declarations(&scenario);
         assert!(lis.contains("struct N0<T>"), "lisette header:\n{lis}");
@@ -479,7 +480,7 @@ mod tests {
 
     #[test]
     fn imported_node_renders_as_package_reference() {
-        let scenario = crate::_embed_harness::corpus::imported_struct_embed();
+        let scenario = imported_struct_embed();
 
         let lis = render_lis_declarations(&scenario);
         assert!(

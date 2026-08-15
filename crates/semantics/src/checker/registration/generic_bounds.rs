@@ -3,6 +3,7 @@ use syntax::types::{CompoundKind, Type, unqualified_name};
 
 use crate::checker::EnvResolve;
 use crate::checker::TaskState;
+use crate::checker::infer::interface::interface_requires_methods;
 use crate::checker::infer::{BuiltinBound, InferCtx};
 use crate::generics::{apply_bounds, bound_implied, type_argument_children};
 use crate::store::Store;
@@ -111,7 +112,7 @@ impl TaskState {
             let resolved_required = store.deep_resolve_alias(&required);
             if let Some(required_id) = resolved_required.get_qualified_id()
                 && store.get_interface(required_id).is_some()
-                && !crate::checker::infer::interface::interface_requires_methods(store, required_id)
+                && !interface_requires_methods(store, required_id)
             {
                 continue;
             }
