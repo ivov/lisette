@@ -161,7 +161,7 @@ impl Planner<'_> {
         &mut self,
         arms: &[MatchArm],
         subject_var: MatchSubject,
-        subject_ty: syntax::types::Type,
+        subject_ty: Type,
         place: &PlacePlan,
     ) -> LoweredBlock {
         let tree_emitter = TreePlanner::new(self, arms, subject_var, subject_ty);

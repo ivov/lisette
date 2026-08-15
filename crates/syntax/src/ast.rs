@@ -1,7 +1,16 @@
 use ecow::EcoString;
 
 use crate::program::{CallKind, DotAccessResolution};
+use crate::types;
 use crate::types::Type;
+use fmt::Formatter;
+use std::fmt;
+use std::fmt::Display;
+use std::ops::Deref;
+use std::ops::DerefMut;
+use std::ops::Index;
+use std::slice::Iter;
+use std::slice::IterMut;
 
 macro_rules! children {
     () => { Vec::new() };
@@ -36,8 +45,8 @@ impl Binding {
     }
 }
 
-impl std::fmt::Debug for Binding {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for Binding {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut s = f.debug_struct("Binding");
         s.field("pattern", &self.pattern);
         s.field("annotation", &self.annotation);
@@ -260,8 +269,8 @@ impl MatchArm {
     }
 }
 
-impl std::fmt::Debug for MatchArm {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for MatchArm {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut s = f.debug_struct("MatchArm");
         s.field("pattern", &self.pattern);
         if self.guard.is_some() {
@@ -484,7 +493,7 @@ impl Pattern {
             p => p,
         };
         matches!(peeled, Pattern::EnumVariant { identifier, fields, .. }
-            if crate::types::unqualified_name(identifier) == "Some" && fields.len() == 1)
+            if types::unqualified_name(identifier) == "Some" && fields.len() == 1)
     }
 }
 
@@ -534,7 +543,7 @@ impl VariantFields {
         }
     }
 
-    pub fn iter(&self) -> std::slice::Iter<'_, EnumFieldDefinition> {
+    pub fn iter(&self) -> Iter<'_, EnumFieldDefinition> {
         self.as_slice().iter()
     }
 
@@ -545,7 +554,7 @@ impl VariantFields {
 
 impl<'a> IntoIterator for &'a VariantFields {
     type Item = &'a EnumFieldDefinition;
-    type IntoIter = std::slice::Iter<'a, EnumFieldDefinition>;
+    type IntoIter = Iter<'a, EnumFieldDefinition>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
@@ -618,7 +627,7 @@ impl StructFields {
     }
 }
 
-impl std::ops::Deref for StructFields {
+impl Deref for StructFields {
     type Target = [StructFieldDefinition];
 
     fn deref(&self) -> &Self::Target {
@@ -626,7 +635,7 @@ impl std::ops::Deref for StructFields {
     }
 }
 
-impl std::ops::DerefMut for StructFields {
+impl DerefMut for StructFields {
     fn deref_mut(&mut self) -> &mut Self::Target {
         match self {
             Self::Record(fields) | Self::Tuple(fields) => fields,
@@ -636,7 +645,7 @@ impl std::ops::DerefMut for StructFields {
 
 impl<'a> IntoIterator for &'a StructFields {
     type Item = &'a StructFieldDefinition;
-    type IntoIter = std::slice::Iter<'a, StructFieldDefinition>;
+    type IntoIter = Iter<'a, StructFieldDefinition>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.as_slice().iter()
@@ -645,7 +654,7 @@ impl<'a> IntoIterator for &'a StructFields {
 
 impl<'a> IntoIterator for &'a mut StructFields {
     type Item = &'a mut StructFieldDefinition;
-    type IntoIter = std::slice::IterMut<'a, StructFieldDefinition>;
+    type IntoIter = IterMut<'a, StructFieldDefinition>;
 
     fn into_iter(self) -> Self::IntoIter {
         match self {
@@ -775,7 +784,7 @@ impl<'a> ResolvedCallTypeArguments<'a> {
     }
 }
 
-impl std::ops::Index<usize> for ResolvedCallTypeArguments<'_> {
+impl Index<usize> for ResolvedCallTypeArguments<'_> {
     type Output = Type;
 
     fn index(&self, index: usize) -> &Self::Output {
@@ -783,8 +792,8 @@ impl std::ops::Index<usize> for ResolvedCallTypeArguments<'_> {
     }
 }
 
-impl std::fmt::Debug for CallTypeArguments {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for CallTypeArguments {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match &self.0 {
             CallTypeArgumentState::None => f.write_str("None"),
             CallTypeArgumentState::Unresolved(annotations) => {
@@ -926,8 +935,8 @@ pub enum Annotation {
     },
 }
 
-impl std::fmt::Debug for Annotation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for Annotation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Constructor {
                 name,
@@ -1013,8 +1022,8 @@ pub struct Generic {
     pub span: Span,
 }
 
-impl std::fmt::Debug for Generic {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for Generic {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let bounds = self.bounds().collect::<Vec<_>>();
         let resolved_bounds = self
             .resolved_bounds()
@@ -1548,7 +1557,7 @@ impl Expression {
         }
     }
 
-    pub fn as_option_constructor(&self) -> Option<std::result::Result<(), ()>> {
+    pub fn as_option_constructor(&self) -> Option<Result<(), ()>> {
         let variant = match self {
             Expression::Identifier { value, .. } => Some(value.as_str()),
             _ => None,
@@ -1565,7 +1574,7 @@ impl Expression {
         matches!(self.as_option_constructor(), Some(Err(())))
     }
 
-    pub fn as_result_constructor(&self) -> Option<std::result::Result<(), ()>> {
+    pub fn as_result_constructor(&self) -> Option<Result<(), ()>> {
         let variant = match self {
             Expression::Identifier { value, .. } => Some(value.as_str()),
             _ => None,
@@ -2395,8 +2404,8 @@ impl BinaryOperator {
     }
 }
 
-impl std::fmt::Display for BinaryOperator {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for BinaryOperator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let symbol = match self {
             BinaryOperator::Addition => "+",
             BinaryOperator::Subtraction => "-",

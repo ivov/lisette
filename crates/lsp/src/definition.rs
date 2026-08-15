@@ -1,9 +1,12 @@
 use rustc_hash::FxHashMap;
+use syntax::ast::StructFieldAssignment;
 use syntax::ast::{
     Annotation, ConstructorPatternResolution, Expression, IdentifierResolution, MatchArm, Pattern,
     RecordPatternResolution, Span, StructFieldPattern,
 };
 use syntax::program::DefinitionBody;
+use syntax::program::File;
+use syntax::types::Type;
 use syntax::types::unqualified_name;
 
 use crate::analysis::find_package_by_alias;
@@ -24,7 +27,7 @@ pub(crate) fn find_struct_field_span(
     type_id: &str,
     field_name: &str,
     snapshot: &AnalysisSnapshot,
-) -> Option<syntax::ast::Span> {
+) -> Option<Span> {
     use syntax::program::{Definition, DefinitionBody};
 
     if let Some(Definition {
@@ -42,13 +45,13 @@ pub(crate) fn find_struct_field_span(
 }
 
 pub(crate) fn resolve_struct_call_field(
-    field_assignments: &[syntax::ast::StructFieldAssignment],
+    field_assignments: &[StructFieldAssignment],
     name: &str,
-    ty: &syntax::types::Type,
+    ty: &Type,
     offset: u32,
-    file: &syntax::program::File,
+    file: &File,
     snapshot: &AnalysisSnapshot,
-) -> Option<syntax::ast::Span> {
+) -> Option<Span> {
     let type_id = type_name(ty, snapshot);
 
     field_assignments
@@ -72,10 +75,10 @@ pub(crate) fn resolve_dot_access_definition(
     expression: &Expression,
     member: &str,
     dot_access_span: Span,
-    file: &syntax::program::File,
+    file: &File,
     snapshot: &AnalysisSnapshot,
-) -> Option<syntax::ast::Span> {
-    let try_lookup = |name: &str| -> Option<syntax::ast::Span> {
+) -> Option<Span> {
+    let try_lookup = |name: &str| -> Option<Span> {
         snapshot
             .definitions()
             .get(name)
@@ -182,10 +185,7 @@ pub(crate) fn resolve_dot_access_definition(
 }
 
 /// True when the span points into a generated typedef (`go:` or prelude), which rename must refuse.
-pub(crate) fn is_generated_typedef_span(
-    snapshot: &AnalysisSnapshot,
-    span: &syntax::ast::Span,
-) -> bool {
+pub(crate) fn is_generated_typedef_span(snapshot: &AnalysisSnapshot, span: &Span) -> bool {
     snapshot
         .files()
         .get(&span.file_id)
@@ -195,9 +195,9 @@ pub(crate) fn is_generated_typedef_span(
 /// Resolve an import alias to the import statement's span.
 pub(crate) fn resolve_import_span(
     name: &str,
-    file: &syntax::program::File,
+    file: &File,
     go_package_names: &FxHashMap<String, String>,
-) -> Option<syntax::ast::Span> {
+) -> Option<Span> {
     file.imports().into_iter().find_map(|import| {
         if import.effective_alias(go_package_names).as_deref() == Some(name) {
             Some(import.span)
@@ -211,7 +211,7 @@ pub(crate) fn resolve_import_span(
 pub(crate) fn resolve_annotation_definition(
     annotation: &Annotation,
     offset: u32,
-    file: &syntax::program::File,
+    file: &File,
     snapshot: &AnalysisSnapshot,
 ) -> Option<Span> {
     if !offset_in_span(offset, &annotation.get_span()) {
@@ -247,7 +247,7 @@ fn resolve_constructor_name(
     name: &str,
     span: Span,
     offset: u32,
-    file: &syntax::program::File,
+    file: &File,
     snapshot: &AnalysisSnapshot,
 ) -> Option<Span> {
     let cursor_in_name = (offset - span.byte_offset) as usize;
@@ -276,9 +276,9 @@ fn resolve_constructor_name(
 
 pub(crate) fn lookup_definition_span(
     name: &str,
-    file: &syntax::program::File,
+    file: &File,
     snapshot: &AnalysisSnapshot,
-) -> Option<syntax::ast::Span> {
+) -> Option<Span> {
     if let Some(definition) = snapshot.definitions().get(name)
         && let Some(span) = definition.name_span
     {
@@ -348,9 +348,9 @@ pub(crate) fn word_at_offset(source: &str, offset: u32) -> Option<(&str, usize, 
 pub(crate) fn resolve_word_at_offset(
     source: &str,
     offset: u32,
-    file: &syntax::program::File,
+    file: &File,
     snapshot: &AnalysisSnapshot,
-) -> Option<syntax::ast::Span> {
+) -> Option<Span> {
     let (word, _, _) = word_at_offset(source, offset)?;
     lookup_definition_span(word, file, snapshot)
 }
@@ -359,9 +359,9 @@ pub(crate) fn resolve_word_at_offset(
 pub(crate) fn resolve_match_pattern_definition(
     arms: &[MatchArm],
     offset: u32,
-    file: &syntax::program::File,
+    file: &File,
     snapshot: &AnalysisSnapshot,
-) -> Option<syntax::ast::Span> {
+) -> Option<Span> {
     arms.iter()
         .find_map(|arm| resolve_enum_in_pattern(&arm.pattern, offset, file, snapshot))
 }
@@ -370,9 +370,9 @@ pub(crate) fn resolve_match_pattern_definition(
 pub(crate) fn resolve_enum_in_pattern(
     pattern: &Pattern,
     offset: u32,
-    file: &syntax::program::File,
+    file: &File,
     snapshot: &AnalysisSnapshot,
-) -> Option<syntax::ast::Span> {
+) -> Option<Span> {
     if !offset_in_span(offset, &pattern.get_span()) {
         return None;
     }
@@ -524,10 +524,10 @@ fn record_pattern_field_span(
 /// Checks binding definitions first, then falls back to expression-based resolution.
 pub(crate) fn resolve_symbol_definition_span(
     snapshot: &AnalysisSnapshot,
-    file: &syntax::program::File,
+    file: &File,
     file_id: u32,
     offset: u32,
-) -> Option<syntax::ast::Span> {
+) -> Option<Span> {
     snapshot
         .bindings()
         .values()

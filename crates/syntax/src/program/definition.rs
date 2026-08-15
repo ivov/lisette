@@ -3,6 +3,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use ecow::EcoString;
 
 use crate::ast::{Annotation, EnumVariant, Generic, Literal, Span, StructFields};
+use crate::types;
 use crate::types::{
     FunctionParameter, Symbol, Type, build_substitution_map, substitute, type_args_match_params,
 };
@@ -143,7 +144,7 @@ impl Definition {
                 DefinitionBody::Struct {
                     fields: StructFields::Tuple(fields),
                     ..
-                } if crate::types::peel_alias(&fields[0].ty, lookup).is_ref()
+                } if types::peel_alias(&fields[0].ty, lookup).is_ref()
             )
     }
 
@@ -483,7 +484,7 @@ where
     ) where
         F: Copy + Fn(&str) -> Option<&'d Definition>,
     {
-        let resolved = crate::types::peel_alias(interface_ty, lookup);
+        let resolved = types::peel_alias(interface_ty, lookup);
         let Type::Nominal { id, params, .. } = &resolved else {
             return;
         };
@@ -582,7 +583,7 @@ where
 /// Resolve the complete method set for a type, including inherited and alias methods.
 pub fn methods_for_type<'d, F>(
     ty: &Type,
-    trait_bounds: &HashMap<crate::types::Symbol, Vec<Type>>,
+    trait_bounds: &HashMap<Symbol, Vec<Type>>,
     lookup: F,
 ) -> Methods
 where
@@ -590,7 +591,7 @@ where
 {
     fn collect<'d, F>(
         ty: &Type,
-        trait_bounds: &HashMap<crate::types::Symbol, Vec<Type>>,
+        trait_bounds: &HashMap<Symbol, Vec<Type>>,
         lookup: F,
         visited: &mut HashSet<String>,
     ) -> Methods
@@ -636,7 +637,7 @@ where
             .unwrap_or_default();
 
         if lookup(&qualified_name).is_some_and(Definition::is_transparent_type_alias) {
-            let underlying = crate::types::peel_alias(&stripped, lookup);
+            let underlying = types::peel_alias(&stripped, lookup);
             if underlying != stripped {
                 for (name, method) in collect(&underlying, trait_bounds, lookup, visited) {
                     methods.entry(name).or_insert(method);
@@ -650,7 +651,7 @@ where
     collect(ty, trait_bounds, lookup, &mut HashSet::default())
 }
 
-fn method_lookup_key(ty: &Type) -> Option<crate::types::Symbol> {
+fn method_lookup_key(ty: &Type) -> Option<Symbol> {
     match ty {
         Type::Nominal { id, .. } => Some(id.clone()),
         Type::Compound { kind, .. } => Some(Symbol::from_parts("prelude", kind.leaf_name())),

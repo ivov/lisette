@@ -5,9 +5,12 @@ use syntax::types::{Symbol, Type, build_substitution_map, substitute, unqualifie
 use crate::checker::infer::BuiltinBound;
 use crate::checker::infer::InferCtx;
 use crate::checker::infer::expressions::comparison;
+use crate::checker::infer::interface::interface_requires_methods;
 use crate::checker::{EnvResolve, TaskState};
 use crate::facts::GenericBoundOrigin;
 use crate::store::Store;
+use std::iter;
+use std::mem;
 
 #[derive(Debug, Clone)]
 pub struct AppliedGenericBound {
@@ -109,7 +112,7 @@ pub(crate) fn type_argument_children(ty: &Type) -> Vec<&Type> {
             .params
             .iter()
             .map(|param| &param.ty)
-            .chain(std::iter::once(function.return_type.as_ref()))
+            .chain(iter::once(function.return_type.as_ref()))
             .collect(),
         _ => Vec::new(),
     }
@@ -122,8 +125,7 @@ pub fn bound_implied(store: &Store, available: &[Type], required: &Type) -> bool
 pub fn bound_requires_evidence(store: &Store, bound: &Type) -> bool {
     let resolved = store.deep_resolve_alias(bound);
     resolved.get_qualified_id().is_some_and(|id| {
-        BuiltinBound::from_qualified_id(id).is_some()
-            || crate::checker::infer::interface::interface_requires_methods(store, id)
+        BuiltinBound::from_qualified_id(id).is_some() || interface_requires_methods(store, id)
     })
 }
 
@@ -150,7 +152,7 @@ impl TaskState {
     }
 
     fn check_resolved_generic_obligations(&mut self, store: &Store) {
-        let obligations = std::mem::take(&mut self.facts.deferred.generic_bounds);
+        let obligations = mem::take(&mut self.facts.deferred.generic_bounds);
         let mut unresolved = Vec::new();
         let mut seen = rustc_hash::FxHashSet::default();
 

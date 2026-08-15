@@ -1,4 +1,5 @@
 use crate::LisetteDiagnostic;
+use std::path::Path;
 use syntax::ast::Span;
 
 pub enum MissingPackageReason {
@@ -399,7 +400,7 @@ pub fn corrupt_go_typedef(go_pkg: &str, discarded: bool, script: bool) -> Lisett
         .with_help(help)
 }
 
-pub fn unreadable_go_typedef(path: &std::path::Path, error: &str, span: Span) -> LisetteDiagnostic {
+pub fn unreadable_go_typedef(path: &Path, error: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Failed to read Go typedef")
         .with_resolve_code("unreadable_go_typedef")
         .with_span_label(&span, "typedef exists but could not be read")

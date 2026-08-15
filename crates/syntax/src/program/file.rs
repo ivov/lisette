@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use ecow::{EcoString, eco_format};
 
 use crate::ast::{Expression, ImportAlias, Span};
+use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct File {
@@ -202,7 +203,7 @@ impl File {
         if let Some(stem) = self.name.strip_suffix(".test.lis") {
             return format!("{stem}_test.go");
         }
-        std::path::Path::new(&self.name)
+        Path::new(&self.name)
             .with_extension("go")
             .display()
             .to_string()

@@ -4,6 +4,9 @@ use syntax::ast::{Expression, Span};
 use syntax::types::{SimpleKind, Type};
 
 use crate::checker::infer::InferCtx;
+use crate::store::Store;
+use syntax::ast::Literal;
+use syntax::ast::UnaryOperator;
 
 impl InferCtx<'_> {
     /// Validates that a cast from source_ty to target_ty is allowed.
@@ -154,14 +157,14 @@ impl InferCtx<'_> {
 
         match inner_expression {
             Expression::Literal {
-                literal: syntax::ast::Literal::Integer { .. },
+                literal: Literal::Integer { .. },
                 ..
             } if target_resolved.is_numeric() && !target_resolved.is_rune() => {
                 self.sink
                     .push(diagnostics::infer::redundant_cast(&target_resolved, span));
             }
             Expression::Literal {
-                literal: syntax::ast::Literal::Float { .. },
+                literal: Literal::Float { .. },
                 ..
             } if target_resolved.is_float() => {
                 self.sink
@@ -172,7 +175,7 @@ impl InferCtx<'_> {
     }
 }
 
-fn uintptr_scalar_conversion(store: &crate::store::Store, source: &Type, target: &Type) -> bool {
+fn uintptr_scalar_conversion(store: &Store, source: &Type, target: &Type) -> bool {
     let castable = |ty: &Type| {
         store.has_underlying_numeric_type(ty)
             || store.underlying_simple_kind(ty) == Some(SimpleKind::Uintptr)
@@ -186,7 +189,7 @@ fn unwrap_parens_and_negation(expression: &Expression) -> &Expression {
     match expression {
         Expression::Paren { expression, .. } => unwrap_parens_and_negation(expression),
         Expression::Unary {
-            operator: syntax::ast::UnaryOperator::Negative,
+            operator: UnaryOperator::Negative,
             expression,
             ..
         } => unwrap_parens_and_negation(expression),

@@ -2209,7 +2209,7 @@ fn main() {
 
 #[test]
 fn manual_replace_all_zero_count_no_warning() {
-    let warnings = crate::_harness::lint::lint(
+    let warnings = lint(
         r#"
 import "go:strings"
 
@@ -2757,7 +2757,7 @@ fn main() {
 
 #[test]
 fn redundant_trim_guard_value_position_no_warning() {
-    let warnings = crate::_harness::lint::lint(
+    let warnings = lint(
         r#"
 import "go:strings"
 
@@ -2782,7 +2782,7 @@ fn main() {
 
 #[test]
 fn redundant_trim_guard_block_tail_no_warning() {
-    let warnings = crate::_harness::lint::lint(
+    let warnings = lint(
         r#"
 import "go:strings"
 
@@ -4806,7 +4806,7 @@ fn main() {
 
 #[test]
 fn nan_comparison_other_math_function_no_warning() {
-    let diagnostics = crate::_harness::lint::lint(
+    let diagnostics = lint(
         r#"
 import "go:math"
 fn main() {
@@ -4824,7 +4824,7 @@ fn main() {
 
 #[test]
 fn nan_comparison_user_defined_function_no_warning() {
-    let diagnostics = crate::_harness::lint::lint(
+    let diagnostics = lint(
         r#"
 fn nan() -> float64 {
   0.0
@@ -5139,7 +5139,7 @@ fn main() {
 
 #[test]
 fn always_true_disjunction_single_tautological_disjunct() {
-    let diagnostics = crate::_harness::lint::lint(
+    let diagnostics = lint(
         r#"
 fn main() {
   let x: uint8 = 5
@@ -5196,7 +5196,7 @@ fn main() {
 
 #[test]
 fn always_true_disjunction_single_diagnostic_for_chain() {
-    let diagnostics = crate::_harness::lint::lint(
+    let diagnostics = lint(
         r#"
 fn main() {
   let x = 5;
@@ -5846,7 +5846,7 @@ fn main() {
 /// Float operands are out of scope for the comparison-chain lints (PR 1), even
 /// though `float_cmp` legitimately flags the `==`/`!=` operands on its own.
 fn assert_no_chain_comparison_lints(source: &str) {
-    let diagnostics = crate::_harness::lint::lint(source);
+    let diagnostics = lint(source);
     let codes: Vec<&str> = diagnostics.iter().filter_map(|d| d.code_str()).collect();
     for code in [
         "infer.impossible_comparison",
@@ -8153,7 +8153,7 @@ fn main() {
 
 #[test]
 fn regexp_in_loop_nested_for_iterable() {
-    let warnings = crate::_harness::lint::lint(
+    let warnings = lint(
         r#"
 import "go:regexp"
 
@@ -8182,7 +8182,7 @@ fn main() {
 
 #[test]
 fn regexp_in_loop_top_level_for_iterable_no_warning() {
-    let warnings = crate::_harness::lint::lint(
+    let warnings = lint(
         r#"
 import "go:regexp"
 
@@ -9951,7 +9951,7 @@ fn main() {
 
 #[test]
 fn no_dead_code_when_continue_is_last() {
-    let warnings = crate::_harness::lint::lint(
+    let warnings = lint(
         r#"
 fn main() {
   loop {
@@ -11294,7 +11294,7 @@ fn main() {
 
 #[test]
 fn function_parameter_reported_once() {
-    let warnings = crate::_harness::lint::lint(
+    let warnings = lint(
         r#"
 fn greet(userId: int) {
   let _ = userId;
@@ -12136,7 +12136,7 @@ pub fn test(x: int) -> int {
 
 #[test]
 fn match_on_bool_duplicate_true_no_suggestion() {
-    let warnings = crate::_harness::lint::lint(
+    let warnings = lint(
         r#"
 pub fn test(b: bool) -> int {
   match b {
@@ -12158,7 +12158,7 @@ pub fn test(b: bool) -> int {
 
 #[test]
 fn match_on_bool_duplicate_false_no_suggestion() {
-    let warnings = crate::_harness::lint::lint(
+    let warnings = lint(
         r#"
 pub fn test(b: bool) -> int {
   match b {
@@ -12285,7 +12285,7 @@ fn main() {
 
 #[test]
 fn redundant_pattern_matching_same_bool_no_suggestion() {
-    let warnings = crate::_harness::lint::lint(
+    let warnings = lint(
         r#"
 fn main() {
   let o: Option<int> = Some(1)
@@ -14140,7 +14140,7 @@ fn main() -> int {
 
 #[test]
 fn replaceable_with_autofill_incomplete_literal_no_warning() {
-    let warnings = crate::_harness::lint::lint(
+    let warnings = lint(
         r#"
 struct Conf {
   title: string,
@@ -14388,7 +14388,7 @@ fn main() {
 
 #[test]
 fn discarded_loop_two_branches_two_diagnostics() {
-    let warnings = crate::_harness::lint::lint(
+    let warnings = lint(
         r#"
 fn test() {
   loop {
@@ -17145,7 +17145,7 @@ fn main() {
 
 #[test]
 fn lost_cancel_named_unused() {
-    let warnings = crate::_harness::lint::lint(
+    let warnings = lint(
         r#"
 import "go:context"
 
@@ -17170,7 +17170,7 @@ fn main() {
 
 #[test]
 fn lost_cancel_aliased_copy_no_warning() {
-    let warnings = crate::_harness::lint::lint(
+    let warnings = lint(
         r#"
 import "go:context"
 
@@ -17208,7 +17208,7 @@ fn main() {
 
 #[test]
 fn lost_cancel_tuple_projection() {
-    let warnings = crate::_harness::lint::lint(
+    let warnings = lint(
         r#"
 import "go:context"
 
@@ -17229,7 +17229,7 @@ fn main() {
 
 #[test]
 fn lost_cancel_projection_of_binding_no_warning() {
-    let warnings = crate::_harness::lint::lint(
+    let warnings = lint(
         r#"
 import "go:context"
 
@@ -19802,7 +19802,7 @@ fn main() {
 
 #[test]
 fn manual_extend_zero_filled_accumulator_no_warning() {
-    let warnings = crate::_harness::lint::lint(
+    let warnings = lint(
         r#"
 fn main() {
   let b = [1, 2, 3]
@@ -20495,7 +20495,7 @@ fn main() {
   let _ = s.contains("e")
 }
 "#;
-    let warnings = crate::_harness::lint::lint(source);
+    let warnings = lint(source);
     let codes: Vec<&str> = warnings.iter().filter_map(|w| w.code_str()).collect();
     assert!(
         codes.contains(&"lint.unused_function"),
@@ -20718,7 +20718,7 @@ fn main() {
 
 #[test]
 fn float_cmp_defers_nan_to_nan_comparison() {
-    let diagnostics = crate::_harness::lint::lint(
+    let diagnostics = lint(
         r#"
 import "go:math"
 fn main() {
@@ -21138,7 +21138,7 @@ fn main() {
 
 #[test]
 fn float_cmp_newtype_alias_symmetric() {
-    let diagnostics = crate::_harness::lint::lint(
+    let diagnostics = lint(
         r#"
 struct Distance(float64)
 type DA = Distance
@@ -21188,7 +21188,7 @@ fn main() {
 
 #[test]
 fn float_equality_without_abs_newtype_alias() {
-    let diagnostics = crate::_harness::lint::lint(
+    let diagnostics = lint(
         r#"
 struct Distance(float64)
 type DA = Distance
@@ -26056,7 +26056,7 @@ fn main() {
 
 #[test]
 fn duplicate_map_keys_reports_every_later_entry() {
-    let diagnostics = crate::_harness::lint::lint(
+    let diagnostics = lint(
         r#"
 fn main() {
   let _ = Map.from([("x", 1), ("x", 2), ("x", 3)])

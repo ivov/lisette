@@ -3,10 +3,12 @@ use crate::output::{format_backticks, use_color};
 use diagnostics::infer::levenshtein_distance;
 use semantics::cache::go_stdlib::{GoPackageCache, try_load_go_stdlib_cache};
 use semantics::cache::types::CachedDefinitionBody;
+use std::mem;
 use stdlib::{
     Target, format_targets, get_go_stdlib_package_targets, get_go_stdlib_packages,
     get_go_stdlib_typedef,
 };
+use syntax::ast::EnumVariant;
 use syntax::ast::{Annotation, Binding, Expression, Generic, Pattern, StructFields, VariantFields};
 
 #[derive(Debug, Clone, Copy)]
@@ -237,7 +239,7 @@ fn struct_definition(name: &str, gen_str: &str, fields: &StructFields, show_pub:
     }
 }
 
-fn enum_definition(name: &str, gen_str: &str, variants: &[syntax::ast::EnumVariant]) -> String {
+fn enum_definition(name: &str, gen_str: &str, variants: &[EnumVariant]) -> String {
     let is_compact = variants.len() <= 3
         && variants.iter().all(|v| {
             matches!(&v.fields, VariantFields::Unit)
@@ -1044,7 +1046,7 @@ fn wrap_into_lines(items: &[String], area: usize) -> Vec<Vec<&String>> {
         let item_width = item.chars().count();
         let separator = if current.is_empty() { 0 } else { 3 };
         if !current.is_empty() && current_width + separator + item_width > area {
-            lines.push(std::mem::take(&mut current));
+            lines.push(mem::take(&mut current));
             current_width = 0;
         }
         current_width += if current.is_empty() {

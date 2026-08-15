@@ -12,10 +12,17 @@ use syntax::types::{CompoundKind, Type};
 
 use crate::imports::PackageResolver;
 use crate::loader::ProjectAnalysis;
+use crate::paths;
 use crate::paths::uri_to_package_file;
 use crate::position::LineIndex;
 use crate::snapshot::AnalysisSnapshot;
 use crate::state::{AnalysisKey, SharedState, Workspace};
+use semantics::loader;
+use semantics::loader::ExternalTestFileIssue;
+use std::fs;
+use syntax::ast::Span;
+use syntax::program::File;
+use syntax::types;
 
 pub(crate) enum AnalysisError {
     Diagnostics(Vec<Diagnostic>),
@@ -29,7 +36,7 @@ struct BuildInput {
 }
 
 fn dotted_directory_reaches_package_graph(uri: &Url, filename: &str, root: &Path) -> bool {
-    if !semantics::loader::is_typedef_file(filename) {
+    if !loader::is_typedef_file(filename) {
         return true;
     }
 
@@ -54,7 +61,7 @@ fn dotted_directory_reaches_package_graph(uri: &Url, filename: &str, root: &Path
 }
 
 fn tree_has_compiled_source(dir: &Path) -> bool {
-    let Ok(entries) = std::fs::read_dir(dir) else {
+    let Ok(entries) = fs::read_dir(dir) else {
         return true;
     };
     entries.flatten().any(|entry| {
@@ -64,13 +71,13 @@ fn tree_has_compiled_source(dir: &Path) -> bool {
         entry
             .file_name()
             .to_str()
-            .is_some_and(|name| name.ends_with(".lis") && !semantics::loader::is_typedef_file(name))
+            .is_some_and(|name| name.ends_with(".lis") && !loader::is_typedef_file(name))
     })
 }
 
 /// Extract the constructor type name, unwrapping `Ref<T>` and peeling aliases.
 pub(crate) fn type_name(ty: &Type, snapshot: &AnalysisSnapshot) -> Option<String> {
-    let resolved = syntax::types::peel_alias(ty, |id| snapshot.definitions().get(id));
+    let resolved = types::peel_alias(ty, |id| snapshot.definitions().get(id));
     match &resolved {
         Type::Nominal { id, .. } => Some(id.to_string()),
         Type::Compound {
@@ -85,13 +92,13 @@ pub(crate) fn type_name(ty: &Type, snapshot: &AnalysisSnapshot) -> Option<String
     }
 }
 
-pub(crate) fn offset_in_span(offset: u32, span: &syntax::ast::Span) -> bool {
+pub(crate) fn offset_in_span(offset: u32, span: &Span) -> bool {
     offset >= span.byte_offset && offset < span.byte_offset + span.byte_length
 }
 
 /// Look up the package name for an import alias in a file.
 pub(crate) fn find_package_by_alias(
-    file: &syntax::program::File,
+    file: &File,
     alias: &str,
     go_package_names: &FxHashMap<String, String>,
 ) -> Option<String> {
@@ -132,16 +139,14 @@ impl SharedState {
         }
 
         if external_test {
-            return semantics::loader::external_test_file_issue(&filename).map(
-                |issue| match issue {
-                    semantics::loader::ExternalTestFileIssue::WrongSuffix => {
-                        diagnostics::package_graph::wrong_test_file_suffix(&filename)
-                    }
-                    semantics::loader::ExternalTestFileIssue::NotATestFile => {
-                        diagnostics::package_graph::non_test_file_under_tests(&filename)
-                    }
-                },
-            );
+            return loader::external_test_file_issue(&filename).map(|issue| match issue {
+                ExternalTestFileIssue::WrongSuffix => {
+                    diagnostics::package_graph::wrong_test_file_suffix(&filename)
+                }
+                ExternalTestFileIssue::NotATestFile => {
+                    diagnostics::package_graph::non_test_file_under_tests(&filename)
+                }
+            });
         }
 
         None
@@ -437,7 +442,7 @@ fn recover_target(key: &AnalysisKey) -> RecoverTarget {
         AnalysisKey::Package {
             external_test: false,
             ..
-        } => RecoverTarget::Package(crate::paths::ENTRY_PACKAGE_ID.to_string()),
+        } => RecoverTarget::Package(paths::ENTRY_PACKAGE_ID.to_string()),
         AnalysisKey::Document { .. } => RecoverTarget::None,
     }
 }
@@ -520,6 +525,7 @@ pub(crate) fn convert_diagnostic_in(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use syntax::ast::Span;
 
     #[test]
     fn info_maps_to_lsp_information() {
@@ -537,7 +543,7 @@ mod tests {
 
     #[test]
     fn prose_label_is_capitalized() {
-        let span = syntax::ast::Span::new(0, 0, 1);
+        let span = Span::new(0, 0, 1);
         let diagnostic = convert_diagnostic(
             &LisetteDiagnostic::warn("Unused function")
                 .with_span_label(&span, "never called")
@@ -556,11 +562,8 @@ mod tests {
         let uri = Url::parse("file:///x.lis").unwrap();
         let diagnostic = convert_diagnostic_in(
             &LisetteDiagnostic::error("`File` does not implement `Writer`")
-                .with_span_label(&syntax::ast::Span::new(0, 17, 4), "`Writer` needed here")
-                .with_span_label(
-                    &syntax::ast::Span::new(0, 3, 5),
-                    "`Writer` requires `fn () -> int`",
-                ),
+                .with_span_label(&Span::new(0, 17, 4), "`Writer` needed here")
+                .with_span_label(&Span::new(0, 3, 5), "`Writer` requires `fn () -> int`"),
             &index,
             Some(&uri),
         );
@@ -576,7 +579,7 @@ mod tests {
 
     #[test]
     fn multi_line_help_leads_with_the_message() {
-        let span = syntax::ast::Span::new(0, 0, 1);
+        let span = Span::new(0, 0, 1);
         let diagnostic = convert_diagnostic(
             &LisetteDiagnostic::error("`File` does not implement `ReadWriter`")
                 .with_span_label(&span, "`ReadWriter` needed here")
@@ -594,7 +597,7 @@ mod tests {
 
     #[test]
     fn identifier_led_label_is_left_untouched() {
-        let span = syntax::ast::Span::new(0, 0, 1);
+        let span = Span::new(0, 0, 1);
         let diagnostic = convert_diagnostic(
             &LisetteDiagnostic::error("Name not found")
                 .with_span_label(&span, "`missing` not found in package `root`"),

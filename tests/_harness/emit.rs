@@ -2,6 +2,7 @@ use emit::{OutputFile, Planner, TestEmitConfig};
 use syntax::program::File;
 
 use super::pipeline::TestPipeline;
+use syntax::program::TestIndex;
 
 pub fn emit_with_sourcemap(raw_source: &str) -> EmitResult {
     emit_inner(raw_source, Some(raw_source), &[])
@@ -43,7 +44,7 @@ fn emit_inner(
         file_comment: None,
     };
 
-    let test_index = syntax::program::TestIndex::default();
+    let test_index = TestIndex::default();
     let config = TestEmitConfig {
         definitions: &result.definitions,
         package_id: &result.package_id,

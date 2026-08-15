@@ -3,6 +3,7 @@ use syntax::types::unqualified_name;
 use crate::Planner;
 use crate::names::go_name;
 use crate::names::packages::{PackageRequirements, PackageUse};
+use syntax::program;
 
 impl Planner<'_> {
     /// A `locally_bound` name must not be rewritten by a package-level remap
@@ -150,7 +151,7 @@ impl Planner<'_> {
             .map(str::to_string)
             .or_else(|| self.facts.go_package_name(package).map(str::to_string))
             .unwrap_or_else(|| match package.strip_prefix(go_name::GO_IMPORT_PREFIX) {
-                Some(go_path) => syntax::program::go_import_default_name(go_path).to_string(),
+                Some(go_path) => program::go_import_default_name(go_path).to_string(),
                 None => go_name::go_package_name(package).to_string(),
             });
         let qualifier = if qualifier == go_name::go_package_name(&path) {

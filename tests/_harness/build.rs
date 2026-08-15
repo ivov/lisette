@@ -5,6 +5,7 @@ use semantics::store::ENTRY_PACKAGE_ID;
 use semantics::{AnalysisScope, AnalyzeInput, EntryFile};
 
 use super::filesystem::MockFileSystem;
+use std::collections::BTreeMap;
 
 fn compile_with(
     fs: MockFileSystem,
@@ -90,7 +91,7 @@ pub fn compile_check_script(fs: MockFileSystem) -> Analysis {
 }
 
 pub fn locator_with_go_dep(module_path: &str, version: &str) -> deps::TypedefLocator {
-    let mut go_deps = std::collections::BTreeMap::new();
+    let mut go_deps = BTreeMap::new();
     go_deps.insert(
         module_path.to_string(),
         deps::GoDependency::Remote {

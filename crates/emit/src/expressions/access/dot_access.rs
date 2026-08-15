@@ -1,4 +1,5 @@
 use syntax::ast::{Expression, StructFields};
+use syntax::parse;
 use syntax::program::{
     Definition, DefinitionBody, DotAccessKind as SemanticDotKind, ReceiverCoercion,
 };
@@ -175,7 +176,7 @@ impl Planner<'_> {
         };
         match dot_access_kind {
             Some(SemanticDotKind::TupleElement) => {
-                let field = syntax::parse::TUPLE_FIELDS
+                let field = parse::TUPLE_FIELDS
                     .get(index)
                     .expect("oversize tuple arity");
                 Some(format!("{}.{}", expression_string, field))

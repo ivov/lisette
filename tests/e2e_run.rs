@@ -1,6 +1,9 @@
+use std::env;
 use std::fs;
+use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::process::Output;
 
 fn go_available() -> bool {
     Command::new("go").arg("version").output().is_ok()
@@ -44,7 +47,7 @@ fn main() {
     (project, invocation)
 }
 
-fn lis_run(project: &Path, invocation: &Path, extra: &[&str]) -> std::process::Output {
+fn lis_run(project: &Path, invocation: &Path, extra: &[&str]) -> Output {
     let manifest = repo().join("Cargo.toml");
     let mut cmd = Command::new("cargo");
     cmd.args(["run", "--quiet", "--manifest-path"])
@@ -57,7 +60,7 @@ fn lis_run(project: &Path, invocation: &Path, extra: &[&str]) -> std::process::O
     cmd.output().expect("failed to invoke lisette")
 }
 
-fn lis(project: &Path, subcommand: &str) -> std::process::Output {
+fn lis(project: &Path, subcommand: &str) -> Output {
     let manifest = repo().join("Cargo.toml");
     Command::new("cargo")
         .args(["run", "--quiet", "--manifest-path"])
@@ -89,7 +92,7 @@ import "box"
 pub struct Wrap<T> { pub value: box.Box<T> }
 "#;
 
-fn assert_rejected_at_check(output: &std::process::Output, expected: &str) {
+fn assert_rejected_at_check(output: &Output, expected: &str) {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
@@ -1916,7 +1919,7 @@ fn a_tree_walk_reports_a_nested_project_with_no_sources() {
     }
 }
 
-fn lis_in(cwd: &Path, args: &[&str]) -> std::process::Output {
+fn lis_in(cwd: &Path, args: &[&str]) -> Output {
     let manifest = repo().join("Cargo.toml");
     Command::new("cargo")
         .args(["run", "--quiet", "--manifest-path"])
@@ -1929,7 +1932,7 @@ fn lis_in(cwd: &Path, args: &[&str]) -> std::process::Output {
         .expect("failed to invoke lisette")
 }
 
-fn combined(output: &std::process::Output) -> String {
+fn combined(output: &Output) -> String {
     format!(
         "{}{}",
         String::from_utf8_lossy(&output.stdout),
@@ -2142,7 +2145,7 @@ fn a_symlink_named_apart_from_its_target_still_runs() {
     let scratch = tempfile::tempdir().expect("create temp dir");
     let dir = scratch.path();
     fs::write(dir.join("greet-tool.lis"), GREETER).unwrap();
-    std::os::unix::fs::symlink(dir.join("greet-tool.lis"), dir.join("greet")).unwrap();
+    symlink(dir.join("greet-tool.lis"), dir.join("greet")).unwrap();
 
     let scratch_tmp = dir.join("tmp");
     fs::create_dir(&scratch_tmp).unwrap();
@@ -2228,7 +2231,7 @@ fn a_symlinked_parent_cannot_reach_the_script() {
     let scratch = tempfile::tempdir().expect("create temp dir");
     let dir = scratch.path();
     fs::create_dir(dir.join("real")).unwrap();
-    std::os::unix::fs::symlink("real", dir.join("link")).unwrap();
+    symlink("real", dir.join("link")).unwrap();
     fs::write(dir.join("real/greet.lis"), GREETER).unwrap();
 
     for args in [
@@ -2552,7 +2555,7 @@ fn an_executable_script_runs_through_its_shebang() {
             .args(["alpha", "beta"])
             .env(
                 "PATH",
-                format!("{}:{}", bin.display(), std::env::var("PATH").unwrap()),
+                format!("{}:{}", bin.display(), env::var("PATH").unwrap()),
             )
             .env("NO_COLOR", "1")
             .output()

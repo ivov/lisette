@@ -5,6 +5,9 @@ use crate::names::go_name;
 use crate::names::packages::{PackageRequirements, PackageUse};
 use crate::types::native::NativeGoType;
 use crate::types::prelude::PreludeType;
+use fmt::Formatter;
+use std::fmt;
+use std::fmt::Display;
 use syntax::ast::ResolvedCallTypeArguments;
 use syntax::program::DefinitionBody;
 use syntax::types::{CompoundKind, FunctionParameter, SimpleKind, Type};
@@ -52,8 +55,8 @@ impl GoType {
     }
 }
 
-impl std::fmt::Display for GoType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for GoType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.code)
     }
 }
@@ -63,7 +66,7 @@ impl Planner<'_> {
         match ty {
             Type::Nominal { id, params, .. } => self.emit_constructor(id, params, ty),
             Type::Simple(kind) => {
-                if matches!(kind, syntax::types::SimpleKind::Unit) {
+                if matches!(kind, SimpleKind::Unit) {
                     GoType::new("struct{}")
                 } else {
                     GoType::new(kind.leaf_name().to_string())
@@ -90,7 +93,7 @@ impl Planner<'_> {
         }
     }
 
-    fn emit_compound(&self, kind: syntax::types::CompoundKind, args: &[Type], ty: &Type) -> GoType {
+    fn emit_compound(&self, kind: CompoundKind, args: &[Type], ty: &Type) -> GoType {
         use syntax::types::CompoundKind;
 
         if kind == CompoundKind::Ref

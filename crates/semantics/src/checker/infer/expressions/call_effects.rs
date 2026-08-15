@@ -7,6 +7,7 @@ use super::super::carry_mut::can_carry_mutation_across_fn_boundary;
 use super::calls::callee_label;
 use super::primitives::contains_deref;
 use crate::checker::infer::InferCtx;
+use syntax::program::AliasKind;
 
 impl InferCtx<'_> {
     pub(super) fn classify_call(&self, callee: &Expression) -> CallKind {
@@ -104,8 +105,8 @@ impl InferCtx<'_> {
                     methods.get(method).cloned().or_else(|| {
                         // Follow the alias to its underlying type.
                         let underlying = match alias {
-                            syntax::program::AliasKind::Transparent { target, .. } => target,
-                            syntax::program::AliasKind::Opaque(_) => return None,
+                            AliasKind::Transparent { target, .. } => target,
+                            AliasKind::Opaque(_) => return None,
                         };
                         let underlying_key: Option<String> = match underlying {
                             Type::Simple(kind) => Some(format!("prelude.{}", kind.leaf_name())),

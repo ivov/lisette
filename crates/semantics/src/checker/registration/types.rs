@@ -1,11 +1,18 @@
 use crate::checker::EnvResolve;
 use rustc_hash::{FxHashMap, FxHashSet};
+use syntax::ast;
 use syntax::ast::{
     EnumFieldDefinition, EnumVariant, Expression, Generic, Span, StructFieldDefinition,
     StructFields, VariantFields,
 };
 use syntax::containment::{EnumPayloads, definition_contains_by_value};
+use syntax::go_names;
+use syntax::go_names::EnumFieldShape;
+use syntax::program::ValueKind;
 use syntax::program::{AliasKind, Definition, DefinitionBody, Methods, Visibility};
+use syntax::types;
+use syntax::types::CompoundKind;
+use syntax::types::SimpleKind;
 use syntax::types::Type;
 
 use super::enum_variant_constructor_type;
@@ -96,7 +103,7 @@ impl TaskState {
                 name_span: Some(variant_name_span),
                 doc: variant_doc,
                 body: DefinitionBody::Value {
-                    kind: syntax::program::ValueKind::Runtime,
+                    kind: ValueKind::Runtime,
                     allowed_lints: vec![],
                     go_hints: vec![],
                     go_name: None,
@@ -138,16 +145,14 @@ impl TaskState {
             return;
         }
 
-        let slots = syntax::go_names::enum_field_slots(name, variants);
+        let slots = go_names::enum_field_slots(name, variants);
 
         // (variant_name, field_name, field shape, type, span)
-        let mut seen: FxHashMap<
-            String,
-            (&str, &str, syntax::go_names::EnumFieldShape, &Type, Span),
-        > = FxHashMap::default();
+        let mut seen: FxHashMap<String, (&str, &str, EnumFieldShape, &Type, Span)> =
+            FxHashMap::default();
 
         for (vi, variant) in variants.iter().enumerate() {
-            let Some(field_shape) = syntax::go_names::enum_field_shape(&variant.fields) else {
+            let Some(field_shape) = go_names::enum_field_shape(&variant.fields) else {
                 continue;
             };
 
@@ -177,12 +182,12 @@ impl TaskState {
                     continue;
                 }
 
-                let loc_a = if shape_a == syntax::go_names::EnumFieldShape::Struct {
+                let loc_a = if shape_a == EnumFieldShape::Struct {
                     format!("{}.{}.{}", name, v_a, f_a)
                 } else {
                     format!("{}.{}", name, v_a)
                 };
-                let loc_b = if field_shape == syntax::go_names::EnumFieldShape::Struct {
+                let loc_b = if field_shape == EnumFieldShape::Struct {
                     format!("{}.{}.{}", name, variant.name, field.name)
                 } else {
                     format!("{}.{}", name, variant.name)
@@ -512,9 +517,9 @@ impl TaskState {
                     .collect();
 
                 let canonical_ty = if self.cursor.package_id() == "prelude" {
-                    if let Some(simple) = syntax::types::SimpleKind::from_name(name) {
+                    if let Some(simple) = SimpleKind::from_name(name) {
                         Type::Simple(simple)
-                    } else if let Some(compound) = syntax::types::CompoundKind::from_name(name) {
+                    } else if let Some(compound) = CompoundKind::from_name(name) {
                         Type::Compound {
                             kind: compound,
                             args: params,
@@ -701,23 +706,19 @@ fn is_embeddable_nominal(ty: &Type) -> bool {
 }
 
 fn is_imported_nominal(ty: &Type) -> bool {
-    matches!(ty, Type::Nominal { id, .. } if id.as_str().starts_with(syntax::types::GO_IMPORT_PREFIX))
+    matches!(ty, Type::Nominal { id, .. } if id.as_str().starts_with(types::GO_IMPORT_PREFIX))
 }
 
 fn is_faithful_imported_embed_target(store: &Store, ty: &Type) -> bool {
-    is_faithful_imported_graph(store, ty, &mut rustc_hash::FxHashSet::default())
+    is_faithful_imported_graph(store, ty, &mut FxHashSet::default())
 }
 
-fn is_faithful_imported_graph(
-    store: &Store,
-    ty: &Type,
-    seen: &mut rustc_hash::FxHashSet<String>,
-) -> bool {
+fn is_faithful_imported_graph(store: &Store, ty: &Type, seen: &mut FxHashSet<String>) -> bool {
     let target = store.deep_resolve_alias(&embed_promotion_target(store, ty));
     let Type::Nominal { id, .. } = &target else {
         return false;
     };
-    if !id.as_str().starts_with(syntax::types::GO_IMPORT_PREFIX) {
+    if !id.as_str().starts_with(types::GO_IMPORT_PREFIX) {
         return false;
     }
     if !seen.insert(id.to_string()) {
@@ -763,7 +764,7 @@ fn is_deferred_local_target(store: &Store, ty: &Type) -> bool {
         return false;
     };
     let id = id.as_str();
-    if id.starts_with(syntax::types::GO_IMPORT_PREFIX) {
+    if id.starts_with(types::GO_IMPORT_PREFIX) {
         return false;
     }
     match store.get_definition(id).map(|definition| &definition.body) {
@@ -780,10 +781,7 @@ fn is_deferred_local_target(store: &Store, ty: &Type) -> bool {
 }
 
 fn has_selector_surface(store: &Store, ty: &Type) -> bool {
-    if !store
-        .get_all_methods(ty, &rustc_hash::FxHashMap::default())
-        .is_empty()
-    {
+    if !store.get_all_methods(ty, &FxHashMap::default()).is_empty() {
         return true;
     }
     let Type::Nominal { id, .. } = ty else {
@@ -801,7 +799,7 @@ fn is_pointer_backed_newtype(store: &Store, ty: &Type) -> bool {
 }
 
 // Mirror the written type's own visibility: peel storage (`Option`/`Ref`), not aliases.
-fn embed_field_visibility(store: &Store, field_ty: &Type) -> syntax::ast::Visibility {
+fn embed_field_visibility(store: &Store, field_ty: &Type) -> ast::Visibility {
     let mut target = field_ty.clone();
     while target.is_option() || target.is_ref() {
         let Some(inner) = target.inner() else { break };
@@ -810,8 +808,8 @@ fn embed_field_visibility(store: &Store, field_ty: &Type) -> syntax::ast::Visibi
     let public = matches!(&target, Type::Nominal { id, .. }
         if store.get_definition(id.as_str()).is_some_and(|d| d.visibility.is_public()));
     if public {
-        syntax::ast::Visibility::Public
+        ast::Visibility::Public
     } else {
-        syntax::ast::Visibility::Private
+        ast::Visibility::Private
     }
 }

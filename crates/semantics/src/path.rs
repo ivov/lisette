@@ -1,9 +1,10 @@
+use std::env;
 use std::path::{Component, Path, PathBuf};
 
 /// Returns path relative to the cwd as a forward-slash string.
 /// Returns None if the cwd is unknown or the path lies outside it.
 pub fn relative_to_cwd(path: &Path) -> Option<String> {
-    relative_to_cwd_with(path, std::env::current_dir().ok().as_deref())
+    relative_to_cwd_with(path, env::current_dir().ok().as_deref())
 }
 
 /// Cwd-relative display paths under a fixed base dir, resolving prefixes once.
@@ -19,7 +20,7 @@ enum DisplayPathResolution {
 
 impl DisplayPathBase {
     pub fn new(base_dir: &Path) -> Self {
-        Self::with_cwd(base_dir, std::env::current_dir().ok())
+        Self::with_cwd(base_dir, env::current_dir().ok())
     }
 
     fn with_cwd(base_dir: &Path, cwd: Option<PathBuf>) -> Self {
@@ -84,6 +85,7 @@ fn relativize(rel: &Path) -> Option<String> {
 mod tests {
     use super::*;
     use std::fs as stdfs;
+    use std::os::unix::fs::symlink;
 
     #[test]
     fn plain_path_inside_cwd() {
@@ -151,7 +153,7 @@ mod tests {
         stdfs::create_dir_all(real.join("src")).unwrap();
         stdfs::write(real.join("src/main.lis"), "").unwrap();
         let link = tmp.path().join("link");
-        std::os::unix::fs::symlink(&real, &link).unwrap();
+        symlink(&real, &link).unwrap();
 
         assert_eq!(
             relative_to_cwd_with(&real.join("src/main.lis"), Some(&link)),
@@ -208,7 +210,7 @@ mod tests {
         let real = tmp.path().join("real");
         stdfs::create_dir_all(real.join("src")).unwrap();
         let link = tmp.path().join("link");
-        std::os::unix::fs::symlink(&real, &link).unwrap();
+        symlink(&real, &link).unwrap();
 
         let base = DisplayPathBase::with_cwd(&real.join("src"), Some(link));
         assert_eq!(

@@ -2,6 +2,7 @@ use crate::passes::walk::NodeCtx;
 use diagnostics::LocalSink;
 use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::{Attribute, AttributeArg, Expression, StructFieldDefinition};
+use syntax::attributes;
 use syntax::attributes::is_serialization_key;
 
 pub fn check_attributes(expression: &Expression, ctx: &NodeCtx) {
@@ -56,11 +57,11 @@ pub fn check_struct_attributes(expression: &Expression, ctx: &NodeCtx) {
 fn check_unknown_attribute(attribute: &Attribute, sink: &LocalSink) {
     let name = &attribute.name;
 
-    if !syntax::attributes::is_known_attribute(name) {
+    if !attributes::is_known_attribute(name) {
         sink.push(diagnostics::lint::unknown_attribute(
             &attribute.span,
             name,
-            &syntax::attributes::known_attribute_names(),
+            &attributes::known_attribute_names(),
         ));
     }
 }

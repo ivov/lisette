@@ -2,6 +2,7 @@ use crate::abi::is_tagged_shape_fn_value;
 use crate::calls::dispatch::{
     CallArgShape, all_type_params_inferrable, is_prelude_variant_constructor,
 };
+use syntax::types::FunctionParameter;
 
 use crate::Planner;
 use crate::abi::callable::{AbiTransition, CallableParamAbi, CallableReturnAbi};
@@ -681,7 +682,7 @@ impl<'a> Planner<'a> {
     pub(crate) fn try_emit_variadic_spread_adapter(
         &mut self,
         spread: &Expression,
-        generic_params: Option<&[syntax::types::FunctionParameter]>,
+        generic_params: Option<&[FunctionParameter]>,
     ) -> Option<ValuePlan> {
         let generic_params = generic_params?;
         let raw_variadic = generic_params.last()?;

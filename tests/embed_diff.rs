@@ -10,6 +10,7 @@ use _embed_harness::corpus::differential_scenarios;
 use _embed_harness::go_answerer::{GoAnswerer, go_available};
 use _embed_harness::random_scenarios::generate;
 use _embed_harness::runner::{run_scenario, summarize};
+use std::env;
 
 /// Override with `EMBED_DIFF_N` for a deeper sweep.
 const DEFAULT_SEEDS: u64 = 200;
@@ -22,7 +23,7 @@ fn embed_differential() {
     }
 
     let answerer = GoAnswerer::build().expect("the go/types answerer builds");
-    let seeds: u64 = std::env::var("EMBED_DIFF_N")
+    let seeds: u64 = env::var("EMBED_DIFF_N")
         .ok()
         .and_then(|value| value.parse().ok())
         .unwrap_or(DEFAULT_SEEDS);

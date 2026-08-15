@@ -6,7 +6,14 @@ use std::time::{Duration, Instant};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use lisette_lsp::protocol::{self, *};
+use lisette_lsp::protocol::*;
+use std::env;
+use std::fs;
+use std::io;
+use std::path::Path;
+use std::path::PathBuf;
+use std::process;
+use std::sync::OnceLock;
 
 /// A test client for communicating with the LSP server.
 pub struct TestClient {
@@ -24,11 +31,10 @@ impl Default for TestClient {
 }
 
 fn init_test_typedef_home() {
-    static HOME: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+    static HOME: OnceLock<PathBuf> = OnceLock::new();
     HOME.get_or_init(|| {
-        let dir =
-            std::env::temp_dir().join(format!("lisette-lsp-test-home-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).expect("create test home dir");
+        let dir = env::temp_dir().join(format!("lisette-lsp-test-home-{}", process::id()));
+        fs::create_dir_all(&dir).expect("create test home dir");
         deps::set_typedef_home(dir.clone());
         dir
     });
@@ -39,15 +45,15 @@ impl TestClient {
     pub fn new() -> Self {
         init_test_typedef_home();
 
-        let (server_read, client_write) = std::io::pipe().expect("create client-to-server pipe");
-        let (client_read, server_write) = std::io::pipe().expect("create server-to-client pipe");
+        let (server_read, client_write) = io::pipe().expect("create client-to-server pipe");
+        let (client_read, server_write) = io::pipe().expect("create server-to-client pipe");
 
-        let exit_code = thread::spawn(move || protocol::serve(server_read, server_write, None));
+        let exit_code = thread::spawn(move || serve(server_read, server_write, None));
 
         let (sender, incoming) = mpsc::channel();
         thread::spawn(move || {
             let mut reader = BufReader::new(client_read);
-            while let Ok(Some(message)) = protocol::read_message(&mut reader) {
+            while let Ok(Some(message)) = read_message(&mut reader) {
                 if sender.send(message).is_err() {
                     break;
                 }
@@ -71,7 +77,7 @@ impl TestClient {
         let id = self.next_id;
         self.next_id += 1;
 
-        protocol::write_message(
+        write_message(
             &mut self.writer,
             &json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}),
         )
@@ -103,7 +109,7 @@ impl TestClient {
     }
 
     fn notify(&mut self, method: &str, params: Value) {
-        protocol::write_message(
+        write_message(
             &mut self.writer,
             &json!({"jsonrpc": "2.0", "method": method, "params": params}),
         )
@@ -123,7 +129,7 @@ impl TestClient {
         result
     }
 
-    pub fn initialize_with_root(&mut self, root: &std::path::Path) -> InitializeResult {
+    pub fn initialize_with_root(&mut self, root: &Path) -> InitializeResult {
         let root_uri = Url::from_file_path(root).unwrap().to_string();
         let result = self.request(
             "initialize",
@@ -447,7 +453,7 @@ pub fn definition_target_text(location: &Location) -> String {
         .uri
         .to_file_path()
         .expect("location uri should be a file path");
-    let source = std::fs::read_to_string(&path).expect("definition file should be readable");
+    let source = fs::read_to_string(&path).expect("definition file should be readable");
     let line = source
         .lines()
         .nth(location.range.start.line as usize)

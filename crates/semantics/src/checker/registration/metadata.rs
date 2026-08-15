@@ -94,7 +94,7 @@ pub(super) fn enum_variant_constructor_type(
 pub(super) fn wrap_with_impl_generics(
     fn_ty: &Type,
     generics: &[Generic],
-    impl_bounds: &[syntax::types::Bound],
+    impl_bounds: &[Bound],
 ) -> Type {
     if generics.is_empty() {
         return fn_ty.clone();
@@ -102,7 +102,7 @@ pub(super) fn wrap_with_impl_generics(
 
     let impl_vars: Vec<syntax::EcoString> = generics.iter().map(|g| g.name.clone()).collect();
 
-    let add_impl_bounds = |existing_bounds: &[syntax::types::Bound]| -> Vec<syntax::types::Bound> {
+    let add_impl_bounds = |existing_bounds: &[Bound]| -> Vec<Bound> {
         impl_bounds
             .iter()
             .cloned()

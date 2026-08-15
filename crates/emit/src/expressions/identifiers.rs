@@ -4,6 +4,7 @@ use crate::names::generics::extract_type_mapping;
 use crate::names::go_name;
 use crate::plan::values::GoExpression;
 use crate::state::bindings::BindingValue;
+use syntax::types::FunctionParameter;
 use syntax::types::{Type, unqualified_name};
 
 enum IdentifierKind {
@@ -145,7 +146,7 @@ impl Planner<'_> {
     /// inferred from the parameter types.
     fn constructor_fn_type_args(
         &mut self,
-        fn_params: &[syntax::types::FunctionParameter],
+        fn_params: &[FunctionParameter],
         ret_params: &[Type],
         ctx: ExpressionContext<'_>,
     ) -> String {

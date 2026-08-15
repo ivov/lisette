@@ -5,14 +5,19 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
 
+use crate::go_cli;
+use crate::output;
 use deps::TypedefLocator;
 use diagnostics::render::{self, Filter, OutputFormat};
 use diagnostics::{Fix, apply_fixes};
 use lisette::fs::LocalFileSystem;
+use lisette::fs::collect_lis_filepaths_recursive;
+use lisette::fs::relative_to_cwd;
 use lisette::pipeline::{
     CompileConfig, CompileEntry, CompileInput, CompileMode, CompileResult, CompileScope,
     ProjectKind, compile,
 };
+use std::time::Duration;
 
 use semantics::loader::{Loader, MemoryLoader};
 
@@ -93,7 +98,7 @@ struct Snapshot {
 
 impl Snapshot {
     fn read(file: &Path) -> Self {
-        let Ok(source) = std::fs::read_to_string(file) else {
+        let Ok(source) = fs::read_to_string(file) else {
             return Self {
                 source: None,
                 locator: TypedefLocator::default(),
@@ -138,7 +143,7 @@ fn check_project(project_path: &Path, options: &CheckOptions) -> i32 {
         None => return 1,
     };
 
-    let (manifest, locator) = match deps::TypedefLocator::from_project_with_manifest(project_path) {
+    let (manifest, locator) = match TypedefLocator::from_project_with_manifest(project_path) {
         Ok(pair) => pair,
         Err(msg) => {
             cli_error!("Failed to check project", msg, "Fix `lisette.toml`");
@@ -161,7 +166,7 @@ fn check_project(project_path: &Path, options: &CheckOptions) -> i32 {
         Err(code) => return code,
     };
 
-    if let Err(e) = crate::go_cli::write_go_mod(&target_dir, &manifest.project.name, &locator) {
+    if let Err(e) = go_cli::write_go_mod(&target_dir, &manifest.project.name, &locator) {
         cli_error!(
             "Failed to check project",
             e,
@@ -314,7 +319,7 @@ fn compile_single_file(
         .unwrap_or("main.lis")
         .to_string();
     let entry_display =
-        lisette::fs::relative_to_cwd(file_path).unwrap_or_else(|| file_path.display().to_string());
+        relative_to_cwd(file_path).unwrap_or_else(|| file_path.display().to_string());
 
     let input = CompileInput::Binary(CompileEntry {
         source: &source,
@@ -385,7 +390,7 @@ fn compile_entry(
 }
 
 fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
-    let mut files = lisette::fs::collect_lis_filepaths_recursive(dir);
+    let mut files = collect_lis_filepaths_recursive(dir);
     files.sort();
 
     if files.is_empty() {
@@ -565,8 +570,8 @@ fn apply_result_fixes(result: &CompileResult, summary: &mut FixSummary) {
     }
 }
 
-fn print_fix_summary(summary: &FixSummary, elapsed: std::time::Duration) {
-    let time_display = crate::output::format_elapsed(elapsed);
+fn print_fix_summary(summary: &FixSummary, elapsed: Duration) {
+    let time_display = output::format_elapsed(elapsed);
 
     if summary.files_changed == 0 {
         eprintln!("  ✓ No fixes applied {}", time_display);

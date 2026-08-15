@@ -1,4 +1,7 @@
 use super::*;
+use syntax::program::ValueKind;
+use syntax::types::CompoundKind;
+use syntax::types::SimpleKind;
 
 impl TaskState {
     pub(super) fn collect_package_type_name_entries(
@@ -134,10 +137,10 @@ impl TaskState {
             // dedicated Simple/Compound variants; everything else remains a
             // nominal Constructor.
             let canonical_ty = if package_id == "prelude" {
-                if let Some(simple) = syntax::types::SimpleKind::from_name(name) {
+                if let Some(simple) = SimpleKind::from_name(name) {
                     debug_assert!(args.is_empty(), "simple kinds have no generics");
                     Type::Simple(simple)
-                } else if let Some(compound) = syntax::types::CompoundKind::from_name(name) {
+                } else if let Some(compound) = CompoundKind::from_name(name) {
                     Type::Compound {
                         kind: compound,
                         args,
@@ -189,7 +192,7 @@ impl TaskState {
                     name_span: None,
                     doc: None,
                     body: DefinitionBody::Value {
-                        kind: syntax::program::ValueKind::Runtime,
+                        kind: ValueKind::Runtime,
                         allowed_lints: vec![],
                         go_hints: vec![],
                         go_name: None,

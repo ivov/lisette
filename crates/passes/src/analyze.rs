@@ -14,6 +14,9 @@ use semantics::store::ENTRY_PACKAGE_ID;
 use semantics::{InferenceOutput, PARALLEL_THRESHOLD, run_inference};
 
 use crate::passes;
+use semantics::cache::CompiledPackage;
+use std::mem;
+use syntax::types;
 
 pub struct Analysis {
     pub emit_input: EmitInput,
@@ -54,7 +57,7 @@ impl Analysis {
     }
 
     pub fn take_diagnostics(&mut self) -> Vec<LisetteDiagnostic> {
-        std::mem::take(&mut self.diagnostics)
+        mem::take(&mut self.diagnostics)
     }
 
     fn error_count(&self) -> usize {
@@ -119,7 +122,7 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
     // Canonicalize diagnostic order so the output is stable regardless of
     // phase ordering, FxHashMap iteration, or parallel inference scheduling.
     let mut all_diagnostics = sink.into_diagnostics();
-    all_diagnostics.sort_by(diagnostics::LisetteDiagnostic::sort_key);
+    all_diagnostics.sort_by(LisetteDiagnostic::sort_key);
     all_diagnostics.splice(0..0, entry_parse_errors.into_iter().map(Into::into));
 
     let emit_stamps: Vec<EmitStamp> = compiled_packages
@@ -135,7 +138,7 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
             .iter()
             .any(|diagnostic| diagnostic.is_error());
         if !has_errors {
-            let save = |compiled: &semantics::cache::CompiledPackage| {
+            let save = |compiled: &CompiledPackage| {
                 let file_ids: HashSet<u32> = store
                     .get_package(&compiled.package_id)
                     .map(|m| m.file_ids().collect())
@@ -173,7 +176,7 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
     let go_package_ids: HashSet<String> = store
         .packages
         .keys()
-        .filter(|id| id.starts_with(syntax::types::GO_IMPORT_PREFIX))
+        .filter(|id| id.starts_with(types::GO_IMPORT_PREFIX))
         .cloned()
         .collect();
 

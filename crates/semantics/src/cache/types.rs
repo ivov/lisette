@@ -2,6 +2,13 @@ use rustc_hash::FxHashMap as HashMap;
 
 use ecow::EcoString;
 use serde::{Deserialize, Serialize};
+use syntax::ast::Attribute;
+use syntax::ast::EnumFieldDefinition;
+use syntax::ast::EnumVariant;
+use syntax::ast::Literal;
+use syntax::ast::StructFieldDefinition;
+use syntax::ast::StructFieldKind;
+use syntax::ast::VariantFields;
 use syntax::ast::{
     Annotation, AttributeArg, FunctionAnnotationParameter, Generic, Span, StructFields,
     Visibility as FieldVisibility,
@@ -229,8 +236,8 @@ pub enum CachedLiteral {
 }
 
 impl CachedLiteral {
-    fn from_literal(lit: &syntax::ast::Literal) -> Self {
-        use syntax::ast::Literal;
+    fn from_literal(lit: &Literal) -> Self {
+        use Literal;
         match lit {
             Literal::Integer { value, text } => CachedLiteral::Integer {
                 value: *value,
@@ -256,8 +263,8 @@ impl CachedLiteral {
         }
     }
 
-    fn to_literal(&self) -> syntax::ast::Literal {
-        use syntax::ast::Literal;
+    fn to_literal(&self) -> Literal {
+        use Literal;
         match self {
             CachedLiteral::Integer { value, text } => Literal::Integer {
                 value: *value,
@@ -284,15 +291,15 @@ pub struct CachedAttribute {
 }
 
 impl CachedAttribute {
-    fn from_attribute(attribute: &syntax::ast::Attribute) -> Self {
+    fn from_attribute(attribute: &Attribute) -> Self {
         Self {
             name: attribute.name.clone(),
             args: attribute.args.clone(),
         }
     }
 
-    fn to_attribute(&self) -> syntax::ast::Attribute {
-        syntax::ast::Attribute {
+    fn to_attribute(&self) -> Attribute {
+        Attribute {
             name: self.name.clone(),
             args: self.args.clone(),
             span: Span::dummy(),
@@ -323,18 +330,15 @@ pub enum CachedStructFields {
 }
 
 impl CachedStructField {
-    fn from_field(
-        field: &syntax::ast::StructFieldDefinition,
-        file_id_to_index: &HashMap<u32, u32>,
-    ) -> Self {
+    fn from_field(field: &StructFieldDefinition, file_id_to_index: &HashMap<u32, u32>) -> Self {
         let kind = match &field.kind {
-            syntax::ast::StructFieldKind::Named { attributes } => CachedStructFieldKind::Named {
+            StructFieldKind::Named { attributes } => CachedStructFieldKind::Named {
                 attributes: attributes
                     .iter()
                     .map(CachedAttribute::from_attribute)
                     .collect(),
             },
-            syntax::ast::StructFieldKind::Embedded => CachedStructFieldKind::Embedded,
+            StructFieldKind::Embedded => CachedStructFieldKind::Embedded,
         };
         Self {
             name: field.name.clone(),
@@ -346,17 +350,17 @@ impl CachedStructField {
         }
     }
 
-    fn to_field(&self, file_ids: &[u32]) -> syntax::ast::StructFieldDefinition {
+    fn to_field(&self, file_ids: &[u32]) -> StructFieldDefinition {
         let kind = match &self.kind {
-            CachedStructFieldKind::Named { attributes } => syntax::ast::StructFieldKind::Named {
+            CachedStructFieldKind::Named { attributes } => StructFieldKind::Named {
                 attributes: attributes
                     .iter()
                     .map(CachedAttribute::to_attribute)
                     .collect(),
             },
-            CachedStructFieldKind::Embedded => syntax::ast::StructFieldKind::Embedded,
+            CachedStructFieldKind::Embedded => StructFieldKind::Embedded,
         };
-        syntax::ast::StructFieldDefinition {
+        StructFieldDefinition {
             doc: self.doc.clone(),
             name: self.name.clone(),
             name_span: self.name_span.to_span(file_ids),
@@ -384,36 +388,33 @@ pub enum CachedVariantFields {
 }
 
 impl CachedVariantFields {
-    fn from_variant_fields(fields: &syntax::ast::VariantFields) -> Self {
+    fn from_variant_fields(fields: &VariantFields) -> Self {
         match fields {
-            syntax::ast::VariantFields::Unit => CachedVariantFields::Unit,
-            syntax::ast::VariantFields::Tuple(fs) => {
+            VariantFields::Unit => CachedVariantFields::Unit,
+            VariantFields::Tuple(fs) => {
                 CachedVariantFields::Tuple(fs.iter().map(CachedEnumField::from_field).collect())
             }
-            syntax::ast::VariantFields::Struct(fs) => {
+            VariantFields::Struct(fs) => {
                 CachedVariantFields::Struct(fs.iter().map(CachedEnumField::from_field).collect())
             }
         }
     }
 
-    fn to_variant_fields(&self) -> syntax::ast::VariantFields {
+    fn to_variant_fields(&self) -> VariantFields {
         match self {
-            CachedVariantFields::Unit => syntax::ast::VariantFields::Unit,
+            CachedVariantFields::Unit => VariantFields::Unit,
             CachedVariantFields::Tuple(fs) => {
-                syntax::ast::VariantFields::Tuple(fs.iter().map(|f| f.to_field()).collect())
+                VariantFields::Tuple(fs.iter().map(|f| f.to_field()).collect())
             }
             CachedVariantFields::Struct(fs) => {
-                syntax::ast::VariantFields::Struct(fs.iter().map(|f| f.to_field()).collect())
+                VariantFields::Struct(fs.iter().map(|f| f.to_field()).collect())
             }
         }
     }
 }
 
 impl CachedEnumVariant {
-    fn from_variant(
-        variant: &syntax::ast::EnumVariant,
-        file_id_to_index: &HashMap<u32, u32>,
-    ) -> Self {
+    fn from_variant(variant: &EnumVariant, file_id_to_index: &HashMap<u32, u32>) -> Self {
         Self {
             name: variant.name.clone(),
             name_span: CachedSpan::from_span(&variant.name_span, file_id_to_index),
@@ -422,8 +423,8 @@ impl CachedEnumVariant {
         }
     }
 
-    fn to_variant(&self, file_ids: &[u32]) -> syntax::ast::EnumVariant {
-        syntax::ast::EnumVariant {
+    fn to_variant(&self, file_ids: &[u32]) -> EnumVariant {
+        EnumVariant {
             doc: self.doc.clone(),
             name: self.name.clone(),
             name_span: self.name_span.to_span(file_ids),
@@ -439,15 +440,15 @@ pub struct CachedEnumField {
 }
 
 impl CachedEnumField {
-    fn from_field(field: &syntax::ast::EnumFieldDefinition) -> Self {
+    fn from_field(field: &EnumFieldDefinition) -> Self {
         Self {
             name: field.name.clone(),
             ty: Clone::clone(&field.ty),
         }
     }
 
-    fn to_field(&self) -> syntax::ast::EnumFieldDefinition {
-        syntax::ast::EnumFieldDefinition {
+    fn to_field(&self) -> EnumFieldDefinition {
+        EnumFieldDefinition {
             name: self.name.clone(),
             name_span: Span::dummy(),
             ty: self.ty.clone(),

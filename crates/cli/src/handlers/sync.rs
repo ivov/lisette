@@ -10,10 +10,11 @@ use crate::typedef_regen::prewarm_typedef_cache;
 use crate::typedef_scan::{SourceScanError, scan_source_imports};
 use crate::workspace::WorkspaceBindgen;
 use crate::{cli_error, error};
+use std::path::Path;
 
 pub fn sync(script: Option<&str>) -> i32 {
     if let Some(script) = script {
-        return super::script_sync::run(std::path::Path::new(script));
+        return super::script_sync::run(Path::new(script));
     }
 
     let project = match MutationProject::open() {

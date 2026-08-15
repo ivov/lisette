@@ -1,4 +1,7 @@
 use crate::LisetteDiagnostic;
+use crate::pattern;
+use std::fmt::Display;
+use std::mem;
 use syntax::ast::{Annotation, BinaryOperator, BindingKind, Span};
 use syntax::types::{SimpleKind, Type};
 
@@ -2932,7 +2935,7 @@ pub fn enum_spread_missing_fields(
         ("field", "it", format!("`{}`", missing[0]))
     } else {
         let formatted: Vec<String> = missing.iter().map(|f| format!("`{}`", f)).collect();
-        ("fields", "them", crate::pattern::join_and(&formatted))
+        ("fields", "them", pattern::join_and(&formatted))
     };
 
     let (label, help) = match counterexample {
@@ -3360,7 +3363,7 @@ pub fn levenshtein_distance(a: &str, b: &str) -> usize {
             let cost = if a_char == b_char { 0 } else { 1 };
             curr[j + 1] = (prev[j + 1] + 1).min(curr[j] + 1).min(prev[j] + cost);
         }
-        std::mem::swap(&mut prev, &mut curr);
+        mem::swap(&mut prev, &mut curr);
     }
 
     prev[b_len]
@@ -4132,7 +4135,7 @@ pub fn array_new_cannot_infer_size(span: Span) -> LisetteDiagnostic {
         .with_help("Write the type arguments, e.g. `Array.new<int, 3>()`, or annotate the binding")
 }
 
-pub fn array_new_no_zero(element: &dyn std::fmt::Display, span: Span) -> LisetteDiagnostic {
+pub fn array_new_no_zero(element: &dyn Display, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error(format!("`{element}` has no zero value"))
         .with_infer_code("array_new_no_zero")
         .with_span_label(
@@ -4168,7 +4171,7 @@ pub fn channel_no_make_constructor(span: Span) -> LisetteDiagnostic {
 }
 
 pub fn slice_make_no_zero(
-    element: &dyn std::fmt::Display,
+    element: &dyn Display,
     hidden_go_state: Option<&str>,
     span: Span,
 ) -> LisetteDiagnostic {
@@ -4190,7 +4193,7 @@ pub fn slice_make_no_zero(
         .with_help(help)
 }
 
-pub fn hidden_state_no_zero(type_name: &dyn std::fmt::Display, span: Span) -> LisetteDiagnostic {
+pub fn hidden_state_no_zero(type_name: &dyn Display, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error(format!("`{type_name}` has no zero value"))
         .with_infer_code("hidden_state_no_zero")
         .with_span_label(&span, "no zero available")

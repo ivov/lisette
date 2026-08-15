@@ -1,4 +1,5 @@
 use crate::passes::walk::{FunctionRole, NodeCtx};
+use std::iter;
 use syntax::ast::{BinaryOperator, Expression, LetMode, MatchArm, Span};
 use syntax::program::resolved_definition;
 use syntax::types::{Symbol, Type};
@@ -55,7 +56,7 @@ fn scan(expression: &Expression, target: &str) -> Flow {
             span,
             ..
         } => {
-            let operands = std::iter::once(callee.as_ref())
+            let operands = iter::once(callee.as_ref())
                 .chain(args)
                 .chain(spread.as_deref());
             sequence(scan_sequence(operands, target), || {
@@ -133,7 +134,7 @@ fn scan_registered_call(expression: &Expression, target: &str) -> Flow {
             spread,
             ..
         } => {
-            let operands = std::iter::once(callee.as_ref())
+            let operands = iter::once(callee.as_ref())
                 .chain(args)
                 .chain(spread.as_deref());
             scan_sequence(operands, target)

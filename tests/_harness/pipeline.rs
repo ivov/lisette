@@ -2,7 +2,9 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::{LisetteDiagnostic, LocalSink};
 use semantics::{checker::TaskState, checker::infer::InferCtx};
+use std::mem;
 use stdlib::{Target, get_go_stdlib_typedef};
+use syntax::types;
 use syntax::{
     ast::{Expression, FunctionBody},
     lex::Lexer,
@@ -246,12 +248,12 @@ impl CompiledTest {
                 }
             }
 
-            let equality_index = std::mem::take(&mut store.equality_index);
+            let equality_index = mem::take(&mut store.equality_index);
             let go_package_names = store.go_package_names.clone();
             let go_package_ids: HashSet<String> = store
                 .packages
                 .keys()
-                .filter(|id| id.starts_with(syntax::types::GO_IMPORT_PREFIX))
+                .filter(|id| id.starts_with(types::GO_IMPORT_PREFIX))
                 .cloned()
                 .collect();
 

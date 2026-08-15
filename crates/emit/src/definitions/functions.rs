@@ -8,6 +8,7 @@ use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::patterns::sites::PatternSubject;
 use crate::plan::bodies::LoweredBlock;
+use crate::state::package_state::FunctionEmissionContext;
 use crate::types::native::NativeGoType;
 use crate::utils::{group_params, receiver_name};
 use syntax::EcoString;
@@ -543,10 +544,7 @@ impl Planner<'_> {
                     .then(|| name.to_string())
             })
             .collect();
-        let context = crate::state::package_state::FunctionEmissionContext::for_function(
-            generic_context,
-            absorbed_ref_generics,
-        );
+        let context = FunctionEmissionContext::for_function(generic_context, absorbed_ref_generics);
         self.function_contexts.push(context);
         let result = f(self);
         self.function_contexts
@@ -639,7 +637,7 @@ pub(crate) fn is_breakless_loop(expression: &Expression) -> bool {
 
 /// Renamed definition parts for methods on native Go receiver types; the
 /// caller rebinds its view to borrow these.
-type NativeMethodOverride = (ecow::EcoString, Vec<Binding>);
+type NativeMethodOverride = (EcoString, Vec<Binding>);
 
 fn change_go_builtin_methods(
     function_definition: FunctionDefinitionView<'_>,

@@ -1,6 +1,8 @@
 use super::resolution::{ImportState, PrefixedImport};
 use super::state::Cursor;
 use super::*;
+use crate::prelude;
+use std::mem;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum FileContext<'a> {
@@ -33,14 +35,8 @@ impl<'a> FileContext<'a> {
                 file_id,
                 imports,
             } => (package_id, file_id, imports),
-            Self::Prelude => (
-                crate::prelude::PRELUDE_PACKAGE_ID,
-                crate::prelude::PRELUDE_FILE_ID,
-                &[],
-            ),
-            Self::TestPrelude { file_id } => {
-                (crate::prelude::TEST_PRELUDE_PACKAGE_ID, file_id, &[])
-            }
+            Self::Prelude => (prelude::PRELUDE_PACKAGE_ID, prelude::PRELUDE_FILE_ID, &[]),
+            Self::TestPrelude { file_id } => (prelude::TEST_PRELUDE_PACKAGE_ID, file_id, &[]),
         }
     }
 }
@@ -71,19 +67,16 @@ impl TaskState {
     ) -> SavedFileContext {
         let (package_id, file_id, imports) = context.parts();
         let saved = SavedFileContext {
-            cursor: std::mem::replace(&mut self.cursor, Cursor::file(package_id, file_id)),
-            scopes: std::mem::take(&mut self.scopes),
-            imports: std::mem::take(&mut self.imports),
+            cursor: mem::replace(&mut self.cursor, Cursor::file(package_id, file_id)),
+            scopes: mem::take(&mut self.scopes),
+            imports: mem::take(&mut self.imports),
         };
 
         match context {
             FileContext::Standard { .. } => {
                 self.put_prelude_in_scope(store);
                 if self.current_file_is_test(store) {
-                    self.put_unprefixed_package_in_scope(
-                        store,
-                        crate::prelude::TEST_PRELUDE_PACKAGE_ID,
-                    );
+                    self.put_unprefixed_package_in_scope(store, prelude::TEST_PRELUDE_PACKAGE_ID);
                 }
                 self.put_unprefixed_package_in_scope(store, package_id);
             }

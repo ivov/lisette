@@ -7,6 +7,7 @@ use crate::names::go_name;
 use crate::plan::bodies::{AssignForm, AssignPlan, CompoundKind, LoweredBlock, LoweredStatement};
 use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
 use crate::state::bindings::BindingValue;
+use syntax::ast::Literal;
 use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, UnaryOperator};
 use syntax::parse::TUPLE_FIELDS;
 use syntax::types::Type;
@@ -456,7 +457,7 @@ fn is_literal_one(expression: &Expression) -> bool {
     matches!(
         expression.unwrap_parens(),
         Expression::Literal {
-            literal: syntax::ast::Literal::Integer { value: 1, .. },
+            literal: Literal::Integer { value: 1, .. },
             ..
         }
     )

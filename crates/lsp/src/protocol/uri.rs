@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
+use std::error::Error;
 
 /// URI used by the Lisette language server.
 ///
@@ -22,7 +23,7 @@ impl fmt::Display for InvalidUri {
     }
 }
 
-impl std::error::Error for InvalidUri {}
+impl Error for InvalidUri {}
 
 impl Url {
     pub fn parse(value: &str) -> Result<Self, InvalidUri> {
@@ -175,10 +176,11 @@ fn hex(byte: u8) -> Option<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::env;
 
     #[test]
     fn file_path_round_trip_preserves_spaces_and_unicode() {
-        let path = std::env::temp_dir().join("lisette uri ☃.lis");
+        let path = env::temp_dir().join("lisette uri ☃.lis");
         let uri = Url::from_file_path(&path).expect("absolute path");
 
         assert_eq!(uri.to_file_path(), Ok(path));

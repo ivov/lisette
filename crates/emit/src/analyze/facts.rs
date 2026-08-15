@@ -3,11 +3,14 @@ use std::sync::Arc;
 use ecow::EcoString;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
+use std::sync::LazyLock;
 use syntax::ast::{BindingId, Pattern, RestPattern, Span};
 use syntax::program::{
     Definition, DefinitionBody, EqualityIndex, Method, MutationInfo, PackageId, TestIndex,
     UnusedInfo,
 };
+use syntax::types;
+use syntax::types::SimpleKind;
 use syntax::types::{Symbol, Type};
 
 use crate::abi::callable::CallableReturnAbi;
@@ -75,10 +78,7 @@ impl<'a> EmitFacts<'a> {
     where
         'a: 'b,
     {
-        syntax::types::package_for_qualified_name(
-            id,
-            self.go_package_ids.iter().map(String::as_str),
-        )
+        types::package_for_qualified_name(id, self.go_package_ids.iter().map(String::as_str))
     }
 
     pub(crate) fn definition(&self, id: &str) -> Option<&'a Definition> {
@@ -107,27 +107,27 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn underlying_type(&self, ty: &Type) -> Option<Type> {
-        syntax::types::underlying_type(ty, |id| self.definition(id))
+        types::underlying_type(ty, |id| self.definition(id))
     }
 
-    pub(crate) fn underlying_simple_kind(&self, ty: &Type) -> Option<syntax::types::SimpleKind> {
-        syntax::types::underlying_simple_kind(ty, |id| self.definition(id))
+    pub(crate) fn underlying_simple_kind(&self, ty: &Type) -> Option<SimpleKind> {
+        types::underlying_simple_kind(ty, |id| self.definition(id))
     }
 
     pub(crate) fn underlying_numeric_type(&self, ty: &Type) -> Option<Type> {
-        syntax::types::underlying_numeric_type(ty, |id| self.definition(id))
+        types::underlying_numeric_type(ty, |id| self.definition(id))
     }
 
     pub(crate) fn is_aliased_numeric_type(&self, ty: &Type) -> bool {
-        syntax::types::is_aliased_numeric_type(ty, |id| self.definition(id))
+        types::is_aliased_numeric_type(ty, |id| self.definition(id))
     }
 
     pub(crate) fn resolves_to_unknown(&self, ty: &Type) -> bool {
-        syntax::types::resolves_to_unknown(ty, |id| self.definition(id))
+        types::resolves_to_unknown(ty, |id| self.definition(id))
     }
 
     pub(crate) fn contains_unknown(&self, ty: &Type) -> bool {
-        syntax::types::contains_unknown(ty, |id| self.definition(id))
+        types::contains_unknown(ty, |id| self.definition(id))
     }
 
     pub(crate) fn strip_and_peel(&self, ty: &Type) -> Type {
@@ -182,8 +182,7 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn unused_imports_for_current_package(&self) -> &'a HashSet<EcoString> {
-        static EMPTY: std::sync::LazyLock<HashSet<EcoString>> =
-            std::sync::LazyLock::new(HashSet::default);
+        static EMPTY: LazyLock<HashSet<EcoString>> = LazyLock::new(HashSet::default);
         self.unused
             .imports_by_package
             .get(self.current_package.as_str())
@@ -282,7 +281,7 @@ impl<'a> EmitFacts<'a> {
             .iter()
             .any(|variant| variant.name == variant_name)
             .then(|| {
-                let enum_name = syntax::types::unqualified_name(enum_id);
+                let enum_name = types::unqualified_name(enum_id);
                 let make_function = go_name::enum_make_function(enum_name, variant_name);
                 if enum_id.starts_with(go_name::PRELUDE_PREFIX) {
                     format!("{}{}", go_name::PRELUDE_PREFIX, make_function)
@@ -343,7 +342,7 @@ pub(crate) fn is_nullable_option(definitions: &HashMap<Symbol, Definition>, ty: 
 }
 
 fn is_nilable_go_type(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> bool {
-    syntax::types::is_nilable_go_type(ty, |id| definitions.get(id))
+    types::is_nilable_go_type(ty, |id| definitions.get(id))
 }
 
 fn as_interface(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> Option<String> {
@@ -362,10 +361,10 @@ fn resolve_to_function_type(definitions: &HashMap<Symbol, Definition>, ty: &Type
     if matches!(resolved, Type::Function(_)) {
         return Some(resolved);
     }
-    syntax::types::underlying_type(ty, |id| definitions.get(id))
+    types::underlying_type(ty, |id| definitions.get(id))
         .filter(|underlying| matches!(underlying, Type::Function(_)))
 }
 
 fn peel_alias(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> Type {
-    syntax::types::peel_alias(ty, |id| definitions.get(id))
+    types::peel_alias(ty, |id| definitions.get(id))
 }

@@ -2,9 +2,15 @@ use std::io::IsTerminal;
 use std::sync::LazyLock;
 
 use owo_colors::OwoColorize;
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::env;
+use std::io;
+use std::str::Chars;
+use std::time::Duration;
 
 static USE_COLOR: LazyLock<bool> =
-    LazyLock::new(|| std::env::var("NO_COLOR").is_err() && std::io::stderr().is_terminal());
+    LazyLock::new(|| env::var("NO_COLOR").is_err() && io::stderr().is_terminal());
 
 pub fn use_color() -> bool {
     *USE_COLOR
@@ -47,7 +53,7 @@ fn platform_terminal_width() -> Option<u16> {
     const GET_WINDOW_SIZE: c_ulong = 0x4008_7468;
 
     let mut size = WindowSize::default();
-    let stderr = std::io::stderr();
+    let stderr = io::stderr();
     // SAFETY: stderr supplies a live file descriptor for the duration of the
     // call, and `size` is the C-compatible buffer required by TIOCGWINSZ.
     let result = unsafe { ioctl(stderr.as_raw_fd(), GET_WINDOW_SIZE, &mut size) };
@@ -94,7 +100,7 @@ fn platform_terminal_width() -> Option<u16> {
         ) -> i32;
     }
 
-    let stderr = std::io::stderr();
+    let stderr = io::stderr();
     let mut info = ConsoleScreenBufferInfo::default();
     // SAFETY: the borrowed stderr handle remains live for the call, and
     // `info` exactly matches the Windows CONSOLE_SCREEN_BUFFER_INFO layout.
@@ -114,7 +120,7 @@ fn platform_terminal_width() -> Option<u16> {
     None
 }
 
-pub fn format_elapsed(elapsed: std::time::Duration) -> String {
+pub fn format_elapsed(elapsed: Duration) -> String {
     let time_str = if elapsed.as_secs() >= 1 {
         format!("{:.2}s", elapsed.as_secs_f64())
     } else if elapsed.as_millis() > 0 {
@@ -234,7 +240,7 @@ fn format_help_text(text: &str, use_color: bool) -> String {
     out
 }
 
-fn take_until(chars: &mut std::str::Chars<'_>, close: char) -> (String, bool) {
+fn take_until(chars: &mut Chars<'_>, close: char) -> (String, bool) {
     let mut content = String::new();
     for c in chars.by_ref() {
         if c == close {
@@ -275,8 +281,8 @@ pub enum ReplacementLabel<'a> {
 pub fn print_add_success(
     module_path: &str,
     version: &str,
-    edges: &std::collections::HashMap<String, Vec<String>>,
-    versions: &std::collections::HashMap<String, String>,
+    edges: &HashMap<String, Vec<String>>,
+    versions: &HashMap<String, String>,
     upgraded_directs: &[(&str, &str, &str)],
     replacement: Option<ReplacementLabel<'_>>,
 ) {
@@ -332,17 +338,17 @@ pub fn print_add_success(
         edges,
         versions,
         colored,
-        visited: std::collections::HashSet::new(),
+        visited: HashSet::new(),
     };
     printer.visited.insert(module_path.to_string());
     printer.print_children(module_path, "    ");
 }
 
 struct TreePrinter<'a> {
-    edges: &'a std::collections::HashMap<String, Vec<String>>,
-    versions: &'a std::collections::HashMap<String, String>,
+    edges: &'a HashMap<String, Vec<String>>,
+    versions: &'a HashMap<String, String>,
     colored: bool,
-    visited: std::collections::HashSet<String>,
+    visited: HashSet<String>,
 }
 
 impl TreePrinter<'_> {
@@ -409,9 +415,8 @@ pub fn print_sync_summary(
 
     let colored = use_color();
 
-    let promoted_set: std::collections::HashSet<&str> =
-        promoted.iter().map(String::as_str).collect();
-    let removed_set: std::collections::HashSet<&str> = removed.iter().map(String::as_str).collect();
+    let promoted_set: HashSet<&str> = promoted.iter().map(String::as_str).collect();
+    let removed_set: HashSet<&str> = removed.iter().map(String::as_str).collect();
 
     for entry in trimmed {
         if promoted_set.contains(entry.module_path.as_str())

@@ -1,5 +1,6 @@
 use ecow::EcoString;
 use rustc_hash::FxHashSet as HashSet;
+use std::slice;
 use syntax::ast::{
     BinaryOperator, Binding, Expression, FormatStringPart, Literal, Pattern, Span, UnaryOperator,
 };
@@ -391,7 +392,7 @@ pub(super) fn enum_has_multiple_variants(ty: &Type, store: &Store) -> bool {
 pub(super) fn mentions_identifier(expression: &Expression, name: &str) -> bool {
     let mut found = false;
     visit_ast(
-        std::slice::from_ref(expression),
+        slice::from_ref(expression),
         &mut |node, _| {
             if let Expression::Identifier { value, .. } = node {
                 found |= value.as_str() == name;
@@ -408,7 +409,7 @@ pub(super) fn mentions_identifier(expression: &Expression, name: &str) -> bool {
 pub(super) fn has_escaping_control_flow(body: &Expression) -> bool {
     let mut found = false;
     visit_ast(
-        std::slice::from_ref(body),
+        slice::from_ref(body),
         &mut |node, _| {
             found |= matches!(
                 node,

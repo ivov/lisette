@@ -23,7 +23,7 @@ pub fn check_float_equality_without_abs(expression: &Expression, ctx: &NodeCtx) 
     };
 
     let Expression::Binary {
-        operator: BinaryOperator::Subtraction,
+        operator: Subtraction,
         left: minuend,
         right: subtrahend,
         span: difference_span,

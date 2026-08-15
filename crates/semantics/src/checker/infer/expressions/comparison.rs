@@ -5,7 +5,9 @@ use crate::checker::TypeEnv;
 use crate::checker::infer::InferCtx;
 use crate::checker::scopes::Scopes;
 use crate::store::Store;
+use syntax::ast::Generic;
 use syntax::ast::{Annotation, Expression, Span, StructFields};
+use syntax::program::AliasKind;
 use syntax::program::{DefinitionBody, Visibility, interface_instances, interface_requirements};
 use syntax::types::{CompoundKind, Type, substitute};
 
@@ -279,7 +281,7 @@ fn reaches_definition(
             if !visited.insert(format!("{resolved:?}")) {
                 return false;
             }
-            let field_types: Vec<(Type, &[syntax::ast::Generic])> =
+            let field_types: Vec<(Type, &[Generic])> =
                 match store.get_definition(id.as_str()).map(|d| &d.body) {
                     Some(DefinitionBody::Struct {
                         generics, fields, ..
@@ -339,7 +341,7 @@ fn is_opaque_go_handle(store: &Store, ty: &Type) -> bool {
         && matches!(
             &definition.body,
             DefinitionBody::TypeAlias {
-                alias: syntax::program::AliasKind::Opaque(Annotation::Opaque { .. }),
+                alias: AliasKind::Opaque(Annotation::Opaque { .. }),
                 ..
             }
         )
@@ -594,7 +596,7 @@ impl InferCtx<'_> {
             return false;
         };
         let type_args = resolved.get_type_params().unwrap_or_default();
-        let (generics, field_types): (&[syntax::ast::Generic], Vec<Type>) = match &definition.body {
+        let (generics, field_types): (&[Generic], Vec<Type>) = match &definition.body {
             DefinitionBody::Struct {
                 fields: StructFields::Tuple(_),
                 ..

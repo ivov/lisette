@@ -15,6 +15,7 @@ use syntax::program::{File, Package, is_test_file};
 
 use crate::loader::is_external_test_package;
 use crate::store::{ENTRY_PACKAGE_ID, Store};
+use std::env;
 use types::CachedDefinition;
 
 /// Current cache format version. Bump this when making breaking changes to the cache format.
@@ -420,7 +421,7 @@ pub fn apply_emit_stamps(
 }
 
 pub(crate) fn is_cache_disabled() -> bool {
-    std::env::var("LISETTE_NO_CACHE")
+    env::var("LISETTE_NO_CACHE")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false)
 }
@@ -887,7 +888,7 @@ mod tests {
     fn apply_emit_stamps_round_trip() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        std::fs::create_dir_all(root.join("target").join(".lisette").join("cache")).unwrap();
+        fs::create_dir_all(root.join("target").join(".lisette").join("cache")).unwrap();
 
         let interface = PackageInterface {
             version: CACHE_FORMAT_VERSION,
@@ -900,21 +901,19 @@ mod tests {
             emit_stamp: None,
         };
         let path = cache_path(root, "greet");
-        std::fs::write(&path, bincode::serialize(&interface).unwrap()).unwrap();
+        fs::write(&path, bincode::serialize(&interface).unwrap()).unwrap();
 
         let stamp = EmitStamp {
             package_id: "greet".to_string(),
             artifact_hash: 999,
         };
         apply_emit_stamps(root, &[(stamp.clone(), Some(999))]).unwrap();
-        let reread: PackageInterface =
-            bincode::deserialize(&std::fs::read(&path).unwrap()).unwrap();
+        let reread: PackageInterface = bincode::deserialize(&fs::read(&path).unwrap()).unwrap();
         assert_eq!(reread.emit_stamp, Some(999));
         assert_eq!(reread.full_hash, 100);
 
         apply_emit_stamps(root, &[(stamp, None)]).unwrap();
-        let reread: PackageInterface =
-            bincode::deserialize(&std::fs::read(&path).unwrap()).unwrap();
+        let reread: PackageInterface = bincode::deserialize(&fs::read(&path).unwrap()).unwrap();
         assert_eq!(reread.emit_stamp, None);
     }
 
@@ -933,8 +932,8 @@ mod tests {
     fn apply_emit_stamps_removes_corrupt_cache() {
         let temp = tempfile::tempdir().unwrap();
         let path = cache_path(temp.path(), "corrupt");
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(&path, b"invalid").unwrap();
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, b"invalid").unwrap();
         let stamp = EmitStamp {
             package_id: "corrupt".to_string(),
             artifact_hash: 0,
@@ -949,9 +948,9 @@ mod tests {
     fn try_load_cache_rejects_unstamped_for_emit() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        std::fs::create_dir_all(root.join("target").join(".lisette").join("cache")).unwrap();
-        std::fs::create_dir_all(root.join("target").join("greet")).unwrap();
-        std::fs::write(root.join("target").join("greet").join("greet.go"), "").unwrap();
+        fs::create_dir_all(root.join("target").join(".lisette").join("cache")).unwrap();
+        fs::create_dir_all(root.join("target").join("greet")).unwrap();
+        fs::write(root.join("target").join("greet").join("greet.go"), "").unwrap();
 
         let interface = PackageInterface {
             version: CACHE_FORMAT_VERSION,
@@ -967,7 +966,7 @@ mod tests {
             emit_stamp: None,
         };
         let path = cache_path(root, "greet");
-        std::fs::write(&path, bincode::serialize(&interface).unwrap()).unwrap();
+        fs::write(&path, bincode::serialize(&interface).unwrap()).unwrap();
 
         let loaded = try_load_cache("greet", 100, &HashMap::default(), None, root);
         assert!(loaded.is_some(), "Check phase must accept unstamped cache");
@@ -989,9 +988,9 @@ mod tests {
     fn try_load_cache_rejects_after_sourcemap_invalidation() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        std::fs::create_dir_all(root.join("target").join(".lisette").join("cache")).unwrap();
-        std::fs::create_dir_all(root.join("target").join("greet")).unwrap();
-        std::fs::write(root.join("target").join("greet").join("greet.go"), "").unwrap();
+        fs::create_dir_all(root.join("target").join(".lisette").join("cache")).unwrap();
+        fs::create_dir_all(root.join("target").join("greet")).unwrap();
+        fs::write(root.join("target").join("greet").join("greet.go"), "").unwrap();
 
         let artifact_hash = compute_emit_artifact_hash(100, "github.com/test/x");
 
@@ -1009,7 +1008,7 @@ mod tests {
             emit_stamp: Some(artifact_hash),
         };
         let path = cache_path(root, "greet");
-        std::fs::write(&path, bincode::serialize(&interface).unwrap()).unwrap();
+        fs::write(&path, bincode::serialize(&interface).unwrap()).unwrap();
 
         assert!(
             try_load_cache("greet", 100, &HashMap::default(), Some(artifact_hash), root).is_some()

@@ -9,6 +9,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
+use std::env;
+use std::fs;
+use std::fs::DirEntry;
+use std::process;
+use std::sync::PoisonError;
 pub use stdlib::Target;
 use stdlib::{
     GO_STD_CONTENT_HASH, LIS_PRELUDE_SOURCE, PRELUDE_CONTENT_HASH, get_go_stdlib_packages,
@@ -31,7 +36,7 @@ pub fn set_typedef_home(home: PathBuf) {
 fn typedef_home() -> Option<PathBuf> {
     match TYPEDEF_HOME.get() {
         Some(home) => Some(home.clone()),
-        None => Some(PathBuf::from(std::env::var_os("HOME")?)),
+        None => Some(PathBuf::from(env::var_os("HOME")?)),
     }
 }
 
@@ -65,7 +70,7 @@ pub fn placeholder_require_version(module_path: &str) -> String {
 }
 
 pub fn check_version_matches_path(module_path: &str, version: &str) -> Result<(), String> {
-    let Some((_, path_major)) = crate::module_path::split_path_version(module_path) else {
+    let Some((_, path_major)) = module_path::split_path_version(module_path) else {
         return Ok(());
     };
     let path_major = path_major.strip_suffix("-unstable").unwrap_or(path_major);
@@ -116,7 +121,7 @@ fn version_major(version: &str) -> Option<u64> {
 
 /// The major a path's suffix demands: `/vN` (N >= 2), or gopkg.in `.vN` (any N).
 fn path_major(module_path: &str) -> Option<u64> {
-    let (_, path_major) = crate::module_path::split_path_version(module_path)?;
+    let (_, path_major) = module_path::split_path_version(module_path)?;
     let digits = path_major
         .strip_suffix("-unstable")
         .unwrap_or(path_major)
@@ -242,12 +247,12 @@ pub fn ensure_stdlib_extracted(target: Target) {
 
     let _guard = STDLIB_EXTRACT_LOCK
         .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
+        .unwrap_or_else(PoisonError::into_inner);
     if target_dir.exists() {
         return;
     }
 
-    if std::fs::create_dir_all(&version_dir).is_err() {
+    if fs::create_dir_all(&version_dir).is_err() {
         return;
     }
     clear_stale_temp_dirs(&version_dir, target, STALE_TEMP_AGE);
@@ -258,16 +263,16 @@ pub fn ensure_stdlib_extracted(target: Target) {
     let tmp = version_dir.join(format!(
         "{}.tmp.{}.{}",
         target.cache_segment(),
-        std::process::id(),
+        process::id(),
         counter
     ));
     if extract_all(&tmp, target).is_none() {
-        let _ = std::fs::remove_dir_all(&tmp);
+        let _ = fs::remove_dir_all(&tmp);
         return;
     }
-    if std::fs::rename(&tmp, &target_dir).is_err() {
+    if fs::rename(&tmp, &target_dir).is_err() {
         // Another extraction won the race, or the rename failed; drop our temp.
-        let _ = std::fs::remove_dir_all(&tmp);
+        let _ = fs::remove_dir_all(&tmp);
     }
     prune_stale_version_dirs(&version_dir);
 }
@@ -280,8 +285,8 @@ fn extract_all(target_tmp: &Path, target: Target) -> Option<()> {
             continue;
         };
         let path = target_tmp.join(format!("{pkg}.d.lis"));
-        std::fs::create_dir_all(path.parent()?).ok()?;
-        std::fs::write(&path, source).ok()?;
+        fs::create_dir_all(path.parent()?).ok()?;
+        fs::write(&path, source).ok()?;
     }
     Some(())
 }
@@ -290,7 +295,7 @@ const STALE_TEMP_AGE: Duration = Duration::from_secs(300);
 
 fn clear_stale_temp_dirs(version_dir: &Path, target: Target, min_age: Duration) {
     let prefix = format!("{}.tmp.", target.cache_segment());
-    let Ok(entries) = std::fs::read_dir(version_dir) else {
+    let Ok(entries) = fs::read_dir(version_dir) else {
         return;
     };
     for entry in entries.flatten() {
@@ -299,12 +304,12 @@ fn clear_stale_temp_dirs(version_dir: &Path, target: Target, min_age: Duration) 
             .to_str()
             .is_some_and(|name| name.starts_with(&prefix));
         if name_matches && temp_dir_is_stale(&entry, min_age) {
-            let _ = std::fs::remove_dir_all(entry.path());
+            let _ = fs::remove_dir_all(entry.path());
         }
     }
 }
 
-fn temp_dir_is_stale(entry: &std::fs::DirEntry, min_age: Duration) -> bool {
+fn temp_dir_is_stale(entry: &DirEntry, min_age: Duration) -> bool {
     entry
         .metadata()
         .and_then(|m| m.modified())
@@ -322,7 +327,7 @@ fn prune_stale_version_dirs(current: &Path) {
     let Some(parent) = current.parent() else {
         return;
     };
-    let Ok(entries) = std::fs::read_dir(parent) else {
+    let Ok(entries) = fs::read_dir(parent) else {
         return;
     };
     for entry in entries.flatten() {
@@ -335,7 +340,7 @@ fn prune_stale_version_dirs(current: &Path) {
             .and_then(|n| n.to_str())
             .is_some_and(|n| n.starts_with("lis@v"));
         if is_version_dir {
-            let _ = std::fs::remove_dir_all(&path);
+            let _ = fs::remove_dir_all(&path);
         }
     }
 }
@@ -373,18 +378,18 @@ pub fn ensure_prelude_extracted() {
     if path.exists() {
         return;
     }
-    if std::fs::create_dir_all(&version_dir).is_err() {
+    if fs::create_dir_all(&version_dir).is_err() {
         return;
     }
 
     let counter = TYPEDEF_TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let tmp = version_dir.join(format!("prelude.tmp.{}.{}", std::process::id(), counter));
-    if std::fs::write(&tmp, LIS_PRELUDE_SOURCE).is_err() {
-        let _ = std::fs::remove_file(&tmp);
+    let tmp = version_dir.join(format!("prelude.tmp.{}.{}", process::id(), counter));
+    if fs::write(&tmp, LIS_PRELUDE_SOURCE).is_err() {
+        let _ = fs::remove_file(&tmp);
         return;
     }
-    if std::fs::rename(&tmp, &path).is_err() {
-        let _ = std::fs::remove_file(&tmp);
+    if fs::rename(&tmp, &path).is_err() {
+        let _ = fs::remove_file(&tmp);
     }
     prune_stale_version_dirs(&version_dir);
 }
@@ -468,6 +473,7 @@ impl GoPackage<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     #[test]
     fn clear_stale_temp_dirs_removes_old_temps_but_keeps_fresh_and_other_targets() {
@@ -476,12 +482,12 @@ mod tests {
         let target = Target::new("darwin", "arm64");
 
         let this_target = root.join("darwin_arm64.tmp.999.0");
-        std::fs::create_dir_all(&this_target).unwrap();
-        std::fs::write(this_target.join("fmt.d.lis"), "x").unwrap();
+        fs::create_dir_all(&this_target).unwrap();
+        fs::write(this_target.join("fmt.d.lis"), "x").unwrap();
         let completed = root.join("darwin_arm64");
-        std::fs::create_dir_all(&completed).unwrap();
+        fs::create_dir_all(&completed).unwrap();
         let other_target_tmp = root.join("linux_amd64.tmp.1.0");
-        std::fs::create_dir_all(&other_target_tmp).unwrap();
+        fs::create_dir_all(&other_target_tmp).unwrap();
 
         clear_stale_temp_dirs(root, target, STALE_TEMP_AGE);
         assert!(this_target.exists(), "a fresh in-flight temp is kept");

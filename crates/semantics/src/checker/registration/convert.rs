@@ -3,7 +3,9 @@ use crate::checker::infer::BuiltinBound;
 use crate::checker::infer::expressions::comparison::{
     check_never_comparable, check_never_comparable_with_bounds, check_not_comparable_with_bounds,
 };
+use std::mem;
 use syntax::EcoString;
+use syntax::ast::Literal;
 use syntax::ast::{Annotation, Generic, Span};
 use syntax::program::DefinitionBody;
 use syntax::types::{
@@ -337,8 +339,7 @@ impl TaskState {
         );
 
         if position == TypePosition::Value
-            && let Some(builtin) =
-                crate::checker::infer::BuiltinBound::from_qualified_id(&qualified_name)
+            && let Some(builtin) = BuiltinBound::from_qualified_id(&qualified_name)
         {
             self.sink
                 .push(diagnostics::infer::bound_only_in_value_position(
@@ -515,7 +516,7 @@ impl TaskState {
                 .push(diagnostics::infer::array_size_computed_constant(name, span));
             return None;
         };
-        let syntax::ast::Literal::Integer { value, .. } = literal else {
+        let Literal::Integer { value, .. } = literal else {
             self.sink
                 .push(diagnostics::infer::array_size_not_integer_constant(
                     name, span,
@@ -547,14 +548,14 @@ impl TaskState {
     /// Settles the size constants whose type had not resolved at conversion time.
     pub(super) fn check_pending_array_size_checks(&mut self, store: &Store) {
         let mut seen = rustc_hash::FxHashSet::default();
-        for pending in std::mem::take(&mut self.pending.array_size_checks) {
+        for pending in mem::take(&mut self.pending.array_size_checks) {
             if !seen.insert((pending.span, pending.qualified_name.clone())) {
                 continue;
             }
             let Some(definition) = store.get_definition(&pending.qualified_name) else {
                 continue;
             };
-            let Some(syntax::ast::Literal::Integer { value, .. }) = definition.const_value() else {
+            let Some(Literal::Integer { value, .. }) = definition.const_value() else {
                 continue;
             };
             let outcome = store

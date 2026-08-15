@@ -5,6 +5,7 @@ use syntax::ast::{Expression, IfLetAlternative, MatchArm, Pattern, Span};
 use syntax::types::Type;
 
 use crate::checker::infer::InferCtx;
+use std::mem;
 
 /// Outcome of unifying branch types: kept first, widened to a supertype, or failed.
 enum BranchReconciliation {
@@ -82,7 +83,7 @@ impl InferCtx<'_> {
     }
 
     pub fn resolve_branch_subsumptions(&mut self) {
-        let obligations = std::mem::take(&mut self.file_checks.branch_subsumptions);
+        let obligations = mem::take(&mut self.file_checks.branch_subsumptions);
         for obligation in obligations.into_iter().rev() {
             for branch in &obligation.arms {
                 let arm = branch.ty.resolve_in(&self.env);

@@ -4,6 +4,7 @@ use crate::abi::transition::try_emit_lowered_tail_return;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::propagation::plain_return;
 use crate::control_flow::targets::legalize_source_loop;
+use crate::definitions::ConstScope;
 use crate::definitions::functions::{is_breakless_loop, is_go_never, is_test_context_ty};
 use crate::expressions::{flip_comparison, flip_preserves_nan};
 use crate::names::go_name::{prelude_qualifier, testkit_qualifier};
@@ -17,6 +18,7 @@ use crate::plan::placement::{
 };
 use crate::plan::values::{OperandForm, ValuePlan};
 use crate::utils::wrap_if_struct_literal;
+use std::slice;
 use syntax::ast::{
     BinaryOperator, Expression, IdentifierResolution, IfLetAlternative, Literal, MatchArm, Pattern,
     Span, UnaryOperator,
@@ -170,7 +172,7 @@ impl Planner<'_> {
         let items: &[Expression] = if let Expression::Block { items, .. } = body {
             items
         } else {
-            std::slice::from_ref(body)
+            slice::from_ref(body)
         };
 
         let Some((last, rest)) = items.split_last() else {
@@ -270,12 +272,7 @@ impl Planner<'_> {
                 let Some(value) = value.value() else {
                     return LoweredStatement::Block(LoweredBlock { statements: vec![] });
                 };
-                let plan = self.build_const_plan(
-                    identifier,
-                    value,
-                    ty,
-                    crate::definitions::ConstScope::Local,
-                );
+                let plan = self.build_const_plan(identifier, value, ty, ConstScope::Local);
                 self.directed_at(expression, LoweredStatement::Const(plan))
             }
             Expression::Return {
@@ -805,7 +802,7 @@ impl Planner<'_> {
         let items: &[Expression] = if let Expression::Block { items, .. } = expression {
             items
         } else {
-            std::slice::from_ref(expression)
+            slice::from_ref(expression)
         };
         let statements = items
             .iter()
@@ -896,7 +893,7 @@ impl Planner<'_> {
         let items: &[Expression] = if let Expression::Block { items, .. } = expression {
             items
         } else {
-            std::slice::from_ref(expression)
+            slice::from_ref(expression)
         };
 
         let Some((last, rest)) = try_elide_tail_let(items).or_else(|| items.split_last()) else {
@@ -995,7 +992,7 @@ impl Planner<'_> {
     fn lower_never_return_tail(
         &mut self,
         last: &Expression,
-        return_span: &syntax::ast::Span,
+        return_span: &Span,
     ) -> Vec<LoweredStatement> {
         let directive = self.maybe_line_directive(return_span);
         let mut statements: Vec<LoweredStatement> = Vec::new();

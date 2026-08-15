@@ -1,4 +1,5 @@
 use super::*;
+use crate::checker::sealing::unexported_key;
 
 const KNOWN_GO_HINTS: &[&str] = &[
     "anon_struct",
@@ -189,5 +190,5 @@ pub(super) fn seal_method_key(
     } else {
         format!("{package_id}.{name}")
     };
-    crate::checker::sealing::unexported_key(&id)
+    unexported_key(&id)
 }

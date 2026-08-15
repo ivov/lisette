@@ -4,6 +4,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use serde::Deserialize;
+use std::collections::BTreeSet;
+use std::collections::HashMap;
 
 include!(concat!(env!("OUT_DIR"), "/go_version.rs"));
 
@@ -324,7 +326,7 @@ pub fn write_go_outputs(dir: &Path, files: &[OutputFile]) -> Result<EmitWriteRes
 
 /// Hash of the sorted union of external (non-stdlib, non-local) Go imports.
 pub fn compute_import_set_hash(manifest: &[ManifestEntry], go_module_name: &str) -> u64 {
-    let mut paths: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+    let mut paths: BTreeSet<&str> = BTreeSet::new();
     for entry in manifest {
         for path in &entry.imports {
             if is_external_import(path, go_module_name) {
@@ -370,7 +372,7 @@ fn hash_go_code(content: &str) -> u64 {
     h
 }
 
-fn read_emit_manifest(dir: &Path) -> std::collections::HashMap<String, ManifestEntry> {
+fn read_emit_manifest(dir: &Path) -> HashMap<String, ManifestEntry> {
     let Ok(content) = fs::read_to_string(emit_manifest_path(dir)) else {
         return Default::default();
     };
@@ -475,8 +477,8 @@ pub fn prewarm_module_cache(target: Target) {
             "download",
             &format!("{}@v{}", PRELUDE_IMPORT_PATH, prelude_version),
         ])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .spawn();
 }
 
@@ -724,6 +726,7 @@ fn run_go_test(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
 
     fn linux() -> Target {
         Target::new("linux", "amd64")
@@ -739,12 +742,12 @@ mod tests {
         assert_eq!(binary_name("github.com/u/myproj", linux()), "myproj");
     }
 
-    fn locator_with(deps: Vec<(&str, deps::GoDependency)>) -> deps::TypedefLocator {
+    fn locator_with(deps: Vec<(&str, deps::GoDependency)>) -> TypedefLocator {
         let map = deps
             .into_iter()
             .map(|(k, v)| (k.to_string(), v))
-            .collect::<std::collections::BTreeMap<_, _>>();
-        deps::TypedefLocator::new(map, None, Target::host())
+            .collect::<BTreeMap<_, _>>();
+        TypedefLocator::new(map, None, Target::host())
     }
 
     #[test]
@@ -762,7 +765,7 @@ mod tests {
         )]);
 
         write_go_mod(dir.path(), "example.com/app", &locator).unwrap();
-        let content = std::fs::read_to_string(dir.path().join("go.mod")).unwrap();
+        let content = fs::read_to_string(dir.path().join("go.mod")).unwrap();
 
         assert!(
             content.contains("github.com/df-mc/dragonfly v0.0.0\n"),
@@ -793,7 +796,7 @@ mod tests {
         )]);
 
         write_go_mod(dir.path(), "example.com/app", &locator).unwrap();
-        let content = std::fs::read_to_string(dir.path().join("go.mod")).unwrap();
+        let content = fs::read_to_string(dir.path().join("go.mod")).unwrap();
 
         assert!(
             content.contains("example.com/lib/v2 v2.0.0\n"),
@@ -820,18 +823,18 @@ mod tests {
     fn write_go_mod_local_emits_synthetic_require_and_quoted_directory_replace() {
         let project = tempfile::tempdir().unwrap();
         let module_dir = project.path().join("foo");
-        std::fs::create_dir_all(&module_dir).unwrap();
-        std::fs::write(module_dir.join("go.mod"), "module example.com/me/foo\n").unwrap();
+        fs::create_dir_all(&module_dir).unwrap();
+        fs::write(module_dir.join("go.mod"), "module example.com/me/foo\n").unwrap();
         let target_dir = project.path().join("target");
-        std::fs::create_dir_all(&target_dir).unwrap();
+        fs::create_dir_all(&target_dir).unwrap();
 
-        let mut go_deps = std::collections::BTreeMap::new();
+        let mut go_deps = BTreeMap::new();
         go_deps.insert("example.com/me/foo".to_string(), local_dep("foo"));
         let locator =
-            deps::TypedefLocator::new(go_deps, Some(project.path().to_path_buf()), Target::host());
+            TypedefLocator::new(go_deps, Some(project.path().to_path_buf()), Target::host());
 
         write_go_mod(&target_dir, "example.com/app", &locator).unwrap();
-        let content = std::fs::read_to_string(target_dir.join("go.mod")).unwrap();
+        let content = fs::read_to_string(target_dir.join("go.mod")).unwrap();
 
         assert!(
             content.contains("example.com/me/foo v0.0.0\n"),
@@ -847,11 +850,11 @@ mod tests {
     fn write_go_mod_local_errors_on_missing_directory_or_missing_go_mod() {
         let project = tempfile::tempdir().unwrap();
         let target_dir = project.path().join("target");
-        std::fs::create_dir_all(&target_dir).unwrap();
+        fs::create_dir_all(&target_dir).unwrap();
 
-        let mut go_deps = std::collections::BTreeMap::new();
+        let mut go_deps = BTreeMap::new();
         go_deps.insert("example.com/me/foo".to_string(), local_dep("foo"));
-        let locator = deps::TypedefLocator::new(
+        let locator = TypedefLocator::new(
             go_deps.clone(),
             Some(project.path().to_path_buf()),
             Target::host(),
@@ -860,9 +863,9 @@ mod tests {
         assert!(error.contains("example.com/me/foo"), "{}", error);
         assert!(error.contains("does not exist"), "{}", error);
 
-        std::fs::create_dir_all(project.path().join("foo")).unwrap();
+        fs::create_dir_all(project.path().join("foo")).unwrap();
         let locator =
-            deps::TypedefLocator::new(go_deps, Some(project.path().to_path_buf()), Target::host());
+            TypedefLocator::new(go_deps, Some(project.path().to_path_buf()), Target::host());
         let error = write_go_mod(&target_dir, "example.com/app", &locator).unwrap_err();
         assert!(error.contains("no `go.mod`"), "{}", error);
     }

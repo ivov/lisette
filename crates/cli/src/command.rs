@@ -1,3 +1,6 @@
+use crate::go_cli;
+use crate::shell_words;
+use crate::shell_words::SplitError;
 use diagnostics::render::{Filter, OutputFormat};
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -213,18 +216,16 @@ fn flag_value(
 }
 
 fn extend_go_flags(go_flags: &mut Vec<String>, raw: &str) -> Result<(), ParseError> {
-    match crate::shell_words::split(raw) {
+    match shell_words::split(raw) {
         Ok(tokens) => {
             go_flags.extend(tokens);
             Ok(())
         }
-        Err(crate::shell_words::SplitError::UnterminatedQuote(quote)) => {
-            Err(ParseError::UnexpectedArgument {
-                message: format!("unterminated {} quote in `--go-flags`", quote),
-                reason: "the value passed to `--go-flags` has an unbalanced quote".to_string(),
-                hint: "Balance the quotes, e.g. `--go-flags \"-ldflags='-s -w'\"`".to_string(),
-            })
-        }
+        Err(SplitError::UnterminatedQuote(quote)) => Err(ParseError::UnexpectedArgument {
+            message: format!("unterminated {} quote in `--go-flags`", quote),
+            reason: "the value passed to `--go-flags` has an unbalanced quote".to_string(),
+            hint: "Balance the quotes, e.g. `--go-flags \"-ldflags='-s -w'\"`".to_string(),
+        }),
     }
 }
 
@@ -421,10 +422,7 @@ fn parse_run(
         }
     }
 
-    if let Some(flag) = go_flags
-        .iter()
-        .find(|f| crate::go_cli::is_go_output_flag(f))
-    {
+    if let Some(flag) = go_flags.iter().find(|f| go_cli::is_go_output_flag(f)) {
         return Err(ParseError::UnexpectedArgument {
             message: format!("`{}` cannot be passed to `lis run` via `--go-flags`", flag),
             reason: "`run` executes the binary it links at an internal path, so it owns `-o`"
@@ -576,7 +574,7 @@ fn parse_test(mut arguments: impl Iterator<Item = String>) -> Result<Command, Pa
         }
     }
 
-    if let Some(flag) = go_flags.iter().find(|f| crate::go_cli::is_go_json_flag(f)) {
+    if let Some(flag) = go_flags.iter().find(|f| go_cli::is_go_json_flag(f)) {
         return Err(ParseError::UnexpectedArgument {
             message: format!("`{}` cannot be passed to `lis test` via `--go-flags`", flag),
             reason: "`lis test` runs `go test -json` and parses that stream to render the report"
@@ -585,10 +583,7 @@ fn parse_test(mut arguments: impl Iterator<Item = String>) -> Result<Command, Pa
         });
     }
 
-    if let Some(flag) = go_flags
-        .iter()
-        .find(|f| crate::go_cli::is_go_selection_flag(f))
-    {
+    if let Some(flag) = go_flags.iter().find(|f| go_cli::is_go_selection_flag(f)) {
         return Err(ParseError::UnexpectedArgument {
             message: format!("`{}` cannot be passed to `lis test` via `--go-flags`", flag),
             reason: "`lis test` selects which tests run and reconciles the report against them"

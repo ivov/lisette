@@ -6,6 +6,8 @@ use crate::names::go_name::GO_IMPORT_PREFIX;
 use crate::write_line;
 use ecow::EcoString;
 use rustc_hash::FxHashSet as HashSet;
+use syntax::go_names;
+use syntax::go_names::ConformanceCandidate;
 use syntax::program::{Definition, DefinitionBody, interface_requirements};
 use syntax::types::{
     SubstitutionMap, Symbol, Type, build_substitution_map, substitute, unqualified_name,
@@ -108,7 +110,7 @@ impl Planner<'_> {
             _ => return None,
         };
 
-        let own_candidate = |name: &str| syntax::go_names::ConformanceCandidate::Resolved {
+        let own_candidate = |name: &str| ConformanceCandidate::Resolved {
             depth: 0,
             owner: source_id.as_eco().clone(),
             shadowed: self.facts.is_ufcs_method(source_id.as_str(), name),
@@ -127,7 +129,7 @@ impl Planner<'_> {
             if !seen.insert(selector) {
                 continue;
             }
-            let (_, impl_ty) = syntax::go_names::conformance_method(
+            let (_, impl_ty) = go_names::conformance_method(
                 impl_methods,
                 requirement.declaring_interface.as_str(),
                 self.facts

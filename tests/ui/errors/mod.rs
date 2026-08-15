@@ -3,11 +3,15 @@ use crate::_harness::filesystem::MockFileSystem;
 use crate::_harness::formatting::{
     format_diagnostic_for_snapshot, format_project_diagnostic_for_snapshot,
 };
-use crate::_harness::infer::{infer, infer_package};
+use crate::_harness::infer::{InferResult, checker_errors, infer, infer_package};
 use crate::{
     assert_infer_error_snapshot, assert_lex_error_snapshot,
     assert_multipackage_infer_error_snapshot, assert_parse_error_snapshot,
 };
+use syntax::ast::Expression;
+use syntax::ast::StructFields;
+use syntax::ast::Visibility;
+use syntax::parse::ParseResult;
 
 use semantics::store::ENTRY_PACKAGE_ID;
 
@@ -2953,7 +2957,7 @@ fn test(regs: Registry) {
   let _r = regs["x"]
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         has_code(&result, "map_read_no_zero"),
         "a bracket read through a map alias must be rejected, got: {:?}",
@@ -2970,7 +2974,7 @@ fn test(holders: Map<string, Holder>) {
   let _h = holders["x"]
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         has_code(&result, "map_read_no_zero"),
         "a bracket read yielding a struct with a Ref field must be rejected, got: {:?}",
@@ -3049,7 +3053,7 @@ fn test() {
   m["k"].* = 5
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         has_code(&result, "map_read_no_zero"),
         "writing through a bracket-read entry still reads the entry, got: {:?}",
@@ -3066,7 +3070,7 @@ fn test() {
   counts[m["j"].*] = "x"
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         has_code(&result, "map_read_no_zero"),
         "a bracket read inside an assignment target index must be rejected, got: {:?}",
@@ -3083,7 +3087,7 @@ fn test() {
   m["k"] = &x
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         result.errors.is_empty(),
         "a bracket write never reads the entry, so it must stay legal, got: {:?}",
@@ -3100,7 +3104,7 @@ fn test(ages: Map<string, int>, opts: Map<string, Option<Ref<int>>>, rows: Slice
   let _row = rows[0]
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         result.errors.is_empty(),
         "reads of zero-valued map entries and slice indexing must stay legal, got: {:?}",
@@ -4914,7 +4918,7 @@ fn test() {
   use_logger(File { path: "test.txt" })
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(!result.errors.is_empty(), "Expected errors");
 
     let mut output = String::new();
@@ -5260,7 +5264,7 @@ fn infer_valueless_const_missing_annotation_in_typedef() {
 }
 
 fn assert_go_hint_error_snapshot(name: &str, input: &str, package: &str, typedef: &str) {
-    let errors = crate::_harness::infer::checker_errors(input, &[(package, typedef)]);
+    let errors = checker_errors(input, &[(package, typedef)]);
     let error = errors
         .iter()
         .find(|e| e.code_str() == Some("attribute.unknown"))
@@ -5822,7 +5826,7 @@ fn main() {
     );
 }
 
-fn has_code(result: &crate::_harness::infer::InferResult, code: &str) -> bool {
+fn has_code(result: &InferResult, code: &str) -> bool {
     result
         .errors
         .iter()
@@ -7449,7 +7453,7 @@ fn main() {
   run(&mu)
 }
 "#;
-    crate::_harness::infer::infer(input).assert_infer_code("deferred_lock");
+    infer(input).assert_infer_code("deferred_lock");
 }
 
 #[test]
@@ -7473,7 +7477,7 @@ fn main() {
   c.inc()
 }
 "#;
-    crate::_harness::infer::infer(input).assert_no_errors();
+    infer(input).assert_no_errors();
 }
 
 #[test]
@@ -7492,7 +7496,7 @@ fn main() {
   defer r.Lock()
 }
 "#;
-    crate::_harness::infer::infer(input).assert_no_errors();
+    infer(input).assert_no_errors();
 }
 
 #[test]
@@ -7516,7 +7520,7 @@ fn main() {
   c.inc()
 }
 "#;
-    crate::_harness::infer::infer(input).assert_no_errors();
+    infer(input).assert_no_errors();
 }
 
 #[test]
@@ -8030,8 +8034,8 @@ fn main() {
 }
 "#;
 
-    let lex_result = syntax::lex::Lexer::new(input, 0).lex();
-    let parse_result = syntax::parse::Parser::new(lex_result.tokens, input).parse();
+    let lex_result = Lexer::new(input, 0).lex();
+    let parse_result = Parser::new(lex_result.tokens, input).parse();
 
     assert!(
         parse_result.errors.len() == 1,
@@ -8059,8 +8063,8 @@ fn main() {
 }
 "#;
 
-    let lex_result = syntax::lex::Lexer::new(input, 0).lex();
-    let parse_result = syntax::parse::Parser::new(lex_result.tokens, input).parse();
+    let lex_result = Lexer::new(input, 0).lex();
+    let parse_result = Parser::new(lex_result.tokens, input).parse();
 
     assert!(
         parse_result.errors.len() == 1,
@@ -8133,8 +8137,8 @@ var conf = Config {
 }
 "#;
 
-    let lex_result = syntax::lex::Lexer::new(input, 0).lex();
-    let parse_result = syntax::parse::Parser::new(lex_result.tokens, input).parse();
+    let lex_result = Lexer::new(input, 0).lex();
+    let parse_result = Parser::new(lex_result.tokens, input).parse();
 
     assert!(
         parse_result.errors.len() == 1,
@@ -8810,7 +8814,7 @@ fn main() {
   takes_ref(&x)
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         result.errors.is_empty(),
         "Expected no errors but got: {:?}",
@@ -8830,7 +8834,7 @@ fn main() {
   takes_ref(&Foo { value: 42 })
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         result.errors.is_empty(),
         "Expected no errors but got: {:?}",
@@ -9091,7 +9095,7 @@ fn pick(a: Animal) -> Option<Animal> {
   assert_type<Dog>(a)
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         result
             .errors
@@ -9878,7 +9882,7 @@ fn wrapper<T: cmp.Ordered>(x: T) {
   requires_ordered(x)
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         result.errors.is_empty(),
         "Expected no errors, got: {:?}",
@@ -9894,7 +9898,7 @@ import "go:cmp"
 fn less<T: cmp.Ordered>(a: T, b: T) -> bool { a < b }
 fn user() -> bool { less(1, 2) }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         result.errors.is_empty(),
         "Expected no errors, got: {:?}",
@@ -9908,7 +9912,7 @@ fn infer_comparable_bound_allows_eq_in_body() {
 fn eq<T: Comparable>(a: T, b: T) -> bool { a == b }
 fn user() -> bool { eq(1, 1) }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         result.errors.is_empty(),
         "Expected no errors, got: {:?}",
@@ -9957,7 +9961,7 @@ interface Bar<E: error> {}
 
 interface Foo<T: Bar<E>, E: error> {}
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         result.errors.is_empty(),
         "Expected no errors, got: {:?}",
@@ -9972,7 +9976,7 @@ interface Wrapper<E: Comparable> {}
 
 interface Foo<T: Wrapper<E>, E: Comparable> {}
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         result.errors.is_empty(),
         "Expected no errors, got: {:?}",
@@ -10005,7 +10009,7 @@ interface Bar<E: Parent<string>> {}
 
 interface Foo<T: Bar<E>, E: Parent<string>> {}
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         result.errors.is_empty(),
         "Expected no errors, got: {:?}",
@@ -10038,7 +10042,7 @@ interface Bar<X, E: Parent<X>> {}
 
 interface Foo<T: Bar<string, E>, E: Parent<string>> {}
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         result.errors.is_empty(),
         "Expected no errors, got: {:?}",
@@ -10099,7 +10103,7 @@ impl<E> Box<E> {
   fn m<T: Bar<E>>(self, _x: T) {}
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         result.errors.is_empty(),
         "Expected no errors, got: {:?}",
@@ -10144,7 +10148,7 @@ interface Cloner<T: Cloner<T>> {
 
 fn squiggle<A: Cloner<B>, B>(_a: A, _b: B) {}
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         result.errors.is_empty(),
         "Expected no errors, got: {:?}",
@@ -10197,7 +10201,7 @@ fn wrapper<T: cmp.Ordered>(x: T) {
   requires_comparable(x)
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         result.errors.is_empty(),
         "Expected no errors, got: {:?}",
@@ -10248,7 +10252,7 @@ fn test_int() -> int { min(1, 2, 3) }
 fn test_float() -> float64 { max(1.0, 2.0) }
 fn test_string() -> string { min("a", "b", "c") }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         result.errors.is_empty(),
         "Expected no errors, got: {:?}",
@@ -10263,7 +10267,7 @@ import "go:cmp"
 
 fn pick<T: cmp.Ordered>(a: T, b: T) -> T { min(a, b) }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         result.errors.is_empty(),
         "Expected no errors, got: {:?}",
@@ -10408,7 +10412,7 @@ fn main() {
   fmt.Println(h.greet())
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     result.assert_no_errors();
 }
 
@@ -11942,7 +11946,7 @@ fn main() {
   let _ = c
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         has_code(&result, "type_used_as_value"),
         "a scalar type alias in value position must be rejected, got: {:?}",
@@ -11963,7 +11967,7 @@ fn main() {
   let _ = b
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         has_code(&result, "record_struct_value"),
         "bare struct and struct-alias names must be rejected by the native_value_usage pass, got: {:?}",
@@ -11988,7 +11992,7 @@ fn main() {
   let _ = b
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         has_code(&result, "record_struct_value"),
         "a multi-hop struct alias must get the struct-literal diagnostic, got: {:?}",
@@ -12078,7 +12082,7 @@ fn main() {
   let _ = c
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         has_code(&result, "type_used_as_value"),
         "an enum alias in value position must be rejected, got: {:?}",
@@ -12096,7 +12100,7 @@ fn main() {
   let _ = k
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert_eq!(
         result
             .errors
@@ -12121,7 +12125,7 @@ fn main() {
   let _ = e
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         has_code(&result, "type_used_as_value"),
         "is_empty on a type alias must be rejected, got: {:?}",
@@ -12141,7 +12145,7 @@ fn main() {
   let _ = c
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         result.errors.is_empty(),
         "static constructors and enum variant constructors must stay legal, got: {:?}",
@@ -12160,7 +12164,7 @@ fn main() {
   let _ = k
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         result.errors.is_empty(),
         "instance methods on value receivers must stay legal, got: {:?}",
@@ -12297,7 +12301,7 @@ fn main() {
   let _ = x
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         has_code(&result, "type_used_as_value"),
         "a bare interface name in value position must be rejected, got: {:?}",
@@ -12315,7 +12319,7 @@ fn main() {
   fmt.Println(time.Second.String())
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         result.errors.is_empty(),
         "a method call on an imported value member must stay legal, got: {:?}",
@@ -12963,7 +12967,7 @@ impl Pair<int> {
   }
 }
 "#;
-    crate::_harness::infer::infer(input).assert_no_errors();
+    infer(input).assert_no_errors();
 }
 
 #[test]
@@ -13317,7 +13321,7 @@ impl<T: Parent<int>> Box<T> {
   fn as_int_again(self) -> int { self.value.p() }
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     result.assert_no_errors();
 }
 
@@ -13877,7 +13881,7 @@ fn test(args: Slice<int>) {
   nofn(args...)
 }
 "#;
-    let result = crate::_harness::infer::infer(input);
+    let result = infer(input);
     assert!(
         !has_code(&result, "spread_on_non_variadic"),
         "an unresolved callee's variadic-ness is unknowable, got: {:?}",
@@ -14296,11 +14300,7 @@ fn main() {
     assert_multipackage_infer_error_snapshot!(result, source);
 }
 
-fn parse_expecting_errors(
-    input: &str,
-    expected_errors: usize,
-    context: &str,
-) -> syntax::parse::ParseResult {
+fn parse_expecting_errors(input: &str, expected_errors: usize, context: &str) -> ParseResult {
     let lex_result = syntax::lex::Lexer::new(input, 0).lex();
     let parse_result = syntax::parse::Parser::new(lex_result.tokens, input).parse();
     assert!(
@@ -14390,9 +14390,12 @@ fn main() {
 "#;
 
     let parse_result = parse_expecting_errors(input, 2, "unclosed params before a declaration");
-    assert!(parse_result.ast.iter().any(
-        |item| matches!(item, syntax::ast::Expression::Function { name, .. } if name == "main")
-    ));
+    assert!(
+        parse_result
+            .ast
+            .iter()
+            .any(|item| matches!(item, Expression::Function { name, .. } if name == "main"))
+    );
 
     assert_parse_error_snapshot!(input);
 }
@@ -14409,9 +14412,12 @@ fn main() {
 
     let parse_result =
         parse_expecting_errors(input, 2, "unclosed typed params before a declaration");
-    assert!(parse_result.ast.iter().any(
-        |item| matches!(item, syntax::ast::Expression::Function { name, .. } if name == "main")
-    ));
+    assert!(
+        parse_result
+            .ast
+            .iter()
+            .any(|item| matches!(item, Expression::Function { name, .. } if name == "main"))
+    );
 
     assert_parse_error_snapshot!(input);
 }
@@ -14428,9 +14434,12 @@ fn main() {
 
     let parse_result =
         parse_expecting_errors(input, 3, "an unclosed function type before a declaration");
-    assert!(parse_result.ast.iter().any(
-        |item| matches!(item, syntax::ast::Expression::Function { name, .. } if name == "main")
-    ));
+    assert!(
+        parse_result
+            .ast
+            .iter()
+            .any(|item| matches!(item, Expression::Function { name, .. } if name == "main"))
+    );
 
     assert_parse_error_snapshot!(input);
 }
@@ -14447,9 +14456,12 @@ fn main() {
 
     let parse_result =
         parse_expecting_errors(input, 3, "an unclosed tuple type before a declaration");
-    assert!(parse_result.ast.iter().any(
-        |item| matches!(item, syntax::ast::Expression::Function { name, .. } if name == "main")
-    ));
+    assert!(
+        parse_result
+            .ast
+            .iter()
+            .any(|item| matches!(item, Expression::Function { name, .. } if name == "main"))
+    );
 
     assert_parse_error_snapshot!(input);
 }
@@ -14465,8 +14477,8 @@ struct S {
     let parse_result = parse_expecting_errors(input, 1, "a missing comma before a pub field");
     assert!(parse_result.ast.iter().any(|item| matches!(
         item,
-        syntax::ast::Expression::Struct {
-            fields: syntax::ast::StructFields::Record(fields),
+        Expression::Struct {
+            fields: StructFields::Record(fields),
             ..
         } if fields.len() == 2 && fields[1].visibility.is_public()
     )));
@@ -14488,7 +14500,7 @@ struct S {
         parse_expecting_errors(input, 2, "unclosed params before a struct declaration");
     assert!(parse_result.ast.iter().any(|item| matches!(
         item,
-        syntax::ast::Expression::Struct { name, .. } if name == "S"
+        Expression::Struct { name, .. } if name == "S"
     )));
 
     assert_parse_error_snapshot!(input);
@@ -14507,9 +14519,9 @@ pub fn helper() -> int {
     let parse_result = parse_expecting_errors(input, 2, "unclosed params before a pub declaration");
     assert!(parse_result.ast.iter().any(|item| matches!(
         item,
-        syntax::ast::Expression::Function {
+        Expression::Function {
             name,
-            visibility: syntax::ast::Visibility::Public,
+            visibility: Visibility::Public,
             ..
         } if name == "helper"
     )));
@@ -14532,7 +14544,7 @@ fn checks() {
         parse_expecting_errors(input, 2, "unclosed params before an attributed declaration");
     assert!(parse_result.ast.iter().any(|item| matches!(
         item,
-        syntax::ast::Expression::Function { name, attributes, .. }
+        Expression::Function { name, attributes, .. }
             if name == "checks" && attributes.iter().any(|a| a.name == "test")
     )));
 
@@ -14554,7 +14566,7 @@ fn documented() {
         parse_expecting_errors(input, 2, "unclosed params before a documented declaration");
     assert!(parse_result.ast.iter().any(|item| matches!(
         item,
-        syntax::ast::Expression::Function { name, doc: Some(_), .. } if name == "documented"
+        Expression::Function { name, doc: Some(_), .. } if name == "documented"
     )));
 
     assert_parse_error_snapshot!(input);
@@ -14577,9 +14589,9 @@ pub fn helper() -> int {
     );
     assert!(parse_result.ast.iter().any(|item| matches!(
         item,
-        syntax::ast::Expression::Function {
+        Expression::Function {
             name,
-            visibility: syntax::ast::Visibility::Public,
+            visibility: Visibility::Public,
             ..
         } if name == "helper"
     )));
@@ -14601,9 +14613,11 @@ fn main() {
 
     let parse_result = parse_expecting_errors(input, 1, "a function type without parens");
     for expected_fn in ["f", "main"] {
-        assert!(parse_result.ast.iter().any(
-            |item| matches!(item, syntax::ast::Expression::Function { name, .. } if name == expected_fn)
-        ));
+        assert!(
+            parse_result.ast.iter().any(
+                |item| matches!(item, Expression::Function { name, .. } if name == expected_fn)
+            )
+        );
     }
 
     assert_parse_error_snapshot!(input);
@@ -14632,8 +14646,8 @@ fn main() {
 fn other() {}
 "#;
 
-    let lex_result = syntax::lex::Lexer::new(input, 0).lex();
-    let parse_result = syntax::parse::Parser::new(lex_result.tokens, input).parse();
+    let lex_result = Lexer::new(input, 0).lex();
+    let parse_result = Parser::new(lex_result.tokens, input).parse();
     assert!(!parse_result.errors.is_empty());
 
     assert_parse_error_snapshot!(input);

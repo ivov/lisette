@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use super::report::{TestRow, failed_keys};
+use std::fs;
 
 #[derive(Serialize, Deserialize, Default)]
 struct LastFailures {
@@ -27,15 +28,15 @@ pub fn save(target_dir: &Path, rows: &[TestRow]) {
         .collect();
     let path = last_failures_path(target_dir);
     if let Some(dir) = path.parent() {
-        let _ = std::fs::create_dir_all(dir);
+        let _ = fs::create_dir_all(dir);
     }
     if let Ok(json) = serde_json::to_string(&LastFailures { failures }) {
-        let _ = std::fs::write(path, json);
+        let _ = fs::write(path, json);
     }
 }
 
 pub fn load(target_dir: &Path) -> HashSet<(String, String)> {
-    let Ok(json) = std::fs::read_to_string(last_failures_path(target_dir)) else {
+    let Ok(json) = fs::read_to_string(last_failures_path(target_dir)) else {
         return HashSet::new();
     };
     serde_json::from_str::<LastFailures>(&json)

@@ -4,6 +4,7 @@ use syntax::program::{DefinitionBody, DotAccessResolution};
 use syntax::types::{Type, unqualified_name};
 
 use crate::checker::infer::InferCtx;
+use std::ptr;
 
 impl InferCtx<'_> {
     pub(super) fn infer_dot_access_or_qualified_path(
@@ -19,7 +20,7 @@ impl InferCtx<'_> {
             while let Expression::Paren { expression: e, .. } = inner {
                 inner = e;
             }
-            if !std::ptr::eq(inner, &*expression)
+            if !ptr::eq(inner, &*expression)
                 && let Some(path) = inner.as_dotted_path()
                 && inner.root_identifier().is_some_and(|root| {
                     self.lookup_qualified_name(store, root).is_some()

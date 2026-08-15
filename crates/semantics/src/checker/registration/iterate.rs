@@ -6,6 +6,7 @@ use crate::checker::registration::derived_attributes::{
     DerivedAttribute, DerivedAttributeContext, DerivedAttributeTarget,
 };
 use crate::store::Store;
+use syntax::program::ValueKind;
 
 impl TaskState {
     pub(super) fn process_iterate_candidate(
@@ -89,7 +90,7 @@ impl TaskState {
                 name_span: Some(*name_span),
                 doc: None,
                 body: DefinitionBody::Value {
-                    kind: syntax::program::ValueKind::Runtime,
+                    kind: ValueKind::Runtime,
                     allowed_lints: vec![],
                     go_hints: vec![],
                     go_name: None,

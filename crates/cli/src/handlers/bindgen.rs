@@ -5,6 +5,9 @@ use stdlib::Target;
 
 use crate::cli_error;
 use crate::command::BindgenTarget;
+use crate::go_cli;
+use std::env;
+use std::fs;
 
 pub fn bindgen(target: BindgenTarget, verbose: bool) -> i32 {
     match target {
@@ -43,7 +46,7 @@ fn bindgen_pkg(target_pkg: &str, output: Option<String>, verbose: bool) -> i32 {
 
     match workspace.run_bindgen(target_pkg) {
         Ok(content) => {
-            if let Err(e) = std::fs::write(&output_path, &content) {
+            if let Err(e) = fs::write(&output_path, &content) {
                 cli_error!(
                     "Failed to write bindings",
                     format!("Could not write to {}: {}", output_path, e),
@@ -56,7 +59,7 @@ fn bindgen_pkg(target_pkg: &str, output: Option<String>, verbose: bool) -> i32 {
             0
         }
         Err(msg) => {
-            let (detail, hint) = match crate::go_cli::toolchain_failure() {
+            let (detail, hint) = match go_cli::toolchain_failure() {
                 Some(failure) => (failure.message, failure.hint),
                 None => (msg, "Check Go installation with `go version`"),
             };
@@ -73,7 +76,7 @@ fn bindgen_std(source_dir: &Path, version: Option<String>, verbose: bool) -> i32
         eprintln!("Generating stdlib bindings to {}", out_dir);
     }
 
-    let cwd = match std::env::current_dir() {
+    let cwd = match env::current_dir() {
         Ok(cwd) => cwd,
         Err(e) => {
             cli_error!(
@@ -125,7 +128,7 @@ fn bindgen_std(source_dir: &Path, version: Option<String>, verbose: bool) -> i32
             1
         }
         Err(e) => {
-            let (detail, hint) = match crate::go_cli::toolchain_failure() {
+            let (detail, hint) = match go_cli::toolchain_failure() {
                 Some(failure) => (failure.message, failure.hint),
                 None => (
                     format!("Failed to run bindgen: {}", e),

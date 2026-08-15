@@ -13,6 +13,7 @@ use super::script_edit::{
 };
 use super::script_table::ScriptTable;
 use crate::cli_error;
+use crate::lock;
 use crate::output::{print_add_success, print_preview_notice, print_progress};
 use crate::workspace::GoWorkspace;
 
@@ -53,11 +54,11 @@ pub(super) fn run(file: &Path, dep_string: &str) -> i32 {
         Ok(dir) => dir,
         Err(code) => return code,
     };
-    let _mutation = match crate::lock::acquire_mutation_lock(&dir, "script") {
+    let _mutation = match lock::acquire_mutation_lock(&dir, "script") {
         Ok(lock) => lock,
         Err(code) => return code,
     };
-    let _target = match crate::lock::acquire_target_lock(&dir) {
+    let _target = match lock::acquire_target_lock(&dir) {
         Ok(lock) => lock,
         Err(code) => return code,
     };

@@ -5,6 +5,7 @@ use crate::ast;
 use crate::lex::TokenKind::{self, *};
 use crate::program::DotAccessResolution;
 use crate::types::Type;
+use std::string;
 
 const RANGE_PREC: u8 = 6;
 const CAST_PREC: u8 = 9;
@@ -309,7 +310,7 @@ impl<'source> Parser<'source> {
                 let lhs_name = match &lhs {
                     ast::Expression::Identifier { value, .. } => value.to_string(),
                     ast::Expression::DotAccess { member, .. } => member.to_string(),
-                    _ => std::string::String::new(),
+                    _ => string::String::new(),
                 };
                 let colon_token = self.current_token();
                 let span = ast::Span::new(self.file_id, colon_token.byte_offset, 2);
@@ -499,7 +500,7 @@ impl<'source> Parser<'source> {
     }
 }
 
-fn format_annotation(ann: &ast::Annotation) -> std::string::String {
+fn format_annotation(ann: &ast::Annotation) -> string::String {
     match ann {
         ast::Annotation::Constructor { name, params, .. } => {
             if params.is_empty() {

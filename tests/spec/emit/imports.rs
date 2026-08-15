@@ -1,3 +1,4 @@
+use crate::_harness::emit::emit_with_go_typedefs;
 use crate::{assert_emit_snapshot, assert_emit_snapshot_with_go_typedefs};
 
 #[test]
@@ -421,7 +422,7 @@ fn make() {
   let _ = dtls.Config {}
 }
 "#;
-    let result = crate::_harness::emit::emit_with_go_typedefs(
+    let result = emit_with_go_typedefs(
         input,
         &[
             ("go:example.com/sdp/v3", sdp),

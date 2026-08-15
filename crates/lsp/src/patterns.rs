@@ -5,6 +5,7 @@ use syntax::ast::{
     SequencePatternResolution, Span,
 };
 use syntax::program::DefinitionBody;
+use syntax::types;
 use syntax::types::{CompoundKind, Type, build_substitution_map, substitute, unqualified_name};
 
 use crate::snapshot::AnalysisSnapshot;
@@ -131,7 +132,7 @@ pub(crate) fn get_pattern_element_type(
 }
 
 fn pattern_type_args(snapshot: &AnalysisSnapshot, ty: &Type) -> Vec<Type> {
-    match syntax::types::peel_alias(ty, |id| snapshot.definitions().get(id)) {
+    match types::peel_alias(ty, |id| snapshot.definitions().get(id)) {
         Type::Nominal { params, .. } => params,
         _ => vec![],
     }

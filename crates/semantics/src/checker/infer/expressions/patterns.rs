@@ -1,5 +1,6 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
+use std::sync::Arc;
 use syntax::ast::BindingKind;
 use syntax::ast::{
     ConstructorPatternResolution, EnumFieldDefinition, Expression, Literal, Pattern,
@@ -393,7 +394,7 @@ impl InferCtx<'_> {
 
         let (pattern_ty, params) = match self.instantiate(&constructor_ty).0 {
             Type::Function(f) => {
-                let f = std::sync::Arc::try_unwrap(f).unwrap_or_else(|arc| (*arc).clone());
+                let f = Arc::try_unwrap(f).unwrap_or_else(|arc| (*arc).clone());
                 (*f.return_type, f.params)
             }
             other => (other, vec![]),

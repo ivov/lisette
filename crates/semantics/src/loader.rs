@@ -1,3 +1,4 @@
+use crate::store;
 use rustc_hash::FxHashMap as HashMap;
 
 /// Source content plus a cwd-relative display path for diagnostics.
@@ -47,7 +48,7 @@ pub fn is_external_test_package(package_id: &str) -> bool {
 }
 
 pub fn import_display_name(package_id: &str) -> &str {
-    if package_id == crate::store::ENTRY_PACKAGE_ID {
+    if package_id == store::ENTRY_PACKAGE_ID {
         ROOT_IMPORT
     } else {
         package_id

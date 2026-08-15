@@ -20,6 +20,7 @@ use metadata::{
     declaration_value_position_types, enum_variant_constructor_type, function_signature_pairs,
     has_recursive_instantiation, wrap_with_impl_generics,
 };
+use std::mem;
 
 use std::path::PathBuf;
 
@@ -105,7 +106,7 @@ impl TaskState {
                 .map(|file| RegistrationFile {
                     id: file.id,
                     imports: file.imports(),
-                    items: std::mem::take(&mut file.items),
+                    items: mem::take(&mut file.items),
                 })
                 .collect::<Vec<_>>()
         };

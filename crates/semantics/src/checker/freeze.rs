@@ -6,10 +6,13 @@
 //! therefore do not need access to the checker's `TypeEnv`: the emitter maps
 //! any remaining unbound `Type::Var` to Go's `any`.
 
+use crate::facts::Facts;
+use crate::facts::GenericBoundOrigin;
 use syntax::ast::{
     Binding, EnumFieldDefinition, Expression, FormatStringPart, Literal, Pattern, SelectArm,
     SequencePatternResolution, StructFieldDefinition, StructSpread, VariantFields,
 };
+use syntax::types::Bound;
 use syntax::types::Type;
 
 use crate::checker::type_env::TypeEnv;
@@ -76,8 +79,8 @@ impl<'a> FreezeFolder<'a> {
         }
     }
 
-    fn normalize_bound(&self, bound: &syntax::types::Bound) -> syntax::types::Bound {
-        syntax::types::Bound {
+    fn normalize_bound(&self, bound: &Bound) -> Bound {
+        Bound {
             param_name: bound.param_name.clone(),
             generic: self.normalize_ref_aliases(&bound.generic),
             ty: self.normalize_ref_aliases(&bound.ty),
@@ -356,14 +359,14 @@ impl<'a> FreezeFolder<'a> {
         }
     }
 
-    pub fn freeze_facts(&self, facts: &mut crate::facts::Facts) {
+    pub fn freeze_facts(&self, facts: &mut Facts) {
         for check in &mut facts.deferred.generic_calls {
             self.env.resolve_in_place(&mut check.ty);
         }
         for obligation in &mut facts.deferred.generic_bounds {
             self.env.resolve_in_place(&mut obligation.argument);
             self.env.resolve_in_place(&mut obligation.required);
-            if let crate::facts::GenericBoundOrigin::Construction {
+            if let GenericBoundOrigin::Construction {
                 enclosing_return_type: Some(return_type),
                 ..
             } = &mut obligation.origin

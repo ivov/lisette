@@ -3,6 +3,13 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
+use crate::local_source;
+use std::fmt;
+use std::fs;
+use std::fs::File;
+use std::io::BufRead;
+use std::io::BufReader;
+use std::io::ErrorKind;
 use stdlib::Target;
 
 use crate::project_manifest::{
@@ -116,7 +123,7 @@ impl ImportablePackage {
     pub fn typedef_source(&self) -> Option<Cow<'static, str>> {
         match &self.typedef {
             PackageTypedef::Embedded(source) => Some(Cow::Borrowed(source)),
-            PackageTypedef::Cached(path) => std::fs::read_to_string(path).ok().map(Cow::Owned),
+            PackageTypedef::Cached(path) => fs::read_to_string(path).ok().map(Cow::Owned),
         }
     }
 
@@ -126,10 +133,10 @@ impl ImportablePackage {
                 stdlib::declared_package_name(source).map(str::to_string)
             }
             PackageTypedef::Cached(path) => {
-                let mut reader = std::io::BufReader::new(std::fs::File::open(path).ok()?);
+                let mut reader = BufReader::new(File::open(path).ok()?);
                 let mut header = String::new();
                 for _ in 0..stdlib::HEADER_LINES {
-                    if std::io::BufRead::read_line(&mut reader, &mut header).ok()? == 0 {
+                    if BufRead::read_line(&mut reader, &mut header).ok()? == 0 {
                         break;
                     }
                 }
@@ -157,19 +164,19 @@ impl TypedefOrigin {
 }
 
 /// Cache-miss hook the locator invokes for declared third-party packages.
-pub trait Bindgen: Send + Sync + std::fmt::Debug {
+pub trait Bindgen: Send + Sync + fmt::Debug {
     /// Generate `pkg`'s typedef and write it to the cache (no transitives).
     fn run(&self, pkg: &GoPackage) -> Result<(), BindgenFailure>;
 }
 
 /// Per-analysis bindgen runner; dropping the session releases the lock.
 pub struct BindgenSession {
-    pub bindgen: std::sync::Arc<dyn Bindgen>,
+    pub bindgen: Arc<dyn Bindgen>,
     _guard: Box<dyn BindgenGuard>,
 }
 
 impl BindgenSession {
-    pub fn new(bindgen: std::sync::Arc<dyn Bindgen>, guard: Box<dyn BindgenGuard>) -> Self {
+    pub fn new(bindgen: Arc<dyn Bindgen>, guard: Box<dyn BindgenGuard>) -> Self {
         Self {
             bindgen,
             _guard: guard,
@@ -193,8 +200,8 @@ mod sealed {
     pub trait Sealed {}
 }
 
-impl sealed::Sealed for std::fs::File {}
-impl BindgenGuard for std::fs::File {}
+impl sealed::Sealed for File {}
+impl BindgenGuard for File {}
 
 pub trait BindgenSetup: Send + Sync {
     fn for_project(&self, project_root: &Path, target: Target) -> Result<BindgenSession, String>;
@@ -232,7 +239,7 @@ impl TypedefLocator {
     }
 
     pub fn declared_stamp(&self) -> String {
-        crate::local_source::stamp_hash(&self.deps, None)
+        local_source::stamp_hash(&self.deps, None)
     }
 
     pub fn with_fresh_local_stamp(&self) -> Self {
@@ -256,7 +263,7 @@ impl TypedefLocator {
                         }
                     )
                 });
-                has_local.then(|| crate::local_source::stamp_hash(&self.deps, Some(project_root)))
+                has_local.then(|| local_source::stamp_hash(&self.deps, Some(project_root)))
             })
             .as_deref()
     }
@@ -328,8 +335,8 @@ impl TypedefLocator {
         let Some(root) = self.project_root.as_deref() else {
             return;
         };
-        if path.starts_with(crate::typedef_cache_dir(root)) {
-            let _ = std::fs::remove_file(path);
+        if path.starts_with(typedef_cache_dir(root)) {
+            let _ = fs::remove_file(path);
         }
     }
 
@@ -508,7 +515,7 @@ impl TypedefLocator {
 
         if is_local
             && let Some(stamp) = self.local_stamp_value()
-            && let Err(error) = crate::local_source::gate_local_typedef(&typedef_path, stamp)
+            && let Err(error) = local_source::gate_local_typedef(&typedef_path, stamp)
         {
             return TypedefLocatorResult::UnreadableTypedef {
                 path: typedef_path,
@@ -563,8 +570,8 @@ fn collect_cached_packages(
 ) {
     let last_segment = package_path.rsplit('/').next().unwrap_or(package_path);
     let typedef = dir.join(format!("{last_segment}.d.lis"));
-    let fresh = local_stamp
-        .is_none_or(|stamp| crate::local_source::local_typedef_is_fresh(&typedef, stamp));
+    let fresh =
+        local_stamp.is_none_or(|stamp| local_source::local_typedef_is_fresh(&typedef, stamp));
     if fresh && typedef.is_file() {
         out.push(ImportablePackage {
             path: package_path.to_string(),
@@ -572,7 +579,7 @@ fn collect_cached_packages(
         });
     }
 
-    let Ok(entries) = std::fs::read_dir(dir) else {
+    let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
     for entry in entries.flatten() {
@@ -602,9 +609,9 @@ enum ReadOutcome {
 }
 
 fn read_typedef(path: &Path) -> ReadOutcome {
-    match std::fs::read_to_string(path) {
+    match fs::read_to_string(path) {
         Ok(s) => ReadOutcome::Found(s),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => ReadOutcome::Missing,
+        Err(e) if e.kind() == ErrorKind::NotFound => ReadOutcome::Missing,
         Err(e) => ReadOutcome::Unreadable(e.to_string()),
     }
 }
@@ -628,10 +635,11 @@ fn read_cached_typedef(path: &Path) -> Option<TypedefLocatorResult> {
 mod tests {
     use super::*;
     use std::collections::BTreeMap;
+    use std::fs;
 
     fn write_typedef(path: &Path, content: &str) {
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(path, content).unwrap();
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, content).unwrap();
     }
 
     #[test]
@@ -770,13 +778,13 @@ mod tests {
     fn local_project(module: &str, path: &str) -> (tempfile::TempDir, TypedefLocator) {
         let project = tempfile::tempdir().unwrap();
         let module_dir = project.path().join(path);
-        std::fs::create_dir_all(&module_dir).unwrap();
-        std::fs::write(
+        fs::create_dir_all(&module_dir).unwrap();
+        fs::write(
             module_dir.join("go.mod"),
             format!("module {}\n\ngo 1.25\n", module),
         )
         .unwrap();
-        std::fs::write(module_dir.join("lib.go"), "package lib\n").unwrap();
+        fs::write(module_dir.join("lib.go"), "package lib\n").unwrap();
 
         let mut deps = BTreeMap::new();
         deps.insert(
@@ -801,20 +809,20 @@ mod tests {
             module: GoModule {
                 path: module,
                 version: "v0.0.0",
-                replacement: Some(crate::ReplacementTarget::LocalDirectory),
+                replacement: Some(ReplacementTarget::LocalDirectory),
             },
             package: module,
         };
         let typedef_path = pkg.typedef_path(&typedef_cache_dir(project.path()), Target::host());
-        std::fs::create_dir_all(typedef_path.parent().unwrap()).unwrap();
-        std::fs::write(&typedef_path, "// Generated\n").unwrap();
+        fs::create_dir_all(typedef_path.parent().unwrap()).unwrap();
+        fs::write(&typedef_path, "// Generated\n").unwrap();
 
         match locator.find_typedef_content(module) {
             TypedefLocatorResult::MissingTypedef { local, .. } => assert!(local),
             other => panic!("expected MissingTypedef after gate, got {:?}", other),
         }
 
-        std::fs::write(&typedef_path, "// Generated\n").unwrap();
+        fs::write(&typedef_path, "// Generated\n").unwrap();
         let same = TypedefLocator::new(
             locator.deps().clone(),
             Some(project.path().to_path_buf()),
@@ -825,7 +833,7 @@ mod tests {
             TypedefLocatorResult::Found { .. }
         ));
 
-        std::fs::write(project.path().join("foo/lib.go"), "package lib // edited\n").unwrap();
+        fs::write(project.path().join("foo/lib.go"), "package lib // edited\n").unwrap();
         let edited = TypedefLocator::new(
             locator.deps().clone(),
             Some(project.path().to_path_buf()),
@@ -846,7 +854,7 @@ mod tests {
             module: GoModule {
                 path: module,
                 version: "v0.0.0",
-                replacement: Some(crate::ReplacementTarget::LocalDirectory),
+                replacement: Some(ReplacementTarget::LocalDirectory),
             },
             package: module,
         };
@@ -855,7 +863,7 @@ mod tests {
         let stamp = locator
             .local_stamp_value()
             .expect("a local module is declared");
-        std::fs::write(typedef_path.with_file_name("foo.stamp"), stamp).unwrap();
+        fs::write(typedef_path.with_file_name("foo.stamp"), stamp).unwrap();
 
         let is_offered = |locator: &TypedefLocator| {
             locator
@@ -865,7 +873,7 @@ mod tests {
         };
         assert!(is_offered(&locator));
 
-        std::fs::write(project.path().join("foo/lib.go"), "package lib // edited\n").unwrap();
+        fs::write(project.path().join("foo/lib.go"), "package lib // edited\n").unwrap();
         assert!(
             is_offered(&locator),
             "this locator answered once already and holds that answer"
@@ -886,7 +894,7 @@ mod tests {
             module: GoModule {
                 path: module,
                 version: "v0.0.0",
-                replacement: Some(crate::ReplacementTarget::LocalDirectory),
+                replacement: Some(ReplacementTarget::LocalDirectory),
             },
             package: module,
         };
@@ -895,7 +903,7 @@ mod tests {
         let stamp = locator
             .local_stamp_value()
             .expect("a declared local module has a stamp");
-        std::fs::write(typedef_path.with_file_name("foo.stamp"), stamp).unwrap();
+        fs::write(typedef_path.with_file_name("foo.stamp"), stamp).unwrap();
 
         let is_offered = |locator: &TypedefLocator| {
             locator
@@ -905,7 +913,7 @@ mod tests {
         };
         assert!(is_offered(&locator), "a stamped typedef is current");
 
-        std::fs::write(project.path().join("foo/lib.go"), "package lib // edited\n").unwrap();
+        fs::write(project.path().join("foo/lib.go"), "package lib // edited\n").unwrap();
         let edited = TypedefLocator::new(
             locator.deps().clone(),
             Some(project.path().to_path_buf()),

@@ -2,6 +2,7 @@ use syntax::types::{CompoundKind, Type};
 
 use crate::Planner;
 use crate::types::native::NativeGoType;
+use syntax::types::SimpleKind;
 
 #[derive(Debug, Clone)]
 pub(crate) struct NativeShape {
@@ -51,7 +52,7 @@ impl Planner<'_> {
                 };
                 Some(NativeShape { kind: native })
             }
-            Type::Simple(syntax::types::SimpleKind::String) => Some(NativeShape {
+            Type::Simple(SimpleKind::String) => Some(NativeShape {
                 kind: NativeGoType::String,
             }),
             _ => None,

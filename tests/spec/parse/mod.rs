@@ -1,4 +1,6 @@
 use crate::{assert_parse_error_snapshot, assert_parse_snapshot};
+use std::fmt;
+use std::fmt::Error;
 
 #[test]
 fn array_literal_operand() {
@@ -3073,10 +3075,10 @@ fn compound_assignment_on_block_no_exponential_blowup() {
 
     struct Counter(usize);
     impl Write for Counter {
-        fn write_str(&mut self, s: &str) -> std::fmt::Result {
+        fn write_str(&mut self, s: &str) -> fmt::Result {
             self.0 += s.len();
             if self.0 >= 100_000 {
-                Err(std::fmt::Error)
+                Err(Error)
             } else {
                 Ok(())
             }

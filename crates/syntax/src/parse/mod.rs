@@ -4,7 +4,9 @@ use crate::lex;
 use crate::lex::TokenKind::*;
 use crate::lex::{Token, TokenKind};
 use crate::types::Type;
+use std::borrow::Cow;
 use std::ops::{Deref, DerefMut};
+use std::string;
 
 pub(crate) const MAX_TUPLE_ARITY: usize = 5;
 pub const TUPLE_FIELDS: &[&str] = &["First", "Second", "Third", "Fourth", "Fifth"];
@@ -40,7 +42,7 @@ pub use error::ParseError;
 pub struct ParseResult {
     pub ast: Vec<ast::Expression>,
     pub errors: Vec<ParseError>,
-    pub file_comment: Option<std::string::String>,
+    pub file_comment: Option<string::String>,
     pub truncated: bool,
     pub status: FileParseStatus,
 }
@@ -194,7 +196,7 @@ impl<'source> Parser<'source> {
         }
 
         if let Some(token) = pub_token {
-            let span = ast::Span::new(self.file_id, token.byte_offset, token.byte_length);
+            let span = Span::new(self.file_id, token.byte_offset, token.byte_length);
             match self.current_token().kind {
                 Impl => self.error_misplaced_pub(
                     span,
@@ -392,7 +394,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    fn collect_file_comments(&mut self, shebang_end: Option<u32>) -> Option<std::string::String> {
+    fn collect_file_comments(&mut self, shebang_end: Option<u32>) -> Option<string::String> {
         let mut docs = Vec::new();
         let mut previous_end: Option<u32> = None;
 
@@ -428,9 +430,9 @@ impl<'source> Parser<'source> {
         }
     }
 
-    fn collect_doc_comments(&mut self) -> Option<(std::string::String, ast::Span)> {
+    fn collect_doc_comments(&mut self) -> Option<(string::String, Span)> {
         let mut docs = Vec::new();
-        let mut first_span: Option<ast::Span> = None;
+        let mut first_span: Option<Span> = None;
 
         while self.is(DocComment) {
             let token = self.current_token();
@@ -542,16 +544,16 @@ impl<'source> Parser<'source> {
         }
     }
 
-    fn span_from_token(&self, token: Token<'source>) -> ast::Span {
-        ast::Span::new(self.file_id, token.byte_offset, token.byte_length)
+    fn span_from_token(&self, token: Token<'source>) -> Span {
+        Span::new(self.file_id, token.byte_offset, token.byte_length)
     }
 
-    fn span_from_offset(&self, start_byte_offset: u32) -> ast::Span {
+    fn span_from_offset(&self, start_byte_offset: u32) -> Span {
         let previous = self.stream.previous_code();
         let end_byte_offset = previous.byte_offset + previous.byte_length;
         let byte_length = end_byte_offset.saturating_sub(start_byte_offset);
 
-        ast::Span::new(self.file_id, start_byte_offset, byte_length)
+        Span::new(self.file_id, start_byte_offset, byte_length)
     }
 
     fn scan_type_args(&self) -> Option<TypeArgsScan> {
@@ -829,21 +831,17 @@ impl<'source> Parser<'source> {
         }
     }
 
-    fn track_error(
-        &mut self,
-        label: impl Into<std::string::String>,
-        help: impl Into<std::string::String>,
-    ) {
+    fn track_error(&mut self, label: impl Into<string::String>, help: impl Into<string::String>) {
         let current = self.current_token();
-        let span = ast::Span::new(self.file_id, current.byte_offset, current.byte_length);
+        let span = Span::new(self.file_id, current.byte_offset, current.byte_length);
         self.track_error_at(span, label, help);
     }
 
     fn track_error_at(
         &mut self,
-        span: ast::Span,
-        label: impl Into<std::string::String>,
-        help: impl Into<std::string::String>,
+        span: Span,
+        label: impl Into<string::String>,
+        help: impl Into<string::String>,
     ) {
         if self.too_many_errors() {
             return;
@@ -855,11 +853,7 @@ impl<'source> Parser<'source> {
         self.errors.push(error);
     }
 
-    fn error_angle_brackets_for_generics(
-        &mut self,
-        span: ast::Span,
-        help: impl Into<std::string::String>,
-    ) {
+    fn error_angle_brackets_for_generics(&mut self, span: Span, help: impl Into<string::String>) {
         if self.too_many_errors() {
             return;
         }
@@ -870,7 +864,7 @@ impl<'source> Parser<'source> {
         self.errors.push(error);
     }
 
-    fn error_var_initializer(&mut self, span: ast::Span) {
+    fn error_var_initializer(&mut self, span: Span) {
         if self.too_many_errors() {
             return;
         }
@@ -883,7 +877,7 @@ impl<'source> Parser<'source> {
         self.errors.push(error);
     }
 
-    fn error_import_alias_after_path(&mut self, span: ast::Span, alias: &str, path: &str) {
+    fn error_import_alias_after_path(&mut self, span: Span, alias: &str, path: &str) {
         if self.too_many_errors() {
             return;
         }
@@ -896,7 +890,7 @@ impl<'source> Parser<'source> {
         self.errors.push(error);
     }
 
-    fn error_bare_multi_return(&mut self, span: ast::Span, suggestion: &str) {
+    fn error_bare_multi_return(&mut self, span: Span, suggestion: &str) {
         if self.too_many_errors() {
             return;
         }
@@ -913,7 +907,7 @@ impl<'source> Parser<'source> {
         self.errors.push(error);
     }
 
-    fn error_match_arm_missing_comma(&mut self, span: ast::Span) {
+    fn error_match_arm_missing_comma(&mut self, span: Span) {
         if self.too_many_errors() {
             return;
         }
@@ -924,7 +918,7 @@ impl<'source> Parser<'source> {
         self.errors.push(error);
     }
 
-    fn error_map_literal_not_supported(&mut self, span: ast::Span) {
+    fn error_map_literal_not_supported(&mut self, span: Span) {
         if self.too_many_errors() {
             return;
         }
@@ -935,7 +929,7 @@ impl<'source> Parser<'source> {
         self.errors.push(error);
     }
 
-    fn error_missing_initializer(&mut self, span: ast::Span) {
+    fn error_missing_initializer(&mut self, span: Span) {
         if self.too_many_errors() {
             return;
         }
@@ -962,7 +956,7 @@ impl<'source> Parser<'source> {
             _ => "unexpected_token",
         };
 
-        let span = ast::Span::new(self.file_id, current.byte_offset, current.byte_length);
+        let span = Span::new(self.file_id, current.byte_offset, current.byte_length);
         let error = ParseError::new("Syntax error", span, format!("expected {}", expected_token))
             .with_parse_code(error_code);
 
@@ -986,7 +980,7 @@ impl<'source> Parser<'source> {
     }
 
     fn error_unclosed_block(&mut self, open_brace: &Token) {
-        let span = ast::Span::new(self.file_id, open_brace.byte_offset, open_brace.byte_length);
+        let span = Span::new(self.file_id, open_brace.byte_offset, open_brace.byte_length);
         let error = ParseError::new("Unclosed block", span, "opening brace here")
             .with_parse_code("unclosed_block")
             .with_help("Add a closing `}`");
@@ -1151,11 +1145,7 @@ impl<'source> Parser<'source> {
         }
 
         let length = last.byte_offset + last.byte_length - first.byte_offset;
-        self.error_misplaced_file_comment_at(ast::Span::new(
-            self.file_id,
-            first.byte_offset,
-            length,
-        ));
+        self.error_misplaced_file_comment_at(Span::new(self.file_id, first.byte_offset, length));
     }
 
     fn error_misplaced_file_comment_at(&mut self, span: Span) {
@@ -1236,9 +1226,9 @@ impl<'source> Parser<'source> {
 
     fn parse_integer_text_with(&mut self, text: &str, preserve_decimal_text: bool) -> ast::Literal {
         let clean = if text.contains('_') {
-            std::borrow::Cow::Owned(text.replace('_', ""))
+            Cow::Owned(text.replace('_', ""))
         } else {
-            std::borrow::Cow::Borrowed(text)
+            Cow::Borrowed(text)
         };
 
         let (n, is_decimal) = if clean.starts_with("0x") || clean.starts_with("0X") {
@@ -1302,7 +1292,7 @@ impl<'source> Parser<'source> {
             format!("`{}`", token.text)
         };
 
-        let span = ast::Span::new(self.file_id, token.byte_offset, token.byte_length);
+        let span = Span::new(self.file_id, token.byte_offset, token.byte_length);
 
         let (label, error_code, help) = match ctx {
             "expr" => (
@@ -1444,9 +1434,10 @@ impl<'source> TokenStream<'source> {
 #[cfg(test)]
 mod import_order_tests {
     use super::IMPORT_AFTER_ITEM_CODE;
+    use crate::ast::Expression;
     use crate::build_ast;
 
-    fn codes(source: &str) -> Vec<std::string::String> {
+    fn codes(source: &str) -> Vec<String> {
         build_ast(source, 0)
             .errors
             .iter()
@@ -1529,7 +1520,7 @@ mod import_order_tests {
         let result = super::Parser::lex_and_parse_file("fn f() {}\nimport \"go:fmt\"", 0);
         assert!(matches!(
             result.ast.last(),
-            Some(crate::ast::Expression::PackageImport { .. })
+            Some(Expression::PackageImport { .. })
         ));
     }
 
@@ -1545,7 +1536,7 @@ mod import_order_tests {
         assert!(result.truncated);
         assert!(!result.ast.iter().any(|item| matches!(
             item,
-            crate::ast::Expression::Function { name, .. } if name == "last"
+            Expression::Function { name, .. } if name == "last"
         )));
     }
 
@@ -1572,7 +1563,7 @@ mod import_order_tests {
 mod file_comment_tests {
     use crate::build_ast;
 
-    fn file_comment(source: &str) -> Option<std::string::String> {
+    fn file_comment(source: &str) -> Option<String> {
         let result = build_ast(source, 0);
         assert!(
             result.errors.is_empty(),

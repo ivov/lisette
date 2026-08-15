@@ -1,6 +1,9 @@
 use super::*;
+use syntax::ast::Literal;
+use syntax::attributes;
+use syntax::program::ValueKind;
 
-fn canonical_const_literal(expression: &Expression) -> Option<syntax::ast::Literal> {
+fn canonical_const_literal(expression: &Expression) -> Option<Literal> {
     use syntax::ast::{Literal, UnaryOperator};
     match expression.unwrap_parens() {
         Expression::Literal { literal, .. } => match literal {
@@ -126,7 +129,7 @@ impl TaskState {
             this.put_in_scope(generics);
 
             let test_params;
-            let params: &[Binding] = if syntax::attributes::has_test_attribute(attributes) {
+            let params: &[Binding] = if attributes::has_test_attribute(attributes) {
                 test_params = test_functions::normalize_test_params(params.clone(), true);
                 &test_params
             } else {
@@ -163,7 +166,7 @@ impl TaskState {
                 name_span: Some(*name_span),
                 doc: doc.clone(),
                 body: DefinitionBody::Value {
-                    kind: syntax::program::ValueKind::Runtime,
+                    kind: ValueKind::Runtime,
                     allowed_lints: extract_attribute_flags(attributes, "allow"),
                     go_hints: extract_attribute_flags(attributes, "go"),
                     go_name: extract_go_name(attributes),
@@ -232,8 +235,8 @@ impl TaskState {
         }
 
         let kind = match expression.value().and_then(canonical_const_literal) {
-            Some(value) => syntax::program::ValueKind::Constant(value),
-            None => syntax::program::ValueKind::ConstantDeclaration,
+            Some(value) => ValueKind::Constant(value),
+            None => ValueKind::ConstantDeclaration,
         };
 
         self.current_package_mut(store).definitions.insert(
@@ -295,7 +298,7 @@ impl TaskState {
                 name_span: Some(*name_span),
                 doc: doc.clone(),
                 body: DefinitionBody::Value {
-                    kind: syntax::program::ValueKind::Runtime,
+                    kind: ValueKind::Runtime,
                     allowed_lints: vec![],
                     go_hints: vec![],
                     go_name: None,

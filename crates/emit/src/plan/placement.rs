@@ -5,6 +5,7 @@ use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
 use crate::definitions::functions::{is_breakless_loop, is_go_never};
 use crate::expressions::staging::SpreadSequenceOptions;
+use crate::names::go_name::is_plain_identifier;
 use crate::plan::bodies::{
     AssignForm, AssignPlan, BreakValueAction, BreakValuePlan, ElseArm, LoopTransfer, LoweredBlock,
     LoweredStatement, PlacePlan,
@@ -13,6 +14,8 @@ use crate::plan::calls::plan_variadic_spread;
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use crate::statements::assignments::is_lvalue_chain;
 use crate::types::native::NativeGoType;
+use std::slice;
+use syntax::ast::Pattern;
 use syntax::ast::{Expression, Literal};
 use syntax::types::Type;
 
@@ -189,7 +192,7 @@ fn join_boolean_branches(condition: &str, then_value: &str, else_value: &str) ->
 }
 
 fn negate_condition(condition: &str) -> String {
-    if crate::names::go_name::is_plain_identifier(condition) {
+    if is_plain_identifier(condition) {
         format!("!{}", condition)
     } else {
         format!("!({})", condition)
@@ -198,7 +201,7 @@ fn negate_condition(condition: &str) -> String {
 
 /// Parenthesize a synthesized `&&` operand, keeping bare identifiers bare.
 fn and_operand(operand: &str) -> String {
-    if crate::names::go_name::is_plain_identifier(operand) {
+    if is_plain_identifier(operand) {
         operand.to_string()
     } else {
         format!("({})", operand)
@@ -245,7 +248,7 @@ pub(crate) fn try_elide_tail_let(items: &[Expression]) -> Option<(&Expression, &
     if mode.else_block().is_some() || binding.is_mutable() {
         return None;
     }
-    let syntax::ast::Pattern::Identifier { identifier, .. } = &binding.pattern else {
+    let Pattern::Identifier { identifier, .. } = &binding.pattern else {
         return None;
     };
     if identifier != tail_name {
@@ -546,7 +549,7 @@ impl Planner<'_> {
         let items: &[Expression] = if let Expression::Block { items, .. } = expression {
             items
         } else {
-            std::slice::from_ref(expression)
+            slice::from_ref(expression)
         };
 
         self.with_block_scope(is_block, has_go_braces, |this| {

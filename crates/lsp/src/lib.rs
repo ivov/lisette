@@ -17,6 +17,8 @@ mod state;
 mod traversal;
 mod validation;
 
+use std::sync::atomic::Ordering;
+
 use crate::protocol::RpcResult as Result;
 use crate::protocol::*;
 use syntax::ast::IdentifierResolution;
@@ -38,7 +40,12 @@ use crate::position::LineIndex;
 use crate::project::find_project_root;
 use crate::snapshot::{AnalysisSnapshot, SnapshotDocument};
 use crate::traversal::find_expression_at;
+use std::collections::HashMap;
+use std::sync::Arc;
+use syntax::ast::Expression;
+use syntax::ast::Span;
 use syntax::program::File;
+use syntax::types;
 
 pub use crate::state::{Backend, SharedState};
 
@@ -50,7 +57,7 @@ impl Backend {
                 .pointer("/textDocument/completion/completionItem/insertReplaceSupport")
                 .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false),
-            std::sync::atomic::Ordering::Relaxed,
+            Ordering::Relaxed,
         );
 
         let workspace_root = params
@@ -279,19 +286,19 @@ impl Backend {
                 .find(|b| b.span.file_id == file_id && offset_in_span(offset, &b.span))
                 .map(|b| b.span)
         };
-        let binding_or_word_fallback = |resolved: Option<syntax::ast::Span>| {
+        let binding_or_word_fallback = |resolved: Option<Span>| {
             resolved
                 .or_else(&find_binding)
                 .or_else(|| resolve_word_at_offset(&file.source, offset, file, &snapshot))
         };
 
         let definition_span = match expression {
-            syntax::ast::Expression::Identifier {
+            Expression::Identifier {
                 resolution: IdentifierResolution::Binding(id),
                 ..
             } => snapshot.bindings().get(id).map(|b| b.span),
 
-            syntax::ast::Expression::Identifier {
+            Expression::Identifier {
                 value,
                 resolution: IdentifierResolution::Definition(qname),
                 span: id_span,
@@ -325,33 +332,29 @@ impl Backend {
                     .and_then(|d| d.name_span)
             }
 
-            syntax::ast::Expression::DotAccess {
+            Expression::DotAccess {
                 expression,
                 member,
                 span,
                 ..
             } => resolve_dot_access_definition(expression, member, *span, file, &snapshot),
 
-            syntax::ast::Expression::StructCall {
+            Expression::StructCall {
                 name,
                 field_assignments,
                 ty,
                 ..
             } => resolve_struct_call_field(field_assignments, name, ty, offset, file, &snapshot),
 
-            syntax::ast::Expression::Function { name_span, .. }
-                if offset_in_span(offset, name_span) =>
-            {
+            Expression::Function { name_span, .. } if offset_in_span(offset, name_span) => {
                 Some(*name_span)
             }
 
-            syntax::ast::Expression::Interface { name_span, .. }
-                if offset_in_span(offset, name_span) =>
-            {
+            Expression::Interface { name_span, .. } if offset_in_span(offset, name_span) => {
                 Some(*name_span)
             }
 
-            syntax::ast::Expression::TypeAlias {
+            Expression::TypeAlias {
                 name_span,
                 annotation,
                 ..
@@ -363,7 +366,7 @@ impl Backend {
                 }
             }
 
-            syntax::ast::Expression::Struct {
+            Expression::Struct {
                 name,
                 name_span,
                 fields,
@@ -382,7 +385,7 @@ impl Backend {
                     })
                 }),
 
-            syntax::ast::Expression::Enum {
+            Expression::Enum {
                 name,
                 name_span,
                 variants,
@@ -399,7 +402,7 @@ impl Backend {
                 })
                 .or_else(|| offset_in_span(offset, name_span).then_some(*name_span)),
 
-            syntax::ast::Expression::Identifier { value, .. } => {
+            Expression::Identifier { value, .. } => {
                 lookup_definition_span(value, file, &snapshot)
                     .or_else(|| {
                         resolve_import_span(
@@ -413,12 +416,11 @@ impl Backend {
                     .or_else(|| resolve_word_at_offset(&file.source, offset, file, &snapshot))
             }
 
-            syntax::ast::Expression::Match { arms, .. } => binding_or_word_fallback(
+            Expression::Match { arms, .. } => binding_or_word_fallback(
                 resolve_match_pattern_definition(arms, offset, file, &snapshot),
             ),
 
-            syntax::ast::Expression::IfLet { pattern, .. }
-            | syntax::ast::Expression::WhileLet { pattern, .. } => {
+            Expression::IfLet { pattern, .. } | Expression::WhileLet { pattern, .. } => {
                 binding_or_word_fallback(resolve_enum_in_pattern(pattern, offset, file, &snapshot))
             }
 
@@ -448,10 +450,10 @@ impl Backend {
         let line_index = document.line_index;
 
         fn expression_to_symbol(
-            expression: &syntax::ast::Expression,
+            expression: &Expression,
             line_index: &LineIndex,
         ) -> Option<DocumentSymbol> {
-            use syntax::ast::Expression;
+            use Expression;
 
             let (name, name_span, span, kind, detail) = match expression {
                 Expression::Function {
@@ -616,19 +618,19 @@ impl Backend {
         let offset = cursor.offset;
 
         let rename_response =
-            |span: syntax::ast::Span, placeholder: &str| -> Result<Option<PrepareRenameResponse>> {
+            |span: Span, placeholder: &str| -> Result<Option<PrepareRenameResponse>> {
                 Ok(Some(PrepareRenameResponse::RangeWithPlaceholder {
                     range: line_index.span_to_range(span),
                     placeholder: placeholder.to_string(),
                 }))
             };
         let rename_word_if_resolved =
-            |resolved: Option<syntax::ast::Span>| -> Result<Option<PrepareRenameResponse>> {
+            |resolved: Option<Span>| -> Result<Option<PrepareRenameResponse>> {
                 if let Some(definition_span) = resolved
                     && !is_generated_typedef_span(&snapshot, &definition_span)
                     && let Some((word, start, end)) = word_at_offset(&file.source, offset)
                 {
-                    let span = syntax::ast::Span::new(file_id, start as u32, (end - start) as u32);
+                    let span = Span::new(file_id, start as u32, (end - start) as u32);
                     return rename_response(span, word);
                 }
                 Ok(None)
@@ -645,7 +647,7 @@ impl Backend {
             return Ok(None);
         };
 
-        if let syntax::ast::Expression::StructCall {
+        if let Expression::StructCall {
             field_assignments,
             ty,
             ..
@@ -661,7 +663,7 @@ impl Backend {
         }
 
         match expression {
-            syntax::ast::Expression::Identifier {
+            Expression::Identifier {
                 value,
                 resolution: IdentifierResolution::Binding(id),
                 span,
@@ -676,7 +678,7 @@ impl Backend {
                 }
             }
 
-            syntax::ast::Expression::Identifier {
+            Expression::Identifier {
                 value,
                 resolution: IdentifierResolution::Definition(qname),
                 span,
@@ -684,19 +686,19 @@ impl Backend {
             } => {
                 validation::check_rename_guards(qname.as_str())?;
                 if snapshot.definitions().contains_key(qname.as_str()) {
-                    rename_response(*span, syntax::types::unqualified_name(value))
+                    rename_response(*span, types::unqualified_name(value))
                 } else {
                     Ok(None)
                 }
             }
 
-            syntax::ast::Expression::Function {
+            Expression::Function {
                 name, name_span, ..
             }
-            | syntax::ast::Expression::Interface {
+            | Expression::Interface {
                 name, name_span, ..
             }
-            | syntax::ast::Expression::TypeAlias {
+            | Expression::TypeAlias {
                 name, name_span, ..
             } => {
                 let qname = format!("{}.{}", file.package_id, name);
@@ -704,7 +706,7 @@ impl Backend {
                 rename_response(*name_span, name)
             }
 
-            syntax::ast::Expression::Struct {
+            Expression::Struct {
                 name,
                 name_span,
                 fields,
@@ -721,7 +723,7 @@ impl Backend {
                 rename_response(*name_span, name)
             }
 
-            syntax::ast::Expression::Enum {
+            Expression::Enum {
                 name,
                 name_span,
                 variants,
@@ -740,11 +742,11 @@ impl Backend {
                 rename_response(*name_span, name)
             }
 
-            syntax::ast::Expression::VariableDeclaration {
+            Expression::VariableDeclaration {
                 name, name_span, ..
             } => rename_response(*name_span, name),
 
-            syntax::ast::Expression::Const {
+            Expression::Const {
                 identifier,
                 identifier_span,
                 ..
@@ -754,7 +756,7 @@ impl Backend {
                 rename_response(*identifier_span, identifier)
             }
 
-            syntax::ast::Expression::DotAccess {
+            Expression::DotAccess {
                 expression,
                 member,
                 span,
@@ -765,7 +767,7 @@ impl Backend {
                 if let Some(definition_span) = resolved
                     && !is_generated_typedef_span(&snapshot, &definition_span)
                 {
-                    let member_span = syntax::ast::Span::new(
+                    let member_span = Span::new(
                         span.file_id,
                         span.byte_offset + span.byte_length - member.len() as u32,
                         member.len() as u32,
@@ -776,12 +778,11 @@ impl Backend {
                 }
             }
 
-            syntax::ast::Expression::Match { arms, .. } => rename_word_if_resolved(
+            Expression::Match { arms, .. } => rename_word_if_resolved(
                 resolve_match_pattern_definition(arms, offset, file, &snapshot),
             ),
 
-            syntax::ast::Expression::IfLet { pattern, .. }
-            | syntax::ast::Expression::WhileLet { pattern, .. } => {
+            Expression::IfLet { pattern, .. } | Expression::WhileLet { pattern, .. } => {
                 rename_word_if_resolved(resolve_enum_in_pattern(pattern, offset, file, &snapshot))
             }
 
@@ -809,10 +810,9 @@ impl Backend {
         let file = cursor.document.file;
         let offset = cursor.offset;
 
-        let mut edits: std::collections::HashMap<Url, Vec<TextEdit>> =
-            std::collections::HashMap::new();
+        let mut edits: HashMap<Url, Vec<TextEdit>> = HashMap::new();
 
-        if let Some(syntax::ast::Expression::Identifier {
+        if let Some(Expression::Identifier {
             resolution: IdentifierResolution::Definition(qname),
             ..
         }) = find_expression_at(&file.items, offset)
@@ -900,7 +900,7 @@ impl Backend {
                 })
                 .collect();
 
-            let mut changes = std::collections::HashMap::new();
+            let mut changes = HashMap::new();
             changes.insert(uri.clone(), text_edits);
 
             actions.push(CodeActionOrCommand::CodeAction(Box::new(CodeAction {
@@ -1002,9 +1002,7 @@ impl Backend {
                 start,
                 end: line_index.offset_to_position(end as u32),
             },
-            insert_replace_support: self
-                .insert_replace_support
-                .load(std::sync::atomic::Ordering::Relaxed),
+            insert_replace_support: self.insert_replace_support.load(Ordering::Relaxed),
         })
     }
 
@@ -1029,7 +1027,7 @@ impl Backend {
     }
 }
 
-fn location_for(span: syntax::ast::Span, snapshot: &AnalysisSnapshot) -> Option<Location> {
+fn location_for(span: Span, snapshot: &AnalysisSnapshot) -> Option<Location> {
     if span.is_dummy() {
         return None;
     }
@@ -1267,10 +1265,7 @@ pub(crate) fn ranges_overlap(a: Range, b: Range) -> bool {
 
 /// Narrows a usage span to just the trailing member token, dropping any
 /// qualifier (`Color.Red`) and any payload (`Red(x)`).
-fn trailing_segment_span(
-    usage_span: syntax::ast::Span,
-    snapshot: &AnalysisSnapshot,
-) -> syntax::ast::Span {
+fn trailing_segment_span(usage_span: Span, snapshot: &AnalysisSnapshot) -> Span {
     let Some(source_file) = snapshot.files().get(&usage_span.file_id) else {
         return usage_span;
     };
@@ -1282,23 +1277,23 @@ fn trailing_segment_span(
     let usage_text = &source_file.source[start..end];
     match member_token_range(usage_text) {
         Some((offset, length)) => {
-            syntax::ast::Span::new(usage_span.file_id, usage_span.byte_offset + offset, length)
+            Span::new(usage_span.file_id, usage_span.byte_offset + offset, length)
         }
         None => usage_span,
     }
 }
 
 fn usage_locations(
-    snapshots: impl IntoIterator<Item = std::sync::Arc<AnalysisSnapshot>>,
+    snapshots: impl IntoIterator<Item = Arc<AnalysisSnapshot>>,
     definition_uri: &Url,
-    definition_span: syntax::ast::Span,
+    definition_span: Span,
 ) -> Vec<Location> {
     let mut locations = Vec::new();
     for snapshot in snapshots {
         let Some(target_document) = snapshot.document(definition_uri) else {
             continue;
         };
-        let target_span = syntax::ast::Span::new(
+        let target_span = Span::new(
             target_document.file_id,
             definition_span.byte_offset,
             definition_span.byte_length,

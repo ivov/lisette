@@ -5,6 +5,8 @@ use syntax::program::DefinitionBody;
 use syntax::types::{Symbol, Type};
 
 use crate::checker::infer::InferCtx;
+use crate::facts::EmptyCollectionCheck;
+use crate::loader;
 
 enum ConstInitReject {
     NotSimple,
@@ -184,7 +186,7 @@ impl InferCtx<'_> {
             self.facts
                 .deferred
                 .empty_collections
-                .push(crate::facts::EmptyCollectionCheck {
+                .push(EmptyCollectionCheck {
                     name: name.to_string(),
                     ty: new_binding.ty.clone(),
                     span,
@@ -219,11 +221,8 @@ impl InferCtx<'_> {
                     store.get_definition(&qualified).map(|d| &d.body),
                     Some(DefinitionBody::Enum { .. })
                 ) {
-                    let type_name = format!(
-                        "{}.{}",
-                        crate::loader::import_display_name(package_id),
-                        member
-                    );
+                    let type_name =
+                        format!("{}.{}", loader::import_display_name(package_id), member);
                     self.sink.push(diagnostics::infer::let_binding_enum_type(
                         &type_name,
                         new_value.get_span(),

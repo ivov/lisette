@@ -5,7 +5,9 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::borrow::Cow;
 
 use crate::EcoString;
+use crate::ast::StructFieldDefinition;
 use crate::ast::{EnumVariant, VariantFields};
+use crate::attributes;
 use crate::program::Methods;
 use crate::types::{GO_IMPORT_PREFIX, Type};
 
@@ -177,22 +179,19 @@ pub fn escape_type_name(name: &str) -> Cow<'_, str> {
 }
 
 /// Whether a struct field emits its camelized Go name.
-pub fn struct_field_is_exported(
-    field: &crate::ast::StructFieldDefinition,
-    struct_forces_export: bool,
-) -> bool {
+pub fn struct_field_is_exported(field: &StructFieldDefinition, struct_forces_export: bool) -> bool {
     !field.is_embedded()
         && (field.visibility.is_public()
             || struct_forces_export
             || field
                 .attributes()
                 .iter()
-                .any(crate::attributes::field_attribute_forces_export))
+                .any(attributes::field_attribute_forces_export))
 }
 
 /// A struct field's emitted Go name under the shared export policy.
 pub fn struct_field_go_name(
-    field: &crate::ast::StructFieldDefinition,
+    field: &StructFieldDefinition,
     struct_forces_export: bool,
 ) -> Cow<'_, str> {
     if struct_field_is_exported(field, struct_forces_export) {
@@ -227,6 +226,8 @@ pub enum EnumFieldShape {
 #[cfg(test)]
 mod shape_tests {
     use super::*;
+    use crate::ast::Annotation;
+    use crate::ast::Span;
     use crate::ast::{EnumFieldDefinition, VariantFields};
     use crate::types::Type;
 
@@ -234,8 +235,8 @@ mod shape_tests {
     fn enum_field_shape_captures_only_name_relevant_layouts() {
         let field = EnumFieldDefinition {
             name: "field0".into(),
-            name_span: crate::ast::Span::dummy(),
-            annotation: crate::ast::Annotation::Unknown,
+            name_span: Span::dummy(),
+            annotation: Annotation::Unknown,
             ty: Type::uninferred(),
         };
 

@@ -2,6 +2,8 @@
 //! lexer never sees. Line offsets are kept, for mapping a TOML error back.
 
 use crate::ast::Span;
+use crate::lex;
+use std::ops::Range;
 
 pub const HEADER: &str = "[dependencies.go]";
 
@@ -13,7 +15,7 @@ pub struct DependencyBlock {
 }
 
 impl DependencyBlock {
-    pub fn map_span(&self, range: std::ops::Range<usize>, file_id: u32) -> Span {
+    pub fn map_span(&self, range: Range<usize>, file_id: u32) -> Span {
         let Some(line) = self.line_of(range.start) else {
             return self.span;
         };
@@ -139,8 +141,8 @@ fn line_break_len(rest: &str) -> usize {
 }
 
 fn prologue_start(source: &str) -> usize {
-    let bom = crate::lex::bom_len(source);
-    bom + crate::lex::shebang_len(&source[bom..]).unwrap_or(0)
+    let bom = lex::bom_len(source);
+    bom + lex::shebang_len(&source[bom..]).unwrap_or(0)
 }
 
 #[cfg(test)]

@@ -8,6 +8,8 @@ use crate::checker::infer::InferCtx;
 use crate::checker::infer::carry_mut::can_carry_mutation_across_fn_boundary;
 use crate::checker::infer::context::{Expectation, ExpectationRole};
 use crate::checker::type_env::VarState;
+use syntax::types::FunctionParameter;
+use syntax::types::SimpleKind;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BuiltinBound {
@@ -318,7 +320,7 @@ impl InferCtx<'_> {
     }
 
     fn is_transparent_alias(&self, ty: &Type) -> bool {
-        let Type::Nominal { id, .. } = ty else {
+        let Nominal { id, .. } = ty else {
             return false;
         };
         self.store
@@ -340,7 +342,7 @@ impl InferCtx<'_> {
             Type::Var { id, .. } => {
                 let _ = self.unify_type_variable(id, &Type::Error, span, false);
             }
-            Type::Nominal { params, .. } => {
+            Nominal { params, .. } => {
                 for p in params {
                     self.collapse_vars_to_error(&p, span);
                 }
@@ -638,7 +640,7 @@ impl InferCtx<'_> {
     fn check_function_bound(
         &mut self,
         bound: &Bound,
-        signature_params: &[syntax::types::FunctionParameter],
+        signature_params: &[FunctionParameter],
         span: &Span,
     ) {
         let store = self.store;
@@ -889,7 +891,7 @@ impl InferCtx<'_> {
             return format!("Cast with `as`, e.g. `value as {}`", expected_name);
         }
 
-        if let Some(Type::Function(function)) = self.store.resolve_to_function_type(expected)
+        if let Some(Function(function)) = self.store.resolve_to_function_type(expected)
             && function.return_type.as_ref() == actual
         {
             return "Remove the `()` so that the type matches".to_string();
@@ -1082,8 +1084,8 @@ fn are_go_type_aliases(a: &str, b: &str) -> bool {
 
 /// Go-level aliases between scalar builtins: `byte` is an alias for `uint8`,
 /// and `rune` is an alias for `int32`.
-fn simple_kinds_are_go_aliases(a: syntax::types::SimpleKind, b: syntax::types::SimpleKind) -> bool {
-    use syntax::types::SimpleKind;
+fn simple_kinds_are_go_aliases(a: SimpleKind, b: SimpleKind) -> bool {
+    use SimpleKind;
     matches!(
         (a, b),
         (SimpleKind::Byte, SimpleKind::Uint8)

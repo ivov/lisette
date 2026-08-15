@@ -24,7 +24,7 @@ struct SelectReceiveContext<'a> {
     body: &'a Expression,
     default_body: Option<&'a Expression>,
     retry_var: Option<&'a str>,
-    element_ty: syntax::types::Type,
+    element_ty: Type,
     place: &'a PlacePlan<'a>,
 }
 
@@ -495,7 +495,7 @@ impl Planner<'_> {
         &mut self,
         match_arms: &[MatchArm],
         channel: &str,
-        element_ty: &syntax::types::Type,
+        element_ty: &Type,
         place: &PlacePlan,
     ) -> SelectArmPlan {
         self.with_binding_frame(|this| {

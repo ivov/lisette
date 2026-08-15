@@ -1,9 +1,12 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::{LisetteDiagnostic, emit as emit_diag};
+use syntax::ast::Generic;
 use syntax::ast::{
     EnumVariant, Expression, ImportAlias, Pattern, Span, StructFields, VariantFields, Visibility,
 };
+use syntax::attributes;
+use syntax::go_names;
 use syntax::program::File;
 
 use crate::Planner;
@@ -152,7 +155,7 @@ impl Planner<'_> {
         self.check_reserved_prefix(name, name_span, diagnostics);
         self.check_reserved_prefix(&go, name_span, diagnostics);
         package_block.entry(go).or_default().push(*name_span);
-        if syntax::attributes::has_test_attribute(attributes) {
+        if attributes::has_test_attribute(attributes) {
             let wrapper = go_name::go_test_function_name(name);
             package_block.entry(wrapper).or_default().push(*name_span);
         }
@@ -402,7 +405,7 @@ impl Planner<'_> {
         members: &mut SpanMap,
         diagnostics: &mut Vec<LisetteDiagnostic>,
     ) {
-        let slots = syntax::go_names::enum_field_slots(name, variants);
+        let slots = go_names::enum_field_slots(name, variants);
         let mut seen: HashSet<String> = HashSet::default();
         for (variant_index, variant) in variants.iter().enumerate() {
             let field_names = &slots[variant_index];
@@ -622,7 +625,7 @@ impl Planner<'_> {
 
     fn check_reserved_qualifier_generics(
         &self,
-        generics: &[syntax::ast::Generic],
+        generics: &[Generic],
         out: &mut Vec<LisetteDiagnostic>,
     ) {
         let mut emitted: SpanMap = HashMap::default();
@@ -638,8 +641,8 @@ impl Planner<'_> {
 
     fn check_free_function_generics(
         &self,
-        impl_generics: &[syntax::ast::Generic],
-        method_generics: &[syntax::ast::Generic],
+        impl_generics: &[Generic],
+        method_generics: &[Generic],
         out: &mut Vec<LisetteDiagnostic>,
     ) {
         let mut emitted: SpanMap = HashMap::default();

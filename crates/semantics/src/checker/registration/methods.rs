@@ -1,7 +1,11 @@
+use crate::loader;
+use crate::prelude;
 use ecow::EcoString;
 use syntax::ast::{
     Annotation, Expression, Generic, Pattern, Span, Visibility as SyntacticVisibility,
 };
+use syntax::program::MethodOrigin;
+use syntax::program::ValueKind;
 use syntax::program::{
     Definition, DefinitionBody, Interface, Method, Visibility, interface_requirements,
 };
@@ -222,7 +226,7 @@ impl TaskState {
         let Some(receiver_qualified_name) = receiver_ty.get_qualified_name() else {
             self.sink.push(diagnostics::infer::impl_on_foreign_type(
                 type_name,
-                crate::prelude::PRELUDE_PACKAGE_ID,
+                prelude::PRELUDE_PACKAGE_ID,
                 *span,
             ));
             return None;
@@ -236,7 +240,7 @@ impl TaskState {
         {
             self.sink.push(diagnostics::infer::impl_on_foreign_type(
                 type_name,
-                crate::loader::import_display_name(type_package),
+                loader::import_display_name(type_package),
                 *span,
             ));
             return None;
@@ -392,7 +396,7 @@ impl TaskState {
                 source_name: fn_name.clone(),
                 ty: method_ty.clone(),
                 visibility: fn_visibility.clone(),
-                origin: syntax::program::MethodOrigin::Declared,
+                origin: MethodOrigin::Declared,
                 name_span: Some(*fn_name_span),
                 doc: fn_doc.clone(),
                 allowed_lints: extract_attribute_flags(fn_attrs, "allow"),
@@ -424,7 +428,7 @@ impl TaskState {
                     name_span: Some(*fn_name_span),
                     doc: fn_doc,
                     body: DefinitionBody::Value {
-                        kind: syntax::program::ValueKind::Runtime,
+                        kind: ValueKind::Runtime,
                         allowed_lints: extract_attribute_flags(fn_attrs, "allow"),
                         go_hints,
                         go_name: None,
@@ -545,7 +549,7 @@ impl TaskState {
                             source_name: method_name.clone(),
                             ty: fn_ty,
                             visibility: visibility.clone(),
-                            origin: syntax::program::MethodOrigin::Declared,
+                            origin: MethodOrigin::Declared,
                             name_span: Some(*method_name_span),
                             doc: fn_doc,
                             allowed_lints: extract_attribute_flags(fn_attrs, "allow"),

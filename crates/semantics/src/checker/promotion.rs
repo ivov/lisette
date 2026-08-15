@@ -3,6 +3,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::collections::BTreeMap;
 
 use syntax::ast::{Generic, Visibility};
+use syntax::go_names;
 use syntax::program::{DefinitionBody, Method, Methods};
 use syntax::types::{
     CompoundKind, Symbol, Type, build_named_substitution_map, build_substitution_map, substitute,
@@ -84,7 +85,7 @@ pub(crate) fn field_selector_depth(store: &Store, outer: &Type, selector: &str) 
         let forces_export = definition.is_serialized();
         let claimed = fields
             .iter()
-            .any(|field| syntax::go_names::struct_field_go_name(field, forces_export) == selector);
+            .any(|field| go_names::struct_field_go_name(field, forces_export) == selector);
         if claimed && min.is_none_or(|m| entry.depth < m) {
             min = Some(entry.depth);
         }
@@ -402,6 +403,7 @@ fn instantiate_method(store: &Store, container: &Type, method_ty: &Type) -> Type
 mod tests {
     use super::*;
     use syntax::ast::{Annotation, Span, StructFieldDefinition, StructFieldKind, StructFields};
+    use syntax::program::MethodOrigin;
     use syntax::program::Visibility as ProgVis;
     use syntax::program::{Attributes, Definition, DefinitionBody, Interface};
     use syntax::types::FunctionParameter;
@@ -493,7 +495,7 @@ mod tests {
                         source_name: n.into(),
                         ty: t,
                         visibility: ProgVis::Public,
-                        origin: syntax::program::MethodOrigin::Declared,
+                        origin: MethodOrigin::Declared,
                         name_span: None,
                         doc: None,
                         allowed_lints: vec![],
@@ -527,7 +529,7 @@ mod tests {
                         source_name: n.into(),
                         ty: t,
                         visibility: ProgVis::Public,
-                        origin: syntax::program::MethodOrigin::Declared,
+                        origin: MethodOrigin::Declared,
                         name_span: None,
                         doc: None,
                         allowed_lints: vec![],
@@ -558,7 +560,7 @@ mod tests {
                         source_name: n.into(),
                         ty: interface_method(),
                         visibility: ProgVis::Public,
-                        origin: syntax::program::MethodOrigin::Declared,
+                        origin: MethodOrigin::Declared,
                         name_span: None,
                         doc: None,
                         allowed_lints: vec![],

@@ -1,5 +1,8 @@
 use crate::checker::EnvResolve;
+use crate::facts::GenericCallCheck;
+use crate::facts::SliceMakeCheck;
 use ecow::EcoString;
+use std::sync::Arc;
 use syntax::ast::CallTypeArguments;
 use syntax::ast::{Annotation, Expression, IdentifierResolution, Literal, Span, UnaryOperator};
 use syntax::program::{CallKind, NativeTypeKind};
@@ -8,7 +11,7 @@ use syntax::types::{
     unqualified_name,
 };
 
-use super::super::context::{Expectation, ExpectationRole};
+use super::super::context::{Expectation, ExpectationRole, UseContext};
 use super::super::unify::Dispatched;
 use super::struct_call::same_nominal;
 use crate::checker::infer::InferCtx;
@@ -140,10 +143,9 @@ impl InferCtx<'_> {
         let store = self.store;
         let callee_ty = self.new_type_var();
 
-        let callee_expression = self.with_use_context(
-            crate::checker::infer::context::UseContext::Callee,
-            |state| state.infer_expression(*expression, &callee_ty),
-        );
+        let callee_expression = self.with_use_context(UseContext::Callee, |state| {
+            state.infer_expression(*expression, &callee_ty)
+        });
 
         let forall_ty = self.resolve_callee_forall_type(&callee_expression, &type_args);
         let (callee_ty, type_arguments) =
@@ -419,24 +421,18 @@ impl InferCtx<'_> {
         let package_id = self.cursor.package_id().to_string();
         match target {
             DeferredCallCheckTarget::GenericCall => {
-                self.facts
-                    .deferred
-                    .generic_calls
-                    .push(crate::facts::GenericCallCheck {
-                        ty,
-                        span,
-                        package_id,
-                    });
+                self.facts.deferred.generic_calls.push(GenericCallCheck {
+                    ty,
+                    span,
+                    package_id,
+                });
             }
             DeferredCallCheckTarget::SliceMake => {
-                self.facts
-                    .deferred
-                    .slice_makes
-                    .push(crate::facts::SliceMakeCheck {
-                        ty,
-                        span,
-                        package_id,
-                    });
+                self.facts.deferred.slice_makes.push(SliceMakeCheck {
+                    ty,
+                    span,
+                    package_id,
+                });
             }
         }
     }
@@ -727,7 +723,7 @@ impl InferCtx<'_> {
                 && let Type::Function(ref mut f) = instantiated
                 && !f.params.is_empty()
             {
-                let f = std::sync::Arc::make_mut(f);
+                let f = Arc::make_mut(f);
                 let receiver_param = f.remove_receiver();
                 let receiver_ty_stripped = receiver_ty.strip_refs();
                 if receiver_param.is_ref() && !receiver_ty.is_ref() {

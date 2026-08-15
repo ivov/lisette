@@ -9,6 +9,7 @@ use crate::imports::PackageIndex;
 use crate::loader::ProjectState;
 use crate::position::LineIndex;
 use crate::snapshot::AnalysisSnapshot;
+use std::ops::Deref;
 
 pub struct SharedState {
     pub(crate) client: Client,
@@ -160,7 +161,7 @@ pub struct Backend {
     pub(crate) shared_state: Arc<SharedState>,
 }
 
-impl std::ops::Deref for Backend {
+impl Deref for Backend {
     type Target = SharedState;
     fn deref(&self) -> &SharedState {
         &self.shared_state

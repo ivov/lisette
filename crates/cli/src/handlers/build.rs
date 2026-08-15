@@ -7,19 +7,27 @@ use crate::cli_error;
 use crate::go_cli;
 use crate::handlers::project::FileTarget;
 use crate::lock::acquire_target_lock;
+use crate::output;
 use crate::output::{format_elapsed, print_warning, use_color};
 use crate::workspace::{GoWorkspace, WorkspaceBindgen, warm_typedefs};
 use diagnostics::render::{self, Filter};
+use lisette::fs::collect_lis_filepaths_recursive;
 use lisette::fs::{LocalFileSystem, prune_orphan_go_files, prune_stale_root_go, relative_to_cwd};
+use lisette::pipeline::CompileResult;
 use lisette::pipeline::{
     CompileConfig, CompileEntry, CompileInput, CompileMode, CompileScope, ProjectKind, Sources,
     TestIndex, compile,
 };
+use semantics::cache;
+use semantics::loader;
 use semantics::loader::{
     EXTERNAL_TESTS_DIR, ExternalTestFileIssue, ROOT_IMPORT, external_test_file_issue,
     is_production_package_file,
 };
 use semantics::store::ENTRY_PACKAGE_ID;
+use std::io;
+use std::io::ErrorKind;
+use std::ops::Deref;
 
 pub fn emit(path: Option<String>, sourcemap: bool, output: Option<String>) -> i32 {
     let target = path.unwrap_or_else(|| ".".to_string());
@@ -86,7 +94,7 @@ pub fn build(
                 );
                 return 1;
             }
-            crate::output::print_preview_notice("Library projects", true);
+            output::print_preview_notice("Library projects", true);
         }
 
         if let Err(code) = build_locked(prep, BuildPurpose::Emit { sourcemap }) {
@@ -307,7 +315,7 @@ impl LockedProject {
     }
 }
 
-impl std::ops::Deref for LockedProject {
+impl Deref for LockedProject {
     type Target = BuildPrep;
 
     fn deref(&self) -> &Self::Target {
@@ -348,12 +356,12 @@ pub(super) struct BuildArtifacts {
 fn remove_stale_test_outputs(
     target_dir: &Path,
     manifest: &mut Vec<go_cli::ManifestEntry>,
-) -> std::io::Result<()> {
+) -> io::Result<()> {
     for entry in manifest.iter() {
         if entry.name.ends_with("_test.go") {
             match fs::remove_file(target_dir.join(&entry.name)) {
                 Ok(()) => {}
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) if e.kind() == ErrorKind::NotFound => {}
                 Err(e) => return Err(e),
             }
         }
@@ -503,7 +511,7 @@ fn compile_project(
     mode: CompileMode,
     entry: &EntryPoint,
     locator: &deps::TypedefLocator,
-) -> lisette::pipeline::CompileResult {
+) -> CompileResult {
     let go_module_name = &prep.manifest.project.name;
     let library_package_name = match prep.kind {
         ProjectKind::Binary => None,
@@ -527,7 +535,7 @@ fn compile_project(
     compile(entry.compile_input(), compile_config, &local_fs)
 }
 
-fn render_diagnostics(result: &lisette::pipeline::CompileResult) -> render::Counts {
+fn render_diagnostics(result: &CompileResult) -> render::Counts {
     render::render_all(
         &result.diagnostics,
         render::SourceCache::new(|file_id| {
@@ -543,7 +551,7 @@ fn render_diagnostics(result: &lisette::pipeline::CompileResult) -> render::Coun
 
 fn write_and_prune_outputs(
     prep: &BuildPrep,
-    result: &lisette::pipeline::CompileResult,
+    result: &CompileResult,
     sourcemap: bool,
     emit_tests: bool,
 ) -> Result<go_cli::EmitWriteResult, i32> {
@@ -551,7 +559,7 @@ fn write_and_prune_outputs(
     let produced: Vec<&str> = result.output.iter().map(|f| f.name.as_str()).collect();
 
     if sourcemap
-        && let Err(e) = semantics::cache::apply_emit_stamps(
+        && let Err(e) = cache::apply_emit_stamps(
             &prep.project_path,
             &result
                 .emit_stamps
@@ -666,8 +674,8 @@ fn reconcile_target_manifest(
     Ok(())
 }
 
-fn commit_emit_stamps(prep: &BuildPrep, result: &lisette::pipeline::CompileResult) {
-    if let Err(e) = semantics::cache::apply_emit_stamps(
+fn commit_emit_stamps(prep: &BuildPrep, result: &CompileResult) {
+    if let Err(e) = cache::apply_emit_stamps(
         &prep.project_path,
         &result
             .emit_stamps
@@ -723,7 +731,7 @@ pub(super) fn resolve_project_layout(project_path: &Path) -> Option<ProjectLayou
     }
 
     let src = project_path.join("src");
-    let sources = lisette::fs::collect_lis_filepaths_recursive(&src);
+    let sources = collect_lis_filepaths_recursive(&src);
 
     if let Some(rel) = sources.iter().find_map(|path| {
         path.strip_prefix(&src)
@@ -779,7 +787,7 @@ pub(super) fn resolve_project_layout(project_path: &Path) -> Option<ProjectLayou
     }
 
     let tests_dir = project_path.join(EXTERNAL_TESTS_DIR);
-    let test_sources = lisette::fs::collect_lis_filepaths_recursive(&tests_dir);
+    let test_sources = collect_lis_filepaths_recursive(&tests_dir);
 
     if let Some((rel, issue)) = test_sources.iter().find_map(|path| {
         let rel = path
@@ -932,7 +940,7 @@ fn rejected_source_shape(
         let Some(name) = rel.file_name().and_then(|n| n.to_str()) else {
             continue;
         };
-        if semantics::loader::is_typedef_file(name) {
+        if loader::is_typedef_file(name) {
             continue;
         }
 

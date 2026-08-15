@@ -5,12 +5,16 @@ use std::path::{Component, Path, PathBuf};
 
 use crate::cli_error;
 use crate::go_cli;
+use crate::output;
 use diagnostics::render::{self, Filter};
 use emit::PRELUDE_IMPORT_PATH;
+use lisette::fs::relative_to_cwd;
 use lisette::pipeline::{
     CompileConfig, CompileEntry, CompileInput, CompileMode, CompileResult, CompileScope, compile,
 };
 use semantics::loader::MemoryLoader;
+use std::env;
+use std::path;
 
 pub(super) const GO_MODULE: &str = "lis-script";
 
@@ -257,8 +261,7 @@ fn compile_file(
         .and_then(|name| name.to_str())
         .unwrap_or("main.lis")
         .to_string();
-    let entry_display =
-        lisette::fs::relative_to_cwd(file).unwrap_or_else(|| file.display().to_string());
+    let entry_display = relative_to_cwd(file).unwrap_or_else(|| file.display().to_string());
 
     let result = compile(
         CompileInput::Binary(CompileEntry {
@@ -296,7 +299,7 @@ fn compile_file(
 }
 
 fn ensure_build_dir(dir: &Path) -> Result<(), String> {
-    std::fs::create_dir_all(dir).map_err(|e| format!("Failed to create `{}`: {}", dir.display(), e))
+    fs::create_dir_all(dir).map_err(|e| format!("Failed to create `{}`: {}", dir.display(), e))
 }
 
 const BUILD_DIR_PREFIX: &str = "lis-script-";
@@ -305,7 +308,7 @@ pub(crate) fn script_build_dir(file: &Path) -> PathBuf {
     let absolute = file.canonicalize().unwrap_or_else(|_| file.to_path_buf());
     let mut hasher = DefaultHasher::new();
     absolute.hash(&mut hasher);
-    std::env::temp_dir().join(format!("{}{:x}", BUILD_DIR_PREFIX, hasher.finish()))
+    env::temp_dir().join(format!("{}{:x}", BUILD_DIR_PREFIX, hasher.finish()))
 }
 
 fn build_dir(file: &Path, heading: &str) -> Result<PathBuf, i32> {
@@ -340,7 +343,7 @@ fn absolute(path: &Path) -> Option<PathBuf> {
     if path.is_absolute() {
         return Some(path.to_path_buf());
     }
-    Some(std::env::current_dir().ok()?.join(path))
+    Some(env::current_dir().ok()?.join(path))
 }
 
 fn prune_stale_go(dir: &Path, emitted: &[&str]) {
@@ -428,12 +431,12 @@ fn check_destination(input: &Path, output: &Path, heading: &str) -> Result<PathB
 /// drops, so this reads the path as written.
 fn demands_a_directory(path: &Path) -> bool {
     let text = path.as_os_str().to_string_lossy();
-    if text.ends_with(std::path::is_separator) {
+    if text.ends_with(path::is_separator) {
         return true;
     }
 
     text.strip_suffix('.')
-        .is_some_and(|rest| rest.is_empty() || rest.ends_with(std::path::is_separator))
+        .is_some_and(|rest| rest.is_empty() || rest.ends_with(path::is_separator))
 }
 
 enum PathError {
@@ -534,7 +537,7 @@ fn file_identity(path: &Path) -> Option<(u32, u64)> {
 }
 
 fn shown(path: &Path) -> String {
-    lisette::fs::relative_to_cwd(path).unwrap_or_else(|| path.display().to_string())
+    relative_to_cwd(path).unwrap_or_else(|| path.display().to_string())
 }
 
 fn report_written(what: &str, path: &Path, diagnostics_shown: bool) {
@@ -542,7 +545,7 @@ fn report_written(what: &str, path: &Path, diagnostics_shown: bool) {
         eprintln!();
     }
     let path = shown(path);
-    if crate::output::use_color() {
+    if output::use_color() {
         use owo_colors::OwoColorize;
         eprintln!("  ✓ {} at {}", what, path.bright_magenta());
     } else {

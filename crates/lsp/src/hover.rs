@@ -11,15 +11,18 @@ use crate::patterns::get_pattern_element_type;
 use crate::snapshot::AnalysisSnapshot;
 use crate::traversal::find_expression_at;
 use crate::type_name;
+use syntax::ast::Binding;
+use syntax::program::File;
+use syntax::types::Type;
 
 /// Hover for top-level declarations and the annotation trees inside them.
 pub(crate) fn resolve_declaration_hover(
     expression: &Expression,
     offset: u32,
-    file: &syntax::program::File,
+    file: &File,
     snapshot: &AnalysisSnapshot,
-) -> Option<(syntax::types::Type, Span)> {
-    let name_hover = |name: &str, name_span: Span| -> Option<(syntax::types::Type, Span)> {
+) -> Option<(Type, Span)> {
+    let name_hover = |name: &str, name_span: Span| -> Option<(Type, Span)> {
         if !offset_in_span(offset, &name_span) {
             return None;
         }
@@ -67,9 +70,9 @@ pub(crate) fn resolve_declaration_hover(
 fn resolve_annotation_hover(
     annotation: &Annotation,
     offset: u32,
-    file: &syntax::program::File,
+    file: &File,
     snapshot: &AnalysisSnapshot,
-) -> Option<(syntax::types::Type, Span)> {
+) -> Option<(Type, Span)> {
     if !offset_in_span(offset, &annotation.get_span()) {
         return None;
     }
@@ -99,9 +102,9 @@ fn resolve_constructor_name_hover(
     name: &str,
     span: Span,
     offset: u32,
-    file: &syntax::program::File,
+    file: &File,
     snapshot: &AnalysisSnapshot,
-) -> Option<(syntax::types::Type, Span)> {
+) -> Option<(Type, Span)> {
     let cursor_in_name = (offset - span.byte_offset) as usize;
     let dot_pos = name.find('.').unwrap_or(name.len());
 
@@ -125,11 +128,7 @@ fn resolve_constructor_name_hover(
     Some((ty, first_span))
 }
 
-fn lookup_type_by_name(
-    name: &str,
-    file: &syntax::program::File,
-    snapshot: &AnalysisSnapshot,
-) -> Option<syntax::types::Type> {
+fn lookup_type_by_name(name: &str, file: &File, snapshot: &AnalysisSnapshot) -> Option<Type> {
     let candidates = [
         format!("{}.{}", file.package_id, name),
         name.to_string(),
@@ -157,12 +156,12 @@ pub(crate) fn get_hover_type_and_span(
     snapshot: &AnalysisSnapshot,
     expression: &Expression,
     offset: u32,
-) -> (syntax::types::Type, Span) {
+) -> (Type, Span) {
     fn get_binding_type(
         snapshot: &AnalysisSnapshot,
-        binding: &syntax::ast::Binding,
+        binding: &Binding,
         offset: u32,
-    ) -> Option<(syntax::types::Type, Span)> {
+    ) -> Option<(Type, Span)> {
         get_pattern_element_type(snapshot, &binding.pattern, &binding.ty, offset)
     }
 
@@ -288,7 +287,7 @@ fn find_doc_at_definition_span(
 fn resolve_dot_access_doc(
     expression: &Expression,
     member: &str,
-    file: &syntax::program::File,
+    file: &File,
     snapshot: &AnalysisSnapshot,
 ) -> Option<String> {
     if let Some(type_id) = type_name(&expression.get_type(), snapshot) {
@@ -333,7 +332,7 @@ fn resolve_dot_access_doc(
 pub(crate) fn get_hover_doc(
     expression: &Expression,
     offset: u32,
-    file: &syntax::program::File,
+    file: &File,
     snapshot: &AnalysisSnapshot,
 ) -> Option<String> {
     if let Some(doc) = extract_doc_from_expression(expression, offset) {

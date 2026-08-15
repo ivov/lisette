@@ -1,5 +1,6 @@
 //! `lis sync --script`.
 
+use crate::lock;
 use std::path::Path;
 
 use super::script_edit::{
@@ -31,7 +32,7 @@ pub(super) fn run(file: &Path) -> i32 {
         Ok(dir) => dir,
         Err(code) => return code,
     };
-    let _mutation = match crate::lock::acquire_mutation_lock(&dir, "script") {
+    let _mutation = match lock::acquire_mutation_lock(&dir, "script") {
         Ok(lock) => lock,
         Err(code) => return code,
     };

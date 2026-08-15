@@ -11,13 +11,16 @@ mod typedef_scan;
 mod workspace;
 
 use command::Command;
+use std::env;
+use std::path::Path;
+use std::process;
 
 fn main() {
     panic::add_handler();
 
-    let args: Vec<String> = std::env::args().collect();
+    let args: Vec<String> = env::args().collect();
 
-    let command = match Command::parse(args, |path| std::path::Path::new(path).is_file()) {
+    let command = match Command::parse(args, |path| Path::new(path).is_file()) {
         Ok(command) => command,
         Err(command::ParseError::MissingArgument { command, argument }) => {
             cli_error!(
@@ -25,10 +28,10 @@ fn main() {
                 format!("`lis {}` requires `<{}>` argument", command, argument),
                 format!("Run `lis help {}` for usage", command)
             );
-            std::process::exit(1);
+            process::exit(1);
         }
         Err(command::ParseError::UnknownCommand(cmd)) => {
-            let hint = match command::Command::suggest(&cmd) {
+            let hint = match Command::suggest(&cmd) {
                 Some(suggestion) => format!("Did you mean `{}`?", suggestion),
                 None => "Run `lis help` for available commands".to_string(),
             };
@@ -37,7 +40,7 @@ fn main() {
                 format!("`{}` is not a lis command", cmd),
                 hint
             );
-            std::process::exit(1);
+            process::exit(1);
         }
         Err(command::ParseError::UnknownFlag(flag)) => {
             cli_error!(
@@ -45,7 +48,7 @@ fn main() {
                 format!("`{}` is not a valid flag", flag),
                 "Run `lis help` for available flags"
             );
-            std::process::exit(1);
+            process::exit(1);
         }
         Err(command::ParseError::UnexpectedArgument {
             message,
@@ -53,7 +56,7 @@ fn main() {
             hint,
         }) => {
             cli_error!(message, reason, hint);
-            std::process::exit(1);
+            process::exit(1);
         }
     };
 
@@ -123,5 +126,5 @@ fn main() {
         Command::Completions { shell } => handlers::completions(shell),
     };
 
-    std::process::exit(exit_code);
+    process::exit(exit_code);
 }

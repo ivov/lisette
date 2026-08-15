@@ -4,6 +4,7 @@ use super::helpers::{
 use crate::passes::walk::NodeCtx;
 use diagnostics::{Edit, Fix};
 use semantics::store::Store;
+use std::slice;
 use syntax::ast::{Expression, Span};
 use syntax::program::{CallKind, NativeTypeKind};
 
@@ -33,7 +34,7 @@ pub fn check_manual_find(expression: &Expression, ctx: &NodeCtx) {
     };
 
     let mut diagnostic = diagnostics::lint::manual_find(span, receiver_text, predicate_text);
-    if reads_as_method_call(receiver, std::slice::from_ref(predicate)) {
+    if reads_as_method_call(receiver, slice::from_ref(predicate)) {
         let replacement = format!(
             "{}.find({predicate_text})",
             as_tight_operand(receiver_text, receiver)

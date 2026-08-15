@@ -9,6 +9,8 @@
 //! innermost log; a successful nested region joins its parent, while a failed
 //! region restores its entries in reverse order.
 
+use std::mem;
+use syntax::types::FunctionParameter;
 use syntax::types::{Bound, Type, TypeVarId};
 
 #[derive(Debug, Clone)]
@@ -63,7 +65,7 @@ impl TypeEnv {
 
     pub(crate) fn bind(&mut self, id: TypeVarId, ty: Type) {
         let slot = Self::slot(id);
-        let old = std::mem::replace(&mut self.entries[slot], VarState::Bound(ty));
+        let old = mem::replace(&mut self.entries[slot], VarState::Bound(ty));
         if let Some(log) = self.undo_logs.last_mut() {
             log.push((id, old));
         }
@@ -186,9 +188,9 @@ impl TypeEnv {
 
     fn resolve_function_params(
         &self,
-        params: &[syntax::types::FunctionParameter],
-    ) -> Option<Vec<syntax::types::FunctionParameter>> {
-        let mut out: Option<Vec<syntax::types::FunctionParameter>> = None;
+        params: &[FunctionParameter],
+    ) -> Option<Vec<FunctionParameter>> {
+        let mut out: Option<Vec<FunctionParameter>> = None;
         for (index, param) in params.iter().enumerate() {
             match self.resolve_changed(&param.ty) {
                 Some(resolved) => {

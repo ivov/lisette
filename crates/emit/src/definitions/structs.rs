@@ -7,6 +7,8 @@ use crate::utils::{synthesized_local_name, synthesized_receiver_name};
 use rustc_hash::FxHashSet;
 use syntax::ast::{Attribute, Generic, StructFieldDefinition, StructFields};
 use syntax::attributes::struct_attribute_forces_field_export;
+use syntax::go_names;
+use syntax::program::MethodOrigin;
 use syntax::program::{Definition, DefinitionBody, Methods, interface_requirements};
 use syntax::types::Type;
 
@@ -400,8 +402,7 @@ impl Planner<'_> {
             .facts
             .method(&qualified, "to_string")
             .is_some_and(|method| {
-                matches!(method.origin, syntax::program::MethodOrigin::Declared)
-                    && method.ty.is_stringer_signature()
+                matches!(method.origin, MethodOrigin::Declared) && method.ty.is_stringer_signature()
             })
             && !self.facts.is_ufcs_method(&qualified, "to_string");
         !has_user_method
@@ -519,7 +520,7 @@ pub(crate) fn struct_field_go_name(
     let struct_forces_export = struct_attrs
         .iter()
         .any(struct_attribute_forces_field_export);
-    syntax::go_names::struct_field_go_name(field, struct_forces_export).into_owned()
+    go_names::struct_field_go_name(field, struct_forces_export).into_owned()
 }
 
 struct StringerField {
@@ -593,9 +594,9 @@ fn definition_emits_go_string_field(definition: &Definition) -> bool {
         return false;
     };
     let forces_export = definition.is_serialized();
-    fields.iter().any(|field| {
-        syntax::go_names::struct_field_go_name(field, forces_export) == ENUM_STRINGER_METHOD
-    })
+    fields
+        .iter()
+        .any(|field| go_names::struct_field_go_name(field, forces_export) == ENUM_STRINGER_METHOD)
 }
 
 fn type_methods(definition: &Definition) -> Option<&Methods> {

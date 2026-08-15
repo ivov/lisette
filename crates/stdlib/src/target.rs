@@ -1,3 +1,4 @@
+use std::env::consts;
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -16,11 +17,11 @@ impl Target {
     }
 
     pub fn host() -> Self {
-        let goos = match std::env::consts::OS {
+        let goos = match consts::OS {
             "macos" => "darwin",
             other => other,
         };
-        let goarch = match std::env::consts::ARCH {
+        let goarch = match consts::ARCH {
             "x86_64" => "amd64",
             "aarch64" => "arm64",
             "x86" => "386",

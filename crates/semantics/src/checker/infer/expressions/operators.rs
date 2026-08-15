@@ -6,7 +6,9 @@ use syntax::types::{SimpleKind, Type};
 use BinaryOperator::*;
 use UnaryOperator::*;
 
+use crate::checker::TypeEnv;
 use crate::checker::infer::InferCtx;
+use syntax::ast::Annotation;
 
 pub(super) struct InferredOperand {
     pub(super) expression: Expression,
@@ -773,7 +775,7 @@ impl InferCtx<'_> {
     pub(super) fn infer_cast(
         &mut self,
         expression: Box<Expression>,
-        target_type: syntax::ast::Annotation,
+        target_type: Annotation,
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
@@ -858,7 +860,7 @@ fn is_float_literal(expression: &Expression) -> bool {
     }
 }
 
-fn is_integer_type(ty: &Type, env: &crate::checker::TypeEnv, store: &Store) -> bool {
+fn is_integer_type(ty: &Type, env: &TypeEnv, store: &Store) -> bool {
     let resolved = ty.resolve_in(env);
     let direct_match = matches!(
         resolved.get_name(),

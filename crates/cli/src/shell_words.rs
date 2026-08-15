@@ -1,5 +1,6 @@
 //! POSIX-style word splitting for the `--go-flags` passthrough.
 
+use std::mem;
 #[derive(Debug, PartialEq, Eq)]
 pub enum SplitError {
     UnterminatedQuote(char),
@@ -15,7 +16,7 @@ pub fn split(input: &str) -> Result<Vec<String>, SplitError> {
         match c {
             ' ' | '\t' | '\n' | '\r' => {
                 if in_word {
-                    words.push(std::mem::take(&mut current));
+                    words.push(mem::take(&mut current));
                     in_word = false;
                 }
             }

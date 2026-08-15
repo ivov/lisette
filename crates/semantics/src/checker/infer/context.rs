@@ -7,6 +7,7 @@ use syntax::types::Type;
 use crate::checker::type_env::SpeculationOutcome;
 use crate::checker::{FileContext, TaskState};
 use crate::store::Store;
+use std::mem;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(super) enum UseContext {
@@ -305,7 +306,7 @@ impl<'a> InferCtx<'a> {
         context: UseContext,
         f: impl FnOnce(&mut Self) -> T,
     ) -> T {
-        let previous = std::mem::replace(&mut self.traversal.use_context, context);
+        let previous = mem::replace(&mut self.traversal.use_context, context);
         let result = f(self);
         self.traversal.use_context = previous;
         result
@@ -334,21 +335,21 @@ impl<'a> InferCtx<'a> {
     }
 
     pub(super) fn with_dot_access_base<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
-        let previous = std::mem::replace(&mut self.traversal.dot_access_base, true);
+        let previous = mem::replace(&mut self.traversal.dot_access_base, true);
         let result = f(self);
         self.traversal.dot_access_base = previous;
         result
     }
 
     pub(super) fn with_pattern<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
-        let previous = std::mem::replace(&mut self.traversal.in_pattern, true);
+        let previous = mem::replace(&mut self.traversal.in_pattern, true);
         let result = f(self);
         self.traversal.in_pattern = previous;
         result
     }
 
     pub(super) fn with_let_binding_rhs<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
-        let previous = std::mem::replace(&mut self.traversal.let_binding_rhs, true);
+        let previous = mem::replace(&mut self.traversal.let_binding_rhs, true);
         let result = f(self);
         self.traversal.let_binding_rhs = previous;
         result
@@ -414,14 +415,14 @@ impl<'a> InferCtx<'a> {
     }
 
     pub(crate) fn in_negation<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
-        let previous = std::mem::replace(&mut self.traversal.in_negation, true);
+        let previous = mem::replace(&mut self.traversal.in_negation, true);
         let result = f(self);
         self.traversal.in_negation = previous;
         result
     }
 
     pub(super) fn in_invariant_position<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
-        let previous = std::mem::replace(&mut self.traversal.in_invariant_position, true);
+        let previous = mem::replace(&mut self.traversal.in_invariant_position, true);
         let result = f(self);
         self.traversal.in_invariant_position = previous;
         result
@@ -452,10 +453,11 @@ impl DerefMut for InferCtx<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::store;
 
     #[test]
     fn failed_speculation_rolls_back_diagnostics() {
-        let mut task = TaskState::for_package(crate::store::ENTRY_PACKAGE_ID);
+        let mut task = TaskState::for_package(store::ENTRY_PACKAGE_ID);
         let store = Store::new();
         let result: Result<(), ()> = {
             let mut ctx = InferCtx::new(&mut task, &store);
@@ -476,7 +478,7 @@ mod tests {
 
     #[test]
     fn successful_speculation_keeps_diagnostics() {
-        let mut task = TaskState::for_package(crate::store::ENTRY_PACKAGE_ID);
+        let mut task = TaskState::for_package(store::ENTRY_PACKAGE_ID);
         let store = Store::new();
         let result: Result<(), ()> = InferCtx::new(&mut task, &store).speculatively(|ctx| {
             ctx.sink

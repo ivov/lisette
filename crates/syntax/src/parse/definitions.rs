@@ -10,9 +10,10 @@ use crate::lex::Token;
 use crate::lex::TokenKind::*;
 use crate::parse::error::ParseError;
 use crate::types::Type;
+use std::string;
 
 struct DefinitionHeader<'source> {
-    doc: Option<std::string::String>,
+    doc: Option<string::String>,
     attributes: Vec<Attribute>,
     name: EcoString,
     name_span: Span,
@@ -23,7 +24,7 @@ struct DefinitionHeader<'source> {
 impl<'source> Parser<'source> {
     fn parse_definition_header(
         &mut self,
-        doc: Option<std::string::String>,
+        doc: Option<string::String>,
         attributes: Vec<Attribute>,
         start: Token<'source>,
     ) -> DefinitionHeader<'source> {
@@ -170,7 +171,7 @@ impl<'source> Parser<'source> {
 
     pub(crate) fn parse_enum_definition(
         &mut self,
-        doc: Option<std::string::String>,
+        doc: Option<string::String>,
         attributes: Vec<Attribute>,
     ) -> Expression {
         let start = self.current_token();
@@ -252,10 +253,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    fn parse_enum_variant_with_doc(
-        &mut self,
-        doc: Option<std::string::String>,
-    ) -> Option<EnumVariant> {
+    fn parse_enum_variant_with_doc(&mut self, doc: Option<string::String>) -> Option<EnumVariant> {
         if self.is_not(Identifier) {
             self.track_error(
                 "expected variant name",
@@ -398,7 +396,7 @@ impl<'source> Parser<'source> {
 
     pub(crate) fn parse_struct_definition(
         &mut self,
-        doc: Option<std::string::String>,
+        doc: Option<string::String>,
         attributes: Vec<Attribute>,
     ) -> Expression {
         let start = self.current_token();
@@ -512,7 +510,7 @@ impl<'source> Parser<'source> {
 
     fn parse_struct_field_with_doc(
         &mut self,
-        doc: Option<std::string::String>,
+        doc: Option<string::String>,
         attributes: Vec<Attribute>,
     ) -> Option<StructFieldDefinition> {
         let visibility = if self.advance_if(Pub) {
@@ -571,7 +569,7 @@ impl<'source> Parser<'source> {
 
     fn parse_embedded_field(
         &mut self,
-        doc: Option<std::string::String>,
+        doc: Option<string::String>,
         attributes: Vec<Attribute>,
     ) -> Option<StructFieldDefinition> {
         let start = self.current_token();
@@ -623,10 +621,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub(crate) fn parse_const_definition(
-        &mut self,
-        doc: Option<std::string::String>,
-    ) -> Expression {
+    pub(crate) fn parse_const_definition(&mut self, doc: Option<string::String>) -> Expression {
         let start = self.current_token();
 
         self.ensure(Const);
@@ -662,7 +657,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub(crate) fn parse_var_declaration(&mut self, doc: Option<std::string::String>) -> Expression {
+    pub(crate) fn parse_var_declaration(&mut self, doc: Option<string::String>) -> Expression {
         let start = self.current_token();
 
         self.ensure(Var);
@@ -782,10 +777,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    pub(crate) fn parse_interface_definition(
-        &mut self,
-        doc: Option<std::string::String>,
-    ) -> Expression {
+    pub(crate) fn parse_interface_definition(&mut self, doc: Option<string::String>) -> Expression {
         let start = self.current_token();
 
         self.ensure(Interface);
@@ -880,7 +872,7 @@ impl<'source> Parser<'source> {
 
     fn parse_interface_parent(
         &mut self,
-        item_doc: Option<(std::string::String, Span)>,
+        item_doc: Option<(string::String, Span)>,
         seen_parents: &mut Vec<(EcoString, Span)>,
         parents: &mut Vec<ParentInterface>,
     ) {

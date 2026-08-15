@@ -1,4 +1,6 @@
 use crate::spec::infer::*;
+use syntax::ast::BinaryOperator;
+use syntax::ast::Expression;
 
 #[test]
 fn addition() {
@@ -499,11 +501,11 @@ fn pipeline_with_parenthesized_pipeline_target() {
 
 #[test]
 fn pipeline_is_absent_from_inferred_ast() {
-    fn contains_pipeline(expression: &syntax::ast::Expression) -> bool {
+    fn contains_pipeline(expression: &Expression) -> bool {
         matches!(
             expression,
-            syntax::ast::Expression::Binary {
-                operator: syntax::ast::BinaryOperator::Pipeline,
+            Expression::Binary {
+                operator: BinaryOperator::Pipeline,
                 ..
             }
         ) || expression.children().into_iter().any(contains_pipeline)

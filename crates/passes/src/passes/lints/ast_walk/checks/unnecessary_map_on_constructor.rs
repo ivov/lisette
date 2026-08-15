@@ -1,6 +1,7 @@
 use crate::passes::walk::NodeCtx;
 use diagnostics::{Edit, Fix};
 use semantics::store::Store;
+use std::slice;
 use syntax::ast::{Expression, Span};
 
 use super::helpers::{
@@ -63,7 +64,7 @@ fn push_map_on_constructor(
     let mut diagnostic = diagnostics::lint::unnecessary_map_on_constructor(span, variant, method);
     // A lambda mapper needs beta-reduction to inline, so it reports without a fix.
     if !matches!(mapper.unwrap_parens(), Expression::Lambda { .. })
-        && reads_as_method_call(receiver, std::slice::from_ref(mapper))
+        && reads_as_method_call(receiver, slice::from_ref(mapper))
         && let (Some(mapper_text), Some(payload_text)) = (
             span_text(ctx.source(), mapper),
             span_text(ctx.source(), payload),

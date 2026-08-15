@@ -6,6 +6,7 @@ use crate::abi::callable::CallableReturnAbi;
 use crate::abi::layout::SlotOrigin;
 use crate::classify_go_return_type;
 use crate::names::go_name;
+use syntax::types;
 
 #[derive(Debug, Default)]
 pub(crate) struct GoAbiCatalog {
@@ -94,15 +95,14 @@ impl GoAbiCatalog {
             .params
             .iter()
             .map(|parameter| GoSlotDescriptor {
-                origin: SlotOrigin::go_parameter(syntax::types::resolves_to_unknown(
-                    &parameter.ty,
-                    |id| definitions.get(id),
-                )),
+                origin: SlotOrigin::go_parameter(types::resolves_to_unknown(&parameter.ty, |id| {
+                    definitions.get(id)
+                })),
                 declared_type: parameter.ty.clone(),
             })
             .collect();
         let return_slot = GoSlotDescriptor {
-            origin: SlotOrigin::go_return(syntax::types::resolves_to_unknown(
+            origin: SlotOrigin::go_return(types::resolves_to_unknown(
                 &function.return_type,
                 |id| definitions.get(id),
             )),
@@ -133,10 +133,9 @@ impl GoAbiCatalog {
             slots.insert(
                 field.name.to_string(),
                 GoSlotDescriptor {
-                    origin: SlotOrigin::go_field(syntax::types::resolves_to_unknown(
-                        &field.ty,
-                        |id| definitions.get(id),
-                    )),
+                    origin: SlotOrigin::go_field(types::resolves_to_unknown(&field.ty, |id| {
+                        definitions.get(id)
+                    })),
                     declared_type: field.ty.clone(),
                 },
             );

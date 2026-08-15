@@ -1,4 +1,7 @@
 use super::*;
+use crate::diagnostics::ReplaceImporter;
+use std::mem;
+use syntax::ast::ImportAlias;
 
 impl TaskState {
     /// Register a Go package (stdlib or third-party). Unlike regular packages,
@@ -58,18 +61,16 @@ impl TaskState {
         let replace_importer = package_id.strip_prefix("go:").and_then(|pkg| {
             match locator.validate_declaration(pkg) {
                 deps::DeclarationStatus::DeclaredReplacement { .. } => {
-                    Some(crate::diagnostics::ReplaceImporter::Module(pkg))
+                    Some(ReplaceImporter::Module(pkg))
                 }
-                deps::DeclarationStatus::DeclaredLocal { .. } => {
-                    Some(crate::diagnostics::ReplaceImporter::Local(pkg))
-                }
+                deps::DeclarationStatus::DeclaredLocal { .. } => Some(ReplaceImporter::Local(pkg)),
                 _ => None,
             }
         });
 
         for import in &imports {
             if let Some(go_pkg) = import.name.strip_prefix("go:") {
-                if matches!(import.alias, Some(syntax::ast::ImportAlias::Blank(_))) {
+                if matches!(import.alias, Some(ImportAlias::Blank(_))) {
                     continue;
                 }
 
@@ -117,7 +118,7 @@ impl TaskState {
                 imports: &imports,
             },
             |this, store| {
-                let mut items = std::mem::take(
+                let mut items = mem::take(
                     &mut store
                         .get_file_mut(file_id)
                         .expect("file must exist after store_file")

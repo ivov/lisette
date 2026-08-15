@@ -1,4 +1,6 @@
 use super::*;
+use crate::loader;
+use std::iter;
 
 #[derive(Debug, Default)]
 pub(super) struct ImportState {
@@ -166,7 +168,7 @@ impl TaskState {
         }
 
         let in_test_file = self.current_file_is_test(store);
-        let package_ids = std::iter::once(self.cursor.package_id())
+        let package_ids = iter::once(self.cursor.package_id())
             .chain(self.imports.unprefixed_imports.iter().map(String::as_str));
 
         let mut value_fallback: Option<EcoString> = None;
@@ -409,7 +411,7 @@ impl TaskState {
         for import in imports {
             if seen_paths.contains(import.name.as_str()) {
                 self.sink.push(diagnostics::infer::duplicate_import_path(
-                    crate::loader::import_display_name(&import.name),
+                    loader::import_display_name(&import.name),
                     import.name_span,
                 ));
                 continue;
@@ -444,8 +446,8 @@ impl TaskState {
             {
                 self.sink.push(diagnostics::infer::import_conflict(
                     &effective,
-                    crate::loader::import_display_name(existing_path),
-                    crate::loader::import_display_name(&import.name),
+                    loader::import_display_name(existing_path),
+                    loader::import_display_name(&import.name),
                     import.name_span,
                 ));
                 continue;

@@ -3,6 +3,8 @@ use std::fmt;
 use std::sync::Arc;
 
 use crate::graphical::FrameLabel;
+use std::cmp::Ordering;
+use std::error::Error;
 use syntax::ParseError;
 use syntax::ast::Span;
 
@@ -165,7 +167,7 @@ impl fmt::Display for LisetteDiagnostic {
     }
 }
 
-impl std::error::Error for LisetteDiagnostic {}
+impl Error for LisetteDiagnostic {}
 
 fn style_help(text: &str, use_color: bool) -> String {
     if use_color {
@@ -501,7 +503,7 @@ impl LisetteDiagnostic {
         self.severity == Severity::Advice
     }
 
-    pub fn sort_key(a: &Self, b: &Self) -> std::cmp::Ordering {
+    pub fn sort_key(a: &Self, b: &Self) -> Ordering {
         a.file_id()
             .cmp(&b.file_id())
             .then_with(|| a.primary_offset().cmp(&b.primary_offset()))
