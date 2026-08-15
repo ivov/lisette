@@ -32,7 +32,7 @@ large_enum_variant = "forbid"
 absolute_paths = "deny"
 
 [workspace.lints.rust]
-unused_qualifications = "warn"
+unused_qualifications = "deny"
 
 [workspace.dependencies]
 serde = { version = "1.0", features = ["derive"] }
