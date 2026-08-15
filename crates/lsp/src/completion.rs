@@ -50,10 +50,7 @@ pub(crate) fn definition_to_completion_kind(
         DefinitionBody::Interface { .. } => CompletionItemKind::INTERFACE,
         DefinitionBody::TypeAlias { .. } => CompletionItemKind::TYPE_PARAMETER,
         DefinitionBody::Value { .. } => {
-            if matches!(
-                &definition.ty,
-                syntax::types::Type::Function(_) | syntax::types::Type::Forall { .. }
-            ) {
+            if matches!(&definition.ty, Type::Function(_) | Type::Forall { .. }) {
                 CompletionItemKind::FUNCTION
             } else {
                 CompletionItemKind::CONSTANT
@@ -136,7 +133,7 @@ pub(crate) fn resolve_variable_type(
         &owned_ty
     };
 
-    let (resolved, _) = syntax::types::Type::remove_vars(&[ty]);
+    let (resolved, _) = Type::remove_vars(&[ty]);
     let ty = &resolved[0];
 
     if indexed {
@@ -248,7 +245,7 @@ fn struct_field_completions(
     items: &mut Vec<CompletionItem>,
 ) {
     if let Some(syntax::program::Definition {
-        body: syntax::program::DefinitionBody::Struct { fields, .. },
+        body: DefinitionBody::Struct { fields, .. },
         ..
     }) = snapshot.definitions().get(type_id)
     {
@@ -333,7 +330,7 @@ fn enum_variant_field_completions(
     items: &mut Vec<CompletionItem>,
 ) {
     let Some(syntax::program::Definition {
-        body: syntax::program::DefinitionBody::Enum { variants, .. },
+        body: DefinitionBody::Enum { variants, .. },
         ..
     }) = snapshot.definitions().get(type_id)
     else {

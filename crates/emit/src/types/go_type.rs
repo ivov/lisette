@@ -63,7 +63,7 @@ impl Planner<'_> {
         match ty {
             Type::Nominal { id, params, .. } => self.emit_constructor(id, params, ty),
             Type::Simple(kind) => {
-                if matches!(kind, syntax::types::SimpleKind::Unit) {
+                if matches!(kind, SimpleKind::Unit) {
                     GoType::new("struct{}")
                 } else {
                     GoType::new(kind.leaf_name().to_string())
@@ -90,7 +90,7 @@ impl Planner<'_> {
         }
     }
 
-    fn emit_compound(&self, kind: syntax::types::CompoundKind, args: &[Type], ty: &Type) -> GoType {
+    fn emit_compound(&self, kind: CompoundKind, args: &[Type], ty: &Type) -> GoType {
         use syntax::types::CompoundKind;
 
         if kind == CompoundKind::Ref

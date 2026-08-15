@@ -582,7 +582,7 @@ where
 /// Resolve the complete method set for a type, including inherited and alias methods.
 pub fn methods_for_type<'d, F>(
     ty: &Type,
-    trait_bounds: &HashMap<crate::types::Symbol, Vec<Type>>,
+    trait_bounds: &HashMap<Symbol, Vec<Type>>,
     lookup: F,
 ) -> Methods
 where
@@ -590,7 +590,7 @@ where
 {
     fn collect<'d, F>(
         ty: &Type,
-        trait_bounds: &HashMap<crate::types::Symbol, Vec<Type>>,
+        trait_bounds: &HashMap<Symbol, Vec<Type>>,
         lookup: F,
         visited: &mut HashSet<String>,
     ) -> Methods
@@ -650,7 +650,7 @@ where
     collect(ty, trait_bounds, lookup, &mut HashSet::default())
 }
 
-fn method_lookup_key(ty: &Type) -> Option<crate::types::Symbol> {
+fn method_lookup_key(ty: &Type) -> Option<Symbol> {
     match ty {
         Type::Nominal { id, .. } => Some(id.clone()),
         Type::Compound { kind, .. } => Some(Symbol::from_parts("prelude", kind.leaf_name())),

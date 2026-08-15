@@ -8030,8 +8030,8 @@ fn main() {
 }
 "#;
 
-    let lex_result = syntax::lex::Lexer::new(input, 0).lex();
-    let parse_result = syntax::parse::Parser::new(lex_result.tokens, input).parse();
+    let lex_result = Lexer::new(input, 0).lex();
+    let parse_result = Parser::new(lex_result.tokens, input).parse();
 
     assert!(
         parse_result.errors.len() == 1,
@@ -8059,8 +8059,8 @@ fn main() {
 }
 "#;
 
-    let lex_result = syntax::lex::Lexer::new(input, 0).lex();
-    let parse_result = syntax::parse::Parser::new(lex_result.tokens, input).parse();
+    let lex_result = Lexer::new(input, 0).lex();
+    let parse_result = Parser::new(lex_result.tokens, input).parse();
 
     assert!(
         parse_result.errors.len() == 1,
@@ -8133,8 +8133,8 @@ var conf = Config {
 }
 "#;
 
-    let lex_result = syntax::lex::Lexer::new(input, 0).lex();
-    let parse_result = syntax::parse::Parser::new(lex_result.tokens, input).parse();
+    let lex_result = Lexer::new(input, 0).lex();
+    let parse_result = Parser::new(lex_result.tokens, input).parse();
 
     assert!(
         parse_result.errors.len() == 1,
@@ -14632,8 +14632,8 @@ fn main() {
 fn other() {}
 "#;
 
-    let lex_result = syntax::lex::Lexer::new(input, 0).lex();
-    let parse_result = syntax::parse::Parser::new(lex_result.tokens, input).parse();
+    let lex_result = Lexer::new(input, 0).lex();
+    let parse_result = Parser::new(lex_result.tokens, input).parse();
     assert!(!parse_result.errors.is_empty());
 
     assert_parse_error_snapshot!(input);

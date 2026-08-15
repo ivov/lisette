@@ -1,4 +1,5 @@
 use std::fs;
+use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -2142,7 +2143,7 @@ fn a_symlink_named_apart_from_its_target_still_runs() {
     let scratch = tempfile::tempdir().expect("create temp dir");
     let dir = scratch.path();
     fs::write(dir.join("greet-tool.lis"), GREETER).unwrap();
-    std::os::unix::fs::symlink(dir.join("greet-tool.lis"), dir.join("greet")).unwrap();
+    symlink(dir.join("greet-tool.lis"), dir.join("greet")).unwrap();
 
     let scratch_tmp = dir.join("tmp");
     fs::create_dir(&scratch_tmp).unwrap();
@@ -2228,7 +2229,7 @@ fn a_symlinked_parent_cannot_reach_the_script() {
     let scratch = tempfile::tempdir().expect("create temp dir");
     let dir = scratch.path();
     fs::create_dir(dir.join("real")).unwrap();
-    std::os::unix::fs::symlink("real", dir.join("link")).unwrap();
+    symlink("real", dir.join("link")).unwrap();
     fs::write(dir.join("real/greet.lis"), GREETER).unwrap();
 
     for args in [

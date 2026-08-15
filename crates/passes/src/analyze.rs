@@ -119,7 +119,7 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
     // Canonicalize diagnostic order so the output is stable regardless of
     // phase ordering, FxHashMap iteration, or parallel inference scheduling.
     let mut all_diagnostics = sink.into_diagnostics();
-    all_diagnostics.sort_by(diagnostics::LisetteDiagnostic::sort_key);
+    all_diagnostics.sort_by(LisetteDiagnostic::sort_key);
     all_diagnostics.splice(0..0, entry_parse_errors.into_iter().map(Into::into));
 
     let emit_stamps: Vec<EmitStamp> = compiled_packages

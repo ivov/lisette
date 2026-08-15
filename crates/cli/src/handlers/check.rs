@@ -93,7 +93,7 @@ struct Snapshot {
 
 impl Snapshot {
     fn read(file: &Path) -> Self {
-        let Ok(source) = std::fs::read_to_string(file) else {
+        let Ok(source) = fs::read_to_string(file) else {
             return Self {
                 source: None,
                 locator: TypedefLocator::default(),
@@ -138,7 +138,7 @@ fn check_project(project_path: &Path, options: &CheckOptions) -> i32 {
         None => return 1,
     };
 
-    let (manifest, locator) = match deps::TypedefLocator::from_project_with_manifest(project_path) {
+    let (manifest, locator) = match TypedefLocator::from_project_with_manifest(project_path) {
         Ok(pair) => pair,
         Err(msg) => {
             cli_error!("Failed to check project", msg, "Fix `lisette.toml`");

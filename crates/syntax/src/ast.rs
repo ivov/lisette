@@ -1548,7 +1548,7 @@ impl Expression {
         }
     }
 
-    pub fn as_option_constructor(&self) -> Option<std::result::Result<(), ()>> {
+    pub fn as_option_constructor(&self) -> Option<Result<(), ()>> {
         let variant = match self {
             Expression::Identifier { value, .. } => Some(value.as_str()),
             _ => None,
@@ -1565,7 +1565,7 @@ impl Expression {
         matches!(self.as_option_constructor(), Some(Err(())))
     }
 
-    pub fn as_result_constructor(&self) -> Option<std::result::Result<(), ()>> {
+    pub fn as_result_constructor(&self) -> Option<Result<(), ()>> {
         let variant = match self {
             Expression::Identifier { value, .. } => Some(value.as_str()),
             _ => None,

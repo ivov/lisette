@@ -190,7 +190,7 @@ pub(super) fn compute_roots(
 /// Production packages the primary roots never reached.
 pub(super) fn find_unreachable_packages(
     discovered: &DiscoveredPackages,
-    graph_result: &crate::package_graph::PackageGraphResult,
+    graph_result: &PackageGraphResult,
 ) -> Vec<String> {
     let mut unreachable: Vec<String> = discovered
         .production_packages()

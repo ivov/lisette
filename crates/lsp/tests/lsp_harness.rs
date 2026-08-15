@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use lisette_lsp::protocol::{self, *};
+use lisette_lsp::protocol::*;
 
 /// A test client for communicating with the LSP server.
 pub struct TestClient {
@@ -42,12 +42,12 @@ impl TestClient {
         let (server_read, client_write) = std::io::pipe().expect("create client-to-server pipe");
         let (client_read, server_write) = std::io::pipe().expect("create server-to-client pipe");
 
-        let exit_code = thread::spawn(move || protocol::serve(server_read, server_write, None));
+        let exit_code = thread::spawn(move || serve(server_read, server_write, None));
 
         let (sender, incoming) = mpsc::channel();
         thread::spawn(move || {
             let mut reader = BufReader::new(client_read);
-            while let Ok(Some(message)) = protocol::read_message(&mut reader) {
+            while let Ok(Some(message)) = read_message(&mut reader) {
                 if sender.send(message).is_err() {
                     break;
                 }
@@ -71,7 +71,7 @@ impl TestClient {
         let id = self.next_id;
         self.next_id += 1;
 
-        protocol::write_message(
+        write_message(
             &mut self.writer,
             &json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}),
         )
@@ -103,7 +103,7 @@ impl TestClient {
     }
 
     fn notify(&mut self, method: &str, params: Value) {
-        protocol::write_message(
+        write_message(
             &mut self.writer,
             &json!({"jsonrpc": "2.0", "method": method, "params": params}),
         )

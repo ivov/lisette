@@ -427,7 +427,7 @@ impl<'source> Parser<'source> {
     pub(crate) fn parse_interface_method(
         &mut self,
         doc: Option<std::string::String>,
-        attributes: Vec<crate::ast::Attribute>,
+        attributes: Vec<Attribute>,
     ) -> Expression {
         self.ensure(Function);
 

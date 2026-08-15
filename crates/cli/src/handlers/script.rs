@@ -296,7 +296,7 @@ fn compile_file(
 }
 
 fn ensure_build_dir(dir: &Path) -> Result<(), String> {
-    std::fs::create_dir_all(dir).map_err(|e| format!("Failed to create `{}`: {}", dir.display(), e))
+    fs::create_dir_all(dir).map_err(|e| format!("Failed to create `{}`: {}", dir.display(), e))
 }
 
 const BUILD_DIR_PREFIX: &str = "lis-script-";

@@ -210,8 +210,7 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
                 .collect();
 
             if let Err(witnesses) = check_exhaustiveness(&unguarded_rows, &unions) {
-                let mut cases: Vec<String> =
-                    witnesses.iter().map(witness::format_witness).collect();
+                let mut cases: Vec<String> = witnesses.iter().map(format_witness).collect();
                 cases.sort();
                 cases.dedup();
 

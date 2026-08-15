@@ -17,6 +17,8 @@ mod state;
 mod traversal;
 mod validation;
 
+use std::sync::atomic::Ordering;
+
 use crate::protocol::RpcResult as Result;
 use crate::protocol::*;
 use syntax::ast::IdentifierResolution;
@@ -50,7 +52,7 @@ impl Backend {
                 .pointer("/textDocument/completion/completionItem/insertReplaceSupport")
                 .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false),
-            std::sync::atomic::Ordering::Relaxed,
+            Ordering::Relaxed,
         );
 
         let workspace_root = params
@@ -1002,9 +1004,7 @@ impl Backend {
                 start,
                 end: line_index.offset_to_position(end as u32),
             },
-            insert_replace_support: self
-                .insert_replace_support
-                .load(std::sync::atomic::Ordering::Relaxed),
+            insert_replace_support: self.insert_replace_support.load(Ordering::Relaxed),
         })
     }
 

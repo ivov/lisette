@@ -276,7 +276,7 @@ impl<'source> Parser<'source> {
         let s = start.text;
         let kind = start.kind;
         self.next();
-        let (value, raw) = if kind == crate::lex::TokenKind::RawString {
+        let (value, raw) = if kind == RawString {
             let stripped = if s.len() >= 3 && s.starts_with("r\"") && s.ends_with('"') {
                 &s[2..s.len() - 1]
             } else if s.len() >= 2 && s.starts_with("r\"") {

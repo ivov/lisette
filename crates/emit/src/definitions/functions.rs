@@ -637,7 +637,7 @@ pub(crate) fn is_breakless_loop(expression: &Expression) -> bool {
 
 /// Renamed definition parts for methods on native Go receiver types; the
 /// caller rebinds its view to borrow these.
-type NativeMethodOverride = (ecow::EcoString, Vec<Binding>);
+type NativeMethodOverride = (EcoString, Vec<Binding>);
 
 fn change_go_builtin_methods(
     function_definition: FunctionDefinitionView<'_>,

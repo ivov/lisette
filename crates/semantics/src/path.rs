@@ -84,6 +84,7 @@ fn relativize(rel: &Path) -> Option<String> {
 mod tests {
     use super::*;
     use std::fs as stdfs;
+    use std::os::unix::fs::symlink;
 
     #[test]
     fn plain_path_inside_cwd() {
@@ -151,7 +152,7 @@ mod tests {
         stdfs::create_dir_all(real.join("src")).unwrap();
         stdfs::write(real.join("src/main.lis"), "").unwrap();
         let link = tmp.path().join("link");
-        std::os::unix::fs::symlink(&real, &link).unwrap();
+        symlink(&real, &link).unwrap();
 
         assert_eq!(
             relative_to_cwd_with(&real.join("src/main.lis"), Some(&link)),
@@ -208,7 +209,7 @@ mod tests {
         let real = tmp.path().join("real");
         stdfs::create_dir_all(real.join("src")).unwrap();
         let link = tmp.path().join("link");
-        std::os::unix::fs::symlink(&real, &link).unwrap();
+        symlink(&real, &link).unwrap();
 
         let base = DisplayPathBase::with_cwd(&real.join("src"), Some(link));
         assert_eq!(

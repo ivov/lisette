@@ -708,8 +708,8 @@ mod closed_domain_tests {
                 fields: StructFields::Tuple(vec![StructFieldDefinition {
                     doc: None,
                     name: "0".into(),
-                    name_span: syntax::ast::Span::dummy(),
-                    annotation: syntax::ast::Annotation::Unknown,
+                    name_span: Span::dummy(),
+                    annotation: Annotation::Unknown,
                     visibility: syntax::ast::Visibility::Private,
                     ty: Type::Simple(SimpleKind::Int),
                     kind: StructFieldKind::Named { attributes: vec![] },
@@ -937,8 +937,8 @@ mod closed_domain_tests {
                     fields: StructFields::Tuple(vec![StructFieldDefinition {
                         doc: None,
                         name: "0".into(),
-                        name_span: syntax::ast::Span::dummy(),
-                        annotation: syntax::ast::Annotation::Unknown,
+                        name_span: Span::dummy(),
+                        annotation: Annotation::Unknown,
                         visibility: syntax::ast::Visibility::Private,
                         ty: field_ty,
                         kind: StructFieldKind::Named { attributes: vec![] },

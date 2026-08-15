@@ -318,7 +318,7 @@ impl InferCtx<'_> {
     }
 
     fn is_transparent_alias(&self, ty: &Type) -> bool {
-        let Type::Nominal { id, .. } = ty else {
+        let Nominal { id, .. } = ty else {
             return false;
         };
         self.store
@@ -340,7 +340,7 @@ impl InferCtx<'_> {
             Type::Var { id, .. } => {
                 let _ = self.unify_type_variable(id, &Type::Error, span, false);
             }
-            Type::Nominal { params, .. } => {
+            Nominal { params, .. } => {
                 for p in params {
                     self.collapse_vars_to_error(&p, span);
                 }
@@ -889,7 +889,7 @@ impl InferCtx<'_> {
             return format!("Cast with `as`, e.g. `value as {}`", expected_name);
         }
 
-        if let Some(Type::Function(function)) = self.store.resolve_to_function_type(expected)
+        if let Some(Function(function)) = self.store.resolve_to_function_type(expected)
             && function.return_type.as_ref() == actual
         {
             return "Remove the `()` so that the type matches".to_string();

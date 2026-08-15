@@ -951,7 +951,7 @@ fn warm_stamp_for(roots: &[String], locator: &TypedefLocator) -> String {
 fn atomic_write(path: &Path, content: &str) -> Result<(), String> {
     let mut tmp_os = path.as_os_str().to_owned();
     tmp_os.push(".tmp");
-    let tmp_path = std::path::PathBuf::from(tmp_os);
+    let tmp_path = PathBuf::from(tmp_os);
 
     fs::write(&tmp_path, content)
         .map_err(|e| format!("Failed to write `{}`: {}", tmp_path.display(), e))?;
@@ -1038,7 +1038,7 @@ impl BindgenSetup for WorkspaceBindgenSetup {
         project_root: &Path,
         target: stdlib::Target,
     ) -> Result<BindgenSession, String> {
-        let (manifest, _) = deps::TypedefLocator::from_project_with_manifest(project_root)?;
+        let (manifest, _) = TypedefLocator::from_project_with_manifest(project_root)?;
 
         let target_dir = project_root.join("target");
         if target_dir.is_file() {
@@ -1053,7 +1053,7 @@ impl BindgenSetup for WorkspaceBindgenSetup {
         let lock = crate::lock::acquire_target_lock_quiet(&target_dir)?;
 
         let manifest_locator =
-            deps::TypedefLocator::new(manifest.go_deps(), Some(project_root.to_path_buf()), target);
+            TypedefLocator::new(manifest.go_deps(), Some(project_root.to_path_buf()), target);
         crate::go_cli::write_go_mod(&target_dir, &manifest.project.name, &manifest_locator)?;
 
         let typedef_cache_dir = deps::typedef_cache_dir(project_root);
@@ -1067,7 +1067,7 @@ impl BindgenSetup for WorkspaceBindgenSetup {
         &self,
         source: &str,
         file: &Path,
-    ) -> Result<(deps::TypedefLocator, Option<deps::ScriptSession>), String> {
+    ) -> Result<(TypedefLocator, Option<deps::ScriptSession>), String> {
         let (locator, dir) = crate::handlers::script_locator(
             source,
             file,
@@ -1127,8 +1127,8 @@ impl WorkspaceBindgen {
 }
 
 #[cfg(debug_assertions)]
-fn dev_bindgen_path() -> Option<std::path::PathBuf> {
-    let path = std::path::PathBuf::from(concat!(
+fn dev_bindgen_path() -> Option<PathBuf> {
+    let path = PathBuf::from(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../bindgen/bin/bindgen"
     ));
@@ -1203,7 +1203,7 @@ mod tests {
         GoWorkspace::new(cache_dir, cache_dir, test_target())
     }
 
-    fn cache_path_for(cache_dir: &Path, pkg: &str) -> std::path::PathBuf {
+    fn cache_path_for(cache_dir: &Path, pkg: &str) -> PathBuf {
         let go_pkg = GoPackage {
             module: module(),
             package: pkg,

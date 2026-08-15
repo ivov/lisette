@@ -46,7 +46,7 @@ pub fn add(
             );
             return 1;
         };
-        return super::script_add::run(std::path::Path::new(script), dep_string);
+        return super::script_add::run(Path::new(script), dep_string);
     }
     if let Some(path) = path {
         return add_local(path);

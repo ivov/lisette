@@ -1150,7 +1150,7 @@ fn collect_const_pattern_check(
     qualified_name: &str,
     collector: &mut PatternCollector,
 ) {
-    let const_name = go_name::unqualified_name(qualified_name);
+    let const_name = unqualified_name(qualified_name);
     let go_literal = match planner.facts.package_for_qualified_name(qualified_name) {
         Some(package) => {
             if planner.facts.is_current_package(package) {

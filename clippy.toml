@@ -1,3 +1,2 @@
 too-many-arguments-threshold = 6
 absolute-paths-max-segments = 3
-absolute-paths-allowed-crates = ["std"]

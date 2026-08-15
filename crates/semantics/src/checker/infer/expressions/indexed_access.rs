@@ -24,7 +24,7 @@ impl InferCtx<'_> {
         &mut self,
         expression: Box<Expression>,
         index: Box<Expression>,
-        span: syntax::ast::Span,
+        span: Span,
         expected_ty: &Type,
     ) -> Expression {
         let store = self.store;
@@ -197,7 +197,7 @@ impl InferCtx<'_> {
         &mut self,
         expression: Box<Expression>,
         index: Box<Expression>,
-        span: syntax::ast::Span,
+        span: Span,
     ) -> Expression {
         let store = self.store;
         let collection_ty_var = self.new_type_var();
@@ -225,7 +225,7 @@ impl InferCtx<'_> {
         &mut self,
         expression: Box<Expression>,
         range: Box<Expression>,
-        span: syntax::ast::Span,
+        span: Span,
         expected_ty: &Type,
     ) -> Expression {
         let store = self.store;

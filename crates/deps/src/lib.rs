@@ -65,7 +65,7 @@ pub fn placeholder_require_version(module_path: &str) -> String {
 }
 
 pub fn check_version_matches_path(module_path: &str, version: &str) -> Result<(), String> {
-    let Some((_, path_major)) = crate::module_path::split_path_version(module_path) else {
+    let Some((_, path_major)) = module_path::split_path_version(module_path) else {
         return Ok(());
     };
     let path_major = path_major.strip_suffix("-unstable").unwrap_or(path_major);
@@ -116,7 +116,7 @@ fn version_major(version: &str) -> Option<u64> {
 
 /// The major a path's suffix demands: `/vN` (N >= 2), or gopkg.in `.vN` (any N).
 fn path_major(module_path: &str) -> Option<u64> {
-    let (_, path_major) = crate::module_path::split_path_version(module_path)?;
+    let (_, path_major) = module_path::split_path_version(module_path)?;
     let digits = path_major
         .strip_suffix("-unstable")
         .unwrap_or(path_major)

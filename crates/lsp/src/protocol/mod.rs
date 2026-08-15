@@ -16,7 +16,7 @@ use crate::state::Backend;
 
 pub use types::*;
 
-pub(crate) type RpcResult<T> = std::result::Result<T, Error>;
+pub(crate) type RpcResult<T> = Result<T, Error>;
 
 #[derive(Debug)]
 pub(crate) struct Error {

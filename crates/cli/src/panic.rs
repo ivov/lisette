@@ -1,4 +1,5 @@
 use std::backtrace::Backtrace;
+use std::env::consts;
 use std::io::{IsTerminal, Write};
 use std::panic::PanicHookInfo;
 
@@ -65,7 +66,7 @@ Lisette {version} · Go {go_version} · {os}/{arch}"#,
         backtrace = backtrace,
         version = env!("CARGO_PKG_VERSION"),
         go_version = GO_VERSION,
-        os = std::env::consts::OS,
-        arch = std::env::consts::ARCH,
+        os = consts::OS,
+        arch = consts::ARCH,
     );
 }

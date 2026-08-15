@@ -20,7 +20,7 @@ struct UnparsedPackage {
 struct ParsedPackage {
     files: Vec<File>,
     errors: Vec<ParseError>,
-    statuses: Vec<(u32, syntax::FileParseStatus)>,
+    statuses: Vec<(u32, FileParseStatus)>,
     pending: PendingPackage,
 }
 

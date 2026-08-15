@@ -23,7 +23,7 @@ pub enum LintMode {
 
 pub(crate) const PARALLEL_THRESHOLD: usize = 4;
 
-pub(crate) fn source_file_work(store: &semantics::store::Store) -> Vec<(&Package, &File)> {
+pub(crate) fn source_file_work(store: &Store) -> Vec<(&Package, &File)> {
     let mut work: Vec<_> = store
         .packages
         .values()

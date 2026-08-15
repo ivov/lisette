@@ -117,7 +117,7 @@ pub fn format(path: Option<String>, check: bool) -> i32 {
 
     if check {
         let colored = crate::output::use_color();
-        let render_path = |file: &std::path::Path| -> String {
+        let render_path = |file: &Path| -> String {
             let s = file.display().to_string();
             if colored {
                 use owo_colors::OwoColorize;

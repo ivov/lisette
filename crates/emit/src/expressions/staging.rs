@@ -181,11 +181,11 @@ impl Planner<'_> {
     pub(crate) fn stage_prelude_arg(
         &mut self,
         expression: &Expression,
-        declared_param: Option<&syntax::types::Type>,
-        param_ty: Option<&syntax::types::Type>,
+        declared_param: Option<&Type>,
+        param_ty: Option<&Type>,
     ) -> ValuePlan {
-        let suppress = declared_param
-            .is_some_and(|p| matches!(p.unwrap_forall(), syntax::types::Type::Function(_)));
+        let suppress =
+            declared_param.is_some_and(|p| matches!(p.unwrap_forall(), Type::Function(_)));
         let arg_ctx = ExpressionContext::value().with_forced_tagged_go_function(suppress);
         let staged = self.stage_composite(expression, arg_ctx);
 

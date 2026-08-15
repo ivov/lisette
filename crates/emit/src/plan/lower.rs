@@ -995,7 +995,7 @@ impl Planner<'_> {
     fn lower_never_return_tail(
         &mut self,
         last: &Expression,
-        return_span: &syntax::ast::Span,
+        return_span: &Span,
     ) -> Vec<LoweredStatement> {
         let directive = self.maybe_line_directive(return_span);
         let mut statements: Vec<LoweredStatement> = Vec::new();

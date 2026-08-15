@@ -28,7 +28,7 @@ fn main() {
             std::process::exit(1);
         }
         Err(command::ParseError::UnknownCommand(cmd)) => {
-            let hint = match command::Command::suggest(&cmd) {
+            let hint = match Command::suggest(&cmd) {
                 Some(suggestion) => format!("Did you mean `{}`?", suggestion),
                 None => "Run `lis help` for available commands".to_string(),
             };

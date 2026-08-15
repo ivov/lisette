@@ -164,12 +164,12 @@ pub trait Bindgen: Send + Sync + std::fmt::Debug {
 
 /// Per-analysis bindgen runner; dropping the session releases the lock.
 pub struct BindgenSession {
-    pub bindgen: std::sync::Arc<dyn Bindgen>,
+    pub bindgen: Arc<dyn Bindgen>,
     _guard: Box<dyn BindgenGuard>,
 }
 
 impl BindgenSession {
-    pub fn new(bindgen: std::sync::Arc<dyn Bindgen>, guard: Box<dyn BindgenGuard>) -> Self {
+    pub fn new(bindgen: Arc<dyn Bindgen>, guard: Box<dyn BindgenGuard>) -> Self {
         Self {
             bindgen,
             _guard: guard,
@@ -328,7 +328,7 @@ impl TypedefLocator {
         let Some(root) = self.project_root.as_deref() else {
             return;
         };
-        if path.starts_with(crate::typedef_cache_dir(root)) {
+        if path.starts_with(typedef_cache_dir(root)) {
             let _ = std::fs::remove_file(path);
         }
     }
@@ -801,7 +801,7 @@ mod tests {
             module: GoModule {
                 path: module,
                 version: "v0.0.0",
-                replacement: Some(crate::ReplacementTarget::LocalDirectory),
+                replacement: Some(ReplacementTarget::LocalDirectory),
             },
             package: module,
         };
@@ -846,7 +846,7 @@ mod tests {
             module: GoModule {
                 path: module,
                 version: "v0.0.0",
-                replacement: Some(crate::ReplacementTarget::LocalDirectory),
+                replacement: Some(ReplacementTarget::LocalDirectory),
             },
             package: module,
         };
@@ -886,7 +886,7 @@ mod tests {
             module: GoModule {
                 path: module,
                 version: "v0.0.0",
-                replacement: Some(crate::ReplacementTarget::LocalDirectory),
+                replacement: Some(ReplacementTarget::LocalDirectory),
             },
             package: module,
         };

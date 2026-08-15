@@ -705,14 +705,10 @@ fn is_imported_nominal(ty: &Type) -> bool {
 }
 
 fn is_faithful_imported_embed_target(store: &Store, ty: &Type) -> bool {
-    is_faithful_imported_graph(store, ty, &mut rustc_hash::FxHashSet::default())
+    is_faithful_imported_graph(store, ty, &mut FxHashSet::default())
 }
 
-fn is_faithful_imported_graph(
-    store: &Store,
-    ty: &Type,
-    seen: &mut rustc_hash::FxHashSet<String>,
-) -> bool {
+fn is_faithful_imported_graph(store: &Store, ty: &Type, seen: &mut FxHashSet<String>) -> bool {
     let target = store.deep_resolve_alias(&embed_promotion_target(store, ty));
     let Type::Nominal { id, .. } = &target else {
         return false;
@@ -780,10 +776,7 @@ fn is_deferred_local_target(store: &Store, ty: &Type) -> bool {
 }
 
 fn has_selector_surface(store: &Store, ty: &Type) -> bool {
-    if !store
-        .get_all_methods(ty, &rustc_hash::FxHashMap::default())
-        .is_empty()
-    {
+    if !store.get_all_methods(ty, &FxHashMap::default()).is_empty() {
         return true;
     }
     let Type::Nominal { id, .. } = ty else {
