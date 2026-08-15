@@ -7,6 +7,7 @@ use crate::checker::infer::interface::interface_requires_methods;
 use crate::checker::infer::{BuiltinBound, InferCtx};
 use crate::generics::{apply_bounds, bound_implied, type_argument_children};
 use crate::store::Store;
+use std::mem;
 
 #[derive(Clone, Copy)]
 enum BoundCheckContext {
@@ -176,7 +177,7 @@ impl TaskState {
     }
 
     pub(super) fn check_pending_generic_bounds(&mut self, store: &Store) {
-        let pending = std::mem::take(&mut self.pending.pre_inference_bound_checks);
+        let pending = mem::take(&mut self.pending.pre_inference_bound_checks);
         let mut ctx = InferCtx::new(self, store);
         for (argument, required, span) in pending {
             ctx.check_concrete_bound(&argument, &required, &span);
@@ -184,7 +185,7 @@ impl TaskState {
     }
 
     pub(crate) fn check_pending_interface_bounds(&mut self, store: &Store) {
-        let pending = std::mem::take(&mut self.pending.post_inference_bound_checks);
+        let pending = mem::take(&mut self.pending.post_inference_bound_checks);
         let mut seen = rustc_hash::FxHashSet::default();
         let mut ctx = InferCtx::new(self, store);
         for (argument, required, span) in pending {

@@ -5,6 +5,7 @@ use crate::ReturnContext;
 use crate::context::lowering::LoopContext;
 use crate::plan::bodies::LoopId;
 use crate::state::bindings::{BindingSnapshot, BindingValue, InlineExpr};
+use std::mem;
 
 pub(crate) struct ScopeState {
     next_var: usize,
@@ -196,8 +197,8 @@ impl ScopeState {
 
     pub(crate) fn enter_isolated_function(&mut self) -> IsolatedFunctionFrame {
         let saved = IsolatedFunctionFrame {
-            declared: std::mem::take(&mut self.declared),
-            established: std::mem::take(&mut self.established),
+            declared: mem::take(&mut self.declared),
+            established: mem::take(&mut self.established),
         };
         self.declared = vec![self.type_param_go_names.clone()];
         self.established = vec![Vec::new()];

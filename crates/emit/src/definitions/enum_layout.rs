@@ -5,6 +5,8 @@ use crate::names::go_name;
 use crate::utils::{synthesized_local_name, synthesized_receiver_name};
 use syntax::ast::{EnumVariant, Generic};
 
+use syntax::go_names;
+use syntax::go_names::EnumFieldShape;
 pub(crate) use syntax::go_names::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD, ENUM_TAG_FIELD};
 
 #[derive(Debug, Clone)]
@@ -52,7 +54,7 @@ impl EnumLayout {
         let enum_name = go_name::unqualified_name(enum_id).to_string();
         let tag_type = format!("{}Tag", enum_name);
 
-        let slots = syntax::go_names::enum_field_slots(&enum_name, variants);
+        let slots = go_names::enum_field_slots(&enum_name, variants);
         let variants = variants
             .iter()
             .enumerate()
@@ -76,15 +78,15 @@ impl EnumLayout {
     ) -> VariantLayout {
         let tag_constant = go_name::enum_tag_constant(enum_name, &variant.name);
 
-        let field_shape = syntax::go_names::enum_field_shape(&variant.fields)
-            .unwrap_or(syntax::go_names::EnumFieldShape::TupleMultiple);
+        let field_shape =
+            go_names::enum_field_shape(&variant.fields).unwrap_or(EnumFieldShape::TupleMultiple);
 
         let fields = variant
             .fields
             .iter()
             .enumerate()
             .map(|(fi, field)| {
-                let source_name = if field_shape == syntax::go_names::EnumFieldShape::Struct {
+                let source_name = if field_shape == EnumFieldShape::Struct {
                     field.name.to_string()
                 } else {
                     fi.to_string()
@@ -112,7 +114,7 @@ impl EnumLayout {
         VariantLayout {
             name: variant.name.to_string(),
             tag_constant,
-            is_struct_variant: field_shape == syntax::go_names::EnumFieldShape::Struct,
+            is_struct_variant: field_shape == EnumFieldShape::Struct,
             fields,
             doc: variant.doc.clone(),
         }

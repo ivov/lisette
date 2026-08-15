@@ -5,6 +5,10 @@ use lsp_harness::{
     TestClient, completion_items, completion_labels, cursor, cursors, definition_location,
     definition_target_text, doc_end, hover_content, inlay_hint_triples, symbol_names,
 };
+use std::collections::HashSet;
+use std::fs;
+use std::path::Path;
+use std::path::PathBuf;
 
 const TEST_URI: &str = "file:///test.lis";
 
@@ -864,19 +868,19 @@ fn hover_on_alias_target_primitive() {
 fn hover_on_alias_target_qualified() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(root.join("lisette.toml"), "").unwrap();
+    fs::write(root.join("lisette.toml"), "").unwrap();
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
     let response_dir = src.join("response");
-    std::fs::create_dir_all(&response_dir).unwrap();
-    std::fs::write(
+    fs::create_dir_all(&response_dir).unwrap();
+    fs::write(
         response_dir.join("response.lis"),
         "pub enum Code { Ok, Err }",
     )
     .unwrap();
     let (main_content, line, character) =
         cursor("import \"response\"\n\ntype Code = response.C~ode\n");
-    std::fs::write(src.join("main.lis"), &main_content).unwrap();
+    fs::write(src.join("main.lis"), &main_content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -987,12 +991,12 @@ fn hover_on_function_param_annotation() {
 fn hover_on_function_qualified_return_annotation() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(root.join("lisette.toml"), "").unwrap();
+    fs::write(root.join("lisette.toml"), "").unwrap();
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
     let http_dir = src.join("http");
-    std::fs::create_dir_all(&http_dir).unwrap();
-    std::fs::write(
+    fs::create_dir_all(&http_dir).unwrap();
+    fs::write(
         http_dir.join("http.lis"),
         "pub struct HandlerFunc { name: string }",
     )
@@ -1000,7 +1004,7 @@ fn hover_on_function_qualified_return_annotation() {
     let (main_content, line, character) = cursor(
         "import \"http\"\n\nfn handle() -> http.Hand~lerFunc { http.HandlerFunc { name: \"\" } }\n",
     );
-    std::fs::write(src.join("main.lis"), &main_content).unwrap();
+    fs::write(src.join("main.lis"), &main_content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -1106,7 +1110,7 @@ fn goto_definition_on_third_party_go_function_navigates_to_cache() {
         "[project]\nname = \"test\"\nversion = \"0.0.1\"\n\n[toolchain]\nlis = \"{}\"\n\n[dependencies.go]\n\"github.com/example/lib\" = \"v1.0.0\"\n",
         env!("CARGO_PKG_VERSION")
     );
-    std::fs::write(root.join("lisette.toml"), manifest).unwrap();
+    fs::write(root.join("lisette.toml"), manifest).unwrap();
 
     // Pre-populate the typedef cache for `github.com/example/lib@v1.0.0`.
     let pkg = deps::GoPackage {
@@ -1119,19 +1123,19 @@ fn goto_definition_on_third_party_go_function_navigates_to_cache() {
     };
     let cache_dir = deps::typedef_cache_dir(root);
     let typedef_path = pkg.typedef_path(&cache_dir, stdlib::Target::host());
-    std::fs::create_dir_all(typedef_path.parent().unwrap()).unwrap();
-    std::fs::write(
+    fs::create_dir_all(typedef_path.parent().unwrap()).unwrap();
+    fs::write(
         &typedef_path,
         "// Package: lib\n\npub fn DoStuff() -> int\n",
     )
     .unwrap();
 
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
     let (main_content, line, character) =
         cursor("import \"go:github.com/example/lib\"\n\nfn main() {\n  let _ = lib.~DoStuff()\n}");
     let main_path = src.join("main.lis");
-    std::fs::write(&main_path, &main_content).unwrap();
+    fs::write(&main_path, &main_content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -1479,21 +1483,21 @@ fn completion_struct_literal_respects_field_visibility() {
     let root = tempfile::tempdir().unwrap();
     let root_path = root.path();
 
-    std::fs::write(
+    fs::write(
         root_path.join("lisette.toml"),
         "[project]\nname = \"test\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
-    std::fs::create_dir_all(root_path.join("src/shapes")).unwrap();
-    std::fs::write(
+    fs::create_dir_all(root_path.join("src/shapes")).unwrap();
+    fs::write(
         root_path.join("src/shapes/shapes.lis"),
         "pub struct Box { pub w: int, h: int }\n",
     )
     .unwrap();
-    std::fs::create_dir_all(root_path.join("src/main")).unwrap();
+    fs::create_dir_all(root_path.join("src/main")).unwrap();
     let (main_source, line, character) =
         cursor("import \"shapes\"\nfn main() {\n  let b = shapes.Box { ~ }\n}\n");
-    std::fs::write(root_path.join("src/main/main.lis"), &main_source).unwrap();
+    fs::write(root_path.join("src/main/main.lis"), &main_source).unwrap();
 
     client.initialize_with_root(root_path);
 
@@ -1505,7 +1509,7 @@ fn completion_struct_literal_respects_field_visibility() {
 
     client.open(
         &shapes_uri,
-        &std::fs::read_to_string(root_path.join("src/shapes/shapes.lis")).unwrap(),
+        &fs::read_to_string(root_path.join("src/shapes/shapes.lis")).unwrap(),
     );
     client.open(&main_uri, &main_source);
 
@@ -2455,17 +2459,17 @@ fn cross_package_goto_definition() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
 
-    std::fs::write(root.join("lisette.toml"), "").unwrap();
+    fs::write(root.join("lisette.toml"), "").unwrap();
 
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
 
     let main_content = "import \"utils\"\n\nfn main() { utils.helper() }";
-    std::fs::write(src.join("main.lis"), main_content).unwrap();
+    fs::write(src.join("main.lis"), main_content).unwrap();
 
     let utils_dir = src.join("utils");
-    std::fs::create_dir_all(&utils_dir).unwrap();
-    std::fs::write(utils_dir.join("utils.lis"), "pub fn helper() -> int { 42 }").unwrap();
+    fs::create_dir_all(&utils_dir).unwrap();
+    fs::write(utils_dir.join("utils.lis"), "pub fn helper() -> int { 42 }").unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -6244,10 +6248,10 @@ fn main() {
 fn stress_cross_package_hover_on_imported_function() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(root.join("lisette.toml"), "").unwrap();
+    fs::write(root.join("lisette.toml"), "").unwrap();
 
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
 
     let (main_content, positions) = cursors(
         "\
@@ -6258,11 +6262,11 @@ fn main() {
   x
 }",
     );
-    std::fs::write(src.join("main.lis"), &main_content).unwrap();
+    fs::write(src.join("main.lis"), &main_content).unwrap();
 
     let math_dir = src.join("math");
-    std::fs::create_dir_all(&math_dir).unwrap();
-    std::fs::write(
+    fs::create_dir_all(&math_dir).unwrap();
+    fs::write(
         math_dir.join("math.lis"),
         "pub fn double(n: int) -> int { n * 2 }",
     )
@@ -6296,14 +6300,14 @@ fn main() {
 fn stress_cross_package_completion_on_struct_methods() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(root.join("lisette.toml"), "").unwrap();
+    fs::write(root.join("lisette.toml"), "").unwrap();
 
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
 
     let lib_dir = src.join("shapes");
-    std::fs::create_dir_all(&lib_dir).unwrap();
-    std::fs::write(
+    fs::create_dir_all(&lib_dir).unwrap();
+    fs::write(
         lib_dir.join("shapes.lis"),
         "\
 pub struct Circle { pub radius: float64 }
@@ -6322,7 +6326,7 @@ fn main() {
   ~c.~area~()
 }",
     );
-    std::fs::write(src.join("main.lis"), &main_content).unwrap();
+    fs::write(src.join("main.lis"), &main_content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -6350,14 +6354,14 @@ fn main() {
 fn stress_cross_package_enum_variant_completion() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(root.join("lisette.toml"), "").unwrap();
+    fs::write(root.join("lisette.toml"), "").unwrap();
 
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
 
     let types_dir = src.join("types");
-    std::fs::create_dir_all(&types_dir).unwrap();
-    std::fs::write(
+    fs::create_dir_all(&types_dir).unwrap();
+    fs::write(
         types_dir.join("types.lis"),
         "\
 pub enum Color {
@@ -6375,7 +6379,7 @@ fn main() {
   let c = types.Color.Red
   c
 }";
-    std::fs::write(src.join("main.lis"), main_content).unwrap();
+    fs::write(src.join("main.lis"), main_content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -6398,14 +6402,14 @@ fn main() {
 fn stress_cross_package_rename_local_binding() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(root.join("lisette.toml"), "").unwrap();
+    fs::write(root.join("lisette.toml"), "").unwrap();
 
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
 
     let util_dir = src.join("util");
-    std::fs::create_dir_all(&util_dir).unwrap();
-    std::fs::write(
+    fs::create_dir_all(&util_dir).unwrap();
+    fs::write(
         util_dir.join("util.lis"),
         "pub fn greet() -> string { \"hi\" }",
     )
@@ -6420,7 +6424,7 @@ fn main() {
   msg
 }",
     );
-    std::fs::write(src.join("main.lis"), &main_content).unwrap();
+    fs::write(src.join("main.lis"), &main_content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -7121,14 +7125,14 @@ fn main() {
 fn stress_cross_package_import_alias() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(root.join("lisette.toml"), "").unwrap();
+    fs::write(root.join("lisette.toml"), "").unwrap();
 
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
 
     let helpers_dir = src.join("helpers");
-    std::fs::create_dir_all(&helpers_dir).unwrap();
-    std::fs::write(
+    fs::create_dir_all(&helpers_dir).unwrap();
+    fs::write(
         helpers_dir.join("helpers.lis"),
         "pub fn compute() -> int { 42 }",
     )
@@ -7142,7 +7146,7 @@ fn main() {
   h.~c~ompute()
 }",
     );
-    std::fs::write(src.join("main.lis"), &main_content).unwrap();
+    fs::write(src.join("main.lis"), &main_content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -7645,14 +7649,14 @@ fn main() {
 fn stress_cross_package_enum_variant_goto_def() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(root.join("lisette.toml"), "").unwrap();
+    fs::write(root.join("lisette.toml"), "").unwrap();
 
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
 
     let types_dir = src.join("types");
-    std::fs::create_dir_all(&types_dir).unwrap();
-    std::fs::write(
+    fs::create_dir_all(&types_dir).unwrap();
+    fs::write(
         types_dir.join("types.lis"),
         "\
 pub enum Color {
@@ -7679,7 +7683,7 @@ fn main() {
   types.is~_warm(c~)
 }",
     );
-    std::fs::write(src.join("main.lis"), &main_content).unwrap();
+    fs::write(src.join("main.lis"), &main_content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -7707,14 +7711,14 @@ fn main() {
 fn goto_definition_const_pattern_resolves_exact_package() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(root.join("lisette.toml"), "").unwrap();
+    fs::write(root.join("lisette.toml"), "").unwrap();
 
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
 
     let a_dir = src.join("week_a");
-    std::fs::create_dir_all(&a_dir).unwrap();
-    std::fs::write(
+    fs::create_dir_all(&a_dir).unwrap();
+    fs::write(
         a_dir.join("week_a.lis"),
         "\
 pub struct Weekday(int)
@@ -7723,8 +7727,8 @@ pub const Friday: Weekday = 5",
     .unwrap();
 
     let b_dir = src.join("week_b");
-    std::fs::create_dir_all(&b_dir).unwrap();
-    std::fs::write(
+    fs::create_dir_all(&b_dir).unwrap();
+    fs::write(
         b_dir.join("week_b.lis"),
         "\
 pub struct Workday(int)
@@ -7742,7 +7746,7 @@ fn classify(d: b.Workday) -> int {
     _ => 0,
   }
 }";
-    std::fs::write(src.join("main.lis"), main_content).unwrap();
+    fs::write(src.join("main.lis"), main_content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -7769,10 +7773,10 @@ fn classify(d: b.Workday) -> int {
 fn goto_definition_bare_const_pattern_resolves_local_constant() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(root.join("lisette.toml"), "").unwrap();
+    fs::write(root.join("lisette.toml"), "").unwrap();
 
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
 
     let main_content = "\
 const MAX_SIZE = 1024
@@ -7783,7 +7787,7 @@ fn classify(n: int) -> int {
     _ => 0,
   }
 }";
-    std::fs::write(src.join("main.lis"), main_content).unwrap();
+    fs::write(src.join("main.lis"), main_content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -7841,14 +7845,14 @@ fn main() {
 fn stress_handlers_on_import_statement() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(root.join("lisette.toml"), "").unwrap();
+    fs::write(root.join("lisette.toml"), "").unwrap();
 
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
 
     let lib_dir = src.join("mylib");
-    std::fs::create_dir_all(&lib_dir).unwrap();
-    std::fs::write(
+    fs::create_dir_all(&lib_dir).unwrap();
+    fs::write(
         lib_dir.join("mylib.lis"),
         "pub fn greet() -> string { \"hello\" }",
     )
@@ -7860,7 +7864,7 @@ import \"mylib\"
 fn main() {
   mylib.greet()
 }";
-    std::fs::write(src.join("main.lis"), main_content).unwrap();
+    fs::write(src.join("main.lis"), main_content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -7957,14 +7961,14 @@ fn main() {
 fn stress_cross_package_type_error_diagnostics() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(root.join("lisette.toml"), "").unwrap();
+    fs::write(root.join("lisette.toml"), "").unwrap();
 
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
 
     let lib_dir = src.join("mymod");
-    std::fs::create_dir_all(&lib_dir).unwrap();
-    std::fs::write(lib_dir.join("mymod.lis"), "pub fn get_num() -> int { 42 }").unwrap();
+    fs::create_dir_all(&lib_dir).unwrap();
+    fs::write(lib_dir.join("mymod.lis"), "pub fn get_num() -> int { 42 }").unwrap();
 
     let main_content = "\
 import \"mymod\"
@@ -7973,7 +7977,7 @@ fn main() {
   let x: string = mymod.get_num()
   x
 }";
-    std::fs::write(src.join("main.lis"), main_content).unwrap();
+    fs::write(src.join("main.lis"), main_content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -8002,26 +8006,26 @@ fn main() {
 fn stress_cross_package_sibling_files() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(root.join("lisette.toml"), "").unwrap();
+    fs::write(root.join("lisette.toml"), "").unwrap();
 
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
 
     let mod_dir = src.join("shapes");
-    std::fs::create_dir_all(&mod_dir).unwrap();
+    fs::create_dir_all(&mod_dir).unwrap();
 
-    std::fs::write(
+    fs::write(
         mod_dir.join("circle.lis"),
         "pub struct Circle { pub radius: float64 }",
     )
     .unwrap();
-    std::fs::write(
+    fs::write(
         mod_dir.join("rect.lis"),
         "pub struct Rect { pub width: float64, pub height: float64 }",
     )
     .unwrap();
     // Package entry file
-    std::fs::write(mod_dir.join("shapes.lis"), "").unwrap();
+    fs::write(mod_dir.join("shapes.lis"), "").unwrap();
 
     let (main_content, positions) = cursors(
         "\
@@ -8033,7 +8037,7 @@ fn main() {
   c.~radius + r.w~idth
 }",
     );
-    std::fs::write(src.join("main.lis"), &main_content).unwrap();
+    fs::write(src.join("main.lis"), &main_content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -8176,15 +8180,15 @@ fn main() {
 fn stress_cross_package_multiple_imports() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(root.join("lisette.toml"), "").unwrap();
+    fs::write(root.join("lisette.toml"), "").unwrap();
 
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
 
     for name in ["a", "b", "c"] {
         let d = src.join(name);
-        std::fs::create_dir_all(&d).unwrap();
-        std::fs::write(
+        fs::create_dir_all(&d).unwrap();
+        fs::write(
             d.join(format!("{name}.lis")),
             format!("pub fn f{name}() -> int {{ 1 }}"),
         )
@@ -8199,7 +8203,7 @@ import \"c\"
 fn main() {
   a.fa() + b.fb() + c.fc()
 }";
-    std::fs::write(src.join("main.lis"), main_content).unwrap();
+    fs::write(src.join("main.lis"), main_content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -8436,14 +8440,14 @@ fn main() {
 fn stress_cross_package_rename_function() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(root.join("lisette.toml"), "").unwrap();
+    fs::write(root.join("lisette.toml"), "").unwrap();
 
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
 
     let lib_dir = src.join("lib");
-    std::fs::create_dir_all(&lib_dir).unwrap();
-    std::fs::write(lib_dir.join("lib.lis"), "pub fn compute() -> int { 42 }").unwrap();
+    fs::create_dir_all(&lib_dir).unwrap();
+    fs::write(lib_dir.join("lib.lis"), "pub fn compute() -> int { 42 }").unwrap();
 
     let (main_content, line, character) = cursor(
         "\
@@ -8455,7 +8459,7 @@ fn main() {
   x + y
 }",
     );
-    std::fs::write(src.join("main.lis"), &main_content).unwrap();
+    fs::write(src.join("main.lis"), &main_content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -9232,7 +9236,7 @@ fn main() {
         assert_eq!(text_edit.new_text, "Vec2");
     }
 
-    let mut seen = std::collections::HashSet::new();
+    let mut seen = HashSet::new();
     for text_edit in edits {
         let key = (text_edit.range.start.line, text_edit.range.start.character);
         assert!(
@@ -9274,7 +9278,7 @@ fn main() {
         locations.len()
     );
 
-    let mut seen = std::collections::HashSet::new();
+    let mut seen = HashSet::new();
     for loc in &locations {
         let key = (loc.range.start.line, loc.range.start.character);
         assert!(
@@ -9396,7 +9400,7 @@ fn opening_prelude_typedef_publishes_no_diagnostics() {
     client.initialize();
 
     let path = deps::prelude_typedef_path().expect("prelude typedef path");
-    let content = std::fs::read_to_string(&path).expect("prelude cache file should exist");
+    let content = fs::read_to_string(&path).expect("prelude cache file should exist");
     let uri = Url::from_file_path(&path).expect("path to uri").to_string();
 
     client.open(&uri, &content);
@@ -9522,18 +9526,18 @@ fn references_cross_package_finds_call_sites() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
 
-    std::fs::write(root.join("lisette.toml"), "").unwrap();
+    fs::write(root.join("lisette.toml"), "").unwrap();
 
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
 
     let main_content = "import \"utils\"\n\nfn main() {\n  utils.helper()\n  utils.helper()\n}";
-    std::fs::write(src.join("main.lis"), main_content).unwrap();
+    fs::write(src.join("main.lis"), main_content).unwrap();
 
     let utils_dir = src.join("utils");
-    std::fs::create_dir_all(&utils_dir).unwrap();
+    fs::create_dir_all(&utils_dir).unwrap();
     let utils_content = "pub fn helper() -> int { 42 }";
-    std::fs::write(utils_dir.join("utils.lis"), utils_content).unwrap();
+    fs::write(utils_dir.join("utils.lis"), utils_content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -9579,21 +9583,21 @@ fn goto_definition_struct_field_cross_package() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
 
-    std::fs::write(root.join("lisette.toml"), "").unwrap();
+    fs::write(root.join("lisette.toml"), "").unwrap();
 
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
 
     let models_dir = src.join("models");
-    std::fs::create_dir_all(&models_dir).unwrap();
+    fs::create_dir_all(&models_dir).unwrap();
 
     let models_content = "pub struct Task {\n  pub id: int,\n  pub title: string,\n}";
-    std::fs::write(models_dir.join("models.lis"), models_content).unwrap();
+    fs::write(models_dir.join("models.lis"), models_content).unwrap();
 
     let (main_content, line, character) = cursor(
         "import \"models\"\n\nfn main() {\n  let t = models.Task { id: 1, title: \"hi\" }\n  let x = t.~id\n}",
     );
-    std::fs::write(src.join("main.lis"), &main_content).unwrap();
+    fs::write(src.join("main.lis"), &main_content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -9961,19 +9965,19 @@ fn completion_on_cross_package_enum_dot_access() {
     let root = tempfile::tempdir().unwrap();
     let root_path = root.path();
 
-    std::fs::write(
+    fs::write(
         root_path.join("lisette.toml"),
         "[project]\nname = \"test\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
-    std::fs::create_dir_all(root_path.join("src/colors")).unwrap();
-    std::fs::write(
+    fs::create_dir_all(root_path.join("src/colors")).unwrap();
+    fs::write(
         root_path.join("src/colors/colors.lis"),
         "pub enum Color { Red, Green, Blue }\n",
     )
     .unwrap();
-    std::fs::create_dir_all(root_path.join("src/main")).unwrap();
-    std::fs::write(
+    fs::create_dir_all(root_path.join("src/main")).unwrap();
+    fs::write(
         root_path.join("src/main/main.lis"),
         "import \"colors\"\nfn main() {\n  let c = colors.Color.Red\n}\n",
     )
@@ -9989,11 +9993,11 @@ fn completion_on_cross_package_enum_dot_access() {
 
     client.open(
         &colors_uri,
-        &std::fs::read_to_string(root_path.join("src/colors/colors.lis")).unwrap(),
+        &fs::read_to_string(root_path.join("src/colors/colors.lis")).unwrap(),
     );
     client.open(
         &main_uri,
-        &std::fs::read_to_string(root_path.join("src/main/main.lis")).unwrap(),
+        &fs::read_to_string(root_path.join("src/main/main.lis")).unwrap(),
     );
 
     let response = client.completion(&main_uri, 2, 23);
@@ -10023,19 +10027,19 @@ fn completion_dot_on_alias_to_cross_package_enum_shows_variants() {
     let root = tempfile::tempdir().unwrap();
     let root_path = root.path();
 
-    std::fs::write(
+    fs::write(
         root_path.join("lisette.toml"),
         "[project]\nname = \"test\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
-    std::fs::create_dir_all(root_path.join("src/utils")).unwrap();
-    std::fs::write(
+    fs::create_dir_all(root_path.join("src/utils")).unwrap();
+    fs::write(
         root_path.join("src/utils/utils.lis"),
         "pub enum Kind { Int, String }\n",
     )
     .unwrap();
-    std::fs::create_dir_all(root_path.join("src/main")).unwrap();
-    std::fs::write(
+    fs::create_dir_all(root_path.join("src/main")).unwrap();
+    fs::write(
         root_path.join("src/main/main.lis"),
         "import \"utils\"\ntype K = utils.Kind\nfn main() {\n  let o = K.\n}\n",
     )
@@ -10048,11 +10052,11 @@ fn completion_dot_on_alias_to_cross_package_enum_shows_variants() {
 
     client.open(
         &utils_uri,
-        &std::fs::read_to_string(root_path.join("src/utils/utils.lis")).unwrap(),
+        &fs::read_to_string(root_path.join("src/utils/utils.lis")).unwrap(),
     );
     client.open(
         &main_uri,
-        &std::fs::read_to_string(root_path.join("src/main/main.lis")).unwrap(),
+        &fs::read_to_string(root_path.join("src/main/main.lis")).unwrap(),
     );
 
     let response = client.completion(&main_uri, 3, 12);
@@ -10080,13 +10084,13 @@ fn completion_dot_on_alias_to_cross_package_enum_hides_private_static_methods() 
     let root = tempfile::tempdir().unwrap();
     let root_path = root.path();
 
-    std::fs::write(
+    fs::write(
         root_path.join("lisette.toml"),
         "[project]\nname = \"test\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
-    std::fs::create_dir_all(root_path.join("src/utils")).unwrap();
-    std::fs::write(
+    fs::create_dir_all(root_path.join("src/utils")).unwrap();
+    fs::write(
         root_path.join("src/utils/utils.lis"),
         "pub enum Kind { Int, String }\n\
 impl Kind {\n\
@@ -10095,8 +10099,8 @@ impl Kind {\n\
 }\n",
     )
     .unwrap();
-    std::fs::create_dir_all(root_path.join("src/main")).unwrap();
-    std::fs::write(
+    fs::create_dir_all(root_path.join("src/main")).unwrap();
+    fs::write(
         root_path.join("src/main/main.lis"),
         "import \"utils\"\ntype K = utils.Kind\nfn main() {\n  let _ = K.\n}\n",
     )
@@ -10109,11 +10113,11 @@ impl Kind {\n\
 
     client.open(
         &utils_uri,
-        &std::fs::read_to_string(root_path.join("src/utils/utils.lis")).unwrap(),
+        &fs::read_to_string(root_path.join("src/utils/utils.lis")).unwrap(),
     );
     client.open(
         &main_uri,
-        &std::fs::read_to_string(root_path.join("src/main/main.lis")).unwrap(),
+        &fs::read_to_string(root_path.join("src/main/main.lis")).unwrap(),
     );
 
     let response = client.completion(&main_uri, 3, 12);
@@ -10816,18 +10820,18 @@ fn goto_definition_type_alias_rhs_with_shadowing_lhs_name() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
 
-    std::fs::write(root.join("lisette.toml"), "").unwrap();
+    fs::write(root.join("lisette.toml"), "").unwrap();
 
     let src = root.join("src");
     let server_dir = src.join("server");
     let response_dir = server_dir.join("response");
-    std::fs::create_dir_all(&response_dir).unwrap();
+    fs::create_dir_all(&response_dir).unwrap();
 
     let response_content = "pub enum Code { Ok, NotFound }\n";
-    std::fs::write(response_dir.join("response.lis"), response_content).unwrap();
+    fs::write(response_dir.join("response.lis"), response_content).unwrap();
 
     let routes_content = "import \"server/response\"\n\ntype Code = response.Code\n";
-    std::fs::write(server_dir.join("routes.lis"), routes_content).unwrap();
+    fs::write(server_dir.join("routes.lis"), routes_content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -10863,18 +10867,18 @@ fn goto_definition_type_alias_inside_generic_param() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
 
-    std::fs::write(root.join("lisette.toml"), "").unwrap();
+    fs::write(root.join("lisette.toml"), "").unwrap();
 
     let src = root.join("src");
     let server_dir = src.join("server");
     let response_dir = server_dir.join("response");
-    std::fs::create_dir_all(&response_dir).unwrap();
+    fs::create_dir_all(&response_dir).unwrap();
 
     let response_content = "pub enum Code { Ok, NotFound }\n";
-    std::fs::write(response_dir.join("response.lis"), response_content).unwrap();
+    fs::write(response_dir.join("response.lis"), response_content).unwrap();
 
     let routes_content = "import \"server/response\"\n\ntype Codes = Slice<response.Code>\n";
-    std::fs::write(server_dir.join("routes.lis"), routes_content).unwrap();
+    fs::write(server_dir.join("routes.lis"), routes_content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -10904,19 +10908,19 @@ fn goto_definition_type_alias_inside_function_annotation() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
 
-    std::fs::write(root.join("lisette.toml"), "").unwrap();
+    fs::write(root.join("lisette.toml"), "").unwrap();
 
     let src = root.join("src");
     let server_dir = src.join("server");
     let response_dir = server_dir.join("response");
-    std::fs::create_dir_all(&response_dir).unwrap();
+    fs::create_dir_all(&response_dir).unwrap();
 
     let response_content = "pub enum Code { Ok, NotFound }\n";
-    std::fs::write(response_dir.join("response.lis"), response_content).unwrap();
+    fs::write(response_dir.join("response.lis"), response_content).unwrap();
 
     let routes_content =
         "import \"server/response\"\n\ntype Handler = fn(response.Code) -> response.Code\n";
-    std::fs::write(server_dir.join("routes.lis"), routes_content).unwrap();
+    fs::write(server_dir.join("routes.lis"), routes_content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -10945,18 +10949,18 @@ fn goto_definition_type_alias_inside_tuple_annotation() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
 
-    std::fs::write(root.join("lisette.toml"), "").unwrap();
+    fs::write(root.join("lisette.toml"), "").unwrap();
 
     let src = root.join("src");
     let server_dir = src.join("server");
     let response_dir = server_dir.join("response");
-    std::fs::create_dir_all(&response_dir).unwrap();
+    fs::create_dir_all(&response_dir).unwrap();
 
     let response_content = "pub enum Code { Ok, NotFound }\n";
-    std::fs::write(response_dir.join("response.lis"), response_content).unwrap();
+    fs::write(response_dir.join("response.lis"), response_content).unwrap();
 
     let routes_content = "import \"server/response\"\n\ntype Pair = (response.Code, int)\n";
-    std::fs::write(server_dir.join("routes.lis"), routes_content).unwrap();
+    fs::write(server_dir.join("routes.lis"), routes_content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -11052,24 +11056,24 @@ fn goto_definition_struct_pattern_field() {
 fn goto_definition_struct_name_in_aliased_struct_call() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(
+    fs::write(
         root.join("lisette.toml"),
         "[project]\nname = \"test\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
 
     let shapes_dir = src.join("shapes");
-    std::fs::create_dir_all(&shapes_dir).unwrap();
-    std::fs::write(
+    fs::create_dir_all(&shapes_dir).unwrap();
+    fs::write(
         shapes_dir.join("shapes.lis"),
         "pub struct Rect {\n  pub width: int,\n  pub height: int,\n}\n",
     )
     .unwrap();
 
     let main_content = "import s \"shapes\"\n\nfn main() {\n  let r = s.Rect { width: 10, height: 20 }\n  r.width\n}\n";
-    std::fs::write(src.join("main.lis"), main_content).unwrap();
+    fs::write(src.join("main.lis"), main_content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -11092,24 +11096,24 @@ fn goto_definition_struct_name_in_aliased_struct_call() {
 fn rename_struct_from_aliased_struct_call() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(
+    fs::write(
         root.join("lisette.toml"),
         "[project]\nname = \"test\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
 
     let shapes_dir = src.join("shapes");
-    std::fs::create_dir_all(&shapes_dir).unwrap();
-    std::fs::write(
+    fs::create_dir_all(&shapes_dir).unwrap();
+    fs::write(
         shapes_dir.join("shapes.lis"),
         "pub struct Rect {\n  pub width: int,\n  pub height: int,\n}\n",
     )
     .unwrap();
 
     let main_content = "import s \"shapes\"\n\nfn main() {\n  let r = s.Rect { width: 10, height: 20 }\n  r.width\n}\n";
-    std::fs::write(src.join("main.lis"), main_content).unwrap();
+    fs::write(src.join("main.lis"), main_content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -11189,13 +11193,13 @@ fn diagnostics_invalid_manifest_surfaces_error() {
     let root = dir.path();
 
     // Write an invalid lisette.toml (missing required [project] section)
-    std::fs::write(root.join("lisette.toml"), "[invalid]\nfoo = 1\n").unwrap();
+    fs::write(root.join("lisette.toml"), "[invalid]\nfoo = 1\n").unwrap();
 
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
 
     let content = "fn main() { 1 }";
-    std::fs::write(src.join("main.lis"), content).unwrap();
+    fs::write(src.join("main.lis"), content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -11228,17 +11232,17 @@ fn diagnostics_toolchain_mismatch_surfaces_error() {
     let root = dir.path();
 
     // Pin a lis version that does not match the running binary
-    std::fs::write(
+    fs::write(
         root.join("lisette.toml"),
         "[project]\nname = \"test\"\nversion = \"0.1.0\"\n\n[toolchain]\nlis = \"99.99.99\"\n",
     )
     .unwrap();
 
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
 
     let content = "fn main() { 1 }";
-    std::fs::write(src.join("main.lis"), content).unwrap();
+    fs::write(src.join("main.lis"), content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -11803,13 +11807,13 @@ fn inlay_hint_lambda_return_over_index_body() {
 #[test]
 fn opening_prelude_source_reports_no_foreign_type_errors() {
     let dir = tempfile::tempdir().unwrap();
-    let prelude_src = std::fs::read_to_string(concat!(
+    let prelude_src = fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../stdlib/prelude.d.lis"
     ))
     .unwrap();
     let path = dir.path().join("prelude.d.lis");
-    std::fs::write(&path, &prelude_src).unwrap();
+    fs::write(&path, &prelude_src).unwrap();
     let uri = Url::from_file_path(&path).unwrap().to_string();
 
     let mut client = TestClient::new();
@@ -11833,18 +11837,18 @@ fn opening_prelude_source_reports_no_foreign_type_errors() {
 fn editing_a_file_refreshes_diagnostics_in_dependent_open_files() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(
+    fs::write(
         root.join("lisette.toml"),
         "[project]\nname = \"test\"\nversion = \"0.0.1\"\n",
     )
     .unwrap();
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
 
     let foo_content = "pub struct Foo {}\n\nimpl Foo {\n  pub fn foo(self) {}\n}\n";
     let main_content = "fn main() {\n  let foo = Foo {}\n  foo.foo()\n}\n";
-    std::fs::write(src.join("foo.lis"), foo_content).unwrap();
-    std::fs::write(src.join("main.lis"), main_content).unwrap();
+    fs::write(src.join("foo.lis"), foo_content).unwrap();
+    fs::write(src.join("main.lis"), main_content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -11890,18 +11894,18 @@ fn editing_a_file_refreshes_diagnostics_in_dependent_open_files() {
 fn closing_an_unsaved_file_refreshes_dependent_open_files() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(
+    fs::write(
         root.join("lisette.toml"),
         "[project]\nname = \"test\"\nversion = \"0.0.1\"\n",
     )
     .unwrap();
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
 
     let foo_content = "pub struct Foo {}\n\nimpl Foo {\n  pub fn foo(self) {}\n}\n";
     let main_content = "fn main() {\n  let foo = Foo {}\n  foo.foo()\n}\n";
-    std::fs::write(src.join("foo.lis"), foo_content).unwrap();
-    std::fs::write(src.join("main.lis"), main_content).unwrap();
+    fs::write(src.join("foo.lis"), foo_content).unwrap();
+    fs::write(src.join("main.lis"), main_content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -11965,15 +11969,15 @@ fn exit_without_shutdown_signals_error_exit() {
 fn library_root_file_analyzes_cleanly() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(
+    fs::write(
         root.join("lisette.toml"),
         "[project]\nname = \"github.com/acme/geo\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
     let content = "pub fn origin() -> int { 0 }";
-    std::fs::write(src.join("geo.lis"), content).unwrap();
+    fs::write(src.join("geo.lis"), content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -12001,21 +12005,21 @@ fn library_root_file_analyzes_cleanly() {
 fn library_cross_package_goto_definition_works() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(
+    fs::write(
         root.join("lisette.toml"),
         "[project]\nname = \"github.com/acme/lib\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
     let src = root.join("src");
-    std::fs::create_dir_all(src.join("math")).unwrap();
-    std::fs::create_dir_all(src.join("calc")).unwrap();
-    std::fs::write(
+    fs::create_dir_all(src.join("math")).unwrap();
+    fs::create_dir_all(src.join("calc")).unwrap();
+    fs::write(
         src.join("math/math.lis"),
         "pub fn double(n: int) -> int { n * 2 }",
     )
     .unwrap();
     let calc = "import \"math\"\n\npub fn quad(n: int) -> int {\n  math.double(n) * 2\n}";
-    std::fs::write(src.join("calc/calc.lis"), calc).unwrap();
+    fs::write(src.join("calc/calc.lis"), calc).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -12043,15 +12047,15 @@ fn library_cross_package_goto_definition_works() {
 fn library_main_function_is_not_flagged() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(
+    fs::write(
         root.join("lisette.toml"),
         "[project]\nname = \"github.com/acme/lib\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
     let content = "pub fn main(x: int) -> int { x }";
-    std::fs::write(src.join("lib.lis"), content).unwrap();
+    fs::write(src.join("lib.lis"), content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -12081,15 +12085,15 @@ fn library_main_function_is_not_flagged() {
 fn creating_main_lis_flips_a_library_to_a_binary() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(
+    fs::write(
         root.join("lisette.toml"),
         "[project]\nname = \"github.com/acme/flip\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
     let content = "pub fn main(x: int) -> int { x }";
-    std::fs::write(src.join("flip.lis"), content).unwrap();
+    fs::write(src.join("flip.lis"), content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -12111,7 +12115,7 @@ fn creating_main_lis_flips_a_library_to_a_binary() {
         "library `main` should not be flagged: {diags:?}"
     );
 
-    std::fs::write(src.join("main.lis"), "fn main() {}").unwrap();
+    fs::write(src.join("main.lis"), "fn main() {}").unwrap();
     client.change(&uri, content, 2);
 
     let diags = client.await_diagnostics();
@@ -12129,29 +12133,29 @@ fn external_test_file_is_analyzed_with_visibility_rules() {
     let root = tempfile::tempdir().unwrap();
     let root_path = root.path();
 
-    std::fs::write(
+    fs::write(
         root_path.join("lisette.toml"),
         "[project]\nname = \"test\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
-    std::fs::create_dir_all(root_path.join("src/geometry")).unwrap();
-    std::fs::write(
+    fs::create_dir_all(root_path.join("src/geometry")).unwrap();
+    fs::write(
         root_path.join("src/main.lis"),
         "import \"geometry\"\nfn main() {\n  geometry.area()\n}\n",
     )
     .unwrap();
-    std::fs::write(
+    fs::write(
         root_path.join("src/geometry/geometry.lis"),
         "pub fn area() -> int {\n  hidden()\n}\n\nfn hidden() -> int {\n  4\n}\n",
     )
     .unwrap();
-    std::fs::create_dir_all(root_path.join("tests")).unwrap();
+    fs::create_dir_all(root_path.join("tests")).unwrap();
     let ok_source =
         "import \"geometry\"\n\n#[test]\nfn uses_api() {\n  assert geometry.area() == 4\n}\n";
-    std::fs::write(root_path.join("tests/ok.test.lis"), ok_source).unwrap();
+    fs::write(root_path.join("tests/ok.test.lis"), ok_source).unwrap();
     let peek_source =
         "import \"geometry\"\n\n#[test]\nfn peeks() {\n  assert geometry.hidden() == 4\n}\n";
-    std::fs::write(root_path.join("tests/peek.test.lis"), peek_source).unwrap();
+    fs::write(root_path.join("tests/peek.test.lis"), peek_source).unwrap();
 
     client.initialize_with_root(root_path);
 
@@ -12178,21 +12182,21 @@ fn external_test_file_is_analyzed_with_visibility_rules() {
     client.shutdown();
 }
 
-fn geo_library_project() -> (tempfile::TempDir, std::path::PathBuf) {
+fn geo_library_project() -> (tempfile::TempDir, PathBuf) {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().to_path_buf();
-    std::fs::write(
+    fs::write(
         root.join("lisette.toml"),
         "[project]\nname = \"example.com/you/geo\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
-    std::fs::create_dir_all(root.join("src")).unwrap();
-    std::fs::write(
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(
         root.join("src/geo.lis"),
         "pub struct Point { pub x: int, pub y: int }\npub fn distance(a: int, b: int) -> int { if a > b { a - b } else { b - a } }\n",
     )
     .unwrap();
-    std::fs::create_dir_all(root.join("tests")).unwrap();
+    fs::create_dir_all(root.join("tests")).unwrap();
     (dir, root)
 }
 
@@ -12201,7 +12205,7 @@ fn external_test_root_import_resolves() {
     let (_dir, root) = geo_library_project();
     let content = "import \"root\"\n\n#[test]\nfn value() {\n  let p = root.Point { x: 1, y: 2 }\n  assert p.x == 1\n  assert root.distance(2, 9) == 7\n}\n";
     let test_path = root.join("tests/api.test.lis");
-    std::fs::write(&test_path, content).unwrap();
+    fs::write(&test_path, content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(&root);
@@ -12232,17 +12236,17 @@ fn external_test_root_import_resolves() {
 fn external_test_root_import_in_binary_reports_error() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(root.join("lisette.toml"), "").unwrap();
+    fs::write(root.join("lisette.toml"), "").unwrap();
 
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
-    std::fs::write(src.join("main.lis"), "fn main() {}\n").unwrap();
+    fs::create_dir_all(&src).unwrap();
+    fs::write(src.join("main.lis"), "fn main() {}\n").unwrap();
 
     let tests = root.join("tests");
-    std::fs::create_dir_all(&tests).unwrap();
+    fs::create_dir_all(&tests).unwrap();
     let content = "import \"root\"\n\n#[test]\nfn value() {\n  assert true\n}\n";
     let test_path = tests.join("api.test.lis");
-    std::fs::write(&test_path, content).unwrap();
+    fs::write(&test_path, content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -12266,7 +12270,7 @@ fn external_test_goto_definition_into_root_resolves_to_src() {
     let (_dir, root) = geo_library_project();
     let content = "import \"root\"\n\n#[test]\nfn value() {\n  let p = root.Point { x: 1, y: 2 }\n  assert p.x == 1\n  assert root.distance(2, 9) == 7\n}\n";
     let test_path = root.join("tests/api.test.lis");
-    std::fs::write(&test_path, content).unwrap();
+    fs::write(&test_path, content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(&root);
@@ -12298,7 +12302,7 @@ fn external_test_hover_survives_reanalysis() {
     let (_dir, root) = geo_library_project();
     let content = "import \"root\"\n\n#[test]\nfn value() {\n  let total = root.distance(2, 9)\n  assert total == 7\n}\n";
     let test_path = root.join("tests/api.test.lis");
-    std::fs::write(&test_path, content).unwrap();
+    fs::write(&test_path, content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(&root);
@@ -12324,7 +12328,7 @@ fn external_test_non_test_file_is_flagged() {
     let (_dir, root) = geo_library_project();
     let content = "pub fn helper() -> int { 1 }\n";
     let helper_path = root.join("tests/helper.lis");
-    std::fs::write(&helper_path, content).unwrap();
+    fs::write(&helper_path, content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(&root);
@@ -12346,7 +12350,7 @@ fn external_test_misnamed_suffix_is_flagged() {
     let (_dir, root) = geo_library_project();
     let content = "#[test]\nfn t() {}\n";
     let misnamed = root.join("tests/api_test.lis");
-    std::fs::write(&misnamed, content).unwrap();
+    fs::write(&misnamed, content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(&root);
@@ -12369,21 +12373,21 @@ fn external_test_misnamed_suffix_is_flagged() {
 fn external_test_root_import_in_subpackage_only_library_is_rejected() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(
+    fs::write(
         root.join("lisette.toml"),
         "[project]\nname = \"example.com/you/geo\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
 
     let shapes = root.join("src/shapes");
-    std::fs::create_dir_all(&shapes).unwrap();
-    std::fs::write(shapes.join("shapes.lis"), "pub fn area() -> int { 4 }\n").unwrap();
+    fs::create_dir_all(&shapes).unwrap();
+    fs::write(shapes.join("shapes.lis"), "pub fn area() -> int { 4 }\n").unwrap();
 
     let tests = root.join("tests");
-    std::fs::create_dir_all(&tests).unwrap();
+    fs::create_dir_all(&tests).unwrap();
     let content = "import \"root\"\n\n#[test]\nfn t() {\n  assert true\n}\n";
     let test_path = tests.join("api.test.lis");
-    std::fs::write(&test_path, content).unwrap();
+    fs::write(&test_path, content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -12405,7 +12409,7 @@ fn external_test_root_namespace_hover_shows_root() {
     let (_dir, root) = geo_library_project();
     let content = "import \"root\"\n\n#[test]\nfn t() {\n  assert root.distance(2, 9) == 11\n}\n";
     let test_path = root.join("tests/api.test.lis");
-    std::fs::write(&test_path, content).unwrap();
+    fs::write(&test_path, content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(&root);
@@ -12435,8 +12439,8 @@ fn external_test_invalid_sibling_is_rejected() {
     let (_dir, root) = geo_library_project();
     let content = "import \"root\"\n\n#[test]\nfn t() {\n  assert true\n}\n";
     let test_path = root.join("tests/api.test.lis");
-    std::fs::write(&test_path, content).unwrap();
-    std::fs::write(
+    fs::write(&test_path, content).unwrap();
+    fs::write(
         root.join("tests/helper.lis"),
         "pub fn shared() -> int { 2 }\n",
     )
@@ -12461,17 +12465,17 @@ fn external_test_invalid_sibling_is_rejected() {
 fn src_tests_file_is_not_misclassified_as_external() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(
+    fs::write(
         root.join("lisette.toml"),
         "[project]\nname = \"example.com/you/geo\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
 
     let src_tests = root.join("src/tests");
-    std::fs::create_dir_all(&src_tests).unwrap();
+    fs::create_dir_all(&src_tests).unwrap();
     let content = "fn f() -> int {\n  missing_symbol()\n}\n";
     let file_path = src_tests.join("helper.lis");
-    std::fs::write(&file_path, content).unwrap();
+    fs::write(&file_path, content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -12496,22 +12500,22 @@ fn src_tests_file_is_not_misclassified_as_external() {
 fn src_tests_siblings_load_from_src_directory() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(
+    fs::write(
         root.join("lisette.toml"),
         "[project]\nname = \"example.com/you/geo\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
 
     let src_tests = root.join("src/tests");
-    std::fs::create_dir_all(&src_tests).unwrap();
-    std::fs::write(
+    fs::create_dir_all(&src_tests).unwrap();
+    fs::write(
         src_tests.join("sibling.lis"),
         "pub fn from_sibling() -> int { 7 }\n",
     )
     .unwrap();
     let content = "fn use_it() -> int {\n  from_sibling()\n}\n";
     let file_path = src_tests.join("caller.lis");
-    std::fs::write(&file_path, content).unwrap();
+    fs::write(&file_path, content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -12532,27 +12536,27 @@ fn src_tests_siblings_load_from_src_directory() {
 fn src_tests_overlay_does_not_collide_with_external_tests() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    std::fs::write(
+    fs::write(
         root.join("lisette.toml"),
         "[project]\nname = \"example.com/you/geo\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
 
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
-    std::fs::write(src.join("geo.lis"), "pub fn distance() -> int { 1 }\n").unwrap();
+    fs::create_dir_all(&src).unwrap();
+    fs::write(src.join("geo.lis"), "pub fn distance() -> int { 1 }\n").unwrap();
 
     let src_tests = root.join("src/tests");
-    std::fs::create_dir_all(&src_tests).unwrap();
+    fs::create_dir_all(&src_tests).unwrap();
     let src_helper = src_tests.join("shared.test.lis");
     let src_helper_content = "fn from_src_tests() -> int { 1 }\n";
-    std::fs::write(&src_helper, src_helper_content).unwrap();
+    fs::write(&src_helper, src_helper_content).unwrap();
 
     let tests = root.join("tests");
-    std::fs::create_dir_all(&tests).unwrap();
+    fs::create_dir_all(&tests).unwrap();
     let api = tests.join("api.test.lis");
     let api_content = "import \"root\"\n\n#[test]\nfn t() {\n  assert from_src_tests() == 1\n}\n";
-    std::fs::write(&api, api_content).unwrap();
+    fs::write(&api, api_content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -12578,7 +12582,7 @@ fn external_test_inlay_hint_does_not_leak_entry() {
     let (_dir, root) = geo_library_project();
     let content = "import \"root\"\n\n#[test]\nfn t() {\n  let x = root\n  assert true\n}\n";
     let test_path = root.join("tests/api.test.lis");
-    std::fs::write(&test_path, content).unwrap();
+    fs::write(&test_path, content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(&root);
@@ -12604,19 +12608,19 @@ fn a_file_opened_without_a_workspace_root_resolves_its_own_project() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("proj");
     let src = root.join("src");
-    std::fs::create_dir_all(src.join("util")).unwrap();
-    std::fs::write(
+    fs::create_dir_all(src.join("util")).unwrap();
+    fs::write(
         root.join("lisette.toml"),
         "[project]\nname = \"demo\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
-    std::fs::write(
+    fs::write(
         src.join("util/util.lis"),
         "pub fn greet() -> string {\n  \"hi\"\n}\n",
     )
     .unwrap();
     let content = "import \"util\"\n\nfn main() {\n  let _ = util.greet()\n}\n";
-    std::fs::write(src.join("main.lis"), content).unwrap();
+    fs::write(src.join("main.lis"), content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize();
@@ -12641,7 +12645,7 @@ fn a_file_with_no_project_above_it_is_told_how_to_make_one() {
     let dir = tempfile::tempdir().unwrap();
     let loose = dir.path().join("loose.lis");
     let content = "import \"nowhere\"\n\nfn main() {}\n";
-    std::fs::write(&loose, content).unwrap();
+    fs::write(&loose, content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize();
@@ -12667,15 +12671,15 @@ fn a_file_with_no_project_above_it_is_told_how_to_make_one() {
 fn a_dotted_project_directory_is_not_a_dotted_package() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("my.app");
-    std::fs::create_dir_all(root.join("src")).unwrap();
-    std::fs::write(
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(
         root.join("lisette.toml"),
         "[project]\nname = \"github.com/acme/myapp\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
     let content = "pub struct VConf { pub a: int }\n";
     let path = root.join("src/conf.lis");
-    std::fs::write(&path, content).unwrap();
+    fs::write(&path, content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(&root);
@@ -12698,9 +12702,9 @@ fn a_dotted_project_directory_is_not_a_dotted_package() {
 fn a_typedef_file_under_a_dotted_directory_is_exempt() {
     let (_dir, root) = geo_library_project();
     let content = "pub fn Ext() -> int\n";
-    std::fs::create_dir_all(root.join("src/v1.2")).unwrap();
+    fs::create_dir_all(root.join("src/v1.2")).unwrap();
     let path = root.join("src/v1.2/api.d.lis");
-    std::fs::write(&path, content).unwrap();
+    fs::write(&path, content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(&root);
@@ -12723,11 +12727,11 @@ fn a_typedef_file_under_a_dotted_directory_is_exempt() {
 fn a_typedef_beside_a_compiled_sibling_under_a_dotted_directory_is_rejected() {
     for sibling in ["s.lis", "api.test.lis"] {
         let (_dir, root) = geo_library_project();
-        std::fs::create_dir_all(root.join("src/v1.2")).unwrap();
+        fs::create_dir_all(root.join("src/v1.2")).unwrap();
         let content = "pub fn Ext() -> int\n";
         let path = root.join("src/v1.2/api.d.lis");
-        std::fs::write(&path, content).unwrap();
-        std::fs::write(
+        fs::write(&path, content).unwrap();
+        fs::write(
             root.join("src/v1.2").join(sibling),
             "pub struct S { pub a: int }\n",
         )
@@ -12764,9 +12768,9 @@ fn a_typedef_tree_under_a_dotted_directory_tracks_the_whole_subtree() {
         ("src/v1.2/sub/api.d.lis", "src/v1.2/sub/x.lis"),
     ] {
         let (_dir, root) = geo_library_project();
-        std::fs::create_dir_all(root.join("src/v1.2/sub")).unwrap();
-        std::fs::write(root.join(open_at), typedef).unwrap();
-        std::fs::write(root.join(compiled_at), "pub fn f() -> int { 1 }\n").unwrap();
+        fs::create_dir_all(root.join("src/v1.2/sub")).unwrap();
+        fs::write(root.join(open_at), typedef).unwrap();
+        fs::write(root.join(compiled_at), "pub fn f() -> int { 1 }\n").unwrap();
 
         let mut client = TestClient::new();
         client.initialize_with_root(&root);
@@ -12783,9 +12787,9 @@ fn a_typedef_tree_under_a_dotted_directory_tracks_the_whole_subtree() {
     }
 
     let (_dir, root) = geo_library_project();
-    std::fs::create_dir_all(root.join("src/v1.2/sub")).unwrap();
-    std::fs::write(root.join("src/v1.2/api.d.lis"), typedef).unwrap();
-    std::fs::write(root.join("src/v1.2/sub/other.d.lis"), typedef).unwrap();
+    fs::create_dir_all(root.join("src/v1.2/sub")).unwrap();
+    fs::write(root.join("src/v1.2/api.d.lis"), typedef).unwrap();
+    fs::write(root.join("src/v1.2/sub/other.d.lis"), typedef).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(&root);
@@ -12807,9 +12811,9 @@ fn a_typedef_tree_under_a_dotted_directory_tracks_the_whole_subtree() {
 fn dotted_external_test_directory_is_rejected() {
     let (_dir, root) = geo_library_project();
     let content = "struct VConf { a: int }\n\n#[test]\nfn value() {\n  let c = VConf { a: 1 }\n  assert c.a == 1\n}\n";
-    std::fs::create_dir_all(root.join("tests/v1.2")).unwrap();
+    fs::create_dir_all(root.join("tests/v1.2")).unwrap();
     let test_path = root.join("tests/v1.2/api.test.lis");
-    std::fs::write(&test_path, content).unwrap();
+    fs::write(&test_path, content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(&root);
@@ -12832,9 +12836,9 @@ fn dotted_external_test_directory_is_rejected() {
 fn dotted_source_directory_is_rejected() {
     let (_dir, root) = geo_library_project();
     let content = "pub struct VConf { pub a: int }\n";
-    std::fs::create_dir_all(root.join("src/v1.2")).unwrap();
+    fs::create_dir_all(root.join("src/v1.2")).unwrap();
     let path = root.join("src/v1.2/vconf.lis");
-    std::fs::write(&path, content).unwrap();
+    fs::write(&path, content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(&root);
@@ -12864,9 +12868,9 @@ fn an_unsaved_test_file_in_a_dotted_directory_is_rejected() {
 
     for on_disk in [None, Some("api.d.lis")] {
         let (_dir, root) = geo_library_project();
-        std::fs::create_dir_all(root.join("tests/v1.2")).unwrap();
+        fs::create_dir_all(root.join("tests/v1.2")).unwrap();
         if let Some(sibling) = on_disk {
-            std::fs::write(
+            fs::write(
                 root.join("tests/v1.2").join(sibling),
                 "pub fn Ext() -> int\n",
             )
@@ -13204,7 +13208,7 @@ fn completion_after_unimported_third_party_package_offers_its_members_and_import
         "[project]\nname = \"test\"\nversion = \"0.0.1\"\n\n[toolchain]\nlis = \"{}\"\n\n[dependencies.go]\n\"github.com/example/go-lib\" = \"v1.0.0\"\n",
         env!("CARGO_PKG_VERSION")
     );
-    std::fs::write(root.join("lisette.toml"), manifest).unwrap();
+    fs::write(root.join("lisette.toml"), manifest).unwrap();
 
     let pkg = deps::GoPackage {
         module: deps::GoModule {
@@ -13215,18 +13219,18 @@ fn completion_after_unimported_third_party_package_offers_its_members_and_import
         package: "github.com/example/go-lib",
     };
     let typedef_path = pkg.typedef_path(&deps::typedef_cache_dir(root), stdlib::Target::host());
-    std::fs::create_dir_all(typedef_path.parent().unwrap()).unwrap();
-    std::fs::write(
+    fs::create_dir_all(typedef_path.parent().unwrap()).unwrap();
+    fs::write(
         &typedef_path,
         "// Generated by Lisette bindgen\n// Package: lib\n\npub fn DoStuff(n: int) -> int\n",
     )
     .unwrap();
 
     let src = root.join("src");
-    std::fs::create_dir_all(&src).unwrap();
+    fs::create_dir_all(&src).unwrap();
     let (content, line, character) = cursor("fn main() {\n  let n = lib.~\n}\n");
     let main_path = src.join("main.lis");
-    std::fs::write(&main_path, &content).unwrap();
+    fs::write(&main_path, &content).unwrap();
 
     let mut client = TestClient::new();
     client.initialize_with_root(root);
@@ -13268,20 +13272,20 @@ fn completion_after_an_unknown_prefix_dot_offers_nothing() {
     client.shutdown();
 }
 
-fn project_with(root: &std::path::Path, files: &[(&str, &str)]) {
-    std::fs::write(
+fn project_with(root: &Path, files: &[(&str, &str)]) {
+    fs::write(
         root.join("lisette.toml"),
         "[project]\nname = \"example.com/you/app\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
     for (relative, content) in files {
         let path = root.join(relative);
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(path, content).unwrap();
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, content).unwrap();
     }
 }
 
-fn uri_of(root: &std::path::Path, relative: &str) -> String {
+fn uri_of(root: &Path, relative: &str) -> String {
     Url::from_file_path(root.join(relative))
         .unwrap()
         .to_string()

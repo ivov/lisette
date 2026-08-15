@@ -1,6 +1,8 @@
 //! Canonical catalog of recognized attributes, shared by the `unknown_attribute`
 //! lint and LSP completions.
 
+use crate::ast::Attribute;
+use crate::ast::AttributeArg;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AttributeTarget {
     Struct,
@@ -121,21 +123,18 @@ pub fn is_serialization_key(key: &str) -> bool {
     SERIALIZATION_KEYS.contains(&key)
 }
 
-pub fn struct_attribute_forces_field_export(attribute: &crate::ast::Attribute) -> bool {
+pub fn struct_attribute_forces_field_export(attribute: &Attribute) -> bool {
     if attribute.name == "tag" {
-        return matches!(
-            attribute.args.first(),
-            Some(crate::ast::AttributeArg::String(_))
-        );
+        return matches!(attribute.args.first(), Some(AttributeArg::String(_)));
     }
     is_serialization_key(&attribute.name)
 }
 
-pub(crate) fn field_attribute_forces_export(attribute: &crate::ast::Attribute) -> bool {
+pub(crate) fn field_attribute_forces_export(attribute: &Attribute) -> bool {
     if attribute.name == "tag" {
         return matches!(
             attribute.args.first(),
-            Some(crate::ast::AttributeArg::String(_) | crate::ast::AttributeArg::Raw(_))
+            Some(AttributeArg::String(_) | AttributeArg::Raw(_))
         );
     }
     is_serialization_key(&attribute.name)
@@ -149,10 +148,10 @@ pub fn attributes_for(target: AttributeTarget) -> impl Iterator<Item = &'static 
     ATTRIBUTES.iter().filter(move |a| a.applies_to(target))
 }
 
-pub fn test_attribute(attributes: &[crate::ast::Attribute]) -> Option<&crate::ast::Attribute> {
+pub fn test_attribute(attributes: &[Attribute]) -> Option<&Attribute> {
     attributes.iter().find(|a| a.name == "test")
 }
 
-pub fn has_test_attribute(attributes: &[crate::ast::Attribute]) -> bool {
+pub fn has_test_attribute(attributes: &[Attribute]) -> bool {
     test_attribute(attributes).is_some()
 }

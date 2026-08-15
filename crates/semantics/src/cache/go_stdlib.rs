@@ -8,6 +8,7 @@ use super::disk;
 use super::types::CachedDefinition;
 use super::{CACHE_FORMAT_VERSION, COMPILER_VERSION_HASH, GO_STDLIB_HASH};
 use crate::store::Store;
+use std::fs;
 use syntax::program::File;
 
 #[derive(Serialize, Deserialize)]
@@ -41,7 +42,7 @@ pub fn try_load_go_stdlib_cache(target: Target) -> Option<GoStdlibCache> {
         || cache.content_hash != GO_STDLIB_HASH
         || cache.compiler_version != COMPILER_VERSION_HASH
     {
-        let _ = std::fs::remove_file(&path);
+        let _ = fs::remove_file(&path);
         return None;
     }
 

@@ -11,6 +11,9 @@ use crate::go_cli::GoTestEvent;
 use crate::output::{format_backticks, format_elapsed};
 use diagnostics::LisetteDiagnostic;
 use lisette::pipeline::{Sources, TestIndex};
+use semantics::loader;
+use std::iter;
+use std::mem;
 
 type TestKey = (String, String);
 
@@ -558,7 +561,7 @@ fn collect_children(
             pkg == package && name.starts_with(&prefix) && state.execution.was_observed()
         })
         .map(|((_, name), _)| name.as_str())
-        .chain(std::iter::once(parent))
+        .chain(iter::once(parent))
         .collect();
 
     let mut children_of: HashMap<&str, Vec<&str>> = HashMap::new();
@@ -658,7 +661,7 @@ fn package_display(package: &str, go_module: &str) -> String {
         .strip_prefix(go_module)
         .and_then(|rest| rest.strip_prefix('/'))
     {
-        if semantics::loader::is_external_test_package(package_id) {
+        if loader::is_external_test_package(package_id) {
             package_id.to_string()
         } else {
             format!("src/{package_id}")
@@ -1321,7 +1324,7 @@ fn wrap_description(text: &str, width: usize, max_lines: usize) -> Vec<String> {
             continue;
         }
         if !current.is_empty() {
-            lines.push(std::mem::take(&mut current));
+            lines.push(mem::take(&mut current));
         }
         let mut rest = word;
         while rest.chars().count() > width {

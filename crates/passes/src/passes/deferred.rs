@@ -4,12 +4,14 @@ use rustc_hash::FxHashSet as HashSet;
 use semantics::facts::{DeferredChecks, GenericBoundOrigin};
 use semantics::generics::bound_display_name;
 use semantics::store::Store;
+use semantics::zero;
+use syntax::types::Type;
 use syntax::types::{CompoundKind, TypeVarId};
 
 pub(crate) fn run(store: &Store, checks: &DeferredChecks, sink: &LocalSink) {
     let mut reported_vars: HashSet<(String, TypeVarId)> = HashSet::default();
     let mut collected = Vec::new();
-    let mut report_vars = |ty: &syntax::types::Type, package_id: &str| {
+    let mut report_vars = |ty: &Type, package_id: &str| {
         collected.clear();
         ty.collect_unbound_variables(&mut collected);
         reported_vars.extend(collected.iter().map(|v| (package_id.to_string(), *v)));
@@ -82,7 +84,7 @@ pub(crate) fn run(store: &Store, checks: &DeferredChecks, sink: &LocalSink) {
         if element_ty.is_error() || element_ty.is_variable() {
             continue;
         }
-        if let Err(no_zero) = semantics::zero::has_zero(store, element_ty, &check.package_id) {
+        if let Err(no_zero) = zero::has_zero(store, element_ty, &check.package_id) {
             sink.push(diagnostics::infer::slice_make_no_zero(
                 &no_zero.leaf_ty.stringify(),
                 no_zero.hidden_go_state(),

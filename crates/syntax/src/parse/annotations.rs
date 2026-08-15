@@ -1,11 +1,13 @@
 use super::{MAX_TUPLE_ARITY, ParamMode, Parser};
 use crate::EcoString;
+use crate::ast::FunctionAnnotationParameter;
 use crate::ast::{
     Annotation, Attribute, Expression, FunctionBody, Generic, Literal, Span, Visibility,
 };
 use crate::lex::Token;
 use crate::lex::TokenKind::*;
 use crate::types::Type;
+use std::string;
 
 impl<'source> Parser<'source> {
     pub(crate) fn parse_annotation(&mut self) -> Annotation {
@@ -287,7 +289,7 @@ impl<'source> Parser<'source> {
         while self.is_not(RightParen) && !self.at_recovery_boundary() {
             let start_position = self.stream.position;
             let mutable = self.advance_if(Mut);
-            params.push(crate::ast::FunctionAnnotationParameter {
+            params.push(FunctionAnnotationParameter {
                 annotation: self.parse_annotation(),
                 mutable,
             });
@@ -426,7 +428,7 @@ impl<'source> Parser<'source> {
 
     pub(crate) fn parse_interface_method(
         &mut self,
-        doc: Option<std::string::String>,
+        doc: Option<string::String>,
         attributes: Vec<Attribute>,
     ) -> Expression {
         self.ensure(Function);
@@ -461,7 +463,7 @@ impl<'source> Parser<'source> {
 
     pub(crate) fn parse_type_alias_with_doc(
         &mut self,
-        doc: Option<std::string::String>,
+        doc: Option<string::String>,
         attributes: Vec<Attribute>,
     ) -> Expression {
         let start = self.current_token();

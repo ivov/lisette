@@ -11,6 +11,8 @@ use syntax::program::{File, FileImport, go_import_default_name};
 use crate::position::LineIndex;
 use crate::protocol::*;
 use crate::snapshot::AnalysisSnapshot;
+use std::path::Path;
+use syntax::dependency_block;
 
 const UNIMPORTED_SORT_PREFIX: &str = "~";
 
@@ -107,7 +109,7 @@ impl PackageResolver {
         );
 
         *discovered = Some(Discovered {
-            root: root.map(std::path::Path::to_path_buf),
+            root: root.map(Path::to_path_buf),
             stamp,
             walked: Instant::now(),
             packages: Arc::clone(&packages),
@@ -330,7 +332,7 @@ fn header_end(source: &str) -> u32 {
 }
 
 fn table_end(source: &str) -> u32 {
-    syntax::dependency_block::scan_dependency_blocks(source, 0)
+    dependency_block::scan_dependency_blocks(source, 0)
         .iter()
         .map(|block| block.span.byte_offset + block.span.byte_length)
         .max()
@@ -412,6 +414,8 @@ fn signature(item: &Expression, source: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use std::path::Path;
 
     fn applied(path: &str, source: &str) -> String {
         let mut file = File::new_cached("root", "main.lis", "main.lis", source, 0);
@@ -583,12 +587,12 @@ mod tests {
         );
     }
 
-    fn declare(root: &std::path::Path, modules: &[&str]) {
+    fn declare(root: &Path, modules: &[&str]) {
         let entries: String = modules
             .iter()
             .map(|module| format!("\"{module}\" = \"v1.0.0\"\n"))
             .collect();
-        std::fs::write(
+        fs::write(
             root.join("lisette.toml"),
             format!(
                 "[project]\nname = \"t\"\nversion = \"0.0.1\"\n\n[toolchain]\nlis = \"{}\"\n\n[dependencies.go]\n{entries}",
@@ -601,13 +605,13 @@ mod tests {
             let dir = deps::typedef_cache_dir(root)
                 .join(deps::Target::host().cache_segment())
                 .join(format!("{module}@v1.0.0"));
-            std::fs::create_dir_all(&dir).unwrap();
+            fs::create_dir_all(&dir).unwrap();
             let name = module.rsplit('/').next().unwrap();
-            std::fs::write(dir.join(format!("{name}.d.lis")), "pub fn Do() -> int\n").unwrap();
+            fs::write(dir.join(format!("{name}.d.lis")), "pub fn Do() -> int\n").unwrap();
         }
     }
 
-    fn resolver(root: &std::path::Path, index: &Arc<PackageIndex>) -> PackageResolver {
+    fn resolver(root: &Path, index: &Arc<PackageIndex>) -> PackageResolver {
         PackageResolver::new(
             TypedefLocator::from_project(root).expect("the manifest should parse"),
             Arc::clone(index),

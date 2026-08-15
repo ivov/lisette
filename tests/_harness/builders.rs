@@ -1,3 +1,4 @@
+use syntax::types::FunctionParameter;
 use syntax::types::{CompoundKind, SimpleKind, Type};
 
 pub fn int_type() -> Type {
@@ -70,7 +71,7 @@ pub fn con_type(name: &str, args: Vec<Type>) -> Type {
 pub fn fun_type(args: Vec<Type>, ret: Type) -> Type {
     Type::function(
         args.into_iter()
-            .map(|ty| syntax::types::FunctionParameter::new(ty, false))
+            .map(|ty| FunctionParameter::new(ty, false))
             .collect(),
         vec![],
         Box::new(ret),

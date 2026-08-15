@@ -6,7 +6,13 @@ use semantics::{
     package_graph::Roots,
     package_graph::{PackageGraphOptions, build_package_graph},
 };
+use std::collections;
+use std::mem;
+use std::path::PathBuf;
 use stdlib::{Target, get_go_stdlib_typedef};
+use syntax::program::File;
+use syntax::types;
+use syntax::types::CompoundKind;
 use syntax::{
     ast::Expression,
     program::Definition,
@@ -71,14 +77,14 @@ pub fn infer_package(package_name: &str, fs: MockFileSystem) -> InferResult {
         PackageGraphOptions {
             loader: Some(&fs),
             sink: &sink,
-            scope: &semantics::AnalysisScope::Project(std::path::PathBuf::new()),
+            scope: &semantics::AnalysisScope::Project(PathBuf::new()),
             locator: &locator,
             include_tests: true,
             project_kind: semantics::ProjectKind::Binary,
         },
     );
 
-    let mut parsed: HashMap<String, Vec<syntax::program::File>> = graph_result
+    let mut parsed: HashMap<String, Vec<File>> = graph_result
         .files
         .drain()
         .map(|(package_id, files)| {
@@ -106,7 +112,7 @@ pub fn infer_package(package_name: &str, fs: MockFileSystem) -> InferResult {
         let mut checker = TaskState::for_package(package_name);
         checker.put_prelude_in_scope(&store);
 
-        let order = std::mem::take(&mut graph_result.order);
+        let order = mem::take(&mut graph_result.order);
         let mut to_infer = Vec::new();
         for package_id in order {
             if let Some(go_pkg) = package_id.strip_prefix("go:") {
@@ -433,7 +439,7 @@ fn is_slice_with_type_var(ty: &Type) -> bool {
                 && matches!(params[0], Type::Var { .. })
         }
         Type::Compound {
-            kind: syntax::types::CompoundKind::Slice,
+            kind: CompoundKind::Slice,
             args,
             ..
         } => args.len() == 1 && matches!(args[0], Type::Var { .. }),
@@ -445,8 +451,8 @@ fn is_slice_with_type_var(ty: &Type) -> bool {
 /// types being compared, so `fn(a) -> a` and `fn(a) -> b` are not conflated.
 #[derive(Default)]
 struct VarBijection {
-    forward: std::collections::HashMap<u32, u32>,
-    backward: std::collections::HashMap<u32, u32>,
+    forward: collections::HashMap<u32, u32>,
+    backward: collections::HashMap<u32, u32>,
 }
 
 impl VarBijection {
@@ -466,12 +472,12 @@ fn types_equal_with(
     vars: &mut VarBijection,
 ) -> bool {
     let resolved1 = if matches!(t1, Type::Nominal { .. }) {
-        syntax::types::peel_alias(t1, |id| definitions.get(id))
+        types::peel_alias(t1, |id| definitions.get(id))
     } else {
         t1.clone()
     };
     let resolved2 = if matches!(t2, Type::Nominal { .. }) {
-        syntax::types::peel_alias(t2, |id| definitions.get(id))
+        types::peel_alias(t2, |id| definitions.get(id))
     } else {
         t2.clone()
     };

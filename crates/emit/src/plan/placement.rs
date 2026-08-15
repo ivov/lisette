@@ -14,6 +14,8 @@ use crate::plan::calls::plan_variadic_spread;
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use crate::statements::assignments::is_lvalue_chain;
 use crate::types::native::NativeGoType;
+use std::slice;
+use syntax::ast::Pattern;
 use syntax::ast::{Expression, Literal};
 use syntax::types::Type;
 
@@ -246,7 +248,7 @@ pub(crate) fn try_elide_tail_let(items: &[Expression]) -> Option<(&Expression, &
     if mode.else_block().is_some() || binding.is_mutable() {
         return None;
     }
-    let syntax::ast::Pattern::Identifier { identifier, .. } = &binding.pattern else {
+    let Pattern::Identifier { identifier, .. } = &binding.pattern else {
         return None;
     };
     if identifier != tail_name {
@@ -547,7 +549,7 @@ impl Planner<'_> {
         let items: &[Expression] = if let Expression::Block { items, .. } = expression {
             items
         } else {
-            std::slice::from_ref(expression)
+            slice::from_ref(expression)
         };
 
         self.with_block_scope(is_block, has_go_braces, |this| {

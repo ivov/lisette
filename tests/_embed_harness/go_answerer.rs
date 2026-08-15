@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use super::render_go::{GoMode, render_go};
 use super::scenario::{Question, Scenario};
+use std::fs;
 
 #[derive(Serialize)]
 struct Request<'a> {
@@ -196,7 +197,7 @@ pub fn go_questions(scenario: &Scenario) -> Vec<GoQuestion> {
 fn build_binary() -> Result<PathBuf, String> {
     let binary = answerer_binary_path();
     if let Some(parent) = binary.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| format!("create answerer target dir: {e}"))?;
+        fs::create_dir_all(parent).map_err(|e| format!("create answerer target dir: {e}"))?;
     }
     let output = Command::new("go")
         .arg("build")

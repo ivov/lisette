@@ -25,6 +25,7 @@ use redundant_import_alias::check_redundant_aliases;
 use reference_graph::{
     EnumVariantId, ItemKind, MemberKind, PackageItemId, ReferenceGraph, StructFieldId,
 };
+use syntax::attributes;
 use syntax::attributes::SERIALIZATION_KEYS;
 use visibility_constraints::check_visibility_constraints;
 
@@ -317,7 +318,7 @@ fn collect_items(
 }
 
 fn function_is_entry(name: &str, visibility: Visibility, attributes: &[Attribute]) -> bool {
-    let is_test = syntax::attributes::has_test_attribute(attributes);
+    let is_test = attributes::has_test_attribute(attributes);
     visibility == Visibility::Public || name == "main" || is_test
 }
 

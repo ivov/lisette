@@ -2,13 +2,11 @@ use syntax::ast::{Pattern, Span};
 use syntax::types::unqualified_name;
 
 use crate::checker::infer::InferCtx;
+use syntax::ast::MatchArm;
+use syntax::ast::SelectArm;
 
 impl InferCtx<'_> {
-    pub(crate) fn check_select_match_arms(
-        &mut self,
-        match_arms: &[syntax::ast::MatchArm],
-        receive_span: Span,
-    ) {
+    pub(crate) fn check_select_match_arms(&mut self, match_arms: &[MatchArm], receive_span: Span) {
         if match_arms.is_empty() {
             self.sink
                 .push(diagnostics::infer::select_match_missing_some_arm(
@@ -130,8 +128,8 @@ impl InferCtx<'_> {
     }
 
     /// Reject multiple `let Some(v) = ch.receive()` arms in one select.
-    pub(crate) fn check_multiple_select_receives(&mut self, arms: &[syntax::ast::SelectArm]) {
-        use syntax::ast::SelectArm;
+    pub(crate) fn check_multiple_select_receives(&mut self, arms: &[SelectArm]) {
+        use SelectArm;
 
         let mut first_receive_span: Option<Span> = None;
 
@@ -164,8 +162,8 @@ impl InferCtx<'_> {
         }
     }
 
-    pub(crate) fn check_duplicate_select_defaults(&mut self, arms: &[syntax::ast::SelectArm]) {
-        use syntax::ast::SelectArm;
+    pub(crate) fn check_duplicate_select_defaults(&mut self, arms: &[SelectArm]) {
+        use SelectArm;
 
         let mut first_default_span: Option<Span> = None;
 

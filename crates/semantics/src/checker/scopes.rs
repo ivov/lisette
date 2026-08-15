@@ -1,5 +1,6 @@
 use ecow::EcoString;
 use rustc_hash::FxHashMap as HashMap;
+use std::mem;
 use syntax::ast::BindingId;
 use syntax::ast::Span;
 use syntax::types::{Symbol, Type};
@@ -393,7 +394,7 @@ impl Scopes {
             .function
             .as_mut()
             .and_then(FunctionContext::body_mut)
-            .map(|body| std::mem::take(&mut body.deferred_map_key_checks))
+            .map(|body| mem::take(&mut body.deferred_map_key_checks))
             .unwrap_or_default()
     }
 

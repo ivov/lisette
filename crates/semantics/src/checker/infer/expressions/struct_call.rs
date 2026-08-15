@@ -8,6 +8,12 @@ use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{SubstitutionMap, Type, substitute, unqualified_name};
 
 use crate::checker::infer::InferCtx;
+use crate::store::Store;
+use crate::zero;
+use std::marker::PhantomData;
+use syntax::ast::EnumFieldDefinition;
+use syntax::go_names;
+use syntax::program::AliasKind;
 
 /// Inputs to `infer_structish_fields` shared between struct and enum-variant literals.
 struct StructishCtx<'a, 'b, F> {
@@ -18,7 +24,7 @@ struct StructishCtx<'a, 'b, F> {
     span: Span,
     all_fields: F,
     map: &'b SubstitutionMap,
-    _marker: std::marker::PhantomData<&'a ()>,
+    _marker: PhantomData<&'a ()>,
 }
 
 struct StructLiteral {
@@ -48,7 +54,7 @@ struct ResolvedStruct {
 }
 
 struct ResolvedVariant {
-    fields: Vec<syntax::ast::EnumFieldDefinition>,
+    fields: Vec<EnumFieldDefinition>,
     substitutions: SubstitutionMap,
     ty: Type,
 }
@@ -92,7 +98,7 @@ impl InferCtx<'_> {
                 body: DefinitionBody::TypeAlias { alias, .. },
                 ..
             }) = store.get_definition(&qualified_name)
-            && matches!(alias, syntax::program::AliasKind::Opaque(_))
+            && matches!(alias, AliasKind::Opaque(_))
             && literal.fields.is_empty()
         {
             let alias_ty = alias_ty.clone();
@@ -125,11 +131,7 @@ impl InferCtx<'_> {
         literal.with_type(Type::Error)
     }
 
-    fn as_struct(
-        &mut self,
-        store: &crate::store::Store,
-        literal: &StructLiteral,
-    ) -> Option<ResolvedStruct> {
+    fn as_struct(&mut self, store: &Store, literal: &StructLiteral) -> Option<ResolvedStruct> {
         let qualified_name = self.lookup_qualified_name(store, &literal.name)?;
         let Definition {
             ty: struct_ty,
@@ -161,7 +163,7 @@ impl InferCtx<'_> {
     }
 
     /// Resolve a `type Alias = Struct` name to its underlying struct.
-    fn as_alias_struct(&self, store: &crate::store::Store, name: &str) -> Option<ResolvedStruct> {
+    fn as_alias_struct(&self, store: &Store, name: &str) -> Option<ResolvedStruct> {
         let qualified_name = self.lookup_qualified_name(store, name)?;
         let Definition {
             ty: alias_ty,
@@ -172,7 +174,7 @@ impl InferCtx<'_> {
             return None;
         };
         let alias_ty = alias_ty.clone();
-        let is_opaque = matches!(alias, syntax::program::AliasKind::Opaque(_));
+        let is_opaque = matches!(alias, AliasKind::Opaque(_));
 
         let underlying = (!is_opaque).then(|| store.peel_alias(&alias_ty));
         let Some(Type::Nominal { id: struct_id, .. }) = &underlying else {
@@ -207,18 +209,14 @@ impl InferCtx<'_> {
         })
     }
 
-    fn as_alias_variant(
-        &mut self,
-        store: &crate::store::Store,
-        name: &str,
-    ) -> Option<ResolvedVariant> {
+    fn as_alias_variant(&mut self, store: &Store, name: &str) -> Option<ResolvedVariant> {
         let (type_part, variant_name) = name.rsplit_once('.')?;
         let qualified_name = self.lookup_qualified_name(store, type_part)?;
         let Definition {
             ty: alias_ty,
             body:
                 DefinitionBody::TypeAlias {
-                    alias: syntax::program::AliasKind::Transparent { .. },
+                    alias: AliasKind::Transparent { .. },
                     ..
                 },
             ..
@@ -251,7 +249,7 @@ impl InferCtx<'_> {
         })
     }
 
-    fn as_variant(&mut self, store: &crate::store::Store, name: &str) -> Option<ResolvedVariant> {
+    fn as_variant(&mut self, store: &Store, name: &str) -> Option<ResolvedVariant> {
         let ty = self.lookup_type(store, name)?;
         let (value_constructor_type, map) = self.instantiate(&ty);
 
@@ -327,7 +325,7 @@ impl InferCtx<'_> {
         if is_go_imported
             && !matches!(new_spread, StructSpread::From(_))
             && let Some(def) = store.get_definition(&qualified_name)
-            && crate::zero::go_struct_denies_zero(def, &struct_fields)
+            && zero::go_struct_denies_zero(def, &struct_fields)
         {
             self.sink.push(diagnostics::infer::hidden_state_no_zero(
                 &struct_call_ty,
@@ -344,7 +342,7 @@ impl InferCtx<'_> {
                 span,
                 all_fields: struct_fields.iter().map(|f| (&f.name, &f.ty)),
                 map: &map,
-                _marker: std::marker::PhantomData,
+                _marker: PhantomData,
             },
             |checker, assignment| {
                 let def = struct_fields.iter().find(|f| f.name == assignment.name)?;
@@ -365,7 +363,7 @@ impl InferCtx<'_> {
                 &struct_name,
                 struct_fields
                     .iter()
-                    .filter(|f| !(is_go_imported && crate::zero::hidden_embed_field(f)))
+                    .filter(|f| !(is_go_imported && zero::hidden_embed_field(f)))
                     .map(|f| (&f.name, &f.ty)),
                 &matched_fields,
                 &map,
@@ -456,7 +454,7 @@ impl InferCtx<'_> {
                 span,
                 all_fields: variant_fields.iter().map(|f| (&f.name, &f.ty)),
                 map: &map,
-                _marker: std::marker::PhantomData,
+                _marker: PhantomData,
             },
             |_checker, assignment| {
                 variant_fields
@@ -516,7 +514,7 @@ impl InferCtx<'_> {
         &mut self,
         resolved_enum: &Type,
         written_name: &str,
-        variant_fields: &[syntax::ast::EnumFieldDefinition],
+        variant_fields: &[EnumFieldDefinition],
         matched_fields: &HashSet<EcoString>,
         spread_span: Span,
     ) {
@@ -535,7 +533,7 @@ impl InferCtx<'_> {
         let Some(target_index) = variants.iter().position(|v| v.name == target_variant) else {
             return;
         };
-        let slots = syntax::go_names::enum_field_slots(enum_name, variants);
+        let slots = go_names::enum_field_slots(enum_name, variants);
         let missing: Vec<String> = variant_fields
             .iter()
             .enumerate()
@@ -569,9 +567,7 @@ impl InferCtx<'_> {
         let builtin_collisions = missing
             .iter()
             .filter(|field_name| {
-                syntax::go_names::is_builtin_enum_member(&syntax::go_names::snake_to_camel(
-                    field_name,
-                ))
+                go_names::is_builtin_enum_member(&go_names::snake_to_camel(field_name))
             })
             .count();
         let reason = if builtin_collisions == missing.len() {
@@ -714,7 +710,7 @@ impl InferCtx<'_> {
 
     pub(crate) fn has_zero(&self, ty: &Type, from_package: &str) -> Result<(), NoZero> {
         let store = self.store;
-        crate::zero::has_zero(store, ty, from_package)
+        zero::has_zero(store, ty, from_package)
     }
 }
 

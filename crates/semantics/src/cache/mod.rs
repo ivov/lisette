@@ -15,6 +15,7 @@ use syntax::program::{File, Package, is_test_file};
 
 use crate::loader::is_external_test_package;
 use crate::store::{ENTRY_PACKAGE_ID, Store};
+use std::env;
 use types::CachedDefinition;
 
 /// Current cache format version. Bump this when making breaking changes to the cache format.
@@ -420,7 +421,7 @@ pub fn apply_emit_stamps(
 }
 
 pub(crate) fn is_cache_disabled() -> bool {
-    std::env::var("LISETTE_NO_CACHE")
+    env::var("LISETTE_NO_CACHE")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false)
 }

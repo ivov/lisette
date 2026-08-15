@@ -1,12 +1,14 @@
 use std::backtrace::Backtrace;
 use std::env::consts;
+use std::io;
 use std::io::{IsTerminal, Write};
+use std::panic;
 use std::panic::PanicHookInfo;
 
 include!(concat!(env!("OUT_DIR"), "/go_version.rs"));
 
 pub fn add_handler() {
-    std::panic::set_hook(Box::new(|info: &PanicHookInfo<'_>| {
+    panic::set_hook(Box::new(|info: &PanicHookInfo<'_>| {
         print_compiler_bug_message(info);
     }));
 }
@@ -33,7 +35,7 @@ fn print_compiler_bug_message(info: &PanicHookInfo<'_>) {
         .collect::<Vec<_>>()
         .join("\n");
 
-    let use_color = std::io::stderr().is_terminal();
+    let use_color = io::stderr().is_terminal();
 
     let (badge, reset) = if use_color {
         ("\x1b[41;30;1m", "\x1b[0m")
@@ -42,7 +44,7 @@ fn print_compiler_bug_message(info: &PanicHookInfo<'_>) {
     };
 
     let _ = writeln!(
-        std::io::stderr(),
+        io::stderr(),
         r#"
 {badge} INTERNAL COMPILER ERROR {reset}
 

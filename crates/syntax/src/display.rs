@@ -1,6 +1,7 @@
 use std::fmt;
 
 use crate::program::is_internal_package_id;
+use crate::types::SimpleKind;
 use crate::types::{GO_IMPORT_PREFIX, Symbol, Type};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -144,7 +145,7 @@ impl Type {
             Type::ReceiverPlaceholder => "self".to_string(),
 
             Type::Simple(kind) => match kind {
-                crate::types::SimpleKind::Unit => "()".to_string(),
+                SimpleKind::Unit => "()".to_string(),
                 _ => kind.leaf_name().to_string(),
             },
 

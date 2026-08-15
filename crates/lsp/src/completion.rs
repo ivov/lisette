@@ -6,9 +6,18 @@ use syntax::program::DefinitionBody;
 use syntax::types::Type;
 
 use crate::definition::get_root_expression;
+use crate::hover;
 use crate::snapshot::AnalysisSnapshot;
 use crate::traversal::{find_enclosing_impl_type, find_expression_at};
 use crate::type_name;
+use syntax::ast::Pattern;
+use syntax::ast::StructFieldAssignment;
+use syntax::attributes;
+use syntax::program;
+use syntax::program::AliasKind;
+use syntax::program::Definition;
+use syntax::program::File;
+use syntax::types;
 
 /// The identifier before the dot, with that dot's offset, whether the cursor
 /// sits right after it or partway through the member.
@@ -40,9 +49,7 @@ pub(crate) fn get_package_prefix(source: &str, offset: usize) -> Option<(&str, u
     Some((identifier, dot_offset))
 }
 
-pub(crate) fn definition_to_completion_kind(
-    definition: &syntax::program::Definition,
-) -> CompletionItemKind {
+pub(crate) fn definition_to_completion_kind(definition: &Definition) -> CompletionItemKind {
     use syntax::program::DefinitionBody;
     match &definition.body {
         DefinitionBody::Struct { .. } => CompletionItemKind::STRUCT,
@@ -80,7 +87,7 @@ fn element_type_name(ty: &Type, snapshot: &AnalysisSnapshot) -> Option<String> {
 /// When `indexed` is true, extracts the element type for collection types.
 pub(crate) fn resolve_variable_type(
     var_name: &str,
-    file: &syntax::program::File,
+    file: &File,
     offset: u32,
     snapshot: &AnalysisSnapshot,
     indexed: bool,
@@ -97,8 +104,8 @@ pub(crate) fn resolve_variable_type(
             ..
         } => {
             let matches_name = match &let_binding.pattern {
-                syntax::ast::Pattern::Identifier { identifier, .. } => identifier == var_name,
-                syntax::ast::Pattern::AsBinding { name, .. } => name == var_name,
+                Pattern::Identifier { identifier, .. } => identifier == var_name,
+                Pattern::AsBinding { name, .. } => name == var_name,
                 _ => false,
             };
             if matches_name {
@@ -114,8 +121,8 @@ pub(crate) fn resolve_variable_type(
         } => Some(&for_binding.ty),
         Expression::Function { params, .. } | Expression::Lambda { params, .. } => {
             let param = params.iter().find(|p| match &p.pattern {
-                syntax::ast::Pattern::Identifier { identifier, .. } => identifier == var_name,
-                syntax::ast::Pattern::AsBinding { name, .. } => name == var_name,
+                Pattern::Identifier { identifier, .. } => identifier == var_name,
+                Pattern::AsBinding { name, .. } => name == var_name,
                 _ => false,
             })?;
             Some(&param.ty)
@@ -127,8 +134,7 @@ pub(crate) fn resolve_variable_type(
     let ty = if let Some(t) = borrowed_ty {
         t
     } else {
-        let (t, _) =
-            crate::hover::get_hover_type_and_span(snapshot, expression, binding.span.byte_offset);
+        let (t, _) = hover::get_hover_type_and_span(snapshot, expression, binding.span.byte_offset);
         owned_ty = t;
         &owned_ty
     };
@@ -149,7 +155,7 @@ pub(crate) enum DotContext {
 }
 
 pub(crate) fn detect_dot_context(
-    file: &syntax::program::File,
+    file: &File,
     offset: u32,
     snapshot: &AnalysisSnapshot,
 ) -> Option<DotContext> {
@@ -219,7 +225,7 @@ pub(crate) fn get_instance_completions(
         params: vec![],
         writable: false,
     };
-    for method in syntax::program::methods_for_type(&ty, &Default::default(), |id| {
+    for method in program::methods_for_type(&ty, &Default::default(), |id| {
         snapshot.definitions().get(id)
     })
     .into_values()
@@ -244,7 +250,7 @@ fn struct_field_completions(
     same_package: bool,
     items: &mut Vec<CompletionItem>,
 ) {
-    if let Some(syntax::program::Definition {
+    if let Some(Definition {
         body: DefinitionBody::Struct { fields, .. },
         ..
     }) = snapshot.definitions().get(type_id)
@@ -264,9 +270,9 @@ fn struct_field_completions(
 
 /// The struct literal's name, type, and assignments when `offset` is at a field name.
 pub(crate) fn detect_struct_literal_field_context(
-    file: &syntax::program::File,
+    file: &File,
     offset: u32,
-) -> Option<(&str, &Type, &[syntax::ast::StructFieldAssignment])> {
+) -> Option<(&str, &Type, &[StructFieldAssignment])> {
     let tokens = Lexer::new(&file.source, 0).lex().tokens;
     let split = tokens.partition_point(|t| (t.byte_offset as usize) < offset as usize);
     if !in_field_name_position(&tokens[..split]) {
@@ -308,7 +314,7 @@ pub(crate) fn get_struct_literal_completions(
     call_name: &str,
     snapshot: &AnalysisSnapshot,
     same_package: bool,
-    assigned: &[syntax::ast::StructFieldAssignment],
+    assigned: &[StructFieldAssignment],
     offset: u32,
 ) -> Vec<CompletionItem> {
     let mut items = Vec::new();
@@ -329,7 +335,7 @@ fn enum_variant_field_completions(
     snapshot: &AnalysisSnapshot,
     items: &mut Vec<CompletionItem>,
 ) {
-    let Some(syntax::program::Definition {
+    let Some(Definition {
         body: DefinitionBody::Enum { variants, .. },
         ..
     }) = snapshot.definitions().get(type_id)
@@ -350,7 +356,7 @@ fn enum_variant_field_completions(
     }
 }
 
-fn cursor_on_name(fa: &syntax::ast::StructFieldAssignment, offset: u32) -> bool {
+fn cursor_on_name(fa: &StructFieldAssignment, offset: u32) -> bool {
     let start = fa.name_span.byte_offset;
     offset >= start && offset <= start + fa.name_span.byte_length
 }
@@ -419,7 +425,7 @@ fn alias_target(type_id: &str, snapshot: &AnalysisSnapshot) -> Option<String> {
     let def = snapshot.definitions().get(type_id)?;
     let DefinitionBody::TypeAlias {
         generics,
-        alias: syntax::program::AliasKind::Transparent { .. },
+        alias: AliasKind::Transparent { .. },
         ..
     } = &def.body
     else {
@@ -428,7 +434,7 @@ fn alias_target(type_id: &str, snapshot: &AnalysisSnapshot) -> Option<String> {
     if !generics.is_empty() {
         return None;
     }
-    let target = syntax::types::peel_alias(&def.ty, |id| snapshot.definitions().get(id));
+    let target = types::peel_alias(&def.ty, |id| snapshot.definitions().get(id));
     let target = match target {
         Type::Nominal { id, .. } => id.to_string(),
         Type::Simple(kind) => format!("prelude.{}", kind.leaf_name()),
@@ -502,7 +508,7 @@ fn attribute_item(info: &AttributeInfo) -> CompletionItem {
 }
 
 fn top_level_attributes() -> impl Iterator<Item = &'static AttributeInfo> {
-    syntax::attributes::ATTRIBUTES.iter().filter(|a| {
+    attributes::ATTRIBUTES.iter().filter(|a| {
         a.applies_to(AttributeTarget::Struct)
             || a.applies_to(AttributeTarget::Enum)
             || a.applies_to(AttributeTarget::Function)

@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::process::Command;
 
 use serde::Deserialize;
+use std::env;
 
 #[derive(Deserialize)]
 struct Metadata {
@@ -26,7 +27,7 @@ struct Dep {
 /// `lisette` cannot resolve newer sibling libraries and mix releases.
 #[test]
 fn internal_crate_deps_are_exact_pinned() {
-    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
+    let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".into());
     let manifest = concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml");
 
     let output = Command::new(cargo)

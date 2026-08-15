@@ -13,6 +13,10 @@ use crate::checker::registration::derived_attributes::{
     DerivedAttribute, DerivedAttributeContext, DerivedAttributeTarget,
 };
 use crate::store::Store;
+use std::mem;
+use syntax::program::Method;
+use syntax::program::MethodOrigin;
+use syntax::types;
 
 fn equals_visibility(store: &Store, id: &str) -> Option<String> {
     match store.get_method(id, "equals") {
@@ -119,7 +123,7 @@ impl TaskState {
     /// Synthesize queued equality methods, build the verdict, and gate derivations.
     /// Run once after registration has completed every type definition.
     pub(super) fn finalize_equality(&mut self, store: &mut Store) {
-        let batches = std::mem::take(&mut self.pending.equality_attributes);
+        let batches = mem::take(&mut self.pending.equality_attributes);
         let mut derivations = Vec::new();
         for batch in &batches {
             for candidate in &batch.candidates {
@@ -141,7 +145,7 @@ impl TaskState {
                 .package_for_qualified_name(id)
                 .map(str::to_string)
                 .unwrap_or_default();
-            let name = syntax::types::unqualified_name(id).to_string();
+            let name = types::unqualified_name(id).to_string();
             self.gate_equality_derivation(store, &name, qualified, &package_id);
         }
     }
@@ -301,11 +305,11 @@ impl TaskState {
         {
             methods.insert(
                 "equals".into(),
-                syntax::program::Method {
+                Method {
                     source_name: "equals".into(),
                     ty: method_ty,
                     visibility,
-                    origin: syntax::program::MethodOrigin::Synthesized,
+                    origin: MethodOrigin::Synthesized,
                     name_span,
                     doc: None,
                     allowed_lints: vec![],

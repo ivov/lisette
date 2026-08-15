@@ -7,8 +7,18 @@ use semantics::package_graph::{DependencyGraph, PackageGraphOptions, Roots, buil
 use semantics::store::Store;
 
 use crate::_harness::filesystem::MockFileSystem;
+use std::collections::BTreeMap;
+use std::fs;
+use std::path::Path;
+use std::path::PathBuf;
+use syntax::ast::Span;
+use syntax::ast::StructFields;
+use syntax::program::Definition;
+use syntax::program::DefinitionBody;
+use syntax::program::Visibility;
+use syntax::types::Type;
 
-const PROJECT_SCOPE: AnalysisScope = AnalysisScope::Project(std::path::PathBuf::new());
+const PROJECT_SCOPE: AnalysisScope = AnalysisScope::Project(PathBuf::new());
 const SCRIPT_SCOPE: AnalysisScope = AnalysisScope::Script {
     inside_project: false,
 };
@@ -40,7 +50,7 @@ fn graph_options<'a>(
     }
 }
 
-fn host_module_cache_dir(project_root: &std::path::Path, module: &str) -> std::path::PathBuf {
+fn host_module_cache_dir(project_root: &Path, module: &str) -> PathBuf {
     deps::typedef_cache_dir(project_root)
         .join(stdlib::Target::host().cache_segment())
         .join(module)
@@ -730,7 +740,7 @@ fn graph_project_third_party_go_import_undeclared() {
 
 #[test]
 fn graph_declared_dep_missing_typedef() {
-    use std::collections::BTreeMap;
+    use BTreeMap;
 
     let mut fs = MockFileSystem::new();
     fs.add_file("main", "main.lis", r#"import "go:github.com/gorilla/mux""#);
@@ -774,7 +784,7 @@ fn graph_declared_dep_missing_typedef() {
 
 #[test]
 fn graph_subpackage_missing_typedef_points_at_add() {
-    use std::collections::BTreeMap;
+    use BTreeMap;
 
     let mut fs = MockFileSystem::new();
     fs.add_file("main", "main.lis", r#"import "go:k8s.io/api/core/v1""#);
@@ -832,18 +842,18 @@ fn store_get_definition_domain_style_go_package() {
     let package = store.get_package_mut("go:github.com/gorilla/mux").unwrap();
     package.definitions.insert(
         "go:github.com/gorilla/mux.Router".into(),
-        syntax::program::Definition {
-            visibility: syntax::program::Visibility::Public,
-            ty: syntax::types::Type::Nominal {
+        Definition {
+            visibility: Visibility::Public,
+            ty: Type::Nominal {
                 id: "go:github.com/gorilla/mux.Router".into(),
                 params: vec![],
                 writable: false,
             },
-            name_span: Some(syntax::ast::Span::dummy()),
+            name_span: Some(Span::dummy()),
             doc: None,
-            body: syntax::program::DefinitionBody::Struct {
+            body: DefinitionBody::Struct {
                 generics: vec![],
-                fields: syntax::ast::StructFields::Record(vec![]),
+                fields: StructFields::Record(vec![]),
                 methods: Default::default(),
                 attributes: Default::default(),
             },
@@ -931,16 +941,16 @@ fn store_package_for_qualified_name_nested_subpackage() {
 
 #[test]
 fn resolver_root_vs_subpackage_typedef_lookup() {
-    use std::collections::BTreeMap;
+    use BTreeMap;
 
     let tmp = tempfile::tempdir().unwrap();
     let project_root = tmp.path();
 
     let root_dir = host_module_cache_dir(project_root, "github.com/gorilla/mux@v1.8.0");
     let sub_dir = root_dir.join("middleware");
-    std::fs::create_dir_all(&sub_dir).unwrap();
-    std::fs::write(root_dir.join("mux.d.lis"), "// root\n").unwrap();
-    std::fs::write(sub_dir.join("middleware.d.lis"), "// sub\n").unwrap();
+    fs::create_dir_all(&sub_dir).unwrap();
+    fs::write(root_dir.join("mux.d.lis"), "// root\n").unwrap();
+    fs::write(sub_dir.join("middleware.d.lis"), "// sub\n").unwrap();
 
     let mut go_deps = BTreeMap::new();
     go_deps.insert(
@@ -987,14 +997,14 @@ fn third_party_go_struct_impl_methods_registered() {
     let tmp = tempfile::tempdir().unwrap();
     let project_root = tmp.path();
     let cache_dir = host_module_cache_dir(project_root, "github.com/gorilla/mux@v1.8.0");
-    std::fs::create_dir_all(&cache_dir).unwrap();
-    std::fs::write(
+    fs::create_dir_all(&cache_dir).unwrap();
+    fs::write(
         cache_dir.join("mux.d.lis"),
         "pub struct Router {}\nimpl Router {\n    fn route(self, path: string) -> string\n}\npub fn new_router() -> Router\n",
     )
     .unwrap();
 
-    let mut go_deps = std::collections::BTreeMap::new();
+    let mut go_deps = BTreeMap::new();
     go_deps.insert(
         "github.com/gorilla/mux".to_string(),
         deps::GoDependency::Remote {
@@ -1077,10 +1087,10 @@ fn stdlib_cache_save_load_excludes_third_party() {
     let tmp = tempfile::tempdir().unwrap();
     let project_root = tmp.path();
     let cache_dir = host_module_cache_dir(project_root, "github.com/gorilla/mux@v1.8.0");
-    std::fs::create_dir_all(&cache_dir).unwrap();
-    std::fs::write(cache_dir.join("mux.d.lis"), "pub const VERSION: string\n").unwrap();
+    fs::create_dir_all(&cache_dir).unwrap();
+    fs::write(cache_dir.join("mux.d.lis"), "pub const VERSION: string\n").unwrap();
 
-    let mut go_deps = std::collections::BTreeMap::new();
+    let mut go_deps = BTreeMap::new();
     go_deps.insert(
         "github.com/gorilla/mux".to_string(),
         deps::GoDependency::Remote {

@@ -1,5 +1,8 @@
 use super::resolution::ImportState;
 use super::*;
+use crate::analysis::ProjectKind;
+use crate::analysis::ScriptUnit;
+use crate::store;
 use syntax::program::TestFunction;
 
 #[derive(Debug, Clone)]
@@ -92,8 +95,8 @@ impl PendingWork {
 /// A consistent read-only snapshot from which parallel checker tasks start.
 pub(crate) struct TaskSeed {
     binding_ids: Arc<BindingIdAllocator>,
-    project_kind: crate::analysis::ProjectKind,
-    script: Option<crate::analysis::ScriptUnit>,
+    project_kind: ProjectKind,
+    script: Option<ScriptUnit>,
 }
 
 impl TaskSeed {
@@ -102,7 +105,7 @@ impl TaskSeed {
             self.binding_ids.clone(),
             LocalSink::new(),
             self.project_kind,
-            crate::store::ENTRY_PACKAGE_ID,
+            store::ENTRY_PACKAGE_ID,
             self.script,
         )
     }
@@ -116,8 +119,8 @@ pub struct TaskState {
     pub(super) imports: ImportState,
     pub sink: LocalSink,
     pub facts: Facts,
-    pub(crate) project_kind: crate::analysis::ProjectKind,
-    pub(crate) script: Option<crate::analysis::ScriptUnit>,
+    pub(crate) project_kind: ProjectKind,
+    pub(crate) script: Option<ScriptUnit>,
     pub(crate) pending: PendingWork,
 }
 
@@ -125,9 +128,9 @@ impl TaskState {
     fn new(
         binding_ids: Arc<BindingIdAllocator>,
         sink: LocalSink,
-        project_kind: crate::analysis::ProjectKind,
+        project_kind: ProjectKind,
         package_id: impl Into<String>,
-        script: Option<crate::analysis::ScriptUnit>,
+        script: Option<ScriptUnit>,
     ) -> Self {
         Self {
             env: TypeEnv::new(),
@@ -146,7 +149,7 @@ impl TaskState {
         Self::new(
             Arc::new(BindingIdAllocator::new()),
             LocalSink::new(),
-            crate::analysis::ProjectKind::Binary,
+            ProjectKind::Binary,
             package_id,
             None,
         )
@@ -154,14 +157,14 @@ impl TaskState {
 
     pub(crate) fn with_sink(
         sink: LocalSink,
-        project_kind: crate::analysis::ProjectKind,
-        script: Option<crate::analysis::ScriptUnit>,
+        project_kind: ProjectKind,
+        script: Option<ScriptUnit>,
     ) -> Self {
         Self::new(
             Arc::new(BindingIdAllocator::new()),
             sink,
             project_kind,
-            crate::store::ENTRY_PACKAGE_ID,
+            store::ENTRY_PACKAGE_ID,
             script,
         )
     }

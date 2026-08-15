@@ -1,8 +1,16 @@
+use crate::go_cli;
+use crate::handlers;
+use crate::handlers::ScriptResolveMode;
+use crate::lock;
+use crate::output;
+use crate::typedef_scan;
 use std::collections::HashSet;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::Arc;
+use std::sync::PoisonError;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 
@@ -79,18 +87,18 @@ impl<'a> GoWorkspace<'a> {
     /// Run a `go` subcommand and return its stdout on success.
     fn run_go(&self, args: &[&str]) -> Result<String, String> {
         let cmd_display = format!("go {}", args.join(" "));
-        let output = crate::go_cli::go_command(self.target)
+        let output = go_cli::go_command(self.target)
             .args(args)
             .current_dir(self.root)
             .output()
             .map_err(|e| {
-                crate::go_cli::toolchain_failure_message()
+                go_cli::toolchain_failure_message()
                     .unwrap_or_else(|| format!("Failed to run `{}`: {}", cmd_display, e))
             })?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(crate::go_cli::toolchain_failure_message()
+            return Err(go_cli::toolchain_failure_message()
                 .unwrap_or_else(|| translate_go_error(args, stderr.trim())));
         }
 
@@ -247,7 +255,7 @@ impl<'a> GoWorkspace<'a> {
             c
         } else {
             let bindgen_at_version = format!("{}@v{}", BINDGEN_GO_MODULE, BINDGEN_VERSION);
-            let mut c = crate::go_cli::go_command(self.target);
+            let mut c = go_cli::go_command(self.target);
             c.args(["run", &bindgen_at_version, sub]);
             c
         };
@@ -881,7 +889,7 @@ pub(crate) fn warm_typedefs(
     }
 
     let src_dir = project_root.join("src");
-    let Ok(scanned) = crate::typedef_scan::scan_source_imports(&src_dir) else {
+    let Ok(scanned) = typedef_scan::scan_source_imports(&src_dir) else {
         return;
     };
 
@@ -910,7 +918,7 @@ pub(crate) fn warm_typedefs(
         return;
     }
 
-    crate::output::print_progress(&format!(
+    output::print_progress(&format!(
         "Generating typedefs for {} Go import(s)",
         roots.len()
     ));
@@ -1050,15 +1058,15 @@ impl BindgenSetup for WorkspaceBindgenSetup {
         fs::create_dir_all(&target_dir)
             .map_err(|e| format!("Failed to create `{}`: {}", target_dir.display(), e))?;
 
-        let lock = crate::lock::acquire_target_lock_quiet(&target_dir)?;
+        let lock = lock::acquire_target_lock_quiet(&target_dir)?;
 
         let manifest_locator =
             TypedefLocator::new(manifest.go_deps(), Some(project_root.to_path_buf()), target);
-        crate::go_cli::write_go_mod(&target_dir, &manifest.project.name, &manifest_locator)?;
+        go_cli::write_go_mod(&target_dir, &manifest.project.name, &manifest_locator)?;
 
         let typedef_cache_dir = deps::typedef_cache_dir(project_root);
-        let bindgen: std::sync::Arc<dyn Bindgen> =
-            std::sync::Arc::new(WorkspaceBindgen::new(target_dir, typedef_cache_dir, target));
+        let bindgen: Arc<dyn Bindgen> =
+            Arc::new(WorkspaceBindgen::new(target_dir, typedef_cache_dir, target));
 
         Ok(BindgenSession::new(bindgen, Box::new(lock)))
     }
@@ -1068,13 +1076,9 @@ impl BindgenSetup for WorkspaceBindgenSetup {
         source: &str,
         file: &Path,
     ) -> Result<(TypedefLocator, Option<deps::ScriptSession>), String> {
-        let (locator, dir) = crate::handlers::script_locator(
-            source,
-            file,
-            crate::handlers::ScriptResolveMode::Offline,
-        )?;
+        let (locator, dir) = handlers::script_locator(source, file, ScriptResolveMode::Offline)?;
         let session = dir
-            .map(|dir| crate::lock::acquire_target_lock_quiet(&dir))
+            .map(|dir| lock::acquire_target_lock_quiet(&dir))
             .transpose()?
             .map(|lock| deps::ScriptSession::new(Box::new(lock)));
         Ok((locator, session))
@@ -1083,21 +1087,18 @@ impl BindgenSetup for WorkspaceBindgenSetup {
 
 impl Bindgen for WorkspaceBindgen {
     fn run(&self, pkg: &GoPackage<'_>) -> Result<(), BindgenFailure> {
-        let _guard = self
-            .mutex
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _guard = self.mutex.lock().unwrap_or_else(PoisonError::into_inner);
 
         let typedef_path = pkg.typedef_path(&self.typedef_cache_dir, self.target);
         if typedef_path.exists() {
             return Ok(());
         }
 
-        if !*self.go_present.get_or_init(crate::go_cli::is_go_present) {
+        if !*self.go_present.get_or_init(go_cli::is_go_present) {
             return Err(BindgenFailure::GoToolchainMissing);
         }
 
-        crate::output::print_progress(&format!("Generating typedef for {}", pkg.package));
+        output::print_progress(&format!("Generating typedef for {}", pkg.package));
         self.progress_emitted.store(true, Ordering::Relaxed);
 
         let workspace = GoWorkspace::new(&self.target_dir, &self.typedef_cache_dir, self.target);
@@ -1143,6 +1144,7 @@ fn dev_bindgen_path() -> Option<std::path::PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::handlers;
     use deps::GoModule;
     use std::fs as stdfs;
 
@@ -1168,7 +1170,7 @@ mod tests {
             .unwrap();
 
         assert!(dir.is_none());
-        assert!(!crate::handlers::script_build_dir(&file).exists());
+        assert!(!handlers::script_build_dir(&file).exists());
     }
 
     fn valid_typedef() -> String {

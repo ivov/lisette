@@ -5,6 +5,9 @@ use crate::names::go_name;
 use crate::names::packages::{PackageRequirements, PackageUse};
 use crate::types::native::NativeGoType;
 use crate::types::prelude::PreludeType;
+use fmt::Formatter;
+use std::fmt;
+use std::fmt::Display;
 use syntax::ast::ResolvedCallTypeArguments;
 use syntax::program::DefinitionBody;
 use syntax::types::{CompoundKind, FunctionParameter, SimpleKind, Type};
@@ -52,8 +55,8 @@ impl GoType {
     }
 }
 
-impl std::fmt::Display for GoType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for GoType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.code)
     }
 }

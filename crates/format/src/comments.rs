@@ -1,4 +1,5 @@
 use crate::lindig::{Document, concat, join};
+use syntax::ast::Span;
 use syntax::lex::{Token, TokenKind};
 
 #[derive(Debug, Clone)]
@@ -352,7 +353,7 @@ impl<'a> Comments<'a> {
         None
     }
 
-    pub fn has_comments_in_range(&self, span: syntax::ast::Span) -> bool {
+    pub fn has_comments_in_range(&self, span: Span) -> bool {
         let start = span.byte_offset;
         let end = span.byte_offset + span.byte_length;
 

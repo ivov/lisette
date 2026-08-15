@@ -2,6 +2,9 @@ use std::path::{Path, PathBuf};
 
 use super::script_table::ScriptTable;
 use crate::cli_error;
+use crate::go_cli;
+use std::fs;
+use syntax::imports;
 
 pub(super) fn refuse_project_file(file: &Path, heading: &str) -> Result<(), i32> {
     let root = match super::project::resolve_file_target(file) {
@@ -22,7 +25,7 @@ pub(super) fn refuse_project_file(file: &Path, heading: &str) -> Result<(), i32>
 }
 
 pub(super) fn save_unchanged(table: &ScriptTable, file: &Path, source: &str) -> Result<(), String> {
-    let current = std::fs::read_to_string(file)
+    let current = fs::read_to_string(file)
         .map_err(|e| format!("Failed to read `{}`: {}", file.display(), e))?;
     if current != source {
         return Err(format!(
@@ -34,7 +37,7 @@ pub(super) fn save_unchanged(table: &ScriptTable, file: &Path, source: &str) -> 
 }
 
 pub(super) fn read(file: &Path, heading: &str) -> Option<String> {
-    match std::fs::read_to_string(file) {
+    match fs::read_to_string(file) {
         Ok(source) => Some(source),
         Err(e) => {
             cli_error!(
@@ -49,7 +52,7 @@ pub(super) fn read(file: &Path, heading: &str) -> Option<String> {
 
 pub(super) fn script_dir(file: &Path, heading: &str) -> Result<PathBuf, i32> {
     let dir = super::script::script_build_dir(file);
-    if let Err(e) = std::fs::create_dir_all(&dir) {
+    if let Err(e) = fs::create_dir_all(&dir) {
         cli_error!(heading, e.to_string(), "Check permissions on the temp dir");
         return Err(1);
     }
@@ -58,7 +61,7 @@ pub(super) fn script_dir(file: &Path, heading: &str) -> Result<PathBuf, i32> {
 
 pub(super) fn write_go_mod(dir: &Path, table: &ScriptTable, heading: &str) -> Result<(), i32> {
     let locator = super::script_deps::locator(table.deps(), dir, super::script_deps::Mode::Offline);
-    if let Err(message) = crate::go_cli::write_go_mod(dir, super::script::GO_MODULE, &locator) {
+    if let Err(message) = go_cli::write_go_mod(dir, super::script::GO_MODULE, &locator) {
         cli_error!(heading, message, "Check permissions on the temp dir");
         return Err(1);
     }
@@ -66,7 +69,7 @@ pub(super) fn write_go_mod(dir: &Path, table: &ScriptTable, heading: &str) -> Re
 }
 
 pub(super) fn third_party_imports(source: &str) -> Vec<String> {
-    syntax::imports::scan_imports(source, 0)
+    imports::scan_imports(source, 0)
         .into_iter()
         .filter_map(|import| {
             let package = import.name.strip_prefix("go:")?;

@@ -4,6 +4,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use serde::Deserialize;
+use std::collections::BTreeSet;
+use std::collections::HashMap;
 
 include!(concat!(env!("OUT_DIR"), "/go_version.rs"));
 
@@ -324,7 +326,7 @@ pub fn write_go_outputs(dir: &Path, files: &[OutputFile]) -> Result<EmitWriteRes
 
 /// Hash of the sorted union of external (non-stdlib, non-local) Go imports.
 pub fn compute_import_set_hash(manifest: &[ManifestEntry], go_module_name: &str) -> u64 {
-    let mut paths: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+    let mut paths: BTreeSet<&str> = BTreeSet::new();
     for entry in manifest {
         for path in &entry.imports {
             if is_external_import(path, go_module_name) {
@@ -370,7 +372,7 @@ fn hash_go_code(content: &str) -> u64 {
     h
 }
 
-fn read_emit_manifest(dir: &Path) -> std::collections::HashMap<String, ManifestEntry> {
+fn read_emit_manifest(dir: &Path) -> HashMap<String, ManifestEntry> {
     let Ok(content) = fs::read_to_string(emit_manifest_path(dir)) else {
         return Default::default();
     };
@@ -724,6 +726,7 @@ fn run_go_test(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
 
     fn linux() -> Target {
         Target::new("linux", "amd64")
@@ -743,7 +746,7 @@ mod tests {
         let map = deps
             .into_iter()
             .map(|(k, v)| (k.to_string(), v))
-            .collect::<std::collections::BTreeMap<_, _>>();
+            .collect::<BTreeMap<_, _>>();
         TypedefLocator::new(map, None, Target::host())
     }
 
@@ -825,7 +828,7 @@ mod tests {
         let target_dir = project.path().join("target");
         fs::create_dir_all(&target_dir).unwrap();
 
-        let mut go_deps = std::collections::BTreeMap::new();
+        let mut go_deps = BTreeMap::new();
         go_deps.insert("example.com/me/foo".to_string(), local_dep("foo"));
         let locator =
             TypedefLocator::new(go_deps, Some(project.path().to_path_buf()), Target::host());
@@ -849,7 +852,7 @@ mod tests {
         let target_dir = project.path().join("target");
         fs::create_dir_all(&target_dir).unwrap();
 
-        let mut go_deps = std::collections::BTreeMap::new();
+        let mut go_deps = BTreeMap::new();
         go_deps.insert("example.com/me/foo".to_string(), local_dep("foo"));
         let locator = TypedefLocator::new(
             go_deps.clone(),

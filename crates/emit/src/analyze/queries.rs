@@ -9,7 +9,9 @@ use crate::definitions::structs::is_raw_function_type;
 use crate::names::go_name;
 use syntax::ast::{Generic, Pattern, RestPattern, StructFields};
 use syntax::containment::enum_payload_pointer_wrapped;
+use syntax::go_names;
 use syntax::program::{Definition, DefinitionBody, interface_requirements};
+use syntax::types;
 use syntax::types::{Type, substitute};
 
 impl Planner<'_> {
@@ -60,7 +62,7 @@ impl Planner<'_> {
         match &resolved.definition.body {
             DefinitionBody::Struct { fields, .. } => {
                 if let Some(field) = fields.iter().find(|f| f.name == field_name) {
-                    return syntax::go_names::struct_field_is_exported(
+                    return go_names::struct_field_is_exported(
                         field,
                         resolved.definition.is_serialized(),
                     );
@@ -249,7 +251,7 @@ impl Planner<'_> {
             return None;
         };
 
-        let name = syntax::types::unqualified_name(enum_id);
+        let name = types::unqualified_name(enum_id);
         if name == "Option" || name == "Result" || name == "Partial" {
             return None;
         }

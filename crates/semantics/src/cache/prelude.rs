@@ -8,6 +8,7 @@ use super::types::CachedDefinition;
 use super::{CACHE_FORMAT_VERSION, COMPILER_VERSION_HASH, PRELUDE_HASH};
 use crate::prelude::{PRELUDE_FILE_ID, PRELUDE_PACKAGE_ID};
 use crate::store::Store;
+use std::fs;
 
 #[derive(Serialize, Deserialize)]
 pub struct PreludeCache {
@@ -33,7 +34,7 @@ pub(crate) fn try_load_prelude_cache() -> Option<PreludeCache> {
         || cache.content_hash != PRELUDE_HASH
         || cache.compiler_version != COMPILER_VERSION_HASH
     {
-        let _ = std::fs::remove_file(&path);
+        let _ = fs::remove_file(&path);
         return None;
     }
 

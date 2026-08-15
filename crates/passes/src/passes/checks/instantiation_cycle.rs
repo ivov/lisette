@@ -10,6 +10,8 @@ use syntax::program::DotAccessKind;
 use syntax::types::{CompoundKind, FunctionType, Symbol, Type};
 
 use semantics::store::Store;
+use std::iter;
+use syntax::ast::Generic;
 
 pub(crate) fn run(store: &Store, sink: &LocalSink) {
     let targets = collect_generic_targets(store);
@@ -134,7 +136,7 @@ fn collect_generic_targets(store: &Store) -> Targets<'_> {
 
 fn collect_method<'a>(
     method: &'a Expression,
-    impl_generics: &'a [syntax::ast::Generic],
+    impl_generics: &'a [Generic],
     receiver_name: &EcoString,
     package_id: &str,
     targets: &mut Targets<'a>,
@@ -459,7 +461,7 @@ fn structural_children(ty: &Type) -> Vec<&Type> {
             .params
             .iter()
             .map(|param| &param.ty)
-            .chain(std::iter::once(function.return_type.as_ref()))
+            .chain(iter::once(function.return_type.as_ref()))
             .collect(),
         Type::Tuple(elements) => elements.iter().collect(),
         _ => Vec::new(),

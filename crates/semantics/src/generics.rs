@@ -9,6 +9,8 @@ use crate::checker::infer::interface::interface_requires_methods;
 use crate::checker::{EnvResolve, TaskState};
 use crate::facts::GenericBoundOrigin;
 use crate::store::Store;
+use std::iter;
+use std::mem;
 
 #[derive(Debug, Clone)]
 pub struct AppliedGenericBound {
@@ -110,7 +112,7 @@ pub(crate) fn type_argument_children(ty: &Type) -> Vec<&Type> {
             .params
             .iter()
             .map(|param| &param.ty)
-            .chain(std::iter::once(function.return_type.as_ref()))
+            .chain(iter::once(function.return_type.as_ref()))
             .collect(),
         _ => Vec::new(),
     }
@@ -150,7 +152,7 @@ impl TaskState {
     }
 
     fn check_resolved_generic_obligations(&mut self, store: &Store) {
-        let obligations = std::mem::take(&mut self.facts.deferred.generic_bounds);
+        let obligations = mem::take(&mut self.facts.deferred.generic_bounds);
         let mut unresolved = Vec::new();
         let mut seen = rustc_hash::FxHashSet::default();
 

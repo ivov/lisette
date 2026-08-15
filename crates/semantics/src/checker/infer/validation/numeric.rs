@@ -3,6 +3,8 @@ use syntax::ast::{Expression, Span};
 use syntax::types::{SimpleKind, Type};
 
 use crate::checker::infer::InferCtx;
+use syntax::ast::Literal;
+use syntax::ast::UnaryOperator;
 
 impl InferCtx<'_> {
     /// Validates that an integer literal fits within the target numeric type.
@@ -106,16 +108,16 @@ impl InferCtx<'_> {
 
         let (value, is_negative) = match expression.unwrap_parens() {
             Expression::Literal {
-                literal: syntax::ast::Literal::Integer { value, .. },
+                literal: Literal::Integer { value, .. },
                 ..
             } => (*value, false),
             Expression::Unary {
-                operator: syntax::ast::UnaryOperator::Negative,
+                operator: UnaryOperator::Negative,
                 expression: inner,
                 ..
             } => {
                 if let Expression::Literal {
-                    literal: syntax::ast::Literal::Integer { value, .. },
+                    literal: Literal::Integer { value, .. },
                     ..
                 } = inner.unwrap_parens()
                 {

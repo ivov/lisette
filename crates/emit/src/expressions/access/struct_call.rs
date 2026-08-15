@@ -14,6 +14,9 @@ use crate::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use crate::utils::is_order_sensitive;
+use syntax::program::AliasKind;
+use syntax::types;
+use syntax::types::SubstitutionMap;
 
 struct SpreadInput<'a> {
     base: &'a Expression,
@@ -298,7 +301,7 @@ impl Planner<'_> {
         let is_opaque = matches!(
             self.facts.definition(id).map(|d| &d.body),
             Some(DefinitionBody::TypeAlias {
-                alias: syntax::program::AliasKind::Opaque(_),
+                alias: AliasKind::Opaque(_),
                 ..
             })
         );
@@ -710,40 +713,40 @@ fn layout_is_map(layout: &ValueLayout) -> bool {
     }
 }
 
-fn forall_substitution(definition_ty: &Type, params: &[Type]) -> syntax::types::SubstitutionMap {
+fn forall_substitution(definition_ty: &Type, params: &[Type]) -> SubstitutionMap {
     if let Type::Forall { vars, .. } = definition_ty
         && !vars.is_empty()
         && vars.len() == params.len()
     {
         generics_substitution(vars.iter().cloned(), params)
     } else {
-        syntax::types::SubstitutionMap::default()
+        SubstitutionMap::default()
     }
 }
 
 fn generics_substitution(
     vars: impl Iterator<Item = ecow::EcoString>,
     params: &[Type],
-) -> syntax::types::SubstitutionMap {
-    let mut map = syntax::types::SubstitutionMap::default();
+) -> SubstitutionMap {
+    let mut map = SubstitutionMap::default();
     for (var, param) in vars.zip(params.iter()) {
         map.insert(var, param.clone());
     }
     map
 }
 
-fn apply_substitution(ty: &Type, map: &syntax::types::SubstitutionMap) -> Type {
+fn apply_substitution(ty: &Type, map: &SubstitutionMap) -> Type {
     if map.is_empty() {
         ty.clone()
     } else {
-        syntax::types::substitute(ty, map)
+        types::substitute(ty, map)
     }
 }
 
 fn unspecified_pairs<'a>(
     fields: impl Iterator<Item = (&'a ecow::EcoString, &'a Type)>,
     assigned: &HashSet<&str>,
-    map: &syntax::types::SubstitutionMap,
+    map: &SubstitutionMap,
 ) -> Vec<(ecow::EcoString, Type)> {
     fields
         .filter(|(name, _)| !assigned.contains(name.as_str()))

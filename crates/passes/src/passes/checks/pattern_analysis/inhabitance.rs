@@ -2,6 +2,7 @@ use rustc_hash::FxHashMap as HashMap;
 
 use semantics::store::Store;
 use syntax::ast::{EnumVariant, Generic, StructFieldDefinition};
+use syntax::program::AliasKind;
 use syntax::program::DefinitionBody;
 use syntax::types::Type;
 use syntax::types::{SubstitutionMap, build_substitution_map, substitute};
@@ -132,7 +133,7 @@ fn check_constructor_inhabited(
         DefinitionBody::TypeAlias {
             generics, alias, ..
         } => {
-            let syntax::program::AliasKind::Transparent { target, .. } = alias else {
+            let AliasKind::Transparent { target, .. } = alias else {
                 return true;
             };
             let map = build_substitution_map(generics, params);

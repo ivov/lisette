@@ -8,6 +8,8 @@ use crate::plan::calls::CallableOrigin;
 use crate::plan::values::{
     CaptureBoundary, EvaluationEffect, GoExpression, SequencedValues, Stability, ValuePlan,
 };
+use std::iter;
+use std::mem;
 use syntax::ast::{Expression, IdentifierResolution};
 use syntax::types::{FunctionParameter, Type};
 
@@ -43,8 +45,8 @@ impl Planner<'_> {
     /// Pin a staged operand's value into a temp so it evaluates before any
     /// later sibling.
     pub(crate) fn pin_staged(&mut self, staged: &mut ValuePlan, prefix: &str) {
-        let value = std::mem::replace(&mut staged.expression, GoExpression::opaque(String::new()))
-            .rendered();
+        let value =
+            mem::replace(&mut staged.expression, GoExpression::opaque(String::new())).rendered();
         let tmp = self.hoist_tmp_value_statement(&mut staged.setup, prefix, &value);
         staged.replace_with_pinned_name(tmp);
     }
@@ -301,7 +303,7 @@ impl Planner<'_> {
                 let combined = format!("append([]{element_go}{{{leading}}}, {spread_value}...)...");
                 values.splice(
                     c.fixed_count..=spread_index,
-                    std::iter::once(GoExpression::opaque_with_deferred_evaluation(
+                    iter::once(GoExpression::opaque_with_deferred_evaluation(
                         combined, true,
                     )),
                 );
@@ -370,11 +372,11 @@ impl Planner<'_> {
         let mut results = Vec::with_capacity(stages.len());
         for i in 0..stages.len() {
             let s_non_literal = !stages[i].evaluation.stability.is_fixed();
-            let s_expression = std::mem::replace(
+            let s_expression = mem::replace(
                 &mut stages[i].expression,
                 GoExpression::opaque(String::new()),
             );
-            let s_setup = std::mem::take(&mut stages[i].setup);
+            let s_setup = mem::take(&mut stages[i].setup);
 
             setup.extend(s_setup);
 

@@ -14,6 +14,7 @@ use crate::imports::{Importable, PackageResolver};
 use crate::paths::{ENTRY_PACKAGE_ID, package_file_to_path};
 use crate::position::LineIndex;
 use crate::project::ProjectConfig;
+use std::path::Path;
 
 pub(crate) struct AnalysisSnapshot {
     pub(crate) analysis: Analysis,
@@ -41,7 +42,7 @@ impl AnalysisSnapshot {
     pub(crate) fn new(
         analysis: Analysis,
         config: &ProjectConfig,
-        entry_dir: &std::path::Path,
+        entry_dir: &Path,
         external_test: bool,
         packages: PackageResolver,
     ) -> Self {
@@ -111,7 +112,7 @@ impl AnalysisSnapshot {
     }
 
     /// On-disk path of a `go:` typedef file, if `file_id` names one.
-    pub(crate) fn typedef_path(&self, file_id: u32) -> Option<&std::path::Path> {
+    pub(crate) fn typedef_path(&self, file_id: u32) -> Option<&Path> {
         self.analysis
             .emit_input
             .files

@@ -3,6 +3,7 @@
 use ecow::EcoString;
 
 use crate::ast::{ImportAlias, Span};
+use crate::lex;
 use crate::program::FileImport;
 
 pub fn scan_imports(source: &str, file_id: u32) -> Vec<FileImport> {
@@ -49,8 +50,8 @@ impl<'source> Scanner<'source> {
     }
 
     fn skip_shebang(&mut self) {
-        self.offset = crate::lex::bom_len(self.source);
-        if let Some(length) = crate::lex::shebang_len(&self.source[self.offset..]) {
+        self.offset = lex::bom_len(self.source);
+        if let Some(length) = lex::shebang_len(&self.source[self.offset..]) {
             self.offset += length;
         }
     }

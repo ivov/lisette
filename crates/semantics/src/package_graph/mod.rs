@@ -12,6 +12,12 @@ use crate::loader as semantics_loader;
 use crate::loader::Loader;
 use crate::store::{ENTRY_PACKAGE_ID, Store};
 use diagnostics::LocalSink;
+use std::mem;
+use syntax::dependency_block;
+use syntax::dependency_block::DependencyBlock;
+use syntax::imports::scan_imports;
+use syntax::program;
+use syntax::program::FileImport;
 
 pub type PackageId = String;
 
@@ -183,7 +189,7 @@ pub struct ScannedFile {
     pub name: String,
     pub display_path: String,
     pub source: String,
-    pub imports: Vec<syntax::program::FileImport>,
+    pub imports: Vec<FileImport>,
 }
 
 impl ScannedFile {
@@ -192,7 +198,7 @@ impl ScannedFile {
     }
 
     pub fn is_test(&self) -> bool {
-        syntax::program::is_test_file(&self.name)
+        program::is_test_file(&self.name)
     }
 
     pub fn parse(
@@ -299,7 +305,7 @@ struct GraphBuilder<'a> {
 impl<'a> GraphBuilder<'a> {
     fn visit(&mut self, mut to_visit: Vec<PackageId>) {
         while !to_visit.is_empty() {
-            let drained: Vec<PackageId> = std::mem::take(&mut to_visit);
+            let drained: Vec<PackageId> = mem::take(&mut to_visit);
             let mut batch: Vec<PackageId> = Vec::with_capacity(drained.len());
             for package_id in drained {
                 if self.visited.insert(package_id.clone()) {
@@ -438,7 +444,7 @@ impl<'a> GraphBuilder<'a> {
 
 #[derive(Clone)]
 struct ClassifiedImport {
-    import: syntax::program::FileImport,
+    import: FileImport,
     kind: DependencyKind,
 }
 
@@ -577,7 +583,7 @@ fn read_folder(fs: &dyn Loader, package_id: &str) -> Vec<(String, semantics_load
 
 fn scan_one(job: ScanJob) -> (PackageId, ScannedFile) {
     let file = ScannedFile {
-        imports: syntax::imports::scan_imports(&job.source, job.file_id),
+        imports: scan_imports(&job.source, job.file_id),
         file_id: job.file_id,
         name: job.filename,
         display_path: job.display_path,
@@ -637,7 +643,7 @@ pub(crate) fn check_dependency_blocks(
     let script = scope.script_unit().is_some();
 
     for (file_id, source) in sources {
-        let blocks = syntax::dependency_block::scan_dependency_blocks(source, *file_id);
+        let blocks = dependency_block::scan_dependency_blocks(source, *file_id);
         let Some((first, rest)) = blocks.split_first() else {
             continue;
         };
@@ -679,7 +685,7 @@ pub(crate) fn check_dependency_blocks(
 }
 
 fn entry_span(
-    block: &syntax::dependency_block::DependencyBlock,
+    block: &DependencyBlock,
     table: &deps::DependencyTable,
     module_path: &str,
     file_id: u32,
@@ -890,10 +896,11 @@ fn process_file_imports(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use syntax::program::FileImport;
+    use FileImport;
+    use std::path::PathBuf;
 
     const DIRECTORY_SCOPE: AnalysisScope = AnalysisScope::Directory;
-    const PROJECT_SCOPE: AnalysisScope = AnalysisScope::Project(std::path::PathBuf::new());
+    const PROJECT_SCOPE: AnalysisScope = AnalysisScope::Project(PathBuf::new());
 
     fn go_import(is_blank: bool, offset: u32) -> FileImport {
         let span = Span::new(0, offset, 1);

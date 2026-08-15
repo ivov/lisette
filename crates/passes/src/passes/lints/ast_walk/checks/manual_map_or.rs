@@ -3,6 +3,7 @@ use syntax::ast::{Expression, MatchArm, Pattern, RestPattern, Span};
 use syntax::types::unqualified_name;
 
 use super::helpers::{enum_variant_binding, has_escaping_control_flow, is_eager_safe};
+use std::slice;
 
 pub fn check_manual_map_or(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Match {
@@ -115,7 +116,7 @@ fn maps_binding(body: &Expression, binding: &str) -> bool {
     let mut referenced = false;
     let mut shadowed = false;
     visit_ast(
-        std::slice::from_ref(body),
+        slice::from_ref(body),
         &mut |node, _| {
             if matches!(node, Expression::Identifier { value, .. } if value.as_str() == binding) {
                 referenced = true;

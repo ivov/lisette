@@ -10,14 +10,16 @@ use super::build::{BuildPurpose, build_locked, project_root_for, with_locked_pro
 
 mod failed;
 mod report;
+use crate::output;
 use report::{
     all_test_keys, build_report_filtered, exit_code, matching_tests, nothing_executed, render,
 };
+use std::path::Path;
 
 pub fn test(path: Option<String>, go_flags: Vec<String>, selection: TestSelection) -> i32 {
-    crate::output::print_preview_notice("Test runner", false);
+    output::print_preview_notice("Test runner", false);
     let target = path.unwrap_or_else(|| ".".to_string());
-    let root = project_root_for(std::path::Path::new(&target));
+    let root = project_root_for(Path::new(&target));
     with_locked_project(&root, |prep| {
         let outcome = match build_locked(prep, BuildPurpose::Test) {
             Ok(outcome) => outcome,
@@ -34,7 +36,7 @@ pub fn test(path: Option<String>, go_flags: Vec<String>, selection: TestSelectio
                     .filter(|key| live.contains(key))
                     .collect();
                 if set.is_empty() {
-                    let message = crate::output::format_backticks(
+                    let message = output::format_backticks(
                         "No failures to rerun. Run `lis test` first.",
                         use_color(),
                     );
@@ -46,7 +48,7 @@ pub fn test(path: Option<String>, go_flags: Vec<String>, selection: TestSelectio
             TestSelection::Filter(pattern) => {
                 let matched = matching_tests(&outcome.test_index, go_module, pattern);
                 if matched.is_empty() {
-                    let message = crate::output::format_backticks(
+                    let message = output::format_backticks(
                         &format!("No tests match `{pattern}`"),
                         use_color(),
                     );

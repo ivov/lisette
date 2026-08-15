@@ -6,6 +6,9 @@ use emit::{Planner, TestEmitConfig};
 use syntax::program::File;
 
 use crate::_harness::pipeline::TestPipeline;
+use std::collections::HashSet;
+use std::io;
+use syntax::program::TestIndex;
 
 const PRELUDE_IMPORT_PATH: &str = "github.com/ivov/lisette/prelude";
 const GO_MODULE: &str = "lisette/e2e_suite_tests";
@@ -56,7 +59,7 @@ pub fn compile_e2e_suite_test(input: &str, package_name: &str) -> Result<Emitted
         file_comment: None,
     };
 
-    let test_index = syntax::program::TestIndex::default();
+    let test_index = TestIndex::default();
     let config = TestEmitConfig {
         definitions: &result.definitions,
         package_id: &result.package_id,
@@ -259,7 +262,7 @@ pub fn write_subpackage(
     name: &str,
     go_code: &str,
     entry: Option<EntryPoint>,
-) -> std::io::Result<()> {
+) -> io::Result<()> {
     let pkg_dir = target_dir.join(format!("test_{name}"));
     fs::create_dir_all(&pkg_dir)?;
     fs::write(pkg_dir.join("test.go"), go_code)?;
@@ -274,11 +277,7 @@ pub fn write_subpackage(
     Ok(())
 }
 
-pub fn write_go_mod(
-    target_dir: &Path,
-    prelude_path: &Path,
-    go_version: &str,
-) -> std::io::Result<()> {
+pub fn write_go_mod(target_dir: &Path, prelude_path: &Path, go_version: &str) -> io::Result<()> {
     let abs = prelude_path.canonicalize()?;
     let content = format!(
         "module {GO_MODULE}\n\ngo {go_version}\n\nrequire {PRELUDE_IMPORT_PATH} v0.0.0\n\nreplace {PRELUDE_IMPORT_PATH} => {}\n",
@@ -359,10 +358,10 @@ pub fn target_dir() -> PathBuf {
     repo_root().join("target/e2e_suite")
 }
 
-pub fn read_skip_list() -> std::collections::HashSet<String> {
+pub fn read_skip_list() -> HashSet<String> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("e2e_suite/skip.txt");
     let Ok(content) = fs::read_to_string(&path) else {
-        return std::collections::HashSet::new();
+        return HashSet::new();
     };
     content
         .lines()
@@ -381,7 +380,7 @@ pub fn read_skip_list() -> std::collections::HashSet<String> {
         .collect()
 }
 
-pub fn read_go_version() -> std::io::Result<String> {
+pub fn read_go_version() -> io::Result<String> {
     let v = fs::read_to_string(repo_root().join("go-version"))?;
     let trimmed = v.trim();
     let mut parts = trimmed.split('.');

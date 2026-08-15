@@ -14,6 +14,7 @@ pub use emit::{emit_with_go_typedefs, emit_with_sourcemap};
 pub use filesystem::MockFileSystem;
 pub use formatting::snapshot_description;
 pub use infer::{InferResult, infer, infer_package, infer_with_go_typedefs};
+use syntax::program::ValueKind;
 
 pub const TEST_PACKAGE_ID: &str = "test";
 
@@ -61,7 +62,7 @@ fn register_test_builtins(store: &mut Store) {
                 name_span: None,
                 doc: None,
                 body: DefinitionBody::Value {
-                    kind: syntax::program::ValueKind::Runtime,
+                    kind: ValueKind::Runtime,
                     allowed_lints: vec![],
                     go_hints: vec![],
                     go_name: None,

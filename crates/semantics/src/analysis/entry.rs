@@ -1,4 +1,5 @@
 use super::*;
+use syntax::ast::Expression;
 
 pub(super) enum EntryRegistration {
     Absent,
@@ -32,7 +33,7 @@ impl EntryRegistration {
 }
 
 struct ParsedEntry {
-    ast: Vec<syntax::ast::Expression>,
+    ast: Vec<Expression>,
     file_comment: Option<String>,
     outcome: EntryParseOutcome,
 }

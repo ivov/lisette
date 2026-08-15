@@ -218,9 +218,10 @@ mod tests {
     use crate::fs::LocalFileSystem;
     use semantics::PARALLEL_THRESHOLD;
     use std::fs as stdfs;
+    use std::path::Path;
     use tempfile::tempdir;
 
-    fn check_diagnostics(project_dir: &std::path::Path) -> Vec<(bool, Option<String>)> {
+    fn check_diagnostics(project_dir: &Path) -> Vec<(bool, Option<String>)> {
         let (_, locator) = TypedefLocator::from_project_with_manifest(project_dir).unwrap();
         let src_main = project_dir.join("src").join("main.lis");
         let source = stdfs::read_to_string(&src_main).unwrap();
@@ -496,9 +497,7 @@ mod tests {
         );
     }
 
-    fn analyze_cache_state(
-        project_dir: &std::path::Path,
-    ) -> (Vec<String>, Vec<(bool, Option<String>)>) {
+    fn analyze_cache_state(project_dir: &Path) -> (Vec<String>, Vec<(bool, Option<String>)>) {
         let (_, locator) = TypedefLocator::from_project_with_manifest(project_dir).unwrap();
         let src_main = project_dir.join("src").join("main.lis");
         let source = stdfs::read_to_string(&src_main).unwrap();
@@ -596,7 +595,7 @@ mod tests {
         );
     }
 
-    fn test_index_names(project_dir: &std::path::Path) -> Vec<String> {
+    fn test_index_names(project_dir: &Path) -> Vec<String> {
         let (_, locator) = TypedefLocator::from_project_with_manifest(project_dir).unwrap();
         let src_main = project_dir.join("src").join("main.lis");
         let source = stdfs::read_to_string(&src_main).unwrap();

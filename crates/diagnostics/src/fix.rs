@@ -1,3 +1,4 @@
+use std::iter;
 use syntax::ast::Span;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -66,7 +67,7 @@ impl Fix {
     }
 
     pub fn edits(&self) -> impl Iterator<Item = &Edit> + Clone {
-        std::iter::once(&self.first).chain(self.rest.iter())
+        iter::once(&self.first).chain(self.rest.iter())
     }
 
     pub(crate) fn file_id(&self) -> u32 {

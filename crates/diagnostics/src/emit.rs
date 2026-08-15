@@ -1,4 +1,5 @@
 use crate::LisetteDiagnostic;
+use crate::pattern;
 use syntax::ast::Span;
 
 pub fn go_name_collision(
@@ -73,7 +74,7 @@ pub fn go_import_collision(
              Add an alias to at least one of them in your source: \
              `import my_{} \"go:{}\"`. \
              One of these may have been pulled in transitively by a typedef.",
-            crate::pattern::join_and(&packages),
+            pattern::join_and(&packages),
             if packages.len() == 2 { "both" } else { "all" },
             alias,
             alias,

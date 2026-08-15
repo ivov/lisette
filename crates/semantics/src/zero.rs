@@ -2,7 +2,12 @@
 //! literal spreads) and by the `replaceable_with_autofill` lint.
 
 use ecow::EcoString;
+use syntax::ast::StructFieldDefinition;
+use syntax::ast::StructFields;
+use syntax::program::AliasKind;
+use syntax::program::Definition;
 use syntax::program::DefinitionBody;
+use syntax::types;
 use syntax::types::{
     CompoundKind, SimpleKind, SubstitutionMap, Symbol, Type, build_named_substitution_map,
     substitute,
@@ -253,7 +258,7 @@ fn has_zero_nominal_fields(
             Ok(())
         }
         DefinitionBody::TypeAlias { alias, .. } => {
-            if matches!(alias, syntax::program::AliasKind::Opaque(_)) {
+            if matches!(alias, AliasKind::Opaque(_)) {
                 if def.is_zero_safe() {
                     return Ok(());
                 }
@@ -281,7 +286,7 @@ fn has_zero_nominal_fields(
 /// `go:archive/zip.File` as `archive/zip.File`, so diagnostics name the package.
 fn go_display_name(id: &Symbol) -> EcoString {
     id.as_str()
-        .strip_prefix(syntax::types::GO_IMPORT_PREFIX)
+        .strip_prefix(types::GO_IMPORT_PREFIX)
         .unwrap_or(id.as_str())
         .into()
 }
@@ -291,10 +296,7 @@ fn go_display_name(id: &Symbol) -> EcoString {
 /// presumed zero-safe (matching Go's own struct literals) unless curated
 /// `zero_unsafe`. A struct whose only content is hidden state is opaque to
 /// callers, so it stays refused unless curated `zero_safe`.
-pub fn go_struct_denies_zero(
-    def: &syntax::program::Definition,
-    fields: &syntax::ast::StructFields,
-) -> bool {
+pub fn go_struct_denies_zero(def: &Definition, fields: &StructFields) -> bool {
     if def.is_zero_unsafe() {
         return true;
     }
@@ -307,7 +309,7 @@ pub fn go_struct_denies_zero(
 
 /// An unexported embed is hidden Go state like any dropped private field, so
 /// the struct-level verdict covers it and per-field zero checks skip it.
-pub fn hidden_embed_field(field: &syntax::ast::StructFieldDefinition) -> bool {
+pub fn hidden_embed_field(field: &StructFieldDefinition) -> bool {
     field.is_embedded() && !field.visibility.is_public()
 }
 

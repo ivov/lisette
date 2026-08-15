@@ -4,6 +4,7 @@ use std::process::Command;
 use crate::cli_error;
 use crate::go_cli;
 use crate::handlers::project::FileTarget;
+use lisette::fs;
 use lisette::pipeline::ProjectKind;
 
 fn exec_binary(output_path: &Path, args: &[String], heading: &str) -> i32 {
@@ -52,8 +53,7 @@ pub fn run(
 }
 
 fn not_an_entrypoint(file_path: &Path, root: &Path) -> i32 {
-    let file =
-        lisette::fs::relative_to_cwd(file_path).unwrap_or_else(|| file_path.display().to_string());
+    let file = fs::relative_to_cwd(file_path).unwrap_or_else(|| file_path.display().to_string());
     let project = super::project::project_label(root);
     let project_path = root.display();
 

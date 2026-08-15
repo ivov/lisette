@@ -7,6 +7,7 @@ use syntax::ast::ImportAlias;
 use syntax::program::{File, FileImport, PackageId};
 
 use crate::names::packages::{PackageRequirements, PackageUse};
+use syntax::program;
 
 /// Source-derived imports resolved during the plan phase: path -> chosen
 /// alias, plus the aliases of imports dropped as unused (still needed so a
@@ -189,7 +190,7 @@ fn effective_qualifier(path: &str, alias: &str, go_package_ids: &HashSet<String>
     let package_name = if !alias.is_empty() {
         alias
     } else if go_package_ids.contains(&format!("{}{path}", go_name::GO_IMPORT_PREFIX)) {
-        syntax::program::go_import_default_name(path)
+        program::go_import_default_name(path)
     } else {
         path.rsplit('/').next().unwrap_or(path)
     };

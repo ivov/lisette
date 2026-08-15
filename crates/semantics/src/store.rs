@@ -4,11 +4,13 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::FileParseStatus;
+use syntax::ast::StructKind;
 use syntax::ast::{EnumVariant, Expression, StructFieldDefinition};
 use syntax::program::{
     Definition, DefinitionBody, EqualityIndex, File, Interface, Method, Methods, Package,
     TestIndex, UninferredExports, methods_for_type,
 };
+use syntax::types;
 use syntax::types::{SimpleKind, Symbol, Type};
 
 pub use crate::closed_domain::{ClosedDomain, ClosedMember, DomainValue};
@@ -298,10 +300,7 @@ impl Store {
     }
 
     pub fn package_for_qualified_name<'a>(&'a self, qualified_name: &'a str) -> Option<&'a str> {
-        syntax::types::package_for_qualified_name(
-            qualified_name,
-            self.packages.keys().map(String::as_str),
-        )
+        types::package_for_qualified_name(qualified_name, self.packages.keys().map(String::as_str))
     }
 
     pub(crate) fn is_const(&self, qualified_name: &str) -> bool {
@@ -336,14 +335,14 @@ impl Store {
         }
     }
 
-    pub fn struct_kind(&self, qualified_name: &str) -> Option<syntax::ast::StructKind> {
+    pub fn struct_kind(&self, qualified_name: &str) -> Option<StructKind> {
         match &self.get_definition(qualified_name)?.body {
             DefinitionBody::Struct { fields, .. } => Some(fields.kind()),
             _ => None,
         }
     }
 
-    pub fn deep_struct_kind(&self, ty: &Type) -> Option<syntax::ast::StructKind> {
+    pub fn deep_struct_kind(&self, ty: &Type) -> Option<StructKind> {
         self.struct_kind(self.deep_resolve_alias(ty).get_qualified_id()?)
     }
 
@@ -372,39 +371,39 @@ impl Store {
     }
 
     pub fn is_nilable_go_type(&self, ty: &Type) -> bool {
-        syntax::types::is_nilable_go_type(ty, |id| self.get_definition(id))
+        types::is_nilable_go_type(ty, |id| self.get_definition(id))
     }
 
     pub fn peel_alias(&self, ty: &Type) -> Type {
-        syntax::types::peel_alias(ty, |id| self.get_definition(id))
+        types::peel_alias(ty, |id| self.get_definition(id))
     }
 
     pub fn underlying_type(&self, ty: &Type) -> Option<Type> {
-        syntax::types::underlying_type(ty, |id| self.get_definition(id))
+        types::underlying_type(ty, |id| self.get_definition(id))
     }
 
     pub fn peel_underlying(&self, ty: &Type) -> Type {
-        syntax::types::peel_underlying(ty, |id| self.get_definition(id))
+        types::peel_underlying(ty, |id| self.get_definition(id))
     }
 
     pub fn underlying_simple_kind(&self, ty: &Type) -> Option<SimpleKind> {
-        syntax::types::underlying_simple_kind(ty, |id| self.get_definition(id))
+        types::underlying_simple_kind(ty, |id| self.get_definition(id))
     }
 
     pub fn underlying_numeric_type(&self, ty: &Type) -> Option<Type> {
-        syntax::types::underlying_numeric_type(ty, |id| self.get_definition(id))
+        types::underlying_numeric_type(ty, |id| self.get_definition(id))
     }
 
     pub fn literal_adaptation_target(&self, ty: &Type) -> Option<Type> {
-        syntax::types::literal_adaptation_target(ty, |id| self.get_definition(id))
+        types::literal_adaptation_target(ty, |id| self.get_definition(id))
     }
 
     pub fn is_numeric_compatible_with(&self, left: &Type, right: &Type) -> bool {
-        syntax::types::is_numeric_compatible_with(left, right, |id| self.get_definition(id))
+        types::is_numeric_compatible_with(left, right, |id| self.get_definition(id))
     }
 
     pub fn is_aliased_numeric_type(&self, ty: &Type) -> bool {
-        syntax::types::is_aliased_numeric_type(ty, |id| self.get_definition(id))
+        types::is_aliased_numeric_type(ty, |id| self.get_definition(id))
     }
 
     pub fn has_underlying_numeric_type(&self, ty: &Type) -> bool {
@@ -422,23 +421,23 @@ impl Store {
     }
 
     pub fn has_byte_or_rune_slice_underlying(&self, ty: &Type) -> bool {
-        syntax::types::has_byte_or_rune_slice_underlying(ty, |id| self.get_definition(id))
+        types::has_byte_or_rune_slice_underlying(ty, |id| self.get_definition(id))
     }
 
     pub fn is_orderable(&self, ty: &Type) -> bool {
-        syntax::types::is_orderable(ty, |id| self.get_definition(id))
+        types::is_orderable(ty, |id| self.get_definition(id))
     }
 
     pub fn satisfies_ordered_constraint(&self, ty: &Type) -> bool {
-        syntax::types::satisfies_ordered_constraint(ty, |id| self.get_definition(id))
+        types::satisfies_ordered_constraint(ty, |id| self.get_definition(id))
     }
 
     pub fn resolves_to_unknown(&self, ty: &Type) -> bool {
-        syntax::types::resolves_to_unknown(ty, |id| self.get_definition(id))
+        types::resolves_to_unknown(ty, |id| self.get_definition(id))
     }
 
     pub fn contains_unknown(&self, ty: &Type) -> bool {
-        syntax::types::contains_unknown(ty, |id| self.get_definition(id))
+        types::contains_unknown(ty, |id| self.get_definition(id))
     }
 
     pub fn resolve_to_function_type(&self, ty: &Type) -> Option<Type> {
@@ -666,9 +665,11 @@ mod clone_tests {
 #[cfg(test)]
 mod closed_domain_tests {
     use super::*;
+    use syntax::ast;
     use syntax::ast::{
         Annotation, Generic, Literal, Span, StructFieldDefinition, StructFieldKind, StructFields,
     };
+    use syntax::program::ValueKind;
     use syntax::program::{AliasKind, Attributes, TypeAttribute, Visibility};
     use syntax::types::CompoundKind;
 
@@ -710,7 +711,7 @@ mod closed_domain_tests {
                     name: "0".into(),
                     name_span: Span::dummy(),
                     annotation: Annotation::Unknown,
-                    visibility: syntax::ast::Visibility::Private,
+                    visibility: ast::Visibility::Private,
                     ty: Type::Simple(SimpleKind::Int),
                     kind: StructFieldKind::Named { attributes: vec![] },
                 }]),
@@ -743,7 +744,7 @@ mod closed_domain_tests {
             name_span: None,
             doc: None,
             body: DefinitionBody::Value {
-                kind: syntax::program::ValueKind::Constant(Literal::Integer { value, text: None }),
+                kind: ValueKind::Constant(Literal::Integer { value, text: None }),
                 allowed_lints: vec![],
                 go_hints: vec![],
                 go_name: None,
@@ -939,7 +940,7 @@ mod closed_domain_tests {
                         name: "0".into(),
                         name_span: Span::dummy(),
                         annotation: Annotation::Unknown,
-                        visibility: syntax::ast::Visibility::Private,
+                        visibility: ast::Visibility::Private,
                         ty: field_ty,
                         kind: StructFieldKind::Named { attributes: vec![] },
                     }]),

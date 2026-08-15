@@ -14,6 +14,7 @@ mod lints;
 pub(crate) mod walk;
 
 pub use lints::Lint;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LintMode {
@@ -27,7 +28,7 @@ pub(crate) fn source_file_work(store: &Store) -> Vec<(&Package, &File)> {
     let mut work: Vec<_> = store
         .packages
         .values()
-        .map(std::sync::Arc::as_ref)
+        .map(Arc::as_ref)
         .flat_map(|package| package.source_files().map(move |file| (package, file)))
         .collect();
     work.sort_unstable_by(|a, b| {

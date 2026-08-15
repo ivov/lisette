@@ -4,7 +4,9 @@ use crate::lex;
 use crate::lex::TokenKind::*;
 use crate::lex::{Token, TokenKind};
 use crate::types::Type;
+use std::borrow::Cow;
 use std::ops::{Deref, DerefMut};
+use std::string;
 
 pub(crate) const MAX_TUPLE_ARITY: usize = 5;
 pub const TUPLE_FIELDS: &[&str] = &["First", "Second", "Third", "Fourth", "Fifth"];
@@ -40,7 +42,7 @@ pub use error::ParseError;
 pub struct ParseResult {
     pub ast: Vec<ast::Expression>,
     pub errors: Vec<ParseError>,
-    pub file_comment: Option<std::string::String>,
+    pub file_comment: Option<string::String>,
     pub truncated: bool,
     pub status: FileParseStatus,
 }
@@ -392,7 +394,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    fn collect_file_comments(&mut self, shebang_end: Option<u32>) -> Option<std::string::String> {
+    fn collect_file_comments(&mut self, shebang_end: Option<u32>) -> Option<string::String> {
         let mut docs = Vec::new();
         let mut previous_end: Option<u32> = None;
 
@@ -428,7 +430,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    fn collect_doc_comments(&mut self) -> Option<(std::string::String, Span)> {
+    fn collect_doc_comments(&mut self) -> Option<(string::String, Span)> {
         let mut docs = Vec::new();
         let mut first_span: Option<Span> = None;
 
@@ -829,11 +831,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    fn track_error(
-        &mut self,
-        label: impl Into<std::string::String>,
-        help: impl Into<std::string::String>,
-    ) {
+    fn track_error(&mut self, label: impl Into<string::String>, help: impl Into<string::String>) {
         let current = self.current_token();
         let span = Span::new(self.file_id, current.byte_offset, current.byte_length);
         self.track_error_at(span, label, help);
@@ -842,8 +840,8 @@ impl<'source> Parser<'source> {
     fn track_error_at(
         &mut self,
         span: Span,
-        label: impl Into<std::string::String>,
-        help: impl Into<std::string::String>,
+        label: impl Into<string::String>,
+        help: impl Into<string::String>,
     ) {
         if self.too_many_errors() {
             return;
@@ -855,11 +853,7 @@ impl<'source> Parser<'source> {
         self.errors.push(error);
     }
 
-    fn error_angle_brackets_for_generics(
-        &mut self,
-        span: Span,
-        help: impl Into<std::string::String>,
-    ) {
+    fn error_angle_brackets_for_generics(&mut self, span: Span, help: impl Into<string::String>) {
         if self.too_many_errors() {
             return;
         }
@@ -1232,9 +1226,9 @@ impl<'source> Parser<'source> {
 
     fn parse_integer_text_with(&mut self, text: &str, preserve_decimal_text: bool) -> ast::Literal {
         let clean = if text.contains('_') {
-            std::borrow::Cow::Owned(text.replace('_', ""))
+            Cow::Owned(text.replace('_', ""))
         } else {
-            std::borrow::Cow::Borrowed(text)
+            Cow::Borrowed(text)
         };
 
         let (n, is_decimal) = if clean.starts_with("0x") || clean.starts_with("0X") {
@@ -1440,6 +1434,7 @@ impl<'source> TokenStream<'source> {
 #[cfg(test)]
 mod import_order_tests {
     use super::IMPORT_AFTER_ITEM_CODE;
+    use crate::ast::Expression;
     use crate::build_ast;
 
     fn codes(source: &str) -> Vec<String> {
@@ -1525,7 +1520,7 @@ mod import_order_tests {
         let result = super::Parser::lex_and_parse_file("fn f() {}\nimport \"go:fmt\"", 0);
         assert!(matches!(
             result.ast.last(),
-            Some(crate::ast::Expression::PackageImport { .. })
+            Some(Expression::PackageImport { .. })
         ));
     }
 
@@ -1541,7 +1536,7 @@ mod import_order_tests {
         assert!(result.truncated);
         assert!(!result.ast.iter().any(|item| matches!(
             item,
-            crate::ast::Expression::Function { name, .. } if name == "last"
+            Expression::Function { name, .. } if name == "last"
         )));
     }
 

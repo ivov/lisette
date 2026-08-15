@@ -1,9 +1,10 @@
+use std::env;
 use std::path::{Component, Path, PathBuf};
 
 /// Returns path relative to the cwd as a forward-slash string.
 /// Returns None if the cwd is unknown or the path lies outside it.
 pub fn relative_to_cwd(path: &Path) -> Option<String> {
-    relative_to_cwd_with(path, std::env::current_dir().ok().as_deref())
+    relative_to_cwd_with(path, env::current_dir().ok().as_deref())
 }
 
 /// Cwd-relative display paths under a fixed base dir, resolving prefixes once.
@@ -19,7 +20,7 @@ enum DisplayPathResolution {
 
 impl DisplayPathBase {
     pub fn new(base_dir: &Path) -> Self {
-        Self::with_cwd(base_dir, std::env::current_dir().ok())
+        Self::with_cwd(base_dir, env::current_dir().ok())
     }
 
     fn with_cwd(base_dir: &Path, cwd: Option<PathBuf>) -> Self {

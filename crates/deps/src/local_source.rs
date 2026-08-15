@@ -5,6 +5,9 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use crate::project_manifest::{GoDependency, ReplacementSource};
+use std::fs;
+use std::io::Error;
+use std::io::ErrorKind;
 
 /// Content, never mtime: a `git checkout` can move mtimes backwards.
 pub(crate) fn stamp_hash(
@@ -40,7 +43,7 @@ pub(crate) fn stamp_hash(
 /// Stops at nested `go.mod` boundaries: a nested module is a separate module,
 /// hashed by its own entry if declared.
 fn hash_local_module(hash: &mut Fnv, module_dir: &Path) {
-    match std::fs::read(module_dir.join("go.mod")) {
+    match fs::read(module_dir.join("go.mod")) {
         Ok(bytes) => {
             hash.write(b"go.mod");
             hash.write(&bytes);
@@ -55,14 +58,14 @@ fn hash_local_module(hash: &mut Fnv, module_dir: &Path) {
     files.sort();
     for relative in files {
         hash.write(relative.as_os_str().as_encoded_bytes());
-        if let Ok(bytes) = std::fs::read(module_dir.join(&relative)) {
+        if let Ok(bytes) = fs::read(module_dir.join(&relative)) {
             hash.write(&bytes);
         }
     }
 }
 
 fn collect_go_files(dir: &Path, relative: PathBuf, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
+    let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
     for entry in entries.flatten() {
@@ -100,28 +103,27 @@ fn stamp_path_for_typedef(typedef_path: &Path) -> PathBuf {
 }
 
 pub(crate) fn local_typedef_is_fresh(typedef_path: &Path, stamp: &str) -> bool {
-    std::fs::read_to_string(stamp_path_for_typedef(typedef_path))
-        .is_ok_and(|existing| existing == stamp)
+    fs::read_to_string(stamp_path_for_typedef(typedef_path)).is_ok_and(|existing| existing == stamp)
 }
 
 /// On stamp mismatch, delete the typedef so resolution reroutes into the
 /// regenerate-on-miss path. A failed eviction (e.g. a file lock on Windows) is
 /// returned so the caller refuses the stale read, and keeps the old stamp so
 /// eviction retries next time.
-pub(crate) fn gate_local_typedef(typedef_path: &Path, stamp: &str) -> Result<(), std::io::Error> {
+pub(crate) fn gate_local_typedef(typedef_path: &Path, stamp: &str) -> Result<(), Error> {
     if local_typedef_is_fresh(typedef_path, stamp) {
         return Ok(());
     }
     let stamp_path = stamp_path_for_typedef(typedef_path);
-    match std::fs::remove_file(typedef_path) {
+    match fs::remove_file(typedef_path) {
         Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) if error.kind() == ErrorKind::NotFound => {}
         Err(error) => return Err(error),
     }
     if let Some(parent) = stamp_path.parent() {
-        let _ = std::fs::create_dir_all(parent);
+        let _ = fs::create_dir_all(parent);
     }
-    let _ = std::fs::write(&stamp_path, stamp);
+    let _ = fs::write(&stamp_path, stamp);
     Ok(())
 }
 
@@ -150,6 +152,8 @@ impl Fnv {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use std::fs::Permissions;
 
     fn local_dep(path: &str) -> GoDependency {
         GoDependency::Replaced {
@@ -169,8 +173,8 @@ mod tests {
 
     fn write(root: &Path, relative: &str, content: &str) {
         let path = root.join(relative);
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(path, content).unwrap();
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, content).unwrap();
     }
 
     #[test]
@@ -245,16 +249,16 @@ mod tests {
     fn gate_deletes_typedef_on_mismatch_and_keeps_it_on_match() {
         let dir = tempfile::tempdir().unwrap();
         let typedef = dir.path().join("foo.d.lis");
-        std::fs::write(&typedef, "typedef").unwrap();
+        fs::write(&typedef, "typedef").unwrap();
 
         gate_local_typedef(&typedef, "aaaa").unwrap();
         assert!(!typedef.exists(), "no stamp -> typedef discarded");
         assert_eq!(
-            std::fs::read_to_string(stamp_path_for_typedef(&typedef)).unwrap(),
+            fs::read_to_string(stamp_path_for_typedef(&typedef)).unwrap(),
             "aaaa"
         );
 
-        std::fs::write(&typedef, "typedef").unwrap();
+        fs::write(&typedef, "typedef").unwrap();
         gate_local_typedef(&typedef, "aaaa").unwrap();
         assert!(typedef.exists(), "matching stamp -> typedef kept");
 
@@ -277,22 +281,22 @@ mod tests {
 
         let dir = tempfile::tempdir().unwrap();
         let locked = dir.path().join("locked");
-        std::fs::create_dir(&locked).unwrap();
+        fs::create_dir(&locked).unwrap();
         let typedef = locked.join("foo.d.lis");
-        std::fs::write(&typedef, "typedef").unwrap();
-        std::fs::write(stamp_path_for_typedef(&typedef), "old").unwrap();
-        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
+        fs::write(&typedef, "typedef").unwrap();
+        fs::write(stamp_path_for_typedef(&typedef), "old").unwrap();
+        fs::set_permissions(&locked, Permissions::from_mode(0o555)).unwrap();
 
         let outcome = gate_local_typedef(&typedef, "new");
 
-        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+        fs::set_permissions(&locked, Permissions::from_mode(0o755)).unwrap();
         assert!(
             outcome.is_err(),
             "failed eviction is reported to the caller"
         );
         assert!(typedef.exists(), "typedef untouched when eviction fails");
         assert_eq!(
-            std::fs::read_to_string(stamp_path_for_typedef(&typedef)).unwrap(),
+            fs::read_to_string(stamp_path_for_typedef(&typedef)).unwrap(),
             "old",
             "stale content is not blessed with the new stamp"
         );

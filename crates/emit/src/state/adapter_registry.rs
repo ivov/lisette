@@ -1,5 +1,6 @@
 use ecow::EcoString;
 use rustc_hash::FxHashMap as HashMap;
+use std::mem;
 
 #[derive(Default)]
 pub(crate) struct AdapterRegistry {
@@ -34,6 +35,6 @@ impl AdapterRegistry {
     }
 
     pub(crate) fn drain_declarations(&mut self) -> Vec<String> {
-        std::mem::take(&mut self.pending_declarations)
+        mem::take(&mut self.pending_declarations)
     }
 }

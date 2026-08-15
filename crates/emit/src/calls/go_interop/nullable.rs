@@ -6,6 +6,7 @@ use crate::calls::go_interop::build_tuple_literal;
 use crate::calls::go_interop::wrappers::{WrapperOutcome, WrapperTarget, leaf_block};
 use crate::control_flow::fallible::{Fallible, FalliblePlanner, OPTION_SOME_TAG};
 use crate::plan::bodies::{ElseArm, IfPlan, LoopKind, LoopPlan, LoweredBlock, LoweredStatement};
+use std::iter;
 use syntax::types::Type;
 
 impl Planner<'_> {
@@ -75,7 +76,7 @@ impl Planner<'_> {
         let all_vars: Vec<&str> = val_vars
             .iter()
             .map(|s| s.as_str())
-            .chain(std::iter::once(ok_var.as_str()))
+            .chain(iter::once(ok_var.as_str()))
             .collect();
         statements.push(LoweredStatement::RawGo(format!(
             "{} := {}\n",

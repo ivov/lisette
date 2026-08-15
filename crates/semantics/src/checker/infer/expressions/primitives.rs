@@ -1,8 +1,11 @@
 use crate::checker::EnvResolve;
+use crate::facts::StatementTailCheck;
+use crate::store::Store;
 use syntax::EcoString;
 use syntax::ast::DeadCodeCause;
 use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, Span, UnaryOperator};
 use syntax::program::DefinitionBody;
+use syntax::types::CompoundKind;
 use syntax::types::Type;
 
 use super::super::addressability::{
@@ -136,7 +139,7 @@ impl InferCtx<'_> {
         if items.is_empty() {
             let unit_ty = self.type_unit();
             let resolved = expected_ty.resolve_in(&self.env);
-            if let Some((syntax::types::CompoundKind::Map, args)) = resolved.as_compound()
+            if let Some((CompoundKind::Map, args)) = resolved.as_compound()
                 && args.len() == 2
             {
                 let k = args[0].resolve_in(&self.env);
@@ -371,7 +374,7 @@ impl InferCtx<'_> {
         }
     }
 
-    fn enum_of_variant(&self, store: &crate::store::Store, value: &str) -> Option<EcoString> {
+    fn enum_of_variant(&self, store: &Store, value: &str) -> Option<EcoString> {
         let (type_part, variant_name) = value.rsplit_once('.')?;
         let qualified = self.lookup_qualified_name(store, type_part)?;
         store
@@ -509,12 +512,7 @@ impl InferCtx<'_> {
         }
     }
 
-    fn report_disallowed_mutation(
-        &mut self,
-        store: &crate::store::Store,
-        var_name: &str,
-        span: Span,
-    ) {
+    fn report_disallowed_mutation(&mut self, store: &Store, var_name: &str, span: Span) {
         let self_type_name = if var_name == "self" {
             self.lookup_type(store, "self")
                 .and_then(|t| t.get_name().map(str::to_owned))
@@ -609,7 +607,7 @@ impl InferCtx<'_> {
                     self.facts
                         .deferred
                         .statement_tails
-                        .push(crate::facts::StatementTailCheck {
+                        .push(StatementTailCheck {
                             expected_ty: last_item_expected_ty.clone(),
                             span: item_span,
                         });

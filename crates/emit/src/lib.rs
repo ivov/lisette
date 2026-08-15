@@ -50,6 +50,7 @@ use state::file_namespace::FileNamespace;
 use state::package_state::{FunctionEmissionContext, PackageState};
 use state::scope::ScopeState;
 use syntax::ast::{Expression, Span};
+use syntax::program;
 use syntax::program::{
     Definition, DefinitionBody, EmitInput, EqualityIndex, File, MutationInfo, TestIndex, UnusedInfo,
 };
@@ -64,7 +65,7 @@ pub struct EmitOptions {
 
 /// A library root's Go package name, from its package path (`example.com/lib/v2` -> `lib`).
 pub fn root_package_name(go_module: &str) -> String {
-    go_name::sanitize_package_name(syntax::program::go_import_default_name(go_module)).into_owned()
+    go_name::sanitize_package_name(program::go_import_default_name(go_module)).into_owned()
 }
 
 #[derive(Default)]

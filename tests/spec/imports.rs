@@ -2,6 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
+use std::fs;
 use syntax::build_ast;
 use syntax::imports::scan_imports;
 use syntax::program::{File, FileImport};
@@ -14,7 +15,7 @@ fn repository_root() -> PathBuf {
 }
 
 fn collect_lisette_files(directory: &Path, found: &mut Vec<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(directory) else {
+    let Ok(entries) = fs::read_dir(directory) else {
         return;
     };
     for entry in entries.flatten() {
@@ -61,7 +62,7 @@ fn the_scanner_matches_the_parser_over_the_repository_corpus() {
     let mut compared = 0;
     let mut with_imports = 0;
     for path in &files {
-        let Ok(source) = std::fs::read_to_string(path) else {
+        let Ok(source) = fs::read_to_string(path) else {
             continue;
         };
         let Some(parsed) = parsed_imports(&source) else {

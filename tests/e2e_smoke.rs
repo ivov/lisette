@@ -1,3 +1,5 @@
+use std::fs;
+use std::path::Path;
 use std::process::Command;
 
 #[test]
@@ -7,14 +9,12 @@ fn e2e_smoke() {
         return;
     }
 
-    let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap();
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let e2e_dir = repo.join("tests/e2e_smoke_project");
     let target_dir = e2e_dir.join("target");
 
     if target_dir.exists() {
-        std::fs::remove_dir_all(&target_dir).expect("failed to clean target/");
+        fs::remove_dir_all(&target_dir).expect("failed to clean target/");
     }
 
     let run = Command::new("cargo")

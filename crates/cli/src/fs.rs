@@ -1,3 +1,6 @@
+use semantics::loader;
+use std::fs;
+use std::fs::DirEntry;
 use std::{
     collections::{HashMap, HashSet},
     ffi::OsStr,
@@ -64,7 +67,7 @@ impl LocalFileSystem {
         let Some((project_root, _)) = &self.project_root else {
             return Vec::new();
         };
-        let tests_root = project_root.join(semantics::loader::EXTERNAL_TESTS_DIR);
+        let tests_root = project_root.join(loader::EXTERNAL_TESTS_DIR);
         let walked;
         let test_sources = match &self.scanned_test_sources {
             Some(test_sources) => test_sources.as_slice(),
@@ -283,7 +286,7 @@ fn remove_direct_go_files(dir: &Path) -> io::Result<()> {
 
 /// `remove_dir_all` that treats an already-absent directory as success.
 fn remove_dir_all_if_present(dir: &Path) -> io::Result<()> {
-    match std::fs::remove_dir_all(dir) {
+    match fs::remove_dir_all(dir) {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(e),
@@ -394,7 +397,7 @@ pub fn collect_lis_filepaths_recursive(dir: &Path) -> Vec<PathBuf> {
     files
 }
 
-fn entry_is_dir(entry: &std::fs::DirEntry, path: &Path) -> bool {
+fn entry_is_dir(entry: &DirEntry, path: &Path) -> bool {
     match entry.file_type() {
         Ok(file_type) if file_type.is_symlink() => false,
         Ok(file_type) => file_type.is_dir(),
@@ -404,7 +407,7 @@ fn entry_is_dir(entry: &std::fs::DirEntry, path: &Path) -> bool {
 
 impl Loader for LocalFileSystem {
     fn scan_folder(&self, folder_name: &str) -> Files {
-        if semantics::loader::is_external_test_package(folder_name)
+        if loader::is_external_test_package(folder_name)
             && let Some((project_root, display_base)) = &self.project_root
         {
             return self.collect_files(&project_root.join(folder_name), folder_name, display_base);
@@ -459,7 +462,7 @@ impl Loader for LocalFileSystem {
                 contents.has_test = true;
             } else {
                 contents.has_test_root_file = true;
-                if semantics::loader::is_production_package_file(name) {
+                if loader::is_production_package_file(name) {
                     contents.has_production = true;
                 }
             }

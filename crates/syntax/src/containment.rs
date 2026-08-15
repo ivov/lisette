@@ -1,5 +1,6 @@
 use rustc_hash::FxHashSet as HashSet;
 
+use crate::program::AliasKind;
 use crate::program::{Definition, DefinitionBody};
 use crate::types::{CompoundKind, Type, peel_alias};
 
@@ -186,10 +187,10 @@ impl<'d, F: Fn(&str) -> Option<&'d Definition>> ContainmentWalk<'_, F> {
                     return true;
                 };
                 match alias {
-                    crate::program::AliasKind::Transparent { target, .. } => {
+                    AliasKind::Transparent { target, .. } => {
                         self.parameter_stored_inline(target, &generic.name, checking, wrap_checking)
                     }
-                    crate::program::AliasKind::Opaque(_) => true,
+                    AliasKind::Opaque(_) => true,
                 }
             }
             DefinitionBody::Interface { .. } => false,

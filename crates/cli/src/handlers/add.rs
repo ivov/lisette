@@ -11,6 +11,8 @@ use crate::output::{print_add_success, print_preview_notice, print_progress, pri
 use crate::workspace::GoWorkspace;
 use crate::{cli_error, error};
 use deps::GoModule;
+use std::collections::BTreeMap;
+use std::env;
 use stdlib::Target;
 
 /// CLI-input dependency: the path the user typed, which may be a subpackage.
@@ -171,7 +173,7 @@ fn setup_project_local(path_arg: &str) -> Result<AddPlan, i32> {
     let setup = MutationProject::open()?;
     print_preview_notice("Local Go modules", true);
 
-    let invocation_dir = std::env::current_dir().map_err(|error| {
+    let invocation_dir = env::current_dir().map_err(|error| {
         error!(
             "failed to resolve directory",
             format!("could not read the current directory: {}", error)
@@ -631,7 +633,7 @@ fn write_target_go_mod(setup: &MutationProject, extra: Option<(&str, deps::GoDep
 /// Write `target/go.mod` from an explicit dependency set.
 fn write_target_go_mod_from(
     setup: &MutationProject,
-    go_deps: std::collections::BTreeMap<String, deps::GoDependency>,
+    go_deps: BTreeMap<String, deps::GoDependency>,
 ) -> bool {
     let locator = deps::TypedefLocator::new(go_deps, Some(setup.root.clone()), Target::host());
     if let Err(msg) =
@@ -644,10 +646,7 @@ fn write_target_go_mod_from(
 }
 
 /// Remove any declared replacement for the module that owns `package`.
-fn strip_replacement_for(
-    go_deps: &mut std::collections::BTreeMap<String, deps::GoDependency>,
-    package: &str,
-) {
+fn strip_replacement_for(go_deps: &mut BTreeMap<String, deps::GoDependency>, package: &str) {
     let owner = go_deps
         .keys()
         .filter(|module| package == module.as_str() || package.starts_with(&format!("{module}/")))
@@ -799,6 +798,7 @@ fn setup_project_replace(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
 
     #[test]
     fn normalize_module_path_applies_github_shorthand() {
@@ -861,7 +861,7 @@ mod tests {
 
     #[test]
     fn strip_replacement_leaves_parent_when_child_remote_owns_package() {
-        let mut go_deps = std::collections::BTreeMap::new();
+        let mut go_deps = BTreeMap::new();
         go_deps.insert(
             "go.opentelemetry.io/otel".to_string(),
             deps::GoDependency::Replaced {
@@ -886,7 +886,7 @@ mod tests {
 
     #[test]
     fn strip_replacement_removes_longest_prefix_replaced_owner() {
-        let mut go_deps = std::collections::BTreeMap::new();
+        let mut go_deps = BTreeMap::new();
         go_deps.insert(
             "go.opentelemetry.io/otel".to_string(),
             deps::GoDependency::Remote {

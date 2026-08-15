@@ -16,6 +16,8 @@ use super::freeze::FreezeFolder;
 use super::registration::{RegisteredPackage, RegistrationFile};
 use super::state::InferredFile;
 use super::{FileContext, TaskState};
+use crate::loader;
+use crate::prelude;
 use crate::store::Store;
 use syntax::ast::{Expression, Span};
 use syntax::program::FileImport;
@@ -159,7 +161,7 @@ impl InferCtx<'_> {
             if let Some(import_path) = alias_to_path.get(definition_name) {
                 self.sink.push(diagnostics::infer::name_shadows_import(
                     definition_name,
-                    crate::loader::import_display_name(import_path),
+                    loader::import_display_name(import_path),
                     name_span,
                 ));
             }
@@ -168,12 +170,12 @@ impl InferCtx<'_> {
 
     fn check_binding_shadows_import(&mut self, name: &str, span: Span, is_typedef: bool) {
         if !is_typedef
-            && name != crate::prelude::PRELUDE_PACKAGE_ID
+            && name != prelude::PRELUDE_PACKAGE_ID
             && let Some(import_path) = self.imports.package_id(name)
         {
             self.sink.push(diagnostics::infer::name_shadows_import(
                 name,
-                crate::loader::import_display_name(import_path),
+                loader::import_display_name(import_path),
                 span,
             ));
         }

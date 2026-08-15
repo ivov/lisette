@@ -1,6 +1,7 @@
 use rustc_hash::FxHashMap as HashMap;
 
 use crate::escape_reserved;
+use std::mem;
 
 #[derive(Clone, Debug)]
 pub(crate) struct InlineExpr {
@@ -100,7 +101,7 @@ impl Bindings {
             return;
         };
         if let BindingValue::GoName(name) = value {
-            let name = std::mem::take(name);
+            let name = mem::take(name);
             *value = BindingValue::GoConst(name);
         }
     }
@@ -139,7 +140,7 @@ impl Bindings {
     }
 
     pub(crate) fn replace_snapshot(&mut self, snapshot: BindingSnapshot) -> BindingSnapshot {
-        BindingSnapshot(std::mem::replace(self.current_mut(), snapshot.0))
+        BindingSnapshot(mem::replace(self.current_mut(), snapshot.0))
     }
 
     pub(crate) fn remove(&mut self, key: &str) {

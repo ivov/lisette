@@ -8,9 +8,11 @@ use crate::ast::{
     FormatStringPart, FunctionBody, IdentifierResolution, ImportAlias, LetMode, Literal, SelectArm,
     Span, StructFieldAssignment, StructSpread, UnaryOperator, Visibility,
 };
+use crate::lex::Token;
 use crate::lex::TokenKind::{self, *};
 use crate::program::{CallKind, DotAccessResolution};
 use crate::types::Type;
+use std::string;
 
 #[derive(Clone, Copy)]
 enum GoMakeKind {
@@ -100,7 +102,7 @@ impl<'source> Parser<'source> {
     pub(super) fn parse_range(
         &mut self,
         start: Option<Box<Expression>>,
-        span_start: crate::lex::Token<'source>,
+        span_start: Token<'source>,
         context: ExpressionContext,
     ) -> Expression {
         if matches!(start.as_deref(), Some(Expression::Range { .. })) {
@@ -857,8 +859,8 @@ impl<'source> Parser<'source> {
 
     fn parse_braced_items(
         &mut self,
-        span_start: crate::lex::Token<'source>,
-        opening_brace: crate::lex::Token<'source>,
+        span_start: Token<'source>,
+        opening_brace: Token<'source>,
     ) -> (Vec<Expression>, Span) {
         if let Some(result) = self.with_recursion(|parser| {
             let mut items = vec![];
@@ -920,7 +922,7 @@ impl<'source> Parser<'source> {
 
     pub(crate) fn parse_function(
         &mut self,
-        doc: Option<std::string::String>,
+        doc: Option<string::String>,
         attributes: Vec<Attribute>,
         param_mode: ParamMode,
     ) -> Expression {
@@ -1729,7 +1731,7 @@ impl<'source> Parser<'source> {
         self.next();
         Expression::Literal {
             literal: Literal::String {
-                value: std::string::String::new(),
+                value: string::String::new(),
                 raw: true,
             },
             ty: Type::uninferred(),

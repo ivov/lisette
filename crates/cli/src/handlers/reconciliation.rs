@@ -12,6 +12,7 @@ use crate::output::{print_progress, print_warning};
 use crate::workspace::{GoWorkspace, UnresolvedTransitive};
 use crate::{cli_error, error};
 use deps::GoModule;
+use std::fs;
 use stdlib::Target;
 
 /// The dependency to reconcile, after its containing module is resolved.
@@ -607,7 +608,7 @@ fn collect_nested_modules(
     declared: &HashSet<&str>,
     out: &mut Vec<LocalChildHint>,
 ) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
+    let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
     for entry in entries.flatten() {
@@ -1366,6 +1367,7 @@ pub(crate) fn finalize_manifest_via(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     #[test]
     fn message_names_module_requires_path_boundaries() {
@@ -1402,10 +1404,10 @@ mod tests {
     fn nested_fixture() -> (tempfile::TempDir, Vec<(String, PathBuf)>) {
         let dir = tempfile::tempdir().unwrap();
         let parent = dir.path().join("parent");
-        std::fs::create_dir_all(parent.join("child/sub")).unwrap();
-        std::fs::create_dir_all(parent.join("plain")).unwrap();
-        std::fs::write(parent.join("go.mod"), "module example.com/x/parent\n").unwrap();
-        std::fs::write(
+        fs::create_dir_all(parent.join("child/sub")).unwrap();
+        fs::create_dir_all(parent.join("plain")).unwrap();
+        fs::write(parent.join("go.mod"), "module example.com/x/parent\n").unwrap();
+        fs::write(
             parent.join("child/go.mod"),
             "module example.com/x/parent/child\n",
         )

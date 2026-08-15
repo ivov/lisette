@@ -8,6 +8,8 @@ use lisette::fs::collect_lis_filepaths_recursive;
 use rayon::prelude::*;
 
 use crate::cli_error;
+use crate::output;
+use std::path::PathBuf;
 
 enum Outcome {
     Unchanged,
@@ -28,7 +30,7 @@ pub fn format(path: Option<String>, check: bool) -> i32 {
         return 1;
     }
 
-    let filepaths: Vec<std::path::PathBuf> = if target_path.is_dir() {
+    let filepaths: Vec<PathBuf> = if target_path.is_dir() {
         collect_lis_filepaths_recursive(target_path)
     } else {
         vec![target_path.to_path_buf()]
@@ -93,7 +95,7 @@ pub fn format(path: Option<String>, check: bool) -> i32 {
         })
         .collect();
 
-    let mut changed_files: Vec<std::path::PathBuf> = Vec::new();
+    let mut changed_files: Vec<PathBuf> = Vec::new();
     let mut error_count = 0;
 
     for (file, outcome) in filepaths.iter().zip(outcomes) {
@@ -113,10 +115,10 @@ pub fn format(path: Option<String>, check: bool) -> i32 {
 
     eprintln!();
 
-    let time_display = crate::output::format_elapsed(start.elapsed());
+    let time_display = output::format_elapsed(start.elapsed());
 
     if check {
-        let colored = crate::output::use_color();
+        let colored = output::use_color();
         let render_path = |file: &Path| -> String {
             let s = file.display().to_string();
             if colored {

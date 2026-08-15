@@ -2,8 +2,13 @@ use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::module_path;
 use serde::Deserialize;
 use serde::de::{self, Deserializer, MapAccess, Visitor};
+use std::fmt;
+use std::str;
+use std::str::Utf8Error;
+use toml_edit::de as toml_de;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Manifest {
@@ -85,7 +90,7 @@ impl<'de> Deserialize<'de> for GoDependency {
         impl<'de> Visitor<'de> for GoDependencyVisitor {
             type Value = GoDependency;
 
-            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 f.write_str(
                     "a version string, or a table with exactly one of `version`, `replacement`, or `path` (and optional `via`)",
                 )
@@ -197,7 +202,7 @@ pub fn parse_manifest(project_root: &Path) -> Result<Manifest, String> {
     let content =
         strip_bom_to_str(&bytes).map_err(|e| format!("Invalid `lisette.toml` manifest: {}", e))?;
 
-    let manifest: Manifest = toml_edit::de::from_str(content)
+    let manifest: Manifest = toml_de::from_str(content)
         .map_err(|e| format!("Invalid `lisette.toml` manifest: {}", e))?;
     validate_go_dep_paths(&manifest)?;
     Ok(manifest)
@@ -230,7 +235,7 @@ fn validate_go_dep_paths(manifest: &Manifest) -> Result<(), String> {
             }
         }
 
-        crate::module_path::check_module_path(key).map_err(|reason| {
+        module_path::check_module_path(key).map_err(|reason| {
             format!(
                 "`{}` in `[dependencies.go]` is not a Go module path: {}",
                 key, reason
@@ -243,7 +248,7 @@ fn validate_go_dep_paths(manifest: &Manifest) -> Result<(), String> {
             ..
         } = dep
         {
-            crate::module_path::check_module_path(path).map_err(|reason| {
+            module_path::check_module_path(path).map_err(|reason| {
                 format!(
                     "the `replace` target `{}` for `{}` is not a Go module path: {}",
                     path, key, reason
@@ -332,9 +337,9 @@ pub fn check_no_subpackage_deps(manifest: &Manifest) -> Result<(), String> {
 
 const UTF8_BOM: &[u8] = &[0xEF, 0xBB, 0xBF];
 
-fn strip_bom_to_str(bytes: &[u8]) -> Result<&str, std::str::Utf8Error> {
+fn strip_bom_to_str(bytes: &[u8]) -> Result<&str, Utf8Error> {
     let body = bytes.strip_prefix(UTF8_BOM).unwrap_or(bytes);
-    std::str::from_utf8(body)
+    str::from_utf8(body)
 }
 
 struct ManifestEncoding {
@@ -408,7 +413,7 @@ pub fn go_deps_of_document(
 
     let mut wrapped = toml_edit::DocumentMut::new();
     wrapped.insert("go", go.clone());
-    toml_edit::de::from_document::<GoTable>(wrapped)
+    toml_de::from_document::<GoTable>(wrapped)
         .map(|table| table.go)
         .map_err(|error| format!("Invalid `[dependencies.go]`: {}", error.message()))
 }

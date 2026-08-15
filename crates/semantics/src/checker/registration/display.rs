@@ -7,6 +7,9 @@ use crate::checker::registration::derived_attributes::{
     DerivedAttribute, DerivedAttributeContext, DerivedAttributeTarget,
 };
 use crate::store::Store;
+use syntax::ast::Generic;
+use syntax::program::Method;
+use syntax::program::MethodOrigin;
 
 impl TaskState {
     pub(super) fn process_display_candidate(
@@ -112,11 +115,11 @@ impl TaskState {
         {
             methods.insert(
                 "to_string".into(),
-                syntax::program::Method {
+                Method {
                     source_name: "to_string".into(),
                     ty: method_ty,
                     visibility,
-                    origin: syntax::program::MethodOrigin::Synthesized,
+                    origin: MethodOrigin::Synthesized,
                     name_span,
                     doc: None,
                     allowed_lints: vec![],
@@ -127,7 +130,7 @@ impl TaskState {
     }
 }
 
-fn type_generics(definition: &Definition) -> Option<Vec<syntax::ast::Generic>> {
+fn type_generics(definition: &Definition) -> Option<Vec<Generic>> {
     match &definition.body {
         DefinitionBody::Struct { generics, .. } | DefinitionBody::Enum { generics, .. } => {
             Some(generics.clone())

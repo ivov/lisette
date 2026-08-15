@@ -9,6 +9,7 @@ use crate::ast::{
 use crate::lex::Token;
 use crate::lex::TokenKind::*;
 use crate::types::Type;
+use std::string;
 
 impl<'source> Parser<'source> {
     pub(crate) fn parse_pattern_allowing_or(&mut self) -> Pattern {
@@ -473,10 +474,7 @@ impl<'source> Parser<'source> {
         }
     }
 
-    fn parse_qualified_pattern_name(
-        &mut self,
-        initial: std::string::String,
-    ) -> std::string::String {
+    fn parse_qualified_pattern_name(&mut self, initial: string::String) -> string::String {
         let mut name = initial;
 
         while self.advance_if(Dot) {
@@ -491,11 +489,7 @@ impl<'source> Parser<'source> {
         name
     }
 
-    fn parse_struct_pattern(
-        &mut self,
-        name: std::string::String,
-        start: Token<'source>,
-    ) -> Pattern {
+    fn parse_struct_pattern(&mut self, name: string::String, start: Token<'source>) -> Pattern {
         self.ensure(LeftCurlyBrace);
 
         let mut fields = Vec::new();
@@ -562,7 +556,7 @@ impl<'source> Parser<'source> {
 
     fn parse_enum_variant_pattern(
         &mut self,
-        name: std::string::String,
+        name: string::String,
         start: Token<'source>,
     ) -> Pattern {
         self.ensure(LeftParen);

@@ -21,6 +21,8 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::{IssueKind, LocalSink};
 use semantics::store::Store;
+use std::slice;
+use syntax::ast::MatchArm;
 use syntax::ast::{
     ConstructorPatternResolution, Expression, IfLetAlternative, Literal, Pattern, SelectArm, Span,
 };
@@ -388,7 +390,7 @@ pub fn check(expression: &Expression, ctx: &mut PatternAnalysisContext) {
 }
 
 fn check_redundancy_with_guards(
-    arms: &[syntax::ast::MatchArm],
+    arms: &[MatchArm],
     unions: &mut UnionTable,
     norm_ctx: &NormalizationContext,
     cache: &mut InhabitanceCache,
@@ -419,14 +421,14 @@ fn check_redundancy_with_guards(
 
                 let covered_by_same_arm = current_arm_rows
                     .iter()
-                    .any(|prev| !is_useful(std::slice::from_ref(prev), current_row, unions));
+                    .any(|prev| !is_useful(slice::from_ref(prev), current_row, unions));
 
                 let help = if covered_by_same_arm {
                     "This alternative is unreachable because it is already covered by an earlier alternative in the same arm"
                         .to_string()
                 } else {
                     let covering = unguarded_previous.iter().find_map(|(orig_idx, prev)| {
-                        if !is_useful(std::slice::from_ref(prev), current_row, unions) {
+                        if !is_useful(slice::from_ref(prev), current_row, unions) {
                             Some((*orig_idx, prev))
                         } else {
                             None

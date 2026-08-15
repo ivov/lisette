@@ -7,6 +7,8 @@ use syntax::types::{Symbol, Type, substitute};
 use super::calls::phantom_type_params;
 use crate::checker::infer::InferCtx;
 use crate::checker::promotion::{self, MemberKind, Resolution};
+use crate::loader;
+use crate::store::Store;
 
 pub(super) struct DotAccessResolutionArgs<'a> {
     pub(super) expression: &'a Expression,
@@ -429,7 +431,7 @@ impl InferCtx<'_> {
                     .find(|imported_package_id| *imported_package_id == package_id)
             })?;
         let package_id = package_id.to_string();
-        let display_package = crate::loader::import_display_name(type_name);
+        let display_package = loader::import_display_name(type_name);
         let package_ty = Type::ImportNamespace(package_id.clone().into());
 
         let resolved_definition = Symbol::from_parts(&package_id, args.member_name);
@@ -495,7 +497,7 @@ impl InferCtx<'_> {
     /// Rejects package members used in value position rather than called or used as a type.
     fn check_package_member_in_value_position(
         &mut self,
-        store: &crate::store::Store,
+        store: &Store,
         resolved_definition: &Symbol,
         member_type: &Type,
         display_package: &str,

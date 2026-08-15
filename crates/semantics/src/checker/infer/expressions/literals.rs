@@ -5,6 +5,7 @@ use syntax::lex::{interpolation_holes, rune_codepoint};
 use syntax::types::{SimpleKind, Type};
 
 use crate::checker::infer::InferCtx;
+use crate::facts::EmptyLiteralCheck;
 
 impl InferCtx<'_> {
     pub(super) fn infer_literal(
@@ -186,14 +187,11 @@ impl InferCtx<'_> {
 
                 if new_elements.is_empty() && unified {
                     let package_id = self.cursor.package_id().to_string();
-                    self.facts
-                        .deferred
-                        .empty_literals
-                        .push(crate::facts::EmptyLiteralCheck {
-                            ty: slice_ty.clone(),
-                            span,
-                            package_id,
-                        });
+                    self.facts.deferred.empty_literals.push(EmptyLiteralCheck {
+                        ty: slice_ty.clone(),
+                        span,
+                        package_id,
+                    });
                 }
 
                 Expression::Literal {

@@ -7,6 +7,8 @@ use crate::plan::bodies::LoweredStatement;
 use crate::plan::placement::simple_assign;
 use crate::plan::values::ValuePlan;
 use crate::state::bindings::{BindingValue, InlineExpr};
+use std::borrow::Cow;
+use syntax::ast::Expression;
 
 /// Hoist a root type assertion as `asserted := subject.(T)` for irrefutable
 /// destructure paths (the pattern compiler has already verified the type).
@@ -15,12 +17,12 @@ pub(crate) fn apply_root_assertion<'s>(
     statements: &mut Vec<LoweredStatement>,
     info: &PatternInfo,
     subject: &'s str,
-) -> std::borrow::Cow<'s, str> {
+) -> Cow<'s, str> {
     let Some(assertion) = info.root_assertion.as_ref() else {
-        return std::borrow::Cow::Borrowed(subject);
+        return Cow::Borrowed(subject);
     };
     if !info.requires_asserted_subject() {
-        return std::borrow::Cow::Borrowed(subject);
+        return Cow::Borrowed(subject);
     }
     let [go_type] = assertion.go_types.as_slice() else {
         unreachable!("multi-type root assertions only reach match destructure paths")
@@ -28,7 +30,7 @@ pub(crate) fn apply_root_assertion<'s>(
     planner.scope.record_go_use(subject);
     let expression = format!("{}.({})", subject, go_type);
     let var = planner.hoist_tmp_value_statement(statements, "asserted", &expression);
-    std::borrow::Cow::Owned(var)
+    Cow::Owned(var)
 }
 
 /// Hoist a root type assertion as comma-ok for refutable contexts (while-let,
@@ -38,9 +40,9 @@ pub(crate) fn apply_refutable_root_assertion<'s>(
     statements: &mut Vec<LoweredStatement>,
     info: &PatternInfo,
     subject: &'s str,
-) -> (std::borrow::Cow<'s, str>, Option<String>) {
+) -> (Cow<'s, str>, Option<String>) {
     let Some(assertion) = info.root_assertion.as_ref() else {
-        return (std::borrow::Cow::Borrowed(subject), None);
+        return (Cow::Borrowed(subject), None);
     };
     planner.scope.record_go_use(subject);
     let needs_asserted = info.requires_asserted_subject();
@@ -60,9 +62,9 @@ pub(crate) fn apply_refutable_root_assertion<'s>(
                 asserted_lhs, ok, subject, go_type
             )));
             let effective = if needs_asserted {
-                std::borrow::Cow::Owned(asserted_lhs)
+                Cow::Owned(asserted_lhs)
             } else {
-                std::borrow::Cow::Borrowed(subject)
+                Cow::Borrowed(subject)
             };
             (effective, Some(ok))
         }
@@ -82,7 +84,7 @@ pub(crate) fn apply_refutable_root_assertion<'s>(
                 })
                 .collect();
             (
-                std::borrow::Cow::Borrowed(subject),
+                Cow::Borrowed(subject),
                 Some(format!("({})", oks.join(" || "))),
             )
         }
@@ -111,8 +113,8 @@ pub(crate) fn tree_binding_statements(
     statements: &mut Vec<LoweredStatement>,
     bindings: &[PatternBinding],
     subject_var: &str,
-    consumers: &[&syntax::ast::Expression],
-    inline_blockers: &[&syntax::ast::Expression],
+    consumers: &[&Expression],
+    inline_blockers: &[&Expression],
 ) -> Vec<(String, Option<BindingValue>)> {
     let mut installed_inlines = Vec::new();
     for binding in bindings {
@@ -195,7 +197,7 @@ pub(crate) fn with_tree_bindings<R>(
     statements: &mut Vec<LoweredStatement>,
     bindings: &[PatternBinding],
     subject_var: &str,
-    body: &syntax::ast::Expression,
+    body: &Expression,
     f: impl FnOnce(&mut Planner, &mut Vec<LoweredStatement>) -> R,
 ) -> R {
     let overlays =

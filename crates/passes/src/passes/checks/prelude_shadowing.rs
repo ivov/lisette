@@ -2,6 +2,8 @@ use diagnostics::LocalSink;
 use syntax::ast::Expression;
 
 use semantics::store::Store;
+use syntax::program::NativeTypeKind;
+use syntax::program::Package;
 
 pub(crate) fn run(typed_ast: &[Expression], store: &Store, sink: &LocalSink) {
     let Some(prelude_package) = store.get_package("prelude") else {
@@ -13,11 +15,7 @@ pub(crate) fn run(typed_ast: &[Expression], store: &Store, sink: &LocalSink) {
     }
 }
 
-fn check_top_level_function(
-    item: &Expression,
-    prelude_package: &syntax::program::Package,
-    sink: &LocalSink,
-) {
+fn check_top_level_function(item: &Expression, prelude_package: &Package, sink: &LocalSink) {
     if let Expression::Function {
         name, name_span, ..
     } = item
@@ -31,11 +29,7 @@ fn check_top_level_function(
     }
 }
 
-fn visit_expression(
-    expression: &Expression,
-    prelude_package: &syntax::program::Package,
-    sink: &LocalSink,
-) {
+fn visit_expression(expression: &Expression, prelude_package: &Package, sink: &LocalSink) {
     match expression {
         Expression::Enum {
             name, name_span, ..
@@ -53,7 +47,7 @@ fn visit_expression(
             // `Array` that have no prelude definition but are still reserved.
             let qualified = format!("prelude.{}", name);
             if prelude_package.definitions.contains_key(qualified.as_str())
-                || syntax::program::NativeTypeKind::from_name(name).is_some()
+                || NativeTypeKind::from_name(name).is_some()
             {
                 sink.push(diagnostics::infer::prelude_type_shadowed(name, *name_span));
             }

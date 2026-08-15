@@ -8,6 +8,10 @@ use crate::{
     assert_infer_error_snapshot, assert_lex_error_snapshot,
     assert_multipackage_infer_error_snapshot, assert_parse_error_snapshot,
 };
+use syntax::ast::Expression;
+use syntax::ast::StructFields;
+use syntax::ast::Visibility;
+use syntax::parse::ParseResult;
 
 use semantics::store::ENTRY_PACKAGE_ID;
 
@@ -14296,11 +14300,7 @@ fn main() {
     assert_multipackage_infer_error_snapshot!(result, source);
 }
 
-fn parse_expecting_errors(
-    input: &str,
-    expected_errors: usize,
-    context: &str,
-) -> syntax::parse::ParseResult {
+fn parse_expecting_errors(input: &str, expected_errors: usize, context: &str) -> ParseResult {
     let lex_result = syntax::lex::Lexer::new(input, 0).lex();
     let parse_result = syntax::parse::Parser::new(lex_result.tokens, input).parse();
     assert!(
@@ -14390,9 +14390,12 @@ fn main() {
 "#;
 
     let parse_result = parse_expecting_errors(input, 2, "unclosed params before a declaration");
-    assert!(parse_result.ast.iter().any(
-        |item| matches!(item, syntax::ast::Expression::Function { name, .. } if name == "main")
-    ));
+    assert!(
+        parse_result
+            .ast
+            .iter()
+            .any(|item| matches!(item, Expression::Function { name, .. } if name == "main"))
+    );
 
     assert_parse_error_snapshot!(input);
 }
@@ -14409,9 +14412,12 @@ fn main() {
 
     let parse_result =
         parse_expecting_errors(input, 2, "unclosed typed params before a declaration");
-    assert!(parse_result.ast.iter().any(
-        |item| matches!(item, syntax::ast::Expression::Function { name, .. } if name == "main")
-    ));
+    assert!(
+        parse_result
+            .ast
+            .iter()
+            .any(|item| matches!(item, Expression::Function { name, .. } if name == "main"))
+    );
 
     assert_parse_error_snapshot!(input);
 }
@@ -14428,9 +14434,12 @@ fn main() {
 
     let parse_result =
         parse_expecting_errors(input, 3, "an unclosed function type before a declaration");
-    assert!(parse_result.ast.iter().any(
-        |item| matches!(item, syntax::ast::Expression::Function { name, .. } if name == "main")
-    ));
+    assert!(
+        parse_result
+            .ast
+            .iter()
+            .any(|item| matches!(item, Expression::Function { name, .. } if name == "main"))
+    );
 
     assert_parse_error_snapshot!(input);
 }
@@ -14447,9 +14456,12 @@ fn main() {
 
     let parse_result =
         parse_expecting_errors(input, 3, "an unclosed tuple type before a declaration");
-    assert!(parse_result.ast.iter().any(
-        |item| matches!(item, syntax::ast::Expression::Function { name, .. } if name == "main")
-    ));
+    assert!(
+        parse_result
+            .ast
+            .iter()
+            .any(|item| matches!(item, Expression::Function { name, .. } if name == "main"))
+    );
 
     assert_parse_error_snapshot!(input);
 }
@@ -14465,8 +14477,8 @@ struct S {
     let parse_result = parse_expecting_errors(input, 1, "a missing comma before a pub field");
     assert!(parse_result.ast.iter().any(|item| matches!(
         item,
-        syntax::ast::Expression::Struct {
-            fields: syntax::ast::StructFields::Record(fields),
+        Expression::Struct {
+            fields: StructFields::Record(fields),
             ..
         } if fields.len() == 2 && fields[1].visibility.is_public()
     )));
@@ -14488,7 +14500,7 @@ struct S {
         parse_expecting_errors(input, 2, "unclosed params before a struct declaration");
     assert!(parse_result.ast.iter().any(|item| matches!(
         item,
-        syntax::ast::Expression::Struct { name, .. } if name == "S"
+        Expression::Struct { name, .. } if name == "S"
     )));
 
     assert_parse_error_snapshot!(input);
@@ -14507,9 +14519,9 @@ pub fn helper() -> int {
     let parse_result = parse_expecting_errors(input, 2, "unclosed params before a pub declaration");
     assert!(parse_result.ast.iter().any(|item| matches!(
         item,
-        syntax::ast::Expression::Function {
+        Expression::Function {
             name,
-            visibility: syntax::ast::Visibility::Public,
+            visibility: Visibility::Public,
             ..
         } if name == "helper"
     )));
@@ -14532,7 +14544,7 @@ fn checks() {
         parse_expecting_errors(input, 2, "unclosed params before an attributed declaration");
     assert!(parse_result.ast.iter().any(|item| matches!(
         item,
-        syntax::ast::Expression::Function { name, attributes, .. }
+        Expression::Function { name, attributes, .. }
             if name == "checks" && attributes.iter().any(|a| a.name == "test")
     )));
 
@@ -14554,7 +14566,7 @@ fn documented() {
         parse_expecting_errors(input, 2, "unclosed params before a documented declaration");
     assert!(parse_result.ast.iter().any(|item| matches!(
         item,
-        syntax::ast::Expression::Function { name, doc: Some(_), .. } if name == "documented"
+        Expression::Function { name, doc: Some(_), .. } if name == "documented"
     )));
 
     assert_parse_error_snapshot!(input);
@@ -14577,9 +14589,9 @@ pub fn helper() -> int {
     );
     assert!(parse_result.ast.iter().any(|item| matches!(
         item,
-        syntax::ast::Expression::Function {
+        Expression::Function {
             name,
-            visibility: syntax::ast::Visibility::Public,
+            visibility: Visibility::Public,
             ..
         } if name == "helper"
     )));
@@ -14601,9 +14613,11 @@ fn main() {
 
     let parse_result = parse_expecting_errors(input, 1, "a function type without parens");
     for expected_fn in ["f", "main"] {
-        assert!(parse_result.ast.iter().any(
-            |item| matches!(item, syntax::ast::Expression::Function { name, .. } if name == expected_fn)
-        ));
+        assert!(
+            parse_result.ast.iter().any(
+                |item| matches!(item, Expression::Function { name, .. } if name == expected_fn)
+            )
+        );
     }
 
     assert_parse_error_snapshot!(input);

@@ -1,4 +1,5 @@
 use crate::cli_error;
+use crate::command::Command;
 use crate::output::{print_dimmed, print_help};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -343,7 +344,7 @@ Print compiler version (Lisette and Go toolchain).",
         ),
 
         unknown => {
-            let hint = match crate::command::Command::suggest(unknown) {
+            let hint = match Command::suggest(unknown) {
                 Some(suggestion) => format!("Did you mean `{}`?", suggestion),
                 None => "Run `lis help` for available commands".to_string(),
             };

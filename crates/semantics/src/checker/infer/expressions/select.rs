@@ -5,6 +5,8 @@ use syntax::program::{ChannelOperation, channel_operation};
 use syntax::types::{Type, unqualified_name};
 
 use crate::checker::infer::InferCtx;
+use std::mem;
+use syntax::ast::BindingKind;
 
 fn select_arm_body_span(pattern: &SelectArm) -> Span {
     match pattern {
@@ -19,7 +21,7 @@ fn select_arm_body_span(pattern: &SelectArm) -> Span {
 
 impl InferCtx<'_> {
     pub fn resolve_select_exhaustiveness(&mut self) {
-        for check in std::mem::take(&mut self.file_checks.select_exhaustiveness) {
+        for check in mem::take(&mut self.file_checks.select_exhaustiveness) {
             let resolved = check.result_ty.resolve_in(&self.env);
             if !resolved.is_unit() && !resolved.is_variable() {
                 self.sink
@@ -217,7 +219,7 @@ impl InferCtx<'_> {
         let new_binding = self.infer_pattern(
             *binding,
             element_ty.clone(),
-            syntax::ast::BindingKind::Let { mutable: false },
+            BindingKind::Let { mutable: false },
         );
 
         let new_body = self.infer_root_expression(*body, result_ty);
@@ -295,7 +297,7 @@ impl InferCtx<'_> {
                     let new_pattern = this.infer_pattern(
                         match_arm.pattern,
                         pattern_ty.clone(),
-                        syntax::ast::BindingKind::MatchArm,
+                        BindingKind::MatchArm,
                     );
 
                     let bool_ty = this.type_bool();

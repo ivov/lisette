@@ -1,5 +1,8 @@
 use crate::checker::EnvResolve;
+use crate::facts::GenericCallCheck;
+use crate::facts::SliceMakeCheck;
 use ecow::EcoString;
+use std::sync::Arc;
 use syntax::ast::CallTypeArguments;
 use syntax::ast::{Annotation, Expression, IdentifierResolution, Literal, Span, UnaryOperator};
 use syntax::program::{CallKind, NativeTypeKind};
@@ -418,24 +421,18 @@ impl InferCtx<'_> {
         let package_id = self.cursor.package_id().to_string();
         match target {
             DeferredCallCheckTarget::GenericCall => {
-                self.facts
-                    .deferred
-                    .generic_calls
-                    .push(crate::facts::GenericCallCheck {
-                        ty,
-                        span,
-                        package_id,
-                    });
+                self.facts.deferred.generic_calls.push(GenericCallCheck {
+                    ty,
+                    span,
+                    package_id,
+                });
             }
             DeferredCallCheckTarget::SliceMake => {
-                self.facts
-                    .deferred
-                    .slice_makes
-                    .push(crate::facts::SliceMakeCheck {
-                        ty,
-                        span,
-                        package_id,
-                    });
+                self.facts.deferred.slice_makes.push(SliceMakeCheck {
+                    ty,
+                    span,
+                    package_id,
+                });
             }
         }
     }
@@ -726,7 +723,7 @@ impl InferCtx<'_> {
                 && let Type::Function(ref mut f) = instantiated
                 && !f.params.is_empty()
             {
-                let f = std::sync::Arc::make_mut(f);
+                let f = Arc::make_mut(f);
                 let receiver_param = f.remove_receiver();
                 let receiver_ty_stripped = receiver_ty.strip_refs();
                 if receiver_param.is_ref() && !receiver_ty.is_ref() {

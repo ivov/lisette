@@ -8,6 +8,8 @@ use syntax::program::{DefinitionBody, InterfaceRequirement, Methods, interface_r
 use syntax::types::{GO_IMPORT_PREFIX, Symbol, Type, unqualified_name};
 
 use crate::checker::infer::InferCtx;
+use syntax::go_names;
+use syntax::go_names::ConformanceCandidate;
 
 struct ConformanceTraversal<'a> {
     receiver: &'a Type,
@@ -261,7 +263,7 @@ impl InferCtx<'_> {
                 let interface_is_public = store
                     .get_definition(&requirement.declaring_interface)
                     .is_some_and(|d| d.visibility.is_public());
-                let (impl_name, method_ty) = syntax::go_names::conformance_method(
+                let (impl_name, method_ty) = go_names::conformance_method(
                     &methods,
                     requirement.declaring_interface.as_str(),
                     interface_is_public,
@@ -294,25 +296,17 @@ impl InferCtx<'_> {
         Err(vec![])
     }
 
-    fn conformance_candidate(
-        &self,
-        receiver: &Type,
-        method: &str,
-    ) -> syntax::go_names::ConformanceCandidate {
+    fn conformance_candidate(&self, receiver: &Type, method: &str) -> ConformanceCandidate {
         let resolved = self
             .store
             .deep_resolve_alias(&receiver.strip_refs().resolve_in(&self.env));
         self.own_candidate(&resolved, method)
             .or_else(|| self.promoted_candidate(&resolved, method))
             .or_else(|| self.bound_candidate(&resolved, method))
-            .unwrap_or(syntax::go_names::ConformanceCandidate::Unresolved)
+            .unwrap_or(ConformanceCandidate::Unresolved)
     }
 
-    fn own_candidate(
-        &self,
-        resolved: &Type,
-        method: &str,
-    ) -> Option<syntax::go_names::ConformanceCandidate> {
+    fn own_candidate(&self, resolved: &Type, method: &str) -> Option<ConformanceCandidate> {
         let id = resolved.get_qualified_id()?;
         if self.store.get_interface(id).is_some() {
             self.store
@@ -322,18 +316,14 @@ impl InferCtx<'_> {
             self.store.get_method(id, method)?;
         }
         // UFCS-lowered methods emit as free functions, not selectors.
-        Some(syntax::go_names::ConformanceCandidate::Resolved {
+        Some(ConformanceCandidate::Resolved {
             depth: 0,
             owner: id.into(),
             shadowed: self.store.is_ufcs_method(id, method),
         })
     }
 
-    fn promoted_candidate(
-        &self,
-        resolved: &Type,
-        method: &str,
-    ) -> Option<syntax::go_names::ConformanceCandidate> {
+    fn promoted_candidate(&self, resolved: &Type, method: &str) -> Option<ConformanceCandidate> {
         let store = self.store;
         resolved.get_qualified_id()?;
         let promotion::Resolution::Found(member) =
@@ -345,13 +335,13 @@ impl InferCtx<'_> {
             return None;
         };
         let selector = if promoted.visibility.is_public() {
-            syntax::go_names::snake_to_camel(method)
+            go_names::snake_to_camel(method)
         } else {
-            syntax::go_names::unexported_method_go_name(method)
+            go_names::unexported_method_go_name(method)
         };
         let shadowed = promotion::field_selector_depth(store, resolved, &selector)
             .is_some_and(|field_depth| field_depth <= member.depth);
-        Some(syntax::go_names::ConformanceCandidate::Resolved {
+        Some(ConformanceCandidate::Resolved {
             depth: member.depth,
             owner: member.declaring_type.as_eco().clone(),
             shadowed,
@@ -359,11 +349,7 @@ impl InferCtx<'_> {
     }
 
     // Bound method sets merge as one Go constraint interface.
-    fn bound_candidate(
-        &self,
-        resolved: &Type,
-        method: &str,
-    ) -> Option<syntax::go_names::ConformanceCandidate> {
+    fn bound_candidate(&self, resolved: &Type, method: &str) -> Option<ConformanceCandidate> {
         let Type::Parameter(name) = resolved else {
             return None;
         };
@@ -375,7 +361,7 @@ impl InferCtx<'_> {
             self.store
                 .get_all_methods(&interface_ty, &Default::default())
                 .get(method)?;
-            Some(syntax::go_names::ConformanceCandidate::Resolved {
+            Some(ConformanceCandidate::Resolved {
                 depth: 0,
                 owner: qualified.as_eco().clone(),
                 shadowed: false,
@@ -411,12 +397,12 @@ impl InferCtx<'_> {
         let own_candidate = |name: &str| {
             store
                 .get_method(own_id, name)
-                .map(|_| syntax::go_names::ConformanceCandidate::Resolved {
+                .map(|_| ConformanceCandidate::Resolved {
                     depth: 0,
                     owner: own_id.into(),
                     shadowed: self.store.is_ufcs_method(own_id, name),
                 })
-                .unwrap_or(syntax::go_names::ConformanceCandidate::Unresolved)
+                .unwrap_or(ConformanceCandidate::Unresolved)
         };
         let interface_ty = Type::Nominal {
             id: interface_qualified_id.into(),
@@ -429,7 +415,7 @@ impl InferCtx<'_> {
                 let interface_is_public = store
                     .get_definition(&requirement.declaring_interface)
                     .is_some_and(|d| d.visibility.is_public());
-                syntax::go_names::conformance_method(
+                go_names::conformance_method(
                     own,
                     requirement.declaring_interface.as_str(),
                     interface_is_public,
@@ -541,7 +527,7 @@ impl InferCtx<'_> {
                             .any(|hint| hint == "comma_ok"),
                         impl_method_name.as_str(),
                     );
-                    let spelling_pinned = syntax::go_names::interface_matches_by_source_name(
+                    let spelling_pinned = go_names::interface_matches_by_source_name(
                         interface_qualified_id,
                         interface_is_public,
                     );
@@ -579,7 +565,7 @@ impl InferCtx<'_> {
     }
 
     fn select_impl_method(&self, site: &ConformanceSite<'_>, method_name: &str) -> SelectedMethod {
-        let selected = syntax::go_names::conformance_method(
+        let selected = go_names::conformance_method(
             site.symbol_methods,
             site.interface_qualified_id,
             site.interface_is_public,
@@ -608,7 +594,7 @@ impl InferCtx<'_> {
         method_name: &str,
         method_ty: &Type,
     ) -> Option<String> {
-        let (impl_name, impl_method) = syntax::go_names::conformance_method_if_public(
+        let (impl_name, impl_method) = go_names::conformance_method_if_public(
             site.symbol_methods,
             site.interface_qualified_id,
             site.interface_is_public,

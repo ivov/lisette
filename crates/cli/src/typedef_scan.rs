@@ -4,16 +4,12 @@ use syntax::ast::{Expression, ImportAlias};
 use syntax::parse::Parser;
 
 use lisette::fs::collect_lis_filepaths_recursive;
+use std::fs;
+use std::io::Error;
 
 pub(crate) enum SourceScanError {
-    Parse {
-        path: PathBuf,
-        message: String,
-    },
-    Read {
-        path: PathBuf,
-        error: std::io::Error,
-    },
+    Parse { path: PathBuf, message: String },
+    Read { path: PathBuf, error: Error },
 }
 
 pub(crate) struct ScannedImports {
@@ -70,7 +66,7 @@ pub(crate) fn scan_source_imports(src_dir: &Path) -> Result<ScannedImports, Sour
 }
 
 fn scan_file_imports(path: PathBuf) -> Result<Vec<ScannedImport>, SourceScanError> {
-    let source = match std::fs::read_to_string(&path) {
+    let source = match fs::read_to_string(&path) {
         Ok(s) => s,
         Err(e) => return Err(SourceScanError::Read { path, error: e }),
     };
@@ -104,13 +100,14 @@ fn scan_file_imports(path: PathBuf) -> Result<Vec<ScannedImport>, SourceScanErro
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     fn project_src(files: &[(&str, &str)]) -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
         let src = dir.path().join("src");
-        std::fs::create_dir_all(&src).unwrap();
+        fs::create_dir_all(&src).unwrap();
         for (name, body) in files {
-            std::fs::write(src.join(name), body).unwrap();
+            fs::write(src.join(name), body).unwrap();
         }
         dir
     }

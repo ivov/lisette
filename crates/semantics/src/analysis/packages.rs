@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
 use super::*;
+use crate::checker::InferredFile;
+use crate::loader;
+use crate::path::DisplayPathBase;
 use rayon::prelude::*;
 use rustc_hash::FxHashMap as HashMap;
 use syntax::program::UninferredExports;
@@ -40,7 +43,7 @@ impl UnparsedPackage {
         for scanned_file in scanned {
             let (mut file, file_errors, status) = scanned_file.parse(package_id, recover);
             if rewrite_root_import {
-                file.rewrite_import(crate::loader::ROOT_IMPORT, ENTRY_PACKAGE_ID);
+                file.rewrite_import(loader::ROOT_IMPORT, ENTRY_PACKAGE_ID);
             }
             statuses.push((file.id, status));
             files.push(file);
@@ -182,7 +185,7 @@ pub(super) fn infer_all_packages(
         let files = input.files.remove(&package_id).unwrap_or_default();
         let rewrite_root_import = input.scope.has_project_root()
             && input.project_kind == ProjectKind::Library
-            && crate::loader::is_external_test_package(&package_id);
+            && loader::is_external_test_package(&package_id);
         // Production-only hash drives dependents/emit; all-files hash drives own validity.
         let (production_hash, full_hash) = source_hashes
             .get(&package_id)
@@ -484,8 +487,8 @@ fn load_cache_candidates(
         });
     }
 
-    let src_base = crate::path::DisplayPathBase::new(&project_root.join("src"));
-    let root_base = crate::path::DisplayPathBase::new(project_root);
+    let src_base = DisplayPathBase::new(&project_root.join("src"));
+    let root_base = DisplayPathBase::new(project_root);
     let build = |job: CacheBuildJob| {
         build_cached_package(
             job.package_id,
@@ -613,7 +616,7 @@ fn infer_packages(checker: &mut TaskState, store: &mut Store, packages: Vec<Regi
         let seed = checker.worker_seed();
         let store_ref: &Store = store;
 
-        let outputs: Vec<(TaskOutput, Vec<crate::checker::InferredFile>)> = packages
+        let outputs: Vec<(TaskOutput, Vec<InferredFile>)> = packages
             .into_par_iter()
             .map(|package| {
                 let mut worker = seed.spawn();

@@ -3,8 +3,13 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use crate::workspace::WorkspaceBindgen;
 use deps::{GoDependency, TypedefLocator};
+use std::path::PathBuf;
+use std::sync::Arc;
 use stdlib::Target;
+use syntax::dependency_block;
+use syntax::dependency_block::DependencyBlock;
 
 /// Whether resolution may reach the network.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -29,8 +34,8 @@ pub(crate) fn script_deps(source: &str) -> BTreeMap<String, GoDependency> {
         .collect()
 }
 
-pub(crate) fn deps_block(source: &str) -> Option<syntax::dependency_block::DependencyBlock> {
-    syntax::dependency_block::scan_dependency_blocks(source, 0)
+pub(crate) fn deps_block(source: &str) -> Option<DependencyBlock> {
+    dependency_block::scan_dependency_blocks(source, 0)
         .into_iter()
         .next()
 }
@@ -46,12 +51,14 @@ pub(crate) fn locator(
         return locator;
     }
 
-    locator.with_bindgen(std::sync::Arc::new(
-        crate::workspace::WorkspaceBindgen::new(dir.to_path_buf(), typedef_dir(dir), target),
-    ))
+    locator.with_bindgen(Arc::new(WorkspaceBindgen::new(
+        dir.to_path_buf(),
+        typedef_dir(dir),
+        target,
+    )))
 }
 
-pub(crate) fn typedef_dir(dir: &Path) -> std::path::PathBuf {
+pub(crate) fn typedef_dir(dir: &Path) -> PathBuf {
     deps::typedef_cache_dir(dir)
 }
 

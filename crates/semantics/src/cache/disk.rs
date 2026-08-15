@@ -4,9 +4,11 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Serialize, de::DeserializeOwned};
+use std::env;
+use std::process;
 
 pub(super) fn global_path(file_name: &str) -> Option<PathBuf> {
-    let home = std::env::var("HOME").ok()?;
+    let home = env::var("HOME").ok()?;
     Some(
         PathBuf::from(home)
             .join(".lisette")
@@ -49,7 +51,7 @@ static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn temp_path(final_path: &Path) -> PathBuf {
     let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-    final_path.with_extension(format!("tmp.{}.{}", std::process::id(), counter))
+    final_path.with_extension(format!("tmp.{}.{}", process::id(), counter))
 }
 
 fn prune_legacy(dir: &Path, prefix: &str) {

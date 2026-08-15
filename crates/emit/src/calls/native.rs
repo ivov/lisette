@@ -10,6 +10,7 @@ use crate::plan::values::{CaptureBoundary, EvaluationEffect, ValuePlan};
 use crate::statements::assignments::lvalues_match;
 use crate::types::native::NativeGoType;
 use crate::utils::reads_mutable_operand;
+use std::iter;
 use syntax::ast::{Expression, Generic, Literal, UnaryOperator};
 use syntax::program::{CallKind, DotAccessKind, NativeTypeKind};
 use syntax::types::{CompoundKind, Type, peel_to_range_type};
@@ -314,7 +315,7 @@ fn render_inline(template: &str, receiver: &str, args: &[String]) -> String {
         result = result.replace("{args}", &args.join(", "));
     }
     if result.contains("{r+args}") {
-        let all = std::iter::once(receiver.to_string())
+        let all = iter::once(receiver.to_string())
             .chain(args.iter().cloned())
             .collect::<Vec<_>>()
             .join(", ");

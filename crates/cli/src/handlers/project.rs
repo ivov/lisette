@@ -4,6 +4,10 @@ use std::path::{Path, PathBuf};
 
 use crate::lock::{acquire_mutation_lock, acquire_target_lock};
 use crate::{cli_error, error};
+use lisette::fs;
+use semantics::loader;
+use std::env;
+use std::fs::create_dir_all;
 
 pub(crate) struct MutationProject {
     pub(crate) root: PathBuf,
@@ -41,7 +45,7 @@ impl MutationProject {
             );
             return Err(1);
         }
-        std::fs::create_dir_all(&target_dir).map_err(|error| {
+        create_dir_all(&target_dir).map_err(|error| {
             error!(
                 "failed to set up target directory",
                 format!("Failed to create target directory: {error}")
@@ -96,7 +100,7 @@ fn validate_manifest(manifest: &deps::Manifest) -> Result<(), i32> {
 }
 
 fn find_project_root() -> Option<PathBuf> {
-    deps::find_project_root(&std::env::current_dir().ok()?)
+    deps::find_project_root(&env::current_dir().ok()?)
 }
 
 /// The compilation unit a named `.lis` file belongs to.
@@ -136,7 +140,7 @@ pub(crate) fn resolve_file_target(file: &Path) -> FileTarget {
         return outside;
     };
     // The walk needs absolute paths to climb, but every message shows a root.
-    let root = lisette::fs::relative_to_cwd(&root)
+    let root = fs::relative_to_cwd(&root)
         .map(PathBuf::from)
         .unwrap_or(root);
     let mut components = relative.components();
@@ -148,7 +152,7 @@ pub(crate) fn resolve_file_target(file: &Path) -> FileTarget {
                 FileTarget::ProjectPackage { root }
             }
         }
-        Some(semantics::loader::EXTERNAL_TESTS_DIR) => FileTarget::ProjectPackage { root },
+        Some(loader::EXTERNAL_TESTS_DIR) => FileTarget::ProjectPackage { root },
         _ => outside,
     }
 }
@@ -156,7 +160,5 @@ pub(crate) fn resolve_file_target(file: &Path) -> FileTarget {
 pub(crate) fn project_label(root: &Path) -> String {
     deps::parse_manifest(root)
         .map(|manifest| manifest.project.name)
-        .unwrap_or_else(|_| {
-            lisette::fs::relative_to_cwd(root).unwrap_or_else(|| root.display().to_string())
-        })
+        .unwrap_or_else(|_| fs::relative_to_cwd(root).unwrap_or_else(|| root.display().to_string()))
 }

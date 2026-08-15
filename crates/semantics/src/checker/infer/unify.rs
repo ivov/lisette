@@ -8,6 +8,8 @@ use crate::checker::infer::InferCtx;
 use crate::checker::infer::carry_mut::can_carry_mutation_across_fn_boundary;
 use crate::checker::infer::context::{Expectation, ExpectationRole};
 use crate::checker::type_env::VarState;
+use syntax::types::FunctionParameter;
+use syntax::types::SimpleKind;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BuiltinBound {
@@ -638,7 +640,7 @@ impl InferCtx<'_> {
     fn check_function_bound(
         &mut self,
         bound: &Bound,
-        signature_params: &[syntax::types::FunctionParameter],
+        signature_params: &[FunctionParameter],
         span: &Span,
     ) {
         let store = self.store;
@@ -1082,8 +1084,8 @@ fn are_go_type_aliases(a: &str, b: &str) -> bool {
 
 /// Go-level aliases between scalar builtins: `byte` is an alias for `uint8`,
 /// and `rune` is an alias for `int32`.
-fn simple_kinds_are_go_aliases(a: syntax::types::SimpleKind, b: syntax::types::SimpleKind) -> bool {
-    use syntax::types::SimpleKind;
+fn simple_kinds_are_go_aliases(a: SimpleKind, b: SimpleKind) -> bool {
+    use SimpleKind;
     matches!(
         (a, b),
         (SimpleKind::Byte, SimpleKind::Uint8)

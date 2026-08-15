@@ -5,11 +5,13 @@ use syntax::program::TestFunction;
 use syntax::types::{Symbol, Type};
 
 use super::{RegistrationFile, TaskState};
+use crate::prelude;
 use crate::store::Store;
+use std::mem;
 
 fn test_context_type() -> Type {
     Type::Nominal {
-        id: Symbol::from_parts(crate::prelude::TEST_PRELUDE_PACKAGE_ID, "TestContext"),
+        id: Symbol::from_parts(prelude::TEST_PRELUDE_PACKAGE_ID, "TestContext"),
         params: vec![],
         writable: false,
     }
@@ -82,7 +84,7 @@ impl TaskState {
     }
 
     pub(super) fn finalize_tests(&mut self, store: &mut Store) {
-        for test in std::mem::take(&mut self.pending.test_functions) {
+        for test in mem::take(&mut self.pending.test_functions) {
             store.test_index.push(test);
         }
     }

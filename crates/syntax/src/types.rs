@@ -6,6 +6,10 @@ use ecow::EcoString;
 
 use crate::ast::Generic;
 use crate::program::{Definition, DefinitionBody};
+use fmt::Formatter;
+use std::fmt;
+use std::fmt::Display;
+use std::ops::Deref;
 
 /// Dot-qualified identifier for a named type, method, value, or variant.
 ///
@@ -82,7 +86,7 @@ impl AsRef<str> for Symbol {
     }
 }
 
-impl std::ops::Deref for Symbol {
+impl Deref for Symbol {
     type Target = str;
 
     fn deref(&self) -> &str {
@@ -96,8 +100,8 @@ impl From<&Symbol> for EcoString {
     }
 }
 
-impl std::fmt::Display for Symbol {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for Symbol {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
     }
 }
@@ -389,8 +393,8 @@ impl TypeVarId {
     }
 }
 
-impl std::fmt::Debug for TypeVarId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for TypeVarId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "#{}", self.0)
     }
 }
@@ -466,14 +470,14 @@ pub enum Type {
 
 struct TypePlaceholder(&'static str);
 
-impl std::fmt::Debug for TypePlaceholder {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for TypePlaceholder {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(self.0)
     }
 }
 
-impl std::fmt::Debug for Type {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for Type {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Type::Nominal {
                 id,
@@ -1897,6 +1901,7 @@ fn alpha_index(idx: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::iter;
 
     #[test]
     fn function_equality_ignores_param_names() {
@@ -1977,7 +1982,7 @@ mod tests {
             .params
             .iter()
             .map(|param| &param.ty)
-            .chain(std::iter::once(f.return_type.as_ref()))
+            .chain(iter::once(f.return_type.as_ref()))
             .map(|p| match p {
                 Type::Parameter(name) => name.to_string(),
                 other => panic!("expected parameter, got {:?}", other),

@@ -15,6 +15,7 @@ use crate::plan::bodies::{
 };
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use crate::write_line;
+use syntax::ast::Expression;
 use syntax::parse::TUPLE_FIELDS;
 
 /// A bare `return v0, v1, ...` statement leaf.
@@ -593,7 +594,7 @@ pub(crate) fn lower_arg_to_tagged(
 /// path handled the emission.
 pub(crate) fn try_emit_lowered_tail_return(
     planner: &mut Planner,
-    expression: &syntax::ast::Expression,
+    expression: &Expression,
 ) -> Option<Vec<LoweredStatement>> {
     let shape = planner.return_ctx().lowered_shape()?;
     match shape {
@@ -607,7 +608,7 @@ pub(crate) fn try_emit_lowered_tail_return(
 
 fn lowered_tail_fallback(
     planner: &mut Planner,
-    expression: &syntax::ast::Expression,
+    expression: &Expression,
     return_ty: &Type,
     shape: &CallableReturnAbi,
     hoist_hint: Option<&str>,
@@ -627,10 +628,10 @@ fn lowered_tail_fallback(
 
 fn emit_lowered_tuple_tail(
     planner: &mut Planner,
-    expression: &syntax::ast::Expression,
+    expression: &Expression,
     arity: usize,
 ) -> Vec<LoweredStatement> {
-    use syntax::ast::Expression;
+    use Expression;
     if let Expression::Tuple { elements, .. } = expression
         && elements.len() == arity
     {
@@ -666,9 +667,9 @@ fn emit_lowered_tuple_tail(
 
 fn emit_lowered_partial_tail(
     planner: &mut Planner,
-    expression: &syntax::ast::Expression,
+    expression: &Expression,
 ) -> Vec<LoweredStatement> {
-    use syntax::ast::Expression;
+    use Expression;
     let return_ty = planner.return_ctx().expect_ty();
 
     if let Expression::Call {
@@ -727,10 +728,10 @@ fn emit_lowered_partial_tail(
 /// project at runtime.
 fn lower_nullable_slot_value(
     planner: &mut Planner,
-    expression: &syntax::ast::Expression,
+    expression: &Expression,
     slot_ty: &Type,
 ) -> ValuePlan {
-    use syntax::ast::Expression;
+    use Expression;
     if let Expression::Call {
         expression: callee,
         args,

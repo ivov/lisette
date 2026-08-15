@@ -1,4 +1,5 @@
 use semantics::store::Store;
+use std::slice;
 use syntax::ast::{
     ConstructorPatternResolution, EnumVariant, Generic, Literal, MatchArm, Pattern,
     RecordPatternResolution, SequencePatternResolution, StructFieldPattern,
@@ -495,7 +496,7 @@ fn normalize_slice(
     ctx: &NormalizationContext,
     cache: &mut InhabitanceCache,
 ) -> NormalizedPattern {
-    let type_name = make_type_key("Slice", std::slice::from_ref(element_type));
+    let type_name = make_type_key("Slice", slice::from_ref(element_type));
     register_union(unions, &type_name, || {
         let mut constructors = vec![Constructor {
             tag_id: "EmptySlice".to_string(),
@@ -593,10 +594,7 @@ fn normalize_array(
     ctx: &NormalizationContext,
     cache: &mut InhabitanceCache,
 ) -> NormalizedPattern {
-    let type_name = make_type_key(
-        &format!("Array{length}"),
-        std::slice::from_ref(element_type),
-    );
+    let type_name = make_type_key(&format!("Array{length}"), slice::from_ref(element_type));
 
     if length == 0 {
         register_union(unions, &type_name, || {

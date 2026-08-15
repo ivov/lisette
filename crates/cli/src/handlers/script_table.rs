@@ -1,5 +1,8 @@
+use std::collections::BTreeMap;
+use std::fs;
 use std::ops::Range;
 use std::path::Path;
+use syntax::dependency_block;
 
 pub(crate) struct ScriptTable {
     pub(crate) document: deps::DocumentMut,
@@ -10,7 +13,7 @@ pub(crate) struct ScriptTable {
 
 impl ScriptTable {
     pub(crate) fn read(source: &str) -> Result<Self, String> {
-        let mut blocks = syntax::dependency_block::scan_dependency_blocks(source, 0);
+        let mut blocks = dependency_block::scan_dependency_blocks(source, 0);
         if blocks.len() > 1 {
             return Err(format!(
                 "This script has {} `[dependencies.go]` blocks. Merge them into one",
@@ -28,7 +31,7 @@ impl ScriptTable {
             return Ok(Self {
                 document: deps::DocumentMut::new(),
                 range: {
-                    let at = syntax::dependency_block::insertion_point(source);
+                    let at = dependency_block::insertion_point(source);
                     at..at
                 },
                 existed: false,
@@ -51,7 +54,7 @@ impl ScriptTable {
         })
     }
 
-    pub(crate) fn deps(&self) -> std::collections::BTreeMap<String, deps::GoDependency> {
+    pub(crate) fn deps(&self) -> BTreeMap<String, deps::GoDependency> {
         deps::go_deps_of_document(&self.document).unwrap_or_default()
     }
 
@@ -103,7 +106,7 @@ impl ScriptTable {
     }
 
     pub(crate) fn save(&self, file: &Path, source: &str) -> Result<(), String> {
-        std::fs::write(file, self.write(source))
+        fs::write(file, self.write(source))
             .map_err(|e| format!("Failed to write `{}`: {}", file.display(), e))
     }
 }

@@ -4,6 +4,8 @@ use std::collections::BTreeMap;
 use std::ops::Range;
 
 use crate::GoDependency;
+use crate::module_path;
+use toml_edit::de;
 
 #[derive(Debug)]
 pub struct DependencyTable {
@@ -83,7 +85,7 @@ pub(crate) fn deserialize_go_table(
 ) -> Result<BTreeMap<String, GoDependency>, TableError> {
     let mut document = toml_edit::DocumentMut::new();
     document.insert(GO, go.clone());
-    Ok(toml_edit::de::from_document::<Wrapper>(document)
+    Ok(de::from_document::<Wrapper>(document)
         .map_err(|error| TableError {
             message: error.message().to_string(),
             range: error.span(),
@@ -111,7 +113,7 @@ struct Wrapper {
 }
 
 pub fn validate_script_entry(module_path: &str, dep: &GoDependency) -> Result<(), String> {
-    crate::module_path::check_module_path(module_path)
+    module_path::check_module_path(module_path)
         .map_err(|reason| format!("`{}` is not a Go module path: {}", module_path, reason))?;
 
     let version = match dep {
