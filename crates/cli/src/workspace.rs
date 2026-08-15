@@ -1137,7 +1137,7 @@ fn dev_bindgen_path() -> Option<PathBuf> {
 }
 
 #[cfg(not(debug_assertions))]
-fn dev_bindgen_path() -> Option<std::path::PathBuf> {
+fn dev_bindgen_path() -> Option<PathBuf> {
     None
 }
 
