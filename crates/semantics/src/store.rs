@@ -440,6 +440,76 @@ impl Store {
         types::contains_unknown(ty, |id| self.get_definition(id))
     }
 
+    pub fn demoted(&self, ty: &Type) -> Type {
+        types::demoted(ty, &|id| self.get_definition(id))
+    }
+
+    pub fn demotion_changes(&self, ty: &Type) -> bool {
+        types::demotion_changes(ty, &|id| self.get_definition(id))
+    }
+
+    /// Canonical form for a type built from an annotation.
+    pub fn normalized_annotation_type(&self, ty: &Type) -> Type {
+        match ty {
+            Type::Compound {
+                kind,
+                args,
+                writable,
+            } => {
+                let mut args: Vec<Type> = args
+                    .iter()
+                    .map(|arg| self.normalized_annotation_type(arg))
+                    .collect();
+                if kind.carries_write_permission()
+                    && !writable
+                    && args.iter().any(|arg| self.demotion_changes(arg))
+                {
+                    args = args.iter().map(|arg| self.demoted(arg)).collect();
+                }
+                Type::Compound {
+                    kind: *kind,
+                    args,
+                    writable: *writable,
+                }
+            }
+            Type::Nominal {
+                id,
+                params,
+                writable,
+            } => Type::Nominal {
+                id: id.clone(),
+                params: params
+                    .iter()
+                    .map(|param| self.normalized_annotation_type(param))
+                    .collect(),
+                writable: *writable,
+            },
+            Type::Tuple(elements) => Type::Tuple(
+                elements
+                    .iter()
+                    .map(|element| self.normalized_annotation_type(element))
+                    .collect(),
+            ),
+            Type::Array { length, element } => Type::Array {
+                length: *length,
+                element: Box::new(self.normalized_annotation_type(element)),
+            },
+            Type::Function(f) => f.rebuild(
+                f.params
+                    .iter()
+                    .map(|param| param.with_type(self.normalized_annotation_type(&param.ty)))
+                    .collect(),
+                f.bounds.clone(),
+                Box::new(self.normalized_annotation_type(&f.return_type)),
+            ),
+            Type::Forall { vars, body } => Type::Forall {
+                vars: vars.clone(),
+                body: Box::new(self.normalized_annotation_type(body)),
+            },
+            _ => ty.clone(),
+        }
+    }
+
     pub fn resolve_to_function_type(&self, ty: &Type) -> Option<Type> {
         let resolved = self.peel_alias(ty);
         if matches!(resolved, Type::Function(_)) {

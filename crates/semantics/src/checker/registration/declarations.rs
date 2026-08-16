@@ -59,6 +59,8 @@ impl TaskState {
         self.register_type_names(store, items, visibility);
         self.register_constants(store, items, visibility);
         self.register_type_definitions(store, items);
+        normalize_registered_component_types(store, &package_id);
+        self.derive_enum_constructor_values(store, items);
         self.check_type_generic_bounds(store, items);
         self.register_impl_blocks(store, items);
         self.register_non_const_values(store, items, visibility);

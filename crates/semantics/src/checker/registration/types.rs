@@ -53,38 +53,12 @@ impl TaskState {
 
         self.check_enum_field_slot_collisions(name, &new_variants);
 
-        for new_variant in &new_variants {
-            self.add_enum_variant_to_scope(new_variant, name, &enum_ty, &generics);
-        }
-
         let visibility = self
             .current_package(&*store)
             .definitions
             .get(qualified_name.as_str())
             .map(|definition| definition.visibility.clone())
             .unwrap_or(Visibility::Private);
-
-        let is_prelude = self.cursor.package_id() == "prelude";
-
-        let variant_definitions: Vec<_> = new_variants
-            .iter()
-            .map(|v| {
-                let variant_ty = enum_variant_constructor_type(v, &enum_ty, &generics);
-                let qualified_variant_name = qualified_name.with_segment(&v.name);
-                let simple_qualified_name = if is_prelude {
-                    Some(self.qualify_name(&v.name))
-                } else {
-                    None
-                };
-                (
-                    qualified_variant_name,
-                    simple_qualified_name,
-                    variant_ty,
-                    v.name_span,
-                    v.doc.clone(),
-                )
-            })
-            .collect();
 
         if self.is_lis(&*store) && self.type_definition_exists(&*store, &qualified_name) {
             self.sink.push(diagnostics::infer::duplicate_definition(
@@ -93,34 +67,6 @@ impl TaskState {
         }
 
         let package = self.current_package_mut(store);
-
-        for (qualified_variant_name, simple_name, variant_ty, variant_name_span, variant_doc) in
-            variant_definitions
-        {
-            let definition = Definition {
-                visibility: visibility.clone(),
-                ty: variant_ty,
-                name_span: Some(variant_name_span),
-                doc: variant_doc,
-                body: DefinitionBody::Value {
-                    kind: ValueKind::Runtime,
-                    allowed_lints: vec![],
-                    go_hints: vec![],
-                    go_name: None,
-                    go_type_param_recipe: None,
-                },
-            };
-            package
-                .definitions
-                .insert(qualified_variant_name, definition.clone());
-
-            if let Some(simple_qualified_name) = simple_name {
-                package
-                    .definitions
-                    .entry(simple_qualified_name)
-                    .or_insert(definition);
-            }
-        }
 
         package.definitions.insert(
             qualified_name.clone(),
@@ -137,6 +83,90 @@ impl TaskState {
                 },
             },
         );
+    }
+
+    /// Runs after `normalize_registered_component_types`.
+    pub(crate) fn derive_enum_constructor_values(
+        &mut self,
+        store: &mut Store,
+        items: &[Expression],
+    ) {
+        for item in items {
+            let Expression::Enum { name, .. } = item else {
+                continue;
+            };
+            let qualified_name = self.qualify_name(name);
+            let Some(definition) = store.get_definition(&qualified_name) else {
+                continue;
+            };
+            let DefinitionBody::Enum {
+                generics, variants, ..
+            } = &definition.body
+            else {
+                continue;
+            };
+            let visibility = definition.visibility.clone();
+            let generics = generics.clone();
+            let variants = variants.clone();
+            let Some(enum_ty) = store.get_type(&qualified_name).cloned() else {
+                continue;
+            };
+            let is_prelude = self.cursor.package_id() == "prelude";
+
+            for variant in &variants {
+                self.add_enum_variant_to_scope(variant, name, &enum_ty, &generics);
+            }
+
+            let variant_definitions: Vec<_> = variants
+                .iter()
+                .map(|v| {
+                    let variant_ty = enum_variant_constructor_type(v, &enum_ty, &generics);
+                    let qualified_variant_name = qualified_name.with_segment(&v.name);
+                    let simple_qualified_name = if is_prelude {
+                        Some(self.qualify_name(&v.name))
+                    } else {
+                        None
+                    };
+                    (
+                        qualified_variant_name,
+                        simple_qualified_name,
+                        variant_ty,
+                        v.name_span,
+                        v.doc.clone(),
+                    )
+                })
+                .collect();
+
+            let package = self.current_package_mut(store);
+
+            for (qualified_variant_name, simple_name, variant_ty, variant_name_span, variant_doc) in
+                variant_definitions
+            {
+                let definition = Definition {
+                    visibility: visibility.clone(),
+                    ty: variant_ty,
+                    name_span: Some(variant_name_span),
+                    doc: variant_doc,
+                    body: DefinitionBody::Value {
+                        kind: ValueKind::Runtime,
+                        allowed_lints: vec![],
+                        go_hints: vec![],
+                        go_name: None,
+                        go_type_param_recipe: None,
+                    },
+                };
+                package
+                    .definitions
+                    .insert(qualified_variant_name, definition.clone());
+
+                if let Some(simple_qualified_name) = simple_name {
+                    package
+                        .definitions
+                        .entry(simple_qualified_name)
+                        .or_insert(definition);
+                }
+            }
+        }
     }
 
     /// Emit's layout dedupes by Go name, so a survivor would take the first type.

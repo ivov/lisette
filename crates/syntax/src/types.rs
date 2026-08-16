@@ -675,6 +675,31 @@ impl Type {
         }
     }
 
+    /// This type with its own write permission removed, type arguments untouched.
+    pub fn shallow_demoted(&self) -> Type {
+        match self {
+            Type::Compound {
+                kind,
+                args,
+                writable: _,
+            } => Type::Compound {
+                kind: *kind,
+                args: args.clone(),
+                writable: false,
+            },
+            Type::Nominal {
+                id,
+                params,
+                writable: _,
+            } => Type::Nominal {
+                id: id.clone(),
+                params: params.clone(),
+                writable: false,
+            },
+            other => other.clone(),
+        }
+    }
+
     pub fn demoted(&self) -> Type {
         match self {
             Type::Compound {
@@ -1596,6 +1621,82 @@ where
     }
 
     contains(ty, &lookup)
+}
+
+/// Alias-aware demotion. An occurrence whose alias hides permission demotes
+/// by expansion to the demoted underlying type.
+pub fn demoted<'d, F>(ty: &Type, lookup: &F) -> Type
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    match ty {
+        Type::Nominal {
+            id,
+            params,
+            writable: _,
+        } => {
+            let cleared = Type::Nominal {
+                id: id.clone(),
+                params: params.iter().map(|param| demoted(param, lookup)).collect(),
+                writable: false,
+            };
+            let peeled = peel_alias(&cleared, lookup);
+            if peeled != cleared && demotion_changes(&peeled, lookup) {
+                demoted(&peeled, lookup)
+            } else {
+                cleared
+            }
+        }
+        Type::Compound {
+            kind,
+            args,
+            writable: _,
+        } => Type::Compound {
+            kind: *kind,
+            args: args.iter().map(|arg| demoted(arg, lookup)).collect(),
+            writable: false,
+        },
+        Type::Tuple(elements) => Type::Tuple(
+            elements
+                .iter()
+                .map(|element| demoted(element, lookup))
+                .collect(),
+        ),
+        Type::Array { length, element } => Type::Array {
+            length: *length,
+            element: Box::new(demoted(element, lookup)),
+        },
+        _ => ty.clone(),
+    }
+}
+
+/// Whether `demoted` returns a different type. Must mirror `demoted`.
+pub fn demotion_changes<'d, F>(ty: &Type, lookup: &F) -> bool
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    match ty {
+        Type::Nominal {
+            params, writable, ..
+        } => {
+            if *writable {
+                return true;
+            }
+            let peeled = peel_alias(ty, lookup);
+            if peeled != *ty {
+                return demotion_changes(&peeled, lookup);
+            }
+            params.iter().any(|param| demotion_changes(param, lookup))
+        }
+        Type::Compound { args, writable, .. } => {
+            *writable || args.iter().any(|arg| demotion_changes(arg, lookup))
+        }
+        Type::Tuple(elements) => elements
+            .iter()
+            .any(|element| demotion_changes(element, lookup)),
+        Type::Array { element, .. } => demotion_changes(element, lookup),
+        _ => false,
+    }
 }
 
 pub fn underlying_simple_kind<'d, F>(ty: &Type, lookup: F) -> Option<SimpleKind>

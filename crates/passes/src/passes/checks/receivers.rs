@@ -33,7 +33,7 @@ fn check_method_receiver(method: &Expression, impl_ty: &Type, sink: &LocalSink) 
     };
 
     let receiver_ty = first_param.ty.strip_refs();
-    let types_match = receiver_ty == *impl_ty;
+    let types_match = receiver_ty.shallow_demoted() == impl_ty.shallow_demoted();
 
     if types_match && identifier != "self" {
         sink.push(diagnostics::infer::receiver_must_be_named_self(
