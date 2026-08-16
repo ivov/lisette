@@ -2,6 +2,40 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.11.3](https://github.com/ivov/lisette/compare/lisette-v0.11.2...lisette-v0.11.3) - 2026-08-15
+
+### Features
+
+- feat: integer constant in `Array` size [#1268](https://github.com/ivov/lisette/pull/1268) [`01209ee`](https://github.com/ivov/lisette/commit/01209ee21aa9332cd2b9571ec9850b4fd9b85394)
+- feat: SSA return view analysis for bindgen [#1254](https://github.com/ivov/lisette/pull/1254) [`3a37c9c`](https://github.com/ivov/lisette/commit/3a37c9ca53c2a9cbabdd4c19bcec975ac00ee8aa)
+
+### Fixes
+
+- fix: reject mixed-width numeric comparisons [#1258](https://github.com/ivov/lisette/pull/1258) [`8271727`](https://github.com/ivov/lisette/commit/82717279ceb622315743b9b709aa32357d557b35)
+- fix: emit explicit tuple type arguments for adapted literals [#1248](https://github.com/ivov/lisette/pull/1248) [`4da8bbd`](https://github.com/ivov/lisette/commit/4da8bbdcc8bd0f326eeb90d7868fff20f584e39e)
+
+### Internals
+
+- chore: enforce short paths at callsites [#1270](https://github.com/ivov/lisette/pull/1270) [`d713d2f`](https://github.com/ivov/lisette/commit/d713d2fe0df8b6b0fe5be26ecf6bc8e5ea115391)
+- refactor: match tuple subjects without building tuple [#1267](https://github.com/ivov/lisette/pull/1267) [`7145c37`](https://github.com/ivov/lisette/commit/7145c378919514eb8d24fa1ed5819ed43b1e22d1)
+- refactor: emit `map`, `filter`, `fold` and `find` as Go loops [#1265](https://github.com/ivov/lisette/pull/1265) [`8f2415d`](https://github.com/ivov/lisette/commit/8f2415dda35e549f4f7278be4f8c3efd69caf961)
+- refactor: drop unreachable `if` in `let ... else` [#1264](https://github.com/ivov/lisette/pull/1264) [`b0e2689`](https://github.com/ivov/lisette/commit/b0e26897ff6e9321eb15a842afe6902b0871e781)
+- refactor: drop the underscore prefix on live emit temps [#1263](https://github.com/ivov/lisette/pull/1263) [`b45f842`](https://github.com/ivov/lisette/commit/b45f842b3b3c59411db850bb9beff889ae1b05a6)
+- refactor: emit `errors.New` instead of verb-free `fmt.Errorf` [#1262](https://github.com/ivov/lisette/pull/1262) [`bfc6e45`](https://github.com/ivov/lisette/commit/bfc6e457f11cad1c8dde09e147fc568d1bc4a4b2)
+- refactor: elide redundant element types in Go composite literals [#1261](https://github.com/ivov/lisette/pull/1261) [`e6b7e21`](https://github.com/ivov/lisette/commit/e6b7e216651ed12f6df407dc68db7b417f272464)
+- refactor: emit counted loops as `for i := range n` [#1260](https://github.com/ivov/lisette/pull/1260) [`17a2789`](https://github.com/ivov/lisette/commit/17a278947dce3486a3990bb59a88c1a2cf5c3a77)
+- refactor: emit guarded matches as a `switch` without a jump target [#1259](https://github.com/ivov/lisette/pull/1259) [`90b0ede`](https://github.com/ivov/lisette/commit/90b0ede516eecf96994a1ea720c5c4614e6a91b4)
+- refactor: parse and represent `mut` in type position [#1257](https://github.com/ivov/lisette/pull/1257) [`ff861e4`](https://github.com/ivov/lisette/commit/ff861e4bea8d5d6a6e47fb54d779564c8982fd5d)
+- refactor: reuse stable names instead of copying them into temps [#1256](https://github.com/ivov/lisette/pull/1256) [`04e6995`](https://github.com/ivov/lisette/commit/04e69957ffb1f569ce86feeb99de27d502ecce20)
+- refactor: emit assertions as a direct failure test without temps [#1255](https://github.com/ivov/lisette/pull/1255) [`27ec06d`](https://github.com/ivov/lisette/commit/27ec06dec4880f94d293ebec94774ff59bbcebdd)
+- refactor: lower branch-assigned temps to direct returns and `:=` [#1253](https://github.com/ivov/lisette/pull/1253) [`0827ae3`](https://github.com/ivov/lisette/commit/0827ae334bc10897cd551897836ea4bfd9115180)
+- refactor: emit `v, ok :=` when matching on comma-ok calls [#1252](https://github.com/ivov/lisette/pull/1252) [`ce2c0a5`](https://github.com/ivov/lisette/commit/ce2c0a54226d682cb30365a2f38ee0eab8d688d2)
+- refactor: emit `if err != nil` when propagating with `?` [#1251](https://github.com/ivov/lisette/pull/1251) [`314a555`](https://github.com/ivov/lisette/commit/314a555a13ba336d4ef912b81d5ff26cefb89a33)
+- refactor: collapse duplicated emit and checker state [#1250](https://github.com/ivov/lisette/pull/1250) [`dc060ec`](https://github.com/ivov/lisette/commit/dc060ecd16224ad01cdb8d7bafe89230e477446a)
+- refactor: lower `Map.from` to a Go map literal [#1249](https://github.com/ivov/lisette/pull/1249) [`d0dc1de`](https://github.com/ivov/lisette/commit/d0dc1ded10acd406da4aee76a7fd8acc2b614f50)
+- refactor: reword the `Map<K, Unknown>` type mismatch help [#1246](https://github.com/ivov/lisette/pull/1246) [`23b237c`](https://github.com/ivov/lisette/commit/23b237c3ad821ee7db3bfd2a330689a32182890c)
+
+
 ## [0.11.2](https://github.com/ivov/lisette/compare/lisette-v0.11.1...lisette-v0.11.2) - 2026-08-09
 
 ### Features
