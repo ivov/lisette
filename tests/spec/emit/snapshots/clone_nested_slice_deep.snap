@@ -3,7 +3,7 @@ source: tests/spec/emit/types.rs
 description: |
   
   fn main() {
-    let a = [[1, 2], [3, 4]]
+    let mut a = [[1, 2], [3, 4]]
     let mut b = a.clone()
     b[0][0] = 9
     let _ = a

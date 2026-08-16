@@ -1292,7 +1292,7 @@ fn can_assign_to_field_on_ref_returning_call() {
     infer(
         r#"{
     struct Point { x: int }
-    let make = || -> Ref<Point> { &Point { x: 1 } };
+    let make = || -> mut Ref<Point> { &Point { x: 1 } };
     make().x = 2
   }"#,
     )
@@ -1309,6 +1309,106 @@ fn can_take_address_of_field_on_ref_returning_call() {
   }"#,
     )
     .assert_no_errors();
+}
+
+#[test]
+fn immutable_let_fix_inserts_mut() {
+    let fixed = apply_infer_fixes(
+        r#"fn main() {
+  let n = 1;
+  n = 2;
+  let _ = n
+}"#,
+    );
+    assert!(
+        fixed.contains("let mut n = 1"),
+        "the fix must make the binding mutable: {fixed}"
+    );
+}
+
+#[test]
+fn container_let_write_fix_inserts_mut() {
+    let fixed = apply_infer_fixes(
+        r#"fn main() {
+  let scores = [70, 85]
+  scores[0] = 100
+  let _ = scores
+}"#,
+    );
+    assert!(
+        fixed.contains("let mut scores = [70, 85]"),
+        "the fix must make the binding mutable: {fixed}"
+    );
+}
+
+#[test]
+fn container_let_write_from_read_only_source_keeps_path_help() {
+    infer(
+        r#"fn source() -> Slice<int> {
+  [1, 2]
+}
+fn main() {
+  let xs = source()
+  xs[0] = 9
+  let _ = xs
+}"#,
+    )
+    .assert_infer_code("write_through_read_only");
+}
+
+#[test]
+fn container_let_write_reports_once_per_binding() {
+    infer(
+        r#"fn main() {
+  let xs = [3, 1, 2]
+  xs[0] = 0
+  xs[1] = 0
+  xs[2] = 0
+  let _ = xs
+}"#,
+    )
+    .assert_infer_code_once("immutable");
+}
+
+#[test]
+fn pointer_compound_write_reports_single_deref_hint() {
+    infer(
+        r#"fn bump(n: mut Ref<int>) {
+  n += 1
+}"#,
+    )
+    .assert_infer_code_once("immutable");
+}
+
+#[test]
+fn immutable_destructured_binding_gets_no_fix() {
+    let result = infer(
+        r#"fn main() {
+  let (a, b) = (1, 2);
+  a = b;
+  let _ = (a, b)
+}"#,
+    );
+    assert!(
+        result
+            .errors
+            .iter()
+            .all(|diagnostic| diagnostic.fix().is_none()),
+        "`mut` is not spellable in a pattern, so no fix may be offered"
+    );
+}
+
+#[test]
+fn immutable_binding_reports_once_across_uses() {
+    infer(
+        r#"{
+    let n = 1;
+    n = 2;
+    n = 3;
+    let _ = n
+  }"#,
+    )
+    .assert_infer_code_once("immutable");
 }
 
 #[test]
@@ -1417,7 +1517,7 @@ fn cannot_delete_from_immutable_map() {
     m.delete("a")
   }"#,
     )
-    .assert_infer_code("immutable");
+    .assert_infer_code("write_through_read_only");
 }
 
 #[test]
@@ -1439,7 +1539,7 @@ fn cannot_copy_into_immutable_slice() {
     dst.copy_from([1, 2, 3])
   }"#,
     )
-    .assert_infer_code("immutable");
+    .assert_infer_code("write_through_read_only");
 }
 
 #[test]
@@ -1460,7 +1560,7 @@ fn auto_address_value_to_ref_receiver() {
     struct Foo { value: int }
 
     impl Foo {
-      fn increment(self: Ref<Foo>) { self.value = self.value + 1 }
+      fn increment(self: mut Ref<Foo>) { self.value = self.value + 1 }
     }
 
     fn main() {
@@ -1479,7 +1579,7 @@ fn auto_address_struct_literal_receiver() {
     struct Foo { value: int }
 
     impl Foo {
-      fn increment(self: Ref<Foo>) { self.value = self.value + 1 }
+      fn increment(self: mut Ref<Foo>) { self.value = self.value + 1 }
     }
 
     fn main() {
@@ -1497,7 +1597,7 @@ fn auto_address_field_access_receiver() {
     struct Inner { value: int }
 
     impl Inner {
-      fn increment(self: Ref<Inner>) { self.value = self.value + 1 }
+      fn increment(self: mut Ref<Inner>) { self.value = self.value + 1 }
     }
 
     struct Outer { inner: Inner }
@@ -1518,11 +1618,11 @@ fn auto_address_slice_index_receiver() {
     struct Foo { value: int }
 
     impl Foo {
-      fn increment(self: Ref<Foo>) { self.value = self.value + 1 }
+      fn increment(self: mut Ref<Foo>) { self.value = self.value + 1 }
     }
 
     fn main() {
-      let mut items: Slice<Foo> = [Foo { value: 42 }];
+      let mut items: mut Slice<Foo> = [Foo { value: 42 }];
       items[0].increment()
     }
         "#,
@@ -1579,7 +1679,7 @@ fn auto_address_function_call_receiver() {
     struct Foo { value: int }
 
     impl Foo {
-      fn increment(self: Ref<Foo>) { self.value = self.value + 1 }
+      fn increment(self: mut Ref<Foo>) { self.value = self.value + 1 }
     }
 
     fn make_foo() -> Foo { Foo { value: 42 } }
@@ -1638,12 +1738,12 @@ fn no_coercion_needed_ref_matches() {
     struct Foo { value: int }
 
     impl Foo {
-      fn increment(self: Ref<Foo>) { self.value = self.value + 1 }
+      fn increment(self: mut Ref<Foo>) { self.value = self.value + 1 }
     }
 
     fn main() {
-      let foo = Foo { value: 42 };
-      let foo_ref: Ref<Foo> = &foo;
+      let mut foo = Foo { value: 42 };
+      let foo_ref: mut Ref<Foo> = &foo;
       foo_ref.increment()
     }
         "#,
@@ -1658,11 +1758,11 @@ fn explicit_ref_still_works() {
     struct Foo { value: int }
 
     impl Foo {
-      fn increment(self: Ref<Foo>) { self.value = self.value + 1 }
+      fn increment(self: mut Ref<Foo>) { self.value = self.value + 1 }
     }
 
     fn main() {
-      let foo = Foo { value: 42 };
+      let mut foo = Foo { value: 42 };
       (&foo).increment()
     }
         "#,
@@ -1677,7 +1777,7 @@ fn auto_address_generic_method() {
     struct Container<T> { value: T }
 
     impl<T> Container<T> {
-      fn set(self: Ref<Container<T>>, v: T) { self.value = v }
+      fn set(self: mut Ref<Container<T>>, v: T) { self.value = v }
     }
 
     fn main() {
@@ -1887,7 +1987,7 @@ fn ref_param_field_write_in_free_function() {
         r#"
     struct Point { x: int, y: int }
 
-    fn set_x(p: Ref<Point>, val: int) {
+    fn set_x(p: mut Ref<Point>, val: int) {
       p.*.x = val
     }
 
@@ -1914,14 +2014,14 @@ fn pointer_deref_assignment_no_ice() {
 }
 
 #[test]
-fn ref_binding_field_mutation_without_mut() {
+fn ref_binding_field_mutation_through_writable_ref() {
     infer(
         r#"
     struct Point { x: int, y: int }
 
     fn test() {
       let mut p = Point { x: 1, y: 2 }
-      let r = &p
+      let mut r = &p
       r.x = 50
     }
         "#,
@@ -2132,8 +2232,7 @@ fn mut_binding_from_scalar_element_no_error() {
 
 #[test]
 fn mut_binding_from_binding_single_diagnostic() {
-    let result =
-        infer(r#"{ let a = [1, 2]; let mut b = a; b = b.append(3); let _ = b; let _ = a }"#);
+    let result = infer(r#"{ let a = [1, 2]; let mut b = a; b[0] = 99; let _ = b; let _ = a }"#);
     assert_eq!(result.errors.len(), 1);
 }
 
@@ -2180,8 +2279,11 @@ fn mut_binding_from_scalar_struct_no_error() {
 fn mut_binding_from_tuple_place_single_diagnostic() {
     let result = infer(
         r#"
+    fn source() -> (Slice<string>, int) {
+      (["x"], 1)
+    }
     fn main() {
-      let t1 = (["x"], 1)
+      let t1 = source()
       let mut t2 = t1
       t2.0[0] = "y"
       let _ = t1
@@ -2192,6 +2294,19 @@ fn mut_binding_from_tuple_place_single_diagnostic() {
 }
 
 #[test]
+fn tuple_component_write_after_rebind_accepted() {
+    infer(
+        r#"fn main() {
+  let t1 = (["x"], 1)
+  let mut t2 = t1
+  t2.0[0] = "y"
+  let _ = t1
+}"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn mut_binding_from_enum_place_single_diagnostic() {
     let result = infer(
         r#"
@@ -2199,10 +2314,9 @@ fn mut_binding_from_enum_place_single_diagnostic() {
 
     fn main() {
       let h1 = Holder.Tags(["x"])
-      let mut h2 = h1
-      h2 = Holder.Empty
+      let mut tags = match h1 { Holder.Tags(t) => t, Holder.Empty => [] }
+      tags[0] = "y"
       let _ = h1
-      let _ = h2
     }
         "#,
     );
@@ -2219,10 +2333,10 @@ fn mut_binding_from_nested_slice_clone_no_error() {
 fn mut_binding_specialized_clone_opaque_no_error() {
     infer(
         r#"
-    struct Box<T> { items: Slice<T> }
+    struct Box<T> { items: mut Slice<T> }
 
     impl Box<int> {
-      fn clone(self) -> Box<int> {
+      fn clone(self) -> mut Box<int> {
         Box { items: self.items.clone() }
       }
     }
@@ -2289,10 +2403,10 @@ fn mut_binding_reassign_own_clone_no_error() {
 fn mut_binding_user_clone_opaque_no_error() {
     infer(
         r#"
-    struct Doc { tags: Slice<string> }
+    struct Doc { tags: mut Slice<string> }
 
     impl Doc {
-      fn clone(self) -> Doc {
+      fn clone(self) -> mut Doc {
         Doc { tags: self.tags.clone() }
       }
     }
@@ -2402,7 +2516,7 @@ fn mut_binding_from_slice_literal_element_single_diagnostic() {
 fn mut_binding_from_constructor_field_clone_no_error() {
     infer(
         r#"
-    struct Box { items: Slice<int> }
+    struct Box { items: mut Slice<int> }
 
     fn main() {
       let a = [1, 2, 3]
@@ -2451,7 +2565,7 @@ fn mut_binding_from_block_local_shadow_no_error() {
         r#"
     fn main() {
       let x = [1, 2, 3]
-      let mut b = { let x = [9, 9]; x }
+      let mut b = { let mut x = [9, 9]; x }
       b[0] = 0
       let _ = x
     }
@@ -2545,13 +2659,30 @@ fn sibling_ref_read_before_ampersand_is_ok() {
     assert_not_sibling_flagged(
         r#"
         struct Options { port: string }
-        fn configure(o: Ref<Options>) -> bool {
+        fn configure(o: mut Ref<Options>) -> bool {
           o.port = "8080"
           true
         }
         fn main() {
           let mut options = Options{ port: "" }
           if options.port.is_empty() && !configure(&options) { () }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn sibling_ref_to_read_only_parameter_is_ok() {
+    assert_not_sibling_flagged(
+        r#"
+        struct Data { n: int }
+        fn inspect(value: Ref<Data>) -> int {
+          value.n
+        }
+        fn main() {
+          let data = Data{ n: 1 }
+          let pair = (inspect(&data), data)
+          let _ = pair
         }
         "#,
     );
@@ -2584,13 +2715,56 @@ fn sibling_ref_read_inside_closure_is_ok() {
 }
 
 #[test]
+fn sibling_ref_to_read_only_alias_callee_is_ok() {
+    assert_not_sibling_flagged(
+        r#"
+        struct Data { n: int }
+        type Inspector = fn(Ref<Data>) -> int
+        fn inspect(value: Ref<Data>) -> int {
+          value.n
+        }
+        fn main() {
+          let f: Inspector = inspect
+          let data = Data{ n: 1 }
+          let pair = (f(&data), data)
+          let _ = pair
+        }
+        "#,
+    );
+}
+
+#[test]
+fn sibling_ref_to_writable_alias_callee_is_flagged() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+        struct Data { n: int }
+        type Bumper = fn(mut Ref<Data>) -> int
+        fn bump(value: mut Ref<Data>) -> int {
+          value.n = 9
+          value.n
+        }
+        fn main() {
+          let f: Bumper = bump
+          let mut data = Data{ n: 1 }
+          let pair = (f(&data), data)
+          let _ = pair
+        }
+        "#,
+    );
+    infer_package("main", fs).assert_infer_code("reference_aliases_sibling");
+}
+
+#[test]
 fn sibling_ref_ampersand_before_read_in_tuple_is_flagged() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
         "main",
         "main.lis",
         r#"
-        fn inc(n: Ref<int>) -> int {
+        fn inc(n: mut Ref<int>) -> int {
           n.* = n.* + 1
           n.*
         }
@@ -2612,7 +2786,7 @@ fn sibling_ref_ampersand_before_read_in_short_circuit_is_flagged() {
         "main.lis",
         r#"
         struct Options { port: string }
-        fn configure(o: Ref<Options>) -> bool {
+        fn configure(o: mut Ref<Options>) -> bool {
           o.port = "8080"
           true
         }
@@ -2623,65 +2797,4 @@ fn sibling_ref_ampersand_before_read_in_short_circuit_is_flagged() {
         "#,
     );
     infer_package("main", fs).assert_infer_code("reference_aliases_sibling");
-}
-
-#[test]
-fn immutable_let_fix_inserts_mut() {
-    let fixed = apply_infer_fixes(
-        r#"fn main() {
-  let n = 1;
-  n = 2;
-  let _ = n
-}"#,
-    );
-    assert!(
-        fixed.contains("let mut n = 1"),
-        "the fix must make the binding mutable: {fixed}"
-    );
-}
-
-#[test]
-fn container_let_write_fix_inserts_mut() {
-    let fixed = apply_infer_fixes(
-        r#"fn main() {
-  let scores = [70, 85]
-  scores[0] = 100
-  let _ = scores
-}"#,
-    );
-    assert!(
-        fixed.contains("let mut scores = [70, 85]"),
-        "the fix must make the binding mutable: {fixed}"
-    );
-}
-
-#[test]
-fn immutable_destructured_binding_gets_no_fix() {
-    let result = infer(
-        r#"fn main() {
-  let (a, b) = (1, 2);
-  a = b;
-  let _ = (a, b)
-}"#,
-    );
-    assert!(
-        result
-            .errors
-            .iter()
-            .all(|diagnostic| diagnostic.fix().is_none()),
-        "`mut` is not spellable in a pattern, so no fix may be offered"
-    );
-}
-
-#[test]
-fn immutable_binding_reports_once() {
-    infer(
-        r#"fn main() {
-  let n = 1;
-  n = 2;
-  n = 3;
-  let _ = n
-}"#,
-    )
-    .assert_infer_code_count("immutable", 1);
 }

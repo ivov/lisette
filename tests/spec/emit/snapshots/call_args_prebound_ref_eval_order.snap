@@ -2,7 +2,7 @@
 source: tests/spec/emit/expressions.rs
 description: |
   
-  fn bump(i: Ref<int>) -> int {
+  fn bump(i: mut Ref<int>) -> int {
     i.* = 1
     9
   }
@@ -12,7 +12,7 @@ description: |
   fn main() {
     let mut i = 0
     let m = [[10], [20]]
-    let ip = &i
+    let mut ip = &i
     let x = first(m[i][0], [bump(ip)][0])
     let _ = x
   }

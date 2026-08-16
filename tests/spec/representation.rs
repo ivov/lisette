@@ -46,7 +46,6 @@ fn function_parameter_metadata_survives_type_substitution() {
         vec![FunctionParameter::named(
             Type::Parameter("T".into()),
             Some("value".into()),
-            true,
         )],
         vec![],
         Box::new(Type::Parameter("T".into())),
@@ -63,7 +62,6 @@ fn function_parameter_metadata_survives_type_substitution() {
 
     assert_eq!(parameter.ty, Type::int());
     assert_eq!(parameter.name.as_deref(), Some("value"));
-    assert!(parameter.mutable);
     assert_eq!(*substituted.return_type, Type::int());
 }
 

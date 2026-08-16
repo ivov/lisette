@@ -1598,7 +1598,7 @@ fn unit_in_option_type_param() {
 #[test]
 fn function_with_mut_parameter() {
     assert_format_snapshot!(
-        "fn process(mut items: Slice<int>, count: int) -> Slice<int> { items }"
+        "fn process(items: mut Slice<int>, count: int) -> Slice<int> { items }"
     );
 }
 

@@ -275,10 +275,10 @@ In Lisette, value receivers are immutable like any other binding:
    ·            ╰── receiver is immutable
  8 │   }
    ╰────
-  help: Use `self: Ref<Counter>` to mutate the receiver
+  help: Use `self: mut Ref<Counter>` to make the receiver mutable
 ```
 
-### Mutable parameters
+### Write permission in types
 
 Go does not signal parameter mutation that affects the caller:
 
@@ -287,24 +287,44 @@ nums := []int{3, 1, 2}
 sort.Ints(nums) // silently mutates `nums`
 ```
 
-In Lisette, functions that mutate their parameters in a way observable to the caller must declare so with `mut`.
+In Lisette, write permission is part of the type. A slice, map, or pointer is read-only unless its type says `mut`:
+
+```rust
+fn total(items: Slice<int>) -> int    // `total` cannot mutate `items`
+fn fill(items: mut Slice<int>)        // `fill` may mutate `items`
+```
+
+The compiler enforces this:
 
 ```
-  ✕ Immutable argument passed to `mut` parameter
+  ✕ Missing write permission
    ╭─[example.lis:5:13]
  4 │   let nums = [3, 1, 2]
  5 │   sort.Ints(nums)
    ·             ──┬─
-   ·               ╰── expected mutable, found immutable
+   ·               ╰── expected `mut Slice<int>`, found `Slice<int>`
    ╰────
-  help: `sort.Ints()` may mutate `nums`, so declare it mutable using `let mut nums = ...`
+  help: `mut Slice<int>` permits writes that `Slice<int>` does not. Keep the
+        value writable where it is created, or write to a `.clone()` for an
+        independent copy
+```
+
+Permission only ever shrinks. A writable value is accepted where a read-only one is expected, never the reverse. When you hold a read-only value and need to write, `.clone()` gives you independent storage.
+
+Struct fields declare the most they allow, and reaching a struct through a read-only handle caps everything inside it:
+
+```rust
+struct Index {
+  counts: mut Map<string, int>,   // writable, if you hold `Index` writably
+  tags: Slice<string>,            // read-only for everyone, always
+}
 ```
 
 📚 See [`05-functions.md`](../reference/05-functions.md#mutable-parameters)
 
 ### Aliased collections
 
-In Go, assigning a slice or map copies only a small header, so two variables silently share the same backing storage:
+In Go, assigning a slice or map copies only a small header, so two variables silently share the same backing storage, and either one can write to it:
 
 ```go
 a := []int{1, 2, 3}
@@ -312,29 +332,15 @@ b := a
 b[0] = 99 // `a` is now [99 2 3]
 ```
 
-In Lisette, a mutable binding must own its value. Creating one from an existing binding, field, or element whose type holds a slice or map (directly, or nested inside an array, struct, tuple, or enum) is a compile error:
-
-```
-  ✕ Cannot make a mutable binding to `a`
-   ╭─[example.lis:3:15]
- 2 │   let a = [1, 2, 3]
- 3 │   let mut b = a
-   ·               ┬
-   ·               ╰── would be mutated implicitly
- 4 │   b[0] = 99
-   ╰────
-  help: Mutating `b` would implicitly mutate `a`. Either use `a.clone()` to
-        make a copy or `&a` to take a reference.
-```
-
-Fresh values (literals and call results) bind without ceremony. Putting an existing binding inside a new struct, tuple, or list does not count as fresh, since the new value shares that binding's storage:
+Lisette keeps the cheap sharing but not the write. If `a` was bound read-only, nothing derived from it can write, not even through `let mut`:
 
 ```rust
 let a = [1, 2, 3]
-let mut pair = (a, 0)   // error: mutating `pair` would implicitly mutate `a`
+let mut b = a           // allowed, but `a` is read-only, so `b` is too
+b[0] = 99               // error: `Slice<int>` permits no write
 ```
 
-Immutable `let` bindings remain zero-copy views, as element writes are not permitted on them.
+The read-only type travels with the value, through structs, tuples, returns, and patterns, so the write is refused no matter how far from its origin. Note that Lisette does not promise a single writer: two `mut` values may share storage, and a write through one is visible through the other. The guarantee is "no unmarked mutation", not "only one writer".
 
 ## Zero values
 

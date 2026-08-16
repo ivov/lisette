@@ -5,12 +5,12 @@ description: |
   struct Cell { v: int }
   
   impl Cell {
-    fn add<T>(self: Ref<Cell>, delta: int) {
+    fn add<T>(self: mut Ref<Cell>, delta: int) {
       self.v += delta
     }
   }
   
-  fn bump(i: Ref<int>) -> int {
+  fn bump(i: mut Ref<int>) -> int {
     i.* = 1
     7
   }

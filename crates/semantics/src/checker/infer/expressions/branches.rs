@@ -360,6 +360,7 @@ impl InferCtx<'_> {
 
         let resolved_subject_ty = new_subject.get_type().resolve_in(&self.env);
         self.ensure_subject_matchable(&resolved_subject_ty, &new_subject.get_span());
+        self.mark_scrutinee_grant(&new_subject, &resolved_subject_ty);
 
         let is_statement = expected_ty.is_ignored();
 
@@ -407,6 +408,7 @@ impl InferCtx<'_> {
                             role: ExpectationRole::MatchArm,
                             span: a.expression.get_span(),
                             expected_ty: result_ty.clone(),
+                            value_context: None,
                         };
                         this.with_expectation(expectation, |this| {
                             this.infer_root_expression(*a.expression, arm_expected)

@@ -7,7 +7,7 @@ description: |
   struct Key { k: string }
   struct Box { x: int }
   
-  fn make_key(counter: Ref<int>) -> Key {
+  fn make_key(counter: mut Ref<int>) -> Key {
     counter.* = counter.* + 1
     Key { k: "a" }
   }

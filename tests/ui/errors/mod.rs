@@ -4,6 +4,7 @@ use crate::_harness::formatting::{
     format_diagnostic_for_snapshot, format_project_diagnostic_for_snapshot,
 };
 use crate::_harness::infer::{InferResult, checker_errors, infer, infer_package};
+use crate::_harness::lint::apply_parse_fixes;
 use crate::{
     assert_infer_error_snapshot, assert_lex_error_snapshot,
     assert_multipackage_infer_error_snapshot, assert_parse_error_snapshot,
@@ -342,7 +343,7 @@ fn infer_mutate_match_arm_binding() {
 struct Counter { n: int }
 
 impl Counter {
-  fn bump(self: Ref<Counter>) {
+  fn bump(self: mut Ref<Counter>) {
     self.n = self.n + 1
   }
 }
@@ -931,6 +932,85 @@ struct Foo {
 }
 "#;
     assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_parameter_mut() {
+    let input = r#"
+fn sort(mut items: Slice<int>) {
+  items[0] = 1
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_parameter_mut_fix_moves_marker_into_the_type() {
+    let fixed = apply_parse_fixes(
+        r#"
+fn sort(mut items: Slice<int>, keys: Slice<string>, m: Map<string, int>) {
+  items[0] = 1
+}
+"#,
+    );
+    assert!(
+        fixed.contains("fn sort( items: mut Slice<int>, keys: Slice<string>, m: Map<string, int>)"),
+        "fix must move the marker into the type, leaving its whitespace behind: {fixed}"
+    );
+}
+
+#[test]
+fn parse_receiver_mut_marker_rejected() {
+    let input = r#"
+struct Counter { n: int }
+
+impl Counter {
+  fn bump(mut self) {
+    let _ = self
+  }
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_parameter_mut_fix_preserves_trivia() {
+    let fixed = apply_parse_fixes("fn sort(mut\n  items: Slice<int>) {\n  items[0] = 1\n}");
+    assert!(
+        fixed.contains("fn sort(\n  items: mut Slice<int>)"),
+        "the fix must delete exactly the marker, leaving trivia intact: {fixed}"
+    );
+}
+
+#[test]
+fn parse_parameter_mut_fix_applies_next_to_an_unfixable_marker() {
+    let fixed = apply_parse_fixes(
+        r#"
+fn a(mut xs: Slice<int>) {
+  xs[0] = 0
+}
+
+fn b(mut y: int) -> int {
+  y
+}
+"#,
+    );
+    assert!(
+        fixed.contains("fn a( xs: mut Slice<int>)") && fixed.contains("fn b(mut y: int)"),
+        "the container fix must apply while the scalar keeps its error: {fixed}"
+    );
+}
+
+#[test]
+fn parse_parameter_mut_scalar_gets_no_fix() {
+    let result = syntax::build_ast("fn shrink(mut n: int) -> int {\n  n\n}", 0);
+    let diagnostics: Vec<diagnostics::LisetteDiagnostic> =
+        result.errors.into_iter().map(Into::into).collect();
+    assert!(!diagnostics.is_empty(), "the marker must still error");
+    assert!(
+        diagnostics.iter().all(|d| d.fix().is_none()),
+        "a scalar parameter must not be offered the type-position fix"
+    );
 }
 
 #[test]
@@ -1971,9 +2051,9 @@ fn test() {
 #[test]
 fn infer_mut_param_function_type_mismatch() {
     let input = r#"
-fn advance(mut data: Slice<byte>) -> int {
-  data = data[1..]
-  return data.length()
+fn advance(data: mut Slice<byte>) -> int {
+  data[0] = 0
+  data.length()
 }
 
 fn apply(f: fn(Slice<byte>) -> int, v: Slice<byte>) -> int {
@@ -1991,12 +2071,12 @@ fn test() {
 #[test]
 fn infer_opposing_mut_params_function_type_mismatch() {
     let input = r#"
-fn advance(mut head: Slice<int>, tail: Slice<int>) -> int {
-  head = head[1..]
+fn advance(head: mut Slice<int>, tail: Slice<int>) -> int {
+  head[0] = 0
   head.length() + tail.length()
 }
 
-fn apply(f: fn(Slice<int>, mut Slice<int>) -> int, a: Slice<int>, mut b: Slice<int>) -> int {
+fn apply(f: fn(Slice<int>, mut Slice<int>) -> int, a: Slice<int>, b: mut Slice<int>) -> int {
   f(a, b)
 }
 
@@ -3350,7 +3430,7 @@ import "go:bytes"
 
 struct Buffer { n: int }
 
-fn take_go(mut b: bytes.Buffer) -> int { b.Len() }
+fn take_go(b: bytes.Buffer) -> int { b.Len() }
 
 fn test() {
   let mine = Buffer { n: 1 }
@@ -3646,7 +3726,7 @@ fn infer_param_not_mutable_for_ref_receiver_method() {
 struct Counter { count: int }
 
 impl Counter {
-  fn increment(self: Ref<Counter>) {
+  fn increment(self: mut Ref<Counter>) {
     self.count = self.count + 1;
   }
 }
@@ -3698,7 +3778,7 @@ fn infer_mut_binding_aliases_slice() {
 fn test() {
   let a = [1, 2, 3]
   let mut b = a
-  b = b.append(4)
+  b[0] = 99
 }
 "#;
     assert_infer_error_snapshot!(input);
@@ -3735,7 +3815,7 @@ struct Doc { tags: Slice<string> }
 
 fn test(d: Doc) {
   let mut t = d.tags
-  t = t.append("x")
+  t[0] = "x"
 }
 "#;
     assert_infer_error_snapshot!(input);
@@ -3746,7 +3826,7 @@ fn infer_mut_binding_aliases_map_index() {
     let input = r#"
 fn test(m: Map<string, Slice<int>>) {
   let mut s = m["k"]
-  s = s.append(1)
+  s[0] = 1
 }
 "#;
     assert_infer_error_snapshot!(input);
@@ -3771,7 +3851,7 @@ fn key() -> string { "k" }
 
 fn test(m: Map<string, Slice<int>>) {
   let mut s = m[key()]
-  s = s.append(1)
+  s[0] = 1
 }
 "#;
     assert_infer_error_snapshot!(input);
@@ -3804,12 +3884,13 @@ fn test(t1: (Slice<string>, int)) {
 #[test]
 fn infer_mut_binding_aliases_enum() {
     let input = r#"
-enum Holder { Tags(Slice<string>), Empty }
+enum Holder { Tags(mut Slice<string>), Empty }
 
-fn test(h1: Holder) {
-  let mut h2 = h1
-  h2 = Holder.Empty
-  let _ = h2
+fn test(a: Slice<string>) {
+  let h = Holder.Tags(a)
+  if let Holder.Tags(tags) = h {
+    tags[0] = "y"
+  }
 }
 "#;
     assert_infer_error_snapshot!(input);
@@ -3830,7 +3911,7 @@ fn test() {
 #[test]
 fn infer_mut_binding_aliases_constructor_field() {
     let input = r#"
-struct Box { items: Slice<int> }
+struct Box { items: mut Slice<int> }
 
 fn test() {
   let a = [1, 2, 3]
@@ -3855,25 +3936,14 @@ fn test(b1: Box<Slice<int>>) {
 }
 
 #[test]
-fn infer_mut_binding_clone_does_not_sever() {
-    let input = r#"
-struct Doc { tags: Slice<string> }
-
-fn test(docs: Slice<Doc>) {
-  let mut copy = docs.clone()
-  copy[0].tags[0] = "y"
-}
-"#;
-    assert_infer_error_snapshot!(input);
-}
-
-#[test]
 fn infer_mut_binding_aliases_option() {
     let input = r#"
-fn test(o1: Option<Slice<int>>) {
-  let mut o2 = o1
-  o2 = None
-  let _ = o2
+fn test(opt: Option<Slice<int>>) {
+  let mut b = match opt {
+    Some(x) => x,
+    None => [0],
+  }
+  b[0] = 9
 }
 "#;
     assert_infer_error_snapshot!(input);
@@ -6288,6 +6358,24 @@ fn let_assert_refutable_pattern_accepted() {
 }
 
 #[test]
+fn let_assert_immutable_binding_gets_no_mut_fix() {
+    let fs = test_attribute_fs(
+        "pub fn parse(n: int) -> Result<int, int> { Ok(n) }",
+        "#[test]\nfn checks() {\n  let assert n = 1\n  n = 2\n  assert n == 2\n}",
+    );
+    let result = infer_package("_entry_", fs);
+    assert!(
+        has_code(&result, "immutable"),
+        "reassigning the binding must be refused, got: {:?}",
+        result.errors
+    );
+    assert!(
+        result.errors.iter().all(|d| d.fix().is_none()),
+        "`let assert mut` is forbidden, so no fix may be offered"
+    );
+}
+
+#[test]
 fn let_assert_outside_test_rejected() {
     let fs = test_attribute_fs(
         "pub fn parse(n: int) -> Result<int, int> { Ok(n) }",
@@ -7409,7 +7497,7 @@ struct Counter {
 }
 
 impl Counter {
-  fn inc(self: Ref<Counter>) {
+  fn inc(self: mut Ref<Counter>) {
     self.mu.Lock()
     defer self.mu.Lock()
   }
@@ -7433,7 +7521,7 @@ struct Cache {
 }
 
 impl Cache {
-  fn read(self: Ref<Cache>) {
+  fn read(self: mut Ref<Cache>) {
     self.rw.RLock()
     defer self.rw.RLock()
   }
@@ -7475,7 +7563,7 @@ struct Counter {
 }
 
 impl Counter {
-  fn inc(self: Ref<Counter>) {
+  fn inc(self: mut Ref<Counter>) {
     self.mu.Lock()
     defer self.mu.Unlock()
   }
@@ -7518,7 +7606,7 @@ struct Counter {
 }
 
 impl Counter {
-  fn inc(self: Ref<Counter>) {
+  fn inc(self: mut Ref<Counter>) {
     self.mu.Lock()
     self.mu.Unlock()
   }
@@ -8857,13 +8945,13 @@ fn infer_cannot_auto_address_map_index_receiver() {
 struct Foo { value: int }
 
 impl Foo {
-  fn increment(self: Ref<Foo>) {
+  fn increment(self: mut Ref<Foo>) {
     self.value = self.value + 1
   }
 }
 
 fn main() {
-  let m = Map.new<string, Foo>();
+  let mut m = Map.new<string, Foo>();
   m["key"].increment()
 }
 "#;
@@ -10907,8 +10995,8 @@ fn test(s: Slice<int>) -> int {
 #[test]
 fn infer_immutable_arg_to_mut_param() {
     let input = r#"
-fn sort(mut items: Slice<int>) {
-  items = [1, 2, 3]
+fn sort(items: mut Slice<int>) {
+  items[0] = 1
 }
 
 fn main() {
@@ -11122,7 +11210,7 @@ fn infer_reference_to_scalar_const() {
     let input = r#"
 const N = 42
 
-fn bump(r: Ref<int>) {
+fn bump(r: mut Ref<int>) {
   r.* = r.* + 1
 }
 
@@ -14014,43 +14102,9 @@ fn test(parts: Slice<string>) {
 }
 
 #[test]
-fn infer_immutable_spread_to_mut_variadic_param() {
-    let input = r#"
-fn touch(mut items: VarArgs<Slice<int>>) {
-  let _ = items
-}
-
-fn main() {
-  let xs = [1, 2]
-  let ys = [3, 4]
-  let data = [xs, ys]
-  touch(data...)
-}
-"#;
-    assert_infer_error_snapshot!(input);
-}
-
-// The spread source is a `Slice<int>`, which carries mutation even though `int`
-// does not, so checking against the element type would miss it.
-#[test]
-fn infer_immutable_spread_to_mut_variadic_param_scalar_element() {
-    let input = r#"
-fn overwrite(mut xs: VarArgs<int>) {
-  xs[0] = 99
-}
-
-fn main() {
-  let ys = [1, 2]
-  overwrite(ys...)
-}
-"#;
-    assert_infer_error_snapshot!(input);
-}
-
-#[test]
 fn infer_immutable_args_to_mut_variadic_param() {
     let input = r#"
-fn touch(x: int, mut ys: VarArgs<Slice<int>>) -> int {
+fn touch(x: int, ys: VarArgs<mut Slice<int>>) -> int {
   let _ = ys
   x
 }
@@ -14309,7 +14363,7 @@ fn infer_reference_aliases_sibling() {
     let mut fs = MockFileSystem::new();
 
     let source = r#"
-fn store(dst: Ref<int>, value: int) -> int {
+fn store(dst: mut Ref<int>, value: int) -> int {
   dst.* = value
   value
 }
@@ -14877,6 +14931,130 @@ fn infer_let_annotation_mismatch_keeps_annotation_help() {
 fn test() {
   let x: int = "four"
   let _ = x
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_element_write_names_the_field_declaration() {
+    let input = r#"
+struct Grid { rows: mut Slice<Slice<int>> }
+
+fn main() {
+  let mut g = Grid { rows: [[1]] }
+  g.rows[0] = [7]
+  g.rows[0][0] = 9
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_read_only_field_write_names_the_field() {
+    let input = r#"
+struct Doc { tags: Slice<string> }
+
+fn main() {
+  let mut d = Doc { tags: ["a"] }
+  d.tags[0] = "b"
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_read_only_parameter_write_names_the_parameter() {
+    let input = r#"
+fn fill(buf: Slice<int>) {
+  buf[0] = 1
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_loop_element_write_names_the_collection() {
+    let input = r#"
+fn main() {
+  let grid = [[1, 2]]
+  for row in grid {
+    row[0] = 9
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_write_through_call_result_names_the_callee() {
+    let input = r#"
+fn get() -> Slice<int> {
+  [1, 2]
+}
+
+fn main() {
+  get()[0] = 9
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_writable_field_under_read_only_owner() {
+    let input = r#"
+struct Box { items: mut Slice<int> }
+
+fn main() {
+  let source = [1, 2]
+  let mut boxed = Box { items: source }
+  boxed.items[0] = 9
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_read_only_field_argument_names_the_field() {
+    let input = r#"
+import "go:sort"
+
+struct Index { order: Slice<string> }
+
+fn main() {
+  let index = Index { order: ["b", "a"] }
+  sort.Strings(index.order)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_read_only_argument_from_alias_names_the_source() {
+    let input = r#"
+import "go:sort"
+
+fn main() {
+  let source = ["b", "a"]
+  let copy = source
+  sort.Strings(copy)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_read_only_owner_names_its_factory() {
+    let input = r#"
+struct Bag { items: mut Slice<int> }
+
+fn make() -> Bag {
+  Bag { items: [1, 2] }
+}
+
+fn main() {
+  let mut b = make()
+  b.items[0] = 9
 }
 "#;
     assert_infer_error_snapshot!(input);

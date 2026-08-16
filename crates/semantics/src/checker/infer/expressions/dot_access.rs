@@ -302,7 +302,8 @@ impl InferCtx<'_> {
 
         let field = struct_fields.iter().find(|f| f.name == field_name)?;
 
-        let field_type = field.ty.clone();
+        self.mark_component_grant(args.expression, args.expression_ty, &field.ty);
+        let field_type = self.granted_component_type(&field.ty, args.expression_ty);
         let field_is_pub = field.visibility.is_public();
 
         self.facts.add_usage(*args.span, field.name_span);
@@ -324,7 +325,7 @@ impl InferCtx<'_> {
         let (struct_ty, map) = self.instantiate(&struct_type);
         let field_ty = substitute(&field_type, &map);
 
-        self.unify(&args.deref_ty, &struct_ty, args.span);
+        self.unify(&args.deref_ty.shallow_demoted(), &struct_ty, args.span);
         self.unify(args.expected_ty, &field_ty, args.span);
 
         let is_exported = field_is_pub || is_cross_package;
@@ -361,6 +362,8 @@ impl InferCtx<'_> {
         else {
             return None;
         };
+        self.mark_component_grant(args.expression, args.expression_ty, &field_ty);
+        let field_ty = self.granted_component_type(&field_ty, args.expression_ty);
 
         if let Some(field) = store
             .fields_of(member.declaring_type.as_str())

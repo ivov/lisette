@@ -6,7 +6,7 @@ description: |
     let mut m = Map.new<string, int>()
     m["0"] = 100
     let mut i = 0
-    let make = || -> Map<string, int> { i += 1; m }
+    let make = || -> mut Map<string, int> { i += 1; m }
     make()[f"{i}"] = 99
     let _ = m
   }

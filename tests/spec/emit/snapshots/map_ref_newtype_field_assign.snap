@@ -6,7 +6,7 @@ description: |
   
   fn main() {
     let mut w = Wrap(1)
-    let mut m = Map.new<string, Ref<Wrap>>()
+    let mut m = Map.new<string, mut Ref<Wrap>>()
     m["a"] = &w
     let Some(r) = m.get("a") else { return; };
     r.* = Wrap(2)

@@ -112,12 +112,11 @@ fn hoistable_callee(
     params: &[&str],
     facts: &Facts,
 ) -> Option<String> {
-    // A `mut`-param callee (e.g. `sort.Ints`) is valid only wrapped in a closure,
-    // never as a bare function value.
-    if callee_ty
-        .get_function_params()
-        .is_some_and(|params| params.iter().any(|param| param.mutable))
-    {
+    if callee_ty.get_function_params().is_some_and(|params| {
+        params
+            .iter()
+            .any(|param| param.ty.contains_write_permission())
+    }) {
         return None;
     }
     match callee {

@@ -3,7 +3,7 @@ source: tests/spec/emit/types.rs
 description: |
   
   fn count<T: Ordered>(x: T) -> int {
-    let mut m: Map<T, int> = Map.new()
+    let mut m: mut Map<T, int> = Map.new()
     m[x] = 1
     m.length()
   }

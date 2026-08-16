@@ -5,7 +5,7 @@ description: |
   import "go:bytes"
   import "go:fmt"
   
-  fn make(counter: Ref<int>) -> Ref<bytes.Buffer> {
+  fn make(counter: mut Ref<int>) -> mut Ref<bytes.Buffer> {
     counter.* = counter.* + 1
     bytes.NewBufferString("a\nb\n")
   }

@@ -158,7 +158,7 @@ fn array_direct_mutation() {
 #[test]
 fn array_mutation_through_ref() {
   let mut a: Array<int, 3> = [1, 2, 3]
-  let r = &a
+  let mut r = &a
   r.*[1] = 8
   assert a[1] == 8
 }

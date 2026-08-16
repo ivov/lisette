@@ -1253,7 +1253,7 @@ import "go:io"
 import "go:os"
 
 fn main() {
-  let reader = bufio.NewReader(os.Stdin)
+  let mut reader = bufio.NewReader(os.Stdin)
   while true {
     let r = match reader.ReadRune() {
       Ok((r, _)) => r,
@@ -1747,7 +1747,7 @@ fn main() {
     Data: None,
     Type: None,
   }
-  let mut objects: Objects = Map.new<string, Option<Ref<ast.Object>>>()
+  let mut objects: mut Objects = Map.new<string, Option<Ref<ast.Object>>>()
   objects["present"] = Some(&obj)
   objects["absent"] = None
   let scope = ast.Scope {

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:2:9]
+ 1 │ 
+ 2 │ fn sort(mut items: Slice<int>) {
+   ·         ─┬─
+   ·          ╰── `mut` goes on the parameter's type
+ 3 │   items[0] = 1
+   ╰────
+  help: Place the permission right before the type, as in `items: mut Slice<int>`, or rebind with `let mut` inside the body for a local copy · code: [parse.syntax_error]

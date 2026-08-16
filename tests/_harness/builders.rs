@@ -70,9 +70,7 @@ pub fn con_type(name: &str, args: Vec<Type>) -> Type {
 
 pub fn fun_type(args: Vec<Type>, ret: Type) -> Type {
     Type::function(
-        args.into_iter()
-            .map(|ty| FunctionParameter::new(ty, false))
-            .collect(),
+        args.into_iter().map(FunctionParameter::new).collect(),
         vec![],
         Box::new(ret),
     )

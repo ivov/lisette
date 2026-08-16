@@ -4,7 +4,7 @@ description: |
   
   struct S { x: int }
   
-  fn get(r: Ref<S>) -> Ref<S> { r }
+  fn get(r: mut Ref<S>) -> mut Ref<S> { r }
   
   fn main() {
     let mut s = S { x: 0 }

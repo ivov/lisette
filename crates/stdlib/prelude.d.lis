@@ -76,7 +76,7 @@ impl string {
   fn contains(self, substr: string) -> bool
 
   /// Splits the string around each occurrence of `sep` and returns the substrings.
-  fn split(self, sep: string) -> Slice<string>
+  fn split(self, sep: string) -> mut Slice<string>
 
   /// Returns `true` if the string starts with `prefix`.
   fn starts_with(self, prefix: string) -> bool
@@ -91,10 +91,10 @@ impl string {
   fn rune_at(self, i: int) -> rune
 
   /// Returns the bytes of the string as a `Slice<byte>`.
-  fn bytes(self) -> Slice<byte>
+  fn bytes(self) -> mut Slice<byte>
 
   /// Returns the runes of the string as a `Slice<rune>`.
-  fn runes(self) -> Slice<rune>
+  fn runes(self) -> mut Slice<rune>
 
   /// Returns the substring at the given rune-indexed range.
   fn substring(self, r: Range<int>) -> string
@@ -151,7 +151,7 @@ impl<T> Option<T> {
   fn filter(self, pred: fn(T) -> bool) -> Option<T>
 
   /// Takes the value out of the option, leaving `None` in its place.
-  fn take(self: Ref<Option<T>>) -> Option<T>
+  fn take(self: mut Ref<Option<T>>) -> Option<T>
 
   /// Transforms `Option<T>` into `Result<T, E>`, mapping `Some(v)`
   /// to `Ok(v)` and `None` to `Err(err)`.
@@ -287,7 +287,7 @@ impl<T> Array<T> {
   fn get(self, index: int) -> Option<T>
 
   /// Copies the elements into a new slice.
-  fn to_slice(self) -> Slice<T>
+  fn to_slice(self) -> mut Slice<T>
 }
 
 /// A growable, indexable sequence of elements. Equivalent to Go's `[]T`.
@@ -305,11 +305,11 @@ type Slice<T>
 
 impl<T> Slice<T> {
   /// Creates a new empty slice.
-  fn new() -> Slice<T>
+  fn new() -> mut Slice<T>
 
   /// Creates a slice of `length` elements, each set to its zero value.
   /// The capacity equals the length.
-  fn make(length: int) -> Slice<T>
+  fn make(length: int) -> mut Slice<T>
 
   /// Returns the number of elements in the slice.
   fn length(self) -> int
@@ -321,7 +321,7 @@ impl<T> Slice<T> {
   fn capacity(self) -> int
 
   /// Returns a slice with capacity for at least `additional` more elements.
-  fn reserve(self, additional: int) -> Slice<T>
+  fn reserve(self, additional: int) -> mut Slice<T>
 
   /// Returns the element at `index`, or `None` if out of bounds.
   fn get(self, index: int) -> Option<T>
@@ -329,17 +329,17 @@ impl<T> Slice<T> {
   /// Returns a new slice with the given elements appended. Spread an input slice
   /// to concatenate: `items.append(xs...)`. Does not modify the original slice.
   /// Reassign the output to grow in place: `items = items.append(x)`.
-  fn append(self, elements: VarArgs<T>) -> Slice<T>
+  fn append(self, elements: VarArgs<T>) -> mut Slice<T>
 
   /// Overwrites the elements of this slice in place with elements from `src`,
   /// up to the shorter of the two lengths. Returns the number of elements copied.
-  fn copy_from(self, src: Slice<T>) -> int
+  fn copy_from(self: mut Slice<T>, src: Slice<T>) -> int
 
   /// Returns a new slice containing only elements for which `f` returns `true`.
-  fn filter(self, f: fn(T) -> bool) -> Slice<T>
+  fn filter(self, f: fn(T) -> bool) -> mut Slice<T>
 
   /// Returns a new slice with `f` applied to each element.
-  fn map<U>(self, f: fn(T) -> U) -> Slice<U>
+  fn map<U>(self, f: fn(T) -> U) -> mut Slice<U>
 
   /// Returns `true` if the slice contains `value`.
   fn contains(self, value: T) -> bool
@@ -364,7 +364,7 @@ impl<T> Slice<T> {
   fn enumerate(self) -> EnumeratedSlice<T>
 
   /// Returns a copy, including any nested slices, maps, and tuples.
-  fn clone(self) -> Slice<T>
+  fn clone(self) -> mut Slice<T>
 }
 
 /// A slice paired with element indices, returned by `Slice.enumerate()`.
@@ -373,10 +373,10 @@ type EnumeratedSlice<T>
 
 impl<T> EnumeratedSlice<T> {
   /// Returns the `(index, element)` pairs for which `f` returns `true`.
-  fn filter(self, f: fn((int, T)) -> bool) -> Slice<(int, T)>
+  fn filter(self, f: fn((int, T)) -> bool) -> mut Slice<(int, T)>
 
   /// Returns a new slice with `f` applied to each `(index, element)` pair.
-  fn map<U>(self, f: fn((int, T)) -> U) -> Slice<U>
+  fn map<U>(self, f: fn((int, T)) -> U) -> mut Slice<U>
 
   /// Reduces the `(index, element)` pairs to a single value by applying `f`
   /// to each pair with an accumulator, starting from `accumulator`.
@@ -387,7 +387,7 @@ impl<T> EnumeratedSlice<T> {
   fn find(self, f: fn((int, T)) -> bool) -> Option<(int, T)>
 
   /// Returns a copy, including any nested slices, maps, and tuples.
-  fn clone(self) -> EnumeratedSlice<T>
+  fn clone(self) -> mut EnumeratedSlice<T>
 }
 
 impl Slice<string> {
@@ -408,7 +408,7 @@ type Map<K: Comparable, V>
 
 impl<K, V> Map<K, V> {
   /// Creates a new empty map.
-  fn new() -> Map<K, V>
+  fn new() -> mut Map<K, V>
 
   /// Returns the number of entries in the map.
   fn length(self) -> int
@@ -420,13 +420,13 @@ impl<K, V> Map<K, V> {
   fn get(self, key: K) -> Option<V>
 
   /// Removes the entry for `key`.
-  fn delete(self, key: K)
+  fn delete(self: mut Map<K, V>, key: K)
 
   /// Creates a map from a slice of key-value pairs.
-  fn from(pairs: Slice<(K, V)>) -> Map<K, V>
+  fn from(pairs: Slice<(K, V)>) -> mut Map<K, V>
 
   /// Returns a copy, including any nested slices, maps, and tuples.
-  fn clone(self) -> Map<K, V>
+  fn clone(self) -> mut Map<K, V>
 
   /// Returns `true` if this map has the same keys and values as `other`.
   fn equals(self, other: Map<K, V>) -> bool

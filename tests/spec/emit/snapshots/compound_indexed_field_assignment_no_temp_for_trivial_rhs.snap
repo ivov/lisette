@@ -5,12 +5,12 @@ description: |
   struct Pos { x: int, y: int }
   
   struct Snake {
-    parts: Slice<Pos>,
+    parts: mut Slice<Pos>,
     head:  int
   }
   
   impl Snake {
-    fn grow(self: Ref<Snake>) {
+    fn grow(self: mut Ref<Snake>) {
       self.parts[self.head].x += 1
       self.parts[self.head].y -= 2
     }

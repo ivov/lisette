@@ -2,7 +2,7 @@
 source: tests/spec/emit/control_flow.rs
 description: |
   
-  fn bump(i: Ref<int>) -> int {
+  fn bump(i: mut Ref<int>) -> int {
     i.* = i.* + 1
     i.*
   }

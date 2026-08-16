@@ -2,10 +2,10 @@
 source: tests/spec/emit/expressions.rs
 description: |
   
-  struct H { ptr: Ref<int> }
+  struct H { ptr: mut Ref<int> }
   
   impl H {
-    fn repoint(self: Ref<H>, q: Ref<int>) -> int {
+    fn repoint(self: mut Ref<H>, q: mut Ref<int>) -> int {
       self.ptr = q
       9
     }

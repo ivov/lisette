@@ -1,0 +1,19 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot write to `g.rows[0][0]`
+   ╭─[test.lis:2:15]
+ 1 │ 
+ 2 │ struct Grid { rows: mut Slice<Slice<int>> }
+   ·               ─────────────┬─────────────
+   ·                            ╰── `mut` makes `rows` writable, but `rows[i]` is still read-only
+ 3 │ 
+   ╰────
+   ╭─[test.lis:7:3]
+ 6 │   g.rows[0] = [7]
+ 7 │   g.rows[0][0] = 9
+   ·   ────────┬───────
+   ·           ╰── this write goes through `rows[0]`
+ 8 │ }
+   ╰────
+  help: Declare `rows` as `mut Slice<mut Slice<int>>` to make both `rows` and `rows[i]` writable · code: [infer.write_through_read_only]

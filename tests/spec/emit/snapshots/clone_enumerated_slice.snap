@@ -5,7 +5,7 @@ description: |
   fn main() {
     let s = [1, 2, 3]
     let e = s.enumerate()
-    let mut e2 = e.clone()
+    let mut e2: EnumeratedSlice<int> = e.clone()
     e2 = s.enumerate()
     let _ = e
     let _ = e2

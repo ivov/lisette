@@ -9,7 +9,7 @@ description: |
   }
   
   fn main() {
-    let mut m: Map<string, Config> = Map.new()
+    let mut m: mut Map<string, Config> = Map.new()
     m["a"] = Config { value: 1 }
     let _ = {
       let mut entry = m["a"]

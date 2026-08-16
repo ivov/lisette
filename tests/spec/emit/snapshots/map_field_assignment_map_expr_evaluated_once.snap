@@ -12,7 +12,7 @@ description: |
   }
   
   fn main() {
-    let mut maps: Map<int, Map<string, Box>> = Map.new()
+    let mut maps: mut Map<int, mut Map<string, Box>> = Map.new()
     let mut inner = Map.new<string, Box>()
     inner["k"] = Box { x: 0 }
     maps[0] = inner

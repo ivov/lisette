@@ -17,7 +17,7 @@ description: |
   }
   
   fn count<T: Named + Comparable>(x: T) -> int {
-    let mut m: Map<T, int> = Map.new()
+    let mut m: mut Map<T, int> = Map.new()
     m[x] = 1
     m.length()
   }

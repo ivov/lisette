@@ -585,19 +585,17 @@ fn test() -> int {
 #[test]
 fn function_type_with_mut_parameter() {
     let input = r#"
-struct Counter { times_called: int }
-
-fn run(counter: Counter, action: fn(mut Counter) -> ()) {
-  action(counter)
+fn run(items: mut Slice<int>, action: fn(mut Slice<int>) -> ()) {
+  action(items)
 }
 
-fn bump(mut counter: Counter) {
-  counter.times_called += 1
+fn bump(items: mut Slice<int>) {
+  items[0] += 1
 }
 
 fn test() {
-  let counter = Counter { times_called: 0 }
-  run(counter, bump)
+  let mut data = [0]
+  run(data, bump)
 }
 "#;
     assert_emit_snapshot!(input);
@@ -606,16 +604,16 @@ fn test() {
 #[test]
 fn lambda_with_mut_parameter() {
     let input = r#"
-fn apply(f: fn(mut int) -> int, x: int) -> int {
-  f(x)
+fn apply(f: fn(mut Slice<int>) -> (), xs: mut Slice<int>) {
+  f(xs)
 }
 
-fn test() -> int {
-  let bump = |mut x: int| {
-    x += 1
-    x
+fn test() {
+  let bump = |xs: mut Slice<int>| {
+    xs[0] += 1
   }
-  apply(bump, 41)
+  let mut data = [41]
+  apply(bump, data)
 }
 "#;
     assert_emit_snapshot!(input);
@@ -1157,7 +1155,7 @@ fn test() -> bool {
 fn generic_function_with_map_key_type_parameter() {
     let input = r#"
 fn put_in_map<K: Comparable, V>(key: K, value: V) -> Map<K, V> {
-  let mut m: Map<K, V> = Map.new()
+  let mut m: mut Map<K, V> = Map.new()
   m[key] = value
   m
 }
@@ -1254,8 +1252,8 @@ fn main() {
 #[test]
 fn function_with_mut_parameter() {
     let input = r#"
-fn process(mut items: Slice<int>) {
-  items = [1, 2, 3]
+fn process(items: mut Slice<int>) {
+  items[0] = 1
 }
 "#;
     assert_emit_snapshot!(input);
@@ -1508,7 +1506,7 @@ fn generic_map_key_in_task_body() {
     let input = r#"
 fn use_map_in_task<K: Comparable, V>(key: K, value: V) {
   task {
-    let mut m: Map<K, V> = Map.new()
+    let mut m: mut Map<K, V> = Map.new()
     m[key] = value
   }
 }
@@ -1586,7 +1584,7 @@ fn go_method_value_receiver_hoisted() {
 import "go:bytes"
 import "go:fmt"
 
-fn make(counter: Ref<int>) -> Ref<bytes.Buffer> {
+fn make(counter: mut Ref<int>) -> mut Ref<bytes.Buffer> {
   counter.* = counter.* + 1
   bytes.NewBufferString("a\nb\n")
 }
@@ -1893,7 +1891,8 @@ fn test(s: Slice<int>, more: Slice<int>) -> Slice<int> {
 #[test]
 fn spread_arg_into_native_slice_append_assignment() {
     let input = r#"
-fn test(mut s: Slice<int>, more: Slice<int>) -> Slice<int> {
+fn test(s: Slice<int>, more: Slice<int>) -> Slice<int> {
+  let mut s = s
   s = s.append(more...)
   s
 }
@@ -1904,7 +1903,8 @@ fn test(mut s: Slice<int>, more: Slice<int>) -> Slice<int> {
 #[test]
 fn spread_arg_with_leading_args_into_native_slice_append_assignment() {
     let input = r#"
-fn test(mut s: Slice<int>, extra: int, more: Slice<int>) -> Slice<int> {
+fn test(s: Slice<int>, extra: int, more: Slice<int>) -> Slice<int> {
+  let mut s = s
   s = s.append(extra, more...)
   s
 }
@@ -1947,7 +1947,7 @@ fn auto_addressed_receiver_is_not_copied_before_effectful_arg() {
 struct Foo { count: int }
 
 impl Foo {
-  fn add<T>(self: Ref<Foo>, _val: Bar) {
+  fn add<T>(self: mut Ref<Foo>, _val: Bar) {
     self.count += 1
   }
 }
@@ -1974,12 +1974,12 @@ fn auto_addressed_index_receiver_pinned_before_effectful_arg() {
 struct Cell { v: int }
 
 impl Cell {
-  fn add<T>(self: Ref<Cell>, delta: int) {
+  fn add<T>(self: mut Ref<Cell>, delta: int) {
     self.v += delta
   }
 }
 
-fn bump(i: Ref<int>) -> int {
+fn bump(i: mut Ref<int>) -> int {
   i.* = 1
   7
 }
@@ -1999,12 +1999,12 @@ fn auto_addressed_struct_literal_receiver_pinned_before_effectful_arg() {
 struct Cell { v: int }
 
 impl Cell {
-  fn add<T>(self: Ref<Cell>, delta: int) {
+  fn add<T>(self: mut Ref<Cell>, delta: int) {
     self.v += delta
   }
 }
 
-fn bump(i: Ref<int>) -> int {
+fn bump(i: mut Ref<int>) -> int {
   i.* = 1
   7
 }
@@ -2023,7 +2023,7 @@ fn auto_addressed_receiver_with_own_setup_pinned_before_effectful_arg() {
 struct Cell { a: int, b: int }
 
 impl Cell {
-  fn add<T>(self: Ref<Cell>, delta: int) {
+  fn add<T>(self: mut Ref<Cell>, delta: int) {
     self.b += delta
   }
 }
@@ -2032,7 +2032,7 @@ fn seed() -> Result<int, error> {
   Ok(1)
 }
 
-fn bump(i: Ref<int>) -> Result<int, error> {
+fn bump(i: mut Ref<int>) -> Result<int, error> {
   i.* = 99
   Ok(7)
 }

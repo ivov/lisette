@@ -286,8 +286,8 @@ impl TaskState {
         };
         let fn_ty = Type::function(
             vec![
-                FunctionParameter::new(receiver_ty.clone(), false),
-                FunctionParameter::new(receiver_ty, false),
+                FunctionParameter::new(receiver_ty.clone()),
+                FunctionParameter::new(receiver_ty),
             ],
             Default::default(),
             Box::new(Type::bool()),

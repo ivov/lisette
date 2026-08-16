@@ -2,7 +2,8 @@
 source: tests/spec/emit/patterns.rs
 description: |
   
-  fn bump(mut n: int) -> bool {
+  fn bump(n: int) -> bool {
+    let mut n = n
     n = n + 1
     true
   }
@@ -22,7 +23,8 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func bump(n int) bool {
-	n++
+	n_1 := n
+	n_1++
 	return true
 }
 

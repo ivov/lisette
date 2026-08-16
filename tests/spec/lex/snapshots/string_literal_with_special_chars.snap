@@ -35,6 +35,7 @@ LexResult {
             ),
             note: None,
             code: "lex.invalid_escape_sequence",
+            fix: None,
         },
     ],
     blank_lines: [],

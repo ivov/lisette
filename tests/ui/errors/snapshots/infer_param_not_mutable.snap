@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·        ╰── `count` was declared without `mut`
  4 │ }
    ╰────
-  help: Declare the parameter with `mut` to mutate it · code: [infer.immutable]
+  help: Parameters are immutable. Rebind with `let mut count = count` to mutate a local copy · code: [infer.immutable]

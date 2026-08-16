@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot write to `boxed.items[0]`
+   ╭─[test.lis:7:3]
+ 6 │   let mut boxed = Box { items: source }
+ 7 │   boxed.items[0] = 9
+   ·   ─────────┬────────
+   ·            ╰── `boxed.items` is read-only
+ 8 │ }
+   ╰────
+  help: `items` is declared writable, but `boxed` is read-only, so its fields are too. Make `boxed` writable where it is created · code: [infer.write_through_read_only]

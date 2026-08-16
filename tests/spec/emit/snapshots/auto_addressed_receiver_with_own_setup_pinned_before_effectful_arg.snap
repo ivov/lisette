@@ -5,7 +5,7 @@ description: |
   struct Cell { a: int, b: int }
   
   impl Cell {
-    fn add<T>(self: Ref<Cell>, delta: int) {
+    fn add<T>(self: mut Ref<Cell>, delta: int) {
       self.b += delta
     }
   }
@@ -14,7 +14,7 @@ description: |
     Ok(1)
   }
   
-  fn bump(i: Ref<int>) -> Result<int, error> {
+  fn bump(i: mut Ref<int>) -> Result<int, error> {
     i.* = 99
     Ok(7)
   }

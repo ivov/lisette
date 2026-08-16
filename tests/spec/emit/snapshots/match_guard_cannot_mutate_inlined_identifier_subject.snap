@@ -2,7 +2,7 @@
 source: tests/spec/emit/control_flow.rs
 description: |
   
-  fn bump_false(r: Ref<int>) -> bool {
+  fn bump_false(r: mut Ref<int>) -> bool {
     r.* = 1
     false
   }

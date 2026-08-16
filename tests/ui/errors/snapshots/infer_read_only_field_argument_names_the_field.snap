@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Missing write permission
+   ╭─[test.lis:8:16]
+ 7 │   let index = Index { order: ["b", "a"] }
+ 8 │   sort.Strings(index.order)
+   ·                ─────┬─────
+   ·                     ╰── expected `mut Slice<string>`, found `Slice<string>`
+ 9 │ }
+   ╰────
+  help: `mut Slice<string>` permits writes, `Slice<string>` does not. Declare the field `order` as `mut Slice<string>` · code: [infer.needs_writable]

@@ -59,13 +59,13 @@ interface Iterator<T> {
   fn next() -> Option<T>
 }
 
-struct Range {
+struct Counter {
   current: int,
   end: int,
 }
 
-impl Range {
-  fn next(self: Ref<Range>) -> Option<int> {
+impl Counter {
+  fn next(self: mut Ref<Counter>) -> Option<int> {
     if self.current >= self.end {
       return None
     }

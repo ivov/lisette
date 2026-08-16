@@ -2,7 +2,7 @@ use crate::checker::EnvResolve;
 use crate::store::Store;
 use syntax::ast::{Expression, FormatStringPart, Literal, Span};
 use syntax::lex::{interpolation_holes, rune_codepoint};
-use syntax::types::{SimpleKind, Type};
+use syntax::types::{CompoundKind, SimpleKind, Type};
 
 use crate::checker::infer::InferCtx;
 use crate::facts::EmptyLiteralCheck;
@@ -182,7 +182,9 @@ impl InferCtx<'_> {
                     })
                     .collect();
 
-                let slice_ty = self.type_slice(element_expected_ty);
+                // A literal is fresh storage, so it yields the writable form.
+                let slice_ty =
+                    Type::qualified_compound(CompoundKind::Slice, vec![element_expected_ty], true);
                 let unified = self.unify(expected_ty, &slice_ty, &span);
 
                 if new_elements.is_empty() && unified {

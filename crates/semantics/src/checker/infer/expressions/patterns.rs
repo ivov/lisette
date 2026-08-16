@@ -155,7 +155,7 @@ impl InferCtx<'_> {
                 }
                 let inner_kind = match kind {
                     BindingKind::Let { .. } => BindingKind::Let { mutable: false },
-                    BindingKind::Parameter { .. } => BindingKind::Parameter { mutable: false },
+                    BindingKind::Parameter => BindingKind::Parameter,
                     other => other,
                 };
                 let inner = self.infer_pattern_inner(
@@ -401,7 +401,7 @@ impl InferCtx<'_> {
         };
 
         let unify_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
-        self.unify(&unify_expected, &pattern_ty, &span);
+        self.unify(&unify_expected.shallow_demoted(), &pattern_ty, &span);
 
         let new_fields: Vec<_> = fields
             .iter()
@@ -409,7 +409,7 @@ impl InferCtx<'_> {
             .map(|(i, f)| {
                 let param_ty = params
                     .get(i)
-                    .map(|param| param.ty.clone())
+                    .map(|param| self.granted_component_type(&param.ty, &unify_expected))
                     .unwrap_or(Type::Error);
                 self.infer_pattern_inner(f.clone(), param_ty, kind, false)
             })
@@ -729,7 +729,11 @@ impl InferCtx<'_> {
 
         let (struct_ty, map) = self.instantiate(&struct_forall_ty);
 
-        self.unify(&expected_ty, &struct_ty, &span);
+        self.unify(
+            &expected_ty.resolve_in(&self.env).shallow_demoted(),
+            &struct_ty,
+            &span,
+        );
 
         let scrutinee_is_error = expected_ty.shallow_resolve_in(&self.env).is_error();
 
@@ -758,7 +762,10 @@ impl InferCtx<'_> {
                         if scrutinee_is_error {
                             Type::Error
                         } else {
-                            substitute(&field_definition.ty, &map)
+                            substitute(
+                                &self.granted_component_type(&field_definition.ty, &expected_ty),
+                                &map,
+                            )
                         }
                     }
                     None => {
@@ -1060,7 +1067,7 @@ impl InferCtx<'_> {
         };
 
         let unify_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
-        self.unify(&unify_expected, &pattern_ty, span);
+        self.unify(&unify_expected.shallow_demoted(), &pattern_ty, span);
 
         let resolved_ty = pattern_ty.resolve_in(&self.env);
 
@@ -1081,7 +1088,10 @@ impl InferCtx<'_> {
             .map(|field| {
                 let field_definition = variant_fields.iter().find(|x| x.name == field.name);
                 let field_ty = match field_definition {
-                    Some(field_definition) => substitute(&field_definition.ty, &map),
+                    Some(field_definition) => substitute(
+                        &self.granted_component_type(&field_definition.ty, &unify_expected),
+                        &map,
+                    ),
                     None => {
                         self.sink.push(diagnostics::infer::member_not_found(
                             &pattern_ty,

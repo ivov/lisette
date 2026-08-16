@@ -5,13 +5,13 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::FileParseStatus;
 use syntax::ast::StructKind;
-use syntax::ast::{EnumVariant, Expression, StructFieldDefinition};
+use syntax::ast::{EnumVariant, Expression, StructFieldDefinition, VariantFields};
 use syntax::program::{
     Definition, DefinitionBody, EqualityIndex, File, Interface, Method, Methods, Package,
     TestIndex, UninferredExports, methods_for_type,
 };
 use syntax::types;
-use syntax::types::{SimpleKind, Symbol, Type};
+use syntax::types::{CompoundKind, SimpleKind, Symbol, Type};
 
 pub use crate::closed_domain::{ClosedDomain, ClosedMember, DomainValue};
 pub use syntax::ENTRY_PACKAGE_ID;
@@ -440,12 +440,69 @@ impl Store {
         types::contains_unknown(ty, |id| self.get_definition(id))
     }
 
+    pub fn contains_write_permission(&self, ty: &Type) -> bool {
+        types::contains_write_permission(ty, |id| self.get_definition(id))
+    }
+
+    pub fn parameter_grants_write(&self, ty: &Type) -> bool {
+        types::parameter_grants_write(ty, |id| self.get_definition(id))
+    }
+
     pub fn demoted(&self, ty: &Type) -> Type {
         types::demoted(ty, &|id| self.get_definition(id))
     }
 
     pub fn demotion_changes(&self, ty: &Type) -> bool {
         types::demotion_changes(ty, &|id| self.get_definition(id))
+    }
+
+    /// Binding demotion: the top-level hop and the nominal flag only.
+    pub fn demoted_at_binding(&self, ty: &Type) -> Type {
+        match ty {
+            Type::Compound { kind, args, .. } if kind.carries_write_permission() => {
+                let args = if args.iter().any(|arg| self.demotion_changes(arg)) {
+                    args.iter().map(|arg| self.demoted(arg)).collect()
+                } else {
+                    args.clone()
+                };
+                Type::Compound {
+                    kind: *kind,
+                    args,
+                    writable: false,
+                }
+            }
+            Type::Nominal { id, params, .. } => {
+                let cleared = Type::Nominal {
+                    id: id.clone(),
+                    params: params.clone(),
+                    writable: false,
+                };
+                let peeled = self.peel_alias(&cleared);
+                if peeled == cleared {
+                    return cleared;
+                }
+                let demoted = self.demoted_at_binding(&peeled);
+                if demoted == peeled { cleared } else { demoted }
+            }
+            other => other.clone(),
+        }
+    }
+
+    pub fn nominal_declares_writable_components(&self, id: &str) -> bool {
+        match self.get_definition(id).map(|definition| &definition.body) {
+            Some(DefinitionBody::Struct { fields, .. }) => fields
+                .as_slice()
+                .iter()
+                .any(|field| self.demotion_changes(&field.ty)),
+            Some(DefinitionBody::Enum { variants, .. }) => variants
+                .iter()
+                .flat_map(|variant| match &variant.fields {
+                    VariantFields::Unit => [].as_slice(),
+                    VariantFields::Tuple(fields) | VariantFields::Struct(fields) => fields,
+                })
+                .any(|field| self.demotion_changes(&field.ty)),
+            _ => false,
+        }
     }
 
     /// Canonical form for a type built from an annotation.
@@ -460,7 +517,18 @@ impl Store {
                     .iter()
                     .map(|arg| self.normalized_annotation_type(arg))
                     .collect();
-                if kind.carries_write_permission()
+                if *kind == CompoundKind::Ref && *writable {
+                    if let Some(arg) = args.first_mut()
+                        && let Type::Nominal {
+                            id,
+                            writable: false,
+                            ..
+                        } = self.peel_alias(arg)
+                        && self.nominal_declares_writable_components(id.as_str())
+                    {
+                        *arg = arg.clone().make_writable();
+                    }
+                } else if kind.carries_write_permission()
                     && !writable
                     && args.iter().any(|arg| self.demotion_changes(arg))
                 {
@@ -1056,6 +1124,104 @@ mod closed_domain_tests {
         // Writable owner never promotes a read-only field.
         assert_eq!(
             store.peel_underlying(&occurrence("m.Plain", true)),
+            plain_slice,
+        );
+    }
+
+    fn transparent_alias(name: &str, target: Type) -> Definition {
+        Definition {
+            visibility: Visibility::Public,
+            ty: nominal_int(name),
+            name_span: None,
+            doc: None,
+            body: DefinitionBody::TypeAlias {
+                generics: vec![],
+                alias: AliasKind::Transparent {
+                    annotation: Annotation::Unknown,
+                    target,
+                },
+                methods: Default::default(),
+                attributes: Default::default(),
+            },
+        }
+    }
+
+    #[test]
+    fn newtype_underlying_demotes_permission_hidden_by_an_alias() {
+        let writable_slice = Type::qualified_compound(CompoundKind::Slice, vec![Type::int()], true);
+        let plain_slice = Type::compound(CompoundKind::Slice, vec![Type::int()]);
+
+        let mut store = Store::new();
+        insert(
+            &mut store,
+            "m",
+            "m.Items",
+            transparent_alias("m.Items", writable_slice.clone()),
+        );
+        insert(
+            &mut store,
+            "m",
+            "m.Wrapper",
+            Definition {
+                visibility: Visibility::Public,
+                ty: nominal_int("m.Wrapper"),
+                name_span: None,
+                doc: None,
+                body: DefinitionBody::Struct {
+                    generics: vec![],
+                    fields: StructFields::Tuple(vec![StructFieldDefinition {
+                        doc: None,
+                        name: "0".into(),
+                        name_span: Span::dummy(),
+                        annotation: Annotation::Unknown,
+                        visibility: ast::Visibility::Private,
+                        ty: nominal_int("m.Items"),
+                        kind: StructFieldKind::Named { attributes: vec![] },
+                    }]),
+                    methods: Default::default(),
+                    attributes: Default::default(),
+                },
+            },
+        );
+
+        let occurrence = |writable: bool| Type::Nominal {
+            id: Symbol::from_raw("m.Wrapper"),
+            params: vec![],
+            writable,
+        };
+
+        assert_eq!(store.peel_underlying(&occurrence(false)), plain_slice);
+        assert_eq!(store.peel_underlying(&occurrence(true)), writable_slice);
+    }
+
+    #[test]
+    fn binding_demotion_stays_shallow_behind_an_alias() {
+        let writable_slice = Type::qualified_compound(CompoundKind::Slice, vec![Type::int()], true);
+        let plain_slice = Type::compound(CompoundKind::Slice, vec![Type::int()]);
+
+        let mut store = Store::new();
+        insert(
+            &mut store,
+            "m",
+            "m.Pair",
+            transparent_alias(
+                "m.Pair",
+                Type::Tuple(vec![writable_slice.clone(), Type::int()]),
+            ),
+        );
+        insert(
+            &mut store,
+            "m",
+            "m.Rows",
+            transparent_alias("m.Rows", writable_slice),
+        );
+
+        assert_eq!(
+            store.demoted_at_binding(&nominal_int("m.Pair")),
+            nominal_int("m.Pair"),
+        );
+        assert_eq!(
+            store.demoted_at_binding(&nominal_int("m.Rows")),
             plain_slice,
         );
     }

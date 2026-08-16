@@ -5,7 +5,7 @@ description: |
   struct Foo { count: int }
   
   impl Foo {
-    fn add<T>(self: Ref<Foo>, _val: Bar) {
+    fn add<T>(self: mut Ref<Foo>, _val: Bar) {
       self.count += 1
     }
   }

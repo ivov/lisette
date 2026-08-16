@@ -70,6 +70,7 @@ LexResult {
             ),
             note: None,
             code: "lex.format_string_multiline_interpolation",
+            fix: None,
         },
     ],
     blank_lines: [],

@@ -125,6 +125,23 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
     all_diagnostics.sort_by(LisetteDiagnostic::sort_key);
     all_diagnostics.splice(0..0, entry_parse_errors.into_iter().map(Into::into));
 
+    let has_permission_errors = all_diagnostics.iter().any(|diagnostic| {
+        diagnostic.is_error()
+            && matches!(
+                diagnostic.code_str(),
+                Some(
+                    "infer.write_through_read_only"
+                        | "infer.needs_writable"
+                        | "infer.immutable"
+                        | "infer.value_receiver_immutable"
+                        | "infer.aliased_writable_argument"
+                )
+            )
+    });
+    if has_permission_errors {
+        all_diagnostics.retain(|diagnostic| diagnostic.code_str() != Some("lint.unnecessary_mut"));
+    }
+
     let emit_stamps: Vec<EmitStamp> = compiled_packages
         .iter()
         .map(|c| EmitStamp {

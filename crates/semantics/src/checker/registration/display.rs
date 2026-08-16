@@ -99,7 +99,7 @@ impl TaskState {
             other => other,
         };
         let fn_ty = Type::function(
-            vec![FunctionParameter::new(receiver_ty, false)],
+            vec![FunctionParameter::new(receiver_ty)],
             Default::default(),
             Box::new(Type::string()),
         );

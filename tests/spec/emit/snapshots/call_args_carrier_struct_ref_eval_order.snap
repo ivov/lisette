@@ -2,9 +2,9 @@
 source: tests/spec/emit/expressions.rs
 description: |
   
-  struct Carrier { p: Ref<int> }
+  struct Carrier { p: mut Ref<int> }
   
-  fn bump(c: Carrier) -> int {
+  fn bump(c: mut Carrier) -> int {
     c.p.* = 1
     9
   }
@@ -14,7 +14,7 @@ description: |
   fn main() {
     let mut i = 0
     let m = [[10], [20]]
-    let c = Carrier { p: &i }
+    let mut c = Carrier { p: &i }
     let x = first(m[i][0], [bump(c)][0])
     let _ = x
   }

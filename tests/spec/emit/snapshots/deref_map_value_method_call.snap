@@ -5,12 +5,12 @@ description: |
   struct Counter { count: int }
   
   impl Counter {
-    fn increment(self: Ref<Counter>) {
+    fn increment(self: mut Ref<Counter>) {
       self.*.count += 1
     }
   }
   
-  fn test(m: Map<string, Ref<Counter>>) {
+  fn test(m: mut Map<string, mut Ref<Counter>>) {
     let Some(c) = m.get("a") else { return; };
     c.*.increment()
   }

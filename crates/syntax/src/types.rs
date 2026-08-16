@@ -309,27 +309,21 @@ pub struct Bound {
 pub struct FunctionParameter {
     pub ty: Type,
     pub name: Option<EcoString>,
-    pub mutable: bool,
 }
 
 impl FunctionParameter {
-    pub fn new(ty: Type, mutable: bool) -> Self {
-        Self {
-            ty,
-            name: None,
-            mutable,
-        }
+    pub fn new(ty: Type) -> Self {
+        Self { ty, name: None }
     }
 
-    pub fn named(ty: Type, name: Option<EcoString>, mutable: bool) -> Self {
-        Self { ty, name, mutable }
+    pub fn named(ty: Type, name: Option<EcoString>) -> Self {
+        Self { ty, name }
     }
 
     pub fn with_type(&self, ty: Type) -> Self {
         Self {
             ty,
             name: self.name.clone(),
-            mutable: self.mutable,
         }
     }
 }
@@ -349,7 +343,7 @@ impl PartialEq for FunctionType {
                 .params
                 .iter()
                 .zip(&other.params)
-                .all(|(left, right)| left.ty == right.ty && left.mutable == right.mutable)
+                .all(|(left, right)| left.ty == right.ty)
             && self.bounds == other.bounds
             && self.return_type == other.return_type
     }
@@ -407,7 +401,7 @@ pub enum Type {
     Compound {
         kind: CompoundKind,
         args: Vec<Type>,
-        /// Write permission through this reference hop. Only `Slice`, `Map`,
+        /// Write permission through this reference. Only `Slice`, `Map`,
         /// and `Ref` can carry it.
         writable: bool,
     },
@@ -623,12 +617,12 @@ impl Type {
 
     pub fn qualified_compound(kind: CompoundKind, args: Vec<Type>, writable: bool) -> Type {
         debug_assert!(
-            !writable || kind.carries_write_permission(),
-            "writable flag is restricted to Slice, Map, and Ref"
+            !writable || kind.accepts_write_qualifier(),
+            "writable flag is restricted to Slice, Map, Ref, and VarArgs"
         );
         let args = if kind.carries_write_permission()
             && !writable
-            && args.iter().any(Type::contains_write_permission)
+            && args.iter().any(Type::demotion_changes)
         {
             args.iter().map(Type::demoted).collect()
         } else {
@@ -642,7 +636,7 @@ impl Type {
     }
 
     /// Whether a write permission appears anywhere in this type.
-    fn contains_write_permission(&self) -> bool {
+    pub fn contains_write_permission(&self) -> bool {
         match self {
             Type::Compound { args, writable, .. } => {
                 *writable || args.iter().any(Type::contains_write_permission)
@@ -656,6 +650,15 @@ impl Type {
         }
     }
 
+    /// Whether a type parameter appears anywhere in this type.
+    pub fn contains_type_parameter(&self) -> bool {
+        matches!(self, Type::Parameter(_))
+            || self
+                .children()
+                .into_iter()
+                .any(Type::contains_type_parameter)
+    }
+
     pub fn is_writable(&self) -> bool {
         matches!(
             self,
@@ -665,7 +668,7 @@ impl Type {
 
     pub fn make_writable(self) -> Type {
         match self {
-            Type::Compound { kind, args, .. } if kind.carries_write_permission() => {
+            Type::Compound { kind, args, .. } if kind.accepts_write_qualifier() => {
                 Type::qualified_compound(kind, args, true)
             }
             Type::Nominal { id, params, .. } => Type::Nominal {
@@ -674,6 +677,38 @@ impl Type {
                 writable: true,
             },
             other => other,
+        }
+    }
+
+    /// A deep clone's type: fresh writable storage at every built-in
+    /// container layer, nominal elements copied shallowly.
+    pub fn writable_clone_result(&self) -> Type {
+        match self {
+            Type::Compound { kind, args, .. }
+                if matches!(kind, CompoundKind::Slice | CompoundKind::EnumeratedSlice) =>
+            {
+                let element = args
+                    .first()
+                    .map(Type::writable_clone_result)
+                    .unwrap_or(Type::Error);
+                Type::qualified_compound(*kind, vec![element], true)
+            }
+            Type::Compound {
+                kind: CompoundKind::Map,
+                args,
+                ..
+            } => {
+                let key = args.first().cloned().unwrap_or(Type::Error);
+                let value = args
+                    .get(1)
+                    .map(Type::writable_clone_result)
+                    .unwrap_or(Type::Error);
+                Type::qualified_compound(CompoundKind::Map, vec![key, value], true)
+            }
+            Type::Tuple(elements) => {
+                Type::Tuple(elements.iter().map(Type::writable_clone_result).collect())
+            }
+            other => other.clone(),
         }
     }
 
@@ -702,6 +737,23 @@ impl Type {
         }
     }
 
+    /// Whether `demoted` would return a different type. Must mirror `demoted`.
+    pub fn demotion_changes(&self) -> bool {
+        match self {
+            Type::Compound { args, writable, .. } => {
+                *writable || args.iter().any(Type::demotion_changes)
+            }
+            Type::Nominal {
+                params, writable, ..
+            } => *writable || params.iter().any(Type::demotion_changes),
+            Type::Tuple(elements) => elements.iter().any(Type::demotion_changes),
+            Type::Array { element, .. } => element.demotion_changes(),
+            Type::Function(f) => f.return_type.demotion_changes(),
+            Type::Forall { body, .. } => body.demotion_changes(),
+            _ => false,
+        }
+    }
+
     pub fn demoted(&self) -> Type {
         match self {
             Type::Compound {
@@ -726,6 +778,17 @@ impl Type {
             Type::Array { length, element } => Type::Array {
                 length: *length,
                 element: Box::new(element.demoted()),
+            },
+            // A read-only owner hands out a function whose result is read-only.
+            // Parameters are contravariant, so they keep their permission.
+            Type::Function(f) => f.rebuild(
+                f.params.clone(),
+                f.bounds.clone(),
+                Box::new(f.return_type.demoted()),
+            ),
+            Type::Forall { vars, body } => Type::Forall {
+                vars: vars.clone(),
+                body: Box::new(body.demoted()),
             },
             _ => self.clone(),
         }
@@ -823,8 +886,17 @@ impl CompoundKind {
     pub fn carries_write_permission(self) -> bool {
         matches!(
             self,
-            CompoundKind::Slice | CompoundKind::Map | CompoundKind::Ref
+            CompoundKind::Slice
+                | CompoundKind::EnumeratedSlice
+                | CompoundKind::Map
+                | CompoundKind::Ref
         )
+    }
+
+    /// Whether `mut` may qualify this kind. A `VarArgs` accepts it for the
+    /// storage a spread hands over, without being a hop that gates elements.
+    pub fn accepts_write_qualifier(self) -> bool {
+        self.carries_write_permission() || matches!(self, CompoundKind::VarArgs)
     }
 
     pub fn leaf_name(self) -> &'static str {
@@ -1567,7 +1639,7 @@ where
     else {
         return None;
     };
-    lookup(id.as_str())?.instantiate_underlying(params, *writable)
+    lookup(id.as_str())?.instantiate_underlying(params, *writable, &lookup)
 }
 
 /// Follow transparent aliases and newtype fields to their canonical
@@ -1590,7 +1662,7 @@ where
             break;
         }
         let Some(underlying) = lookup(id.as_str())
-            .and_then(|definition| definition.instantiate_underlying(params, writable))
+            .and_then(|definition| definition.instantiate_underlying(params, writable, &lookup))
         else {
             break;
         };
@@ -1623,6 +1695,51 @@ where
     }
 
     contains(ty, &lookup)
+}
+
+pub fn contains_write_permission<'d, F>(ty: &Type, lookup: F) -> bool
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    fn contains<'d, F>(ty: &Type, lookup: &F) -> bool
+    where
+        F: Fn(&str) -> Option<&'d Definition>,
+    {
+        let peeled = peel_alias(ty, lookup);
+        peeled.is_writable()
+            || peeled
+                .children()
+                .into_iter()
+                .any(|child| contains(child, lookup))
+    }
+
+    contains(ty, &lookup)
+}
+
+/// Whether a parameter of this type grants the callee write permission over
+/// the argument's storage.
+pub fn parameter_grants_write<'d, F>(ty: &Type, lookup: F) -> bool
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    fn grants<'d, F>(ty: &Type, lookup: &F) -> bool
+    where
+        F: Fn(&str) -> Option<&'d Definition>,
+    {
+        match peel_alias(ty, lookup) {
+            Type::Compound { args, writable, .. } => {
+                writable || args.iter().any(|arg| grants(arg, lookup))
+            }
+            Type::Nominal {
+                params, writable, ..
+            } => writable || params.iter().any(|param| grants(param, lookup)),
+            Type::Tuple(elements) => elements.iter().any(|element| grants(element, lookup)),
+            Type::Array { element, .. } => grants(&element, lookup),
+            _ => false,
+        }
+    }
+
+    grants(ty, &lookup)
 }
 
 /// Alias-aware demotion. An occurrence whose alias hides permission demotes
@@ -1668,6 +1785,15 @@ where
             length: *length,
             element: Box::new(demoted(element, lookup)),
         },
+        Type::Function(f) => f.rebuild(
+            f.params.clone(),
+            f.bounds.clone(),
+            Box::new(demoted(&f.return_type, lookup)),
+        ),
+        Type::Forall { vars, body } => Type::Forall {
+            vars: vars.clone(),
+            body: Box::new(demoted(body, lookup)),
+        },
         _ => ty.clone(),
     }
 }
@@ -1697,6 +1823,8 @@ where
             .iter()
             .any(|element| demotion_changes(element, lookup)),
         Type::Array { element, .. } => demotion_changes(element, lookup),
+        Type::Function(f) => demotion_changes(&f.return_type, lookup),
+        Type::Forall { body, .. } => demotion_changes(body, lookup),
         _ => false,
     }
 }
@@ -1858,7 +1986,7 @@ impl Type {
         match self {
             Type::Function(f) => {
                 let f = Arc::try_unwrap(f).unwrap_or_else(|arc| (*arc).clone());
-                let mut new_params = vec![FunctionParameter::new(Type::ReceiverPlaceholder, false)];
+                let mut new_params = vec![FunctionParameter::new(Type::ReceiverPlaceholder)];
                 new_params.extend(f.params);
 
                 Type::function(new_params, f.bounds, f.return_type)
@@ -2021,25 +2149,17 @@ mod tests {
     #[test]
     fn function_equality_ignores_param_names() {
         let named = Type::function(
-            vec![FunctionParameter::named(
-                Type::int(),
-                Some("width".into()),
-                false,
-            )],
+            vec![FunctionParameter::named(Type::int(), Some("width".into()))],
             vec![],
             Box::new(Type::bool()),
         );
         let differently_named = Type::function(
-            vec![FunctionParameter::named(
-                Type::int(),
-                Some("height".into()),
-                false,
-            )],
+            vec![FunctionParameter::named(Type::int(), Some("height".into()))],
             vec![],
             Box::new(Type::bool()),
         );
         let unnamed = Type::function(
-            vec![FunctionParameter::new(Type::int(), false)],
+            vec![FunctionParameter::new(Type::int())],
             vec![],
             Box::new(Type::bool()),
         );
@@ -2081,7 +2201,7 @@ mod tests {
         let func = Type::function(
             (0..6)
                 .map(unhinted_var)
-                .map(|ty| FunctionParameter::new(ty, false))
+                .map(FunctionParameter::new)
                 .collect(),
             vec![],
             Box::new(unhinted_var(6)),
@@ -2110,11 +2230,7 @@ mod tests {
     fn remove_vars_handles_dozens_of_unhinted_vars() {
         let params: Vec<Type> = (0..30).map(unhinted_var).collect();
         let func = Type::function(
-            params
-                .iter()
-                .cloned()
-                .map(|ty| FunctionParameter::new(ty, false))
-                .collect(),
+            params.iter().cloned().map(FunctionParameter::new).collect(),
             vec![],
             Box::new(Type::Simple(SimpleKind::Unit)),
         );

@@ -3275,7 +3275,7 @@ fn test() {
 #[test]
 fn match_guard_cannot_mutate_inlined_identifier_subject() {
     let input = r#"
-fn bump_false(r: Ref<int>) -> bool {
+fn bump_false(r: mut Ref<int>) -> bool {
   r.* = 1
   false
 }
@@ -3630,7 +3630,7 @@ fn test() {
 #[test]
 fn while_condition_with_setup_statements_inside_loop() {
     let input = r#"
-fn bump(i: Ref<int>) -> int {
+fn bump(i: mut Ref<int>) -> int {
   i.* = i.* + 1
   i.*
 }
@@ -3647,7 +3647,7 @@ fn test() {
 #[test]
 fn while_binary_condition_with_capture_inside_loop() {
     let input = r#"
-fn bump(i: Ref<int>) -> int {
+fn bump(i: mut Ref<int>) -> int {
   i.* = i.* + 1
   i.*
 }
@@ -3664,7 +3664,7 @@ fn test() {
 #[test]
 fn else_if_condition_setup_emitted_in_else_scope() {
     let input = r#"
-fn track(flag: Ref<bool>) -> Result<int, error> {
+fn track(flag: mut Ref<bool>) -> Result<int, error> {
   flag.* = true
   Ok(1)
 }

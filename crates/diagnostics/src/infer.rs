@@ -510,26 +510,318 @@ pub fn json_non_serializable_field(span: &Span, kind: &str, skippable: bool) -> 
         .with_help(format!("Go's `encoding/json` cannot marshal {kind}s.{fix}"))
 }
 
+pub fn cast_grants_permission(source: &str, target: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Missing write permission")
+        .with_infer_code("needs_writable")
+        .with_span_label(
+            &span,
+            format!("cannot cast `{source}` to the more permissive `{target}`"),
+        )
+        .with_help(
+            "A cast may drop `mut`, never restore it. Keep the value writable \
+             where it is created, or cast a `.clone()`",
+        )
+}
+
+pub fn immutable_loop_binding(
+    variable_name: &str,
+    collection: Option<&str>,
+    span: Span,
+) -> LisetteDiagnostic {
+    let target = match collection {
+        Some(collection) => format!("`{collection}[i]`"),
+        None => "the collection by index".to_string(),
+    };
+    LisetteDiagnostic::error("Immutable loop binding")
+        .with_infer_code("immutable")
+        .with_span_label(
+            &span,
+            format!("`{variable_name}` binds a copy of each element"),
+        )
+        .with_help(format!(
+            "Writes to the loop binding do not reach the collection. \
+             Write through {target} to update it"
+        ))
+}
+
+pub fn loop_copy_write(
+    variable_name: &str,
+    collection: Option<&str>,
+    span: Span,
+) -> LisetteDiagnostic {
+    let help = match collection {
+        Some(collection) => format!(
+            "`{variable_name}` is a copy of the element, so the collection keeps its \
+             old value. Write through `{collection}[i]` to update it"
+        ),
+        None => format!(
+            "`{variable_name}` is a copy of the element, so the collection keeps its \
+             old value. Index into the collection to update it"
+        ),
+    };
+    LisetteDiagnostic::warn("Write to a loop copy")
+        .with_infer_code("loop_copy_write")
+        .with_span_label(&span, format!("only changes `{variable_name}`"))
+        .with_help(help)
+}
+
+pub fn loop_binding_read_only(variable_name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Immutable loop binding")
+        .with_infer_code("immutable")
+        .with_span_label(&span, format!("`{variable_name}` binds read-only elements"))
+        .with_help(format!(
+            "Bind with `for mut {variable_name}` to keep the elements writable"
+        ))
+}
+
+pub fn mut_without_effect(target: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`mut` has no effect")
+        .with_infer_code("mut_without_effect")
+        .with_span_label(&span, format!("`{target}` cannot carry write permission"))
+        .with_help(
+            "Only `Slice`, `Map`, `Ref`, and `Unknown` can carry write permission, \
+             directly or through their contents. Remove `mut`",
+        )
+}
+
+pub fn assert_type_needs_concrete(target: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot assert to a type parameter")
+        .with_infer_code("needs_writable")
+        .with_span_label(&span, format!("`{target}` is not a concrete type"))
+        .with_help(
+            "A type parameter could stand for a writable type, and an assertion \
+             from `Unknown` never grants permission. Assert to a concrete read-only type",
+        )
+}
+
+pub fn assert_type_grants_permission(target: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Missing write permission")
+        .with_infer_code("needs_writable")
+        .with_span_label(
+            &span,
+            format!("cannot assert to the more permissive `{target}`"),
+        )
+        .with_help(
+            "An assertion may narrow `Unknown` to a read-only type, never a writable \
+             one. Assert to the read-only type, then write to a `.clone()`",
+        )
+}
+
+pub fn spread_needs_writable(element_ty: &str, actual_ty: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Missing write permission")
+        .with_infer_code("needs_writable")
+        .with_span_label(
+            &span,
+            format!("spreads read-only elements where `{element_ty}` is expected"),
+        )
+        .with_help(format!(
+            "Each spread element becomes a `{element_ty}` argument, and `{actual_ty}` \
+             holds read-only elements. Keep the elements writable where they are \
+             created, or pass clones"
+        ))
+}
+
+pub fn aliased_writable_argument(place: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Aliased writable argument")
+        .with_infer_code("aliased_writable_argument")
+        .with_span_label(
+            &span,
+            format!("`{place}` is passed writably and again in the same call"),
+        )
+        .with_help(format!(
+            "The callee's other view of `{place}` would change under it. \
+             Pass `{place}.clone()` in one position"
+        ))
+}
+
+#[derive(Debug, Clone)]
+pub enum WriteContext {
+    Element(ElementDeclaration),
+    Parameter(String),
+    Field(String),
+    LoopElement {
+        binding: String,
+        collection: Option<String>,
+    },
+    AliasOf {
+        binding: String,
+        source: String,
+    },
+    CallResult(String),
+    ReadOnlyOwner {
+        owner: String,
+        field: String,
+        origin: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct ElementDeclaration {
+    pub name: String,
+    pub replacement_type: String,
+    pub place: String,
+    /// `i` for a slice, `k` for a map.
+    pub index: &'static str,
+    /// None when the declaration sits in another file.
+    pub declaration_span: Option<Span>,
+}
+
+pub fn needs_writable_help(expected: &str, actual: &str, context: Option<WriteContext>) -> String {
+    let remedy = match context {
+        Some(WriteContext::Parameter(name)) => {
+            format!("Declare the parameter `{name}` as `{expected}`")
+        }
+        Some(WriteContext::Field(name)) => format!("Declare the field `{name}` as `{expected}`"),
+        Some(WriteContext::ReadOnlyOwner { owner, field, .. }) => format!(
+            "`{field}` is declared writable, but `{owner}` is read-only, so its fields are too. \
+             Make `{owner}` writable where it is created"
+        ),
+        Some(WriteContext::AliasOf { binding, source }) => format!(
+            "`{binding}` shares storage with `{source}`, which is read-only. \
+             Make `{source}` writable, or pass a `.clone()`"
+        ),
+        Some(WriteContext::CallResult(callee)) => {
+            format!("`{callee}` returns `{actual}`. Declare its return type `{expected}`")
+        }
+        Some(WriteContext::LoopElement {
+            binding,
+            collection,
+        }) => match collection {
+            Some(collection) => format!(
+                "`{binding}` binds elements of `{collection}`, which is read-only. \
+                 Declare `let mut {collection}`"
+            ),
+            None => format!("`{binding}` binds read-only elements"),
+        },
+        _ => "Make the value writable where it is created, or pass a `.clone()`".to_string(),
+    };
+    format!("`{expected}` permits writes, `{actual}` does not. {remedy}")
+}
+
+pub fn write_through_read_only(
+    place: &str,
+    hop: &str,
+    governing_type: &str,
+    span: Span,
+    context: Option<WriteContext>,
+) -> LisetteDiagnostic {
+    let diagnostic = LisetteDiagnostic::error(format!("Cannot write to `{place}`"))
+        .with_infer_code("write_through_read_only");
+    let element = match context {
+        Some(WriteContext::Element(element)) => element,
+        other => {
+            let help = match other {
+                Some(WriteContext::Parameter(name)) => {
+                    format!("Declare the parameter `{name}` as `mut {governing_type}`")
+                }
+                Some(WriteContext::Field(name)) => {
+                    format!("Declare the field `{name}` as `mut {governing_type}`")
+                }
+                Some(WriteContext::LoopElement {
+                    binding,
+                    collection: Some(collection),
+                }) => format!(
+                    "`{binding}` binds elements of `{collection}`, which is read-only. \
+                     Declare `let mut {collection}`"
+                ),
+                Some(WriteContext::LoopElement { binding, .. }) => format!(
+                    "`{binding}` binds read-only elements. \
+                     Declare the collection with `let mut`"
+                ),
+                Some(WriteContext::AliasOf { binding, source }) => format!(
+                    "`{binding}` shares storage with `{source}`, which is read-only. \
+                     Make `{source}` writable, or write to a `.clone()` for an independent copy"
+                ),
+                Some(WriteContext::ReadOnlyOwner {
+                    owner,
+                    field,
+                    origin,
+                }) => {
+                    let source = match origin {
+                        Some(callee) => format!(
+                            "`{owner}` comes from `{callee}`, so declare that function's return type `mut`"
+                        ),
+                        None => format!("Make `{owner}` writable where it is created"),
+                    };
+                    format!(
+                        "`{field}` is declared writable, but `{owner}` is read-only, \
+                         so its fields are too. {source}"
+                    )
+                }
+                Some(WriteContext::CallResult(callee)) => format!(
+                    "`{callee}` returns `{governing_type}`. \
+                     Declare its return type `mut {governing_type}`, or bind the result and write to a `.clone()`"
+                ),
+                _ => format!(
+                    "Make it `mut {governing_type}` where it is created, \
+                     or write to a `.clone()` for an independent copy"
+                ),
+            };
+            let label = if hop.is_empty() {
+                format!("`{governing_type}` permits no write")
+            } else {
+                format!("`{hop}` is read-only")
+            };
+            return diagnostic.with_span_label(&span, label).with_help(help);
+        }
+    };
+    let ElementDeclaration {
+        name,
+        replacement_type,
+        place,
+        index,
+        declaration_span,
+    } = element;
+    let rule = format!("`mut` makes `{name}` writable, but `{name}[{index}]` is still read-only");
+    let remedy = format!(
+        "Declare `{name}` as `{replacement_type}` to make both `{name}` and `{name}[{index}]` writable"
+    );
+    let mut diagnostic =
+        diagnostic.with_span_label(&span, format!("this write goes through `{place}`"));
+    let help = match declaration_span {
+        Some(declaration_span) => {
+            diagnostic = diagnostic.with_span_label(&declaration_span, &rule);
+            remedy
+        }
+        None => format!("{rule}. {remedy}"),
+    };
+    diagnostic.with_help(help)
+}
+
+pub enum MutationHint<'a> {
+    Pointer(&'a str),
+    WritingCallee(&'a str),
+}
+
 pub fn disallowed_mutation(
     variable_name: &str,
     span: Span,
     self_type_name: Option<&str>,
     binding_kind: Option<BindingKind>,
     is_const_binding: bool,
+    hint: Option<MutationHint<'_>>,
 ) -> LisetteDiagnostic {
+    if let Some(MutationHint::Pointer(ref_type)) = hint {
+        return LisetteDiagnostic::error("Missing `.*` on a pointer write")
+            .with_infer_code("immutable")
+            .with_span_label(&span, format!("`{variable_name}` is a `{ref_type}`"))
+            .with_help(format!(
+                "Write through the pointer with `{variable_name}.*`"
+            ));
+    }
     if variable_name == "self" {
         if let Some(type_name) = self_type_name {
             LisetteDiagnostic::error("Immutable receiver")
                 .with_infer_code("value_receiver_immutable")
                 .with_span_label(&span, "receiver is immutable")
                 .with_help(format!(
-                    "Use `self: Ref<{type_name}>` to make the receiver mutable"
+                    "Use `self: mut Ref<{type_name}>` to make the receiver mutable"
                 ))
         } else {
             LisetteDiagnostic::error("Immutable receiver")
                 .with_infer_code("value_receiver_immutable")
                 .with_span_label(&span, "receiver is immutable")
-                .with_help("Use `self: Ref<Self>` to make the receiver mutable")
+                .with_help("Use `self: mut Ref<Self>` to make the receiver mutable")
         }
     } else if is_const_binding {
         LisetteDiagnostic::error("Cannot mutate `const`")
@@ -547,7 +839,14 @@ pub fn disallowed_mutation(
             ))
     } else {
         let help = if binding_kind.is_some_and(|kind| kind.is_param()) {
-            "Declare the parameter with `mut` to mutate it".to_string()
+            format!(
+                "Parameters are immutable. Rebind with `let mut {variable_name} = {variable_name}` to mutate a local copy"
+            )
+        } else if let Some(MutationHint::WritingCallee(callee)) = hint {
+            format!(
+                "{callee} writes to `{variable_name}`. \
+                 Declare using `let mut {variable_name}` to make the variable mutable"
+            )
         } else {
             format!("Declare using `let mut {variable_name}` to make the variable mutable")
         };
@@ -566,65 +865,6 @@ pub fn self_reference_in_assignment(span: Span) -> LisetteDiagnostic {
         .with_infer_code("self_reference_in_assignment")
         .with_span_label(&span, "disallowed")
         .with_help("Separate the reassignment from reference taking, or use a different variable")
-}
-
-pub fn mut_binding_aliases(
-    binding_name: &str,
-    source: &str,
-    addressable: bool,
-    clone_severs: bool,
-    span: Span,
-) -> LisetteDiagnostic {
-    let target = mutation_target(binding_name, source);
-    let help = match (clone_severs, addressable) {
-        (true, true) => format!(
-            "Mutating `{binding_name}` would implicitly mutate {target}. Either use `{source}.clone()` to make a copy or `&{source}` to take a reference."
-        ),
-        (true, false) => format!(
-            "Mutating `{binding_name}` would implicitly mutate {target}. Use `{source}.clone()` to make a copy."
-        ),
-        (false, true) => format!(
-            "Mutating `{binding_name}` would implicitly mutate {target}. Either use `&{source}` to take a reference or construct a new value to mutate independently."
-        ),
-        (false, false) => format!(
-            "Mutating `{binding_name}` would implicitly mutate {target}. Construct a new value to mutate independently."
-        ),
-    };
-    LisetteDiagnostic::error(format!("Cannot make a mutable binding to `{source}`"))
-        .with_infer_code("mut_binding_aliases")
-        .with_span_label(&span, "would be mutated implicitly")
-        .with_help(help)
-}
-
-pub fn mut_binding_clone_does_not_sever(
-    binding_name: &str,
-    source: &str,
-    addressable: bool,
-    span: Span,
-) -> LisetteDiagnostic {
-    let target = mutation_target(binding_name, source);
-    let help = if addressable {
-        format!(
-            "`{source}.clone()` leaves collections inside composite values shared, so mutating one through `{binding_name}` could still implicitly mutate {target}. Either use `&{source}` to take a reference or construct a new value to mutate independently."
-        )
-    } else {
-        format!(
-            "`{source}.clone()` leaves collections inside composite values shared, so mutating one through `{binding_name}` could still implicitly mutate {target}. Construct a new value to mutate independently."
-        )
-    };
-    LisetteDiagnostic::error(format!("Cannot make a mutable binding to `{source}`"))
-        .with_infer_code("mut_binding_aliases")
-        .with_span_label(&span, "does not make an independent copy")
-        .with_help(help)
-}
-
-/// A same-name source means the new binding shadows the one it aliases.
-fn mutation_target(binding_name: &str, source: &str) -> String {
-    if binding_name == source {
-        format!("the shadowed `{source}`")
-    } else {
-        format!("`{source}`")
-    }
 }
 
 pub fn uppercase_binding(span: Span, name: &str) -> LisetteDiagnostic {
@@ -2313,10 +2553,19 @@ fn change_sentence(method: &LabelledMethod<'_>) -> String {
                 || format!("{} parameter", ordinal(*index)),
                 |name| format!("`{}` parameter", name),
             );
-            format!(
-                "Change the {} of `{}` to `{}`",
-                parameter, method.name, expected.params[*index].ty
-            )
+            let expected_ty = &expected.params[*index].ty;
+            let actual_ty = &actual.params[*index].ty;
+            if expected_ty.demoted() == actual_ty.demoted() {
+                format!(
+                    "Change the {} of `{}` to `{}`, or require `{}` in `{}`",
+                    parameter, method.name, expected_ty, actual_ty, method.interface
+                )
+            } else {
+                format!(
+                    "Change the {} of `{}` to `{}`",
+                    parameter, method.name, expected_ty
+                )
+            }
         }
         _ => format!("Change `{}` to `{}`", method.name, method.expected),
     }
@@ -2336,8 +2585,7 @@ fn declaration(name: &str, signature: &Type, receiver: Option<&str>) -> String {
             .name
             .as_ref()
             .map_or_else(|| format!("arg{}", index + 1), ToString::to_string);
-        let mutable = if param.mutable { "mut " } else { "" };
-        params.push(format!("{}{}: {}", mutable, name, param.ty));
+        params.push(format!("{}: {}", name, param.ty));
     }
 
     format!(
@@ -3897,34 +4145,6 @@ pub fn reference_through_newtype(span: Span) -> LisetteDiagnostic {
         .with_infer_code("reference_through_newtype")
         .with_span_label(&span, "newtype `.0` inside `&`")
         .with_help("Bind the inner value first: `let inner = val.0; &inner`")
-}
-
-pub fn immutable_argument_to_mut_param(
-    var_name: &str,
-    callee_label: &str,
-    span: Span,
-) -> LisetteDiagnostic {
-    let help = format!(
-        "{callee_label} may mutate `{var_name}`, so declare it mutable using `let mut {var_name} = ...`."
-    );
-    LisetteDiagnostic::error("Immutable argument passed to `mut` parameter")
-        .with_infer_code("immutable_arg_to_mut_param")
-        .with_span_label(&span, "expected mutable, found immutable")
-        .with_help(help)
-}
-
-pub fn mut_arg_clone_does_not_sever(
-    source: &str,
-    callee_label: &str,
-    span: Span,
-) -> LisetteDiagnostic {
-    let help = format!(
-        "`{source}.clone()` leaves collections inside composite values shared, so {callee_label} could still mutate one shared with `{source}`. Construct a new value to pass instead."
-    );
-    LisetteDiagnostic::error("Aliasing argument passed to `mut` parameter")
-        .with_infer_code("mut_arg_clone_does_not_sever")
-        .with_span_label(&span, "does not make an independent copy")
-        .with_help(help)
 }
 
 pub fn failure_propagation_in_expression(span: Span) -> LisetteDiagnostic {

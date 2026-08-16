@@ -2,12 +2,12 @@
 source: tests/spec/emit/functions.rs
 description: |
   
-  fn process(mut items: Slice<int>) {
-    items = [1, 2, 3]
+  fn process(items: mut Slice<int>) {
+    items[0] = 1
   }
 ---
 package main
 
-func process(_ []int) {
-	_ = []int{1, 2, 3}
+func process(items []int) {
+	items[0] = 1
 }

@@ -115,10 +115,10 @@ fn sum(numbers: VarArgs<int>) -> int {
 }
 ```
 
-A spread call passes the caller's slice rather than a copy, so a `mut` parameter mutates the caller's data. The call site must then pass a mutable binding:
+A spread call passes the caller's slice rather than a copy, so writing through the parameter reaches the caller's data. The type must say so with `mut VarArgs<T>`, and the spread argument must then be writable:
 
 ```rust
-fn overwrite(mut xs: VarArgs<int>) {
+fn overwrite(xs: mut VarArgs<int>) {
   xs[0] = 99
 }
 
@@ -207,7 +207,7 @@ Some Go functions return `(T, error)` where both values are meaningful simultane
 ```rs
 import "go:io"
 
-fn read_loop(r: io.Reader, mut buf: Slice<uint8>) -> Result<(), error> {
+fn read_loop(r: io.Reader, buf: mut Slice<uint8>) -> Result<(), error> {
   loop {
     match r.Read(buf) {
       Partial.Ok(n) => process(buf[..n]),
@@ -264,7 +264,7 @@ Go functions that mutate their parameters in a way observable to the caller must
 
 ```rust
 // sort.d.lis
-pub fn Ints(mut x: Slice<int>)
+pub fn Ints(x: mut Slice<int>)
 ```
 
 📚 See [`05-functions.md`](../reference/05-functions.md#mutable-parameters)

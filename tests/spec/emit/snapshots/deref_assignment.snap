@@ -2,7 +2,7 @@
 source: tests/spec/emit/expressions.rs
 description: |
   
-  fn mutate(r: Ref<int>) {
+  fn mutate(r: mut Ref<int>) {
     r.* = 99
   }
   

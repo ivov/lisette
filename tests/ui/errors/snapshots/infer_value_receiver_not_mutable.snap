@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                  ╰── receiver is immutable
  7 │   }
    ╰────
-  help: Use `self: Ref<Counter>` to make the receiver mutable · code: [infer.value_receiver_immutable]
+  help: Use `self: mut Ref<Counter>` to make the receiver mutable · code: [infer.value_receiver_immutable]

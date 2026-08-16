@@ -1,12 +1,12 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Cannot make a mutable binding to `t1`
-   ╭─[test.lis:3:16]
- 2 │ fn test(t1: (Slice<string>, int)) {
+  ✕ Cannot write to `t2.0[0]`
+   ╭─[test.lis:4:3]
  3 │   let mut t2 = t1
-   ·                ─┬
-   ·                 ╰── would be mutated implicitly
  4 │   t2.0[0] = "y"
+   ·   ──────┬──────
+   ·         ╰── `t2.0` is read-only
+ 5 │ }
    ╰────
-  help: Mutating `t2` would implicitly mutate `t1`. Either use `&t1` to take a reference or construct a new value to mutate independently · code: [infer.mut_binding_aliases]
+  help: `t2` shares storage with `t1`, which is read-only. Make `t1` writable, or write to a `.clone()` for an independent copy · code: [infer.write_through_read_only]

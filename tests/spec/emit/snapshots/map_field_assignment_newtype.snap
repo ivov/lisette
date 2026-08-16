@@ -5,7 +5,7 @@ description: |
   struct New(int)
   
   fn main() {
-    let mut m: Map<string, New> = Map.new()
+    let mut m: mut Map<string, New> = Map.new()
     m["a"] = New(0)
     m["a"] = New(5)
   }

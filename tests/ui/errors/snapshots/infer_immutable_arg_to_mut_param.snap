@@ -1,12 +1,12 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Immutable argument passed to `mut` parameter
+  ✕ Immutable variable
    ╭─[test.lis:8:8]
  7 │   let data = [3, 1, 2];
  8 │   sort(data)
    ·        ──┬─
-   ·          ╰── expected mutable, found immutable
+   ·          ╰── `data` was declared without `mut`
  9 │ }
    ╰────
-  help: `sort()` may mutate `data`, so declare it mutable using `let mut data = ...` · code: [infer.immutable_arg_to_mut_param]
+  help: `sort()` writes to `data`. Declare using `let mut data` to make the variable mutable · code: [infer.immutable]

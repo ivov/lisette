@@ -1,7 +1,7 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Type mismatch
+  ✕ Missing write permission
     ╭─[test.lis:14:17]
  13 │   let mut b = [2]
  14 │   let _ = apply(advance, a, b)
@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
     ·                    ╰── expected `fn (Slice<int>, mut Slice<int>) -> int`, found `fn (mut Slice<int>, Slice<int>) -> int`
  15 │ }
     ╰────
-  help: `mut` belongs to the function type when the parameter carries mutation back to the caller. Match `mut` on each differing parameter, or expect `fn (mut Slice<int>, Slice<int>) -> int` instead · code: [infer.type_mismatch]
+  help: A function value may demand less permission than its type promises, never more. Match `mut` on each differing parameter, or expect `fn (mut Slice<int>, Slice<int>) -> int` instead · code: [infer.needs_writable]

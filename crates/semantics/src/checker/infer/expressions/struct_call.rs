@@ -402,6 +402,24 @@ impl InferCtx<'_> {
             }
         }
 
+        self.mark_writable_initializer_uses(
+            struct_fields
+                .iter()
+                .filter(|f| self.store.demotion_changes(&f.ty))
+                .map(|f| &f.name),
+            &new_field_assignments,
+        );
+
+        let struct_call_ty = if self.construction_grants_write(
+            struct_fields.iter().map(|f| (&f.name, &f.ty)),
+            &new_field_assignments,
+            &new_spread,
+        ) {
+            struct_call_ty.make_writable()
+        } else {
+            struct_call_ty
+        };
+
         let final_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
         self.unify(&final_expected, &struct_call_ty, &span);
 
@@ -414,6 +432,46 @@ impl InferCtx<'_> {
             ty: struct_call_ty,
             span,
         }
+    }
+
+    /// Keeps `lint.unnecessary_mut` quiet on values feeding `mut`-declared fields.
+    fn mark_writable_initializer_uses<'f>(
+        &mut self,
+        mut_field_names: impl Iterator<Item = &'f EcoString>,
+        assignments: &[StructFieldAssignment],
+    ) {
+        for name in mut_field_names {
+            if let Some(assignment) = assignments.iter().find(|a| &a.name == name)
+                && let Some(root) =
+                    super::aliasing::place_root_name(assignment.value.unwrap_parens())
+                && let Some(binding_id) = self.scopes.lookup_binding_id(&root)
+            {
+                self.facts.mark_alias_mutated(binding_id);
+            }
+        }
+    }
+
+    fn construction_grants_write<'f>(
+        &self,
+        fields: impl Iterator<Item = (&'f EcoString, &'f Type)>,
+        assignments: &[StructFieldAssignment],
+        spread: &StructSpread,
+    ) -> bool {
+        let missing_grants = match spread {
+            StructSpread::Autofill { .. } => true,
+            StructSpread::From(base) => self.owner_grants_write(&base.get_type()),
+            StructSpread::None => false,
+        };
+        self.components_grant_write(
+            fields.map(|(name, ty)| {
+                let value = assignments
+                    .iter()
+                    .find(|a| &a.name == name)
+                    .map(|a| a.value.as_ref());
+                (ty.clone(), value)
+            }),
+            missing_grants,
+        )
     }
 
     fn infer_struct_call_for_enum_variant(
@@ -434,8 +492,7 @@ impl InferCtx<'_> {
             ty: enum_ty,
         } = target;
         let store = self.store;
-        self.unify(expected_ty, &enum_ty, &span);
-
+        // The expected type unifies after the grant, so a binding captures the promoted form.
         let resolved_enum = enum_ty.resolve_in(&self.env);
         if let Type::Nominal { id, .. } = &resolved_enum {
             let variant_last = unqualified_name(&variant_name);
@@ -488,6 +545,27 @@ impl InferCtx<'_> {
             let enum_id = id.as_str();
             self.register_construction_obligations(enum_id, &enum_ty, span);
         }
+
+        self.mark_writable_initializer_uses(
+            variant_fields
+                .iter()
+                .filter(|f| self.store.demotion_changes(&f.ty))
+                .map(|f| &f.name),
+            &new_field_assignments,
+        );
+
+        // The same construction grant as struct literals.
+        let enum_ty = if self.construction_grants_write(
+            variant_fields.iter().map(|f| (&f.name, &f.ty)),
+            &new_field_assignments,
+            &new_spread,
+        ) {
+            enum_ty.resolve_in(&self.env).make_writable()
+        } else {
+            enum_ty
+        };
+
+        self.unify(expected_ty, &enum_ty, &span);
 
         Expression::StructCall {
             name: variant_name,
@@ -605,7 +683,7 @@ impl InferCtx<'_> {
                 let field_ty = match find_def(self, field) {
                     Some(def_ty) => {
                         matched.insert(field.name.clone());
-                        substitute(def_ty, ctx.map)
+                        substitute(&self.component_expected_type(def_ty, &field.value), ctx.map)
                     }
                     None => {
                         let available: Vec<String> =

@@ -12,7 +12,7 @@ description: |
   }
   
   fn main() {
-    let mut m: Map<string, C> = Map.new()
+    let mut m: mut Map<string, C> = Map.new()
     m["a"] = C { value: 1 }
     let key = make_key()
     let mut entry = m[key]

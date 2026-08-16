@@ -2,10 +2,10 @@
 source: tests/spec/emit/expressions.rs
 description: |
   
-  struct Holder { p: Ref<int> }
-  struct Carrier { h: Ref<Holder>, np: Ref<int> }
+  struct Holder { p: mut Ref<int> }
+  struct Carrier { h: mut Ref<Holder>, np: mut Ref<int> }
   
-  fn retarget(mut c: Carrier) -> int {
+  fn retarget(c: mut Carrier) -> int {
     c.h.p = c.np
     9
   }

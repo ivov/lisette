@@ -242,16 +242,21 @@ fn build_member(outer: &Type, entry: &Entry, candidate: &Candidate) -> ResolvedM
             visibility: *visibility,
         },
         MemberKind::Method(method) => {
-            // Only promoted methods are re-pointed; a depth-0 receiver is already
-            // the outer type, and rewriting it would break generics. A promoted
-            // method stays pointer-only when its receiver is a pointer and no
-            // pointer edge was crossed.
+            let receiver_writable = receiver_type(&method.ty).is_some_and(Type::is_writable);
             let method_ty = if entry.depth == 0 {
                 method.ty.clone()
-            } else if !entry.indirect && method_has_pointer_receiver(&method.ty) {
-                method.ty.with_replaced_first_param(&ref_of(outer))
             } else {
-                method.ty.with_replaced_first_param(outer)
+                let replacement = if !entry.indirect && method_has_pointer_receiver(&method.ty) {
+                    ref_of(outer)
+                } else {
+                    outer.clone()
+                };
+                let replacement = if receiver_writable {
+                    replacement.make_writable()
+                } else {
+                    replacement
+                };
+                method.ty.with_replaced_first_param(&replacement)
             };
             MemberKind::Method(method.with_type(method_ty))
         }
@@ -346,11 +351,18 @@ fn deref_once(ty: &Type) -> (Type, bool) {
 }
 
 fn method_has_pointer_receiver(method_ty: &Type) -> bool {
+    matches!(receiver_type(method_ty), Some(ty) if ty.is_ref())
+}
+
+fn receiver_type(method_ty: &Type) -> Option<&Type> {
     let body = match method_ty {
         Type::Forall { body, .. } => body.as_ref(),
         other => other,
     };
-    matches!(body, Type::Function(f) if f.params.first().is_some_and(|param| param.ty.is_ref()))
+    match body {
+        Type::Function(f) => f.params.first().map(|param| &param.ty),
+        _ => None,
+    }
 }
 
 fn ref_of(ty: &Type) -> Type {
@@ -420,7 +432,7 @@ mod tests {
 
     fn value_method(owner: &str) -> Type {
         Type::function(
-            vec![FunctionParameter::new(nominal(owner), false)],
+            vec![FunctionParameter::new(nominal(owner))],
             vec![],
             Box::new(Type::string()),
         )
@@ -428,7 +440,7 @@ mod tests {
 
     fn pointer_method(owner: &str) -> Type {
         Type::function(
-            vec![FunctionParameter::new(ref_of(&nominal(owner)), false)],
+            vec![FunctionParameter::new(ref_of(&nominal(owner)))],
             vec![],
             Box::new(Type::string()),
         )
@@ -605,10 +617,10 @@ mod tests {
         Type::Forall {
             vars: vec![impl_var.into()],
             body: Box::new(Type::function(
-                vec![FunctionParameter::new(
-                    generic_nominal(owner, vec![param(impl_var)]),
-                    false,
-                )],
+                vec![FunctionParameter::new(generic_nominal(
+                    owner,
+                    vec![param(impl_var)],
+                ))],
                 vec![],
                 Box::new(ret),
             )),
@@ -962,17 +974,14 @@ mod tests {
         let specialized = Type::Forall {
             vars: vec!["V".into()],
             body: Box::new(Type::function(
-                vec![FunctionParameter::new(
-                    generic_nominal(
-                        "Box",
-                        vec![Type::Compound {
-                            kind: CompoundKind::Slice,
-                            args: vec![param("V")],
-                            writable: false,
-                        }],
-                    ),
-                    false,
-                )],
+                vec![FunctionParameter::new(generic_nominal(
+                    "Box",
+                    vec![Type::Compound {
+                        kind: CompoundKind::Slice,
+                        args: vec![param("V")],
+                        writable: false,
+                    }],
+                ))],
                 vec![],
                 Box::new(param("V")),
             )),
@@ -998,10 +1007,10 @@ mod tests {
     /// without a `Forall` because it binds no type variables.
     fn concrete_int_method() -> Type {
         Type::function(
-            vec![FunctionParameter::new(
-                generic_nominal("Box", vec![Type::int()]),
-                false,
-            )],
+            vec![FunctionParameter::new(generic_nominal(
+                "Box",
+                vec![Type::int()],
+            ))],
             vec![],
             Box::new(Type::int()),
         )

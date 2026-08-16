@@ -5,7 +5,6 @@ use syntax::ast::Span;
 use syntax::types::{Bound, CompoundKind, Type, TypeVarId};
 
 use crate::checker::infer::InferCtx;
-use crate::checker::infer::carry_mut::can_carry_mutation_across_fn_boundary;
 use crate::checker::infer::context::{Expectation, ExpectationRole};
 use crate::checker::type_env::VarState;
 use syntax::types::FunctionParameter;
@@ -43,6 +42,8 @@ impl BuiltinBound {
 #[derive(Debug, Clone, PartialEq)]
 pub enum UnifyError {
     TypeMismatch,
+    /// Equal apart from a qualifier difference that would grant permission.
+    QualifierMismatch,
     InfiniteType,
     ArityMismatch,
     #[expect(clippy::box_collection)] // Intentional: shrinks Result<(), UnifyError> on hot path
@@ -170,7 +171,13 @@ impl InferCtx<'_> {
 
             (Type::Var { id: i1, .. }, Type::Var { id: i2, .. }) if i1 == i2 => Ok(()),
 
-            _ if r1_is_unknown && r2_is_unknown => Ok(()),
+            _ if r1_is_unknown && r2_is_unknown => {
+                if r1.is_writable() && !r2.is_writable() {
+                    Err(UnifyError::QualifierMismatch)
+                } else {
+                    Ok(())
+                }
+            }
 
             (Type::Var { id, .. }, _) => self.unify_type_variable(*id, &r2, span, false),
             (_, Type::Var { id, .. }) => self.unify_type_variable(*id, &r1, span, true),
@@ -178,7 +185,16 @@ impl InferCtx<'_> {
             _ if r1_is_unknown && self.is_inside_invariant_position() => {
                 Err(UnifyError::TypeMismatch)
             }
-            _ if r1_is_unknown => Ok(()),
+            _ if r1_is_unknown => {
+                if r1.is_writable()
+                    && !matches!(r2, Type::Never | Type::Error)
+                    && !store.peel_alias(&r2).is_writable()
+                {
+                    Err(UnifyError::QualifierMismatch)
+                } else {
+                    Ok(())
+                }
+            }
             _ if r2_is_unknown => Err(UnifyError::TypeMismatch),
 
             _ if matches!(r2, Type::Never) => Ok(()),
@@ -226,18 +242,27 @@ impl InferCtx<'_> {
 
             (
                 Type::Compound {
-                    kind: k1, args: a1, ..
+                    kind: k1,
+                    args: a1,
+                    writable: w1,
                 },
                 Type::Compound {
-                    kind: k2, args: a2, ..
+                    kind: k2,
+                    args: a2,
+                    writable: w2,
                 },
             ) if k1 == k2 && a1.len() == a2.len() => {
                 // Compound type arguments are invariant (same rule as generic
                 // user types). Track depth so that interface coercion is
                 // rejected inside generic positions.
+                let expected_writable = self.check_qualifier(*w1, *w2)?;
                 let a1 = a1.clone();
                 let a2 = a2.clone();
-                self.in_invariant_position(|this| this.unify_pairs(a1.iter().zip(a2.iter()), span))
+                self.in_invariant_position(|this| {
+                    this.in_qualifier_invariant(expected_writable, |this| {
+                        this.unify_pairs(a1.iter().zip(a2.iter()), span)
+                    })
+                })
             }
 
             (Nominal { .. }, Nominal { .. }) => self.unify_constructors(&r1, &r2, span),
@@ -330,7 +355,15 @@ impl InferCtx<'_> {
 
     fn unify_refs(&mut self, t1: &Type, t2: &Type, span: &Span) -> Result<(), UnifyError> {
         match (t1.is_ref(), t2.is_ref()) {
-            (true, true) => self.try_unify(&t1.strip_refs(), &t2.strip_refs(), span),
+            (true, true) => {
+                let expected_writable = self.check_qualifier(t1.is_writable(), t2.is_writable())?;
+                // One `Ref` layer at a time, so every nested qualifier is compared.
+                let inner1 = t1.inner().unwrap_or(Type::Error);
+                let inner2 = t2.inner().unwrap_or(Type::Error);
+                self.in_qualifier_invariant(expected_writable, |this| {
+                    this.try_unify(&inner1, &inner2, span)
+                })
+            }
             (true, false) | (false, true) => Err(UnifyError::TypeMismatch),
             (false, false) => unreachable!("unify_refs called without refs"),
         }
@@ -401,12 +434,12 @@ impl InferCtx<'_> {
             Nominal {
                 id: symbol1,
                 params: params1,
-                ..
+                writable: w1,
             },
             Nominal {
                 id: symbol2,
                 params: params2,
-                ..
+                writable: w2,
             },
         ) = (t1, t2)
         else {
@@ -435,6 +468,8 @@ impl InferCtx<'_> {
             return Err(UnifyError::TypeMismatch);
         }
 
+        let expected_writable = self.check_qualifier(*w1, *w2)?;
+
         // Generics are invariant: Box<Dog> is not Box<Animal>
         // even if Dog satisfies Animal. Track depth so we reject
         // interface coercion inside generic type params. All generic types
@@ -445,15 +480,35 @@ impl InferCtx<'_> {
         // continuing past a failed pair would bind subsequent type variables
         // and erase their original names from the diagnostic.
         self.in_invariant_position(|this| {
-            let mut result = Ok(());
-            for (p1, p2) in params1.iter().zip(params2) {
-                if let Err(e) = this.try_unify(p1, p2, span) {
-                    result = Err(e);
-                    break;
+            this.in_qualifier_invariant(expected_writable, |this| {
+                let mut result = Ok(());
+                for (p1, p2) in params1.iter().zip(params2) {
+                    if let Err(e) = this.try_unify(p1, p2, span) {
+                        result = Err(e);
+                        break;
+                    }
                 }
-            }
-            result
+                result
+            })
         })
+    }
+
+    fn check_qualifier(&self, w1: bool, w2: bool) -> Result<bool, UnifyError> {
+        let (expected, actual) = if self.is_qualifier_variance_flipped() {
+            (w2, w1)
+        } else {
+            (w1, w2)
+        };
+        let compatible = if self.is_qualifier_invariant() {
+            expected == actual
+        } else {
+            actual || !expected
+        };
+        if compatible {
+            Ok(expected)
+        } else {
+            Err(UnifyError::QualifierMismatch)
+        }
     }
 
     fn try_coerce_or_satisfy_interface(
@@ -559,25 +614,18 @@ impl InferCtx<'_> {
         }
 
         let (params_result, return_type_result) = self.in_invariant_position(|this| {
-            let params_result = this.unify_pairs(
-                f1.params
-                    .iter()
-                    .zip(&f2.params)
-                    .map(|(left, right)| (&left.ty, &right.ty)),
-                span,
-            );
+            let params_result = this.in_flipped_qualifier_variance(|this| {
+                this.unify_pairs(
+                    f1.params
+                        .iter()
+                        .zip(&f2.params)
+                        .map(|(left, right)| (&left.ty, &right.ty)),
+                    span,
+                )
+            });
             let return_type_result = this.try_unify(&f1.return_type, &f2.return_type, span);
             (params_result, return_type_result)
         });
-
-        if params_result.is_ok()
-            && f1.params.iter().zip(&f2.params).any(|(left, right)| {
-                left.mutable != right.mutable
-                    && (self.mut_reaches_caller(&left.ty) || self.mut_reaches_caller(&right.ty))
-            })
-        {
-            return Err(UnifyError::TypeMismatch);
-        }
 
         for bound in &f1.bounds {
             self.check_function_bound(bound, &f1.params, span);
@@ -596,12 +644,6 @@ impl InferCtx<'_> {
             (Ok(()), Err(e2)) => Err(e2),
             (Err(e1), Err(e2)) => Err(UnifyError::Multiple(Box::new(vec![e1, e2]))),
         }
-    }
-
-    fn mut_reaches_caller(&self, ty: &Type) -> bool {
-        let resolved = self.store.peel_alias(&ty.resolve_in(&self.env));
-        can_carry_mutation_across_fn_boundary(&resolved, &self.env, self.store)
-            || self.store.is_interface(&resolved)
     }
 
     fn bounds_equivalent(&self, bounds1: &[Bound], bounds2: &[Bound]) -> bool {
@@ -746,6 +788,39 @@ impl InferCtx<'_> {
                         format!("expected `{}`, found `{}`", expected_name, actual_name),
                     )
                     .with_help("The function types must have the same number of parameters")
+            }
+
+            UnifyError::QualifierMismatch => {
+                let concrete_expected = overlay_qualifiers(expected, actual);
+                let (expected_name, actual_name) = Type::stringify_pair(&concrete_expected, actual);
+                let diagnostic = LisetteDiagnostic::error("Missing write permission")
+                    .with_infer_code("needs_writable")
+                    .with_span_label(
+                        span,
+                        format!("expected `{}`, found `{}`", expected_name, actual_name),
+                    );
+                if matches!(actual.unwrap_forall(), Function(_)) {
+                    diagnostic.with_help(format!(
+                        "A function value may demand less permission than its type \
+                         promises, never more. Match `mut` on each differing parameter, \
+                         or expect `{actual_name}` instead"
+                    ))
+                } else if concrete_expected.is_writable() == actual.is_writable() {
+                    diagnostic.with_help(format!(
+                        "`{expected_name}` and `{actual_name}` differ in a nested `mut`. \
+                         A container is invariant in its element, so the element \
+                         permission must match exactly"
+                    ))
+                } else {
+                    let context = self
+                        .expectation_at(span)
+                        .and_then(|expectation| expectation.value_context.clone());
+                    diagnostic.with_help(diagnostics::infer::needs_writable_help(
+                        &expected_name,
+                        &actual_name,
+                        context,
+                    ))
+                }
             }
 
             UnifyError::TypeMismatch | UnifyError::Multiple(_) => {
@@ -895,12 +970,6 @@ impl InferCtx<'_> {
             && function.return_type.as_ref() == actual
         {
             return "Remove the `()` so that the type matches".to_string();
-        }
-
-        if differs_only_in_param_mutability(expected, actual) {
-            return format!(
-                "`mut` belongs to the function type when the parameter carries mutation back to the caller. Match `mut` on each differing parameter, or expect `{actual_name}` instead"
-            );
         }
 
         match self.closure_adapter(expected, actual) {
@@ -1056,22 +1125,6 @@ fn array_to_slice_help_applies(expected: &Type, actual: &Type) -> bool {
     expected_element == element.as_ref()
 }
 
-/// Whether two function types are the same but for `mut` on one or more parameters.
-fn differs_only_in_param_mutability(expected: &Type, actual: &Type) -> bool {
-    let (Function(expected), Function(actual)) = (expected, actual) else {
-        return false;
-    };
-    if expected.params.len() != actual.params.len()
-        || expected.return_type != actual.return_type
-        || expected.bounds != actual.bounds
-    {
-        return false;
-    }
-    let pairs = || expected.params.iter().zip(&actual.params);
-    pairs().all(|(left, right)| left.ty == right.ty)
-        && pairs().any(|(left, right)| left.mutable != right.mutable)
-}
-
 fn are_go_type_aliases(a: &str, b: &str) -> bool {
     matches!(
         (a, b),
@@ -1080,6 +1133,68 @@ fn are_go_type_aliases(a: &str, b: &str) -> bool {
             | ("prelude.rune", "prelude.int32")
             | ("prelude.int32", "prelude.rune")
     )
+}
+
+/// The actual type's concrete content carrying the expected type's write
+/// qualifiers, so messages show the caller's arguments instead of `K, V`.
+fn overlay_qualifiers(expected: &Type, actual: &Type) -> Type {
+    match (expected, actual) {
+        (Type::Parameter(_), _) => actual.clone(),
+        (
+            Type::Compound {
+                kind: expected_kind,
+                args: expected_args,
+                writable,
+            },
+            Type::Compound {
+                kind: actual_kind,
+                args: actual_args,
+                ..
+            },
+        ) if expected_kind == actual_kind && expected_args.len() == actual_args.len() => {
+            Type::Compound {
+                kind: *expected_kind,
+                args: expected_args
+                    .iter()
+                    .zip(actual_args)
+                    .map(|(e, a)| overlay_qualifiers(e, a))
+                    .collect(),
+                writable: *writable,
+            }
+        }
+        (
+            Nominal {
+                id,
+                params: expected_params,
+                writable,
+            },
+            Nominal {
+                id: actual_id,
+                params: actual_params,
+                ..
+            },
+        ) if id == actual_id && expected_params.len() == actual_params.len() => Nominal {
+            id: id.clone(),
+            params: expected_params
+                .iter()
+                .zip(actual_params)
+                .map(|(e, a)| overlay_qualifiers(e, a))
+                .collect(),
+            writable: *writable,
+        },
+        (Type::Tuple(expected_items), Type::Tuple(actual_items))
+            if expected_items.len() == actual_items.len() =>
+        {
+            Type::Tuple(
+                expected_items
+                    .iter()
+                    .zip(actual_items)
+                    .map(|(e, a)| overlay_qualifiers(e, a))
+                    .collect(),
+            )
+        }
+        _ => expected.clone(),
+    }
 }
 
 /// Go-level aliases between scalar builtins: `byte` is an alias for `uint8`,

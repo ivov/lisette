@@ -6,7 +6,7 @@ description: |
   
   fn main() {
     let mut v = Item { x: 0 }
-    let r = &v
+    let mut r = &v
     r.*.x = 1
     let _ = v.x
   }

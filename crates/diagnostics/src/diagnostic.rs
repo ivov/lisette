@@ -101,6 +101,17 @@ impl From<ParseError> for LisetteDiagnostic {
             diagnostic = diagnostic.with_code(err.code);
         }
 
+        if let Some(fix) = err.fix {
+            let mut edits = fix
+                .edits
+                .into_iter()
+                .map(|(span, content)| crate::Edit::replacement(span, content));
+            if let Some(first) = edits.next() {
+                diagnostic =
+                    diagnostic.with_fix(crate::Fix::multi(fix.message, first, edits.collect()));
+            }
+        }
+
         diagnostic
     }
 }

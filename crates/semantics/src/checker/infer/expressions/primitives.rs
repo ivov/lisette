@@ -16,22 +16,6 @@ use super::calls::phantom_type_params;
 use super::operators::InferredOperand;
 use crate::checker::infer::InferCtx;
 
-/// Checks whether an assignment target expression contains a deref (`.* `)
-/// anywhere in its chain. For example, `p.*.x` is a `DotAccess` wrapping a
-/// `Unary::Deref`, and mutations through a deref don't require the variable
-/// to be declared `mut` since they mutate the pointed-to value.
-pub(crate) fn contains_deref(expression: &Expression) -> bool {
-    match expression {
-        Expression::Unary {
-            operator: UnaryOperator::Deref,
-            ..
-        } => true,
-        Expression::DotAccess { expression, .. } => contains_deref(expression),
-        Expression::IndexedAccess { expression, .. } => contains_deref(expression),
-        _ => false,
-    }
-}
-
 /// Checks whether an expression contains a stored Reference (`&var_name`) to a specific variable.
 /// Used to detect self-referential assignment patterns like `x = Foo { field: &x }`.
 ///
@@ -208,28 +192,51 @@ impl InferCtx<'_> {
                 .add_overused_reference(span, new_expression.get_var_name());
             resolved_inner
         } else {
-            self.type_reference(inner_ty.clone())
+            // The pointer is writable exactly when the place is, and a construction is a fresh cell.
+            let writable = match new_expression.unwrap_parens() {
+                Expression::StructCall { .. } => true,
+                other => self.place_permits_write(other),
+            };
+            Type::qualified_compound(CompoundKind::Ref, vec![inner_ty.clone()], writable)
         };
 
-        self.unify(expected_ty, &ref_ty, &span);
-
+        // Addressability and const diagnostics come before any qualifier mismatch.
+        let mut not_addressable = false;
         if !is_already_ref {
             if let Some(kind) = check_is_non_addressable(&new_expression, &self.env, self.store) {
                 self.sink
                     .push(diagnostics::infer::non_addressable_expression(kind, span));
+                not_addressable = true;
             } else if let Expression::Identifier { resolution, .. } = &new_expression
                 && let Some(qname) = resolution.definition()
                 && self.is_const_name(store, qname)
             {
                 self.sink
                     .push(diagnostics::infer::non_addressable_const(span));
+                not_addressable = true;
             }
 
             if let Some(var_name) = new_expression.get_var_name()
                 && let Some(binding_id) = self.scopes.lookup_binding_id(&var_name)
             {
                 self.facts.mark_alias_mutated(binding_id);
+                if ref_ty.is_writable()
+                    && let Some(collection) = self.loop_element_bindings.get(&binding_id).cloned()
+                    && self.reported_immutable.insert(binding_id)
+                {
+                    self.sink.push(diagnostics::infer::loop_copy_write(
+                        &var_name,
+                        collection.as_deref(),
+                        span,
+                    ));
+                }
             }
+        }
+
+        if not_addressable {
+            self.unify(expected_ty, &Type::Error, &span);
+        } else {
+            self.unify(expected_ty, &ref_ty, &span);
         }
 
         Expression::Reference {
@@ -374,7 +381,7 @@ impl InferCtx<'_> {
         }
     }
 
-    fn enum_of_variant(&self, store: &Store, value: &str) -> Option<EcoString> {
+    pub(super) fn enum_of_variant(&self, store: &Store, value: &str) -> Option<EcoString> {
         let (type_part, variant_name) = value.rsplit_once('.')?;
         let qualified = self.lookup_qualified_name(store, type_part)?;
         store
@@ -411,6 +418,32 @@ impl InferCtx<'_> {
                 .push(diagnostics::infer::non_addressable_assignment(kind, span));
         }
 
+        if compound_operator.is_some()
+            && let Some(var_name) = new_target.get_var_name()
+            && !self.scopes.lookup_mutable(&var_name)
+            && self.imports.namespace(&var_name).is_none()
+        {
+            let peeled = store.peel_alias(&target_ty.resolve_in(&self.env));
+            if peeled.is_ref() && peeled.is_writable() {
+                self.report_disallowed_mutation(store, &var_name, span, false, None);
+                if let Some(binding_id) = self.scopes.lookup_binding_id(&var_name) {
+                    self.facts.mark_used(binding_id);
+                }
+                let inner = peeled
+                    .inner()
+                    .map(|ty| ty.resolve_in(&self.env))
+                    .unwrap_or_else(|| self.new_type_var());
+                let new_value =
+                    self.with_value_context(|state| state.infer_expression(*value, &inner));
+                return Expression::Assignment {
+                    target: new_target.into(),
+                    value: new_value.into(),
+                    compound_operator,
+                    span,
+                };
+            }
+        }
+
         let (new_value, value_ty) =
             self.infer_assignment_value(&new_target, &target_ty, value, compound_operator, span);
 
@@ -430,40 +463,76 @@ impl InferCtx<'_> {
                 }
             }
 
-            let is_mutable = self.scopes.lookup_mutable(&var_name);
-
-            let is_deref = contains_deref(&new_target);
-
-            // Mutation through a Ref<T> binding doesn't require mut: the pointer
-            // isn't being reassigned, the pointee is being mutated through it.
-            let binding_is_ref = self
-                .scopes
-                .lookup_value(&var_name)
-                .map(|t| t.resolve_in(&self.env).is_ref())
-                .unwrap_or(false);
-
-            let can_mutate = is_mutable || is_deref || binding_is_ref;
-
-            if !can_mutate && self.imports.namespace(&var_name).is_none() {
-                self.report_disallowed_mutation(store, &var_name, span);
-            }
-
             // Check for self-referential assignment: x = Expr { field: &x }
             // This creates a circular reference in Go and is not allowed.
             if contains_stored_reference_to(&new_value, &var_name) {
                 self.sink
                     .push(diagnostics::infer::self_reference_in_assignment(span));
             }
+        }
 
-            let value_expr = new_value.unwrap_parens();
-            let value_place = super::aliasing::clone_call_receiver(value_expr)
-                .map(|receiver| receiver.unwrap_parens())
-                .unwrap_or(value_expr);
-            let self_sourced =
-                super::aliasing::place_root_name(value_place).is_some_and(|root| root == var_name);
-            if compound_operator.is_none() && is_simple_target && is_mutable && !self_sourced {
-                self.check_mut_reassignment_alias(&var_name, &new_value);
+        // A write through a reference needs it writable, a direct write a mutable binding.
+        match self.classify_write_target(&new_target) {
+            super::permission::WriteTarget::Through { governing } => {
+                if !governing.is_writable() {
+                    let root = super::aliasing::place_root_name(new_target.unwrap_parens());
+                    let root_binding = root
+                        .as_ref()
+                        .and_then(|root| self.scopes.lookup_binding_id(root));
+                    let receiver_needs_mut = root.as_deref() == Some("self")
+                        && !self
+                            .lookup_type(store, "self")
+                            .map(|ty| store.peel_alias(&ty.resolve_in(&self.env)))
+                            .is_some_and(|ty| ty.is_ref() && ty.is_writable());
+                    if receiver_needs_mut {
+                        self.report_disallowed_mutation(store, "self", span, false, None);
+                    } else if root_binding
+                        .is_some_and(|id| self.demoted_writable_lets.contains(&id))
+                    {
+                        self.report_disallowed_mutation(
+                            store,
+                            &root.expect("rooted"),
+                            span,
+                            false,
+                            None,
+                        );
+                    } else if let Some(id) =
+                        root_binding.filter(|id| self.demoted_writable_loops.contains(id))
+                    {
+                        if self.reported_immutable.insert(id) {
+                            self.sink.push(diagnostics::infer::loop_binding_read_only(
+                                &root.expect("rooted"),
+                                span,
+                            ));
+                        }
+                    } else if self.report_read_only_write(&new_target) {
+                        let context = self.write_context(&new_target);
+                        self.sink.push(diagnostics::infer::write_through_read_only(
+                            &super::aliasing::render_place(&new_target),
+                            &self.write_hop_place(&new_target),
+                            &governing.to_string(),
+                            span,
+                            context,
+                        ));
+                    }
+                }
             }
+            super::permission::WriteTarget::Binding { name } => {
+                if !self.scopes.lookup_mutable(&name) && self.imports.namespace(&name).is_none() {
+                    let rhs_is_ref = store.peel_alias(&value_ty.resolve_in(&self.env)).is_ref();
+                    self.report_disallowed_mutation(store, &name, span, rhs_is_ref, None);
+                } else if let Some(id) = self.scopes.lookup_binding_id(&name)
+                    && let Some(collection) = self.loop_element_bindings.get(&id).cloned()
+                    && self.reported_immutable.insert(id)
+                {
+                    self.sink.push(diagnostics::infer::loop_copy_write(
+                        &name,
+                        collection.as_deref(),
+                        span,
+                    ));
+                }
+            }
+            super::permission::WriteTarget::Other => {}
         }
 
         // Only unify if the RHS type is still a variable (not yet resolved).
@@ -512,11 +581,29 @@ impl InferCtx<'_> {
         }
     }
 
-    fn report_disallowed_mutation(&mut self, store: &Store, var_name: &str, span: Span) {
+    pub(super) fn report_disallowed_mutation(
+        &mut self,
+        store: &Store,
+        var_name: &str,
+        span: Span,
+        rhs_is_ref: bool,
+        writing_callee: Option<&str>,
+    ) {
+        use diagnostics::infer::MutationHint;
         let binding_id = self.scopes.lookup_binding_id(var_name);
         if let Some(id) = binding_id
             && !self.reported_immutable.insert(id)
         {
+            return;
+        }
+        if let Some(id) = binding_id
+            && let Some(collection) = self.loop_element_bindings.get(&id).cloned()
+        {
+            self.sink.push(diagnostics::infer::immutable_loop_binding(
+                var_name,
+                collection.as_deref(),
+                span,
+            ));
             return;
         }
         let self_type_name = if var_name == "self" {
@@ -529,14 +616,25 @@ impl InferCtx<'_> {
             .and_then(|id| self.facts.bindings.get(&id))
             .map(|b| b.kind);
         let is_const = self.is_const_var(store, var_name);
+        let pointer_type = (!rhs_is_ref && var_name != "self" && !is_const)
+            .then(|| self.lookup_type(store, var_name))
+            .flatten()
+            .map(|ty| store.peel_alias(&ty.resolve_in(&self.env)))
+            .filter(|ty| ty.is_ref() && ty.is_writable())
+            .map(|ty| ty.to_string());
         let mut diagnostic = diagnostics::infer::disallowed_mutation(
             var_name,
             span,
             self_type_name.as_deref(),
             binding_kind,
             is_const,
+            pointer_type
+                .as_deref()
+                .map(MutationHint::Pointer)
+                .or(writing_callee.map(MutationHint::WritingCallee)),
         );
         if !is_const
+            && pointer_type.is_none()
             && let Some(id) = binding_id
             && self.plain_lets.contains(&id)
             && let Some(declaration) = self.facts.bindings.get(&id).map(|b| b.span)

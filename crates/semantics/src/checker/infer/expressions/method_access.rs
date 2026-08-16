@@ -6,7 +6,6 @@ use syntax::program::{Definition, DefinitionBody, DotAccessResolution, ReceiverC
 use syntax::types::{Symbol, Type, unqualified_name};
 
 use super::super::addressability::check_is_non_addressable;
-use super::primitives::contains_deref;
 use crate::checker::infer::InferCtx;
 use crate::checker::promotion::{self, Resolution};
 
@@ -328,6 +327,15 @@ impl InferCtx<'_> {
 
         let mut coercion = None;
 
+        if self.store.parameter_grants_write(&receiver_ty) {
+            self.mark_place_root_mutated(receiver_expression);
+            if self.is_callee_context()
+                && let Some(place) = super::aliasing::place_key(receiver_expression.unwrap_parens())
+            {
+                self.stash_writable_receiver(place);
+            }
+        }
+
         match (receiver_is_ref, actual_is_ref) {
             (true, false) => {
                 // Method expects Ref<T>, have T → auto-address
@@ -344,7 +352,9 @@ impl InferCtx<'_> {
                         ));
                 } else {
                     coercion = Some(ReceiverCoercion::AutoAddress);
-                    self.check_auto_address_mutation(receiver_expression, method_name, span);
+                    if receiver_ty.is_writable() {
+                        self.check_auto_address_mutation(receiver_expression, method_name, span);
+                    }
                 }
                 // Unify inner types: T with T (from Ref<T>)
                 if let Some(inner) = receiver_ty.inner() {
@@ -391,36 +401,10 @@ impl InferCtx<'_> {
         if let Some(binding_id) = self.scopes.lookup_binding_id(&var_name) {
             self.facts.mark_alias_mutated(binding_id);
         }
-        let is_deref = contains_deref(receiver_expression);
-        let binding_is_ref = self
-            .scopes
-            .lookup_value(&var_name)
-            .map(|t| t.resolve_in(&self.env).is_ref())
-            .unwrap_or(false);
-        if !is_deref
-            && !binding_is_ref
-            && !self.scopes.lookup_mutable(&var_name)
+        if !self.place_permits_write(receiver_expression)
             && self.imports.namespace(&var_name).is_none()
         {
-            let self_type_name = if var_name == "self" {
-                self.lookup_type(store, "self")
-                    .and_then(|t| t.get_name().map(str::to_owned))
-            } else {
-                None
-            };
-            let binding_kind = self
-                .scopes
-                .lookup_binding_id(&var_name)
-                .and_then(|id| self.facts.bindings.get(&id))
-                .map(|b| b.kind);
-            let is_const = self.is_const_var(store, &var_name);
-            self.sink.push(diagnostics::infer::disallowed_mutation(
-                &var_name,
-                *span,
-                self_type_name.as_deref(),
-                binding_kind,
-                is_const,
-            ));
+            self.report_disallowed_mutation(store, &var_name, *span, false, None);
         }
     }
 

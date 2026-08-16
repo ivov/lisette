@@ -4,7 +4,7 @@ description: |
   
   const BASE = 10
   
-  fn eff(x: Ref<int>) -> int {
+  fn eff(x: mut Ref<int>) -> int {
     x.* = 1
     2
   }

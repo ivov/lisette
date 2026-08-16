@@ -187,7 +187,7 @@ fn pointer_receiver_struct_literal() {
 
 #[test]
 fn pointer_receiver_constructor() {
-  let buf = bytes.NewBufferString("hello")
+  let mut buf = bytes.NewBufferString("hello")
   let result = match buf.ReadString(111) {
     Partial.Ok(s) => if s == "hello" { 100 } else { 0 },
     Partial.Both(s, _) => if s == "hello" { 100 } else { 0 },

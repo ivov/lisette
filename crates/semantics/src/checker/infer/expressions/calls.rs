@@ -44,6 +44,7 @@ struct CallSignature {
 struct VariadicParameter {
     parameter: FunctionParameter,
     first_index: usize,
+    writable: bool,
 }
 
 enum DeferredCallCheckTarget {
@@ -147,6 +148,8 @@ impl InferCtx<'_> {
             state.infer_expression(*expression, &callee_ty)
         });
 
+        let writable_receiver = self.take_writable_receiver();
+
         let forall_ty = self.resolve_callee_forall_type(&callee_expression, &type_args);
         let (callee_ty, type_arguments) =
             self.instantiate_callee_type(&forall_ty, &type_args, &callee_expression, &span);
@@ -204,11 +207,19 @@ impl InferCtx<'_> {
             let mut adjusted = parameters.clone();
             adjusted[idx] = adjusted[idx].with_type(self.new_type_var());
             self.infer_call_arguments(args, &adjusted, variadic_start, &callee_expression)
+        } else if call_kind == CallKind::TupleStructConstructor {
+            let adjusted = self.tuple_struct_expected_parameters(&parameters, &args);
+            self.infer_call_arguments(args, &adjusted, variadic_start, &callee_expression)
         } else {
             self.infer_call_arguments(args, &parameters, variadic_start, &callee_expression)
         };
         self.check_call_arity(&parameters, &new_args, &callee_expression, &span);
-        self.check_mut_param_arguments(&new_args, &parameters, &callee_expression);
+        self.check_aliased_writable_arguments(
+            &new_args,
+            &parameters,
+            variadic.as_ref().map(|variadic| &variadic.parameter),
+            writable_receiver,
+        );
 
         self.check_range_to_for_variadic(
             &new_args,
@@ -235,6 +246,22 @@ impl InferCtx<'_> {
                 span,
             )
         });
+
+        let return_ty = if call_kind == CallKind::TupleStructConstructor {
+            if self.tuple_struct_construction_grants_write(&parameters, &new_args) {
+                return_ty.resolve_in(&self.env).make_writable()
+            } else {
+                return_ty
+            }
+        } else if self.constructor_call_grants_write(&callee_expression, &parameters) {
+            return_ty.resolve_in(&self.env).make_writable()
+        } else if let Some(promoted) =
+            self.native_clone_promotion(call_kind, &callee_expression, &new_args)
+        {
+            promoted
+        } else {
+            return_ty
+        };
 
         let resolved_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
         let expected_is_map = matches!(
@@ -323,6 +350,7 @@ impl InferCtx<'_> {
         };
 
         if call_kind == CallKind::AssertType {
+            self.check_assert_type_permission(&return_ty, span);
             self.check_redundant_assert_type(&return_ty, &new_args, span);
         }
 
@@ -350,6 +378,84 @@ impl InferCtx<'_> {
             span,
             call_kind,
         }
+    }
+
+    fn constructor_call_grants_write(
+        &self,
+        callee: &Expression,
+        parameters: &[FunctionParameter],
+    ) -> bool {
+        let is_constructor = callee
+            .get_var_name()
+            .is_some_and(|name| self.enum_of_variant(self.store, &name).is_some());
+        is_constructor
+            && parameters
+                .iter()
+                .any(|param| self.store.demotion_changes(&param.ty.resolve_in(&self.env)))
+    }
+
+    fn tuple_struct_expected_parameters(
+        &mut self,
+        parameters: &[FunctionParameter],
+        args: &[Expression],
+    ) -> Vec<FunctionParameter> {
+        parameters
+            .iter()
+            .enumerate()
+            .map(|(i, param)| match args.get(i) {
+                Some(arg) => {
+                    let declared = param.ty.resolve_in(&self.env);
+                    param.with_type(self.component_expected_type(&declared, arg))
+                }
+                None => param.clone(),
+            })
+            .collect()
+    }
+
+    fn tuple_struct_construction_grants_write(
+        &self,
+        parameters: &[FunctionParameter],
+        args: &[Expression],
+    ) -> bool {
+        self.components_grant_write(
+            parameters
+                .iter()
+                .enumerate()
+                .map(|(i, param)| (param.ty.resolve_in(&self.env), args.get(i))),
+            false,
+        )
+    }
+
+    fn native_clone_promotion(
+        &self,
+        call_kind: CallKind,
+        callee: &Expression,
+        args: &[Expression],
+    ) -> Option<Type> {
+        let container = |kind: NativeTypeKind| {
+            matches!(
+                kind,
+                NativeTypeKind::Slice | NativeTypeKind::Map | NativeTypeKind::EnumeratedSlice
+            )
+        };
+        let receiver = match (call_kind, callee.unwrap_parens()) {
+            (
+                CallKind::NativeMethod(kind),
+                Expression::DotAccess {
+                    expression, member, ..
+                },
+            ) if member == "clone" && container(kind) => expression.as_ref(),
+            (CallKind::NativeMethodIdentifier(kind), Expression::Identifier { value, .. })
+                if value.ends_with(".clone") && container(kind) =>
+            {
+                args.first()?
+            }
+            _ => return None,
+        };
+        let receiver_ty = self
+            .store
+            .peel_alias(&receiver.get_type().resolve_in(&self.env));
+        Some(receiver_ty.writable_clone_result())
     }
 
     /// Error-recovery rebuild for `Map.make`/`Channel.make`, which have no constructor.
@@ -383,23 +489,44 @@ impl InferCtx<'_> {
         &mut self,
         spread_expr: Box<Expression>,
         variadic: Option<&VariadicParameter>,
-        callee_expression: &Expression,
+        _callee_expression: &Expression,
         callee_is_unresolved: bool,
         span: Span,
     ) -> Expression {
         match variadic {
             Some(variadic) => {
-                let expected = if variadic.parameter.ty.is_unknown() {
-                    let var = self.new_type_var();
-                    self.type_slice(var)
+                let element = if variadic.parameter.ty.is_unknown() {
+                    self.new_type_var()
                 } else {
-                    self.type_slice(variadic.parameter.ty.clone())
+                    variadic.parameter.ty.clone()
                 };
+                let expected =
+                    Type::qualified_compound(CompoundKind::Slice, vec![element], variadic.writable);
                 let inferred =
                     self.with_value_context(|s| s.infer_expression(*spread_expr, &expected));
-                if variadic.parameter.mutable {
-                    let callee_label = callee_label(callee_expression);
-                    self.check_arg_against_mut_param(&inferred, &expected, &callee_label);
+                if variadic.writable {
+                    self.mark_place_root_mutated(&inferred);
+                }
+                let param_ty = variadic.parameter.ty.resolve_in(&self.env);
+                if !variadic.writable && param_ty.is_writable() {
+                    let actual = self
+                        .store
+                        .peel_alias(&inferred.get_type().resolve_in(&self.env));
+                    let element_writable = actual
+                        .get_type_params()
+                        .and_then(|params| params.first().cloned())
+                        .is_some_and(|element| {
+                            self.store
+                                .peel_alias(&element.resolve_in(&self.env))
+                                .is_writable()
+                        });
+                    if !element_writable && !actual.is_error() {
+                        self.sink.push(diagnostics::infer::spread_needs_writable(
+                            &param_ty.to_string(),
+                            &actual.to_string(),
+                            inferred.get_span(),
+                        ));
+                    }
                 }
                 inferred
             }
@@ -761,6 +888,7 @@ impl InferCtx<'_> {
                     let parameter = params
                         .pop()
                         .expect("variadic function has a trailing parameter");
+                    let writable = parameter.ty.resolve_in(&self.env).is_writable();
                     let first_index = params.len();
                     while params.len() < arg_count {
                         params.push(parameter.with_type(variadic_ty.clone()));
@@ -768,19 +896,20 @@ impl InferCtx<'_> {
                     VariadicParameter {
                         parameter: parameter.with_type(variadic_ty),
                         first_index,
+                        writable,
                     }
                 });
                 (params, variadic, return_type)
             }
             None if callee_ty.is_variable() => {
                 let parameters = (0..arg_count)
-                    .map(|_| FunctionParameter::new(self.new_type_var(), false))
+                    .map(|_| FunctionParameter::new(self.new_type_var()))
                     .collect();
                 (parameters, None, self.new_type_var())
             }
             None if callee_ty.resolve_in(&self.env).is_error() => {
                 let parameters = (0..arg_count)
-                    .map(|_| FunctionParameter::new(Type::Error, false))
+                    .map(|_| FunctionParameter::new(Type::Error))
                     .collect();
                 (parameters, None, Type::Error)
             }
@@ -809,7 +938,7 @@ impl InferCtx<'_> {
                     callee_expression.get_span(),
                 ));
                 let parameters = (0..arg_count)
-                    .map(|_| FunctionParameter::new(Type::Error, false))
+                    .map(|_| FunctionParameter::new(Type::Error))
                     .collect();
                 (parameters, None, Type::Error)
             }
@@ -956,6 +1085,25 @@ impl InferCtx<'_> {
                 if variadic_start.is_some_and(|start| i >= start) {
                     return self.with_value_context(|s| s.infer_expression(arg, &expected_ty));
                 }
+                let resolved_expected = expected_ty.resolve_in(&self.env);
+                if resolved_expected.is_writable()
+                    && let Some(name) = arg.get_var_name()
+                    && self
+                        .scopes
+                        .lookup_binding_id(&name)
+                        .is_some_and(|id| self.demoted_writable_lets.contains(&id))
+                {
+                    let store = self.store;
+                    self.report_disallowed_mutation(
+                        store,
+                        &name,
+                        arg.get_span(),
+                        false,
+                        Some(&callee),
+                    );
+                    let demoted_expected = self.store.demoted(&resolved_expected);
+                    return self.with_value_context(|s| s.infer_expression(arg, &demoted_expected));
+                }
                 let expectation = Expectation {
                     role: ExpectationRole::CallArgument {
                         callee_label: callee.clone(),
@@ -964,12 +1112,37 @@ impl InferCtx<'_> {
                     },
                     span: arg.get_span(),
                     expected_ty: expected_ty.clone(),
+                    value_context: resolved_expected
+                        .is_writable()
+                        .then(|| self.value_context(&arg))
+                        .flatten(),
                 };
                 self.with_expectation(expectation, |s| {
                     s.with_value_context(|s| s.infer_expression(arg, &expected_ty))
                 })
             })
             .collect()
+    }
+
+    fn check_assert_type_permission(&mut self, return_ty: &Type, span: Span) {
+        let resolved_return = return_ty.resolve_in(&self.env);
+        let Some(asserted_ty) = resolved_return.inner() else {
+            return;
+        };
+        let asserted_ty = asserted_ty.resolve_in(&self.env);
+        if self.store.contains_write_permission(&asserted_ty) {
+            self.sink
+                .push(diagnostics::infer::assert_type_grants_permission(
+                    &asserted_ty.to_string(),
+                    span,
+                ));
+        } else if asserted_ty.contains_type_parameter() {
+            self.sink
+                .push(diagnostics::infer::assert_type_needs_concrete(
+                    &asserted_ty.to_string(),
+                    span,
+                ));
+        }
     }
 
     fn check_redundant_assert_type(&mut self, return_ty: &Type, args: &[Expression], span: Span) {

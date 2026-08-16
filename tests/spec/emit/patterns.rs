@@ -1706,7 +1706,8 @@ fn test(a: int, b: int) -> int {
 #[test]
 fn tuple_subject_with_a_guard_keeps_its_tuple() {
     let input = r#"
-fn bump(mut n: int) -> bool {
+fn bump(n: int) -> bool {
+  let mut n = n
   n = n + 1
   true
 }

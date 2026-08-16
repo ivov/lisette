@@ -8,7 +8,7 @@ description: |
   import "go:os"
   
   fn main() {
-    let reader = bufio.NewReader(os.Stdin)
+    let mut reader = bufio.NewReader(os.Stdin)
     while true {
       let r = match reader.ReadRune() {
         Ok((r, _)) => r,

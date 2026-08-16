@@ -2739,10 +2739,10 @@ fn match_value_arms_widen_to_interface_via_use_site_ok() {
     struct R2 {}
 
     impl R1 {
-      fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(0) }
+      fn Read(self, _p: mut Slice<uint8>) -> Partial<int, error> { Partial.Ok(0) }
     }
     impl R2 {
-      fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(1) }
+      fn Read(self, _p: mut Slice<uint8>) -> Partial<int, error> { Partial.Ok(1) }
     }
 
     fn pick(flag: bool) -> io.Reader {
@@ -2895,10 +2895,10 @@ fn match_value_arms_widen_with_diverging_arm_ok() {
     struct R2 {}
 
     impl R1 {
-      fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(0) }
+      fn Read(self, _p: mut Slice<uint8>) -> Partial<int, error> { Partial.Ok(0) }
     }
     impl R2 {
-      fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(1) }
+      fn Read(self, _p: mut Slice<uint8>) -> Partial<int, error> { Partial.Ok(1) }
     }
 
     fn pick(n: int) -> io.Reader {
@@ -2938,9 +2938,9 @@ import "go:io"
 struct R1 {}
 struct R2 {}
 struct R3 {}
-impl R1 { fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(0) } }
-impl R2 { fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(1) } }
-impl R3 { fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(2) } }
+impl R1 { fn Read(self, _p: mut Slice<uint8>) -> Partial<int, error> { Partial.Ok(0) } }
+impl R2 { fn Read(self, _p: mut Slice<uint8>) -> Partial<int, error> { Partial.Ok(1) } }
+impl R3 { fn Read(self, _p: mut Slice<uint8>) -> Partial<int, error> { Partial.Ok(2) } }
 "#;
     infer(&format!(
         "{prelude}\nfn pick(n: int, m: int) -> io.Reader {{\n  let r = match n {{ 1 => match m {{ 1 => R1 {{}}, _ => R2 {{}} }}, _ => R3 {{}} }}\n  r\n}}"
@@ -2959,8 +2959,8 @@ fn deferred_select_widening_arms_still_non_exhaustive() {
 import "go:io"
 struct R1 {}
 struct R2 {}
-impl R1 { fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(0) } }
-impl R2 { fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(1) } }
+impl R1 { fn Read(self, _p: mut Slice<uint8>) -> Partial<int, error> { Partial.Ok(0) } }
+impl R2 { fn Read(self, _p: mut Slice<uint8>) -> Partial<int, error> { Partial.Ok(1) } }
 fn pick() -> io.Reader {
   let ch = Channel.new<int>()
   let r = select {
@@ -2982,9 +2982,9 @@ import "go:io"
 struct R1 {}
 struct R2 {}
 struct R3 {}
-impl R1 { fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(0) } }
-impl R2 { fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(1) } }
-impl R3 { fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(2) } }
+impl R1 { fn Read(self, _p: mut Slice<uint8>) -> Partial<int, error> { Partial.Ok(0) } }
+impl R2 { fn Read(self, _p: mut Slice<uint8>) -> Partial<int, error> { Partial.Ok(1) } }
+impl R3 { fn Read(self, _p: mut Slice<uint8>) -> Partial<int, error> { Partial.Ok(2) } }
 fn pick(n: int, m: int) -> (io.Reader, int) {
   let r = match n {
     1 => (match m { 1 => R1 {}, _ => R2 {} }, 0),
@@ -3004,8 +3004,8 @@ fn if_branches_widen_to_interface_via_use_site_ok() {
 import "go:io"
 struct R1 {}
 struct R2 {}
-impl R1 { fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(0) } }
-impl R2 { fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> { Partial.Ok(1) } }
+impl R1 { fn Read(self, _p: mut Slice<uint8>) -> Partial<int, error> { Partial.Ok(0) } }
+impl R2 { fn Read(self, _p: mut Slice<uint8>) -> Partial<int, error> { Partial.Ok(1) } }
 fn pick(flag: bool) -> io.Reader {
   let r = if flag { R1 {} } else { R2 {} }
   r

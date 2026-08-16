@@ -5,7 +5,7 @@ description: |
   struct Base { pub id: int }
   
   impl Base {
-    pub fn bump(self: Ref<Base>) { self.id += 1 }
+    pub fn bump(self: mut Ref<Base>) { self.id += 1 }
   }
   
   struct Outer { embed Base }

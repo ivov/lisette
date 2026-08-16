@@ -6,7 +6,7 @@ description: |
   
   struct S { x: int }
   
-  fn get() -> Ref<S> {
+  fn get() -> mut Ref<S> {
     let _ = fmt.Println("get")
     let mut s = S { x: 1 }
     &s

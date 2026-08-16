@@ -6,7 +6,7 @@ description: |
   
   fn main() {
     let mut id = UserId(1)
-    let r = &id
+    let mut r = &id
     r.* = UserId(2)
   }
 ---

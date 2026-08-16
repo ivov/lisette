@@ -113,14 +113,28 @@ impl TaskState {
             };
             let is_prelude = self.cursor.package_id() == "prelude";
 
+            let enum_grants_write = variants.iter().any(|variant| match &variant.fields {
+                VariantFields::Unit => false,
+                VariantFields::Tuple(fields) | VariantFields::Struct(fields) => {
+                    fields.iter().any(|field| store.demotion_changes(&field.ty))
+                }
+            });
+
             for variant in &variants {
-                self.add_enum_variant_to_scope(variant, name, &enum_ty, &generics);
+                self.add_enum_variant_to_scope(
+                    variant,
+                    name,
+                    &enum_ty,
+                    &generics,
+                    enum_grants_write,
+                );
             }
 
             let variant_definitions: Vec<_> = variants
                 .iter()
                 .map(|v| {
-                    let variant_ty = enum_variant_constructor_type(v, &enum_ty, &generics);
+                    let variant_ty =
+                        enum_variant_constructor_type(v, &enum_ty, &generics, enum_grants_write);
                     let qualified_variant_name = qualified_name.with_segment(&v.name);
                     let simple_qualified_name = if is_prelude {
                         Some(self.qualify_name(&v.name))
@@ -287,8 +301,10 @@ impl TaskState {
         enum_name: &str,
         enum_ty: &Type,
         generics: &[Generic],
+        enum_grants_write: bool,
     ) {
-        let enum_variant_constructor_ty = enum_variant_constructor_type(variant, enum_ty, generics);
+        let enum_variant_constructor_ty =
+            enum_variant_constructor_type(variant, enum_ty, generics, enum_grants_write);
         let qualified_name = format!("{}.{}", enum_name, variant.name);
 
         let scope = self.scopes.current_mut();

@@ -61,8 +61,18 @@ pub(super) fn enum_variant_constructor_type(
     enum_variant: &EnumVariant,
     enum_ty: &Type,
     generics: &[Generic],
+    enum_grants_write: bool,
 ) -> Type {
     if enum_variant.fields.is_empty() {
+        if enum_grants_write {
+            return match enum_ty {
+                Type::Forall { vars, body } => Type::Forall {
+                    vars: vars.clone(),
+                    body: Box::new(body.as_ref().clone().make_writable()),
+                },
+                other => other.clone().make_writable(),
+            };
+        }
         return enum_ty.clone();
     }
 
@@ -75,7 +85,7 @@ pub(super) fn enum_variant_constructor_type(
         enum_variant
             .fields
             .iter()
-            .map(|field| FunctionParameter::new(field.ty.clone(), false))
+            .map(|field| FunctionParameter::new(field.ty.clone()))
             .collect(),
         Default::default(),
         return_type.into(),

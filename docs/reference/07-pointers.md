@@ -54,10 +54,10 @@ let value = r.*     // 42
 
 ## Mutation
 
-To mutate a referenced value, assign to its dereference:
+Writing through a pointer requires the writable pointer type `mut Ref<T>`. To mutate a referenced value, assign to its dereference:
 
 ```rust
-fn increment(r: Ref<int>) {
+fn increment(r: mut Ref<int>) {
   r.* = r.* + 1
 }
 
@@ -66,7 +66,7 @@ increment(&x)
 // x is now 2
 ```
 
-Mutation through a `Ref<T>` does not require `mut` on either the reference binding or the original binding. `Ref<T>` is a Go pointer, so it can always write to its target. This escape hatch does not apply to `const` bindings, since `&CONST` is rejected at compile time.
+`&x` yields what `x` allows: here a `mut Ref<int>`, because `x` is a `let mut` binding, and a read-only `Ref<int>` from a plain `let`. A pointer never grants more permission than the place it was taken from.
 
 ## Nil safety
 

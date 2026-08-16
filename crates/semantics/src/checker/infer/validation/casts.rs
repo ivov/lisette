@@ -31,8 +31,18 @@ impl InferCtx<'_> {
         span: Span,
     ) {
         let store = self.store;
-        let source_ty = raw_source_ty.resolve_in(&self.env);
-        let target_ty = raw_target_ty.resolve_in(&self.env);
+        let raw_source_resolved = raw_source_ty.resolve_in(&self.env);
+        let raw_target_resolved = raw_target_ty.resolve_in(&self.env);
+        if !self.cast_keeps_permission(&raw_source_resolved, &raw_target_resolved) {
+            self.sink.push(diagnostics::infer::cast_grants_permission(
+                &raw_source_resolved.to_string(),
+                &raw_target_resolved.to_string(),
+                span,
+            ));
+            return;
+        }
+        let source_ty = raw_source_resolved.demoted();
+        let target_ty = raw_target_resolved.demoted();
 
         if source_ty.contains_error() || target_ty.contains_error() {
             return;
@@ -194,5 +204,67 @@ fn unwrap_parens_and_negation(expression: &Expression) -> &Expression {
             ..
         } => unwrap_parens_and_negation(expression),
         _ => expression,
+    }
+}
+
+impl InferCtx<'_> {
+    /// Whether the target's write permission is within the source's, with
+    /// newtypes normalized so both sides compare at the same layer.
+    fn cast_keeps_permission(&self, source: &Type, target: &Type) -> bool {
+        let source = self.store.peel_underlying(&source.resolve_in(&self.env));
+        let target = self.store.peel_underlying(&target.resolve_in(&self.env));
+        match (&source, &target) {
+            (
+                Type::Compound {
+                    writable: source_writable,
+                    args: source_args,
+                    ..
+                },
+                Type::Compound {
+                    writable: target_writable,
+                    args: target_args,
+                    ..
+                },
+            ) => {
+                (*source_writable || !*target_writable)
+                    && source_args
+                        .iter()
+                        .zip(target_args)
+                        .all(|(s, t)| self.cast_keeps_permission(s, t))
+            }
+            (
+                Type::Nominal {
+                    writable: source_writable,
+                    params: source_params,
+                    ..
+                },
+                Type::Nominal {
+                    writable: target_writable,
+                    params: target_params,
+                    ..
+                },
+            ) => {
+                (*source_writable || !*target_writable)
+                    && source_params
+                        .iter()
+                        .zip(target_params)
+                        .all(|(s, t)| self.cast_keeps_permission(s, t))
+            }
+            (Type::Tuple(source_elements), Type::Tuple(target_elements)) => source_elements
+                .iter()
+                .zip(target_elements)
+                .all(|(s, t)| self.cast_keeps_permission(s, t)),
+            (
+                Type::Array {
+                    element: source_element,
+                    ..
+                },
+                Type::Array {
+                    element: target_element,
+                    ..
+                },
+            ) => self.cast_keeps_permission(source_element, target_element),
+            _ => true,
+        }
     }
 }

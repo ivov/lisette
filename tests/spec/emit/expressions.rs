@@ -144,7 +144,7 @@ fn test() -> bool {
 #[test]
 fn binary_logical_and_short_circuits_rhs_with_setup() {
     let input = r#"
-fn track(flag: Ref<bool>) -> Result<int, error> {
+fn track(flag: mut Ref<bool>) -> Result<int, error> {
   flag.* = true
   Ok(1)
 }
@@ -165,7 +165,7 @@ fn test() {
 #[test]
 fn binary_logical_or_short_circuits_rhs_with_setup() {
     let input = r#"
-fn track(flag: Ref<bool>) -> Result<int, error> {
+fn track(flag: mut Ref<bool>) -> Result<int, error> {
   flag.* = true
   Ok(1)
 }
@@ -380,7 +380,7 @@ fn deref_field_access() {
 struct Counter { value: int }
 
 impl Counter {
-  fn increment(self: Ref<Counter>) {
+  fn increment(self: mut Ref<Counter>) {
     self.*.value = self.*.value + 1
   }
 
@@ -929,7 +929,7 @@ fn test() -> int {
 #[test]
 fn deref_assignment() {
     let input = r#"
-fn mutate(r: Ref<int>) {
+fn mutate(r: mut Ref<int>) {
   r.* = 99
 }
 
@@ -960,10 +960,10 @@ impl Foo {
 #[test]
 fn deref_assignment_target_captured_before_rhs() {
     let input = r#"
-struct H { ptr: Ref<int> }
+struct H { ptr: mut Ref<int> }
 
 impl H {
-  fn repoint(self: Ref<H>, q: Ref<int>) -> int {
+  fn repoint(self: mut Ref<H>, q: mut Ref<int>) -> int {
     self.ptr = q
     9
   }
@@ -986,10 +986,10 @@ fn main() {
 #[test]
 fn compound_deref_assignment_target_captured() {
     let input = r#"
-struct H { ptr: Ref<int> }
+struct H { ptr: mut Ref<int> }
 
 impl H {
-  fn repoint(self: Ref<H>, q: Ref<int>) -> int {
+  fn repoint(self: mut Ref<H>, q: mut Ref<int>) -> int {
     self.ptr = q
     9
   }
@@ -1011,10 +1011,10 @@ fn main() {
 fn dot_field_through_ref_assignment_captured() {
     let input = r#"
 struct P { x: int }
-struct H { ptr: Ref<P> }
+struct H { ptr: mut Ref<P> }
 
 impl H {
-  fn repoint(self: Ref<H>, q: Ref<P>) -> int {
+  fn repoint(self: mut Ref<H>, q: mut Ref<P>) -> int {
     self.ptr = q
     9
   }
@@ -1035,7 +1035,7 @@ fn main() {
 #[test]
 fn binary_left_hoisted_when_right_is_call() {
     let input = r#"
-fn bump(i: Ref<int>) -> int {
+fn bump(i: mut Ref<int>) -> int {
   i.* = 1
   10
 }
@@ -1052,7 +1052,7 @@ fn main() {
 #[test]
 fn call_args_eval_order_captured() {
     let input = r#"
-fn bump(i: Ref<int>) -> int {
+fn bump(i: mut Ref<int>) -> int {
   i.* = 1
   10
 }
@@ -1071,7 +1071,7 @@ fn main() {
 #[test]
 fn tuple_eval_order_captured() {
     let input = r#"
-fn bump(i: Ref<int>) -> int {
+fn bump(i: mut Ref<int>) -> int {
   i.* = 1
   10
 }
@@ -1090,7 +1090,7 @@ fn struct_literal_field_eval_order_captured() {
     let input = r#"
 struct Pair { a: int, b: int }
 
-fn bump(i: Ref<int>) -> int {
+fn bump(i: mut Ref<int>) -> int {
   i.* = 1
   10
 }
@@ -1107,7 +1107,7 @@ fn main() {
 #[test]
 fn format_string_eval_order_captured() {
     let input = r#"
-fn bump(i: Ref<int>) -> int {
+fn bump(i: mut Ref<int>) -> int {
   i.* = 1
   10
 }
@@ -1124,7 +1124,7 @@ fn main() {
 #[test]
 fn slice_literal_eval_order_captured() {
     let input = r#"
-fn bump(i: Ref<int>) -> int {
+fn bump(i: mut Ref<int>) -> int {
   i.* = 1
   10
 }
@@ -1141,7 +1141,7 @@ fn main() {
 #[test]
 fn range_value_eval_order_captured() {
     let input = r#"
-fn bump(i: Ref<int>) -> int {
+fn bump(i: mut Ref<int>) -> int {
   i.* = 1
   10
 }
@@ -1161,7 +1161,7 @@ fn regular_call_callee_eval_order_captured() {
 fn f0(x: int) -> int { x + 10 }
 fn f1(x: int) -> int { x + 20 }
 
-fn bump(i: Ref<int>) -> int {
+fn bump(i: mut Ref<int>) -> int {
   i.* = 1
   0
 }
@@ -1289,7 +1289,7 @@ fn main() {
 #[test]
 fn index_access_eval_order_captured() {
     let input = r#"
-fn bump(i: Ref<int>) -> int {
+fn bump(i: mut Ref<int>) -> int {
   i.* = 1
   10
 }
@@ -1307,7 +1307,7 @@ fn main() {
 #[test]
 fn slice_range_eval_order_captured() {
     let input = r#"
-fn bump(i: Ref<int>) -> int {
+fn bump(i: mut Ref<int>) -> int {
   i.* = 1
   10
 }
@@ -1333,7 +1333,7 @@ impl Adder {
   }
 }
 
-fn bump(i: Ref<int>) -> int {
+fn bump(i: mut Ref<int>) -> int {
   i.* = 1
   10
 }
@@ -1357,7 +1357,7 @@ impl Counter {
   fn get(self) -> int { self.n }
 }
 
-fn bump_and_get(c: Ref<Counter>) -> int {
+fn bump_and_get(c: mut Ref<Counter>) -> int {
   c.*.n = c.*.n + 1
   c.*.n
 }
@@ -1376,7 +1376,7 @@ fn main() {
 #[test]
 fn native_method_dot_access_eval_order_captured() {
     let input = r#"
-fn bump(i: Ref<int>) -> int {
+fn bump(i: mut Ref<int>) -> int {
   i.* = 1
   10
 }
@@ -1394,7 +1394,7 @@ fn main() {
 #[test]
 fn native_method_identifier_eval_order_captured() {
     let input = r#"
-fn bump(i: Ref<int>) -> string {
+fn bump(i: mut Ref<int>) -> string {
   i.* = 1
   ","
 }
@@ -1414,7 +1414,7 @@ fn tuple_struct_call_eval_order_captured() {
     let input = r#"
 struct Pair(int, int)
 
-fn bump(i: Ref<int>) -> int {
+fn bump(i: mut Ref<int>) -> int {
   i.* = 1
   10
 }
@@ -1431,7 +1431,7 @@ fn main() {
 #[test]
 fn append_args_eval_order_captured() {
     let input = r#"
-fn bump(i: Ref<int>) -> int {
+fn bump(i: mut Ref<int>) -> int {
   i.* = 1
   10
 }
@@ -1449,7 +1449,7 @@ fn main() {
 #[test]
 fn call_args_prebound_ref_eval_order() {
     let input = r#"
-fn bump(i: Ref<int>) -> int {
+fn bump(i: mut Ref<int>) -> int {
   i.* = 1
   9
 }
@@ -1459,7 +1459,7 @@ fn first(a: int, _b: int) -> int { a }
 fn main() {
   let mut i = 0
   let m = [[10], [20]]
-  let ip = &i
+  let mut ip = &i
   let x = first(m[i][0], [bump(ip)][0])
   let _ = x
 }
@@ -1470,9 +1470,9 @@ fn main() {
 #[test]
 fn call_args_carrier_struct_ref_eval_order() {
     let input = r#"
-struct Carrier { p: Ref<int> }
+struct Carrier { p: mut Ref<int> }
 
-fn bump(c: Carrier) -> int {
+fn bump(c: mut Carrier) -> int {
   c.p.* = 1
   9
 }
@@ -1482,7 +1482,7 @@ fn first(a: int, _b: int) -> int { a }
 fn main() {
   let mut i = 0
   let m = [[10], [20]]
-  let c = Carrier { p: &i }
+  let mut c = Carrier { p: &i }
   let x = first(m[i][0], [bump(c)][0])
   let _ = x
 }
@@ -1493,9 +1493,9 @@ fn main() {
 #[test]
 fn assignment_deref_target_frozen_prebound_ref() {
     let input = r#"
-struct Holder { p: Ref<int> }
+struct Holder { p: mut Ref<int> }
 
-fn retarget(h: Ref<Holder>, np: Ref<int>) -> int {
+fn retarget(h: mut Ref<Holder>, np: mut Ref<int>) -> int {
   h.p = np
   9
 }
@@ -1504,8 +1504,8 @@ fn main() {
   let mut a = 1
   let mut b = 2
   let mut h = Holder { p: &a }
-  let hp = &h
-  let np = &b
+  let mut hp = &h
+  let mut np = &b
   h.p.* = retarget(hp, np)
   let _ = a
 }
@@ -1516,10 +1516,10 @@ fn main() {
 #[test]
 fn assignment_deref_target_frozen_carrier_ref() {
     let input = r#"
-struct Holder { p: Ref<int> }
-struct Carrier { h: Ref<Holder>, np: Ref<int> }
+struct Holder { p: mut Ref<int> }
+struct Carrier { h: mut Ref<Holder>, np: mut Ref<int> }
 
-fn retarget(mut c: Carrier) -> int {
+fn retarget(c: mut Carrier) -> int {
   c.h.p = c.np
   9
 }
@@ -1540,10 +1540,10 @@ fn main() {
 fn call_args_carrier_enum_ref_eval_order() {
     let input = r#"
 enum Carrier {
-  C { p: Ref<int> },
+  C { p: mut Ref<int> },
 }
 
-fn bump(c: Carrier) -> int {
+fn bump(c: mut Carrier) -> int {
   match c {
     Carrier.C { p } => {
       p.* = 1
@@ -1557,7 +1557,7 @@ fn first(a: int, _b: int) -> int { a }
 fn main() {
   let mut i = 0
   let m = [[10], [20]]
-  let c = Carrier.C { p: &i }
+  let mut c = Carrier.C { p: &i }
   let x = first(m[i][0], [bump(c)][0])
   let _ = x
 }
@@ -1568,10 +1568,10 @@ fn main() {
 #[test]
 fn assignment_deref_target_frozen_match_hidden_ref() {
     let input = r#"
-struct Holder { p: Ref<int> }
-struct Carrier { h: Ref<Holder>, np: Ref<int> }
+struct Holder { p: mut Ref<int> }
+struct Carrier { h: mut Ref<Holder>, np: mut Ref<int> }
 
-fn retarget(c: Carrier) -> int {
+fn retarget(c: mut Carrier) -> int {
   c.h.*.p = c.np
   9
 }
@@ -1580,7 +1580,7 @@ fn main() {
   let mut a = 1
   let mut b = 2
   let mut h = Holder { p: &a }
-  let c = Carrier { h: &h, np: &b }
+  let mut c = Carrier { h: &h, np: &b }
   h.p.* = match 0 {
     0 => retarget(c),
     _ => 0,
@@ -1789,7 +1789,7 @@ fn make_counter(start: int) -> fn() -> int {
 fn map_index_assign_closure_type_propagation() {
     let input = r#"
 fn test() {
-  let mut m: Map<string, fn(int) -> int> = Map.new()
+  let mut m: mut Map<string, fn(int) -> int> = Map.new()
   m["square"] = |x| x * x
 }
 "#;
@@ -1822,12 +1822,12 @@ fn deref_map_value_method_call() {
 struct Counter { count: int }
 
 impl Counter {
-  fn increment(self: Ref<Counter>) {
+  fn increment(self: mut Ref<Counter>) {
     self.*.count += 1
   }
 }
 
-fn test(m: Map<string, Ref<Counter>>) {
+fn test(m: mut Map<string, mut Ref<Counter>>) {
   let Some(c) = m.get("a") else { return; };
   c.*.increment()
 }
@@ -1877,7 +1877,7 @@ fn auto_address_function_call_receiver() {
 struct Foo { value: int }
 
 impl Foo {
-  fn increment(self: Ref<Foo>) {
+  fn increment(self: mut Ref<Foo>) {
     self.value = self.value + 1
   }
 }
@@ -1899,7 +1899,7 @@ fn auto_address_parenthesized_function_call_receiver() {
 struct Foo { value: int }
 
 impl Foo {
-  fn increment(self: Ref<Foo>) {
+  fn increment(self: mut Ref<Foo>) {
     self.value = self.value + 1
   }
 }
@@ -1921,7 +1921,7 @@ fn auto_address_struct_literal_receiver() {
 struct Foo { value: int }
 
 impl Foo {
-  fn increment(self: Ref<Foo>) {
+  fn increment(self: mut Ref<Foo>) {
     self.value = self.value + 1
   }
 }
@@ -1939,7 +1939,7 @@ fn auto_address_parenthesized_struct_literal_receiver() {
 struct Foo { value: int }
 
 impl Foo {
-  fn increment(self: Ref<Foo>) {
+  fn increment(self: mut Ref<Foo>) {
     self.value = self.value + 1
   }
 }
@@ -1970,7 +1970,7 @@ fn test() {
 #[test]
 fn deref_map_index_assignment() {
     let input = r#"
-fn update(m: Ref<Map<string, int>>, key: string, val: int) {
+fn update(m: mut Ref<mut Map<string, int>>, key: string, val: int) {
   m.*[key] = val
 }
 "#;
@@ -2234,7 +2234,7 @@ struct Config {
 }
 
 fn main() {
-  let mut m: Map<string, Config> = Map.new()
+  let mut m: mut Map<string, Config> = Map.new()
   m["a"] = Config { value: 1 }
   let _ = {
     let mut entry = m["a"]
@@ -2299,7 +2299,7 @@ import "go:fmt"
 struct Key { k: string }
 struct Box { x: int }
 
-fn make_key(counter: Ref<int>) -> Key {
+fn make_key(counter: mut Ref<int>) -> Key {
   counter.* = counter.* + 1
   Key { k: "a" }
 }
@@ -2330,7 +2330,7 @@ fn make_key() -> string {
 }
 
 fn main() {
-  let mut m: Map<string, C> = Map.new()
+  let mut m: mut Map<string, C> = Map.new()
   m["a"] = C { value: 1 }
   let key = make_key()
   let mut entry = m[key]
@@ -2388,7 +2388,7 @@ struct Box { x: int }
 
 fn main() {
   let mut m = Map.from([("k", Box { x: 0 })])
-  let r = &m
+  let mut r = &m
   let mut entry = r.*["k"]
   entry.x = 1
   r.*["k"] = entry
@@ -2410,7 +2410,7 @@ fn make_i() -> int {
 }
 
 fn main() {
-  let mut maps: Map<int, Map<string, Box>> = Map.new()
+  let mut maps: mut Map<int, mut Map<string, Box>> = Map.new()
   let mut inner = Map.new<string, Box>()
   inner["k"] = Box { x: 0 }
   maps[0] = inner
@@ -2462,7 +2462,7 @@ fn map_field_assignment_newtype() {
 struct New(int)
 
 fn main() {
-  let mut m: Map<string, New> = Map.new()
+  let mut m: mut Map<string, New> = Map.new()
   m["a"] = New(0)
   m["a"] = New(5)
 }
@@ -2610,7 +2610,7 @@ struct Box {
   items: Slice<int>,
 }
 
-fn get_map(m: Map<string, Box>) -> Map<string, Box> {
+fn get_map(m: mut Map<string, Box>) -> mut Map<string, Box> {
   m
 }
 
@@ -2636,7 +2636,7 @@ struct Box {
 fn main() {
   let mut m = Map.new<string, Box>()
   m["a"] = Box { items: [] }
-  let r = &m
+  let mut r = &m
   let mut entry = Box { items: r.*["a"].items.clone() }
   entry.items = entry.items.append(1)
   r.*["a"] = entry
@@ -2686,12 +2686,12 @@ fn indexed_field_assignment_no_temp_for_trivial_rhs() {
 struct Pos { x: int, y: int }
 
 struct Snake {
-  parts: Slice<Pos>,
+  parts: mut Slice<Pos>,
   head:  int
 }
 
 impl Snake {
-  fn set_head(self: Ref<Snake>, x: int, y: int) {
+  fn set_head(self: mut Ref<Snake>, x: int, y: int) {
     self.parts[self.head].x = x
     self.parts[self.head].y = y
   }
@@ -2706,12 +2706,12 @@ fn compound_indexed_field_assignment_no_temp_for_trivial_rhs() {
 struct Pos { x: int, y: int }
 
 struct Snake {
-  parts: Slice<Pos>,
+  parts: mut Slice<Pos>,
   head:  int
 }
 
 impl Snake {
-  fn grow(self: Ref<Snake>) {
+  fn grow(self: mut Ref<Snake>) {
     self.parts[self.head].x += 1
     self.parts[self.head].y -= 2
   }
@@ -2738,9 +2738,9 @@ fn main() {
 fn indexed_lvalue_pins_call_base_before_index() {
     let input = r#"
 fn main() {
-  let xs = [10, 20]
+  let mut xs = [10, 20]
   let mut i = 0
-  let make = || -> Slice<int> { i += 1; xs }
+  let make = || -> mut Slice<int> { i += 1; xs }
   make()[i] = 99
   let _ = xs
 }
@@ -2769,7 +2769,7 @@ fn main() {
   let mut m = Map.new<string, int>()
   m["0"] = 100
   let mut i = 0
-  let make = || -> Map<string, int> { i += 1; m }
+  let make = || -> mut Map<string, int> { i += 1; m }
   make()[f"{i}"] = 99
   let _ = m
 }
@@ -2873,7 +2873,7 @@ fn auto_address_receiver_ref_temp_var_no_collision() {
 struct Box { x: int }
 
 impl Box {
-  fn inc(self: Ref<Box>) -> int {
+  fn inc(self: mut Ref<Box>) -> int {
     self.*.x = self.*.x + 1
     self.*.x
   }
@@ -3196,7 +3196,7 @@ fn promoted_method_expression_pointer_receiver() {
 struct Base { pub id: int }
 
 impl Base {
-  pub fn bump(self: Ref<Base>) { self.id += 1 }
+  pub fn bump(self: mut Ref<Base>) { self.id += 1 }
 }
 
 struct Outer { embed Base }
@@ -3343,12 +3343,12 @@ fn reference_nested_parens_no_hoist() {
 struct S { x: int }
 
 impl S {
-  fn inc(self: Ref<S>) { self.x = self.x + 1 }
+  fn inc(self: mut Ref<S>) { self.x = self.x + 1 }
 }
 
 fn main() {
   let mut s = S { x: 1 }
-  let r = &((s))
+  let mut r = &((s))
   r.inc()
 }
 "#;
@@ -3374,14 +3374,14 @@ fn ufcs_address_of_receiver_parens() {
 struct Counter { x: int }
 
 impl Counter {
-  fn inc(self: Ref<Counter>) -> int {
+  fn inc(self: mut Ref<Counter>) -> int {
     self.x = self.x + 1
     self.x
   }
 }
 
 fn main() {
-  let c = Counter { x: 0 }
+  let mut c = Counter { x: 0 }
   let _ = Counter.inc(&c)
 }
 "#;
@@ -3394,7 +3394,7 @@ fn ufcs_address_of_struct_literal_receiver() {
 struct Counter { x: int }
 
 impl Counter {
-  fn inc(self: Ref<Counter>) -> int {
+  fn inc(self: mut Ref<Counter>) -> int {
     self.x = self.x + 1
     self.x
   }
@@ -3457,7 +3457,7 @@ fn ref_slice_append_statement_rewrite() {
     let input = r#"
 fn main() {
   let mut s = [1]
-  let r: Ref<Slice<int>> = &s
+  let mut r: mut Ref<mut Slice<int>> = &s
   r.* = r.*.append(2)
   let _ = s
 }
@@ -3502,7 +3502,7 @@ struct Item { x: int }
 
 fn main() {
   let mut v = Item { x: 0 }
-  let r = &v
+  let mut r = &v
   r.*.x = 1
   let _ = v.x
 }
@@ -3516,7 +3516,7 @@ fn newtype_nested_field_assign_eval_order() {
 struct Inner { x: int }
 struct Wrap(Inner)
 
-fn bump(i: Ref<int>) -> int {
+fn bump(i: mut Ref<int>) -> int {
   i.* = i.* + 1
   i.*
 }
@@ -3573,7 +3573,7 @@ struct Wrap(int)
 
 fn main() {
   let mut w = Wrap(0)
-  let r = &w
+  let mut r = &w
   let _ = { r.* = Wrap(1) }
   let _ = w.0
 }
@@ -3612,7 +3612,7 @@ fn ref_call_field_assignment() {
     let input = r#"
 struct Item { x: int }
 
-fn get() -> Ref<Item> { &Item { x: 0 } }
+fn get() -> mut Ref<Item> { &Item { x: 0 } }
 
 fn main() {
   get().x = 1
@@ -3643,7 +3643,7 @@ fn map_field_assign_captures_key() {
     let input = r#"
 struct Pair { x: int }
 
-fn set_key(k: Ref<string>) -> int {
+fn set_key(k: mut Ref<string>) -> int {
   k.* = "b"
   1
 }
@@ -3669,7 +3669,7 @@ struct Wrap(Slice<int>)
 
 fn main() {
   let mut w = Wrap([1])
-  let r = &w
+  let mut r = &w
   r.* = Wrap(r.0.append(2))
   let _ = w
 }
@@ -3680,11 +3680,11 @@ fn main() {
 #[test]
 fn map_field_ref_slice_append() {
     let input = r#"
-struct Outer { items: Ref<Slice<int>> }
+struct Outer { items: mut Ref<Slice<int>> }
 
 fn main() {
   let mut items = [1]
-  let mut m = Map.new<string, Outer>()
+  let mut m = Map.new<string, mut Outer>()
   m["a"] = Outer { items: &items }
   let Some(o) = m.get("a") else { return; };
   o.items.* = o.items.*.append(2)
@@ -3701,7 +3701,7 @@ struct Wrap(int)
 
 fn main() {
   let mut w = Wrap(1)
-  let mut m = Map.new<string, Ref<Wrap>>()
+  let mut m = Map.new<string, mut Ref<Wrap>>()
   m["a"] = &w
   let Some(r) = m.get("a") else { return; };
   r.* = Wrap(2)
@@ -3719,7 +3719,7 @@ struct Wrap(Inner)
 
 fn main() {
   let mut w = Wrap(Inner { x: 0 })
-  let mut m = Map.new<string, Ref<Wrap>>()
+  let mut m = Map.new<string, mut Ref<Wrap>>()
   m["a"] = &w
   let Some(r) = m.get("a") else { return; };
   let mut inner = r.0
@@ -3738,7 +3738,7 @@ struct Wrap(Slice<int>)
 
 fn main() {
   let mut w = Wrap([1])
-  let mut m = Map.new<string, Ref<Wrap>>()
+  let mut m = Map.new<string, mut Ref<Wrap>>()
   m["a"] = &w
   let Some(r) = m.get("a") else { return; };
   r.* = Wrap(r.0.append(2))
@@ -3756,7 +3756,7 @@ struct Wrap(Inner)
 
 fn main() {
   let mut w = Wrap(Inner { items: [1] })
-  let mut m = Map.new<string, Ref<Wrap>>()
+  let mut m = Map.new<string, mut Ref<Wrap>>()
   m["a"] = &w
   let Some(r) = m.get("a") else { return; };
   let mut inner = Inner { items: r.0.items.clone() }
@@ -3790,11 +3790,11 @@ fn map_ref_newtype_mid_chain_field_assign() {
     let input = r#"
 struct Inner { x: int }
 struct Wrap(Inner)
-struct Outer { w: Ref<Wrap> }
+struct Outer { w: mut Ref<Wrap> }
 
 fn main() {
   let mut w = Wrap(Inner { x: 0 })
-  let mut m = Map.new<string, Outer>()
+  let mut m = Map.new<string, mut Outer>()
   m["a"] = Outer { w: &w }
   let Some(o) = m.get("a") else { return; };
   let mut inner = o.w.0
@@ -3811,11 +3811,11 @@ fn map_ref_newtype_mid_chain_field_append() {
     let input = r#"
 struct Inner { items: Slice<int> }
 struct Wrap(Inner)
-struct Outer { w: Ref<Wrap> }
+struct Outer { w: mut Ref<Wrap> }
 
 fn main() {
   let mut w = Wrap(Inner { items: [1] })
-  let mut m = Map.new<string, Outer>()
+  let mut m = Map.new<string, mut Outer>()
   m["a"] = Outer { w: &w }
   let Some(o) = m.get("a") else { return; };
   let mut inner = Inner { items: o.w.0.items.clone() }
@@ -3890,14 +3890,14 @@ import "go:fmt"
 struct Inner { x: int }
 struct Wrap(Inner)
 
-fn get() -> Ref<Wrap> {
+fn get() -> mut Ref<Wrap> {
   let _ = fmt.Println("get")
   let mut w = Wrap(Inner { x: 1 })
   &w
 }
 
 fn main() {
-  let r = get()
+  let mut r = get()
   let mut inner = r.0
   inner.x = 2
   r.* = Wrap(inner)
@@ -3913,7 +3913,7 @@ import "go:fmt"
 
 struct S { x: int }
 
-fn get() -> Ref<S> {
+fn get() -> mut Ref<S> {
   let _ = fmt.Println("get")
   let mut s = S { x: 1 }
   &s
@@ -4303,7 +4303,7 @@ fn parenthesized_call_base_field_assignment() {
     let input = r#"
 struct S { x: int }
 
-fn get(r: Ref<S>) -> Ref<S> { r }
+fn get(r: mut Ref<S>) -> mut Ref<S> { r }
 
 fn main() {
   let mut s = S { x: 0 }
@@ -4774,7 +4774,7 @@ fn test() -> int {
 #[test]
 fn indexed_receiver_append_arg_mutates_index() {
     let input = r#"
-fn bump(i: Ref<int>) -> int {
+fn bump(i: mut Ref<int>) -> int {
   i.* = 1
   99
 }
@@ -4792,7 +4792,7 @@ fn test() -> int {
 #[test]
 fn indexed_receiver_append_spread_arg_mutates_index() {
     let input = r#"
-fn bump_and_make(i: Ref<int>) -> Slice<int> {
+fn bump_and_make(i: mut Ref<int>) -> Slice<int> {
   i.* = 1
   [99]
 }
@@ -4814,7 +4814,7 @@ fn make_f(i: Ref<int>) -> fn(int) -> int {
   |x: int| -> int { x }
 }
 
-fn get(i: Ref<int>) -> Result<int, string> {
+fn get(i: mut Ref<int>) -> Result<int, string> {
   i.* = 1
   Ok(7)
 }
@@ -5065,7 +5065,7 @@ fn top_level_reference_not_pinned_before_call() {
     let input = r#"
 const BASE = 10
 
-fn eff(x: Ref<int>) -> int {
+fn eff(x: mut Ref<int>) -> int {
   x.* = 1
   2
 }
@@ -5142,7 +5142,7 @@ fn run() -> Result<int, string> {
 fn selector_receiver_append_arg_mutates_index() {
     let input = r#"
 struct Holder { slc: Slice<int> }
-fn bump(i: Ref<int>) -> int { i.* = 1; 99 }
+fn bump(i: mut Ref<int>) -> int { i.* = 1; 99 }
 
 fn run() -> int {
   let hs = [Holder { slc: [10] }, Holder { slc: [20] }]
@@ -5235,7 +5235,7 @@ fn run() -> int {
 #[test]
 fn identifier_native_receiver_arg_mutates_index() {
     let input = r#"
-fn bump(i: Ref<int>) -> int { i.* = 1; 99 }
+fn bump(i: mut Ref<int>) -> int { i.* = 1; 99 }
 
 fn run() -> int {
   let xss = [[10], [20]]

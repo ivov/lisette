@@ -2,7 +2,8 @@
 source: tests/spec/emit/functions.rs
 description: |
   
-  fn test(mut s: Slice<int>, extra: int, more: Slice<int>) -> Slice<int> {
+  fn test(s: Slice<int>, extra: int, more: Slice<int>) -> Slice<int> {
+    let mut s = s
     s = s.append(extra, more...)
     s
   }
@@ -10,6 +11,7 @@ description: |
 package main
 
 func test(s []int, extra int, more []int) []int {
-	s = append(s, append([]int{extra}, more...)...)
-	return s
+	s_1 := s
+	s_1 = append(s_1, append([]int{extra}, more...)...)
+	return s_1
 }

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot write to `row[0]`
+   ╭─[test.lis:5:5]
+ 4 │   for row in grid {
+ 5 │     row[0] = 9
+   ·     ─────┬────
+   ·          ╰── `row` is read-only
+ 6 │   }
+   ╰────
+  help: `row` binds elements of `grid`, which is read-only. Declare `let mut grid` · code: [infer.write_through_read_only]

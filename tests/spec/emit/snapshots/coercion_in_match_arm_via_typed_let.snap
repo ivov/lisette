@@ -8,13 +8,13 @@ description: |
   struct B {}
   
   impl A {
-    fn Read(self, mut p: Slice<uint8>) -> Partial<int, error> {
+    fn Read(self, p: mut Slice<uint8>) -> Partial<int, error> {
       Partial.Ok(0)
     }
   }
   
   impl B {
-    fn Read(self, mut p: Slice<uint8>) -> Partial<int, error> {
+    fn Read(self, p: mut Slice<uint8>) -> Partial<int, error> {
       Partial.Ok(0)
     }
   }
