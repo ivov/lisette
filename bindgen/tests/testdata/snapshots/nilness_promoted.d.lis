@@ -7,10 +7,10 @@ import "go:github.com/ivov/lisette/bindgen/tests/testdata/fixtures/nilness_promo
 
 #[go(hidden_embed)]
 pub struct Wrapper {
-  pub Core: inner.Core,
+  pub Core: mut inner.Core,
 }
 
 impl Wrapper {
-  fn Produce(self: Ref<Wrapper>) -> Ref<inner.Core>
-  fn Withhold(self: Ref<Wrapper>) -> Option<Ref<inner.Core>>
+  fn Produce(self: Ref<Wrapper>) -> mut Ref<inner.Core>
+  fn Withhold(self: Ref<Wrapper>) -> Option<mut Ref<inner.Core>>
 }

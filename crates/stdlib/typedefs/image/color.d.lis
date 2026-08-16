@@ -86,7 +86,7 @@ pub struct NYCbCrA {
 }
 
 /// Palette is a palette of colors.
-pub struct Palette(Slice<Color>)
+pub struct Palette(mut Slice<Color>)
 
 /// RGBA represents a traditional 32-bit alpha-premultiplied color, having 8
 /// bits for each of red, green, blue and alpha.

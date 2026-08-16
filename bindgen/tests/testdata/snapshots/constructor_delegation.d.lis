@@ -3,10 +3,10 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
-pub fn LookupWidget() -> Ref<Widget>
+pub fn LookupWidget() -> mut Ref<Widget>
 
-pub fn NewNilWidget() -> Option<Ref<Widget>>
+pub fn NewNilWidget() -> Option<mut Ref<Widget>>
 
-pub fn NewWidget() -> Ref<Widget>
+pub fn NewWidget() -> mut Ref<Widget>
 
 pub type Widget

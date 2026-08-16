@@ -61,7 +61,7 @@ pub fn SignMessage(
   rand: io.Reader,
   msg: Slice<byte>,
   opts: SignerOpts,
-) -> Result<Slice<byte>, error>
+) -> Result<mut Slice<byte>, error>
 
 /// Decrypter is an interface for an opaque private key that can be used for
 /// asymmetric decryption operations. An example would be an RSA key

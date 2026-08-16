@@ -3,51 +3,51 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
-pub fn Alpha() -> Ref<Widget>
+pub fn Alpha() -> mut Ref<Widget>
 
-pub fn Append(data: Slice<byte>) -> Ref<Builder>
+pub fn Append(data: Slice<byte>) -> mut Ref<Builder>
 
-pub fn Beta() -> Ref<Widget>
+pub fn Beta() -> mut Ref<Widget>
 
-pub fn Delta() -> Ref<Widget>
+pub fn Delta() -> mut Ref<Widget>
 
-pub fn DirectMakeKnob(name: string) -> Ref<Knob>
+pub fn DirectMakeKnob(name: string) -> mut Ref<Knob>
 
-pub fn Epsilon() -> Ref<Widget>
+pub fn Epsilon() -> mut Ref<Widget>
 
-pub fn Eta() -> Ref<Widget>
+pub fn Eta() -> mut Ref<Widget>
 
-pub fn Fetch(key: string) -> Option<Ref<Result>>
+pub fn Fetch(key: string) -> Option<mut Ref<Result>>
 
-pub fn Gamma() -> Ref<Widget>
+pub fn Gamma() -> mut Ref<Widget>
 
-pub fn GetDefault() -> Option<Ref<Builder>>
+pub fn GetDefault() -> Option<mut Ref<Builder>>
 
-pub fn IndirectMakeKnob(name: string) -> Ref<Knob>
+pub fn IndirectMakeKnob(name: string) -> mut Ref<Knob>
 
-pub fn Iota() -> Ref<Widget>
+pub fn Iota() -> mut Ref<Widget>
 
-pub fn Kappa() -> Ref<Widget>
+pub fn Kappa() -> mut Ref<Widget>
 
-pub fn Lambda() -> Ref<Widget>
+pub fn Lambda() -> mut Ref<Widget>
 
-pub fn MakeKnob() -> Ref<Knob>
+pub fn MakeKnob() -> mut Ref<Knob>
 
-pub fn Reset() -> Ref<Builder>
+pub fn Reset() -> mut Ref<Builder>
 
-pub fn Scan() -> Ref<TreeIterator>
+pub fn Scan() -> mut Ref<TreeIterator>
 
-pub fn ScanCursor() -> Option<Ref<Cursor>>
+pub fn ScanCursor() -> Option<mut Ref<Cursor>>
 
-pub fn SetTag(key: string, val: string) -> Ref<Builder>
+pub fn SetTag(key: string, val: string) -> mut Ref<Builder>
 
-pub fn SmallA() -> Ref<Gadget>
+pub fn SmallA() -> mut Ref<Gadget>
 
-pub fn SmallB() -> Option<Ref<Gadget>>
+pub fn SmallB() -> Option<mut Ref<Gadget>>
 
-pub fn Theta() -> Ref<Widget>
+pub fn Theta() -> mut Ref<Widget>
 
-pub fn Zeta() -> Ref<Widget>
+pub fn Zeta() -> mut Ref<Widget>
 
 pub type Builder
 
@@ -75,17 +75,17 @@ pub struct Widget {
 
 impl Builder {
   #[allow(unused_value)]
-  fn Append(self: Ref<Builder>, data: Slice<byte>) -> Ref<Builder>
+  fn Append(self: mut Ref<Builder>, data: Slice<byte>) -> mut Ref<Builder>
   #[allow(unused_value)]
-  fn Reset(self: Ref<Builder>) -> Ref<Builder>
+  fn Reset(self: mut Ref<Builder>) -> mut Ref<Builder>
   #[allow(unused_value)]
-  fn SetTag(self: Ref<Builder>, key: string, val: string) -> Ref<Builder>
+  fn SetTag(self: mut Ref<Builder>, key: string, val: string) -> mut Ref<Builder>
 }
 
 impl Store {
-  fn Fetch(self: Ref<Store>, key: string) -> Option<Ref<Result>>
+  fn Fetch(self: Ref<Store>, key: string) -> Option<mut Ref<Result>>
 }
 
 impl TreeIterator {
-  fn Sub(self: Ref<TreeIterator>) -> Ref<ItemIterator>
+  fn Sub(self: Ref<TreeIterator>) -> mut Ref<ItemIterator>
 }

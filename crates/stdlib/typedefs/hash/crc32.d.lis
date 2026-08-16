@@ -15,7 +15,7 @@ pub fn ChecksumIEEE(data: Slice<byte>) -> uint32
 
 /// MakeTable returns a [Table] constructed from the specified polynomial.
 /// The contents of this [Table] must not be modified.
-pub fn MakeTable(poly: uint32) -> Ref<Table>
+pub fn MakeTable(poly: uint32) -> mut Ref<Table>
 
 /// New creates a new [hash.Hash32] computing the CRC-32 checksum using the
 /// polynomial represented by the [Table]. Its Sum method will lay the
@@ -50,4 +50,4 @@ pub const Koopman = 0xeb31d82e
 pub const Size = 4
 
 /// IEEETable is the table for the [IEEE] polynomial.
-pub var IEEETable: Ref<Table>
+pub var IEEETable: mut Ref<Table>

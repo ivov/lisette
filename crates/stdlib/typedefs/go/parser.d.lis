@@ -25,7 +25,7 @@ import "go:io/fs"
 /// between packages and files, use golang.org/x/tools/go/packages,
 /// which can also optionally parse and type-check the files too.
 pub fn ParseDir(
-  fset: Ref<token.FileSet>,
+  fset: mut Ref<token.FileSet>,
   path: string,
   filter: fn(fs.FileInfo) -> bool,
   mode: Mode,
@@ -51,7 +51,7 @@ pub fn ParseExpr(x: string) -> Partial<ast.Expr, error>
 /// representing the fragments of erroneous source code). Multiple errors
 /// are returned via a scanner.ErrorList which is sorted by source position.
 pub fn ParseExprFrom(
-  fset: Ref<token.FileSet>,
+  fset: mut Ref<token.FileSet>,
   filename: string,
   src: Unknown,
   mode: Mode,
@@ -82,11 +82,11 @@ pub fn ParseExprFrom(
 /// representing the fragments of erroneous source code). Multiple errors
 /// are returned via a scanner.ErrorList which is sorted by source position.
 pub fn ParseFile(
-  fset: Ref<token.FileSet>,
+  fset: mut Ref<token.FileSet>,
   filename: string,
   src: Unknown,
   mode: Mode,
-) -> Partial<Ref<ast.File>, error>
+) -> Partial<mut Ref<ast.File>, error>
 
 /// A Mode value is a set of flags (or 0).
 /// They control the amount of source code parsed and other optional

@@ -366,7 +366,8 @@ impl TaskState {
             .into_iter()
             .zip(params)
             .map(|(ty, binding)| {
-                FunctionParameter::named(ty, binding.pattern.get_identifier(), binding.is_mutable())
+                let (ty, mutable) = bridge_parameter_permission(ty, binding.is_mutable());
+                FunctionParameter::named(ty, binding.pattern.get_identifier(), mutable)
             })
             .collect();
 

@@ -27,7 +27,7 @@ pub fn Callback(n: int, s: string) -> bool
 /// Comma-ok with pointer inner type - produces tuple to avoid
 /// ambiguity with single-pointer returns that also produce Option<Ref<T>>
 #[go(comma_ok)]
-pub fn FindNode(key: string) -> Option<Ref<Node>>
+pub fn FindNode(key: string) -> Option<mut Ref<Node>>
 
 /// Variadic function - tests convertFunc variadic path
 pub fn Printf(format: string, args: VarArgs<Unknown>)

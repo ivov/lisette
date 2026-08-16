@@ -387,6 +387,7 @@
           "GoroutineProfile": ["p"],
           "MemProfile": ["p"],
           "MutexProfile": ["p"],
+          "ReadMemStats": ["m"],
           "Stack": ["buf"],
           "ThreadCreateProfile": ["p"]
         },
@@ -396,6 +397,8 @@
         "sort": {
           "Float64s": ["x"],
           "Ints": ["x"],
+          "Slice": ["x"],
+          "SliceStable": ["x"],
           "Strings": ["x"]
         },
         "strconv": {
@@ -413,6 +416,41 @@
         "strings": {
           "Reader.Read": ["b"],
           "Reader.ReadAt": ["b"]
+        },
+        "sync/atomic": {
+          "AddInt32": ["addr"],
+          "AddInt64": ["addr"],
+          "AddUint32": ["addr"],
+          "AddUint64": ["addr"],
+          "AddUintptr": ["addr"],
+          "AndInt32": ["addr"],
+          "AndInt64": ["addr"],
+          "AndUint32": ["addr"],
+          "AndUint64": ["addr"],
+          "AndUintptr": ["addr"],
+          "CompareAndSwapInt32": ["addr"],
+          "CompareAndSwapInt64": ["addr"],
+          "CompareAndSwapPointer": ["addr"],
+          "CompareAndSwapUint32": ["addr"],
+          "CompareAndSwapUint64": ["addr"],
+          "CompareAndSwapUintptr": ["addr"],
+          "OrInt32": ["addr"],
+          "OrInt64": ["addr"],
+          "OrUint32": ["addr"],
+          "OrUint64": ["addr"],
+          "OrUintptr": ["addr"],
+          "StoreInt32": ["addr"],
+          "StoreInt64": ["addr"],
+          "StorePointer": ["addr"],
+          "StoreUint32": ["addr"],
+          "StoreUint64": ["addr"],
+          "StoreUintptr": ["addr"],
+          "SwapInt32": ["addr"],
+          "SwapInt64": ["addr"],
+          "SwapPointer": ["addr"],
+          "SwapUint32": ["addr"],
+          "SwapUint64": ["addr"],
+          "SwapUintptr": ["addr"]
         },
         "syscall": {
           "Getdirentries": ["buf"],
@@ -436,6 +474,78 @@
         },
         "unicode/utf16": {
           "AppendRune": ["a"]
+        }
+      },
+      "mutates_receiver": {
+        "sync": [
+          "Cond.Broadcast",
+          "Cond.Signal",
+          "Cond.Wait",
+          "Mutex.Lock",
+          "Mutex.TryLock",
+          "Mutex.Unlock",
+          "Once.Do",
+          "Pool.Get",
+          "Pool.Put",
+          "RWMutex.Lock",
+          "RWMutex.RLock",
+          "RWMutex.RUnlock",
+          "RWMutex.TryLock",
+          "RWMutex.TryRLock",
+          "RWMutex.Unlock",
+          "WaitGroup.Add",
+          "WaitGroup.Done",
+          "WaitGroup.Go",
+          "WaitGroup.Wait"
+        ],
+        "sync/atomic": [
+          "Bool.CompareAndSwap",
+          "Bool.Store",
+          "Bool.Swap",
+          "Int32.Add",
+          "Int32.And",
+          "Int32.CompareAndSwap",
+          "Int32.Or",
+          "Int32.Store",
+          "Int32.Swap",
+          "Int64.Add",
+          "Int64.And",
+          "Int64.CompareAndSwap",
+          "Int64.Or",
+          "Int64.Store",
+          "Int64.Swap",
+          "Pointer.CompareAndSwap",
+          "Pointer.Store",
+          "Pointer.Swap",
+          "Uint32.Add",
+          "Uint32.And",
+          "Uint32.CompareAndSwap",
+          "Uint32.Or",
+          "Uint32.Store",
+          "Uint32.Swap",
+          "Uint64.Add",
+          "Uint64.And",
+          "Uint64.CompareAndSwap",
+          "Uint64.Or",
+          "Uint64.Store",
+          "Uint64.Swap",
+          "Uintptr.Add",
+          "Uintptr.And",
+          "Uintptr.CompareAndSwap",
+          "Uintptr.Or",
+          "Uintptr.Store",
+          "Uintptr.Swap",
+          "Value.CompareAndSwap",
+          "Value.Store",
+          "Value.Swap"
+        ]
+      },
+      "returns_view_of": {
+        "io/ioutil": {
+          "ReadDir": []
+        },
+        "net": {
+          "Interfaces": []
         }
       },
       "non_nilable_return": {

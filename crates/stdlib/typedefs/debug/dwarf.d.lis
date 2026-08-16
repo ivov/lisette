@@ -464,7 +464,7 @@ pub fn New(
   pubnames: Slice<byte>,
   ranges: Slice<byte>,
   str: Slice<byte>,
-) -> Result<Ref<Data>, error>
+) -> Result<mut Ref<Data>, error>
 
 /// An AddrType represents a machine address type.
 pub struct AddrType {
@@ -533,7 +533,7 @@ pub struct Entry {
   pub Offset: Offset,
   pub Tag: Tag,
   pub Children: bool,
-  pub Field: Slice<Field>,
+  pub Field: mut Slice<Field>,
 }
 
 /// An EnumType represents an enumerated type.
@@ -542,7 +542,7 @@ pub struct Entry {
 pub struct EnumType {
   embed CommonType,
   pub EnumName: string,
-  pub Val: Slice<Option<Ref<EnumValue>>>,
+  pub Val: mut Slice<Option<mut Ref<EnumValue>>>,
 }
 
 /// An EnumValue represents a single enumeration value.
@@ -589,7 +589,7 @@ pub struct FloatType {
 pub struct FuncType {
   embed CommonType,
   pub ReturnType: Option<Type>,
-  pub ParamType: Slice<Option<Type>>,
+  pub ParamType: mut Slice<Option<Type>>,
 }
 
 /// An IntType represents a signed integer type.
@@ -601,7 +601,7 @@ pub struct IntType {
 pub struct LineEntry {
   pub Address: uint64,
   pub OpIndex: int,
-  pub File: Option<Ref<LineFile>>,
+  pub File: Option<mut Ref<LineFile>>,
   pub Line: int,
   pub Column: int,
   pub IsStmt: bool,
@@ -742,14 +742,14 @@ pub struct StructType {
   embed CommonType,
   pub StructName: string,
   pub Kind: string,
-  pub Field: Slice<Option<Ref<StructField>>>,
+  pub Field: mut Slice<Option<mut Ref<StructField>>>,
   pub Incomplete: bool,
 }
 
 /// A Type conventionally represents a pointer to any of the
 /// specific Type structures ([CharType], [StructType], etc.).
 pub interface Type {
-  fn Common() -> Option<Ref<CommonType>>
+  fn Common() -> Option<mut Ref<CommonType>>
   fn Size() -> int64
   fn String() -> string
 }
@@ -804,7 +804,7 @@ impl Attr {
 }
 
 impl BasicType {
-  fn Basic(self: Ref<BasicType>) -> Ref<BasicType>
+  fn Basic(self: Ref<BasicType>) -> mut Ref<BasicType>
 
   fn String(self: Ref<BasicType>) -> string
 }
@@ -816,7 +816,7 @@ impl Class {
 }
 
 impl CommonType {
-  fn Common(self: Ref<CommonType>) -> Ref<CommonType>
+  fn Common(self: Ref<CommonType>) -> mut Ref<CommonType>
 
   fn Size(self: Ref<CommonType>) -> int64
 }
@@ -826,31 +826,31 @@ impl Data {
   /// DWARF section name such as ".debug_addr", ".debug_str_offsets", and
   /// so forth. This approach is used for new DWARF sections added in
   /// DWARF 5 and later.
-  fn AddSection(self: Ref<Data>, name: string, contents: Slice<byte>) -> Result<(), error>
+  fn AddSection(self: mut Ref<Data>, name: string, contents: Slice<byte>) -> Result<(), error>
 
   /// AddTypes will add one .debug_types section to the DWARF data. A
   /// typical object with DWARF version 4 debug info will have multiple
   /// .debug_types sections. The name is used for error reporting only,
   /// and serves to distinguish one .debug_types section from another.
-  fn AddTypes(self: Ref<Data>, name: string, types: Slice<byte>) -> Result<(), error>
+  fn AddTypes(self: mut Ref<Data>, name: string, types: Slice<byte>) -> Result<(), error>
 
   /// LineReader returns a new reader for the line table of compilation
   /// unit cu, which must be an [Entry] with tag [TagCompileUnit].
   /// 
   /// If this compilation unit has no line table, it returns nil, nil.
-  fn LineReader(self: Ref<Data>, cu: Ref<Entry>) -> Result<Option<Ref<LineReader>>, error>
+  fn LineReader(self: Ref<Data>, cu: Ref<Entry>) -> Result<Option<mut Ref<LineReader>>, error>
 
   /// Ranges returns the PC ranges covered by e, a slice of [low,high) pairs.
   /// Only some entry types, such as [TagCompileUnit] or [TagSubprogram], have PC
   /// ranges; for others, this will return nil with no error.
-  fn Ranges(self: Ref<Data>, e: Ref<Entry>) -> Result<Slice<Array<uint64, 2>>, error>
+  fn Ranges(self: Ref<Data>, e: Ref<Entry>) -> Result<mut Slice<Array<uint64, 2>>, error>
 
   /// Reader returns a new Reader for [Data].
   /// The reader is positioned at byte offset 0 in the DWARF “info” section.
-  fn Reader(self: Ref<Data>) -> Ref<Reader>
+  fn Reader(self: Ref<Data>) -> mut Ref<Reader>
 
   /// Type reads the type at off in the DWARF “info” section.
-  fn Type(self: Ref<Data>, off: Offset) -> Result<Type, error>
+  fn Type(self: mut Ref<Data>, off: Offset) -> Result<Type, error>
 }
 
 impl DecodeError {
@@ -864,7 +864,7 @@ impl DotDotDotType {
 impl Entry {
   /// AttrField returns the [Field] associated with attribute [Attr] in
   /// [Entry], or nil if there is no such attribute.
-  fn AttrField(self: Ref<Entry>, a: Attr) -> Option<Ref<Field>>
+  fn AttrField(self: Ref<Entry>, a: Attr) -> Option<mut Ref<Field>>
 
   /// Val returns the value associated with attribute [Attr] in [Entry],
   /// or nil if there is no such attribute.
@@ -905,17 +905,17 @@ impl LineReader {
   /// 
   /// Rows are always in order of increasing entry.Address, but
   /// entry.Line may go forward or backward.
-  fn Next(self: Ref<LineReader>, entry: Ref<LineEntry>) -> Result<(), error>
+  fn Next(self: mut Ref<LineReader>, entry: mut Ref<LineEntry>) -> Result<(), error>
 
   /// Reset repositions the line table reader at the beginning of the
   /// line table.
-  fn Reset(self: Ref<LineReader>)
+  fn Reset(self: mut Ref<LineReader>)
 
   /// Seek restores the line table reader to a position returned by [LineReader.Tell].
   /// 
   /// The argument pos must have been returned by a call to [LineReader.Tell] on this
   /// line table.
-  fn Seek(self: Ref<LineReader>, pos: LineReaderPos)
+  fn Seek(self: mut Ref<LineReader>, pos: LineReaderPos)
 
   /// SeekPC sets *entry to the [LineEntry] that includes pc and positions
   /// the reader on the next entry in the line table. If necessary, this
@@ -929,10 +929,10 @@ impl LineReader {
   /// Hence, in the worst case, this takes time linear in the size of the
   /// line table. If the caller wishes to do repeated fast PC lookups, it
   /// should build an appropriate index of the line table.
-  fn SeekPC(self: Ref<LineReader>, pc: uint64, entry: Ref<LineEntry>) -> Result<(), error>
+  fn SeekPC(self: mut Ref<LineReader>, pc: uint64, entry: mut Ref<LineEntry>) -> Result<(), error>
 
   /// Tell returns the current position in the line table.
-  fn Tell(self: Ref<LineReader>) -> LineReaderPos
+  fn Tell(self: Ref<LineReader>) -> mut LineReaderPos
 }
 
 impl PtrType {
@@ -957,11 +957,11 @@ impl Reader {
   /// It returns nil, nil when it reaches the end of the section.
   /// It returns an error if the current offset is invalid or the data at the
   /// offset cannot be decoded as a valid [Entry].
-  fn Next(self: Ref<Reader>) -> Result<Option<Ref<Entry>>, error>
+  fn Next(self: mut Ref<Reader>) -> Result<Option<mut Ref<Entry>>, error>
 
   /// Seek positions the [Reader] at offset off in the encoded entry stream.
   /// Offset 0 can be used to denote the first entry.
-  fn Seek(self: Ref<Reader>, off: Offset)
+  fn Seek(self: mut Ref<Reader>, off: Offset)
 
   /// SeekPC returns the [Entry] for the compilation unit that includes pc,
   /// and positions the reader to read the children of that unit.  If pc
@@ -975,12 +975,12 @@ impl Reader {
   /// looking up a series of PCs will be faster if they are sorted. If
   /// the caller wishes to do repeated fast PC lookups, it should build
   /// an appropriate index using the Ranges method.
-  fn SeekPC(self: Ref<Reader>, pc: uint64) -> Result<Ref<Entry>, error>
+  fn SeekPC(self: mut Ref<Reader>, pc: uint64) -> Result<mut Ref<Entry>, error>
 
   /// SkipChildren skips over the child entries associated with
   /// the last [Entry] returned by [Reader.Next]. If that [Entry] did not have
   /// children or [Reader.Next] has not been called, SkipChildren is a no-op.
-  fn SkipChildren(self: Ref<Reader>)
+  fn SkipChildren(self: mut Ref<Reader>)
 }
 
 impl StructType {

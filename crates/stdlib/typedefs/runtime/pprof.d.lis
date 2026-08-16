@@ -29,10 +29,10 @@ pub fn Label(ctx: context.Context, key: string) -> Option<string>
 /// Currently only the CPU and goroutine profiles utilize any labels
 /// information.
 /// See https://golang.org/issue/23458 for details.
-pub fn Labels(args: VarArgs<string>) -> LabelSet
+pub fn Labels(args: VarArgs<string>) -> mut LabelSet
 
 /// Lookup returns the profile with the given name, or nil if no such profile exists.
-pub fn Lookup(name: string) -> Option<Ref<Profile>>
+pub fn Lookup(name: string) -> Option<mut Ref<Profile>>
 
 /// NewProfile creates a new profile with the given name.
 /// If a profile with that name already exists, NewProfile panics.
@@ -40,7 +40,7 @@ pub fn Lookup(name: string) -> Option<Ref<Profile>>
 /// separate name spaces for each package.
 /// For compatibility with various tools that read pprof data,
 /// profile names should not contain spaces.
-pub fn NewProfile(name: string) -> Ref<Profile>
+pub fn NewProfile(name: string) -> mut Ref<Profile>
 
 /// Profiles returns a slice of all the known profiles, sorted by name.
 pub fn Profiles() -> Slice<Ref<Profile>>
@@ -173,7 +173,7 @@ impl Profile {
   /// 
   /// Passing skip=0 begins the stack trace at the call to Add inside rpc.NewClient.
   /// Passing skip=1 begins the stack trace at the call to NewClient inside mypkg.Run.
-  fn Add(self: Ref<Profile>, value: Unknown, skip: int)
+  fn Add(self: mut Ref<Profile>, value: Unknown, skip: int)
 
   /// Count returns the number of execution stacks currently in the profile.
   fn Count(self: Ref<Profile>) -> int
@@ -183,7 +183,7 @@ impl Profile {
 
   /// Remove removes the execution stack associated with value from the profile.
   /// It is a no-op if the value is not in the profile.
-  fn Remove(self: Ref<Profile>, value: Unknown)
+  fn Remove(self: mut Ref<Profile>, value: Unknown)
 
   /// WriteTo writes a pprof-formatted snapshot of the profile to w.
   /// If a write to w returns an error, WriteTo returns that error.

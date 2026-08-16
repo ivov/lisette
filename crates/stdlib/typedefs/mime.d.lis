@@ -21,7 +21,7 @@ pub fn AddExtensionType(ext: string, typ: string) -> Result<(), error>
 /// type typ. The returned extensions will each begin with a leading dot, as in
 /// ".html". When typ has no associated extensions, ExtensionsByType returns an
 /// nil slice.
-pub fn ExtensionsByType(typ: string) -> Result<Slice<string>, error>
+pub fn ExtensionsByType(typ: string) -> Result<mut Slice<string>, error>
 
 /// FormatMediaType serializes mediatype t and the parameters
 /// param as a media type conforming to RFC 2045 and RFC 2616.
@@ -40,7 +40,7 @@ pub fn FormatMediaType(t: string, param: Map<string, string>) -> string
 /// [ErrInvalidMediaParameter].
 /// The returned map, params, maps from the lowercase
 /// attribute to the attribute value with its case preserved.
-pub fn ParseMediaType(v: string) -> Partial<(string, Map<string, string>), error>
+pub fn ParseMediaType(v: string) -> Partial<(string, mut Map<string, string>), error>
 
 /// TypeByExtension returns the MIME type associated with the file extension ext.
 /// The extension ext should begin with a leading dot, as in ".html".

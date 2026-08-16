@@ -7,13 +7,13 @@ import "go:html/template"
 import text_template "go:text/template"
 
 /// HTMLTmpl returns a value from html/template.
-pub fn HTMLTmpl() -> Option<Ref<template.Template>>
+pub fn HTMLTmpl() -> Option<mut Ref<template.Template>>
 
 /// TextTmpl returns a value from text/template.
-pub fn TextTmpl() -> Option<Ref<text_template.Template>>
+pub fn TextTmpl() -> Option<mut Ref<text_template.Template>>
 
 /// Holder references both html/template and text/template.
 pub struct Holder {
-  pub HTML: Option<Ref<template.Template>>,
-  pub Text: Option<Ref<text_template.Template>>,
+  pub HTML: Option<mut Ref<template.Template>>,
+  pub Text: Option<mut Ref<text_template.Template>>,
 }

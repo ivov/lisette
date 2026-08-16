@@ -2912,10 +2912,10 @@ pub const EV_NONE: Version = 0
 
 /// NewFile creates a new [File] for accessing an ELF binary in an underlying reader.
 /// The ELF binary is expected to start at position 0 in the ReaderAt.
-pub fn NewFile(r: io.ReaderAt) -> Result<Ref<File>, error>
+pub fn NewFile(r: io.ReaderAt) -> Result<mut Ref<File>, error>
 
 /// Open opens the named file using [os.Open] and prepares it for use as an ELF binary.
-pub fn Open(name: string) -> Result<Ref<File>, error>
+pub fn Open(name: string) -> Result<mut Ref<File>, error>
 
 pub fn R_INFO(sym: uint32, typ: uint32) -> uint64
 
@@ -2981,7 +2981,7 @@ pub struct DynamicVersion {
   pub Name: string,
   pub Index: uint16,
   pub Flags: DynamicVersionFlag,
-  pub Deps: Slice<string>,
+  pub Deps: mut Slice<string>,
 }
 
 /// DynamicVersionDep is a version needed from some shared library.
@@ -3001,15 +3001,15 @@ pub struct DynamicVersionFlag(uint16)
 /// We assume that the vn_version field is 1.
 pub struct DynamicVersionNeed {
   pub Name: string,
-  pub Needs: Slice<DynamicVersionDep>,
+  pub Needs: mut Slice<DynamicVersionDep>,
 }
 
 /// A File represents an open ELF file.
 #[go(hidden_fields)]
 pub struct File {
   embed FileHeader,
-  pub Sections: Slice<Option<Ref<Section>>>,
-  pub Progs: Slice<Option<Ref<Prog>>>,
+  pub Sections: mut Slice<Option<mut Ref<Section>>>,
+  pub Progs: mut Slice<Option<mut Ref<Prog>>>,
 }
 
 /// A FileHeader represents an ELF file header.
@@ -3426,20 +3426,20 @@ impl File {
   /// If the [File] was created using [NewFile] directly instead of [Open],
   /// Close has no effect.
   #[allow(unused_result)]
-  fn Close(self: Ref<File>) -> Result<(), error>
+  fn Close(self: mut Ref<File>) -> Result<(), error>
 
-  fn DWARF(self: Ref<File>) -> Result<Ref<dwarf.Data>, error>
+  fn DWARF(self: Ref<File>) -> Result<mut Ref<dwarf.Data>, error>
 
   /// DynString returns the strings listed for the given tag in the file's dynamic
   /// section.
   /// 
   /// The tag must be one that takes string values: [DT_NEEDED], [DT_SONAME], [DT_RPATH], or
   /// [DT_RUNPATH].
-  fn DynString(self: Ref<File>, tag: DynTag) -> Result<Slice<string>, error>
+  fn DynString(self: Ref<File>, tag: DynTag) -> Result<mut Slice<string>, error>
 
   /// DynValue returns the values listed for the given tag in the file's dynamic
   /// section.
-  fn DynValue(self: Ref<File>, tag: DynTag) -> Result<Slice<uint64>, error>
+  fn DynValue(self: Ref<File>, tag: DynTag) -> Result<mut Slice<uint64>, error>
 
   /// DynamicSymbols returns the dynamic symbol table for f. The symbols
   /// will be listed in the order they appear in f.
@@ -3450,32 +3450,32 @@ impl File {
   /// For compatibility with [File.Symbols], [File.DynamicSymbols] omits the null symbol at index 0.
   /// After retrieving the symbols as symtab, an externally supplied index x
   /// corresponds to symtab[x-1], not symtab[x].
-  fn DynamicSymbols(self: Ref<File>) -> Result<Slice<Symbol>, error>
+  fn DynamicSymbols(self: mut Ref<File>) -> Result<mut Slice<Symbol>, error>
 
   /// DynamicVersionNeeds returns version dependencies for a dynamic object.
-  fn DynamicVersionNeeds(self: Ref<File>) -> Result<Slice<DynamicVersionNeed>, error>
+  fn DynamicVersionNeeds(self: mut Ref<File>) -> Result<mut Slice<mut DynamicVersionNeed>, error>
 
   /// DynamicVersions returns version information for a dynamic object.
-  fn DynamicVersions(self: Ref<File>) -> Result<Slice<DynamicVersion>, error>
+  fn DynamicVersions(self: mut Ref<File>) -> Result<mut Slice<mut DynamicVersion>, error>
 
   /// ImportedLibraries returns the names of all libraries
   /// referred to by the binary f that are expected to be
   /// linked with the binary at dynamic link time.
-  fn ImportedLibraries(self: Ref<File>) -> Result<Slice<string>, error>
+  fn ImportedLibraries(self: Ref<File>) -> Result<mut Slice<string>, error>
 
   /// ImportedSymbols returns the names of all symbols
   /// referred to by the binary f that are expected to be
   /// satisfied by other libraries at dynamic load time.
   /// It does not return weak symbols.
-  fn ImportedSymbols(self: Ref<File>) -> Result<Slice<ImportedSymbol>, error>
+  fn ImportedSymbols(self: mut Ref<File>) -> Result<mut Slice<ImportedSymbol>, error>
 
   /// Section returns a section with the given name, or nil if no such
   /// section exists.
-  fn Section(self: Ref<File>, name: string) -> Option<Ref<Section>>
+  fn Section(self: Ref<File>, name: string) -> Option<mut Ref<Section>>
 
   /// SectionByType returns the first section in f with the
   /// given type, or nil if there is no such section.
-  fn SectionByType(self: Ref<File>, typ: SectionType) -> Option<Ref<Section>>
+  fn SectionByType(self: Ref<File>, typ: SectionType) -> Option<mut Ref<Section>>
 
   /// Symbols returns the symbol table for f. The symbols will be listed in the order
   /// they appear in f.
@@ -3483,7 +3483,7 @@ impl File {
   /// For compatibility with Go 1.0, Symbols omits the null symbol at index 0.
   /// After retrieving the symbols as symtab, an externally supplied index x
   /// corresponds to symtab[x-1], not symtab[x].
-  fn Symbols(self: Ref<File>) -> Result<Slice<Symbol>, error>
+  fn Symbols(self: Ref<File>) -> Result<mut Slice<Symbol>, error>
 }
 
 impl FormatError {
@@ -3512,7 +3512,7 @@ impl Prog {
   /// Open returns a new ReadSeeker reading the ELF program body.
   fn Open(self: Ref<Prog>) -> io.ReadSeeker
 
-  fn ReadAt(self, mut p: Slice<byte>, off: int64) -> Partial<int, error>
+  fn ReadAt(self, p: mut Slice<byte>, off: int64) -> Partial<int, error>
 }
 
 impl ProgFlag {
@@ -3605,7 +3605,7 @@ impl Section {
   /// Data returns uncompressed data.
   /// 
   /// For an [SHT_NOBITS] section, Data always returns a non-nil error.
-  fn Data(self: Ref<Section>) -> Result<Slice<byte>, error>
+  fn Data(self: mut Ref<Section>) -> Result<mut Slice<byte>, error>
 
   /// Open returns a new ReadSeeker reading the ELF section.
   /// Even if the section is stored compressed in the ELF file,
@@ -3613,9 +3613,9 @@ impl Section {
   /// 
   /// For an [SHT_NOBITS] section, all calls to the opened reader
   /// will return a non-nil error.
-  fn Open(self: Ref<Section>) -> io.ReadSeeker
+  fn Open(self: mut Ref<Section>) -> io.ReadSeeker
 
-  fn ReadAt(self, mut p: Slice<byte>, off: int64) -> Partial<int, error>
+  fn ReadAt(self, p: mut Slice<byte>, off: int64) -> Partial<int, error>
 }
 
 impl SectionFlag {

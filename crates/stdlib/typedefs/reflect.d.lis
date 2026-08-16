@@ -86,11 +86,11 @@ pub const SelectSend: SelectDir = 1
 
 /// Append appends the values x to a slice s and returns the resulting slice.
 /// As in Go, each x's value must be assignable to the slice's element type.
-pub fn Append(s: Value, x: VarArgs<Value>) -> Value
+pub fn Append(s: mut Value, x: VarArgs<Value>) -> mut Value
 
 /// AppendSlice appends a slice t to a slice s and returns the resulting slice.
 /// The slices s and t must have the same element type.
-pub fn AppendSlice(s: Value, t: Value) -> Value
+pub fn AppendSlice(s: mut Value, t: Value) -> mut Value
 
 /// ArrayOf returns the array type with the given length and element type.
 /// For example, if t represents int, ArrayOf(5, t) represents [5]int.
@@ -114,7 +114,7 @@ pub fn ChanOf(dir: ChanDir, t: Type) -> Type
 /// It dst is an [Array], it panics if [Value.CanSet] returns false.
 /// 
 /// As a special case, src can have kind [String] if the element type of dst is kind [Uint8].
-pub fn Copy(dst: Value, src: Value) -> int
+pub fn Copy(dst: mut Value, src: Value) -> int
 
 /// DeepEqual reports whether x and y are “deeply equal,” defined as follows.
 /// Two values of identical type are deeply equal if one of the following cases applies.
@@ -181,10 +181,10 @@ pub fn FuncOf(in_: Slice<Type>, out: Slice<Type>, variadic: bool) -> Type
 /// Indirect returns the value that v points to.
 /// If v is a nil pointer, Indirect returns a zero Value.
 /// If v is not a pointer, Indirect returns v.
-pub fn Indirect(v: Value) -> Value
+pub fn Indirect(v: Value) -> mut Value
 
 /// MakeChan creates a new channel with the specified type and buffer size.
-pub fn MakeChan(typ: Type, buffer: int) -> Value
+pub fn MakeChan(typ: Type, buffer: int) -> mut Value
 
 /// MakeFunc returns a new function of the given [Type]
 /// that wraps the function fn. When called, that new function
@@ -207,14 +207,14 @@ pub fn MakeChan(typ: Type, buffer: int) -> Value
 /// 
 /// The Examples section of the documentation includes an illustration
 /// of how to use MakeFunc to build a swap function for different types.
-pub fn MakeFunc(typ: Type, fn_: fn(Slice<Value>) -> Slice<Value>) -> Value
+pub fn MakeFunc(typ: Type, fn_: fn(Slice<Value>) -> Slice<Value>) -> mut Value
 
 /// MakeMap creates a new map with the specified type.
-pub fn MakeMap(typ: Type) -> Value
+pub fn MakeMap(typ: Type) -> mut Value
 
 /// MakeMapWithSize creates a new map with the specified type
 /// and initial space for approximately n elements.
-pub fn MakeMapWithSize(typ: Type, n: int) -> Value
+pub fn MakeMapWithSize(typ: Type, n: int) -> mut Value
 
 /// MakeSlice creates a new zero-initialized slice value
 /// for the specified slice type, length, and capacity.
@@ -230,11 +230,11 @@ pub fn MapOf(key: Type, elem: Type) -> Type
 
 /// New returns a Value representing a pointer to a new zero value
 /// for the specified type. That is, the returned Value's Type is [PointerTo](typ).
-pub fn New(typ: Type) -> Value
+pub fn New(typ: Type) -> mut Value
 
 /// NewAt returns a Value representing a pointer to a value of the
 /// specified type, using p as that pointer.
-pub fn NewAt(typ: Type, p: Unknown) -> Value
+pub fn NewAt(typ: Type, p: Unknown) -> mut Value
 
 /// PointerTo returns the pointer type with element t.
 /// For example, if t represents type Foo, PointerTo(t) represents *Foo.
@@ -257,13 +257,13 @@ pub fn PtrTo(t: Type) -> Type
 /// boolean indicating whether the value corresponds to a send on the channel
 /// (as opposed to a zero value received because the channel is closed).
 /// Select supports a maximum of 65536 cases.
-pub fn Select(cases: Slice<SelectCase>) -> (int, Value, bool)
+pub fn Select(cases: Slice<SelectCase>) -> (int, mut Value, bool)
 
 /// SliceAt returns a [Value] representing a slice whose underlying
 /// data starts at p, with length and capacity equal to n.
 /// 
 /// This is like [unsafe.Slice].
-pub fn SliceAt(typ: Type, p: Unknown, n: int) -> Value
+pub fn SliceAt(typ: Type, p: Unknown, n: int) -> mut Value
 
 /// SliceOf returns the slice type with element type t.
 /// For example, if t represents int, SliceOf(t) represents []int.
@@ -297,7 +297,7 @@ pub fn TypeOf(i: Unknown) -> Option<Type>
 
 /// ValueOf returns a new Value initialized to the concrete value
 /// stored in the interface i. ValueOf(nil) returns the zero Value.
-pub fn ValueOf(i: Unknown) -> Value
+pub fn ValueOf(i: Unknown) -> mut Value
 
 /// VisibleFields returns all the visible fields in t, which must be a
 /// struct type. A field is defined as visible if it's accessible
@@ -326,7 +326,7 @@ pub struct Method {
   pub Name: string,
   pub PkgPath: string,
   pub Type: Option<Type>,
-  pub Func: Value,
+  pub Func: mut Value,
   pub Index: int,
 }
 
@@ -348,8 +348,8 @@ pub struct Method {
 /// When a receive operation is selected, the received Value is returned by Select.
 pub struct SelectCase {
   pub Dir: SelectDir,
-  pub Chan: Value,
-  pub Send: Value,
+  pub Chan: mut Value,
+  pub Send: mut Value,
 }
 
 /// SliceHeader is the runtime representation of a slice.
@@ -386,7 +386,7 @@ pub struct StructField {
   pub Type: Option<Type>,
   pub Tag: StructTag,
   pub Offset: uintptr,
-  pub Index: Slice<int>,
+  pub Index: mut Slice<int>,
   pub Anonymous: bool,
 }
 
@@ -496,21 +496,21 @@ impl Kind {
 
 impl MapIter {
   /// Key returns the key of iter's current map entry.
-  fn Key(self: Ref<MapIter>) -> Value
+  fn Key(self: Ref<MapIter>) -> mut Value
 
   /// Next advances the map iterator and reports whether there is another
   /// entry. It returns false when iter is exhausted; subsequent
   /// calls to [MapIter.Key], [MapIter.Value], or [MapIter.Next] will panic.
-  fn Next(self: Ref<MapIter>) -> bool
+  fn Next(self: mut Ref<MapIter>) -> bool
 
   /// Reset modifies iter to iterate over v.
   /// It panics if v's Kind is not [Map] and v is not the zero Value.
   /// Reset(Value{}) causes iter to not to refer to any map,
   /// which may allow the previously iterated-over map to be garbage collected.
-  fn Reset(self: Ref<MapIter>, v: Value)
+  fn Reset(self: mut Ref<MapIter>, v: Value)
 
   /// Value returns the value of iter's current map entry.
-  fn Value(self: Ref<MapIter>) -> Value
+  fn Value(self: Ref<MapIter>) -> mut Value
 }
 
 impl Method {
@@ -546,7 +546,7 @@ impl Value {
   /// Addr is typically used to obtain a pointer to a struct field
   /// or slice element in order to call a method that requires a
   /// pointer receiver.
-  fn Addr(self) -> Value
+  fn Addr(self) -> mut Value
 
   /// Bool returns v's underlying value.
   /// It panics if v's kind is not [Bool].
@@ -565,7 +565,7 @@ impl Value {
   /// type of the function's corresponding input parameter.
   /// If v is a variadic function, Call creates the variadic slice parameter
   /// itself, copying in the corresponding values.
-  fn Call(self, in_: Slice<Value>) -> Slice<Value>
+  fn Call(self, in_: Slice<Value>) -> mut Slice<mut Value>
 
   /// CallSlice calls the variadic function v with the input arguments in,
   /// assigning the slice in[len(in)-1] to v's final variadic argument.
@@ -574,7 +574,7 @@ impl Value {
   /// It returns the output results as Values.
   /// As in Go, each input argument must be assignable to the
   /// type of the function's corresponding input parameter.
-  fn CallSlice(self, in_: Slice<Value>) -> Slice<Value>
+  fn CallSlice(self, in_: Slice<Value>) -> mut Slice<mut Value>
 
   /// CanAddr reports whether the value's address can be obtained with [Value.Addr].
   /// Such values are called addressable. A value is addressable if it is
@@ -636,13 +636,13 @@ impl Value {
   /// Convert returns the value v converted to type t.
   /// If the usual Go conversion rules do not allow conversion
   /// of the value v to type t, or if converting v to type t panics, Convert panics.
-  fn Convert(self, t: Type) -> Value
+  fn Convert(self, t: Type) -> mut Value
 
   /// Elem returns the value that the interface v contains
   /// or that the pointer v points to.
   /// It panics if v's Kind is not [Interface] or [Pointer].
   /// It returns the zero Value if v is nil.
-  fn Elem(self) -> Value
+  fn Elem(self) -> mut Value
 
   /// Equal reports true if v is equal to u.
   /// For two invalid values, Equal will report true.
@@ -656,29 +656,29 @@ impl Value {
 
   /// Field returns the i'th field of the struct v.
   /// It panics if v's Kind is not [Struct] or i is out of range.
-  fn Field(self, i: int) -> Value
+  fn Field(self, i: int) -> mut Value
 
   /// FieldByIndex returns the nested field corresponding to index.
   /// It panics if evaluation requires stepping through a nil
   /// pointer or a field that is not a struct.
-  fn FieldByIndex(self, index: Slice<int>) -> Value
+  fn FieldByIndex(self, index: Slice<int>) -> mut Value
 
   /// FieldByIndexErr returns the nested field corresponding to index.
   /// It returns an error if evaluation requires stepping through a nil
   /// pointer, but panics if it must step through a field that
   /// is not a struct.
-  fn FieldByIndexErr(self, index: Slice<int>) -> Result<Value, error>
+  fn FieldByIndexErr(self, index: Slice<int>) -> Result<mut Value, error>
 
   /// FieldByName returns the struct field with the given name.
   /// It returns the zero Value if no field was found.
   /// It panics if v's Kind is not [Struct].
-  fn FieldByName(self, name: string) -> Value
+  fn FieldByName(self, name: string) -> mut Value
 
   /// FieldByNameFunc returns the struct field with a name
   /// that satisfies the match function.
   /// It panics if v's Kind is not [Struct].
   /// It returns the zero Value if no field was found.
-  fn FieldByNameFunc(self, match_: fn(string) -> bool) -> Value
+  fn FieldByNameFunc(self, match_: fn(string) -> bool) -> mut Value
 
   /// Float returns v's underlying value, as a float64.
   /// It panics if v's Kind is not [Float32] or [Float64]
@@ -691,7 +691,7 @@ impl Value {
   /// It panics if v's Kind is not a [Slice], or if n is negative or too large to
   /// allocate the memory, or if [Value.CanSet] returns false.
   #[go(value_method_set)]
-  fn Grow(self: Ref<Value>, n: int)
+  fn Grow(self: mut Ref<Value>, n: int)
 
   /// Index returns v's i'th element.
   /// It panics if v's Kind is not [Array], [Slice], or [String] or i is out of range.
@@ -753,13 +753,13 @@ impl Value {
   /// It panics if v's Kind is not [Map].
   /// It returns the zero Value if key is not found in the map or if v represents a nil map.
   /// As in Go, the key's value must be assignable to the map's key type.
-  fn MapIndex(self, key: Value) -> Value
+  fn MapIndex(self, key: Value) -> mut Value
 
   /// MapKeys returns a slice containing all the keys present in the map,
   /// in unspecified order.
   /// It panics if v's Kind is not [Map].
   /// It returns an empty slice if v represents a nil map.
-  fn MapKeys(self) -> Slice<Value>
+  fn MapKeys(self) -> mut Slice<mut Value>
 
   /// MapRange returns a range iterator for a map.
   /// It panics if v's Kind is not [Map].
@@ -776,7 +776,7 @@ impl Value {
   /// 		v := iter.Value()
   /// 		...
   /// 	}
-  fn MapRange(self) -> Ref<MapIter>
+  fn MapRange(self) -> mut Ref<MapIter>
 
   /// Method returns a function value corresponding to v's i'th method.
   /// The arguments to a Call on the returned function should not include
@@ -785,7 +785,7 @@ impl Value {
   /// 
   /// Calling this method will force the linker to retain all exported methods in all packages.
   /// This may make the executable binary larger but will not affect execution time.
-  fn Method(self, i: int) -> Value
+  fn Method(self, i: int) -> mut Value
 
   /// MethodByName returns a function value corresponding to the method
   /// of v with the given name.
@@ -796,7 +796,7 @@ impl Value {
   /// Calling this method will cause the linker to retain all methods with this name in all packages.
   /// If the linker can't determine the name, it will retain all exported methods.
   /// This may make the executable binary larger but will not affect execution time.
-  fn MethodByName(self, name: string) -> Value
+  fn MethodByName(self, name: string) -> mut Value
 
   /// NumField returns the number of fields in the struct v.
   /// It panics if v's Kind is not [Struct].
@@ -876,43 +876,43 @@ impl Value {
   /// As in Go, x's value must be assignable to v's type and
   /// must not be derived from an unexported field.
   #[go(value_method_set)]
-  fn Set(self: Ref<Value>, x: Value)
+  fn Set(self: mut Ref<Value>, x: Value)
 
   /// SetBool sets v's underlying value.
   /// It panics if v's Kind is not [Bool] or if [Value.CanSet] returns false.
   #[go(value_method_set)]
-  fn SetBool(self: Ref<Value>, x: bool)
+  fn SetBool(self: mut Ref<Value>, x: bool)
 
   /// SetBytes sets v's underlying value.
   /// It panics if v's underlying value is not a slice of bytes
   /// or if [Value.CanSet] returns false.
   #[go(value_method_set)]
-  fn SetBytes(self: Ref<Value>, x: Slice<byte>)
+  fn SetBytes(self: mut Ref<Value>, x: Slice<byte>)
 
   /// SetCap sets v's capacity to n.
   /// It panics if v's Kind is not [Slice], or if n is smaller than the length or
   /// greater than the capacity of the slice,
   /// or if [Value.CanSet] returns false.
   #[go(value_method_set)]
-  fn SetCap(self: Ref<Value>, n: int)
+  fn SetCap(self: mut Ref<Value>, n: int)
 
   /// SetComplex sets v's underlying value to x.
   /// It panics if v's Kind is not [Complex64] or [Complex128],
   /// or if [Value.CanSet] returns false.
   #[go(value_method_set)]
-  fn SetComplex(self: Ref<Value>, x: complex128)
+  fn SetComplex(self: mut Ref<Value>, x: complex128)
 
   /// SetFloat sets v's underlying value to x.
   /// It panics if v's Kind is not [Float32] or [Float64],
   /// or if [Value.CanSet] returns false.
   #[go(value_method_set)]
-  fn SetFloat(self: Ref<Value>, x: float64)
+  fn SetFloat(self: mut Ref<Value>, x: float64)
 
   /// SetInt sets v's underlying value to x.
   /// It panics if v's Kind is not [Int], [Int8], [Int16], [Int32], or [Int64],
   /// or if [Value.CanSet] returns false.
   #[go(value_method_set)]
-  fn SetInt(self: Ref<Value>, x: int64)
+  fn SetInt(self: mut Ref<Value>, x: int64)
 
   /// SetIterKey assigns to v the key of iter's current map entry.
   /// It is equivalent to v.Set(iter.Key()), but it avoids allocating a new Value.
@@ -920,7 +920,7 @@ impl Value {
   /// must not be derived from an unexported field.
   /// It panics if [Value.CanSet] returns false.
   #[go(value_method_set)]
-  fn SetIterKey(self: Ref<Value>, iter: Ref<MapIter>)
+  fn SetIterKey(self: mut Ref<Value>, iter: Ref<MapIter>)
 
   /// SetIterValue assigns to v the value of iter's current map entry.
   /// It is equivalent to v.Set(iter.Value()), but it avoids allocating a new Value.
@@ -928,14 +928,14 @@ impl Value {
   /// must not be derived from an unexported field.
   /// It panics if [Value.CanSet] returns false.
   #[go(value_method_set)]
-  fn SetIterValue(self: Ref<Value>, iter: Ref<MapIter>)
+  fn SetIterValue(self: mut Ref<Value>, iter: Ref<MapIter>)
 
   /// SetLen sets v's length to n.
   /// It panics if v's Kind is not [Slice], or if n is negative or
   /// greater than the capacity of the slice,
   /// or if [Value.CanSet] returns false.
   #[go(value_method_set)]
-  fn SetLen(self: Ref<Value>, n: int)
+  fn SetLen(self: mut Ref<Value>, n: int)
 
   /// SetMapIndex sets the element associated with key in the map v to elem.
   /// It panics if v's Kind is not [Map].
@@ -949,33 +949,33 @@ impl Value {
   /// It panics if v's Kind is not [UnsafePointer]
   /// or if [Value.CanSet] returns false.
   #[go(value_method_set)]
-  fn SetPointer(self: Ref<Value>, x: Unknown)
+  fn SetPointer(self: mut Ref<Value>, x: Unknown)
 
   /// SetString sets v's underlying value to x.
   /// It panics if v's Kind is not [String] or if [Value.CanSet] returns false.
   #[go(value_method_set)]
-  fn SetString(self: Ref<Value>, x: string)
+  fn SetString(self: mut Ref<Value>, x: string)
 
   /// SetUint sets v's underlying value to x.
   /// It panics if v's Kind is not [Uint], [Uintptr], [Uint8], [Uint16], [Uint32], or [Uint64],
   /// or if [Value.CanSet] returns false.
   #[go(value_method_set)]
-  fn SetUint(self: Ref<Value>, x: uint64)
+  fn SetUint(self: mut Ref<Value>, x: uint64)
 
   /// SetZero sets v to be the zero value of v's type.
   /// It panics if [Value.CanSet] returns false.
   #[go(value_method_set)]
-  fn SetZero(self: Ref<Value>)
+  fn SetZero(self: mut Ref<Value>)
 
   /// Slice returns v[i:j].
   /// It panics if v's Kind is not [Array], [Slice] or [String], or if v is an unaddressable array,
   /// or if the indexes are out of bounds.
-  fn Slice(self, i: int, j: int) -> Value
+  fn Slice(self, i: int, j: int) -> mut Value
 
   /// Slice3 is the 3-index form of the slice operation: it returns v[i:j:k].
   /// It panics if v's Kind is not [Array] or [Slice], or if v is an unaddressable array,
   /// or if the indexes are out of bounds.
-  fn Slice3(self, i: int, j: int, k: int) -> Value
+  fn Slice3(self, i: int, j: int, k: int) -> mut Value
 
   /// String returns the string v's underlying value, as a string.
   /// String is a special case because of Go's String method convention.

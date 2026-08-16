@@ -8,6 +8,6 @@ import meta_v1 "go:github.com/ivov/lisette/bindgen/tests/testdata/fixtures/impor
 
 /// Holder references both `meta/v1` packages.
 pub struct Holder {
-  pub Foo: Option<Ref<meta_v1.FooMeta>>,
-  pub Bar: Option<Ref<v1.BarMeta>>,
+  pub Foo: Option<mut Ref<meta_v1.FooMeta>>,
+  pub Bar: Option<mut Ref<v1.BarMeta>>,
 }

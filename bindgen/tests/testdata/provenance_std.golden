@@ -814,7 +814,7 @@ io/fs.PathError.Unwrap: r0<-recv
 io/fs.ReadLink (shared r1): 
 io/fs.Sub (shared r1): r0<-fsys
 io/ioutil.NopCloser: r0<-[r]
-io/ioutil.ReadDir (opaque r0) (shared r1): 
+io/ioutil.ReadDir (shared r1): 
 io/ioutil.ReadFile (shared r1): 
 io/ioutil.TempDir (shared r1): 
 io/ioutil.TempFile (opaque r0) (shared r1): 
@@ -1021,7 +1021,7 @@ net.Interface.MulticastAddrs (shared r1):
 net.InterfaceAddrs (shared r1): 
 net.InterfaceByIndex (opaque r0) (shared r1): 
 net.InterfaceByName (opaque r0) (shared r1): 
-net.Interfaces (opaque r0) (shared r1): 
+net.Interfaces (shared r1): 
 net.Listen (opaque r1) (shared r1): 
 net.ListenConfig.Listen (opaque r1) (shared r1): r1<-ctx
 net.ListenConfig.ListenPacket (opaque r1) (shared r1): r1<-ctx

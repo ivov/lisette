@@ -18,7 +18,7 @@ pub fn FreeOSMemory()
 /// Programs should normally not call this function,
 /// but instead call [ReadBuildInfo], [debug/buildinfo.ReadFile],
 /// or [debug/buildinfo.Read].
-pub fn ParseBuildInfo(data: string) -> Result<Ref<BuildInfo>, error>
+pub fn ParseBuildInfo(data: string) -> Result<mut Ref<BuildInfo>, error>
 
 /// PrintStack prints to standard error the stack trace returned by runtime.Stack.
 pub fn PrintStack()
@@ -27,7 +27,7 @@ pub fn PrintStack()
 /// in the running binary. The information is available only
 /// in binaries built with module support.
 #[go(comma_ok)]
-pub fn ReadBuildInfo() -> Option<Ref<BuildInfo>>
+pub fn ReadBuildInfo() -> Option<mut Ref<BuildInfo>>
 
 /// ReadGCStats reads statistics about garbage collection into stats.
 /// The number of entries in the pause history is system-dependent;
@@ -37,7 +37,7 @@ pub fn ReadBuildInfo() -> Option<Ref<BuildInfo>>
 /// summarizing the distribution of pause time. For example, if
 /// len(stats.PauseQuantiles) is 5, it will be filled with the minimum,
 /// 25%, 50%, 75%, and maximum pause times.
-pub fn ReadGCStats(stats: Ref<GCStats>)
+pub fn ReadGCStats(stats: mut Ref<GCStats>)
 
 /// SetCrashOutput configures a single additional file where unhandled
 /// panics and other fatal errors are printed, in addition to standard error.
@@ -179,7 +179,7 @@ pub fn SetTraceback(level: string)
 
 /// Stack returns a formatted stack trace of the goroutine that calls it.
 /// It calls [runtime.Stack] with a large enough buffer to capture the entire trace.
-pub fn Stack() -> Slice<byte>
+pub fn Stack() -> mut Slice<byte>
 
 /// WriteHeapDump writes a description of the heap and the objects in
 /// it to the given file descriptor.
@@ -196,9 +196,9 @@ pub fn WriteHeapDump(fd: uintptr)
 pub struct BuildInfo {
   pub GoVersion: string,
   pub Path: string,
-  pub Main: Module,
-  pub Deps: Slice<Option<Ref<Module>>>,
-  pub Settings: Slice<BuildSetting>,
+  pub Main: mut Module,
+  pub Deps: mut Slice<Option<mut Ref<Module>>>,
+  pub Settings: mut Slice<BuildSetting>,
 }
 
 /// A BuildSetting is a key-value pair describing one setting that influenced a build.
@@ -233,12 +233,12 @@ pub type CrashOptions
 
 /// GCStats collect information about recent garbage collections.
 pub struct GCStats {
-  pub LastGC: time.Time,
+  pub LastGC: mut time.Time,
   pub NumGC: int64,
   pub PauseTotal: time.Duration,
-  pub Pause: Slice<time.Duration>,
-  pub PauseEnd: Slice<time.Time>,
-  pub PauseQuantiles: Slice<time.Duration>,
+  pub Pause: mut Slice<time.Duration>,
+  pub PauseEnd: mut Slice<mut time.Time>,
+  pub PauseQuantiles: mut Slice<time.Duration>,
 }
 
 /// A Module describes a single module included in a build.
@@ -246,7 +246,7 @@ pub struct Module {
   pub Path: string,
   pub Version: string,
   pub Sum: string,
-  pub Replace: Option<Ref<Module>>,
+  pub Replace: Option<mut Ref<Module>>,
 }
 
 impl BuildInfo {

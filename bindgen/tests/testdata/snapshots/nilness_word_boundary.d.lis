@@ -3,13 +3,13 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
-pub fn MakeAccount(name: string) -> Ref<Account>
+pub fn MakeAccount(name: string) -> mut Ref<Account>
 
-pub fn Makeshift(name: string) -> Option<Ref<Account>>
+pub fn Makeshift(name: string) -> Option<mut Ref<Account>>
 
-pub fn WithTag(name: string) -> Ref<Account>
+pub fn WithTag(name: string) -> mut Ref<Account>
 
-pub fn Withdraw(name: string) -> Option<Ref<Account>>
+pub fn Withdraw(name: string) -> Option<mut Ref<Account>>
 
 pub struct Account {
   pub Balance: int,

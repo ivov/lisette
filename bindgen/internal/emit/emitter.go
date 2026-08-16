@@ -361,11 +361,7 @@ func (e *Emitter) String() string {
 func formatParams(params []convert.FunctionParameter) []string {
 	out := make([]string, 0, len(params))
 	for _, p := range params {
-		if p.Mutable {
-			out = append(out, fmt.Sprintf("mut %s: %s", p.Name, p.Type))
-		} else {
-			out = append(out, fmt.Sprintf("%s: %s", p.Name, p.Type))
-		}
+		out = append(out, fmt.Sprintf("%s: %s", p.Name, p.Type))
 	}
 	return out
 }
@@ -497,7 +493,13 @@ func (e *Emitter) emitMethodInImpl(result convert.ConvertResult, recvName string
 	var params []string
 	if result.Receiver != nil && (result.Receiver.IsPointer || result.Receiver.Mutable) {
 		typeName := recvName + result.Receiver.TypeParams.UseBlock()
-		params = append(params, fmt.Sprintf("self: Ref<%s>", typeName))
+		// A Go pointer receiver may write unless the analysis proved
+		// otherwise, so the worst case keeps the `mut` qualifier.
+		if result.Receiver.ProvenReadOnly && !result.Receiver.Mutable {
+			params = append(params, fmt.Sprintf("self: Ref<%s>", typeName))
+		} else {
+			params = append(params, fmt.Sprintf("self: mut Ref<%s>", typeName))
+		}
 	} else {
 		params = append(params, "self")
 	}

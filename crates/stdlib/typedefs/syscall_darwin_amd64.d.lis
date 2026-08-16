@@ -463,26 +463,26 @@ pub fn BpfHeadercmpl(fd: int) -> Result<int, error>
 pub fn BpfInterface(fd: int, name: string) -> Result<string, error>
 
 /// Deprecated: Use golang.org/x/net/bpf instead.
-pub fn BpfJump(code: int, k: int, jt: int, jf: int) -> Ref<BpfInsn>
+pub fn BpfJump(code: int, k: int, jt: int, jf: int) -> mut Ref<BpfInsn>
 
 /// Deprecated: Use golang.org/x/net/bpf instead.
-pub fn BpfStats(fd: int) -> Result<Ref<BpfStat>, error>
+pub fn BpfStats(fd: int) -> Result<mut Ref<BpfStat>, error>
 
 /// Deprecated: Use golang.org/x/net/bpf instead.
-pub fn BpfStmt(code: int, k: int) -> Ref<BpfInsn>
+pub fn BpfStmt(code: int, k: int) -> mut Ref<BpfInsn>
 
 /// Deprecated: Use golang.org/x/net/bpf instead.
-pub fn BpfTimeout(fd: int) -> Result<Ref<Timeval>, error>
+pub fn BpfTimeout(fd: int) -> Result<mut Ref<Timeval>, error>
 
 /// BytePtrFromString returns a pointer to a NUL-terminated array of
 /// bytes containing the text of s. If s contains a NUL byte at any
 /// location, it returns (nil, [EINVAL]).
-pub fn BytePtrFromString(s: string) -> Result<Ref<byte>, error>
+pub fn BytePtrFromString(s: string) -> Result<mut Ref<byte>, error>
 
 /// ByteSliceFromString returns a NUL-terminated slice of bytes
 /// containing the text of s. If s contains a NUL byte at any
 /// location, it returns (nil, [EINVAL]).
-pub fn ByteSliceFromString(s: string) -> Result<Slice<byte>, error>
+pub fn ByteSliceFromString(s: string) -> Result<mut Slice<byte>, error>
 
 pub fn Chdir(path: string) -> Result<(), error>
 
@@ -518,7 +518,7 @@ pub fn Dup(fd: int) -> Result<int, error>
 
 pub fn Dup2(from: int, to: int) -> Result<(), error>
 
-pub fn Environ() -> Slice<string>
+pub fn Environ() -> mut Slice<string>
 
 pub fn Exchangedata(path1: string, path2: string, options: int) -> Result<(), error>
 
@@ -558,7 +558,7 @@ pub fn Ftruncate(fd: int, length: int64) -> Result<(), error>
 
 pub fn Futimes(fd: int, tv: Slice<Timeval>) -> Result<(), error>
 
-pub fn Getdirentries(fd: int, mut buf: Slice<byte>, basep: Ref<uintptr>) -> Result<int, error>
+pub fn Getdirentries(fd: int, buf: mut Slice<byte>, basep: Ref<uintptr>) -> Result<int, error>
 
 pub fn Getdtablesize() -> int
 
@@ -568,11 +568,11 @@ pub fn Getenv(key: string) -> Option<string>
 
 pub fn Geteuid() -> int
 
-pub fn Getfsstat(mut buf: Slice<Statfs_t>, flags: int) -> Result<int, error>
+pub fn Getfsstat(buf: mut Slice<Statfs_t>, flags: int) -> Result<int, error>
 
 pub fn Getgid() -> int
 
-pub fn Getgroups() -> Result<Slice<int>, error>
+pub fn Getgroups() -> Result<mut Slice<int>, error>
 
 pub fn Getpagesize() -> int
 
@@ -598,13 +598,13 @@ pub fn Getsockname(fd: int) -> Result<Sockaddr, error>
 
 pub fn GetsockoptByte(fd: int, level: int, opt: int) -> Result<byte, error>
 
-pub fn GetsockoptICMPv6Filter(fd: int, level: int, opt: int) -> Result<Ref<ICMPv6Filter>, error>
+pub fn GetsockoptICMPv6Filter(fd: int, level: int, opt: int) -> Result<mut Ref<ICMPv6Filter>, error>
 
-pub fn GetsockoptIPMreq(fd: int, level: int, opt: int) -> Result<Ref<IPMreq>, error>
+pub fn GetsockoptIPMreq(fd: int, level: int, opt: int) -> Result<mut Ref<IPMreq>, error>
 
-pub fn GetsockoptIPv6MTUInfo(fd: int, level: int, opt: int) -> Result<Ref<IPv6MTUInfo>, error>
+pub fn GetsockoptIPv6MTUInfo(fd: int, level: int, opt: int) -> Result<mut Ref<IPv6MTUInfo>, error>
 
-pub fn GetsockoptIPv6Mreq(fd: int, level: int, opt: int) -> Result<Ref<IPv6Mreq>, error>
+pub fn GetsockoptIPv6Mreq(fd: int, level: int, opt: int) -> Result<mut Ref<IPv6Mreq>, error>
 
 pub fn GetsockoptInet4Addr(fd: int, level: int, opt: int) -> Result<Array<byte, 4>, error>
 
@@ -669,7 +669,7 @@ pub fn Open(path: string, mode: int, perm: uint32) -> Result<int, error>
 /// appending the names to names. It returns the number of
 /// bytes consumed from buf, the number of entries added
 /// to names, and the new names slice.
-pub fn ParseDirent(buf: Slice<byte>, max: int, mut names: Slice<string>) -> (int, int, Slice<string>)
+pub fn ParseDirent(buf: Slice<byte>, max: int, names: mut Slice<string>) -> (int, int, mut Slice<string>)
 
 /// ParseRoutingMessage parses b as routing messages and returns the
 /// slice containing the [RoutingMessage] interfaces.
@@ -681,7 +681,7 @@ pub fn ParseRoutingMessage(b: Slice<byte>) -> Result<Slice<RoutingMessage>, erro
 /// returns the slice containing the [Sockaddr] interfaces.
 /// 
 /// Deprecated: Use golang.org/x/net/route instead.
-pub fn ParseRoutingSockaddr(msg: RoutingMessage) -> Result<Slice<Sockaddr>, error>
+pub fn ParseRoutingSockaddr(msg: RoutingMessage) -> Result<mut Slice<Sockaddr>, error>
 
 /// ParseSocketControlMessage parses b as an array of socket control
 /// messages.
@@ -689,13 +689,13 @@ pub fn ParseSocketControlMessage(b: Slice<byte>) -> Result<Slice<SocketControlMe
 
 /// ParseUnixRights decodes a socket control message that contains an
 /// integer array of open file descriptors from another process.
-pub fn ParseUnixRights(m: Ref<SocketControlMessage>) -> Result<Slice<int>, error>
+pub fn ParseUnixRights(m: Ref<SocketControlMessage>) -> Result<mut Slice<int>, error>
 
 pub fn Pathconf(path: string, name: int) -> Result<int, error>
 
-pub fn Pipe(mut p: Slice<int>) -> Result<(), error>
+pub fn Pipe(p: mut Slice<int>) -> Result<(), error>
 
-pub fn Pread(fd: int, mut p: Slice<byte>, offset: int64) -> Result<int, error>
+pub fn Pread(fd: int, p: mut Slice<byte>, offset: int64) -> Result<int, error>
 
 pub fn PtraceAttach(pid: int) -> Result<(), error>
 
@@ -715,15 +715,15 @@ pub fn RawSyscall6(
   a6: uintptr,
 ) -> (uintptr, uintptr, Errno)
 
-pub fn Read(fd: int, mut p: Slice<byte>) -> Result<int, error>
+pub fn Read(fd: int, p: mut Slice<byte>) -> Result<int, error>
 
-pub fn ReadDirent(fd: int, mut buf: Slice<byte>) -> Result<int, error>
+pub fn ReadDirent(fd: int, buf: mut Slice<byte>) -> Result<int, error>
 
-pub fn Readlink(path: string, mut buf: Slice<byte>) -> Result<int, error>
+pub fn Readlink(path: string, buf: mut Slice<byte>) -> Result<int, error>
 
-pub fn Recvfrom(fd: int, mut p: Slice<byte>, flags: int) -> Result<(int, Sockaddr), error>
+pub fn Recvfrom(fd: int, p: mut Slice<byte>, flags: int) -> Result<(int, Sockaddr), error>
 
-pub fn Recvmsg(fd: int, mut p: Slice<byte>, mut oob: Slice<byte>, flags: int) -> Result<(int, int, int, Sockaddr), error>
+pub fn Recvmsg(fd: int, p: mut Slice<byte>, oob: mut Slice<byte>, flags: int) -> Result<(int, int, int, Sockaddr), error>
 
 pub fn Rename(from: string, to: string) -> Result<(), error>
 
@@ -736,7 +736,7 @@ pub fn Rmdir(path: string) -> Result<(), error>
 /// parameters.
 /// 
 /// Deprecated: Use golang.org/x/net/route instead.
-pub fn RouteRIB(facility: int, param: int) -> Result<Slice<byte>, error>
+pub fn RouteRIB(facility: int, param: int) -> Result<mut Slice<byte>, error>
 
 pub fn Seek(fd: int, offset: int64, whence: int) -> Result<int64, error>
 
@@ -792,7 +792,7 @@ pub fn SetBpfPromisc(fd: int, m: int) -> Result<(), error>
 /// Deprecated: Use golang.org/x/net/bpf instead.
 pub fn SetBpfTimeout(fd: int, tv: Ref<Timeval>) -> Result<(), error>
 
-pub fn SetKevent(k: Ref<Kevent_t>, fd: int, mode: int, flags: int)
+pub fn SetKevent(k: mut Ref<Kevent_t>, fd: int, mode: int, flags: int)
 
 pub fn SetNonblock(fd: int, nonblocking: bool) -> Result<(), error>
 
@@ -854,7 +854,7 @@ pub fn Shutdown(s: int, how: int) -> Result<(), error>
 /// SlicePtrFromStrings converts a slice of strings to a slice of
 /// pointers to NUL-terminated byte arrays. If any string contains
 /// a NUL byte, it returns (nil, [EINVAL]).
-pub fn SlicePtrFromStrings(ss: Slice<string>) -> Result<Slice<Ref<byte>>, error>
+pub fn SlicePtrFromStrings(ss: Slice<string>) -> Result<mut Slice<mut Ref<byte>>, error>
 
 pub fn Socket(domain: int, typ: int, proto: int) -> Result<int, error>
 
@@ -872,21 +872,21 @@ pub fn Statfs(path: string, stat: Ref<Statfs_t>) -> Result<(), error>
 /// an error.
 /// 
 /// Deprecated: Use [BytePtrFromString] instead.
-pub fn StringBytePtr(s: string) -> Ref<byte>
+pub fn StringBytePtr(s: string) -> mut Ref<byte>
 
 /// StringByteSlice converts a string to a NUL-terminated []byte,
 /// If s contains a NUL byte this function panics instead of
 /// returning an error.
 /// 
 /// Deprecated: Use ByteSliceFromString instead.
-pub fn StringByteSlice(s: string) -> Slice<byte>
+pub fn StringByteSlice(s: string) -> mut Slice<byte>
 
 /// StringSlicePtr converts a slice of strings to a slice of pointers
 /// to NUL-terminated byte arrays. If any string contains a NUL byte
 /// this function panics instead of returning an error.
 /// 
 /// Deprecated: Use [SlicePtrFromStrings] instead.
-pub fn StringSlicePtr(ss: Slice<string>) -> Slice<Ref<byte>>
+pub fn StringSlicePtr(ss: Slice<string>) -> mut Slice<mut Ref<byte>>
 
 pub fn Symlink(path: string, link: string) -> Result<(), error>
 
@@ -949,7 +949,7 @@ pub fn UtimesNano(path: string, ts: Slice<Timespec>) -> Result<(), error>
 
 pub fn Wait4(
   pid: int,
-  wstatus: Ref<WaitStatus>,
+  wstatus: mut Ref<WaitStatus>,
   options: int,
   rusage: Ref<Rusage>,
 ) -> Result<int, error>
@@ -974,7 +974,7 @@ pub struct BpfInsn {
 pub struct BpfProgram {
   pub Len: uint32,
   pub Pad_cgo_0: Array<byte, 4>,
-  pub Insns: Option<Ref<BpfInsn>>,
+  pub Insns: Option<mut Ref<BpfInsn>>,
 }
 
 pub struct BpfStat {
@@ -1004,7 +1004,7 @@ pub interface Conn {
 pub struct Credential {
   pub Uid: uint32,
   pub Gid: uint32,
-  pub Groups: Slice<uint32>,
+  pub Groups: mut Slice<uint32>,
   pub NoSetGroups: bool,
 }
 
@@ -1021,7 +1021,7 @@ pub struct Dirent {
 pub struct Fbootstraptransfer_t {
   pub Offset: int64,
   pub Length: uint64,
-  pub Buffer: Option<Ref<byte>>,
+  pub Buffer: Option<mut Ref<byte>>,
 }
 
 pub struct FdSet {
@@ -1159,7 +1159,7 @@ pub struct Inet6Pktinfo {
 /// Deprecated: Use golang.org/x/net/route instead.
 pub struct InterfaceAddrMessage {
   pub Header: IfaMsghdr,
-  pub Data: Slice<byte>,
+  pub Data: mut Slice<byte>,
 }
 
 /// InterfaceMessage represents a routing message containing
@@ -1168,7 +1168,7 @@ pub struct InterfaceAddrMessage {
 /// Deprecated: Use golang.org/x/net/route instead.
 pub struct InterfaceMessage {
   pub Header: IfMsghdr,
-  pub Data: Slice<byte>,
+  pub Data: mut Slice<byte>,
 }
 
 /// InterfaceMulticastAddrMessage represents a routing message
@@ -1177,11 +1177,11 @@ pub struct InterfaceMessage {
 /// Deprecated: Use golang.org/x/net/route instead.
 pub struct InterfaceMulticastAddrMessage {
   pub Header: IfmaMsghdr2,
-  pub Data: Slice<byte>,
+  pub Data: mut Slice<byte>,
 }
 
 pub struct Iovec {
-  pub Base: Option<Ref<byte>>,
+  pub Base: Option<mut Ref<byte>>,
   pub Len: uint64,
 }
 
@@ -1191,7 +1191,7 @@ pub struct Kevent_t {
   pub Flags: uint16,
   pub Fflags: uint32,
   pub Data: int64,
-  pub Udata: Option<Ref<byte>>,
+  pub Udata: Option<mut Ref<byte>>,
 }
 
 pub struct Linger {
@@ -1206,13 +1206,13 @@ pub struct Log2phys_t {
 }
 
 pub struct Msghdr {
-  pub Name: Option<Ref<byte>>,
+  pub Name: Option<mut Ref<byte>>,
   pub Namelen: uint32,
   pub Pad_cgo_0: Array<byte, 4>,
-  pub Iov: Option<Ref<Iovec>>,
+  pub Iov: Option<mut Ref<Iovec>>,
   pub Iovlen: int32,
   pub Pad_cgo_1: Array<byte, 4>,
-  pub Control: Option<Ref<byte>>,
+  pub Control: Option<mut Ref<byte>>,
   pub Controllen: uint32,
   pub Flags: int32,
 }
@@ -1221,9 +1221,9 @@ pub struct Msghdr {
 /// by [StartProcess].
 pub struct ProcAttr {
   pub Dir: string,
-  pub Env: Slice<string>,
-  pub Files: Slice<uintptr>,
-  pub Sys: Option<Ref<SysProcAttr>>,
+  pub Env: mut Slice<string>,
+  pub Files: mut Slice<uintptr>,
+  pub Sys: Option<mut Ref<SysProcAttr>>,
 }
 
 pub struct Radvisory_t {
@@ -1295,7 +1295,7 @@ pub struct Rlimit {
 /// Deprecated: Use golang.org/x/net/route instead.
 pub struct RouteMessage {
   pub Header: RtMsghdr,
-  pub Data: Slice<byte>,
+  pub Data: mut Slice<byte>,
 }
 
 /// RoutingMessage represents a routing message.
@@ -1393,7 +1393,7 @@ pub struct SockaddrUnix {
 /// SocketControlMessage represents a socket control message.
 pub struct SocketControlMessage {
   pub Header: Cmsghdr,
-  pub Data: Slice<byte>,
+  pub Data: mut Slice<byte>,
 }
 
 pub struct Stat_t {
@@ -1439,7 +1439,7 @@ pub struct Statfs_t {
 
 pub struct SysProcAttr {
   pub Chroot: string,
-  pub Credential: Option<Ref<Credential>>,
+  pub Credential: Option<mut Ref<Credential>>,
   pub Ptrace: bool,
   pub Setsid: bool,
   pub Setpgid: bool,
@@ -4544,7 +4544,7 @@ pub var Stdin: int
 pub var Stdout: int
 
 impl Cmsghdr {
-  fn SetLen(self: Ref<Cmsghdr>, length: int)
+  fn SetLen(self: mut Ref<Cmsghdr>, length: int)
 }
 
 impl Errno {
@@ -4573,11 +4573,11 @@ impl InterfaceMulticastAddrMessage {
 }
 
 impl Iovec {
-  fn SetLen(self: Ref<Iovec>, length: int)
+  fn SetLen(self: mut Ref<Iovec>, length: int)
 }
 
 impl Msghdr {
-  fn SetControllen(self: Ref<Msghdr>, length: int)
+  fn SetControllen(self: mut Ref<Msghdr>, length: int)
 }
 
 impl RouteMessage {
@@ -4593,22 +4593,22 @@ impl Signal {
 
 impl SockaddrDatalink {
   #[go(unexported, "syscall.sockaddr() unsafe.Pointer,syscall._Socklen,error")]
-  fn sockaddr(self: Ref<SockaddrDatalink>)
+  fn sockaddr(self: mut Ref<SockaddrDatalink>)
 }
 
 impl SockaddrInet4 {
   #[go(unexported, "syscall.sockaddr() unsafe.Pointer,syscall._Socklen,error")]
-  fn sockaddr(self: Ref<SockaddrInet4>)
+  fn sockaddr(self: mut Ref<SockaddrInet4>)
 }
 
 impl SockaddrInet6 {
   #[go(unexported, "syscall.sockaddr() unsafe.Pointer,syscall._Socklen,error")]
-  fn sockaddr(self: Ref<SockaddrInet6>)
+  fn sockaddr(self: mut Ref<SockaddrInet6>)
 }
 
 impl SockaddrUnix {
   #[go(unexported, "syscall.sockaddr() unsafe.Pointer,syscall._Socklen,error")]
-  fn sockaddr(self: Ref<SockaddrUnix>)
+  fn sockaddr(self: mut Ref<SockaddrUnix>)
 }
 
 impl Timespec {

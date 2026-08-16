@@ -4,7 +4,7 @@
 // Lisette: 0.0.0
 
 /// Wrapped slice — the Labels pattern.
-pub struct Labels(Slice<string>)
+pub struct Labels(mut Slice<string>)
 
 /// Wrapped basic types — the Ginkgo decorator pattern.
 pub struct NodeTimeout(int64)

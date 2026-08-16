@@ -20,12 +20,12 @@ pub const L3072N256: ParameterSizes = 3
 
 /// GenerateKey generates a public&private key pair. The Parameters of the
 /// [PrivateKey] must already be valid (see [GenerateParameters]).
-pub fn GenerateKey(priv: Ref<PrivateKey>, rand: io.Reader) -> Result<(), error>
+pub fn GenerateKey(priv: mut Ref<PrivateKey>, rand: io.Reader) -> Result<(), error>
 
 /// GenerateParameters puts a random, valid set of DSA parameters into params.
 /// This function can take many seconds, even on fast machines.
 pub fn GenerateParameters(
-  params: Ref<Parameters>,
+  params: mut Ref<Parameters>,
   rand: io.Reader,
   sizes: ParameterSizes,
 ) -> Result<(), error>
@@ -41,7 +41,7 @@ pub fn GenerateParameters(
 /// 
 /// Be aware that calling Sign with an attacker-controlled [PrivateKey] may
 /// require an arbitrary amount of CPU.
-pub fn Sign(rand: io.Reader, priv: Ref<PrivateKey>, hash: Slice<byte>) -> Result<(Ref<big.Int>, Ref<big.Int>), error>
+pub fn Sign(rand: io.Reader, priv: Ref<PrivateKey>, hash: Slice<byte>) -> Result<(mut Ref<big.Int>, mut Ref<big.Int>), error>
 
 /// Verify verifies the signature in r, s of hash using the public key, pub. It
 /// reports whether the signature is valid.
@@ -59,21 +59,21 @@ pub fn Verify(
 /// Parameters represents the domain parameters for a key. These parameters can
 /// be shared across many keys. The bit length of Q must be a multiple of 8.
 pub struct Parameters {
-  pub P: Option<Ref<big.Int>>,
-  pub Q: Option<Ref<big.Int>>,
-  pub G: Option<Ref<big.Int>>,
+  pub P: Option<mut Ref<big.Int>>,
+  pub Q: Option<mut Ref<big.Int>>,
+  pub G: Option<mut Ref<big.Int>>,
 }
 
 /// PrivateKey represents a DSA private key.
 pub struct PrivateKey {
-  embed PublicKey,
-  pub X: Option<Ref<big.Int>>,
+  embed mut PublicKey,
+  pub X: Option<mut Ref<big.Int>>,
 }
 
 /// PublicKey represents a DSA public key.
 pub struct PublicKey {
-  embed Parameters,
-  pub Y: Option<Ref<big.Int>>,
+  embed mut Parameters,
+  pub Y: Option<mut Ref<big.Int>>,
 }
 
 /// ErrInvalidPublicKey results when a public key is not usable by this code.

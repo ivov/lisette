@@ -25,8 +25,8 @@ impl FS {
   fn Open(self, name: string) -> Result<fs.File, error>
 
   /// ReadDir reads and returns the entire named directory.
-  fn ReadDir(self, name: string) -> Result<Slice<fs.DirEntry>, error>
+  fn ReadDir(self, name: string) -> Result<mut Slice<fs.DirEntry>, error>
 
   /// ReadFile reads and returns the content of the named file.
-  fn ReadFile(self, name: string) -> Result<Slice<byte>, error>
+  fn ReadFile(self, name: string) -> Result<mut Slice<byte>, error>
 }

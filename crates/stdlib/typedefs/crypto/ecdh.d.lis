@@ -35,9 +35,9 @@ pub fn P521() -> Curve
 pub fn X25519() -> Curve
 
 pub interface Curve {
-  fn GenerateKey(rand: io.Reader) -> Result<Ref<PrivateKey>, error>
-  fn NewPrivateKey(key: Slice<byte>) -> Result<Ref<PrivateKey>, error>
-  fn NewPublicKey(key: Slice<byte>) -> Result<Ref<PublicKey>, error>
+  fn GenerateKey(rand: io.Reader) -> Result<mut Ref<PrivateKey>, error>
+  fn NewPrivateKey(key: Slice<byte>) -> Result<mut Ref<PrivateKey>, error>
+  fn NewPublicKey(key: Slice<byte>) -> Result<mut Ref<PublicKey>, error>
   #[go(unexported, "crypto/ecdh.ecdh(*crypto/ecdh.PrivateKey,*crypto/ecdh.PublicKey) []byte,error")]
   fn ecdh()
 }
@@ -58,7 +58,7 @@ pub type PublicKey
 
 impl PrivateKey {
   /// Bytes returns a copy of the encoding of the private key.
-  fn Bytes(self: Ref<PrivateKey>) -> Slice<byte>
+  fn Bytes(self: Ref<PrivateKey>) -> mut Slice<byte>
 
   fn Curve(self: Ref<PrivateKey>) -> Curve
 
@@ -73,7 +73,7 @@ impl PrivateKey {
   /// 
   /// For [X25519], this performs ECDH as specified in RFC 7748, Section 6.1. If
   /// the result is the all-zero value, ECDH returns an error.
-  fn ECDH(self: Ref<PrivateKey>, remote: Ref<PublicKey>) -> Result<Slice<byte>, error>
+  fn ECDH(self: Ref<PrivateKey>, remote: Ref<PublicKey>) -> Result<mut Slice<byte>, error>
 
   /// Equal returns whether x represents the same private key as k.
   /// 
@@ -88,12 +88,12 @@ impl PrivateKey {
   /// keys. See the docs of [crypto.PrivateKey].
   fn Public(self: Ref<PrivateKey>) -> crypto.PublicKey
 
-  fn PublicKey(self: Ref<PrivateKey>) -> Ref<PublicKey>
+  fn PublicKey(self: Ref<PrivateKey>) -> mut Ref<PublicKey>
 }
 
 impl PublicKey {
   /// Bytes returns a copy of the encoding of the public key.
-  fn Bytes(self: Ref<PublicKey>) -> Slice<byte>
+  fn Bytes(self: Ref<PublicKey>) -> mut Slice<byte>
 
   fn Curve(self: Ref<PublicKey>) -> Curve
 

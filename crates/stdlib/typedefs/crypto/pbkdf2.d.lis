@@ -30,4 +30,4 @@ pub fn Key<Hash: hash.Hash>(
   salt: Slice<byte>,
   iter: int,
   keyLength: int,
-) -> Result<Slice<byte>, error>
+) -> Result<mut Slice<byte>, error>

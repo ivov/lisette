@@ -18,12 +18,12 @@ pub fn Handler(name: string) -> http.Handler
 /// For example, "/debug/pprof/heap" serves the "heap" profile.
 /// Index responds to a request for "/debug/pprof/" with an HTML page
 /// listing the available profiles.
-pub fn Index(w: http.ResponseWriter, r: Ref<http.Request>)
+pub fn Index(w: http.ResponseWriter, r: mut Ref<http.Request>)
 
 /// Profile responds with the pprof-formatted cpu profile.
 /// Profiling lasts for duration specified in seconds GET parameter, or for 30 seconds if not specified.
 /// The package initialization registers it as /debug/pprof/profile.
-pub fn Profile(w: http.ResponseWriter, r: Ref<http.Request>)
+pub fn Profile(w: http.ResponseWriter, r: mut Ref<http.Request>)
 
 /// Symbol looks up the program counters listed in the request,
 /// responding with a table mapping program counters to function names.
@@ -33,4 +33,4 @@ pub fn Symbol(w: http.ResponseWriter, r: Ref<http.Request>)
 /// Trace responds with the execution trace in binary form.
 /// Tracing lasts for duration specified in seconds GET parameter, or for 1 second if not specified.
 /// The package initialization registers it as /debug/pprof/trace.
-pub fn Trace(w: http.ResponseWriter, r: Ref<http.Request>)
+pub fn Trace(w: http.ResponseWriter, r: mut Ref<http.Request>)

@@ -16,11 +16,11 @@ pub fn CRAMMD5Auth(username: string, secret: string) -> Auth
 
 /// Dial returns a new [Client] connected to an SMTP server at addr.
 /// The addr must include a port, as in "mail.example.com:smtp".
-pub fn Dial(addr: string) -> Result<Ref<Client>, error>
+pub fn Dial(addr: string) -> Result<mut Ref<Client>, error>
 
 /// NewClient returns a new [Client] using an existing connection and host as a
 /// server name to be used when authenticating.
-pub fn NewClient(conn: net.Conn, host: string) -> Result<Ref<Client>, error>
+pub fn NewClient(conn: net.Conn, host: string) -> Result<mut Ref<Client>, error>
 
 /// PlainAuth returns an [Auth] that implements the PLAIN authentication
 /// mechanism as defined in RFC 4616. The returned Auth uses the given
@@ -75,21 +75,21 @@ pub interface Auth {
 #[go(hidden_fields)]
 #[go(zero_unsafe)]
 pub struct Client {
-  pub Text: Option<Ref<textproto.Conn>>,
+  pub Text: Option<mut Ref<textproto.Conn>>,
 }
 
 /// ServerInfo records information about an SMTP server.
 pub struct ServerInfo {
   pub Name: string,
   pub TLS: bool,
-  pub Auth: Slice<string>,
+  pub Auth: mut Slice<string>,
 }
 
 impl Client {
   /// Auth authenticates a client using the provided authentication mechanism.
   /// A failed authentication closes the connection.
   /// Only servers that advertise the AUTH extension support this function.
-  fn Auth(self: Ref<Client>, a: Auth) -> Result<(), error>
+  fn Auth(self: mut Ref<Client>, a: Auth) -> Result<(), error>
 
   /// Close closes the connection.
   #[allow(unused_result)]
@@ -105,28 +105,28 @@ impl Client {
   /// The extension name is case-insensitive. If the extension is supported,
   /// Extension also returns a string that contains any parameters the
   /// server specifies for the extension.
-  fn Extension(self: Ref<Client>, ext: string) -> (bool, string)
+  fn Extension(self: mut Ref<Client>, ext: string) -> (bool, string)
 
   /// Hello sends a HELO or EHLO to the server as the given host name.
   /// Calling this method is only necessary if the client needs control
   /// over the host name used. The client will introduce itself as "localhost"
   /// automatically otherwise. If Hello is called, it must be called before
   /// any of the other methods.
-  fn Hello(self: Ref<Client>, localName: string) -> Result<(), error>
+  fn Hello(self: mut Ref<Client>, localName: string) -> Result<(), error>
 
   /// Mail issues a MAIL command to the server using the provided email address.
   /// If the server supports the 8BITMIME extension, Mail adds the BODY=8BITMIME
   /// parameter. If the server supports the SMTPUTF8 extension, Mail adds the
   /// SMTPUTF8 parameter.
   /// This initiates a mail transaction and is followed by one or more [Client.Rcpt] calls.
-  fn Mail(self: Ref<Client>, from: string) -> Result<(), error>
+  fn Mail(self: mut Ref<Client>, from: string) -> Result<(), error>
 
   /// Noop sends the NOOP command to the server. It does nothing but check
   /// that the connection to the server is okay.
-  fn Noop(self: Ref<Client>) -> Result<(), error>
+  fn Noop(self: mut Ref<Client>) -> Result<(), error>
 
   /// Quit sends the QUIT command and closes the connection to the server.
-  fn Quit(self: Ref<Client>) -> Result<(), error>
+  fn Quit(self: mut Ref<Client>) -> Result<(), error>
 
   /// Rcpt issues a RCPT command to the server using the provided email address.
   /// A call to Rcpt must be preceded by a call to [Client.Mail] and may be followed by
@@ -135,11 +135,11 @@ impl Client {
 
   /// Reset sends the RSET command to the server, aborting the current mail
   /// transaction.
-  fn Reset(self: Ref<Client>) -> Result<(), error>
+  fn Reset(self: mut Ref<Client>) -> Result<(), error>
 
   /// StartTLS sends the STARTTLS command and encrypts all further communication.
   /// Only servers that advertise the STARTTLS extension support this function.
-  fn StartTLS(self: Ref<Client>, config: Ref<tls.Config>) -> Result<(), error>
+  fn StartTLS(self: mut Ref<Client>, config: Ref<tls.Config>) -> Result<(), error>
 
   /// TLSConnectionState returns the client's TLS connection state.
   /// The return values are their zero values if [Client.StartTLS] did
@@ -150,5 +150,5 @@ impl Client {
   /// If Verify returns nil, the address is valid. A non-nil return
   /// does not necessarily indicate an invalid address. Many servers
   /// will not verify addresses for security reasons.
-  fn Verify(self: Ref<Client>, addr: string) -> Result<(), error>
+  fn Verify(self: mut Ref<Client>, addr: string) -> Result<(), error>
 }

@@ -72,7 +72,7 @@ pub struct Mixed {
 
 pub struct Node {
   pub Value: int,
-  pub Next: Option<Ref<Node>>,
+  pub Next: Option<mut Ref<Node>>,
 }
 
 /// Basic struct with exported fields
@@ -84,15 +84,15 @@ pub struct Point {
 /// Collection-of-pointer fields
 pub struct Project {
   pub Name: string,
-  pub Modules: Slice<Option<Ref<Node>>>,
-  pub Lookup: Map<string, Option<Ref<Node>>>,
+  pub Modules: mut Slice<Option<mut Ref<Node>>>,
+  pub Lookup: mut Map<string, Option<mut Ref<Node>>>,
 }
 
 /// Interface embedding
 pub interface ReadWriteCloser {
   #[allow(unused_result)]
   fn Close() -> Result<(), error>
-  fn Read(mut p: Slice<byte>) -> Partial<int, error>
+  fn Read(p: mut Slice<byte>) -> Partial<int, error>
   fn Write(p: Slice<byte>) -> Partial<int, error>
 }
 
@@ -102,8 +102,8 @@ pub struct Shadower {
 }
 
 pub struct Tree {
-  pub Left: Option<Ref<Tree>>,
-  pub Right: Option<Ref<Tree>>,
+  pub Left: Option<mut Ref<Tree>>,
+  pub Right: Option<mut Ref<Tree>>,
   pub Data: string,
 }
 
@@ -124,7 +124,7 @@ impl Base {
   /// GetID returns the ID
   fn GetID(self) -> int
   /// SetName sets the name
-  fn SetName(self: Ref<Base>, name: string)
+  fn SetName(self: mut Ref<Base>, name: string)
 }
 
 impl Shadower {
@@ -133,5 +133,5 @@ impl Shadower {
 }
 
 impl Wrapper {
-  fn Read(self, mut p: Slice<byte>) -> Partial<int, error>
+  fn Read(self, p: mut Slice<byte>) -> Partial<int, error>
 }

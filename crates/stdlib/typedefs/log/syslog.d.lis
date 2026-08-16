@@ -74,19 +74,19 @@ pub const LOG_WARNING: Priority = 4
 /// If network is empty, Dial will connect to the local syslog server.
 /// Otherwise, see the documentation for net.Dial for valid values
 /// of network and raddr.
-pub fn Dial(network: string, raddr: string, priority: Priority, tag: string) -> Result<Ref<Writer>, error>
+pub fn Dial(network: string, raddr: string, priority: Priority, tag: string) -> Result<mut Ref<Writer>, error>
 
 /// New establishes a new connection to the system log daemon. Each
 /// write to the returned writer sends a log message with the given
 /// priority (a combination of the syslog facility and severity) and
 /// prefix tag. If tag is empty, the [os.Args][0] is used.
-pub fn New(priority: Priority, tag: string) -> Result<Ref<Writer>, error>
+pub fn New(priority: Priority, tag: string) -> Result<mut Ref<Writer>, error>
 
 /// NewLogger creates a [log.Logger] whose output is written to the
 /// system log service with the specified priority, a combination of
 /// the syslog facility and severity. The logFlag argument is the flag
 /// set passed through to [log.New] to create the Logger.
-pub fn NewLogger(p: Priority, logFlag: int) -> Result<Ref<log.Logger>, error>
+pub fn NewLogger(p: Priority, logFlag: int) -> Result<mut Ref<log.Logger>, error>
 
 /// A Writer is a connection to a syslog server.
 pub type Writer
@@ -94,40 +94,40 @@ pub type Writer
 impl Writer {
   /// Alert logs a message with severity [LOG_ALERT], ignoring the severity
   /// passed to New.
-  fn Alert(self: Ref<Writer>, m: string) -> Result<(), error>
+  fn Alert(self: mut Ref<Writer>, m: string) -> Result<(), error>
 
   /// Close closes a connection to the syslog daemon.
   #[allow(unused_result)]
-  fn Close(self: Ref<Writer>) -> Result<(), error>
+  fn Close(self: mut Ref<Writer>) -> Result<(), error>
 
   /// Crit logs a message with severity [LOG_CRIT], ignoring the severity
   /// passed to New.
-  fn Crit(self: Ref<Writer>, m: string) -> Result<(), error>
+  fn Crit(self: mut Ref<Writer>, m: string) -> Result<(), error>
 
   /// Debug logs a message with severity [LOG_DEBUG], ignoring the severity
   /// passed to New.
-  fn Debug(self: Ref<Writer>, m: string) -> Result<(), error>
+  fn Debug(self: mut Ref<Writer>, m: string) -> Result<(), error>
 
   /// Emerg logs a message with severity [LOG_EMERG], ignoring the severity
   /// passed to New.
-  fn Emerg(self: Ref<Writer>, m: string) -> Result<(), error>
+  fn Emerg(self: mut Ref<Writer>, m: string) -> Result<(), error>
 
   /// Err logs a message with severity [LOG_ERR], ignoring the severity
   /// passed to New.
-  fn Err(self: Ref<Writer>, m: string) -> Result<(), error>
+  fn Err(self: mut Ref<Writer>, m: string) -> Result<(), error>
 
   /// Info logs a message with severity [LOG_INFO], ignoring the severity
   /// passed to New.
-  fn Info(self: Ref<Writer>, m: string) -> Result<(), error>
+  fn Info(self: mut Ref<Writer>, m: string) -> Result<(), error>
 
   /// Notice logs a message with severity [LOG_NOTICE], ignoring the
   /// severity passed to New.
-  fn Notice(self: Ref<Writer>, m: string) -> Result<(), error>
+  fn Notice(self: mut Ref<Writer>, m: string) -> Result<(), error>
 
   /// Warning logs a message with severity [LOG_WARNING], ignoring the
   /// severity passed to New.
-  fn Warning(self: Ref<Writer>, m: string) -> Result<(), error>
+  fn Warning(self: mut Ref<Writer>, m: string) -> Result<(), error>
 
   /// Write sends a log message to the syslog daemon.
-  fn Write(self: Ref<Writer>, b: Slice<byte>) -> Partial<int, error>
+  fn Write(self: mut Ref<Writer>, b: Slice<byte>) -> Partial<int, error>
 }

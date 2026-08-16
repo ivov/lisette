@@ -44,18 +44,18 @@ pub fn TestFS(fsys: fs.FS, expected: VarArgs<string>) -> Result<(), error>
 /// Another implication is that opening or reading a directory requires
 /// iterating over the entire map, so a MapFS should typically be used with not more
 /// than a few hundred entries or directory reads.
-pub struct MapFS(Map<string, Ref<MapFile>>)
+pub struct MapFS(mut Map<string, mut Ref<MapFile>>)
 
 /// A MapFile describes a single file in a [MapFS].
 pub struct MapFile {
-  pub Data: Slice<byte>,
+  pub Data: mut Slice<byte>,
   pub Mode: fs.FileMode,
-  pub ModTime: time.Time,
+  pub ModTime: mut time.Time,
   pub Sys: Unknown,
 }
 
 impl MapFS {
-  fn Glob(self, pattern: string) -> Result<Slice<string>, error>
+  fn Glob(self, pattern: string) -> Result<mut Slice<string>, error>
 
   /// Lstat returns a FileInfo describing the named file.
   /// If the file is a symbolic link, the returned FileInfo describes the symbolic link.
@@ -65,9 +65,9 @@ impl MapFS {
   /// Open opens the named file after following any symbolic links.
   fn Open(self, name: string) -> Result<fs.File, error>
 
-  fn ReadDir(self, name: string) -> Result<Slice<fs.DirEntry>, error>
+  fn ReadDir(self, name: string) -> Result<mut Slice<fs.DirEntry>, error>
 
-  fn ReadFile(self, name: string) -> Result<Slice<byte>, error>
+  fn ReadFile(self, name: string) -> Result<mut Slice<byte>, error>
 
   /// ReadLink returns the destination of the named symbolic link.
   fn ReadLink(self, name: string) -> Result<string, error>

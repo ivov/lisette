@@ -374,12 +374,12 @@ pub fn Bind(fd: Handle, sa: Sockaddr) -> Result<(), error>
 /// BytePtrFromString returns a pointer to a NUL-terminated array of
 /// bytes containing the text of s. If s contains a NUL byte at any
 /// location, it returns (nil, [EINVAL]).
-pub fn BytePtrFromString(s: string) -> Result<Ref<byte>, error>
+pub fn BytePtrFromString(s: string) -> Result<mut Ref<byte>, error>
 
 /// ByteSliceFromString returns a NUL-terminated slice of bytes
 /// containing the text of s. If s contains a NUL byte at any
 /// location, it returns (nil, [EINVAL]).
-pub fn ByteSliceFromString(s: string) -> Result<Slice<byte>, error>
+pub fn ByteSliceFromString(s: string) -> Result<mut Slice<byte>, error>
 
 pub fn CancelIo(s: Handle) -> Result<(), error>
 
@@ -398,9 +398,9 @@ pub fn CertCreateCertificateContext(
   certEncodingType: uint32,
   certEncoded: Ref<byte>,
   encodedLen: uint32,
-) -> Result<Ref<CertContext>, error>
+) -> Result<mut Ref<CertContext>, error>
 
-pub fn CertEnumCertificatesInStore(store: Handle, prevContext: Ref<CertContext>) -> Result<Ref<CertContext>, error>
+pub fn CertEnumCertificatesInStore(store: Handle, prevContext: Ref<CertContext>) -> Result<mut Ref<CertContext>, error>
 
 pub fn CertFreeCertificateChain(ctx: Ref<CertChainContext>)
 
@@ -451,7 +451,7 @@ pub fn CloseOnExec(fd: Handle)
 
 pub fn Closesocket(s: Handle) -> Result<(), error>
 
-pub fn CommandLineToArgv(cmd: Ref<uint16>, argc: Ref<int32>) -> Result<Ref<Array<Ref<Array<uint16, 8192>>, 8192>>, error>
+pub fn CommandLineToArgv(cmd: Ref<uint16>, argc: Ref<int32>) -> Result<mut Ref<Array<mut Ref<Array<uint16, 8192>>, 8192>>, error>
 
 pub fn ComputerName() -> Result<string, error>
 
@@ -597,7 +597,7 @@ pub fn DuplicateHandle(
   dwOptions: uint32,
 ) -> Result<(), error>
 
-pub fn Environ() -> Slice<string>
+pub fn Environ() -> mut Slice<string>
 
 /// EscapeArg rewrites command line argument s as prescribed
 /// in https://msdn.microsoft.com/en-us/library/ms880421.
@@ -624,9 +624,9 @@ pub fn Fchown(fd: Handle, uid: int, gid: int) -> Result<(), error>
 
 pub fn FindClose(handle: Handle) -> Result<(), error>
 
-pub fn FindFirstFile(name: Ref<uint16>, data: Ref<Win32finddata>) -> Result<Handle, error>
+pub fn FindFirstFile(name: Ref<uint16>, data: mut Ref<Win32finddata>) -> Result<Handle, error>
 
-pub fn FindNextFile(handle: Handle, data: Ref<Win32finddata>) -> Result<(), error>
+pub fn FindNextFile(handle: Handle, data: mut Ref<Win32finddata>) -> Result<(), error>
 
 pub fn FlushFileBuffers(handle: Handle) -> Result<(), error>
 
@@ -678,7 +678,7 @@ pub fn GetAddrInfoW(
   result: Ref<Ref<AddrinfoW>>,
 ) -> Result<(), error>
 
-pub fn GetCommandLine() -> Option<Ref<uint16>>
+pub fn GetCommandLine() -> Option<mut Ref<uint16>>
 
 pub fn GetComputerName(buf: Ref<uint16>, n: Ref<uint32>) -> Result<(), error>
 
@@ -688,7 +688,7 @@ pub fn GetCurrentDirectory(buflen: uint32, buf: Ref<uint16>) -> Result<uint32, e
 
 pub fn GetCurrentProcess() -> Result<Handle, error>
 
-pub fn GetEnvironmentStrings() -> Result<Ref<uint16>, error>
+pub fn GetEnvironmentStrings() -> Result<mut Ref<uint16>, error>
 
 pub fn GetEnvironmentVariable(
   name: Ref<uint16>,
@@ -716,7 +716,7 @@ pub fn GetFullPathName(
   fname: Ref<Ref<uint16>>,
 ) -> Result<uint32, error>
 
-pub fn GetHostByName(name: string) -> Result<Ref<Hostent>, error>
+pub fn GetHostByName(name: string) -> Result<mut Ref<Hostent>, error>
 
 pub fn GetIfEntry(pIfRow: Ref<MibIfRow>) -> Result<(), error>
 
@@ -736,18 +736,18 @@ pub fn GetProcessTimes(
   userTime: Ref<Filetime>,
 ) -> Result<(), error>
 
-pub fn GetProtoByName(name: string) -> Result<Ref<Protoent>, error>
+pub fn GetProtoByName(name: string) -> Result<mut Ref<Protoent>, error>
 
 /// Deprecated: GetQueuedCompletionStatus has the wrong function signature. Use x/sys/windows.GetQueuedCompletionStatus.
 pub fn GetQueuedCompletionStatus(
   cphandle: Handle,
   qty: Ref<uint32>,
-  key: Ref<uint32>,
+  key: mut Ref<uint32>,
   overlapped: Ref<Ref<Overlapped>>,
   timeout: uint32,
 ) -> Result<(), error>
 
-pub fn GetServByName(name: string, proto: string) -> Result<Ref<Servent>, error>
+pub fn GetServByName(name: string, proto: string) -> Result<mut Ref<Servent>, error>
 
 pub fn GetShortPathName(
   longpath: Ref<uint16>,
@@ -791,7 +791,7 @@ pub fn Geteuid() -> int
 
 pub fn Getgid() -> int
 
-pub fn Getgroups() -> Result<Slice<int>, error>
+pub fn Getgroups() -> Result<mut Slice<int>, error>
 
 pub fn Getpagesize() -> int
 
@@ -813,7 +813,7 @@ pub fn Getsockopt(
 
 pub fn GetsockoptInt(fd: Handle, level: int, opt: int) -> Result<int, error>
 
-pub fn Gettimeofday(tv: Ref<Timeval>) -> Result<(), error>
+pub fn Gettimeofday(tv: mut Ref<Timeval>) -> Result<(), error>
 
 pub fn Getuid() -> int
 
@@ -840,7 +840,7 @@ pub fn LoadCreateSymbolicLink() -> Result<(), error>
 /// 
 /// Use [LazyDLL] in golang.org/x/sys/windows for a secure way to
 /// load system DLLs.
-pub fn LoadDLL(name: string) -> Result<Ref<DLL>, error>
+pub fn LoadDLL(name: string) -> Result<mut Ref<DLL>, error>
 
 pub fn LoadGetAddrInfo() -> Result<(), error>
 
@@ -873,7 +873,7 @@ pub fn LookupAccountSid(
 /// LookupSID retrieves a security identifier sid for the account
 /// and the name of the domain on which the account was found.
 /// System specify target computer to search.
-pub fn LookupSID(system: string, account: string) -> Result<(Ref<SID>, string, uint32), error>
+pub fn LookupSID(system: string, account: string) -> Result<(mut Ref<SID>, string, uint32), error>
 
 pub fn MapViewOfFile(
   handle: Handle,
@@ -888,7 +888,7 @@ pub fn Mkdir(path: string, mode: uint32) -> Result<(), error>
 pub fn MoveFile(from: Ref<uint16>, to: Ref<uint16>) -> Result<(), error>
 
 /// MustLoadDLL is like [LoadDLL] but panics if load operation fails.
-pub fn MustLoadDLL(name: string) -> Ref<DLL>
+pub fn MustLoadDLL(name: string) -> mut Ref<DLL>
 
 pub fn NetApiBufferFree(buf: Ref<byte>) -> Result<(), error>
 
@@ -922,7 +922,7 @@ pub fn NewCallback(fn_: Unknown) -> uintptr
 pub fn NewCallbackCDecl(fn_: Unknown) -> uintptr
 
 /// NewLazyDLL creates new [LazyDLL] associated with [DLL] file.
-pub fn NewLazyDLL(name: string) -> Ref<LazyDLL>
+pub fn NewLazyDLL(name: string) -> mut Ref<LazyDLL>
 
 pub fn NsecToFiletime(nsec: int64) -> Filetime
 
@@ -942,7 +942,7 @@ pub fn OpenProcess(da: uint32, inheritHandle: bool, pid: uint32) -> Result<Handl
 
 pub fn OpenProcessToken(h: Handle, access: uint32, token: Ref<Token>) -> Result<(), error>
 
-pub fn Pipe(mut p: Slice<Handle>) -> Result<(), error>
+pub fn Pipe(p: mut Slice<Handle>) -> Result<(), error>
 
 /// Deprecated: PostQueuedCompletionStatus has the wrong function signature. Use x/sys/windows.PostQueuedCompletionStatus.
 pub fn PostQueuedCompletionStatus(
@@ -956,7 +956,7 @@ pub fn Process32First(snapshot: Handle, procEntry: Ref<ProcessEntry32>) -> Resul
 
 pub fn Process32Next(snapshot: Handle, procEntry: Ref<ProcessEntry32>) -> Result<(), error>
 
-pub fn Read(fd: Handle, mut p: Slice<byte>) -> Result<int, error>
+pub fn Read(fd: Handle, p: mut Slice<byte>) -> Result<int, error>
 
 pub fn ReadConsole(
   console: Handle,
@@ -985,9 +985,9 @@ pub fn ReadFile(
 ) -> Result<(), error>
 
 /// Readlink returns the destination of the named symbolic link.
-pub fn Readlink(path: string, mut buf: Slice<byte>) -> Result<int, error>
+pub fn Readlink(path: string, buf: mut Slice<byte>) -> Result<int, error>
 
-pub fn Recvfrom(fd: Handle, mut p: Slice<byte>, flags: int) -> Result<(int, Sockaddr), error>
+pub fn Recvfrom(fd: Handle, p: mut Slice<byte>, flags: int) -> Result<(int, Sockaddr), error>
 
 pub fn RegCloseKey(key: Handle) -> Result<(), error>
 
@@ -1134,18 +1134,18 @@ pub fn StartProcess(argv0: string, argv: Slice<string>, attr: Ref<ProcAttr>) -> 
 /// an error.
 /// 
 /// Deprecated: Use [BytePtrFromString] instead.
-pub fn StringBytePtr(s: string) -> Ref<byte>
+pub fn StringBytePtr(s: string) -> mut Ref<byte>
 
 /// StringByteSlice converts a string to a NUL-terminated []byte,
 /// If s contains a NUL byte this function panics instead of
 /// returning an error.
 /// 
 /// Deprecated: Use ByteSliceFromString instead.
-pub fn StringByteSlice(s: string) -> Slice<byte>
+pub fn StringByteSlice(s: string) -> mut Slice<byte>
 
 /// StringToSid converts a string-format security identifier
 /// sid into a valid, functional sid.
-pub fn StringToSid(s: string) -> Result<Ref<SID>, error>
+pub fn StringToSid(s: string) -> Result<mut Ref<SID>, error>
 
 /// StringToUTF16 returns the UTF-16 encoding of the UTF-8 string s,
 /// with a terminating NUL added. If s contains a NUL byte this
@@ -1160,7 +1160,7 @@ pub fn StringToUTF16(s: string) -> Slice<uint16>
 /// returning an error.
 /// 
 /// Deprecated: Use [UTF16PtrFromString] instead.
-pub fn StringToUTF16Ptr(s: string) -> Ref<uint16>
+pub fn StringToUTF16Ptr(s: string) -> mut Ref<uint16>
 
 pub fn Symlink(path: string, link: string) -> Result<(), error>
 
@@ -1306,7 +1306,7 @@ pub fn UTF16FromString(s: string) -> Result<Slice<uint16>, error>
 /// the UTF-8 string s, with a terminating NUL added. If s
 /// contains a NUL byte at any location, it returns (nil, EINVAL).
 /// Unpaired surrogates are encoded using WTF-8.
-pub fn UTF16PtrFromString(s: string) -> Result<Ref<uint16>, error>
+pub fn UTF16PtrFromString(s: string) -> Result<mut Ref<uint16>, error>
 
 /// UTF16ToString returns the UTF-8 encoding of the UTF-16 sequence s,
 /// with a terminating NUL removed. Unpaired surrogates are decoded
@@ -1430,8 +1430,8 @@ pub struct AddrinfoW {
   pub Protocol: int32,
   pub Addrlen: uintptr,
   pub Canonname: Option<uint16>,
-  pub Addr: Pointer,
-  pub Next: Option<Ref<AddrinfoW>>,
+  pub Addr: mut Pointer,
+  pub Next: Option<mut Ref<AddrinfoW>>,
 }
 
 pub struct ByHandleFileInformation {
@@ -1451,37 +1451,37 @@ pub struct CertChainContext {
   pub Size: uint32,
   pub TrustStatus: CertTrustStatus,
   pub ChainCount: uint32,
-  pub Chains: Option<Ref<Ref<CertSimpleChain>>>,
+  pub Chains: Option<mut Ref<mut Ref<CertSimpleChain>>>,
   pub LowerQualityChainCount: uint32,
-  pub LowerQualityChains: Option<Ref<Ref<CertChainContext>>>,
+  pub LowerQualityChains: Option<mut Ref<mut Ref<CertChainContext>>>,
   pub HasRevocationFreshnessTime: uint32,
   pub RevocationFreshnessTime: uint32,
 }
 
 pub struct CertChainElement {
   pub Size: uint32,
-  pub CertContext: Option<Ref<CertContext>>,
+  pub CertContext: Option<mut Ref<CertContext>>,
   pub TrustStatus: CertTrustStatus,
-  pub RevocationInfo: Option<Ref<CertRevocationInfo>>,
-  pub IssuanceUsage: Option<Ref<CertEnhKeyUsage>>,
-  pub ApplicationUsage: Option<Ref<CertEnhKeyUsage>>,
+  pub RevocationInfo: Option<mut Ref<CertRevocationInfo>>,
+  pub IssuanceUsage: Option<mut Ref<CertEnhKeyUsage>>,
+  pub ApplicationUsage: Option<mut Ref<CertEnhKeyUsage>>,
   pub ExtendedErrorInfo: Option<uint16>,
 }
 
 pub struct CertChainPara {
   pub Size: uint32,
-  pub RequestedUsage: CertUsageMatch,
-  pub RequstedIssuancePolicy: CertUsageMatch,
+  pub RequestedUsage: mut CertUsageMatch,
+  pub RequstedIssuancePolicy: mut CertUsageMatch,
   pub URLRetrievalTimeout: uint32,
   pub CheckRevocationFreshnessTime: uint32,
   pub RevocationFreshnessTime: uint32,
-  pub CacheResync: Option<Ref<Filetime>>,
+  pub CacheResync: Option<mut Ref<Filetime>>,
 }
 
 pub struct CertChainPolicyPara {
   pub Size: uint32,
   pub Flags: uint32,
-  pub ExtraPolicyPara: Pointer,
+  pub ExtraPolicyPara: mut Pointer,
 }
 
 pub struct CertChainPolicyStatus {
@@ -1489,20 +1489,20 @@ pub struct CertChainPolicyStatus {
   pub Error: uint32,
   pub ChainIndex: uint32,
   pub ElementIndex: uint32,
-  pub ExtraPolicyStatus: Pointer,
+  pub ExtraPolicyStatus: mut Pointer,
 }
 
 pub struct CertContext {
   pub EncodingType: uint32,
-  pub EncodedCert: Option<Ref<byte>>,
+  pub EncodedCert: Option<mut Ref<byte>>,
   pub Length: uint32,
-  pub CertInfo: Option<Ref<CertInfo>>,
+  pub CertInfo: Option<mut Ref<CertInfo>>,
   pub Store: Handle,
 }
 
 pub struct CertEnhKeyUsage {
   pub Length: uint32,
-  pub UsageIdentifiers: Option<Ref<Ref<byte>>>,
+  pub UsageIdentifiers: Option<mut Ref<mut Ref<byte>>>,
 }
 
 pub type CertInfo
@@ -1512,19 +1512,19 @@ pub type CertRevocationCrlInfo
 pub struct CertRevocationInfo {
   pub Size: uint32,
   pub RevocationResult: uint32,
-  pub RevocationOid: Option<Ref<byte>>,
-  pub OidSpecificInfo: Pointer,
+  pub RevocationOid: Option<mut Ref<byte>>,
+  pub OidSpecificInfo: mut Pointer,
   pub HasFreshnessTime: uint32,
   pub FreshnessTime: uint32,
-  pub CrlInfo: Option<Ref<CertRevocationCrlInfo>>,
+  pub CrlInfo: Option<mut Ref<CertRevocationCrlInfo>>,
 }
 
 pub struct CertSimpleChain {
   pub Size: uint32,
   pub TrustStatus: CertTrustStatus,
   pub NumElements: uint32,
-  pub Elements: Option<Ref<Ref<CertChainElement>>>,
-  pub TrustListInfo: Option<Ref<CertTrustListInfo>>,
+  pub Elements: Option<mut Ref<mut Ref<CertChainElement>>>,
+  pub TrustListInfo: Option<mut Ref<CertTrustListInfo>>,
   pub HasRevocationFreshnessTime: uint32,
   pub RevocationFreshnessTime: uint32,
 }
@@ -1538,7 +1538,7 @@ pub struct CertTrustStatus {
 
 pub struct CertUsageMatch {
   pub Type: uint32,
-  pub Usage: CertEnhKeyUsage,
+  pub Usage: mut CertEnhKeyUsage,
 }
 
 /// Conn is implemented by some types in the net and os packages to provide
@@ -1571,7 +1571,7 @@ pub struct DNSPTRData {
 }
 
 pub struct DNSRecord {
-  pub Next: Option<Ref<DNSRecord>>,
+  pub Next: Option<mut Ref<DNSRecord>>,
   pub Name: Option<uint16>,
   pub Type: uint16,
   pub Length: uint16,
@@ -1616,11 +1616,11 @@ pub struct GUID {
 pub struct Handle(uintptr)
 
 pub struct Hostent {
-  pub Name: Option<Ref<byte>>,
-  pub Aliases: Option<Ref<Ref<byte>>>,
+  pub Name: Option<mut Ref<byte>>,
+  pub Aliases: Option<mut Ref<mut Ref<byte>>>,
   pub AddrType: uint16,
   pub Length: uint16,
-  pub AddrList: Option<Ref<Ref<byte>>>,
+  pub AddrList: Option<mut Ref<mut Ref<byte>>>,
 }
 
 pub struct IPMreq {
@@ -1641,7 +1641,7 @@ pub struct InterfaceInfo {
 }
 
 pub struct IpAdapterInfo {
-  pub Next: Option<Ref<IpAdapterInfo>>,
+  pub Next: Option<mut Ref<IpAdapterInfo>>,
   pub ComboIndex: uint32,
   pub AdapterName: Array<byte, 260>,
   pub Description: Array<byte, 132>,
@@ -1650,19 +1650,19 @@ pub struct IpAdapterInfo {
   pub Index: uint32,
   pub Type: uint32,
   pub DhcpEnabled: uint32,
-  pub CurrentIpAddress: Option<Ref<IpAddrString>>,
-  pub IpAddressList: IpAddrString,
-  pub GatewayList: IpAddrString,
-  pub DhcpServer: IpAddrString,
+  pub CurrentIpAddress: Option<mut Ref<IpAddrString>>,
+  pub IpAddressList: mut IpAddrString,
+  pub GatewayList: mut IpAddrString,
+  pub DhcpServer: mut IpAddrString,
   pub HaveWins: bool,
-  pub PrimaryWinsServer: IpAddrString,
-  pub SecondaryWinsServer: IpAddrString,
+  pub PrimaryWinsServer: mut IpAddrString,
+  pub SecondaryWinsServer: mut IpAddrString,
   pub LeaseObtained: int64,
   pub LeaseExpires: int64,
 }
 
 pub struct IpAddrString {
-  pub Next: Option<Ref<IpAddrString>>,
+  pub Next: Option<mut Ref<IpAddrString>>,
   pub IpAddress: IpAddressString,
   pub IpMask: IpMaskString,
   pub Context: uint32,
@@ -1744,20 +1744,20 @@ pub struct Overlapped {
 /// up to the caller to provide a pointer to the appropriate type, cast
 /// to Pointer. The caller must obey the unsafe.Pointer rules while
 /// doing so.
-pub struct Pointer(Ref<()>)
+pub struct Pointer(mut Ref<()>)
 
 /// A Proc implements access to a procedure inside a [DLL].
 #[go(hidden_fields)]
 pub struct Proc {
-  pub Dll: Option<Ref<DLL>>,
+  pub Dll: Option<mut Ref<DLL>>,
   pub Name: string,
 }
 
 pub struct ProcAttr {
   pub Dir: string,
-  pub Env: Slice<string>,
-  pub Files: Slice<uintptr>,
-  pub Sys: Option<Ref<SysProcAttr>>,
+  pub Env: mut Slice<string>,
+  pub Files: mut Slice<uintptr>,
+  pub Sys: Option<mut Ref<SysProcAttr>>,
 }
 
 pub struct ProcessEntry32 {
@@ -1781,8 +1781,8 @@ pub struct ProcessInformation {
 }
 
 pub struct Protoent {
-  pub Name: Option<Ref<byte>>,
-  pub Aliases: Option<Ref<Ref<byte>>>,
+  pub Name: Option<mut Ref<byte>>,
+  pub Aliases: Option<mut Ref<mut Ref<byte>>>,
   pub Proto: uint16,
 }
 
@@ -1836,7 +1836,7 @@ pub struct Rusage {
 pub type SID
 
 pub struct SIDAndAttributes {
-  pub Sid: Option<Ref<SID>>,
+  pub Sid: Option<mut Ref<SID>>,
   pub Attributes: uint32,
 }
 
@@ -1854,9 +1854,9 @@ pub struct SecurityAttributes {
 }
 
 pub struct Servent {
-  pub Name: Option<Ref<byte>>,
-  pub Aliases: Option<Ref<Ref<byte>>>,
-  pub Proto: Option<Ref<byte>>,
+  pub Name: Option<mut Ref<byte>>,
+  pub Aliases: Option<mut Ref<mut Ref<byte>>>,
+  pub Proto: Option<mut Ref<byte>>,
   pub Port: uint16,
 }
 
@@ -1909,10 +1909,10 @@ pub struct SysProcAttr {
   pub CmdLine: string,
   pub CreationFlags: uint32,
   pub Token: Token,
-  pub ProcessAttributes: Option<Ref<SecurityAttributes>>,
-  pub ThreadAttributes: Option<Ref<SecurityAttributes>>,
+  pub ProcessAttributes: Option<mut Ref<SecurityAttributes>>,
+  pub ThreadAttributes: Option<mut Ref<SecurityAttributes>>,
   pub NoInheritHandles: bool,
-  pub AdditionalInheritedHandles: Slice<Handle>,
+  pub AdditionalInheritedHandles: mut Slice<Handle>,
   pub ParentProcess: Handle,
 }
 
@@ -1966,11 +1966,11 @@ pub struct Timezoneinformation {
 pub struct Token(uintptr)
 
 pub struct Tokenprimarygroup {
-  pub PrimaryGroup: Option<Ref<SID>>,
+  pub PrimaryGroup: Option<mut Ref<SID>>,
 }
 
 pub struct Tokenuser {
-  pub User: SIDAndAttributes,
+  pub User: mut SIDAndAttributes,
 }
 
 pub struct TransmitFileBuffers {
@@ -1989,7 +1989,7 @@ pub struct UserInfo10 {
 
 pub struct WSABuf {
   pub Len: uint32,
-  pub Buf: Option<Ref<byte>>,
+  pub Buf: Option<mut Ref<byte>>,
 }
 
 pub struct WSAData {
@@ -1997,7 +1997,7 @@ pub struct WSAData {
   pub HighVersion: uint16,
   pub MaxSockets: uint16,
   pub MaxUdpDg: uint16,
-  pub VendorInfo: Option<Ref<byte>>,
+  pub VendorInfo: Option<mut Ref<byte>>,
   pub Description: Array<byte, 257>,
   pub SystemStatus: Array<byte, 129>,
 }
@@ -3075,11 +3075,11 @@ pub const XP1_UNI_SEND = 0x00008000
 /// ForkLock is not used on Windows.
 pub var ForkLock: sync.RWMutex
 
-pub var OID_PKIX_KP_SERVER_AUTH: Slice<byte>
+pub var OID_PKIX_KP_SERVER_AUTH: mut Slice<byte>
 
-pub var OID_SERVER_GATED_CRYPTO: Slice<byte>
+pub var OID_SERVER_GATED_CRYPTO: mut Slice<byte>
 
-pub var OID_SGC_NETSCAPE: Slice<byte>
+pub var OID_SGC_NETSCAPE: mut Slice<byte>
 
 /// For testing: clients can set this flag to force
 /// creation of IPv6 sockets to return [EAFNOSUPPORT].
@@ -3096,10 +3096,10 @@ pub var WSAID_CONNECTEX: GUID
 impl DLL {
   /// FindProc searches [DLL] d for procedure named name and returns [*Proc]
   /// if found. It returns an error if search fails.
-  fn FindProc(self: Ref<DLL>, name: string) -> Result<Ref<Proc>, error>
+  fn FindProc(self: Ref<DLL>, name: string) -> Result<mut Ref<Proc>, error>
 
   /// MustFindProc is like [DLL.FindProc] but panics if search fails.
-  fn MustFindProc(self: Ref<DLL>, name: string) -> Ref<Proc>
+  fn MustFindProc(self: Ref<DLL>, name: string) -> mut Ref<Proc>
 
   /// Release unloads [DLL] d from memory.
   fn Release(self: Ref<DLL>) -> Result<(), error>
@@ -3136,7 +3136,7 @@ impl LazyDLL {
   fn Load(self: Ref<LazyDLL>) -> Result<(), error>
 
   /// NewProc returns a [LazyProc] for accessing the named procedure in the [DLL] d.
-  fn NewProc(self: Ref<LazyDLL>, name: string) -> Ref<LazyProc>
+  fn NewProc(self: Ref<LazyDLL>, name: string) -> mut Ref<LazyProc>
 }
 
 impl LazyProc {
@@ -3177,12 +3177,12 @@ impl Proc {
 }
 
 impl RawSockaddrAny {
-  fn Sockaddr(self: Ref<RawSockaddrAny>) -> Result<Sockaddr, error>
+  fn Sockaddr(self: mut Ref<RawSockaddrAny>) -> Result<Sockaddr, error>
 }
 
 impl SID {
   /// Copy creates a duplicate of security identifier sid.
-  fn Copy(self: Ref<SID>) -> Result<Ref<SID>, error>
+  fn Copy(self: Ref<SID>) -> Result<mut Ref<SID>, error>
 
   /// Len returns the length, in bytes, of a valid security identifier sid.
   fn Len(self: Ref<SID>) -> int
@@ -3205,17 +3205,17 @@ impl Signal {
 
 impl SockaddrInet4 {
   #[go(unexported, "syscall.sockaddr() unsafe.Pointer,int32,error")]
-  fn sockaddr(self: Ref<SockaddrInet4>)
+  fn sockaddr(self: mut Ref<SockaddrInet4>)
 }
 
 impl SockaddrInet6 {
   #[go(unexported, "syscall.sockaddr() unsafe.Pointer,int32,error")]
-  fn sockaddr(self: Ref<SockaddrInet6>)
+  fn sockaddr(self: mut Ref<SockaddrInet6>)
 }
 
 impl SockaddrUnix {
   #[go(unexported, "syscall.sockaddr() unsafe.Pointer,int32,error")]
-  fn sockaddr(self: Ref<SockaddrUnix>)
+  fn sockaddr(self: mut Ref<SockaddrUnix>)
 }
 
 impl Timespec {
@@ -3244,10 +3244,10 @@ impl Token {
   /// GetTokenPrimaryGroup retrieves access token t primary group information.
   /// A pointer to a SID structure representing a group that will become
   /// the primary group of any objects created by a process using this access token.
-  fn GetTokenPrimaryGroup(self) -> Result<Ref<Tokenprimarygroup>, error>
+  fn GetTokenPrimaryGroup(self) -> Result<mut Ref<Tokenprimarygroup>, error>
 
   /// GetTokenUser retrieves access token t user account information.
-  fn GetTokenUser(self) -> Result<Ref<Tokenuser>, error>
+  fn GetTokenUser(self) -> Result<mut Ref<Tokenuser>, error>
 
   /// GetUserProfileDirectory retrieves path to the
   /// root directory of the access token t user's profile.

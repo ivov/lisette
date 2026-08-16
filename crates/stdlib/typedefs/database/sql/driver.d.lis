@@ -200,7 +200,7 @@ pub interface Rows {
   #[allow(unused_result)]
   fn Close() -> Result<(), error>
   fn Columns() -> Slice<string>
-  fn Next(mut dest: Slice<Value>) -> Result<(), error>
+  fn Next(dest: mut Slice<Value>) -> Result<(), error>
 }
 
 /// RowsAffected implements [Result] for an INSERT or UPDATE operation
@@ -217,7 +217,7 @@ pub interface RowsColumnTypeDatabaseTypeName {
   fn Close() -> Result<(), error>
   fn ColumnTypeDatabaseTypeName(index: int) -> string
   fn Columns() -> Slice<string>
-  fn Next(mut dest: Slice<Value>) -> Result<(), error>
+  fn Next(dest: mut Slice<Value>) -> Result<(), error>
 }
 
 /// RowsColumnTypeLength may be implemented by [Rows]. It should return the length
@@ -237,7 +237,7 @@ pub interface RowsColumnTypeLength {
   fn Close() -> Result<(), error>
   fn ColumnTypeLength(index: int) -> Option<int64>
   fn Columns() -> Slice<string>
-  fn Next(mut dest: Slice<Value>) -> Result<(), error>
+  fn Next(dest: mut Slice<Value>) -> Result<(), error>
 }
 
 /// RowsColumnTypeNullable may be implemented by [Rows]. The nullable value should
@@ -249,7 +249,7 @@ pub interface RowsColumnTypeNullable {
   fn Close() -> Result<(), error>
   fn ColumnTypeNullable(index: int) -> Option<bool>
   fn Columns() -> Slice<string>
-  fn Next(mut dest: Slice<Value>) -> Result<(), error>
+  fn Next(dest: mut Slice<Value>) -> Result<(), error>
 }
 
 /// RowsColumnTypePrecisionScale may be implemented by [Rows]. It should return
@@ -264,7 +264,7 @@ pub interface RowsColumnTypePrecisionScale {
   fn Close() -> Result<(), error>
   fn ColumnTypePrecisionScale(index: int) -> Option<(int64, int64)>
   fn Columns() -> Slice<string>
-  fn Next(mut dest: Slice<Value>) -> Result<(), error>
+  fn Next(dest: mut Slice<Value>) -> Result<(), error>
 }
 
 /// RowsColumnTypeScanType may be implemented by [Rows]. It should return
@@ -275,7 +275,7 @@ pub interface RowsColumnTypeScanType {
   fn Close() -> Result<(), error>
   fn ColumnTypeScanType(index: int) -> Option<reflect.Type>
   fn Columns() -> Slice<string>
-  fn Next(mut dest: Slice<Value>) -> Result<(), error>
+  fn Next(dest: mut Slice<Value>) -> Result<(), error>
 }
 
 /// RowsNextResultSet extends the [Rows] interface by providing a way to signal
@@ -285,7 +285,7 @@ pub interface RowsNextResultSet {
   fn Close() -> Result<(), error>
   fn Columns() -> Slice<string>
   fn HasNextResultSet() -> bool
-  fn Next(mut dest: Slice<Value>) -> Result<(), error>
+  fn Next(dest: mut Slice<Value>) -> Result<(), error>
   fn NextResultSet() -> Result<(), error>
 }
 

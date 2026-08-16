@@ -17,7 +17,7 @@ pub fn Expand<H: hash.Hash>(
   pseudorandomKey: Slice<byte>,
   info: string,
   keyLength: int,
-) -> Result<Slice<byte>, error>
+) -> Result<mut Slice<byte>, error>
 
 /// Extract generates a pseudorandom key for use with [Expand] from an input
 /// secret and an optional independent salt.
@@ -29,7 +29,7 @@ pub fn Extract<H: hash.Hash>(
   h: fn() -> H,
   secret: Slice<byte>,
   salt: Slice<byte>,
-) -> Result<Slice<byte>, error>
+) -> Result<mut Slice<byte>, error>
 
 /// Key derives a key from the given hash, secret, salt and context info,
 /// returning a []byte of length keyLength that can be used as cryptographic key.
@@ -40,4 +40,4 @@ pub fn Key<Hash: hash.Hash>(
   salt: Slice<byte>,
   info: string,
   keyLength: int,
-) -> Result<Slice<byte>, error>
+) -> Result<mut Slice<byte>, error>

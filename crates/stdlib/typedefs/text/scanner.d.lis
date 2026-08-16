@@ -212,7 +212,7 @@ impl Scanner {
   /// [Scanner.Error] is set to nil, [Scanner.ErrorCount] is set to 0, [Scanner.Mode] is set to [GoTokens],
   /// and [Scanner.Whitespace] is set to [GoWhitespace].
   #[allow(unused_value)]
-  fn Init(self: Ref<Scanner>, src: io.Reader) -> Ref<Scanner>
+  fn Init(self: mut Ref<Scanner>, src: io.Reader) -> mut Ref<Scanner>
 
   /// Next reads and returns the next Unicode character.
   /// It returns [EOF] at the end of the source. It reports
@@ -220,12 +220,12 @@ impl Scanner {
   /// it prints an error message to [os.Stderr]. Next does not
   /// update the [Scanner.Position] field; use [Scanner.Pos]() to
   /// get the current position.
-  fn Next(self: Ref<Scanner>) -> rune
+  fn Next(self: mut Ref<Scanner>) -> rune
 
   /// Peek returns the next Unicode character in the source without advancing
   /// the scanner. It returns [EOF] if the scanner's position is at the last
   /// character of the source.
-  fn Peek(self: Ref<Scanner>) -> rune
+  fn Peek(self: mut Ref<Scanner>) -> rune
 
   /// Pos returns the position of the character immediately after
   /// the character or token returned by the last call to [Scanner.Next] or [Scanner.Scan].
@@ -238,9 +238,9 @@ impl Scanner {
   /// It returns [EOF] at the end of the source. It reports scanner errors (read and
   /// token errors) by calling s.Error, if not nil; otherwise it prints an error
   /// message to [os.Stderr].
-  fn Scan(self: Ref<Scanner>) -> rune
+  fn Scan(self: mut Ref<Scanner>) -> rune
 
   /// TokenText returns the string corresponding to the most recently scanned token.
   /// Valid after calling [Scanner.Scan] and in calls of [Scanner.Error].
-  fn TokenText(self: Ref<Scanner>) -> string
+  fn TokenText(self: mut Ref<Scanner>) -> string
 }

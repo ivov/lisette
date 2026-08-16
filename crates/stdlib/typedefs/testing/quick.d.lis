@@ -32,26 +32,26 @@ pub fn CheckEqual(f: Unknown, g: Unknown, config: Ref<Config>) -> Result<(), err
 /// Value returns an arbitrary value of the given type.
 /// If the type implements the [Generator] interface, that will be used.
 /// Note: To create arbitrary values for structs, all the fields must be exported.
-pub fn Value(t: reflect.Type, rand: Ref<rand.Rand>) -> Option<reflect.Value>
+pub fn Value(t: reflect.Type, rand: Ref<rand.Rand>) -> Option<mut reflect.Value>
 
 /// A CheckEqualError is the result [CheckEqual] finding an error.
 pub struct CheckEqualError {
-  embed CheckError,
-  pub Out1: Slice<Unknown>,
-  pub Out2: Slice<Unknown>,
+  embed mut CheckError,
+  pub Out1: mut Slice<Unknown>,
+  pub Out2: mut Slice<Unknown>,
 }
 
 /// A CheckError is the result of Check finding an error.
 pub struct CheckError {
   pub Count: int,
-  pub In: Slice<Unknown>,
+  pub In: mut Slice<Unknown>,
 }
 
 /// A Config structure contains options for running a test.
 pub struct Config {
   pub MaxCount: int,
   pub MaxCountScale: float64,
-  pub Rand: Option<Ref<rand.Rand>>,
+  pub Rand: Option<mut Ref<rand.Rand>>,
   pub Values: Option<fn(Slice<reflect.Value>, Ref<rand.Rand>) -> ()>,
 }
 

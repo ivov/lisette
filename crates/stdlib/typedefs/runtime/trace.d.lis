@@ -26,7 +26,7 @@ pub fn Logf(
 )
 
 /// NewFlightRecorder creates a new flight recorder from the provided configuration.
-pub fn NewFlightRecorder(cfg: FlightRecorderConfig) -> Ref<FlightRecorder>
+pub fn NewFlightRecorder(cfg: FlightRecorderConfig) -> mut Ref<FlightRecorder>
 
 /// NewTask creates a task instance with the type taskType and returns
 /// it along with a Context that carries the task.
@@ -50,7 +50,7 @@ pub fn NewFlightRecorder(cfg: FlightRecorderConfig) -> Ref<FlightRecorder>
 /// 	    defer task.End()
 /// 	    trace.WithRegion(ctx, "remainingWork", remainingWork)
 /// 	}()
-pub fn NewTask(pctx: context.Context, taskType: string) -> (context.Context, Ref<Task>)
+pub fn NewTask(pctx: context.Context, taskType: string) -> (context.Context, mut Ref<Task>)
 
 /// Start enables tracing for the current program.
 /// While tracing, the trace will be buffered and written to w.
@@ -65,7 +65,7 @@ pub fn Start(w: io.Writer) -> Result<(), error>
 /// Recommended usage is
 /// 
 /// 	defer trace.StartRegion(ctx, "myTracedRegion").End()
-pub fn StartRegion(ctx: context.Context, regionType: string) -> Ref<Region>
+pub fn StartRegion(ctx: context.Context, regionType: string) -> mut Ref<Region>
 
 /// Stop stops the current tracing, if any.
 /// Stop only returns after all the writes for the trace have completed.
@@ -113,10 +113,10 @@ impl FlightRecorder {
   /// Only one call to trace.Start may be active at any given time.
   /// In addition, currently only one flight recorder may be active in the program.
   /// Returns an error if the flight recorder cannot be started or is already started.
-  fn Start(self: Ref<FlightRecorder>) -> Result<(), error>
+  fn Start(self: mut Ref<FlightRecorder>) -> Result<(), error>
 
   /// Stop ends recording of trace data. It blocks until any concurrent WriteTo calls complete.
-  fn Stop(self: Ref<FlightRecorder>)
+  fn Stop(self: mut Ref<FlightRecorder>)
 
   /// WriteTo snapshots the moving window tracked by the flight recorder.
   /// The snapshot is expected to contain data that is up-to-date as of when WriteTo is called,

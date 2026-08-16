@@ -3,11 +3,11 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
-pub fn FreshList() -> Ref<List>
+pub fn FreshList() -> mut Ref<List>
 
-pub fn FromBoundMethod() -> Option<Ref<Node>>
+pub fn FromBoundMethod() -> Option<mut Ref<Node>>
 
-pub fn NewList() -> Ref<List>
+pub fn NewList() -> mut Ref<List>
 
 pub type List
 
@@ -18,13 +18,13 @@ pub struct Node {
 
 impl List {
   #[allow(unused_value)]
-  fn Init(self: Ref<List>) -> Ref<List>
+  fn Init(self: mut Ref<List>) -> mut Ref<List>
 }
 
 impl Node {
-  fn Identity(self: Ref<Node>) -> Ref<Node>
+  fn Identity(self: Ref<Node>) -> mut Ref<Node>
   #[allow(unused_value)]
-  fn Move(self: Ref<Node>, steps: int) -> Option<Ref<Node>>
+  fn Move(self: Ref<Node>, steps: int) -> Option<mut Ref<Node>>
   #[allow(unused_value)]
-  fn Reset(self: Ref<Node>) -> Ref<Node>
+  fn Reset(self: mut Ref<Node>) -> mut Ref<Node>
 }

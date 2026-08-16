@@ -25,11 +25,11 @@ pub fn Collect<K: Comparable, V>(seq: iter.Seq2<K, V>) -> Map<K, V>
 /// the value in dst will be overwritten by the value associated
 /// with the key in src.
 #[go(collapsed_type_params, "Map<K, V>, Map<K, V>, K, V")]
-pub fn Copy<K: Comparable, V>(mut dst: Map<K, V>, src: Map<K, V>)
+pub fn Copy<K: Comparable, V>(dst: mut Map<K, V>, src: Map<K, V>)
 
 /// DeleteFunc deletes any key/value pairs from m for which del returns true.
 #[go(collapsed_type_params, "Map<K, V>, K, V")]
-pub fn DeleteFunc<K: Comparable, V>(mut m: Map<K, V>, del: fn(K, V) -> bool)
+pub fn DeleteFunc<K: Comparable, V>(m: mut Map<K, V>, del: fn(K, V) -> bool)
 
 /// Equal reports whether two maps contain the same key/value pairs.
 /// Values are compared using ==.
@@ -48,7 +48,7 @@ pub fn EqualFunc<K: Comparable, V1, V2>(
 /// Insert adds the key-value pairs from seq to m.
 /// If a key in seq already exists in m, its value will be overwritten.
 #[go(collapsed_type_params, "Map<K, V>, K, V")]
-pub fn Insert<K: Comparable, V>(mut m: Map<K, V>, seq: iter.Seq2<K, V>)
+pub fn Insert<K: Comparable, V>(m: mut Map<K, V>, seq: iter.Seq2<K, V>)
 
 /// Keys returns an iterator over keys in m.
 /// The iteration order is not specified and is not guaranteed

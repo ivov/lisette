@@ -19,7 +19,7 @@ import "go:testing"
 ///   - T.Context returns a [context.Context] with a Done channel
 ///     associated with the bubble.
 ///   - T.Run, T.Parallel, and T.Deadline must not be called.
-pub fn Test(t: Ref<testing.T>, f: fn(Ref<testing.T>) -> ())
+pub fn Test(t: mut Ref<testing.T>, f: fn(Ref<testing.T>) -> ())
 
 /// Wait blocks until every goroutine within the current bubble,
 /// other than the current goroutine, is durably blocked.

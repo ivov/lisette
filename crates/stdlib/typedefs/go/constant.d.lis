@@ -42,7 +42,7 @@ pub fn BoolVal(x: Value) -> bool
 
 /// Bytes returns the bytes for the absolute value of x in little-
 /// endian binary representation; x must be an [Int].
-pub fn Bytes(x: Value) -> Slice<byte>
+pub fn Bytes(x: Value) -> mut Slice<byte>
 
 /// Compare returns the result of the comparison x op y.
 /// The comparison must be defined for the operands.

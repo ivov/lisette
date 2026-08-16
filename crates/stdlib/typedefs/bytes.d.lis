@@ -10,7 +10,7 @@ import "go:unicode"
 /// Clone returns a copy of b[:len(b)].
 /// The result may have additional unused capacity.
 /// Clone(nil) returns nil.
-pub fn Clone(b: Slice<byte>) -> Slice<byte>
+pub fn Clone(b: Slice<byte>) -> mut Slice<byte>
 
 /// Compare returns an integer comparing two byte slices lexicographically.
 /// The result will be 0 if a == b, -1 if a < b, and +1 if a > b.
@@ -167,7 +167,7 @@ pub fn Lines(s: Slice<byte>) -> iter.Seq<Slice<byte>>
 /// according to the mapping function. If mapping returns a negative value, the character is
 /// dropped from the byte slice with no replacement. The characters in s and the
 /// output are interpreted as UTF-8-encoded code points.
-pub fn Map(mapping: fn(rune) -> rune, s: Slice<byte>) -> Slice<byte>
+pub fn Map(mapping: fn(rune) -> rune, s: Slice<byte>) -> mut Slice<byte>
 
 /// NewBuffer creates and initializes a new [Buffer] using buf as its
 /// initial contents. The new [Buffer] takes ownership of buf, and the
@@ -178,7 +178,7 @@ pub fn Map(mapping: fn(rune) -> rune, s: Slice<byte>) -> Slice<byte>
 /// 
 /// In most cases, new([Buffer]) (or just declaring a [Buffer] variable) is
 /// sufficient to initialize a [Buffer].
-pub fn NewBuffer(mut buf: Slice<byte>) -> Ref<Buffer>
+pub fn NewBuffer(buf: mut Slice<byte>) -> mut Ref<Buffer>
 
 /// NewBufferString creates and initializes a new [Buffer] using string s as its
 /// initial contents. It is intended to prepare a buffer to read an existing
@@ -186,10 +186,10 @@ pub fn NewBuffer(mut buf: Slice<byte>) -> Ref<Buffer>
 /// 
 /// In most cases, new([Buffer]) (or just declaring a [Buffer] variable) is
 /// sufficient to initialize a [Buffer].
-pub fn NewBufferString(s: string) -> Ref<Buffer>
+pub fn NewBufferString(s: string) -> mut Ref<Buffer>
 
 /// NewReader returns a new [Reader] reading from b.
-pub fn NewReader(b: Slice<byte>) -> Ref<Reader>
+pub fn NewReader(b: Slice<byte>) -> mut Ref<Reader>
 
 /// Repeat returns a new byte slice consisting of count copies of b.
 /// 
@@ -203,18 +203,18 @@ pub fn Repeat(b: Slice<byte>, count: int) -> Slice<byte>
 /// and after each UTF-8 sequence, yielding up to k+1 replacements
 /// for a k-rune slice.
 /// If n < 0, there is no limit on the number of replacements.
-pub fn Replace(s: Slice<byte>, old: Slice<byte>, new: Slice<byte>, n: int) -> Slice<byte>
+pub fn Replace(s: Slice<byte>, old: Slice<byte>, new: Slice<byte>, n: int) -> mut Slice<byte>
 
 /// ReplaceAll returns a copy of the slice s with all
 /// non-overlapping instances of old replaced by new.
 /// If old is empty, it matches at the beginning of the slice
 /// and after each UTF-8 sequence, yielding up to k+1 replacements
 /// for a k-rune slice.
-pub fn ReplaceAll(s: Slice<byte>, old: Slice<byte>, new: Slice<byte>) -> Slice<byte>
+pub fn ReplaceAll(s: Slice<byte>, old: Slice<byte>, new: Slice<byte>) -> mut Slice<byte>
 
 /// Runes interprets s as a sequence of UTF-8-encoded code points.
 /// It returns a slice of runes (Unicode code points) equivalent to s.
-pub fn Runes(s: Slice<byte>) -> Slice<rune>
+pub fn Runes(s: Slice<byte>) -> mut Slice<rune>
 
 /// Split slices s into all subslices separated by sep and returns a slice of
 /// the subslices between those separators.
@@ -267,7 +267,7 @@ pub fn SplitSeq(s: Slice<byte>, sep: Slice<byte>) -> iter.Seq<Slice<byte>>
 /// 
 /// Deprecated: The rule Title uses for word boundaries does not handle Unicode
 /// punctuation properly. Use golang.org/x/text/cases instead.
-pub fn Title(s: Slice<byte>) -> Slice<byte>
+pub fn Title(s: Slice<byte>) -> mut Slice<byte>
 
 /// ToLower returns a copy of the byte slice s with all Unicode letters mapped to
 /// their lower case.
@@ -275,14 +275,14 @@ pub fn ToLower(s: Slice<byte>) -> Slice<byte>
 
 /// ToLowerSpecial treats s as UTF-8-encoded bytes and returns a copy with all the Unicode letters mapped to their
 /// lower case, giving priority to the special casing rules.
-pub fn ToLowerSpecial(c: unicode.SpecialCase, s: Slice<byte>) -> Slice<byte>
+pub fn ToLowerSpecial(c: unicode.SpecialCase, s: Slice<byte>) -> mut Slice<byte>
 
 /// ToTitle treats s as UTF-8-encoded bytes and returns a copy with all the Unicode letters mapped to their title case.
-pub fn ToTitle(s: Slice<byte>) -> Slice<byte>
+pub fn ToTitle(s: Slice<byte>) -> mut Slice<byte>
 
 /// ToTitleSpecial treats s as UTF-8-encoded bytes and returns a copy with all the Unicode letters mapped to their
 /// title case, giving priority to the special casing rules.
-pub fn ToTitleSpecial(c: unicode.SpecialCase, s: Slice<byte>) -> Slice<byte>
+pub fn ToTitleSpecial(c: unicode.SpecialCase, s: Slice<byte>) -> mut Slice<byte>
 
 /// ToUpper returns a copy of the byte slice s with all Unicode letters mapped to
 /// their upper case.
@@ -290,11 +290,11 @@ pub fn ToUpper(s: Slice<byte>) -> Slice<byte>
 
 /// ToUpperSpecial treats s as UTF-8-encoded bytes and returns a copy with all the Unicode letters mapped to their
 /// upper case, giving priority to the special casing rules.
-pub fn ToUpperSpecial(c: unicode.SpecialCase, s: Slice<byte>) -> Slice<byte>
+pub fn ToUpperSpecial(c: unicode.SpecialCase, s: Slice<byte>) -> mut Slice<byte>
 
 /// ToValidUTF8 treats s as UTF-8-encoded bytes and returns a copy with each run of bytes
 /// representing invalid UTF-8 replaced with the bytes in replacement, which may be empty.
-pub fn ToValidUTF8(s: Slice<byte>, replacement: Slice<byte>) -> Slice<byte>
+pub fn ToValidUTF8(s: Slice<byte>, replacement: Slice<byte>) -> mut Slice<byte>
 
 /// Trim returns a subslice of s by slicing off all leading and
 /// trailing UTF-8-encoded code points contained in cutset.
@@ -380,7 +380,7 @@ impl Buffer {
   /// buffer without another allocation.
   /// If n is negative, Grow will panic.
   /// If the buffer can't grow it will panic with [ErrTooLarge].
-  fn Grow(self: Ref<Buffer>, n: int)
+  fn Grow(self: mut Ref<Buffer>, n: int)
 
   /// Len returns the number of bytes of the unread portion of the buffer;
   /// b.Len() == len(b.Bytes()).
@@ -390,17 +390,17 @@ impl Buffer {
   /// advancing the buffer as if the bytes had been returned by [Buffer.Read].
   /// If there are fewer than n bytes in the buffer, Next returns the entire buffer.
   /// The slice is only valid until the next call to a read or write method.
-  fn Next(self: Ref<Buffer>, n: int) -> Slice<byte>
+  fn Next(self: mut Ref<Buffer>, n: int) -> mut Slice<byte>
 
   /// Read reads the next len(p) bytes from the buffer or until the buffer
   /// is drained. The return value n is the number of bytes read. If the
   /// buffer has no data to return, err is [io.EOF] (unless len(p) is zero);
   /// otherwise it is nil.
-  fn Read(self: Ref<Buffer>, mut p: Slice<byte>) -> Partial<int, error>
+  fn Read(self: mut Ref<Buffer>, p: mut Slice<byte>) -> Partial<int, error>
 
   /// ReadByte reads and returns the next byte from the buffer.
   /// If no byte is available, it returns error [io.EOF].
-  fn ReadByte(self: Ref<Buffer>) -> Result<byte, error>
+  fn ReadByte(self: mut Ref<Buffer>) -> Result<byte, error>
 
   /// ReadBytes reads until the first occurrence of delim in the input,
   /// returning a slice containing the data up to and including the delimiter.
@@ -408,20 +408,20 @@ impl Buffer {
   /// it returns the data read before the error and the error itself (often [io.EOF]).
   /// ReadBytes returns err != nil if and only if the returned data does not end in
   /// delim.
-  fn ReadBytes(self: Ref<Buffer>, delim: byte) -> Partial<Slice<byte>, error>
+  fn ReadBytes(self: mut Ref<Buffer>, delim: byte) -> Partial<mut Slice<byte>, error>
 
   /// ReadFrom reads data from r until EOF and appends it to the buffer, growing
   /// the buffer as needed. The return value n is the number of bytes read. Any
   /// error except io.EOF encountered during the read is also returned. If the
   /// buffer becomes too large, ReadFrom will panic with [ErrTooLarge].
-  fn ReadFrom(self: Ref<Buffer>, r: io.Reader) -> Partial<int64, error>
+  fn ReadFrom(self: mut Ref<Buffer>, r: io.Reader) -> Partial<int64, error>
 
   /// ReadRune reads and returns the next UTF-8-encoded
   /// Unicode code point from the buffer.
   /// If no bytes are available, the error returned is io.EOF.
   /// If the bytes are an erroneous UTF-8 encoding, it
   /// consumes one byte and returns U+FFFD, 1.
-  fn ReadRune(self: Ref<Buffer>) -> Result<(rune, int), error>
+  fn ReadRune(self: mut Ref<Buffer>) -> Result<(rune, int), error>
 
   /// ReadString reads until the first occurrence of delim in the input,
   /// returning a string containing the data up to and including the delimiter.
@@ -429,12 +429,12 @@ impl Buffer {
   /// it returns the data read before the error and the error itself (often [io.EOF]).
   /// ReadString returns err != nil if and only if the returned data does not end
   /// in delim.
-  fn ReadString(self: Ref<Buffer>, delim: byte) -> Partial<string, error>
+  fn ReadString(self: mut Ref<Buffer>, delim: byte) -> Partial<string, error>
 
   /// Reset resets the buffer to be empty,
   /// but it retains the underlying storage for use by future writes.
   /// Reset is the same as [Buffer.Truncate](0).
-  fn Reset(self: Ref<Buffer>)
+  fn Reset(self: mut Ref<Buffer>)
 
   /// String returns the contents of the unread portion of the buffer
   /// as a string. If the [Buffer] is a nil pointer, it returns "<nil>".
@@ -445,51 +445,51 @@ impl Buffer {
   /// Truncate discards all but the first n unread bytes from the buffer
   /// but continues to use the same allocated storage.
   /// It panics if n is negative or greater than the length of the buffer.
-  fn Truncate(self: Ref<Buffer>, n: int)
+  fn Truncate(self: mut Ref<Buffer>, n: int)
 
   /// UnreadByte unreads the last byte returned by the most recent successful
   /// read operation that read at least one byte. If a write has happened since
   /// the last read, if the last read returned an error, or if the read read zero
   /// bytes, UnreadByte returns an error.
-  fn UnreadByte(self: Ref<Buffer>) -> Result<(), error>
+  fn UnreadByte(self: mut Ref<Buffer>) -> Result<(), error>
 
   /// UnreadRune unreads the last rune returned by [Buffer.ReadRune].
   /// If the most recent read or write operation on the buffer was
   /// not a successful [Buffer.ReadRune], UnreadRune returns an error.  (In this regard
   /// it is stricter than [Buffer.UnreadByte], which will unread the last byte
   /// from any read operation.)
-  fn UnreadRune(self: Ref<Buffer>) -> Result<(), error>
+  fn UnreadRune(self: mut Ref<Buffer>) -> Result<(), error>
 
   /// Write appends the contents of p to the buffer, growing the buffer as
   /// needed. The return value n is the length of p; err is always nil. If the
   /// buffer becomes too large, Write will panic with [ErrTooLarge].
-  fn Write(self: Ref<Buffer>, p: Slice<byte>) -> Partial<int, error>
+  fn Write(self: mut Ref<Buffer>, p: Slice<byte>) -> Partial<int, error>
 
   /// WriteByte appends the byte c to the buffer, growing the buffer as needed.
   /// The returned error is always nil, but is included to match [bufio.Writer]'s
   /// WriteByte. If the buffer becomes too large, WriteByte will panic with
   /// [ErrTooLarge].
   #[allow(unused_result)]
-  fn WriteByte(self: Ref<Buffer>, c: byte) -> Result<(), error>
+  fn WriteByte(self: mut Ref<Buffer>, c: byte) -> Result<(), error>
 
   /// WriteRune appends the UTF-8 encoding of Unicode code point r to the
   /// buffer, returning its length and an error, which is always nil but is
   /// included to match [bufio.Writer]'s WriteRune. The buffer is grown as needed;
   /// if it becomes too large, WriteRune will panic with [ErrTooLarge].
   #[allow(unused_result)]
-  fn WriteRune(self: Ref<Buffer>, r: rune) -> Result<int, error>
+  fn WriteRune(self: mut Ref<Buffer>, r: rune) -> Result<int, error>
 
   /// WriteString appends the contents of s to the buffer, growing the buffer as
   /// needed. The return value n is the length of s; err is always nil. If the
   /// buffer becomes too large, WriteString will panic with [ErrTooLarge].
   #[allow(unused_partial)]
-  fn WriteString(self: Ref<Buffer>, s: string) -> Partial<int, error>
+  fn WriteString(self: mut Ref<Buffer>, s: string) -> Partial<int, error>
 
   /// WriteTo writes data to w until the buffer is drained or an error occurs.
   /// The return value n is the number of bytes written; it always fits into an
   /// int, but it is int64 to match the [io.WriterTo] interface. Any error
   /// encountered during the write is also returned.
-  fn WriteTo(self: Ref<Buffer>, w: io.Writer) -> Partial<int64, error>
+  fn WriteTo(self: mut Ref<Buffer>, w: io.Writer) -> Partial<int64, error>
 }
 
 impl Reader {
@@ -498,22 +498,22 @@ impl Reader {
   fn Len(self: Ref<Reader>) -> int
 
   /// Read implements the [io.Reader] interface.
-  fn Read(self: Ref<Reader>, mut b: Slice<byte>) -> Partial<int, error>
+  fn Read(self: mut Ref<Reader>, b: mut Slice<byte>) -> Partial<int, error>
 
   /// ReadAt implements the [io.ReaderAt] interface.
-  fn ReadAt(self: Ref<Reader>, mut b: Slice<byte>, off: int64) -> Partial<int, error>
+  fn ReadAt(self: Ref<Reader>, b: mut Slice<byte>, off: int64) -> Partial<int, error>
 
   /// ReadByte implements the [io.ByteReader] interface.
-  fn ReadByte(self: Ref<Reader>) -> Result<byte, error>
+  fn ReadByte(self: mut Ref<Reader>) -> Result<byte, error>
 
   /// ReadRune implements the [io.RuneReader] interface.
-  fn ReadRune(self: Ref<Reader>) -> Result<(rune, int), error>
+  fn ReadRune(self: mut Ref<Reader>) -> Result<(rune, int), error>
 
   /// Reset resets the [Reader] to be reading from b.
-  fn Reset(self: Ref<Reader>, b: Slice<byte>)
+  fn Reset(self: mut Ref<Reader>, b: Slice<byte>)
 
   /// Seek implements the [io.Seeker] interface.
-  fn Seek(self: Ref<Reader>, offset: int64, whence: int) -> Result<int64, error>
+  fn Seek(self: mut Ref<Reader>, offset: int64, whence: int) -> Result<int64, error>
 
   /// Size returns the original length of the underlying byte slice.
   /// Size is the number of bytes available for reading via [Reader.ReadAt].
@@ -521,11 +521,11 @@ impl Reader {
   fn Size(self: Ref<Reader>) -> int64
 
   /// UnreadByte complements [Reader.ReadByte] in implementing the [io.ByteScanner] interface.
-  fn UnreadByte(self: Ref<Reader>) -> Result<(), error>
+  fn UnreadByte(self: mut Ref<Reader>) -> Result<(), error>
 
   /// UnreadRune complements [Reader.ReadRune] in implementing the [io.RuneScanner] interface.
-  fn UnreadRune(self: Ref<Reader>) -> Result<(), error>
+  fn UnreadRune(self: mut Ref<Reader>) -> Result<(), error>
 
   /// WriteTo implements the [io.WriterTo] interface.
-  fn WriteTo(self: Ref<Reader>, w: io.Writer) -> Partial<int64, error>
+  fn WriteTo(self: mut Ref<Reader>, w: io.Writer) -> Partial<int64, error>
 }

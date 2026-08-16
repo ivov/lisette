@@ -3,14 +3,14 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
-pub fn Default() -> Ref<Registry>
+pub fn Default() -> mut Ref<Registry>
 
 pub fn Enable()
 
-pub fn Lazy() -> Option<Ref<Registry>>
+pub fn Lazy() -> Option<mut Ref<Registry>>
 
-pub fn SharedRegistry() -> Option<Ref<Registry>>
+pub fn SharedRegistry() -> Option<mut Ref<Registry>>
 
 pub type Registry
 
-pub var Shared: Ref<Registry>
+pub var Shared: mut Ref<Registry>

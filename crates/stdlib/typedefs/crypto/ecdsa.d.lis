@@ -14,7 +14,7 @@ import "go:math/big"
 /// Most applications should use [crypto/rand.Reader] as rand. Note that the
 /// returned key does not depend deterministically on the bytes read from rand,
 /// and may change between calls and/or between versions.
-pub fn GenerateKey(c: elliptic.Curve, rand: io.Reader) -> Result<Ref<PrivateKey>, error>
+pub fn GenerateKey(c: elliptic.Curve, rand: io.Reader) -> Result<mut Ref<PrivateKey>, error>
 
 /// ParseRawPrivateKey parses a private key encoded as a fixed-length big-endian
 /// integer, according to SEC 1, Version 2.0, Section 2.3.6 (sometimes referred
@@ -30,7 +30,7 @@ pub fn GenerateKey(c: elliptic.Curve, rand: io.Reader) -> Result<Ref<PrivateKey>
 /// Note that private keys are more commonly encoded in ASN.1 or PKCS#8 format,
 /// which can be parsed with [crypto/x509.ParseECPrivateKey] or
 /// [crypto/x509.ParsePKCS8PrivateKey] (and [encoding/pem]).
-pub fn ParseRawPrivateKey(curve: elliptic.Curve, data: Slice<byte>) -> Result<Ref<PrivateKey>, error>
+pub fn ParseRawPrivateKey(curve: elliptic.Curve, data: Slice<byte>) -> Result<mut Ref<PrivateKey>, error>
 
 /// ParseUncompressedPublicKey parses a public key encoded as an uncompressed
 /// point according to SEC 1, Version 2.0, Section 2.3.3 (also known as the X9.62
@@ -46,14 +46,14 @@ pub fn ParseRawPrivateKey(curve: elliptic.Curve, data: Slice<byte>) -> Result<Re
 /// 
 /// Note that public keys are more commonly encoded in DER (or PEM) format, which
 /// can be parsed with [crypto/x509.ParsePKIXPublicKey] (and [encoding/pem]).
-pub fn ParseUncompressedPublicKey(curve: elliptic.Curve, data: Slice<byte>) -> Result<Ref<PublicKey>, error>
+pub fn ParseUncompressedPublicKey(curve: elliptic.Curve, data: Slice<byte>) -> Result<mut Ref<PublicKey>, error>
 
 /// Sign signs a hash (which should be the result of hashing a larger message)
 /// using the private key, priv. If the hash is longer than the bit-length of the
 /// private key's curve order, the hash will be truncated to that length. It
 /// returns the signature as a pair of integers. Most applications should use
 /// [SignASN1] instead of dealing directly with r, s.
-pub fn Sign(rand: io.Reader, priv: Ref<PrivateKey>, hash: Slice<byte>) -> Result<(Ref<big.Int>, Ref<big.Int>), error>
+pub fn Sign(rand: io.Reader, priv: Ref<PrivateKey>, hash: Slice<byte>) -> Result<(mut Ref<big.Int>, mut Ref<big.Int>), error>
 
 /// SignASN1 signs a hash (which should be the result of hashing a larger message)
 /// using the private key, priv. If the hash is longer than the bit-length of the
@@ -87,16 +87,16 @@ pub fn VerifyASN1(pub_: Ref<PublicKey>, hash: Slice<byte>, sig: Slice<byte>) -> 
 
 /// PrivateKey represents an ECDSA private key.
 pub struct PrivateKey {
-  embed PublicKey,
-  pub D: Option<Ref<big.Int>>,
+  embed mut PublicKey,
+  pub D: Option<mut Ref<big.Int>>,
 }
 
 /// PublicKey represents an ECDSA public key.
 #[go(hidden_embed)]
 pub struct PublicKey {
   pub Curve: Option<elliptic.Curve>,
-  pub X: Option<Ref<big.Int>>,
-  pub Y: Option<Ref<big.Int>>,
+  pub X: Option<mut Ref<big.Int>>,
+  pub Y: Option<mut Ref<big.Int>>,
 }
 
 impl PrivateKey {
@@ -112,12 +112,12 @@ impl PrivateKey {
   /// Note that private keys are more commonly encoded in ASN.1 or PKCS#8 format,
   /// which can be generated with [crypto/x509.MarshalECPrivateKey] or
   /// [crypto/x509.MarshalPKCS8PrivateKey] (and [encoding/pem]).
-  fn Bytes(self: Ref<PrivateKey>) -> Result<Slice<byte>, error>
+  fn Bytes(self: Ref<PrivateKey>) -> Result<mut Slice<byte>, error>
 
   /// ECDH returns k as a [ecdh.PrivateKey]. It returns an error if the key is
   /// invalid according to the definition of [ecdh.Curve.NewPrivateKey], or if the
   /// Curve is not supported by [crypto/ecdh].
-  fn ECDH(self: Ref<PrivateKey>) -> Result<Ref<ecdh.PrivateKey>, error>
+  fn ECDH(self: Ref<PrivateKey>) -> Result<mut Ref<ecdh.PrivateKey>, error>
 
   /// Equal reports whether priv and x have the same value.
   /// 
@@ -159,7 +159,7 @@ impl PublicKey {
     y1: Ref<big.Int>,
     x2: Ref<big.Int>,
     y2: Ref<big.Int>,
-  ) -> (Ref<big.Int>, Ref<big.Int>)
+  ) -> (mut Ref<big.Int>, mut Ref<big.Int>)
 
   /// Bytes encodes the public key as an uncompressed point according to SEC 1,
   /// Version 2.0, Section 2.3.3 (also known as the X9.62 uncompressed format).
@@ -177,12 +177,12 @@ impl PublicKey {
   /// Double returns 2*(x,y).
   /// 
   /// Deprecated: this is a low-level unsafe API.
-  fn Double(self, x1: Ref<big.Int>, y1: Ref<big.Int>) -> (Ref<big.Int>, Ref<big.Int>)
+  fn Double(self, x1: Ref<big.Int>, y1: Ref<big.Int>) -> (mut Ref<big.Int>, mut Ref<big.Int>)
 
   /// ECDH returns k as a [ecdh.PublicKey]. It returns an error if the key is
   /// invalid according to the definition of [ecdh.Curve.NewPublicKey], or if the
   /// Curve is not supported by crypto/ecdh.
-  fn ECDH(self: Ref<PublicKey>) -> Result<Ref<ecdh.PublicKey>, error>
+  fn ECDH(self: Ref<PublicKey>) -> Result<mut Ref<ecdh.PublicKey>, error>
 
   /// Equal reports whether pub and x have the same value.
   /// 
@@ -199,7 +199,7 @@ impl PublicKey {
   fn IsOnCurve(self, x: Ref<big.Int>, y: Ref<big.Int>) -> bool
 
   /// Params returns the parameters for the curve.
-  fn Params(self) -> Ref<elliptic.CurveParams>
+  fn Params(self) -> mut Ref<elliptic.CurveParams>
 
   /// ScalarBaseMult returns k*G, where G is the base point of the group
   /// and k is an integer in big-endian form.
@@ -207,12 +207,12 @@ impl PublicKey {
   /// Deprecated: this is a low-level unsafe API. For ECDH, use the crypto/ecdh
   /// package. Most uses of ScalarBaseMult can be replaced by a call to the
   /// PrivateKey.PublicKey method in crypto/ecdh.
-  fn ScalarBaseMult(self, k: Slice<byte>) -> (Ref<big.Int>, Ref<big.Int>)
+  fn ScalarBaseMult(self, k: Slice<byte>) -> (mut Ref<big.Int>, mut Ref<big.Int>)
 
   /// ScalarMult returns k*(x,y) where k is an integer in big-endian form.
   /// 
   /// Deprecated: this is a low-level unsafe API. For ECDH, use the crypto/ecdh
   /// package. Most uses of ScalarMult can be replaced by a call to the ECDH
   /// methods of NIST curves in crypto/ecdh.
-  fn ScalarMult(self, x1: Ref<big.Int>, y1: Ref<big.Int>, k: Slice<byte>) -> (Ref<big.Int>, Ref<big.Int>)
+  fn ScalarMult(self, x1: Ref<big.Int>, y1: Ref<big.Int>, k: Slice<byte>) -> (mut Ref<big.Int>, mut Ref<big.Int>)
 }

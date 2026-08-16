@@ -74,23 +74,23 @@ pub fn EscapeText(w: io.Writer, s: Slice<byte>) -> Result<(), error>
 /// See [MarshalIndent] for an example.
 /// 
 /// Marshal will return an error if asked to marshal a channel, function, or map.
-pub fn Marshal(v: Unknown) -> Result<Slice<byte>, error>
+pub fn Marshal(v: Unknown) -> Result<mut Slice<byte>, error>
 
 /// MarshalIndent works like [Marshal], but each XML element begins on a new
 /// indented line that starts with prefix and is followed by one or more
 /// copies of indent according to the nesting depth.
-pub fn MarshalIndent(v: Unknown, prefix: string, indent: string) -> Result<Slice<byte>, error>
+pub fn MarshalIndent(v: Unknown, prefix: string, indent: string) -> Result<mut Slice<byte>, error>
 
 /// NewDecoder creates a new XML parser reading from r.
 /// If r does not implement [io.ByteReader], NewDecoder will
 /// do its own buffering.
-pub fn NewDecoder(r: io.Reader) -> Ref<Decoder>
+pub fn NewDecoder(r: io.Reader) -> mut Ref<Decoder>
 
 /// NewEncoder returns a new encoder that writes to w.
-pub fn NewEncoder(w: io.Writer) -> Ref<Encoder>
+pub fn NewEncoder(w: io.Writer) -> mut Ref<Encoder>
 
 /// NewTokenDecoder creates a new XML parser using an underlying token stream.
-pub fn NewTokenDecoder(t: TokenReader) -> Ref<Decoder>
+pub fn NewTokenDecoder(t: TokenReader) -> mut Ref<Decoder>
 
 /// Unmarshal parses the XML-encoded data and stores the result in
 /// the value pointed to by v, which must be an arbitrary struct,
@@ -200,7 +200,7 @@ pub fn NewTokenDecoder(t: TokenReader) -> Ref<Decoder>
 /// A missing element or empty attribute value will be unmarshaled as a zero value.
 /// If the field is a slice, a zero value will be appended to the field. Otherwise, the
 /// field will be set to its zero value.
-pub fn Unmarshal<T>(data: Slice<byte>, v: Ref<T>) -> Result<(), error>
+pub fn Unmarshal<T>(data: Slice<byte>, v: mut Ref<T>) -> Result<(), error>
 
 /// An Attr represents an attribute in an XML element (Name=Value).
 pub struct Attr {
@@ -211,11 +211,11 @@ pub struct Attr {
 /// A CharData represents XML character data (raw text),
 /// in which XML escape sequences have been replaced by
 /// the characters they represent.
-pub struct CharData(Slice<byte>)
+pub struct CharData(mut Slice<byte>)
 
 /// A Comment represents an XML comment of the form <!--comment-->.
 /// The bytes do not include the <!-- and --> comment markers.
-pub struct Comment(Slice<byte>)
+pub struct Comment(mut Slice<byte>)
 
 /// A Decoder represents an XML parser reading a particular input stream.
 /// The parser assumes that its input is encoded in UTF-8.
@@ -223,15 +223,15 @@ pub struct Comment(Slice<byte>)
 #[go(zero_unsafe)]
 pub struct Decoder {
   pub Strict: bool,
-  pub AutoClose: Slice<string>,
-  pub Entity: Map<string, string>,
+  pub AutoClose: mut Slice<string>,
+  pub Entity: mut Map<string, string>,
   pub CharsetReader: Option<fn(string, io.Reader) -> Result<io.Reader, error>>,
   pub DefaultSpace: string,
 }
 
 /// A Directive represents an XML directive of the form <!text>.
 /// The bytes do not include the <! and > markers.
-pub struct Directive(Slice<byte>)
+pub struct Directive(mut Slice<byte>)
 
 /// An Encoder writes XML data to an output stream.
 pub type Encoder
@@ -289,13 +289,13 @@ pub struct Name {
 /// A ProcInst represents an XML processing instruction of the form <?target inst?>
 pub struct ProcInst {
   pub Target: string,
-  pub Inst: Slice<byte>,
+  pub Inst: mut Slice<byte>,
 }
 
 /// A StartElement represents an XML start element.
 pub struct StartElement {
   pub Name: Name,
-  pub Attr: Slice<Attr>,
+  pub Attr: mut Slice<Attr>,
 }
 
 /// A SyntaxError represents a syntax error in the XML input stream.
@@ -381,34 +381,38 @@ pub const Header = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
 /// should be considered to close automatically.
 /// 
 /// See the [Decoder.Strict] and [Decoder.Entity] fields' documentation.
-pub var HTMLAutoClose: Slice<string>
+pub var HTMLAutoClose: mut Slice<string>
 
 /// HTMLEntity is an entity map containing translations for the
 /// standard HTML entity characters.
 /// 
 /// See the [Decoder.Strict] and [Decoder.Entity] fields' documentation.
-pub var HTMLEntity: Map<string, string>
+pub var HTMLEntity: mut Map<string, string>
 
 impl CharData {
   /// Copy creates a new copy of CharData.
-  fn Copy(self) -> CharData
+  fn Copy(self) -> mut CharData
 }
 
 impl Comment {
   /// Copy creates a new copy of Comment.
-  fn Copy(self) -> Comment
+  fn Copy(self) -> mut Comment
 }
 
 impl Decoder {
   /// Decode works like [Unmarshal], except it reads the decoder
   /// stream to find the start element.
-  fn Decode<T>(self: Ref<Decoder>, v: Ref<T>) -> Result<(), error>
+  fn Decode<T>(self: mut Ref<Decoder>, v: mut Ref<T>) -> Result<(), error>
 
   /// DecodeElement works like [Unmarshal] except that it takes
   /// a pointer to the start XML element to decode into v.
   /// It is useful when a client reads some raw XML tokens itself
   /// but also wants to defer to [Unmarshal] for some elements.
-  fn DecodeElement<T>(self: Ref<Decoder>, v: Ref<T>, start: Ref<StartElement>) -> Result<(), error>
+  fn DecodeElement<T>(
+    self: mut Ref<Decoder>,
+    v: mut Ref<T>,
+    start: Ref<StartElement>,
+  ) -> Result<(), error>
 
   /// InputOffset returns the input stream byte offset of the current decoder position.
   /// The offset gives the location of the end of the most recently returned token
@@ -423,14 +427,14 @@ impl Decoder {
   /// RawToken is like [Decoder.Token] but does not verify that
   /// start and end elements match and does not translate
   /// name space prefixes to their corresponding URLs.
-  fn RawToken(self: Ref<Decoder>) -> Result<Token, error>
+  fn RawToken(self: mut Ref<Decoder>) -> Result<Token, error>
 
   /// Skip reads tokens until it has consumed the end element
   /// matching the most recent start element already consumed,
   /// skipping nested structures.
   /// It returns nil if it finds an end element matching the start
   /// element; otherwise it returns an error describing the problem.
-  fn Skip(self: Ref<Decoder>) -> Result<(), error>
+  fn Skip(self: mut Ref<Decoder>) -> Result<(), error>
 
   /// Token returns the next XML token in the input stream.
   /// At the end of the input stream, Token returns nil, [io.EOF].
@@ -458,12 +462,12 @@ impl Decoder {
   /// set to the URL identifying its name space when known.
   /// If Token encounters an unrecognized name space prefix,
   /// it uses the prefix as the Space rather than report an error.
-  fn Token(self: Ref<Decoder>) -> Result<Token, error>
+  fn Token(self: mut Ref<Decoder>) -> Result<Token, error>
 }
 
 impl Directive {
   /// Copy creates a new copy of Directive.
-  fn Copy(self) -> Directive
+  fn Copy(self) -> mut Directive
 }
 
 impl Encoder {
@@ -471,7 +475,7 @@ impl Encoder {
   /// any buffered XML to the underlying writer and returns an error if the
   /// written XML is invalid (e.g. by containing unclosed elements).
   #[allow(unused_result)]
-  fn Close(self: Ref<Encoder>) -> Result<(), error>
+  fn Close(self: mut Ref<Encoder>) -> Result<(), error>
 
   /// Encode writes the XML encoding of v to the stream.
   /// 
@@ -479,7 +483,7 @@ impl Encoder {
   /// of Go values to XML.
   /// 
   /// Encode calls [Encoder.Flush] before returning.
-  fn Encode(self: Ref<Encoder>, v: Unknown) -> Result<(), error>
+  fn Encode(self: mut Ref<Encoder>, v: Unknown) -> Result<(), error>
 
   /// EncodeElement writes the XML encoding of v to the stream,
   /// using start as the outermost tag in the encoding.
@@ -488,7 +492,7 @@ impl Encoder {
   /// of Go values to XML.
   /// 
   /// EncodeElement calls [Encoder.Flush] before returning.
-  fn EncodeElement(self: Ref<Encoder>, v: Unknown, start: StartElement) -> Result<(), error>
+  fn EncodeElement(self: mut Ref<Encoder>, v: Unknown, start: StartElement) -> Result<(), error>
 
   /// EncodeToken writes the given XML token to the stream.
   /// It returns an error if [StartElement] and [EndElement] tokens are not properly matched.
@@ -502,7 +506,7 @@ impl Encoder {
   /// 
   /// EncodeToken allows writing a [ProcInst] with Target set to "xml" only as the first token
   /// in the stream.
-  fn EncodeToken(self: Ref<Encoder>, t: Token) -> Result<(), error>
+  fn EncodeToken(self: mut Ref<Encoder>, t: Token) -> Result<(), error>
 
   /// Flush flushes any buffered XML to the underlying writer.
   /// See the [Encoder.EncodeToken] documentation for details about when it is necessary.
@@ -512,7 +516,7 @@ impl Encoder {
   /// Indent sets the encoder to generate XML in which each element
   /// begins on a new indented line that starts with prefix and is followed by
   /// one or more copies of indent according to the nesting depth.
-  fn Indent(self: Ref<Encoder>, prefix: string, indent: string)
+  fn Indent(self: mut Ref<Encoder>, prefix: string, indent: string)
 }
 
 impl ProcInst {

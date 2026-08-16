@@ -19,13 +19,13 @@ pub fn Get(name: string) -> Option<Var>
 /// This is only needed to install the handler in a non-standard location.
 pub fn Handler() -> http.Handler
 
-pub fn NewFloat(name: string) -> Ref<Float>
+pub fn NewFloat(name: string) -> mut Ref<Float>
 
-pub fn NewInt(name: string) -> Ref<Int>
+pub fn NewInt(name: string) -> mut Ref<Int>
 
-pub fn NewMap(name: string) -> Ref<Map>
+pub fn NewMap(name: string) -> mut Ref<Map>
 
-pub fn NewString(name: string) -> Ref<String>
+pub fn NewString(name: string) -> mut Ref<String>
 
 /// Publish declares a named exported variable. This should be called from a
 /// package's init function when it creates its Vars. If the name is already
@@ -89,28 +89,28 @@ impl Int {
 
 impl Map {
   /// Add adds delta to the *[Int] value stored under the given map key.
-  fn Add(self: Ref<Map>, key: string, delta: int64)
+  fn Add(self: mut Ref<Map>, key: string, delta: int64)
 
   /// AddFloat adds delta to the *[Float] value stored under the given map key.
-  fn AddFloat(self: Ref<Map>, key: string, delta: float64)
+  fn AddFloat(self: mut Ref<Map>, key: string, delta: float64)
 
   /// Delete deletes the given key from the map.
-  fn Delete(self: Ref<Map>, key: string)
+  fn Delete(self: mut Ref<Map>, key: string)
 
   /// Do calls f for each entry in the map.
   /// The map is locked during the iteration,
   /// but existing entries may be concurrently updated.
-  fn Do(self: Ref<Map>, f: fn(KeyValue) -> ())
+  fn Do(self: mut Ref<Map>, f: fn(KeyValue) -> ())
 
-  fn Get(self: Ref<Map>, key: string) -> Option<Var>
+  fn Get(self: mut Ref<Map>, key: string) -> Option<Var>
 
   /// Init removes all keys from the map.
   #[allow(unused_value)]
-  fn Init(self: Ref<Map>) -> Ref<Map>
+  fn Init(self: mut Ref<Map>) -> mut Ref<Map>
 
-  fn Set(self: Ref<Map>, key: string, av: Var)
+  fn Set(self: mut Ref<Map>, key: string, av: Var)
 
-  fn String(self: Ref<Map>) -> string
+  fn String(self: mut Ref<Map>) -> string
 }
 
 impl String {

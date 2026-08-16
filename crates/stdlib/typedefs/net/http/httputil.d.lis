@@ -27,15 +27,15 @@ import "go:time"
 /// 
 /// The documentation for [http.Request.Write] details which fields
 /// of req are included in the dump.
-pub fn DumpRequest(req: Ref<http.Request>, body: bool) -> Result<Slice<byte>, error>
+pub fn DumpRequest(req: mut Ref<http.Request>, body: bool) -> Result<mut Slice<byte>, error>
 
 /// DumpRequestOut is like [DumpRequest] but for outgoing client requests. It
 /// includes any headers that the standard [http.Transport] adds, such as
 /// User-Agent.
-pub fn DumpRequestOut(req: Ref<http.Request>, body: bool) -> Result<Slice<byte>, error>
+pub fn DumpRequestOut(req: mut Ref<http.Request>, body: bool) -> Result<mut Slice<byte>, error>
 
 /// DumpResponse is like DumpRequest but dumps a response.
-pub fn DumpResponse(resp: Ref<http.Response>, body: bool) -> Result<Slice<byte>, error>
+pub fn DumpResponse(resp: mut Ref<http.Response>, body: bool) -> Result<mut Slice<byte>, error>
 
 /// NewChunkedReader returns a new chunkedReader that translates the data read from r
 /// out of HTTP "chunked" format before returning it.
@@ -63,21 +63,21 @@ pub fn NewChunkedWriter(w: io.Writer) -> io.WriteCloser
 /// We should have deleted it before Go 1.
 /// 
 /// Deprecated: Use the Client or Transport in package [net/http] instead.
-pub fn NewClientConn(c: net.Conn, r: Ref<bufio.Reader>) -> Ref<ClientConn>
+pub fn NewClientConn(c: net.Conn, r: Ref<bufio.Reader>) -> mut Ref<ClientConn>
 
 /// NewProxyClientConn is an artifact of Go's early HTTP implementation.
 /// It is low-level, old, and unused by Go's current HTTP stack.
 /// We should have deleted it before Go 1.
 /// 
 /// Deprecated: Use the Client or Transport in package [net/http] instead.
-pub fn NewProxyClientConn(c: net.Conn, r: Ref<bufio.Reader>) -> Ref<ClientConn>
+pub fn NewProxyClientConn(c: net.Conn, r: Ref<bufio.Reader>) -> mut Ref<ClientConn>
 
 /// NewServerConn is an artifact of Go's early HTTP implementation.
 /// It is low-level, old, and unused by Go's current HTTP stack.
 /// We should have deleted it before Go 1.
 /// 
 /// Deprecated: Use the Server in package [net/http] instead.
-pub fn NewServerConn(c: net.Conn, r: Ref<bufio.Reader>) -> Ref<ServerConn>
+pub fn NewServerConn(c: net.Conn, r: Ref<bufio.Reader>) -> mut Ref<ServerConn>
 
 /// NewSingleHostReverseProxy returns a new [ReverseProxy] that routes
 /// URLs to the scheme, host, and base path provided in target. If the
@@ -99,7 +99,7 @@ pub fn NewServerConn(c: net.Conn, r: Ref<bufio.Reader>) -> Ref<ServerConn>
 /// 			r.Out.Host = r.In.Host // if desired
 /// 		},
 /// 	}
-pub fn NewSingleHostReverseProxy(target: Ref<url.URL>) -> Ref<ReverseProxy>
+pub fn NewSingleHostReverseProxy(target: Ref<url.URL>) -> mut Ref<ReverseProxy>
 
 /// A BufferPool is an interface for getting and returning temporary
 /// byte slices for use by [io.CopyBuffer].
@@ -117,8 +117,8 @@ pub type ClientConn
 
 /// A ProxyRequest contains a request to be rewritten by a [ReverseProxy].
 pub struct ProxyRequest {
-  pub In: Option<Ref<http.Request>>,
-  pub Out: Option<Ref<http.Request>>,
+  pub In: Option<mut Ref<http.Request>>,
+  pub Out: Option<mut Ref<http.Request>>,
 }
 
 /// ReverseProxy is an HTTP Handler that takes an incoming request and
@@ -139,7 +139,7 @@ pub struct ReverseProxy {
   pub Director: Option<fn(Ref<http.Request>) -> ()>,
   pub Transport: Option<http.RoundTripper>,
   pub FlushInterval: time.Duration,
-  pub ErrorLog: Option<Ref<log.Logger>>,
+  pub ErrorLog: Option<mut Ref<log.Logger>>,
   pub BufferPool: Option<BufferPool>,
   pub ModifyResponse: Option<fn(Ref<http.Response>) -> Result<(), error>>,
   pub ErrorHandler: Option<fn(http.ResponseWriter, Ref<http.Request>, error) -> ()>,
@@ -152,29 +152,29 @@ pub struct ReverseProxy {
 /// Deprecated: Use the Server in package [net/http] instead.
 pub type ServerConn
 
-pub var ErrClosed: Ref<http.ProtocolError>
+pub var ErrClosed: mut Ref<http.ProtocolError>
 
 /// ErrLineTooLong is returned when reading malformed chunked data
 /// with lines that are too long.
 pub var ErrLineTooLong: error
 
-pub var ErrPersistEOF: Ref<http.ProtocolError>
+pub var ErrPersistEOF: mut Ref<http.ProtocolError>
 
-pub var ErrPipeline: Ref<http.ProtocolError>
+pub var ErrPipeline: mut Ref<http.ProtocolError>
 
 impl ClientConn {
   /// Close calls [ClientConn.Hijack] and then also closes the underlying connection.
   #[allow(unused_result)]
-  fn Close(self: Ref<ClientConn>) -> Result<(), error>
+  fn Close(self: mut Ref<ClientConn>) -> Result<(), error>
 
   /// Do is convenience method that writes a request and reads a response.
-  fn Do(self: Ref<ClientConn>, req: Ref<http.Request>) -> Result<Ref<http.Response>, error>
+  fn Do(self: mut Ref<ClientConn>, req: Ref<http.Request>) -> Result<mut Ref<http.Response>, error>
 
   /// Hijack detaches the [ClientConn] and returns the underlying connection as well
   /// as the read-side bufio which may have some left over data. Hijack may be
   /// called before the user or Read have signaled the end of the keep-alive
   /// logic. The user should not call Hijack while [ClientConn.Read] or ClientConn.Write is in progress.
-  fn Hijack(self: Ref<ClientConn>) -> (net.Conn, Ref<bufio.Reader>)
+  fn Hijack(self: mut Ref<ClientConn>) -> (net.Conn, mut Ref<bufio.Reader>)
 
   /// Pending returns the number of unanswered requests
   /// that have been sent on the connection.
@@ -184,14 +184,14 @@ impl ClientConn {
   /// returned together with an [ErrPersistEOF], which means that the remote
   /// requested that this be the last request serviced. Read can be called
   /// concurrently with [ClientConn.Write], but not with another Read.
-  fn Read(self: Ref<ClientConn>, req: Ref<http.Request>) -> Result<Ref<http.Response>, error>
+  fn Read(self: mut Ref<ClientConn>, req: Ref<http.Request>) -> Result<mut Ref<http.Response>, error>
 
   /// Write writes a request. An [ErrPersistEOF] error is returned if the connection
   /// has been closed in an HTTP keep-alive sense. If req.Close equals true, the
   /// keep-alive connection is logically closed after this request and the opposing
   /// server is informed. An ErrUnexpectedEOF indicates the remote closed the
   /// underlying TCP connection, which is usually considered as graceful close.
-  fn Write(self: Ref<ClientConn>, req: Ref<http.Request>) -> Result<(), error>
+  fn Write(self: mut Ref<ClientConn>, req: Ref<http.Request>) -> Result<(), error>
 }
 
 impl ProxyRequest {
@@ -244,13 +244,13 @@ impl ReverseProxy {
 impl ServerConn {
   /// Close calls [ServerConn.Hijack] and then also closes the underlying connection.
   #[allow(unused_result)]
-  fn Close(self: Ref<ServerConn>) -> Result<(), error>
+  fn Close(self: mut Ref<ServerConn>) -> Result<(), error>
 
   /// Hijack detaches the [ServerConn] and returns the underlying connection as well
   /// as the read-side bufio which may have some left over data. Hijack may be
   /// called before Read has signaled the end of the keep-alive logic. The user
   /// should not call Hijack while [ServerConn.Read] or [ServerConn.Write] is in progress.
-  fn Hijack(self: Ref<ServerConn>) -> (net.Conn, Ref<bufio.Reader>)
+  fn Hijack(self: mut Ref<ServerConn>) -> (net.Conn, mut Ref<bufio.Reader>)
 
   /// Pending returns the number of unanswered requests
   /// that have been received on the connection.
@@ -260,13 +260,13 @@ impl ServerConn {
   /// it is gracefully determined that there are no more requests (e.g. after the
   /// first request on an HTTP/1.0 connection, or after a Connection:close on a
   /// HTTP/1.1 connection).
-  fn Read(self: Ref<ServerConn>) -> Result<Ref<http.Request>, error>
+  fn Read(self: mut Ref<ServerConn>) -> Result<mut Ref<http.Request>, error>
 
   /// Write writes resp in response to req. To close the connection gracefully, set the
   /// Response.Close field to true. Write should be considered operational until
   /// it returns an error, regardless of any errors returned on the [ServerConn.Read] side.
   fn Write(
-    self: Ref<ServerConn>,
+    self: mut Ref<ServerConn>,
     req: Ref<http.Request>,
     resp: Ref<http.Response>,
   ) -> Result<(), error>

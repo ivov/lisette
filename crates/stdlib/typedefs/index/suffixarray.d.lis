@@ -8,7 +8,7 @@ import "go:regexp"
 
 /// New creates a new [Index] for data.
 /// [Index] creation time is O(N) for N = len(data).
-pub fn New(data: Slice<byte>) -> Ref<Index>
+pub fn New(data: Slice<byte>) -> mut Ref<Index>
 
 /// Index implements a suffix array for fast substring search.
 pub type Index
@@ -24,17 +24,17 @@ impl Index {
   /// in successive order. Otherwise, at most n matches are returned and
   /// they may not be successive. The result is nil if there are no matches,
   /// or if n == 0.
-  fn FindAllIndex(self: Ref<Index>, r: Ref<regexp.Regexp>, n: int) -> Slice<Slice<int>>
+  fn FindAllIndex(self: Ref<Index>, r: Ref<regexp.Regexp>, n: int) -> mut Slice<mut Slice<int>>
 
   /// Lookup returns an unsorted list of at most n indices where the byte string s
   /// occurs in the indexed data. If n < 0, all occurrences are returned.
   /// The result is nil if s is empty, s is not found, or n == 0.
   /// Lookup time is O(log(N)*len(s) + len(result)) where N is the
   /// size of the indexed data.
-  fn Lookup(self: Ref<Index>, s: Slice<byte>, n: int) -> Slice<int>
+  fn Lookup(self: Ref<Index>, s: Slice<byte>, n: int) -> mut Slice<int>
 
   /// Read reads the index from r into x; x must not be nil.
-  fn Read(self: Ref<Index>, r: io.Reader) -> Result<(), error>
+  fn Read(self: mut Ref<Index>, r: io.Reader) -> Result<(), error>
 
   /// Write writes the index x to w.
   fn Write(self: Ref<Index>, w: io.Writer) -> Result<(), error>

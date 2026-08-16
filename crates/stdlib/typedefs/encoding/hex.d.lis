@@ -8,11 +8,11 @@ import "go:io"
 /// AppendDecode appends the hexadecimally decoded src to dst
 /// and returns the extended buffer.
 /// If the input is malformed, it returns the partially decoded src and an error.
-pub fn AppendDecode(mut dst: Slice<byte>, src: Slice<byte>) -> Partial<Slice<byte>, error>
+pub fn AppendDecode(dst: mut Slice<byte>, src: Slice<byte>) -> Partial<mut Slice<byte>, error>
 
 /// AppendEncode appends the hexadecimally encoded src to dst
 /// and returns the extended buffer.
-pub fn AppendEncode(mut dst: Slice<byte>, src: Slice<byte>) -> Slice<byte>
+pub fn AppendEncode(dst: mut Slice<byte>, src: Slice<byte>) -> mut Slice<byte>
 
 /// Decode decodes src into [DecodedLen](len(src)) bytes,
 /// returning the actual number of bytes written to dst.
@@ -21,7 +21,7 @@ pub fn AppendEncode(mut dst: Slice<byte>, src: Slice<byte>) -> Slice<byte>
 /// characters and that src has even length.
 /// If the input is malformed, Decode returns the number
 /// of bytes decoded before the error.
-pub fn Decode(mut dst: Slice<byte>, src: Slice<byte>) -> Partial<int, error>
+pub fn Decode(dst: mut Slice<byte>, src: Slice<byte>) -> Partial<int, error>
 
 /// DecodeString returns the bytes represented by the hexadecimal string s.
 /// 
@@ -48,7 +48,7 @@ pub fn Dumper(w: io.Writer) -> io.WriteCloser
 /// bytes of dst. As a convenience, it returns the number
 /// of bytes written to dst, but this value is always [EncodedLen](len(src)).
 /// Encode implements hexadecimal encoding.
-pub fn Encode(mut dst: Slice<byte>, src: Slice<byte>) -> int
+pub fn Encode(dst: mut Slice<byte>, src: Slice<byte>) -> int
 
 /// EncodeToString returns the hexadecimal encoding of src.
 pub fn EncodeToString(src: Slice<byte>) -> string

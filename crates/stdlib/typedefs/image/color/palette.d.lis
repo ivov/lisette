@@ -17,10 +17,10 @@ import "go:image/color"
 /// 
 /// This palette was used in the Plan 9 Operating System, described at
 /// https://9p.io/magic/man2html/6/color
-pub var Plan9: Slice<color.Color>
+pub var Plan9: mut Slice<color.Color>
 
 /// WebSafe is a 216-color palette that was popularized by early versions
 /// of Netscape Navigator. It is also known as the Netscape Color Cube.
 /// 
 /// See https://en.wikipedia.org/wiki/Web_colors#Web-safe_colors for details.
-pub var WebSafe: Slice<color.Color>
+pub var WebSafe: mut Slice<color.Color>

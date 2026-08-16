@@ -143,7 +143,7 @@ pub const ResultVar: VarKind = 5
 ///   - if V is a generalized interface; i.e., an interface that may only be used
 ///     as a type constraint in Go code
 ///   - if T is an uninstantiated generic type
-pub fn AssertableTo(v: Ref<Interface>, t: Type) -> bool
+pub fn AssertableTo(v: mut Ref<Interface>, t: Type) -> bool
 
 /// AssignableTo reports whether a value of type V is assignable to a variable
 /// of type T.
@@ -209,7 +209,7 @@ pub fn Default(t: Option<Type>) -> Option<Type>
 /// be parsed successfully, or the resulting expr AST cannot be
 /// type-checked.
 pub fn Eval(
-  fset: Ref<token.FileSet>,
+  fset: mut Ref<token.FileSet>,
   pkg: Ref<Package>,
   pos: token.Pos,
   expr: string,
@@ -248,7 +248,7 @@ pub fn IdenticalIgnoreTags(x: Type, y: Type) -> bool
 /// 
 /// The behavior of Implements is unspecified if V is Typ[Invalid] or an uninstantiated
 /// generic type.
-pub fn Implements(v: Type, t: Ref<Interface>) -> bool
+pub fn Implements(v: Type, t: mut Ref<Interface>) -> bool
 
 /// Instantiate instantiates the type orig with the given type arguments targs.
 /// orig must be an *Alias, *Named, or *Signature type. If there is no error,
@@ -320,7 +320,7 @@ pub fn LookupFieldOrMethod(
   addressable: bool,
   pkg: Ref<Package>,
   name: string,
-) -> (Option<Object>, Slice<int>, bool)
+) -> (Option<Object>, mut Slice<int>, bool)
 
 /// LookupSelection selects the field or method whose ID is Id(pkg,
 /// name), on a value of type T. If addressable is set, T is the type
@@ -362,27 +362,27 @@ pub fn LookupSelection(
 /// present in V have matching types (e.g., for a type assertion x.(T) where
 /// x is of interface type V).
 #[go(comma_ok)]
-pub fn MissingMethod(v: Type, t: Ref<Interface>, static: bool) -> Option<Ref<Func>>
+pub fn MissingMethod(v: Type, t: mut Ref<Interface>, static: bool) -> Option<mut Ref<Func>>
 
 /// NewAlias creates a new Alias type with the given type name and rhs.
 /// rhs must not be nil.
-pub fn NewAlias(obj: Ref<TypeName>, rhs: Type) -> Ref<Alias>
+pub fn NewAlias(obj: mut Ref<TypeName>, rhs: Type) -> mut Ref<Alias>
 
 /// NewArray returns a new array type for the given element type and length.
 /// A negative length indicates an unknown length.
-pub fn NewArray(elem: Type, len: int64) -> Ref<types.Array>
+pub fn NewArray(elem: Type, len: int64) -> mut Ref<types.Array>
 
 /// NewChan returns a new channel type for the given direction and element type.
-pub fn NewChan(dir: ChanDir, elem: Type) -> Ref<Chan>
+pub fn NewChan(dir: ChanDir, elem: Type) -> mut Ref<Chan>
 
 /// NewChecker returns a new [Checker] instance for a given package.
 /// [Package] files may be added incrementally via checker.Files.
 pub fn NewChecker(
-  conf: Option<Ref<Config>>,
+  conf: Option<mut Ref<Config>>,
   fset: Ref<token.FileSet>,
   pkg: Ref<Package>,
   info: Option<Ref<Info>>,
-) -> Ref<Checker>
+) -> mut Ref<Checker>
 
 /// NewConst returns a new constant with value val.
 /// The remaining arguments set the attributes found with all Objects.
@@ -392,10 +392,10 @@ pub fn NewConst(
   name: string,
   typ: Type,
   val: constant.Value,
-) -> Ref<Const>
+) -> mut Ref<Const>
 
 /// NewContext creates a new Context.
-pub fn NewContext() -> Ref<Context>
+pub fn NewContext() -> mut Ref<Context>
 
 /// NewField returns a new variable representing a struct field.
 /// For embedded fields, the name is the unqualified type name
@@ -406,7 +406,7 @@ pub fn NewField(
   name: string,
   typ: Type,
   embedded: bool,
-) -> Ref<Var>
+) -> mut Ref<Var>
 
 /// NewFunc returns a new function with the given signature, representing
 /// the function's type.
@@ -415,14 +415,17 @@ pub fn NewFunc(
   pkg: Ref<Package>,
   name: string,
   sig: Ref<Signature>,
-) -> Ref<Func>
+) -> mut Ref<Func>
 
 /// NewInterface returns a new interface for the given methods and embedded types.
 /// NewInterface takes ownership of the provided methods and may modify their types
 /// by setting missing receivers.
 /// 
 /// Deprecated: Use NewInterfaceType instead which allows arbitrary embedded types.
-pub fn NewInterface(mut methods: Slice<Ref<Func>>, embeddeds: Slice<Ref<Named>>) -> Ref<Interface>
+pub fn NewInterface(
+  methods: mut Slice<mut Ref<Func>>,
+  embeddeds: Slice<Ref<Named>>,
+) -> mut Ref<Interface>
 
 /// NewInterfaceType returns a new interface for the given methods and embedded
 /// types. NewInterfaceType takes ownership of the provided methods and may
@@ -430,32 +433,39 @@ pub fn NewInterface(mut methods: Slice<Ref<Func>>, embeddeds: Slice<Ref<Named>>)
 /// 
 /// To avoid race conditions, the interface's type set should be computed before
 /// concurrent use of the interface, by explicitly calling Complete.
-pub fn NewInterfaceType(mut methods: Slice<Ref<Func>>, embeddeds: Slice<Type>) -> Ref<Interface>
+pub fn NewInterfaceType(
+  methods: mut Slice<mut Ref<Func>>,
+  embeddeds: Slice<Type>,
+) -> mut Ref<Interface>
 
 /// NewLabel returns a new label.
-pub fn NewLabel(pos: token.Pos, pkg: Ref<Package>, name: string) -> Ref<Label>
+pub fn NewLabel(pos: token.Pos, pkg: Ref<Package>, name: string) -> mut Ref<Label>
 
 /// NewMap returns a new map for the given key and element types.
-pub fn NewMap(key: Type, elem: Type) -> Ref<Map>
+pub fn NewMap(key: Type, elem: Type) -> mut Ref<Map>
 
 /// NewMethodSet returns the method set for the given type T.
 /// It always returns a non-nil method set, even if it is empty.
-pub fn NewMethodSet(t: Type) -> Ref<MethodSet>
+pub fn NewMethodSet(t: Type) -> mut Ref<MethodSet>
 
 /// NewNamed returns a new named type for the given type name, underlying type, and associated methods.
 /// If the given type name obj doesn't have a type yet, its type is set to the returned named type.
 /// The underlying type must not be a *Named.
-pub fn NewNamed(obj: Ref<TypeName>, underlying: Type, methods: Slice<Ref<Func>>) -> Ref<Named>
+pub fn NewNamed(
+  obj: mut Ref<TypeName>,
+  underlying: Type,
+  methods: Slice<Ref<Func>>,
+) -> mut Ref<Named>
 
 /// NewPackage returns a new Package for the given package path and name.
 /// The package is not complete and contains no explicit imports.
-pub fn NewPackage(path: string, name: string) -> Ref<Package>
+pub fn NewPackage(path: string, name: string) -> mut Ref<Package>
 
 /// NewParam returns a new variable representing a function parameter.
 /// 
 /// The caller must subsequently call [Var.SetKind] if the desired Var
 /// is not of kind [ParamVar]: for example, [RecvVar] or [ResultVar].
-pub fn NewParam(pos: token.Pos, pkg: Ref<Package>, name: string, typ: Type) -> Ref<Var>
+pub fn NewParam(pos: token.Pos, pkg: Ref<Package>, name: string, typ: Type) -> mut Ref<Var>
 
 /// NewPkgName returns a new PkgName object representing an imported package.
 /// The remaining arguments set the attributes found with all Objects.
@@ -464,19 +474,19 @@ pub fn NewPkgName(
   pkg: Ref<Package>,
   name: string,
   imported: Ref<Package>,
-) -> Ref<PkgName>
+) -> mut Ref<PkgName>
 
 /// NewPointer returns a new pointer type for the given element (base) type.
-pub fn NewPointer(elem: Type) -> Ref<Pointer>
+pub fn NewPointer(elem: Type) -> mut Ref<Pointer>
 
 /// NewScope returns a new, empty scope contained in the given parent
 /// scope, if any. The comment is for debugging only.
 pub fn NewScope(
-  parent: Ref<Scope>,
+  parent: mut Ref<Scope>,
   pos: token.Pos,
   end: token.Pos,
   comment: string,
-) -> Ref<Scope>
+) -> mut Ref<Scope>
 
 /// NewSignature returns a new function type for the given receiver, parameters,
 /// and results, either of which may be nil. If variadic is set, the function
@@ -489,7 +499,7 @@ pub fn NewSignature(
   params: Ref<Tuple>,
   results: Ref<Tuple>,
   variadic: bool,
-) -> Ref<Signature>
+) -> mut Ref<Signature>
 
 /// NewSignatureType creates a new function type for the given receiver,
 /// receiver type parameters, type parameters, parameters, and results.
@@ -508,22 +518,22 @@ pub fn NewSignatureType(
   params: Ref<Tuple>,
   results: Ref<Tuple>,
   variadic: bool,
-) -> Ref<Signature>
+) -> mut Ref<Signature>
 
 /// NewSlice returns a new slice type for the given element type.
-pub fn NewSlice(elem: Type) -> Ref<Slice>
+pub fn NewSlice(elem: Type) -> mut Ref<Slice>
 
 /// NewStruct returns a new struct with the given fields and corresponding field tags.
 /// If a field with index i has a tag, tags[i] must be that tag, but len(tags) may be
 /// only as long as required to hold the tag with the largest index i. Consequently,
 /// if no field has a tag, tags may be nil.
-pub fn NewStruct(fields: Slice<Ref<Var>>, tags: Slice<string>) -> Ref<Struct>
+pub fn NewStruct(fields: Slice<Ref<Var>>, tags: Slice<string>) -> mut Ref<Struct>
 
 /// NewTerm returns a new union term.
-pub fn NewTerm(tilde: bool, typ: Type) -> Ref<Term>
+pub fn NewTerm(tilde: bool, typ: Type) -> mut Ref<Term>
 
 /// NewTuple returns a new tuple for the given variables.
-pub fn NewTuple(x: VarArgs<Ref<Var>>) -> Option<Ref<Tuple>>
+pub fn NewTuple(x: VarArgs<Ref<Var>>) -> Option<mut Ref<Tuple>>
 
 /// NewTypeName returns a new type name denoting the given typ.
 /// The remaining arguments set the attributes found with all Objects.
@@ -532,7 +542,7 @@ pub fn NewTuple(x: VarArgs<Ref<Var>>) -> Option<Ref<Tuple>>
 /// It may also be nil such that the returned TypeName can be used as
 /// argument for NewNamed, which will set the TypeName's type as a side-
 /// effect.
-pub fn NewTypeName(pos: token.Pos, pkg: Ref<Package>, name: string, typ: Type) -> Ref<TypeName>
+pub fn NewTypeName(pos: token.Pos, pkg: Ref<Package>, name: string, typ: Type) -> mut Ref<TypeName>
 
 /// NewTypeParam returns a new TypeParam. Type parameters may be set on a Named
 /// type by calling SetTypeParams. Setting a type parameter on more than one type
@@ -540,18 +550,18 @@ pub fn NewTypeName(pos: token.Pos, pkg: Ref<Package>, name: string, typ: Type) -
 /// 
 /// The constraint argument can be nil, and set later via SetConstraint. If the
 /// constraint is non-nil, it must be fully defined.
-pub fn NewTypeParam(obj: Ref<TypeName>, constraint: Type) -> Ref<TypeParam>
+pub fn NewTypeParam(obj: mut Ref<TypeName>, constraint: Type) -> mut Ref<TypeParam>
 
 /// NewUnion returns a new [Union] type with the given terms.
 /// It is an error to create an empty union; they are syntactically not possible.
-pub fn NewUnion(terms: Slice<Ref<Term>>) -> Ref<Union>
+pub fn NewUnion(terms: Slice<Ref<Term>>) -> mut Ref<Union>
 
 /// NewVar returns a new variable.
 /// The arguments set the attributes found with all Objects.
 /// 
 /// The caller must subsequently call [Var.SetKind]
 /// if the desired Var is not of kind [PackageVar].
-pub fn NewVar(pos: token.Pos, pkg: Ref<Package>, name: string, typ: Type) -> Ref<Var>
+pub fn NewVar(pos: token.Pos, pkg: Ref<Package>, name: string, typ: Type) -> mut Ref<Var>
 
 /// ObjectString returns the string form of obj.
 /// The Qualifier controls the printing of
@@ -566,7 +576,7 @@ pub fn RelativeTo(pkg: Ref<Package>) -> Qualifier
 /// 
 /// The behavior of Satisfies is unspecified if V is Typ[Invalid] or an uninstantiated
 /// generic type.
-pub fn Satisfies(v: Type, t: Ref<Interface>) -> bool
+pub fn Satisfies(v: Type, t: mut Ref<Interface>) -> bool
 
 /// SelectionString returns the string form of s.
 /// The Qualifier controls the printing of
@@ -601,7 +611,7 @@ pub fn Unalias(t: Type) -> Type
 /// WriteExpr writes the (possibly shortened) string representation for x to buf.
 /// Shortened representations are suitable for user interfaces but may not
 /// necessarily follow Go syntax.
-pub fn WriteExpr(buf: Ref<bytes.Buffer>, x: ast.Expr)
+pub fn WriteExpr(buf: mut Ref<bytes.Buffer>, x: ast.Expr)
 
 /// WriteSignature writes the representation of the signature sig to buf,
 /// without a leading "func" keyword. The [Qualifier] controls the printing
@@ -670,7 +680,7 @@ pub struct BasicInfo(int)
 /// Builtins don't have a valid type.
 #[go(hidden_fields)]
 pub struct Builtin {
-  embed object,
+  embed mut object,
 }
 
 /// A Chan represents a channel type.
@@ -681,15 +691,15 @@ pub type Chan
 #[go(hidden_fields)]
 #[go(zero_unsafe)]
 pub struct Checker {
-  embed Ref<Info>,
-  embed environment,
+  embed mut Ref<Info>,
+  embed mut environment,
 }
 
 /// A Config specifies the configuration for type checking.
 /// The zero value for Config is a ready-to-use default configuration.
 #[go(hidden_fields)]
 pub struct Config {
-  pub Context: Option<Ref<Context>>,
+  pub Context: Option<mut Ref<Context>>,
   pub GoVersion: string,
   pub IgnoreFuncBodies: bool,
   pub FakeImportC: bool,
@@ -702,7 +712,7 @@ pub struct Config {
 /// A Const represents a declared constant.
 #[go(hidden_fields)]
 pub struct Const {
-  embed object,
+  embed mut object,
 }
 
 /// A Context is an opaque type checking context. It may be used to share
@@ -719,7 +729,7 @@ pub type Context
 /// behavior if ignored.
 #[go(hidden_fields)]
 pub struct Error {
-  pub Fset: Option<Ref<token.FileSet>>,
+  pub Fset: Option<mut Ref<token.FileSet>>,
   pub Pos: token.Pos,
   pub Msg: string,
   pub Soft: bool,
@@ -730,7 +740,7 @@ pub struct Error {
 /// An abstract method may belong to many interfaces due to embedding.
 #[go(hidden_fields)]
 pub struct Func {
-  embed object,
+  embed mut object,
 }
 
 /// ImportMode is reserved for future use.
@@ -742,15 +752,15 @@ pub struct ImportMode(int)
 /// vendored packages. See https://golang.org/s/go15vendor.
 /// If possible, external implementations should implement [ImporterFrom].
 pub interface Importer {
-  fn Import(path: string) -> Result<Ref<Package>, error>
+  fn Import(path: string) -> Result<mut Ref<Package>, error>
 }
 
 /// An ImporterFrom resolves import paths to packages; it
 /// supports vendoring per https://golang.org/s/go15vendor.
 /// Use go/importer to obtain an ImporterFrom implementation.
 pub interface ImporterFrom {
-  fn Import(path: string) -> Result<Ref<Package>, error>
-  fn ImportFrom(path: string, dir: string, mode: ImportMode) -> Result<Ref<Package>, error>
+  fn Import(path: string) -> Result<mut Ref<Package>, error>
+  fn ImportFrom(path: string, dir: string, mode: ImportMode) -> Result<mut Ref<Package>, error>
 }
 
 /// Info holds result type information for a type-checked package.
@@ -758,22 +768,22 @@ pub interface ImporterFrom {
 /// If the package has type errors, the collected information may
 /// be incomplete.
 pub struct Info {
-  pub Types: Map<ast.Expr, TypeAndValue>,
-  pub Instances: Map<Ref<ast.Ident>, Instance>,
-  pub Defs: Map<Ref<ast.Ident>, Option<Object>>,
-  pub Uses: Map<Ref<ast.Ident>, Option<Object>>,
-  pub Implicits: Map<ast.Node, Option<Object>>,
-  pub Selections: Map<Ref<ast.SelectorExpr>, Option<Ref<Selection>>>,
-  pub Scopes: Map<ast.Node, Option<Ref<Scope>>>,
-  pub InitOrder: Slice<Option<Ref<Initializer>>>,
-  pub FileVersions: Map<Ref<ast.File>, string>,
+  pub Types: mut Map<ast.Expr, TypeAndValue>,
+  pub Instances: mut Map<mut Ref<ast.Ident>, mut Instance>,
+  pub Defs: mut Map<mut Ref<ast.Ident>, Option<Object>>,
+  pub Uses: mut Map<mut Ref<ast.Ident>, Option<Object>>,
+  pub Implicits: mut Map<ast.Node, Option<Object>>,
+  pub Selections: mut Map<mut Ref<ast.SelectorExpr>, Option<mut Ref<Selection>>>,
+  pub Scopes: mut Map<ast.Node, Option<mut Ref<Scope>>>,
+  pub InitOrder: mut Slice<Option<mut Ref<Initializer>>>,
+  pub FileVersions: mut Map<mut Ref<ast.File>, string>,
 }
 
 /// An Initializer describes a package-level variable, or a list of variables in case
 /// of a multi-valued initialization expression, and the corresponding initialization
 /// expression.
 pub struct Initializer {
-  pub Lhs: Slice<Option<Ref<Var>>>,
+  pub Lhs: mut Slice<Option<mut Ref<Var>>>,
   pub Rhs: Option<ast.Expr>,
 }
 
@@ -782,7 +792,7 @@ pub struct Initializer {
 /// type *[Named]. For function instantiations, [Type] will be of dynamic type
 /// *Signature.
 pub struct Instance {
-  pub TypeArgs: Option<Ref<TypeList>>,
+  pub TypeArgs: Option<mut Ref<TypeList>>,
   pub Type: Option<Type>,
 }
 
@@ -793,7 +803,7 @@ pub type Interface
 /// Labels don't have a type.
 #[go(hidden_fields)]
 pub struct Label {
-  embed object,
+  embed mut object,
 }
 
 /// A Map represents a map type.
@@ -821,7 +831,7 @@ pub type Named
 
 /// Nil represents the predeclared value nil.
 pub struct Nil {
-  embed object,
+  embed mut object,
 }
 
 /// An Object is a named language entity.
@@ -837,8 +847,8 @@ pub interface Object {
   fn Exported() -> bool
   fn Id() -> string
   fn Name() -> string
-  fn Parent() -> Option<Ref<Scope>>
-  fn Pkg() -> Option<Ref<Package>>
+  fn Parent() -> Option<mut Ref<Scope>>
+  fn Pkg() -> Option<mut Ref<Package>>
   fn Pos() -> token.Pos
   fn String() -> string
   fn Type() -> Option<Type>
@@ -869,7 +879,7 @@ pub type Package
 /// PkgNames don't have a type.
 #[go(hidden_fields)]
 pub struct PkgName {
-  embed object,
+  embed mut object,
 }
 
 /// A Pointer represents a pointer type.
@@ -983,7 +993,7 @@ pub type TypeList
 /// a type parameter ([TypeParam]),
 /// or a predeclared type such as int or error.
 pub struct TypeName {
-  embed object,
+  embed mut object,
 }
 
 /// A TypeParam represents the type of a type parameter in a generic declaration.
@@ -1001,7 +1011,7 @@ pub type Union
 /// A Variable represents a declared variable (including function parameters and results, and struct fields).
 #[go(hidden_fields)]
 pub struct Var {
-  embed object,
+  embed mut object,
 }
 
 /// An environment represents the environment within which an object is
@@ -1039,20 +1049,20 @@ pub const IsUntyped: BasicInfo = 64
 /// The *Basic type for Typ[Byte] will have the name "uint8".
 /// Use Universe.Lookup("byte").Type() to obtain the specific
 /// alias basic type named "byte" (and analogous for "rune").
-pub var Typ: Slice<Ref<Basic>>
+pub var Typ: mut Slice<mut Ref<Basic>>
 
-pub var Universe: Ref<Scope>
+pub var Universe: mut Ref<Scope>
 
-pub var Unsafe: Ref<Package>
+pub var Unsafe: mut Ref<Package>
 
 impl Alias {
   /// Obj returns the type name for the declaration defining the alias type a.
   /// For instantiated types, this is same as the type name of the origin type.
-  fn Obj(self: Ref<Alias>) -> Ref<TypeName>
+  fn Obj(self: Ref<Alias>) -> mut Ref<TypeName>
 
   /// Origin returns the generic Alias type of which a is an instance.
   /// If a is not an instance of a generic alias, Origin returns a.
-  fn Origin(self: Ref<Alias>) -> Ref<Alias>
+  fn Origin(self: Ref<Alias>) -> mut Ref<Alias>
 
   /// Rhs returns the type R on the right-hand side of an alias
   /// declaration "type A = R", which may be another alias.
@@ -1060,24 +1070,24 @@ impl Alias {
 
   /// SetTypeParams sets the type parameters of the alias type a.
   /// The alias a must not have type arguments.
-  fn SetTypeParams(self: Ref<Alias>, tparams: Slice<Ref<TypeParam>>)
+  fn SetTypeParams(self: mut Ref<Alias>, tparams: Slice<Ref<TypeParam>>)
 
-  fn String(self: Ref<Alias>) -> string
+  fn String(self: mut Ref<Alias>) -> string
 
   /// TypeArgs returns the type arguments used to instantiate the Alias type.
   /// If a is not an instance of a generic alias, the result is nil.
-  fn TypeArgs(self: Ref<Alias>) -> Option<Ref<TypeList>>
+  fn TypeArgs(self: Ref<Alias>) -> Option<mut Ref<TypeList>>
 
   /// TypeParams returns the type parameters of the alias type a, or nil.
   /// A generic Alias and its instances have the same type parameters.
-  fn TypeParams(self: Ref<Alias>) -> Option<Ref<TypeParamList>>
+  fn TypeParams(self: Ref<Alias>) -> Option<mut Ref<TypeParamList>>
 
   /// Underlying returns the [underlying type] of the alias type a, which is the
   /// underlying type of the aliased type. Underlying types are never Named,
   /// TypeParam, or Alias types.
   /// 
   /// [underlying type]: https://go.dev/ref/spec#Underlying_types.
-  fn Underlying(self: Ref<Alias>) -> Type
+  fn Underlying(self: mut Ref<Alias>) -> Type
 }
 
 impl ArgumentError {
@@ -1094,7 +1104,7 @@ impl types.Array {
   /// A negative result indicates an unknown length.
   fn Len(self: Ref<types.Array>) -> int64
 
-  fn String(self: Ref<types.Array>) -> string
+  fn String(self: mut Ref<types.Array>) -> string
 
   fn Underlying(self: Ref<types.Array>) -> Type
 }
@@ -1109,7 +1119,7 @@ impl Basic {
   /// Name returns the name of basic type b.
   fn Name(self: Ref<Basic>) -> string
 
-  fn String(self: Ref<Basic>) -> string
+  fn String(self: mut Ref<Basic>) -> string
 
   fn Underlying(self: Ref<Basic>) -> Type
 }
@@ -1125,14 +1135,14 @@ impl Chan {
   /// Elem returns the element type of channel c.
   fn Elem(self: Ref<Chan>) -> Type
 
-  fn String(self: Ref<Chan>) -> string
+  fn String(self: mut Ref<Chan>) -> string
 
   fn Underlying(self: Ref<Chan>) -> Type
 }
 
 impl Checker {
   /// Files checks the provided files as part of the checker's package.
-  fn Files(self: Ref<Checker>, files: Slice<Ref<ast.File>>) -> Result<(), error>
+  fn Files(self: mut Ref<Checker>, files: Slice<Ref<ast.File>>) -> Result<(), error>
 }
 
 impl Config {
@@ -1148,12 +1158,12 @@ impl Config {
   /// file set, and the package path the package is identified with.
   /// The clean path must not be empty or dot (".").
   fn Check(
-    self: Ref<Config>,
+    self: mut Ref<Config>,
     path: string,
     fset: Ref<token.FileSet>,
     files: Slice<Ref<ast.File>>,
     info: Ref<Info>,
-  ) -> Partial<Ref<Package>, error>
+  ) -> Partial<mut Ref<Package>, error>
 }
 
 impl Const {
@@ -1181,21 +1191,21 @@ impl Func {
   /// instantiated Named type or interface methods that depend on type arguments),
   /// this will be the corresponding Func on the generic (uninstantiated) type.
   /// For all other Funcs Origin returns the receiver.
-  fn Origin(self: Ref<Func>) -> Ref<Func>
+  fn Origin(self: Ref<Func>) -> mut Ref<Func>
 
   /// Pkg returns the package to which the function belongs.
   /// 
   /// The result is nil for methods of types in the Universe scope,
   /// like method Error of the error built-in interface type.
-  fn Pkg(self: Ref<Func>) -> Option<Ref<Package>>
+  fn Pkg(self: Ref<Func>) -> Option<mut Ref<Package>>
 
   /// Scope returns the scope of the function's body block.
   /// The result is nil for imported or instantiated functions and methods
   /// (but there is also no mechanism to get to an instantiated function).
-  fn Scope(self: Ref<Func>) -> Option<Ref<Scope>>
+  fn Scope(self: Ref<Func>) -> Option<mut Ref<Scope>>
 
   /// Signature returns the signature (type) of the function or method.
-  fn Signature(self: Ref<Func>) -> Ref<Signature>
+  fn Signature(self: Ref<Func>) -> mut Ref<Signature>
 
   fn String(self: Ref<Func>) -> string
 }
@@ -1216,7 +1226,7 @@ impl Info {
   /// For dot-imports, the package name is ".".
   /// 
   /// Precondition: the Defs and Implicts maps are populated.
-  fn PkgNameOf(self: Ref<Info>, imp: Ref<ast.ImportSpec>) -> Option<Ref<PkgName>>
+  fn PkgNameOf(self: Ref<Info>, imp: Ref<ast.ImportSpec>) -> Option<mut Ref<PkgName>>
 
   /// TypeOf returns the type of expression e, or nil if not found.
   /// Precondition: the Types, Uses and Defs maps are populated.
@@ -1236,13 +1246,13 @@ impl Interface {
   /// 
   /// Interface types that have been completed are safe for concurrent use.
   #[allow(unused_value)]
-  fn Complete(self: Ref<Interface>) -> Ref<Interface>
+  fn Complete(self: mut Ref<Interface>) -> mut Ref<Interface>
 
   /// Embedded returns the i'th embedded defined (*[Named]) type of interface t for 0 <= i < t.NumEmbeddeds().
   /// The result is nil if the i'th embedded type is not a defined type.
   /// 
   /// Deprecated: Use [Interface.EmbeddedType] which is not restricted to defined (*[Named]) types.
-  fn Embedded(self: Ref<Interface>, i: int) -> Option<Ref<Named>>
+  fn Embedded(self: Ref<Interface>, i: int) -> Option<mut Ref<Named>>
 
   /// EmbeddedType returns the i'th embedded type of interface t for 0 <= i < t.NumEmbeddeds().
   fn EmbeddedType(self: Ref<Interface>, i: int) -> Type
@@ -1253,11 +1263,11 @@ impl Interface {
   fn EmbeddedTypes(self: Ref<Interface>) -> iter.Seq<Type>
 
   /// Empty reports whether t is the empty interface.
-  fn Empty(self: Ref<Interface>) -> bool
+  fn Empty(self: mut Ref<Interface>) -> bool
 
   /// ExplicitMethod returns the i'th explicitly declared method of interface t for 0 <= i < t.NumExplicitMethods().
   /// The methods are ordered by their unique [Id].
-  fn ExplicitMethod(self: Ref<Interface>, i: int) -> Ref<Func>
+  fn ExplicitMethod(self: Ref<Interface>, i: int) -> mut Ref<Func>
 
   /// ExplicitMethods returns a go1.23 iterator over the explicit methods of
   /// an interface, ordered by Id.
@@ -1266,30 +1276,30 @@ impl Interface {
   fn ExplicitMethods(self: Ref<Interface>) -> iter.Seq<Ref<Func>>
 
   /// IsComparable reports whether each type in interface t's type set is comparable.
-  fn IsComparable(self: Ref<Interface>) -> bool
+  fn IsComparable(self: mut Ref<Interface>) -> bool
 
   /// IsImplicit reports whether the interface t is a wrapper for a type set literal.
   fn IsImplicit(self: Ref<Interface>) -> bool
 
   /// IsMethodSet reports whether the interface t is fully described by its method
   /// set.
-  fn IsMethodSet(self: Ref<Interface>) -> bool
+  fn IsMethodSet(self: mut Ref<Interface>) -> bool
 
   /// MarkImplicit marks the interface t as implicit, meaning this interface
   /// corresponds to a constraint literal such as ~T or A|B without explicit
   /// interface embedding. MarkImplicit should be called before any concurrent use
   /// of implicit interfaces.
-  fn MarkImplicit(self: Ref<Interface>)
+  fn MarkImplicit(self: mut Ref<Interface>)
 
   /// Method returns the i'th method of interface t for 0 <= i < t.NumMethods().
   /// The methods are ordered by their unique Id.
-  fn Method(self: Ref<Interface>, i: int) -> Ref<Func>
+  fn Method(self: mut Ref<Interface>, i: int) -> mut Ref<Func>
 
   /// Methods returns a go1.23 iterator over all the methods of an
   /// interface, ordered by Id.
   /// 
   /// Example: for m := range t.Methods() { ... }
-  fn Methods(self: Ref<Interface>) -> iter.Seq<Ref<Func>>
+  fn Methods(self: mut Ref<Interface>) -> iter.Seq<Ref<Func>>
 
   /// NumEmbeddeds returns the number of embedded types in interface t.
   fn NumEmbeddeds(self: Ref<Interface>) -> int
@@ -1298,9 +1308,9 @@ impl Interface {
   fn NumExplicitMethods(self: Ref<Interface>) -> int
 
   /// NumMethods returns the total number of methods of interface t.
-  fn NumMethods(self: Ref<Interface>) -> int
+  fn NumMethods(self: mut Ref<Interface>) -> int
 
-  fn String(self: Ref<Interface>) -> string
+  fn String(self: mut Ref<Interface>) -> string
 
   fn Underlying(self: Ref<Interface>) -> Type
 }
@@ -1316,20 +1326,20 @@ impl Map {
   /// Key returns the key type of map m.
   fn Key(self: Ref<Map>) -> Type
 
-  fn String(self: Ref<Map>) -> string
+  fn String(self: mut Ref<Map>) -> string
 
   fn Underlying(self: Ref<Map>) -> Type
 }
 
 impl MethodSet {
   /// At returns the i'th method in s for 0 <= i < s.Len().
-  fn At(self: Ref<MethodSet>, i: int) -> Ref<Selection>
+  fn At(self: Ref<MethodSet>, i: int) -> mut Ref<Selection>
 
   /// Len returns the number of methods in s.
   fn Len(self: Ref<MethodSet>) -> int
 
   /// Lookup returns the method with matching package and name, or nil if not found.
-  fn Lookup(self: Ref<MethodSet>, pkg: Ref<Package>, name: string) -> Option<Ref<Selection>>
+  fn Lookup(self: Ref<MethodSet>, pkg: Ref<Package>, name: string) -> Option<mut Ref<Selection>>
 
   /// Methods returns a go1.23 iterator over the methods of a method set.
   /// 
@@ -1343,7 +1353,7 @@ impl Named {
   /// AddMethod adds method m unless it is already in the method list.
   /// The method must be in the same package as t, and t must not have
   /// type arguments.
-  fn AddMethod(self: Ref<Named>, m: Ref<Func>)
+  fn AddMethod(self: mut Ref<Named>, m: Ref<Func>)
 
   /// Method returns the i'th method of named type t for 0 <= i < t.NumMethods().
   /// 
@@ -1356,47 +1366,47 @@ impl Named {
   /// calls, the mapping from method index to corresponding method remains the same.
   /// But the specific ordering is not specified and must not be relied on as it may
   /// change in the future.
-  fn Method(self: Ref<Named>, i: int) -> Ref<Func>
+  fn Method(self: mut Ref<Named>, i: int) -> mut Ref<Func>
 
   /// Methods returns a go1.23 iterator over the declared methods of a named type.
   /// 
   /// Example: for m := range t.Methods() { ... }
-  fn Methods(self: Ref<Named>) -> iter.Seq<Ref<Func>>
+  fn Methods(self: mut Ref<Named>) -> iter.Seq<Ref<Func>>
 
   /// NumMethods returns the number of explicit methods defined for t.
   fn NumMethods(self: Ref<Named>) -> int
 
   /// Obj returns the type name for the declaration defining the named type t. For
   /// instantiated types, this is same as the type name of the origin type.
-  fn Obj(self: Ref<Named>) -> Ref<TypeName>
+  fn Obj(self: Ref<Named>) -> mut Ref<TypeName>
 
   /// Origin returns the generic type from which the named type t is
   /// instantiated. If t is not an instantiated type, the result is t.
-  fn Origin(self: Ref<Named>) -> Ref<Named>
+  fn Origin(self: Ref<Named>) -> mut Ref<Named>
 
   /// SetTypeParams sets the type parameters of the named type t.
   /// t must not have type arguments.
-  fn SetTypeParams(self: Ref<Named>, tparams: Slice<Ref<TypeParam>>)
+  fn SetTypeParams(self: mut Ref<Named>, tparams: Slice<Ref<TypeParam>>)
 
   /// SetUnderlying sets the underlying type and marks t as complete.
   /// t must not have type arguments.
-  fn SetUnderlying(self: Ref<Named>, underlying: Type)
+  fn SetUnderlying(self: mut Ref<Named>, underlying: Type)
 
-  fn String(self: Ref<Named>) -> string
+  fn String(self: mut Ref<Named>) -> string
 
   /// TypeArgs returns the type arguments used to instantiate the named type t.
-  fn TypeArgs(self: Ref<Named>) -> Option<Ref<TypeList>>
+  fn TypeArgs(self: Ref<Named>) -> Option<mut Ref<TypeList>>
 
   /// TypeParams returns the type parameters of the named type t, or nil.
   /// The result is non-nil for an (originally) generic type even if it is instantiated.
-  fn TypeParams(self: Ref<Named>) -> Option<Ref<TypeParamList>>
+  fn TypeParams(self: mut Ref<Named>) -> Option<mut Ref<TypeParamList>>
 
   /// Underlying returns the [underlying type] of the named type t, resolving all
   /// forwarding declarations. Underlying types are never Named, TypeParam, or
   /// Alias types.
   /// 
   /// [underlying type]: https://go.dev/ref/spec#Underlying_types.
-  fn Underlying(self: Ref<Named>) -> Type
+  fn Underlying(self: mut Ref<Named>) -> Type
 }
 
 impl Nil {
@@ -1426,7 +1436,7 @@ impl Package {
   fn Imports(self: Ref<Package>) -> Slice<Ref<Package>>
 
   /// MarkComplete marks a package as complete.
-  fn MarkComplete(self: Ref<Package>)
+  fn MarkComplete(self: mut Ref<Package>)
 
   /// Name returns the package name.
   fn Name(self: Ref<Package>) -> string
@@ -1438,14 +1448,14 @@ impl Package {
   /// holding the objects declared at package level (TypeNames,
   /// Consts, Vars, and Funcs).
   /// For a nil pkg receiver, Scope returns the Universe scope.
-  fn Scope(self: Ref<Package>) -> Ref<Scope>
+  fn Scope(self: Ref<Package>) -> mut Ref<Scope>
 
   /// SetImports sets the list of explicitly imported packages to list.
   /// It is the caller's responsibility to make sure list elements are unique.
-  fn SetImports(self: Ref<Package>, list: Slice<Ref<Package>>)
+  fn SetImports(self: mut Ref<Package>, list: Slice<Ref<Package>>)
 
   /// SetName sets the package name.
-  fn SetName(self: Ref<Package>, name: string)
+  fn SetName(self: mut Ref<Package>, name: string)
 
   fn String(self: Ref<Package>) -> string
 }
@@ -1453,7 +1463,7 @@ impl Package {
 impl PkgName {
   /// Imported returns the package that was imported.
   /// It is distinct from Pkg(), which is the package containing the import statement.
-  fn Imported(self: Ref<PkgName>) -> Ref<Package>
+  fn Imported(self: Ref<PkgName>) -> mut Ref<Package>
 
   fn String(self: Ref<PkgName>) -> string
 }
@@ -1462,14 +1472,14 @@ impl Pointer {
   /// Elem returns the element type for the given pointer p.
   fn Elem(self: Ref<Pointer>) -> Type
 
-  fn String(self: Ref<Pointer>) -> string
+  fn String(self: mut Ref<Pointer>) -> string
 
   fn Underlying(self: Ref<Pointer>) -> Type
 }
 
 impl Scope {
   /// Child returns the i'th child scope for 0 <= i < NumChildren().
-  fn Child(self: Ref<Scope>, i: int) -> Ref<Scope>
+  fn Child(self: Ref<Scope>, i: int) -> mut Ref<Scope>
 
   /// Children returns a go1.23 iterator over the child scopes nested within scope s.
   /// 
@@ -1488,14 +1498,14 @@ impl Scope {
   /// The result is also nil for the Universe scope.
   /// The result is guaranteed to be valid only if the type-checked
   /// AST has complete position information.
-  fn Innermost(self: Ref<Scope>, pos: token.Pos) -> Option<Ref<Scope>>
+  fn Innermost(self: Ref<Scope>, pos: token.Pos) -> Option<mut Ref<Scope>>
 
   /// Insert attempts to insert an object obj into scope s.
   /// If s already contains an alternative object alt with
   /// the same name, Insert leaves s unchanged and returns alt.
   /// Otherwise it inserts obj, sets the object's parent scope
   /// if not already set, and returns nil.
-  fn Insert(self: Ref<Scope>, obj: Object) -> Option<Object>
+  fn Insert(self: mut Ref<Scope>, obj: Object) -> Option<Object>
 
   /// Len returns the number of scope elements.
   fn Len(self: Ref<Scope>) -> int
@@ -1516,7 +1526,7 @@ impl Scope {
   /// object was inserted into the scope and already had a parent at that
   /// time (see Insert). This can only happen for dot-imported objects
   /// whose parent is the scope of the package that exported them.
-  fn LookupParent(self: Ref<Scope>, name: string, pos: token.Pos) -> (Option<Ref<Scope>>, Option<Object>)
+  fn LookupParent(self: Ref<Scope>, name: string, pos: token.Pos) -> (Option<mut Ref<Scope>>, Option<Object>)
 
   /// Names returns the scope's element names in sorted order.
   fn Names(self: Ref<Scope>) -> Slice<string>
@@ -1525,7 +1535,7 @@ impl Scope {
   fn NumChildren(self: Ref<Scope>) -> int
 
   /// Parent returns the scope's containing (parent) scope.
-  fn Parent(self: Ref<Scope>) -> Option<Ref<Scope>>
+  fn Parent(self: Ref<Scope>) -> Option<mut Ref<Scope>>
 
   /// Pos and End describe the scope's source code extent [pos, end).
   /// The results are guaranteed to be valid only if the type-checked
@@ -1585,7 +1595,7 @@ impl Selection {
 
 impl Signature {
   /// Params returns the parameters of signature s, or nil.
-  fn Params(self: Ref<Signature>) -> Option<Ref<Tuple>>
+  fn Params(self: Ref<Signature>) -> Option<mut Ref<Tuple>>
 
   /// Recv returns the receiver of signature s (if a method), or nil if a
   /// function. It is ignored when comparing signatures for identity.
@@ -1593,18 +1603,18 @@ impl Signature {
   /// For an abstract method, Recv returns the enclosing interface either
   /// as a *[Named] or an *[Interface]. Due to embedding, an interface may
   /// contain methods whose receiver type is a different interface.
-  fn Recv(self: Ref<Signature>) -> Option<Ref<Var>>
+  fn Recv(self: Ref<Signature>) -> Option<mut Ref<Var>>
 
   /// RecvTypeParams returns the receiver type parameters of signature s, or nil.
-  fn RecvTypeParams(self: Ref<Signature>) -> Option<Ref<TypeParamList>>
+  fn RecvTypeParams(self: Ref<Signature>) -> Option<mut Ref<TypeParamList>>
 
   /// Results returns the results of signature s, or nil.
-  fn Results(self: Ref<Signature>) -> Option<Ref<Tuple>>
+  fn Results(self: Ref<Signature>) -> Option<mut Ref<Tuple>>
 
-  fn String(self: Ref<Signature>) -> string
+  fn String(self: mut Ref<Signature>) -> string
 
   /// TypeParams returns the type parameters of signature s, or nil.
-  fn TypeParams(self: Ref<Signature>) -> Option<Ref<TypeParamList>>
+  fn TypeParams(self: Ref<Signature>) -> Option<mut Ref<TypeParamList>>
 
   fn Underlying(self: Ref<Signature>) -> Type
 
@@ -1616,7 +1626,7 @@ impl Slice {
   /// Elem returns the element type of slice s.
   fn Elem(self: Ref<Slice>) -> Type
 
-  fn String(self: Ref<Slice>) -> string
+  fn String(self: mut Ref<Slice>) -> string
 
   fn Underlying(self: Ref<Slice>) -> Type
 }
@@ -1624,14 +1634,14 @@ impl Slice {
 impl StdSizes {
   fn Alignof(self: Ref<StdSizes>, t: Type) -> int64
 
-  fn Offsetsof(self: Ref<StdSizes>, fields: Slice<Ref<Var>>) -> Slice<int64>
+  fn Offsetsof(self: Ref<StdSizes>, fields: Slice<Ref<Var>>) -> mut Slice<int64>
 
   fn Sizeof(self: Ref<StdSizes>, t: Type) -> int64
 }
 
 impl Struct {
   /// Field returns the i'th field for 0 <= i < NumFields().
-  fn Field(self: Ref<Struct>, i: int) -> Ref<Var>
+  fn Field(self: Ref<Struct>, i: int) -> mut Ref<Var>
 
   /// Fields returns a go1.23 iterator over the fields of a struct type.
   /// 
@@ -1641,7 +1651,7 @@ impl Struct {
   /// NumFields returns the number of fields in the struct (including blank and embedded fields).
   fn NumFields(self: Ref<Struct>) -> int
 
-  fn String(self: Ref<Struct>) -> string
+  fn String(self: mut Ref<Struct>) -> string
 
   /// Tag returns the i'th field tag for 0 <= i < NumFields().
   fn Tag(self: Ref<Struct>, i: int) -> string
@@ -1659,12 +1669,12 @@ impl Term {
 
 impl Tuple {
   /// At returns the i'th variable of tuple t.
-  fn At(self: Ref<Tuple>, i: int) -> Ref<Var>
+  fn At(self: Ref<Tuple>, i: int) -> mut Ref<Var>
 
   /// Len returns the number variables of tuple t.
   fn Len(self: Ref<Tuple>) -> int
 
-  fn String(self: Ref<Tuple>) -> string
+  fn String(self: mut Ref<Tuple>) -> string
 
   fn Underlying(self: Ref<Tuple>) -> Type
 
@@ -1738,7 +1748,7 @@ impl TypeParam {
   fn Index(self: Ref<TypeParam>) -> int
 
   /// Obj returns the type name for the type parameter t.
-  fn Obj(self: Ref<TypeParam>) -> Ref<TypeName>
+  fn Obj(self: Ref<TypeParam>) -> mut Ref<TypeName>
 
   /// SetConstraint sets the type constraint for t.
   /// 
@@ -1746,20 +1756,20 @@ impl TypeParam {
   /// fully defined, and before using the type parameter in any way other than to
   /// form other types. Once SetConstraint returns the receiver, t is safe for
   /// concurrent use.
-  fn SetConstraint(self: Ref<TypeParam>, bound: Type)
+  fn SetConstraint(self: mut Ref<TypeParam>, bound: Type)
 
-  fn String(self: Ref<TypeParam>) -> string
+  fn String(self: mut Ref<TypeParam>) -> string
 
   /// Underlying returns the [underlying type] of the type parameter t, which is
   /// the underlying type of its constraint. This type is always an interface.
   /// 
   /// [underlying type]: https://go.dev/ref/spec#Underlying_types.
-  fn Underlying(self: Ref<TypeParam>) -> Type
+  fn Underlying(self: mut Ref<TypeParam>) -> Type
 }
 
 impl TypeParamList {
   /// At returns the i'th type parameter in the list.
-  fn At(self: Ref<TypeParamList>, i: int) -> Ref<TypeParam>
+  fn At(self: Ref<TypeParamList>, i: int) -> mut Ref<TypeParam>
 
   /// Len returns the number of type parameters in the list.
   /// It is safe to call on a nil receiver.
@@ -1774,9 +1784,9 @@ impl TypeParamList {
 impl Union {
   fn Len(self: Ref<Union>) -> int
 
-  fn String(self: Ref<Union>) -> string
+  fn String(self: mut Ref<Union>) -> string
 
-  fn Term(self: Ref<Union>, i: int) -> Ref<Term>
+  fn Term(self: Ref<Union>, i: int) -> mut Ref<Term>
 
   /// Terms returns a go1.23 iterator over the terms of a union.
   /// 
@@ -1807,11 +1817,11 @@ impl Var {
   /// function parameters that depend on type arguments), this will be the
   /// corresponding Var on the generic (uninstantiated) type. For all other Vars
   /// Origin returns the receiver.
-  fn Origin(self: Ref<Var>) -> Ref<Var>
+  fn Origin(self: Ref<Var>) -> mut Ref<Var>
 
   /// SetKind sets the kind of the variable.
   /// It should be used only immediately after [NewVar] or [NewParam].
-  fn SetKind(self: Ref<Var>, kind: VarKind)
+  fn SetKind(self: mut Ref<Var>, kind: VarKind)
 
   fn String(self: Ref<Var>) -> string
 }
@@ -1834,11 +1844,11 @@ impl object {
 
   /// Parent returns the scope in which the object is declared.
   /// The result is nil for methods and struct fields.
-  fn Parent(self: Ref<object>) -> Option<Ref<Scope>>
+  fn Parent(self: Ref<object>) -> Option<mut Ref<Scope>>
 
   /// Pkg returns the package to which the object belongs.
   /// The result is nil for labels and objects in the Universe scope.
-  fn Pkg(self: Ref<object>) -> Option<Ref<Package>>
+  fn Pkg(self: Ref<object>) -> Option<mut Ref<Package>>
 
   /// Pos returns the declaration position of the object's identifier.
   fn Pos(self: Ref<object>) -> token.Pos
@@ -1861,17 +1871,17 @@ impl object {
   fn scopePos(self: Ref<object>)
 
   #[go(unexported, "go/types.setColor(go/types.color)")]
-  fn setColor(self: Ref<object>)
+  fn setColor(self: mut Ref<object>)
 
   #[go(unexported, "go/types.setOrder(uint32)")]
-  fn setOrder(self: Ref<object>)
+  fn setOrder(self: mut Ref<object>)
 
   #[go(unexported, "go/types.setParent(*go/types.Scope)")]
-  fn setParent(self: Ref<object>)
+  fn setParent(self: mut Ref<object>)
 
   #[go(unexported, "go/types.setScopePos(go/token.Pos)")]
-  fn setScopePos(self: Ref<object>)
+  fn setScopePos(self: mut Ref<object>)
 
   #[go(unexported, "go/types.setType(go/types.Type)")]
-  fn setType(self: Ref<object>)
+  fn setType(self: mut Ref<object>)
 }

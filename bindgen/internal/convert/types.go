@@ -374,6 +374,113 @@ func wrapOption(r TypeResult) TypeResult {
 	return TypeResult{LisetteType: optionOf(r.LisetteType)}
 }
 
+// WritableFieldType renders a struct-field or newtype-underlying type with `mut` at every writable layer.
+func WritableFieldType(t types.Type, conv *Converter) TypeResult {
+	return writableRecursive(t, make(map[types.Type]bool), conv, nil, true)
+}
+
+// writableParamType renders a mutated parameter's type with `mut` at every writable layer.
+func writableParamType(t types.Type, optional bool, conv *Converter, substitutions map[string]string) TypeResult {
+	if iface, ok := t.Underlying().(*types.Interface); ok && iface.Empty() {
+		rendered := writableBase(t, make(map[types.Type]bool), conv, substitutions, optional)
+		if rendered.SkipReason == nil {
+			rendered.LisetteType = "mut " + rendered.LisetteType
+		}
+		return rendered
+	}
+	return writableRecursive(t, make(map[types.Type]bool), conv, substitutions, optional)
+}
+
+// writableBase is the read-only rendering the writable one decorates.
+func writableBase(t types.Type, seen map[types.Type]bool, conv *Converter, substitutions map[string]string, nilable bool) TypeResult {
+	if nilable {
+		return toLisetteNilableRecursive(t, seen, conv, substitutions)
+	}
+	return toLisetteRecursive(t, seen, conv, substitutions)
+}
+
+func writableRecursive(t types.Type, seen map[types.Type]bool, conv *Converter, substitutions map[string]string, nilable bool) TypeResult {
+	switch u := t.(type) {
+	case *types.Pointer:
+		if nilable && isScalarType(u.Elem()) {
+			return toLisetteNilableRecursive(t, seen, conv, substitutions)
+		}
+		var elem TypeResult
+		if _, isNamed := types.Unalias(u.Elem()).(*types.Named); isNamed {
+			elem = writableBase(u.Elem(), seen, conv, substitutions, false)
+		} else {
+			elem = writableRecursive(u.Elem(), seen, conv, substitutions, false)
+		}
+		if elem.SkipReason != nil {
+			return elem
+		}
+		rendered := "mut " + refOf(elem.LisetteType)
+		if nilable {
+			rendered = optionOf(rendered)
+		}
+		return TypeResult{LisetteType: rendered}
+
+	case *types.Slice:
+		elem := writableRecursive(u.Elem(), seen, conv, substitutions, nilable)
+		if elem.SkipReason != nil {
+			return elem
+		}
+		return TypeResult{LisetteType: "mut " + sliceOf(elem.LisetteType)}
+
+	case *types.Map:
+		key := writableRecursive(u.Key(), seen, conv, substitutions, false)
+		if key.SkipReason != nil {
+			return key
+		}
+		val := writableRecursive(u.Elem(), seen, conv, substitutions, nilable)
+		if val.SkipReason != nil {
+			return val
+		}
+		return TypeResult{LisetteType: "mut " + mapOf(key.LisetteType, val.LisetteType)}
+
+	case *types.Array:
+		elem := writableRecursive(u.Elem(), seen, conv, substitutions, nilable)
+		if elem.SkipReason != nil {
+			return elem
+		}
+		return TypeResult{LisetteType: arrayOf(elem.LisetteType, u.Len())}
+
+	case *types.Named:
+		if goWritableCapability(u) {
+			rendered := writableBase(t, seen, conv, substitutions, nilable)
+			if rendered.SkipReason != nil {
+				return rendered
+			}
+			rendered.LisetteType = "mut " + rendered.LisetteType
+			return rendered
+		}
+		return writableBase(t, seen, conv, substitutions, nilable)
+
+	case *types.TypeParam:
+		rendered := writableBase(t, seen, conv, substitutions, nilable)
+		if rendered.SkipReason != nil {
+			return rendered
+		}
+		if core := coreType(u); core != nil && goWritableCapability(core) {
+			rendered.LisetteType = "mut " + rendered.LisetteType
+		}
+		return rendered
+
+	case *types.Struct:
+		rendered := writableBase(t, seen, conv, substitutions, nilable)
+		if rendered.SkipReason == nil && goWritableCapability(u) {
+			rendered.LisetteType = "mut " + rendered.LisetteType
+		}
+		return rendered
+
+	case *types.Alias:
+		return writableRecursive(u.Rhs(), seen, conv, substitutions, nilable)
+
+	default:
+		return writableBase(t, seen, conv, substitutions, nilable)
+	}
+}
+
 // toLisetteNilableRecursive converts a Go type to Lisette in a nilable context.
 // Pointers become Option<Ref<T>>, named non-error interfaces become Option<Name>,
 // and function types (including named func aliases) become Option<fn(...)> /

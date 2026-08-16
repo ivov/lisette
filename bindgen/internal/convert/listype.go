@@ -21,9 +21,6 @@ func varArgsOf(elem string) string  { return "VarArgs<" + elem + ">" }
 func resultOf(ok string) string     { return "Result<" + ok + ", error>" }
 func partialOf(ok string) string    { return "Partial<" + ok + ", error>" }
 
-func isSliceType(s string) bool { return strings.HasPrefix(s, "Slice<") }
-func isMapType(s string) bool   { return strings.HasPrefix(s, "Map<") }
-
 func unwrapSlice(s string) (string, bool) {
 	if strings.HasPrefix(s, "Slice<") && strings.HasSuffix(s, ">") {
 		return s[len("Slice<") : len(s)-1], true

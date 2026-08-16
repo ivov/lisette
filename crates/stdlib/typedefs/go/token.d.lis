@@ -185,7 +185,7 @@ pub fn IsKeyword(name: string) -> bool
 pub fn Lookup(ident: string) -> Token
 
 /// NewFileSet creates a new file set.
-pub fn NewFileSet() -> Ref<FileSet>
+pub fn NewFileSet() -> mut Ref<FileSet>
 
 /// A File is a handle for a file belonging to a [FileSet].
 /// A File has a name, size, and line offset table.
@@ -279,7 +279,7 @@ impl File {
   /// AddLine adds the line offset for a new line.
   /// The line offset must be larger than the offset for the previous line
   /// and smaller than the file size; otherwise the line offset is ignored.
-  fn AddLine(self: Ref<File>, offset: int)
+  fn AddLine(self: mut Ref<File>, offset: int)
 
   /// AddLineColumnInfo adds alternative file, line, and column number
   /// information for a given file offset. The offset must be larger
@@ -290,7 +290,7 @@ impl File {
   /// AddLineColumnInfo is typically used to register alternative position
   /// information for line directives such as //line filename:line:column.
   fn AddLineColumnInfo(
-    self: Ref<File>,
+    self: mut Ref<File>,
     offset: int,
     filename: string,
     line: int,
@@ -299,7 +299,7 @@ impl File {
 
   /// AddLineInfo is like [File.AddLineColumnInfo] with a column = 1 argument.
   /// It is here for backward-compatibility for code prior to Go 1.11.
-  fn AddLineInfo(self: Ref<File>, offset: int, filename: string, line: int)
+  fn AddLineInfo(self: mut Ref<File>, offset: int, filename: string, line: int)
 
   /// Base returns the base offset of file f as registered with AddFile.
   fn Base(self: Ref<File>) -> int
@@ -324,7 +324,7 @@ impl File {
   /// the newline character at the end of the line with a space (to not change the
   /// remaining offsets). To obtain the line number, consult e.g. [Position.Line].
   /// MergeLine will panic if given an invalid line number.
-  fn MergeLine(self: Ref<File>, line: int)
+  fn MergeLine(self: mut Ref<File>, line: int)
 
   /// Name returns the file name of file f as registered with AddFile.
   fn Name(self: Ref<File>) -> string
@@ -371,11 +371,11 @@ impl File {
   /// and smaller than the file size; otherwise SetLines fails and returns
   /// false.
   /// Callers must not mutate the provided slice after SetLines returns.
-  fn SetLines(self: Ref<File>, lines: Slice<int>) -> bool
+  fn SetLines(self: mut Ref<File>, lines: Slice<int>) -> bool
 
   /// SetLinesForContent sets the line offsets for the given file content.
   /// It ignores position-altering //line comments.
-  fn SetLinesForContent(self: Ref<File>, content: Slice<byte>)
+  fn SetLinesForContent(self: mut Ref<File>, content: Slice<byte>)
 
   /// Size returns the size of file f as registered with AddFile.
   fn Size(self: Ref<File>) -> int
@@ -386,7 +386,7 @@ impl FileSet {
   /// FileSet if they are not already present.
   /// The caller must ensure that no pair of Files that
   /// would appear in the resulting FileSet overlap.
-  fn AddExistingFiles(self: Ref<FileSet>, files: VarArgs<Ref<File>>)
+  fn AddExistingFiles(self: mut Ref<FileSet>, files: VarArgs<Ref<File>>)
 
   /// AddFile adds a new file with a given filename, base offset, and file size
   /// to the file set s and returns the file. Multiple files may have the same
@@ -403,7 +403,7 @@ impl FileSet {
   /// with offs in the range [0, size] and thus p in the range [base, base+size].
   /// For convenience, [File.Pos] may be used to create file-specific position
   /// values from a file offset.
-  fn AddFile(self: Ref<FileSet>, filename: string, base: int, size: int) -> Ref<File>
+  fn AddFile(self: mut Ref<FileSet>, filename: string, base: int, size: int) -> mut Ref<File>
 
   /// Base returns the minimum base offset that must be provided to
   /// [FileSet.AddFile] when adding the next file.
@@ -412,7 +412,7 @@ impl FileSet {
   /// File returns the file that contains the position p.
   /// If no such file is found (for instance for p == [NoPos]),
   /// the result is nil.
-  fn File(self: Ref<FileSet>, p: Pos) -> Option<Ref<File>>
+  fn File(self: Ref<FileSet>, p: Pos) -> Option<mut Ref<File>>
 
   /// Iterate calls yield for the files in the file set in ascending Base
   /// order until yield returns false.
@@ -429,7 +429,7 @@ impl FileSet {
   fn PositionFor(self: Ref<FileSet>, p: Pos, adjusted: bool) -> Position
 
   /// Read calls decode to deserialize a file set into s; s must not be nil.
-  fn Read(self: Ref<FileSet>, decode: fn(Unknown) -> Result<(), error>) -> Result<(), error>
+  fn Read(self: mut Ref<FileSet>, decode: fn(Unknown) -> Result<(), error>) -> Result<(), error>
 
   /// RemoveFile removes a file from the [FileSet] so that subsequent
   /// queries for its [Pos] interval yield a negative result.
@@ -437,7 +437,7 @@ impl FileSet {
   /// encounters an unbounded stream of files.
   /// 
   /// Removing a file that does not belong to the set has no effect.
-  fn RemoveFile(self: Ref<FileSet>, file: Ref<File>)
+  fn RemoveFile(self: mut Ref<FileSet>, file: Ref<File>)
 
   /// Write calls encode to serialize the file set s.
   fn Write(self: Ref<FileSet>, encode: fn(Unknown) -> Result<(), error>) -> Result<(), error>

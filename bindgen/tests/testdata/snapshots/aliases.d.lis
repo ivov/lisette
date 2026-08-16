@@ -3,13 +3,52 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
+/// AppendByte exercises a result that views a heuristically mutable parameter.
+pub fn AppendByte(dst: mut Slice<byte>, b: byte) -> mut Slice<byte>
+
+/// BlankPair exercises per-hop qualifiers on a mutated array parameter.
+pub fn BlankPair(p: Array<mut Slice<byte>, 2>)
+
+/// BlankTopLeft exercises per-hop qualifiers on a nested mutated parameter.
+pub fn BlankTopLeft(rows: mut Slice<mut Slice<byte>>)
+
 pub fn ComputeDigest() -> Array<byte, 32>
 
+/// FillAlias exercises the writable qualifier through a type alias.
+pub fn FillAlias(xs: mut Slice<int>)
+
+/// FillBag exercises the mutated by-value struct parameter.
+pub fn FillBag(b: mut Bag)
+
+/// FillIntList exercises the mutated-pointer-parameter qualifier.
+pub fn FillIntList(l: mut Ref<IntList>)
+
+/// FillVia exercises curated permission on a reserved parameter name.
+pub fn FillVia(f: fn(Slice<int>) -> (), self_: mut Slice<int>)
+
 /// Function returning alias
-pub fn GetMap() -> Map<string, int>
+pub fn GetMap() -> mut Map<string, int>
+
+/// MakeIntList exercises the writable qualifier on a named container return.
+pub fn MakeIntList(n: int) -> mut IntList
+
+/// OpenIntList exercises the qualifier inside a Result wrapper.
+pub fn OpenIntList(ok: bool) -> Result<mut IntList, error>
+
+/// PairOfLists exercises per-result qualifiers on a plain multi-value return.
+pub fn PairOfLists() -> (mut IntList, mut IntList)
+
+/// PairOfRows exercises per-hop qualifiers on a writable array return.
+pub fn PairOfRows() -> Array<mut Slice<byte>, 2>
+
+/// Pick exercises curated view overrides on a blind-spot result.
+pub fn Pick(f: fn(Slice<string>) -> Slice<string>, rows: Slice<string>) -> Slice<string>
 
 /// Function using type aliases
-pub fn TakeAlias(s: string) -> Slice<int>
+pub fn TakeAlias(s: string) -> mut Slice<int>
+
+/// TouchKeys exercises the writable qualifier on pointer map keys.
+pub fn TouchKeys(m: mut Map<mut Ref<IntList>, int>)
 
 pub type AliasIntSlice = Slice<int>
 
@@ -17,11 +56,44 @@ pub type AliasString = string
 
 pub type AliasStringMap = Map<string, int>
 
+/// Bag exercises writable capability through a by-value struct.
+pub struct Bag {
+  pub Items: mut Slice<int>,
+}
+
 /// Callback is a simple callback function.
 pub type Callback = fn() -> ()
 
+/// Callbacks exercises the writable pointer return inside a function type.
+pub struct Callbacks {
+  pub Load: Option<fn(string) -> Result<mut Ref<IntList>, error>>,
+}
+
+/// Counter exercises the curated receiver override.
+pub struct Counter {
+  pub Total: int,
+}
+
 /// Alias-to-array peels to the array type.
 pub type Digest = Array<byte, 32>
+
+/// Grid holds nested containers to exercise per-hop field qualifiers.
+pub struct Grid {
+  pub Rows: mut Slice<mut Slice<byte>>,
+  pub Lookup: mut Map<string, mut Slice<int>>,
+  pub Pointer: Option<mut Ref<IntList>>,
+  pub Raw: Option<mut Ref<mut Ref<byte>>>,
+}
+
+/// GridBox exercises the pointer-embed qualifier.
+pub struct GridBox {
+  embed mut Ref<Grid>,
+}
+
+/// GridPack exercises the value-struct embed qualifier.
+pub struct GridPack {
+  embed mut Grid,
+}
 
 /// Handler is a function that handles requests.
 pub type Handler = fn(string) -> Result<string, error>
@@ -29,7 +101,16 @@ pub type Handler = fn(string) -> Result<string, error>
 pub struct ID(uint64)
 
 /// Type definition over slice - hits convertType default path
-pub struct IntList(Slice<int>)
+pub struct IntList(mut Slice<int>)
+
+/// ListBox exercises the non-struct embed rendering.
+#[go(hidden_embed)]
+pub struct ListBox {
+  pub IntList: mut IntList,
+}
+
+/// Matrix exercises nested container hops in field and newtype positions.
+pub struct Matrix(mut Slice<mut Slice<byte>>)
 
 pub struct MyInt(int)
 
@@ -38,5 +119,13 @@ pub struct MyString(string)
 /// Processor processes data.
 pub type Processor = fn(Slice<byte>) -> Slice<byte>
 
+/// RefList exercises the plain newtype shape with per-hop qualifiers.
+pub struct RefList(mut Slice<mut Ref<IntList>>)
+
 /// Type definition over map
-pub struct StringMap(Map<string, int>)
+pub struct StringMap(mut Map<string, int>)
+
+impl Counter {
+  /// Bump exercises a receiver write hidden behind an indirect call.
+  fn Bump(self: mut Ref<Counter>, f: fn(Ref<int>) -> ())
+}

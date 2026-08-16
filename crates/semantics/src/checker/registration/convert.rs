@@ -216,7 +216,10 @@ impl TaskState {
                     new_params
                         .into_iter()
                         .zip(params)
-                        .map(|(ty, param)| FunctionParameter::new(ty, param.mutable))
+                        .map(|(ty, param)| {
+                            let (ty, mutable) = bridge_parameter_permission(ty, param.mutable);
+                            FunctionParameter::new(ty, mutable)
+                        })
                         .collect(),
                     Default::default(),
                     new_return_type.into(),
@@ -970,4 +973,15 @@ impl TaskState {
 
 fn is_reserved_prelude_generic(name: &str) -> bool {
     matches!(name, "Option" | "Result" | "Partial")
+}
+
+/// A `mut` qualifier on a parameter's type reads as the parameter marker, so
+/// derived typedefs enforce under the current model. The write-permission
+/// type system replaces this bridge.
+pub(crate) fn bridge_parameter_permission(ty: Type, mutable: bool) -> (Type, bool) {
+    if ty.is_writable() {
+        (ty.shallow_demoted(), true)
+    } else {
+        (ty, mutable)
+    }
 }

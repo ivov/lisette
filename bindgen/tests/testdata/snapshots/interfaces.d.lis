@@ -12,7 +12,7 @@ pub type Any = Unknown
 /// Nilable comma-ok method on interface
 pub interface Cache {
   #[go(comma_ok)]
-  fn Get(key: string) -> Option<Ref<Node>>
+  fn Get(key: string) -> Option<mut Ref<Node>>
   fn Set(key: string, value: Ref<Node>)
 }
 
@@ -41,13 +41,13 @@ pub struct NotFoundError(string)
 
 /// Embedding standard interfaces
 pub interface ReadWriteSeeker {
-  fn Read(mut p: Slice<byte>) -> Partial<int, error>
+  fn Read(p: mut Slice<byte>) -> Partial<int, error>
   fn Seek(offset: int64, whence: int) -> Result<int64, error>
   fn Write(p: Slice<byte>) -> Partial<int, error>
 }
 
 pub interface ReadWriter {
-  fn Read(mut b: Slice<byte>) -> Partial<int, error>
+  fn Read(b: mut Slice<byte>) -> Partial<int, error>
   fn Write(b: Slice<byte>) -> Partial<int, error>
 }
 

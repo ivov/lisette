@@ -33,7 +33,7 @@ pub fn Find(n: int, cmp: fn(int) -> int) -> Option<int>
 /// Not-a-number (NaN) values are ordered before other values.
 /// 
 /// Note: as of Go 1.22, this function simply calls [slices.Sort].
-pub fn Float64s(mut x: Slice<float64>)
+pub fn Float64s(x: mut Slice<float64>)
 
 /// Float64sAreSorted reports whether the slice x is sorted in increasing order,
 /// with not-a-number (NaN) values before any other values.
@@ -44,7 +44,7 @@ pub fn Float64sAreSorted(x: Slice<float64>) -> bool
 /// Ints sorts a slice of ints in increasing order.
 /// 
 /// Note: as of Go 1.22, this function simply calls [slices.Sort].
-pub fn Ints(mut x: Slice<int>)
+pub fn Ints(x: mut Slice<int>)
 
 /// IntsAreSorted reports whether the slice x is sorted in increasing order.
 /// 
@@ -141,7 +141,7 @@ pub fn SearchStrings(a: Slice<string>, x: string) -> int
 /// 
 /// Note: in many situations, the newer [slices.SortFunc] function is more
 /// ergonomic and runs faster.
-pub fn Slice(x: Unknown, less: fn(int, int) -> bool)
+pub fn Slice(x: mut Unknown, less: fn(int, int) -> bool)
 
 /// SliceIsSorted reports whether the slice x is sorted according to the provided less function.
 /// It panics if x is not a slice.
@@ -159,7 +159,7 @@ pub fn SliceIsSorted(x: Unknown, less: fn(int, int) -> bool) -> bool
 /// 
 /// Note: in many situations, the newer [slices.SortStableFunc] function is more
 /// ergonomic and runs faster.
-pub fn SliceStable(x: Unknown, less: fn(int, int) -> bool)
+pub fn SliceStable(x: mut Unknown, less: fn(int, int) -> bool)
 
 /// Sort sorts data in ascending order as determined by the Less method.
 /// It makes one call to data.Len to determine n and O(n*log(n)) calls to
@@ -182,7 +182,7 @@ pub fn Stable(data: Interface)
 /// Strings sorts a slice of strings in increasing order.
 /// 
 /// Note: as of Go 1.22, this function simply calls [slices.Sort].
-pub fn Strings(mut x: Slice<string>)
+pub fn Strings(x: mut Slice<string>)
 
 /// StringsAreSorted reports whether the slice x is sorted in increasing order.
 /// 
@@ -191,10 +191,10 @@ pub fn StringsAreSorted(x: Slice<string>) -> bool
 
 /// Float64Slice implements Interface for a []float64, sorting in increasing order,
 /// with not-a-number (NaN) values ordered before other values.
-pub struct Float64Slice(Slice<float64>)
+pub struct Float64Slice(mut Slice<float64>)
 
 /// IntSlice attaches the methods of Interface to []int, sorting in increasing order.
-pub struct IntSlice(Slice<int>)
+pub struct IntSlice(mut Slice<int>)
 
 /// An implementation of Interface can be sorted by the routines in this package.
 /// The methods refer to elements of the underlying collection by integer index.
@@ -205,7 +205,7 @@ pub interface Interface {
 }
 
 /// StringSlice attaches the methods of Interface to []string, sorting in increasing order.
-pub struct StringSlice(Slice<string>)
+pub struct StringSlice(mut Slice<string>)
 
 impl Float64Slice {
   fn Len(self) -> int
@@ -223,10 +223,10 @@ impl Float64Slice {
 
   /// Sort is a convenience method: x.Sort() calls Sort(x).
   #[go(value_method_set)]
-  fn Sort(self: Ref<Float64Slice>)
+  fn Sort(self: mut Ref<Float64Slice>)
 
   #[go(value_method_set)]
-  fn Swap(self: Ref<Float64Slice>, i: int, j: int)
+  fn Swap(self: mut Ref<Float64Slice>, i: int, j: int)
 }
 
 impl IntSlice {
@@ -239,10 +239,10 @@ impl IntSlice {
 
   /// Sort is a convenience method: x.Sort() calls Sort(x).
   #[go(value_method_set)]
-  fn Sort(self: Ref<IntSlice>)
+  fn Sort(self: mut Ref<IntSlice>)
 
   #[go(value_method_set)]
-  fn Swap(self: Ref<IntSlice>, i: int, j: int)
+  fn Swap(self: mut Ref<IntSlice>, i: int, j: int)
 }
 
 impl StringSlice {
@@ -255,8 +255,8 @@ impl StringSlice {
 
   /// Sort is a convenience method: x.Sort() calls Sort(x).
   #[go(value_method_set)]
-  fn Sort(self: Ref<StringSlice>)
+  fn Sort(self: mut Ref<StringSlice>)
 
   #[go(value_method_set)]
-  fn Swap(self: Ref<StringSlice>, i: int, j: int)
+  fn Swap(self: mut Ref<StringSlice>, i: int, j: int)
 }

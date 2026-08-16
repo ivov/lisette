@@ -35,7 +35,7 @@ pub fn All() -> Slice<Description>
 /// 
 /// Sample values with names not appearing in [All] will have their Value populated
 /// as KindBad to indicate that the name is unknown.
-pub fn Read(mut m: Slice<Sample>)
+pub fn Read(m: mut Slice<Sample>)
 
 /// Description describes a runtime metric.
 pub struct Description {
@@ -47,8 +47,8 @@ pub struct Description {
 
 /// Float64Histogram represents a distribution of float64 values.
 pub struct Float64Histogram {
-  pub Counts: Slice<uint64>,
-  pub Buckets: Slice<float64>,
+  pub Counts: mut Slice<uint64>,
+  pub Buckets: mut Slice<float64>,
 }
 
 /// Sample captures a single metric sample.
@@ -69,7 +69,7 @@ impl Value {
   /// Float64Histogram returns the internal *Float64Histogram value for the metric.
   /// 
   /// If v.Kind() != KindFloat64Histogram, this method panics.
-  fn Float64Histogram(self) -> Option<Ref<Float64Histogram>>
+  fn Float64Histogram(self) -> Option<mut Ref<Float64Histogram>>
 
   /// Kind returns the tag representing the kind of value this is.
   fn Kind(self) -> ValueKind

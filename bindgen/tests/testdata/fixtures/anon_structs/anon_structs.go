@@ -55,3 +55,8 @@ var Anon struct {
 	Hits   int64
 	Misses int64
 }
+
+// FillAnon exercises the writable qualifier on a mutated anonymous struct.
+func FillAnon(b struct{ Items []int }) {
+	b.Items[0] = 1
+}

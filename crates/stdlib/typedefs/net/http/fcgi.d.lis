@@ -11,7 +11,7 @@ import "go:net/http"
 /// is hidden in the request's context. As an example, if REMOTE_USER is set for a
 /// request, it will not be found anywhere in r, but it will be included in
 /// ProcessEnv's response (via r's context).
-pub fn ProcessEnv(r: Ref<http.Request>) -> Map<string, string>
+pub fn ProcessEnv(r: Ref<http.Request>) -> mut Map<string, string>
 
 /// Serve accepts incoming FastCGI connections on the listener l, creating a new
 /// goroutine for each. The goroutine reads requests and then calls handler

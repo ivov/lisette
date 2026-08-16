@@ -5,7 +5,7 @@
 
 /// NewCipher creates and returns a new [Cipher]. The key argument should be the
 /// RC4 key, at least 1 byte and at most 256 bytes.
-pub fn NewCipher(key: Slice<byte>) -> Result<Ref<Cipher>, error>
+pub fn NewCipher(key: Slice<byte>) -> Result<mut Ref<Cipher>, error>
 
 /// A Cipher is an instance of RC4 using a particular key.
 pub type Cipher
@@ -17,11 +17,11 @@ impl Cipher {
   /// 
   /// Deprecated: Reset can't guarantee that the key will be entirely removed from
   /// the process's memory.
-  fn Reset(self: Ref<Cipher>)
+  fn Reset(self: mut Ref<Cipher>)
 
   /// XORKeyStream sets dst to the result of XORing src with the key stream.
   /// Dst and src must overlap entirely or not at all.
-  fn XORKeyStream(self: Ref<Cipher>, mut dst: Slice<byte>, src: Slice<byte>)
+  fn XORKeyStream(self: mut Ref<Cipher>, dst: mut Slice<byte>, src: Slice<byte>)
 }
 
 impl KeySizeError {

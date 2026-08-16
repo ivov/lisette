@@ -7,10 +7,10 @@ import "go:debug/dwarf"
 import "go:io"
 
 /// NewFile creates a new [File] for accessing a PE binary in an underlying reader.
-pub fn NewFile(r: io.ReaderAt) -> Result<Ref<File>, error>
+pub fn NewFile(r: io.ReaderAt) -> Result<mut Ref<File>, error>
 
 /// Open opens the named file using [os.Open] and prepares it for use as a PE binary.
-pub fn Open(name: string) -> Result<Ref<File>, error>
+pub fn Open(name: string) -> Result<mut Ref<File>, error>
 
 /// COFFSymbol represents single COFF symbol table record.
 pub struct COFFSymbol {
@@ -50,10 +50,10 @@ pub struct DataDirectory {
 pub struct File {
   embed FileHeader,
   pub OptionalHeader: Unknown,
-  pub Sections: Slice<Option<Ref<Section>>>,
-  pub Symbols: Slice<Option<Ref<Symbol>>>,
-  pub COFFSymbols: Slice<COFFSymbol>,
-  pub StringTable: StringTable,
+  pub Sections: mut Slice<Option<mut Ref<Section>>>,
+  pub Symbols: mut Slice<Option<mut Ref<Symbol>>>,
+  pub COFFSymbols: mut Slice<COFFSymbol>,
+  pub StringTable: mut StringTable,
 }
 
 pub struct FileHeader {
@@ -161,7 +161,7 @@ pub struct Reloc {
 #[go(zero_unsafe)]
 pub struct Section {
   embed SectionHeader,
-  pub Relocs: Slice<Reloc>,
+  pub Relocs: mut Slice<Reloc>,
   pub ReaderAt: Option<io.ReaderAt>,
 }
 
@@ -195,7 +195,7 @@ pub struct SectionHeader32 {
 }
 
 /// StringTable is a COFF string table.
-pub struct StringTable(Slice<byte>)
+pub struct StringTable(mut Slice<byte>)
 
 /// Symbol is similar to [COFFSymbol] with Name field replaced
 /// by Go string. Symbol also does not have NumberOfAuxSymbols.
@@ -504,30 +504,30 @@ impl File {
   /// auxiliary symbols: https://docs.microsoft.com/en-us/windows/win32/debug/pe-format#auxiliary-symbol-records
   /// COMDAT sections: https://docs.microsoft.com/en-us/windows/win32/debug/pe-format#comdat-sections-object-only
   /// auxiliary info for section definitions: https://docs.microsoft.com/en-us/windows/win32/debug/pe-format#auxiliary-format-5-section-definitions
-  fn COFFSymbolReadSectionDefAux(self: Ref<File>, idx: int) -> Result<Ref<COFFSymbolAuxFormat5>, error>
+  fn COFFSymbolReadSectionDefAux(self: Ref<File>, idx: int) -> Result<mut Ref<COFFSymbolAuxFormat5>, error>
 
   /// Close closes the [File].
   /// If the [File] was created using [NewFile] directly instead of [Open],
   /// Close has no effect.
   #[allow(unused_result)]
-  fn Close(self: Ref<File>) -> Result<(), error>
+  fn Close(self: mut Ref<File>) -> Result<(), error>
 
-  fn DWARF(self: Ref<File>) -> Result<Ref<dwarf.Data>, error>
+  fn DWARF(self: Ref<File>) -> Result<mut Ref<dwarf.Data>, error>
 
   /// ImportedLibraries returns the names of all libraries
   /// referred to by the binary f that are expected to be
   /// linked with the binary at dynamic link time.
-  fn ImportedLibraries(self: Ref<File>) -> Result<Slice<string>, error>
+  fn ImportedLibraries(self: Ref<File>) -> Result<mut Slice<string>, error>
 
   /// ImportedSymbols returns the names of all symbols
   /// referred to by the binary f that are expected to be
   /// satisfied by other libraries at dynamic load time.
   /// It does not return weak symbols.
-  fn ImportedSymbols(self: Ref<File>) -> Result<Slice<string>, error>
+  fn ImportedSymbols(self: Ref<File>) -> Result<mut Slice<string>, error>
 
   /// Section returns the first section with the given name, or nil if no such
   /// section exists.
-  fn Section(self: Ref<File>, name: string) -> Option<Ref<Section>>
+  fn Section(self: Ref<File>, name: string) -> Option<mut Ref<Section>>
 }
 
 impl FormatError {
@@ -539,7 +539,7 @@ impl Section {
   /// 
   /// If s.Offset is 0, the section has no contents,
   /// and Data will always return a non-nil error.
-  fn Data(self: Ref<Section>) -> Result<Slice<byte>, error>
+  fn Data(self: Ref<Section>) -> Result<mut Slice<byte>, error>
 
   /// Open returns a new ReadSeeker reading the PE section s.
   /// 
@@ -547,7 +547,7 @@ impl Section {
   /// to the returned reader will return a non-nil error.
   fn Open(self: Ref<Section>) -> io.ReadSeeker
 
-  fn ReadAt(self, mut p: Slice<byte>, off: int64) -> Partial<int, error>
+  fn ReadAt(self, p: mut Slice<byte>, off: int64) -> Partial<int, error>
 }
 
 impl StringTable {

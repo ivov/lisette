@@ -11,7 +11,7 @@ import "go:time"
 
 /// ContextClientTrace returns the [ClientTrace] associated with the
 /// provided context. If none, it returns nil.
-pub fn ContextClientTrace(ctx: context.Context) -> Option<Ref<ClientTrace>>
+pub fn ContextClientTrace(ctx: context.Context) -> Option<mut Ref<ClientTrace>>
 
 /// WithClientTrace returns a new context based on the provided parent
 /// ctx. HTTP client requests made with the returned context will use
@@ -51,7 +51,7 @@ pub struct ClientTrace {
 
 /// DNSDoneInfo contains information about the results of a DNS lookup.
 pub struct DNSDoneInfo {
-  pub Addrs: Slice<net.IPAddr>,
+  pub Addrs: mut Slice<mut net.IPAddr>,
   pub Err: error,
   pub Coalesced: bool,
 }

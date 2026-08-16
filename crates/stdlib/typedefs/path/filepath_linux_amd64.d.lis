@@ -84,7 +84,7 @@ pub fn FromSlash(path: string) -> string
 /// Glob ignores file system errors such as I/O errors reading directories.
 /// The only possible returned error is [ErrBadPattern], when pattern
 /// is malformed.
-pub fn Glob(pattern: string) -> Result<Slice<string>, error>
+pub fn Glob(pattern: string) -> Result<mut Slice<string>, error>
 
 /// HasPrefix exists for historical compatibility and should not be used.
 /// 
@@ -177,7 +177,7 @@ pub fn Split(path: string) -> (string, string)
 /// usually found in PATH or GOPATH environment variables.
 /// Unlike strings.Split, SplitList returns an empty slice when passed an empty
 /// string.
-pub fn SplitList(path: string) -> Slice<string>
+pub fn SplitList(path: string) -> mut Slice<string>
 
 /// ToSlash returns the result of replacing each separator character
 /// in path with a slash ('/') character. Multiple separators are

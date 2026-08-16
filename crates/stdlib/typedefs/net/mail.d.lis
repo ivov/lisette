@@ -8,10 +8,10 @@ import "go:mime"
 import "go:time"
 
 /// ParseAddress parses a single RFC 5322 address, e.g. "Barry Gibbs <bg@example.com>"
-pub fn ParseAddress(address: string) -> Result<Ref<Address>, error>
+pub fn ParseAddress(address: string) -> Result<mut Ref<Address>, error>
 
 /// ParseAddressList parses the given string as a list of addresses.
-pub fn ParseAddressList(list: string) -> Result<Slice<Ref<Address>>, error>
+pub fn ParseAddressList(list: string) -> Result<mut Slice<mut Ref<Address>>, error>
 
 /// ParseDate parses an RFC 5322 date string.
 pub fn ParseDate(date: string) -> Result<time.Time, error>
@@ -19,7 +19,7 @@ pub fn ParseDate(date: string) -> Result<time.Time, error>
 /// ReadMessage reads a message from r.
 /// The headers are parsed, and the body of the message will be available
 /// for reading from msg.Body.
-pub fn ReadMessage(r: io.Reader) -> Result<Ref<Message>, error>
+pub fn ReadMessage(r: io.Reader) -> Result<mut Ref<Message>, error>
 
 /// Address represents a single mail address.
 /// An address such as "Barry Gibbs <bg@example.com>" is represented
@@ -31,15 +31,15 @@ pub struct Address {
 
 /// An AddressParser is an RFC 5322 address parser.
 pub struct AddressParser {
-  pub WordDecoder: Option<Ref<mime.WordDecoder>>,
+  pub WordDecoder: Option<mut Ref<mime.WordDecoder>>,
 }
 
 /// A Header represents the key-value pairs in a mail message header.
-pub struct Header(Map<string, Slice<string>>)
+pub struct Header(mut Map<string, mut Slice<string>>)
 
 /// A Message represents a parsed mail message.
 pub struct Message {
-  pub Header: Header,
+  pub Header: mut Header,
   pub Body: Option<io.Reader>,
 }
 
@@ -55,16 +55,16 @@ impl Address {
 impl AddressParser {
   /// Parse parses a single RFC 5322 address of the
   /// form "Gogh Fir <gf@example.com>" or "foo@example.com".
-  fn Parse(self: Ref<AddressParser>, address: string) -> Result<Ref<Address>, error>
+  fn Parse(self: Ref<AddressParser>, address: string) -> Result<mut Ref<Address>, error>
 
   /// ParseList parses the given string as a list of comma-separated addresses
   /// of the form "Gogh Fir <gf@example.com>" or "foo@example.com".
-  fn ParseList(self: Ref<AddressParser>, list: string) -> Result<Slice<Ref<Address>>, error>
+  fn ParseList(self: Ref<AddressParser>, list: string) -> Result<mut Slice<mut Ref<Address>>, error>
 }
 
 impl Header {
   /// AddressList parses the named header field as a list of addresses.
-  fn AddressList(self, key: string) -> Result<Slice<Ref<Address>>, error>
+  fn AddressList(self, key: string) -> Result<mut Slice<mut Ref<Address>>, error>
 
   /// Date parses the Date header field.
   fn Date(self) -> Result<time.Time, error>

@@ -7,21 +7,21 @@
 /// not as a one-shot.
 pub interface Container {
   fn Children() -> Slice<Ref<Widget>>
-  fn GetWidget() -> Option<Ref<Widget>>
-  fn Parent() -> Option<Ref<Container>>
+  fn GetWidget() -> Option<mut Ref<Widget>>
+  fn Parent() -> Option<mut Ref<Container>>
 }
 
 /// Constructor naming must NOT exempt on the interface side. The contract
 /// permits nil from any implementer, even if a particular impl happens not to
 /// return nil. Snapshot must show Option<Ref<Widget>>.
 pub interface Factory {
-  fn NewWidget() -> Option<Ref<Widget>>
+  fn NewWidget() -> Option<mut Ref<Widget>>
 }
 
 /// Named pointer type. Both interface and concrete sides wrap to
 /// `Option<Handle>`; the ABI classifier recognizes named pointer types
 /// as nilable so this lowers to the correct `Handle` Go signature.
-pub struct Handle(Ref<Widget>)
+pub struct Handle(mut Ref<Widget>)
 
 /// Concrete impl with a body that is not proven non-nil (returns a field).
 /// Snapshot must show the same `Option<Handle>` shape on both sides to
@@ -29,17 +29,17 @@ pub struct Handle(Ref<Widget>)
 pub type HandleBox
 
 pub interface HandleHolder {
-  fn GetHandle() -> Option<Handle>
+  fn GetHandle() -> Option<mut Handle>
 }
 
 pub interface HasWidget {
-  fn GetWidget() -> Option<Ref<Widget>>
+  fn GetWidget() -> Option<mut Ref<Widget>>
 }
 
 /// Navigation naming on an interface method also wraps.
 pub interface Tree {
-  fn Find(id: int) -> Option<Ref<Widget>>
-  fn Next() -> Option<Ref<Widget>>
+  fn Find(id: int) -> Option<mut Ref<Widget>>
+  fn Next() -> Option<mut Ref<Widget>>
 }
 
 pub struct Widget {
@@ -52,9 +52,9 @@ pub struct Widget {
 pub type WidgetBox
 
 impl HandleBox {
-  fn GetHandle(self: Ref<HandleBox>) -> Option<Handle>
+  fn GetHandle(self: Ref<HandleBox>) -> Option<mut Handle>
 }
 
 impl WidgetBox {
-  fn GetWidget(self: Ref<WidgetBox>) -> Ref<Widget>
+  fn GetWidget(self: Ref<WidgetBox>) -> mut Ref<Widget>
 }

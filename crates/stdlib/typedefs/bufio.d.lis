@@ -6,29 +6,29 @@
 import "go:io"
 
 /// NewReadWriter allocates a new [ReadWriter] that dispatches to r and w.
-pub fn NewReadWriter(r: Ref<Reader>, w: Ref<Writer>) -> Ref<ReadWriter>
+pub fn NewReadWriter(r: Ref<Reader>, w: Ref<Writer>) -> mut Ref<ReadWriter>
 
 /// NewReader returns a new [Reader] whose buffer has the default size.
-pub fn NewReader(rd: io.Reader) -> Ref<Reader>
+pub fn NewReader(rd: io.Reader) -> mut Ref<Reader>
 
 /// NewReaderSize returns a new [Reader] whose buffer has at least the specified
 /// size. If the argument io.Reader is already a [Reader] with large enough
 /// size, it returns the underlying [Reader].
-pub fn NewReaderSize(rd: io.Reader, size: int) -> Ref<Reader>
+pub fn NewReaderSize(rd: io.Reader, size: int) -> mut Ref<Reader>
 
 /// NewScanner returns a new [Scanner] to read from r.
 /// The split function defaults to [ScanLines].
-pub fn NewScanner(r: io.Reader) -> Ref<Scanner>
+pub fn NewScanner(r: io.Reader) -> mut Ref<Scanner>
 
 /// NewWriter returns a new [Writer] whose buffer has the default size.
 /// If the argument io.Writer is already a [Writer] with large enough buffer size,
 /// it returns the underlying [Writer].
-pub fn NewWriter(w: io.Writer) -> Ref<Writer>
+pub fn NewWriter(w: io.Writer) -> mut Ref<Writer>
 
 /// NewWriterSize returns a new [Writer] whose buffer has at least the specified
 /// size. If the argument io.Writer is already a [Writer] with large enough
 /// size, it returns the underlying [Writer].
-pub fn NewWriterSize(w: io.Writer, size: int) -> Ref<Writer>
+pub fn NewWriterSize(w: io.Writer, size: int) -> mut Ref<Writer>
 
 /// ScanBytes is a split function for a [Scanner] that returns each byte as a token.
 pub fn ScanBytes(data: Slice<byte>, atEOF: bool) -> Result<(int, Slice<byte>), error>
@@ -58,8 +58,8 @@ pub fn ScanWords(data: Slice<byte>, atEOF: bool) -> Result<(int, Slice<byte>), e
 /// ReadWriter stores pointers to a [Reader] and a [Writer].
 /// It implements [io.ReadWriter].
 pub struct ReadWriter {
-  embed Ref<Reader>,
-  embed Ref<Writer>,
+  embed mut Ref<Reader>,
+  embed mut Ref<Writer>,
 }
 
 /// Reader implements buffering for an io.Reader object.
@@ -162,7 +162,7 @@ impl Reader {
   /// If Discard skips fewer than n bytes, it also returns an error.
   /// If 0 <= n <= b.Buffered(), Discard is guaranteed to succeed without
   /// reading from the underlying io.Reader.
-  fn Discard(self: Ref<Reader>, n: int) -> Partial<int, error>
+  fn Discard(self: mut Ref<Reader>, n: int) -> Partial<int, error>
 
   /// Peek returns the next n bytes without advancing the reader. The bytes stop
   /// being valid at the next read call. If necessary, Peek will read more bytes
@@ -172,7 +172,7 @@ impl Reader {
   /// 
   /// Calling Peek prevents a [Reader.UnreadByte] or [Reader.UnreadRune] call from succeeding
   /// until the next read operation.
-  fn Peek(self: Ref<Reader>, n: int) -> Partial<Slice<byte>, error>
+  fn Peek(self: mut Ref<Reader>, n: int) -> Partial<mut Slice<byte>, error>
 
   /// Read reads data into p.
   /// It returns the number of bytes read into p.
@@ -181,11 +181,11 @@ impl Reader {
   /// To read exactly len(p) bytes, use io.ReadFull(b, p).
   /// If the underlying [Reader] can return a non-zero count with io.EOF,
   /// then this Read method can do so as well; see the [io.Reader] docs.
-  fn Read(self: Ref<Reader>, mut p: Slice<byte>) -> Partial<int, error>
+  fn Read(self: mut Ref<Reader>, p: mut Slice<byte>) -> Partial<int, error>
 
   /// ReadByte reads and returns a single byte.
   /// If no byte is available, returns an error.
-  fn ReadByte(self: Ref<Reader>) -> Result<byte, error>
+  fn ReadByte(self: mut Ref<Reader>) -> Result<byte, error>
 
   /// ReadBytes reads until the first occurrence of delim in the input,
   /// returning a slice containing the data up to and including the delimiter.
@@ -194,7 +194,7 @@ impl Reader {
   /// ReadBytes returns err != nil if and only if the returned data does not end in
   /// delim.
   /// For simple uses, a Scanner may be more convenient.
-  fn ReadBytes(self: Ref<Reader>, delim: byte) -> Partial<Slice<byte>, error>
+  fn ReadBytes(self: mut Ref<Reader>, delim: byte) -> Partial<mut Slice<byte>, error>
 
   /// ReadLine is a low-level line-reading primitive. Most callers should use
   /// [Reader.ReadBytes]('\n') or [Reader.ReadString]('\n') instead or use a [Scanner].
@@ -212,12 +212,12 @@ impl Reader {
   /// Calling [Reader.UnreadByte] after ReadLine will always unread the last byte read
   /// (possibly a character belonging to the line end) even if that byte is not
   /// part of the line returned by ReadLine.
-  fn ReadLine(self: Ref<Reader>) -> Result<(Slice<byte>, bool), error>
+  fn ReadLine(self: mut Ref<Reader>) -> Result<(mut Slice<byte>, bool), error>
 
   /// ReadRune reads a single UTF-8 encoded Unicode character and returns the
   /// rune and its size in bytes. If the encoded rune is invalid, it consumes one byte
   /// and returns unicode.ReplacementChar (U+FFFD) with a size of 1.
-  fn ReadRune(self: Ref<Reader>) -> Result<(rune, int), error>
+  fn ReadRune(self: mut Ref<Reader>) -> Result<(rune, int), error>
 
   /// ReadSlice reads until the first occurrence of delim in the input,
   /// returning a slice pointing at the bytes in the buffer.
@@ -229,7 +229,7 @@ impl Reader {
   /// by the next I/O operation, most clients should use
   /// [Reader.ReadBytes] or ReadString instead.
   /// ReadSlice returns err != nil if and only if line does not end in delim.
-  fn ReadSlice(self: Ref<Reader>, delim: byte) -> Partial<Slice<byte>, error>
+  fn ReadSlice(self: mut Ref<Reader>, delim: byte) -> Partial<mut Slice<byte>, error>
 
   /// ReadString reads until the first occurrence of delim in the input,
   /// returning a string containing the data up to and including the delimiter.
@@ -238,14 +238,14 @@ impl Reader {
   /// ReadString returns err != nil if and only if the returned data does not end in
   /// delim.
   /// For simple uses, a Scanner may be more convenient.
-  fn ReadString(self: Ref<Reader>, delim: byte) -> Partial<string, error>
+  fn ReadString(self: mut Ref<Reader>, delim: byte) -> Partial<string, error>
 
   /// Reset discards any buffered data, resets all state, and switches
   /// the buffered reader to read from r.
   /// Calling Reset on the zero value of [Reader] initializes the internal buffer
   /// to the default size.
   /// Calling b.Reset(b) (that is, resetting a [Reader] to itself) does nothing.
-  fn Reset(self: Ref<Reader>, r: io.Reader)
+  fn Reset(self: mut Ref<Reader>, r: io.Reader)
 
   /// Size returns the size of the underlying buffer in bytes.
   fn Size(self: Ref<Reader>) -> int
@@ -255,19 +255,19 @@ impl Reader {
   /// UnreadByte returns an error if the most recent method called on the
   /// [Reader] was not a read operation. Notably, [Reader.Peek], [Reader.Discard], and [Reader.WriteTo] are not
   /// considered read operations.
-  fn UnreadByte(self: Ref<Reader>) -> Result<(), error>
+  fn UnreadByte(self: mut Ref<Reader>) -> Result<(), error>
 
   /// UnreadRune unreads the last rune. If the most recent method called on
   /// the [Reader] was not a [Reader.ReadRune], [Reader.UnreadRune] returns an error. (In this
   /// regard it is stricter than [Reader.UnreadByte], which will unread the last byte
   /// from any read operation.)
-  fn UnreadRune(self: Ref<Reader>) -> Result<(), error>
+  fn UnreadRune(self: mut Ref<Reader>) -> Result<(), error>
 
   /// WriteTo implements io.WriterTo.
   /// This may make multiple calls to the [Reader.Read] method of the underlying [Reader].
   /// If the underlying reader supports the [Reader.WriteTo] method,
   /// this calls the underlying [Reader.WriteTo] without buffering.
-  fn WriteTo(self: Ref<Reader>, w: io.Writer) -> Partial<int64, error>
+  fn WriteTo(self: mut Ref<Reader>, w: io.Writer) -> Partial<int64, error>
 }
 
 impl Scanner {
@@ -283,7 +283,7 @@ impl Scanner {
   /// maximum token size to [MaxScanTokenSize].
   /// 
   /// Buffer panics if it is called after scanning has started.
-  fn Buffer(self: Ref<Scanner>, mut buf: Slice<byte>, max: int)
+  fn Buffer(self: mut Ref<Scanner>, buf: mut Slice<byte>, max: int)
 
   /// Bytes returns the most recent token generated by a call to [Scanner.Scan].
   /// The underlying array may point to data that will be overwritten
@@ -302,13 +302,13 @@ impl Scanner {
   /// Scan panics if the split function returns too many empty
   /// tokens without advancing the input. This is a common error mode for
   /// scanners.
-  fn Scan(self: Ref<Scanner>) -> bool
+  fn Scan(self: mut Ref<Scanner>) -> bool
 
   /// Split sets the split function for the [Scanner].
   /// The default split function is [ScanLines].
   /// 
   /// Split panics if it is called after scanning has started.
-  fn Split(self: Ref<Scanner>, split: SplitFunc)
+  fn Split(self: mut Ref<Scanner>, split: SplitFunc)
 
   /// Text returns the most recent token generated by a call to [Scanner.Scan]
   /// as a newly allocated string holding its bytes.
@@ -330,20 +330,20 @@ impl Writer {
 
   /// Flush writes any buffered data to the underlying [io.Writer].
   #[allow(unused_result)]
-  fn Flush(self: Ref<Writer>) -> Result<(), error>
+  fn Flush(self: mut Ref<Writer>) -> Result<(), error>
 
   /// ReadFrom implements [io.ReaderFrom]. If the underlying writer
   /// supports the ReadFrom method, this calls the underlying ReadFrom.
   /// If there is buffered data and an underlying ReadFrom, this fills
   /// the buffer and writes it before calling ReadFrom.
-  fn ReadFrom(self: Ref<Writer>, r: io.Reader) -> Partial<int64, error>
+  fn ReadFrom(self: mut Ref<Writer>, r: io.Reader) -> Partial<int64, error>
 
   /// Reset discards any unflushed buffered data, clears any error, and
   /// resets b to write its output to w.
   /// Calling Reset on the zero value of [Writer] initializes the internal buffer
   /// to the default size.
   /// Calling w.Reset(w) (that is, resetting a [Writer] to itself) does nothing.
-  fn Reset(self: Ref<Writer>, w: io.Writer)
+  fn Reset(self: mut Ref<Writer>, w: io.Writer)
 
   /// Size returns the size of the underlying buffer in bytes.
   fn Size(self: Ref<Writer>) -> int
@@ -352,18 +352,18 @@ impl Writer {
   /// It returns the number of bytes written.
   /// If nn < len(p), it also returns an error explaining
   /// why the write is short.
-  fn Write(self: Ref<Writer>, p: Slice<byte>) -> Partial<int, error>
+  fn Write(self: mut Ref<Writer>, p: Slice<byte>) -> Partial<int, error>
 
   /// WriteByte writes a single byte.
-  fn WriteByte(self: Ref<Writer>, c: byte) -> Result<(), error>
+  fn WriteByte(self: mut Ref<Writer>, c: byte) -> Result<(), error>
 
   /// WriteRune writes a single Unicode code point, returning
   /// the number of bytes written and any error.
-  fn WriteRune(self: Ref<Writer>, r: rune) -> Partial<int, error>
+  fn WriteRune(self: mut Ref<Writer>, r: rune) -> Partial<int, error>
 
   /// WriteString writes a string.
   /// It returns the number of bytes written.
   /// If the count is less than len(s), it also returns an error explaining
   /// why the write is short.
-  fn WriteString(self: Ref<Writer>, s: string) -> Partial<int, error>
+  fn WriteString(self: mut Ref<Writer>, s: string) -> Partial<int, error>
 }

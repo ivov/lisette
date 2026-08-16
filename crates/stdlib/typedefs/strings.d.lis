@@ -71,7 +71,7 @@ pub fn EqualFold(s: string, t: string) -> bool
 /// empty slice if s contains only white space. Every element of the returned slice is
 /// non-empty. Unlike [Split], leading and trailing runs runs of white space characters
 /// are discarded.
-pub fn Fields(s: string) -> Slice<string>
+pub fn Fields(s: string) -> mut Slice<string>
 
 /// FieldsFunc splits the string s at each run of Unicode code points c satisfying f(c)
 /// and returns an array of slices of s. If all code points in s satisfy f(c) or the
@@ -81,7 +81,7 @@ pub fn Fields(s: string) -> Slice<string>
 /// 
 /// FieldsFunc makes no guarantees about the order in which it calls f(c)
 /// and assumes that f always returns the same value for a given c.
-pub fn FieldsFunc(s: string, f: fn(rune) -> bool) -> Slice<string>
+pub fn FieldsFunc(s: string, f: fn(rune) -> bool) -> mut Slice<string>
 
 /// FieldsFuncSeq returns an iterator over substrings of s split around runs of
 /// Unicode code points satisfying f(c).
@@ -163,7 +163,7 @@ pub fn Map(mapping: fn(rune) -> rune, s: string) -> string
 
 /// NewReader returns a new [Reader] reading from s.
 /// It is similar to [bytes.NewBufferString] but more efficient and non-writable.
-pub fn NewReader(s: string) -> Ref<Reader>
+pub fn NewReader(s: string) -> mut Ref<Reader>
 
 /// NewReplacer returns a new [Replacer] from a list of old, new string
 /// pairs. Replacements are performed in the order they appear in the
@@ -171,7 +171,7 @@ pub fn NewReader(s: string) -> Ref<Reader>
 /// comparisons are done in argument order.
 /// 
 /// NewReplacer panics if given an odd number of arguments.
-pub fn NewReplacer(oldnew: VarArgs<string>) -> Ref<Replacer>
+pub fn NewReplacer(oldnew: VarArgs<string>) -> mut Ref<Replacer>
 
 /// Repeat returns a new string consisting of count copies of the string s.
 /// 
@@ -206,7 +206,7 @@ pub fn ReplaceAll(s: string, old: string, new: string) -> string
 /// It is equivalent to [SplitN] with a count of -1.
 /// 
 /// To split around the first instance of a separator, see [Cut].
-pub fn Split(s: string, sep: string) -> Slice<string>
+pub fn Split(s: string, sep: string) -> mut Slice<string>
 
 /// SplitAfter slices s into all substrings after each instance of sep and
 /// returns a slice of those substrings.
@@ -218,7 +218,7 @@ pub fn Split(s: string, sep: string) -> Slice<string>
 /// both s and sep are empty, SplitAfter returns an empty slice.
 /// 
 /// It is equivalent to [SplitAfterN] with a count of -1.
-pub fn SplitAfter(s: string, sep: string) -> Slice<string>
+pub fn SplitAfter(s: string, sep: string) -> mut Slice<string>
 
 /// SplitAfterN slices s into substrings after each instance of sep and
 /// returns a slice of those substrings.
@@ -230,7 +230,7 @@ pub fn SplitAfter(s: string, sep: string) -> Slice<string>
 /// 
 /// Edge cases for s and sep (for example, empty strings) are handled
 /// as described in the documentation for [SplitAfter].
-pub fn SplitAfterN(s: string, sep: string, n: int) -> Slice<string>
+pub fn SplitAfterN(s: string, sep: string, n: int) -> mut Slice<string>
 
 /// SplitAfterSeq returns an iterator over substrings of s split after each instance of sep.
 /// The iterator yields the same strings that would be returned by [SplitAfter](s, sep),
@@ -250,7 +250,7 @@ pub fn SplitAfterSeq(s: string, sep: string) -> iter.Seq<string>
 /// as described in the documentation for [Split].
 /// 
 /// To split around the first instance of a separator, see [Cut].
-pub fn SplitN(s: string, sep: string, n: int) -> Slice<string>
+pub fn SplitN(s: string, sep: string, n: int) -> mut Slice<string>
 
 /// SplitSeq returns an iterator over all substrings of s separated by sep.
 /// The iterator yields the same strings that would be returned by [Split](s, sep),
@@ -357,35 +357,35 @@ impl Builder {
   /// Grow grows b's capacity, if necessary, to guarantee space for
   /// another n bytes. After Grow(n), at least n bytes can be written to b
   /// without another allocation. If n is negative, Grow panics.
-  fn Grow(self: Ref<Builder>, n: int)
+  fn Grow(self: mut Ref<Builder>, n: int)
 
   /// Len returns the number of accumulated bytes; b.Len() == len(b.String()).
   fn Len(self: Ref<Builder>) -> int
 
   /// Reset resets the [Builder] to be empty.
-  fn Reset(self: Ref<Builder>)
+  fn Reset(self: mut Ref<Builder>)
 
   /// String returns the accumulated string.
   fn String(self: Ref<Builder>) -> string
 
   /// Write appends the contents of p to b's buffer.
   /// Write always returns len(p), nil.
-  fn Write(self: Ref<Builder>, p: Slice<byte>) -> Partial<int, error>
+  fn Write(self: mut Ref<Builder>, p: Slice<byte>) -> Partial<int, error>
 
   /// WriteByte appends the byte c to b's buffer.
   /// The returned error is always nil.
   #[allow(unused_result)]
-  fn WriteByte(self: Ref<Builder>, c: byte) -> Result<(), error>
+  fn WriteByte(self: mut Ref<Builder>, c: byte) -> Result<(), error>
 
   /// WriteRune appends the UTF-8 encoding of Unicode code point r to b's buffer.
   /// It returns the length of r and a nil error.
   #[allow(unused_result)]
-  fn WriteRune(self: Ref<Builder>, r: rune) -> Result<int, error>
+  fn WriteRune(self: mut Ref<Builder>, r: rune) -> Result<int, error>
 
   /// WriteString appends the contents of s to b's buffer.
   /// It returns the length of s and a nil error.
   #[allow(unused_partial)]
-  fn WriteString(self: Ref<Builder>, s: string) -> Partial<int, error>
+  fn WriteString(self: mut Ref<Builder>, s: string) -> Partial<int, error>
 }
 
 impl Reader {
@@ -394,22 +394,22 @@ impl Reader {
   fn Len(self: Ref<Reader>) -> int
 
   /// Read implements the [io.Reader] interface.
-  fn Read(self: Ref<Reader>, mut b: Slice<byte>) -> Partial<int, error>
+  fn Read(self: mut Ref<Reader>, b: mut Slice<byte>) -> Partial<int, error>
 
   /// ReadAt implements the [io.ReaderAt] interface.
-  fn ReadAt(self: Ref<Reader>, mut b: Slice<byte>, off: int64) -> Partial<int, error>
+  fn ReadAt(self: Ref<Reader>, b: mut Slice<byte>, off: int64) -> Partial<int, error>
 
   /// ReadByte implements the [io.ByteReader] interface.
-  fn ReadByte(self: Ref<Reader>) -> Result<byte, error>
+  fn ReadByte(self: mut Ref<Reader>) -> Result<byte, error>
 
   /// ReadRune implements the [io.RuneReader] interface.
-  fn ReadRune(self: Ref<Reader>) -> Result<(rune, int), error>
+  fn ReadRune(self: mut Ref<Reader>) -> Result<(rune, int), error>
 
   /// Reset resets the [Reader] to be reading from s.
-  fn Reset(self: Ref<Reader>, s: string)
+  fn Reset(self: mut Ref<Reader>, s: string)
 
   /// Seek implements the [io.Seeker] interface.
-  fn Seek(self: Ref<Reader>, offset: int64, whence: int) -> Result<int64, error>
+  fn Seek(self: mut Ref<Reader>, offset: int64, whence: int) -> Result<int64, error>
 
   /// Size returns the original length of the underlying string.
   /// Size is the number of bytes available for reading via [Reader.ReadAt].
@@ -418,19 +418,19 @@ impl Reader {
   fn Size(self: Ref<Reader>) -> int64
 
   /// UnreadByte implements the [io.ByteScanner] interface.
-  fn UnreadByte(self: Ref<Reader>) -> Result<(), error>
+  fn UnreadByte(self: mut Ref<Reader>) -> Result<(), error>
 
   /// UnreadRune implements the [io.RuneScanner] interface.
-  fn UnreadRune(self: Ref<Reader>) -> Result<(), error>
+  fn UnreadRune(self: mut Ref<Reader>) -> Result<(), error>
 
   /// WriteTo implements the [io.WriterTo] interface.
-  fn WriteTo(self: Ref<Reader>, w: io.Writer) -> Partial<int64, error>
+  fn WriteTo(self: mut Ref<Reader>, w: io.Writer) -> Partial<int64, error>
 }
 
 impl Replacer {
   /// Replace returns a copy of s with all replacements performed.
-  fn Replace(self: Ref<Replacer>, s: string) -> string
+  fn Replace(self: mut Ref<Replacer>, s: string) -> string
 
   /// WriteString writes s to w with all replacements performed.
-  fn WriteString(self: Ref<Replacer>, w: io.Writer, s: string) -> Partial<int, error>
+  fn WriteString(self: mut Ref<Replacer>, w: io.Writer, s: string) -> Partial<int, error>
 }

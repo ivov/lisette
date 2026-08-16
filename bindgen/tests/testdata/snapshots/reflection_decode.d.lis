@@ -4,13 +4,13 @@
 // Lisette: 0.0.0
 
 /// Param typed as `any` (alias for `interface{}`) must also be lifted.
-pub fn DecodeAny<T>(v: Ref<T>) -> Result<(), error>
+pub fn DecodeAny<T>(v: mut Ref<T>) -> Result<(), error>
 
 /// Multiple interface{} params: each lifts to its own T_n.
-pub fn DecodeBoth<T, T2>(src: Ref<T>, dst: Ref<T2>) -> Result<(), error>
+pub fn DecodeBoth<T, T2>(src: mut Ref<T>, dst: mut Ref<T2>) -> Result<(), error>
 
 /// `error` interface must NOT be lifted, even when whitelisted.
-pub fn DecodeWithErr<T>(v: Ref<T>, err: error) -> Result<(), error>
+pub fn DecodeWithErr<T>(v: mut Ref<T>, err: error) -> Result<(), error>
 
 /// Non-whitelisted free function with `interface{}` — stays `Unknown`.
 pub fn Log(v: Unknown)
@@ -19,10 +19,10 @@ pub fn Log(v: Unknown)
 pub fn ScanRow(dest: VarArgs<Unknown>) -> Result<(), error>
 
 /// Pointer-out shape: json.Unmarshal-like.
-pub fn Unmarshal<T>(data: Slice<byte>, v: Ref<T>) -> Result<(), error>
+pub fn Unmarshal<T>(data: Slice<byte>, v: mut Ref<T>) -> Result<(), error>
 
 /// Key + pointer-out shape: viper.UnmarshalKey-like.
-pub fn UnmarshalKey<T>(key: string, v: Ref<T>) -> Result<(), error>
+pub fn UnmarshalKey<T>(key: string, v: mut Ref<T>) -> Result<(), error>
 
 /// Method on a pointer receiver, plus a non-whitelisted method that should
 /// keep its `interface{}` param as `Unknown`.
@@ -33,9 +33,9 @@ pub type Decoder
 
 impl Codec {
   fn Set(self: Ref<Codec>, v: Unknown)
-  fn Unmarshal<T>(self: Ref<Codec>, data: Slice<byte>, v: Ref<T>) -> Result<(), error>
+  fn Unmarshal<T>(self: Ref<Codec>, data: Slice<byte>, v: mut Ref<T>) -> Result<(), error>
 }
 
 impl Decoder {
-  fn Decode<T>(self, v: Ref<T>) -> Result<(), error>
+  fn Decode<T>(self, v: mut Ref<T>) -> Result<(), error>
 }
