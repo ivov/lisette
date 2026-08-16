@@ -513,25 +513,43 @@ impl InferCtx<'_> {
     }
 
     fn report_disallowed_mutation(&mut self, store: &Store, var_name: &str, span: Span) {
+        let binding_id = self.scopes.lookup_binding_id(var_name);
+        if let Some(id) = binding_id
+            && !self.reported_immutable.insert(id)
+        {
+            return;
+        }
         let self_type_name = if var_name == "self" {
             self.lookup_type(store, "self")
                 .and_then(|t| t.get_name().map(str::to_owned))
         } else {
             None
         };
-        let binding_kind = self
-            .scopes
-            .lookup_binding_id(var_name)
+        let binding_kind = binding_id
             .and_then(|id| self.facts.bindings.get(&id))
             .map(|b| b.kind);
         let is_const = self.is_const_var(store, var_name);
-        self.sink.push(diagnostics::infer::disallowed_mutation(
+        let mut diagnostic = diagnostics::infer::disallowed_mutation(
             var_name,
             span,
             self_type_name.as_deref(),
             binding_kind,
             is_const,
-        ));
+        );
+        if !is_const
+            && let Some(id) = binding_id
+            && self.plain_lets.contains(&id)
+            && let Some(declaration) = self.facts.bindings.get(&id).map(|b| b.span)
+        {
+            diagnostic = diagnostic.with_fix(diagnostics::Fix::new(
+                format!("Declare `{var_name}` mutable"),
+                diagnostics::Edit::replacement(
+                    Span::new(declaration.file_id, declaration.byte_offset, 0),
+                    "mut ",
+                ),
+            ));
+        }
+        self.sink.push(diagnostic);
     }
 
     pub(super) fn infer_tuple(

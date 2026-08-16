@@ -1,3 +1,4 @@
+use crate::_harness::lint::apply_infer_fixes;
 use crate::spec::infer::*;
 use syntax::ast::BinaryOperator;
 use syntax::ast::Expression;
@@ -2622,4 +2623,65 @@ fn sibling_ref_ampersand_before_read_in_short_circuit_is_flagged() {
         "#,
     );
     infer_package("main", fs).assert_infer_code("reference_aliases_sibling");
+}
+
+#[test]
+fn immutable_let_fix_inserts_mut() {
+    let fixed = apply_infer_fixes(
+        r#"fn main() {
+  let n = 1;
+  n = 2;
+  let _ = n
+}"#,
+    );
+    assert!(
+        fixed.contains("let mut n = 1"),
+        "the fix must make the binding mutable: {fixed}"
+    );
+}
+
+#[test]
+fn container_let_write_fix_inserts_mut() {
+    let fixed = apply_infer_fixes(
+        r#"fn main() {
+  let scores = [70, 85]
+  scores[0] = 100
+  let _ = scores
+}"#,
+    );
+    assert!(
+        fixed.contains("let mut scores = [70, 85]"),
+        "the fix must make the binding mutable: {fixed}"
+    );
+}
+
+#[test]
+fn immutable_destructured_binding_gets_no_fix() {
+    let result = infer(
+        r#"fn main() {
+  let (a, b) = (1, 2);
+  a = b;
+  let _ = (a, b)
+}"#,
+    );
+    assert!(
+        result
+            .errors
+            .iter()
+            .all(|diagnostic| diagnostic.fix().is_none()),
+        "`mut` is not spellable in a pattern, so no fix may be offered"
+    );
+}
+
+#[test]
+fn immutable_binding_reports_once() {
+    infer(
+        r#"fn main() {
+  let n = 1;
+  n = 2;
+  n = 3;
+  let _ = n
+}"#,
+    )
+    .assert_infer_code_count("immutable", 1);
 }

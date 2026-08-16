@@ -512,11 +512,11 @@ struct FixSummary {
 
 fn apply_result_fixes(result: &CompileResult, summary: &mut FixSummary) {
     let mut by_file: HashMap<u32, Vec<&Fix>> = HashMap::default();
-    for lint in result.lints() {
-        let Some(fix) = lint.fix() else {
+    for diagnostic in result.diagnostics.iter() {
+        let Some(fix) = diagnostic.fix() else {
             continue;
         };
-        let Some(file_id) = lint.file_id() else {
+        let Some(file_id) = diagnostic.file_id() else {
             continue;
         };
         by_file.entry(file_id).or_default().push(fix);
@@ -536,10 +536,9 @@ fn apply_result_fixes(result: &CompileResult, summary: &mut FixSummary) {
             continue;
         }
 
-        if !syntax::build_ast(&applied.source, file_id)
-            .errors
-            .is_empty()
-        {
+        let errors_before = syntax::build_ast(&info.source, file_id).errors.len();
+        let errors_after = syntax::build_ast(&applied.source, file_id).errors.len();
+        if errors_after >= errors_before.max(1) {
             cli_error!(
                 "Skipped a fix",
                 format!(

@@ -1,7 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
 use rustc_hash::FxHashSet;
-use syntax::ast::Span;
+use syntax::ast::{BindingId, Span};
 use syntax::types::Type;
 
 use crate::checker::type_env::SpeculationOutcome;
@@ -214,6 +214,9 @@ pub struct InferCtx<'a> {
     pub(crate) store: &'a Store,
     pub(super) file_checks: FileChecks,
     pub(crate) satisfying_stack: FxHashSet<(String, String)>,
+    pub(super) reported_immutable: FxHashSet<BindingId>,
+    /// Identifier-pattern lets, the only bindings where inserting `mut` is valid.
+    pub(super) plain_lets: FxHashSet<BindingId>,
     traversal: TraversalContext,
 }
 
@@ -224,6 +227,8 @@ impl<'a> InferCtx<'a> {
             store,
             file_checks: FileChecks::default(),
             satisfying_stack: FxHashSet::default(),
+            reported_immutable: FxHashSet::default(),
+            plain_lets: FxHashSet::default(),
             traversal: TraversalContext::default(),
         }
     }
