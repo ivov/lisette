@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1786887456076,
+  "lastUpdate": 1786897585408,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -23424,6 +23424,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "syntax",
             "value": 14377,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13050,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 7983,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5994,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2912,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1851,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 714,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9074,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "ef1198e5ed4bae97e90697d4a899bb6a9ca5c59b",
+          "message": "refactor: derive enum constructors after type bodies register (#1271)",
+          "timestamp": "2026-08-16T18:26:01+02:00",
+          "tree_id": "bc08315cf2c97b0f9f355a4ddb25b74c88173bac",
+          "url": "https://github.com/ivov/lisette/commit/ef1198e5ed4bae97e90697d4a899bb6a9ca5c59b"
+        },
+        "date": 1786897583440,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 134191,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32187,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 26440,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18595,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14475,
             "unit": "lines"
           },
           {
