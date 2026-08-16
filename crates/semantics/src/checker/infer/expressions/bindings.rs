@@ -136,7 +136,8 @@ impl InferCtx<'_> {
         let binding_name = binding.pattern.get_identifier();
         let pattern_span = binding.pattern.get_span();
 
-        if mode.is_assert() && !self.scopes.has_test_handle() {
+        let is_assert = mode.is_assert();
+        if is_assert && !self.scopes.has_test_handle() {
             self.sink
                 .push(diagnostics::infer::assert_without_test_context(
                     pattern_span,
@@ -177,6 +178,15 @@ impl InferCtx<'_> {
             ty: ty.clone(),
             mut_span,
         };
+
+        if !mutable
+            && !is_assert
+            && new_binding.pattern.is_identifier()
+            && let Some(ref name) = binding_name
+            && let Some(binding_id) = self.scopes.lookup_binding_id(name)
+        {
+            self.plain_lets.insert(binding_id);
+        }
 
         if !has_annotation
             && new_value.is_empty_collection()

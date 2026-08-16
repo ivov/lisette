@@ -123,6 +123,17 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     diagnostics
 }
 
+pub fn apply_infer_fixes(source: &str) -> String {
+    let result = super::infer::infer(source);
+    let fixes: Vec<&Fix> = result
+        .errors
+        .iter()
+        .filter_map(LisetteDiagnostic::fix)
+        .collect();
+    assert!(!fixes.is_empty(), "expected at least one fix");
+    apply_fixes(source, fixes).source
+}
+
 pub fn apply_lint_fixes(source: &str) -> String {
     let lints = lint(source);
     let fixes: Vec<&Fix> = lints.iter().filter_map(LisetteDiagnostic::fix).collect();
