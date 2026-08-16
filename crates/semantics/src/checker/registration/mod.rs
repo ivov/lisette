@@ -159,6 +159,20 @@ impl TaskState {
             );
         }
 
+        normalize_registered_component_types(store, &id);
+
+        for file in &mut files {
+            self.with_file_context_mut(
+                store,
+                FileContext::Standard {
+                    package_id: &id,
+                    file_id: file.id,
+                    imports: &file.imports,
+                },
+                |this, store| this.derive_enum_constructor_values(store, &file.items),
+            );
+        }
+
         for file in &mut files {
             self.with_file_context_mut(
                 store,
@@ -181,5 +195,63 @@ impl TaskState {
 
         self.register_package_tests(store, &id, &files);
         RegisteredPackage { id, files }
+    }
+}
+
+/// A forward or self reference converts before its definition exists.
+pub(crate) fn normalize_registered_component_types(store: &mut Store, package_id: &str) {
+    let Some(package) = store.get_package(package_id) else {
+        return;
+    };
+    let mut changed: Vec<(Symbol, Definition)> = Vec::new();
+    for (name, definition) in &package.definitions {
+        let mut updated = definition.clone();
+        let mut any = false;
+        let mut normalize = |ty: &mut Type| {
+            let normalized = store.normalized_annotation_type(ty);
+            if normalized != *ty {
+                *ty = normalized;
+                any = true;
+            }
+        };
+        match &mut updated.body {
+            DefinitionBody::Struct { fields, .. } => {
+                let (StructFields::Record(fields) | StructFields::Tuple(fields)) = fields;
+                for field in fields {
+                    normalize(&mut field.ty);
+                }
+            }
+            DefinitionBody::Enum { variants, .. } => {
+                for variant in variants {
+                    match &mut variant.fields {
+                        VariantFields::Unit => {}
+                        VariantFields::Tuple(fields) | VariantFields::Struct(fields) => {
+                            for field in fields {
+                                normalize(&mut field.ty);
+                            }
+                        }
+                    }
+                }
+            }
+            DefinitionBody::TypeAlias {
+                alias: AliasKind::Transparent { target, .. },
+                ..
+            } => {
+                normalize(target);
+            }
+            _ => {}
+        }
+        if any {
+            changed.push((name.clone(), updated));
+        }
+    }
+    if changed.is_empty() {
+        return;
+    }
+    let Some(package) = store.get_package_mut(package_id) else {
+        return;
+    };
+    for (name, definition) in changed {
+        package.definitions.insert(name, definition);
     }
 }

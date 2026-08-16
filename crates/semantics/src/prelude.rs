@@ -2,6 +2,7 @@ use diagnostics::LocalSink;
 use stdlib::{LIS_PRELUDE_SOURCE, LIS_TEST_PRELUDE_SOURCE};
 use syntax::program::{File, Visibility};
 
+use crate::checker::registration::normalize_registered_component_types;
 use crate::checker::{FileContext, TaskState};
 use crate::store::Store;
 
@@ -42,6 +43,10 @@ pub fn parse_and_register_prelude(store: &mut Store, sink: &LocalSink) {
         for file in package.files.values_mut().filter(|file| file.is_d_lis()) {
             checker.register_constants(store, &file.items, &Visibility::Public);
             checker.register_type_definitions(store, &mut file.items);
+        }
+        normalize_registered_component_types(store, PRELUDE_PACKAGE_ID);
+        for file in package.files.values_mut().filter(|file| file.is_d_lis()) {
+            checker.derive_enum_constructor_values(store, &file.items);
             checker.register_impl_blocks(store, &mut file.items);
             checker.register_non_const_values(store, &mut file.items, &Visibility::Public);
         }
@@ -87,6 +92,10 @@ pub fn parse_and_register_test_prelude(store: &mut Store, sink: &LocalSink) {
             for file in package.files.values_mut().filter(|file| file.is_d_lis()) {
                 checker.register_constants(store, &file.items, &Visibility::Public);
                 checker.register_type_definitions(store, &mut file.items);
+            }
+            normalize_registered_component_types(store, TEST_PRELUDE_PACKAGE_ID);
+            for file in package.files.values_mut().filter(|file| file.is_d_lis()) {
+                checker.derive_enum_constructor_values(store, &file.items);
                 checker.register_impl_blocks(store, &mut file.items);
                 checker.register_non_const_values(store, &mut file.items, &Visibility::Public);
             }

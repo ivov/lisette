@@ -122,7 +122,7 @@ impl TaskState {
         annotation: &Annotation,
         span: &Span,
     ) -> Type {
-        self.convert_to_type_mode(
+        let ty = self.convert_to_type_mode(
             store,
             annotation,
             span,
@@ -131,7 +131,8 @@ impl TaskState {
                 type_argument_checks: TypeArgumentChecks::All,
                 position: TypePosition::Value,
             },
-        )
+        );
+        store.normalized_annotation_type(&ty)
     }
 
     pub(crate) fn convert_variadic_to_type(
@@ -140,7 +141,7 @@ impl TaskState {
         annotation: &Annotation,
         span: &Span,
     ) -> Type {
-        self.convert_to_type_mode(
+        let ty = self.convert_to_type_mode(
             store,
             annotation,
             span,
@@ -149,7 +150,8 @@ impl TaskState {
                 type_argument_checks: TypeArgumentChecks::All,
                 position: TypePosition::Value,
             },
-        )
+        );
+        store.normalized_annotation_type(&ty)
     }
 
     pub(crate) fn convert_receiver_to_type(
@@ -158,7 +160,7 @@ impl TaskState {
         annotation: &Annotation,
         span: &Span,
     ) -> Type {
-        self.convert_to_type_mode(
+        let ty = self.convert_to_type_mode(
             store,
             annotation,
             span,
@@ -167,7 +169,8 @@ impl TaskState {
                 type_argument_checks: TypeArgumentChecks::Descendants,
                 position: TypePosition::Value,
             },
-        )
+        );
+        store.normalized_annotation_type(&ty)
     }
 
     fn convert_to_type_mode(
@@ -311,6 +314,14 @@ impl TaskState {
                 self.sink.push(diagnostics::infer::self_type_not_supported(
                     annotation_span,
                     receiver.as_deref(),
+                ));
+            } else if let Some((kind, help)) = self.classify_unregistered_variant(store, type_name)
+            {
+                self.sink.push(diagnostics::infer::value_in_type_position(
+                    type_name,
+                    kind,
+                    annotation_span,
+                    help,
                 ));
             } else if !self.may_name_uninferred_export(store, type_name) {
                 self.sink.push(diagnostics::infer::type_not_found(
@@ -578,6 +589,32 @@ impl TaskState {
         } else {
             true
         }
+    }
+
+    /// Classifies `Enum.Variant` in type position before its constructor value exists.
+    fn classify_unregistered_variant(
+        &self,
+        store: &Store,
+        type_name: &str,
+    ) -> Option<(&'static str, Option<String>)> {
+        let (parent, variant_name) = type_name.rsplit_once('.')?;
+        let qualified = self.lookup_qualified_name_in_type_position(store, parent)?;
+        let Some(DefinitionBody::Enum { variants, .. }) =
+            store.get_definition(&qualified).map(|d| &d.body)
+        else {
+            return None;
+        };
+        let variant = variants.iter().find(|v| v.name == variant_name)?;
+        let enum_name = unqualified_name(&qualified);
+        let help = if variant.fields.is_empty() {
+            format!("Use `{}` for the enum type", enum_name)
+        } else {
+            format!(
+                "Use `{}` for the enum type, or call `{}(...)` to construct a value",
+                enum_name, type_name
+            )
+        };
+        Some(("enum variant", Some(help)))
     }
 
     fn classify_non_type_name(
