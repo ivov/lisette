@@ -38,6 +38,12 @@ pub struct AnonInner {
 
 /// Synthesized from a Go anonymous struct type.
 #[go(anon_struct)]
+pub struct AnonItems {
+  pub Items: mut Slice<int>,
+}
+
+/// Synthesized from a Go anonymous struct type.
+#[go(anon_struct)]
 pub struct AnonLabel {
   pub Label: string,
 }
@@ -53,6 +59,9 @@ pub struct AnonW {
 pub struct AnonX {
   pub X: int,
 }
+
+/// FillAnon exercises the writable qualifier on a mutated anonymous struct.
+pub fn FillAnon(b: mut AnonItems)
 
 /// OptionReturn returns an anonymous struct with a comma-ok bool.
 pub fn OptionReturn() -> Option<AnonLabel>
@@ -72,10 +81,10 @@ pub fn TupleReturn() -> (AnonA, AnonB)
 /// Collection, pointer, channel, and array element positions all synthesize the
 /// anonymous element.
 pub struct Carriers {
-  pub Slice: Slice<AnonX>,
-  pub MapKey: Map<AnonX, int>,
-  pub MapVal: Map<string, AnonX>,
-  pub Ptr: Option<Ref<AnonX>>,
+  pub Slice: mut Slice<AnonX>,
+  pub MapKey: mut Map<AnonX, int>,
+  pub MapVal: mut Map<string, AnonX>,
+  pub Ptr: Option<mut Ref<AnonX>>,
   pub Chan: Channel<AnonX>,
   pub Array: Array<AnonX, 4>,
 }

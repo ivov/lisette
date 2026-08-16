@@ -34,7 +34,7 @@ pub fn MakeSeed() -> Seed
 pub fn String(seed: Seed, s: string) -> uint64
 
 /// WriteComparable adds x to the data hashed by h.
-pub fn WriteComparable<T: Comparable>(h: Ref<Hash>, x: T)
+pub fn WriteComparable<T: Comparable>(h: mut Ref<Hash>, x: T)
 
 /// A Hash computes a seeded hash of a byte sequence.
 /// 
@@ -80,21 +80,21 @@ impl Hash {
   fn BlockSize(self: Ref<Hash>) -> int
 
   /// Clone implements [hash.Cloner].
-  fn Clone(self: Ref<Hash>) -> Result<hash.Cloner, error>
+  fn Clone(self: mut Ref<Hash>) -> Result<hash.Cloner, error>
 
   /// Reset discards all bytes added to h.
   /// (The seed remains the same.)
-  fn Reset(self: Ref<Hash>)
+  fn Reset(self: mut Ref<Hash>)
 
   /// Seed returns h's seed value.
-  fn Seed(self: Ref<Hash>) -> Seed
+  fn Seed(self: mut Ref<Hash>) -> Seed
 
   /// SetSeed sets h to use seed, which must have been returned by [MakeSeed]
   /// or by another [Hash.Seed] method.
   /// Two [Hash] objects with the same seed behave identically.
   /// Two [Hash] objects with different seeds will very likely behave differently.
   /// Any bytes added to h before this call will be discarded.
-  fn SetSeed(self: Ref<Hash>, seed: Seed)
+  fn SetSeed(self: mut Ref<Hash>, seed: Seed)
 
   /// Size returns h's hash value size, 8 bytes.
   fn Size(self: Ref<Hash>) -> int
@@ -102,7 +102,7 @@ impl Hash {
   /// Sum appends the hash's current 64-bit value to b.
   /// It exists for implementing [hash.Hash].
   /// For direct calls, it is more efficient to use [Hash.Sum64].
-  fn Sum(self: Ref<Hash>, mut b: Slice<byte>) -> Slice<byte>
+  fn Sum(self: mut Ref<Hash>, b: mut Slice<byte>) -> mut Slice<byte>
 
   /// Sum64 returns h's current 64-bit value, which depends on
   /// h's seed and the sequence of bytes added to h since the
@@ -111,17 +111,17 @@ impl Hash {
   /// All bits of the Sum64 result are close to uniformly and
   /// independently distributed, so it can be safely reduced
   /// by using bit masking, shifting, or modular arithmetic.
-  fn Sum64(self: Ref<Hash>) -> uint64
+  fn Sum64(self: mut Ref<Hash>) -> uint64
 
   /// Write adds b to the sequence of bytes hashed by h.
   /// It always writes all of b and never fails; the count and error result are for implementing [io.Writer].
-  fn Write(self: Ref<Hash>, b: Slice<byte>) -> Partial<int, error>
+  fn Write(self: mut Ref<Hash>, b: Slice<byte>) -> Partial<int, error>
 
   /// WriteByte adds b to the sequence of bytes hashed by h.
   /// It never fails; the error result is for implementing [io.ByteWriter].
-  fn WriteByte(self: Ref<Hash>, b: byte) -> Result<(), error>
+  fn WriteByte(self: mut Ref<Hash>, b: byte) -> Result<(), error>
 
   /// WriteString adds the bytes of s to the sequence of bytes hashed by h.
   /// It always writes all of s and never fails; the count and error result are for implementing [io.StringWriter].
-  fn WriteString(self: Ref<Hash>, s: string) -> Partial<int, error>
+  fn WriteString(self: mut Ref<Hash>, s: string) -> Partial<int, error>
 }

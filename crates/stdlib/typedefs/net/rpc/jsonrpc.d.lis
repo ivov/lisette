@@ -7,11 +7,11 @@ import "go:io"
 import "go:net/rpc"
 
 /// Dial connects to a JSON-RPC server at the specified network address.
-pub fn Dial(network: string, address: string) -> Result<Ref<rpc.Client>, error>
+pub fn Dial(network: string, address: string) -> Result<mut Ref<rpc.Client>, error>
 
 /// NewClient returns a new [rpc.Client] to handle requests to the
 /// set of services at the other end of the connection.
-pub fn NewClient(conn: io.ReadWriteCloser) -> Ref<rpc.Client>
+pub fn NewClient(conn: io.ReadWriteCloser) -> mut Ref<rpc.Client>
 
 /// NewClientCodec returns a new [rpc.ClientCodec] using JSON-RPC on conn.
 pub fn NewClientCodec(conn: io.ReadWriteCloser) -> rpc.ClientCodec

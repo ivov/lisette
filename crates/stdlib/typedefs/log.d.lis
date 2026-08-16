@@ -6,7 +6,7 @@
 import "go:io"
 
 /// Default returns the standard logger used by the package-level output functions.
-pub fn Default() -> Ref<Logger>
+pub fn Default() -> mut Ref<Logger>
 
 /// Fatal is equivalent to [Print] followed by a call to [os.Exit](1).
 pub fn Fatal(v: VarArgs<Unknown>) -> Never
@@ -26,7 +26,7 @@ pub fn Flags() -> int
 /// The prefix appears at the beginning of each generated log line, or
 /// after the log header if the [Lmsgprefix] flag is provided.
 /// The flag argument defines the logging properties.
-pub fn New(out: io.Writer, prefix: string, flag: int) -> Ref<Logger>
+pub fn New(out: io.Writer, prefix: string, flag: int) -> mut Ref<Logger>
 
 /// Output writes the output for a logging event. The string s contains
 /// the text to print after the prefix specified by the flags of the
@@ -259,7 +259,7 @@ impl Logger {
   fn SetFlags(self: Ref<Logger>, flag: int)
 
   /// SetOutput sets the output destination for the logger.
-  fn SetOutput(self: Ref<Logger>, w: io.Writer)
+  fn SetOutput(self: mut Ref<Logger>, w: io.Writer)
 
   /// SetPrefix sets the output prefix for the logger.
   fn SetPrefix(self: Ref<Logger>, prefix: string)

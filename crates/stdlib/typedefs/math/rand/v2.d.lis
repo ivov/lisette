@@ -54,19 +54,19 @@ pub fn N<Int: Ordered>(n: Int) -> Int
 
 /// New returns a new Rand that uses random values from src
 /// to generate other random values.
-pub fn New(src: Source) -> Ref<Rand>
+pub fn New(src: Source) -> mut Ref<Rand>
 
 /// NewChaCha8 returns a new ChaCha8 seeded with the given seed.
-pub fn NewChaCha8(seed: Array<byte, 32>) -> Ref<ChaCha8>
+pub fn NewChaCha8(seed: Array<byte, 32>) -> mut Ref<ChaCha8>
 
 /// NewPCG returns a new PCG seeded with the given values.
-pub fn NewPCG(seed1: uint64, seed2: uint64) -> Ref<PCG>
+pub fn NewPCG(seed1: uint64, seed2: uint64) -> mut Ref<PCG>
 
 /// NewZipf returns a Zipf variate generator.
 /// The generator generates values k ∈ [0, imax]
 /// such that P(k) is proportional to (v + k) ** (-s).
 /// Requirements: s > 1 and v >= 1.
-pub fn NewZipf(r: Ref<Rand>, s: float64, v: float64, imax: uint64) -> Option<Ref<Zipf>>
+pub fn NewZipf(r: Ref<Rand>, s: float64, v: float64, imax: uint64) -> Option<mut Ref<Zipf>>
 
 /// NormFloat64 returns a normally distributed float64 in the range
 /// [-math.MaxFloat64, +math.MaxFloat64] with
@@ -80,7 +80,7 @@ pub fn NormFloat64() -> float64
 
 /// Perm returns, as a slice of n ints, a pseudo-random permutation of the integers
 /// in the half-open interval [0,n) from the default Source.
-pub fn Perm(n: int) -> Slice<int>
+pub fn Perm(n: int) -> mut Slice<int>
 
 /// Shuffle pseudo-randomizes the order of elements using the default Source.
 /// n is the number of elements. Shuffle panics if n < 0.
@@ -138,10 +138,10 @@ pub type Zipf
 
 impl ChaCha8 {
   /// AppendBinary implements the [encoding.BinaryAppender] interface.
-  fn AppendBinary(self: Ref<ChaCha8>, mut b: Slice<byte>) -> Result<Slice<byte>, error>
+  fn AppendBinary(self: Ref<ChaCha8>, b: mut Slice<byte>) -> Result<mut Slice<byte>, error>
 
   /// MarshalBinary implements the [encoding.BinaryMarshaler] interface.
-  fn MarshalBinary(self: Ref<ChaCha8>) -> Result<Slice<byte>, error>
+  fn MarshalBinary(self: Ref<ChaCha8>) -> Result<mut Slice<byte>, error>
 
   /// Read reads exactly len(p) bytes into p.
   /// It always returns len(p) and a nil error.
@@ -149,33 +149,33 @@ impl ChaCha8 {
   /// If calls to Read and Uint64 are interleaved, the order in which bits are
   /// returned by the two is undefined, and Read may return bits generated before
   /// the last call to Uint64.
-  fn Read(self: Ref<ChaCha8>, mut p: Slice<byte>) -> Partial<int, error>
+  fn Read(self: mut Ref<ChaCha8>, p: mut Slice<byte>) -> Partial<int, error>
 
   /// Seed resets the ChaCha8 to behave the same way as NewChaCha8(seed).
-  fn Seed(self: Ref<ChaCha8>, seed: Array<byte, 32>)
+  fn Seed(self: mut Ref<ChaCha8>, seed: Array<byte, 32>)
 
   /// Uint64 returns a uniformly distributed random uint64 value.
-  fn Uint64(self: Ref<ChaCha8>) -> uint64
+  fn Uint64(self: mut Ref<ChaCha8>) -> uint64
 
   /// UnmarshalBinary implements the [encoding.BinaryUnmarshaler] interface.
-  fn UnmarshalBinary(self: Ref<ChaCha8>, data: Slice<byte>) -> Result<(), error>
+  fn UnmarshalBinary(self: mut Ref<ChaCha8>, data: Slice<byte>) -> Result<(), error>
 }
 
 impl PCG {
   /// AppendBinary implements the [encoding.BinaryAppender] interface.
-  fn AppendBinary(self: Ref<PCG>, mut b: Slice<byte>) -> Result<Slice<byte>, error>
+  fn AppendBinary(self: Ref<PCG>, b: mut Slice<byte>) -> Result<mut Slice<byte>, error>
 
   /// MarshalBinary implements the [encoding.BinaryMarshaler] interface.
-  fn MarshalBinary(self: Ref<PCG>) -> Result<Slice<byte>, error>
+  fn MarshalBinary(self: Ref<PCG>) -> Result<mut Slice<byte>, error>
 
   /// Seed resets the PCG to behave the same way as NewPCG(seed1, seed2).
-  fn Seed(self: Ref<PCG>, seed1: uint64, seed2: uint64)
+  fn Seed(self: mut Ref<PCG>, seed1: uint64, seed2: uint64)
 
   /// Uint64 return a uniformly-distributed random uint64 value.
-  fn Uint64(self: Ref<PCG>) -> uint64
+  fn Uint64(self: mut Ref<PCG>) -> uint64
 
   /// UnmarshalBinary implements the [encoding.BinaryUnmarshaler] interface.
-  fn UnmarshalBinary(self: Ref<PCG>, data: Slice<byte>) -> Result<(), error>
+  fn UnmarshalBinary(self: mut Ref<PCG>, data: Slice<byte>) -> Result<(), error>
 }
 
 impl Rand {
@@ -226,7 +226,7 @@ impl Rand {
 
   /// Perm returns, as a slice of n ints, a pseudo-random permutation of the integers
   /// in the half-open interval [0,n).
-  fn Perm(self: Ref<Rand>, n: int) -> Slice<int>
+  fn Perm(self: Ref<Rand>, n: int) -> mut Slice<int>
 
   /// Shuffle pseudo-randomizes the order of elements.
   /// n is the number of elements. Shuffle panics if n < 0.

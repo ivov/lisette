@@ -11,17 +11,17 @@ import "go:io"
 /// 
 /// The output of this function is deterministic, and equivalent to reading
 /// [SeedSize] bytes from rand, and passing them to [NewKeyFromSeed].
-pub fn GenerateKey(rand: io.Reader) -> Result<(PublicKey, PrivateKey), error>
+pub fn GenerateKey(rand: io.Reader) -> Result<(mut PublicKey, mut PrivateKey), error>
 
 /// NewKeyFromSeed calculates a private key from a seed. It will panic if
 /// len(seed) is not [SeedSize]. This function is provided for interoperability
 /// with RFC 8032. RFC 8032's private keys correspond to seeds in this
 /// package.
-pub fn NewKeyFromSeed(seed: Slice<byte>) -> PrivateKey
+pub fn NewKeyFromSeed(seed: Slice<byte>) -> mut PrivateKey
 
 /// Sign signs the message with privateKey and returns a signature. It will
 /// panic if len(privateKey) is not [PrivateKeySize].
-pub fn Sign(privateKey: PrivateKey, message: Slice<byte>) -> Slice<byte>
+pub fn Sign(privateKey: PrivateKey, message: Slice<byte>) -> mut Slice<byte>
 
 /// Verify reports whether sig is a valid signature of message by publicKey. It
 /// will panic if len(publicKey) is not [PublicKeySize].
@@ -56,10 +56,10 @@ pub struct Options {
 }
 
 /// PrivateKey is the type of Ed25519 private keys. It implements [crypto.Signer].
-pub struct PrivateKey(Slice<byte>)
+pub struct PrivateKey(mut Slice<byte>)
 
 /// PublicKey is the type of Ed25519 public keys.
-pub struct PublicKey(Slice<byte>)
+pub struct PublicKey(mut Slice<byte>)
 
 pub const PrivateKeySize = 64
 
@@ -84,7 +84,7 @@ impl PrivateKey {
   /// Seed returns the private key seed corresponding to priv. It is provided for
   /// interoperability with RFC 8032. RFC 8032's private keys correspond to seeds
   /// in this package.
-  fn Seed(self) -> Slice<byte>
+  fn Seed(self) -> mut Slice<byte>
 
   /// Sign signs the given message with priv. rand is ignored and can be nil.
   /// 
@@ -95,7 +95,7 @@ impl PrivateKey {
   /// 
   /// A value of type [Options] can be used as opts, or crypto.Hash(0) or
   /// crypto.SHA512 directly to select plain Ed25519 or Ed25519ph, respectively.
-  fn Sign(self, rand: io.Reader, message: Slice<byte>, opts: crypto.SignerOpts) -> Result<Slice<byte>, error>
+  fn Sign(self, rand: io.Reader, message: Slice<byte>, opts: crypto.SignerOpts) -> Result<mut Slice<byte>, error>
 }
 
 impl PublicKey {

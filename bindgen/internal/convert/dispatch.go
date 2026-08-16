@@ -70,18 +70,20 @@ func (r *ConvertResult) HasReturn() bool {
 }
 
 type FunctionParameter struct {
-	Name    string
-	Type    string
-	Mutable bool
+	Name string
+	Type string
 }
 
 type Receiver struct {
-	Name         string
-	Type         string
-	IsPointer    bool
-	Mutable      bool
-	BaseTypeName string
-	TypeParams   TypeParamSpecs // Type parameters of the receiver type (for generic types)
+	Name      string
+	Type      string
+	IsPointer bool
+	Mutable   bool
+	// ProvenReadOnly: SSA analyzed the method and found no receiver write, so
+	// a pointer receiver may drop the worst-case `mut` qualifier.
+	ProvenReadOnly bool
+	BaseTypeName   string
+	TypeParams     TypeParamSpecs // Type parameters of the receiver type (for generic types)
 }
 
 type StructField struct {

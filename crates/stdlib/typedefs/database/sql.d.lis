@@ -28,7 +28,7 @@ pub const LevelSnapshot: IsolationLevel = 5
 pub const LevelWriteCommitted: IsolationLevel = 3
 
 /// Drivers returns a sorted list of the names of the registered drivers.
-pub fn Drivers() -> Slice<string>
+pub fn Drivers() -> mut Slice<string>
 
 /// Named provides a more concise way to create [NamedArg] values.
 /// 
@@ -61,7 +61,7 @@ pub fn Named(name: string, value: Unknown) -> NamedArg
 /// and maintains its own pool of idle connections. Thus, the Open
 /// function should be called just once. It is rarely necessary to
 /// close a [DB].
-pub fn Open(driverName: string, dataSourceName: string) -> Result<Ref<DB>, error>
+pub fn Open(driverName: string, dataSourceName: string) -> Result<mut Ref<DB>, error>
 
 /// OpenDB opens a database using a [driver.Connector], allowing drivers to
 /// bypass a string based data source name.
@@ -79,7 +79,7 @@ pub fn Open(driverName: string, dataSourceName: string) -> Result<Ref<DB>, error
 /// and maintains its own pool of idle connections. Thus, the OpenDB
 /// function should be called just once. It is rarely necessary to
 /// close a [DB].
-pub fn OpenDB(c: driver.Connector) -> Ref<DB>
+pub fn OpenDB(c: driver.Connector) -> mut Ref<DB>
 
 /// Register makes a database driver available by the provided name.
 /// If Register is called twice with the same name or if driver is nil,
@@ -227,7 +227,7 @@ pub struct NullString {
 /// NullTime implements the [Scanner] interface so
 /// it can be used as a scan destination, similar to [NullString].
 pub struct NullTime {
-  pub Time: time.Time,
+  pub Time: mut time.Time,
   pub Valid: bool,
 }
 
@@ -248,7 +248,7 @@ pub struct Out {
 /// RawBytes is a byte slice that holds a reference to memory owned by
 /// the database itself. After a [Rows.Scan] into a RawBytes, the slice is only
 /// valid until the next call to [Rows.Next], [Rows.Scan], or [Rows.Close].
-pub struct RawBytes(Slice<byte>)
+pub struct RawBytes(mut Slice<byte>)
 
 /// A Result summarizes an executed SQL command.
 pub interface Result {
@@ -354,7 +354,7 @@ impl Conn {
   /// The provided [TxOptions] is optional and may be nil if defaults should be used.
   /// If a non-default isolation level is used that the driver doesn't support,
   /// an error will be returned.
-  fn BeginTx(self: Ref<Conn>, ctx: context.Context, opts: Ref<TxOptions>) -> Result<Ref<Tx>, error>
+  fn BeginTx(self: mut Ref<Conn>, ctx: context.Context, opts: Ref<TxOptions>) -> Result<mut Ref<Tx>, error>
 
   /// Close returns the connection to the connection pool.
   /// All operations after a Close will return with [ErrConnDone].
@@ -362,19 +362,19 @@ impl Conn {
   /// block until all other operations finish. It may be useful to first
   /// cancel any used context and then call close directly after.
   #[allow(unused_result)]
-  fn Close(self: Ref<Conn>) -> Result<(), error>
+  fn Close(self: mut Ref<Conn>) -> Result<(), error>
 
   /// ExecContext executes a query without returning any rows.
   /// The args are for any placeholder parameters in the query.
   fn ExecContext(
-    self: Ref<Conn>,
+    self: mut Ref<Conn>,
     ctx: context.Context,
     query: string,
     args: VarArgs<Unknown>,
   ) -> Result<Result, error>
 
   /// PingContext verifies the connection to the database is still alive.
-  fn PingContext(self: Ref<Conn>, ctx: context.Context) -> Result<(), error>
+  fn PingContext(self: mut Ref<Conn>, ctx: context.Context) -> Result<(), error>
 
   /// PrepareContext creates a prepared statement for later queries or executions.
   /// Multiple queries or executions may be run concurrently from the
@@ -384,16 +384,16 @@ impl Conn {
   /// 
   /// The provided context is used for the preparation of the statement, not for the
   /// execution of the statement.
-  fn PrepareContext(self: Ref<Conn>, ctx: context.Context, query: string) -> Result<Ref<Stmt>, error>
+  fn PrepareContext(self: mut Ref<Conn>, ctx: context.Context, query: string) -> Result<mut Ref<Stmt>, error>
 
   /// QueryContext executes a query that returns rows, typically a SELECT.
   /// The args are for any placeholder parameters in the query.
   fn QueryContext(
-    self: Ref<Conn>,
+    self: mut Ref<Conn>,
     ctx: context.Context,
     query: string,
     args: VarArgs<Unknown>,
-  ) -> Result<Ref<Rows>, error>
+  ) -> Result<mut Ref<Rows>, error>
 
   /// QueryRowContext executes a query that is expected to return at most one row.
   /// QueryRowContext always returns a non-nil value. Errors are deferred until
@@ -402,18 +402,18 @@ impl Conn {
   /// Otherwise, the [*Row.Scan] scans the first selected row and discards
   /// the rest.
   fn QueryRowContext(
-    self: Ref<Conn>,
+    self: mut Ref<Conn>,
     ctx: context.Context,
     query: string,
     args: VarArgs<Unknown>,
-  ) -> Ref<Row>
+  ) -> mut Ref<Row>
 
   /// Raw executes f exposing the underlying driver connection for the
   /// duration of f. The driverConn must not be used outside of f.
   /// 
   /// Once f returns and err is not [driver.ErrBadConn], the [Conn] will continue to be usable
   /// until [Conn.Close] is called.
-  fn Raw(self: Ref<Conn>, f: fn(Unknown) -> Result<(), error>) -> Result<(), error>
+  fn Raw(self: mut Ref<Conn>, f: fn(Unknown) -> Result<(), error>) -> Result<(), error>
 }
 
 impl DB {
@@ -422,7 +422,7 @@ impl DB {
   /// 
   /// Begin uses [context.Background] internally; to specify the context, use
   /// [DB.BeginTx].
-  fn Begin(self: Ref<DB>) -> Result<Ref<Tx>, error>
+  fn Begin(self: mut Ref<DB>) -> Result<mut Ref<Tx>, error>
 
   /// BeginTx starts a transaction.
   /// 
@@ -434,7 +434,7 @@ impl DB {
   /// The provided [TxOptions] is optional and may be nil if defaults should be used.
   /// If a non-default isolation level is used that the driver doesn't support,
   /// an error will be returned.
-  fn BeginTx(self: Ref<DB>, ctx: context.Context, opts: Ref<TxOptions>) -> Result<Ref<Tx>, error>
+  fn BeginTx(self: mut Ref<DB>, ctx: context.Context, opts: Ref<TxOptions>) -> Result<mut Ref<Tx>, error>
 
   /// Close closes the database and prevents new queries from starting.
   /// Close then waits for all queries that have started processing on the server
@@ -443,7 +443,7 @@ impl DB {
   /// It is rare to Close a [DB], as the [DB] handle is meant to be
   /// long-lived and shared between many goroutines.
   #[allow(unused_result)]
-  fn Close(self: Ref<DB>) -> Result<(), error>
+  fn Close(self: mut Ref<DB>) -> Result<(), error>
 
   /// Conn returns a single connection by either opening a new connection
   /// or returning an existing connection from the connection pool. Conn will
@@ -452,7 +452,7 @@ impl DB {
   /// 
   /// Every Conn must be returned to the database pool after use by
   /// calling [Conn.Close].
-  fn Conn(self: Ref<DB>, ctx: context.Context) -> Result<Ref<Conn>, error>
+  fn Conn(self: mut Ref<DB>, ctx: context.Context) -> Result<mut Ref<Conn>, error>
 
   /// Driver returns the database's underlying driver.
   fn Driver(self: Ref<DB>) -> Option<driver.Driver>
@@ -462,12 +462,12 @@ impl DB {
   /// 
   /// Exec uses [context.Background] internally; to specify the context, use
   /// [DB.ExecContext].
-  fn Exec(self: Ref<DB>, query: string, args: VarArgs<Unknown>) -> Result<Result, error>
+  fn Exec(self: mut Ref<DB>, query: string, args: VarArgs<Unknown>) -> Result<Result, error>
 
   /// ExecContext executes a query without returning any rows.
   /// The args are for any placeholder parameters in the query.
   fn ExecContext(
-    self: Ref<DB>,
+    self: mut Ref<DB>,
     ctx: context.Context,
     query: string,
     args: VarArgs<Unknown>,
@@ -478,11 +478,11 @@ impl DB {
   /// 
   /// Ping uses [context.Background] internally; to specify the context, use
   /// [DB.PingContext].
-  fn Ping(self: Ref<DB>) -> Result<(), error>
+  fn Ping(self: mut Ref<DB>) -> Result<(), error>
 
   /// PingContext verifies a connection to the database is still alive,
   /// establishing a connection if necessary.
-  fn PingContext(self: Ref<DB>, ctx: context.Context) -> Result<(), error>
+  fn PingContext(self: mut Ref<DB>, ctx: context.Context) -> Result<(), error>
 
   /// Prepare creates a prepared statement for later queries or executions.
   /// Multiple queries or executions may be run concurrently from the
@@ -492,7 +492,7 @@ impl DB {
   /// 
   /// Prepare uses [context.Background] internally; to specify the context, use
   /// [DB.PrepareContext].
-  fn Prepare(self: Ref<DB>, query: string) -> Result<Ref<Stmt>, error>
+  fn Prepare(self: mut Ref<DB>, query: string) -> Result<mut Ref<Stmt>, error>
 
   /// PrepareContext creates a prepared statement for later queries or executions.
   /// Multiple queries or executions may be run concurrently from the
@@ -502,23 +502,23 @@ impl DB {
   /// 
   /// The provided context is used for the preparation of the statement, not for the
   /// execution of the statement.
-  fn PrepareContext(self: Ref<DB>, ctx: context.Context, query: string) -> Result<Ref<Stmt>, error>
+  fn PrepareContext(self: mut Ref<DB>, ctx: context.Context, query: string) -> Result<mut Ref<Stmt>, error>
 
   /// Query executes a query that returns rows, typically a SELECT.
   /// The args are for any placeholder parameters in the query.
   /// 
   /// Query uses [context.Background] internally; to specify the context, use
   /// [DB.QueryContext].
-  fn Query(self: Ref<DB>, query: string, args: VarArgs<Unknown>) -> Result<Ref<Rows>, error>
+  fn Query(self: mut Ref<DB>, query: string, args: VarArgs<Unknown>) -> Result<mut Ref<Rows>, error>
 
   /// QueryContext executes a query that returns rows, typically a SELECT.
   /// The args are for any placeholder parameters in the query.
   fn QueryContext(
-    self: Ref<DB>,
+    self: mut Ref<DB>,
     ctx: context.Context,
     query: string,
     args: VarArgs<Unknown>,
-  ) -> Result<Ref<Rows>, error>
+  ) -> Result<mut Ref<Rows>, error>
 
   /// QueryRow executes a query that is expected to return at most one row.
   /// QueryRow always returns a non-nil value. Errors are deferred until
@@ -529,7 +529,7 @@ impl DB {
   /// 
   /// QueryRow uses [context.Background] internally; to specify the context, use
   /// [DB.QueryRowContext].
-  fn QueryRow(self: Ref<DB>, query: string, args: VarArgs<Unknown>) -> Ref<Row>
+  fn QueryRow(self: mut Ref<DB>, query: string, args: VarArgs<Unknown>) -> mut Ref<Row>
 
   /// QueryRowContext executes a query that is expected to return at most one row.
   /// QueryRowContext always returns a non-nil value. Errors are deferred until
@@ -538,25 +538,25 @@ impl DB {
   /// Otherwise, [*Row.Scan] scans the first selected row and discards
   /// the rest.
   fn QueryRowContext(
-    self: Ref<DB>,
+    self: mut Ref<DB>,
     ctx: context.Context,
     query: string,
     args: VarArgs<Unknown>,
-  ) -> Ref<Row>
+  ) -> mut Ref<Row>
 
   /// SetConnMaxIdleTime sets the maximum amount of time a connection may be idle.
   /// 
   /// Expired connections may be closed lazily before reuse.
   /// 
   /// If d <= 0, connections are not closed due to a connection's idle time.
-  fn SetConnMaxIdleTime(self: Ref<DB>, d: time.Duration)
+  fn SetConnMaxIdleTime(self: mut Ref<DB>, d: time.Duration)
 
   /// SetConnMaxLifetime sets the maximum amount of time a connection may be reused.
   /// 
   /// Expired connections may be closed lazily before reuse.
   /// 
   /// If d <= 0, connections are not closed due to a connection's age.
-  fn SetConnMaxLifetime(self: Ref<DB>, d: time.Duration)
+  fn SetConnMaxLifetime(self: mut Ref<DB>, d: time.Duration)
 
   /// SetMaxIdleConns sets the maximum number of connections in the idle
   /// connection pool.
@@ -568,7 +568,7 @@ impl DB {
   /// 
   /// The default max idle connections is currently 2. This may change in
   /// a future release.
-  fn SetMaxIdleConns(self: Ref<DB>, n: int)
+  fn SetMaxIdleConns(self: mut Ref<DB>, n: int)
 
   /// SetMaxOpenConns sets the maximum number of open connections to the database.
   /// 
@@ -578,7 +578,7 @@ impl DB {
   /// 
   /// If n <= 0, then there is no limit on the number of open connections.
   /// The default is 0 (unlimited).
-  fn SetMaxOpenConns(self: Ref<DB>, n: int)
+  fn SetMaxOpenConns(self: mut Ref<DB>, n: int)
 
   /// Stats returns database statistics.
   fn Stats(self: Ref<DB>) -> DBStats
@@ -590,14 +590,14 @@ impl IsolationLevel {
 }
 
 impl<T> Null<T> {
-  fn Scan(self: Ref<Null<T>>, value: Unknown) -> Result<(), error>
+  fn Scan(self: mut Ref<Null<T>>, value: Unknown) -> Result<(), error>
 
   fn Value(self) -> Result<driver.Value, error>
 }
 
 impl NullBool {
   /// Scan implements the [Scanner] interface.
-  fn Scan(self: Ref<NullBool>, value: Unknown) -> Result<(), error>
+  fn Scan(self: mut Ref<NullBool>, value: Unknown) -> Result<(), error>
 
   /// Value implements the [driver.Valuer] interface.
   fn Value(self) -> Result<driver.Value, error>
@@ -605,7 +605,7 @@ impl NullBool {
 
 impl NullByte {
   /// Scan implements the [Scanner] interface.
-  fn Scan(self: Ref<NullByte>, value: Unknown) -> Result<(), error>
+  fn Scan(self: mut Ref<NullByte>, value: Unknown) -> Result<(), error>
 
   /// Value implements the [driver.Valuer] interface.
   fn Value(self) -> Result<driver.Value, error>
@@ -613,7 +613,7 @@ impl NullByte {
 
 impl NullFloat64 {
   /// Scan implements the [Scanner] interface.
-  fn Scan(self: Ref<NullFloat64>, value: Unknown) -> Result<(), error>
+  fn Scan(self: mut Ref<NullFloat64>, value: Unknown) -> Result<(), error>
 
   /// Value implements the [driver.Valuer] interface.
   fn Value(self) -> Result<driver.Value, error>
@@ -621,7 +621,7 @@ impl NullFloat64 {
 
 impl NullInt16 {
   /// Scan implements the [Scanner] interface.
-  fn Scan(self: Ref<NullInt16>, value: Unknown) -> Result<(), error>
+  fn Scan(self: mut Ref<NullInt16>, value: Unknown) -> Result<(), error>
 
   /// Value implements the [driver.Valuer] interface.
   fn Value(self) -> Result<driver.Value, error>
@@ -629,7 +629,7 @@ impl NullInt16 {
 
 impl NullInt32 {
   /// Scan implements the [Scanner] interface.
-  fn Scan(self: Ref<NullInt32>, value: Unknown) -> Result<(), error>
+  fn Scan(self: mut Ref<NullInt32>, value: Unknown) -> Result<(), error>
 
   /// Value implements the [driver.Valuer] interface.
   fn Value(self) -> Result<driver.Value, error>
@@ -637,7 +637,7 @@ impl NullInt32 {
 
 impl NullInt64 {
   /// Scan implements the [Scanner] interface.
-  fn Scan(self: Ref<NullInt64>, value: Unknown) -> Result<(), error>
+  fn Scan(self: mut Ref<NullInt64>, value: Unknown) -> Result<(), error>
 
   /// Value implements the [driver.Valuer] interface.
   fn Value(self) -> Result<driver.Value, error>
@@ -645,7 +645,7 @@ impl NullInt64 {
 
 impl NullString {
   /// Scan implements the [Scanner] interface.
-  fn Scan(self: Ref<NullString>, value: Unknown) -> Result<(), error>
+  fn Scan(self: mut Ref<NullString>, value: Unknown) -> Result<(), error>
 
   /// Value implements the [driver.Valuer] interface.
   fn Value(self) -> Result<driver.Value, error>
@@ -653,7 +653,7 @@ impl NullString {
 
 impl NullTime {
   /// Scan implements the [Scanner] interface.
-  fn Scan(self: Ref<NullTime>, value: Unknown) -> Result<(), error>
+  fn Scan(self: mut Ref<NullTime>, value: Unknown) -> Result<(), error>
 
   /// Value implements the [driver.Valuer] interface.
   fn Value(self) -> Result<driver.Value, error>
@@ -680,15 +680,15 @@ impl Rows {
   /// the [Rows] are closed automatically and it will suffice to check the
   /// result of [Rows.Err]. Close is idempotent and does not affect the result of [Rows.Err].
   #[allow(unused_result)]
-  fn Close(self: Ref<Rows>) -> Result<(), error>
+  fn Close(self: mut Ref<Rows>) -> Result<(), error>
 
   /// ColumnTypes returns column information such as column type, length,
   /// and nullable. Some information may not be available from some drivers.
-  fn ColumnTypes(self: Ref<Rows>) -> Result<Slice<Ref<ColumnType>>, error>
+  fn ColumnTypes(self: Ref<Rows>) -> Result<mut Slice<mut Ref<ColumnType>>, error>
 
   /// Columns returns the column names.
   /// Columns returns an error if the rows are closed.
-  fn Columns(self: Ref<Rows>) -> Result<Slice<string>, error>
+  fn Columns(self: Ref<Rows>) -> Result<mut Slice<string>, error>
 
   /// Err returns the error, if any, that was encountered during iteration.
   /// Err may be called after an explicit or implicit [Rows.Close].
@@ -700,7 +700,7 @@ impl Rows {
   /// the two cases.
   /// 
   /// Every call to [Rows.Scan], even the first one, must be preceded by a call to [Rows.Next].
-  fn Next(self: Ref<Rows>) -> bool
+  fn Next(self: mut Ref<Rows>) -> bool
 
   /// NextResultSet prepares the next result set for reading. It reports whether
   /// there is further result sets, or false if there is no further result set
@@ -710,7 +710,7 @@ impl Rows {
   /// After calling NextResultSet, the [Rows.Next] method should always be called before
   /// scanning. If there are further result sets they may not have rows in the result
   /// set.
-  fn NextResultSet(self: Ref<Rows>) -> bool
+  fn NextResultSet(self: mut Ref<Rows>) -> bool
 
   /// Scan copies the columns in the current row into the values pointed
   /// at by dest. The number of values in dest must be the same as the
@@ -772,35 +772,43 @@ impl Rows {
   /// 
   /// If any of the first arguments implementing [Scanner] returns an error,
   /// that error will be wrapped in the returned error.
-  fn Scan(self: Ref<Rows>, dest: VarArgs<Unknown>) -> Result<(), error>
+  fn Scan(self: mut Ref<Rows>, dest: VarArgs<Unknown>) -> Result<(), error>
 }
 
 impl Stmt {
   /// Close closes the statement.
   #[allow(unused_result)]
-  fn Close(self: Ref<Stmt>) -> Result<(), error>
+  fn Close(self: mut Ref<Stmt>) -> Result<(), error>
 
   /// Exec executes a prepared statement with the given arguments and
   /// returns a [Result] summarizing the effect of the statement.
   /// 
   /// Exec uses [context.Background] internally; to specify the context, use
   /// [Stmt.ExecContext].
-  fn Exec(self: Ref<Stmt>, args: VarArgs<Unknown>) -> Result<Result, error>
+  fn Exec(self: mut Ref<Stmt>, args: VarArgs<Unknown>) -> Result<Result, error>
 
   /// ExecContext executes a prepared statement with the given arguments and
   /// returns a [Result] summarizing the effect of the statement.
-  fn ExecContext(self: Ref<Stmt>, ctx: context.Context, args: VarArgs<Unknown>) -> Result<Result, error>
+  fn ExecContext(
+    self: mut Ref<Stmt>,
+    ctx: context.Context,
+    args: VarArgs<Unknown>,
+  ) -> Result<Result, error>
 
   /// Query executes a prepared query statement with the given arguments
   /// and returns the query results as a *Rows.
   /// 
   /// Query uses [context.Background] internally; to specify the context, use
   /// [Stmt.QueryContext].
-  fn Query(self: Ref<Stmt>, args: VarArgs<Unknown>) -> Result<Ref<Rows>, error>
+  fn Query(self: mut Ref<Stmt>, args: VarArgs<Unknown>) -> Result<mut Ref<Rows>, error>
 
   /// QueryContext executes a prepared query statement with the given arguments
   /// and returns the query results as a [*Rows].
-  fn QueryContext(self: Ref<Stmt>, ctx: context.Context, args: VarArgs<Unknown>) -> Result<Ref<Rows>, error>
+  fn QueryContext(
+    self: mut Ref<Stmt>,
+    ctx: context.Context,
+    args: VarArgs<Unknown>,
+  ) -> Result<mut Ref<Rows>, error>
 
   /// QueryRow executes a prepared query statement with the given arguments.
   /// If an error occurs during the execution of the statement, that error will
@@ -816,7 +824,7 @@ impl Stmt {
   /// 
   /// QueryRow uses [context.Background] internally; to specify the context, use
   /// [Stmt.QueryRowContext].
-  fn QueryRow(self: Ref<Stmt>, args: VarArgs<Unknown>) -> Ref<Row>
+  fn QueryRow(self: mut Ref<Stmt>, args: VarArgs<Unknown>) -> mut Ref<Row>
 
   /// QueryRowContext executes a prepared query statement with the given arguments.
   /// If an error occurs during the execution of the statement, that error will
@@ -825,15 +833,15 @@ impl Stmt {
   /// Otherwise, the [*Row.Scan] scans the first selected row and discards
   /// the rest.
   fn QueryRowContext(
-    self: Ref<Stmt>,
+    self: mut Ref<Stmt>,
     ctx: context.Context,
     args: VarArgs<Unknown>,
-  ) -> Ref<Row>
+  ) -> mut Ref<Row>
 }
 
 impl Tx {
   /// Commit commits the transaction.
-  fn Commit(self: Ref<Tx>) -> Result<(), error>
+  fn Commit(self: mut Ref<Tx>) -> Result<(), error>
 
   /// Exec executes a query that doesn't return rows.
   /// For example: an INSERT and UPDATE.
@@ -860,7 +868,7 @@ impl Tx {
   /// 
   /// Prepare uses [context.Background] internally; to specify the context, use
   /// [Tx.PrepareContext].
-  fn Prepare(self: Ref<Tx>, query: string) -> Result<Ref<Stmt>, error>
+  fn Prepare(self: mut Ref<Tx>, query: string) -> Result<mut Ref<Stmt>, error>
 
   /// PrepareContext creates a prepared statement for use within a transaction.
   /// 
@@ -872,13 +880,13 @@ impl Tx {
   /// The provided context will be used for the preparation of the context, not
   /// for the execution of the returned statement. The returned statement
   /// will run in the transaction context.
-  fn PrepareContext(self: Ref<Tx>, ctx: context.Context, query: string) -> Result<Ref<Stmt>, error>
+  fn PrepareContext(self: mut Ref<Tx>, ctx: context.Context, query: string) -> Result<mut Ref<Stmt>, error>
 
   /// Query executes a query that returns rows, typically a SELECT.
   /// 
   /// Query uses [context.Background] internally; to specify the context, use
   /// [Tx.QueryContext].
-  fn Query(self: Ref<Tx>, query: string, args: VarArgs<Unknown>) -> Result<Ref<Rows>, error>
+  fn Query(self: Ref<Tx>, query: string, args: VarArgs<Unknown>) -> Result<mut Ref<Rows>, error>
 
   /// QueryContext executes a query that returns rows, typically a SELECT.
   fn QueryContext(
@@ -886,7 +894,7 @@ impl Tx {
     ctx: context.Context,
     query: string,
     args: VarArgs<Unknown>,
-  ) -> Result<Ref<Rows>, error>
+  ) -> Result<mut Ref<Rows>, error>
 
   /// QueryRow executes a query that is expected to return at most one row.
   /// QueryRow always returns a non-nil value. Errors are deferred until
@@ -897,7 +905,7 @@ impl Tx {
   /// 
   /// QueryRow uses [context.Background] internally; to specify the context, use
   /// [Tx.QueryRowContext].
-  fn QueryRow(self: Ref<Tx>, query: string, args: VarArgs<Unknown>) -> Ref<Row>
+  fn QueryRow(self: Ref<Tx>, query: string, args: VarArgs<Unknown>) -> mut Ref<Row>
 
   /// QueryRowContext executes a query that is expected to return at most one row.
   /// QueryRowContext always returns a non-nil value. Errors are deferred until
@@ -910,11 +918,11 @@ impl Tx {
     ctx: context.Context,
     query: string,
     args: VarArgs<Unknown>,
-  ) -> Ref<Row>
+  ) -> mut Ref<Row>
 
   /// Rollback aborts the transaction.
   #[allow(unused_result)]
-  fn Rollback(self: Ref<Tx>) -> Result<(), error>
+  fn Rollback(self: mut Ref<Tx>) -> Result<(), error>
 
   /// Stmt returns a transaction-specific prepared statement from
   /// an existing statement.
@@ -932,7 +940,7 @@ impl Tx {
   /// 
   /// Stmt uses [context.Background] internally; to specify the context, use
   /// [Tx.StmtContext].
-  fn Stmt(self: Ref<Tx>, stmt: Ref<Stmt>) -> Ref<Stmt>
+  fn Stmt(self: mut Ref<Tx>, stmt: mut Ref<Stmt>) -> mut Ref<Stmt>
 
   /// StmtContext returns a transaction-specific prepared statement from
   /// an existing statement.
@@ -950,5 +958,5 @@ impl Tx {
   /// 
   /// The returned statement operates within the transaction and will be closed
   /// when the transaction has been committed or rolled back.
-  fn StmtContext(self: Ref<Tx>, ctx: context.Context, stmt: Ref<Stmt>) -> Ref<Stmt>
+  fn StmtContext(self: mut Ref<Tx>, ctx: context.Context, stmt: mut Ref<Stmt>) -> mut Ref<Stmt>
 }

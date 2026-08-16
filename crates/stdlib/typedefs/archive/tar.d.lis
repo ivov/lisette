@@ -18,13 +18,13 @@ import "go:time"
 /// If fi implements [FileInfoNames]
 /// Header.Gname and Header.Uname
 /// are provided by the methods of the interface.
-pub fn FileInfoHeader(fi: fs.FileInfo, link: string) -> Result<Ref<Header>, error>
+pub fn FileInfoHeader(fi: fs.FileInfo, link: string) -> Result<mut Ref<Header>, error>
 
 /// NewReader creates a new [Reader] reading from r.
-pub fn NewReader(r: io.Reader) -> Ref<Reader>
+pub fn NewReader(r: io.Reader) -> mut Ref<Reader>
 
 /// NewWriter creates a new Writer writing to w.
-pub fn NewWriter(w: io.Writer) -> Ref<Writer>
+pub fn NewWriter(w: io.Writer) -> mut Ref<Writer>
 
 /// FileInfoNames extends [fs.FileInfo].
 /// Passing an instance of this to [FileInfoHeader] permits the caller
@@ -97,13 +97,13 @@ pub struct Header {
   pub Gid: int,
   pub Uname: string,
   pub Gname: string,
-  pub ModTime: time.Time,
-  pub AccessTime: time.Time,
-  pub ChangeTime: time.Time,
+  pub ModTime: mut time.Time,
+  pub AccessTime: mut time.Time,
+  pub ChangeTime: mut time.Time,
   pub Devmajor: int64,
   pub Devminor: int64,
-  pub Xattrs: Map<string, string>,
-  pub PAXRecords: Map<string, string>,
+  pub Xattrs: mut Map<string, string>,
+  pub PAXRecords: mut Map<string, string>,
   pub Format: Format,
 }
 
@@ -198,7 +198,7 @@ impl Reader {
   /// A future version of Go may introduce this behavior by default.
   /// Programs that want to accept non-local names can ignore
   /// the [ErrInsecurePath] error and use the returned header.
-  fn Next(self: Ref<Reader>) -> Result<Ref<Header>, error>
+  fn Next(self: mut Ref<Reader>) -> Result<mut Ref<Header>, error>
 
   /// Read reads from the current file in the tar archive.
   /// It returns (0, io.EOF) when it reaches the end of that file,
@@ -210,20 +210,20 @@ impl Reader {
   /// Calling Read on special types like [TypeLink], [TypeSymlink], [TypeChar],
   /// [TypeBlock], [TypeDir], and [TypeFifo] returns (0, [io.EOF]) regardless of what
   /// the [Header.Size] claims.
-  fn Read(self: Ref<Reader>, mut b: Slice<byte>) -> Partial<int, error>
+  fn Read(self: mut Ref<Reader>, b: mut Slice<byte>) -> Partial<int, error>
 }
 
 impl Writer {
   /// AddFS adds the files from fs.FS to the archive.
   /// It walks the directory tree starting at the root of the filesystem
   /// adding each file to the tar archive while maintaining the directory structure.
-  fn AddFS(self: Ref<Writer>, fsys: fs.FS) -> Result<(), error>
+  fn AddFS(self: mut Ref<Writer>, fsys: fs.FS) -> Result<(), error>
 
   /// Close closes the tar archive by flushing the padding, and writing the footer.
   /// If the current file (from a prior call to [Writer.WriteHeader]) is not fully written,
   /// then this returns an error.
   #[allow(unused_result)]
-  fn Close(self: Ref<Writer>) -> Result<(), error>
+  fn Close(self: mut Ref<Writer>) -> Result<(), error>
 
   /// Flush finishes writing the current file's block padding.
   /// The current file must be fully written before Flush can be called.
@@ -231,7 +231,7 @@ impl Writer {
   /// This is unnecessary as the next call to [Writer.WriteHeader] or [Writer.Close]
   /// will implicitly flush out the file's padding.
   #[allow(unused_result)]
-  fn Flush(self: Ref<Writer>) -> Result<(), error>
+  fn Flush(self: mut Ref<Writer>) -> Result<(), error>
 
   /// Write writes to the current file in the tar archive.
   /// Write returns the error [ErrWriteTooLong] if more than
@@ -240,11 +240,11 @@ impl Writer {
   /// Calling Write on special types like [TypeLink], [TypeSymlink], [TypeChar],
   /// [TypeBlock], [TypeDir], and [TypeFifo] returns (0, [ErrWriteTooLong]) regardless
   /// of what the [Header.Size] claims.
-  fn Write(self: Ref<Writer>, b: Slice<byte>) -> Partial<int, error>
+  fn Write(self: mut Ref<Writer>, b: Slice<byte>) -> Partial<int, error>
 
   /// WriteHeader writes hdr and prepares to accept the file's contents.
   /// The Header.Size determines how many bytes can be written for the next file.
   /// If the current file is not fully written, then this returns an error.
   /// This implicitly flushes any padding necessary before writing the header.
-  fn WriteHeader(self: Ref<Writer>, hdr: Ref<Header>) -> Result<(), error>
+  fn WriteHeader(self: mut Ref<Writer>, hdr: Ref<Header>) -> Result<(), error>
 }

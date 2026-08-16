@@ -52,10 +52,10 @@ pub const NodeWith: NodeType = 19
 pub fn IsEmptyTree(n: Option<Node>) -> bool
 
 /// New allocates a new parse tree with the given name.
-pub fn New(name: string, funcs: VarArgs<Map<string, Unknown>>) -> Ref<Tree>
+pub fn New(name: string, funcs: VarArgs<Map<string, Unknown>>) -> mut Ref<Tree>
 
 /// NewIdentifier returns a new [IdentifierNode] with the given identifier name.
-pub fn NewIdentifier(ident: string) -> Ref<IdentifierNode>
+pub fn NewIdentifier(ident: string) -> mut Ref<IdentifierNode>
 
 /// Parse returns a map from template name to [Tree], created by parsing the
 /// templates described in the argument string. The top-level template will be
@@ -67,7 +67,7 @@ pub fn Parse(
   leftDelim: string,
   rightDelim: string,
   funcs: VarArgs<Map<string, Unknown>>,
-) -> Result<Map<string, Ref<Tree>>, error>
+) -> Result<mut Map<string, mut Ref<Tree>>, error>
 
 /// ActionNode holds an action (something bounded by delimiters).
 /// Control actions have their own nodes; ActionNode represents simple
@@ -78,7 +78,7 @@ pub struct ActionNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
   pub Line: int,
-  pub Pipe: Option<Ref<PipeNode>>,
+  pub Pipe: Option<mut Ref<PipeNode>>,
 }
 
 /// BoolNode holds a boolean constant.
@@ -97,9 +97,9 @@ pub struct BranchNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
   pub Line: int,
-  pub Pipe: Option<Ref<PipeNode>>,
-  pub List: Option<Ref<ListNode>>,
-  pub ElseList: Option<Ref<ListNode>>,
+  pub Pipe: Option<mut Ref<PipeNode>>,
+  pub List: Option<mut Ref<ListNode>>,
+  pub ElseList: Option<mut Ref<ListNode>>,
 }
 
 /// BreakNode represents a {{break}} action.
@@ -120,7 +120,7 @@ pub struct ChainNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
   pub Node: Option<Node>,
-  pub Field: Slice<string>,
+  pub Field: mut Slice<string>,
 }
 
 /// CommandNode holds a command (a pipeline inside an evaluating action).
@@ -129,7 +129,7 @@ pub struct ChainNode {
 pub struct CommandNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
-  pub Args: Slice<Option<Node>>,
+  pub Args: mut Slice<Option<Node>>,
 }
 
 /// CommentNode holds a comment.
@@ -166,7 +166,7 @@ pub struct DotNode {
 pub struct FieldNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
-  pub Ident: Slice<string>,
+  pub Ident: mut Slice<string>,
 }
 
 /// IdentifierNode holds an identifier.
@@ -180,7 +180,7 @@ pub struct IdentifierNode {
 
 /// IfNode represents an {{if}} action and its commands.
 pub struct IfNode {
-  embed BranchNode,
+  embed mut BranchNode,
 }
 
 /// ListNode holds a sequence of nodes.
@@ -189,7 +189,7 @@ pub struct IfNode {
 pub struct ListNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
-  pub Nodes: Slice<Option<Node>>,
+  pub Nodes: mut Slice<Option<Node>>,
 }
 
 /// A mode value is a set of flags (or 0). Modes control parser behavior.
@@ -245,8 +245,8 @@ pub struct PipeNode {
   pub Pos: Pos,
   pub Line: int,
   pub IsAssign: bool,
-  pub Decl: Slice<Option<Ref<VariableNode>>>,
-  pub Cmds: Slice<Option<Ref<CommandNode>>>,
+  pub Decl: mut Slice<Option<mut Ref<VariableNode>>>,
+  pub Cmds: mut Slice<Option<mut Ref<CommandNode>>>,
 }
 
 /// Pos represents a byte position in the original input text from which
@@ -255,7 +255,7 @@ pub struct Pos(int)
 
 /// RangeNode represents a {{range}} action and its commands.
 pub struct RangeNode {
-  embed BranchNode,
+  embed mut BranchNode,
 }
 
 /// StringNode holds a string constant. The value has been "unquoted".
@@ -276,7 +276,7 @@ pub struct TemplateNode {
   pub Pos: Pos,
   pub Line: int,
   pub Name: string,
-  pub Pipe: Option<Ref<PipeNode>>,
+  pub Pipe: Option<mut Ref<PipeNode>>,
 }
 
 /// TextNode holds plain text.
@@ -285,7 +285,7 @@ pub struct TemplateNode {
 pub struct TextNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
-  pub Text: Slice<byte>,
+  pub Text: mut Slice<byte>,
 }
 
 /// Tree is the representation of a single parsed template.
@@ -294,7 +294,7 @@ pub struct TextNode {
 pub struct Tree {
   pub Name: string,
   pub ParseName: string,
-  pub Root: Option<Ref<ListNode>>,
+  pub Root: Option<mut Ref<ListNode>>,
   pub Mode: Mode,
 }
 
@@ -305,12 +305,12 @@ pub struct Tree {
 pub struct VariableNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
-  pub Ident: Slice<string>,
+  pub Ident: mut Slice<string>,
 }
 
 /// WithNode represents a {{with}} action and its commands.
 pub struct WithNode {
-  embed BranchNode,
+  embed mut BranchNode,
 }
 
 pub const ParseComments: Mode = 1
@@ -391,7 +391,7 @@ impl BreakNode {
 
 impl ChainNode {
   /// Add adds the named field (which should start with a period) to the end of the chain.
-  fn Add(self: Ref<ChainNode>, field: string)
+  fn Add(self: mut Ref<ChainNode>, field: string)
 
   fn Copy(self: Ref<ChainNode>) -> Node
 
@@ -507,13 +507,13 @@ impl IdentifierNode {
   /// Chained for convenience.
   /// TODO: fix one day?
   #[allow(unused_value)]
-  fn SetPos(self: Ref<IdentifierNode>, pos: Pos) -> Ref<IdentifierNode>
+  fn SetPos(self: mut Ref<IdentifierNode>, pos: Pos) -> mut Ref<IdentifierNode>
 
   /// SetTree sets the parent tree for the node. [NewIdentifier] is a public method so we can't modify its signature.
   /// Chained for convenience.
   /// TODO: fix one day?
   #[allow(unused_value)]
-  fn SetTree(self: Ref<IdentifierNode>, t: Ref<Tree>) -> Ref<IdentifierNode>
+  fn SetTree(self: mut Ref<IdentifierNode>, t: Ref<Tree>) -> mut Ref<IdentifierNode>
 
   fn String(self: Ref<IdentifierNode>) -> string
 
@@ -535,7 +535,7 @@ impl IfNode {
 impl ListNode {
   fn Copy(self: Ref<ListNode>) -> Node
 
-  fn CopyList(self: Ref<ListNode>) -> Ref<ListNode>
+  fn CopyList(self: Ref<ListNode>) -> mut Ref<ListNode>
 
   fn Position(self) -> Pos
 
@@ -595,7 +595,7 @@ impl NumberNode {
 impl PipeNode {
   fn Copy(self: Ref<PipeNode>) -> Node
 
-  fn CopyPipe(self: Ref<PipeNode>) -> Ref<PipeNode>
+  fn CopyPipe(self: Ref<PipeNode>) -> mut Ref<PipeNode>
 
   fn Position(self) -> Pos
 
@@ -676,7 +676,7 @@ impl TextNode {
 
 impl Tree {
   /// Copy returns a copy of the [Tree]. Any parsing state is discarded.
-  fn Copy(self: Ref<Tree>) -> Ref<Tree>
+  fn Copy(self: Ref<Tree>) -> mut Ref<Tree>
 
   /// ErrorContext returns a textual representation of the location of the node in the input text.
   /// The receiver is only used when the node does not have a pointer to the tree inside,
@@ -688,13 +688,13 @@ impl Tree {
   /// default ("{{" or "}}") is used. Embedded template definitions are added to
   /// the treeSet map.
   fn Parse(
-    self: Ref<Tree>,
+    self: mut Ref<Tree>,
     text: string,
     leftDelim: string,
     rightDelim: string,
     treeSet: Map<string, Ref<Tree>>,
     funcs: VarArgs<Map<string, Unknown>>,
-  ) -> Result<Ref<Tree>, error>
+  ) -> Result<mut Ref<Tree>, error>
 }
 
 impl VariableNode {

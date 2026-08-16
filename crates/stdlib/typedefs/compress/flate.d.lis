@@ -36,7 +36,7 @@ pub fn NewReaderDict(r: io.Reader, dict: Slice<byte>) -> io.ReadCloser
 /// 
 /// If level is in the range [-2, 9] then the error returned will be nil.
 /// Otherwise the error returned will be non-nil.
-pub fn NewWriter(w: io.Writer, level: int) -> Result<Ref<Writer>, error>
+pub fn NewWriter(w: io.Writer, level: int) -> Result<mut Ref<Writer>, error>
 
 /// NewWriterDict is like [NewWriter] but initializes the new
 /// [Writer] with a preset dictionary. The returned [Writer] behaves
@@ -44,7 +44,7 @@ pub fn NewWriter(w: io.Writer, level: int) -> Result<Ref<Writer>, error>
 /// any compressed output. The compressed data written to w
 /// can only be decompressed by a reader initialized with the
 /// same dictionary (see [NewReaderDict]).
-pub fn NewWriterDict(w: io.Writer, level: int, dict: Slice<byte>) -> Result<Ref<Writer>, error>
+pub fn NewWriterDict(w: io.Writer, level: int, dict: Slice<byte>) -> Result<mut Ref<Writer>, error>
 
 /// A CorruptInputError reports the presence of corrupt input at a given offset.
 pub struct CorruptInputError(int64)
@@ -64,7 +64,7 @@ pub struct ReadError {
 /// If the passed in [io.Reader] does not also have ReadByte,
 /// the [NewReader] will introduce its own buffering.
 pub interface Reader {
-  fn Read(mut p: Slice<byte>) -> Partial<int, error>
+  fn Read(p: mut Slice<byte>) -> Partial<int, error>
   fn ReadByte() -> Result<byte, error>
 }
 
@@ -116,7 +116,7 @@ impl WriteError {
 impl Writer {
   /// Close flushes and closes the writer.
   #[allow(unused_result)]
-  fn Close(self: Ref<Writer>) -> Result<(), error>
+  fn Close(self: mut Ref<Writer>) -> Result<(), error>
 
   /// Flush flushes any pending data to the underlying writer.
   /// It is useful mainly in compressed network protocols, to ensure that
@@ -128,12 +128,12 @@ impl Writer {
   /// 
   /// In the terminology of the zlib library, Flush is equivalent to Z_SYNC_FLUSH.
   #[allow(unused_result)]
-  fn Flush(self: Ref<Writer>) -> Result<(), error>
+  fn Flush(self: mut Ref<Writer>) -> Result<(), error>
 
   /// Reset discards the writer's state and makes it equivalent to
   /// the result of [NewWriter] or [NewWriterDict] called with dst
   /// and w's level and dictionary.
-  fn Reset(self: Ref<Writer>, dst: io.Writer)
+  fn Reset(self: mut Ref<Writer>, dst: io.Writer)
 
   /// Write writes data to w, which will eventually write the
   /// compressed form of data to its underlying writer.

@@ -15,7 +15,7 @@ pub fn ConstantTimeCompare(x: Slice<byte>, y: Slice<byte>) -> int
 /// ConstantTimeCopy copies the contents of y into x (a slice of equal length)
 /// if v == 1. If v == 0, x is left unchanged. Its behavior is undefined if v
 /// takes any other value.
-pub fn ConstantTimeCopy(v: int, mut x: Slice<byte>, y: Slice<byte>)
+pub fn ConstantTimeCopy(v: int, x: mut Slice<byte>, y: Slice<byte>)
 
 /// ConstantTimeEq returns 1 if x == y and 0 otherwise.
 pub fn ConstantTimeEq(x: int32, y: int32) -> int
@@ -54,4 +54,4 @@ pub fn WithDataIndependentTiming(f: fn() -> ())
 /// 
 /// dst and x or y may overlap exactly or not at all,
 /// otherwise XORBytes may panic.
-pub fn XORBytes(mut dst: Slice<byte>, x: Slice<byte>, y: Slice<byte>) -> int
+pub fn XORBytes(dst: mut Slice<byte>, x: Slice<byte>, y: Slice<byte>) -> int

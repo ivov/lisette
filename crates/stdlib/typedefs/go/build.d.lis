@@ -15,10 +15,10 @@ import "go:io/fs"
 pub fn ArchChar(goarch: string) -> Result<string, error>
 
 /// Import is shorthand for Default.Import.
-pub fn Import(path: string, srcDir: string, mode: ImportMode) -> Partial<Ref<Package>, error>
+pub fn Import(path: string, srcDir: string, mode: ImportMode) -> Partial<mut Ref<Package>, error>
 
 /// ImportDir is shorthand for Default.ImportDir.
-pub fn ImportDir(dir: string, mode: ImportMode) -> Partial<Ref<Package>, error>
+pub fn ImportDir(dir: string, mode: ImportMode) -> Partial<mut Ref<Package>, error>
 
 /// IsLocalImport reports whether the import path is
 /// a local import path, like ".", "..", "./foo", or "../foo".
@@ -34,9 +34,9 @@ pub struct Context {
   pub CgoEnabled: bool,
   pub UseAllFiles: bool,
   pub Compiler: string,
-  pub BuildTags: Slice<string>,
-  pub ToolTags: Slice<string>,
-  pub ReleaseTags: Slice<string>,
+  pub BuildTags: mut Slice<string>,
+  pub ToolTags: mut Slice<string>,
+  pub ReleaseTags: mut Slice<string>,
   pub InstallSuffix: string,
   pub JoinPath: Option<fn(VarArgs<string>) -> string>,
   pub SplitPathList: Option<fn(string) -> Slice<string>>,
@@ -61,8 +61,8 @@ pub struct ImportMode(uint)
 /// multiple buildable Go source files for multiple packages.
 pub struct MultiplePackageError {
   pub Dir: string,
-  pub Packages: Slice<string>,
-  pub Files: Slice<string>,
+  pub Packages: mut Slice<string>,
+  pub Files: mut Slice<string>,
 }
 
 /// NoGoError is the error used by [Import] to describe a directory
@@ -86,46 +86,46 @@ pub struct Package {
   pub BinDir: string,
   pub Goroot: bool,
   pub PkgObj: string,
-  pub AllTags: Slice<string>,
+  pub AllTags: mut Slice<string>,
   pub ConflictDir: string,
   pub BinaryOnly: bool,
-  pub GoFiles: Slice<string>,
-  pub CgoFiles: Slice<string>,
-  pub IgnoredGoFiles: Slice<string>,
-  pub InvalidGoFiles: Slice<string>,
-  pub IgnoredOtherFiles: Slice<string>,
-  pub CFiles: Slice<string>,
-  pub CXXFiles: Slice<string>,
-  pub MFiles: Slice<string>,
-  pub HFiles: Slice<string>,
-  pub FFiles: Slice<string>,
-  pub SFiles: Slice<string>,
-  pub SwigFiles: Slice<string>,
-  pub SwigCXXFiles: Slice<string>,
-  pub SysoFiles: Slice<string>,
-  pub CgoCFLAGS: Slice<string>,
-  pub CgoCPPFLAGS: Slice<string>,
-  pub CgoCXXFLAGS: Slice<string>,
-  pub CgoFFLAGS: Slice<string>,
-  pub CgoLDFLAGS: Slice<string>,
-  pub CgoPkgConfig: Slice<string>,
-  pub TestGoFiles: Slice<string>,
-  pub XTestGoFiles: Slice<string>,
-  pub Directives: Slice<Directive>,
-  pub TestDirectives: Slice<Directive>,
-  pub XTestDirectives: Slice<Directive>,
-  pub Imports: Slice<string>,
-  pub ImportPos: Map<string, Slice<token.Position>>,
-  pub TestImports: Slice<string>,
-  pub TestImportPos: Map<string, Slice<token.Position>>,
-  pub XTestImports: Slice<string>,
-  pub XTestImportPos: Map<string, Slice<token.Position>>,
-  pub EmbedPatterns: Slice<string>,
-  pub EmbedPatternPos: Map<string, Slice<token.Position>>,
-  pub TestEmbedPatterns: Slice<string>,
-  pub TestEmbedPatternPos: Map<string, Slice<token.Position>>,
-  pub XTestEmbedPatterns: Slice<string>,
-  pub XTestEmbedPatternPos: Map<string, Slice<token.Position>>,
+  pub GoFiles: mut Slice<string>,
+  pub CgoFiles: mut Slice<string>,
+  pub IgnoredGoFiles: mut Slice<string>,
+  pub InvalidGoFiles: mut Slice<string>,
+  pub IgnoredOtherFiles: mut Slice<string>,
+  pub CFiles: mut Slice<string>,
+  pub CXXFiles: mut Slice<string>,
+  pub MFiles: mut Slice<string>,
+  pub HFiles: mut Slice<string>,
+  pub FFiles: mut Slice<string>,
+  pub SFiles: mut Slice<string>,
+  pub SwigFiles: mut Slice<string>,
+  pub SwigCXXFiles: mut Slice<string>,
+  pub SysoFiles: mut Slice<string>,
+  pub CgoCFLAGS: mut Slice<string>,
+  pub CgoCPPFLAGS: mut Slice<string>,
+  pub CgoCXXFLAGS: mut Slice<string>,
+  pub CgoFFLAGS: mut Slice<string>,
+  pub CgoLDFLAGS: mut Slice<string>,
+  pub CgoPkgConfig: mut Slice<string>,
+  pub TestGoFiles: mut Slice<string>,
+  pub XTestGoFiles: mut Slice<string>,
+  pub Directives: mut Slice<Directive>,
+  pub TestDirectives: mut Slice<Directive>,
+  pub XTestDirectives: mut Slice<Directive>,
+  pub Imports: mut Slice<string>,
+  pub ImportPos: mut Map<string, mut Slice<token.Position>>,
+  pub TestImports: mut Slice<string>,
+  pub TestImportPos: mut Map<string, mut Slice<token.Position>>,
+  pub XTestImports: mut Slice<string>,
+  pub XTestImportPos: mut Map<string, mut Slice<token.Position>>,
+  pub EmbedPatterns: mut Slice<string>,
+  pub EmbedPatternPos: mut Map<string, mut Slice<token.Position>>,
+  pub TestEmbedPatterns: mut Slice<string>,
+  pub TestEmbedPatternPos: mut Map<string, mut Slice<token.Position>>,
+  pub XTestEmbedPatterns: mut Slice<string>,
+  pub XTestEmbedPatternPos: mut Map<string, mut Slice<token.Position>>,
 }
 
 pub const AllowBinary: ImportMode = 2
@@ -136,7 +136,7 @@ pub const IgnoreVendor: ImportMode = 8
 
 pub const ImportComment: ImportMode = 4
 
-pub var Default: Context
+pub var Default: mut Context
 
 /// ToolDir is the directory containing build tools.
 pub var ToolDir: string
@@ -157,11 +157,11 @@ impl Context {
   /// 
   /// If an error occurs, Import returns a non-nil error and a non-nil
   /// *[Package] containing partial information.
-  fn Import(self: Ref<Context>, path: string, srcDir: string, mode: ImportMode) -> Partial<Ref<Package>, error>
+  fn Import(self: Ref<Context>, path: string, srcDir: string, mode: ImportMode) -> Partial<mut Ref<Package>, error>
 
   /// ImportDir is like [Import] but processes the Go package found in
   /// the named directory.
-  fn ImportDir(self: Ref<Context>, dir: string, mode: ImportMode) -> Partial<Ref<Package>, error>
+  fn ImportDir(self: Ref<Context>, dir: string, mode: ImportMode) -> Partial<mut Ref<Package>, error>
 
   /// MatchFile reports whether the file with the given name in the given directory
   /// matches the context and would be included in a [Package] created by [ImportDir]
@@ -174,7 +174,7 @@ impl Context {
   /// SrcDirs returns a list of package source root directories.
   /// It draws from the current Go root and Go path but omits directories
   /// that do not exist.
-  fn SrcDirs(self: Ref<Context>) -> Slice<string>
+  fn SrcDirs(self: Ref<Context>) -> mut Slice<string>
 }
 
 impl MultiplePackageError {

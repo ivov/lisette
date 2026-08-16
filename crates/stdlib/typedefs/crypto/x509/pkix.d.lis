@@ -10,22 +10,22 @@ import "go:time"
 /// AlgorithmIdentifier represents the ASN.1 structure of the same name. See RFC
 /// 5280, section 4.1.1.2.
 pub struct AlgorithmIdentifier {
-  pub Algorithm: asn1.ObjectIdentifier,
-  pub Parameters: asn1.RawValue,
+  pub Algorithm: mut asn1.ObjectIdentifier,
+  pub Parameters: mut asn1.RawValue,
 }
 
 /// AttributeTypeAndValue mirrors the ASN.1 structure of the same name in
 /// RFC 5280, Section 4.1.2.4.
 pub struct AttributeTypeAndValue {
-  pub Type: asn1.ObjectIdentifier,
+  pub Type: mut asn1.ObjectIdentifier,
   pub Value: Unknown,
 }
 
 /// AttributeTypeAndValueSET represents a set of ASN.1 sequences of
 /// [AttributeTypeAndValue] sequences from RFC 2986 (PKCS #10).
 pub struct AttributeTypeAndValueSET {
-  pub Type: asn1.ObjectIdentifier,
-  pub Value: Slice<Slice<AttributeTypeAndValue>>,
+  pub Type: mut asn1.ObjectIdentifier,
+  pub Value: mut Slice<mut Slice<mut AttributeTypeAndValue>>,
 }
 
 /// CertificateList represents the ASN.1 structure of the same name. See RFC
@@ -34,17 +34,17 @@ pub struct AttributeTypeAndValueSET {
 /// 
 /// Deprecated: x509.RevocationList should be used instead.
 pub struct CertificateList {
-  pub TBSCertList: TBSCertificateList,
-  pub SignatureAlgorithm: AlgorithmIdentifier,
-  pub SignatureValue: asn1.BitString,
+  pub TBSCertList: mut TBSCertificateList,
+  pub SignatureAlgorithm: mut AlgorithmIdentifier,
+  pub SignatureValue: mut asn1.BitString,
 }
 
 /// Extension represents the ASN.1 structure of the same name. See RFC
 /// 5280, section 4.2.
 pub struct Extension {
-  pub Id: asn1.ObjectIdentifier,
+  pub Id: mut asn1.ObjectIdentifier,
   pub Critical: bool,
-  pub Value: Slice<byte>,
+  pub Value: mut Slice<byte>,
 }
 
 /// Name represents an X.509 distinguished name. This only includes the common
@@ -52,29 +52,29 @@ pub struct Extension {
 /// structure. If an accurate representation is needed, asn1.Unmarshal the raw
 /// subject or issuer as an [RDNSequence].
 pub struct Name {
-  pub Country: Slice<string>,
-  pub Organization: Slice<string>,
-  pub OrganizationalUnit: Slice<string>,
-  pub Locality: Slice<string>,
-  pub Province: Slice<string>,
-  pub StreetAddress: Slice<string>,
-  pub PostalCode: Slice<string>,
+  pub Country: mut Slice<string>,
+  pub Organization: mut Slice<string>,
+  pub OrganizationalUnit: mut Slice<string>,
+  pub Locality: mut Slice<string>,
+  pub Province: mut Slice<string>,
+  pub StreetAddress: mut Slice<string>,
+  pub PostalCode: mut Slice<string>,
   pub SerialNumber: string,
   pub CommonName: string,
-  pub Names: Slice<AttributeTypeAndValue>,
-  pub ExtraNames: Slice<AttributeTypeAndValue>,
+  pub Names: mut Slice<mut AttributeTypeAndValue>,
+  pub ExtraNames: mut Slice<mut AttributeTypeAndValue>,
 }
 
-pub struct RDNSequence(Slice<RelativeDistinguishedNameSET>)
+pub struct RDNSequence(mut Slice<mut RelativeDistinguishedNameSET>)
 
-pub struct RelativeDistinguishedNameSET(Slice<AttributeTypeAndValue>)
+pub struct RelativeDistinguishedNameSET(mut Slice<mut AttributeTypeAndValue>)
 
 /// RevokedCertificate represents the ASN.1 structure of the same name. See RFC
 /// 5280, section 5.1.
 pub struct RevokedCertificate {
-  pub SerialNumber: Option<Ref<big.Int>>,
-  pub RevocationTime: time.Time,
-  pub Extensions: Slice<Extension>,
+  pub SerialNumber: Option<mut Ref<big.Int>>,
+  pub RevocationTime: mut time.Time,
+  pub Extensions: mut Slice<mut Extension>,
 }
 
 /// TBSCertificateList represents the ASN.1 structure of the same name. See RFC
@@ -82,14 +82,14 @@ pub struct RevokedCertificate {
 /// 
 /// Deprecated: x509.RevocationList should be used instead.
 pub struct TBSCertificateList {
-  pub Raw: asn1.RawContent,
+  pub Raw: mut asn1.RawContent,
   pub Version: int,
-  pub Signature: AlgorithmIdentifier,
-  pub Issuer: RDNSequence,
-  pub ThisUpdate: time.Time,
-  pub NextUpdate: time.Time,
-  pub RevokedCertificates: Slice<RevokedCertificate>,
-  pub Extensions: Slice<Extension>,
+  pub Signature: mut AlgorithmIdentifier,
+  pub Issuer: mut RDNSequence,
+  pub ThisUpdate: mut time.Time,
+  pub NextUpdate: mut time.Time,
+  pub RevokedCertificates: mut Slice<mut RevokedCertificate>,
+  pub Extensions: mut Slice<mut Extension>,
 }
 
 impl CertificateList {
@@ -101,7 +101,7 @@ impl Name {
   /// FillFromRDNSequence populates n from the provided [RDNSequence].
   /// Multi-entry RDNs are flattened, all entries are added to the
   /// relevant n fields, and the grouping is not preserved.
-  fn FillFromRDNSequence(self: Ref<Name>, rdns: Ref<RDNSequence>)
+  fn FillFromRDNSequence(self: mut Ref<Name>, rdns: Ref<RDNSequence>)
 
   /// String returns the string form of n, roughly following
   /// the RFC 2253 Distinguished Names syntax.

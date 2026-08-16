@@ -8,11 +8,11 @@ import "go:math/big"
 
 /// Int returns a uniform random value in [0, max). It panics if max <= 0, and
 /// returns an error if rand.Read returns one.
-pub fn Int(rand: io.Reader, max: Ref<big.Int>) -> Result<Ref<big.Int>, error>
+pub fn Int(rand: io.Reader, max: Ref<big.Int>) -> Result<mut Ref<big.Int>, error>
 
 /// Prime returns a number of the given bit length that is prime with high probability.
 /// Prime will return error for any error returned by rand.Read or if bits < 2.
-pub fn Prime(rand: io.Reader, bits: int) -> Result<Ref<big.Int>, error>
+pub fn Prime(rand: io.Reader, bits: int) -> Result<mut Ref<big.Int>, error>
 
 /// Read fills b with cryptographically secure random bytes. It never returns an
 /// error, and always fills b entirely.
@@ -20,7 +20,7 @@ pub fn Prime(rand: io.Reader, bits: int) -> Result<Ref<big.Int>, error>
 /// Read calls [io.ReadFull] on [Reader] and crashes the program irrecoverably if
 /// an error is returned. The default Reader uses operating system APIs that are
 /// documented to never return an error on all but legacy Linux systems.
-pub fn Read(mut b: Slice<byte>) -> Result<int, error>
+pub fn Read(b: mut Slice<byte>) -> Result<int, error>
 
 /// Text returns a cryptographically random string using the standard RFC 4648 base32 alphabet
 /// for use when a secret string, token, password, or other text is needed.

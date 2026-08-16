@@ -4,7 +4,7 @@
 // Lisette: 0.11.1
 
 /// New creates a ring of n elements.
-pub fn New(n: int) -> Option<Ref<Ring>>
+pub fn New(n: int) -> Option<mut Ref<Ring>>
 
 /// A Ring is an element of a circular list, or ring.
 /// Rings do not have a beginning or end; a pointer to any ring element
@@ -19,11 +19,11 @@ pub struct Ring {
 impl Ring {
   /// Do calls function f on each element of the ring, in forward order.
   /// The behavior of Do is undefined if f changes *r.
-  fn Do(self: Ref<Ring>, f: fn(Unknown) -> ())
+  fn Do(self: mut Ref<Ring>, f: fn(Unknown) -> ())
 
   /// Len computes the number of elements in ring r.
   /// It executes in time proportional to the number of elements.
-  fn Len(self: Ref<Ring>) -> int
+  fn Len(self: mut Ref<Ring>) -> int
 
   /// Link connects ring r with ring s such that r.Next()
   /// becomes s and returns the original value for r.Next().
@@ -40,21 +40,21 @@ impl Ring {
   /// them creates a single ring with the elements of s inserted
   /// after r. The result points to the element following the
   /// last element of s after insertion.
-  fn Link(self: Ref<Ring>, s: Option<Ref<Ring>>) -> Ref<Ring>
+  fn Link(self: mut Ref<Ring>, s: Option<mut Ref<Ring>>) -> mut Ref<Ring>
 
   /// Move moves n % r.Len() elements backward (n < 0) or forward (n >= 0)
   /// in the ring and returns that ring element. r must not be empty.
   #[allow(unused_value)]
-  fn Move(self: Ref<Ring>, n: int) -> Ref<Ring>
+  fn Move(self: mut Ref<Ring>, n: int) -> mut Ref<Ring>
 
   /// Next returns the next ring element. r must not be empty.
-  fn Next(self: Ref<Ring>) -> Ref<Ring>
+  fn Next(self: mut Ref<Ring>) -> mut Ref<Ring>
 
   /// Prev returns the previous ring element. r must not be empty.
-  fn Prev(self: Ref<Ring>) -> Ref<Ring>
+  fn Prev(self: mut Ref<Ring>) -> mut Ref<Ring>
 
   /// Unlink removes n % r.Len() elements from the ring r, starting
   /// at r.Next(). If n % r.Len() == 0, r remains unchanged.
   /// The result is the removed subring. r must not be empty.
-  fn Unlink(self: Ref<Ring>, n: int) -> Option<Ref<Ring>>
+  fn Unlink(self: mut Ref<Ring>, n: int) -> Option<mut Ref<Ring>>
 }

@@ -13,15 +13,15 @@ import "go:net/http"
 pub fn Accept(lis: net.Listener)
 
 /// Dial connects to an RPC server at the specified network address.
-pub fn Dial(network: string, address: string) -> Result<Ref<Client>, error>
+pub fn Dial(network: string, address: string) -> Result<mut Ref<Client>, error>
 
 /// DialHTTP connects to an HTTP RPC server at the specified network address
 /// listening on the default HTTP RPC path.
-pub fn DialHTTP(network: string, address: string) -> Result<Ref<Client>, error>
+pub fn DialHTTP(network: string, address: string) -> Result<mut Ref<Client>, error>
 
 /// DialHTTPPath connects to an HTTP RPC server
 /// at the specified network address and path.
-pub fn DialHTTPPath(network: string, address: string, path: string) -> Result<Ref<Client>, error>
+pub fn DialHTTPPath(network: string, address: string, path: string) -> Result<mut Ref<Client>, error>
 
 /// HandleHTTP registers an HTTP handler for RPC messages to [DefaultServer]
 /// on [DefaultRPCPath] and a debugging handler on [DefaultDebugPath].
@@ -37,14 +37,14 @@ pub fn HandleHTTP()
 /// so no interlocking is required. However each half may be accessed
 /// concurrently so the implementation of conn should protect against
 /// concurrent reads or concurrent writes.
-pub fn NewClient(conn: io.ReadWriteCloser) -> Ref<Client>
+pub fn NewClient(conn: io.ReadWriteCloser) -> mut Ref<Client>
 
 /// NewClientWithCodec is like [NewClient] but uses the specified
 /// codec to encode requests and decode responses.
-pub fn NewClientWithCodec(codec: ClientCodec) -> Ref<Client>
+pub fn NewClientWithCodec(codec: ClientCodec) -> mut Ref<Client>
 
 /// NewServer returns a new [Server].
-pub fn NewServer() -> Ref<Server>
+pub fn NewServer() -> mut Ref<Server>
 
 /// Register publishes the receiver's methods in the [DefaultServer].
 pub fn Register(rcvr: Unknown) -> Result<(), error>
@@ -148,14 +148,14 @@ pub const DefaultDebugPath = "/debug/rpc"
 pub const DefaultRPCPath = "/_goRPC_"
 
 /// DefaultServer is the default instance of [*Server].
-pub var DefaultServer: Ref<Server>
+pub var DefaultServer: mut Ref<Server>
 
 pub var ErrShutdown: error
 
 impl Client {
   /// Call invokes the named function, waits for it to complete, and returns its error status.
   fn Call(
-    self: Ref<Client>,
+    self: mut Ref<Client>,
     serviceMethod: string,
     args: Unknown,
     reply: Unknown,
@@ -164,19 +164,19 @@ impl Client {
   /// Close calls the underlying codec's Close method. If the connection is already
   /// shutting down, [ErrShutdown] is returned.
   #[allow(unused_result)]
-  fn Close(self: Ref<Client>) -> Result<(), error>
+  fn Close(self: mut Ref<Client>) -> Result<(), error>
 
   /// Go invokes the function asynchronously. It returns the [Call] structure representing
   /// the invocation. The done channel will signal when the call is complete by returning
   /// the same Call object. If done is nil, Go will allocate a new channel.
   /// If non-nil, done must be buffered or Go will deliberately crash.
   fn Go(
-    self: Ref<Client>,
+    self: mut Ref<Client>,
     serviceMethod: string,
     args: Unknown,
     reply: Unknown,
     done: Channel<Ref<Call>>,
-  ) -> Ref<Call>
+  ) -> mut Ref<Call>
 }
 
 impl Server {
@@ -184,7 +184,7 @@ impl Server {
   /// for each incoming connection. Accept blocks until the listener
   /// returns a non-nil error. The caller typically invokes Accept in a
   /// go statement.
-  fn Accept(self: Ref<Server>, lis: net.Listener)
+  fn Accept(self: mut Ref<Server>, lis: net.Listener)
 
   /// HandleHTTP registers an HTTP handler for RPC messages on rpcPath,
   /// and a debugging handler on debugPath.
@@ -202,15 +202,15 @@ impl Server {
   /// no suitable methods. It also logs the error using package log.
   /// The client accesses each method using a string of the form "Type.Method",
   /// where Type is the receiver's concrete type.
-  fn Register(self: Ref<Server>, rcvr: Unknown) -> Result<(), error>
+  fn Register(self: mut Ref<Server>, rcvr: Unknown) -> Result<(), error>
 
   /// RegisterName is like [Register] but uses the provided name for the type
   /// instead of the receiver's concrete type.
-  fn RegisterName(self: Ref<Server>, name: string, rcvr: Unknown) -> Result<(), error>
+  fn RegisterName(self: mut Ref<Server>, name: string, rcvr: Unknown) -> Result<(), error>
 
   /// ServeCodec is like [ServeConn] but uses the specified codec to
   /// decode requests and encode responses.
-  fn ServeCodec(self: Ref<Server>, codec: ServerCodec)
+  fn ServeCodec(self: mut Ref<Server>, codec: ServerCodec)
 
   /// ServeConn runs the server on a single connection.
   /// ServeConn blocks, serving the connection until the client hangs up.
@@ -218,18 +218,18 @@ impl Server {
   /// ServeConn uses the gob wire format (see package gob) on the
   /// connection. To use an alternate codec, use [ServeCodec].
   /// See [NewClient]'s comment for information about concurrent access.
-  fn ServeConn(self: Ref<Server>, conn: io.ReadWriteCloser)
+  fn ServeConn(self: mut Ref<Server>, conn: io.ReadWriteCloser)
 
   /// ServeHTTP implements an [http.Handler] that answers RPC requests.
   fn ServeHTTP(
-    self: Ref<Server>,
+    self: mut Ref<Server>,
     w: http.ResponseWriter,
     req: Ref<http.Request>,
   )
 
   /// ServeRequest is like [ServeCodec] but synchronously serves a single request.
   /// It does not close the codec upon completion.
-  fn ServeRequest(self: Ref<Server>, codec: ServerCodec) -> Result<(), error>
+  fn ServeRequest(self: mut Ref<Server>, codec: ServerCodec) -> Result<(), error>
 }
 
 impl ServerError {

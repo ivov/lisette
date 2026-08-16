@@ -14,7 +14,7 @@ import "go:time"
 /// of the returned header to provide the full path name of the file.
 /// If compression is desired, callers should set the FileHeader.Method
 /// field; it is unset by default.
-pub fn FileInfoHeader(fi: fs.FileInfo) -> Result<Ref<FileHeader>, error>
+pub fn FileInfoHeader(fi: fs.FileInfo) -> Result<mut Ref<FileHeader>, error>
 
 /// NewReader returns a new [Reader] reading from r, which is assumed to
 /// have the given size in bytes.
@@ -26,10 +26,10 @@ pub fn FileInfoHeader(fi: fs.FileInfo) -> Result<Ref<FileHeader>, error>
 /// A future version of Go may introduce this behavior by default.
 /// Programs that want to accept non-local names can ignore
 /// the [ErrInsecurePath] error and use the returned reader.
-pub fn NewReader(r: io.ReaderAt, size: int64) -> Result<Ref<Reader>, error>
+pub fn NewReader(r: io.ReaderAt, size: int64) -> Result<mut Ref<Reader>, error>
 
 /// NewWriter returns a new [Writer] writing a zip file to w.
-pub fn NewWriter(w: io.Writer) -> Ref<Writer>
+pub fn NewWriter(w: io.Writer) -> mut Ref<Writer>
 
 /// OpenReader will open the Zip file specified by name and return a ReadCloser.
 /// 
@@ -40,7 +40,7 @@ pub fn NewWriter(w: io.Writer) -> Ref<Writer>
 /// A future version of Go may introduce this behavior by default.
 /// Programs that want to accept non-local names can ignore
 /// the ErrInsecurePath error and use the returned reader.
-pub fn OpenReader(name: string) -> Result<Ref<ReadCloser>, error>
+pub fn OpenReader(name: string) -> Result<mut Ref<ReadCloser>, error>
 
 /// RegisterCompressor registers custom compressors for a specified method ID.
 /// The common methods [Store] and [Deflate] are built in.
@@ -70,7 +70,7 @@ pub type Decompressor = fn(io.Reader) -> io.ReadCloser
 #[go(hidden_fields)]
 #[go(zero_unsafe)]
 pub struct File {
-  embed FileHeader,
+  embed mut FileHeader,
 }
 
 /// FileHeader describes a file within a ZIP file.
@@ -85,7 +85,7 @@ pub struct FileHeader {
   pub ReaderVersion: uint16,
   pub Flags: uint16,
   pub Method: uint16,
-  pub Modified: time.Time,
+  pub Modified: mut time.Time,
   pub ModifiedTime: uint16,
   pub ModifiedDate: uint16,
   pub CRC32: uint32,
@@ -93,20 +93,20 @@ pub struct FileHeader {
   pub UncompressedSize: uint32,
   pub CompressedSize64: uint64,
   pub UncompressedSize64: uint64,
-  pub Extra: Slice<byte>,
+  pub Extra: mut Slice<byte>,
   pub ExternalAttrs: uint32,
 }
 
 /// A ReadCloser is a [Reader] that must be closed when no longer needed.
 #[go(hidden_fields)]
 pub struct ReadCloser {
-  embed Reader,
+  embed mut Reader,
 }
 
 /// A Reader serves content from a ZIP archive.
 #[go(hidden_fields)]
 pub struct Reader {
-  pub File: Slice<Option<Ref<File>>>,
+  pub File: mut Slice<Option<mut Ref<File>>>,
   pub Comment: string,
 }
 
@@ -161,10 +161,10 @@ impl FileHeader {
   /// to the given time in UTC.
   /// 
   /// Deprecated: Use [Modified] instead.
-  fn SetModTime(self: Ref<FileHeader>, t: time.Time)
+  fn SetModTime(self: mut Ref<FileHeader>, t: time.Time)
 
   /// SetMode changes the permission and mode bits for the [FileHeader].
-  fn SetMode(self: Ref<FileHeader>, mode: fs.FileMode)
+  fn SetMode(self: mut Ref<FileHeader>, mode: fs.FileMode)
 }
 
 impl ReadCloser {
@@ -178,13 +178,13 @@ impl Reader {
   /// using the semantics of fs.FS.Open:
   /// paths are always slash separated, with no
   /// leading / or ../ elements.
-  fn Open(self: Ref<Reader>, name: string) -> Result<fs.File, error>
+  fn Open(self: mut Ref<Reader>, name: string) -> Result<fs.File, error>
 
   /// RegisterDecompressor registers or overrides a custom decompressor for a
   /// specific method ID. If a decompressor for a given method is not found,
   /// [Reader] will default to looking up the decompressor at the package level.
   fn RegisterDecompressor(
-    self: Ref<Reader>,
+    self: mut Ref<Reader>,
     method: uint16,
     dcomp: Decompressor,
   )
@@ -194,16 +194,16 @@ impl Writer {
   /// AddFS adds the files from fs.FS to the archive.
   /// It walks the directory tree starting at the root of the filesystem
   /// adding each file to the zip using deflate while maintaining the directory structure.
-  fn AddFS(self: Ref<Writer>, fsys: fs.FS) -> Result<(), error>
+  fn AddFS(self: mut Ref<Writer>, fsys: fs.FS) -> Result<(), error>
 
   /// Close finishes writing the zip file by writing the central directory.
   /// It does not close the underlying writer.
   #[allow(unused_result)]
-  fn Close(self: Ref<Writer>) -> Result<(), error>
+  fn Close(self: mut Ref<Writer>) -> Result<(), error>
 
   /// Copy copies the file f (obtained from a [Reader]) into w. It copies the raw
   /// form directly bypassing decompression, compression, and validation.
-  fn Copy(self: Ref<Writer>, f: Ref<File>) -> Result<(), error>
+  fn Copy(self: mut Ref<Writer>, f: Ref<File>) -> Result<(), error>
 
   /// Create adds a file to the zip file using the provided name.
   /// It returns a [Writer] to which the file contents should be written.
@@ -215,7 +215,7 @@ impl Writer {
   /// and are appended to the zip file.
   /// The file's contents must be written to the [io.Writer] before the next
   /// call to [Writer.Create], [Writer.CreateHeader], or [Writer.Close].
-  fn Create(self: Ref<Writer>, name: string) -> Result<io.Writer, error>
+  fn Create(self: mut Ref<Writer>, name: string) -> Result<io.Writer, error>
 
   /// CreateHeader adds a file to the zip archive using the provided [FileHeader]
   /// for the file metadata. [Writer] takes ownership of fh and may mutate
@@ -224,7 +224,7 @@ impl Writer {
   /// This returns a [Writer] to which the file contents should be written.
   /// The file's contents must be written to the io.Writer before the next
   /// call to [Writer.Create], [Writer.CreateHeader], [Writer.CreateRaw], or [Writer.Close].
-  fn CreateHeader(self: Ref<Writer>, fh: Ref<FileHeader>) -> Result<io.Writer, error>
+  fn CreateHeader(self: mut Ref<Writer>, fh: mut Ref<FileHeader>) -> Result<io.Writer, error>
 
   /// CreateRaw adds a file to the zip archive using the provided [FileHeader] and
   /// returns a [Writer] to which the file contents should be written. The file's
@@ -236,7 +236,7 @@ impl Writer {
   /// CreateRaw's argument is stored in w. If the argument is a pointer to the embedded
   /// [FileHeader] in a [File] obtained from a [Reader] created from in-memory data,
   /// then w will refer to all of that memory.
-  fn CreateRaw(self: Ref<Writer>, fh: Ref<FileHeader>) -> Result<io.Writer, error>
+  fn CreateRaw(self: mut Ref<Writer>, fh: mut Ref<FileHeader>) -> Result<io.Writer, error>
 
   /// Flush flushes any buffered data to the underlying writer.
   /// Calling Flush is not normally necessary; calling Close is sufficient.
@@ -246,11 +246,11 @@ impl Writer {
   /// RegisterCompressor registers or overrides a custom compressor for a specific
   /// method ID. If a compressor for a given method is not found, [Writer] will
   /// default to looking up the compressor at the package level.
-  fn RegisterCompressor(self: Ref<Writer>, method: uint16, comp: Compressor)
+  fn RegisterCompressor(self: mut Ref<Writer>, method: uint16, comp: Compressor)
 
   /// SetComment sets the end-of-central-directory comment field.
   /// It can only be called before [Writer.Close].
-  fn SetComment(self: Ref<Writer>, comment: string) -> Result<(), error>
+  fn SetComment(self: mut Ref<Writer>, comment: string) -> Result<(), error>
 
   /// SetOffset sets the offset of the beginning of the zip data within the
   /// underlying writer. It should be used when the zip data is appended to an

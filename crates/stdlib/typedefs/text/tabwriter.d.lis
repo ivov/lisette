@@ -14,7 +14,7 @@ pub fn NewWriter(
   padding: int,
   padchar: byte,
   flags: uint,
-) -> Ref<Writer>
+) -> mut Ref<Writer>
 
 /// A Writer is a filter that inserts padding around tab-delimited
 /// columns in its input to align them in the output.
@@ -107,7 +107,7 @@ impl Writer {
   /// incomplete escape sequence at the end is considered
   /// complete for formatting purposes.
   #[allow(unused_result)]
-  fn Flush(self: Ref<Writer>) -> Result<(), error>
+  fn Flush(self: mut Ref<Writer>) -> Result<(), error>
 
   /// A [Writer] must be initialized with a call to Init. The first parameter (output)
   /// specifies the filter output. The remaining parameters control the formatting:
@@ -124,17 +124,17 @@ impl Writer {
   /// 	flags		formatting control
   #[allow(unused_value)]
   fn Init(
-    self: Ref<Writer>,
+    self: mut Ref<Writer>,
     output: io.Writer,
     minwidth: int,
     tabwidth: int,
     padding: int,
     padchar: byte,
     flags: uint,
-  ) -> Ref<Writer>
+  ) -> mut Ref<Writer>
 
   /// Write writes buf to the writer b.
   /// The only errors returned are ones encountered
   /// while writing to the underlying output stream.
-  fn Write(self: Ref<Writer>, buf: Slice<byte>) -> Partial<int, error>
+  fn Write(self: mut Ref<Writer>, buf: Slice<byte>) -> Partial<int, error>
 }

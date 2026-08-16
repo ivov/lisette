@@ -27,13 +27,13 @@ pub struct Code {
 
 /// A Doc is a parsed Go doc comment.
 pub struct Doc {
-  pub Content: Slice<Option<Block>>,
-  pub Links: Slice<Option<Ref<LinkDef>>>,
+  pub Content: mut Slice<Option<Block>>,
+  pub Links: mut Slice<Option<mut Ref<LinkDef>>>,
 }
 
 /// A DocLink is a link to documentation for a Go package or symbol.
 pub struct DocLink {
-  pub Text: Slice<Option<Text>>,
+  pub Text: mut Slice<Option<Text>>,
   pub ImportPath: string,
   pub Recv: string,
   pub Name: string,
@@ -41,7 +41,7 @@ pub struct DocLink {
 
 /// A Heading is a doc comment heading.
 pub struct Heading {
-  pub Text: Slice<Option<Text>>,
+  pub Text: mut Slice<Option<Text>>,
 }
 
 /// An Italic is a string rendered as italicized text.
@@ -50,7 +50,7 @@ pub struct Italic(string)
 /// A Link is a link to a specific URL.
 pub struct Link {
   pub Auto: bool,
-  pub Text: Slice<Option<Text>>,
+  pub Text: mut Slice<Option<Text>>,
   pub URL: string,
 }
 
@@ -66,7 +66,7 @@ pub struct LinkDef {
 /// In a numbered list, every Items[i].Number is a non-empty string.
 /// In a bullet list, every Items[i].Number is an empty string.
 pub struct List {
-  pub Items: Slice<Option<Ref<ListItem>>>,
+  pub Items: mut Slice<Option<mut Ref<ListItem>>>,
   pub ForceBlankBefore: bool,
   pub ForceBlankBetween: bool,
 }
@@ -74,19 +74,19 @@ pub struct List {
 /// A ListItem is a single item in a numbered or bullet list.
 pub struct ListItem {
   pub Number: string,
-  pub Content: Slice<Option<Block>>,
+  pub Content: mut Slice<Option<Block>>,
 }
 
 /// A Paragraph is a paragraph of text.
 pub struct Paragraph {
-  pub Text: Slice<Option<Text>>,
+  pub Text: mut Slice<Option<Text>>,
 }
 
 /// A Parser is a doc comment parser.
 /// The fields in the struct can be filled in before calling [Parser.Parse]
 /// in order to customize the details of the parsing process.
 pub struct Parser {
-  pub Words: Map<string, string>,
+  pub Words: mut Map<string, string>,
   pub LookupPackage: Option<fn(string) -> Option<string>>,
   pub LookupSym: Option<fn(string, string) -> bool>,
 }
@@ -199,7 +199,7 @@ impl Paragraph {
 impl Parser {
   /// Parse parses the doc comment text and returns the *[Doc] form.
   /// Comment markers (/* // and */) in the text must have already been removed.
-  fn Parse(self: Ref<Parser>, text: string) -> Ref<Doc>
+  fn Parse(self: Ref<Parser>, text: string) -> mut Ref<Doc>
 }
 
 impl Plain {

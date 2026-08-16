@@ -3,11 +3,11 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
-pub fn NewGadget(id: int) -> Option<Ref<Gadget>>
+pub fn NewGadget(id: int) -> Option<mut Ref<Gadget>>
 
-pub fn Passthrough(g: Ref<Gadget>) -> Ref<Gadget>
+pub fn Passthrough(g: Ref<Gadget>) -> mut Ref<Gadget>
 
-pub fn Prepared() -> Ref<Gadget>
+pub fn Prepared() -> mut Ref<Gadget>
 
 pub struct Gadget {
   pub ID: int,

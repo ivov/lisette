@@ -11,11 +11,11 @@ import "go:net/http"
 /// environment. This assumes the current program is being run
 /// by a web server in a CGI environment.
 /// The returned Request's Body is populated, if applicable.
-pub fn Request() -> Result<Ref<http.Request>, error>
+pub fn Request() -> Result<mut Ref<http.Request>, error>
 
 /// RequestFromMap creates an [http.Request] from CGI variables.
 /// The returned Request's Body field is not populated.
-pub fn RequestFromMap(params: Map<string, string>) -> Result<Ref<http.Request>, error>
+pub fn RequestFromMap(params: Map<string, string>) -> Result<mut Ref<http.Request>, error>
 
 /// Serve executes the provided [Handler] on the currently active CGI
 /// request, if any. If there's no current CGI environment
@@ -28,10 +28,10 @@ pub struct Handler {
   pub Path: string,
   pub Root: string,
   pub Dir: string,
-  pub Env: Slice<string>,
-  pub InheritEnv: Slice<string>,
-  pub Logger: Option<Ref<log.Logger>>,
-  pub Args: Slice<string>,
+  pub Env: mut Slice<string>,
+  pub InheritEnv: mut Slice<string>,
+  pub Logger: Option<mut Ref<log.Logger>>,
+  pub Args: mut Slice<string>,
   pub Stderr: Option<io.Writer>,
   pub PathLocationHandler: Option<http.Handler>,
 }

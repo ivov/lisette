@@ -69,7 +69,7 @@ func (c *Converter) convertAnonFields(s *types.Struct) ([]StructField, *SkipReas
 	fields := make([]StructField, 0, s.NumFields())
 	for i := 0; i < s.NumFields(); i++ {
 		field := s.Field(i)
-		fieldType := ToLisetteNilable(field.Type(), c)
+		fieldType := WritableFieldType(field.Type(), c)
 		if fieldType.SkipReason != nil {
 			return nil, fieldType.SkipReason
 		}

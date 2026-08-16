@@ -4,12 +4,12 @@
 // Lisette: 0.0.0
 
 #[allow(unused_value)]
-pub fn Mount(prefix: string, h: fn() -> ()) -> Ref<HttpServer>
+pub fn Mount(prefix: string, h: fn() -> ()) -> mut Ref<HttpServer>
 
-pub fn NotConfigured(path: string, h: fn() -> ()) -> Ref<HttpServer>
+pub fn NotConfigured(path: string, h: fn() -> ()) -> mut Ref<HttpServer>
 
 #[allow(unused_value)]
-pub fn Register(path: string, h: fn() -> ()) -> Ref<HttpServer>
+pub fn Register(path: string, h: fn() -> ()) -> mut Ref<HttpServer>
 
 pub fn VoidReturn(path: string)
 

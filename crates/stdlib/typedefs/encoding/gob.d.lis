@@ -9,10 +9,10 @@ import "go:reflect"
 /// NewDecoder returns a new decoder that reads from the [io.Reader].
 /// If r does not also implement [io.ByteReader], it will be wrapped in a
 /// [bufio.Reader].
-pub fn NewDecoder(r: io.Reader) -> Ref<Decoder>
+pub fn NewDecoder(r: io.Reader) -> mut Ref<Decoder>
 
 /// NewEncoder returns a new encoder that will transmit on the [io.Writer].
-pub fn NewEncoder(w: io.Writer) -> Ref<Encoder>
+pub fn NewEncoder(w: io.Writer) -> mut Ref<Encoder>
 
 /// Register records a type, identified by a value for that type, under its
 /// internal type name. That name will identify the concrete type of a value
@@ -78,7 +78,7 @@ impl Decoder {
   /// correct type for the next data item received.
   /// If the input is at EOF, Decode returns [io.EOF] and
   /// does not modify e.
-  fn Decode<T>(self: Ref<Decoder>, e: Ref<T>) -> Result<(), error>
+  fn Decode<T>(self: mut Ref<Decoder>, e: mut Ref<T>) -> Result<(), error>
 
   /// DecodeValue reads the next value from the input stream.
   /// If v is the zero reflect.Value (v.Kind() == Invalid), DecodeValue discards the value.
@@ -86,17 +86,17 @@ impl Decoder {
   /// a non-nil pointer to data or be an assignable reflect.Value (v.CanSet())
   /// If the input is at EOF, DecodeValue returns [io.EOF] and
   /// does not modify v.
-  fn DecodeValue(self: Ref<Decoder>, v: reflect.Value) -> Result<(), error>
+  fn DecodeValue(self: mut Ref<Decoder>, v: mut reflect.Value) -> Result<(), error>
 }
 
 impl Encoder {
   /// Encode transmits the data item represented by the empty interface value,
   /// guaranteeing that all necessary type information has been transmitted first.
   /// Passing a nil pointer to Encoder will panic, as they cannot be transmitted by gob.
-  fn Encode(self: Ref<Encoder>, e: Unknown) -> Result<(), error>
+  fn Encode(self: mut Ref<Encoder>, e: Unknown) -> Result<(), error>
 
   /// EncodeValue transmits the data item represented by the reflection value,
   /// guaranteeing that all necessary type information has been transmitted first.
   /// Passing a nil pointer to EncodeValue will panic, as they cannot be transmitted by gob.
-  fn EncodeValue(self: Ref<Encoder>, value: reflect.Value) -> Result<(), error>
+  fn EncodeValue(self: mut Ref<Encoder>, value: reflect.Value) -> Result<(), error>
 }

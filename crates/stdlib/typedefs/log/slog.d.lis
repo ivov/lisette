@@ -77,7 +77,7 @@ pub fn Debug(msg: string, args: VarArgs<Unknown>)
 pub fn DebugContext(ctx: context.Context, msg: string, args: VarArgs<Unknown>)
 
 /// Default returns the default [Logger].
-pub fn Default() -> Ref<Logger>
+pub fn Default() -> mut Ref<Logger>
 
 /// Duration returns an Attr for a [time.Duration].
 pub fn Duration(key: string, v: time.Duration) -> Attr
@@ -153,17 +153,17 @@ pub fn LogAttrs(
 )
 
 /// New creates a new Logger with the given non-nil Handler.
-pub fn New(h: Handler) -> Ref<Logger>
+pub fn New(h: Handler) -> mut Ref<Logger>
 
 /// NewJSONHandler creates a [JSONHandler] that writes to w,
 /// using the given options.
 /// If opts is nil, the default options are used.
-pub fn NewJSONHandler(w: io.Writer, opts: Option<Ref<HandlerOptions>>) -> Ref<JSONHandler>
+pub fn NewJSONHandler(w: io.Writer, opts: Option<Ref<HandlerOptions>>) -> mut Ref<JSONHandler>
 
 /// NewLogLogger returns a new [log.Logger] such that each call to its Output method
 /// dispatches a Record to the specified handler. The logger acts as a bridge from
 /// the older log API to newer structured logging handlers.
-pub fn NewLogLogger(h: Handler, level: Level) -> Ref<log.Logger>
+pub fn NewLogLogger(h: Handler, level: Level) -> mut Ref<log.Logger>
 
 /// NewRecord creates a [Record] from the given arguments.
 /// Use [Record.AddAttrs] to add attributes to the Record.
@@ -175,7 +175,7 @@ pub fn NewRecord(t: time.Time, level: Level, msg: string, pc: uintptr) -> Record
 /// NewTextHandler creates a [TextHandler] that writes to w,
 /// using the given options.
 /// If opts is nil, the default options are used.
-pub fn NewTextHandler(w: io.Writer, opts: Option<Ref<HandlerOptions>>) -> Ref<TextHandler>
+pub fn NewTextHandler(w: io.Writer, opts: Option<Ref<HandlerOptions>>) -> mut Ref<TextHandler>
 
 /// SetDefault makes l the default [Logger], which is used by
 /// the top-level functions [Info], [Debug] and so on.
@@ -235,7 +235,7 @@ pub fn Warn(msg: string, args: VarArgs<Unknown>)
 pub fn WarnContext(ctx: context.Context, msg: string, args: VarArgs<Unknown>)
 
 /// With calls [Logger.With] on the default logger.
-pub fn With(args: VarArgs<Unknown>) -> Ref<Logger>
+pub fn With(args: VarArgs<Unknown>) -> mut Ref<Logger>
 
 /// An Attr is a key-value pair.
 pub struct Attr {
@@ -275,7 +275,7 @@ pub struct HandlerOptions {
 /// JSONHandler is a [Handler] that writes Records to an [io.Writer] as
 /// line-delimited JSON objects.
 pub struct JSONHandler {
-  embed Ref<commonHandler>,
+  embed mut Ref<commonHandler>,
 }
 
 /// A LevelVar is a [Level] variable, to allow a [Handler] level to change
@@ -319,7 +319,7 @@ pub type Logger
 /// Use [Record.Clone] to create a copy with no shared state.
 #[go(hidden_fields)]
 pub struct Record {
-  pub Time: time.Time,
+  pub Time: mut time.Time,
   pub Message: string,
   pub Level: Level,
   pub PC: uintptr,
@@ -335,7 +335,7 @@ pub struct Source {
 /// TextHandler is a [Handler] that writes Records to an [io.Writer] as a
 /// sequence of key=value pairs separated by spaces and followed by a newline.
 pub struct TextHandler {
-  embed Ref<commonHandler>,
+  embed mut Ref<commonHandler>,
 }
 
 /// A Value can represent any Go value, but unlike type any,
@@ -417,7 +417,7 @@ impl Kind {
 impl Level {
   /// AppendText implements [encoding.TextAppender]
   /// by calling [Level.String].
-  fn AppendText(self, mut b: Slice<byte>) -> Result<Slice<byte>, error>
+  fn AppendText(self, b: mut Slice<byte>) -> Result<mut Slice<byte>, error>
 
   /// Level returns the receiver.
   /// It implements [Leveler].
@@ -425,11 +425,11 @@ impl Level {
 
   /// MarshalJSON implements [encoding/json.Marshaler]
   /// by quoting the output of [Level.String].
-  fn MarshalJSON(self) -> Result<Slice<byte>, error>
+  fn MarshalJSON(self) -> Result<mut Slice<byte>, error>
 
   /// MarshalText implements [encoding.TextMarshaler]
   /// by calling [Level.AppendText].
-  fn MarshalText(self) -> Result<Slice<byte>, error>
+  fn MarshalText(self) -> Result<mut Slice<byte>, error>
 
   /// String returns a name for the level.
   /// If the level has a name, then that name
@@ -447,27 +447,27 @@ impl Level {
   /// ignoring case.
   /// It also accepts numeric offsets that would result in a different string on
   /// output. For example, "Error-8" would marshal as "INFO".
-  fn UnmarshalJSON(self: Ref<Level>, data: Slice<byte>) -> Result<(), error>
+  fn UnmarshalJSON(self: mut Ref<Level>, data: Slice<byte>) -> Result<(), error>
 
   /// UnmarshalText implements [encoding.TextUnmarshaler].
   /// It accepts any string produced by [Level.MarshalText],
   /// ignoring case.
   /// It also accepts numeric offsets that would result in a different string on
   /// output. For example, "Error-8" would marshal as "INFO".
-  fn UnmarshalText(self: Ref<Level>, data: Slice<byte>) -> Result<(), error>
+  fn UnmarshalText(self: mut Ref<Level>, data: Slice<byte>) -> Result<(), error>
 }
 
 impl LevelVar {
   /// AppendText implements [encoding.TextAppender]
   /// by calling [Level.AppendText].
-  fn AppendText(self: Ref<LevelVar>, mut b: Slice<byte>) -> Result<Slice<byte>, error>
+  fn AppendText(self: Ref<LevelVar>, b: mut Slice<byte>) -> Result<mut Slice<byte>, error>
 
   /// Level returns v's level.
   fn Level(self: Ref<LevelVar>) -> Level
 
   /// MarshalText implements [encoding.TextMarshaler]
   /// by calling [LevelVar.AppendText].
-  fn MarshalText(self: Ref<LevelVar>) -> Result<Slice<byte>, error>
+  fn MarshalText(self: Ref<LevelVar>) -> Result<mut Slice<byte>, error>
 
   /// Set sets v's level to l.
   fn Set(self: Ref<LevelVar>, l: Level)
@@ -560,7 +560,7 @@ impl Logger {
   /// With returns a Logger that includes the given attributes
   /// in each output operation. Arguments are converted to
   /// attributes as if by [Logger.Log].
-  fn With(self: Ref<Logger>, args: VarArgs<Unknown>) -> Ref<Logger>
+  fn With(self: Ref<Logger>, args: VarArgs<Unknown>) -> mut Ref<Logger>
 
   /// WithGroup returns a Logger that starts a group, if name is non-empty.
   /// The keys of all attributes added to the Logger will be qualified by the given
@@ -568,18 +568,18 @@ impl Logger {
   /// method of the Logger's Handler.)
   /// 
   /// If name is empty, WithGroup returns the receiver.
-  fn WithGroup(self: Ref<Logger>, name: string) -> Ref<Logger>
+  fn WithGroup(self: Ref<Logger>, name: string) -> mut Ref<Logger>
 }
 
 impl Record {
   /// Add converts the args to Attrs as described in [Logger.Log],
   /// then appends the Attrs to the [Record]'s list of Attrs.
   /// It omits empty groups.
-  fn Add(self: Ref<Record>, args: VarArgs<Unknown>)
+  fn Add(self: mut Ref<Record>, args: VarArgs<Unknown>)
 
   /// AddAttrs appends the given Attrs to the [Record]'s list of Attrs.
   /// It omits empty groups.
-  fn AddAttrs(self: Ref<Record>, attrs: VarArgs<Attr>)
+  fn AddAttrs(self: mut Ref<Record>, attrs: VarArgs<Attr>)
 
   /// Attrs calls f on each Attr in the [Record].
   /// Iteration stops if f returns false.
@@ -596,7 +596,7 @@ impl Record {
   /// Source returns a new Source for the log event using r's PC.
   /// If the PC field is zero, meaning the Record was created without the necessary information
   /// or the location is unavailable, then nil is returned.
-  fn Source(self) -> Option<Ref<Source>>
+  fn Source(self) -> Option<mut Ref<Source>>
 }
 
 impl TextHandler {

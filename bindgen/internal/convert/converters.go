@@ -35,13 +35,9 @@ func sanitizeParamName(name string) string {
 	return name
 }
 
-func isReferenceType(typeStr string) bool {
-	return isSliceType(typeStr) || isMapType(typeStr)
-}
-
 // liftReflectionDecodeParams returns (specs, nil) when not whitelisted or no
-// `interface{}` params are liftable; the index map encodes per-param Ref<T>
-// rewrites for the caller to apply during the param loop.
+// `interface{}` params are liftable; the index map encodes per-param
+// `mut Ref<T>` rewrites for the caller to apply during the param loop.
 func (c *Converter) liftReflectionDecodeParams(
 	sig *types.Signature,
 	qualifiedName string,
@@ -78,7 +74,7 @@ func (c *Converter) liftReflectionDecodeParams(
 		if overrides == nil {
 			overrides = make(map[int]string)
 		}
-		overrides[i] = refOf(name)
+		overrides[i] = "mut " + refOf(name)
 	}
 	return specs, overrides
 }
@@ -174,19 +170,23 @@ func (c *Converter) convertParams(sig *types.Signature, obj types.Object, lookup
 	var out []FunctionParameter
 	for i := 0; i < params.Len(); i++ {
 		param := params.At(i)
-		name := param.Name()
+		isVariadicTail := sig.Variadic() && i == params.Len()-1
+		goName := param.Name()
+		name := goName
 		if name == "" {
-			isVariadic := sig.Variadic() && i == params.Len()-1
-			name = deriveParamName(param.Type(), i, isVariadic, usedNames)
+			name = deriveParamName(param.Type(), i, isVariadicTail, usedNames)
 		} else {
 			name = sanitizeParamName(name)
 		}
 
 		var paramType TypeResult
+		directHandled := false
+		optional := false
 		if named, ok := c.directHandleIfEligible(param.Type(), directEligible); ok {
 			paramType = TypeResult{LisetteType: named.Obj().Name()}
+			directHandled = true
 		} else {
-			optional := declaring != nil && c.nilness.Params().Optional(declaring, i)
+			optional = declaring != nil && c.nilness.Params().Optional(declaring, i)
 			paramType = convertParamType(param.Type(), optional, c, substitutions)
 		}
 		if paramType.SkipReason != nil {
@@ -194,18 +194,22 @@ func (c *Converter) convertParams(sig *types.Signature, obj types.Object, lookup
 		}
 
 		typeStr := paramType.LisetteType
-		if sig.Variadic() && i == params.Len()-1 {
+		if !directHandled && !isVariadicTail &&
+			isMutableParam(mutation.Mutates(i), mutParams, goName, param.Type(), methodName) {
+			writable := writableParamType(param.Type(), optional, c, substitutions)
+			if writable.SkipReason != nil {
+				return nil, writable.SkipReason
+			}
+			typeStr = writable.LisetteType
+		}
+		if isVariadicTail {
 			typeStr = sliceToVarArgs(typeStr)
 		}
 		if override, ok := paramOverrides[i]; ok {
 			typeStr = override
 		}
 
-		out = append(out, FunctionParameter{
-			Name:    name,
-			Type:    typeStr,
-			Mutable: isMutableParam(mutation.Mutates(i), mutParams, name, typeStr, methodName),
-		})
+		out = append(out, FunctionParameter{Name: name, Type: typeStr})
 	}
 	return out, nil
 }
@@ -356,9 +360,14 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 			}
 		}
 
-		if result.Receiver != nil && !result.Receiver.IsPointer {
-			if mutation, ok := c.mutation.Function(symbolExport.Obj); ok && mutation.ReceiverMutates {
-				result.Receiver.Mutable = true
+		if result.Receiver != nil {
+			if mutation, ok := c.mutation.Function(symbolExport.Obj); ok {
+				if mutation.ReceiverMutates && !result.Receiver.IsPointer {
+					result.Receiver.Mutable = true
+				}
+				if !mutation.ReceiverMutates {
+					result.Receiver.ProvenReadOnly = true
+				}
 			}
 		}
 	}
@@ -377,6 +386,10 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 	qualifiedName := result.Name
 	if result.Receiver != nil && result.Receiver.BaseTypeName != "" {
 		qualifiedName = result.Receiver.BaseTypeName + "." + result.Name
+	}
+	if result.Receiver != nil && c.cfg.MutatesReceiver(c.currentPkgPath, qualifiedName) {
+		result.Receiver.Mutable = true
+		result.Receiver.ProvenReadOnly = false
 	}
 
 	methodSpecs, _, _, skip := collectTypeParams(signature.TypeParams(), false, c)
@@ -704,12 +717,40 @@ func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport)
 
 	default:
 		t := ToLisette(underlying, c)
+		if goWritableCapability(underlying) {
+			t = writableRecursive(underlying, make(map[types.Type]bool), c, nil, false)
+		}
 		if t.SkipReason != nil {
 			result.SkipReason = withOpaqueType(t.SkipReason)
 			return
 		}
 		result.LisetteType = t.LisetteType
 	}
+}
+
+// goWritableCapability reports whether Go grants writes through this storage.
+func goWritableCapability(t types.Type) bool {
+	return writableCapability(t, make(map[types.Type]bool))
+}
+
+func writableCapability(t types.Type, seen map[types.Type]bool) bool {
+	if seen[t] {
+		return false
+	}
+	seen[t] = true
+	switch u := t.Underlying().(type) {
+	case *types.Slice, *types.Map, *types.Pointer:
+		return true
+	case *types.Struct:
+		for field := range u.Fields() {
+			if writableCapability(field.Type(), seen) {
+				return true
+			}
+		}
+	case *types.Array:
+		return writableCapability(u.Elem(), seen)
+	}
+	return false
 }
 
 // withOpaqueType clones reason with EmitOpaqueType set, so a skipped top-level
@@ -777,6 +818,12 @@ func (c *Converter) convertVariable(result *ConvertResult, exp extract.SymbolExp
 		result.SkipNote = t.SkipReason
 	} else {
 		result.LisetteType = t.LisetteType
+		if goWritableCapability(exp.GoType) {
+			writable := writableRecursive(exp.GoType, make(map[types.Type]bool), c, nil, false)
+			if writable.SkipReason == nil {
+				result.LisetteType = writable.LisetteType
+			}
+		}
 	}
 
 	isNilable := isNilableGoType(exp.GoType)
@@ -806,7 +853,7 @@ func convertStructFields(s *types.Struct, c *Converter) ([]StructField, bool) {
 			fields = append(fields, embeddedStructField(field, c))
 			continue
 		}
-		fieldType := ToLisetteNilable(field.Type(), c)
+		fieldType := WritableFieldType(field.Type(), c)
 		if fieldType.SkipReason != nil {
 			fields = append(fields, StructField{
 				Name:       field.Name(),
@@ -876,7 +923,9 @@ func embeddedStructField(field *types.Var, c *Converter) StructField {
 	if named, ok := unexportedSamePkgStruct(target, c); ok {
 		ref := named.Obj().Name()
 		if isPointer {
-			ref = refOf(ref)
+			ref = "mut " + refOf(ref)
+		} else if goWritableCapability(named) {
+			ref = "mut " + ref
 		}
 		return StructField{Name: field.Name(), Type: ref, IsEmbedded: true}
 	}
@@ -901,7 +950,16 @@ func embeddedStructField(field *types.Var, c *Converter) StructField {
 	}
 	ref := bare
 	if isPointer {
-		ref = refOf(ref)
+		ref = "mut " + refOf(ref)
+	} else if goWritableCapability(target) {
+		if isStruct {
+			ref = "mut " + ref
+		} else {
+			writable := WritableFieldType(target, c)
+			if writable.SkipReason == nil {
+				ref = writable.LisetteType
+			}
+		}
 	}
 	if !isStruct {
 		return StructField{Name: field.Name(), Type: ref}
@@ -1170,27 +1228,34 @@ func describeConstraint(constraint *types.Interface) string {
 
 // isMutableParam combines the three signals additively rather than ranking them:
 // a missing `mut` corrupts caller data, a spurious one only asks for a `let mut`.
-func isMutableParam(derivedMutates bool, mutParams []string, name, typeStr, funcName string) bool {
-	if !isReferenceType(typeStr) {
-		return false
-	}
+// The writable renderer neutralizes a signal on a type Go cannot write through.
+func isMutableParam(derivedMutates bool, mutParams []string, name string, t types.Type, funcName string) bool {
 	return slices.Contains(mutParams, name) ||
 		derivedMutates ||
-		looksLikeMutableParam(name, typeStr, funcName)
+		looksLikeMutableParam(name, t, funcName)
 }
 
 // looksLikeMutableParam returns true if the parameter is likely written into.
-func looksLikeMutableParam(name, typeStr, funcName string) bool {
+func looksLikeMutableParam(name string, t types.Type, funcName string) bool {
 	if name == "dst" {
 		return true
 	}
-	if typeStr == "Slice<byte>" || typeStr == "Slice<uint8>" {
+	if isByteSlice(t) {
 		switch funcName {
 		case "Read", "ReadAt", "ReadFull", "ReadFrom", "ReadMsgUDP", "Recv", "ReadPixels":
 			return true
 		}
 	}
 	return false
+}
+
+func isByteSlice(t types.Type) bool {
+	slice, ok := types.Unalias(t).(*types.Slice)
+	if !ok {
+		return false
+	}
+	basic, ok := slice.Elem().(*types.Basic)
+	return ok && basic.Kind() == types.Uint8
 }
 
 var constructorPrefixes = [...]string{

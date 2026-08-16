@@ -3,12 +3,12 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
-pub fn Decode(data: Slice<byte>) -> (Option<Ref<Block>>, Slice<byte>)
+pub fn Decode(data: Slice<byte>) -> (Option<mut Ref<Block>>, Slice<byte>)
 
-pub fn DecodeForwarded(data: Slice<byte>) -> (Option<Ref<Block>>, Slice<byte>)
+pub fn DecodeForwarded(data: Slice<byte>) -> (Option<mut Ref<Block>>, Slice<byte>)
 
-pub fn Split(data: Slice<byte>) -> (Ref<Block>, Ref<Block>)
+pub fn Split(data: Slice<byte>) -> (mut Ref<Block>, mut Ref<Block>)
 
 pub struct Block {
-  pub Data: Slice<byte>,
+  pub Data: mut Slice<byte>,
 }

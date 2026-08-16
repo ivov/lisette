@@ -13,7 +13,7 @@ import "go:time"
 /// CIDRMask returns an [IPMask] consisting of 'ones' 1 bits
 /// followed by 0s up to a total length of 'bits' bits.
 /// For a mask of this form, CIDRMask is the inverse of [IPMask.Size].
-pub fn CIDRMask(ones: int, bits: int) -> IPMask
+pub fn CIDRMask(ones: int, bits: int) -> mut IPMask
 
 /// Dial connects to the address on the named network.
 /// 
@@ -72,7 +72,7 @@ pub fn Dial(network: string, address: string) -> Result<Conn, error>
 /// If laddr is nil, a local address is automatically chosen.
 /// If the IP field of raddr is nil or an unspecified IP address, the
 /// local system is assumed.
-pub fn DialIP(network: string, laddr: Ref<IPAddr>, raddr: Ref<IPAddr>) -> Result<Ref<IPConn>, error>
+pub fn DialIP(network: string, laddr: Ref<IPAddr>, raddr: Ref<IPAddr>) -> Result<mut Ref<IPConn>, error>
 
 /// DialTCP acts like [Dial] for TCP networks.
 /// 
@@ -81,7 +81,7 @@ pub fn DialIP(network: string, laddr: Ref<IPAddr>, raddr: Ref<IPAddr>) -> Result
 /// If laddr is nil, a local address is automatically chosen.
 /// If the IP field of raddr is nil or an unspecified IP address, the
 /// local system is assumed.
-pub fn DialTCP(network: string, laddr: Ref<TCPAddr>, raddr: Ref<TCPAddr>) -> Result<Ref<TCPConn>, error>
+pub fn DialTCP(network: string, laddr: Ref<TCPAddr>, raddr: Ref<TCPAddr>) -> Result<mut Ref<TCPConn>, error>
 
 /// DialTimeout acts like [Dial] but takes a timeout.
 /// 
@@ -102,7 +102,7 @@ pub fn DialTimeout(network: string, address: string, timeout: time.Duration) -> 
 /// If laddr is nil, a local address is automatically chosen.
 /// If the IP field of raddr is nil or an unspecified IP address, the
 /// local system is assumed.
-pub fn DialUDP(network: string, laddr: Ref<UDPAddr>, raddr: Ref<UDPAddr>) -> Result<Ref<UDPConn>, error>
+pub fn DialUDP(network: string, laddr: Ref<UDPAddr>, raddr: Ref<UDPAddr>) -> Result<mut Ref<UDPConn>, error>
 
 /// DialUnix acts like [Dial] for Unix networks.
 /// 
@@ -110,7 +110,7 @@ pub fn DialUDP(network: string, laddr: Ref<UDPAddr>, raddr: Ref<UDPAddr>) -> Res
 /// 
 /// If laddr is non-nil, it is used as the local address for the
 /// connection.
-pub fn DialUnix(network: string, laddr: Ref<UnixAddr>, raddr: Ref<UnixAddr>) -> Result<Ref<UnixConn>, error>
+pub fn DialUnix(network: string, laddr: Ref<UnixAddr>, raddr: Ref<UnixAddr>) -> Result<mut Ref<UnixConn>, error>
 
 /// FileConn returns a copy of the network connection corresponding to
 /// the open file f.
@@ -132,31 +132,31 @@ pub fn FilePacketConn(f: Ref<os.File>) -> Result<PacketConn, error>
 
 /// IPv4 returns the IP address (in 16-byte form) of the
 /// IPv4 address a.b.c.d.
-pub fn IPv4(a: byte, b: byte, c: byte, d: byte) -> IP
+pub fn IPv4(a: byte, b: byte, c: byte, d: byte) -> mut IP
 
 /// IPv4Mask returns the IP mask (in 4-byte form) of the
 /// IPv4 mask a.b.c.d.
-pub fn IPv4Mask(a: byte, b: byte, c: byte, d: byte) -> IPMask
+pub fn IPv4Mask(a: byte, b: byte, c: byte, d: byte) -> mut IPMask
 
 /// InterfaceAddrs returns a list of the system's unicast interface
 /// addresses.
 /// 
 /// The returned list does not identify the associated interface; use
 /// Interfaces and [Interface.Addrs] for more detail.
-pub fn InterfaceAddrs() -> Result<Slice<Addr>, error>
+pub fn InterfaceAddrs() -> Result<mut Slice<Addr>, error>
 
 /// InterfaceByIndex returns the interface specified by index.
 /// 
 /// On Solaris, it returns one of the logical network interfaces
 /// sharing the logical data link; for more precision use
 /// [InterfaceByName].
-pub fn InterfaceByIndex(index: int) -> Result<Ref<Interface>, error>
+pub fn InterfaceByIndex(index: int) -> Result<mut Ref<Interface>, error>
 
 /// InterfaceByName returns the interface specified by name.
-pub fn InterfaceByName(name: string) -> Result<Ref<Interface>, error>
+pub fn InterfaceByName(name: string) -> Result<mut Ref<Interface>, error>
 
 /// Interfaces returns a list of the system's network interfaces.
-pub fn Interfaces() -> Result<Slice<Interface>, error>
+pub fn Interfaces() -> Result<mut Slice<mut Interface>, error>
 
 /// JoinHostPort combines host and port into a network address of the
 /// form "host:port". If host contains a colon, as found in literal
@@ -195,7 +195,7 @@ pub fn Listen(network: string, address: string) -> Result<Listener, error>
 /// If the IP field of laddr is nil or an unspecified IP address,
 /// ListenIP listens on all available IP addresses of the local system
 /// except multicast IP addresses.
-pub fn ListenIP(network: string, laddr: Ref<IPAddr>) -> Result<Ref<IPConn>, error>
+pub fn ListenIP(network: string, laddr: Ref<IPAddr>) -> Result<mut Ref<IPConn>, error>
 
 /// ListenMulticastUDP acts like [ListenPacket] for UDP networks but
 /// takes a group address on a specific network interface.
@@ -221,7 +221,7 @@ pub fn ListenMulticastUDP(
   network: string,
   ifi: Ref<Interface>,
   gaddr: Ref<UDPAddr>,
-) -> Result<Ref<UDPConn>, error>
+) -> Result<mut Ref<UDPConn>, error>
 
 /// ListenPacket announces on the local network address.
 /// 
@@ -259,7 +259,7 @@ pub fn ListenPacket(network: string, address: string) -> Result<PacketConn, erro
 /// of the local system.
 /// If the Port field of laddr is 0, a port number is automatically
 /// chosen.
-pub fn ListenTCP(network: string, laddr: Ref<TCPAddr>) -> Result<Ref<TCPListener>, error>
+pub fn ListenTCP(network: string, laddr: Ref<TCPAddr>) -> Result<mut Ref<TCPListener>, error>
 
 /// ListenUDP acts like [ListenPacket] for UDP networks.
 /// 
@@ -270,17 +270,17 @@ pub fn ListenTCP(network: string, laddr: Ref<TCPAddr>) -> Result<Ref<TCPListener
 /// except multicast IP addresses.
 /// If the Port field of laddr is 0, a port number is automatically
 /// chosen.
-pub fn ListenUDP(network: string, laddr: Ref<UDPAddr>) -> Result<Ref<UDPConn>, error>
+pub fn ListenUDP(network: string, laddr: Ref<UDPAddr>) -> Result<mut Ref<UDPConn>, error>
 
 /// ListenUnix acts like [Listen] for Unix networks.
 /// 
 /// The network must be "unix" or "unixpacket".
-pub fn ListenUnix(network: string, laddr: Ref<UnixAddr>) -> Result<Ref<UnixListener>, error>
+pub fn ListenUnix(network: string, laddr: Ref<UnixAddr>) -> Result<mut Ref<UnixListener>, error>
 
 /// ListenUnixgram acts like [ListenPacket] for Unix networks.
 /// 
 /// The network must be "unixgram".
-pub fn ListenUnixgram(network: string, laddr: Ref<UnixAddr>) -> Result<Ref<UnixConn>, error>
+pub fn ListenUnixgram(network: string, laddr: Ref<UnixAddr>) -> Result<mut Ref<UnixConn>, error>
 
 /// LookupAddr performs a reverse lookup for the given address, returning a list
 /// of names mapping to that address.
@@ -294,7 +294,7 @@ pub fn ListenUnixgram(network: string, laddr: Ref<UnixAddr>) -> Result<Ref<UnixC
 /// 
 /// LookupAddr uses [context.Background] internally; to specify the context, use
 /// [Resolver.LookupAddr].
-pub fn LookupAddr(addr: string) -> Partial<Slice<string>, error>
+pub fn LookupAddr(addr: string) -> Partial<mut Slice<string>, error>
 
 /// LookupCNAME returns the canonical name for the given host.
 /// Callers that do not care about the canonical name can call
@@ -319,7 +319,7 @@ pub fn LookupCNAME(host: string) -> Result<string, error>
 /// 
 /// LookupHost uses [context.Background] internally; to specify the context, use
 /// [Resolver.LookupHost].
-pub fn LookupHost(host: string) -> Result<Slice<string>, error>
+pub fn LookupHost(host: string) -> Result<mut Slice<string>, error>
 
 /// LookupIP looks up host using the local resolver.
 /// It returns a slice of that host's IPv4 and IPv6 addresses.
@@ -334,7 +334,7 @@ pub fn LookupIP(host: string) -> Result<Slice<IP>, error>
 /// 
 /// LookupMX uses [context.Background] internally; to specify the context, use
 /// [Resolver.LookupMX].
-pub fn LookupMX(name: string) -> Partial<Slice<Ref<MX>>, error>
+pub fn LookupMX(name: string) -> Partial<mut Slice<mut Ref<MX>>, error>
 
 /// LookupNS returns the DNS NS records for the given domain name.
 /// 
@@ -345,7 +345,7 @@ pub fn LookupMX(name: string) -> Partial<Slice<Ref<MX>>, error>
 /// 
 /// LookupNS uses [context.Background] internally; to specify the context, use
 /// [Resolver.LookupNS].
-pub fn LookupNS(name: string) -> Partial<Slice<Ref<NS>>, error>
+pub fn LookupNS(name: string) -> Partial<mut Slice<mut Ref<NS>>, error>
 
 /// LookupPort looks up the port for the given network and service.
 /// 
@@ -367,7 +367,7 @@ pub fn LookupPort(network: string, service: string) -> Result<int, error>
 /// formatted presentation-format domain names. If the response contains
 /// invalid names, those records are filtered out and an error
 /// will be returned alongside the remaining results, if any.
-pub fn LookupSRV(service: string, proto: string, name: string) -> Partial<(string, Slice<Ref<SRV>>), error>
+pub fn LookupSRV(service: string, proto: string, name: string) -> Partial<(string, mut Slice<mut Ref<SRV>>), error>
 
 /// LookupTXT returns the DNS TXT records for the given domain name.
 /// 
@@ -376,7 +376,7 @@ pub fn LookupSRV(service: string, proto: string, name: string) -> Partial<(strin
 /// 
 /// LookupTXT uses [context.Background] internally; to specify the context, use
 /// [Resolver.LookupTXT].
-pub fn LookupTXT(name: string) -> Result<Slice<string>, error>
+pub fn LookupTXT(name: string) -> Result<mut Slice<string>, error>
 
 /// ParseCIDR parses s as a CIDR notation IP address and prefix length,
 /// like "192.0.2.0/24" or "2001:db8::/32", as defined in
@@ -386,7 +386,7 @@ pub fn LookupTXT(name: string) -> Result<Slice<string>, error>
 /// prefix length.
 /// For example, ParseCIDR("192.0.2.1/24") returns the IP address
 /// 192.0.2.1 and the network 192.0.2.0/24.
-pub fn ParseCIDR(s: string) -> Result<(IP, Ref<IPNet>), error>
+pub fn ParseCIDR(s: string) -> Result<(mut IP, mut Ref<IPNet>), error>
 
 /// ParseIP parses s as an IP address, returning the result.
 /// The string s can be in IPv4 dotted decimal ("192.0.2.1"), IPv6
@@ -394,7 +394,7 @@ pub fn ParseCIDR(s: string) -> Result<(IP, Ref<IPNet>), error>
 /// If s is not a valid textual representation of an IP address,
 /// ParseIP returns nil. The returned address is always 16 bytes,
 /// IPv4 addresses are returned in IPv4-mapped IPv6 form.
-pub fn ParseIP(s: string) -> IP
+pub fn ParseIP(s: string) -> mut IP
 
 /// ParseMAC parses s as an IEEE 802 MAC-48, EUI-48, EUI-64, or a 20-octet
 /// IP over InfiniBand link-layer address using one of the following formats:
@@ -408,7 +408,7 @@ pub fn ParseIP(s: string) -> IP
 /// 	0000.5e00.5301
 /// 	0200.5e10.0000.0001
 /// 	0000.0000.fe80.0000.0000.0000.0200.5e10.0000.0001
-pub fn ParseMAC(s: string) -> Result<HardwareAddr, error>
+pub fn ParseMAC(s: string) -> Result<mut HardwareAddr, error>
 
 /// Pipe creates a synchronous, in-memory, full duplex
 /// network connection; both ends implement the [Conn] interface.
@@ -430,7 +430,7 @@ pub fn Pipe() -> (Conn, Conn)
 /// 
 /// See func [Dial] for a description of the network and address
 /// parameters.
-pub fn ResolveIPAddr(network: string, address: string) -> Result<Ref<IPAddr>, error>
+pub fn ResolveIPAddr(network: string, address: string) -> Result<mut Ref<IPAddr>, error>
 
 /// ResolveTCPAddr returns an address of TCP end point.
 /// 
@@ -447,7 +447,7 @@ pub fn ResolveIPAddr(network: string, address: string) -> Result<Ref<IPAddr>, er
 /// 
 /// See func [Dial] for a description of the network and address
 /// parameters.
-pub fn ResolveTCPAddr(network: string, address: string) -> Result<Ref<TCPAddr>, error>
+pub fn ResolveTCPAddr(network: string, address: string) -> Result<mut Ref<TCPAddr>, error>
 
 /// ResolveUDPAddr returns an address of UDP end point.
 /// 
@@ -464,7 +464,7 @@ pub fn ResolveTCPAddr(network: string, address: string) -> Result<Ref<TCPAddr>, 
 /// 
 /// See func [Dial] for a description of the network and address
 /// parameters.
-pub fn ResolveUDPAddr(network: string, address: string) -> Result<Ref<UDPAddr>, error>
+pub fn ResolveUDPAddr(network: string, address: string) -> Result<mut Ref<UDPAddr>, error>
 
 /// ResolveUnixAddr returns an address of Unix domain socket end point.
 /// 
@@ -472,7 +472,7 @@ pub fn ResolveUDPAddr(network: string, address: string) -> Result<Ref<UDPAddr>, 
 /// 
 /// See func [Dial] for a description of the network and address
 /// parameters.
-pub fn ResolveUnixAddr(network: string, address: string) -> Result<Ref<UnixAddr>, error>
+pub fn ResolveUnixAddr(network: string, address: string) -> Result<mut Ref<UnixAddr>, error>
 
 /// SplitHostPort splits a network address of the form "host:port",
 /// "host%zone:port", "[host]:port" or "[host%zone]:port" into host or
@@ -488,12 +488,12 @@ pub fn SplitHostPort(hostport: string) -> Result<(string, string), error>
 /// TCPAddrFromAddrPort returns addr as a [TCPAddr]. If addr.IsValid() is false,
 /// then the returned TCPAddr will contain a nil IP field, indicating an
 /// address family-agnostic unspecified address.
-pub fn TCPAddrFromAddrPort(addr: netip.AddrPort) -> Ref<TCPAddr>
+pub fn TCPAddrFromAddrPort(addr: netip.AddrPort) -> mut Ref<TCPAddr>
 
 /// UDPAddrFromAddrPort returns addr as a [UDPAddr]. If addr.IsValid() is false,
 /// then the returned UDPAddr will contain a nil IP field, indicating an
 /// address family-agnostic unspecified address.
-pub fn UDPAddrFromAddrPort(addr: netip.AddrPort) -> Ref<UDPAddr>
+pub fn UDPAddrFromAddrPort(addr: netip.AddrPort) -> mut Ref<UDPAddr>
 
 /// Addr represents a network end point address.
 /// 
@@ -515,7 +515,7 @@ pub struct AddrError {
 /// On certain machines, for certain types of connections, this is
 /// optimized into an OS-specific batch write operation (such as
 /// "writev").
-pub struct Buffers(Slice<Slice<byte>>)
+pub struct Buffers(mut Slice<mut Slice<byte>>)
 
 /// Conn is a generic stream-oriented network connection.
 /// 
@@ -524,7 +524,7 @@ pub interface Conn {
   #[allow(unused_result)]
   fn Close() -> Result<(), error>
   fn LocalAddr() -> Option<Addr>
-  fn Read(mut b: Slice<byte>) -> Partial<int, error>
+  fn Read(b: mut Slice<byte>) -> Partial<int, error>
   fn RemoteAddr() -> Option<Addr>
   fn SetDeadline(t: time.Time) -> Result<(), error>
   fn SetReadDeadline(t: time.Time) -> Result<(), error>
@@ -559,13 +559,13 @@ pub struct DNSError {
 #[go(hidden_fields)]
 pub struct Dialer {
   pub Timeout: time.Duration,
-  pub Deadline: time.Time,
+  pub Deadline: mut time.Time,
   pub LocalAddr: Option<Addr>,
   pub DualStack: bool,
   pub FallbackDelay: time.Duration,
   pub KeepAlive: time.Duration,
   pub KeepAliveConfig: KeepAliveConfig,
-  pub Resolver: Option<Ref<Resolver>>,
+  pub Resolver: Option<mut Ref<Resolver>>,
   pub Cancel: Receiver<()>,
   pub Control: Option<fn(string, string, syscall.RawConn) -> Result<(), error>>,
   pub ControlContext: Option<fn(context.Context, string, string, syscall.RawConn) -> Result<(), error>>,
@@ -582,7 +582,7 @@ pub interface Error {
 pub struct Flags(uint)
 
 /// A HardwareAddr represents a physical hardware address.
-pub struct HardwareAddr(Slice<byte>)
+pub struct HardwareAddr(mut Slice<byte>)
 
 /// An IP is a single IP address, a slice of bytes.
 /// Functions in this package accept either 4-byte (IPv4)
@@ -593,30 +593,30 @@ pub struct HardwareAddr(Slice<byte>)
 /// is a semantic property of the address, not just the
 /// length of the byte slice: a 16-byte slice can still
 /// be an IPv4 address.
-pub struct IP(Slice<byte>)
+pub struct IP(mut Slice<byte>)
 
 /// IPAddr represents the address of an IP end point.
 pub struct IPAddr {
-  pub IP: IP,
+  pub IP: mut IP,
   pub Zone: string,
 }
 
 /// IPConn is the implementation of the [Conn] and [PacketConn] interfaces
 /// for IP network connections.
 pub struct IPConn {
-  embed conn,
+  embed mut conn,
 }
 
 /// An IPMask is a bitmask that can be used to manipulate
 /// IP addresses for IP addressing and routing.
 /// 
 /// See type [IPNet] and func [ParseCIDR] for details.
-pub struct IPMask(Slice<byte>)
+pub struct IPMask(mut Slice<byte>)
 
 /// An IPNet represents an IP network.
 pub struct IPNet {
-  pub IP: IP,
-  pub Mask: IPMask,
+  pub IP: mut IP,
+  pub Mask: mut IPMask,
 }
 
 /// Interface represents a mapping between network interface name
@@ -626,7 +626,7 @@ pub struct Interface {
   pub Index: int,
   pub MTU: int,
   pub Name: string,
-  pub HardwareAddr: HardwareAddr,
+  pub HardwareAddr: mut HardwareAddr,
   pub Flags: Flags,
 }
 
@@ -702,7 +702,7 @@ pub interface PacketConn {
   #[allow(unused_result)]
   fn Close() -> Result<(), error>
   fn LocalAddr() -> Option<Addr>
-  fn ReadFrom(mut p: Slice<byte>) -> Result<(int, Addr), error>
+  fn ReadFrom(p: mut Slice<byte>) -> Result<(int, Addr), error>
   fn SetDeadline(t: time.Time) -> Result<(), error>
   fn SetReadDeadline(t: time.Time) -> Result<(), error>
   fn SetWriteDeadline(t: time.Time) -> Result<(), error>
@@ -735,7 +735,7 @@ pub struct SRV {
 
 /// TCPAddr represents the address of a TCP end point.
 pub struct TCPAddr {
-  pub IP: IP,
+  pub IP: mut IP,
   pub Port: int,
   pub Zone: string,
 }
@@ -743,7 +743,7 @@ pub struct TCPAddr {
 /// TCPConn is an implementation of the [Conn] interface for TCP network
 /// connections.
 pub struct TCPConn {
-  embed conn,
+  embed mut conn,
 }
 
 /// TCPListener is a TCP network listener. Clients should typically
@@ -752,7 +752,7 @@ pub type TCPListener
 
 /// UDPAddr represents the address of a UDP end point.
 pub struct UDPAddr {
-  pub IP: IP,
+  pub IP: mut IP,
   pub Port: int,
   pub Zone: string,
 }
@@ -760,7 +760,7 @@ pub struct UDPAddr {
 /// UDPConn is the implementation of the [Conn] and [PacketConn] interfaces
 /// for UDP network connections.
 pub struct UDPConn {
-  embed conn,
+  embed mut conn,
 }
 
 /// UnixAddr represents the address of a Unix domain socket end point.
@@ -772,7 +772,7 @@ pub struct UnixAddr {
 /// UnixConn is an implementation of the [Conn] interface for connections
 /// to Unix domain sockets.
 pub struct UnixConn {
-  embed conn,
+  embed mut conn,
 }
 
 /// UnixListener is a Unix domain socket listener. Clients should
@@ -805,7 +805,7 @@ pub const IPv6len = 16
 
 /// DefaultResolver is the resolver used by the package-level Lookup
 /// functions and by Dialers without a specified Resolver.
-pub var DefaultResolver: Ref<Resolver>
+pub var DefaultResolver: mut Ref<Resolver>
 
 /// ErrClosed is the error returned by an I/O call on a network
 /// connection that has already been closed, or that is closed by
@@ -818,34 +818,34 @@ pub var ErrClosed: error
 pub var ErrWriteToConnected: error
 
 /// Well-known IPv4 addresses
-pub var IPv4allrouter: IP
+pub var IPv4allrouter: mut IP
 
 /// Well-known IPv4 addresses
-pub var IPv4allsys: IP
+pub var IPv4allsys: mut IP
 
 /// Well-known IPv4 addresses
-pub var IPv4bcast: IP
+pub var IPv4bcast: mut IP
 
 /// Well-known IPv4 addresses
-pub var IPv4zero: IP
+pub var IPv4zero: mut IP
 
 /// Well-known IPv6 addresses
-pub var IPv6interfacelocalallnodes: IP
+pub var IPv6interfacelocalallnodes: mut IP
 
 /// Well-known IPv6 addresses
-pub var IPv6linklocalallnodes: IP
+pub var IPv6linklocalallnodes: mut IP
 
 /// Well-known IPv6 addresses
-pub var IPv6linklocalallrouters: IP
+pub var IPv6linklocalallrouters: mut IP
 
 /// Well-known IPv6 addresses
-pub var IPv6loopback: IP
+pub var IPv6loopback: mut IP
 
 /// Well-known IPv6 addresses
-pub var IPv6unspecified: IP
+pub var IPv6unspecified: mut IP
 
 /// Well-known IPv6 addresses
-pub var IPv6zero: IP
+pub var IPv6zero: mut IP
 
 impl AddrError {
   fn Error(self: Ref<AddrError>) -> string
@@ -862,7 +862,7 @@ impl Buffers {
   /// 
   /// Read modifies the slice v as well as v[i] for 0 <= i < len(v),
   /// but does not modify v[i][j] for any i, j.
-  fn Read(self: Ref<Buffers>, mut p: Slice<byte>) -> Partial<int, error>
+  fn Read(self: mut Ref<Buffers>, p: mut Slice<byte>) -> Partial<int, error>
 
   /// WriteTo writes contents of the buffers to w.
   /// 
@@ -870,7 +870,7 @@ impl Buffers {
   /// 
   /// WriteTo modifies the slice v as well as v[i] for 0 <= i < len(v),
   /// but does not modify v[i][j] for any i, j.
-  fn WriteTo(self: Ref<Buffers>, w: io.Writer) -> Partial<int64, error>
+  fn WriteTo(self: mut Ref<Buffers>, w: io.Writer) -> Partial<int64, error>
 }
 
 impl DNSConfigError {
@@ -947,7 +947,7 @@ impl Dialer {
   /// 
   /// If MPTCP is not available on the host or not supported by the server,
   /// the Dial methods will fall back to TCP.
-  fn SetMultipathTCP(self: Ref<Dialer>, use: bool)
+  fn SetMultipathTCP(self: mut Ref<Dialer>, use: bool)
 }
 
 impl Flags {
@@ -962,7 +962,7 @@ impl IP {
   /// AppendText implements the [encoding.TextAppender] interface.
   /// The encoding is the same as returned by [IP.String], with one exception:
   /// When len(ip) is zero, it appends nothing.
-  fn AppendText(self, mut b: Slice<byte>) -> Result<Slice<byte>, error>
+  fn AppendText(self, b: mut Slice<byte>) -> Result<mut Slice<byte>, error>
 
   /// DefaultMask returns the default IP mask for the IP address ip.
   /// Only IPv4 addresses have default masks; DefaultMask returns
@@ -1013,10 +1013,10 @@ impl IP {
   /// MarshalText implements the [encoding.TextMarshaler] interface.
   /// The encoding is the same as returned by [IP.String], with one exception:
   /// When len(ip) is zero, it returns an empty slice.
-  fn MarshalText(self) -> Result<Slice<byte>, error>
+  fn MarshalText(self) -> Result<mut Slice<byte>, error>
 
   /// Mask returns the result of masking the IP address ip with mask.
-  fn Mask(self, mask: IPMask) -> IP
+  fn Mask(self, mask: IPMask) -> mut IP
 
   /// String returns the string form of the IP address ip.
   /// It returns one of 4 forms:
@@ -1036,7 +1036,7 @@ impl IP {
 
   /// UnmarshalText implements the [encoding.TextUnmarshaler] interface.
   /// The IP address is expected in a form accepted by [ParseIP].
-  fn UnmarshalText(self: Ref<IP>, text: Slice<byte>) -> Result<(), error>
+  fn UnmarshalText(self: mut Ref<IP>, text: Slice<byte>) -> Result<(), error>
 }
 
 impl IPAddr {
@@ -1048,10 +1048,10 @@ impl IPAddr {
 
 impl IPConn {
   /// ReadFrom implements the [PacketConn] ReadFrom method.
-  fn ReadFrom(self: Ref<IPConn>, mut b: Slice<byte>) -> Result<(int, Addr), error>
+  fn ReadFrom(self: Ref<IPConn>, b: mut Slice<byte>) -> Result<(int, Addr), error>
 
   /// ReadFromIP acts like ReadFrom but returns an IPAddr.
-  fn ReadFromIP(self: Ref<IPConn>, mut b: Slice<byte>) -> Result<(int, Ref<IPAddr>), error>
+  fn ReadFromIP(self: Ref<IPConn>, b: mut Slice<byte>) -> Result<(int, mut Ref<IPAddr>), error>
 
   /// ReadMsgIP reads a message from c, copying the payload into b and
   /// the associated out-of-band data into oob. It returns the number of
@@ -1060,7 +1060,7 @@ impl IPConn {
   /// 
   /// The packages golang.org/x/net/ipv4 and golang.org/x/net/ipv6 can be
   /// used to manipulate IP-level socket options in oob.
-  fn ReadMsgIP(self: Ref<IPConn>, mut b: Slice<byte>, mut oob: Slice<byte>) -> Result<(int, int, int, Ref<IPAddr>), error>
+  fn ReadMsgIP(self: Ref<IPConn>, b: mut Slice<byte>, oob: mut Slice<byte>) -> Result<(int, int, int, mut Ref<IPAddr>), error>
 
   /// SyscallConn returns a raw network connection.
   /// This implements the [syscall.Conn] interface.
@@ -1115,11 +1115,11 @@ impl IPNet {
 impl Interface {
   /// Addrs returns a list of unicast interface addresses for a specific
   /// interface.
-  fn Addrs(self: Ref<Interface>) -> Result<Slice<Addr>, error>
+  fn Addrs(self: Ref<Interface>) -> Result<mut Slice<Addr>, error>
 
   /// MulticastAddrs returns a list of multicast, joined group addresses
   /// for a specific interface.
-  fn MulticastAddrs(self: Ref<Interface>) -> Result<Slice<Addr>, error>
+  fn MulticastAddrs(self: Ref<Interface>) -> Result<mut Slice<Addr>, error>
 }
 
 impl InvalidAddrError {
@@ -1171,7 +1171,7 @@ impl ListenConfig {
   /// 
   /// If MPTCP is not available on the host or not supported by the client,
   /// the Listen method will fall back to TCP.
-  fn SetMultipathTCP(self: Ref<ListenConfig>, use: bool)
+  fn SetMultipathTCP(self: mut Ref<ListenConfig>, use: bool)
 }
 
 impl OpError {
@@ -1199,7 +1199,7 @@ impl Resolver {
   /// The returned names are validated to be properly formatted presentation-format
   /// domain names. If the response contains invalid names, those records are filtered
   /// out and an error will be returned alongside the remaining results, if any.
-  fn LookupAddr(self: Ref<Resolver>, ctx: context.Context, addr: string) -> Partial<Slice<string>, error>
+  fn LookupAddr(self: Ref<Resolver>, ctx: context.Context, addr: string) -> Partial<mut Slice<string>, error>
 
   /// LookupCNAME returns the canonical name for the given host.
   /// Callers that do not care about the canonical name can call
@@ -1218,7 +1218,7 @@ impl Resolver {
 
   /// LookupHost looks up the given host using the local resolver.
   /// It returns a slice of that host's addresses.
-  fn LookupHost(self: Ref<Resolver>, ctx: context.Context, host: string) -> Result<Slice<string>, error>
+  fn LookupHost(self: Ref<Resolver>, ctx: context.Context, host: string) -> Result<mut Slice<string>, error>
 
   /// LookupIP looks up host for the given network using the local resolver.
   /// It returns a slice of that host's IP addresses of the type specified by
@@ -1229,7 +1229,7 @@ impl Resolver {
     ctx: context.Context,
     network: string,
     host: string,
-  ) -> Result<Slice<IP>, error>
+  ) -> Result<mut Slice<mut IP>, error>
 
   /// LookupIPAddr looks up host using the local resolver.
   /// It returns a slice of that host's IPv4 and IPv6 addresses.
@@ -1241,7 +1241,7 @@ impl Resolver {
   /// formatted presentation-format domain names, or numeric IP addresses.
   /// If the response contains invalid names, those records are filtered out
   /// and an error will be returned alongside the remaining results, if any.
-  fn LookupMX(self: Ref<Resolver>, ctx: context.Context, name: string) -> Partial<Slice<Ref<MX>>, error>
+  fn LookupMX(self: Ref<Resolver>, ctx: context.Context, name: string) -> Partial<mut Slice<mut Ref<MX>>, error>
 
   /// LookupNS returns the DNS NS records for the given domain name.
   /// 
@@ -1249,7 +1249,7 @@ impl Resolver {
   /// formatted presentation-format domain names. If the response contains
   /// invalid names, those records are filtered out and an error
   /// will be returned alongside the remaining results, if any.
-  fn LookupNS(self: Ref<Resolver>, ctx: context.Context, name: string) -> Partial<Slice<Ref<NS>>, error>
+  fn LookupNS(self: Ref<Resolver>, ctx: context.Context, name: string) -> Partial<mut Slice<mut Ref<NS>>, error>
 
   /// LookupNetIP looks up host using the local resolver.
   /// It returns a slice of that host's IP addresses of the type specified by
@@ -1260,7 +1260,7 @@ impl Resolver {
     ctx: context.Context,
     network: string,
     host: string,
-  ) -> Result<Slice<netip.Addr>, error>
+  ) -> Result<mut Slice<mut netip.Addr>, error>
 
   /// LookupPort looks up the port for the given network and service.
   /// 
@@ -1292,13 +1292,13 @@ impl Resolver {
     service: string,
     proto: string,
     name: string,
-  ) -> Partial<(string, Slice<Ref<SRV>>), error>
+  ) -> Partial<(string, mut Slice<mut Ref<SRV>>), error>
 
   /// LookupTXT returns the DNS TXT records for the given domain name.
   /// 
   /// If a DNS TXT record holds multiple strings, they are concatenated as a
   /// single string.
-  fn LookupTXT(self: Ref<Resolver>, ctx: context.Context, name: string) -> Result<Slice<string>, error>
+  fn LookupTXT(self: Ref<Resolver>, ctx: context.Context, name: string) -> Result<mut Slice<string>, error>
 }
 
 impl TCPAddr {
@@ -1307,7 +1307,7 @@ impl TCPAddr {
   /// If a.Port does not fit in a uint16, it's silently truncated.
   /// 
   /// If a is nil, a zero value is returned.
-  fn AddrPort(self: Ref<TCPAddr>) -> netip.AddrPort
+  fn AddrPort(self: Ref<TCPAddr>) -> mut netip.AddrPort
 
   /// Network returns the address's network name, "tcp".
   fn Network(self: Ref<TCPAddr>) -> string
@@ -1391,7 +1391,7 @@ impl TCPListener {
 
   /// AcceptTCP accepts the next incoming call and returns the new
   /// connection.
-  fn AcceptTCP(self: Ref<TCPListener>) -> Result<Ref<TCPConn>, error>
+  fn AcceptTCP(self: Ref<TCPListener>) -> Result<mut Ref<TCPConn>, error>
 
   /// Addr returns the listener's network address, a [*TCPAddr].
   /// The Addr returned is shared by all invocations of Addr, so
@@ -1413,7 +1413,7 @@ impl TCPListener {
   /// 
   /// On Windows, the returned os.File's file descriptor is not
   /// usable on other processes.
-  fn File(self: Ref<TCPListener>) -> Result<Ref<os.File>, error>
+  fn File(self: Ref<TCPListener>) -> Result<mut Ref<os.File>, error>
 
   /// SetDeadline sets the deadline associated with the listener.
   /// A zero time value disables the deadline.
@@ -1433,7 +1433,7 @@ impl UDPAddr {
   /// If a.Port does not fit in a uint16, it's silently truncated.
   /// 
   /// If a is nil, a zero value is returned.
-  fn AddrPort(self: Ref<UDPAddr>) -> netip.AddrPort
+  fn AddrPort(self: Ref<UDPAddr>) -> mut netip.AddrPort
 
   /// Network returns the address's network name, "udp".
   fn Network(self: Ref<UDPAddr>) -> string
@@ -1443,17 +1443,17 @@ impl UDPAddr {
 
 impl UDPConn {
   /// ReadFrom implements the [PacketConn] ReadFrom method.
-  fn ReadFrom(self: Ref<UDPConn>, mut b: Slice<byte>) -> Result<(int, Addr), error>
+  fn ReadFrom(self: Ref<UDPConn>, b: mut Slice<byte>) -> Result<(int, Addr), error>
 
   /// ReadFromUDP acts like [UDPConn.ReadFrom] but returns a UDPAddr.
-  fn ReadFromUDP(self: Ref<UDPConn>, mut b: Slice<byte>) -> Result<(int, Ref<UDPAddr>), error>
+  fn ReadFromUDP(self: Ref<UDPConn>, b: mut Slice<byte>) -> Result<(int, mut Ref<UDPAddr>), error>
 
   /// ReadFromUDPAddrPort acts like ReadFrom but returns a [netip.AddrPort].
   /// 
   /// If c is bound to an unspecified address, the returned
   /// netip.AddrPort's address might be an IPv4-mapped IPv6 address.
   /// Use [netip.Addr.Unmap] to get the address without the IPv6 prefix.
-  fn ReadFromUDPAddrPort(self: Ref<UDPConn>, mut b: Slice<byte>) -> Result<(int, netip.AddrPort), error>
+  fn ReadFromUDPAddrPort(self: Ref<UDPConn>, b: mut Slice<byte>) -> Result<(int, mut netip.AddrPort), error>
 
   /// ReadMsgUDP reads a message from c, copying the payload into b and
   /// the associated out-of-band data into oob. It returns the number of
@@ -1462,14 +1462,14 @@ impl UDPConn {
   /// 
   /// The packages [golang.org/x/net/ipv4] and [golang.org/x/net/ipv6] can be
   /// used to manipulate IP-level socket options in oob.
-  fn ReadMsgUDP(self: Ref<UDPConn>, mut b: Slice<byte>, mut oob: Slice<byte>) -> Result<(int, int, int, Ref<UDPAddr>), error>
+  fn ReadMsgUDP(self: Ref<UDPConn>, b: mut Slice<byte>, oob: mut Slice<byte>) -> Result<(int, int, int, mut Ref<UDPAddr>), error>
 
   /// ReadMsgUDPAddrPort is like [UDPConn.ReadMsgUDP] but returns an [netip.AddrPort] instead of a [UDPAddr].
   fn ReadMsgUDPAddrPort(
     self: Ref<UDPConn>,
-    mut b: Slice<byte>,
-    mut oob: Slice<byte>,
-  ) -> Result<(int, int, int, netip.AddrPort), error>
+    b: mut Slice<byte>,
+    oob: mut Slice<byte>,
+  ) -> Result<(int, int, int, mut netip.AddrPort), error>
 
   /// SyscallConn returns a raw network connection.
   /// This implements the [syscall.Conn] interface.
@@ -1532,10 +1532,10 @@ impl UnixConn {
   fn CloseWrite(self: Ref<UnixConn>) -> Result<(), error>
 
   /// ReadFrom implements the [PacketConn].ReadFrom method.
-  fn ReadFrom(self: Ref<UnixConn>, mut b: Slice<byte>) -> Result<(int, Addr), error>
+  fn ReadFrom(self: Ref<UnixConn>, b: mut Slice<byte>) -> Result<(int, Addr), error>
 
   /// ReadFromUnix acts like [UnixConn.ReadFrom] but returns a [UnixAddr].
-  fn ReadFromUnix(self: Ref<UnixConn>, mut b: Slice<byte>) -> Result<(int, Ref<UnixAddr>), error>
+  fn ReadFromUnix(self: Ref<UnixConn>, b: mut Slice<byte>) -> Result<(int, mut Ref<UnixAddr>), error>
 
   /// ReadMsgUnix reads a message from c, copying the payload into b and
   /// the associated out-of-band data into oob. It returns the number of
@@ -1544,7 +1544,7 @@ impl UnixConn {
   /// 
   /// Note that if len(b) == 0 and len(oob) > 0, this function will still
   /// read (and discard) 1 byte from the connection.
-  fn ReadMsgUnix(self: Ref<UnixConn>, mut b: Slice<byte>, mut oob: Slice<byte>) -> Result<(int, int, int, Ref<UnixAddr>), error>
+  fn ReadMsgUnix(self: Ref<UnixConn>, b: mut Slice<byte>, oob: mut Slice<byte>) -> Result<(int, int, int, mut Ref<UnixAddr>), error>
 
   /// SyscallConn returns a raw network connection.
   /// This implements the [syscall.Conn] interface.
@@ -1577,7 +1577,7 @@ impl UnixListener {
 
   /// AcceptUnix accepts the next incoming call and returns the new
   /// connection.
-  fn AcceptUnix(self: Ref<UnixListener>) -> Result<Ref<UnixConn>, error>
+  fn AcceptUnix(self: Ref<UnixListener>) -> Result<mut Ref<UnixConn>, error>
 
   /// Addr returns the listener's network address.
   /// The [Addr] returned is shared by all invocations of Addr, so
@@ -1599,7 +1599,7 @@ impl UnixListener {
   /// 
   /// On Windows, the returned os.File's file descriptor is not
   /// usable on other processes.
-  fn File(self: Ref<UnixListener>) -> Result<Ref<os.File>, error>
+  fn File(self: Ref<UnixListener>) -> Result<mut Ref<os.File>, error>
 
   /// SetDeadline sets the deadline associated with the listener.
   /// A zero time value disables the deadline.
@@ -1613,7 +1613,7 @@ impl UnixListener {
   /// Listen or ListenUnix, then by default closing the listener will remove the socket file.
   /// but if the listener was created by a call to FileListener to use an already existing
   /// socket file, then by default closing the listener will not remove the socket file.
-  fn SetUnlinkOnClose(self: Ref<UnixListener>, unlink: bool)
+  fn SetUnlinkOnClose(self: mut Ref<UnixListener>, unlink: bool)
 
   /// SyscallConn returns a raw network connection.
   /// This implements the [syscall.Conn] interface.
@@ -1646,7 +1646,7 @@ impl conn {
   /// 
   /// On Windows, the returned os.File's file descriptor is not usable
   /// on other processes.
-  fn File(self: Ref<conn>) -> Result<Ref<os.File>, error>
+  fn File(self: Ref<conn>) -> Result<mut Ref<os.File>, error>
 
   /// LocalAddr returns the local network address.
   /// The Addr returned is shared by all invocations of LocalAddr, so
@@ -1654,7 +1654,7 @@ impl conn {
   fn LocalAddr(self: Ref<conn>) -> Addr
 
   /// Read implements the Conn Read method.
-  fn Read(self: Ref<conn>, mut b: Slice<byte>) -> Partial<int, error>
+  fn Read(self: Ref<conn>, b: mut Slice<byte>) -> Partial<int, error>
 
   /// RemoteAddr returns the remote network address.
   /// The Addr returned is shared by all invocations of RemoteAddr, so

@@ -9,7 +9,7 @@ import "go:io"
 /// etc) in the input. It returns that block and the remainder of the input. If
 /// no PEM data is found, p is nil and the whole of the input is returned in
 /// rest. Blocks must start at the beginning of a line and end at the end of a line.
-pub fn Decode(data: Slice<byte>) -> (Option<Ref<Block>>, Slice<byte>)
+pub fn Decode(data: Slice<byte>) -> (Option<mut Ref<Block>>, Slice<byte>)
 
 /// Encode writes the PEM encoding of b to out.
 pub fn Encode(out: io.Writer, b: Ref<Block>) -> Result<(), error>
@@ -19,7 +19,7 @@ pub fn Encode(out: io.Writer, b: Ref<Block>) -> Result<(), error>
 /// If b has invalid headers and cannot be encoded,
 /// EncodeToMemory returns nil. If it is important to
 /// report details about this error case, use [Encode] instead.
-pub fn EncodeToMemory(b: Ref<Block>) -> Slice<byte>
+pub fn EncodeToMemory(b: Ref<Block>) -> mut Slice<byte>
 
 /// A Block represents a PEM encoded structure.
 /// 
@@ -33,6 +33,6 @@ pub fn EncodeToMemory(b: Ref<Block>) -> Slice<byte>
 /// where [Block.Headers] is a possibly empty sequence of Key: Value lines.
 pub struct Block {
   pub Type: string,
-  pub Headers: Map<string, string>,
-  pub Bytes: Slice<byte>,
+  pub Headers: mut Map<string, string>,
+  pub Bytes: mut Slice<byte>,
 }

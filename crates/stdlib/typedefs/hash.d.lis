@@ -17,7 +17,7 @@ pub interface Cloner {
   fn Clone() -> Result<Cloner, error>
   fn Reset()
   fn Size() -> int
-  fn Sum(mut b: Slice<byte>) -> Slice<byte>
+  fn Sum(b: mut Slice<byte>) -> Slice<byte>
   fn Write(p: Slice<byte>) -> Partial<int, error>
 }
 
@@ -41,7 +41,7 @@ pub interface Hash {
   fn BlockSize() -> int
   fn Reset()
   fn Size() -> int
-  fn Sum(mut b: Slice<byte>) -> Slice<byte>
+  fn Sum(b: mut Slice<byte>) -> Slice<byte>
   fn Write(p: Slice<byte>) -> Partial<int, error>
 }
 
@@ -50,7 +50,7 @@ pub interface Hash32 {
   fn BlockSize() -> int
   fn Reset()
   fn Size() -> int
-  fn Sum(mut b: Slice<byte>) -> Slice<byte>
+  fn Sum(b: mut Slice<byte>) -> Slice<byte>
   fn Sum32() -> uint32
   fn Write(p: Slice<byte>) -> Partial<int, error>
 }
@@ -60,7 +60,7 @@ pub interface Hash64 {
   fn BlockSize() -> int
   fn Reset()
   fn Size() -> int
-  fn Sum(mut b: Slice<byte>) -> Slice<byte>
+  fn Sum(b: mut Slice<byte>) -> Slice<byte>
   fn Sum64() -> uint64
   fn Write(p: Slice<byte>) -> Partial<int, error>
 }
@@ -68,7 +68,7 @@ pub interface Hash64 {
 /// XOF (extendable output function) is a hash function with arbitrary or unlimited output length.
 pub interface XOF {
   fn BlockSize() -> int
-  fn Read(mut p: Slice<byte>) -> Partial<int, error>
+  fn Read(p: mut Slice<byte>) -> Partial<int, error>
   fn Reset()
   fn Write(p: Slice<byte>) -> Partial<int, error>
 }

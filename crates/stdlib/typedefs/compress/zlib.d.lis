@@ -26,7 +26,7 @@ pub fn NewReaderDict(r: io.Reader, dict: Slice<byte>) -> Result<io.ReadCloser, e
 /// 
 /// It is the caller's responsibility to call Close on the Writer when done.
 /// Writes may be buffered and not flushed until Close.
-pub fn NewWriter(w: io.Writer) -> Ref<Writer>
+pub fn NewWriter(w: io.Writer) -> mut Ref<Writer>
 
 /// NewWriterLevel is like [NewWriter] but specifies the compression level instead
 /// of assuming [DefaultCompression].
@@ -34,14 +34,14 @@ pub fn NewWriter(w: io.Writer) -> Ref<Writer>
 /// The compression level can be [DefaultCompression], [NoCompression], [HuffmanOnly]
 /// or any integer value between [BestSpeed] and [BestCompression] inclusive.
 /// The error returned will be nil if the level is valid.
-pub fn NewWriterLevel(w: io.Writer, level: int) -> Result<Ref<Writer>, error>
+pub fn NewWriterLevel(w: io.Writer, level: int) -> Result<mut Ref<Writer>, error>
 
 /// NewWriterLevelDict is like [NewWriterLevel] but specifies a dictionary to
 /// compress with.
 /// 
 /// The dictionary may be nil. If not, its contents should not be modified until
 /// the Writer is closed.
-pub fn NewWriterLevelDict(w: io.Writer, level: int, dict: Slice<byte>) -> Result<Ref<Writer>, error>
+pub fn NewWriterLevelDict(w: io.Writer, level: int, dict: Slice<byte>) -> Result<mut Ref<Writer>, error>
 
 /// Resetter resets a ReadCloser returned by [NewReader] or [NewReaderDict]
 /// to switch to a new underlying Reader. This permits reusing a ReadCloser
@@ -84,19 +84,19 @@ impl Writer {
   /// Close closes the Writer, flushing any unwritten data to the underlying
   /// [io.Writer], but does not close the underlying io.Writer.
   #[allow(unused_result)]
-  fn Close(self: Ref<Writer>) -> Result<(), error>
+  fn Close(self: mut Ref<Writer>) -> Result<(), error>
 
   /// Flush flushes the Writer to its underlying [io.Writer].
   #[allow(unused_result)]
-  fn Flush(self: Ref<Writer>) -> Result<(), error>
+  fn Flush(self: mut Ref<Writer>) -> Result<(), error>
 
   /// Reset clears the state of the [Writer] z such that it is equivalent to its
   /// initial state from [NewWriterLevel] or [NewWriterLevelDict], but instead writing
   /// to w.
-  fn Reset(self: Ref<Writer>, w: io.Writer)
+  fn Reset(self: mut Ref<Writer>, w: io.Writer)
 
   /// Write writes a compressed form of p to the underlying [io.Writer]. The
   /// compressed bytes are not necessarily flushed until the [Writer] is closed or
   /// explicitly flushed.
-  fn Write(self: Ref<Writer>, p: Slice<byte>) -> Partial<int, error>
+  fn Write(self: mut Ref<Writer>, p: Slice<byte>) -> Partial<int, error>
 }

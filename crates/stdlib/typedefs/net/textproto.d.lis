@@ -18,20 +18,20 @@ pub fn CanonicalMIMEHeaderKey(s: string) -> string
 
 /// Dial connects to the given address on the given network using [net.Dial]
 /// and then returns a new [Conn] for the connection.
-pub fn Dial(network: string, addr: string) -> Result<Ref<Conn>, error>
+pub fn Dial(network: string, addr: string) -> Result<mut Ref<Conn>, error>
 
 /// NewConn returns a new [Conn] using conn for I/O.
-pub fn NewConn(conn: io.ReadWriteCloser) -> Ref<Conn>
+pub fn NewConn(conn: io.ReadWriteCloser) -> mut Ref<Conn>
 
 /// NewReader returns a new [Reader] reading from r.
 /// 
 /// To avoid denial of service attacks, the provided [bufio.Reader]
 /// should be reading from an [io.LimitReader] or similar Reader to bound
 /// the size of responses.
-pub fn NewReader(r: Ref<bufio.Reader>) -> Ref<Reader>
+pub fn NewReader(r: Ref<bufio.Reader>) -> mut Ref<Reader>
 
 /// NewWriter returns a new [Writer] writing to w.
-pub fn NewWriter(w: Ref<bufio.Writer>) -> Ref<Writer>
+pub fn NewWriter(w: Ref<bufio.Writer>) -> mut Ref<Writer>
 
 /// TrimBytes returns b without leading and trailing ASCII space.
 pub fn TrimBytes(b: Slice<byte>) -> Slice<byte>
@@ -47,9 +47,9 @@ pub fn TrimString(s: string) -> string
 #[go(hidden_fields)]
 #[go(zero_unsafe)]
 pub struct Conn {
-  embed Reader,
-  embed Writer,
-  embed Pipeline,
+  embed mut Reader,
+  embed mut Writer,
+  embed mut Pipeline,
 }
 
 /// An Error represents a numeric error response from a server.
@@ -60,7 +60,7 @@ pub struct Error {
 
 /// A MIMEHeader represents a MIME-style header mapping
 /// keys to sets of values.
-pub struct MIMEHeader(Map<string, Slice<string>>)
+pub struct MIMEHeader(mut Map<string, mut Slice<string>>)
 
 /// A Pipeline manages a pipelined in-order request/response sequence.
 /// 
@@ -90,7 +90,7 @@ pub struct ProtocolError(string)
 #[go(hidden_fields)]
 #[go(zero_unsafe)]
 pub struct Reader {
-  pub R: Option<Ref<bufio.Reader>>,
+  pub R: Option<mut Ref<bufio.Reader>>,
 }
 
 /// A Writer implements convenience methods for writing
@@ -98,7 +98,7 @@ pub struct Reader {
 #[go(hidden_fields)]
 #[go(zero_unsafe)]
 pub struct Writer {
-  pub W: Option<Ref<bufio.Writer>>,
+  pub W: Option<mut Ref<bufio.Writer>>,
 }
 
 impl Conn {
@@ -130,7 +130,7 @@ impl Conn {
   /// 		return nil, err
   /// 	}
   /// 	return c.ReadCodeLine(250)
-  fn Cmd(self: Ref<Conn>, format: string, args: VarArgs<Unknown>) -> Result<uint, error>
+  fn Cmd(self: mut Ref<Conn>, format: string, args: VarArgs<Unknown>) -> Result<uint, error>
 }
 
 impl Error {
@@ -141,11 +141,11 @@ impl MIMEHeader {
   /// Add adds the key, value pair to the header.
   /// It appends to any existing values associated with key.
   #[go(value_method_set)]
-  fn Add(self: Ref<MIMEHeader>, key: string, value: string)
+  fn Add(self: mut Ref<MIMEHeader>, key: string, value: string)
 
   /// Del deletes the values associated with key.
   #[go(value_method_set)]
-  fn Del(self: Ref<MIMEHeader>, key: string)
+  fn Del(self: mut Ref<MIMEHeader>, key: string)
 
   /// Get gets the first value associated with the given key.
   /// It is case insensitive; [CanonicalMIMEHeaderKey] is used
@@ -158,7 +158,7 @@ impl MIMEHeader {
   /// the single element value. It replaces any existing
   /// values associated with key.
   #[go(value_method_set)]
-  fn Set(self: Ref<MIMEHeader>, key: string, value: string)
+  fn Set(self: mut Ref<MIMEHeader>, key: string, value: string)
 
   /// Values returns all values associated with the given key.
   /// It is case insensitive; [CanonicalMIMEHeaderKey] is
@@ -171,22 +171,22 @@ impl MIMEHeader {
 impl Pipeline {
   /// EndRequest notifies p that the request with the given id has been sent
   /// (or, if this is a server, received).
-  fn EndRequest(self: Ref<Pipeline>, id: uint)
+  fn EndRequest(self: mut Ref<Pipeline>, id: uint)
 
   /// EndResponse notifies p that the response with the given id has been received
   /// (or, if this is a server, sent).
-  fn EndResponse(self: Ref<Pipeline>, id: uint)
+  fn EndResponse(self: mut Ref<Pipeline>, id: uint)
 
   /// Next returns the next id for a request/response pair.
-  fn Next(self: Ref<Pipeline>) -> uint
+  fn Next(self: mut Ref<Pipeline>) -> uint
 
   /// StartRequest blocks until it is time to send (or, if this is a server, receive)
   /// the request with the given id.
-  fn StartRequest(self: Ref<Pipeline>, id: uint)
+  fn StartRequest(self: mut Ref<Pipeline>, id: uint)
 
   /// StartResponse blocks until it is time to receive (or, if this is a server, send)
   /// the request with the given id.
-  fn StartResponse(self: Ref<Pipeline>, id: uint)
+  fn StartResponse(self: mut Ref<Pipeline>, id: uint)
 }
 
 impl ProtocolError {
@@ -210,7 +210,7 @@ impl Reader {
   /// rewrites the "\r\n" line endings into the simpler "\n",
   /// removes leading dot escapes if present, and stops with error [io.EOF]
   /// after consuming (and discarding) the end-of-sequence line.
-  fn DotReader(self: Ref<Reader>) -> io.Reader
+  fn DotReader(self: mut Ref<Reader>) -> io.Reader
 
   /// ReadCodeLine reads a response code line of the form
   /// 
@@ -249,22 +249,22 @@ impl Reader {
   /// and the second will return "Line 2".
   /// 
   /// Empty lines are never continued.
-  fn ReadContinuedLine(self: Ref<Reader>) -> Result<string, error>
+  fn ReadContinuedLine(self: mut Ref<Reader>) -> Result<string, error>
 
   /// ReadContinuedLineBytes is like [Reader.ReadContinuedLine] but
   /// returns a []byte instead of a string.
-  fn ReadContinuedLineBytes(self: Ref<Reader>) -> Result<Slice<byte>, error>
+  fn ReadContinuedLineBytes(self: mut Ref<Reader>) -> Result<mut Slice<byte>, error>
 
   /// ReadDotBytes reads a dot-encoding and returns the decoded data.
   /// 
   /// See the documentation for the [Reader.DotReader] method for details about dot-encoding.
-  fn ReadDotBytes(self: Ref<Reader>) -> Result<Slice<byte>, error>
+  fn ReadDotBytes(self: mut Ref<Reader>) -> Result<mut Slice<byte>, error>
 
   /// ReadDotLines reads a dot-encoding and returns a slice
   /// containing the decoded lines, with the final \r\n or \n elided from each.
   /// 
   /// See the documentation for the [Reader.DotReader] method for details about dot-encoding.
-  fn ReadDotLines(self: Ref<Reader>) -> Result<Slice<string>, error>
+  fn ReadDotLines(self: Ref<Reader>) -> Result<mut Slice<string>, error>
 
   /// ReadLine reads a single line from r,
   /// eliding the final \n or \r\n from the returned string.
@@ -292,7 +292,7 @@ impl Reader {
   /// 		"My-Key": {"Value 1", "Value 2"},
   /// 		"Long-Key": {"Even Longer Value"},
   /// 	}
-  fn ReadMIMEHeader(self: Ref<Reader>) -> Result<MIMEHeader, error>
+  fn ReadMIMEHeader(self: mut Ref<Reader>) -> Result<mut MIMEHeader, error>
 
   /// ReadResponse reads a multi-line response of the form:
   /// 
@@ -331,7 +331,7 @@ impl Writer {
   /// DotWriter before the next call to a method on w.
   /// 
   /// See the documentation for the [Reader.DotReader] method for details about dot-encoding.
-  fn DotWriter(self: Ref<Writer>) -> io.WriteCloser
+  fn DotWriter(self: mut Ref<Writer>) -> io.WriteCloser
 
   /// PrintfLine writes the formatted output followed by \r\n.
   fn PrintfLine(self: Ref<Writer>, format: string, args: VarArgs<Unknown>) -> Result<(), error>

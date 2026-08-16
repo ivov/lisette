@@ -5,23 +5,23 @@
 
 import "go:github.com/ivov/lisette/bindgen/tests/testdata/fixtures/nilness_transitive/mid/leaf"
 
-pub fn Grab() -> Option<Ref<leaf.Thing>>
+pub fn Grab() -> Option<mut Ref<leaf.Thing>>
 
-pub fn GrabHonest() -> Option<Ref<leaf.Thing>>
+pub fn GrabHonest() -> Option<mut Ref<leaf.Thing>>
 
-pub fn GrabViaHelper() -> Option<Ref<Gizmo>>
+pub fn GrabViaHelper() -> Option<mut Ref<Gizmo>>
 
-pub fn NewBox<T>() -> Ref<Box<T>>
+pub fn NewBox<T>() -> mut Ref<Box<T>>
 
-pub fn NewBoxInt() -> Ref<Box<int>>
+pub fn NewBoxInt() -> mut Ref<Box<int>>
 
-pub fn NewBuilt() -> Ref<Gizmo>
+pub fn NewBuilt() -> mut Ref<Gizmo>
 
-pub fn NewDirectNil() -> Option<Ref<Gizmo>>
+pub fn NewDirectNil() -> Option<mut Ref<Gizmo>>
 
-pub fn NewViaHelper() -> Option<Ref<Gizmo>>
+pub fn NewViaHelper() -> Option<mut Ref<Gizmo>>
 
-pub fn UnnamedBuilt() -> Ref<Gizmo>
+pub fn UnnamedBuilt() -> mut Ref<Gizmo>
 
 pub struct Box<T> {
   pub Value: T,

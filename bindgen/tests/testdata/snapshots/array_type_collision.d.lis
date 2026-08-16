@@ -5,17 +5,17 @@
 
 pub fn Digest() -> Array<byte, 16>
 
-pub fn NewArray<T>() -> array_type_collision.Array<T>
+pub fn NewArray<T>() -> mut array_type_collision.Array<T>
 
 pub fn TakeArray<T>(a: array_type_collision.Array<T>)
 
 pub struct Array<T> {
-  pub Elements: Slice<T>,
+  pub Elements: mut Slice<T>,
   pub Valid: bool,
 }
 
 pub struct Holder {
-  pub Ints: array_type_collision.Array<int>,
+  pub Ints: mut array_type_collision.Array<int>,
   pub Digest: Array<byte, 16>,
 }
 

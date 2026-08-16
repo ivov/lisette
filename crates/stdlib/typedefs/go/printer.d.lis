@@ -17,7 +17,7 @@ pub fn Fprint(output: io.Writer, fset: Ref<token.FileSet>, node: Unknown) -> Res
 /// It may be provided as argument to any of the [Fprint] functions.
 pub struct CommentedNode {
   pub Node: Unknown,
-  pub Comments: Slice<Option<Ref<ast.CommentGroup>>>,
+  pub Comments: mut Slice<Option<mut Ref<ast.CommentGroup>>>,
 }
 
 /// A Config node controls the output of Fprint.

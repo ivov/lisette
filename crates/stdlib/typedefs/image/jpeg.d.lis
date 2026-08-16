@@ -29,7 +29,7 @@ pub struct Options {
 /// Deprecated: Reader is not used by the [image/jpeg] package and should
 /// not be used by others. It is kept for compatibility.
 pub interface Reader {
-  fn Read(mut p: Slice<byte>) -> Partial<int, error>
+  fn Read(p: mut Slice<byte>) -> Partial<int, error>
   fn ReadByte() -> Result<byte, error>
 }
 

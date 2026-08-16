@@ -22,7 +22,7 @@ pub fn NewEncoder(enc: Ref<Encoding>, w: io.Writer) -> io.WriteCloser
 /// without any special treatment for multi-byte UTF-8.
 /// The resulting Encoding uses the default padding character ('='),
 /// which may be changed or disabled via [Encoding.WithPadding].
-pub fn NewEncoding(encoder: string) -> Ref<Encoding>
+pub fn NewEncoding(encoder: string) -> mut Ref<Encoding>
 
 pub struct CorruptInputError(int64)
 
@@ -40,19 +40,19 @@ pub const StdPadding = 61
 /// RawStdEncoding is the standard raw, unpadded base64 encoding,
 /// as defined in RFC 4648 section 3.2.
 /// This is the same as [StdEncoding] but omits padding characters.
-pub var RawStdEncoding: Ref<Encoding>
+pub var RawStdEncoding: mut Ref<Encoding>
 
 /// RawURLEncoding is the unpadded alternate base64 encoding defined in RFC 4648.
 /// It is typically used in URLs and file names.
 /// This is the same as [URLEncoding] but omits padding characters.
-pub var RawURLEncoding: Ref<Encoding>
+pub var RawURLEncoding: mut Ref<Encoding>
 
 /// StdEncoding is the standard base64 encoding, as defined in RFC 4648.
-pub var StdEncoding: Ref<Encoding>
+pub var StdEncoding: mut Ref<Encoding>
 
 /// URLEncoding is the alternate base64 encoding defined in RFC 4648.
 /// It is typically used in URLs and file names.
-pub var URLEncoding: Ref<Encoding>
+pub var URLEncoding: mut Ref<Encoding>
 
 impl CorruptInputError {
   fn Error(self) -> string
@@ -63,11 +63,11 @@ impl Encoding {
   /// and returns the extended buffer.
   /// If the input is malformed, it returns the partially decoded src and an error.
   /// New line characters (\r and \n) are ignored.
-  fn AppendDecode(self: Ref<Encoding>, mut dst: Slice<byte>, src: Slice<byte>) -> Partial<Slice<byte>, error>
+  fn AppendDecode(self: Ref<Encoding>, dst: mut Slice<byte>, src: Slice<byte>) -> Partial<mut Slice<byte>, error>
 
   /// AppendEncode appends the base64 encoded src to dst
   /// and returns the extended buffer.
-  fn AppendEncode(self: Ref<Encoding>, mut dst: Slice<byte>, src: Slice<byte>) -> Slice<byte>
+  fn AppendEncode(self: Ref<Encoding>, dst: mut Slice<byte>, src: Slice<byte>) -> mut Slice<byte>
 
   /// Decode decodes src using the encoding enc. It writes at most
   /// [Encoding.DecodedLen](len(src)) bytes to dst and returns the number of bytes
@@ -75,7 +75,7 @@ impl Encoding {
   /// the decoded data. If src contains invalid base64 data, it will return the
   /// number of bytes successfully written and [CorruptInputError].
   /// New line characters (\r and \n) are ignored.
-  fn Decode(self: Ref<Encoding>, mut dst: Slice<byte>, src: Slice<byte>) -> Partial<int, error>
+  fn Decode(self: Ref<Encoding>, dst: mut Slice<byte>, src: Slice<byte>) -> Partial<int, error>
 
   /// DecodeString returns the bytes represented by the base64 string s.
   /// If the input is malformed, it returns the partially decoded data and
@@ -92,7 +92,7 @@ impl Encoding {
   /// The encoding pads the output to a multiple of 4 bytes,
   /// so Encode is not appropriate for use on individual blocks
   /// of a large data stream. Use [NewEncoder] instead.
-  fn Encode(self: Ref<Encoding>, mut dst: Slice<byte>, src: Slice<byte>)
+  fn Encode(self: Ref<Encoding>, dst: mut Slice<byte>, src: Slice<byte>)
 
   /// EncodeToString returns the base64 encoding of src.
   fn EncodeToString(self: Ref<Encoding>, src: Slice<byte>) -> string
@@ -107,7 +107,7 @@ impl Encoding {
   /// 
   /// Note that the input is still malleable, as new line characters
   /// (CR and LF) are still ignored.
-  fn Strict(self) -> Ref<Encoding>
+  fn Strict(self) -> mut Ref<Encoding>
 
   /// WithPadding creates a new encoding identical to enc except
   /// with a specified padding character, or [NoPadding] to disable padding.
@@ -116,5 +116,5 @@ impl Encoding {
   /// must not be negative, and must be a rune equal or below '\xff'.
   /// Padding characters above '\x7f' are encoded as their exact byte value
   /// rather than using the UTF-8 representation of the codepoint.
-  fn WithPadding(self, padding: rune) -> Ref<Encoding>
+  fn WithPadding(self, padding: rune) -> mut Ref<Encoding>
 }

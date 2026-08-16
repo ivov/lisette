@@ -77,7 +77,7 @@ pub fn AddCleanup<T, S>(ptr: Ref<T>, cleanup: fn(S) -> (), arg: S) -> Cleanup
 /// Most clients should use the [runtime/pprof] package or
 /// the [testing] package's -test.blockprofile flag instead
 /// of calling BlockProfile directly.
-pub fn BlockProfile(mut p: Slice<BlockProfileRecord>) -> Option<int>
+pub fn BlockProfile(p: mut Slice<BlockProfileRecord>) -> Option<int>
 
 /// Breakpoint executes a breakpoint trap.
 pub fn Breakpoint()
@@ -91,7 +91,7 @@ pub fn Breakpoint()
 /// Deprecated: Use the [runtime/pprof] package,
 /// or the handlers in the [net/http/pprof] package,
 /// or the [testing] package's -test.cpuprofile flag instead.
-pub fn CPUProfile() -> Slice<byte>
+pub fn CPUProfile() -> mut Slice<byte>
 
 /// Caller reports file and line number information about function invocations on
 /// the calling goroutine's stack. The argument skip is the number of stack frames
@@ -115,12 +115,12 @@ pub fn Caller(skip: int) -> Option<(uintptr, string, int)>
 /// directly is discouraged, as is using [FuncForPC] on any of the
 /// returned PCs, since these cannot account for inlining or return
 /// program counter adjustment.
-pub fn Callers(skip: int, mut pc: Slice<uintptr>) -> int
+pub fn Callers(skip: int, pc: mut Slice<uintptr>) -> int
 
 /// CallersFrames takes a slice of PC values returned by [Callers] and
 /// prepares to return function/file/line information.
 /// Do not change the slice until you are done with the [Frames].
-pub fn CallersFrames(callers: Slice<uintptr>) -> Ref<Frames>
+pub fn CallersFrames(callers: Slice<uintptr>) -> mut Ref<Frames>
 
 /// FuncForPC returns a *[Func] describing the function that contains the
 /// given program counter address, or else nil.
@@ -128,7 +128,7 @@ pub fn CallersFrames(callers: Slice<uintptr>) -> Ref<Frames>
 /// If pc represents multiple functions because of inlining, it returns
 /// the *Func describing the innermost function, but with an entry of
 /// the outermost function.
-pub fn FuncForPC(pc: uintptr) -> Option<Ref<Func>>
+pub fn FuncForPC(pc: uintptr) -> Option<mut Ref<Func>>
 
 /// GC runs a garbage collection and blocks the caller until the
 /// garbage collection is complete. It may also block the entire
@@ -223,7 +223,7 @@ pub fn Goexit() -> Never
 /// 
 /// Most clients should use the [runtime/pprof] package instead
 /// of calling GoroutineProfile directly.
-pub fn GoroutineProfile(mut p: Slice<StackRecord>) -> Option<int>
+pub fn GoroutineProfile(p: mut Slice<StackRecord>) -> Option<int>
 
 /// Gosched yields the processor, allowing other goroutines to run. It does not
 /// suspend the current goroutine, so execution resumes automatically.
@@ -292,7 +292,7 @@ pub fn LockOSThread()
 /// Most clients should use the runtime/pprof package or
 /// the testing package's -test.memprofile flag instead
 /// of calling MemProfile directly.
-pub fn MemProfile(mut p: Slice<MemProfileRecord>, inuseZero: bool) -> Option<int>
+pub fn MemProfile(p: mut Slice<MemProfileRecord>, inuseZero: bool) -> Option<int>
 
 /// MutexProfile returns n, the number of records in the current mutex profile.
 /// If len(p) >= n, MutexProfile copies the profile into p and returns n, true.
@@ -300,7 +300,7 @@ pub fn MemProfile(mut p: Slice<MemProfileRecord>, inuseZero: bool) -> Option<int
 /// 
 /// Most clients should use the [runtime/pprof] package
 /// instead of calling MutexProfile directly.
-pub fn MutexProfile(mut p: Slice<BlockProfileRecord>) -> Option<int>
+pub fn MutexProfile(p: mut Slice<BlockProfileRecord>) -> Option<int>
 
 /// NumCPU returns the number of logical CPUs usable by the current process.
 /// 
@@ -321,14 +321,14 @@ pub fn NumGoroutine() -> int
 /// call to ReadMemStats. This is in contrast with a heap profile,
 /// which is a snapshot as of the most recently completed garbage
 /// collection cycle.
-pub fn ReadMemStats(m: Ref<MemStats>)
+pub fn ReadMemStats(m: mut Ref<MemStats>)
 
 /// ReadTrace returns the next chunk of binary tracing data, blocking until data
 /// is available. If tracing is turned off and all the data accumulated while it
 /// was on has been returned, ReadTrace returns nil. The caller must copy the
 /// returned data before calling ReadTrace again.
 /// ReadTrace must be called from one goroutine at a time.
-pub fn ReadTrace() -> Slice<byte>
+pub fn ReadTrace() -> mut Slice<byte>
 
 /// SetBlockProfileRate controls the fraction of goroutine blocking events
 /// that are reported in the blocking profile. The profiler aims to sample
@@ -632,7 +632,7 @@ pub fn SetMutexProfileFraction(rate: int) -> int
 /// and returns the number of bytes written to buf.
 /// If all is true, Stack formats stack traces of all other goroutines
 /// into buf after the trace for the current goroutine.
-pub fn Stack(mut buf: Slice<byte>, all: bool) -> int
+pub fn Stack(buf: mut Slice<byte>, all: bool) -> int
 
 /// StartTrace enables tracing for the current process.
 /// While tracing, the data will be buffered and available via [ReadTrace].
@@ -651,7 +651,7 @@ pub fn StopTrace()
 /// 
 /// Most clients should use the runtime/pprof package instead
 /// of calling ThreadCreateProfile directly.
-pub fn ThreadCreateProfile(mut p: Slice<StackRecord>) -> Option<int>
+pub fn ThreadCreateProfile(p: mut Slice<StackRecord>) -> Option<int>
 
 /// UnlockOSThread undoes an earlier call to LockOSThread.
 /// If this drops the number of active LockOSThread calls on the
@@ -703,7 +703,7 @@ pub interface Error {
 #[go(hidden_fields)]
 pub struct Frame {
   pub PC: uintptr,
-  pub Func: Option<Ref<Func>>,
+  pub Func: Option<mut Ref<Func>>,
   pub Function: string,
   pub File: string,
   pub Line: int,
@@ -775,7 +775,7 @@ pub type PanicNilError
 /// objects. See their comments for more information.
 #[go(zero_safe)]
 pub struct Pinner {
-  embed Ref<pinner>,
+  embed mut Ref<pinner>,
 }
 
 /// A StackRecord describes a single execution stack.
@@ -839,7 +839,7 @@ impl Frames {
   /// returned one.
   /// 
   /// See the [Frames] example for idiomatic usage.
-  fn Next(self: Ref<Frames>) -> (Frame, bool)
+  fn Next(self: mut Ref<Frames>) -> (mut Frame, bool)
 }
 
 impl Func {
@@ -865,7 +865,7 @@ impl MemProfileRecord {
 
   /// Stack returns the stack trace associated with the record,
   /// a prefix of r.Stack0.
-  fn Stack(self: Ref<MemProfileRecord>) -> Slice<uintptr>
+  fn Stack(self: Ref<MemProfileRecord>) -> mut Slice<uintptr>
 }
 
 impl PanicNilError {
@@ -885,16 +885,16 @@ impl Pinner {
   /// 
   /// The argument must be a pointer of any type or an [unsafe.Pointer].
   /// It's safe to call Pin on non-Go pointers, in which case Pin will do nothing.
-  fn Pin(self: Ref<Pinner>, pointer: Unknown)
+  fn Pin(self: mut Ref<Pinner>, pointer: Unknown)
 
   /// Unpin unpins all pinned objects of the [Pinner].
-  fn Unpin(self: Ref<Pinner>)
+  fn Unpin(self: mut Ref<Pinner>)
 }
 
 impl StackRecord {
   /// Stack returns the stack trace associated with the record,
   /// a prefix of r.Stack0.
-  fn Stack(self: Ref<StackRecord>) -> Slice<uintptr>
+  fn Stack(self: Ref<StackRecord>) -> mut Slice<uintptr>
 }
 
 impl TypeAssertionError {

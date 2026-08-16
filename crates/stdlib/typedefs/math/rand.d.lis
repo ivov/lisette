@@ -48,7 +48,7 @@ pub fn Intn(n: int) -> int
 
 /// New returns a new [Rand] that uses random values from src
 /// to generate other random values.
-pub fn New(src: Source) -> Ref<Rand>
+pub fn New(src: Source) -> mut Ref<Rand>
 
 /// NewSource returns a new pseudo-random [Source] seeded with the given value.
 /// Unlike the default [Source] used by top-level functions, this source is not
@@ -60,7 +60,7 @@ pub fn NewSource(seed: int64) -> Source
 /// The generator generates values k ∈ [0, imax]
 /// such that P(k) is proportional to (v + k) ** (-s).
 /// Requirements: s > 1 and v >= 1.
-pub fn NewZipf(r: Ref<Rand>, s: float64, v: float64, imax: uint64) -> Option<Ref<Zipf>>
+pub fn NewZipf(r: Ref<Rand>, s: float64, v: float64, imax: uint64) -> Option<mut Ref<Zipf>>
 
 /// NormFloat64 returns a normally distributed float64 in the range
 /// [-[math.MaxFloat64], +[math.MaxFloat64]] with
@@ -74,7 +74,7 @@ pub fn NormFloat64() -> float64
 
 /// Perm returns, as a slice of n ints, a pseudo-random permutation of the integers
 /// in the half-open interval [0,n) from the default [Source].
-pub fn Perm(n: int) -> Slice<int>
+pub fn Perm(n: int) -> mut Slice<int>
 
 /// Read generates len(p) random bytes from the default [Source] and
 /// writes them into p. It always returns len(p) and a nil error.
@@ -82,7 +82,7 @@ pub fn Perm(n: int) -> Slice<int>
 /// 
 /// Deprecated: For almost all use cases, [crypto/rand.Read] is more appropriate.
 /// If a deterministic source is required, use [math/rand/v2.ChaCha8.Read].
-pub fn Read(mut p: Slice<byte>) -> Result<int, error>
+pub fn Read(p: mut Slice<byte>) -> Result<int, error>
 
 /// Seed uses the provided seed value to initialize the default Source to a
 /// deterministic state. Seed values that have the same remainder when
@@ -193,16 +193,16 @@ impl Rand {
 
   /// Perm returns, as a slice of n ints, a pseudo-random permutation of the integers
   /// in the half-open interval [0,n).
-  fn Perm(self: Ref<Rand>, n: int) -> Slice<int>
+  fn Perm(self: Ref<Rand>, n: int) -> mut Slice<int>
 
   /// Read generates len(p) random bytes and writes them into p. It
   /// always returns len(p) and a nil error.
   /// Read should not be called concurrently with any other Rand method.
-  fn Read(self: Ref<Rand>, mut p: Slice<byte>) -> Partial<int, error>
+  fn Read(self: mut Ref<Rand>, p: mut Slice<byte>) -> Partial<int, error>
 
   /// Seed uses the provided seed value to initialize the generator to a deterministic state.
   /// Seed should not be called concurrently with any other [Rand] method.
-  fn Seed(self: Ref<Rand>, seed: int64)
+  fn Seed(self: mut Ref<Rand>, seed: int64)
 
   /// Shuffle pseudo-randomizes the order of elements.
   /// n is the number of elements. Shuffle panics if n < 0.

@@ -9,14 +9,14 @@ import "go:reflect"
 
 /// Compact appends to dst the JSON-encoded src with
 /// insignificant space characters elided.
-pub fn Compact(dst: Ref<bytes.Buffer>, src: Slice<byte>) -> Result<(), error>
+pub fn Compact(dst: mut Ref<bytes.Buffer>, src: Slice<byte>) -> Result<(), error>
 
 /// HTMLEscape appends to dst the JSON-encoded src with <, >, &, U+2028 and U+2029
 /// characters inside string literals changed to \u003c, \u003e, \u0026, \u2028, \u2029
 /// so that the JSON will be safe to embed inside HTML <script> tags.
 /// For historical reasons, web browsers don't honor standard HTML
 /// escaping within <script> tags, so an alternative JSON encoding must be used.
-pub fn HTMLEscape(dst: Ref<bytes.Buffer>, src: Slice<byte>)
+pub fn HTMLEscape(dst: mut Ref<bytes.Buffer>, src: Slice<byte>)
 
 /// Indent appends to dst an indented form of the JSON-encoded src.
 /// Each element in a JSON object or array begins on a new,
@@ -30,7 +30,7 @@ pub fn HTMLEscape(dst: Ref<bytes.Buffer>, src: Slice<byte>)
 /// For example, if src has no trailing spaces, neither will dst;
 /// if src ends in a trailing newline, so will dst.
 pub fn Indent(
-  dst: Ref<bytes.Buffer>,
+  dst: mut Ref<bytes.Buffer>,
   src: Slice<byte>,
   prefix: string,
   indent: string,
@@ -177,7 +177,7 @@ pub fn Indent(
 /// JSON cannot represent cyclic data structures and Marshal does not
 /// handle them. Passing cyclic structures to Marshal will result in
 /// an error.
-pub fn Marshal(v: Unknown) -> Result<Slice<byte>, error>
+pub fn Marshal(v: Unknown) -> Result<mut Slice<byte>, error>
 
 /// MarshalIndent is like [Marshal] but applies [Indent] to format the output.
 /// Each JSON element in the output will begin on a new line beginning with prefix
@@ -188,10 +188,10 @@ pub fn MarshalIndent(v: Unknown, prefix: string, indent: string) -> Result<Slice
 /// 
 /// The decoder introduces its own buffering and may
 /// read data from r beyond the JSON values requested.
-pub fn NewDecoder(r: io.Reader) -> Ref<Decoder>
+pub fn NewDecoder(r: io.Reader) -> mut Ref<Decoder>
 
 /// NewEncoder returns a new encoder that writes to w.
-pub fn NewEncoder(w: io.Writer) -> Ref<Encoder>
+pub fn NewEncoder(w: io.Writer) -> mut Ref<Encoder>
 
 /// Unmarshal parses the JSON-encoded data and stores the result
 /// in the value pointed to by v. If v is nil or not a pointer,
@@ -270,7 +270,7 @@ pub fn NewEncoder(w: io.Writer) -> Ref<Encoder>
 /// invalid UTF-16 surrogate pairs are not treated as an error.
 /// Instead, they are replaced by the Unicode replacement
 /// character U+FFFD.
-pub fn Unmarshal<T>(data: Slice<byte>, v: Ref<T>) -> Result<(), error>
+pub fn Unmarshal<T>(data: Slice<byte>, v: mut Ref<T>) -> Result<(), error>
 
 /// Valid reports whether data is a valid JSON encoding.
 pub fn Valid(data: Slice<byte>) -> bool
@@ -321,7 +321,7 @@ pub struct Number(string)
 /// RawMessage is a raw encoded JSON value.
 /// It implements [Marshaler] and [Unmarshaler] and can
 /// be used to delay JSON decoding or precompute a JSON encoding.
-pub struct RawMessage(Slice<byte>)
+pub struct RawMessage(mut Slice<byte>)
 
 /// A SyntaxError is a description of a JSON syntax error.
 /// [Unmarshal] will return a SyntaxError if the JSON can't be parsed.
@@ -347,7 +347,7 @@ pub type Token = Unknown
 pub struct UnmarshalFieldError {
   pub Key: string,
   pub Type: Option<reflect.Type>,
-  pub Field: reflect.StructField,
+  pub Field: mut reflect.StructField,
 }
 
 /// An UnmarshalTypeError describes a JSON value that was
@@ -378,7 +378,7 @@ pub struct UnsupportedTypeError {
 /// An UnsupportedValueError is returned by [Marshal] when attempting
 /// to encode an unsupported value.
 pub struct UnsupportedValueError {
-  pub Value: reflect.Value,
+  pub Value: mut reflect.Value,
   pub Str: string,
 }
 
@@ -392,12 +392,12 @@ impl Decoder {
   /// 
   /// See the documentation for [Unmarshal] for details about
   /// the conversion of JSON into a Go value.
-  fn Decode<T>(self: Ref<Decoder>, v: Ref<T>) -> Result<(), error>
+  fn Decode<T>(self: mut Ref<Decoder>, v: mut Ref<T>) -> Result<(), error>
 
   /// DisallowUnknownFields causes the Decoder to return an error when the destination
   /// is a struct and the input contains object keys which do not match any
   /// non-ignored, exported fields in the destination.
-  fn DisallowUnknownFields(self: Ref<Decoder>)
+  fn DisallowUnknownFields(self: mut Ref<Decoder>)
 
   /// InputOffset returns the input stream byte offset of the current decoder position.
   /// The offset gives the location of the end of the most recently returned token
@@ -406,7 +406,7 @@ impl Decoder {
 
   /// More reports whether there is another element in the
   /// current array or object being parsed.
-  fn More(self: Ref<Decoder>) -> bool
+  fn More(self: mut Ref<Decoder>) -> bool
 
   /// Token returns the next JSON token in the input stream.
   /// At the end of the input stream, Token returns nil, [io.EOF].
@@ -419,11 +419,11 @@ impl Decoder {
   /// number, and null—along with delimiters [ ] { } of type [Delim]
   /// to mark the start and end of arrays and objects.
   /// Commas and colons are elided.
-  fn Token(self: Ref<Decoder>) -> Result<Token, error>
+  fn Token(self: mut Ref<Decoder>) -> Result<Token, error>
 
   /// UseNumber causes the Decoder to unmarshal a number into an
   /// interface value as a [Number] instead of as a float64.
-  fn UseNumber(self: Ref<Decoder>)
+  fn UseNumber(self: mut Ref<Decoder>)
 }
 
 impl Delim {
@@ -437,7 +437,7 @@ impl Encoder {
   /// 
   /// See the documentation for [Marshal] for details about the
   /// conversion of Go values to JSON.
-  fn Encode(self: Ref<Encoder>, v: Unknown) -> Result<(), error>
+  fn Encode(self: mut Ref<Encoder>, v: Unknown) -> Result<(), error>
 
   /// SetEscapeHTML specifies whether problematic HTML characters
   /// should be escaped inside JSON quoted strings.
@@ -446,12 +446,12 @@ impl Encoder {
   /// 
   /// In non-HTML settings where the escaping interferes with the readability
   /// of the output, SetEscapeHTML(false) disables this behavior.
-  fn SetEscapeHTML(self: Ref<Encoder>, on: bool)
+  fn SetEscapeHTML(self: mut Ref<Encoder>, on: bool)
 
   /// SetIndent instructs the encoder to format each subsequent encoded
   /// value as if indented by the package-level function Indent(dst, src, prefix, indent).
   /// Calling SetIndent("", "") disables indentation.
-  fn SetIndent(self: Ref<Encoder>, prefix: string, indent: string)
+  fn SetIndent(self: mut Ref<Encoder>, prefix: string, indent: string)
 }
 
 impl InvalidUTF8Error {
@@ -485,7 +485,7 @@ impl RawMessage {
   fn MarshalJSON(self) -> Result<Slice<byte>, error>
 
   /// UnmarshalJSON sets *m to a copy of data.
-  fn UnmarshalJSON(self: Ref<RawMessage>, data: Slice<byte>) -> Result<(), error>
+  fn UnmarshalJSON(self: mut Ref<RawMessage>, data: Slice<byte>) -> Result<(), error>
 }
 
 impl SyntaxError {

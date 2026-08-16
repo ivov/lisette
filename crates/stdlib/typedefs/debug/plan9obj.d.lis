@@ -7,16 +7,16 @@ import "go:io"
 
 /// NewFile creates a new [File] for accessing a Plan 9 binary in an underlying reader.
 /// The Plan 9 binary is expected to start at position 0 in the ReaderAt.
-pub fn NewFile(r: io.ReaderAt) -> Result<Ref<File>, error>
+pub fn NewFile(r: io.ReaderAt) -> Result<mut Ref<File>, error>
 
 /// Open opens the named file using [os.Open] and prepares it for use as a Plan 9 a.out binary.
-pub fn Open(name: string) -> Result<Ref<File>, error>
+pub fn Open(name: string) -> Result<mut Ref<File>, error>
 
 /// A File represents an open Plan 9 a.out file.
 #[go(hidden_fields)]
 pub struct File {
   embed FileHeader,
-  pub Sections: Slice<Option<Ref<Section>>>,
+  pub Sections: mut Slice<Option<mut Ref<Section>>>,
 }
 
 /// A FileHeader represents a Plan 9 a.out file header.
@@ -71,11 +71,11 @@ impl File {
   /// If the [File] was created using [NewFile] directly instead of [Open],
   /// Close has no effect.
   #[allow(unused_result)]
-  fn Close(self: Ref<File>) -> Result<(), error>
+  fn Close(self: mut Ref<File>) -> Result<(), error>
 
   /// Section returns a section with the given name, or nil if no such
   /// section exists.
-  fn Section(self: Ref<File>, name: string) -> Option<Ref<Section>>
+  fn Section(self: Ref<File>, name: string) -> Option<mut Ref<Section>>
 
   /// Symbols returns the symbol table for f.
   fn Symbols(self: Ref<File>) -> Result<Slice<Sym>, error>
@@ -83,10 +83,10 @@ impl File {
 
 impl Section {
   /// Data reads and returns the contents of the Plan 9 a.out section.
-  fn Data(self: Ref<Section>) -> Result<Slice<byte>, error>
+  fn Data(self: Ref<Section>) -> Result<mut Slice<byte>, error>
 
   /// Open returns a new ReadSeeker reading the Plan 9 a.out section.
   fn Open(self: Ref<Section>) -> io.ReadSeeker
 
-  fn ReadAt(self, mut p: Slice<byte>, off: int64) -> Partial<int, error>
+  fn ReadAt(self, p: mut Slice<byte>, off: int64) -> Partial<int, error>
 }

@@ -34,46 +34,46 @@ pub fn Decode(r: io.Reader) -> Result<(Image, string), error>
 pub fn DecodeConfig(r: io.Reader) -> Result<(Config, string), error>
 
 /// NewAlpha returns a new [Alpha] image with the given bounds.
-pub fn NewAlpha(r: Rectangle) -> Ref<Alpha>
+pub fn NewAlpha(r: Rectangle) -> mut Ref<Alpha>
 
 /// NewAlpha16 returns a new [Alpha16] image with the given bounds.
-pub fn NewAlpha16(r: Rectangle) -> Ref<Alpha16>
+pub fn NewAlpha16(r: Rectangle) -> mut Ref<Alpha16>
 
 /// NewCMYK returns a new CMYK image with the given bounds.
-pub fn NewCMYK(r: Rectangle) -> Ref<CMYK>
+pub fn NewCMYK(r: Rectangle) -> mut Ref<CMYK>
 
 /// NewGray returns a new [Gray] image with the given bounds.
-pub fn NewGray(r: Rectangle) -> Ref<Gray>
+pub fn NewGray(r: Rectangle) -> mut Ref<Gray>
 
 /// NewGray16 returns a new [Gray16] image with the given bounds.
-pub fn NewGray16(r: Rectangle) -> Ref<Gray16>
+pub fn NewGray16(r: Rectangle) -> mut Ref<Gray16>
 
 /// NewNRGBA returns a new [NRGBA] image with the given bounds.
-pub fn NewNRGBA(r: Rectangle) -> Ref<NRGBA>
+pub fn NewNRGBA(r: Rectangle) -> mut Ref<NRGBA>
 
 /// NewNRGBA64 returns a new [NRGBA64] image with the given bounds.
-pub fn NewNRGBA64(r: Rectangle) -> Ref<NRGBA64>
+pub fn NewNRGBA64(r: Rectangle) -> mut Ref<NRGBA64>
 
 /// NewNYCbCrA returns a new [NYCbCrA] image with the given bounds and subsample
 /// ratio.
-pub fn NewNYCbCrA(r: Rectangle, subsampleRatio: YCbCrSubsampleRatio) -> Ref<NYCbCrA>
+pub fn NewNYCbCrA(r: Rectangle, subsampleRatio: YCbCrSubsampleRatio) -> mut Ref<NYCbCrA>
 
 /// NewPaletted returns a new [Paletted] image with the given width, height and
 /// palette.
-pub fn NewPaletted(r: Rectangle, p: color.Palette) -> Ref<Paletted>
+pub fn NewPaletted(r: Rectangle, p: color.Palette) -> mut Ref<Paletted>
 
 /// NewRGBA returns a new [RGBA] image with the given bounds.
-pub fn NewRGBA(r: Rectangle) -> Ref<RGBA>
+pub fn NewRGBA(r: Rectangle) -> mut Ref<RGBA>
 
 /// NewRGBA64 returns a new [RGBA64] image with the given bounds.
-pub fn NewRGBA64(r: Rectangle) -> Ref<RGBA64>
+pub fn NewRGBA64(r: Rectangle) -> mut Ref<RGBA64>
 
 /// NewUniform returns a new [Uniform] image of the given color.
-pub fn NewUniform(c: color.Color) -> Ref<Uniform>
+pub fn NewUniform(c: color.Color) -> mut Ref<Uniform>
 
 /// NewYCbCr returns a new YCbCr image with the given bounds and subsample
 /// ratio.
-pub fn NewYCbCr(r: Rectangle, subsampleRatio: YCbCrSubsampleRatio) -> Ref<YCbCr>
+pub fn NewYCbCr(r: Rectangle, subsampleRatio: YCbCrSubsampleRatio) -> mut Ref<YCbCr>
 
 /// Pt is shorthand for [Point]{X, Y}.
 pub fn Pt(x: int, y: int) -> Point
@@ -98,21 +98,21 @@ pub fn RegisterFormat(
 
 /// Alpha is an in-memory image whose At method returns [color.Alpha] values.
 pub struct Alpha {
-  pub Pix: Slice<uint8>,
+  pub Pix: mut Slice<uint8>,
   pub Stride: int,
   pub Rect: Rectangle,
 }
 
 /// Alpha16 is an in-memory image whose At method returns [color.Alpha16] values.
 pub struct Alpha16 {
-  pub Pix: Slice<uint8>,
+  pub Pix: mut Slice<uint8>,
   pub Stride: int,
   pub Rect: Rectangle,
 }
 
 /// CMYK is an in-memory image whose At method returns [color.CMYK] values.
 pub struct CMYK {
-  pub Pix: Slice<uint8>,
+  pub Pix: mut Slice<uint8>,
   pub Stride: int,
   pub Rect: Rectangle,
 }
@@ -126,14 +126,14 @@ pub struct Config {
 
 /// Gray is an in-memory image whose At method returns [color.Gray] values.
 pub struct Gray {
-  pub Pix: Slice<uint8>,
+  pub Pix: mut Slice<uint8>,
   pub Stride: int,
   pub Rect: Rectangle,
 }
 
 /// Gray16 is an in-memory image whose At method returns [color.Gray16] values.
 pub struct Gray16 {
-  pub Pix: Slice<uint8>,
+  pub Pix: mut Slice<uint8>,
   pub Stride: int,
   pub Rect: Rectangle,
 }
@@ -148,14 +148,14 @@ pub interface Image {
 
 /// NRGBA is an in-memory image whose At method returns [color.NRGBA] values.
 pub struct NRGBA {
-  pub Pix: Slice<uint8>,
+  pub Pix: mut Slice<uint8>,
   pub Stride: int,
   pub Rect: Rectangle,
 }
 
 /// NRGBA64 is an in-memory image whose At method returns [color.NRGBA64] values.
 pub struct NRGBA64 {
-  pub Pix: Slice<uint8>,
+  pub Pix: mut Slice<uint8>,
   pub Stride: int,
   pub Rect: Rectangle,
 }
@@ -164,17 +164,17 @@ pub struct NRGBA64 {
 /// colors. A and AStride are analogous to the Y and YStride fields of the
 /// embedded YCbCr.
 pub struct NYCbCrA {
-  embed YCbCr,
-  pub A: Slice<uint8>,
+  embed mut YCbCr,
+  pub A: mut Slice<uint8>,
   pub AStride: int,
 }
 
 /// Paletted is an in-memory image of uint8 indices into a given palette.
 pub struct Paletted {
-  pub Pix: Slice<uint8>,
+  pub Pix: mut Slice<uint8>,
   pub Stride: int,
   pub Rect: Rectangle,
-  pub Palette: color.Palette,
+  pub Palette: mut color.Palette,
 }
 
 /// PalettedImage is an image whose colors may come from a limited palette.
@@ -197,14 +197,14 @@ pub struct Point {
 
 /// RGBA is an in-memory image whose At method returns [color.RGBA] values.
 pub struct RGBA {
-  pub Pix: Slice<uint8>,
+  pub Pix: mut Slice<uint8>,
   pub Stride: int,
   pub Rect: Rectangle,
 }
 
 /// RGBA64 is an in-memory image whose At method returns [color.RGBA64] values.
 pub struct RGBA64 {
-  pub Pix: Slice<uint8>,
+  pub Pix: mut Slice<uint8>,
   pub Stride: int,
   pub Rect: Rectangle,
 }
@@ -252,25 +252,25 @@ pub struct Uniform {
 /// 	For 4:1:1, CStride == YStride/4 && len(Cb) == len(Cr) == len(Y)/4.
 /// 	For 4:1:0, CStride == YStride/4 && len(Cb) == len(Cr) == len(Y)/8.
 pub struct YCbCr {
-  pub Y: Slice<uint8>,
-  pub Cb: Slice<uint8>,
-  pub Cr: Slice<uint8>,
+  pub Y: mut Slice<uint8>,
+  pub Cb: mut Slice<uint8>,
+  pub Cr: mut Slice<uint8>,
   pub YStride: int,
   pub CStride: int,
   pub SubsampleRatio: YCbCrSubsampleRatio,
   pub Rect: Rectangle,
 }
 
-pub var Black: Ref<Uniform>
+pub var Black: mut Ref<Uniform>
 
 /// ErrFormat indicates that decoding encountered an unknown format.
 pub var ErrFormat: error
 
-pub var Opaque: Ref<Uniform>
+pub var Opaque: mut Ref<Uniform>
 
-pub var Transparent: Ref<Uniform>
+pub var Transparent: mut Ref<Uniform>
 
-pub var White: Ref<Uniform>
+pub var White: mut Ref<Uniform>
 
 pub var ZP: Point
 
@@ -294,11 +294,11 @@ impl Alpha {
 
   fn RGBA64At(self: Ref<Alpha>, x: int, y: int) -> color.RGBA64
 
-  fn Set(self: Ref<Alpha>, x: int, y: int, c: color.Color)
+  fn Set(self: mut Ref<Alpha>, x: int, y: int, c: color.Color)
 
-  fn SetAlpha(self: Ref<Alpha>, x: int, y: int, c: color.Alpha)
+  fn SetAlpha(self: mut Ref<Alpha>, x: int, y: int, c: color.Alpha)
 
-  fn SetRGBA64(self: Ref<Alpha>, x: int, y: int, c: color.RGBA64)
+  fn SetRGBA64(self: mut Ref<Alpha>, x: int, y: int, c: color.RGBA64)
 
   /// SubImage returns an image representing the portion of the image p visible
   /// through r. The returned value shares pixels with the original image.
@@ -323,11 +323,11 @@ impl Alpha16 {
 
   fn RGBA64At(self: Ref<Alpha16>, x: int, y: int) -> color.RGBA64
 
-  fn Set(self: Ref<Alpha16>, x: int, y: int, c: color.Color)
+  fn Set(self: mut Ref<Alpha16>, x: int, y: int, c: color.Color)
 
-  fn SetAlpha16(self: Ref<Alpha16>, x: int, y: int, c: color.Alpha16)
+  fn SetAlpha16(self: mut Ref<Alpha16>, x: int, y: int, c: color.Alpha16)
 
-  fn SetRGBA64(self: Ref<Alpha16>, x: int, y: int, c: color.RGBA64)
+  fn SetRGBA64(self: mut Ref<Alpha16>, x: int, y: int, c: color.RGBA64)
 
   /// SubImage returns an image representing the portion of the image p visible
   /// through r. The returned value shares pixels with the original image.
@@ -352,11 +352,11 @@ impl CMYK {
 
   fn RGBA64At(self: Ref<CMYK>, x: int, y: int) -> color.RGBA64
 
-  fn Set(self: Ref<CMYK>, x: int, y: int, c: color.Color)
+  fn Set(self: mut Ref<CMYK>, x: int, y: int, c: color.Color)
 
-  fn SetCMYK(self: Ref<CMYK>, x: int, y: int, c: color.CMYK)
+  fn SetCMYK(self: mut Ref<CMYK>, x: int, y: int, c: color.CMYK)
 
-  fn SetRGBA64(self: Ref<CMYK>, x: int, y: int, c: color.RGBA64)
+  fn SetRGBA64(self: mut Ref<CMYK>, x: int, y: int, c: color.RGBA64)
 
   /// SubImage returns an image representing the portion of the image p visible
   /// through r. The returned value shares pixels with the original image.
@@ -381,11 +381,11 @@ impl Gray {
 
   fn RGBA64At(self: Ref<Gray>, x: int, y: int) -> color.RGBA64
 
-  fn Set(self: Ref<Gray>, x: int, y: int, c: color.Color)
+  fn Set(self: mut Ref<Gray>, x: int, y: int, c: color.Color)
 
-  fn SetGray(self: Ref<Gray>, x: int, y: int, c: color.Gray)
+  fn SetGray(self: mut Ref<Gray>, x: int, y: int, c: color.Gray)
 
-  fn SetRGBA64(self: Ref<Gray>, x: int, y: int, c: color.RGBA64)
+  fn SetRGBA64(self: mut Ref<Gray>, x: int, y: int, c: color.RGBA64)
 
   /// SubImage returns an image representing the portion of the image p visible
   /// through r. The returned value shares pixels with the original image.
@@ -410,11 +410,11 @@ impl Gray16 {
 
   fn RGBA64At(self: Ref<Gray16>, x: int, y: int) -> color.RGBA64
 
-  fn Set(self: Ref<Gray16>, x: int, y: int, c: color.Color)
+  fn Set(self: mut Ref<Gray16>, x: int, y: int, c: color.Color)
 
-  fn SetGray16(self: Ref<Gray16>, x: int, y: int, c: color.Gray16)
+  fn SetGray16(self: mut Ref<Gray16>, x: int, y: int, c: color.Gray16)
 
-  fn SetRGBA64(self: Ref<Gray16>, x: int, y: int, c: color.RGBA64)
+  fn SetRGBA64(self: mut Ref<Gray16>, x: int, y: int, c: color.RGBA64)
 
   /// SubImage returns an image representing the portion of the image p visible
   /// through r. The returned value shares pixels with the original image.
@@ -439,11 +439,11 @@ impl NRGBA {
 
   fn RGBA64At(self: Ref<NRGBA>, x: int, y: int) -> color.RGBA64
 
-  fn Set(self: Ref<NRGBA>, x: int, y: int, c: color.Color)
+  fn Set(self: mut Ref<NRGBA>, x: int, y: int, c: color.Color)
 
-  fn SetNRGBA(self: Ref<NRGBA>, x: int, y: int, c: color.NRGBA)
+  fn SetNRGBA(self: mut Ref<NRGBA>, x: int, y: int, c: color.NRGBA)
 
-  fn SetRGBA64(self: Ref<NRGBA>, x: int, y: int, c: color.RGBA64)
+  fn SetRGBA64(self: mut Ref<NRGBA>, x: int, y: int, c: color.RGBA64)
 
   /// SubImage returns an image representing the portion of the image p visible
   /// through r. The returned value shares pixels with the original image.
@@ -468,11 +468,11 @@ impl NRGBA64 {
 
   fn RGBA64At(self: Ref<NRGBA64>, x: int, y: int) -> color.RGBA64
 
-  fn Set(self: Ref<NRGBA64>, x: int, y: int, c: color.Color)
+  fn Set(self: mut Ref<NRGBA64>, x: int, y: int, c: color.Color)
 
-  fn SetNRGBA64(self: Ref<NRGBA64>, x: int, y: int, c: color.NRGBA64)
+  fn SetNRGBA64(self: mut Ref<NRGBA64>, x: int, y: int, c: color.NRGBA64)
 
-  fn SetRGBA64(self: Ref<NRGBA64>, x: int, y: int, c: color.RGBA64)
+  fn SetRGBA64(self: mut Ref<NRGBA64>, x: int, y: int, c: color.RGBA64)
 
   /// SubImage returns an image representing the portion of the image p visible
   /// through r. The returned value shares pixels with the original image.
@@ -518,11 +518,11 @@ impl Paletted {
 
   fn RGBA64At(self: Ref<Paletted>, x: int, y: int) -> color.RGBA64
 
-  fn Set(self: Ref<Paletted>, x: int, y: int, c: color.Color)
+  fn Set(self: mut Ref<Paletted>, x: int, y: int, c: color.Color)
 
-  fn SetColorIndex(self: Ref<Paletted>, x: int, y: int, index: uint8)
+  fn SetColorIndex(self: mut Ref<Paletted>, x: int, y: int, index: uint8)
 
-  fn SetRGBA64(self: Ref<Paletted>, x: int, y: int, c: color.RGBA64)
+  fn SetRGBA64(self: mut Ref<Paletted>, x: int, y: int, c: color.RGBA64)
 
   /// SubImage returns an image representing the portion of the image p visible
   /// through r. The returned value shares pixels with the original image.
@@ -574,11 +574,11 @@ impl RGBA {
 
   fn RGBAAt(self: Ref<RGBA>, x: int, y: int) -> color.RGBA
 
-  fn Set(self: Ref<RGBA>, x: int, y: int, c: color.Color)
+  fn Set(self: mut Ref<RGBA>, x: int, y: int, c: color.Color)
 
-  fn SetRGBA(self: Ref<RGBA>, x: int, y: int, c: color.RGBA)
+  fn SetRGBA(self: mut Ref<RGBA>, x: int, y: int, c: color.RGBA)
 
-  fn SetRGBA64(self: Ref<RGBA>, x: int, y: int, c: color.RGBA64)
+  fn SetRGBA64(self: mut Ref<RGBA>, x: int, y: int, c: color.RGBA64)
 
   /// SubImage returns an image representing the portion of the image p visible
   /// through r. The returned value shares pixels with the original image.
@@ -601,9 +601,9 @@ impl RGBA64 {
 
   fn RGBA64At(self: Ref<RGBA64>, x: int, y: int) -> color.RGBA64
 
-  fn Set(self: Ref<RGBA64>, x: int, y: int, c: color.Color)
+  fn Set(self: mut Ref<RGBA64>, x: int, y: int, c: color.Color)
 
-  fn SetRGBA64(self: Ref<RGBA64>, x: int, y: int, c: color.RGBA64)
+  fn SetRGBA64(self: mut Ref<RGBA64>, x: int, y: int, c: color.RGBA64)
 
   /// SubImage returns an image representing the portion of the image p visible
   /// through r. The returned value shares pixels with the original image.

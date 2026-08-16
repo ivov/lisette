@@ -97,14 +97,14 @@ pub fn NewOFB(b: Block, iv: Slice<byte>) -> Stream
 pub interface AEAD {
   fn NonceSize() -> int
   fn Open(
-    mut dst: Slice<byte>,
+    dst: mut Slice<byte>,
     nonce: Slice<byte>,
     ciphertext: Slice<byte>,
     additionalData: Slice<byte>,
   ) -> Result<Slice<byte>, error>
   fn Overhead() -> int
   fn Seal(
-    mut dst: Slice<byte>,
+    dst: mut Slice<byte>,
     nonce: Slice<byte>,
     plaintext: Slice<byte>,
     additionalData: Slice<byte>,
@@ -117,20 +117,20 @@ pub interface AEAD {
 /// extend that capability to streams of blocks.
 pub interface Block {
   fn BlockSize() -> int
-  fn Decrypt(mut dst: Slice<byte>, src: Slice<byte>)
-  fn Encrypt(mut dst: Slice<byte>, src: Slice<byte>)
+  fn Decrypt(dst: mut Slice<byte>, src: Slice<byte>)
+  fn Encrypt(dst: mut Slice<byte>, src: Slice<byte>)
 }
 
 /// A BlockMode represents a block cipher running in a block-based mode (CBC,
 /// ECB etc).
 pub interface BlockMode {
   fn BlockSize() -> int
-  fn CryptBlocks(mut dst: Slice<byte>, src: Slice<byte>)
+  fn CryptBlocks(dst: mut Slice<byte>, src: Slice<byte>)
 }
 
 /// A Stream represents a stream cipher.
 pub interface Stream {
-  fn XORKeyStream(mut dst: Slice<byte>, src: Slice<byte>)
+  fn XORKeyStream(dst: mut Slice<byte>, src: Slice<byte>)
 }
 
 /// StreamReader wraps a [Stream] into an [io.Reader]. It calls XORKeyStream
@@ -152,7 +152,7 @@ pub struct StreamWriter {
 }
 
 impl StreamReader {
-  fn Read(self, mut dst: Slice<byte>) -> Partial<int, error>
+  fn Read(self, dst: mut Slice<byte>) -> Partial<int, error>
 }
 
 impl StreamWriter {

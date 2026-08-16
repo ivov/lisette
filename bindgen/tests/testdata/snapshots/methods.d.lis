@@ -37,9 +37,9 @@ impl BadReceiver {
 }
 
 impl Counter {
-  fn Add(self: Ref<Counter>, n: int) -> int
+  fn Add(self: mut Ref<Counter>, n: int) -> int
   fn Get(self) -> int
-  fn Increment(self: Ref<Counter>)
+  fn Increment(self: mut Ref<Counter>)
   /// Variadic method - tests convertMethod variadic path
   fn Log(self: Ref<Counter>, format: string, args: VarArgs<Unknown>)
   /// Method with unnamed params - tests convertMethod unnamed param path

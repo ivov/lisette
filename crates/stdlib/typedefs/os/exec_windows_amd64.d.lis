@@ -31,7 +31,7 @@ import "go:time"
 /// unquoting algorithm. In these or other similar cases, you can do the
 /// quoting yourself and provide the full command line in SysProcAttr.CmdLine,
 /// leaving Args empty.
-pub fn Command(name: string, arg: VarArgs<string>) -> Ref<Cmd>
+pub fn Command(name: string, arg: VarArgs<string>) -> mut Ref<Cmd>
 
 /// CommandContext is like [Command] but includes a context.
 /// 
@@ -42,7 +42,7 @@ pub fn Command(name: string, arg: VarArgs<string>) -> Ref<Cmd>
 /// CommandContext sets the command's Cancel function to invoke the Kill method
 /// on its Process, and leaves its WaitDelay unset. The caller may change the
 /// cancellation behavior by modifying those fields before starting the command.
-pub fn CommandContext(ctx: context.Context, name: string, arg: VarArgs<string>) -> Ref<Cmd>
+pub fn CommandContext(ctx: context.Context, name: string, arg: VarArgs<string>) -> mut Ref<Cmd>
 
 /// LookPath searches for an executable named file in the
 /// directories named by the PATH environment variable.
@@ -63,16 +63,16 @@ pub fn LookPath(file: string) -> Partial<string, error>
 #[go(hidden_fields)]
 pub struct Cmd {
   pub Path: string,
-  pub Args: Slice<string>,
-  pub Env: Slice<string>,
+  pub Args: mut Slice<string>,
+  pub Env: mut Slice<string>,
   pub Dir: string,
   pub Stdin: Option<io.Reader>,
   pub Stdout: Option<io.Writer>,
   pub Stderr: Option<io.Writer>,
-  pub ExtraFiles: Slice<Option<Ref<os.File>>>,
-  pub SysProcAttr: Option<Ref<syscall.SysProcAttr>>,
-  pub Process: Option<Ref<os.Process>>,
-  pub ProcessState: Option<Ref<os.ProcessState>>,
+  pub ExtraFiles: mut Slice<Option<mut Ref<os.File>>>,
+  pub SysProcAttr: Option<mut Ref<syscall.SysProcAttr>>,
+  pub Process: Option<mut Ref<os.Process>>,
+  pub ProcessState: Option<mut Ref<os.ProcessState>>,
   pub Err: error,
   pub Cancel: Option<fn() -> Result<(), error>>,
   pub WaitDelay: time.Duration,
@@ -87,8 +87,8 @@ pub struct Error {
 
 /// An ExitError reports an unsuccessful exit by a command.
 pub struct ExitError {
-  embed Ref<os.ProcessState>,
-  pub Stderr: Slice<byte>,
+  embed mut Ref<os.ProcessState>,
+  pub Stderr: mut Slice<byte>,
 }
 
 /// ErrDot indicates that a path lookup resolved to an executable
@@ -111,18 +111,18 @@ pub var ErrWaitDelay: error
 impl Cmd {
   /// CombinedOutput runs the command and returns its combined standard
   /// output and standard error.
-  fn CombinedOutput(self: Ref<Cmd>) -> Result<Slice<byte>, error>
+  fn CombinedOutput(self: mut Ref<Cmd>) -> Result<Slice<byte>, error>
 
   /// Environ returns a copy of the environment in which the command would be run
   /// as it is currently configured.
-  fn Environ(self: Ref<Cmd>) -> Slice<string>
+  fn Environ(self: Ref<Cmd>) -> mut Slice<string>
 
   /// Output runs the command and returns its standard output.
   /// Any returned error will usually be of type [*ExitError].
   /// If c.Stderr was nil and the returned error is of type
   /// [*ExitError], Output populates the Stderr field of the
   /// returned error.
-  fn Output(self: Ref<Cmd>) -> Result<Slice<byte>, error>
+  fn Output(self: mut Ref<Cmd>) -> Result<Slice<byte>, error>
 
   /// Run starts the specified command and waits for it to complete.
   /// 
@@ -137,7 +137,7 @@ impl Cmd {
   /// with [runtime.LockOSThread] and modified any inheritable OS-level
   /// thread state (for example, Linux or Plan 9 name spaces), the new
   /// process will inherit the caller's thread state.
-  fn Run(self: Ref<Cmd>) -> Result<(), error>
+  fn Run(self: mut Ref<Cmd>) -> Result<(), error>
 
   /// Start starts the specified command but does not wait for it to complete.
   /// 
@@ -145,7 +145,7 @@ impl Cmd {
   /// 
   /// After a successful call to Start the [Cmd.Wait] method must be called in
   /// order to release associated system resources.
-  fn Start(self: Ref<Cmd>) -> Result<(), error>
+  fn Start(self: mut Ref<Cmd>) -> Result<(), error>
 
   /// StderrPipe returns a pipe that will be connected to the command's
   /// standard error when the command starts.
@@ -155,7 +155,7 @@ impl Cmd {
   /// before all reads from the pipe have completed.
   /// For the same reason, it is incorrect to use [Cmd.Run] when using StderrPipe.
   /// See the StdoutPipe example for idiomatic usage.
-  fn StderrPipe(self: Ref<Cmd>) -> Result<io.ReadCloser, error>
+  fn StderrPipe(self: mut Ref<Cmd>) -> Result<io.ReadCloser, error>
 
   /// StdinPipe returns a pipe that will be connected to the command's
   /// standard input when the command starts.
@@ -163,7 +163,7 @@ impl Cmd {
   /// A caller need only call Close to force the pipe to close sooner.
   /// For example, if the command being run will not exit until standard input
   /// is closed, the caller must close the pipe.
-  fn StdinPipe(self: Ref<Cmd>) -> Result<io.WriteCloser, error>
+  fn StdinPipe(self: mut Ref<Cmd>) -> Result<io.WriteCloser, error>
 
   /// StdoutPipe returns a pipe that will be connected to the command's
   /// standard output when the command starts.
@@ -173,7 +173,7 @@ impl Cmd {
   /// before all reads from the pipe have completed.
   /// For the same reason, it is incorrect to call [Cmd.Run] when using StdoutPipe.
   /// See the example for idiomatic usage.
-  fn StdoutPipe(self: Ref<Cmd>) -> Result<io.ReadCloser, error>
+  fn StdoutPipe(self: mut Ref<Cmd>) -> Result<io.ReadCloser, error>
 
   /// String returns a human-readable description of c.
   /// It is intended only for debugging.
@@ -198,7 +198,7 @@ impl Cmd {
   /// for the respective I/O loop copying to or from the process to complete.
   /// 
   /// Wait releases any resources associated with the [Cmd].
-  fn Wait(self: Ref<Cmd>) -> Result<(), error>
+  fn Wait(self: mut Ref<Cmd>) -> Result<(), error>
 }
 
 impl Error {

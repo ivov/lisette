@@ -3,9 +3,9 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
-pub fn FetchNil() -> Option<Ref<Thing>>
+pub fn FetchNil() -> Option<mut Ref<Thing>>
 
-pub fn NewNil() -> Option<Ref<Thing>>
+pub fn NewNil() -> Option<mut Ref<Thing>>
 
 pub struct Thing {
   pub ID: int,

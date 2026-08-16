@@ -109,7 +109,7 @@ func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]b
 		if isPointerToErrorImpl(results.At(0).Type()) {
 			return TypeResult{LisetteType: "error", IsDirectError: true}
 		}
-		elem := toLisetteRecursive(results.At(0).Type(), seen, conv, substitutions)
+		elem := conv.resultType(obj, results, 0, seen, substitutions, qualifiedName)
 		if elem.SkipReason == nil {
 			wrapped, applied := maybeWrapNilableFunction(results.At(0).Type(), elem.LisetteType, conv, qualifiedName)
 			elem.LisetteType = wrapped
@@ -137,7 +137,7 @@ func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]b
 		if !partial {
 			demoted = nilWitnessDemotions(conv, obj, results, 0, results.Len()-1, qualifiedName, true)
 		}
-		inner := collectReturnTypes(results, 0, results.Len()-1, seen, conv, qualifiedName, substitutions, demoted)
+		inner := collectReturnTypes(results, 0, results.Len()-1, seen, conv, obj, qualifiedName, substitutions, demoted)
 		innerType := inner.LisetteType
 		if inner.SkipReason != nil {
 			innerType = "Unknown"
@@ -157,7 +157,7 @@ func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]b
 	if isBoolType(last.Type()) {
 		if shouldConvertToOption(last.Name(), conv, qualifiedName) {
 			nilable := results.Len() == 2 && isDemotableGoType(results.At(0).Type())
-			inner := collectReturnTypes(results, 0, results.Len()-1, seen, conv, qualifiedName, substitutions, nil)
+			inner := collectReturnTypes(results, 0, results.Len()-1, seen, conv, obj, qualifiedName, substitutions, nil)
 			innerType := inner.LisetteType
 			if inner.SkipReason != nil {
 				innerType = "Unknown"
@@ -172,7 +172,7 @@ func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]b
 	}
 
 	demoted := nilWitnessDemotions(conv, obj, results, 0, results.Len(), qualifiedName, false)
-	return collectReturnTypes(results, 0, results.Len(), seen, conv, qualifiedName, substitutions, demoted)
+	return collectReturnTypes(results, 0, results.Len(), seen, conv, obj, qualifiedName, substitutions, demoted)
 }
 
 // nilWitnessDemotions: result indices demoted to Option by a witnessed nil
@@ -232,7 +232,76 @@ func shouldConvertToOption(boolName string, conv *Converter, qualifiedName strin
 // crates/syntax/src/parse/mod.rs.
 const maxReturnTupleArity = 5
 
-func collectReturnTypes(results *types.Tuple, start, end int, seen map[types.Type]bool, conv *Converter, qualifiedName string, substitutions map[string]string, demoted map[int]bool) TypeResult {
+// resultWritable reports whether one logical result is writable: a pointer, or a container that is fresh or views only mutated storage.
+func (c *Converter) resultWritable(obj types.Object, results *types.Tuple, index int, qualifiedName string) bool {
+	t := results.At(index).Type()
+	if typeParam, ok := types.Unalias(t).(*types.TypeParam); ok {
+		if core := coreType(typeParam); core != nil {
+			t = core
+		}
+	}
+	if !goWritableCapability(t) {
+		return false
+	}
+	if _, isPointer := t.Underlying().(*types.Pointer); isPointer {
+		return true
+	}
+	if c == nil || c.mutation == nil || obj == nil {
+		return false
+	}
+	fn, isFunc := obj.(*types.Func)
+	if !isFunc {
+		return false
+	}
+	sig, isSig := fn.Type().(*types.Signature)
+	if !isSig {
+		return false
+	}
+	views, recorded := c.mutation.Views(obj)
+	overrides, hasOverride := c.cfg.ViewOverrides(c.currentPkgPath, qualifiedName)
+	if (!recorded || !views.Analyzed) && !hasOverride {
+		return false
+	}
+	views, _ = ResolveViews(views, overrides, hasOverride, sig)
+	if index >= len(views.Results) {
+		return false
+	}
+	view := views.Results[index]
+	if view.Opaque || view.Shared {
+		return false
+	}
+	mutation, _ := c.mutation.Function(obj)
+	mutParams := c.cfg.MutatingParams(c.currentPkgPath, qualifiedName)
+	params := sig.Params()
+	for i, depth := range view.Params {
+		if depth == DepthNone {
+			continue
+		}
+		if i >= params.Len() || (sig.Variadic() && i == params.Len()-1) {
+			return false
+		}
+		source := params.At(i)
+		if !isMutableParam(mutation.Mutates(i), mutParams, source.Name(), source.Type(), fn.Name()) {
+			return false
+		}
+	}
+	if view.Receiver != DepthNone && !mutation.ReceiverMutates &&
+		!c.cfg.MutatesReceiver(c.currentPkgPath, qualifiedName) {
+		return false
+	}
+	return true
+}
+
+// resultType renders one logical result, writable at every layer when the facts allow.
+func (c *Converter) resultType(obj types.Object, results *types.Tuple, index int, seen map[types.Type]bool, substitutions map[string]string, qualifiedName string) TypeResult {
+	t := results.At(index).Type()
+	if c.resultWritable(obj, results, index, qualifiedName) {
+		return writableRecursive(t, seen, c, substitutions, false)
+	}
+	return toLisetteRecursive(t, seen, c, substitutions)
+}
+
+func collectReturnTypes(results *types.Tuple, start, end int, seen map[types.Type]bool, conv *Converter, obj types.Object, qualifiedName string, substitutions map[string]string, demoted map[int]bool) TypeResult {
 	count := end - start
 
 	if count == 0 {
@@ -240,7 +309,7 @@ func collectReturnTypes(results *types.Tuple, start, end int, seen map[types.Typ
 	}
 
 	if count == 1 {
-		elem := toLisetteRecursive(results.At(start).Type(), seen, conv, substitutions)
+		elem := conv.resultType(obj, results, start, seen, substitutions, qualifiedName)
 		if elem.SkipReason == nil {
 			wrapped, applied := maybeWrapNilableFunction(results.At(start).Type(), elem.LisetteType, conv, qualifiedName)
 			if demoted[start] && !applied {
@@ -264,7 +333,7 @@ func collectReturnTypes(results *types.Tuple, start, end int, seen map[types.Typ
 	var elems []string
 	anyApplied := false
 	for i := start; i < end; i++ {
-		elem := toLisetteRecursive(results.At(i).Type(), seen, conv, substitutions)
+		elem := conv.resultType(obj, results, i, seen, substitutions, qualifiedName)
 		if elem.SkipReason != nil {
 			return elem
 		}

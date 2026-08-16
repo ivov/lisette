@@ -24,7 +24,7 @@ pub fn DecryptOAEP(
   priv: Ref<PrivateKey>,
   ciphertext: Slice<byte>,
   label: Slice<byte>,
-) -> Result<Slice<byte>, error>
+) -> Result<mut Slice<byte>, error>
 
 /// DecryptPKCS1v15 decrypts a plaintext using RSA and the padding scheme from PKCS #1 v1.5.
 /// The random parameter is legacy and ignored, and it can be nil.
@@ -38,7 +38,7 @@ pub fn DecryptPKCS1v15(
   random: io.Reader,
   priv: Ref<PrivateKey>,
   ciphertext: Slice<byte>,
-) -> Result<Slice<byte>, error>
+) -> Result<mut Slice<byte>, error>
 
 /// DecryptPKCS1v15SessionKey decrypts a session key using RSA and the padding
 /// scheme from PKCS #1 v1.5. The random parameter is legacy and ignored, and it
@@ -78,7 +78,7 @@ pub fn DecryptPKCS1v15SessionKey(
   random: io.Reader,
   priv: Ref<PrivateKey>,
   ciphertext: Slice<byte>,
-  mut key: Slice<byte>,
+  key: mut Slice<byte>,
 ) -> Result<(), error>
 
 /// EncryptOAEP encrypts the given message with RSA-OAEP.
@@ -105,7 +105,7 @@ pub fn EncryptOAEP(
   pub_: Ref<PublicKey>,
   msg: Slice<byte>,
   label: Slice<byte>,
-) -> Result<Slice<byte>, error>
+) -> Result<mut Slice<byte>, error>
 
 /// EncryptPKCS1v15 encrypts the given message with RSA and the padding
 /// scheme from PKCS #1 v1.5.  The message must be no longer than the
@@ -124,7 +124,7 @@ pub fn EncryptPKCS1v15(
   random: io.Reader,
   pub_: Ref<PublicKey>,
   msg: Slice<byte>,
-) -> Result<Slice<byte>, error>
+) -> Result<mut Slice<byte>, error>
 
 /// GenerateKey generates a random RSA private key of the given bit size.
 /// 
@@ -136,7 +136,7 @@ pub fn EncryptPKCS1v15(
 /// and may change between calls and/or between versions.
 /// 
 /// [Minimum key size]: https://pkg.go.dev/crypto/rsa#hdr-Minimum_key_size
-pub fn GenerateKey(random: io.Reader, bits: int) -> Result<Ref<PrivateKey>, error>
+pub fn GenerateKey(random: io.Reader, bits: int) -> Result<mut Ref<PrivateKey>, error>
 
 /// GenerateMultiPrimeKey generates a multi-prime RSA keypair of the given bit
 /// size and the given random source.
@@ -157,7 +157,7 @@ pub fn GenerateKey(random: io.Reader, bits: int) -> Result<Ref<PrivateKey>, erro
 /// reasons. Use [GenerateKey] instead.
 /// 
 /// [On the Security of Multi-prime RSA]: http://www.cacr.math.uwaterloo.ca/techreports/2006/cacr2006-16.pdf
-pub fn GenerateMultiPrimeKey(random: io.Reader, nprimes: int, bits: int) -> Result<Ref<PrivateKey>, error>
+pub fn GenerateMultiPrimeKey(random: io.Reader, nprimes: int, bits: int) -> Result<mut Ref<PrivateKey>, error>
 
 /// SignPKCS1v15 calculates the signature of hashed using
 /// RSASSA-PKCS1-V1_5-SIGN from RSA PKCS #1 v1.5.  Note that hashed must
@@ -176,7 +176,7 @@ pub fn SignPKCS1v15(
   priv: Ref<PrivateKey>,
   hash: crypto.Hash,
   hashed: Slice<byte>,
-) -> Result<Slice<byte>, error>
+) -> Result<mut Slice<byte>, error>
 
 /// SignPSS calculates the signature of digest using PSS.
 /// 
@@ -193,7 +193,7 @@ pub fn SignPSS(
   hash: crypto.Hash,
   digest: Slice<byte>,
   opts: Ref<PSSOptions>,
-) -> Result<Slice<byte>, error>
+) -> Result<mut Slice<byte>, error>
 
 /// VerifyPKCS1v15 verifies an RSA PKCS #1 v1.5 signature.
 /// hashed is the result of hashing the input message using the given hash
@@ -229,9 +229,9 @@ pub fn VerifyPSS(
 
 /// CRTValue contains the precomputed Chinese remainder theorem values.
 pub struct CRTValue {
-  pub Exp: Option<Ref<big.Int>>,
-  pub Coeff: Option<Ref<big.Int>>,
-  pub R: Option<Ref<big.Int>>,
+  pub Exp: Option<mut Ref<big.Int>>,
+  pub Coeff: Option<mut Ref<big.Int>>,
+  pub R: Option<mut Ref<big.Int>>,
 }
 
 /// OAEPOptions is an interface for passing options to OAEP decryption using the
@@ -239,7 +239,7 @@ pub struct CRTValue {
 pub struct OAEPOptions {
   pub Hash: crypto.Hash,
   pub MGFHash: crypto.Hash,
-  pub Label: Slice<byte>,
+  pub Label: mut Slice<byte>,
 }
 
 /// PKCS1v15DecryptOptions is for passing options to PKCS #1 v1.5 decryption using
@@ -256,18 +256,18 @@ pub struct PSSOptions {
 
 #[go(hidden_fields)]
 pub struct PrecomputedValues {
-  pub Dp: Option<Ref<big.Int>>,
-  pub Dq: Option<Ref<big.Int>>,
-  pub Qinv: Option<Ref<big.Int>>,
-  pub CRTValues: Slice<CRTValue>,
+  pub Dp: Option<mut Ref<big.Int>>,
+  pub Dq: Option<mut Ref<big.Int>>,
+  pub Qinv: Option<mut Ref<big.Int>>,
+  pub CRTValues: mut Slice<mut CRTValue>,
 }
 
 /// A PrivateKey represents an RSA key
 pub struct PrivateKey {
-  embed PublicKey,
-  pub D: Option<Ref<big.Int>>,
-  pub Primes: Slice<Option<Ref<big.Int>>>,
-  pub Precomputed: PrecomputedValues,
+  embed mut PublicKey,
+  pub D: Option<mut Ref<big.Int>>,
+  pub Primes: mut Slice<Option<mut Ref<big.Int>>>,
+  pub Precomputed: mut PrecomputedValues,
 }
 
 /// A PublicKey represents the public part of an RSA key.
@@ -275,7 +275,7 @@ pub struct PrivateKey {
 /// The values of N and E are not considered confidential, and may leak through
 /// side channels, or could be mathematically derived from other public values.
 pub struct PublicKey {
-  pub N: Option<Ref<big.Int>>,
+  pub N: Option<mut Ref<big.Int>>,
   pub E: int,
 }
 
@@ -318,7 +318,7 @@ impl PrivateKey {
 
   /// Precompute performs some calculations that speed up private key operations
   /// in the future. It is safe to run on non-validated private keys.
-  fn Precompute(self: Ref<PrivateKey>)
+  fn Precompute(self: mut Ref<PrivateKey>)
 
   /// Public returns the public key corresponding to priv.
   fn Public(self: Ref<PrivateKey>) -> crypto.PublicKey
@@ -336,7 +336,7 @@ impl PrivateKey {
     rand: io.Reader,
     digest: Slice<byte>,
     opts: crypto.SignerOpts,
-  ) -> Result<Slice<byte>, error>
+  ) -> Result<mut Slice<byte>, error>
 
   /// Validate performs basic sanity checks on the key.
   /// It returns nil if the key is valid, or else an error describing a problem.

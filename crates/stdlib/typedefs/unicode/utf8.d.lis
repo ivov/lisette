@@ -6,7 +6,7 @@
 /// AppendRune appends the UTF-8 encoding of r to the end of p and
 /// returns the extended buffer. If the rune is out of range,
 /// it appends the encoding of [RuneError].
-pub fn AppendRune(mut p: Slice<byte>, r: rune) -> Slice<byte>
+pub fn AppendRune(p: mut Slice<byte>, r: rune) -> mut Slice<byte>
 
 /// DecodeLastRune unpacks the last UTF-8 encoding in p and returns the rune and
 /// its width in bytes. If p is empty it returns ([RuneError], 0). Otherwise, if
@@ -51,7 +51,7 @@ pub fn DecodeRuneInString(s: string) -> (rune, int)
 /// EncodeRune writes into p (which must be large enough) the UTF-8 encoding of the rune.
 /// If the rune is out of range, it writes the encoding of [RuneError].
 /// It returns the number of bytes written.
-pub fn EncodeRune(mut p: Slice<byte>, r: rune) -> int
+pub fn EncodeRune(p: mut Slice<byte>, r: rune) -> int
 
 /// FullRune reports whether the bytes in p begin with a full UTF-8 encoding of a rune.
 /// An invalid encoding is considered a full Rune since it will convert as a width-1 error rune.

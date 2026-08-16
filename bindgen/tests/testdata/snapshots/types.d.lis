@@ -11,7 +11,7 @@ pub fn GetBool() -> bool
 
 pub fn GetByte() -> byte
 
-pub fn GetDoublePtr() -> Option<Ref<Ref<int>>>
+pub fn GetDoublePtr() -> Option<mut Ref<mut Ref<int>>>
 
 pub fn GetFloat32() -> float32
 
@@ -27,15 +27,15 @@ pub fn GetInt64() -> int64
 
 pub fn GetInt8() -> int8
 
-pub fn GetIntPtr() -> Option<Ref<int>>
+pub fn GetIntPtr() -> Option<mut Ref<int>>
 
-pub fn GetIntSlice() -> Slice<int>
+pub fn GetIntSlice() -> mut Slice<int>
 
-pub fn GetIntToInterface() -> Map<int, Unknown>
+pub fn GetIntToInterface() -> mut Map<int, Unknown>
 
-pub fn GetNested() -> Map<string, Map<int, bool>>
+pub fn GetNested() -> mut Map<string, mut Map<int, bool>>
 
-pub fn GetNestedSlice() -> Slice<Slice<byte>>
+pub fn GetNestedSlice() -> mut Slice<mut Slice<byte>>
 
 pub fn GetRecvOnly() -> Receiver<string>
 
@@ -45,11 +45,11 @@ pub fn GetSendOnly() -> Sender<bool>
 
 pub fn GetString() -> string
 
-pub fn GetStringSlice() -> Slice<string>
+pub fn GetStringSlice() -> mut Slice<string>
 
-pub fn GetStringToInt() -> Map<string, int>
+pub fn GetStringToInt() -> mut Map<string, int>
 
-pub fn GetStructPtr() -> Option<Ref<T>>
+pub fn GetStructPtr() -> Option<mut Ref<T>>
 
 pub fn GetUint() -> uint
 

@@ -8,23 +8,23 @@
 /// The first call will cache the current user information.
 /// Subsequent calls will return the cached value and will not reflect
 /// changes to the current user.
-pub fn Current() -> Result<Ref<User>, error>
+pub fn Current() -> Result<mut Ref<User>, error>
 
 /// Lookup looks up a user by username. If the user cannot be found, the
 /// returned error is of type [UnknownUserError].
-pub fn Lookup(username: string) -> Result<Ref<User>, error>
+pub fn Lookup(username: string) -> Result<mut Ref<User>, error>
 
 /// LookupGroup looks up a group by name. If the group cannot be found, the
 /// returned error is of type [UnknownGroupError].
-pub fn LookupGroup(name: string) -> Result<Ref<Group>, error>
+pub fn LookupGroup(name: string) -> Result<mut Ref<Group>, error>
 
 /// LookupGroupId looks up a group by groupid. If the group cannot be found, the
 /// returned error is of type [UnknownGroupIdError].
-pub fn LookupGroupId(gid: string) -> Result<Ref<Group>, error>
+pub fn LookupGroupId(gid: string) -> Result<mut Ref<Group>, error>
 
 /// LookupId looks up a user by userid. If the user cannot be found, the
 /// returned error is of type [UnknownUserIdError].
-pub fn LookupId(uid: string) -> Result<Ref<User>, error>
+pub fn LookupId(uid: string) -> Result<mut Ref<User>, error>
 
 /// Group represents a grouping of users.
 /// 
@@ -76,5 +76,5 @@ impl UnknownUserIdError {
 
 impl User {
   /// GroupIds returns the list of group IDs that the user is a member of.
-  fn GroupIds(self: Ref<User>) -> Result<Slice<string>, error>
+  fn GroupIds(self: Ref<User>) -> Result<mut Slice<string>, error>
 }

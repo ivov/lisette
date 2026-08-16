@@ -21,7 +21,7 @@ pub fn DelegateViaVar() -> Option<Stringer>
 
 pub fn MaybeAlias() -> Option<Stringer>
 
-pub fn MaybeWidgetAlias() -> Option<Ref<Widget>>
+pub fn MaybeWidgetAlias() -> Option<mut Ref<Widget>>
 
 pub fn NewMaybe() -> Option<Stringer>
 

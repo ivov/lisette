@@ -475,25 +475,28 @@ func Forward(s Sink, xs []int) { s.Absorb(xs) }
 }
 
 func TestIsMutableParamCombinesSignals(t *testing.T) {
+	intSlice := types.NewSlice(types.Typ[types.Int])
+	byteSlice := types.NewSlice(types.Typ[types.Uint8])
+	pointer := types.NewPointer(types.Typ[types.Int64])
 	cases := []struct {
 		name      string
 		derived   bool
 		curated   []string
 		paramName string
-		typeStr   string
+		paramType types.Type
 		funcName  string
 		want      bool
 	}{
-		{"derived only", true, nil, "s", "Slice<int>", "Sort", true},
-		{"curated only", false, []string{"buf"}, "buf", "Slice<byte>", "Buffer", true},
-		{"heuristic only", false, nil, "p", "Slice<byte>", "Read", true},
-		{"curated omits, derived finds", true, []string{"other"}, "s", "Slice<int>", "Sort", true},
-		{"no signal", false, nil, "s", "Slice<int>", "Sort", false},
-		{"not a reference type", true, []string{"n"}, "n", "int", "Read", false},
+		{"derived only", true, nil, "s", intSlice, "Sort", true},
+		{"curated only", false, []string{"buf"}, "buf", byteSlice, "Buffer", true},
+		{"heuristic only", false, nil, "p", byteSlice, "Read", true},
+		{"curated omits, derived finds", true, []string{"other"}, "s", intSlice, "Sort", true},
+		{"no signal", false, nil, "s", intSlice, "Sort", false},
+		{"pointer with derived signal", true, nil, "m", pointer, "ReadMemStats", true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := isMutableParam(c.derived, c.curated, c.paramName, c.typeStr, c.funcName)
+			got := isMutableParam(c.derived, c.curated, c.paramName, c.paramType, c.funcName)
 			if got != c.want {
 				t.Errorf("isMutableParam = %v, want %v", got, c.want)
 			}

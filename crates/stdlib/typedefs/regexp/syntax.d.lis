@@ -106,7 +106,7 @@ pub const OpWordBoundary: Op = 11
 
 /// Compile compiles the regexp into a program to be executed.
 /// The regexp should have been simplified already (returned from re.Simplify).
-pub fn Compile(re: Ref<Regexp>) -> Result<Ref<Prog>, error>
+pub fn Compile(re: Ref<Regexp>) -> Result<mut Ref<Prog>, error>
 
 /// EmptyOpContext returns the zero-width assertions
 /// satisfied at the position between the runes r1 and r2.
@@ -124,7 +124,7 @@ pub fn IsWordChar(r: rune) -> bool
 /// Parse parses a regular expression string s, controlled by the specified
 /// Flags, and returns a regular expression parse tree. The syntax is
 /// described in the top-level comment.
-pub fn Parse(s: string, flags: Flags) -> Result<Ref<Regexp>, error>
+pub fn Parse(s: string, flags: Flags) -> Result<mut Ref<Regexp>, error>
 
 /// An EmptyOp specifies a kind or mixture of zero-width assertions.
 #[go(bit_flag_set)]
@@ -146,12 +146,12 @@ pub struct Inst {
   pub Op: InstOp,
   pub Out: uint32,
   pub Arg: uint32,
-  pub Rune: Slice<rune>,
+  pub Rune: mut Slice<rune>,
 }
 
 /// A Prog is a compiled regular expression program.
 pub struct Prog {
-  pub Inst: Slice<Inst>,
+  pub Inst: mut Slice<mut Inst>,
   pub Start: int,
   pub NumCap: int,
 }
@@ -160,9 +160,9 @@ pub struct Prog {
 pub struct Regexp {
   pub Op: Op,
   pub Flags: Flags,
-  pub Sub: Slice<Option<Ref<Regexp>>>,
-  pub Sub0: Array<Option<Ref<Regexp>>, 1>,
-  pub Rune: Slice<rune>,
+  pub Sub: mut Slice<Option<mut Ref<Regexp>>>,
+  pub Sub0: Array<Option<mut Ref<Regexp>>, 1>,
+  pub Rune: mut Slice<rune>,
   pub Rune0: Array<rune, 2>,
   pub Min: int,
   pub Max: int,
@@ -274,7 +274,7 @@ impl Regexp {
   /// may have been duplicated or removed. For example, the simplified form
   /// for /(x){1,2}/ is /(x)(x)?/ but both parentheses capture as $1.
   /// The returned regexp may share structure with or be the original.
-  fn Simplify(self: Ref<Regexp>) -> Option<Ref<Regexp>>
+  fn Simplify(self: mut Ref<Regexp>) -> Option<mut Ref<Regexp>>
 
   fn String(self: Ref<Regexp>) -> string
 }

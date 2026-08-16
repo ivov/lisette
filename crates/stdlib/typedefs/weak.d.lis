@@ -4,7 +4,7 @@
 // Lisette: 0.11.1
 
 /// Make creates a weak pointer from a pointer to some value of type T.
-pub fn Make<T>(ptr: Ref<T>) -> Pointer<T>
+pub fn Make<T>(ptr: Ref<T>) -> mut Pointer<T>
 
 /// Pointer is a weak pointer to a value of type T.
 /// 
@@ -62,5 +62,5 @@ impl<T> Pointer<T> {
   /// the garbage collector.
   /// If a weak pointer points to an object with a finalizer, then Value will
   /// return nil as soon as the object's finalizer is queued for execution.
-  fn Value(self) -> Option<Ref<T>>
+  fn Value(self) -> Option<mut Ref<T>>
 }

@@ -4,7 +4,7 @@
 // Lisette: 0.11.1
 
 /// NewCond returns a new Cond with Locker l.
-pub fn NewCond(l: Locker) -> Ref<Cond>
+pub fn NewCond(l: Locker) -> mut Ref<Cond>
 
 /// OnceFunc returns a function that invokes f only once. The returned function
 /// may be called concurrently.
@@ -229,7 +229,7 @@ impl Cond {
   /// 
   /// It is allowed but not required for the caller to hold c.L
   /// during the call.
-  fn Broadcast(self: Ref<Cond>)
+  fn Broadcast(self: mut Ref<Cond>)
 
   /// Signal wakes one goroutine waiting on c, if there is any.
   /// 
@@ -238,7 +238,7 @@ impl Cond {
   /// 
   /// Signal() does not affect goroutine scheduling priority; if other goroutines
   /// are attempting to lock c.L, they may be awoken before a "waiting" goroutine.
-  fn Signal(self: Ref<Cond>)
+  fn Signal(self: mut Ref<Cond>)
 
   /// Wait atomically unlocks c.L and suspends execution
   /// of the calling goroutine. After later resuming execution,
@@ -255,42 +255,47 @@ impl Cond {
   /// 	}
   /// 	... make use of condition ...
   /// 	c.L.Unlock()
-  fn Wait(self: Ref<Cond>)
+  fn Wait(self: mut Ref<Cond>)
 }
 
 impl Map {
   /// Clear deletes all the entries, resulting in an empty Map.
-  fn Clear(self: Ref<Map>)
+  fn Clear(self: mut Ref<Map>)
 
   /// CompareAndDelete deletes the entry for key if its value is equal to old.
   /// The old value must be of a comparable type.
   /// 
   /// If there is no current value for key in the map, CompareAndDelete
   /// returns false (even if the old value is the nil interface value).
-  fn CompareAndDelete(self: Ref<Map>, key: Unknown, old: Unknown) -> bool
+  fn CompareAndDelete(self: mut Ref<Map>, key: Unknown, old: Unknown) -> bool
 
   /// CompareAndSwap swaps the old and new values for key
   /// if the value stored in the map is equal to old.
   /// The old value must be of a comparable type.
-  fn CompareAndSwap(self: Ref<Map>, key: Unknown, old: Unknown, new: Unknown) -> bool
+  fn CompareAndSwap(
+    self: mut Ref<Map>,
+    key: Unknown,
+    old: Unknown,
+    new: Unknown,
+  ) -> bool
 
   /// Delete deletes the value for a key.
   /// If the key is not in the map, Delete does nothing.
-  fn Delete(self: Ref<Map>, key: Unknown)
+  fn Delete(self: mut Ref<Map>, key: Unknown)
 
   /// Load returns the value stored in the map for a key, or nil if no
   /// value is present.
   /// The ok result indicates whether value was found in the map.
-  fn Load(self: Ref<Map>, key: Unknown) -> Option<Unknown>
+  fn Load(self: mut Ref<Map>, key: Unknown) -> Option<Unknown>
 
   /// LoadAndDelete deletes the value for a key, returning the previous value if any.
   /// The loaded result reports whether the key was present.
-  fn LoadAndDelete(self: Ref<Map>, key: Unknown) -> (Unknown, bool)
+  fn LoadAndDelete(self: mut Ref<Map>, key: Unknown) -> (Unknown, bool)
 
   /// LoadOrStore returns the existing value for the key if present.
   /// Otherwise, it stores and returns the given value.
   /// The loaded result is true if the value was loaded, false if stored.
-  fn LoadOrStore(self: Ref<Map>, key: Unknown, value: Unknown) -> (Unknown, bool)
+  fn LoadOrStore(self: mut Ref<Map>, key: Unknown, value: Unknown) -> (Unknown, bool)
 
   /// Range calls f sequentially for each key and value present in the map.
   /// If f returns false, range stops the iteration.
@@ -303,28 +308,28 @@ impl Map {
   /// 
   /// Range may be O(N) with the number of elements in the map even if f returns
   /// false after a constant number of calls.
-  fn Range(self: Ref<Map>, f: fn(Unknown, Unknown) -> bool)
+  fn Range(self: mut Ref<Map>, f: fn(Unknown, Unknown) -> bool)
 
   /// Store sets the value for a key.
-  fn Store(self: Ref<Map>, key: Unknown, value: Unknown)
+  fn Store(self: mut Ref<Map>, key: Unknown, value: Unknown)
 
   /// Swap swaps the value for a key and returns the previous value if any.
   /// The loaded result reports whether the key was present.
-  fn Swap(self: Ref<Map>, key: Unknown, value: Unknown) -> (Unknown, bool)
+  fn Swap(self: mut Ref<Map>, key: Unknown, value: Unknown) -> (Unknown, bool)
 }
 
 impl Mutex {
   /// Lock locks m.
   /// If the lock is already in use, the calling goroutine
   /// blocks until the mutex is available.
-  fn Lock(self: Ref<Mutex>)
+  fn Lock(self: mut Ref<Mutex>)
 
   /// TryLock tries to lock m and reports whether it succeeded.
   /// 
   /// Note that while correct uses of TryLock do exist, they are rare,
   /// and use of TryLock is often a sign of a deeper problem
   /// in a particular use of mutexes.
-  fn TryLock(self: Ref<Mutex>) -> bool
+  fn TryLock(self: mut Ref<Mutex>) -> bool
 
   /// Unlock unlocks m.
   /// It is a run-time error if m is not locked on entry to Unlock.
@@ -332,7 +337,7 @@ impl Mutex {
   /// A locked [Mutex] is not associated with a particular goroutine.
   /// It is allowed for one goroutine to lock a Mutex and then
   /// arrange for another goroutine to unlock it.
-  fn Unlock(self: Ref<Mutex>)
+  fn Unlock(self: mut Ref<Mutex>)
 }
 
 impl Once {
@@ -356,7 +361,7 @@ impl Once {
   /// 
   /// If f panics, Do considers it to have returned; future calls of Do return
   /// without calling f.
-  fn Do(self: Ref<Once>, f: fn() -> ())
+  fn Do(self: mut Ref<Once>, f: fn() -> ())
 }
 
 impl Pool {
@@ -368,24 +373,24 @@ impl Pool {
   /// 
   /// If Get would otherwise return nil and p.New is non-nil, Get returns
   /// the result of calling p.New.
-  fn Get(self: Ref<Pool>) -> Unknown
+  fn Get(self: mut Ref<Pool>) -> Unknown
 
   /// Put adds x to the pool.
-  fn Put(self: Ref<Pool>, x: Unknown)
+  fn Put(self: mut Ref<Pool>, x: Unknown)
 }
 
 impl RWMutex {
   /// Lock locks rw for writing.
   /// If the lock is already locked for reading or writing,
   /// Lock blocks until the lock is available.
-  fn Lock(self: Ref<RWMutex>)
+  fn Lock(self: mut Ref<RWMutex>)
 
   /// RLock locks rw for reading.
   /// 
   /// It should not be used for recursive read locking; a blocked Lock
   /// call excludes new readers from acquiring the lock. See the
   /// documentation on the [RWMutex] type.
-  fn RLock(self: Ref<RWMutex>)
+  fn RLock(self: mut Ref<RWMutex>)
 
   /// RLocker returns a [Locker] interface that implements
   /// the [Locker.Lock] and [Locker.Unlock] methods by calling rw.RLock and rw.RUnlock.
@@ -395,21 +400,21 @@ impl RWMutex {
   /// it does not affect other simultaneous readers.
   /// It is a run-time error if rw is not locked for reading
   /// on entry to RUnlock.
-  fn RUnlock(self: Ref<RWMutex>)
+  fn RUnlock(self: mut Ref<RWMutex>)
 
   /// TryLock tries to lock rw for writing and reports whether it succeeded.
   /// 
   /// Note that while correct uses of TryLock do exist, they are rare,
   /// and use of TryLock is often a sign of a deeper problem
   /// in a particular use of mutexes.
-  fn TryLock(self: Ref<RWMutex>) -> bool
+  fn TryLock(self: mut Ref<RWMutex>) -> bool
 
   /// TryRLock tries to lock rw for reading and reports whether it succeeded.
   /// 
   /// Note that while correct uses of TryRLock do exist, they are rare,
   /// and use of TryRLock is often a sign of a deeper problem
   /// in a particular use of mutexes.
-  fn TryRLock(self: Ref<RWMutex>) -> bool
+  fn TryRLock(self: mut Ref<RWMutex>) -> bool
 
   /// Unlock unlocks rw for writing. It is a run-time error if rw is
   /// not locked for writing on entry to Unlock.
@@ -417,7 +422,7 @@ impl RWMutex {
   /// As with Mutexes, a locked [RWMutex] is not associated with a particular
   /// goroutine. One goroutine may [RWMutex.RLock] ([RWMutex.Lock]) a RWMutex and then
   /// arrange for another goroutine to [RWMutex.RUnlock] ([RWMutex.Unlock]) it.
-  fn Unlock(self: Ref<RWMutex>)
+  fn Unlock(self: mut Ref<RWMutex>)
 }
 
 impl WaitGroup {
@@ -436,7 +441,7 @@ impl WaitGroup {
   /// If a WaitGroup is reused to wait for several independent sets of events,
   /// new Add calls must happen after all previous Wait calls have returned.
   /// See the WaitGroup example.
-  fn Add(self: Ref<WaitGroup>, delta: int)
+  fn Add(self: mut Ref<WaitGroup>, delta: int)
 
   /// Done decrements the [WaitGroup] task counter by one.
   /// It is equivalent to Add(-1).
@@ -447,7 +452,7 @@ impl WaitGroup {
   /// "synchronizes before" the return of any Wait call that it unblocks.
   /// 
   /// [the Go memory model]: https://go.dev/ref/mem
-  fn Done(self: Ref<WaitGroup>)
+  fn Done(self: mut Ref<WaitGroup>)
 
   /// Go calls f in a new goroutine and adds that task to the [WaitGroup].
   /// When f returns, the task is removed from the WaitGroup.
@@ -465,8 +470,8 @@ impl WaitGroup {
   /// "synchronizes before" the return of any Wait call that it unblocks.
   /// 
   /// [the Go memory model]: https://go.dev/ref/mem
-  fn Go(self: Ref<WaitGroup>, f: fn() -> ())
+  fn Go(self: mut Ref<WaitGroup>, f: fn() -> ())
 
   /// Wait blocks until the [WaitGroup] task counter is zero.
-  fn Wait(self: Ref<WaitGroup>)
+  fn Wait(self: mut Ref<WaitGroup>)
 }

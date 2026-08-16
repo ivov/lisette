@@ -200,7 +200,7 @@ pub fn CreateCertificate(
   parent: Ref<Certificate>,
   pub_: Unknown,
   priv: Unknown,
-) -> Result<Slice<byte>, error>
+) -> Result<mut Slice<byte>, error>
 
 /// CreateCertificateRequest creates a new certificate request based on a
 /// template. The following members of template are used:
@@ -225,7 +225,7 @@ pub fn CreateCertificateRequest(
   rand: io.Reader,
   template: Ref<CertificateRequest>,
   priv: Unknown,
-) -> Result<Slice<byte>, error>
+) -> Result<mut Slice<byte>, error>
 
 /// CreateRevocationList creates a new X.509 v2 [Certificate] Revocation List,
 /// according to RFC 5280, based on template.
@@ -245,7 +245,7 @@ pub fn CreateRevocationList(
   template: Ref<RevocationList>,
   issuer: Ref<Certificate>,
   priv: crypto.Signer,
-) -> Result<Slice<byte>, error>
+) -> Result<mut Slice<byte>, error>
 
 /// DecryptPEMBlock takes a PEM block encrypted according to RFC 1423 and the
 /// password used to encrypt it and returns a slice of decrypted DER encoded
@@ -259,7 +259,7 @@ pub fn CreateRevocationList(
 /// Deprecated: Legacy PEM encryption as specified in RFC 1423 is insecure by
 /// design. Since it does not authenticate the ciphertext, it is vulnerable to
 /// padding oracle attacks that can let an attacker recover the plaintext.
-pub fn DecryptPEMBlock(b: Ref<pem.Block>, password: Slice<byte>) -> Result<Slice<byte>, error>
+pub fn DecryptPEMBlock(b: Ref<pem.Block>, password: Slice<byte>) -> Result<mut Slice<byte>, error>
 
 /// EncryptPEMBlock returns a PEM block of the specified type holding the
 /// given DER encoded data encrypted with the specified algorithm and
@@ -274,7 +274,7 @@ pub fn EncryptPEMBlock(
   data: Slice<byte>,
   password: Slice<byte>,
   alg: PEMCipher,
-) -> Result<Ref<pem.Block>, error>
+) -> Result<mut Ref<pem.Block>, error>
 
 /// IsEncryptedPEMBlock returns whether the PEM block is password encrypted
 /// according to RFC 1423.
@@ -289,7 +289,7 @@ pub fn IsEncryptedPEMBlock(b: Ref<pem.Block>) -> bool
 /// This kind of key is commonly encoded in PEM blocks of type "EC PRIVATE KEY".
 /// For a more flexible key format which is not EC specific, use
 /// [MarshalPKCS8PrivateKey].
-pub fn MarshalECPrivateKey(key: Ref<ecdsa.PrivateKey>) -> Result<Slice<byte>, error>
+pub fn MarshalECPrivateKey(key: Ref<ecdsa.PrivateKey>) -> Result<mut Slice<byte>, error>
 
 /// MarshalPKCS1PrivateKey converts an [RSA] private key to PKCS #1, ASN.1 DER form.
 /// 
@@ -300,12 +300,12 @@ pub fn MarshalECPrivateKey(key: Ref<ecdsa.PrivateKey>) -> Result<Slice<byte>, er
 /// The key must have passed validation by calling [rsa.PrivateKey.Validate]
 /// first. MarshalPKCS1PrivateKey calls [rsa.PrivateKey.Precompute], which may
 /// modify the key if not already precomputed.
-pub fn MarshalPKCS1PrivateKey(key: Ref<rsa.PrivateKey>) -> Slice<byte>
+pub fn MarshalPKCS1PrivateKey(key: mut Ref<rsa.PrivateKey>) -> mut Slice<byte>
 
 /// MarshalPKCS1PublicKey converts an [RSA] public key to PKCS #1, ASN.1 DER form.
 /// 
 /// This kind of key is commonly encoded in PEM blocks of type "RSA PUBLIC KEY".
-pub fn MarshalPKCS1PublicKey(key: Ref<rsa.PublicKey>) -> Slice<byte>
+pub fn MarshalPKCS1PublicKey(key: Ref<rsa.PublicKey>) -> mut Slice<byte>
 
 /// MarshalPKCS8PrivateKey converts a private key to PKCS #8, ASN.1 DER form.
 /// 
@@ -316,7 +316,7 @@ pub fn MarshalPKCS1PublicKey(key: Ref<rsa.PublicKey>) -> Slice<byte>
 /// This kind of key is commonly encoded in PEM blocks of type "PRIVATE KEY".
 /// 
 /// MarshalPKCS8PrivateKey runs [rsa.PrivateKey.Precompute] on RSA keys.
-pub fn MarshalPKCS8PrivateKey(key: Unknown) -> Result<Slice<byte>, error>
+pub fn MarshalPKCS8PrivateKey(key: mut Unknown) -> Result<mut Slice<byte>, error>
 
 /// MarshalPKIXPublicKey converts a public key to PKIX, ASN.1 DER form.
 /// The encoded public key is a SubjectPublicKeyInfo structure
@@ -327,10 +327,10 @@ pub fn MarshalPKCS8PrivateKey(key: Unknown) -> Result<Slice<byte>, error>
 /// Unsupported key types result in an error.
 /// 
 /// This kind of key is commonly encoded in PEM blocks of type "PUBLIC KEY".
-pub fn MarshalPKIXPublicKey(pub_: Unknown) -> Result<Slice<byte>, error>
+pub fn MarshalPKIXPublicKey(pub_: Unknown) -> Result<mut Slice<byte>, error>
 
 /// NewCertPool returns a new, empty CertPool.
-pub fn NewCertPool() -> Ref<CertPool>
+pub fn NewCertPool() -> mut Ref<CertPool>
 
 /// OIDFromInts creates a new OID using ints, each integer is a separate component.
 pub fn OIDFromInts(oid: Slice<uint64>) -> Result<OID, error>
@@ -341,18 +341,18 @@ pub fn OIDFromInts(oid: Slice<uint64>) -> Result<OID, error>
 /// garbage.
 /// 
 /// Deprecated: Use [ParseRevocationList] instead.
-pub fn ParseCRL(crlBytes: Slice<byte>) -> Result<Ref<pkix.CertificateList>, error>
+pub fn ParseCRL(crlBytes: Slice<byte>) -> Result<mut Ref<pkix.CertificateList>, error>
 
 /// ParseCertificate parses a single certificate from the given ASN.1 DER data.
 /// 
 /// Before Go 1.23, ParseCertificate accepted certificates with negative serial
 /// numbers. This behavior can be restored by including "x509negativeserial=1" in
 /// the GODEBUG environment variable.
-pub fn ParseCertificate(der: Slice<byte>) -> Result<Ref<Certificate>, error>
+pub fn ParseCertificate(der: Slice<byte>) -> Result<mut Ref<Certificate>, error>
 
 /// ParseCertificateRequest parses a single certificate request from the
 /// given ASN.1 DER data.
-pub fn ParseCertificateRequest(asn1Data: Slice<byte>) -> Result<Ref<CertificateRequest>, error>
+pub fn ParseCertificateRequest(asn1Data: Slice<byte>) -> Result<mut Ref<CertificateRequest>, error>
 
 /// ParseCertificates parses one or more certificates from the given ASN.1 DER
 /// data. The certificates must be concatenated with no intermediate padding.
@@ -361,12 +361,12 @@ pub fn ParseCertificates(der: Slice<byte>) -> Result<Slice<Ref<Certificate>>, er
 /// ParseDERCRL parses a DER encoded CRL from the given bytes.
 /// 
 /// Deprecated: Use [ParseRevocationList] instead.
-pub fn ParseDERCRL(derBytes: Slice<byte>) -> Result<Ref<pkix.CertificateList>, error>
+pub fn ParseDERCRL(derBytes: Slice<byte>) -> Result<mut Ref<pkix.CertificateList>, error>
 
 /// ParseECPrivateKey parses an EC private key in SEC 1, ASN.1 DER form.
 /// 
 /// This kind of key is commonly encoded in PEM blocks of type "EC PRIVATE KEY".
-pub fn ParseECPrivateKey(der: Slice<byte>) -> Result<Ref<ecdsa.PrivateKey>, error>
+pub fn ParseECPrivateKey(der: Slice<byte>) -> Result<mut Ref<ecdsa.PrivateKey>, error>
 
 /// ParseOID parses a Object Identifier string, represented by ASCII numbers separated by dots.
 pub fn ParseOID(oid: string) -> Result<OID, error>
@@ -377,12 +377,12 @@ pub fn ParseOID(oid: string) -> Result<OID, error>
 /// 
 /// Before Go 1.24, the CRT parameters were ignored and recomputed. To restore
 /// the old behavior, use the GODEBUG=x509rsacrt=0 environment variable.
-pub fn ParsePKCS1PrivateKey(der: Slice<byte>) -> Result<Ref<rsa.PrivateKey>, error>
+pub fn ParsePKCS1PrivateKey(der: Slice<byte>) -> Result<mut Ref<rsa.PrivateKey>, error>
 
 /// ParsePKCS1PublicKey parses an [RSA] public key in PKCS #1, ASN.1 DER form.
 /// 
 /// This kind of key is commonly encoded in PEM blocks of type "RSA PUBLIC KEY".
-pub fn ParsePKCS1PublicKey(der: Slice<byte>) -> Result<Ref<rsa.PublicKey>, error>
+pub fn ParsePKCS1PublicKey(der: Slice<byte>) -> Result<mut Ref<rsa.PublicKey>, error>
 
 /// ParsePKCS8PrivateKey parses an unencrypted private key in PKCS #8, ASN.1 DER form.
 /// 
@@ -408,7 +408,7 @@ pub fn ParsePKIXPublicKey(derBytes: Slice<byte>) -> Result<Unknown, error>
 
 /// ParseRevocationList parses a X509 v2 [Certificate] Revocation List from the given
 /// ASN.1 DER data.
-pub fn ParseRevocationList(der: Slice<byte>) -> Result<Ref<RevocationList>, error>
+pub fn ParseRevocationList(der: Slice<byte>) -> Result<mut Ref<RevocationList>, error>
 
 /// SetFallbackRoots sets the roots to use during certificate verification, if no
 /// custom roots are specified and a platform verifier or a system certificate
@@ -436,94 +436,94 @@ pub fn SetFallbackRoots(roots: Ref<CertPool>)
 /// any other pool returned by SystemCertPool.
 /// 
 /// New changes in the system cert pool might not be reflected in subsequent calls.
-pub fn SystemCertPool() -> Result<Ref<CertPool>, error>
+pub fn SystemCertPool() -> Result<mut Ref<CertPool>, error>
 
 /// CertPool is a set of certificates.
 pub type CertPool
 
 /// A Certificate represents an X.509 certificate.
 pub struct Certificate {
-  pub Raw: Slice<byte>,
-  pub RawTBSCertificate: Slice<byte>,
-  pub RawSubjectPublicKeyInfo: Slice<byte>,
-  pub RawSubject: Slice<byte>,
-  pub RawIssuer: Slice<byte>,
-  pub Signature: Slice<byte>,
+  pub Raw: mut Slice<byte>,
+  pub RawTBSCertificate: mut Slice<byte>,
+  pub RawSubjectPublicKeyInfo: mut Slice<byte>,
+  pub RawSubject: mut Slice<byte>,
+  pub RawIssuer: mut Slice<byte>,
+  pub Signature: mut Slice<byte>,
   pub SignatureAlgorithm: SignatureAlgorithm,
   pub PublicKeyAlgorithm: PublicKeyAlgorithm,
   pub PublicKey: Unknown,
   pub Version: int,
-  pub SerialNumber: Option<Ref<big.Int>>,
-  pub Issuer: pkix.Name,
-  pub Subject: pkix.Name,
-  pub NotBefore: time.Time,
-  pub NotAfter: time.Time,
+  pub SerialNumber: Option<mut Ref<big.Int>>,
+  pub Issuer: mut pkix.Name,
+  pub Subject: mut pkix.Name,
+  pub NotBefore: mut time.Time,
+  pub NotAfter: mut time.Time,
   pub KeyUsage: KeyUsage,
-  pub Extensions: Slice<pkix.Extension>,
-  pub ExtraExtensions: Slice<pkix.Extension>,
-  pub UnhandledCriticalExtensions: Slice<asn1.ObjectIdentifier>,
-  pub ExtKeyUsage: Slice<ExtKeyUsage>,
-  pub UnknownExtKeyUsage: Slice<asn1.ObjectIdentifier>,
+  pub Extensions: mut Slice<mut pkix.Extension>,
+  pub ExtraExtensions: mut Slice<mut pkix.Extension>,
+  pub UnhandledCriticalExtensions: mut Slice<mut asn1.ObjectIdentifier>,
+  pub ExtKeyUsage: mut Slice<ExtKeyUsage>,
+  pub UnknownExtKeyUsage: mut Slice<mut asn1.ObjectIdentifier>,
   pub BasicConstraintsValid: bool,
   pub IsCA: bool,
   pub MaxPathLen: int,
   pub MaxPathLenZero: bool,
-  pub SubjectKeyId: Slice<byte>,
-  pub AuthorityKeyId: Slice<byte>,
-  pub OCSPServer: Slice<string>,
-  pub IssuingCertificateURL: Slice<string>,
-  pub DNSNames: Slice<string>,
-  pub EmailAddresses: Slice<string>,
-  pub IPAddresses: Slice<net.IP>,
-  pub URIs: Slice<Option<Ref<url.URL>>>,
+  pub SubjectKeyId: mut Slice<byte>,
+  pub AuthorityKeyId: mut Slice<byte>,
+  pub OCSPServer: mut Slice<string>,
+  pub IssuingCertificateURL: mut Slice<string>,
+  pub DNSNames: mut Slice<string>,
+  pub EmailAddresses: mut Slice<string>,
+  pub IPAddresses: mut Slice<mut net.IP>,
+  pub URIs: mut Slice<Option<mut Ref<url.URL>>>,
   pub PermittedDNSDomainsCritical: bool,
-  pub PermittedDNSDomains: Slice<string>,
-  pub ExcludedDNSDomains: Slice<string>,
-  pub PermittedIPRanges: Slice<Option<Ref<net.IPNet>>>,
-  pub ExcludedIPRanges: Slice<Option<Ref<net.IPNet>>>,
-  pub PermittedEmailAddresses: Slice<string>,
-  pub ExcludedEmailAddresses: Slice<string>,
-  pub PermittedURIDomains: Slice<string>,
-  pub ExcludedURIDomains: Slice<string>,
-  pub CRLDistributionPoints: Slice<string>,
-  pub PolicyIdentifiers: Slice<asn1.ObjectIdentifier>,
-  pub Policies: Slice<OID>,
+  pub PermittedDNSDomains: mut Slice<string>,
+  pub ExcludedDNSDomains: mut Slice<string>,
+  pub PermittedIPRanges: mut Slice<Option<mut Ref<net.IPNet>>>,
+  pub ExcludedIPRanges: mut Slice<Option<mut Ref<net.IPNet>>>,
+  pub PermittedEmailAddresses: mut Slice<string>,
+  pub ExcludedEmailAddresses: mut Slice<string>,
+  pub PermittedURIDomains: mut Slice<string>,
+  pub ExcludedURIDomains: mut Slice<string>,
+  pub CRLDistributionPoints: mut Slice<string>,
+  pub PolicyIdentifiers: mut Slice<mut asn1.ObjectIdentifier>,
+  pub Policies: mut Slice<mut OID>,
   pub InhibitAnyPolicy: int,
   pub InhibitAnyPolicyZero: bool,
   pub InhibitPolicyMapping: int,
   pub InhibitPolicyMappingZero: bool,
   pub RequireExplicitPolicy: int,
   pub RequireExplicitPolicyZero: bool,
-  pub PolicyMappings: Slice<PolicyMapping>,
+  pub PolicyMappings: mut Slice<mut PolicyMapping>,
 }
 
 /// CertificateInvalidError results when an odd error occurs. Users of this
 /// library probably want to handle all these errors uniformly.
 pub struct CertificateInvalidError {
-  pub Cert: Option<Ref<Certificate>>,
+  pub Cert: Option<mut Ref<Certificate>>,
   pub Reason: InvalidReason,
   pub Detail: string,
 }
 
 /// CertificateRequest represents a PKCS #10, certificate signature request.
 pub struct CertificateRequest {
-  pub Raw: Slice<byte>,
-  pub RawTBSCertificateRequest: Slice<byte>,
-  pub RawSubjectPublicKeyInfo: Slice<byte>,
-  pub RawSubject: Slice<byte>,
+  pub Raw: mut Slice<byte>,
+  pub RawTBSCertificateRequest: mut Slice<byte>,
+  pub RawSubjectPublicKeyInfo: mut Slice<byte>,
+  pub RawSubject: mut Slice<byte>,
   pub Version: int,
-  pub Signature: Slice<byte>,
+  pub Signature: mut Slice<byte>,
   pub SignatureAlgorithm: SignatureAlgorithm,
   pub PublicKeyAlgorithm: PublicKeyAlgorithm,
   pub PublicKey: Unknown,
-  pub Subject: pkix.Name,
-  pub Attributes: Slice<pkix.AttributeTypeAndValueSET>,
-  pub Extensions: Slice<pkix.Extension>,
-  pub ExtraExtensions: Slice<pkix.Extension>,
-  pub DNSNames: Slice<string>,
-  pub EmailAddresses: Slice<string>,
-  pub IPAddresses: Slice<net.IP>,
-  pub URIs: Slice<Option<Ref<url.URL>>>,
+  pub Subject: mut pkix.Name,
+  pub Attributes: mut Slice<mut pkix.AttributeTypeAndValueSET>,
+  pub Extensions: mut Slice<mut pkix.Extension>,
+  pub ExtraExtensions: mut Slice<mut pkix.Extension>,
+  pub DNSNames: mut Slice<string>,
+  pub EmailAddresses: mut Slice<string>,
+  pub IPAddresses: mut Slice<mut net.IP>,
+  pub URIs: mut Slice<Option<mut Ref<url.URL>>>,
 }
 
 /// ConstraintViolationError results when a requested usage is not permitted by
@@ -535,7 +535,7 @@ pub type ConstraintViolationError
 /// HostnameError results when the set of authorized names doesn't match the
 /// requested name.
 pub struct HostnameError {
-  pub Certificate: Option<Ref<Certificate>>,
+  pub Certificate: Option<mut Ref<Certificate>>,
   pub Host: string,
 }
 
@@ -553,38 +553,38 @@ pub type OID
 
 /// PolicyMapping represents a policy mapping entry in the policyMappings extension.
 pub struct PolicyMapping {
-  pub IssuerDomainPolicy: OID,
-  pub SubjectDomainPolicy: OID,
+  pub IssuerDomainPolicy: mut OID,
+  pub SubjectDomainPolicy: mut OID,
 }
 
 /// RevocationList represents a [Certificate] Revocation List (CRL) as specified
 /// by RFC 5280.
 pub struct RevocationList {
-  pub Raw: Slice<byte>,
-  pub RawTBSRevocationList: Slice<byte>,
-  pub RawIssuer: Slice<byte>,
-  pub Issuer: pkix.Name,
-  pub AuthorityKeyId: Slice<byte>,
-  pub Signature: Slice<byte>,
+  pub Raw: mut Slice<byte>,
+  pub RawTBSRevocationList: mut Slice<byte>,
+  pub RawIssuer: mut Slice<byte>,
+  pub Issuer: mut pkix.Name,
+  pub AuthorityKeyId: mut Slice<byte>,
+  pub Signature: mut Slice<byte>,
   pub SignatureAlgorithm: SignatureAlgorithm,
-  pub RevokedCertificateEntries: Slice<RevocationListEntry>,
-  pub RevokedCertificates: Slice<pkix.RevokedCertificate>,
-  pub Number: Option<Ref<big.Int>>,
-  pub ThisUpdate: time.Time,
-  pub NextUpdate: time.Time,
-  pub Extensions: Slice<pkix.Extension>,
-  pub ExtraExtensions: Slice<pkix.Extension>,
+  pub RevokedCertificateEntries: mut Slice<mut RevocationListEntry>,
+  pub RevokedCertificates: mut Slice<mut pkix.RevokedCertificate>,
+  pub Number: Option<mut Ref<big.Int>>,
+  pub ThisUpdate: mut time.Time,
+  pub NextUpdate: mut time.Time,
+  pub Extensions: mut Slice<mut pkix.Extension>,
+  pub ExtraExtensions: mut Slice<mut pkix.Extension>,
 }
 
 /// RevocationListEntry represents an entry in the revokedCertificates
 /// sequence of a CRL.
 pub struct RevocationListEntry {
-  pub Raw: Slice<byte>,
-  pub SerialNumber: Option<Ref<big.Int>>,
-  pub RevocationTime: time.Time,
+  pub Raw: mut Slice<byte>,
+  pub SerialNumber: Option<mut Ref<big.Int>>,
+  pub RevocationTime: mut time.Time,
   pub ReasonCode: int,
-  pub Extensions: Slice<pkix.Extension>,
-  pub ExtraExtensions: Slice<pkix.Extension>,
+  pub Extensions: mut Slice<mut pkix.Extension>,
+  pub ExtraExtensions: mut Slice<mut pkix.Extension>,
 }
 
 /// SystemRootsError results when we fail to load the system root certificates.
@@ -598,19 +598,19 @@ pub type UnhandledCriticalExtension
 /// UnknownAuthorityError results when the certificate issuer is unknown
 #[go(hidden_fields)]
 pub struct UnknownAuthorityError {
-  pub Cert: Option<Ref<Certificate>>,
+  pub Cert: Option<mut Ref<Certificate>>,
 }
 
 /// VerifyOptions contains parameters for Certificate.Verify.
 #[go(hidden_fields)]
 pub struct VerifyOptions {
   pub DNSName: string,
-  pub Intermediates: Option<Ref<CertPool>>,
-  pub Roots: Option<Ref<CertPool>>,
-  pub CurrentTime: time.Time,
-  pub KeyUsages: Slice<ExtKeyUsage>,
+  pub Intermediates: Option<mut Ref<CertPool>>,
+  pub Roots: Option<mut Ref<CertPool>>,
+  pub CurrentTime: mut time.Time,
+  pub KeyUsages: mut Slice<ExtKeyUsage>,
   pub MaxConstraintComparisions: int,
-  pub CertificatePolicies: Slice<OID>,
+  pub CertificatePolicies: mut Slice<mut OID>,
 }
 
 pub const KeyUsageCRLSign: KeyUsage = 64
@@ -640,7 +640,7 @@ pub var IncorrectPasswordError: error
 
 impl CertPool {
   /// AddCert adds a certificate to a pool.
-  fn AddCert(self: Ref<CertPool>, cert: Ref<Certificate>)
+  fn AddCert(self: mut Ref<CertPool>, cert: Ref<Certificate>)
 
   /// AddCertWithConstraint adds a certificate to the pool with the additional
   /// constraint. When Certificate.Verify builds a chain which is rooted by cert,
@@ -648,7 +648,7 @@ impl CertPool {
   /// validity. If constraint returns a non-nil error, the chain will be discarded.
   /// constraint may be called concurrently from multiple goroutines.
   fn AddCertWithConstraint(
-    self: Ref<CertPool>,
+    self: mut Ref<CertPool>,
     cert: Ref<Certificate>,
     constraint: fn(Slice<Ref<Certificate>>) -> Result<(), error>,
   )
@@ -659,10 +659,10 @@ impl CertPool {
   /// 
   /// On many Linux systems, /etc/ssl/cert.pem will contain the system wide set
   /// of root CAs in a format suitable for this function.
-  fn AppendCertsFromPEM(self: Ref<CertPool>, pemCerts: Slice<byte>) -> bool
+  fn AppendCertsFromPEM(self: mut Ref<CertPool>, pemCerts: Slice<byte>) -> bool
 
   /// Clone returns a copy of s.
-  fn Clone(self: Ref<CertPool>) -> Ref<CertPool>
+  fn Clone(self: Ref<CertPool>) -> mut Ref<CertPool>
 
   /// Equal reports whether s and other are equal.
   fn Equal(self: Ref<CertPool>, other: Option<Ref<CertPool>>) -> bool
@@ -713,7 +713,7 @@ impl Certificate {
     revokedCerts: Slice<pkix.RevokedCertificate>,
     now: time.Time,
     expiry: time.Time,
-  ) -> Result<Slice<byte>, error>
+  ) -> Result<mut Slice<byte>, error>
 
   fn Equal(self: Ref<Certificate>, other: Option<Ref<Certificate>>) -> bool
 
@@ -786,10 +786,10 @@ impl InsecureAlgorithmError {
 
 impl OID {
   /// AppendBinary implements [encoding.BinaryAppender]
-  fn AppendBinary(self, mut b: Slice<byte>) -> Result<Slice<byte>, error>
+  fn AppendBinary(self, b: mut Slice<byte>) -> Result<mut Slice<byte>, error>
 
   /// AppendText implements [encoding.TextAppender]
-  fn AppendText(self, mut b: Slice<byte>) -> Result<Slice<byte>, error>
+  fn AppendText(self, b: mut Slice<byte>) -> Result<mut Slice<byte>, error>
 
   /// Equal returns true when oid and other represents the same Object Identifier.
   fn Equal(self, other: OID) -> bool
@@ -800,19 +800,19 @@ impl OID {
   fn EqualASN1OID(self, other: asn1.ObjectIdentifier) -> bool
 
   /// MarshalBinary implements [encoding.BinaryMarshaler]
-  fn MarshalBinary(self) -> Result<Slice<byte>, error>
+  fn MarshalBinary(self) -> Result<mut Slice<byte>, error>
 
   /// MarshalText implements [encoding.TextMarshaler]
-  fn MarshalText(self) -> Result<Slice<byte>, error>
+  fn MarshalText(self) -> Result<mut Slice<byte>, error>
 
   /// Strings returns the string representation of the Object Identifier.
   fn String(self) -> string
 
   /// UnmarshalBinary implements [encoding.BinaryUnmarshaler]
-  fn UnmarshalBinary(self: Ref<OID>, b: Slice<byte>) -> Result<(), error>
+  fn UnmarshalBinary(self: mut Ref<OID>, b: Slice<byte>) -> Result<(), error>
 
   /// UnmarshalText implements [encoding.TextUnmarshaler]
-  fn UnmarshalText(self: Ref<OID>, text: Slice<byte>) -> Result<(), error>
+  fn UnmarshalText(self: mut Ref<OID>, text: Slice<byte>) -> Result<(), error>
 }
 
 impl PublicKeyAlgorithm {

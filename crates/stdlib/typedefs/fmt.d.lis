@@ -7,16 +7,16 @@ import "go:io"
 
 /// Append formats using the default formats for its operands, appends the result to
 /// the byte slice, and returns the updated slice.
-pub fn Append(mut b: Slice<byte>, a: VarArgs<Unknown>) -> Slice<byte>
+pub fn Append(b: mut Slice<byte>, a: VarArgs<Unknown>) -> mut Slice<byte>
 
 /// Appendf formats according to a format specifier, appends the result to the byte
 /// slice, and returns the updated slice.
-pub fn Appendf(mut b: Slice<byte>, format: string, a: VarArgs<Unknown>) -> Slice<byte>
+pub fn Appendf(b: mut Slice<byte>, format: string, a: VarArgs<Unknown>) -> mut Slice<byte>
 
 /// Appendln formats using the default formats for its operands, appends the result
 /// to the byte slice, and returns the updated slice. Spaces are always added
 /// between operands and a newline is appended.
-pub fn Appendln(mut b: Slice<byte>, a: VarArgs<Unknown>) -> Slice<byte>
+pub fn Appendln(b: mut Slice<byte>, a: VarArgs<Unknown>) -> mut Slice<byte>
 
 /// Errorf formats according to a format specifier and returns the string as a
 /// value that satisfies error.
@@ -153,7 +153,7 @@ pub interface GoStringer {
 /// Scanners may do rune-at-a-time scanning or ask the ScanState
 /// to discover the next space-delimited token.
 pub interface ScanState {
-  fn Read(mut buf: Slice<byte>) -> Partial<int, error>
+  fn Read(buf: mut Slice<byte>) -> Partial<int, error>
   fn ReadRune() -> Result<(rune, int), error>
   fn SkipSpace()
   fn Token(skipSpace: bool, f: fn(rune) -> bool) -> Result<Slice<byte>, error>

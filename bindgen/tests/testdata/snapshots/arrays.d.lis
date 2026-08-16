@@ -9,9 +9,9 @@ pub fn Grid() -> Array<Array<int, 3>, 2>
 
 pub fn Pair() -> (Array<int, 2>, Array<int, 3>)
 
-pub fn Ptr() -> Option<Ref<Array<byte, 8>>>
+pub fn Ptr() -> Option<mut Ref<Array<byte, 8>>>
 
-pub fn Rows() -> Slice<Array<int, 4>>
+pub fn Rows() -> mut Slice<Array<int, 4>>
 
 pub fn Sum() -> Array<byte, 32>
 
@@ -30,14 +30,14 @@ pub fn WithErr() -> Result<Array<byte, 32>, error>
 /// element: a pointer to a scalar drops Ref, a pointer to a struct keeps it.
 pub struct Cell {
   pub Ptrs: Array<Option<int>, 2>,
-  pub Nodes: Array<Option<Ref<Cell>>, 2>,
+  pub Nodes: Array<Option<mut Ref<Cell>>, 2>,
 }
 
 pub type Digest = Array<byte, 16>
 
 pub struct Holder {
   pub Data: Array<int, 3>,
-  pub Pairs: Map<string, Array<byte, 4>>,
+  pub Pairs: mut Map<string, Array<byte, 4>>,
 }
 
 impl Holder {

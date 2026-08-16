@@ -28,7 +28,7 @@ pub type ErrorHandler = fn(token.Position, string) -> ()
 
 /// ErrorList is a list of *Errors.
 /// The zero value for an ErrorList is an empty ErrorList ready to use.
-pub struct ErrorList(Slice<Ref<Error>>)
+pub struct ErrorList(mut Slice<mut Ref<Error>>)
 
 /// A mode value is a set of flags (or 0).
 /// They control scanner behavior.
@@ -51,7 +51,7 @@ impl Error {
 
 impl ErrorList {
   /// Add adds an [Error] with given position and error message to an [ErrorList].
-  fn Add(self: Ref<ErrorList>, pos: token.Position, msg: string)
+  fn Add(self: mut Ref<ErrorList>, pos: token.Position, msg: string)
 
   /// Err returns an error equivalent to this error list.
   /// If the list is empty, Err returns nil.
@@ -66,19 +66,19 @@ impl ErrorList {
   fn Less(self, i: int, j: int) -> bool
 
   /// RemoveMultiples sorts an [ErrorList] and removes all but the first error per line.
-  fn RemoveMultiples(self: Ref<ErrorList>)
+  fn RemoveMultiples(self: mut Ref<ErrorList>)
 
   /// Reset resets an [ErrorList] to no errors.
-  fn Reset(self: Ref<ErrorList>)
+  fn Reset(self: mut Ref<ErrorList>)
 
   /// Sort sorts an [ErrorList]. *[Error] entries are sorted by position,
   /// other errors are sorted by error message, and before any *[Error]
   /// entry.
   #[go(value_method_set)]
-  fn Sort(self: Ref<ErrorList>)
+  fn Sort(self: mut Ref<ErrorList>)
 
   #[go(value_method_set)]
-  fn Swap(self: Ref<ErrorList>, i: int, j: int)
+  fn Swap(self: mut Ref<ErrorList>, i: int, j: int)
 }
 
 impl Scanner {
@@ -97,7 +97,7 @@ impl Scanner {
   /// Note that Init may call err if there is an error in the first character
   /// of the file.
   fn Init(
-    self: Ref<Scanner>,
+    self: mut Ref<Scanner>,
     file: Ref<token.File>,
     src: Slice<byte>,
     err: ErrorHandler,
@@ -134,5 +134,5 @@ impl Scanner {
   /// Scan adds line information to the file added to the file
   /// set with Init. Token positions are relative to that file
   /// and thus relative to the file set.
-  fn Scan(self: Ref<Scanner>) -> (token.Pos, token.Token, string)
+  fn Scan(self: mut Ref<Scanner>) -> (token.Pos, token.Token, string)
 }

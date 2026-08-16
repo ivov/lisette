@@ -146,7 +146,7 @@ pub fn CipherSuites() -> Slice<Ref<CipherSuite>>
 /// using conn as the underlying transport.
 /// The config cannot be nil: users must set either ServerName or
 /// InsecureSkipVerify in the config.
-pub fn Client(conn: net.Conn, config: Ref<Config>) -> Ref<Conn>
+pub fn Client(conn: net.Conn, config: Ref<Config>) -> mut Ref<Conn>
 
 /// Dial connects to the given network address using net.Dial
 /// and then initiates a TLS handshake, returning the resulting
@@ -154,7 +154,7 @@ pub fn Client(conn: net.Conn, config: Ref<Config>) -> Ref<Conn>
 /// Dial interprets a nil configuration as equivalent to
 /// the zero configuration; see the documentation of Config
 /// for the defaults.
-pub fn Dial(network: string, addr: string, config: Ref<Config>) -> Result<Ref<Conn>, error>
+pub fn Dial(network: string, addr: string, config: Ref<Config>) -> Result<mut Ref<Conn>, error>
 
 /// DialWithDialer connects to the given network address using dialer.Dial and
 /// then initiates a TLS handshake, returning the resulting TLS connection. Any
@@ -171,7 +171,7 @@ pub fn DialWithDialer(
   network: string,
   addr: string,
   config: Ref<Config>,
-) -> Result<Ref<Conn>, error>
+) -> Result<mut Ref<Conn>, error>
 
 /// InsecureCipherSuites returns a list of cipher suites currently implemented by
 /// this package and which have security issues.
@@ -212,28 +212,28 @@ pub fn NewListener(inner: net.Listener, config: Ref<Config>) -> net.Listener
 /// 
 /// state needs to be returned by [ParseSessionState], and the ticket and session
 /// state must have been returned by [ClientSessionState.ResumptionState].
-pub fn NewResumptionState(ticket: Slice<byte>, state: Ref<SessionState>) -> Result<Ref<ClientSessionState>, error>
+pub fn NewResumptionState(ticket: Slice<byte>, state: mut Ref<SessionState>) -> Result<mut Ref<ClientSessionState>, error>
 
 /// ParseSessionState parses a [SessionState] encoded by [SessionState.Bytes].
-pub fn ParseSessionState(data: Slice<byte>) -> Result<Ref<SessionState>, error>
+pub fn ParseSessionState(data: Slice<byte>) -> Result<mut Ref<SessionState>, error>
 
 /// QUICClient returns a new TLS client side connection using QUICTransport as the
 /// underlying transport. The config cannot be nil.
 /// 
 /// The config's MinVersion must be at least TLS 1.3.
-pub fn QUICClient(config: Ref<QUICConfig>) -> Ref<QUICConn>
+pub fn QUICClient(config: Ref<QUICConfig>) -> mut Ref<QUICConn>
 
 /// QUICServer returns a new TLS server side connection using QUICTransport as the
 /// underlying transport. The config cannot be nil.
 /// 
 /// The config's MinVersion must be at least TLS 1.3.
-pub fn QUICServer(config: Ref<QUICConfig>) -> Ref<QUICConn>
+pub fn QUICServer(config: Ref<QUICConfig>) -> mut Ref<QUICConn>
 
 /// Server returns a new TLS server side connection
 /// using conn as the underlying transport.
 /// The configuration config must be non-nil and must include
 /// at least one certificate or else set GetCertificate.
-pub fn Server(conn: net.Conn, config: Ref<Config>) -> Ref<Conn>
+pub fn Server(conn: net.Conn, config: Ref<Config>) -> mut Ref<Conn>
 
 /// VersionName returns the name for the provided TLS version number
 /// (e.g. "TLS 1.3"), or a fallback representation of the value if the
@@ -256,12 +256,12 @@ pub struct AlertError(uint8)
 
 /// A Certificate is a chain of one or more certificates, leaf first.
 pub struct Certificate {
-  pub Certificate: Slice<Slice<byte>>,
+  pub Certificate: mut Slice<mut Slice<byte>>,
   pub PrivateKey: crypto.PrivateKey,
-  pub SupportedSignatureAlgorithms: Slice<SignatureScheme>,
-  pub OCSPStaple: Slice<byte>,
-  pub SignedCertificateTimestamps: Slice<Slice<byte>>,
-  pub Leaf: Option<Ref<x509.Certificate>>,
+  pub SupportedSignatureAlgorithms: mut Slice<SignatureScheme>,
+  pub OCSPStaple: mut Slice<byte>,
+  pub SignedCertificateTimestamps: mut Slice<mut Slice<byte>>,
+  pub Leaf: Option<mut Ref<x509.Certificate>>,
 }
 
 /// CertificateRequestInfo contains information from a server's
@@ -269,14 +269,14 @@ pub struct Certificate {
 /// of control from a client.
 #[go(hidden_fields)]
 pub struct CertificateRequestInfo {
-  pub AcceptableCAs: Slice<Slice<byte>>,
-  pub SignatureSchemes: Slice<SignatureScheme>,
+  pub AcceptableCAs: mut Slice<mut Slice<byte>>,
+  pub SignatureSchemes: mut Slice<SignatureScheme>,
   pub Version: uint16,
 }
 
 /// CertificateVerificationError is returned when certificate verification fails during the handshake.
 pub struct CertificateVerificationError {
-  pub UnverifiedCertificates: Slice<Option<Ref<x509.Certificate>>>,
+  pub UnverifiedCertificates: mut Slice<Option<mut Ref<x509.Certificate>>>,
   pub Err: error,
 }
 
@@ -285,7 +285,7 @@ pub struct CertificateVerificationError {
 pub struct CipherSuite {
   pub ID: uint16,
   pub Name: string,
-  pub SupportedVersions: Slice<uint16>,
+  pub SupportedVersions: mut Slice<uint16>,
   pub Insecure: bool,
 }
 
@@ -293,14 +293,14 @@ pub struct CipherSuite {
 /// guide application logic in the GetCertificate and GetConfigForClient callbacks.
 #[go(hidden_fields)]
 pub struct ClientHelloInfo {
-  pub CipherSuites: Slice<uint16>,
+  pub CipherSuites: mut Slice<uint16>,
   pub ServerName: string,
-  pub SupportedCurves: Slice<CurveID>,
-  pub SupportedPoints: Slice<uint8>,
-  pub SignatureSchemes: Slice<SignatureScheme>,
-  pub SupportedProtos: Slice<string>,
-  pub SupportedVersions: Slice<uint16>,
-  pub Extensions: Slice<uint16>,
+  pub SupportedCurves: mut Slice<CurveID>,
+  pub SupportedPoints: mut Slice<uint8>,
+  pub SignatureSchemes: mut Slice<SignatureScheme>,
+  pub SupportedProtos: mut Slice<string>,
+  pub SupportedVersions: mut Slice<uint16>,
+  pub Extensions: mut Slice<uint16>,
   pub Conn: Option<net.Conn>,
 }
 
@@ -312,7 +312,7 @@ pub struct ClientHelloInfo {
 /// are supported via this interface.
 pub interface ClientSessionCache {
   #[go(comma_ok)]
-  fn Get(sessionKey: string) -> Option<Ref<ClientSessionState>>
+  fn Get(sessionKey: string) -> Option<mut Ref<ClientSessionState>>
   fn Put(sessionKey: string, cs: Ref<ClientSessionState>)
 }
 
@@ -328,36 +328,36 @@ pub type ClientSessionState
 pub struct Config {
   pub Rand: Option<io.Reader>,
   pub Time: Option<fn() -> time.Time>,
-  pub Certificates: Slice<Certificate>,
-  pub NameToCertificate: Map<string, Option<Ref<Certificate>>>,
-  pub GetCertificate: Option<fn(Ref<ClientHelloInfo>) -> Result<Ref<Certificate>, error>>,
-  pub GetClientCertificate: Option<fn(Ref<CertificateRequestInfo>) -> Result<Ref<Certificate>, error>>,
-  pub GetConfigForClient: Option<fn(Ref<ClientHelloInfo>) -> Result<Ref<Config>, error>>,
+  pub Certificates: mut Slice<mut Certificate>,
+  pub NameToCertificate: mut Map<string, Option<mut Ref<Certificate>>>,
+  pub GetCertificate: Option<fn(Ref<ClientHelloInfo>) -> Result<mut Ref<Certificate>, error>>,
+  pub GetClientCertificate: Option<fn(Ref<CertificateRequestInfo>) -> Result<mut Ref<Certificate>, error>>,
+  pub GetConfigForClient: Option<fn(Ref<ClientHelloInfo>) -> Result<mut Ref<Config>, error>>,
   pub VerifyPeerCertificate: Option<fn(Slice<Slice<byte>>, Slice<Slice<Ref<x509.Certificate>>>) -> Result<(), error>>,
   pub VerifyConnection: Option<fn(ConnectionState) -> Result<(), error>>,
-  pub RootCAs: Option<Ref<x509.CertPool>>,
-  pub NextProtos: Slice<string>,
+  pub RootCAs: Option<mut Ref<x509.CertPool>>,
+  pub NextProtos: mut Slice<string>,
   pub ServerName: string,
   pub ClientAuth: ClientAuthType,
-  pub ClientCAs: Option<Ref<x509.CertPool>>,
+  pub ClientCAs: Option<mut Ref<x509.CertPool>>,
   pub InsecureSkipVerify: bool,
-  pub CipherSuites: Slice<uint16>,
+  pub CipherSuites: mut Slice<uint16>,
   pub PreferServerCipherSuites: bool,
   pub SessionTicketsDisabled: bool,
   pub SessionTicketKey: Array<byte, 32>,
   pub ClientSessionCache: Option<ClientSessionCache>,
-  pub UnwrapSession: Option<fn(Slice<byte>, ConnectionState) -> Result<Ref<SessionState>, error>>,
+  pub UnwrapSession: Option<fn(Slice<byte>, ConnectionState) -> Result<mut Ref<SessionState>, error>>,
   pub WrapSession: Option<fn(ConnectionState, Ref<SessionState>) -> Result<Slice<byte>, error>>,
   pub MinVersion: uint16,
   pub MaxVersion: uint16,
-  pub CurvePreferences: Slice<CurveID>,
+  pub CurvePreferences: mut Slice<CurveID>,
   pub DynamicRecordSizingDisabled: bool,
   pub Renegotiation: RenegotiationSupport,
   pub KeyLogWriter: Option<io.Writer>,
-  pub EncryptedClientHelloConfigList: Slice<byte>,
+  pub EncryptedClientHelloConfigList: mut Slice<byte>,
   pub EncryptedClientHelloRejectionVerify: Option<fn(ConnectionState) -> Result<(), error>>,
   pub GetEncryptedClientHelloKeys: Option<fn(Ref<ClientHelloInfo>) -> Result<Slice<EncryptedClientHelloKey>, error>>,
-  pub EncryptedClientHelloKeys: Slice<EncryptedClientHelloKey>,
+  pub EncryptedClientHelloKeys: mut Slice<mut EncryptedClientHelloKey>,
 }
 
 /// A Conn represents a secured connection.
@@ -375,19 +375,19 @@ pub struct ConnectionState {
   pub NegotiatedProtocol: string,
   pub NegotiatedProtocolIsMutual: bool,
   pub ServerName: string,
-  pub PeerCertificates: Slice<Option<Ref<x509.Certificate>>>,
-  pub VerifiedChains: Slice<Slice<Option<Ref<x509.Certificate>>>>,
-  pub SignedCertificateTimestamps: Slice<Slice<byte>>,
-  pub OCSPResponse: Slice<byte>,
-  pub TLSUnique: Slice<byte>,
+  pub PeerCertificates: mut Slice<Option<mut Ref<x509.Certificate>>>,
+  pub VerifiedChains: mut Slice<mut Slice<Option<mut Ref<x509.Certificate>>>>,
+  pub SignedCertificateTimestamps: mut Slice<mut Slice<byte>>,
+  pub OCSPResponse: mut Slice<byte>,
+  pub TLSUnique: mut Slice<byte>,
   pub ECHAccepted: bool,
 }
 
 /// Dialer dials TLS connections given a configuration and a Dialer for the
 /// underlying connection.
 pub struct Dialer {
-  pub NetDialer: Option<Ref<net.Dialer>>,
-  pub Config: Option<Ref<Config>>,
+  pub NetDialer: Option<mut Ref<net.Dialer>>,
+  pub Config: Option<mut Ref<Config>>,
 }
 
 /// ECHRejectionError is the error type returned when ECH is rejected by a remote
@@ -397,20 +397,20 @@ pub struct Dialer {
 /// The client may treat an ECHRejectionError with an empty set of RetryConfigs
 /// as a secure signal from the server.
 pub struct ECHRejectionError {
-  pub RetryConfigList: Slice<byte>,
+  pub RetryConfigList: mut Slice<byte>,
 }
 
 /// EncryptedClientHelloKey holds a private key that is associated
 /// with a specific ECH config known to a client.
 pub struct EncryptedClientHelloKey {
-  pub Config: Slice<byte>,
-  pub PrivateKey: Slice<byte>,
+  pub Config: mut Slice<byte>,
+  pub PrivateKey: mut Slice<byte>,
   pub SendAsRetry: bool,
 }
 
 /// A QUICConfig configures a [QUICConn].
 pub struct QUICConfig {
-  pub TLSConfig: Option<Ref<Config>>,
+  pub TLSConfig: Option<mut Ref<Config>>,
   pub EnableSessionEvents: bool,
 }
 
@@ -427,14 +427,14 @@ pub type QUICConn
 pub struct QUICEvent {
   pub Kind: QUICEventKind,
   pub Level: QUICEncryptionLevel,
-  pub Data: Slice<byte>,
+  pub Data: mut Slice<byte>,
   pub Suite: uint16,
-  pub SessionState: Option<Ref<SessionState>>,
+  pub SessionState: Option<mut Ref<SessionState>>,
 }
 
 pub struct QUICSessionTicketOptions {
   pub EarlyData: bool,
-  pub Extra: Slice<Slice<byte>>,
+  pub Extra: mut Slice<mut Slice<byte>>,
 }
 
 /// RecordHeaderError is returned when a TLS record header is invalid.
@@ -447,7 +447,7 @@ pub struct RecordHeaderError {
 /// A SessionState is a resumable session.
 #[go(hidden_fields)]
 pub struct SessionState {
-  pub Extra: Slice<Slice<byte>>,
+  pub Extra: mut Slice<mut Slice<byte>>,
   pub EarlyData: bool,
 }
 
@@ -681,7 +681,7 @@ impl ClientSessionState {
   /// 
   /// It can be called by [ClientSessionCache.Put] to serialize (with
   /// [SessionState.Bytes]) and store the session.
-  fn ResumptionState(self: Ref<ClientSessionState>) -> Result<(Slice<byte>, Option<Ref<SessionState>>), error>
+  fn ResumptionState(self: Ref<ClientSessionState>) -> Result<(Slice<byte>, Option<mut Ref<SessionState>>), error>
 }
 
 impl Config {
@@ -692,7 +692,7 @@ impl Config {
   /// Deprecated: NameToCertificate only allows associating a single certificate
   /// with a given name. Leave that field nil to let the library select the first
   /// compatible chain from Certificates.
-  fn BuildNameToCertificate(self: Ref<Config>)
+  fn BuildNameToCertificate(self: mut Ref<Config>)
 
   /// Clone returns a shallow clone of c or nil if c is nil. It is safe to clone a
   /// [Config] that is being used concurrently by a TLS client or server.
@@ -703,25 +703,25 @@ impl Config {
   /// including connections that were originally established on the parent Config.
   /// If that is not intended, use [Config.VerifyConnection] instead, or set
   /// [Config.SessionTicketsDisabled].
-  fn Clone(self: Ref<Config>) -> Ref<Config>
+  fn Clone(self: Ref<Config>) -> mut Ref<Config>
 
   /// DecryptTicket decrypts a ticket encrypted by [Config.EncryptTicket]. It can
   /// be used as a [Config.UnwrapSession] implementation.
   /// 
   /// If the ticket can't be decrypted or parsed, DecryptTicket returns (nil, nil).
   fn DecryptTicket(
-    self: Ref<Config>,
+    self: mut Ref<Config>,
     identity: Slice<byte>,
     cs: ConnectionState,
-  ) -> Result<Option<Ref<SessionState>>, error>
+  ) -> Result<Option<mut Ref<SessionState>>, error>
 
   /// EncryptTicket encrypts a ticket with the [Config]'s configured (or default)
   /// session ticket keys. It can be used as a [Config.WrapSession] implementation.
   fn EncryptTicket(
-    self: Ref<Config>,
+    self: mut Ref<Config>,
     cs: ConnectionState,
     ss: Ref<SessionState>,
-  ) -> Result<Slice<byte>, error>
+  ) -> Result<mut Slice<byte>, error>
 
   /// SetSessionTicketKeys updates the session ticket keys for a server.
   /// 
@@ -736,19 +736,19 @@ impl Config {
   /// all have the same session ticket keys. If the session ticket keys leaks,
   /// previously recorded and future TLS connections using those keys might be
   /// compromised.
-  fn SetSessionTicketKeys(self: Ref<Config>, keys: Slice<Array<byte, 32>>)
+  fn SetSessionTicketKeys(self: mut Ref<Config>, keys: Slice<Array<byte, 32>>)
 }
 
 impl Conn {
   /// Close closes the connection.
   #[allow(unused_result)]
-  fn Close(self: Ref<Conn>) -> Result<(), error>
+  fn Close(self: mut Ref<Conn>) -> Result<(), error>
 
   /// CloseWrite shuts down the writing side of the connection. It should only be
   /// called once the handshake has completed and does not call CloseWrite on the
   /// underlying connection. Most callers should just use [Conn.Close].
   #[allow(unused_result)]
-  fn CloseWrite(self: Ref<Conn>) -> Result<(), error>
+  fn CloseWrite(self: mut Ref<Conn>) -> Result<(), error>
 
   /// ConnectionState returns basic TLS details about the connection.
   fn ConnectionState(self: Ref<Conn>) -> ConnectionState
@@ -766,7 +766,7 @@ impl Conn {
   /// in certificates sent by either the TLS server or client is limited to 8192
   /// bits. This limit can be overridden by setting tlsmaxrsasize in the GODEBUG
   /// environment variable (e.g. GODEBUG=tlsmaxrsasize=4096).
-  fn Handshake(self: Ref<Conn>) -> Result<(), error>
+  fn Handshake(self: mut Ref<Conn>) -> Result<(), error>
 
   /// HandshakeContext runs the client or server handshake
   /// protocol if it has not yet been run.
@@ -778,7 +778,7 @@ impl Conn {
   /// 
   /// Most uses of this package need not call HandshakeContext explicitly: the
   /// first [Conn.Read] or [Conn.Write] will call it automatically.
-  fn HandshakeContext(self: Ref<Conn>, ctx: context.Context) -> Result<(), error>
+  fn HandshakeContext(self: mut Ref<Conn>, ctx: context.Context) -> Result<(), error>
 
   /// LocalAddr returns the local network address.
   fn LocalAddr(self: Ref<Conn>) -> Option<net.Addr>
@@ -798,7 +798,7 @@ impl Conn {
   /// must be set for both Read and [Conn.Write] before Read is called when the handshake
   /// has not yet completed. See [Conn.SetDeadline], [Conn.SetReadDeadline], and
   /// [Conn.SetWriteDeadline].
-  fn Read(self: Ref<Conn>, mut b: Slice<byte>) -> Partial<int, error>
+  fn Read(self: mut Ref<Conn>, b: mut Slice<byte>) -> Partial<int, error>
 
   /// RemoteAddr returns the remote network address.
   fn RemoteAddr(self: Ref<Conn>) -> Option<net.Addr>
@@ -828,7 +828,7 @@ impl Conn {
   /// must be set for both [Conn.Read] and Write before Write is called when the handshake
   /// has not yet completed. See [Conn.SetDeadline], [Conn.SetReadDeadline], and
   /// [Conn.SetWriteDeadline].
-  fn Write(self: Ref<Conn>, b: Slice<byte>) -> Partial<int, error>
+  fn Write(self: mut Ref<Conn>, b: Slice<byte>) -> Partial<int, error>
 }
 
 impl ConnectionState {
@@ -847,7 +847,7 @@ impl ConnectionState {
     label: string,
     context: Slice<byte>,
     length: int,
-  ) -> Result<Slice<byte>, error>
+  ) -> Result<mut Slice<byte>, error>
 }
 
 impl CurveID {
@@ -908,7 +908,7 @@ impl QUICConn {
   /// SendSessionTicket sends a session ticket to the client.
   /// It produces connection events, which may be read with [QUICConn.NextEvent].
   /// Currently, it can only be called once.
-  fn SendSessionTicket(self: Ref<QUICConn>, opts: QUICSessionTicketOptions) -> Result<(), error>
+  fn SendSessionTicket(self: mut Ref<QUICConn>, opts: QUICSessionTicketOptions) -> Result<(), error>
 
   /// SetTransportParameters sets the transport parameters to send to the peer.
   /// 

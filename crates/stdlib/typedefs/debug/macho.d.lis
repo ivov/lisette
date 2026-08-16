@@ -139,23 +139,23 @@ pub const TypeObj: Type = 1
 /// NewFatFile creates a new [FatFile] for accessing all the Mach-O images in a
 /// universal binary. The Mach-O binary is expected to start at position 0 in
 /// the ReaderAt.
-pub fn NewFatFile(r: io.ReaderAt) -> Result<Ref<FatFile>, error>
+pub fn NewFatFile(r: io.ReaderAt) -> Result<mut Ref<FatFile>, error>
 
 /// NewFile creates a new [File] for accessing a Mach-O binary in an underlying reader.
 /// The Mach-O binary is expected to start at position 0 in the ReaderAt.
-pub fn NewFile(r: io.ReaderAt) -> Result<Ref<File>, error>
+pub fn NewFile(r: io.ReaderAt) -> Result<mut Ref<File>, error>
 
 /// Open opens the named file using [os.Open] and prepares it for use as a Mach-O binary.
-pub fn Open(name: string) -> Result<Ref<File>, error>
+pub fn Open(name: string) -> Result<mut Ref<File>, error>
 
 /// OpenFat opens the named file using [os.Open] and prepares it for use as a Mach-O
 /// universal binary.
-pub fn OpenFat(name: string) -> Result<Ref<FatFile>, error>
+pub fn OpenFat(name: string) -> Result<mut Ref<FatFile>, error>
 
 /// A Dylib represents a Mach-O load dynamic library command.
 #[go(hidden_embed)]
 pub struct Dylib {
-  pub LoadBytes: LoadBytes,
+  pub LoadBytes: mut LoadBytes,
   pub Name: string,
   pub Time: uint32,
   pub CurrentVersion: uint32,
@@ -175,9 +175,9 @@ pub struct DylibCmd {
 /// A Dysymtab represents a Mach-O dynamic symbol table command.
 #[go(hidden_embed)]
 pub struct Dysymtab {
-  pub LoadBytes: LoadBytes,
+  pub LoadBytes: mut LoadBytes,
   embed DysymtabCmd,
-  pub IndirectSyms: Slice<uint32>,
+  pub IndirectSyms: mut Slice<uint32>,
 }
 
 /// A DysymtabCmd is a Mach-O dynamic symbol table command.
@@ -207,7 +207,7 @@ pub struct DysymtabCmd {
 /// A FatArch is a Mach-O File inside a FatFile.
 pub struct FatArch {
   embed FatArchHeader,
-  embed Ref<File>,
+  embed mut Ref<File>,
 }
 
 /// A FatArchHeader represents a fat header for a specific image architecture.
@@ -223,7 +223,7 @@ pub struct FatArchHeader {
 #[go(hidden_fields)]
 pub struct FatFile {
   pub Magic: uint32,
-  pub Arches: Slice<FatArch>,
+  pub Arches: mut Slice<mut FatArch>,
 }
 
 /// A File represents an open Mach-O file.
@@ -231,10 +231,10 @@ pub struct FatFile {
 pub struct File {
   embed FileHeader,
   pub ByteOrder: Option<binary.ByteOrder>,
-  pub Loads: Slice<Option<Load>>,
-  pub Sections: Slice<Option<Ref<Section>>>,
-  pub Symtab: Option<Ref<Symtab>>,
-  pub Dysymtab: Option<Ref<Dysymtab>>,
+  pub Loads: mut Slice<Option<Load>>,
+  pub Sections: mut Slice<Option<mut Ref<Section>>>,
+  pub Symtab: Option<mut Ref<Symtab>>,
+  pub Dysymtab: Option<mut Ref<Dysymtab>>,
 }
 
 /// A FileHeader represents a Mach-O file header.
@@ -258,7 +258,7 @@ pub interface Load {
 }
 
 /// A LoadBytes is the uninterpreted bytes of a Mach-O load command.
-pub struct LoadBytes(Slice<byte>)
+pub struct LoadBytes(mut Slice<byte>)
 
 /// An Nlist32 is a Mach-O 32-bit symbol table entry.
 pub struct Nlist32 {
@@ -337,7 +337,7 @@ pub struct Reloc {
 /// A Rpath represents a Mach-O rpath command.
 #[go(hidden_embed)]
 pub struct Rpath {
-  pub LoadBytes: LoadBytes,
+  pub LoadBytes: mut LoadBytes,
   pub Path: string,
 }
 
@@ -353,7 +353,7 @@ pub struct RpathCmd {
 #[go(zero_unsafe)]
 pub struct Section {
   embed SectionHeader,
-  pub Relocs: Slice<Reloc>,
+  pub Relocs: mut Slice<Reloc>,
   pub ReaderAt: Option<io.ReaderAt>,
 }
 
@@ -405,7 +405,7 @@ pub struct SectionHeader {
 #[go(hidden_fields)]
 #[go(zero_unsafe)]
 pub struct Segment {
-  pub LoadBytes: LoadBytes,
+  pub LoadBytes: mut LoadBytes,
   embed SegmentHeader,
   pub ReaderAt: Option<io.ReaderAt>,
 }
@@ -467,9 +467,9 @@ pub struct Symbol {
 /// A Symtab represents a Mach-O symbol table command.
 #[go(hidden_embed)]
 pub struct Symtab {
-  pub LoadBytes: LoadBytes,
+  pub LoadBytes: mut LoadBytes,
   embed SymtabCmd,
-  pub Syms: Slice<Symbol>,
+  pub Syms: mut Slice<Symbol>,
 }
 
 /// A SymtabCmd is a Mach-O symbol table command.
@@ -487,7 +487,7 @@ pub struct Thread {
   pub Cmd: LoadCmd,
   pub Len: uint32,
   pub Type: uint32,
-  pub Data: Slice<uint32>,
+  pub Data: mut Slice<uint32>,
 }
 
 pub const FlagAllModsBound = 0x1000
@@ -550,7 +550,7 @@ pub const MagicFat = 0xcafebabe
 
 /// ErrNotFat is returned from [NewFatFile] or [OpenFat] when the file is not a
 /// universal binary but may be a thin binary, based on its magic number.
-pub var ErrNotFat: Ref<FormatError>
+pub var ErrNotFat: mut Ref<FormatError>
 
 impl Cpu {
   fn GoString(self) -> string
@@ -568,7 +568,7 @@ impl Dysymtab {
 
 impl FatFile {
   #[allow(unused_result)]
-  fn Close(self: Ref<FatFile>) -> Result<(), error>
+  fn Close(self: mut Ref<FatFile>) -> Result<(), error>
 }
 
 impl File {
@@ -576,27 +576,27 @@ impl File {
   /// If the [File] was created using [NewFile] directly instead of [Open],
   /// Close has no effect.
   #[allow(unused_result)]
-  fn Close(self: Ref<File>) -> Result<(), error>
+  fn Close(self: mut Ref<File>) -> Result<(), error>
 
   /// DWARF returns the DWARF debug information for the Mach-O file.
-  fn DWARF(self: Ref<File>) -> Result<Ref<dwarf.Data>, error>
+  fn DWARF(self: Ref<File>) -> Result<mut Ref<dwarf.Data>, error>
 
   /// ImportedLibraries returns the paths of all libraries
   /// referred to by the binary f that are expected to be
   /// linked with the binary at dynamic link time.
-  fn ImportedLibraries(self: Ref<File>) -> Result<Slice<string>, error>
+  fn ImportedLibraries(self: Ref<File>) -> Result<mut Slice<string>, error>
 
   /// ImportedSymbols returns the names of all symbols
   /// referred to by the binary f that are expected to be
   /// satisfied by other libraries at dynamic load time.
-  fn ImportedSymbols(self: Ref<File>) -> Result<Slice<string>, error>
+  fn ImportedSymbols(self: Ref<File>) -> Result<mut Slice<string>, error>
 
   /// Section returns the first section with the given name, or nil if no such
   /// section exists.
-  fn Section(self: Ref<File>, name: string) -> Option<Ref<Section>>
+  fn Section(self: Ref<File>, name: string) -> Option<mut Ref<Section>>
 
   /// Segment returns the first Segment with the given name, or nil if no such segment exists.
-  fn Segment(self: Ref<File>, name: string) -> Option<Ref<Segment>>
+  fn Segment(self: Ref<File>, name: string) -> Option<mut Ref<Segment>>
 }
 
 impl FormatError {
@@ -643,24 +643,24 @@ impl Rpath {
 
 impl Section {
   /// Data reads and returns the contents of the Mach-O section.
-  fn Data(self: Ref<Section>) -> Result<Slice<byte>, error>
+  fn Data(self: Ref<Section>) -> Result<mut Slice<byte>, error>
 
   /// Open returns a new ReadSeeker reading the Mach-O section.
   fn Open(self: Ref<Section>) -> io.ReadSeeker
 
-  fn ReadAt(self, mut p: Slice<byte>, off: int64) -> Partial<int, error>
+  fn ReadAt(self, p: mut Slice<byte>, off: int64) -> Partial<int, error>
 }
 
 impl Segment {
   /// Data reads and returns the contents of the segment.
-  fn Data(self: Ref<Segment>) -> Result<Slice<byte>, error>
+  fn Data(self: Ref<Segment>) -> Result<mut Slice<byte>, error>
 
   /// Open returns a new ReadSeeker reading the segment.
   fn Open(self: Ref<Segment>) -> io.ReadSeeker
 
   fn Raw(self) -> Slice<byte>
 
-  fn ReadAt(self, mut p: Slice<byte>, off: int64) -> Partial<int, error>
+  fn ReadAt(self, p: mut Slice<byte>, off: int64) -> Partial<int, error>
 }
 
 impl Symtab {

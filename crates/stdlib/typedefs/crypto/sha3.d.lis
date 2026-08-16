@@ -6,36 +6,36 @@
 import "go:hash"
 
 /// New224 creates a new SHA3-224 hash.
-pub fn New224() -> Ref<SHA3>
+pub fn New224() -> mut Ref<SHA3>
 
 /// New256 creates a new SHA3-256 hash.
-pub fn New256() -> Ref<SHA3>
+pub fn New256() -> mut Ref<SHA3>
 
 /// New384 creates a new SHA3-384 hash.
-pub fn New384() -> Ref<SHA3>
+pub fn New384() -> mut Ref<SHA3>
 
 /// New512 creates a new SHA3-512 hash.
-pub fn New512() -> Ref<SHA3>
+pub fn New512() -> mut Ref<SHA3>
 
 /// NewCSHAKE128 creates a new cSHAKE128 XOF.
 /// 
 /// N is used to define functions based on cSHAKE, it can be empty when plain
 /// cSHAKE is desired. S is a customization byte string used for domain
 /// separation. When N and S are both empty, this is equivalent to NewSHAKE128.
-pub fn NewCSHAKE128(n: Slice<byte>, s: Slice<byte>) -> Ref<SHAKE>
+pub fn NewCSHAKE128(n: Slice<byte>, s: Slice<byte>) -> mut Ref<SHAKE>
 
 /// NewCSHAKE256 creates a new cSHAKE256 XOF.
 /// 
 /// N is used to define functions based on cSHAKE, it can be empty when plain
 /// cSHAKE is desired. S is a customization byte string used for domain
 /// separation. When N and S are both empty, this is equivalent to NewSHAKE256.
-pub fn NewCSHAKE256(n: Slice<byte>, s: Slice<byte>) -> Ref<SHAKE>
+pub fn NewCSHAKE256(n: Slice<byte>, s: Slice<byte>) -> mut Ref<SHAKE>
 
 /// NewSHAKE128 creates a new SHAKE128 XOF.
-pub fn NewSHAKE128() -> Ref<SHAKE>
+pub fn NewSHAKE128() -> mut Ref<SHAKE>
 
 /// NewSHAKE256 creates a new SHAKE256 XOF.
-pub fn NewSHAKE256() -> Ref<SHAKE>
+pub fn NewSHAKE256() -> mut Ref<SHAKE>
 
 /// Sum224 returns the SHA3-224 hash of data.
 pub fn Sum224(data: Slice<byte>) -> Array<byte, 28>
@@ -51,11 +51,11 @@ pub fn Sum512(data: Slice<byte>) -> Array<byte, 64>
 
 /// SumSHAKE128 applies the SHAKE128 extendable output function to data and
 /// returns an output of the given length in bytes.
-pub fn SumSHAKE128(data: Slice<byte>, length: int) -> Slice<byte>
+pub fn SumSHAKE128(data: Slice<byte>, length: int) -> mut Slice<byte>
 
 /// SumSHAKE256 applies the SHAKE256 extendable output function to data and
 /// returns an output of the given length in bytes.
-pub fn SumSHAKE256(data: Slice<byte>, length: int) -> Slice<byte>
+pub fn SumSHAKE256(data: Slice<byte>, length: int) -> mut Slice<byte>
 
 /// SHA3 is an instance of a SHA-3 hash. It implements [hash.Hash].
 pub type SHA3
@@ -65,7 +65,7 @@ pub type SHAKE
 
 impl SHA3 {
   /// AppendBinary implements [encoding.BinaryAppender].
-  fn AppendBinary(self: Ref<SHA3>, mut p: Slice<byte>) -> Result<Slice<byte>, error>
+  fn AppendBinary(self: Ref<SHA3>, p: mut Slice<byte>) -> Result<mut Slice<byte>, error>
 
   /// BlockSize returns the hash's rate.
   fn BlockSize(self: Ref<SHA3>) -> int
@@ -74,27 +74,27 @@ impl SHA3 {
   fn Clone(self: Ref<SHA3>) -> Result<hash.Cloner, error>
 
   /// MarshalBinary implements [encoding.BinaryMarshaler].
-  fn MarshalBinary(self: Ref<SHA3>) -> Result<Slice<byte>, error>
+  fn MarshalBinary(self: Ref<SHA3>) -> Result<mut Slice<byte>, error>
 
   /// Reset resets the hash to its initial state.
-  fn Reset(self: Ref<SHA3>)
+  fn Reset(self: mut Ref<SHA3>)
 
   /// Size returns the number of bytes Sum will produce.
   fn Size(self: Ref<SHA3>) -> int
 
   /// Sum appends the current hash to b and returns the resulting slice.
-  fn Sum(self: Ref<SHA3>, mut b: Slice<byte>) -> Slice<byte>
+  fn Sum(self: Ref<SHA3>, b: mut Slice<byte>) -> Slice<byte>
 
   /// UnmarshalBinary implements [encoding.BinaryUnmarshaler].
-  fn UnmarshalBinary(self: Ref<SHA3>, data: Slice<byte>) -> Result<(), error>
+  fn UnmarshalBinary(self: mut Ref<SHA3>, data: Slice<byte>) -> Result<(), error>
 
   /// Write absorbs more data into the hash's state.
-  fn Write(self: Ref<SHA3>, p: Slice<byte>) -> Partial<int, error>
+  fn Write(self: mut Ref<SHA3>, p: Slice<byte>) -> Partial<int, error>
 }
 
 impl SHAKE {
   /// AppendBinary implements [encoding.BinaryAppender].
-  fn AppendBinary(self: Ref<SHAKE>, mut p: Slice<byte>) -> Result<Slice<byte>, error>
+  fn AppendBinary(self: Ref<SHAKE>, p: mut Slice<byte>) -> Result<mut Slice<byte>, error>
 
   /// BlockSize returns the rate of the XOF.
   fn BlockSize(self: Ref<SHAKE>) -> int
@@ -105,16 +105,16 @@ impl SHAKE {
   /// Read squeezes more output from the XOF.
   /// 
   /// Any call to Write after a call to Read will panic.
-  fn Read(self: Ref<SHAKE>, mut p: Slice<byte>) -> Partial<int, error>
+  fn Read(self: mut Ref<SHAKE>, p: mut Slice<byte>) -> Partial<int, error>
 
   /// Reset resets the XOF to its initial state.
-  fn Reset(self: Ref<SHAKE>)
+  fn Reset(self: mut Ref<SHAKE>)
 
   /// UnmarshalBinary implements [encoding.BinaryUnmarshaler].
-  fn UnmarshalBinary(self: Ref<SHAKE>, data: Slice<byte>) -> Result<(), error>
+  fn UnmarshalBinary(self: mut Ref<SHAKE>, data: Slice<byte>) -> Result<(), error>
 
   /// Write absorbs more data into the XOF's state.
   /// 
   /// It panics if any output has already been read.
-  fn Write(self: Ref<SHAKE>, p: Slice<byte>) -> Partial<int, error>
+  fn Write(self: mut Ref<SHAKE>, p: Slice<byte>) -> Partial<int, error>
 }

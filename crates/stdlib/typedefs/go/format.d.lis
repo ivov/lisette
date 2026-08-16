@@ -16,7 +16,7 @@ import "go:io"
 /// 
 /// The function may return early (before the entire result is written)
 /// and return a formatting error, for instance due to an incorrect AST.
-pub fn Node(dst: io.Writer, fset: Ref<token.FileSet>, node: Unknown) -> Result<(), error>
+pub fn Node(dst: io.Writer, fset: mut Ref<token.FileSet>, node: Unknown) -> Result<(), error>
 
 /// Source formats src in canonical gofmt style and returns the result
 /// or an (I/O or syntax) error. src is expected to be a syntactically

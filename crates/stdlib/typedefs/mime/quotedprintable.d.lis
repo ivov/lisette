@@ -6,10 +6,10 @@
 import "go:io"
 
 /// NewReader returns a quoted-printable reader, decoding from r.
-pub fn NewReader(r: io.Reader) -> Ref<Reader>
+pub fn NewReader(r: io.Reader) -> mut Ref<Reader>
 
 /// NewWriter returns a new [Writer] that writes to w.
-pub fn NewWriter(w: io.Writer) -> Ref<Writer>
+pub fn NewWriter(w: io.Writer) -> mut Ref<Writer>
 
 /// Reader is a quoted-printable decoder.
 pub type Reader
@@ -23,17 +23,17 @@ pub struct Writer {
 
 impl Reader {
   /// Read reads and decodes quoted-printable data from the underlying reader.
-  fn Read(self: Ref<Reader>, mut p: Slice<byte>) -> Partial<int, error>
+  fn Read(self: mut Ref<Reader>, p: mut Slice<byte>) -> Partial<int, error>
 }
 
 impl Writer {
   /// Close closes the [Writer], flushing any unwritten data to the underlying
   /// [io.Writer], but does not close the underlying io.Writer.
   #[allow(unused_result)]
-  fn Close(self: Ref<Writer>) -> Result<(), error>
+  fn Close(self: mut Ref<Writer>) -> Result<(), error>
 
   /// Write encodes p using quoted-printable encoding and writes it to the
   /// underlying [io.Writer]. It limits line length to 76 characters. The encoded
   /// bytes are not necessarily flushed until the [Writer] is closed.
-  fn Write(self: Ref<Writer>, p: Slice<byte>) -> Partial<int, error>
+  fn Write(self: mut Ref<Writer>, p: Slice<byte>) -> Partial<int, error>
 }

@@ -5,8 +5,8 @@
 
 import "go:github.com/ivov/lisette/bindgen/tests/testdata/fixtures/nilness_transitive/mid/leaf"
 
-pub fn MakeIt() -> Option<Ref<leaf.Thing>>
+pub fn MakeIt() -> Option<mut Ref<leaf.Thing>>
 
-pub fn MakeItHonest() -> Option<Ref<leaf.Thing>>
+pub fn MakeItHonest() -> Option<mut Ref<leaf.Thing>>
 
 pub type Thing = leaf.Thing

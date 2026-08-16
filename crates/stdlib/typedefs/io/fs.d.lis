@@ -37,7 +37,7 @@ pub fn FormatFileInfo(info: FileInfo) -> string
 /// If fs implements [GlobFS], Glob calls fs.Glob.
 /// Otherwise, Glob uses [ReadDir] to traverse the directory tree
 /// and look for matches for the pattern.
-pub fn Glob(fsys: FS, pattern: string) -> Result<Slice<string>, error>
+pub fn Glob(fsys: FS, pattern: string) -> Result<mut Slice<string>, error>
 
 /// Lstat returns a [FileInfo] describing the named file.
 /// If the file is a symbolic link, the returned [FileInfo] describes the symbolic link.
@@ -52,7 +52,7 @@ pub fn Lstat(fsys: FS, name: string) -> Result<FileInfo, error>
 /// If fs implements [ReadDirFS], ReadDir calls fs.ReadDir.
 /// Otherwise ReadDir calls fs.Open and uses ReadDir and Close
 /// on the returned file.
-pub fn ReadDir(fsys: FS, name: string) -> Result<Slice<DirEntry>, error>
+pub fn ReadDir(fsys: FS, name: string) -> Result<mut Slice<DirEntry>, error>
 
 /// ReadFile reads the named file from the file system fs and returns its contents.
 /// A successful call returns a nil error, not [io.EOF].
@@ -62,7 +62,7 @@ pub fn ReadDir(fsys: FS, name: string) -> Result<Slice<DirEntry>, error>
 /// If fs implements [ReadFileFS], ReadFile calls fs.ReadFile.
 /// Otherwise ReadFile calls fs.Open and uses Read and Close
 /// on the returned [File].
-pub fn ReadFile(fsys: FS, name: string) -> Result<Slice<byte>, error>
+pub fn ReadFile(fsys: FS, name: string) -> Result<mut Slice<byte>, error>
 
 /// ReadLink returns the destination of the named symbolic link.
 /// 
@@ -149,7 +149,7 @@ pub interface FS {
 pub interface File {
   #[allow(unused_result)]
   fn Close() -> Result<(), error>
-  fn Read(mut b: Slice<byte>) -> Partial<int, error>
+  fn Read(b: mut Slice<byte>) -> Partial<int, error>
   fn Stat() -> Result<FileInfo, error>
 }
 
@@ -198,7 +198,7 @@ pub interface ReadDirFS {
 pub interface ReadDirFile {
   #[allow(unused_result)]
   fn Close() -> Result<(), error>
-  fn Read(mut b: Slice<byte>) -> Partial<int, error>
+  fn Read(b: mut Slice<byte>) -> Partial<int, error>
   fn ReadDir(n: int) -> Result<Slice<DirEntry>, error>
   fn Stat() -> Result<FileInfo, error>
 }

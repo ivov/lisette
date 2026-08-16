@@ -24,7 +24,7 @@ pub struct Coord {
 }
 
 pub struct Engine {
-  embed Inner,
+  embed mut Inner,
 }
 
 /// Pointer receiver returning a *different* concrete type — must not be marked.
@@ -60,12 +60,12 @@ pub type Var
 
 impl App {
   #[allow(unused_value)]
-  fn Add(self: Ref<App>, method: string, path: string) -> Ref<App>
+  fn Add(self: Ref<App>, method: string, path: string) -> mut Ref<App>
   #[allow(unused_value)]
-  fn GetRoute(self: Ref<App>, path: string) -> Ref<App>
-  fn NewGroup(self: Ref<App>) -> Ref<Group>
+  fn GetRoute(self: Ref<App>, path: string) -> mut Ref<App>
+  fn NewGroup(self: Ref<App>) -> mut Ref<Group>
   #[allow(unused_value)]
-  fn PostRoute(self: Ref<App>, path: string) -> Ref<App>
+  fn PostRoute(self: Ref<App>, path: string) -> mut Ref<App>
 }
 
 impl Box {
@@ -74,14 +74,14 @@ impl Box {
 }
 
 impl Cfg {
-  fn Clone(self: Ref<Cfg>) -> Ref<Cfg>
-  fn Copy(self: Ref<Cfg>) -> Ref<Cfg>
+  fn Clone(self: Ref<Cfg>) -> mut Ref<Cfg>
+  fn Copy(self: Ref<Cfg>) -> mut Ref<Cfg>
 }
 
 impl Config {
   fn Name(self: Ref<Config>) -> string
   #[allow(unused_value)]
-  fn WithName(self: Ref<Config>, n: string) -> Ref<Config>
+  fn WithName(self: mut Ref<Config>, n: string) -> mut Ref<Config>
   fn WithTag(self: Ref<Config>, k: string, v: string)
 }
 
@@ -91,23 +91,23 @@ impl Coord {
 
 impl Inner {
   #[allow(unused_value)]
-  fn Get(self: Ref<Inner>, path: string) -> Router
-  fn NewGroup(self: Ref<Inner>) -> Ref<Group>
+  fn Get(self: mut Ref<Inner>, path: string) -> Router
+  fn NewGroup(self: Ref<Inner>) -> mut Ref<Group>
   #[allow(unused_value)]
-  fn Post(self: Ref<Inner>, path: string) -> Router
+  fn Post(self: mut Ref<Inner>, path: string) -> Router
 }
 
 impl Logger {
-  fn With(self: Ref<Logger>, attr: string) -> Ref<Logger>
+  fn With(self: Ref<Logger>, attr: string) -> mut Ref<Logger>
 }
 
 impl Server {
   #[allow(unused_value)]
-  fn Get(self: Ref<Server>, path: string) -> Router
+  fn Get(self: mut Ref<Server>, path: string) -> Router
   #[allow(unused_value)]
-  fn Post(self: Ref<Server>, path: string) -> Router
+  fn Post(self: mut Ref<Server>, path: string) -> Router
 }
 
 impl Var {
-  fn Origin(self: Ref<Var>) -> Option<Ref<Var>>
+  fn Origin(self: Ref<Var>) -> Option<mut Ref<Var>>
 }

@@ -1,0 +1,19 @@
+{
+  "overrides": {
+    "types": {
+      "mutates_param": {
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/aliases": {
+          "FillVia": ["self"]
+        }
+      },
+      "mutates_receiver": {
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/aliases": ["Counter.Bump"]
+      },
+      "returns_view_of": {
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/aliases": {
+          "Pick": ["0:rows"]
+        }
+      }
+    }
+  }
+}

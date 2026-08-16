@@ -32,7 +32,7 @@ pub fn IsPredeclared(s: string) -> bool
 /// New takes ownership of the AST pkg and may edit or overwrite it.
 /// To have the [Examples] fields populated, use [NewFromFiles] and include
 /// the package's _test.go files.
-pub fn New(pkg: Ref<ast.Package>, importPath: string, mode: Mode) -> Ref<Package>
+pub fn New(pkg: Ref<ast.Package>, importPath: string, mode: Mode) -> mut Ref<Package>
 
 /// NewFromFiles computes documentation for a package.
 /// 
@@ -61,7 +61,7 @@ pub fn NewFromFiles(
   files: Slice<Ref<ast.File>>,
   importPath: string,
   opts: VarArgs<Unknown>,
-) -> Result<Ref<Package>, error>
+) -> Result<mut Ref<Package>, error>
 
 /// Synopsis returns a cleaned version of the first sentence in text.
 /// 
@@ -128,8 +128,8 @@ pub struct Example {
   pub Suffix: string,
   pub Doc: string,
   pub Code: Option<ast.Node>,
-  pub Play: Option<Ref<ast.File>>,
-  pub Comments: Slice<Option<Ref<ast.CommentGroup>>>,
+  pub Play: Option<mut Ref<ast.File>>,
+  pub Comments: mut Slice<Option<mut Ref<ast.CommentGroup>>>,
   pub Output: string,
   pub Unordered: bool,
   pub EmptyOutput: bool,
@@ -142,11 +142,11 @@ pub type Filter = fn(string) -> bool
 pub struct Func {
   pub Doc: string,
   pub Name: string,
-  pub Decl: Option<Ref<ast.FuncDecl>>,
+  pub Decl: Option<mut Ref<ast.FuncDecl>>,
   pub Recv: string,
   pub Orig: string,
   pub Level: int,
-  pub Examples: Slice<Option<Ref<Example>>>,
+  pub Examples: mut Slice<Option<mut Ref<Example>>>,
 }
 
 /// Mode values control the operation of [New] and [NewFromFiles].
@@ -170,35 +170,35 @@ pub struct Package {
   pub Doc: string,
   pub Name: string,
   pub ImportPath: string,
-  pub Imports: Slice<string>,
-  pub Filenames: Slice<string>,
-  pub Notes: Map<string, Slice<Option<Ref<Note>>>>,
-  pub Bugs: Slice<string>,
-  pub Consts: Slice<Option<Ref<Value>>>,
-  pub Types: Slice<Option<Ref<Type>>>,
-  pub Vars: Slice<Option<Ref<Value>>>,
-  pub Funcs: Slice<Option<Ref<Func>>>,
-  pub Examples: Slice<Option<Ref<Example>>>,
+  pub Imports: mut Slice<string>,
+  pub Filenames: mut Slice<string>,
+  pub Notes: mut Map<string, mut Slice<Option<mut Ref<Note>>>>,
+  pub Bugs: mut Slice<string>,
+  pub Consts: mut Slice<Option<mut Ref<Value>>>,
+  pub Types: mut Slice<Option<mut Ref<Type>>>,
+  pub Vars: mut Slice<Option<mut Ref<Value>>>,
+  pub Funcs: mut Slice<Option<mut Ref<Func>>>,
+  pub Examples: mut Slice<Option<mut Ref<Example>>>,
 }
 
 /// Type is the documentation for a type declaration.
 pub struct Type {
   pub Doc: string,
   pub Name: string,
-  pub Decl: Option<Ref<ast.GenDecl>>,
-  pub Consts: Slice<Option<Ref<Value>>>,
-  pub Vars: Slice<Option<Ref<Value>>>,
-  pub Funcs: Slice<Option<Ref<Func>>>,
-  pub Methods: Slice<Option<Ref<Func>>>,
-  pub Examples: Slice<Option<Ref<Example>>>,
+  pub Decl: Option<mut Ref<ast.GenDecl>>,
+  pub Consts: mut Slice<Option<mut Ref<Value>>>,
+  pub Vars: mut Slice<Option<mut Ref<Value>>>,
+  pub Funcs: mut Slice<Option<mut Ref<Func>>>,
+  pub Methods: mut Slice<Option<mut Ref<Func>>>,
+  pub Examples: mut Slice<Option<mut Ref<Example>>>,
 }
 
 /// Value is the documentation for a (possibly grouped) var or const declaration.
 #[go(hidden_fields)]
 pub struct Value {
   pub Doc: string,
-  pub Names: Slice<string>,
-  pub Decl: Option<Ref<ast.GenDecl>>,
+  pub Names: mut Slice<string>,
+  pub Decl: Option<mut Ref<ast.GenDecl>>,
 }
 
 pub const AllDecls: Mode = 1
@@ -212,12 +212,12 @@ pub const PreserveAST: Mode = 4
 /// This helps to avoid misinterpreting the common mistake
 /// of a copyright notice immediately before a package statement
 /// as being a doc comment.
-pub var IllegalPrefixes: Slice<string>
+pub var IllegalPrefixes: mut Slice<string>
 
 impl Package {
   /// Filter eliminates documentation for names that don't pass through the filter f.
   /// TODO(gri): Recognize "Type.Method" as a name.
-  fn Filter(self: Ref<Package>, f: Filter)
+  fn Filter(self: mut Ref<Package>, f: Filter)
 
   /// HTML returns formatted HTML for the doc comment text.
   /// 
@@ -237,13 +237,13 @@ impl Package {
   /// for parsing doc comments from package p.
   /// Each call returns a new parser, so that the caller may
   /// customize it before use.
-  fn Parser(self: Ref<Package>) -> Ref<comment.Parser>
+  fn Parser(self: Ref<Package>) -> mut Ref<comment.Parser>
 
   /// Printer returns a doc comment printer configured
   /// for printing doc comments from package p.
   /// Each call returns a new printer, so that the caller may
   /// customize it before use.
-  fn Printer(self: Ref<Package>) -> Ref<comment.Printer>
+  fn Printer(self: Ref<Package>) -> mut Ref<comment.Printer>
 
   /// Synopsis returns a cleaned version of the first sentence in text.
   /// That sentence ends after the first period followed by space and not
