@@ -399,11 +399,7 @@ impl InferCtx<'_> {
                     self.with_value_context(|s| s.infer_expression(*spread_expr, &expected));
                 if variadic.parameter.mutable {
                     let callee_label = callee_label(callee_expression);
-                    self.check_arg_against_mut_param(
-                        &inferred,
-                        &variadic.parameter.ty,
-                        &callee_label,
-                    );
+                    self.check_arg_against_mut_param(&inferred, &expected, &callee_label);
                 }
                 inferred
             }

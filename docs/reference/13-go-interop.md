@@ -61,7 +61,7 @@ Compound types are different:
 | `Channel<T>`    | `chan T`                     |
 | `Sender<T>`     | `chan<- T`                   |
 | `Receiver<T>`   | `<-chan T`                   |
-| `VarArgs<T>`    | `...T` (call-site only)      |
+| `VarArgs<T>`    | `...T`                       |
 | `Unknown`       | `any` or `interface{}`       |
 
 ### Named primitive types
@@ -101,7 +101,31 @@ fmt.Println(parts...)
 fmt.Println("prefix:", parts...)
 ```
 
-`...` is only valid as the last argument, and only when the receiving parameter is `VarArgs<T>`. Consuming a `VarArgs<T>` inside a Lisette function body is not currently supported.
+`...` is only valid as the last argument, and only when the receiving parameter is `VarArgs<T>`.
+
+Inside the function body the parameter is a `Slice<T>`, exactly as in Go:
+
+```rust
+fn sum(numbers: VarArgs<int>) -> int {
+  let mut total = 0
+  for n in numbers {
+    total += n
+  }
+  total
+}
+```
+
+A spread call passes the caller's slice rather than a copy, so a `mut` parameter mutates the caller's data. The call site must then pass a mutable binding:
+
+```rust
+fn overwrite(mut xs: VarArgs<int>) {
+  xs[0] = 99
+}
+
+let mut nums = [1, 2]
+overwrite(nums...)  // nums is now [99, 2]
+overwrite(1, 2)     // separate arguments are collected into a new slice, so nothing is shared
+```
 
 ### `Unknown`
 

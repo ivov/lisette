@@ -2132,6 +2132,21 @@ fn build() -> IntList {
     assert_emit_snapshot!(input);
 }
 
+// `...T` in the signature, `[]T` in the body, as in Go.
+#[test]
+fn varargs_param_declares_variadic_and_bodies_use_a_slice() {
+    let input = r#"
+fn test(xs: VarArgs<int>) -> int {
+  let mut n = xs.length() + xs[0]
+  for x in xs {
+    n = n + x
+  };
+  n
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
 // Zero variadic args, so `T` must be forwarded explicitly: `first[int]()`.
 #[test]
 fn empty_varargs_call_forwards_inferred_type_arg() {
