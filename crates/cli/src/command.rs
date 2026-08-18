@@ -332,6 +332,9 @@ impl Command {
     }
 
     pub fn suggest(typo: &str) -> Option<String> {
+        if typo == "update" {
+            return Some("upgrade".to_string());
+        }
         const COMMANDS: &[&str] = &[
             "new", "build", "emit", "run", "format", "check", "test", "help", "version", "add",
             "sync", "learn", "doc", "complete", "lsp", "bindgen", "upgrade",
@@ -1587,6 +1590,11 @@ mod tests {
         let result = parse(&["lis", "bindgen", "stdlib", "--output", "ignored"]);
 
         assert!(matches!(result, Err(ParseError::UnexpectedArgument { .. })));
+    }
+
+    #[test]
+    fn update_points_at_upgrade() {
+        assert_eq!(Command::suggest("update"), Some("upgrade".to_string()));
     }
 
     #[test]
