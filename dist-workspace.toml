@@ -18,3 +18,4 @@ hosting = "github"
 create-release = false
 github-attestations = true
 install-updater = false
+features = ["self-upgrade"]

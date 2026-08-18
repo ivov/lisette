@@ -7,7 +7,7 @@ include!(concat!(env!("OUT_DIR"), "/go_version.rs"));
 
 pub fn print_main_help() {
     print_help(
-        "Lisette compiler and toolchain.
+        "Lisette compiler toolchain.
 
 Usage:
     `lis` <command>
@@ -25,6 +25,7 @@ Commands:
 
 Extras:
     `version`      Print compiler version
+    `upgrade`      Upgrade compiler toolchain
     `help`         Show help for a command
     `doc`          Browse documentation
     `learn`        Create a new sample project
@@ -46,7 +47,7 @@ Commands:
     `new`, `run`, `build`, `emit`, `check`, `format`, `test`, `add`, `sync`
 
 Extras:
-    `version`, `help`, `doc`, `learn`, `complete`, `lsp`",
+    `version`, `upgrade`, `help`, `doc`, `learn`, `complete`, `lsp`",
     );
 }
 
@@ -341,6 +342,12 @@ Arguments:
             "`lis version`
 
 Print compiler version (Lisette and Go toolchain).",
+        ),
+
+        "upgrade" => print_help(
+            "`lis upgrade`
+
+Upgrade the compiler, or show the upgrade command for the tool that installed it.",
         ),
 
         unknown => {
