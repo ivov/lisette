@@ -522,7 +522,7 @@ impl<'source> Parser<'source> {
         if self.is(Mut) {
             self.track_error(
                 "`mut` goes on the field's type",
-                "Write the permission in the type, as in `items: mut Slice<int>`.",
+                "Place the permission right before the type, as in `items: mut Slice<int>`.",
             );
             self.next();
         }

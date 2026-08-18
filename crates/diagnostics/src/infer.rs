@@ -2158,7 +2158,7 @@ pub fn type_conversion_arity(
             format!("expected 1 argument, found {}", actual_count),
         )
         .with_help(format!(
-            "Type conversion `{}(value)` takes exactly one argument — the value to convert",
+            "Type conversion `{}(value)` takes exactly one argument, the value to convert",
             type_name
         ))
 }
@@ -2845,10 +2845,19 @@ pub fn non_addressable_const(span: Span) -> LisetteDiagnostic {
 }
 
 pub fn non_addressable_assignment(expression_kind: &str, span: Span) -> LisetteDiagnostic {
+    let help = if matches!(
+        expression_kind,
+        "map index expression" | "sub-slice expression"
+    ) {
+        "Indexing yields a copy of the element. Modify a local copy, then \
+         assign it back into the collection"
+    } else {
+        "Assign the value to a variable first, then modify it"
+    };
     LisetteDiagnostic::error("Cannot assign to non-addressable expression")
         .with_infer_code("non_addressable_assignment")
         .with_span_label(&span, format!("cannot assign to {}", expression_kind))
-        .with_help("Assign the value to a variable first, then modify it")
+        .with_help(help)
 }
 
 pub fn newtype_field_assignment(type_name: &str, span: Span) -> LisetteDiagnostic {
@@ -3694,7 +3703,7 @@ pub fn prelude_function_shadowed(name: &str, span: Span) -> LisetteDiagnostic {
         .with_infer_code("prelude_function_shadowed")
         .with_span_label(&span, format!("`{}` is a prelude function", name))
         .with_help(format!(
-            "Choose a different name — `{}` is defined in the prelude and cannot be redefined",
+            "Choose a different name. `{}` is defined in the prelude and cannot be redefined",
             name
         ))
 }

@@ -16,7 +16,7 @@ pub fn package_not_found(
 ) -> LisetteDiagnostic {
     let help = match reason {
         MissingPackageReason::UnnecessarySrcPrefix(stripped) => format!(
-            "Did you mean `import \"{}\"`? The `src/` prefix is not needed — imports are relative to the source directory.",
+            "Did you mean `import \"{}\"`? The `src/` prefix is not needed. Imports are relative to the source directory.",
             stripped
         ),
         MissingPackageReason::GoStandardLibrary => format!(
