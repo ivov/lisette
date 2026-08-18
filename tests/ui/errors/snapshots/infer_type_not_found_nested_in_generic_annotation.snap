@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Type not found
+   ╭─[test.lis:2:29]
+ 1 │ 
+ 2 │ fn test(items: Slice<Option<UnknownType>>) {
+   ·                             ─────┬─────
+   ·                                  ╰── not declared or imported
+ 3 │ }
+   ╰────
+  help: Define or import this type · code: [resolve.type_not_found]
