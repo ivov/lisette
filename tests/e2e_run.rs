@@ -2527,21 +2527,43 @@ fn executable_script(dir: &Path, name: &str, body: &str) -> PathBuf {
 
 #[cfg(unix)]
 fn lis_on_path() -> PathBuf {
-    let repo = repo();
-    let built = Command::new("cargo")
-        .args(["build", "-p", "lisette", "--quiet"])
-        .current_dir(&repo)
+    let build = Command::new("cargo")
+        .args([
+            "build",
+            "-p",
+            "lisette",
+            "--quiet",
+            "--message-format=json-render-diagnostics",
+        ])
+        .current_dir(repo())
         .env("NO_COLOR", "1")
-        .status()
+        .output()
         .expect("failed to build lisette");
-    assert!(built.success(), "cargo build -p lisette failed");
-    repo.join("target/debug")
+    assert!(build.status.success(), "{}", combined(&build));
+
+    let executable = String::from_utf8_lossy(&build.stdout)
+        .lines()
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+        .filter(|message| message["target"]["name"] == "lis")
+        .filter_map(|message| Some(PathBuf::from(message["executable"].as_str()?)))
+        .next_back()
+        .expect("cargo did not report where it put `lis`");
+
+    executable
+        .parent()
+        .expect("the `lis` executable has a parent directory")
+        .to_path_buf()
+}
+
+#[cfg(unix)]
+fn env_available() -> bool {
+    Path::new("/usr/bin/env").exists()
 }
 
 #[cfg(unix)]
 #[test]
 fn an_executable_script_runs_through_its_shebang() {
-    if !go_available() {
+    if !go_available() || !env_available() {
         return;
     }
     let scratch = tempfile::tempdir().expect("create temp dir");
