@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787072026058,
+  "lastUpdate": 1787076106624,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -24230,6 +24230,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "cli",
             "value": 13053,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 7992,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5992,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2902,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1851,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 714,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9328,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c7c5831772c0de29a71d054d1bb83ad5089faabe",
+          "message": "feat: `lis upgrade` (#1282)",
+          "timestamp": "2026-08-18T20:01:21+02:00",
+          "tree_id": "da94b1c65d94e2ed3f81ad9ff2be50501f38281b",
+          "url": "https://github.com/ivov/lisette/commit/c7c5831772c0de29a71d054d1bb83ad5089faabe"
+        },
+        "date": 1787076105090,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 134931,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32187,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 26469,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18595,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14479,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13506,
             "unit": "lines"
           },
           {
