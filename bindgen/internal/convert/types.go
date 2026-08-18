@@ -391,6 +391,21 @@ func writableParamType(t types.Type, optional bool, conv *Converter, substitutio
 	return writableRecursive(t, make(map[types.Type]bool), conv, substitutions, optional)
 }
 
+// outerWritableType carries `mut` on the outermost layer only. A named type
+// is left alone, since its qualifier unlocks the whole declaration rather
+// than one layer, and the shared storage sits inside.
+func outerWritableType(t types.Type, seen map[types.Type]bool, conv *Converter, substitutions map[string]string) TypeResult {
+	rendered := toLisetteRecursive(t, seen, conv, substitutions)
+	concrete := concreteResultType(t)
+	if rendered.SkipReason != nil || !goWritableCapability(concrete) {
+		return rendered
+	}
+	if _, named := types.Unalias(concrete).(*types.Named); named {
+		return rendered
+	}
+	return TypeResult{LisetteType: "mut " + rendered.LisetteType}
+}
+
 // writableBase is the read-only rendering the writable one decorates.
 func writableBase(t types.Type, seen map[types.Type]bool, conv *Converter, substitutions map[string]string, nilable bool) TypeResult {
 	if nilable {

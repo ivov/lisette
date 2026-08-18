@@ -868,7 +868,7 @@ log/syslog.Writer.Notice (opaque r0) (shared r0): r0<-recv
 log/syslog.Writer.Warning (opaque r0) (shared r0): r0<-recv
 log/syslog.Writer.Write (opaque r1) (shared r1): r1<-b r1<-recv
 maps.All (opaque r0): r0<-m
-maps.Clone (opaque r0): r0<-m
+maps.Clone: r0<-[m]
 maps.Collect (opaque r0): 
 maps.Keys (opaque r0): r0<-m
 maps.Values: r0<-[m]

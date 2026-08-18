@@ -14,7 +14,7 @@ pub fn All<K: Comparable, V>(m: Map<K, V>) -> iter.Seq2<K, V>
 /// Clone returns a copy of m.  This is a shallow clone:
 /// the new keys and values are set using ordinary assignment.
 #[go(collapsed_type_params, "Map<K, V>, K, V")]
-pub fn Clone<K: Comparable, V>(m: Map<K, V>) -> Map<K, V>
+pub fn Clone<K: Comparable, V>(m: Map<K, V>) -> mut Map<K, V>
 
 /// Collect collects key-value pairs from seq into a new map
 /// and returns it.
