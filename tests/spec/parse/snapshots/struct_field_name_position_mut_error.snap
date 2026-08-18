@@ -7,4 +7,4 @@ source: tests/spec/parse/mod.rs
    ·            ─┬─
    ·             ╰── `mut` goes on the field's type
    ╰────
-  help: Write the permission in the type, as in `items: mut Slice<int>` · code: [parse.syntax_error]
+  help: Place the permission right before the type, as in `items: mut Slice<int>` · code: [parse.syntax_error]

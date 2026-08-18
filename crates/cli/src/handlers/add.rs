@@ -460,7 +460,7 @@ pub(super) fn parse_dep_string(input: &str) -> Result<ParsedDependency, String> 
     }
     if let Some(corrected) = miscased_known_host(path) {
         return Err(format!(
-            "`{}` — Go module paths are case-sensitive (try `{}` instead)",
+            "`{}` is miscased. Go module paths are case-sensitive (try `{}` instead)",
             path, corrected
         ));
     }
