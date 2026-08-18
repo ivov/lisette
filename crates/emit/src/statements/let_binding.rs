@@ -281,7 +281,7 @@ impl Planner<'_> {
         {
             return None;
         }
-        if value.get_type() != *binding_ty {
+        if value.get_type().demoted() != binding_ty.demoted() {
             return None;
         }
         let plan = self.plan_call(value)?;

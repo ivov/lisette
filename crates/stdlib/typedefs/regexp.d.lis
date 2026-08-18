@@ -136,7 +136,7 @@ impl Regexp {
   /// matches of the expression, as defined by the 'All' description in the
   /// package comment.
   /// A return value of nil indicates no match.
-  fn FindAll(self: Ref<Regexp>, b: Slice<byte>, n: int) -> Slice<Slice<byte>>
+  fn FindAll(self: Ref<Regexp>, b: Slice<byte>, n: int) -> mut Slice<Slice<byte>>
 
   /// FindAllIndex is the 'All' version of [Regexp.FindIndex]; it returns a slice of all
   /// successive matches of the expression, as defined by the 'All' description
@@ -173,7 +173,7 @@ impl Regexp {
   /// of all successive matches of the expression, as defined by the 'All'
   /// description in the package comment.
   /// A return value of nil indicates no match.
-  fn FindAllSubmatch(self: Ref<Regexp>, b: Slice<byte>, n: int) -> Slice<Slice<Slice<byte>>>
+  fn FindAllSubmatch(self: Ref<Regexp>, b: Slice<byte>, n: int) -> mut Slice<Slice<Slice<byte>>>
 
   /// FindAllSubmatchIndex is the 'All' version of [Regexp.FindSubmatchIndex]; it returns
   /// a slice of all successive matches of the expression, as defined by the
@@ -233,7 +233,7 @@ impl Regexp {
   /// subexpressions, as defined by the 'Submatch' descriptions in the package
   /// comment.
   /// A return value of nil indicates no match.
-  fn FindSubmatch(self: Ref<Regexp>, b: Slice<byte>) -> Slice<Slice<byte>>
+  fn FindSubmatch(self: Ref<Regexp>, b: Slice<byte>) -> mut Slice<Slice<byte>>
 
   /// FindSubmatchIndex returns a slice holding the index pairs identifying the
   /// leftmost match of the regular expression in b and the matches, if any, of

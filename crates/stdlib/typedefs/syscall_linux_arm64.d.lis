@@ -825,16 +825,16 @@ pub fn ParseDirent(buf: Slice<byte>, max: int, names: mut Slice<string>) -> (int
 
 /// ParseNetlinkMessage parses b as an array of netlink messages and
 /// returns the slice containing the NetlinkMessage structures.
-pub fn ParseNetlinkMessage(b: Slice<byte>) -> Result<Slice<NetlinkMessage>, error>
+pub fn ParseNetlinkMessage(b: Slice<byte>) -> Result<mut Slice<NetlinkMessage>, error>
 
 /// ParseNetlinkRouteAttr parses m's payload as an array of netlink
 /// route attributes and returns the slice containing the
 /// NetlinkRouteAttr structures.
-pub fn ParseNetlinkRouteAttr(m: Ref<NetlinkMessage>) -> Result<Slice<NetlinkRouteAttr>, error>
+pub fn ParseNetlinkRouteAttr(m: Ref<NetlinkMessage>) -> Result<mut Slice<NetlinkRouteAttr>, error>
 
 /// ParseSocketControlMessage parses b as an array of socket control
 /// messages.
-pub fn ParseSocketControlMessage(b: Slice<byte>) -> Result<Slice<SocketControlMessage>, error>
+pub fn ParseSocketControlMessage(b: Slice<byte>) -> Result<mut Slice<SocketControlMessage>, error>
 
 /// ParseUnixCredentials decodes a socket control message that contains
 /// credentials in a Ucred structure. To receive such a message, the

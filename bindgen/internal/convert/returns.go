@@ -232,71 +232,100 @@ func shouldConvertToOption(boolName string, conv *Converter, qualifiedName strin
 // crates/syntax/src/parse/mod.rs.
 const maxReturnTupleArity = 5
 
-// resultWritable reports whether one logical result is writable: a pointer, or a container that is fresh or views only mutated storage.
-func (c *Converter) resultWritable(obj types.Object, results *types.Tuple, index int, qualifiedName string) bool {
-	t := results.At(index).Type()
+func concreteResultType(t types.Type) types.Type {
 	if typeParam, ok := types.Unalias(t).(*types.TypeParam); ok {
 		if core := coreType(typeParam); core != nil {
-			t = core
+			return core
 		}
 	}
+	return t
+}
+
+// resultPermission is how much of one logical result may be written.
+type resultPermission uint8
+
+const (
+	resultReadOnly resultPermission = iota
+	resultOuterWritable
+	resultFullyWritable
+)
+
+// permissionFor keeps the container around element sharing fresh, since the
+// shared storage sits inside the result.
+func permissionFor(depth ViewDepth) resultPermission {
+	if depth == DepthElement {
+		return resultOuterWritable
+	}
+	return resultReadOnly
+}
+
+// resultPermissionOf reports how much of one logical result is writable: a
+// pointer, or a container that is fresh or views only mutated storage.
+func (c *Converter) resultPermissionOf(obj types.Object, results *types.Tuple, index int, qualifiedName string) resultPermission {
+	t := concreteResultType(results.At(index).Type())
 	if !goWritableCapability(t) {
-		return false
+		return resultReadOnly
 	}
 	if _, isPointer := t.Underlying().(*types.Pointer); isPointer {
-		return true
+		return resultFullyWritable
 	}
 	if c == nil || c.mutation == nil || obj == nil {
-		return false
+		return resultReadOnly
 	}
 	fn, isFunc := obj.(*types.Func)
 	if !isFunc {
-		return false
+		return resultReadOnly
 	}
 	sig, isSig := fn.Type().(*types.Signature)
 	if !isSig {
-		return false
+		return resultReadOnly
 	}
 	views, recorded := c.mutation.Views(obj)
 	overrides, hasOverride := c.cfg.ViewOverrides(c.currentPkgPath, qualifiedName)
 	if (!recorded || !views.Analyzed) && !hasOverride {
-		return false
+		return resultReadOnly
 	}
 	views, _ = ResolveViews(views, overrides, hasOverride, sig)
 	if index >= len(views.Results) {
-		return false
+		return resultReadOnly
 	}
 	view := views.Results[index]
 	if view.Opaque || view.Shared {
-		return false
+		return resultReadOnly
 	}
 	mutation, _ := c.mutation.Function(obj)
 	mutParams := c.cfg.MutatingParams(c.currentPkgPath, qualifiedName)
 	params := sig.Params()
+	permission := resultFullyWritable
 	for i, depth := range view.Params {
 		if depth == DepthNone {
 			continue
 		}
+		// A variadic source has no `mut` spelling, so it never proves writability.
 		if i >= params.Len() || (sig.Variadic() && i == params.Len()-1) {
-			return false
+			permission = min(permission, permissionFor(depth))
+			continue
 		}
 		source := params.At(i)
 		if !isMutableParam(mutation.Mutates(i), mutParams, source.Name(), source.Type(), fn.Name()) {
-			return false
+			permission = min(permission, permissionFor(depth))
 		}
 	}
 	if view.Receiver != DepthNone && !mutation.ReceiverMutates &&
 		!c.cfg.MutatesReceiver(c.currentPkgPath, qualifiedName) {
-		return false
+		permission = min(permission, permissionFor(view.Receiver))
 	}
-	return true
+	return permission
 }
 
 // resultType renders one logical result, writable at every layer when the facts allow.
 func (c *Converter) resultType(obj types.Object, results *types.Tuple, index int, seen map[types.Type]bool, substitutions map[string]string, qualifiedName string) TypeResult {
 	t := results.At(index).Type()
-	if c.resultWritable(obj, results, index, qualifiedName) {
+	switch c.resultPermissionOf(obj, results, index, qualifiedName) {
+	case resultFullyWritable:
 		return writableRecursive(t, seen, c, substitutions, false)
+	case resultOuterWritable:
+		return outerWritableType(t, seen, c, substitutions)
 	}
 	return toLisetteRecursive(t, seen, c, substitutions)
 }

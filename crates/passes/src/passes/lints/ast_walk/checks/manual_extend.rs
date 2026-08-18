@@ -148,7 +148,7 @@ fn extending_loop<'a>(
 
     // Per-element append widens each element to the accumulator's element type,
     // the spread form does not.
-    if receiver.ty != iterable.ty {
+    if receiver.ty.demoted() != iterable.ty.demoted() {
         return None;
     }
 

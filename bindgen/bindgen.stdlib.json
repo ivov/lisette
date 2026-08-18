@@ -544,6 +544,9 @@
         "io/ioutil": {
           "ReadDir": []
         },
+        "maps": {
+          "Clone": ["0:[m]"]
+        },
         "net": {
           "Interfaces": []
         }

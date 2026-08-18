@@ -672,7 +672,7 @@ impl CertPool {
   /// 
   /// Deprecated: if s was returned by [SystemCertPool], Subjects
   /// will not include the system roots.
-  fn Subjects(self: Ref<CertPool>) -> Slice<Slice<byte>>
+  fn Subjects(self: Ref<CertPool>) -> mut Slice<Slice<byte>>
 }
 
 impl Certificate {
