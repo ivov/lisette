@@ -732,13 +732,6 @@ impl StructSpread {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct FunctionAnnotationParameter {
-    pub annotation: Annotation,
-    pub mutable: bool,
-}
-
 #[derive(Clone, PartialEq)]
 pub struct CallTypeArguments(CallTypeArgumentState);
 
@@ -914,7 +907,7 @@ pub enum Annotation {
         span: Span,
     },
     Function {
-        params: Vec<FunctionAnnotationParameter>,
+        params: Vec<Self>,
         return_type: Box<Self>,
         span: Span,
     },

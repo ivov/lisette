@@ -10,8 +10,7 @@ use syntax::ast::StructFieldDefinition;
 use syntax::ast::StructFieldKind;
 use syntax::ast::VariantFields;
 use syntax::ast::{
-    Annotation, AttributeArg, FunctionAnnotationParameter, Generic, Span, StructFields,
-    Visibility as FieldVisibility,
+    Annotation, AttributeArg, Generic, Span, StructFields, Visibility as FieldVisibility,
 };
 use syntax::program::{
     AliasKind, Attributes, Definition, DefinitionBody, Interface, Methods, Package, ValueKind,
@@ -69,7 +68,7 @@ enum CachedAnnotation {
         span: CachedSpan,
     },
     Function {
-        params: Vec<CachedFunctionAnnotationParameter>,
+        params: Vec<Self>,
         return_type: Box<Self>,
         span: CachedSpan,
     },
@@ -86,12 +85,6 @@ enum CachedAnnotation {
         text: Option<String>,
         span: CachedSpan,
     },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-struct CachedFunctionAnnotationParameter {
-    annotation: CachedAnnotation,
-    mutable: bool,
 }
 
 impl CachedAnnotation {
@@ -118,10 +111,7 @@ impl CachedAnnotation {
             } => Self::Function {
                 params: params
                     .iter()
-                    .map(|param| CachedFunctionAnnotationParameter {
-                        annotation: Self::from_annotation(&param.annotation, file_id_to_index),
-                        mutable: param.mutable,
-                    })
+                    .map(|param| Self::from_annotation(param, file_id_to_index))
                     .collect(),
                 return_type: Box::new(Self::from_annotation(return_type, file_id_to_index)),
                 span: CachedSpan::from_span(span, file_id_to_index),
@@ -168,10 +158,7 @@ impl CachedAnnotation {
             } => Annotation::Function {
                 params: params
                     .iter()
-                    .map(|param| FunctionAnnotationParameter {
-                        annotation: param.annotation.to_annotation(file_ids),
-                        mutable: param.mutable,
-                    })
+                    .map(|param| param.to_annotation(file_ids))
                     .collect(),
                 return_type: Box::new(return_type.to_annotation(file_ids)),
                 span: span.to_span(file_ids),

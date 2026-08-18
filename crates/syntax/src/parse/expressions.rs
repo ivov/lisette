@@ -1787,7 +1787,7 @@ mod tests {
     }
 
     #[test]
-    fn function_type_annotation_captures_per_param_mutability() {
+    fn function_type_annotation_captures_per_param_writability() {
         let result = build_ast("fn run(action: fn(mut Bar, Baz) -> ()) {}", 0);
         assert!(result.errors.is_empty(), "{:?}", result.errors);
 
@@ -1812,7 +1812,7 @@ mod tests {
         assert_eq!(
             type_params
                 .iter()
-                .map(|param| param.mutable)
+                .map(|param| matches!(param, Annotation::Constructor { writable: true, .. }))
                 .collect::<Vec<_>>(),
             vec![true, false]
         );

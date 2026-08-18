@@ -27,17 +27,14 @@ description: |
                     },
                     annotation: Function {
                         params: [
-                            FunctionAnnotationParameter {
-                                annotation: Constructor {
-                                    name: "byte",
-                                    params: [],
-                                    span: Span {
-                                        file_id: 0,
-                                        byte_offset: 22,
-                                        byte_length: 4,
-                                    },
+                            Constructor {
+                                name: "byte",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 22,
+                                    byte_length: 4,
                                 },
-                                mutable: false,
                             },
                         ],
                         return_type: Constructor {

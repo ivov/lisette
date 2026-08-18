@@ -184,7 +184,7 @@ fn annotation_remove_names(annotation: &Annotation, names: &mut HashSet<EcoStrin
             ..
         } => {
             for p in params {
-                annotation_remove_names(&p.annotation, names);
+                annotation_remove_names(p, names);
             }
             annotation_remove_names(return_type, names);
         }

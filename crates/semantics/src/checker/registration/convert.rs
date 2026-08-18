@@ -195,7 +195,7 @@ impl TaskState {
                     .map(|(index, param)| {
                         self.convert_to_type_mode(
                             store,
-                            &param.annotation,
+                            param,
                             span,
                             ConvertMode {
                                 variadic_allowed: index == last_param,
@@ -215,9 +215,8 @@ impl TaskState {
                 Type::function(
                     new_params
                         .into_iter()
-                        .zip(params)
-                        .map(|(ty, param)| {
-                            let (ty, mutable) = bridge_parameter_permission(ty, param.mutable);
+                        .map(|ty| {
+                            let (ty, mutable) = bridge_parameter_permission(ty, false);
                             FunctionParameter::new(ty, mutable)
                         })
                         .collect(),

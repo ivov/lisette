@@ -502,8 +502,13 @@ impl<'source> Parser<'source> {
 
 fn format_annotation(ann: &ast::Annotation) -> string::String {
     match ann {
-        ast::Annotation::Constructor { name, params, .. } => {
-            if params.is_empty() {
+        ast::Annotation::Constructor {
+            name,
+            params,
+            writable,
+            ..
+        } => {
+            let rendered = if params.is_empty() {
                 name.to_string()
             } else {
                 format!(
@@ -515,6 +520,11 @@ fn format_annotation(ann: &ast::Annotation) -> string::String {
                         .collect::<Vec<_>>()
                         .join(", ")
                 )
+            };
+            if *writable {
+                format!("mut {}", rendered)
+            } else {
+                rendered
             }
         }
         ast::Annotation::Tuple { elements, .. } => {
@@ -536,14 +546,7 @@ fn format_annotation(ann: &ast::Annotation) -> string::String {
                 "fn({}) -> {}",
                 params
                     .iter()
-                    .map(|param| {
-                        let rendered = format_annotation(&param.annotation);
-                        if param.mutable {
-                            format!("mut {}", rendered)
-                        } else {
-                            rendered
-                        }
-                    })
+                    .map(format_annotation)
                     .collect::<Vec<_>>()
                     .join(", "),
                 format_annotation(return_type)
