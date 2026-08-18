@@ -566,7 +566,9 @@ impl PartialEq for Type {
             ) => id1 == id2 && params1 == params2 && w1 == w2,
             (Type::Function(f1), Type::Function(f2)) => f1 == f2,
             (Type::Var { id: id1, .. }, Type::Var { id: id2, .. }) => id1 == id2,
-            (Type::Uninferred, Type::Uninferred) | (Type::Ignored, Type::Ignored) => true,
+            (Type::Uninferred, Type::Uninferred)
+            | (Type::Ignored, Type::Ignored)
+            | (Type::Error, Type::Error) => true,
             (
                 Type::Forall {
                     vars: vars1,
@@ -2003,6 +2005,18 @@ fn alpha_index(idx: usize) -> String {
 mod tests {
     use super::*;
     use std::iter;
+
+    #[test]
+    fn error_type_equals_itself() {
+        let nominal_over_error = || Type::Nominal {
+            id: Symbol::from_parts("prelude", "Option"),
+            params: vec![Type::Error],
+            writable: false,
+        };
+
+        assert_eq!(Type::Error, Type::Error);
+        assert_eq!(nominal_over_error(), nominal_over_error());
+    }
 
     #[test]
     fn function_equality_ignores_param_names() {

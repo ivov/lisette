@@ -3442,6 +3442,15 @@ fn test() {
 }
 
 #[test]
+fn infer_type_not_found_nested_in_generic_annotation() {
+    let input = r#"
+fn test(items: Slice<Option<UnknownType>>) {
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_type_not_found_float_suggests_float64() {
     let input = r#"
 struct Circle { radius: float }
