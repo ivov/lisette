@@ -12,6 +12,9 @@ readme = "../../README.md"
 [lib]
 doctest = false
 
+[features]
+self-upgrade = []
+
 [dev-dependencies]
 tempfile = "3"
 

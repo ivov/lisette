@@ -94,6 +94,7 @@ pub enum Command {
     Completions {
         shell: Option<String>,
     },
+    Upgrade,
 }
 
 #[derive(Debug)]
@@ -325,6 +326,7 @@ impl Command {
             }),
             "doc" => parse_doc(arguments),
             "bindgen" => parse_bindgen(arguments),
+            "upgrade" => parse_upgrade(arguments),
             _ => Err(ParseError::UnknownCommand(command)),
         }
     }
@@ -332,7 +334,7 @@ impl Command {
     pub fn suggest(typo: &str) -> Option<String> {
         const COMMANDS: &[&str] = &[
             "new", "build", "emit", "run", "format", "check", "test", "help", "version", "add",
-            "sync", "learn", "doc", "complete", "lsp", "bindgen",
+            "sync", "learn", "doc", "complete", "lsp", "bindgen", "upgrade",
         ];
         let candidates: Vec<String> = COMMANDS.iter().map(|s| s.to_string()).collect();
         diagnostics::infer::find_similar_name(typo, &candidates)
@@ -705,6 +707,17 @@ fn parse_sync(mut arguments: impl Iterator<Item = String>) -> Result<Command, Pa
         }
     }
     Ok(Command::Sync { script })
+}
+
+fn parse_upgrade(mut arguments: impl Iterator<Item = String>) -> Result<Command, ParseError> {
+    match arguments.next() {
+        None => Ok(Command::Upgrade),
+        Some(argument) => Err(ParseError::UnexpectedArgument {
+            message: format!("unexpected argument `{}`", argument),
+            reason: "`lis upgrade` takes no arguments and no flags".to_string(),
+            hint: "Run `lis upgrade`".to_string(),
+        }),
+    }
 }
 
 fn parse_doc(arguments: impl Iterator<Item = String>) -> Result<Command, ParseError> {
@@ -1574,6 +1587,37 @@ mod tests {
         let result = parse(&["lis", "bindgen", "stdlib", "--output", "ignored"]);
 
         assert!(matches!(result, Err(ParseError::UnexpectedArgument { .. })));
+    }
+
+    #[test]
+    fn upgrade_takes_no_arguments() {
+        assert!(matches!(parse(&["lis", "upgrade"]), Ok(Command::Upgrade)));
+        for arguments in [
+            vec!["lis", "upgrade", "--dry-run"],
+            vec!["lis", "upgrade", "--check"],
+            vec!["lis", "upgrade", "0.12.0"],
+        ] {
+            assert!(
+                matches!(
+                    parse(&arguments),
+                    Err(ParseError::UnexpectedArgument { .. })
+                ),
+                "expected a rejection for {arguments:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn upgrade_still_answers_the_help_flags() {
+        for arguments in [
+            vec!["lis", "upgrade", "-h"],
+            vec!["lis", "upgrade", "--help"],
+        ] {
+            let Ok(Command::Help { command }) = parse(&arguments) else {
+                panic!("expected Help for {arguments:?}");
+            };
+            assert_eq!(command.as_deref(), Some("upgrade"));
+        }
     }
 
     #[test]

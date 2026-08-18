@@ -124,6 +124,7 @@ fn main() {
         Command::DocSearch { query } => handlers::doc_search(&query),
         Command::Learn => handlers::learn(),
         Command::Completions { shell } => handlers::completions(shell),
+        Command::Upgrade => handlers::upgrade(),
     };
 
     process::exit(exit_code);

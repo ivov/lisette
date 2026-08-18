@@ -113,7 +113,9 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
       - uses: ./.github/actions/setup-rust
-      - run: cargo test --workspace --lib --bins --locked -- --format terse
+        with:
+          just: 'true'
+      - run: just test-unit
 
   lsp-test:
     name: LSP tests

@@ -36,7 +36,7 @@ fn bash_completions() -> &'static str {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    commands="new run build emit check format test add sync version help doc learn complete lsp"
+    commands="new run build emit check format test add sync version upgrade help doc learn complete lsp"
 
     case "$prev" in
         lis)
@@ -44,11 +44,11 @@ fn bash_completions() -> &'static str {
             return 0
             ;;
         build)
-            COMPREPLY=( $(compgen -W "--sourcemap --go-flags" -- "$cur") )
+            COMPREPLY=( $(compgen -W "--sourcemap --go-flags -o --output" -- "$cur") )
             return 0
             ;;
         emit)
-            COMPREPLY=( $(compgen -W "--sourcemap" -- "$cur") )
+            COMPREPLY=( $(compgen -W "--sourcemap -o --output" -- "$cur") )
             return 0
             ;;
         run)
@@ -56,7 +56,7 @@ fn bash_completions() -> &'static str {
             return 0
             ;;
         test)
-            COMPREPLY=( $(compgen -W "--filter --failed --go-flags" -- "$cur") )
+            COMPREPLY=( $(compgen -W "-f --filter --failed --go-flags" -- "$cur") )
             return 0
             ;;
         format)
@@ -64,7 +64,11 @@ fn bash_completions() -> &'static str {
             return 0
             ;;
         add)
-            COMPREPLY=( $(compgen -W "--replace --path" -- "$cur") )
+            COMPREPLY=( $(compgen -W "--replace --path --script" -- "$cur") )
+            return 0
+            ;;
+        sync)
+            COMPREPLY=( $(compgen -W "--script" -- "$cur") )
             return 0
             ;;
         check)
@@ -106,14 +110,15 @@ _lis() {
     commands=(
         'new:Create a new project'
         'run:Compile and run a project'
-        'build:Compile a project to Go'
-        'emit:Emit Go code into target/'
+        'build:Compile a project to a binary'
+        'emit:Emit Go code into target/ dir'
         'check:Lint and typecheck a project'
         'format:Format a project'
         'test:Run a project'\''s tests'
         'add:Add a third-party Go dependency'
-        'sync:Tidy project manifest'
+        'sync:Tidy up project manifest'
         'version:Print compiler version'
+        'upgrade:Upgrade compiler toolchain'
         'help:Show help for a command'
         'doc:Browse documentation'
         'learn:Create a new sample project'
@@ -134,10 +139,13 @@ _lis() {
                 build)
                     _arguments \
                         '--sourcemap[Include line directives for stack traces]' \
-                        '--go-flags[Flags passed through to go build]:flags'
+                        '--go-flags[Flags passed through to go build]:flags' \
+                        {-o,--output}'[Write the binary for a script at this path]:path:_files'
                     ;;
                 emit)
-                    _arguments '--sourcemap[Include line directives for stack traces]'
+                    _arguments \
+                        '--sourcemap[Include line directives for stack traces]' \
+                        {-o,--output}'[Write the Go file for a script at this path]:path:_files'
                     ;;
                 run)
                     _arguments \
@@ -146,7 +154,7 @@ _lis() {
                     ;;
                 test)
                     _arguments \
-                        '--filter[Run only tests whose name contains the pattern]:pattern' \
+                        {-f,--filter}'[Run only tests whose name contains the pattern]:pattern' \
                         '--failed[Rerun the tests that failed last time]' \
                         '--go-flags[Flags passed through to go test]:flags'
                     ;;
@@ -156,7 +164,11 @@ _lis() {
                 add)
                     _arguments \
                         '--replace[Source the dependency from another module]:module@version' \
-                        '--path[Use a local module on disk]:directory:_directories'
+                        '--path[Use a local module on disk]:directory:_directories' \
+                        '--script[Add the dependency to this script]:file:_files'
+                    ;;
+                sync)
+                    _arguments '--script[Tidy the dependencies of this script]:file:_files'
                     ;;
                 check)
                     _arguments \
@@ -190,16 +202,18 @@ complete -c lis -f
 
 complete -c lis -n __fish_use_subcommand -a new -d 'Create a new project'
 complete -c lis -n __fish_use_subcommand -a run -d 'Compile and run a project'
-complete -c lis -n __fish_use_subcommand -a build -d 'Compile a project to Go'
-complete -c lis -n __fish_use_subcommand -a emit -d 'Emit Go code into target/'
+complete -c lis -n __fish_use_subcommand -a build -d 'Compile a project to a binary'
+complete -c lis -n __fish_use_subcommand -a emit -d 'Emit Go code into target/ dir'
 complete -c lis -n __fish_use_subcommand -a check -d 'Lint and typecheck a project'
 complete -c lis -n __fish_use_subcommand -a format -d 'Format a project'
 complete -c lis -n __fish_use_subcommand -a test -d 'Run a project\'s tests'
 complete -c lis -n __fish_use_subcommand -a add -d 'Add a third-party Go dependency'
-complete -c lis -n '__fish_seen_subcommand_from add' -l replace -d 'Source the dependency from another module'
-complete -c lis -n '__fish_seen_subcommand_from add' -l path -d 'Use a local module on disk'
-complete -c lis -n __fish_use_subcommand -a sync -d 'Tidy project manifest'
+complete -c lis -n '__fish_seen_subcommand_from add' -l replace -r -d 'Source the dependency from another module'
+complete -c lis -n '__fish_seen_subcommand_from add' -l path -r -d 'Use a local module on disk'
+complete -c lis -n '__fish_seen_subcommand_from add' -l script -r -F -d 'Add the dependency to this script'
+complete -c lis -n __fish_use_subcommand -a sync -d 'Tidy up project manifest'
 complete -c lis -n __fish_use_subcommand -a version -d 'Print compiler version'
+complete -c lis -n __fish_use_subcommand -a upgrade -d 'Upgrade compiler toolchain'
 complete -c lis -n __fish_use_subcommand -a help -d 'Show help for a command'
 complete -c lis -n __fish_use_subcommand -a doc -d 'Browse documentation'
 complete -c lis -n __fish_use_subcommand -a learn -d 'Create a new sample project'
@@ -208,7 +222,9 @@ complete -c lis -n __fish_use_subcommand -a lsp -d 'Start the language server'
 
 complete -c lis -n '__fish_seen_subcommand_from build' -l sourcemap -d 'Include line directives for stack traces'
 complete -c lis -n '__fish_seen_subcommand_from build' -l go-flags -r -d 'Flags passed through to go build'
+complete -c lis -n '__fish_seen_subcommand_from build' -s o -l output -r -F -d 'Write the binary for a script at this path'
 complete -c lis -n '__fish_seen_subcommand_from emit' -l sourcemap -d 'Include line directives for stack traces'
+complete -c lis -n '__fish_seen_subcommand_from emit' -s o -l output -r -F -d 'Write the Go file for a script at this path'
 complete -c lis -n '__fish_seen_subcommand_from run' -l sourcemap -d 'Include line directives for stack traces'
 complete -c lis -n '__fish_seen_subcommand_from run' -l go-flags -r -d 'Flags passed through to go build'
 complete -c lis -n '__fish_seen_subcommand_from test' -s f -l filter -r -d 'Run only tests whose name contains the pattern'
@@ -220,8 +236,21 @@ complete -c lis -n '__fish_seen_subcommand_from check' -l warnings-only -d 'Show
 complete -c lis -n '__fish_seen_subcommand_from check' -l deny -r -a warnings -d 'Fail check if warnings found'
 complete -c lis -n '__fish_seen_subcommand_from check' -l fix -d 'Apply lint fixes in place'
 complete -c lis -n '__fish_seen_subcommand_from check' -l output -r -a unix -d 'Machine-readable output'
+complete -c lis -n '__fish_seen_subcommand_from sync' -l script -r -F -d 'Tidy the dependencies of this script'
 complete -c lis -n '__fish_seen_subcommand_from doc' -s s -l search -d 'Search across prelude and Go stdlib'
 complete -c lis -n '__fish_seen_subcommand_from complete' -a 'bash zsh fish' -d 'Shell type'
-complete -c lis -n '__fish_seen_subcommand_from help' -a 'new run build emit check format test add sync version help doc learn complete lsp' -d 'Command'
+complete -c lis -n '__fish_seen_subcommand_from help' -a 'new run build emit check format test add sync version upgrade help doc learn complete lsp' -d 'Command'
 "#
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{bash_completions, fish_completions, zsh_completions};
+
+    #[test]
+    fn every_shell_completes_upgrade() {
+        assert!(bash_completions().contains(" upgrade "));
+        assert!(zsh_completions().contains("'upgrade:"));
+        assert!(fish_completions().contains("-a upgrade "));
+    }
 }

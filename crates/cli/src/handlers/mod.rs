@@ -20,6 +20,7 @@ mod script_sync;
 mod script_table;
 mod sync;
 mod test;
+mod upgrade;
 
 #[cfg(test)]
 pub(crate) use script::script_build_dir;
@@ -39,3 +40,4 @@ pub use new::new_project;
 pub use run::run;
 pub use sync::sync;
 pub use test::test;
+pub use upgrade::upgrade;

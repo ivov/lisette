@@ -148,7 +148,7 @@ target/
 ```
 lis
 
-Lisette compiler and toolchain.
+Lisette compiler toolchain.
 
 Usage:
     lis <command>

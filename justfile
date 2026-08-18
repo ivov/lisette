@@ -29,10 +29,12 @@ test:
     cargo test -p tests --test manifest_pins -- --format terse
 
 test-unit:
-    cargo test --workspace --lib --bins -- --format terse
+    cargo test --workspace --lib --bins --locked -- --format terse
+    cargo test -p lisette --bins --locked --features self-upgrade -- --format terse
 
 _test-check:
     cargo test --workspace --lib --bins --test suite --test lsp --test manifest_pins -- --format terse
+    cargo test -p lisette --bins --features self-upgrade -- --format terse
 
 test-infer:
     cargo test -p tests --test suite infer_tests
@@ -70,6 +72,7 @@ format-check:
 
 lint:
     cargo clippy --all-targets -- -D warnings
+    cargo clippy -p lisette --all-targets --features self-upgrade -- -D warnings
 
 lint-satellites:
     cd playground/wasm && cargo fmt -- --check && cargo clippy --all-targets -- -D warnings
