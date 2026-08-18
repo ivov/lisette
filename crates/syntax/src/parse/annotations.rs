@@ -1,6 +1,5 @@
 use super::{MAX_TUPLE_ARITY, ParamMode, Parser};
 use crate::EcoString;
-use crate::ast::FunctionAnnotationParameter;
 use crate::ast::{
     Annotation, Attribute, Expression, FunctionBody, Generic, Literal, Span, Visibility,
 };
@@ -288,11 +287,7 @@ impl<'source> Parser<'source> {
 
         while self.is_not(RightParen) && !self.at_recovery_boundary() {
             let start_position = self.stream.position;
-            let mutable = self.advance_if(Mut);
-            params.push(FunctionAnnotationParameter {
-                annotation: self.parse_annotation(),
-                mutable,
-            });
+            params.push(self.parse_annotation());
             if self.at_recovery_boundary() {
                 break;
             }

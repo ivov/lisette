@@ -661,7 +661,7 @@ fn walk_annotation(
             ..
         } => {
             for p in params {
-                walk_annotation(package, &p.annotation, graph, alias_map, from);
+                walk_annotation(package, p, graph, alias_map, from);
             }
             walk_annotation(package, return_type, graph, alias_map, from);
         }

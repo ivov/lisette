@@ -538,17 +538,7 @@ impl<'a> Formatter<'a> {
                 return_type,
                 ..
             } => {
-                let param_docs: Vec<_> = params
-                    .iter()
-                    .map(|param| {
-                        let doc = Self::annotation(&param.annotation);
-                        if param.mutable {
-                            Document::str("mut ").append(doc)
-                        } else {
-                            doc
-                        }
-                    })
-                    .collect();
+                let param_docs: Vec<_> = params.iter().map(Self::annotation).collect();
                 Document::str("fn(")
                     .append(join(param_docs, Document::str(", ")))
                     .append(") -> ")

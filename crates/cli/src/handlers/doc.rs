@@ -72,8 +72,13 @@ struct GoPackageIndex {
 
 fn annotation_to_string(ann: &Annotation) -> String {
     match ann {
-        Annotation::Constructor { name, params, .. } => {
-            if params.is_empty() {
+        Annotation::Constructor {
+            name,
+            params,
+            writable,
+            ..
+        } => {
+            let rendered = if params.is_empty() {
                 name.to_string()
             } else {
                 format!(
@@ -85,6 +90,11 @@ fn annotation_to_string(ann: &Annotation) -> String {
                         .collect::<Vec<_>>()
                         .join(", ")
                 )
+            };
+            if *writable {
+                format!("mut {}", rendered)
+            } else {
+                rendered
             }
         }
         Annotation::Function {
@@ -94,14 +104,7 @@ fn annotation_to_string(ann: &Annotation) -> String {
         } => {
             let params_str = params
                 .iter()
-                .map(|param| {
-                    let rendered = annotation_to_string(&param.annotation);
-                    if param.mutable {
-                        format!("mut {}", rendered)
-                    } else {
-                        rendered
-                    }
-                })
+                .map(annotation_to_string)
                 .collect::<Vec<_>>()
                 .join(", ");
             let ret = annotation_to_string(return_type);
