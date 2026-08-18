@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/functions.rs
+description: |
+  
+  fn test(xs: VarArgs<int>) -> int {
+    let mut n = xs.length() + xs[0]
+    for x in xs {
+      n = n + x
+    };
+    n
+  }
+---
+package main
+
+func test(xs ...int) int {
+	n := len(xs) + xs[0]
+	for _, x := range xs {
+		n += x
+	}
+	return n
+}

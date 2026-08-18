@@ -1,6 +1,6 @@
 use crate::checker::{EnvResolve, resolved_generic_bounds};
 use syntax::ast::{Annotation, Binding, BindingKind, Expression, Pattern, Span};
-use syntax::types::{FunctionParameter, Type};
+use syntax::types::{CompoundKind, FunctionParameter, Type};
 
 use crate::analysis::ProjectKind;
 use crate::checker::infer::InferCtx;
@@ -348,9 +348,18 @@ impl InferCtx<'_> {
                 });
 
                 let mutable = binding.is_mutable();
+                // A `...T` parameter is a `[]T` in the body, as in Go. `Binding.ty`
+                // stays `VarArgs<T>`: call-site arity and emit's parameter
+                // declaration read it, so matching the two would emit `[]T`.
+                let body_ty = match binding_ty.get_type_params() {
+                    Some([element]) if binding_ty.is_native(CompoundKind::VarArgs) => {
+                        self.type_slice(element.clone())
+                    }
+                    _ => binding_ty.clone(),
+                };
                 let new_pattern = self.infer_pattern(
                     binding.pattern,
-                    binding_ty.clone(),
+                    body_ty,
                     BindingKind::Parameter { mutable },
                 );
 

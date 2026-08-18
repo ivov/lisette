@@ -606,8 +606,16 @@ type Ordered
 /// Zero or more arguments of type `T`. Only valid as the last parameter
 /// of a function. Corresponds to Go's `...T` syntax.
 ///
-/// For Go interop only. Consuming the args inside a Lisette function body 
-/// is currently unsupported.
+/// Inside the function body the parameter is a `Slice<T>`, as in Go. A spread
+/// call shares the caller's slice, so mutating through a `mut` parameter is
+/// visible to the caller.
+///
+/// Example:
+///   fn sum(numbers: VarArgs<int>) -> int {
+///     let mut total = 0
+///     for n in numbers { total += n }
+///     total
+///   }
 type VarArgs<T>
 
 /// A value captured from a `recover` block after a panic.

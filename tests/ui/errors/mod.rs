@@ -14030,6 +14030,23 @@ fn main() {
     assert_infer_error_snapshot!(input);
 }
 
+// The spread source is a `Slice<int>`, which carries mutation even though `int`
+// does not, so checking against the element type would miss it.
+#[test]
+fn infer_immutable_spread_to_mut_variadic_param_scalar_element() {
+    let input = r#"
+fn overwrite(mut xs: VarArgs<int>) {
+  xs[0] = 99
+}
+
+fn main() {
+  let ys = [1, 2]
+  overwrite(ys...)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
 #[test]
 fn infer_immutable_args_to_mut_variadic_param() {
     let input = r#"

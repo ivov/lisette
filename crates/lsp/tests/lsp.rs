@@ -191,6 +191,26 @@ fn goto_definition_promoted_field() {
     client.shutdown();
 }
 
+/// A body use is a `Slice<T>`, as `gopls` reports for Go's `...T`.
+#[test]
+fn hover_on_varargs_param_in_body_shows_a_slice() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "fn f(xs: VarArgs<int>) -> int {\n  ~xs.length()\n}\n\nfn main() {\n  let _ = f(1, 2)\n}",
+    );
+    client.open(TEST_URI, &source);
+
+    let hover = client.hover(TEST_URI, line, character).expect("hover");
+    let content = hover_content(&hover);
+    assert!(
+        content.contains("Slice<int>"),
+        "expected the body binding to hover as a slice, got: {content}"
+    );
+
+    client.shutdown();
+}
+
 #[test]
 fn hover_on_explicit_type_arg_call_shows_substituted_signature() {
     let mut client = TestClient::new();

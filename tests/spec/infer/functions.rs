@@ -2877,6 +2877,94 @@ fn main() {
 }
 
 #[test]
+fn varargs_param_is_a_slice_in_the_body() {
+    infer(
+        r#"
+fn test(xs: VarArgs<int>) -> int {
+  let ys: Slice<int> = xs
+  let mut n = xs.length() + xs[0]
+  for x in xs { n += x }
+  n + ys.length()
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn varargs_param_body_keeps_the_element_type() {
+    infer(
+        r#"
+fn test(xs: VarArgs<int>) -> Slice<string> {
+  xs
+}
+"#,
+    )
+    .assert_type_mismatch();
+}
+
+#[test]
+fn varargs_param_can_be_forwarded_with_spread() {
+    infer(
+        r#"
+fn inner(xs: VarArgs<int>) -> int { xs.length() }
+
+fn test(xs: VarArgs<int>) -> int {
+  inner(xs...)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mut_varargs_param_can_be_written_through() {
+    infer(
+        r#"
+fn overwrite(mut xs: VarArgs<int>) {
+  xs[0] = 9
+}
+
+fn main() {
+  let mut a = [1, 2]
+  overwrite(a...)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn varargs_param_without_mut_cannot_be_written_through() {
+    infer(
+        r#"
+fn test(xs: VarArgs<int>) {
+  xs[0] = 9
+}
+"#,
+    )
+    .assert_infer_code("immutable");
+}
+
+#[test]
+fn individual_args_to_mut_varargs_need_no_mutable_binding() {
+    infer(
+        r#"
+fn overwrite(mut xs: VarArgs<int>) {
+  xs[0] = 9
+}
+
+fn main() {
+  let a = 1
+  let b = 2
+  overwrite(a, b)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn generic_function_with_phantom_param_passed_as_argument_rejected() {
     infer(
         r#"
