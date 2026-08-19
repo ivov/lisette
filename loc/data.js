@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787155785661,
+  "lastUpdate": 1787155980448,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -24477,6 +24477,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 32187,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27515,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18613,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14651,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13507,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8212,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5992,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2902,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1851,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 714,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9328,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d26d796ef18af1814bb3f4f56c9cc39fab2a3539",
+          "message": "fix: type aliases to `Option`, `Result` and `Partial` (#1289)",
+          "timestamp": "2026-08-19T18:12:35+02:00",
+          "tree_id": "c13331b090440f7a6e3d0b8d5b9fe9d33970502c",
+          "url": "https://github.com/ivov/lisette/commit/d26d796ef18af1814bb3f4f56c9cc39fab2a3539"
+        },
+        "date": 1787155978994,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 136394,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32193,
             "unit": "lines"
           },
           {
