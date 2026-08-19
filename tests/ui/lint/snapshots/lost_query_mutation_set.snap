@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·              ╰── mutates a discarded copy
  7 │ }
    ╰────
-  help: `URL.Query` returns a fresh copy, so this `Set` has no effect. Bind the copy returned by `Query()` to an identifier, mutate it, then assign `values.Encode()` back to the URL's `RawQuery` field · code: [lint.lost_query_mutation]
+  help: `URL.Query` returns a fresh copy, so this `Set` has no effect. Bind it, mutate it, then assign `values.Encode()` to `RawQuery` · code: [lint.lost_query_mutation]

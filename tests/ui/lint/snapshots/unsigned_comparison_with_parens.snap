@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                ╰── an unsigned integer is never negative
  5 │ }
    ╰────
-  help: An unsigned integer is never negative, so this comparison always has the same result. Did you mean to compare against a different value? · code: [lint.unsigned_comparison]
+  help: An unsigned integer is never negative, so this comparison always has the same result. Did you mean to compare to a different value? · code: [lint.unsigned_comparison]

@@ -188,9 +188,9 @@ pub fn unused_expression(span: &Span, kind: UnusedExpressionKind) -> LisetteDiag
         ),
         UnusedExpressionKind::Option => (
             "unused_option",
-            "Unused Option",
-            "this `Option` is discarded",
-            "Handle this `Option`, or explicitly discard it with `let _ = ...`",
+            "`Option` is silently discarded",
+            "absence will go unnoticed",
+            "Handle this `Option` with `?` or `match`, or explicitly discard it with `let _ = ...`",
         ),
         UnusedExpressionKind::Partial => (
             "unused_partial",
@@ -284,7 +284,7 @@ pub fn append_to_zero_filled(
     };
     LisetteDiagnostic::warn("Appending to a zero-filled slice")
         .with_lint_code("append_to_zero_filled")
-        .with_span_label(make_span, "every element is already a zero value")
+        .with_span_label(make_span, "already all zeros")
         .with_span_label(append_span, append_label)
         .with_help(help)
 }
@@ -363,7 +363,7 @@ pub fn unsigned_comparison(span: &Span, always_true: bool) -> LisetteDiagnostic 
         .with_lint_code("unsigned_comparison")
         .with_span_label(span, "an unsigned integer is never negative")
         .with_help(
-            "An unsigned integer is never negative, so this comparison always has the same result. Did you mean to compare against a different value?",
+            "An unsigned integer is never negative, so this comparison always has the same result. Did you mean to compare to a different value?",
         )
 }
 
@@ -374,7 +374,7 @@ pub fn type_limit_comparison(span: &Span, always_true: bool) -> LisetteDiagnosti
         .with_lint_code("type_limit_comparison")
         .with_span_label(span, "compares against the limit of the value's type")
         .with_help(format!(
-            "This compares against the limit of the value's type, so this comparison is always `{result}`. Did you mean to compare against a different value?"
+            "This compares against the limit of the value's type, so this comparison is always `{result}`. Did you mean to compare to a different value?"
         ))
 }
 
@@ -461,7 +461,7 @@ pub fn non_negative_comparison(span: &Span, always_true: bool) -> LisetteDiagnos
         .with_lint_code("non_negative_comparison")
         .with_span_label(span, "a length is never negative")
         .with_help(
-            "A length is never negative, so this comparison always has the same result. Did you mean to compare against a different value?",
+            "A length is never negative, so this comparison always has the same result. Did you mean to compare to a different value?",
         )
 }
 
@@ -523,9 +523,9 @@ pub fn verbose_failure_propagation(span: &Span) -> LisetteDiagnostic {
 pub fn almost_swapped(span: &Span, first: &str, second: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Variables are not swapped")
         .with_lint_code("almost_swapped")
-        .with_span_label(span, "does not swap the values")
+        .with_span_label(span, "does not swap values")
         .with_help(format!(
-            "`{first} = {second}` overwrites `{first}`, so the following `{second} = {first}` writes `{second}`'s own value back and the original `{first}` is lost. To swap them, save one value in a temporary variable first."
+            "`{first} = {second}` overwrites `{first}`, so `{second} = {first}` writes `{second}`'s own value back and the original `{first}` is lost. Save one value in a temporary variable first"
         ))
 }
 
@@ -567,9 +567,9 @@ pub fn neg_multiply(span: &Span, operand: &str) -> LisetteDiagnostic {
 pub fn regexp_in_loop(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Regexp recompiled on every iteration")
         .with_lint_code("regexp_in_loop")
-        .with_span_label(span, "compiled each time through the loop")
+        .with_span_label(span, "recompiled")
         .with_help(
-            "Compile the pattern once outside the loop and reuse it: `regexp.MustCompile` for a known-valid pattern, or `regexp.Compile` to keep handling the error",
+            "Compile the pattern once outside the loop and reuse it: `regexp.MustCompile`, or `regexp.Compile` to keep the error",
         )
 }
 
@@ -581,7 +581,7 @@ pub fn manual_is_empty(span: &Span, replacement: &str) -> LisetteDiagnostic {
 }
 
 pub fn manual_find(span: &Span, receiver: &str, predicate: &str) -> LisetteDiagnostic {
-    LisetteDiagnostic::info("Manual `find`")
+    LisetteDiagnostic::info("Filtered slice thrown away")
         .with_lint_code("manual_find")
         .with_span_label(span, "can use `find`")
         .with_help(format!(
@@ -1335,7 +1335,7 @@ pub fn manual_equal_fold(
     right_arg: &str,
 ) -> LisetteDiagnostic {
     let prefix = if negated { "!" } else { "" };
-    LisetteDiagnostic::info("Inefficient comparison")
+    LisetteDiagnostic::info("Inefficient string comparison")
         .with_lint_code("manual_equal_fold")
         .with_span_label(span, "can use `strings.EqualFold`")
         .with_help(format!(
@@ -1554,7 +1554,7 @@ pub fn lost_query_mutation(span: &Span, method: &str) -> LisetteDiagnostic {
         .with_lint_code("lost_query_mutation")
         .with_span_label(span, "mutates a discarded copy")
         .with_help(format!(
-            "`URL.Query` returns a fresh copy, so this `{method}` has no effect. Bind the copy returned by `Query()` to an identifier, mutate it, then assign `values.Encode()` back to the URL's `RawQuery` field."
+            "`URL.Query` returns a fresh copy, so this `{method}` has no effect. Bind it, mutate it, then assign `values.Encode()` to `RawQuery`"
         ))
 }
 
@@ -1586,7 +1586,7 @@ pub fn lost_cancel(span: &Span) -> LisetteDiagnostic {
 pub fn exit_after_defer(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("`os.Exit` skips `defer`")
         .with_lint_code("exit_after_defer")
-        .with_span_label(span, "exits before the `defer` above can run")
+        .with_span_label(span, "exits before `defer` can run")
         .with_help(
             "`os.Exit` will terminate the process without running deferred calls. Run the cleanup before exiting instead of deferring it",
         )

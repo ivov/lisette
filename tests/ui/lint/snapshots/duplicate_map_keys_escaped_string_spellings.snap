@@ -6,8 +6,8 @@ source: tests/ui/lint/mod.rs
  2 │ fn main() {
  3 │   let _ = Map.from([("A", 1), ("\x41", 2)])
    ·                      ─┬─       ───┬──
-   ·                       │           ╰── overwrites the earlier entry
-   ·                       ╰── first entry for this key
+   ·                       │           ╰── overwrites first
+   ·                       ╰── key for first entry
  4 │ }
    ╰────
   help: `Map.from` keeps the last entry for a key, so the earlier entry never reaches the map. Remove one of the two entries · code: [infer.duplicate_map_keys]

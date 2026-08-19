@@ -6,7 +6,7 @@ source: tests/ui/lint/mod.rs
  2 │ fn run(flag: bool) {
  3 │   let mut ids = Slice.make<int>(5)
    ·                 ─────────┬────────
-   ·                          ╰── every element is already a zero value
+   ·                          ╰── already all zeros
  4 │   if flag {
  5 │     ids = ids.append(1)
    ·           ──────┬──────

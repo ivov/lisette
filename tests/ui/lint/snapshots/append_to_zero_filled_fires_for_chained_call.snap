@@ -7,7 +7,7 @@ source: tests/ui/lint/mod.rs
  3 │   let grown = Slice.make<int>(100).append(1)
    ·               ──────────┬──────────────┬────
    ·                         │              ╰── `append` adds element 101 here
-   ·                         ╰── every element is already a zero value
+   ·                         ╰── already all zeros
  4 │   let _ = grown
    ╰────
   help: For an empty slice with room for 100, use `Slice.new<int>().reserve(100)` · code: [lint.append_to_zero_filled]

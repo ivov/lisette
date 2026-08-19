@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
     ·      ╰── not all patterns covered
  10 │     Color.Red => 1,
     ╰────
-  help: Handle the missing cases by adding `Color.Blue => { ... }` and `Color.Green => { ... }` · code: [infer.non_exhaustive]
+  help: Handle the missing cases `Color.Blue` and `Color.Green`, e.g. `Color.Blue => { ... }` · code: [infer.non_exhaustive]

@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·       ╰── not all patterns covered
  4 │     [0, ..] => 1
    ╰────
-  help: Handle the missing case by adding `[_, ..] => { ... }` · code: [infer.non_exhaustive]
+  help: Handle the missing case `[_, ..]`, e.g. `[_, ..] => { ... }` · code: [infer.non_exhaustive]

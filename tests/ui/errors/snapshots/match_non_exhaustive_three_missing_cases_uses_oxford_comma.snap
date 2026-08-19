@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
     ·      ╰── not all patterns covered
  11 │     Suit.Hearts => 1,
     ╰────
-  help: Handle the missing cases by adding `Suit.Clubs => { ... }`, `Suit.Diamonds => { ... }`, and `Suit.Spades => { ... }` · code: [infer.non_exhaustive]
+  help: Handle the missing cases `Suit.Clubs`, `Suit.Diamonds`, and `Suit.Spades`, e.g. `Suit.Clubs => { ... }` · code: [infer.non_exhaustive]

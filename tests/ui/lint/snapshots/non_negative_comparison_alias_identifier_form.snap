@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                      ╰── a length is never negative
  7 │ }
    ╰────
-  help: A length is never negative, so this comparison always has the same result. Did you mean to compare against a different value? · code: [lint.non_negative_comparison]
+  help: A length is never negative, so this comparison always has the same result. Did you mean to compare to a different value? · code: [lint.non_negative_comparison]

@@ -2,18 +2,20 @@ use crate::LisetteDiagnostic;
 use syntax::ast::Span;
 
 pub fn non_exhaustive(match_span: Span, cases: &[String]) -> LisetteDiagnostic {
-    let arms: Vec<String> = cases
-        .iter()
-        .map(|case| format!("`{} => {{ ... }}`", case))
-        .collect();
+    let names: Vec<String> = cases.iter().map(|case| format!("`{}`", case)).collect();
     let noun = if cases.len() == 1 { "case" } else { "cases" };
+    let example = cases
+        .first()
+        .map(|case| format!("`{} => {{ ... }}`", case))
+        .unwrap_or_default();
     LisetteDiagnostic::error("`match` is not exhaustive")
         .with_infer_code("non_exhaustive")
         .with_span_label(&match_span, "not all patterns covered")
         .with_help(format!(
-            "Handle the missing {} by adding {}",
+            "Handle the missing {} {}, e.g. {}",
             noun,
-            join_and(&arms)
+            join_and(&names),
+            example
         ))
 }
 
