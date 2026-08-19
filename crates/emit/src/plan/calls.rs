@@ -1,5 +1,6 @@
 use crate::Planner;
 use crate::abi::callable::{AbiTransition, CallableAbi, CallableParamAbi, CallableReturnAbi};
+use crate::abi::is_prelude_container_constructor;
 use crate::abi::layout::SlotOrigin;
 use crate::expressions::staging::VariadicCombine;
 use crate::types::native::NativeGoType;
@@ -424,10 +425,7 @@ impl<'a> Planner<'a> {
         }
         // Tagged-type constructors compile to `lisette.MakeX(...)`,
         // not multi-return Go calls.
-        if inner.as_result_constructor().is_some()
-            || inner.as_option_constructor().is_some()
-            || inner.as_partial_constructor().is_some()
-        {
+        if is_prelude_container_constructor(inner) {
             return None;
         }
         let declared_return = declared_type.and_then(|ty| ty.unwrap_forall().get_function_ret());

@@ -253,7 +253,7 @@ impl Planner<'_> {
         };
 
         let name = types::unqualified_name(enum_id);
-        if name == "Option" || name == "Result" || name == "Partial" {
+        if matches!(name, "Option" | "Result" | "Partial") {
             return None;
         }
 

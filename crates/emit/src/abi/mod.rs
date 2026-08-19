@@ -15,9 +15,7 @@ impl Planner<'_> {
     /// ABI of a value after it has crossed into Lisette expression space.
     pub(crate) fn value_return_abi(&self, return_ty: &Type) -> CallableReturnAbi {
         let peeled = self.facts.peel_alias(return_ty);
-        if peeled.is_result()
-            || peeled.is_partial()
-            || peeled.is_option()
+        if is_prelude_container_type(&peeled)
             || peeled.tuple_arity().is_some_and(|arity| arity >= 2)
         {
             CallableReturnAbi::Tagged
@@ -149,10 +147,7 @@ pub(crate) fn tuple_element_types(ty: &Type) -> Vec<Type> {
 /// and lambdas emit with the lowered ABI (`(T, bool)`).
 pub(crate) fn is_tagged_shape_fn_value(expression: &Expression) -> bool {
     let inner = expression.unwrap_parens();
-    if inner.as_option_constructor().is_some()
-        || inner.as_result_constructor().is_some()
-        || inner.as_partial_constructor().is_some()
-    {
+    if is_prelude_container_constructor(inner) {
         return true;
     }
     matches!(
@@ -162,4 +157,14 @@ pub(crate) fn is_tagged_shape_fn_value(expression: &Expression) -> bool {
             ..
         } if q.starts_with("prelude.")
     )
+}
+
+pub(crate) fn is_prelude_container_type(ty: &Type) -> bool {
+    ty.is_option() || ty.is_result() || ty.is_partial()
+}
+
+pub(crate) fn is_prelude_container_constructor(expression: &Expression) -> bool {
+    expression.as_option_constructor().is_some()
+        || expression.as_result_constructor().is_some()
+        || expression.as_partial_constructor().is_some()
 }

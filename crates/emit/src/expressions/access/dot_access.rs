@@ -210,9 +210,12 @@ impl Planner<'_> {
                 is_exported || self.method_needs_export(member)
             }
             _ => {
-                self.compute_is_exported_context(expression, expression_ty)
+                if self.compute_is_exported_context(expression, expression_ty)
                     || self.field_is_public(expression_ty, member)
-                    || (!self.has_field(expression_ty, member) && self.method_needs_export(member))
+                {
+                    return true;
+                }
+                !self.has_field(expression_ty, member) && self.method_needs_export(member)
             }
         }
     }
@@ -359,13 +362,9 @@ impl Planner<'_> {
     fn is_absorbed_ref_generic(&self, expression: &Expression) -> bool {
         let check_expression = expression.deref_inner().unwrap_or(expression);
         let expression_ty = check_expression.get_type();
-        expression_ty.is_ref()
-            && expression_ty.inner().is_some_and(|inner| {
-                matches!(inner, Type::Parameter(name)
-                    if self
-                        .current_function_context()
-                        .is_some_and(|context| context.is_absorbed_ref_generic(name.as_ref())))
-            })
+        self.current_function_context()
+            .and_then(|context| context.absorbed_ref_inner(&expression_ty))
+            .is_some()
     }
 
     pub(crate) fn try_emit_tuple_struct_field_access(

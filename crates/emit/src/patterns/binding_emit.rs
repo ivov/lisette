@@ -125,8 +125,7 @@ pub(crate) fn tree_binding_statements(
 
         let access_expression = binding.path.render(SubjectRoot::Var(subject_var));
 
-        if !consumers.is_empty()
-            && analyze_inline_candidate(&binding.lisette_name, consumers) == InlineDecision::Inline
+        if analyze_inline_candidate(&binding.lisette_name, consumers) == InlineDecision::Inline
             && !region_blocks_inline(inline_blockers.iter().copied(), &binding.lisette_name)
         {
             let previous = planner

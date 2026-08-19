@@ -9,7 +9,6 @@ use crate::patterns::tree_emitter::{MatchSubject, TreePlanner};
 use crate::plan::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan};
 use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
-use crate::state::bindings::BindingValue;
 use syntax::ast::{ConstructorPatternResolution, Expression, MatchArm, Pattern};
 use syntax::parse::TUPLE_FIELDS;
 use syntax::types::Type;
@@ -645,11 +644,7 @@ impl Planner<'_> {
             let has_collision = arms
                 .iter()
                 .any(|arm| pattern_binds_name(&arm.pattern, &name));
-            let bound_to_inline = matches!(
-                self.scope.resolve_identifier_binding(&name),
-                Some(BindingValue::InlineExpr(_))
-            );
-            if !has_collision && !name.contains('.') && !bound_to_inline {
+            if self.can_reuse_subject_identifier(&name, has_collision) {
                 let var = self.reference_go_name(&name);
                 return (var.clone(), SubjectDeclaration::PlainDiscard { var });
             }

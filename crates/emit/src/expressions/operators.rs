@@ -424,13 +424,15 @@ impl Planner<'_> {
                 right,
                 ..
             } => {
-                (matches!(
+                let is_untyped_shift = matches!(
                     operator,
                     BinaryOperator::ShiftLeft | BinaryOperator::ShiftRight
                 ) && self.is_go_constant_expression(left)
-                    && !self.is_go_constant_expression(right))
-                    || self.contains_untyped_constant_shift(left)
-                    || self.contains_untyped_constant_shift(right)
+                    && !self.is_go_constant_expression(right);
+                is_untyped_shift
+                    || [left, right]
+                        .into_iter()
+                        .any(|operand| self.contains_untyped_constant_shift(operand))
             }
             _ => false,
         }

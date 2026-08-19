@@ -526,19 +526,31 @@ impl Planner<'_> {
         // For cross-package struct calls (including type aliases), use the original name
         // to preserve the alias. E.g., "api.PublicSecret" should emit as "api.PublicSecret"
         // not as the underlying "internal.Secret".
-        if name.contains('.') && !is_prelude {
+        if !is_prelude {
             let parts: Vec<&str> = name.split('.').collect();
-            let emits_qualified = (is_enum && parts.len() == 3) || (!is_enum && parts.len() == 2);
-            if emits_qualified && !self.facts.is_current_package(parts[0]) {
-                let type_args = if self.is_non_generic_alias_call(parts[1], ty) {
+            let qualified = match (is_enum, parts.as_slice()) {
+                (true, [package, type_name, _]) | (false, [package, type_name]) => {
+                    Some((*package, *type_name))
+                }
+                _ => None,
+            };
+            if let Some((package, type_name)) = qualified
+                && !self.facts.is_current_package(package)
+            {
+                let type_args = if self.is_non_generic_alias_call(type_name, ty) {
                     String::new()
                 } else if let Type::Nominal { params, .. } = ty {
                     self.format_type_args(params)
                 } else {
                     String::new()
                 };
-                let pkg = self.require_package_import(&self.canonical_package(parts[0]));
-                return format!("{}.{}{}", pkg, go_name::snake_to_camel(parts[1]), type_args);
+                let pkg = self.require_package_import(&self.canonical_package(package));
+                return format!(
+                    "{}.{}{}",
+                    pkg,
+                    go_name::snake_to_camel(type_name),
+                    type_args
+                );
             }
         }
 

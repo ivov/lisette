@@ -7,6 +7,7 @@ use std::borrow::Cow;
 use super::NativeCallContext;
 use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
+use crate::abi::is_prelude_container_type;
 use crate::calls::native::native_method_lowers_to_plain_call;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
@@ -760,7 +761,7 @@ impl Planner<'_> {
     }
 
     pub(crate) fn prelude_container_type_args(&mut self, ty: &Type) -> Option<String> {
-        if !ty.is_option() && !ty.is_result() && !ty.is_partial() {
+        if !is_prelude_container_type(ty) {
             return None;
         }
         let Type::Nominal { params, .. } = ty else {

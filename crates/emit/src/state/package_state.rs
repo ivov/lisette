@@ -66,6 +66,17 @@ impl FunctionEmissionContext {
         self.absorbed_ref_generics.contains(name)
     }
 
+    pub(crate) fn absorbed_ref_inner(&self, ty: &Type) -> Option<Type> {
+        if !ty.is_ref() {
+            return None;
+        }
+        let inner = ty.inner()?;
+        let Type::Parameter(name) = &inner else {
+            return None;
+        };
+        self.is_absorbed_ref_generic(name).then_some(inner)
+    }
+
     pub(crate) fn generic_context(&self) -> &[(EcoString, Vec<Type>)] {
         &self.generic_context
     }

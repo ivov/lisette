@@ -386,14 +386,8 @@ impl Planner<'_> {
     /// Whether a `Partial` ok value can be Go nil, which makes the bare `Err`
     /// variant reachable (a nil value alongside a non-nil error).
     pub(crate) fn partial_ok_is_nilable(&self, ok_ty: &Type) -> bool {
-        if self.facts.as_interface(ok_ty).is_some() {
-            return true;
-        }
         let peeled = self.facts.peel_alias(ok_ty);
-        self.facts.is_nilable_go_type(ok_ty)
-            || peeled.is_map()
-            || peeled.is_slice()
-            || peeled.is_channel()
+        self.facts.is_nilable_go_type(ok_ty) || peeled.is_slice()
     }
 
     pub(crate) fn partial_ok_nil_check(&mut self, ok_ty: &Type, val: &str) -> Option<String> {

@@ -27,6 +27,33 @@ pub(crate) struct SpreadSequenceOptions {
     pub(crate) boundary: CaptureBoundary,
 }
 
+#[derive(Default)]
+struct LaterStages {
+    has_setup: bool,
+    has_effectful_call: bool,
+    has_pin: bool,
+}
+
+impl LaterStages {
+    fn prepend(&mut self, stage: &ValuePlan) -> bool {
+        let stage_has_setup = !stage.setup.is_empty();
+        let later_can_change_value = self.has_setup
+            || (self.has_effectful_call && !stage.evaluation.stability.is_stable_across_calls());
+        let value_pin = !stage_has_setup
+            && stage.evaluation.stability.is_observable()
+            && later_can_change_value;
+        let ordering_pin = stage.evaluation.effect.has_call()
+            && stage.expression.contains_deferred_evaluation()
+            && (self.has_setup || self.has_pin);
+        let pinned = value_pin || ordering_pin;
+
+        self.has_setup |= stage_has_setup;
+        self.has_effectful_call |= stage.evaluation.effect.has_effectful_call();
+        self.has_pin |= pinned;
+        pinned
+    }
+}
+
 impl Planner<'_> {
     pub(crate) fn stage_or_capture(&mut self, expression: &Expression, prefix: &str) -> ValuePlan {
         if matches!(
@@ -332,22 +359,9 @@ impl Planner<'_> {
         // already reduced to a temp by its own setup evaluates nothing
         // inline and needs no ordering pin.
         let mut pins = vec![false; stages.len()];
-        let mut later_has_setup = false;
-        let mut later_effectful = false;
-        let mut later_pins = false;
+        let mut later = LaterStages::default();
         for i in (0..stages.len()).rev() {
-            let stage = &stages[i];
-            let call_pin_exempt = stage.evaluation.stability.is_stable_across_calls();
-            let base_pin = stage.setup.is_empty()
-                && stage.evaluation.stability.is_observable()
-                && (later_has_setup || (later_effectful && !call_pin_exempt));
-            let ordering_pin = stage.evaluation.effect.has_call()
-                && stage.expression.contains_deferred_evaluation()
-                && (later_has_setup || later_pins);
-            pins[i] = base_pin || ordering_pin;
-            later_pins |= pins[i];
-            later_has_setup |= !stage.setup.is_empty();
-            later_effectful |= stage.evaluation.effect.has_effectful_call();
+            pins[i] = later.prepend(&stages[i]);
         }
 
         let mut setup: Vec<LoweredStatement> = Vec::new();

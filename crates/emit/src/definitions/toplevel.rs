@@ -38,16 +38,6 @@ impl Planner<'_> {
             .unwrap_or(ty);
         let ty_string = self.use_go_type(underlying);
 
-        if let Type::Nominal { id, .. } = underlying
-            && let Some(package) = self.facts.package_for_qualified_name(id.as_str())
-            && !self.facts.is_current_package(package)
-            && package != go_name::PRELUDE_PACKAGE
-            && !go_name::is_go_import(package)
-        {
-            let package = package.to_string();
-            self.require_package_import(&package);
-        }
-
         let generics_string = self.generics_to_string(generics);
 
         let separator = if is_fn_alias { " " } else { " = " };

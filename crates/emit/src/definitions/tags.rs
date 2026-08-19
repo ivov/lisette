@@ -377,10 +377,11 @@ fn to_snake_case(s: &str) -> String {
         }
 
         if c.is_uppercase() {
-            let prev_upper = i > 0 && chars[i - 1].is_uppercase();
-            let next_lower = i + 1 < len && chars[i + 1].is_lowercase();
-
-            if (i > 0 && !prev_upper) || (i > 1 && prev_upper && next_lower) {
+            let previous_is_upper = i > 0 && chars[i - 1].is_uppercase();
+            let next_is_lower = i + 1 < len && chars[i + 1].is_lowercase();
+            let follows_lowercase = i > 0 && !previous_is_upper;
+            let ends_acronym = i > 1 && previous_is_upper && next_is_lower;
+            if follows_lowercase || ends_acronym {
                 result.push('_');
             }
 

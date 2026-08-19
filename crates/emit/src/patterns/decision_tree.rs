@@ -403,24 +403,20 @@ fn classify_switch_shape(
     branches: &[SwitchBranch],
     fallback: &Option<Box<Decision>>,
 ) -> SwitchShape {
-    if matches!(kind, SwitchKind::TypeSwitch) {
-        return SwitchShape::TypeSwitch;
+    match (kind, branches, fallback) {
+        (SwitchKind::TypeSwitch, _, _) => SwitchShape::TypeSwitch,
+        (SwitchKind::Value, [left, right], None)
+            if matches!(
+                (left.case_label.as_str(), right.case_label.as_str()),
+                ("true", "false") | ("false", "true")
+            ) =>
+        {
+            SwitchShape::Bool
+        }
+        (_, [_, _], None) => SwitchShape::Binary,
+        (_, [_], _) => SwitchShape::SingleArm,
+        _ => SwitchShape::Multi,
     }
-    let is_bool = matches!(kind, SwitchKind::Value)
-        && branches.len() == 2
-        && fallback.is_none()
-        && branches.iter().any(|b| b.case_label == "true")
-        && branches.iter().any(|b| b.case_label == "false");
-    if is_bool {
-        return SwitchShape::Bool;
-    }
-    if branches.len() == 2 && fallback.is_none() {
-        return SwitchShape::Binary;
-    }
-    if branches.len() == 1 {
-        return SwitchShape::SingleArm;
-    }
-    SwitchShape::Multi
 }
 
 /// True when the tree has an unconditional success path.

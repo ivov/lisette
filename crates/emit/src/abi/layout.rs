@@ -2,6 +2,7 @@ use syntax::types::{CompoundKind, Type};
 
 use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi};
+use crate::abi::is_prelude_container_type;
 use crate::types::go_type::GoType;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,6 +49,12 @@ pub(crate) struct FunctionLayout {
 }
 
 impl FunctionLayout {
+    fn same_representation(&self, other: &Self) -> bool {
+        self.return_abi == other.return_abi
+            && layouts_match(&self.parameters, &other.parameters)
+            && self.result_same_representation(other)
+    }
+
     fn result_same_representation(&self, other: &Self) -> bool {
         match self.return_abi {
             CallableReturnAbi::Result { .. }
@@ -256,27 +263,14 @@ impl ValueLayout {
                     && left_value.same_representation(right_value)
             }
             (Self::Function { layout: left, .. }, Self::Function { layout: right, .. }) => {
-                left.return_abi == right.return_abi
-                    && left.parameters.len() == right.parameters.len()
-                    && left
-                        .parameters
-                        .iter()
-                        .zip(&right.parameters)
-                        .all(|(left, right)| left.same_representation(right))
-                    && left.result_same_representation(right)
+                left.same_representation(right)
             }
             (
                 Self::Tuple { elements: left, .. },
                 Self::Tuple {
                     elements: right, ..
                 },
-            ) => {
-                left.len() == right.len()
-                    && left
-                        .iter()
-                        .zip(right)
-                        .all(|(left, right)| left.same_representation(right))
-            }
+            ) => layouts_match(left, right),
             _ => false,
         }
     }
@@ -611,7 +605,7 @@ impl Planner<'_> {
 }
 
 fn callable_payload_type(ty: &Type) -> Option<Type> {
-    (ty.is_result() || ty.is_partial() || ty.is_option()).then(|| ty.ok_type())
+    is_prelude_container_type(ty).then(|| ty.ok_type())
 }
 
 fn optional_layouts_match(left: Option<&ValueLayout>, right: Option<&ValueLayout>) -> bool {
@@ -620,6 +614,14 @@ fn optional_layouts_match(left: Option<&ValueLayout>, right: Option<&ValueLayout
         (None, None) => true,
         _ => false,
     }
+}
+
+fn layouts_match(left: &[ValueLayout], right: &[ValueLayout]) -> bool {
+    left.len() == right.len()
+        && left
+            .iter()
+            .zip(right)
+            .all(|(left, right)| left.same_representation(right))
 }
 
 fn compound_hint(

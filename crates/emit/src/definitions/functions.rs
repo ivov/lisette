@@ -161,41 +161,43 @@ impl Planner<'_> {
     fn lambda_return_info(&mut self, ty: &Type, ctx: ExpressionContext<'_>) -> LambdaReturnInfo {
         let suppress_lowering = ctx.forces_tagged_go_function();
         let argument_flows_to_unknown = ctx.argument_flows_to_unknown();
-
-        let has_return = matches!(ty, Type::Function(f)
-            if !(f.return_type.is_unit()
-                || f.return_type.is_variable()
-                || f.return_type.is_placeholder()
-                || (argument_flows_to_unknown && f.return_type.is_never())));
-
-        let ctx = match ty {
-            Type::Function(f) => {
-                let return_ty = f.return_type.as_ref().clone();
-                if suppress_lowering {
-                    ReturnContext::Tagged(return_ty)
-                } else {
-                    self.return_context_for_type(return_ty)
-                }
-            }
-            _ => ReturnContext::None,
+        let Type::Function(function) = ty else {
+            return LambdaReturnInfo {
+                signature: None,
+                ctx: ReturnContext::None,
+            };
         };
 
+        let return_ty = function.return_type.as_ref();
+        let has_return = match return_ty {
+            Type::Simple(syntax::types::SimpleKind::Unit)
+            | Type::Var { .. }
+            | Type::Uninferred
+            | Type::Ignored => false,
+            Type::Never => !argument_flows_to_unknown,
+            _ => true,
+        };
+        let return_ctx = if suppress_lowering {
+            ReturnContext::Tagged(return_ty.clone())
+        } else {
+            self.return_context_for_type(return_ty.clone())
+        };
         let signature = if has_return {
-            match ty {
-                Type::Function(f) => match ctx.lowered_shape() {
-                    Some(shape) => Some(format!(
-                        " {}",
-                        self.render_lowered_return_ty(&shape, &f.return_type)
-                    )),
-                    None => Some(format!(" {}", self.use_go_type(&f.return_type))),
-                },
-                _ => None,
+            match return_ctx.lowered_shape() {
+                Some(shape) => Some(format!(
+                    " {}",
+                    self.render_lowered_return_ty(&shape, return_ty)
+                )),
+                None => Some(format!(" {}", self.use_go_type(return_ty))),
             }
         } else {
             None
         };
 
-        LambdaReturnInfo { signature, ctx }
+        LambdaReturnInfo {
+            signature,
+            ctx: return_ctx,
+        }
     }
 
     fn emit_lambda_body_with_deferred(
@@ -583,19 +585,10 @@ impl Planner<'_> {
                 }
             };
 
-            let param_type = {
-                if param.ty.is_ref()
-                    && let Some(inner) = param.ty.inner()
-                    && let Type::Parameter(name) = &inner
-                    && self
-                        .current_function_context()
-                        .is_some_and(|context| context.is_absorbed_ref_generic(name.as_ref()))
-                {
-                    inner
-                } else {
-                    param.ty.clone()
-                }
-            };
+            let param_type = self
+                .current_function_context()
+                .and_then(|context| context.absorbed_ref_inner(&param.ty))
+                .unwrap_or_else(|| param.ty.clone());
             params.push((name, self.use_go_type(&param_type)));
         }
         (format!("({})", group_params(&params)), deferred_patterns)

@@ -480,22 +480,26 @@ impl Planner<'_> {
                 ..
             } => {
                 let kind = fallible.classify_constructor(callee);
-                let constructor_name = match kind {
-                    Some(ConstructorKind::Success) => fallible.ok_constructor(),
-                    Some(ConstructorKind::Failure) => fallible.err_constructor(),
+                let (constructor_name, constructor_arg) = match kind {
+                    Some(ConstructorKind::Success) => (
+                        fallible.ok_constructor(),
+                        Some(args.first().expect("success constructor has an argument")),
+                    ),
+                    Some(ConstructorKind::Failure) if fallible.err_constructor_takes_arg() => (
+                        fallible.err_constructor(),
+                        Some(args.first().expect("failure constructor has an argument")),
+                    ),
+                    Some(ConstructorKind::Failure) => (fallible.err_constructor(), None),
                     None => {
                         return self.lower_plain_assign(target_var, expression);
                     }
                 };
-                if kind == Some(ConstructorKind::Success)
-                    || (kind == Some(ConstructorKind::Failure)
-                        && fallible.err_constructor_takes_arg())
-                {
+                if let Some(constructor_arg) = constructor_arg {
                     let (arg_setup, call_str, argument_effect) = {
                         let mut fe = FalliblePlanner::new(self, &fallible);
                         let argument = fe
                             .planner
-                            .lower_composite_value(&args[0], ExpressionContext::value());
+                            .lower_composite_value(constructor_arg, ExpressionContext::value());
                         let argument_effect = argument.evaluation.effect;
                         let (arg_setup, arg) = argument.into_parts();
                         (

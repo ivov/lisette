@@ -82,14 +82,15 @@ impl GlobalEmitData {
         };
 
         for (key, definition) in definitions.iter() {
-            let is_go = go_name::is_go_import(key);
-            globals.register_exported_methods(key, definition, is_go);
+            globals.register_exported_methods(key, definition);
         }
 
         globals
     }
 
-    fn register_exported_methods(&mut self, key: &Symbol, definition: &Definition, is_go: bool) {
+    fn register_exported_methods(&mut self, key: &Symbol, definition: &Definition) {
+        let is_user_definition =
+            !go_name::is_go_import(key) && !key.starts_with(go_name::PRELUDE_PREFIX);
         match &definition.body {
             DefinitionBody::Interface {
                 definition: iface, ..
@@ -100,9 +101,8 @@ impl GlobalEmitData {
             }
             DefinitionBody::Value { .. }
                 if definition.visibility.is_public()
-                    && !is_go
-                    && !key.starts_with(go_name::PRELUDE_PREFIX)
-                    && key.chars().filter(|c| *c == '.').count() >= 2 =>
+                    && is_user_definition
+                    && key.split('.').nth(2).is_some() =>
             {
                 let method_name = go_name::unqualified_name(key);
                 self.exported_method_names.insert(method_name.to_string());
@@ -110,10 +110,7 @@ impl GlobalEmitData {
             _ => {}
         }
 
-        if !is_go
-            && !key.starts_with(go_name::PRELUDE_PREFIX)
-            && let Some(methods) = definition.methods()
-        {
+        if is_user_definition && let Some(methods) = definition.methods() {
             for method in methods
                 .values()
                 .filter(|method| method.visibility.is_public())

@@ -169,15 +169,14 @@ impl Planner<'_> {
         // Solo-expression f-strings round-trip through fmt.Sprint, which skips
         // the format-string parse. Excluded: `%c`, because Sprint on a rune
         // prints the integer codepoint instead of the character.
-        if args.len() == 1
-            && matches!(parts, [FormatStringPart::Expression(_)])
+        if let ([FormatStringPart::Expression(_)], [arg]) = (parts, args.as_slice())
             && format_string != "%c"
         {
             return ValuePlan::observable_call(
                 setup,
                 GoExpression::call(
                     GoExpression::opaque("fmt.Sprint".to_string()),
-                    vec![GoExpression::opaque(args[0].clone())],
+                    vec![GoExpression::opaque(arg.clone())],
                 ),
                 effect,
             );

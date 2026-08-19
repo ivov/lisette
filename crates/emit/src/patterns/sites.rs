@@ -101,6 +101,15 @@ struct LetElseAlternatives<'s> {
 }
 
 impl Planner<'_> {
+    pub(crate) fn can_reuse_subject_identifier(&self, value: &str, binds_name: bool) -> bool {
+        !binds_name
+            && !value.contains('.')
+            && !matches!(
+                self.scope.resolve_identifier_binding(value),
+                Some(BindingValue::InlineExpr(_))
+            )
+    }
+
     fn resolve_pattern_subject(
         &mut self,
         setup: &mut Vec<LoweredStatement>,
@@ -114,12 +123,7 @@ impl Planner<'_> {
                 temp_hint,
             } => {
                 if let Expression::Identifier { value, .. } = scrutinee
-                    && !value.contains('.')
-                    && !pattern_binds_name(pattern, value)
-                    && !matches!(
-                        self.scope.resolve_identifier_binding(value),
-                        Some(BindingValue::InlineExpr(_))
-                    )
+                    && self.can_reuse_subject_identifier(value, pattern_binds_name(pattern, value))
                 {
                     let var = self.reference_go_name(value);
                     return ResolvedSubject::Existing { var };
@@ -345,11 +349,7 @@ impl Planner<'_> {
     ) -> (String, Vec<LoweredStatement>) {
         if let Expression::Identifier { value, .. } = scrutinee {
             let has_collision = pattern_binds_name(pattern, value);
-            let bound_to_inline = matches!(
-                self.scope.resolve_identifier_binding(value),
-                Some(BindingValue::InlineExpr(_))
-            );
-            if !has_collision && !value.contains('.') && !bound_to_inline {
+            if self.can_reuse_subject_identifier(value, has_collision) {
                 return (self.reference_go_name(value), Vec::new());
             }
         }
@@ -908,15 +908,20 @@ pub(crate) fn lower_none_arm_body(
 /// the outer is not `Some(_)`.
 pub(crate) fn unwrap_some_pattern(pattern: &Pattern) -> &Pattern {
     let pattern = peel_as_binding(pattern);
-    if let Pattern::EnumVariant {
+    some_payload_pattern(pattern).unwrap_or(pattern)
+}
+
+pub(crate) fn some_payload_pattern(pattern: &Pattern) -> Option<&Pattern> {
+    let Pattern::EnumVariant {
         identifier, fields, ..
     } = pattern
-        && go_name::unqualified_name(identifier) == "Some"
-        && fields.len() == 1
-    {
-        return &fields[0];
+    else {
+        return None;
+    };
+    match (go_name::unqualified_name(identifier), fields.as_slice()) {
+        ("Some", [payload]) => Some(payload),
+        _ => None,
     }
-    pattern
 }
 
 fn peel_as_binding(pattern: &Pattern) -> &Pattern {

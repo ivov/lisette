@@ -49,13 +49,34 @@ pub(super) enum InlineImport {
 struct InlineRule {
     types: &'static [NativeGoType],
     method: &'static str,
-    arity: i8,
+    arity: RuleArity,
     template: &'static str,
     /// Direct Go form of the negated method. Set when the positive template
     /// emits a comparison, so `!method(...)` can flip the operator instead
     /// of prepending `!` (Go's `!` binds tighter than `==`).
     negated_template: Option<&'static str>,
     import: InlineImport,
+}
+
+#[derive(Clone, Copy)]
+enum RuleArity {
+    Exact(usize),
+    Variadic,
+}
+
+impl RuleArity {
+    fn accepts(self, actual: usize) -> bool {
+        match self {
+            Self::Exact(expected) => actual == expected,
+            Self::Variadic => true,
+        }
+    }
+}
+
+impl InlineRule {
+    fn matches(&self, native_type: NativeGoType, method: &str, arity: usize) -> bool {
+        self.method == method && self.types.contains(&native_type) && self.arity.accepts(arity)
+    }
 }
 
 type N = NativeGoType;
@@ -73,7 +94,7 @@ static INLINE_METHODS: &[InlineRule] = &[
             N::Array,
         ],
         method: "length",
-        arity: 0,
+        arity: RuleArity::Exact(0),
         template: "len({r})",
         negated_template: None,
         import: InlineImport::None,
@@ -81,7 +102,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::Slice, N::Channel, N::Sender, N::Receiver],
         method: "capacity",
-        arity: 0,
+        arity: RuleArity::Exact(0),
         template: "cap({r})",
         negated_template: None,
         import: InlineImport::None,
@@ -96,7 +117,7 @@ static INLINE_METHODS: &[InlineRule] = &[
             N::String,
         ],
         method: "is_empty",
-        arity: 0,
+        arity: RuleArity::Exact(0),
         template: "len({r}) == 0",
         negated_template: Some("len({r}) != 0"),
         import: InlineImport::None,
@@ -104,7 +125,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::Slice],
         method: "enumerate",
-        arity: 0,
+        arity: RuleArity::Exact(0),
         template: "{r}",
         negated_template: None,
         import: InlineImport::None,
@@ -112,7 +133,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::String],
         method: "bytes",
-        arity: 0,
+        arity: RuleArity::Exact(0),
         template: "[]byte({r})",
         negated_template: None,
         import: InlineImport::None,
@@ -120,7 +141,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::String],
         method: "runes",
-        arity: 0,
+        arity: RuleArity::Exact(0),
         template: "[]rune({r})",
         negated_template: None,
         import: InlineImport::None,
@@ -129,7 +150,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::Map],
         method: "delete",
-        arity: 1,
+        arity: RuleArity::Exact(1),
         template: "delete({r}, {0})",
         negated_template: None,
         import: InlineImport::None,
@@ -137,7 +158,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::Slice],
         method: "copy_from",
-        arity: 1,
+        arity: RuleArity::Exact(1),
         template: "copy({r}, {0})",
         negated_template: None,
         import: InlineImport::None,
@@ -145,7 +166,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::Slice],
         method: "contains",
-        arity: 1,
+        arity: RuleArity::Exact(1),
         template: "slices.Contains({r}, {0})",
         negated_template: None,
         import: InlineImport::Slices,
@@ -153,7 +174,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::String],
         method: "contains",
-        arity: 1,
+        arity: RuleArity::Exact(1),
         template: "strings.Contains({r}, {0})",
         negated_template: None,
         import: InlineImport::Strings,
@@ -161,7 +182,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::String],
         method: "split",
-        arity: 1,
+        arity: RuleArity::Exact(1),
         template: "strings.Split({r}, {0})",
         negated_template: None,
         import: InlineImport::Strings,
@@ -169,7 +190,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::String],
         method: "starts_with",
-        arity: 1,
+        arity: RuleArity::Exact(1),
         template: "strings.HasPrefix({r}, {0})",
         negated_template: None,
         import: InlineImport::Strings,
@@ -177,7 +198,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::String],
         method: "ends_with",
-        arity: 1,
+        arity: RuleArity::Exact(1),
         template: "strings.HasSuffix({r}, {0})",
         negated_template: None,
         import: InlineImport::Strings,
@@ -185,7 +206,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::String],
         method: "byte_at",
-        arity: 1,
+        arity: RuleArity::Exact(1),
         template: "{r}[{0}]",
         negated_template: None,
         import: InlineImport::None,
@@ -193,7 +214,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::String],
         method: "rune_at",
-        arity: 1,
+        arity: RuleArity::Exact(1),
         template: "lisette.RuneAt({r}, {0})",
         negated_template: None,
         import: InlineImport::Stdlib,
@@ -201,7 +222,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::Slice],
         method: "join",
-        arity: 1,
+        arity: RuleArity::Exact(1),
         template: "strings.Join({r}, {0})",
         negated_template: None,
         import: InlineImport::Strings,
@@ -209,7 +230,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::Slice],
         method: "any",
-        arity: 1,
+        arity: RuleArity::Exact(1),
         template: "slices.ContainsFunc({r}, {0})",
         negated_template: None,
         import: InlineImport::Slices,
@@ -217,7 +238,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::Slice],
         method: "reserve",
-        arity: 1,
+        arity: RuleArity::Exact(1),
         template: "slices.Grow({r}, {0})",
         negated_template: None,
         import: InlineImport::Slices,
@@ -226,7 +247,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::Slice],
         method: "append",
-        arity: -1,
+        arity: RuleArity::Variadic,
         template: "append({r+args})",
         negated_template: None,
         import: InlineImport::None,
@@ -329,11 +350,9 @@ fn lookup_inline_rule(
     method: &str,
     arity: usize,
 ) -> Option<&'static InlineRule> {
-    INLINE_METHODS.iter().find(|s| {
-        s.method == method
-            && s.types.contains(native_type)
-            && (s.arity < 0 || s.arity as usize == arity)
-    })
+    INLINE_METHODS
+        .iter()
+        .find(|rule| rule.matches(*native_type, method, arity))
 }
 
 /// Try to inline a native-type method call. `negated` picks the rule's
@@ -767,22 +786,15 @@ impl Planner<'_> {
         &mut self,
         ctx: &NativeCallContext,
     ) -> NativeCallResult {
-        if matches!(ctx.native_type, NativeGoType::String)
-            && ctx.method == "substring"
-            && ctx.args.len() >= 2
-        {
-            return self.lower_string_substring(&ctx.args[0], &ctx.args[1..], ctx.capture_boundary);
-        }
-
-        if ctx.method == "equals"
-            && matches!(ctx.native_type, NativeGoType::Slice | NativeGoType::Map)
-            && let Some(receiver_expr) = ctx.args.first()
-        {
-            let receiver_ty = self.facts.strip_and_peel(&receiver_expr.get_type());
-            if receiver_ty.is_slice() || receiver_ty.is_map() {
-                let (setup, emitted_args, effect, contains_deferred_evaluation) =
-                    self.stage_native_identifier_args(ctx);
-                if emitted_args.len() >= 2 {
+        match (*ctx.native_type, ctx.method, ctx.args) {
+            (NativeGoType::String, "substring", [receiver, rest @ ..]) if !rest.is_empty() => {
+                return self.lower_string_substring(receiver, rest, ctx.capture_boundary);
+            }
+            (NativeGoType::Slice | NativeGoType::Map, "equals", [receiver, _, ..]) => {
+                let receiver_ty = self.facts.strip_and_peel(&receiver.get_type());
+                if receiver_ty.is_slice() || receiver_ty.is_map() {
+                    let (setup, emitted_args, effect, contains_deferred_evaluation) =
+                        self.stage_native_identifier_args(ctx);
                     let body =
                         self.render_equality(&emitted_args[0], &emitted_args[1], &receiver_ty, &[]);
                     return NativeCallResult::new(
@@ -793,6 +805,39 @@ impl Planner<'_> {
                     );
                 }
             }
+            (_, "clone", [receiver, ..]) => {
+                let receiver_ty = self.facts.strip_and_peel(&receiver.get_type());
+                if is_cloneable_container(&receiver_ty) {
+                    let (setup, emitted_args, effect, contains_deferred_evaluation) =
+                        self.stage_native_identifier_args(ctx);
+                    let body = self.render_clone(&emitted_args[0], &receiver_ty);
+                    return NativeCallResult::new(
+                        setup,
+                        body,
+                        effect,
+                        contains_deferred_evaluation,
+                    );
+                }
+            }
+            (_, method, [receiver, ..])
+                if is_native_array_method(method)
+                    && matches!(
+                        self.facts.strip_and_peel(&receiver.get_type()),
+                        Type::Array { .. }
+                    ) =>
+            {
+                let (mut setup, emitted_args, effect, contains_deferred_evaluation) =
+                    self.stage_native_identifier_args(ctx);
+                let body = self.lower_array_method_body(
+                    method,
+                    receiver,
+                    emitted_args[0].clone(),
+                    emitted_args.get(1),
+                    &mut setup,
+                );
+                return NativeCallResult::new(setup, body, effect, contains_deferred_evaluation);
+            }
+            _ => {}
         }
 
         if matches!(ctx.native_type, NativeGoType::Slice)
@@ -802,54 +847,14 @@ impl Planner<'_> {
             return result;
         }
 
-        if ctx.method == "clone"
-            && let Some(receiver_expr) = ctx.args.first()
-        {
-            let receiver_ty = self.facts.strip_and_peel(&receiver_expr.get_type());
-            if is_cloneable_container(&receiver_ty) {
-                let (setup, emitted_args, effect, contains_deferred_evaluation) =
-                    self.stage_native_identifier_args(ctx);
-                if let Some(receiver) = emitted_args.first() {
-                    let body = self.render_clone(receiver, &receiver_ty);
-                    return NativeCallResult::new(
-                        setup,
-                        body,
-                        effect,
-                        contains_deferred_evaluation,
-                    );
-                }
-            }
-        }
-
-        if is_native_array_method(ctx.method)
-            && let Some(receiver_expr) = ctx.args.first()
-            && matches!(
-                self.facts.strip_and_peel(&receiver_expr.get_type()),
-                Type::Array { .. }
-            )
-        {
-            let (mut setup, emitted_args, effect, contains_deferred_evaluation) =
-                self.stage_native_identifier_args(ctx);
-            let receiver = emitted_args[0].clone();
-            let index = emitted_args.get(1);
-            let body = self.lower_array_method_body(
-                ctx.method,
-                receiver_expr,
-                receiver,
-                index,
-                &mut setup,
-            );
-            return NativeCallResult::new(setup, body, effect, contains_deferred_evaluation);
-        }
-
         let (setup, mut emitted_args, effect, contains_deferred_evaluation) =
             self.stage_native_identifier_args(ctx);
 
-        if let Some(receiver_expr) = ctx.args.first()
-            && growth_clip_applies(ctx, receiver_expr)
-            && let Some(first) = emitted_args.first_mut()
-        {
-            *first = clip_shared_capacity(first);
+        match (ctx.args.first(), emitted_args.first_mut()) {
+            (Some(receiver), Some(emitted)) if growth_clip_applies(ctx, receiver) => {
+                *emitted = clip_shared_capacity(emitted);
+            }
+            _ => {}
         }
 
         if let Some(inlined) = apply_inline_identifier_lookup(self, ctx, &emitted_args, false) {
