@@ -572,6 +572,8 @@ fn apply_result_fixes(result: &CompileResult, summary: &mut FixSummary) {
 fn print_fix_summary(summary: &FixSummary, elapsed: Duration) {
     let time_display = output::format_elapsed(elapsed);
 
+    eprintln!();
+
     if summary.files_changed == 0 {
         eprintln!("  ✓ No fixes applied {}", time_display);
     } else {
