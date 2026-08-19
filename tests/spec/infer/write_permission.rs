@@ -1066,6 +1066,22 @@ fn mut_on_scalar_let_refused() {
 }
 
 #[test]
+fn mut_on_impl_target_refused() {
+    infer(
+        r#"struct Batch {
+  items: mut Slice<int>,
+}
+
+impl mut Batch {
+  fn first(self) -> int {
+    self.items[0]
+  }
+}"#,
+    )
+    .assert_infer_code("mut_without_effect");
+}
+
+#[test]
 fn mut_on_type_parameter_refused() {
     infer(
         r#"fn hold<T>(x: mut T) {
