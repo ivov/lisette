@@ -2834,6 +2834,44 @@ pub fn pointer_receiver_interface_mismatch(
         ))
 }
 
+pub fn interface_needs_writable_receiver(
+    interface_name: &str,
+    type_name: &str,
+    methods: &[String],
+    span: Span,
+) -> LisetteDiagnostic {
+    let methods_str = methods
+        .iter()
+        .map(|m| format!("`{}.{}`", type_name, m))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let writes = if methods.len() == 1 {
+        format!(
+            "{} writes through `self: mut Ref<{}>`",
+            methods_str, type_name
+        )
+    } else {
+        format!(
+            "{} write through `self: mut Ref<{}>`",
+            methods_str, type_name
+        )
+    };
+    LisetteDiagnostic::error("Missing write permission")
+        .with_infer_code("needs_writable")
+        .with_span_label(
+            &span,
+            format!(
+                "expected `mut Ref<{}>`, found `Ref<{}>`",
+                type_name, type_name
+            ),
+        )
+        .with_help(format!(
+            "{}, so `{}` needs a writable reference. Make the value writable where it is created, \
+             or take the reference from a `let mut` binding",
+            writes, interface_name
+        ))
+}
+
 pub fn unknown_in_bound_position(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid `Unknown` bound")
         .with_infer_code("unknown_in_bound_position")

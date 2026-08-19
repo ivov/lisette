@@ -250,18 +250,33 @@ impl InferCtx<'_> {
             .map(|arg| super::aliasing::place_key(arg.unwrap_parens()))
             .collect();
 
+        let parameter_at = |i: usize| {
+            parameters.get(i).or(if i >= parameters.len() {
+                variadic
+            } else {
+                None
+            })
+        };
+
         let writable_positions: Vec<bool> = (0..args.len())
             .map(|i| {
-                parameters
-                    .get(i)
-                    .or(if i >= parameters.len() {
-                        variadic
-                    } else {
-                        None
-                    })
-                    .is_some_and(|param| {
-                        self.store
-                            .parameter_grants_write(&param.ty.resolve_in(&self.env))
+                parameter_at(i).is_some_and(|param| {
+                    self.store
+                        .parameter_grants_write(&param.ty.resolve_in(&self.env))
+                })
+            })
+            .collect();
+
+        let mutating_positions: Vec<bool> = (0..args.len())
+            .map(|i| {
+                writable_positions[i]
+                    || parameter_at(i).is_some_and(|param| {
+                        let param_ty = param.ty.resolve_in(&self.env);
+                        self.store.is_interface(&param_ty)
+                            && self.interface_writes_through_receiver(
+                                &args[i].get_type().resolve_in(&self.env),
+                                &param_ty,
+                            )
                     })
             })
             .collect();
@@ -271,7 +286,7 @@ impl InferCtx<'_> {
             let Some(place) = places[i].as_deref() else {
                 continue;
             };
-            if writable_position
+            if mutating_positions[i]
                 && let Some(binding_id) = arg
                     .get_var_name()
                     .and_then(|name| self.scopes.lookup_binding_id(&name))

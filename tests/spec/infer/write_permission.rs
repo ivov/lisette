@@ -1082,6 +1082,64 @@ impl mut Batch {
 }
 
 #[test]
+fn read_only_reference_does_not_satisfy_writing_interface() {
+    infer(
+        r#"interface Sink {
+  fn push(value: int)
+}
+
+struct Bag {
+  items: mut Slice<int>,
+}
+
+impl Bag {
+  fn push(self: mut Ref<Bag>, value: int) {
+    self.items[0] = value
+  }
+}
+
+fn feed(s: Sink) {
+  s.push(1)
+}
+
+fn main() {
+  let bag = Bag { items: [0] }
+  feed(&bag)
+}"#,
+    )
+    .assert_infer_code("needs_writable");
+}
+
+#[test]
+fn writable_reference_satisfies_writing_interface() {
+    infer(
+        r#"interface Sink {
+  fn push(value: int)
+}
+
+struct Bag {
+  items: mut Slice<int>,
+}
+
+impl Bag {
+  fn push(self: mut Ref<Bag>, value: int) {
+    self.items[0] = value
+  }
+}
+
+fn feed(s: Sink) {
+  s.push(1)
+}
+
+fn main() {
+  let mut bag = Bag { items: [0] }
+  feed(&bag)
+}"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn mut_on_type_parameter_refused() {
     infer(
         r#"fn hold<T>(x: mut T) {

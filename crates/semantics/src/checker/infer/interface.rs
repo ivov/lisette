@@ -249,15 +249,61 @@ impl InferCtx<'_> {
         span: &Span,
     ) -> Result<(), Vec<InterfaceViolation>> {
         let store = self.store;
-        if store.peel_alias(ty).is_ref() {
+        let peeled = store.peel_alias(ty);
+        let value_is_ref = peeled.is_ref();
+        if value_is_ref && peeled.is_writable() {
             return Ok(());
         }
         let interface_ty = store.deep_resolve_alias(interface_ty);
         let Some(interface_qualified_id) = interface_ty.get_qualified_id() else {
             return Ok(());
         };
+        let ptr_methods = self
+            .reference_receiver_conformance(ty, &interface_ty)
+            .into_iter()
+            .filter(|(_, writes_through_receiver)| !value_is_ref || *writes_through_receiver)
+            .map(|(impl_name, _)| impl_name)
+            .collect::<Vec<_>>();
+
+        if ptr_methods.is_empty() {
+            return Ok(());
+        }
+
+        let type_name = ty.get_name().map_or_else(|| ty.to_string(), str::to_owned);
+        let diagnostic = if value_is_ref {
+            let pointee = store.deep_resolve_alias(&ty.strip_refs().resolve_in(&self.env));
+            let pointee_name = pointee
+                .get_name()
+                .map_or_else(|| pointee.to_string(), str::to_owned);
+            diagnostics::infer::interface_needs_writable_receiver(
+                unqualified_name(interface_qualified_id),
+                &pointee_name,
+                &ptr_methods,
+                *span,
+            )
+        } else {
+            diagnostics::infer::pointer_receiver_interface_mismatch(
+                unqualified_name(interface_qualified_id),
+                &type_name,
+                &ptr_methods,
+                *span,
+            )
+        };
+        self.sink.push(diagnostic);
+        Err(vec![])
+    }
+
+    /// The conformance methods of `interface_ty` on `ty` that take a reference
+    /// receiver, each paired with whether that receiver is writable. Methods in
+    /// the value method set are absent, because a value satisfies those.
+    fn reference_receiver_conformance(
+        &mut self,
+        ty: &Type,
+        interface_ty: &Type,
+    ) -> Vec<(String, bool)> {
+        let store = self.store;
         let methods = self.get_all_methods(store, ty);
-        let ptr_methods = interface_requirements(&interface_ty, |id| store.get_definition(id))
+        interface_requirements(interface_ty, |id| store.get_definition(id))
             .into_iter()
             .filter_map(|requirement| {
                 let interface_is_public = store
@@ -274,26 +320,37 @@ impl InferCtx<'_> {
                     Type::Forall { body, .. } => body.as_ref(),
                     other => other,
                 };
-                let has_pointer_receiver = matches!(func, Type::Function(f)
-                    if f.params.first().is_some_and(|param| param.ty.is_ref()));
-                (has_pointer_receiver && !self.method_in_value_method_set(ty, impl_name))
-                    .then(|| impl_name.to_string())
+                let Type::Function(f) = func else {
+                    return None;
+                };
+                let receiver = &f.params.first()?.ty;
+                if !receiver.is_ref() || self.method_in_value_method_set(ty, impl_name) {
+                    return None;
+                }
+                Some((impl_name.to_string(), receiver.is_writable()))
             })
-            .collect::<Vec<_>>();
+            .collect()
+    }
 
-        if ptr_methods.is_empty() {
-            return Ok(());
+    /// A reference passed as `interface_ty` reaches a method that writes through
+    /// the receiver, so the call can mutate the referent. The interface hides
+    /// the receiver qualifier, so a caller cannot read this off the signature.
+    pub(super) fn interface_writes_through_receiver(
+        &mut self,
+        ty: &Type,
+        interface_ty: &Type,
+    ) -> bool {
+        let store = self.store;
+        if !store.peel_alias(ty).is_ref() {
+            return false;
         }
-
-        let type_name = ty.get_name().map_or_else(|| ty.to_string(), str::to_owned);
-        self.sink
-            .push(diagnostics::infer::pointer_receiver_interface_mismatch(
-                unqualified_name(interface_qualified_id),
-                &type_name,
-                &ptr_methods,
-                *span,
-            ));
-        Err(vec![])
+        let interface_ty = store.deep_resolve_alias(interface_ty);
+        if interface_ty.get_qualified_id().is_none() {
+            return false;
+        }
+        self.reference_receiver_conformance(ty, &interface_ty)
+            .into_iter()
+            .any(|(_, writes_through_receiver)| writes_through_receiver)
     }
 
     fn conformance_candidate(&self, receiver: &Type, method: &str) -> ConformanceCandidate {
