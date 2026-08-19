@@ -1,7 +1,9 @@
 use rustc_hash::FxHashSet as HashSet;
 
 use syntax::ast::{Expression, Span};
+use syntax::types::{CompoundKind, Type};
 
+use crate::checker::EnvResolve;
 use crate::checker::infer::InferCtx;
 
 impl InferCtx<'_> {
@@ -121,7 +123,7 @@ impl InferCtx<'_> {
     fn check_sibling_ref_aliasing_refs(&mut self, siblings: &[&Expression]) {
         let mut ref_vars: HashSet<String> = HashSet::default();
         for sib in siblings {
-            collect_ref_targets(sib, &mut ref_vars, false);
+            self.collect_ref_targets(sib, &mut ref_vars, false);
         }
         if ref_vars.is_empty() {
             return;
@@ -132,7 +134,7 @@ impl InferCtx<'_> {
             collect_read_vars(sib, &mut reads, false);
             for var in reads.intersection(&ref_vars) {
                 let mut ref_in_same = HashSet::default();
-                collect_ref_targets(sib, &mut ref_in_same, false);
+                self.collect_ref_targets(sib, &mut ref_in_same, false);
                 if ref_in_same.contains(var.as_str()) {
                     continue; // `&v` and `v` in the same operand is fine
                 }
@@ -154,29 +156,67 @@ impl InferCtx<'_> {
             }
         }
     }
-}
 
-/// Collect `v` for each `&v` passed into a call, which executes and may mutate
-/// `v`. A bare `&v` that is only captured never mutates before a sibling read.
-fn collect_ref_targets(expression: &Expression, out: &mut HashSet<String>, inside_call: bool) {
-    match expression.unwrap_parens() {
-        Expression::Reference { expression, .. } => {
-            if inside_call && let Expression::Identifier { value, .. } = expression.unwrap_parens()
-            {
-                out.insert(value.to_string());
+    /// Collect `v` for each `&v` handed to a parameter that permits writing.
+    fn collect_ref_targets(
+        &self,
+        expression: &Expression,
+        out: &mut HashSet<String>,
+        granted: bool,
+    ) {
+        match expression.unwrap_parens() {
+            Expression::Reference { expression, .. } => {
+                if granted && let Expression::Identifier { value, .. } = expression.unwrap_parens()
+                {
+                    out.insert(value.to_string());
+                }
+                self.collect_ref_targets(expression, out, granted);
             }
-            collect_ref_targets(expression, out, inside_call);
-        }
-        node @ Expression::Call { .. } => {
-            for child in node.children() {
-                collect_ref_targets(child, out, true);
+            Expression::Call {
+                expression: callee,
+                args,
+                spread,
+                ..
+            } => {
+                self.collect_ref_targets(callee, out, false);
+                let resolved = callee.get_type().resolve_in(&self.env);
+                let function = self
+                    .store
+                    .resolve_to_function_type(&resolved)
+                    .unwrap_or(resolved);
+                for (index, arg) in args.iter().enumerate() {
+                    let grants = self.argument_position_grants(&function, index);
+                    self.collect_ref_targets(arg, out, grants);
+                }
+                if let Some(spread) = spread.as_deref() {
+                    let grants = self.argument_position_grants(&function, args.len());
+                    self.collect_ref_targets(spread, out, grants);
+                }
+            }
+            other => {
+                for child in other.children() {
+                    self.collect_ref_targets(child, out, granted);
+                }
             }
         }
-        other => {
-            for child in other.children() {
-                collect_ref_targets(child, out, inside_call);
+    }
+
+    fn argument_position_grants(&self, function: &Type, index: usize) -> bool {
+        let Some(parameters) = function.get_function_params() else {
+            return true;
+        };
+        let parameter = if index < parameters.len() {
+            &parameters[index]
+        } else {
+            match parameters.last() {
+                Some(last) if matches!(last.ty.as_compound(), Some((CompoundKind::VarArgs, _))) => {
+                    last
+                }
+                _ => return true,
             }
-        }
+        };
+        self.store
+            .parameter_grants_write(&parameter.ty.resolve_in(&self.env))
     }
 }
 

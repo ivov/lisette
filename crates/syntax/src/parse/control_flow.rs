@@ -246,7 +246,22 @@ impl<'source> Parser<'source> {
 
         self.ensure(For);
 
-        let binding = self.parse_binding();
+        let mut_token = if self.is(Mut) {
+            let token = self.current_token();
+            self.next();
+            Some(token)
+        } else {
+            None
+        };
+
+        let mut binding = self.parse_binding();
+        if let Some(token) = mut_token {
+            binding.mut_span = Some(Span::new(
+                self.file_id,
+                token.byte_offset,
+                token.byte_length,
+            ));
+        }
 
         self.ensure(In_);
 

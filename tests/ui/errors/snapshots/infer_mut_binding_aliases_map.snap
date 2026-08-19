@@ -1,12 +1,12 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Cannot make a mutable binding to `m`
-   ╭─[test.lis:4:16]
- 3 │   let m = Map.from([("a", 1)])
+  ✕ Cannot write to `m2["b"]`
+   ╭─[test.lis:5:3]
  4 │   let mut m2 = m
-   ·                ┬
-   ·                ╰── would be mutated implicitly
  5 │   m2["b"] = 2
+   ·   ─────┬─────
+   ·        ╰── `m2` is read-only
+ 6 │ }
    ╰────
-  help: Mutating `m2` would implicitly mutate `m`. Either use `m.clone()` to make a copy or `&m` to take a reference · code: [infer.mut_binding_aliases]
+  help: `m2` shares storage with `m`, which is read-only. Make `m` writable, or write to a `.clone()` for an independent copy · code: [infer.write_through_read_only]

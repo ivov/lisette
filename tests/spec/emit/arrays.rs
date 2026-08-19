@@ -546,7 +546,7 @@ fn overwrite(a: Array<int, 3>) -> Array<int, 3> {
 #[test]
 fn array_element_assignment_through_ref() {
     let input = r#"
-fn bump(a: Ref<Array<int, 3>>) {
+fn bump(a: mut Ref<Array<int, 3>>) {
   a.*[0] = 9
 }
 "#;

@@ -6,7 +6,7 @@ description: |
     |x: int| -> int { x }
   }
   
-  fn get(i: Ref<int>) -> Result<int, string> {
+  fn get(i: mut Ref<int>) -> Result<int, string> {
     i.* = 1
     Ok(7)
   }

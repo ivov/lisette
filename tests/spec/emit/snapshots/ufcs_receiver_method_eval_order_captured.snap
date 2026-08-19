@@ -10,7 +10,7 @@ description: |
     }
   }
   
-  fn bump(i: Ref<int>) -> int {
+  fn bump(i: mut Ref<int>) -> int {
     i.* = 1
     10
   }

@@ -308,7 +308,7 @@ let name = "Alice"
 let items = [1, 2, 3]
 ```
 
-`let mut` creates a mutable binding. Mutable bindings can be reassigned. Note that `let` makes the _binding_ immutable, but it does not prevent mutation through a `Ref<T>` pointer to the value. See [`07-pointers.md`](07-pointers.md)
+`let mut` creates a mutable binding. Mutable bindings can be reassigned. A plain `let` also stops writes through pointers taken from it. See [`07-pointers.md`](07-pointers.md)
 
 ```rust
 let mut items = [1, 2, 3]
@@ -318,14 +318,9 @@ let mut count = 0
 count += 1
 ```
 
-A mutable binding must own its value. Initializing or reassigning one from an existing binding, field, or element whose type holds a `Slice` or `Map` (directly, or nested inside an `Array`, struct, tuple, or enum) would share the source's backing storage, so the compiler rejects it. Use `.clone()` for an independent copy, or `&` to share the value intentionally through a reference.
+Write permission lives in the type. `Slice<T>`, `Map<K, V>`, and `Ref<T>` are read-only, and `mut Slice<T>`, `mut Map<K, V>`, and `mut Ref<T>` allow writes.
 
-```rust
-let a = [1, 2, 3]
-let mut b = a          // error: mutating `b` would implicitly mutate `a`
-let mut c = a.clone()  // independent copy
-let r = &a             // shared intentionally
-```
+New values come with write permission, and the binding keeps or drops it: `let mut` keeps it, bare `let` drops it. Everything derived from a read-only value is read-only too, and `.clone()` is the way back to independent writable storage.
 
 `const` defines a compile-time constant. As in Go, only primitive values are allowed: `bool`, `int`, `float`, `string`. The initializer must be a literal or an expression built from literals. `const` bindings are immutable and unaddressable.
 

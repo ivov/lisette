@@ -3,9 +3,6 @@ use syntax::ast::{Expression, Span, StructFields};
 use syntax::program::{CallKind, Definition, DefinitionBody, NativeTypeKind};
 use syntax::types::{FunctionParameter, Symbol, Type, peel_to_range_type};
 
-use super::super::carry_mut::can_carry_mutation_across_fn_boundary;
-use super::calls::callee_label;
-use super::primitives::contains_deref;
 use crate::checker::infer::InferCtx;
 use syntax::program::AliasKind;
 
@@ -222,89 +219,78 @@ impl InferCtx<'_> {
         if !is_mutating {
             return;
         }
-        let Some(var_name) = receiver.get_var_name() else {
-            return;
-        };
-        if let Some(binding_id) = self.scopes.lookup_binding_id(&var_name) {
+        if let Some(var_name) = receiver.get_var_name()
+            && let Some(binding_id) = self.scopes.lookup_binding_id(&var_name)
+        {
             self.facts.mark_alias_mutated(binding_id);
         }
-        let is_deref = contains_deref(receiver);
-        let binding_is_ref = self
-            .scopes
-            .lookup_value(&var_name)
-            .map(|t| t.resolve_in(&self.env).is_ref())
-            .unwrap_or(false);
-        if !is_deref
-            && !binding_is_ref
-            && !self.scopes.lookup_mutable(&var_name)
-            && self.imports.namespace(&var_name).is_none()
-        {
-            let binding_kind = self
-                .scopes
-                .lookup_binding_id(&var_name)
-                .and_then(|id| self.facts.bindings.get(&id))
-                .map(|b| b.kind);
-            let is_const = self.is_const_var(store, &var_name);
-            self.sink.push(diagnostics::infer::disallowed_mutation(
-                &var_name,
+        // The write goes through the receiver handle, so its type must be writable.
+        let governing = store.peel_alias(&receiver_ty);
+        if !governing.is_writable() && !governing.is_error() {
+            let receiver_place = super::aliasing::render_place(receiver);
+            self.sink.push(diagnostics::infer::write_through_read_only(
+                &receiver_place,
+                &receiver_place,
+                &governing.to_string(),
                 *span,
                 None,
-                binding_kind,
-                is_const,
             ));
         }
     }
 
-    pub(super) fn check_mut_param_arguments(
+    pub(super) fn check_aliased_writable_arguments(
         &mut self,
         args: &[Expression],
         parameters: &[FunctionParameter],
-        callee: &Expression,
+        variadic: Option<&FunctionParameter>,
+        writable_receiver: Option<String>,
     ) {
-        let callee_label = callee_label(callee);
+        let places: Vec<Option<String>> = args
+            .iter()
+            .map(|arg| super::aliasing::place_key(arg.unwrap_parens()))
+            .collect();
+
+        let writable_positions: Vec<bool> = (0..args.len())
+            .map(|i| {
+                parameters
+                    .get(i)
+                    .or(if i >= parameters.len() {
+                        variadic
+                    } else {
+                        None
+                    })
+                    .is_some_and(|param| {
+                        self.store
+                            .parameter_grants_write(&param.ty.resolve_in(&self.env))
+                    })
+            })
+            .collect();
+
         for (i, arg) in args.iter().enumerate() {
-            let Some(param) = parameters.get(i) else {
+            let writable_position = writable_positions[i];
+            let Some(place) = places[i].as_deref() else {
                 continue;
             };
-            if !param.mutable {
-                continue;
+            if writable_position
+                && let Some(binding_id) = arg
+                    .get_var_name()
+                    .and_then(|name| self.scopes.lookup_binding_id(&name))
+            {
+                self.facts.mark_alias_mutated(binding_id);
             }
-            self.check_arg_against_mut_param(arg, &param.ty, &callee_label);
-        }
-    }
-
-    pub(super) fn check_arg_against_mut_param(
-        &mut self,
-        arg: &Expression,
-        param_ty: &Type,
-        callee_label: &str,
-    ) {
-        let store = self.store;
-        if !can_carry_mutation_across_fn_boundary(param_ty, &self.env, store) {
-            return;
-        }
-        if let Some(source) = self.non_severing_clone_source(arg) {
-            self.sink
-                .push(diagnostics::infer::mut_arg_clone_does_not_sever(
-                    &source,
-                    callee_label,
-                    arg.get_span(),
-                ));
-            return;
-        }
-        let Some(var_name) = arg.get_var_name() else {
-            return;
-        };
-        if !self.scopes.lookup_mutable(&var_name) {
-            self.sink
-                .push(diagnostics::infer::immutable_argument_to_mut_param(
-                    &var_name,
-                    callee_label,
-                    arg.get_span(),
-                ));
-        }
-        if let Some(binding_id) = self.scopes.lookup_binding_id(&var_name) {
-            self.facts.mark_alias_mutated(binding_id);
+            let aliases_receiver = writable_receiver.as_deref() == Some(place);
+            let aliases_argument = writable_position
+                && places
+                    .iter()
+                    .enumerate()
+                    .any(|(j, other)| j != i && other.as_deref() == Some(place));
+            if aliases_receiver || aliases_argument {
+                self.sink
+                    .push(diagnostics::infer::aliased_writable_argument(
+                        place,
+                        arg.get_span(),
+                    ));
+            }
         }
     }
 

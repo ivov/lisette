@@ -6,7 +6,7 @@ description: |
   
   fn main() {
     let mut m = Map.from([("k", Box { x: 0 })])
-    let r = &m
+    let mut r = &m
     let mut entry = r.*["k"]
     entry.x = 1
     r.*["k"] = entry

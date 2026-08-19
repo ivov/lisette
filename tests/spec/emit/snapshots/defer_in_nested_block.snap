@@ -2,7 +2,7 @@
 source: tests/spec/emit/concurrency.rs
 description: |
   
-  fn record(acc: Ref<int>, digit: int) {
+  fn record(acc: mut Ref<int>, digit: int) {
     acc.* = acc.* * 10 + digit
   }
   

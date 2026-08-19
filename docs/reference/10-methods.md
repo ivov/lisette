@@ -17,7 +17,7 @@ impl Rectangle {
     self.width * self.height
   }
 
-  fn scale(self: Ref<Rectangle>, factor: float64) {
+  fn scale(self: mut Ref<Rectangle>, factor: float64) {
     self.width *= factor
     self.height *= factor
   }
@@ -49,11 +49,11 @@ impl Rectangle {
 }
 ```
 
-A reference receiver receives a reference (pointer) and can mutate:
+A reference receiver receives a reference (pointer), and a `mut Ref` receiver can mutate:
 
 ```rust
 impl Rectangle {
-  fn scale(self: Ref<Rectangle>, factor: float64) {
+  fn scale(self: mut Ref<Rectangle>, factor: float64) {
     self.width *= factor
     self.height *= factor
   }

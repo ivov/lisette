@@ -263,7 +263,7 @@ fn go_struct_autofill_writes_omitted_named_map_field() {
     let input = r#"
 import "go:net/url"
 
-struct Wrapper { values: url.Values }
+struct Wrapper { values: mut url.Values }
 
 fn test() -> string {
   let mut w = Wrapper { .. }

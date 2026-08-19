@@ -204,7 +204,7 @@ fn takes_ref(r: Ref<int>) -> int {
   r.*
 }
 
-fn mutates_ref(r: Ref<int>) {
+fn mutates_ref(r: mut Ref<int>) {
   r.* = 99
 }
 

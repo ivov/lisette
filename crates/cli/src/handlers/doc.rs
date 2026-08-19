@@ -2029,7 +2029,7 @@ mod tests {
             .find(|m| m.name == "delete")
             .expect("`Map` documents `delete`");
 
-        assert_eq!(delete.signature, "fn delete(self, key: K)");
+        assert_eq!(delete.signature, "fn delete(self: mut Map<K, V>, key: K)");
     }
 
     #[test]

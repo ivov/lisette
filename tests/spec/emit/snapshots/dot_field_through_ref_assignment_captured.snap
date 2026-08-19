@@ -3,10 +3,10 @@ source: tests/spec/emit/expressions.rs
 description: |
   
   struct P { x: int }
-  struct H { ptr: Ref<P> }
+  struct H { ptr: mut Ref<P> }
   
   impl H {
-    fn repoint(self: Ref<H>, q: Ref<P>) -> int {
+    fn repoint(self: mut Ref<H>, q: mut Ref<P>) -> int {
       self.ptr = q
       9
     }

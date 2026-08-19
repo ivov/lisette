@@ -8,7 +8,7 @@ description: |
     fn get(self) -> int { self.n }
   }
   
-  fn bump_and_get(c: Ref<Counter>) -> int {
+  fn bump_and_get(c: mut Ref<Counter>) -> int {
     c.*.n = c.*.n + 1
     c.*.n
   }

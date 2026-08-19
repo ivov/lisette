@@ -9,7 +9,7 @@ import "go:io"
 struct Doubler {}
 
 impl Doubler {
-  fn Read(self, mut p: Slice<uint8>) -> Partial<int, error> {
+  fn Read(self, p: mut Slice<uint8>) -> Partial<int, error> {
     Partial.Ok(0)
   }
 }
@@ -101,7 +101,7 @@ import "go:io"
 struct Doubler {}
 
 impl Doubler {
-  fn Read(self, mut p: Slice<uint8>) -> Partial<int, error> {
+  fn Read(self, p: mut Slice<uint8>) -> Partial<int, error> {
     Partial.Ok(0)
   }
 }
@@ -133,7 +133,7 @@ import "go:io"
 struct Doubler {}
 
 impl Doubler {
-  fn Read(self, mut p: Slice<uint8>) -> Partial<int, error> {
+  fn Read(self, p: mut Slice<uint8>) -> Partial<int, error> {
     Partial.Ok(0)
   }
 }
@@ -160,7 +160,7 @@ import "go:io"
 struct Doubler {}
 
 impl Doubler {
-  fn Read(self, mut p: Slice<uint8>) -> Partial<int, error> {
+  fn Read(self, p: mut Slice<uint8>) -> Partial<int, error> {
     Partial.Ok(0)
   }
 }
@@ -187,7 +187,7 @@ import "go:io"
 struct Doubler {}
 
 impl Doubler {
-  fn Read(self, mut p: Slice<uint8>) -> Partial<int, error> {
+  fn Read(self, p: mut Slice<uint8>) -> Partial<int, error> {
     Partial.Ok(0)
   }
 }
@@ -210,7 +210,7 @@ import "go:io"
 struct Doubler {}
 
 impl Doubler {
-  fn Read(self, mut p: Slice<uint8>) -> Partial<int, error> {
+  fn Read(self, p: mut Slice<uint8>) -> Partial<int, error> {
     Partial.Ok(0)
   }
 }
@@ -239,7 +239,7 @@ import "go:io"
 struct Doubler {}
 
 impl Doubler {
-  fn Read(self, mut p: Slice<uint8>) -> Partial<int, error> {
+  fn Read(self, p: mut Slice<uint8>) -> Partial<int, error> {
     Partial.Ok(0)
   }
 }
@@ -266,13 +266,13 @@ struct A {}
 struct B {}
 
 impl A {
-  fn Read(self, mut p: Slice<uint8>) -> Partial<int, error> {
+  fn Read(self, p: mut Slice<uint8>) -> Partial<int, error> {
     Partial.Ok(0)
   }
 }
 
 impl B {
-  fn Read(self, mut p: Slice<uint8>) -> Partial<int, error> {
+  fn Read(self, p: mut Slice<uint8>) -> Partial<int, error> {
     Partial.Ok(0)
   }
 }
@@ -300,13 +300,13 @@ struct A {}
 struct B {}
 
 impl A {
-  fn Read(self, mut p: Slice<uint8>) -> Partial<int, error> {
+  fn Read(self, p: mut Slice<uint8>) -> Partial<int, error> {
     Partial.Ok(0)
   }
 }
 
 impl B {
-  fn Read(self, mut p: Slice<uint8>) -> Partial<int, error> {
+  fn Read(self, p: mut Slice<uint8>) -> Partial<int, error> {
     Partial.Ok(0)
   }
 }
@@ -333,7 +333,7 @@ import "go:example.com/rw"
 struct Dev {}
 
 impl Dev {
-  fn Read(self, mut p: Slice<uint8>) -> Partial<int, error> {
+  fn Read(self, p: mut Slice<uint8>) -> Partial<int, error> {
     Partial.Ok(0)
   }
   fn Write(self, p: Slice<uint8>) -> Partial<int, error> {
@@ -352,7 +352,7 @@ fn main() {
 "#;
     let typedef = r#"
 pub interface Reader {
-  fn Read(mut p: Slice<uint8>) -> Partial<int, error>
+  fn Read(p: mut Slice<uint8>) -> Partial<int, error>
 }
 
 pub interface Writer {

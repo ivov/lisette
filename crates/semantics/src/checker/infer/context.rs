@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 use syntax::ast::{BindingId, Span};
 use syntax::types::Type;
 
@@ -89,6 +89,12 @@ struct TraversalContext {
     loops: LoopFrames,
     in_negation: bool,
     in_invariant_position: bool,
+    /// Below a writable layer and in nominal arguments, stores flow back at the actual type.
+    qualifier_invariant: bool,
+    /// In parameter position an implementation may demand less permission.
+    flipped_qualifier_variance: bool,
+    /// A writable receiver's place key, for the enclosing call's aliased-argument check.
+    pending_writable_receiver: Option<String>,
     use_context: UseContext,
     dot_access_base: bool,
     in_pattern: bool,
@@ -96,11 +102,17 @@ struct TraversalContext {
     expectation: Option<Expectation>,
 }
 
+pub(super) enum ValueSource {
+    Place(String),
+    Call(String),
+}
+
 #[derive(Debug, Clone)]
 pub(super) struct Expectation {
     pub(super) role: ExpectationRole,
     pub(super) span: Span,
     pub(super) expected_ty: Type,
+    pub(super) value_context: Option<diagnostics::infer::WriteContext>,
 }
 
 #[derive(Debug, Clone)]
@@ -217,6 +229,15 @@ pub struct InferCtx<'a> {
     pub(super) reported_immutable: FxHashSet<BindingId>,
     /// Identifier-pattern lets, the only bindings where inserting `mut` is valid.
     pub(super) plain_lets: FxHashSet<BindingId>,
+    /// Plain lets whose initializer was writable, where inserting `mut` restores the write.
+    pub(super) demoted_writable_lets: FxHashSet<BindingId>,
+    /// Plain loop bindings over writable elements, where `for mut` restores the write.
+    pub(super) demoted_writable_loops: FxHashSet<BindingId>,
+    /// Loop element bindings, each with its collection's name: writes to the
+    /// binding itself stay on the loop copy.
+    pub(super) loop_element_bindings: FxHashMap<BindingId, Option<String>>,
+    pub(super) reported_read_only_writes: FxHashSet<(BindingId, String)>,
+    pub(super) value_sources: FxHashMap<BindingId, ValueSource>,
     traversal: TraversalContext,
 }
 
@@ -229,6 +250,11 @@ impl<'a> InferCtx<'a> {
             satisfying_stack: FxHashSet::default(),
             reported_immutable: FxHashSet::default(),
             plain_lets: FxHashSet::default(),
+            demoted_writable_lets: FxHashSet::default(),
+            demoted_writable_loops: FxHashSet::default(),
+            loop_element_bindings: FxHashMap::default(),
+            reported_read_only_writes: FxHashSet::default(),
+            value_sources: FxHashMap::default(),
             traversal: TraversalContext::default(),
         }
     }
@@ -392,6 +418,17 @@ impl<'a> InferCtx<'a> {
         }
     }
 
+    /// Runs `f` and discards every unification and diagnostic it produced.
+    pub(crate) fn probe<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        let diagnostics_before = self.sink.checkpoint();
+        let speculation = self.env.begin_speculation();
+        let value = f(self);
+        self.env
+            .end_speculation(speculation, SpeculationOutcome::Rollback);
+        self.sink.rollback(diagnostics_before);
+        value
+    }
+
     pub(crate) fn without_diagnostics<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
         let diagnostics_before = self.sink.checkpoint();
         let result = f(self);
@@ -430,6 +467,42 @@ impl<'a> InferCtx<'a> {
         let previous = mem::replace(&mut self.traversal.in_invariant_position, true);
         let result = f(self);
         self.traversal.in_invariant_position = previous;
+        result
+    }
+
+    pub(super) fn is_qualifier_invariant(&self) -> bool {
+        self.traversal.qualifier_invariant
+    }
+
+    pub(super) fn in_qualifier_invariant<T>(
+        &mut self,
+        invariant: bool,
+        f: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        let entered = self.traversal.qualifier_invariant || invariant;
+        let previous = mem::replace(&mut self.traversal.qualifier_invariant, entered);
+        let result = f(self);
+        self.traversal.qualifier_invariant = previous;
+        result
+    }
+
+    pub(super) fn is_qualifier_variance_flipped(&self) -> bool {
+        self.traversal.flipped_qualifier_variance
+    }
+
+    pub(super) fn stash_writable_receiver(&mut self, place: String) {
+        self.traversal.pending_writable_receiver = Some(place);
+    }
+
+    pub(super) fn take_writable_receiver(&mut self) -> Option<String> {
+        self.traversal.pending_writable_receiver.take()
+    }
+
+    pub(super) fn in_flipped_qualifier_variance<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        let previous = self.traversal.flipped_qualifier_variance;
+        self.traversal.flipped_qualifier_variance = !previous;
+        let result = f(self);
+        self.traversal.flipped_qualifier_variance = previous;
         result
     }
 

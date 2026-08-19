@@ -1,206 +1,4 @@
-use syntax::ast::{Expression, IdentifierResolution, Literal, Span, UnaryOperator};
-use syntax::program::{CallKind, DefinitionBody};
-use syntax::types::Type;
-
-use crate::checker::EnvResolve;
-use crate::checker::infer::InferCtx;
-use crate::checker::infer::addressability::check_is_non_addressable;
-use crate::checker::infer::carry_mut::{
-    can_carry_mutation_across_fn_boundary, clone_recipe_is_known, clone_severs_alias,
-};
-
-struct AliasFinding {
-    source: String,
-    span: Span,
-    kind: AliasKind,
-    addressable: bool,
-}
-
-enum AliasKind {
-    Direct { clone_severs: bool },
-    NonSeveringClone,
-}
-
-impl InferCtx<'_> {
-    /// Reject a mutable binding that would share the backing store of a live one.
-    pub(super) fn check_mut_binding_alias(&mut self, binding_name: &str, value: &Expression) {
-        let Some(finding) = self.find_alias(value, true) else {
-            return;
-        };
-        self.push_binding_alias(binding_name, finding);
-    }
-
-    pub(super) fn check_mut_reassignment_alias(&mut self, binding_name: &str, value: &Expression) {
-        let Some(finding) = self.find_alias(value, false) else {
-            return;
-        };
-        self.push_binding_alias(binding_name, finding);
-    }
-
-    fn push_binding_alias(&mut self, binding_name: &str, finding: AliasFinding) {
-        let diagnostic = match finding.kind {
-            AliasKind::NonSeveringClone => diagnostics::infer::mut_binding_clone_does_not_sever(
-                binding_name,
-                &finding.source,
-                finding.addressable,
-                finding.span,
-            ),
-            AliasKind::Direct { clone_severs } => diagnostics::infer::mut_binding_aliases(
-                binding_name,
-                &finding.source,
-                finding.addressable,
-                clone_severs,
-                finding.span,
-            ),
-        };
-        self.sink.push(diagnostic);
-    }
-
-    fn find_alias(&self, value: &Expression, through_constructions: bool) -> Option<AliasFinding> {
-        let expr = value.unwrap_parens();
-
-        if let Some(receiver) = clone_call_receiver(expr) {
-            return self.alias_leaf(receiver.unwrap_parens(), true, expr.get_span());
-        }
-
-        match expr {
-            Expression::Identifier { .. }
-            | Expression::DotAccess { .. }
-            | Expression::IndexedAccess { .. }
-            | Expression::Unary {
-                operator: UnaryOperator::Deref,
-                ..
-            } => return self.alias_leaf(expr, false, expr.get_span()),
-            _ => {}
-        }
-
-        if !through_constructions
-            || !can_carry_mutation_across_fn_boundary(&expr.get_type(), &self.env, self.store)
-        {
-            return None;
-        }
-
-        match expr {
-            Expression::Block { items, .. } => self.find_alias(items.last()?, true),
-            Expression::If {
-                consequence,
-                alternative,
-                ..
-            } => self.find_alias(consequence, true).or_else(|| {
-                alternative
-                    .as_deref()
-                    .and_then(|alternative| self.find_alias(alternative, true))
-            }),
-            Expression::Tuple { elements, .. } => {
-                elements.iter().find_map(|e| self.find_alias(e, true))
-            }
-            Expression::StructCall {
-                field_assignments,
-                ty,
-                ..
-            } if self.is_struct_backed(ty) => field_assignments
-                .iter()
-                .find_map(|f| self.find_alias(&f.value, true)),
-            Expression::Literal {
-                literal: Literal::Slice(elements),
-                ..
-            } => elements.iter().find_map(|e| self.find_alias(e, true)),
-            Expression::Call {
-                args,
-                call_kind: CallKind::TupleStructConstructor,
-                ..
-            } => args.iter().find_map(|a| self.find_alias(a, true)),
-            _ => None,
-        }
-    }
-
-    fn is_struct_backed(&self, ty: &Type) -> bool {
-        let Type::Nominal { id, .. } = self.store.peel_alias(&ty.resolve_in(&self.env)) else {
-            return false;
-        };
-        matches!(
-            self.store.get_definition(id.as_str()).map(|d| &d.body),
-            Some(DefinitionBody::Struct { .. })
-        )
-    }
-
-    fn alias_leaf(&self, place: &Expression, via_clone: bool, span: Span) -> Option<AliasFinding> {
-        let Expression::Identifier {
-            value,
-            resolution: IdentifierResolution::Binding(root_id),
-            ..
-        } = place_root(place)?
-        else {
-            return None;
-        };
-        if self.scopes.lookup_binding_id(value) != Some(*root_id) {
-            return None;
-        }
-        let ty = place.get_type();
-        if !can_carry_mutation_across_fn_boundary(&ty, &self.env, self.store) {
-            return None;
-        }
-        if via_clone && !clone_recipe_is_known(&ty, &self.env, self.store) {
-            return None;
-        }
-        let clone_severs = clone_severs_alias(&ty, &self.env, self.store);
-        let kind = if via_clone {
-            if clone_severs {
-                return None;
-            }
-            AliasKind::NonSeveringClone
-        } else {
-            AliasKind::Direct { clone_severs }
-        };
-        Some(AliasFinding {
-            source: render_place(place),
-            span,
-            kind,
-            addressable: check_is_non_addressable(place, &self.env, self.store).is_none(),
-        })
-    }
-
-    pub(super) fn non_severing_clone_source(&self, value: &Expression) -> Option<String> {
-        let expr = value.unwrap_parens();
-        let receiver = clone_call_receiver(expr)?;
-        let finding = self.alias_leaf(receiver.unwrap_parens(), true, expr.get_span())?;
-        Some(finding.source)
-    }
-}
-
-/// The receiver of a `clone()` call written as `x.clone()`, `Type.clone(x)`,
-/// or `Slice.clone(x)`. `None` for a free function named `clone` (UFCS).
-pub(super) fn clone_call_receiver(expression: &Expression) -> Option<&Expression> {
-    let Expression::Call {
-        expression: callee,
-        args,
-        call_kind,
-        ..
-    } = expression
-    else {
-        return None;
-    };
-    match callee.unwrap_parens() {
-        Expression::DotAccess {
-            expression, member, ..
-        } if member == "clone" && args.is_empty() && !matches!(call_kind, CallKind::UfcsMethod) => {
-            Some(expression)
-        }
-        Expression::Identifier { .. }
-            if args.len() == 1
-                && matches!(
-                    call_kind,
-                    CallKind::NativeMethodIdentifier(_) | CallKind::ReceiverMethodUfcs { .. }
-                )
-                && callee
-                    .get_var_name()
-                    .is_some_and(|name| name.ends_with(".clone")) =>
-        {
-            args.first()
-        }
-        _ => None,
-    }
-}
+use syntax::ast::{Expression, Literal, UnaryOperator};
 
 fn place_root(expression: &Expression) -> Option<&Expression> {
     match expression {
@@ -225,9 +23,87 @@ pub(super) fn place_root_name(expression: &Expression) -> Option<String> {
     place_root(expression)?.get_var_name()
 }
 
+/// Identifies which storage a place names, piece by piece. `None` when any
+/// piece cannot be pinned down, so unknown places never compare equal.
+pub(super) fn place_key(expression: &Expression) -> Option<String> {
+    match expression {
+        Expression::Identifier { .. } => expression.get_var_name(),
+        Expression::DotAccess {
+            expression: inner,
+            member,
+            ..
+        } => Some(format!("{}.{member}", place_key(inner.unwrap_parens())?)),
+        Expression::IndexedAccess {
+            expression: inner,
+            index,
+            ..
+        } => {
+            let index = index_key(index.unwrap_parens())?;
+            Some(format!("{}[{index}]", place_key(inner.unwrap_parens())?))
+        }
+        Expression::Unary {
+            operator: UnaryOperator::Deref,
+            expression: inner,
+            ..
+        } => Some(format!("{}.*", place_key(inner.unwrap_parens())?)),
+        _ => None,
+    }
+}
+
+/// Identifies an index expression, `None` when its value cannot be pinned
+/// down, so `rows[i + 1]` twice is one place while `rows[i + 1]` and
+/// `rows[j + 1]` are not compared.
+fn index_key(expression: &Expression) -> Option<String> {
+    let expression = expression.unwrap_parens();
+    match expression {
+        Expression::Identifier { .. } => expression.get_var_name(),
+        Expression::Literal { .. } => render_scalar(expression),
+        // A selector, nested index, or deref compares by structural identity.
+        Expression::DotAccess { .. }
+        | Expression::IndexedAccess { .. }
+        | Expression::Unary {
+            operator: UnaryOperator::Deref,
+            ..
+        } => place_key(expression),
+        Expression::Range {
+            start,
+            end,
+            inclusive,
+            ..
+        } => {
+            let endpoint = |e: &Option<Box<Expression>>| match e {
+                None => Some(String::new()),
+                Some(e) => index_key(e),
+            };
+            Some(format!(
+                "({}{}{})",
+                endpoint(start)?,
+                if *inclusive { "..=" } else { ".." },
+                endpoint(end)?
+            ))
+        }
+        Expression::Binary {
+            operator,
+            left,
+            right,
+            ..
+        } => Some(format!(
+            "({}{operator:?}{})",
+            index_key(left)?,
+            index_key(right)?
+        )),
+        Expression::Unary {
+            operator,
+            expression: inner,
+            ..
+        } => Some(format!("({operator:?}{})", index_key(inner)?)),
+        _ => None,
+    }
+}
+
 /// Reconstructed source text for a place expression. Indexes that are not
 /// literals or identifiers render as `..` placeholders.
-fn render_place(expression: &Expression) -> String {
+pub(super) fn render_place(expression: &Expression) -> String {
     match expression {
         Expression::Identifier { .. } => expression.get_var_name().unwrap_or_default(),
         Expression::DotAccess {
@@ -249,6 +125,9 @@ fn render_place(expression: &Expression) -> String {
             expression: inner,
             ..
         } => format!("{}.*", render_place(inner.unwrap_parens())),
+        Expression::Call { expression, .. } => {
+            format!("{}()", render_place(expression.unwrap_parens()))
+        }
         _ => String::new(),
     }
 }

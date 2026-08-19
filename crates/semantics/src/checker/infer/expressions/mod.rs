@@ -15,6 +15,7 @@ mod loops;
 mod method_access;
 pub mod operators;
 pub mod patterns;
+pub mod permission;
 pub mod primitives;
 pub mod propagate;
 mod qualified_path;

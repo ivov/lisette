@@ -2,11 +2,11 @@
 source: tests/spec/emit/expressions.rs
 description: |
   
-  struct Outer { items: Ref<Slice<int>> }
+  struct Outer { items: mut Ref<Slice<int>> }
   
   fn main() {
     let mut items = [1]
-    let mut m = Map.new<string, Outer>()
+    let mut m = Map.new<string, mut Outer>()
     m["a"] = Outer { items: &items }
     let Some(o) = m.get("a") else { return; };
     o.items.* = o.items.*.append(2)

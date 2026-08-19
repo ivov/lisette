@@ -396,7 +396,7 @@ fn numeric_int_literal_adapts_through_multi_hop_numeric_alias() {
     fn main() {
       let _x: A = 1;
       let _y: Option<A> = Some(2);
-      let mut m: Map<A, string> = Map.new();
+      let mut m: mut Map<A, string> = Map.new();
       m[3] = "v";
     }
         "#,
@@ -487,7 +487,7 @@ fn numeric_int_literal_adapts_through_user_alias() {
     fn main() {
       let a: MyInt = 1;
       let b: Option<MyInt> = Some(2);
-      let mut m: Map<MyInt, string> = Map.new();
+      let mut m: mut Map<MyInt, string> = Map.new();
       m[3] = "v";
     }
         "#,
@@ -513,7 +513,7 @@ fn numeric_int_literal_adapts_as_map_key() {
     infer(
         r#"
     fn main() {
-      let mut m: Map<int32, string> = Map.new();
+      let mut m: mut Map<int32, string> = Map.new();
       m[5] = "v";
     }
         "#,
@@ -1864,7 +1864,7 @@ fn unknown_in_let_mut_map_allowed() {
     infer(
         r#"
     fn main() {
-      let mut m: Map<string, Unknown> = Map.new();
+      let mut m: mut Map<string, Unknown> = Map.new();
       m["k"] = "alice";
       m["n"] = 42;
     }

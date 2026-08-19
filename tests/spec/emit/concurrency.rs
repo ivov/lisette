@@ -349,7 +349,7 @@ fn test() -> int {
 #[test]
 fn defer_in_nested_block() {
     let input = r#"
-fn record(acc: Ref<int>, digit: int) {
+fn record(acc: mut Ref<int>, digit: int) {
   acc.* = acc.* * 10 + digit
 }
 
@@ -1303,7 +1303,7 @@ fn run() {
 #[test]
 fn defer_native_method_iife_snapshots_deref_receiver() {
     let input = r#"
-fn run(out: Ref<Slice<int>>) {
+fn run(out: mut Ref<mut Slice<int>>) {
   defer out.copy_from([1, 2, 3])
   out.* = [7, 7, 7, 7, 7]
 }

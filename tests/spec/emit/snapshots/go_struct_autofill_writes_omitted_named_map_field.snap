@@ -4,7 +4,7 @@ description: |
   
   import "go:net/url"
   
-  struct Wrapper { values: url.Values }
+  struct Wrapper { values: mut url.Values }
   
   fn test() -> string {
     let mut w = Wrapper { .. }

@@ -105,7 +105,11 @@ impl InferCtx<'_> {
                     .get_type_params()
                     .and_then(|params| params.first().cloned())
                     .unwrap_or_else(|| self.new_type_var());
-                let result_ty = self.type_slice(element_ty);
+                let result_ty = Type::qualified_compound(
+                    CompoundKind::Slice,
+                    vec![element_ty],
+                    resolved_collection_ty.is_writable(),
+                );
                 self.unify(expected_ty, &result_ty, &span);
 
                 return Expression::IndexedAccess {
@@ -325,7 +329,11 @@ impl InferCtx<'_> {
             _ => unreachable!("infer_slice_range_access called with non-range expression"),
         };
 
-        let result_ty = self.type_slice(element_ty);
+        let result_ty = Type::qualified_compound(
+            CompoundKind::Slice,
+            vec![element_ty],
+            resolved_collection_ty.is_writable(),
+        );
 
         self.unify(expected_ty, &result_ty, &span);
 

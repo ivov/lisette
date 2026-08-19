@@ -16,7 +16,6 @@ mod types;
 mod values;
 
 use attributes::*;
-use convert::bridge_parameter_permission;
 use metadata::{
     declaration_value_position_types, enum_variant_constructor_type, function_signature_pairs,
     has_recursive_instantiation, wrap_with_impl_generics,

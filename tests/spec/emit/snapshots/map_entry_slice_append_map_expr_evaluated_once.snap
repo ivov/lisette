@@ -6,7 +6,7 @@ description: |
     items: Slice<int>,
   }
   
-  fn get_map(m: Map<string, Box>) -> Map<string, Box> {
+  fn get_map(m: mut Map<string, Box>) -> mut Map<string, Box> {
     m
   }
   

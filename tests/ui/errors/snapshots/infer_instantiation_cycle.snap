@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  2 │ fn depth<T>(x: T, n: int) -> int {
  3 │   if n > 0 { depth([x], n - 1) } else { 0 }
    ·              ────────┬────────
-   ·                      ╰── `T` becomes `Slice<T>` in this recursive call
+   ·                      ╰── `T` becomes `mut Slice<T>` in this recursive call
  4 │ }
    ╰────
   help: Each recursive call would need a new version of `depth` at a larger type, so compilation would never finish. Keep type arguments fixed across recursive calls · code: [infer.instantiation_cycle]

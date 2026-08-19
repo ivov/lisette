@@ -169,13 +169,59 @@ impl InferCtx<'_> {
             new_else
         });
 
-        let inferred_pattern =
-            self.infer_pattern(binding.pattern, ty.clone(), BindingKind::Let { mutable });
+        // Destructured components keep their own permission, `mut` is not
+        // spellable on a pattern.
+        let mut demoted_from_writable = false;
+        let binding_ty = if mutable || has_annotation || !binding.pattern.is_identifier() {
+            ty.clone()
+        } else {
+            let resolved = ty.resolve_in(&self.env);
+            demoted_from_writable = self.store.peel_alias(&resolved).is_writable();
+            self.store.demoted_at_binding(&resolved)
+        };
+
+        if mutable
+            && binding_ty.resolve_in(&self.env).is_writable()
+            && let Some(root) = super::aliasing::place_root_name(new_value.unwrap_parens())
+            && let Some(binding_id) = self.scopes.lookup_binding_id(&root)
+        {
+            self.facts.mark_alias_mutated(binding_id);
+        }
+
+        let is_plain_identifier = binding.pattern.is_identifier();
+        if !is_plain_identifier {
+            self.mark_scrutinee_grant(&new_value, &binding_ty.resolve_in(&self.env));
+        }
+        let inferred_pattern = self.infer_pattern(
+            binding.pattern,
+            binding_ty.clone(),
+            BindingKind::Let { mutable },
+        );
+
+        if is_plain_identifier
+            && let Some(name) = inferred_pattern.get_identifier()
+            && let Some(binding_id) = self.scopes.lookup_binding_id(&name)
+            && let Some(source) = self.value_source(new_value.unwrap_parens(), &name)
+        {
+            self.value_sources.insert(binding_id, source);
+        }
+
+        if !mutable
+            && is_plain_identifier
+            && !is_assert
+            && let Some(name) = inferred_pattern.get_identifier()
+            && let Some(binding_id) = self.scopes.lookup_binding_id(&name)
+        {
+            self.plain_lets.insert(binding_id);
+            if demoted_from_writable {
+                self.demoted_writable_lets.insert(binding_id);
+            }
+        }
 
         let new_binding = Binding {
             pattern: inferred_pattern,
             annotation: binding.annotation,
-            ty: ty.clone(),
+            ty: binding_ty,
             mut_span,
         };
 
@@ -208,13 +254,6 @@ impl InferCtx<'_> {
             self.sink.push(diagnostics::infer::disallowed_mut_use(
                 mut_span.unwrap_or(span),
             ));
-        }
-
-        if mutable
-            && new_binding.pattern.is_identifier()
-            && let Some(ref name) = binding_name
-        {
-            self.check_mut_binding_alias(name, &new_value);
         }
 
         // Reject enum type bindings: `let c = utils.Color`

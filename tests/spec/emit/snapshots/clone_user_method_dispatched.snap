@@ -2,10 +2,10 @@
 source: tests/spec/emit/types.rs
 description: |
   
-  struct Doc { tags: Slice<string> }
+  struct Doc { tags: mut Slice<string> }
   
   impl Doc {
-    fn clone(self) -> Doc {
+    fn clone(self) -> mut Doc {
       Doc { tags: self.tags.clone() }
     }
   }

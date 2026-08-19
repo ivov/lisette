@@ -1,12 +1,12 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Immutable variable
+  ✕ Missing write permission
    ╭─[test.lis:3:3]
  2 │ fn test(scores: Map<string, int>) {
  3 │   scores.delete("a")
-   ·   ─────────┬────────
-   ·            ╰── `scores` was declared without `mut`
+   ·   ──────┬──────
+   ·         ╰── expected `mut Map<string, int>`, found `Map<string, int>`
  4 │ }
    ╰────
-  help: Declare the parameter with `mut` to mutate it · code: [infer.immutable]
+  help: `mut Map<string, int>` permits writes, `Map<string, int>` does not. Make the value writable where it is created, or pass a `.clone()` · code: [infer.needs_writable]

@@ -5,7 +5,7 @@ description: |
   import "go:strings"
   
   fn main() {
-    let reader = strings.NewReader("hello world")
+    let mut reader = strings.NewReader("hello world")
     let mut buffer = Slice.make<byte>(8)
     let n = reader.Read(buffer).unwrap_or(0)
     if n != 8 {

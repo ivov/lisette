@@ -1,12 +1,12 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Cannot make a mutable binding to `a`
+  ✕ Missing write permission
    ╭─[test.lis:4:7]
  3 │   let mut b = [0]
  4 │   b = a
    ·       ┬
-   ·       ╰── would be mutated implicitly
+   ·       ╰── expected `mut Slice<int>`, found `Slice<int>`
  5 │   b = b.append(1)
    ╰────
-  help: Mutating `b` would implicitly mutate `a`. Either use `a.clone()` to make a copy or `&a` to take a reference · code: [infer.mut_binding_aliases]
+  help: `mut Slice<int>` permits writes, `Slice<int>` does not. Make the value writable where it is created, or pass a `.clone()` · code: [infer.needs_writable]

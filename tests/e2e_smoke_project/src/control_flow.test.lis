@@ -267,21 +267,21 @@ fn defer_lifo_order() {
   assert acc == 321
 }
 
-fn record(acc: Ref<int>, val: int) {
+fn record(acc: mut Ref<int>, val: int) {
   acc.* = acc.* * 10 + val
 }
 
-fn defer_helper_normal(acc: Ref<int>) {
+fn defer_helper_normal(acc: mut Ref<int>) {
   defer record(acc, 1)
   record(acc, 2)
 }
 
-fn defer_helper_early_return(acc: Ref<int>) -> Result<int, string> {
+fn defer_helper_early_return(acc: mut Ref<int>) -> Result<int, string> {
   defer record(acc, 1)
   Err("fail")
 }
 
-fn defer_helper_lifo(acc: Ref<int>) {
+fn defer_helper_lifo(acc: mut Ref<int>) {
   defer record(acc, 1)
   defer record(acc, 2)
   defer record(acc, 3)

@@ -3,9 +3,9 @@ source: tests/spec/emit/expressions.rs
 description: |
   
   fn main() {
-    let xs = [10, 20]
+    let mut xs = [10, 20]
     let mut i = 0
-    let make = || -> Slice<int> { i += 1; xs }
+    let make = || -> mut Slice<int> { i += 1; xs }
     make()[i] = 99
     let _ = xs
   }

@@ -2,7 +2,7 @@
 source: tests/spec/emit/prelude.rs
 description: |
   
-  fn test(mut m: Map<string, int>, key: string) {
+  fn test(m: mut Map<string, int>, key: string) {
     m.delete(key)
   }
 ---

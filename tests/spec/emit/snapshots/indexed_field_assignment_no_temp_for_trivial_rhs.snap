@@ -5,12 +5,12 @@ description: |
   struct Pos { x: int, y: int }
   
   struct Snake {
-    parts: Slice<Pos>,
+    parts: mut Slice<Pos>,
     head:  int
   }
   
   impl Snake {
-    fn set_head(self: Ref<Snake>, x: int, y: int) {
+    fn set_head(self: mut Ref<Snake>, x: int, y: int) {
       self.parts[self.head].x = x
       self.parts[self.head].y = y
     }

@@ -392,13 +392,13 @@ fn main() {
 fn mut_param_no_unnecessary_mut_warning() {
     assert_no_lint_warnings!(
         r#"
-fn process(mut items: Slice<int>) -> Slice<int> {
+fn process(items: mut Slice<int>) -> Slice<int> {
   items = items.append(42);
   items
 }
 
 fn main() {
-  let mut x = [3, 1, 2];
+  let x = [3, 1, 2];
   let _ = process(x)
 }
 "#
@@ -431,7 +431,7 @@ struct Counter {
 }
 
 impl Counter {
-  fn increment(self: Ref<Counter>) {
+  fn increment(self: mut Ref<Counter>) {
     self.value += 1;
   }
 
@@ -16799,7 +16799,7 @@ fn waitgroup_add_in_task() {
 import "go:sync"
 
 fn main() {
-  let mut wg = sync.WaitGroup {}
+  let wg = sync.WaitGroup {}
   task {
     wg.Add(1)
     wg.Done()
@@ -16817,7 +16817,7 @@ fn waitgroup_add_before_task_no_warning() {
 import "go:sync"
 
 fn main() {
-  let mut wg = sync.WaitGroup {}
+  let wg = sync.WaitGroup {}
   wg.Add(1)
   task {
     wg.Done()
@@ -16835,7 +16835,7 @@ fn waitgroup_add_in_task_not_waited_no_warning() {
 import "go:sync"
 
 fn main() {
-  let mut wg = sync.WaitGroup {}
+  let wg = sync.WaitGroup {}
   task {
     wg.Add(1)
     wg.Done()
@@ -16852,7 +16852,7 @@ fn waitgroup_negative_add_in_task_no_warning() {
 import "go:sync"
 
 fn main() {
-  let mut wg = sync.WaitGroup {}
+  let wg = sync.WaitGroup {}
   wg.Add(1)
   task {
     wg.Add(-1)
@@ -16870,8 +16870,8 @@ fn waitgroup_distinct_groups_no_warning() {
 import "go:sync"
 
 fn main() {
-  let mut wg1 = sync.WaitGroup {}
-  let mut wg2 = sync.WaitGroup {}
+  let wg1 = sync.WaitGroup {}
+  let wg2 = sync.WaitGroup {}
   task {
     wg1.Add(1)
   }
@@ -16888,7 +16888,7 @@ fn waitgroup_add_in_task_covered_by_prior_add_no_warning() {
 import "go:sync"
 
 fn main() {
-  let mut wg = sync.WaitGroup {}
+  let wg = sync.WaitGroup {}
   wg.Add(1)
   task {
     defer wg.Done()
@@ -16907,7 +16907,7 @@ fn waitgroup_add_in_nested_task_covered_by_prior_add_no_warning() {
 import "go:sync"
 
 fn main() {
-  let mut wg = sync.WaitGroup {}
+  let wg = sync.WaitGroup {}
   wg.Add(1)
   task {
     defer wg.Done()
@@ -17934,12 +17934,12 @@ fn main() {
 fn unnecessary_range_loop_alias_passed_to_call_no_warning() {
     assert_no_lint_warnings!(
         r#"
-fn touch(mut s: Slice<int>) {
+fn touch(s: mut Slice<int>) {
   s[0] = 99
 }
 
 fn main() {
-  let xs = [1, 2, 3]
+  let mut xs = [1, 2, 3]
   let mut ys = xs
   for i in 0..xs.length() {
     touch(ys)
@@ -17955,18 +17955,18 @@ fn unnecessary_range_loop_wrapper_passed_to_call_no_warning() {
     assert_no_lint_warnings!(
         r#"
 struct Box {
-  items: Slice<int>,
+  items: mut Slice<int>,
 }
 
-fn touch(mut b: Box) {
+fn touch(b: mut Ref<Box>) {
   b.items[0] = 99
 }
 
 fn main() {
-  let xs = [1, 2, 3]
+  let mut xs = [1, 2, 3]
   let mut b = Box { items: xs }
   for i in 0..xs.length() {
-    touch(b)
+    touch(&b)
     let _ = xs[i]
   }
 }
@@ -18266,12 +18266,12 @@ fn main() {
 fn redundant_closure_mut_param_callee_no_warning() {
     assert_no_lint_warnings!(
         r#"
-fn dec(mut x: int) -> int { x -= 1; x }
-fn apply(f: fn(int) -> int, n: int) -> int { f(n) }
+fn fill(xs: mut Slice<int>) -> int { xs[0] = 1; xs[0] }
+fn apply(f: fn(Slice<int>) -> int, xs: Slice<int>) -> int { f(xs) }
 
 fn main() {
-  let n = 5
-  let _ = apply(|x| dec(x), n)
+  let data = [5]
+  let _ = apply(|xs| fill(xs.clone()), data)
 }
 "#
     );
@@ -18378,7 +18378,7 @@ import "go:net/url"
 type MyURL = url.URL
 
 fn main() {
-  let mut u: MyURL = url.URL { Scheme: "https", Host: "example.com", .. }
+  let u: MyURL = url.URL { Scheme: "https", Host: "example.com", .. }
   u.Query().Set("b", "2")
 }
 "#
@@ -19707,7 +19707,7 @@ fn main() {
 fn manual_extend_parameter_accumulator_no_warning() {
     assert_no_lint_warnings!(
         r#"
-fn extend(mut out: Slice<int>, b: Slice<int>) -> Slice<int> {
+fn extend(out: mut Slice<int>, b: Slice<int>) -> Slice<int> {
   for x in b {
     out = out.append(x)
   }
@@ -21349,7 +21349,9 @@ fn main() {
 fn almost_swapped_mutable_params() {
     assert_lint_snapshot!(
         r#"
-fn swap(mut a: int, mut b: int) -> int {
+fn swap(first: int, second: int) -> int {
+  let mut a = first
+  let mut b = second
   a = b
   b = a
   a + b

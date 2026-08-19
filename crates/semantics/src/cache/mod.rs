@@ -778,14 +778,11 @@ mod tests {
     #[test]
     fn test_type_roundtrip_bincode() {
         let ty = Type::function(
-            vec![FunctionParameter::new(
-                Type::Nominal {
-                    id: Symbol::from_raw("int"),
-                    params: vec![],
-                    writable: false,
-                },
-                false,
-            )],
+            vec![FunctionParameter::new(Type::Nominal {
+                id: Symbol::from_raw("int"),
+                params: vec![],
+                writable: false,
+            })],
             vec![],
             Box::new(Type::Nominal {
                 id: Symbol::from_raw("main.MyType"),

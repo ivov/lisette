@@ -52,10 +52,7 @@ fn register_test_builtins(store: &mut Store) {
             Definition {
                 visibility: Visibility::Public,
                 ty: Type::function(
-                    params
-                        .into_iter()
-                        .map(|ty| FunctionParameter::new(ty, false))
-                        .collect(),
+                    params.into_iter().map(FunctionParameter::new).collect(),
                     vec![],
                     Box::new(return_type),
                 ),

@@ -7,14 +7,14 @@ description: |
   struct Inner { x: int }
   struct Wrap(Inner)
   
-  fn get() -> Ref<Wrap> {
+  fn get() -> mut Ref<Wrap> {
     let _ = fmt.Println("get")
     let mut w = Wrap(Inner { x: 1 })
     &w
   }
   
   fn main() {
-    let r = get()
+    let mut r = get()
     let mut inner = r.0
     inner.x = 2
     r.* = Wrap(inner)

@@ -1,5 +1,6 @@
 use ecow::EcoString;
 
+use super::error::ParseFix;
 use super::strings::cook_string_contents;
 use super::{MAX_TUPLE_ARITY, ParamMode, ParseError, Parser};
 use crate::ast::{
@@ -668,7 +669,8 @@ impl<'source> Parser<'source> {
             }
         }
 
-        let mut_span = self.parse_mut_span();
+        let marker_span = self.parse_mut_span();
+        let mut_span = None;
 
         let pattern = self.parse_pattern();
 
@@ -677,6 +679,7 @@ impl<'source> Parser<'source> {
             && identifier == "self"
             && self.is_not(Colon)
         {
+            self.reject_parameter_marker(marker_span, None);
             return Binding {
                 pattern,
                 annotation: None,
@@ -686,6 +689,7 @@ impl<'source> Parser<'source> {
         }
 
         if mode == ParamMode::TestFunction && self.is_not(Colon) {
+            self.reject_parameter_marker(marker_span, None);
             return Binding {
                 pattern,
                 annotation: None,
@@ -695,6 +699,7 @@ impl<'source> Parser<'source> {
         }
 
         if !self.ensure_in_place(Colon) && !self.can_recover_annotation() {
+            self.reject_parameter_marker(marker_span, None);
             return Binding {
                 pattern,
                 annotation: None,
@@ -704,12 +709,49 @@ impl<'source> Parser<'source> {
         }
 
         let annotation = self.parse_annotation();
+        self.reject_parameter_marker(marker_span, Some(&annotation));
 
         Binding {
             pattern,
             annotation: Some(annotation),
             ty: Type::uninferred(),
             mut_span,
+        }
+    }
+
+    fn reject_parameter_marker(
+        &mut self,
+        marker_span: Option<Span>,
+        annotation: Option<&Annotation>,
+    ) {
+        let Some(span) = marker_span else { return };
+        let mut error = ParseError::new("Syntax error", span, "`mut` goes on the parameter's type")
+            .with_parse_code("syntax_error")
+            .with_help(
+                "Place the permission right before the type, as in `items: mut Slice<int>`, \
+                 or rebind with `let mut` inside the body for a local copy.",
+            );
+        if let Some(Annotation::Constructor {
+            name,
+            span: type_span,
+            writable: false,
+            ..
+        }) = annotation
+            && matches!(name.as_str(), "Slice" | "Map" | "Ref")
+        {
+            error = error.with_fix(ParseFix {
+                message: "Move `mut` into the type".to_string(),
+                edits: vec![
+                    (span, string::String::new()),
+                    (
+                        Span::new(self.file_id, type_span.byte_offset, 0),
+                        "mut ".to_string(),
+                    ),
+                ],
+            });
+        }
+        if !self.too_many_errors() {
+            self.errors.push(error);
         }
     }
 

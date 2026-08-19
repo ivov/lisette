@@ -1,12 +1,12 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Cannot make a mutable binding to `d1`
-   ╭─[test.lis:5:16]
- 4 │ fn test(d1: Doc) {
+  ✕ Cannot write to `d2.tags[0]`
+   ╭─[test.lis:6:3]
  5 │   let mut d2 = d1
-   ·                ─┬
-   ·                 ╰── would be mutated implicitly
  6 │   d2.tags[0] = "y"
+   ·   ────────┬───────
+   ·           ╰── `d2.tags` is read-only
+ 7 │ }
    ╰────
-  help: Mutating `d2` would implicitly mutate `d1`. Either use `&d1` to take a reference or construct a new value to mutate independently · code: [infer.mut_binding_aliases]
+  help: Declare the field `tags` as `mut Slice<string>` · code: [infer.write_through_read_only]

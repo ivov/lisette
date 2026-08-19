@@ -2,7 +2,7 @@
 source: tests/spec/emit/expressions.rs
 description: |
   
-  fn track(flag: Ref<bool>) -> Result<int, error> {
+  fn track(flag: mut Ref<bool>) -> Result<int, error> {
     flag.* = true
     Ok(1)
   }

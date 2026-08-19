@@ -10,6 +10,178 @@ use semantics::CompilePhase;
 use semantics::store::ENTRY_PACKAGE_ID;
 
 #[test]
+fn unnecessary_mut_holds_while_permission_errors_stand() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+
+fn zero(items: Slice<int>) {
+    items[0] = 0
+}
+
+fn main() {
+    let mut xs = [1, 2]
+    zero(xs)
+    fmt.Println(xs)
+}
+"#,
+    );
+    let analysis = compile_check(fs);
+    assert!(
+        analysis
+            .diagnostics()
+            .iter()
+            .any(|d| d.code_str() == Some("infer.write_through_read_only")),
+        "the permission error must stand"
+    );
+    assert!(
+        analysis
+            .diagnostics()
+            .iter()
+            .all(|d| d.code_str() != Some("lint.unnecessary_mut")),
+        "unnecessary_mut must hold while permission errors stand"
+    );
+}
+
+#[test]
+fn unnecessary_mut_silent_on_indirect_writable_consumption() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+
+type Items = mut Slice<int>
+type Factory = fn() -> mut Slice<int>
+
+struct Buf {
+    xs: Items,
+}
+
+impl Buf {
+    fn set_first(self: mut Buf) {
+        self.xs[0] = 9
+    }
+}
+
+struct FactoryBox {
+    get: Factory,
+}
+
+enum Load {
+    Data(Items),
+    Empty,
+}
+
+struct W(Items)
+
+fn make() -> mut Slice<int> {
+    [1, 2]
+}
+
+fn main() {
+    let mut b = Buf { xs: [1, 2] }
+    b.set_first()
+    fmt.Println(b.xs)
+
+    let mut fb = FactoryBox { get: make }
+    let mut fresh = fb.get()
+    fresh[0] = 9
+    fmt.Println(fresh)
+
+    let mut load = Load.Data([1, 2])
+    if let Load.Data(xs) = load {
+        xs[0] = 9
+    }
+
+    let mut w = W([1, 2])
+    let W(inner) = w
+    inner[0] = 9
+    fmt.Println(inner)
+}
+"#,
+    );
+    let analysis = compile_check(fs);
+    assert!(
+        analysis
+            .diagnostics()
+            .iter()
+            .all(|d| !d.code_str().is_some_and(|c| c.starts_with("infer."))),
+        "every binding's mut is load-bearing, the program must check clean"
+    );
+    assert!(
+        analysis
+            .diagnostics()
+            .iter()
+            .all(|d| d.code_str() != Some("lint.unnecessary_mut")),
+        "receiver, field, scrutinee, and destructure consumption must count as mutable use"
+    );
+}
+
+#[test]
+fn unnecessary_mut_silent_on_for_mut_element_write() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+
+fn main() {
+    let mut rows = [[1, 2], [3, 4]]
+    for mut r in rows {
+        r[0] = 9
+    }
+    fmt.Println(rows)
+}
+"#,
+    );
+    let analysis = compile_check(fs);
+    assert!(
+        analysis
+            .diagnostics()
+            .iter()
+            .all(|d| d.code_str() != Some("lint.unnecessary_mut")),
+        "a `for mut` element write must count as mutable use of the collection"
+    );
+}
+
+#[test]
+fn unnecessary_mut_still_fires_on_read_only_use() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+
+struct Point {
+    x: int,
+}
+
+fn main() {
+    let mut a = [1, 2]
+    fmt.Println(a)
+
+    let mut p = Point { x: 1 }
+    fmt.Println(p.x)
+}
+"#,
+    );
+    let analysis = compile_check(fs);
+    let warnings = analysis
+        .diagnostics()
+        .iter()
+        .filter(|d| d.code_str() == Some("lint.unnecessary_mut"))
+        .count();
+    assert_eq!(warnings, 2, "read-only bindings must still warn");
+}
+
+#[test]
 fn cross_package_generic_constructor_type_args() {
     let mut fs = MockFileSystem::new();
 
@@ -401,7 +573,7 @@ import "go:container/list"
 import "go:fmt"
 
 fn main() {
-  let l = list.New()
+  let mut l = list.New()
   let _ = l.PushBack(42)
   let front = l.Front()
   fmt.Print(front.is_some())
@@ -425,7 +597,7 @@ import "go:strings"
 import "go:fmt"
 
 fn main() {
-  let reader = bufio.NewReader(strings.NewReader("hello\nworld"))
+  let mut reader = bufio.NewReader(strings.NewReader("hello\nworld"))
   let b = reader.ReadByte()
   match b {
     Ok(c) => fmt.Print(c),
@@ -1751,7 +1923,7 @@ import "go:runtime/debug"
 import "go:fmt"
 
 fn main() {
-  let replacement = debug.Module {
+  let mut replacement = debug.Module {
     Path: "example.com/replacement",
     Version: "v2.0.0",
     Sum: "",
@@ -3310,8 +3482,8 @@ fn main() {
         result
             .errors()
             .iter()
-            .any(|e| e.code_str() == Some("infer.immutable_arg_to_mut_param")),
-        "Expected immutable_arg_to_mut_param error, got: {:?}",
+            .any(|e| e.code_str() == Some("infer.immutable")),
+        "Expected immutable error, got: {:?}",
         result.errors()
     );
 }
@@ -3336,8 +3508,8 @@ fn main() {
         result
             .errors()
             .iter()
-            .any(|e| e.code_str() == Some("infer.immutable_arg_to_mut_param")),
-        "Expected immutable_arg_to_mut_param error, got: {:?}",
+            .any(|e| e.code_str() == Some("infer.immutable")),
+        "Expected immutable error, got: {:?}",
         result.errors()
     );
 }
@@ -3395,7 +3567,7 @@ fn go_mut_param_selective_only_dst() {
 import "go:encoding/hex"
 
 fn main() {
-  let mut dst: Slice<uint8> = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+  let mut dst: mut Slice<uint8> = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
   let src: Slice<uint8> = [0xDE, 0xAD];
   let _ = hex.Encode(dst, src)
 }
@@ -3428,8 +3600,8 @@ fn main() {
         result
             .errors()
             .iter()
-            .any(|e| e.code_str() == Some("infer.type_mismatch")),
-        "Expected type_mismatch error, got: {:?}",
+            .any(|e| e.code_str() == Some("infer.needs_writable")),
+        "Expected needs_writable error, got: {:?}",
         result.errors()
     );
 }
@@ -3867,7 +4039,7 @@ import "go:fmt"
 
 fn main() {
   let xs: Slice<Option<int32>> = [Some(1), None, Some(3)]
-  let mut counts: Map<int32, string> = Map.new()
+  let mut counts: mut Map<int32, string> = Map.new()
   counts[7] = "seven"
   fmt.Println(xs, counts[7])
 }
@@ -4020,7 +4192,7 @@ pub struct Counter {
 }
 
 impl Counter {
-  pub fn increment(self: Ref<Counter>) {
+  pub fn increment(self: mut Ref<Counter>) {
     self.count = self.count + 1
   }
 }
@@ -5899,7 +6071,7 @@ import "go:io"
 struct Reader {}
 
 impl Reader {
-  fn Read(self, mut _buf: Slice<uint8>) -> Partial<int, error> {
+  fn Read(self, _buf: mut Slice<uint8>) -> Partial<int, error> {
     Partial.Both(0, io.EOF)
   }
 }
@@ -5967,7 +6139,7 @@ import "go:io"
 struct Dev {}
 
 impl Dev {
-  fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> {
+  fn Read(self, _p: mut Slice<uint8>) -> Partial<int, error> {
     Partial.Ok(0)
   }
   fn Write(self, _p: Slice<uint8>) -> Partial<int, error> {
@@ -6003,13 +6175,13 @@ struct Reader1 {}
 struct Reader2 {}
 
 impl Reader1 {
-  fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> {
+  fn Read(self, _p: mut Slice<uint8>) -> Partial<int, error> {
     Partial.Ok(0)
   }
 }
 
 impl Reader2 {
-  fn Read(self, mut _p: Slice<uint8>) -> Partial<int, error> {
+  fn Read(self, _p: mut Slice<uint8>) -> Partial<int, error> {
     Partial.Ok(1)
   }
 }
@@ -6044,7 +6216,7 @@ import "go:crypto/tls"
 struct MyCache {}
 
 impl MyCache {
-  fn Get(self, _key: string) -> Option<Ref<tls.ClientSessionState>> {
+  fn Get(self, _key: string) -> Option<mut Ref<tls.ClientSessionState>> {
     None
   }
   fn Put(self, _key: string, _cs: Ref<tls.ClientSessionState>) {}
@@ -6661,28 +6833,6 @@ fn go_import_under_project_package_resolves_by_package_not_version() {
 }
 
 #[test]
-fn write_only_mut_param_keeps_name_in_codegen_via_reassignment() {
-    let mut fs = MockFileSystem::new();
-
-    fs.add_file(
-        ENTRY_PACKAGE_ID,
-        "main.lis",
-        r#"
-fn reassign_only(mut items: Slice<int>) {
-  items = [99, 99, 99]
-}
-
-fn main() {
-  let mut data = [1, 2, 3]
-  reassign_only(data)
-}
-"#,
-    );
-
-    assert_build_snapshot!(fs, "github.com/user/myproject");
-}
-
-#[test]
 fn write_only_mut_local_emits_blank_identifier_to_avoid_unused_var_error() {
     let mut fs = MockFileSystem::new();
 
@@ -6708,7 +6858,7 @@ fn write_only_mut_param_keeps_name_in_codegen_via_index_write() {
         ENTRY_PACKAGE_ID,
         "main.lis",
         r#"
-fn index_write(mut items: Slice<int>) {
+fn index_write(items: mut Slice<int>) {
   items[0] = 99
 }
 
@@ -9408,7 +9558,7 @@ import "go:crypto/tls"
 struct MyCache {}
 
 impl MyCache {
-  pub fn get(self, _key: string) -> Option<Ref<tls.ClientSessionState>> {
+  pub fn get(self, _key: string) -> Option<mut Ref<tls.ClientSessionState>> {
     None
   }
   pub fn put(self, _key: string, _cs: Ref<tls.ClientSessionState>) {}
@@ -9468,7 +9618,7 @@ import "go:crypto/tls"
 enum CacheKind { Mem }
 
 impl CacheKind {
-  pub fn get(self, _key: string) -> Option<Ref<tls.ClientSessionState>> {
+  pub fn get(self, _key: string) -> Option<mut Ref<tls.ClientSessionState>> {
     None
   }
   pub fn put(self, _key: string, _cs: Ref<tls.ClientSessionState>) {}
@@ -9497,7 +9647,7 @@ import "go:crypto/tls"
 
 pub struct CacheBase {}
 impl CacheBase {
-  pub fn get(self, _key: string) -> Option<Ref<tls.ClientSessionState>> {
+  pub fn get(self, _key: string) -> Option<mut Ref<tls.ClientSessionState>> {
     None
   }
   pub fn put(self, _key: string, _cs: Ref<tls.ClientSessionState>) {}

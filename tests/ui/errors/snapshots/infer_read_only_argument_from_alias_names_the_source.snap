@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Missing write permission
+   ╭─[test.lis:7:16]
+ 6 │   let copy = source
+ 7 │   sort.Strings(copy)
+   ·                ──┬─
+   ·                  ╰── expected `mut Slice<string>`, found `Slice<string>`
+ 8 │ }
+   ╰────
+  help: `mut Slice<string>` permits writes, `Slice<string>` does not. `copy` shares storage with `source`, which is read-only. Make `source` writable, or pass a `.clone()` · code: [infer.needs_writable]

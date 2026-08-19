@@ -165,7 +165,15 @@ impl Definition {
         }
     }
 
-    pub fn instantiate_underlying(&self, params: &[Type], writable: bool) -> Option<Type> {
+    pub fn instantiate_underlying<'d, F>(
+        &self,
+        params: &[Type],
+        writable: bool,
+        lookup: &F,
+    ) -> Option<Type>
+    where
+        F: Fn(&str) -> Option<&'d Definition>,
+    {
         if let Some(target) = self.instantiate_alias_target(params, writable) {
             return Some(target);
         }
@@ -176,7 +184,7 @@ impl Definition {
             } if self.is_newtype() => Some(if writable {
                 fields[0].ty.clone()
             } else {
-                fields[0].ty.demoted()
+                types::demoted(&fields[0].ty, lookup)
             }),
             _ => None,
         }
@@ -201,7 +209,7 @@ impl Definition {
         let function = Type::function(
             fields
                 .iter()
-                .map(|field| FunctionParameter::new(field.ty.clone(), false))
+                .map(|field| FunctionParameter::new(field.ty.clone()))
                 .collect(),
             Default::default(),
             return_type.into(),
@@ -701,7 +709,7 @@ mod tests {
 
     fn method(vars: &[&str], receiver: Type) -> Type {
         let function = Type::function(
-            vec![FunctionParameter::new(receiver, false)],
+            vec![FunctionParameter::new(receiver)],
             Default::default(),
             Box::new(Type::unit()),
         );

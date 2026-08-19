@@ -4,7 +4,7 @@ description: |
   
   struct Item { x: int }
   
-  fn get() -> Ref<Item> { &Item { x: 0 } }
+  fn get() -> mut Ref<Item> { &Item { x: 0 } }
   
   fn main() {
     get().x = 1

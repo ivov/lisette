@@ -1531,7 +1531,7 @@ fn method_with_ref_receiver_can_mutate() {
     struct Point { x: int, y: int }
 
     impl Point {
-      fn set_x(self: Ref<Point>, x: int) {
+      fn set_x(self: mut Ref<Point>, x: int) {
         self.x = x;
       }
     }
@@ -2152,8 +2152,8 @@ fn main() {
 fn mut_param_allows_mutation() {
     infer(
         r#"
-fn sort(mut items: Slice<int>) {
-  items = [1, 2, 3]
+fn sort(items: mut Slice<int>) {
+  items[0] = 1
 }
 
 fn main() {
@@ -2166,11 +2166,23 @@ fn main() {
 }
 
 #[test]
+fn parameter_binding_cannot_be_reassigned() {
+    infer(
+        r#"
+fn sort(items: mut Slice<int>) {
+  items = [1, 2, 3]
+}
+"#,
+    )
+    .assert_infer_code("immutable");
+}
+
+#[test]
 fn mut_param_requires_mut_arg() {
     infer(
         r#"
-fn sort(mut items: Slice<int>) {
-  items = [1, 2, 3]
+fn sort(items: mut Slice<int>) {
+  items[0] = 1
 }
 
 fn main() {
@@ -2179,18 +2191,18 @@ fn main() {
 }
 "#,
     )
-    .assert_infer_code("immutable_arg_to_mut_param");
+    .assert_infer_code("immutable");
 }
 
 #[test]
 fn mut_param_propagation_through_wrapper() {
     infer(
         r#"
-fn sort(mut items: Slice<int>) {
-  items = [1, 2, 3]
+fn sort(items: mut Slice<int>) {
+  items[0] = 1
 }
 
-fn my_sort(mut items: Slice<int>) {
+fn my_sort(items: mut Slice<int>) {
   sort(items)
 }
 
@@ -2207,8 +2219,8 @@ fn main() {
 fn mut_param_propagation_missing_mut_on_wrapper() {
     infer(
         r#"
-fn sort(mut items: Slice<int>) {
-  items = [1, 2, 3]
+fn sort(items: mut Slice<int>) {
+  items[0] = 1
 }
 
 fn my_sort(items: Slice<int>) {
@@ -2216,7 +2228,7 @@ fn my_sort(items: Slice<int>) {
 }
 "#,
     )
-    .assert_infer_code("immutable_arg_to_mut_param");
+    .assert_infer_code("needs_writable");
 }
 
 #[test]
@@ -2225,8 +2237,8 @@ fn mut_param_non_severing_clone_arg_rejected() {
         r#"
 struct Doc { tags: Slice<string> }
 
-fn touch(mut docs: Slice<Doc>) {
-  docs[0] = Doc { tags: ["z"] }
+fn touch(docs: mut Slice<Doc>) {
+  docs[0].tags[0] = "z"
 }
 
 fn main() {
@@ -2236,14 +2248,14 @@ fn main() {
 }
 "#,
     )
-    .assert_infer_code("mut_arg_clone_does_not_sever");
+    .assert_infer_code("write_through_read_only");
 }
 
 #[test]
 fn mut_param_severing_clone_arg_accepted() {
     infer(
         r#"
-fn touch(mut m: Slice<Slice<int>>) {
+fn touch(m: mut Slice<mut Slice<int>>) {
   m[0][0] = 9
 }
 
@@ -2261,13 +2273,15 @@ fn main() {
 fn mut_param_user_clone_arg_accepted() {
     infer(
         r#"
-struct Box { items: Slice<int> }
+struct Box { items: mut Slice<int> }
 
 impl Box {
-  fn clone(self) -> Box { self }
+  fn clone(self) -> mut Box {
+    Box { items: self.items.clone() }
+  }
 }
 
-fn touch(mut b: Box) {
+fn touch(b: mut Box) {
   b.items[0] = 9
 }
 
@@ -2289,7 +2303,7 @@ fn make() -> Slice<Slice<int>> {
   [[1]]
 }
 
-fn touch(mut m: Slice<Slice<int>>) {
+fn touch(m: mut Slice<mut Slice<int>>) {
   m[0][0] = 9
 }
 
@@ -2302,140 +2316,12 @@ fn main() {
 }
 
 #[test]
-fn mut_int_param_does_not_require_mut_arg() {
-    infer(
-        r#"
-fn to_char(mut n: int) -> int {
-  n = n - 10
-  return n
-}
-
-fn main() {
-  let rnd = 42
-  let _ = to_char(rnd)
-}
-"#,
-    )
-    .assert_no_errors();
-}
-
-#[test]
-fn mut_string_param_does_not_require_mut_arg() {
-    infer(
-        r#"
-fn append_bang(mut s: string) -> string {
-  s = s + "!"
-  return s
-}
-
-fn main() {
-  let greeting = "hi"
-  let _ = append_bang(greeting)
-}
-"#,
-    )
-    .assert_no_errors();
-}
-
-#[test]
-fn mut_bool_param_does_not_require_mut_arg() {
-    infer(
-        r#"
-fn flip(mut b: bool) -> bool {
-  b = !b
-  return b
-}
-
-fn main() {
-  let flag = true
-  let _ = flip(flag)
-}
-"#,
-    )
-    .assert_no_errors();
-}
-
-#[test]
-fn mut_float_param_does_not_require_mut_arg() {
-    infer(
-        r#"
-fn bump(mut f: float64) -> float64 {
-  f = f + 1.0
-  return f
-}
-
-fn main() {
-  let v = 1.5
-  let _ = bump(v)
-}
-"#,
-    )
-    .assert_no_errors();
-}
-
-#[test]
-fn mut_byte_param_does_not_require_mut_arg() {
-    infer(
-        r#"
-fn inc(mut x: byte) -> byte {
-  x = x + 1
-  return x
-}
-
-fn main() {
-  let b: byte = 65
-  let _ = inc(b)
-}
-"#,
-    )
-    .assert_no_errors();
-}
-
-#[test]
-fn mut_value_struct_param_does_not_require_mut_arg() {
-    infer(
-        r#"
-struct Point { x: int, y: int }
-
-fn relocate(mut p: Point) -> Point {
-  p = Point { x: 0, y: 0 }
-  return p
-}
-
-fn main() {
-  let p = Point { x: 1, y: 2 }
-  let _ = relocate(p)
-}
-"#,
-    )
-    .assert_no_errors();
-}
-
-#[test]
-fn mut_value_tuple_param_does_not_require_mut_arg() {
-    infer(
-        r#"
-fn reset(mut t: (int, int)) -> (int, int) {
-  t = (0, 0)
-  return t
-}
-
-fn main() {
-  let t = (1, 2)
-  let _ = reset(t)
-}
-"#,
-    )
-    .assert_no_errors();
-}
-
-#[test]
 fn mut_struct_containing_slice_requires_mut_arg() {
     infer(
         r#"
-struct Box { items: Slice<int> }
+struct Box { items: mut Slice<int> }
 
-fn write_first(mut b: Box) {
+fn write_first(b: mut Box) {
   b.items[0] = 99
 }
 
@@ -2445,7 +2331,7 @@ fn main() {
 }
 "#,
     )
-    .assert_infer_code("immutable_arg_to_mut_param");
+    .assert_infer_code("immutable");
 }
 
 #[test]
@@ -2454,67 +2340,33 @@ fn mut_enum_variant_carrying_slice_requires_mut_arg() {
         r#"
 enum Payload { Items(Slice<int>), Empty }
 
-fn touch(mut p: Payload) {
-  let _ = p
+fn touch(items: mut Slice<int>) {
+  items[0] = 9
 }
 
 fn main() {
   let p = Payload.Items([1, 2, 3])
-  touch(p)
+  match p {
+    Payload.Items(items) => touch(items),
+    Payload.Empty => {}
+  }
 }
 "#,
     )
-    .assert_infer_code("immutable_arg_to_mut_param");
+    .assert_infer_code("needs_writable");
 }
 
 #[test]
-fn mut_ref_param_does_not_require_mut_arg() {
+fn mut_ref_param_accepts_ref_to_mut_binding() {
     infer(
         r#"
-fn bump(mut r: Ref<int>) {
+fn bump(r: mut Ref<int>) {
   r.* = r.* + 1
 }
 
 fn main() {
-  let x = 10
+  let mut x = 10
   bump(&x)
-}
-"#,
-    )
-    .assert_no_errors();
-}
-
-#[test]
-fn mut_channel_param_does_not_require_mut_arg() {
-    infer(
-        r#"
-fn send_one(mut ch: Channel<int>) {
-  ch.send(1)
-}
-
-fn main() {
-  let ch = Channel.new<int>()
-  send_one(ch)
-}
-"#,
-    )
-    .assert_no_errors();
-}
-
-#[test]
-fn mut_struct_with_only_ref_field_does_not_require_mut_arg() {
-    infer(
-        r#"
-struct Wrap { r: Ref<int> }
-
-fn touch(mut w: Wrap) {
-  let _ = w
-}
-
-fn main() {
-  let x = 10
-  let w = Wrap { r: &x }
-  touch(w)
 }
 "#,
     )
@@ -2527,118 +2379,25 @@ fn mut_generic_struct_with_slice_requires_mut_arg() {
         r#"
 struct Box<T> { item: T }
 
-fn write_first(mut b: Box<Slice<int>>) {
-  b.item[0] = 99
+fn write_first(items: mut Slice<int>) {
+  items[0] = 99
 }
 
 fn main() {
   let b: Box<Slice<int>> = Box { item: [1, 2, 3] }
-  write_first(b)
+  write_first(b.item)
 }
 "#,
     )
-    .assert_infer_code("immutable_arg_to_mut_param");
-}
-
-#[test]
-fn mut_generic_struct_with_int_does_not_require_mut_arg() {
-    infer(
-        r#"
-struct Box<T> { item: T }
-
-fn replace(mut b: Box<int>) {
-  b = Box { item: 0 }
-}
-
-fn main() {
-  let b: Box<int> = Box { item: 42 }
-  replace(b)
-}
-"#,
-    )
-    .assert_no_errors();
-}
-
-#[test]
-fn mut_int_param_unifies_with_plain_function_type() {
-    infer(
-        r#"
-fn bump(mut n: int) -> int {
-  n += 1
-  return n
-}
-
-fn apply(f: fn(int) -> int, v: int) -> int {
-  return f(v)
-}
-
-fn main() {
-  let _ = apply(bump, 1)
-}
-"#,
-    )
-    .assert_no_errors();
-}
-
-#[test]
-fn mut_value_struct_param_unifies_with_plain_function_type() {
-    infer(
-        r#"
-struct Point { x: int, y: int }
-
-fn relocate(mut p: Point) -> Point {
-  p = Point { x: 0, y: 0 }
-  return p
-}
-
-fn apply(f: fn(Point) -> Point, p: Point) -> Point {
-  return f(p)
-}
-
-fn main() {
-  let _ = apply(relocate, Point { x: 1, y: 2 })
-}
-"#,
-    )
-    .assert_no_errors();
-}
-
-#[test]
-fn mut_int_param_satisfies_plain_interface_method() {
-    infer(
-        r#"
-interface Counter {
-  fn bump(n: int) -> int
-}
-
-struct Impl { base: int }
-
-impl Impl {
-  fn bump(self: Ref<Impl>, mut n: int) -> int {
-    n += 1
-    return self.base + n
-  }
-}
-
-fn use_it(c: Counter) -> int {
-  return c.bump(1)
-}
-
-fn main() {
-  let it = Impl { base: 10 }
-  let _ = use_it(&it)
-}
-"#,
-    )
-    .assert_no_errors();
+    .assert_infer_code("needs_writable");
 }
 
 #[test]
 fn mut_slice_param_does_not_unify_with_plain_function_type() {
     infer(
         r#"
-fn advance(mut data: Slice<byte>) -> int {
-  data = data[1..]
+fn advance(data: mut Slice<byte>) -> int {
+  data[0] = 0
   return data.length()
 }
 
@@ -2652,16 +2411,16 @@ fn main() {
 }
 "#,
     )
-    .assert_infer_code("type_mismatch");
+    .assert_infer_code("needs_writable");
 }
 
 #[test]
 fn mut_struct_containing_slice_param_does_not_unify_with_plain_function_type() {
     infer(
         r#"
-struct Box { items: Slice<int> }
+struct Box { items: mut Slice<int> }
 
-fn write_first(mut b: Box) {
+fn write_first(b: mut Box) {
   b.items[0] = 99
 }
 
@@ -2675,7 +2434,7 @@ fn main() {
 }
 "#,
     )
-    .assert_infer_code("type_mismatch");
+    .assert_infer_code("needs_writable");
 }
 
 #[test]
@@ -2685,14 +2444,14 @@ fn mut_interface_param_does_not_unify_with_plain_function_type() {
 struct Counter { n: int }
 
 impl Counter {
-  fn bump(self: Ref<Counter>) { self.n += 1 }
+  fn bump(self: Ref<Counter>) { let _ = self.n }
 }
 
 interface Bumper {
   fn bump()
 }
 
-fn use_it(mut b: Bumper) {
+fn use_it(b: mut Bumper) {
   b.bump()
 }
 
@@ -2706,7 +2465,7 @@ fn main() {
 }
 "#,
     )
-    .assert_infer_code("type_mismatch");
+    .assert_infer_code("needs_writable");
 }
 
 #[test]
@@ -2720,8 +2479,8 @@ interface Sink {
 struct Impl { total: int }
 
 impl Impl {
-  fn write(self: Ref<Impl>, mut data: Slice<byte>) -> int {
-    data = data[1..]
+  fn write(self: Ref<Impl>, data: mut Slice<byte>) -> int {
+    data[0] = 0
     return self.total + data.length()
   }
 }
@@ -2918,10 +2677,22 @@ fn test(xs: VarArgs<int>) -> int {
 }
 
 #[test]
+fn varargs_param_cannot_be_written_through() {
+    infer(
+        r#"
+fn test(xs: VarArgs<int>) {
+  xs[0] = 9
+}
+"#,
+    )
+    .assert_infer_code("write_through_read_only");
+}
+
+#[test]
 fn mut_varargs_param_can_be_written_through() {
     infer(
         r#"
-fn overwrite(mut xs: VarArgs<int>) {
+fn overwrite(xs: mut VarArgs<int>) {
   xs[0] = 9
 }
 
@@ -2935,22 +2706,10 @@ fn main() {
 }
 
 #[test]
-fn varargs_param_without_mut_cannot_be_written_through() {
+fn individual_args_to_mut_varargs_need_no_writable_binding() {
     infer(
         r#"
-fn test(xs: VarArgs<int>) {
-  xs[0] = 9
-}
-"#,
-    )
-    .assert_infer_code("immutable");
-}
-
-#[test]
-fn individual_args_to_mut_varargs_need_no_mutable_binding() {
-    infer(
-        r#"
-fn overwrite(mut xs: VarArgs<int>) {
+fn overwrite(xs: mut VarArgs<int>) {
   xs[0] = 9
 }
 
@@ -2962,6 +2721,23 @@ fn main() {
 "#,
     )
     .assert_no_errors();
+}
+
+#[test]
+fn read_only_spread_to_mut_varargs_refused() {
+    infer(
+        r#"
+fn overwrite(xs: mut VarArgs<int>) {
+  xs[0] = 9
+}
+
+fn main() {
+  let a = [1, 2]
+  overwrite(a...)
+}
+"#,
+    )
+    .assert_infer_code("needs_writable");
 }
 
 #[test]

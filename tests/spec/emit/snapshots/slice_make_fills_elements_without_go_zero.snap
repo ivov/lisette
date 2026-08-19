@@ -3,7 +3,7 @@ source: tests/spec/emit/prelude.rs
 description: |
   
   fn main() {
-    let maps = Slice.make<Map<string, int>>(2)
+    let mut maps = Slice.make<mut Map<string, int>>(2)
     let mut first = maps.get(0).unwrap_or(Map.new<string, int>())
     first["k"] = 1
     let second = maps.get(1).unwrap_or(Map.new<string, int>())

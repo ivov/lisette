@@ -2,7 +2,7 @@
 
 Quick reference for Rust developers. For full details, see [`reference.md`](../reference/README.md)
 
-Lisette has no ownership, borrowing, or lifetimes, as memory is garbage-collected.
+Lisette is garbage-collected, so there is no ownership, no borrowing, and no lifetimes. From Rust's `&T` versus `&mut T` it keeps one idea: the type says whether you may write. Slices, maps, and refs are read-only by default, and `mut Slice<T>`, `mut Map<K, V>`, and `mut Ref<T>` grant writes. Unlike `&mut T`, a `mut` value is not exclusive: two writable handles to the same storage can coexist.
 
 Much of Lisette's syntax should feel familiar; the sections below cover where things diverge.
 

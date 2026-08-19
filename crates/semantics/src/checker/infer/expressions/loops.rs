@@ -138,18 +138,43 @@ impl InferCtx<'_> {
             self.unify(&element_ty, &annotated_ty, &span);
         }
 
+        let mutable = binding.mut_span.is_some();
+        let mut demoted_from_writable = false;
+        let binding_element_ty = if mutable {
+            element_ty.clone()
+        } else {
+            let resolved = element_ty.resolve_in(&self.env);
+            demoted_from_writable = self.store.peel_alias(&resolved).is_writable();
+            self.store.demoted_at_binding(&resolved)
+        };
+
+        if mutable && binding_element_ty.resolve_in(&self.env).is_writable() {
+            self.mark_place_root_mutated(&new_iterable);
+        }
+
         let (new_binding, new_body) = self.with_scope(|this| {
             let inferred_pattern = this.infer_pattern(
                 binding.pattern,
-                element_ty.clone(),
-                BindingKind::Let { mutable: false },
+                binding_element_ty.clone(),
+                BindingKind::Let { mutable },
             );
+
+            if let Some(name) = inferred_pattern.get_identifier()
+                && let Some(binding_id) = this.scopes.lookup_binding_id(&name)
+            {
+                if demoted_from_writable {
+                    this.demoted_writable_loops.insert(binding_id);
+                }
+                let collection = super::aliasing::place_root_name(new_iterable.unwrap_parens())
+                    .map(|root| root.to_string());
+                this.loop_element_bindings.insert(binding_id, collection);
+            }
 
             let new_binding = Binding {
                 pattern: inferred_pattern,
                 annotation: binding.annotation,
-                ty: element_ty.clone(),
-                mut_span: None,
+                ty: binding_element_ty.clone(),
+                mut_span: binding.mut_span,
             };
 
             let requires_tuple_destructuring =

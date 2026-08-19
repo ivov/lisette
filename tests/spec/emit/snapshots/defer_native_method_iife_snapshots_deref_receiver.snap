@@ -2,7 +2,7 @@
 source: tests/spec/emit/concurrency.rs
 description: |
   
-  fn run(out: Ref<Slice<int>>) {
+  fn run(out: mut Ref<mut Slice<int>>) {
     defer out.copy_from([1, 2, 3])
     out.* = [7, 7, 7, 7, 7]
   }

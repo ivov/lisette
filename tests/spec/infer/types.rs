@@ -1499,7 +1499,7 @@ fn field_assignment_through_deref_allowed() {
         r#"
     struct Point { x: int, y: int }
 
-    fn set_field(p: Ref<Point>) {
+    fn set_field(p: mut Ref<Point>) {
       p.*.x = p.*.x + 1
     }
         "#,
@@ -6098,7 +6098,7 @@ fn ref_method_on_immutable_binding_fails() {
     struct Counter { value: int }
 
     impl Counter {
-      fn increment(self: Ref<Counter>) { self.value = self.value + 1 }
+      fn increment(self: mut Ref<Counter>) { self.value = self.value + 1 }
     }
 
     fn main() {
@@ -6116,12 +6116,12 @@ fn ref_method_on_nested_field_through_ref_receiver() {
         r#"
     struct Counter { count: int }
     impl Counter {
-      fn increment(self: Ref<Counter>) { self.count = self.count + 1 }
+      fn increment(self: mut Ref<Counter>) { self.count = self.count + 1 }
     }
 
     struct Wrapper { inner: Counter }
     impl Wrapper {
-      fn increment_inner(self: Ref<Wrapper>) {
+      fn increment_inner(self: mut Ref<Wrapper>) {
         self.inner.increment()
       }
     }
@@ -6303,7 +6303,7 @@ fn pointer_receiver_through_value_bound_rejected() {
         r#"
 interface Bumper { fn bump() }
 struct Counter { n: int }
-impl Counter { fn bump(self: Ref<Counter>) { self.n += 1 } }
+impl Counter { fn bump(self: Ref<Counter>) { let _ = self.n } }
 fn use_bound<T: Bumper>(x: T) { x.bump() }
 fn main() { let c = Counter { n: 0 }; use_bound(c) }
 "#,
@@ -6317,7 +6317,7 @@ fn pointer_receiver_through_ref_bound_accepted() {
         r#"
 interface Bumper { fn bump() }
 struct Counter { n: int }
-impl Counter { fn bump(self: Ref<Counter>) { self.n += 1 } }
+impl Counter { fn bump(self: Ref<Counter>) { let _ = self.n } }
 fn use_bound<T: Bumper>(x: Ref<T>) { x.bump() }
 fn main() { let mut c = Counter { n: 0 }; use_bound(&c) }
 "#,
@@ -6331,7 +6331,7 @@ fn pointer_receiver_through_value_bound_function_value_rejected() {
         r#"
 interface Bumper { fn bump() }
 struct Counter { n: int }
-impl Counter { fn bump(self: Ref<Counter>) { self.n += 1 } }
+impl Counter { fn bump(self: Ref<Counter>) { let _ = self.n } }
 fn use_bound<T: Bumper>(x: T) { x.bump() }
 fn apply(f: fn(Counter)) { f(Counter { n: 0 }) }
 fn main() { apply(use_bound) }
@@ -6346,7 +6346,7 @@ fn pointer_receiver_through_ref_bound_function_value_accepted() {
         r#"
 interface Bumper { fn bump() }
 struct Counter { n: int }
-impl Counter { fn bump(self: Ref<Counter>) { self.n += 1 } }
+impl Counter { fn bump(self: Ref<Counter>) { let _ = self.n } }
 fn use_bound<T: Bumper>(x: Ref<T>) { x.bump() }
 fn apply(f: fn(Ref<Counter>)) { let mut c = Counter { n: 0 }; f(&c) }
 fn main() { apply(use_bound) }
@@ -6361,7 +6361,7 @@ fn pointer_receiver_through_mixed_value_and_ref_bound_rejected() {
         r#"
 interface Bumper { fn bump() }
 struct Counter { n: int }
-impl Counter { fn bump(self: Ref<Counter>) { self.n += 1 } }
+impl Counter { fn bump(self: Ref<Counter>) { let _ = self.n } }
 fn use_bound<T: Bumper>(x: T, y: Ref<T>) { x.bump(); y.bump() }
 fn main() {
   let c = Counter { n: 0 }
@@ -6379,7 +6379,7 @@ fn pointer_receiver_through_repeated_ref_bound_accepted() {
         r#"
 interface Bumper { fn bump() }
 struct Counter { n: int }
-impl Counter { fn bump(self: Ref<Counter>) { self.n += 1 } }
+impl Counter { fn bump(self: Ref<Counter>) { let _ = self.n } }
 fn use_bound<T: Bumper>(x: Ref<T>, y: Ref<T>) { x.bump(); y.bump() }
 fn main() {
   let mut c = Counter { n: 0 }

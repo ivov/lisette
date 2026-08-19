@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot write to `b.items[0]`
+    ╭─[test.lis:10:3]
+  9 │   let mut b = make()
+ 10 │   b.items[0] = 9
+    ·   ───────┬──────
+    ·          ╰── `b.items` is read-only
+ 11 │ }
+    ╰────
+  help: `items` is declared writable, but `b` is read-only, so its fields are too. `b` comes from `make()`, so declare that function's return type `mut` · code: [infer.write_through_read_only]

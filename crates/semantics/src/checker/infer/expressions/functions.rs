@@ -106,11 +106,7 @@ impl InferCtx<'_> {
                 new_params
                     .iter()
                     .map(|param| {
-                        FunctionParameter::named(
-                            param.ty.clone(),
-                            param.pattern.get_identifier(),
-                            param.is_mutable(),
-                        )
+                        FunctionParameter::named(param.ty.clone(), param.pattern.get_identifier())
                     })
                     .collect(),
                 bounds,
@@ -209,11 +205,7 @@ impl InferCtx<'_> {
                 new_params
                     .iter()
                     .map(|param| {
-                        FunctionParameter::named(
-                            param.ty.clone(),
-                            param.pattern.get_identifier(),
-                            param.is_mutable(),
-                        )
+                        FunctionParameter::named(param.ty.clone(), param.pattern.get_identifier())
                     })
                     .collect(),
                 vec![],
@@ -287,6 +279,7 @@ impl InferCtx<'_> {
                 },
                 span: tail.get_span(),
                 expected_ty: body_ty.clone(),
+                value_context: None,
             };
             return self.with_expectation(expectation, |s| s.infer_expression(*body, body_ty));
         }
@@ -347,21 +340,21 @@ impl InferCtx<'_> {
                         .unwrap_or_else(|| self.new_type_var())
                 });
 
-                let mutable = binding.is_mutable();
                 // A `...T` parameter is a `[]T` in the body, as in Go. `Binding.ty`
                 // stays `VarArgs<T>`: call-site arity and emit's parameter
                 // declaration read it, so matching the two would emit `[]T`.
                 let body_ty = match binding_ty.get_type_params() {
                     Some([element]) if binding_ty.is_native(CompoundKind::VarArgs) => {
-                        self.type_slice(element.clone())
+                        Type::qualified_compound(
+                            CompoundKind::Slice,
+                            vec![element.clone()],
+                            binding_ty.is_writable(),
+                        )
                     }
                     _ => binding_ty.clone(),
                 };
-                let new_pattern = self.infer_pattern(
-                    binding.pattern,
-                    body_ty,
-                    BindingKind::Parameter { mutable },
-                );
+                let new_pattern =
+                    self.infer_pattern(binding.pattern, body_ty, BindingKind::Parameter);
 
                 Binding {
                     pattern: new_pattern,

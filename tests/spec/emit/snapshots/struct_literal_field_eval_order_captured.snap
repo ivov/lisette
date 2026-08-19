@@ -4,7 +4,7 @@ description: |
   
   struct Pair { a: int, b: int }
   
-  fn bump(i: Ref<int>) -> int {
+  fn bump(i: mut Ref<int>) -> int {
     i.* = 1
     10
   }

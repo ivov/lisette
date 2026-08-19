@@ -3071,12 +3071,12 @@ struct Box {
 }
 
 impl Box {
-  fn mutate(self: Ref<Box>, val: string) {
+  fn mutate(self: mut Ref<Box>, val: string) {
     self.content = val
   }
 }
 
-fn apply_mutation<T: Mutable>(item: Ref<T>, val: string) {
+fn apply_mutation<T: Mutable>(item: mut Ref<T>, val: string) {
   item.mutate(val)
 }
 
@@ -3211,7 +3211,7 @@ struct UserId(int)
 
 fn main() {
   let mut id = UserId(1)
-  let r = &id
+  let mut r = &id
   r.* = UserId(2)
 }
 "#;
@@ -5239,7 +5239,7 @@ impl Person {
 }
 
 fn count<T: Named + Comparable>(x: T) -> int {
-  let mut m: Map<T, int> = Map.new()
+  let mut m: mut Map<T, int> = Map.new()
   m[x] = 1
   m.length()
 }
@@ -5286,7 +5286,7 @@ fn main() {
 fn ordered_bound_plus_map_key_use_stays_cmp_ordered() {
     let input = r#"
 fn count<T: Ordered>(x: T) -> int {
-  let mut m: Map<T, int> = Map.new()
+  let mut m: mut Map<T, int> = Map.new()
   m[x] = 1
   m.length()
 }
@@ -5464,7 +5464,7 @@ fn main() {
 fn clone_nested_slice_deep() {
     let input = r#"
 fn main() {
-  let a = [[1, 2], [3, 4]]
+  let mut a = [[1, 2], [3, 4]]
   let mut b = a.clone()
   b[0][0] = 9
   let _ = a
@@ -5505,10 +5505,10 @@ fn main() {
 #[test]
 fn clone_user_method_dispatched() {
     let input = r#"
-struct Doc { tags: Slice<string> }
+struct Doc { tags: mut Slice<string> }
 
 impl Doc {
-  fn clone(self) -> Doc {
+  fn clone(self) -> mut Doc {
     Doc { tags: self.tags.clone() }
   }
 }
@@ -5530,7 +5530,7 @@ fn clone_enumerated_slice() {
 fn main() {
   let s = [1, 2, 3]
   let e = s.enumerate()
-  let mut e2 = e.clone()
+  let mut e2: EnumeratedSlice<int> = e.clone()
   e2 = s.enumerate()
   let _ = e
   let _ = e2

@@ -2,7 +2,7 @@
 source: tests/spec/emit/arrays.rs
 description: |
   
-  fn bump(a: Ref<Array<int, 3>>) {
+  fn bump(a: mut Ref<Array<int, 3>>) {
     a.*[0] = 9
   }
 ---

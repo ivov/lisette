@@ -11,12 +11,12 @@ description: |
   }
   
   impl Box {
-    fn mutate(self: Ref<Box>, val: string) {
+    fn mutate(self: mut Ref<Box>, val: string) {
       self.content = val
     }
   }
   
-  fn apply_mutation<T: Mutable>(item: Ref<T>, val: string) {
+  fn apply_mutation<T: Mutable>(item: mut Ref<T>, val: string) {
     item.mutate(val)
   }
   

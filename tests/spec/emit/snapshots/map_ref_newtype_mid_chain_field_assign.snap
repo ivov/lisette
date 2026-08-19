@@ -4,11 +4,11 @@ description: |
   
   struct Inner { x: int }
   struct Wrap(Inner)
-  struct Outer { w: Ref<Wrap> }
+  struct Outer { w: mut Ref<Wrap> }
   
   fn main() {
     let mut w = Wrap(Inner { x: 0 })
-    let mut m = Map.new<string, Outer>()
+    let mut m = Map.new<string, mut Outer>()
     m["a"] = Outer { w: &w }
     let Some(o) = m.get("a") else { return; };
     let mut inner = o.w.0

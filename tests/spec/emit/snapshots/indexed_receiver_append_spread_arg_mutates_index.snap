@@ -2,7 +2,7 @@
 source: tests/spec/emit/expressions.rs
 description: |
   
-  fn bump_and_make(i: Ref<int>) -> Slice<int> {
+  fn bump_and_make(i: mut Ref<int>) -> Slice<int> {
     i.* = 1
     [99]
   }

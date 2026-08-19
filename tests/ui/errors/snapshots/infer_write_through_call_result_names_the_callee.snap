@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot write to `get()[0]`
+   ╭─[test.lis:7:3]
+ 6 │ fn main() {
+ 7 │   get()[0] = 9
+   ·   ──────┬─────
+   ·         ╰── `get()` is read-only
+ 8 │ }
+   ╰────
+  help: `get` returns `Slice<int>`. Declare its return type `mut Slice<int>`, or bind the result and write to a `.clone()` · code: [infer.write_through_read_only]

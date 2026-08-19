@@ -6,8 +6,8 @@ use crate::checker::infer::expressions::comparison::{
 use std::mem;
 use syntax::EcoString;
 use syntax::ast::Literal;
-use syntax::ast::{Annotation, Generic, Span};
-use syntax::program::DefinitionBody;
+use syntax::ast::{Annotation, Generic, Span, VariantFields};
+use syntax::program::{AliasKind, DefinitionBody};
 use syntax::types::{
     FunctionParameter, SimpleKind, Symbol, Type, build_named_substitution_map, substitute,
     unqualified_name,
@@ -213,13 +213,7 @@ impl TaskState {
                 };
 
                 Type::function(
-                    new_params
-                        .into_iter()
-                        .map(|ty| {
-                            let (ty, mutable) = bridge_parameter_permission(ty, false);
-                            FunctionParameter::new(ty, mutable)
-                        })
-                        .collect(),
+                    new_params.into_iter().map(FunctionParameter::new).collect(),
                     Default::default(),
                     new_return_type.into(),
                 )
@@ -300,11 +294,23 @@ impl TaskState {
                     annotation_span,
                 ));
             }
+            if writable {
+                self.sink.push(diagnostics::infer::mut_without_effect(
+                    type_name,
+                    annotation_span,
+                ));
+            }
             return Type::Parameter(type_name.into());
         }
 
         // `Array` carries a const-integer size, so it needs its own path.
         if type_name == "Array" {
+            if writable {
+                self.sink.push(diagnostics::infer::mut_without_effect(
+                    type_name,
+                    annotation_span,
+                ));
+            }
             return self.convert_array_annotation(store, params, annotation_span, span, mode);
         }
 
@@ -423,6 +429,14 @@ impl TaskState {
                 .and_then(|parameters| parameters.first())
         {
             self.check_map_key_comparable(store, key_ty, annotation_span);
+        }
+
+        if writable && !writable_qualifier_has_effect(store, &qualified_name, &resolved_ty) {
+            self.sink.push(diagnostics::infer::mut_without_effect(
+                type_name,
+                annotation_span,
+            ));
+            return resolved_ty.shallow_demoted();
         }
 
         resolved_ty
@@ -974,13 +988,51 @@ fn is_reserved_prelude_generic(name: &str) -> bool {
     matches!(name, "Option" | "Result" | "Partial")
 }
 
-/// A `mut` qualifier on a parameter's type reads as the parameter marker, so
-/// derived typedefs enforce under the current model. The write-permission
-/// type system replaces this bridge.
-pub(crate) fn bridge_parameter_permission(ty: Type, mutable: bool) -> (Type, bool) {
-    if ty.is_writable() {
-        (ty.shallow_demoted(), true)
-    } else {
-        (ty, mutable)
+/// Whether `mut` on this annotation can ever permit a write.
+fn writable_qualifier_has_effect(store: &Store, qualified_name: &str, resolved_ty: &Type) -> bool {
+    if !resolved_ty.is_writable() {
+        return false;
+    }
+    let Type::Nominal { .. } = resolved_ty else {
+        return true;
+    };
+    if resolved_ty.is_unknown() {
+        return true;
+    }
+    let package = qualified_name
+        .rsplit_once('.')
+        .map_or("", |(package, _)| package);
+    if store.go_package_names.contains_key(package) {
+        return true;
+    }
+    let Some(definition) = store.get_definition(qualified_name) else {
+        return true;
+    };
+    match &definition.body {
+        DefinitionBody::TypeAlias {
+            alias: AliasKind::Opaque(_),
+            ..
+        } => true,
+        DefinitionBody::TypeAlias { .. } => {
+            let underlying = store.peel_alias(resolved_ty);
+            match underlying.get_qualified_id() {
+                Some(underlying_name) if underlying_name != qualified_name => {
+                    writable_qualifier_has_effect(store, underlying_name, &underlying)
+                }
+                _ => underlying.is_writable(),
+            }
+        }
+        DefinitionBody::Struct { fields, .. } => fields
+            .as_slice()
+            .iter()
+            .any(|field| store.demotion_changes(&field.ty)),
+        DefinitionBody::Enum { variants, .. } => variants
+            .iter()
+            .flat_map(|variant| match &variant.fields {
+                VariantFields::Unit => [].as_slice(),
+                VariantFields::Tuple(fields) | VariantFields::Struct(fields) => fields,
+            })
+            .any(|field| store.demotion_changes(&field.ty)),
+        _ => true,
     }
 }

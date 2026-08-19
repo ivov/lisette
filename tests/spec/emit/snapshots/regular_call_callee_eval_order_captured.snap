@@ -5,7 +5,7 @@ description: |
   fn f0(x: int) -> int { x + 10 }
   fn f1(x: int) -> int { x + 20 }
   
-  fn bump(i: Ref<int>) -> int {
+  fn bump(i: mut Ref<int>) -> int {
     i.* = 1
     0
   }

@@ -365,10 +365,7 @@ impl TaskState {
         let function_params = param_types
             .into_iter()
             .zip(params)
-            .map(|(ty, binding)| {
-                let (ty, mutable) = bridge_parameter_permission(ty, binding.is_mutable());
-                FunctionParameter::named(ty, binding.pattern.get_identifier(), mutable)
-            })
+            .map(|(ty, binding)| FunctionParameter::named(ty, binding.pattern.get_identifier()))
             .collect();
 
         let base_fn_ty = Type::function(function_params, bounds, return_ty.into());

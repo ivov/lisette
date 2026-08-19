@@ -29,6 +29,7 @@ LexResult {
             ),
             note: None,
             code: "lex.unsupported_raw_format_string",
+            fix: None,
         },
     ],
     blank_lines: [],

@@ -226,7 +226,7 @@ impl ConstInitializer {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BindingKind {
     Let { mutable: bool },
-    Parameter { mutable: bool },
+    Parameter,
     MatchArm,
     IfLet,
     WhileLet,
@@ -234,14 +234,11 @@ pub enum BindingKind {
 
 impl BindingKind {
     pub fn is_mutable(&self) -> bool {
-        matches!(
-            self,
-            BindingKind::Let { mutable: true } | BindingKind::Parameter { mutable: true }
-        )
+        matches!(self, BindingKind::Let { mutable: true })
     }
 
     pub fn is_param(&self) -> bool {
-        matches!(self, BindingKind::Parameter { .. })
+        matches!(self, BindingKind::Parameter)
     }
 
     pub fn is_match_arm(&self) -> bool {

@@ -5,12 +5,12 @@ description: |
   struct S { x: int }
   
   impl S {
-    fn inc(self: Ref<S>) { self.x = self.x + 1 }
+    fn inc(self: mut Ref<S>) { self.x = self.x + 1 }
   }
   
   fn main() {
     let mut s = S { x: 1 }
-    let r = &((s))
+    let mut r = &((s))
     r.inc()
   }
 ---

@@ -6,7 +6,7 @@ description: |
   
   fn main() {
     let mut w = Wrap(0)
-    let r = &w
+    let mut r = &w
     let _ = { r.* = Wrap(1) }
     let _ = w.0
   }

@@ -2,28 +2,28 @@
 source: tests/spec/emit/functions.rs
 description: |
   
-  fn apply(f: fn(mut int) -> int, x: int) -> int {
-    f(x)
+  fn apply(f: fn(mut Slice<int>) -> (), xs: mut Slice<int>) {
+    f(xs)
   }
   
-  fn test() -> int {
-    let bump = |mut x: int| {
-      x += 1
-      x
+  fn test() {
+    let bump = |xs: mut Slice<int>| {
+      xs[0] += 1
     }
-    apply(bump, 41)
+    let mut data = [41]
+    apply(bump, data)
   }
 ---
 package main
 
-func apply(f func(int) int, x int) int {
-	return f(x)
+func apply(f func([]int), xs []int) {
+	f(xs)
 }
 
-func test() int {
-	bump := func(x int) int {
-		x++
-		return x
+func test() {
+	bump := func(xs []int) {
+		xs[0]++
 	}
-	return apply(bump, 41)
+	data := []int{41}
+	apply(bump, data)
 }

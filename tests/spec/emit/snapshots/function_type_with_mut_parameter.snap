@@ -2,36 +2,30 @@
 source: tests/spec/emit/functions.rs
 description: |
   
-  struct Counter { times_called: int }
-  
-  fn run(counter: Counter, action: fn(mut Counter) -> ()) {
-    action(counter)
+  fn run(items: mut Slice<int>, action: fn(mut Slice<int>) -> ()) {
+    action(items)
   }
   
-  fn bump(mut counter: Counter) {
-    counter.times_called += 1
+  fn bump(items: mut Slice<int>) {
+    items[0] += 1
   }
   
   fn test() {
-    let counter = Counter { times_called: 0 }
-    run(counter, bump)
+    let mut data = [0]
+    run(data, bump)
   }
 ---
 package main
 
-type Counter struct {
-	timesCalled int
+func run(items []int, action func([]int)) {
+	action(items)
 }
 
-func run(counter Counter, action func(Counter)) {
-	action(counter)
-}
-
-func bump(counter Counter) {
-	counter.timesCalled++
+func bump(items []int) {
+	items[0]++
 }
 
 func test() {
-	counter := Counter{timesCalled: 0}
-	run(counter, bump)
+	data := []int{0}
+	run(data, bump)
 }

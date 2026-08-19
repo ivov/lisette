@@ -9,7 +9,7 @@ description: |
   fn main() {
     let mut m = Map.new<string, Box>()
     m["a"] = Box { items: [] }
-    let r = &m
+    let mut r = &m
     let mut entry = Box { items: r.*["a"].items.clone() }
     entry.items = entry.items.append(1)
     r.*["a"] = entry

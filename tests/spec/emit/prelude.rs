@@ -206,7 +206,7 @@ fn slice_make_read_loop() {
 import "go:strings"
 
 fn main() {
-  let reader = strings.NewReader("hello world")
+  let mut reader = strings.NewReader("hello world")
   let mut buffer = Slice.make<byte>(8)
   let n = reader.Read(buffer).unwrap_or(0)
   if n != 8 {
@@ -283,7 +283,7 @@ fn main() {
 fn slice_make_fills_elements_without_go_zero() {
     let input = r#"
 fn main() {
-  let maps = Slice.make<Map<string, int>>(2)
+  let mut maps = Slice.make<mut Map<string, int>>(2)
   let mut first = maps.get(0).unwrap_or(Map.new<string, int>())
   first["k"] = 1
   let second = maps.get(1).unwrap_or(Map.new<string, int>())
@@ -584,7 +584,7 @@ fn test(s: Slice<int>) {
 #[test]
 fn slice_copy_from() {
     let input = r#"
-fn test(mut dst: Slice<int>, src: Slice<int>) -> int {
+fn test(dst: mut Slice<int>, src: Slice<int>) -> int {
   dst.copy_from(src)
 }
 "#;
@@ -977,7 +977,7 @@ fn test(m: Map<string, int>) -> bool {
 #[test]
 fn map_delete() {
     let input = r#"
-fn test(mut m: Map<string, int>, key: string) {
+fn test(m: mut Map<string, int>, key: string) {
   m.delete(key)
 }
 "#;

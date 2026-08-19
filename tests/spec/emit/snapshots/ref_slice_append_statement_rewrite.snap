@@ -4,7 +4,7 @@ description: |
   
   fn main() {
     let mut s = [1]
-    let r: Ref<Slice<int>> = &s
+    let mut r: mut Ref<mut Slice<int>> = &s
     r.* = r.*.append(2)
     let _ = s
   }

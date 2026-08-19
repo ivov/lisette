@@ -5,7 +5,7 @@ description: |
   struct Foo { value: int }
   
   impl Foo {
-    fn increment(self: Ref<Foo>) {
+    fn increment(self: mut Ref<Foo>) {
       self.value = self.value + 1
     }
   }

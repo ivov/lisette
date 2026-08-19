@@ -95,28 +95,35 @@ To give type parameters their individual bounds:
 fn label<T: Display, U: Ordered>(value: T, rank: U) -> string { ... }
 ```
 
-## Mutable parameters
+## Write permission in parameters
 
-By default, parameters disallow rebinding inside the function body. Mark them `mut` to allow rebinding.
-
-Additionally, if the function writes through the parameter in a way observable to the caller, marking the parameter `mut` requires the call-site binding to be `mut` as well.
+Parameters are immutable bindings. To mutate a local copy, rebind with `let mut`:
 
 ```rust
-fn sort_in_place(mut items: Slice<int>) {
-  // ...
+fn digits(n: int) -> int {
+  let mut n = n
+  let mut count = 1
+  while n >= 10 {
+    n /= 10
+    count += 1
+  }
+  count
 }
-
-let mut nums = [3, 1, 2] // arg mutable
-sort_in_place(nums)  // param mutable, ok
-
-let nums = [3, 1, 2] // arg immutable
-sort_in_place(nums)  // param immutable, error
 ```
 
-This additional rule applies to `Slice<T>`, `Map<K, V>`, and any array, struct, tuple, or enum that recursively contains one. This rule does not apply to:
+Write permission travels in the parameter's type. A parameter typed `mut Slice<T>`, `mut Map<K, V>`, or `mut Ref<T>` may write through to the caller's data, so the caller must pass a `mut` value:
 
-- Values that Go passes by copy and that do not recursively contain a slice or map, e.g. `int`, `string`, `bool`, `float64`, arrays, plain structs, and tuples.
-- `Ref<T>` and `Channel<T>`. The purpose of pointers and channels is to share or transmit data, so mutation is implied.
+```rust
+fn reset_first(items: mut Slice<int>) {
+  items[0] = 0             // writes observably to the caller
+}
+
+let mut nums = [3, 1, 2]
+reset_first(nums)          // ok: `nums` permits writes
+
+let frozen = [3, 1, 2]
+reset_first(frozen)        // error: `Slice<int>` permits no write
+```
 
 ## Lambdas
 

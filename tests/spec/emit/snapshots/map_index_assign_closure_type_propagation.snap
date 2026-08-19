@@ -3,7 +3,7 @@ source: tests/spec/emit/expressions.rs
 description: |
   
   fn test() {
-    let mut m: Map<string, fn(int) -> int> = Map.new()
+    let mut m: mut Map<string, fn(int) -> int> = Map.new()
     m["square"] = |x| x * x
   }
 ---

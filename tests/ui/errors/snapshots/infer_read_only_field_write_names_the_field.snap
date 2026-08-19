@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot write to `d.tags[0]`
+   ╭─[test.lis:6:3]
+ 5 │   let mut d = Doc { tags: ["a"] }
+ 6 │   d.tags[0] = "b"
+   ·   ───────┬───────
+   ·          ╰── `d.tags` is read-only
+ 7 │ }
+   ╰────
+  help: Declare the field `tags` as `mut Slice<string>` · code: [infer.write_through_read_only]

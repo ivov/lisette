@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Cannot write to `buf[0]`
+   ╭─[test.lis:3:3]
+ 2 │ fn fill(buf: Slice<int>) {
+ 3 │   buf[0] = 1
+   ·   ─────┬────
+   ·        ╰── `buf` is read-only
+ 4 │ }
+   ╰────
+  help: Declare the parameter `buf` as `mut Slice<int>` · code: [infer.write_through_read_only]
