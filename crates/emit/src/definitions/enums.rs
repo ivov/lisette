@@ -1,6 +1,6 @@
 use crate::Planner;
 use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD, EnumLayout};
-use crate::definitions::structs::should_synthesize_stringer;
+use crate::definitions::structs::{StringFormat, should_synthesize_stringer};
 use crate::names::go_name::{self, prelude_qualifier};
 use crate::utils::{synthesized_local_name, synthesized_receiver_name};
 use syntax::ast::{Attribute, Generic};
@@ -36,18 +36,22 @@ impl Planner<'_> {
         let mut result = layout.emit_definition(&generics_string);
         if emit_string {
             result.push_str("\n\n");
-            result.push_str(&layout.emit_stringer_method(
+            result.push_str(&layout.emit_format_method(
                 &receiver_generics,
-                ENUM_STRINGER_METHOD,
-                false,
+                StringFormat::Display {
+                    method: ENUM_STRINGER_METHOD,
+                    qualified: false,
+                },
             ));
         }
         if emit_go_string {
             result.push_str("\n\n");
-            result.push_str(&layout.emit_stringer_method(
+            result.push_str(&layout.emit_format_method(
                 &receiver_generics,
-                ENUM_GO_STRINGER_METHOD,
-                true,
+                StringFormat::Display {
+                    method: ENUM_GO_STRINGER_METHOD,
+                    qualified: true,
+                },
             ));
         }
         if has_json {
@@ -90,7 +94,12 @@ impl Planner<'_> {
             return;
         }
         out.push_str("\n\n");
-        out.push_str(&layout.emit_debug_method(receiver_generics, prelude_qualifier()));
+        out.push_str(&layout.emit_format_method(
+            receiver_generics,
+            StringFormat::Debug {
+                prelude: prelude_qualifier(),
+            },
+        ));
         self.require_fmt();
         if layout.debug_uses_prelude() {
             self.require_stdlib();

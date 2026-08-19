@@ -681,8 +681,12 @@ impl Planner<'_> {
 /// Whether reading the value again costs nothing and skipping it loses nothing.
 fn is_inert_value(element: &Expression, value: &GoExpression) -> bool {
     match value {
-        GoExpression::Literal(_) => true,
-        GoExpression::CompositeLiteral { .. } => element.get_type().is_unit(),
+        GoExpression::Literal {
+            composite: false, ..
+        } => true,
+        GoExpression::Literal {
+            composite: true, ..
+        } => element.get_type().is_unit(),
         _ => false,
     }
 }

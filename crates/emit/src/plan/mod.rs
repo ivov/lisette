@@ -1,7 +1,5 @@
 pub(crate) mod bodies;
 pub(crate) mod calls;
-#[cfg(debug_assertions)]
-pub(crate) mod invariants;
 pub(crate) mod lower;
 pub(crate) mod placement;
 pub(crate) mod values;

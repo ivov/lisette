@@ -10,9 +10,7 @@ use crate::control_flow::fallible::{
     OPTION_SOME_TAG, PARTIAL_ERR_TAG, PARTIAL_OK_TAG, RESULT_OK_TAG,
 };
 use crate::control_flow::propagation::plain_return;
-use crate::plan::bodies::{
-    ElseArm, IfPlan, LoweredBlock, LoweredStatement, ReturnForm, ReturnStatementPlan,
-};
+use crate::plan::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement, ReturnForm};
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use crate::write_line;
 use syntax::ast::Expression;
@@ -20,9 +18,7 @@ use syntax::parse::TUPLE_FIELDS;
 
 /// A bare `return v0, v1, ...` statement leaf.
 pub(crate) fn multi_value_return(values: Vec<String>) -> LoweredStatement {
-    LoweredStatement::Return(ReturnStatementPlan {
-        form: ReturnForm::Multi { values },
-    })
+    LoweredStatement::Return(ReturnForm::Multi { values })
 }
 
 /// An `if <condition> { <setup...> return <then_values...> }` tag-check leaf (no else).

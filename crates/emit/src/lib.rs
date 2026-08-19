@@ -33,6 +33,7 @@ pub use output::imports;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::cell::RefCell;
+use std::mem;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -655,7 +656,7 @@ impl<'a> Planner<'a> {
             );
             // Layouts render Go types against the current file's import aliases.
             self.enum_layouts.get_mut().clear();
-            let namespace = std::mem::replace(&mut self.namespace, next_namespace);
+            let namespace = mem::replace(&mut self.namespace, next_namespace);
             let (imports, mut diagnostics) =
                 namespace.finish(self.facts.go_package_names(), self.facts.go_package_ids());
             all_diagnostics.append(&mut diagnostics);

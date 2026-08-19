@@ -75,7 +75,7 @@ impl Planner<'_> {
 
         // `is_go_constant_expression` admits only literals, identifiers, and
         // constexpr unary/binary, none of which carry setup statements.
-        let raw_value = self.plan_value(expression, ExpressionContext::value());
+        let raw_value = self.lower_value(expression, ExpressionContext::value());
         let value_text = raw_value.rendered();
         let value = if value_text.is_empty() {
             ValuePlan::opaque("struct{}{}".to_string())

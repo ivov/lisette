@@ -6,7 +6,7 @@ use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::Fallible;
 use crate::escape_reserved;
 use crate::patterns::sites::{AnnotatedPattern, PatternSubject};
-use crate::plan::bodies::{LetForm, LetPlan, LoweredBlock, LoweredStatement};
+use crate::plan::bodies::{LetPlan, LoweredBlock, LoweredStatement};
 use crate::plan::calls::CallableOrigin;
 use crate::plan::placement::{
     collapse_boolean_branch_assign, collapse_declare_assign, expression_contains_binding,
@@ -411,8 +411,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         }
     }
 
-    /// Classify the binding and build the matching `LetForm`.
-    fn build_form(mut self) -> LetForm {
+    fn build(mut self) -> LetPlan {
         // Never-typed values diverge (break/continue/return). Declare the
         // binding so dead code can reference it, then emit the value as a
         // statement.
@@ -431,7 +430,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             } else {
                 None
             };
-            return LetForm::Never {
+            return LetPlan {
                 declaration,
                 body: LoweredBlock {
                     statements: vec![self.planner.lower_statement(self.value)],
@@ -439,7 +438,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             };
         }
 
-        match self.classify() {
+        let body = match self.classify() {
             LetKind::Refutable => {
                 let ap = AnnotatedPattern {
                     pattern: &self.binding.pattern,
@@ -463,19 +462,11 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                         else_block,
                     )
                 };
-                LetForm::Refutable {
-                    body: LoweredBlock { statements },
-                }
+                LoweredBlock { statements }
             }
-            LetKind::SimpleIdentifier => LetForm::SimpleIdentifier {
-                body: self.lower_simple_identifier(),
-            },
-            LetKind::Discard => LetForm::Discard {
-                body: self.lower_discard(),
-            },
-            LetKind::MultiValueCall => LetForm::MultiValueCall {
-                body: self.lower_multi_value_call(),
-            },
+            LetKind::SimpleIdentifier => self.lower_simple_identifier(),
+            LetKind::Discard => self.lower_discard(),
+            LetKind::MultiValueCall => self.lower_multi_value_call(),
             LetKind::ComplexPattern => {
                 let value_ty = self.value.get_type();
                 let statements = self.planner.lower_irrefutable_pattern_site(
@@ -483,10 +474,12 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                     &self.binding.pattern,
                     &value_ty,
                 );
-                LetForm::ComplexPattern {
-                    body: LoweredBlock { statements },
-                }
+                LoweredBlock { statements }
             }
+        };
+        LetPlan {
+            declaration: None,
+            body,
         }
     }
 
@@ -653,7 +646,6 @@ fn extract_simple_tuple_vars(pattern: &Pattern) -> Option<Vec<String>> {
 }
 
 impl Planner<'_> {
-    /// Build a `LetPlan` by classifying the binding into a `LetForm`.
     pub(crate) fn build_let_plan(
         &mut self,
         binding: &Binding,
@@ -662,7 +654,6 @@ impl Planner<'_> {
         mutable: bool,
         assert: bool,
     ) -> LetPlan {
-        let form = LetPlanner::new(self, binding, value, else_block, mutable, assert).build_form();
-        LetPlan { form }
+        LetPlanner::new(self, binding, value, else_block, mutable, assert).build()
     }
 }

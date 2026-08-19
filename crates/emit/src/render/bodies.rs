@@ -1,11 +1,9 @@
 use crate::plan::bodies::{
-    AssignForm, AssignPlan, BreakValueAction, BreakValuePlan, CompoundKind, ConstPlan, ElseArm,
-    ExpressionStatementForm, ExpressionStatementPlan, IfPlan, LetForm, LetPlan, LoopPlan,
-    LoopTransfer, LoweredBlock, LoweredStatement, ReturnForm, ReturnStatementPlan, SelectArmPlan,
-    SelectStatementPlan, SwitchKind, SwitchStatementPlan,
+    AssignForm, BreakValueAction, BreakValuePlan, CompoundKind, ConstPlan, ElseArm,
+    ExpressionStatementForm, IfPlan, LetPlan, LoopPlan, LoopTransfer, LoweredBlock,
+    LoweredStatement, ReturnForm, SelectArmPlan, SelectStatementPlan, SwitchKind,
+    SwitchStatementPlan,
 };
-#[cfg(debug_assertions)]
-use crate::plan::invariants;
 use crate::plan::values::ValuePlan;
 use crate::render::Renderer;
 use crate::write_line;
@@ -21,15 +19,6 @@ impl Renderer {
     }
 
     pub(crate) fn render_lowered_block(&self, output: &mut String, block: &LoweredBlock) {
-        #[cfg(debug_assertions)]
-        {
-            let issues = invariants::validate(block);
-            debug_assert!(
-                issues.is_empty(),
-                "LoweredBlock invariant violations: {:#?}",
-                issues
-            );
-        }
         for statement in &block.statements {
             self.render_statement(output, statement);
         }
@@ -123,6 +112,7 @@ impl Renderer {
                 self.render_lowered_block(output, body);
                 output.push_str("}\n");
             }
+            LoweredStatement::Body(body) => self.render_lowered_block(output, body),
             LoweredStatement::Break(target) => self.render_transfer(output, "break", target),
             LoweredStatement::Continue(target) => self.render_transfer(output, "continue", target),
             LoweredStatement::Const(plan) => {
@@ -143,13 +133,10 @@ impl Renderer {
             LoweredStatement::Expression(plan) => {
                 self.render_expression_statement(output, plan);
             }
-            LoweredStatement::Match(plan) => {
-                self.render_lowered_block(output, &plan.body);
-            }
             LoweredStatement::Select(plan) => self.render_select(output, plan),
             LoweredStatement::Switch(plan) => self.render_switch(output, plan),
-            LoweredStatement::WhileLet(plan) => {
-                self.render_lowered_block(output, &plan.body);
+            LoweredStatement::WhileLet(body) => {
+                self.render_lowered_block(output, body);
             }
             LoweredStatement::TempBind { name, value } => {
                 write_line!(output, "{} := {}", name, value);
@@ -188,12 +175,8 @@ impl Renderer {
         }
     }
 
-    /// Render an `ExpressionStatementPlan`. The `Async` form flushes the value's
-    /// setup, then emits the value as its own statement line (skipped when
-    /// the value text is empty); the `Other` form is dumped via
-    /// `render_lowered_block`.
-    fn render_expression_statement(&self, output: &mut String, plan: &ExpressionStatementPlan) {
-        match &plan.form {
+    fn render_expression_statement(&self, output: &mut String, plan: &ExpressionStatementForm) {
+        match plan {
             ExpressionStatementForm::Async { value } => {
                 let value_text = self.render_value(output, value);
                 if !value_text.is_empty() {
@@ -205,31 +188,18 @@ impl Renderer {
                 self.render_lowered_block(output, body);
                 output.push_str("}()\n");
             }
-            ExpressionStatementForm::Propagate { body }
-            | ExpressionStatementForm::Discard { body } => {
-                self.render_lowered_block(output, body);
-            }
         }
     }
 
-    /// Render a `LetPlan`. The `Never` form emits the optional `var X T`
-    /// declaration leaf first; every form then renders its body block.
     fn render_let_statement(&self, output: &mut String, plan: &LetPlan) {
-        if let LetForm::Never {
-            declaration: Some(declaration),
-            ..
-        } = &plan.form
-        {
+        if let Some(declaration) = &plan.declaration {
             self.render_statement(output, declaration);
         }
-        self.render_lowered_block(output, plan.form.body());
+        self.render_lowered_block(output, &plan.body);
     }
 
-    /// Render an `AssignPlan`. The `Compound` form composes `target++`,
-    /// `target--`, or `target op= rhs` after flushing target capture and
-    /// RHS setup; the `Other` form is dumped via `render_lowered_block`.
-    fn render_assign_statement(&self, output: &mut String, plan: &AssignPlan) {
-        match &plan.form {
+    fn render_assign_statement(&self, output: &mut String, plan: &AssignForm) {
+        match plan {
             AssignForm::Compound {
                 target_capture,
                 target_str,
@@ -270,9 +240,6 @@ impl Renderer {
                 let value_text = self.render_value(output, value);
                 write_line!(output, "{} = {}", target_str, value_text);
             }
-            AssignForm::Discard { body } | AssignForm::NeverTyped { body } => {
-                self.render_lowered_block(output, body);
-            }
         }
     }
 
@@ -284,12 +251,8 @@ impl Renderer {
         }
     }
 
-    /// Render a `ReturnStatementPlan`. The `Plain` form flushes the value's
-    /// setup, then writes `return <value>`. The `Other` form (unit return,
-    /// lowered-ABI tail return, fallible-wrapped return, propagate-as-
-    /// return) is dumped via `render_lowered_block`.
-    fn render_return_statement(&self, output: &mut String, plan: &ReturnStatementPlan) {
-        match &plan.form {
+    fn render_return_statement(&self, output: &mut String, plan: &ReturnForm) {
+        match plan {
             ReturnForm::Plain { value } => {
                 let value_text = self.render_value(output, value);
                 write_line!(output, "return {}", value_text);
@@ -303,7 +266,7 @@ impl Renderer {
             ReturnForm::Multi { values } => {
                 write_line!(output, "return {}", values.join(", "));
             }
-            ReturnForm::LoweredAbi { body } | ReturnForm::Wrapped { body } => {
+            ReturnForm::Body { body } => {
                 self.render_lowered_block(output, body);
             }
         }
@@ -373,6 +336,7 @@ impl Renderer {
     }
 
     fn render_loop(&self, output: &mut String, plan: &LoopPlan) {
+        debug_assert!(!plan.header.is_empty(), "loop header must not be empty");
         output.push_str(&self.render_setup(&plan.prologue));
         if let Some(label) = plan.kind.label() {
             write_line!(output, "{}:", label);
@@ -383,6 +347,7 @@ impl Renderer {
     }
 
     fn render_if(&self, output: &mut String, plan: &IfPlan) {
+        debug_assert!(!plan.condition.is_empty(), "if condition must not be empty");
         output.push_str(&self.render_setup(&plan.condition_setup));
         write_line!(output, "if {} {{", plan.condition);
         self.render_lowered_block(output, &plan.then_body);
@@ -393,6 +358,10 @@ impl Renderer {
         match arm {
             ElseArm::None => output.push_str("}\n"),
             ElseArm::ElseIf(plan) => {
+                debug_assert!(
+                    !plan.condition.is_empty(),
+                    "else-if condition must not be empty"
+                );
                 if !plan.condition_setup.is_empty() {
                     output.push_str("} else {\n");
                     output.push_str(&self.render_setup(&plan.condition_setup));
@@ -407,6 +376,7 @@ impl Renderer {
                 }
             }
             ElseArm::Else { body, inline } => {
+                debug_assert!(!body.renders_empty(), "else body must render output");
                 if *inline {
                     output.push_str("}\n");
                     self.render_lowered_block(output, body);

@@ -285,16 +285,10 @@ impl Planner<'_> {
             .next()
             .expect("numeric binary expression has a right operand");
         if let Some(ty) = &info.cast_left_to {
-            left = GoExpression::Conversion {
-                go_type: self.use_go_type(ty),
-                value: Box::new(left),
-            };
+            left = GoExpression::conversion(self.use_go_type(ty), left);
         }
         if let Some(ty) = &info.cast_right_to {
-            right = GoExpression::Conversion {
-                go_type: self.use_go_type(ty),
-                value: Box::new(right),
-            };
+            right = GoExpression::conversion(self.use_go_type(ty), right);
         }
         ValuePlan::computed(
             setup,

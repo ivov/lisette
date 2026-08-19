@@ -193,7 +193,7 @@ impl Planner<'_> {
         };
         let is_channel = self
             .native_shape(&iterable_ty)
-            .is_some_and(|s| matches!(s.kind, NativeGoType::Channel | NativeGoType::Receiver));
+            .is_some_and(|shape| matches!(shape, NativeGoType::Channel | NativeGoType::Receiver));
         if is_channel {
             self.require_stdlib();
             iter_expression = format!("lisette.ChannelRange({})", iter_expression);
@@ -571,7 +571,7 @@ impl Planner<'_> {
 
     fn is_map_tuple_iterable(&self, iterable_ty: &Type) -> bool {
         self.native_shape(iterable_ty)
-            .is_some_and(|s| matches!(s.kind, NativeGoType::Map | NativeGoType::EnumeratedSlice))
+            .is_some_and(|shape| matches!(shape, NativeGoType::Map | NativeGoType::EnumeratedSlice))
             || self.iter_seq_arity(iterable_ty) == Some(2)
     }
 

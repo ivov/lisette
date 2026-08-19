@@ -6,10 +6,7 @@ use crate::calls::go_interop::NilGuard;
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
 use crate::definitions::functions::is_go_never;
-use crate::plan::bodies::{
-    AssignForm, AssignPlan, LoweredBlock, LoweredStatement, PlacePlan, ReturnForm,
-    ReturnStatementPlan,
-};
+use crate::plan::bodies::{AssignForm, LoweredBlock, LoweredStatement, PlacePlan, ReturnForm};
 use crate::plan::values::{GoExpression, ValuePlan};
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -22,20 +19,16 @@ struct WrappedReturnInfo<'a> {
 }
 
 pub(crate) fn plain_return(value: String) -> LoweredStatement {
-    LoweredStatement::Return(ReturnStatementPlan {
-        form: ReturnForm::Plain {
-            value: ValuePlan::opaque(value),
-        },
+    LoweredStatement::Return(ReturnForm::Plain {
+        value: ValuePlan::opaque(value),
     })
 }
 
 fn simple_assign(target: String, value: String) -> LoweredStatement {
-    LoweredStatement::Assign(AssignPlan {
-        form: AssignForm::Simple {
-            target_capture: Vec::new(),
-            target_str: target,
-            value: ValuePlan::opaque(value),
-        },
+    LoweredStatement::Assign(AssignForm::Simple {
+        target_capture: Vec::new(),
+        target_str: target,
+        value: ValuePlan::opaque(value),
     })
 }
 
@@ -335,8 +328,7 @@ impl Planner<'_> {
         }
     }
 
-    /// Build a `ReturnStatementPlan`, dispatching on return shape.
-    pub(crate) fn build_return_plan(&mut self, expression: &Expression) -> ReturnStatementPlan {
+    pub(crate) fn build_return_plan(&mut self, expression: &Expression) -> ReturnForm {
         let return_ctx = self.return_ctx();
         let is_unit = return_ctx.ty().is_some_and(Type::is_unit);
         if is_unit {
@@ -356,49 +348,41 @@ impl Planner<'_> {
                 };
                 (!body.renders_empty()).then_some(body)
             };
-            return ReturnStatementPlan {
-                form: ReturnForm::Unit { side_effect },
-            };
+            return ReturnForm::Unit { side_effect };
         }
 
         if let Some(statements) = transition::try_emit_lowered_tail_return(self, expression) {
-            return ReturnStatementPlan {
-                form: ReturnForm::LoweredAbi {
-                    body: LoweredBlock { statements },
-                },
+            return ReturnForm::Body {
+                body: LoweredBlock { statements },
             };
         }
 
         if let Some(statements) = self.lower_wrapped_return(expression) {
-            return ReturnStatementPlan {
-                form: ReturnForm::Wrapped {
-                    body: LoweredBlock { statements },
-                },
+            return ReturnForm::Body {
+                body: LoweredBlock { statements },
             };
         }
 
         let plan = self.lower_value(expression, ExpressionContext::value());
-        ReturnStatementPlan {
-            form: ReturnForm::Plain {
-                value: plan.map_rendered_as_computed(
-                    |setup, raw_value, contains_deferred_evaluation| {
-                        let mut coercion_buffer = String::new();
-                        let final_value = self.apply_type_coercion(
-                            &mut coercion_buffer,
-                            return_ctx.ty(),
-                            expression,
-                            raw_value,
-                        );
-                        if !coercion_buffer.is_empty() {
-                            setup.push(LoweredStatement::RawGo(coercion_buffer));
-                        }
-                        GoExpression::opaque_with_deferred_evaluation(
-                            final_value,
-                            contains_deferred_evaluation,
-                        )
-                    },
-                ),
-            },
+        ReturnForm::Plain {
+            value: plan.map_rendered_as_computed(
+                |setup, raw_value, contains_deferred_evaluation| {
+                    let mut coercion_buffer = String::new();
+                    let final_value = self.apply_type_coercion(
+                        &mut coercion_buffer,
+                        return_ctx.ty(),
+                        expression,
+                        raw_value,
+                    );
+                    if !coercion_buffer.is_empty() {
+                        setup.push(LoweredStatement::RawGo(coercion_buffer));
+                    }
+                    GoExpression::opaque_with_deferred_evaluation(
+                        final_value,
+                        contains_deferred_evaluation,
+                    )
+                },
+            ),
         }
     }
 

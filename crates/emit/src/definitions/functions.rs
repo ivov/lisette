@@ -15,7 +15,7 @@ use syntax::EcoString;
 use syntax::ast::{
     Annotation, Binding, Expression, FunctionDefinitionView, Generic, Pattern, Span,
 };
-use syntax::types::{Type, build_substitution_map, substitute};
+use syntax::types::{SimpleKind, Type, build_substitution_map, substitute};
 
 /// Owned param-destructure record: temp var, pattern, param type.
 type DeferredParamDestructure = (String, Pattern, Type);
@@ -170,7 +170,7 @@ impl Planner<'_> {
 
         let return_ty = function.return_type.as_ref();
         let has_return = match return_ty {
-            Type::Simple(syntax::types::SimpleKind::Unit)
+            Type::Simple(SimpleKind::Unit)
             | Type::Var { .. }
             | Type::Uninferred
             | Type::Ignored => false,

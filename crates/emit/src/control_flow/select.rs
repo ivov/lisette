@@ -500,12 +500,7 @@ impl Planner<'_> {
         self.with_binding_frame(|this| {
             let (receiver_var_pattern, some_arm) = match_arms
                 .iter()
-                .find_map(|arm| {
-                    Some((
-                        sites::some_payload_pattern(&arm.pattern)?,
-                        arm,
-                    ))
-                })
+                .find_map(|arm| Some((sites::some_payload_pattern(&arm.pattern)?, arm)))
                 .expect("MatchReceive must have Some arm");
 
             let (case_var, needs_receiver_destructure) =

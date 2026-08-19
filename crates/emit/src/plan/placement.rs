@@ -7,7 +7,7 @@ use crate::definitions::functions::{is_breakless_loop, is_go_never};
 use crate::expressions::staging::SpreadSequenceOptions;
 use crate::names::go_name::is_plain_identifier;
 use crate::plan::bodies::{
-    AssignForm, AssignPlan, BreakValueAction, BreakValuePlan, ElseArm, LoopTransfer, LoweredBlock,
+    AssignForm, BreakValueAction, BreakValuePlan, ElseArm, LoopTransfer, LoweredBlock,
     LoweredStatement, PlacePlan,
 };
 use crate::plan::calls::plan_variadic_spread;
@@ -54,12 +54,10 @@ pub(crate) fn is_unit_call(expression: &Expression) -> bool {
 
 /// A `target = value` assignment with no lvalue capture.
 pub(crate) fn simple_assign(target_var: &str, value: ValuePlan) -> LoweredStatement {
-    LoweredStatement::Assign(AssignPlan {
-        form: AssignForm::Simple {
-            target_capture: Vec::new(),
-            target_str: target_var.to_string(),
-            value,
-        },
+    LoweredStatement::Assign(AssignForm::Simple {
+        target_capture: Vec::new(),
+        target_str: target_var.to_string(),
+        value,
     })
 }
 
@@ -95,7 +93,7 @@ pub(crate) fn collapse_declare_assign(statements: &mut Vec<LoweredStatement>, na
         target_capture,
         target_str,
         value,
-    } = &assign.form
+    } = assign
     else {
         return;
     };
@@ -109,7 +107,7 @@ pub(crate) fn collapse_declare_assign(statements: &mut Vec<LoweredStatement>, na
     let Some(LoweredStatement::Assign(assign)) = statements.pop() else {
         unreachable!("shape checked above");
     };
-    let AssignForm::Simple { value, .. } = assign.form else {
+    let AssignForm::Simple { value, .. } = assign else {
         unreachable!("shape checked above");
     };
     statements[0] = LoweredStatement::TempBind {
@@ -166,7 +164,7 @@ fn single_simple_assign_value(body: &LoweredBlock, name: &str) -> Option<String>
         target_capture,
         target_str,
         value,
-    } = &assign.form
+    } = assign
     else {
         return None;
     };
@@ -813,7 +811,7 @@ impl Planner<'_> {
 
     /// Build a `BreakValuePlan` for a `break value` statement.
     pub(crate) fn build_break_value_plan(&mut self, val: &Expression) -> BreakValuePlan {
-        let value = self.plan_value(val, ExpressionContext::value());
+        let value = self.lower_value(val, ExpressionContext::value());
         let value_is_empty = value.is_empty();
         let is_propagate_diverged = value_is_empty && matches!(val, Expression::Propagate { .. });
         if is_propagate_diverged {

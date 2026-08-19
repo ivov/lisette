@@ -1,4 +1,5 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use std::mem;
 
 use crate::ReturnContext;
 use crate::context::lowering::LoopContext;
@@ -116,7 +117,7 @@ impl ScopeState {
             return;
         };
         if let BindingValue::GoName(name) = value {
-            let name = std::mem::take(name);
+            let name = mem::take(name);
             *value = BindingValue::GoConst(name);
         }
     }
@@ -167,7 +168,7 @@ impl ScopeState {
         &mut self,
         snapshot: BindingSnapshot,
     ) -> BindingSnapshot {
-        BindingSnapshot::new(std::mem::replace(
+        BindingSnapshot::new(mem::replace(
             self.current_bindings_mut(),
             snapshot.into_inner(),
         ))

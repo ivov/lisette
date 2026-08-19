@@ -9,9 +9,8 @@ use crate::definitions::functions::{is_breakless_loop, is_go_never, is_test_cont
 use crate::expressions::{flip_comparison, flip_preserves_nan};
 use crate::names::go_name::{prelude_qualifier, testkit_qualifier};
 use crate::plan::bodies::{
-    ElseArm, ExpressionStatementForm, ExpressionStatementPlan, IfPlan, LoopKind, LoopPlan,
-    LoopTransfer, LoweredBlock, LoweredStatement, MatchStatementPlan, PlacePlan, WhileLetPlan,
-    directed,
+    ElseArm, ExpressionStatementForm, IfPlan, LoopKind, LoopPlan, LoopTransfer, LoweredBlock,
+    LoweredStatement, PlacePlan, directed,
 };
 use crate::plan::placement::{
     collapse_boolean_branch_assign, collapse_declare_assign, requires_temp_var, try_elide_tail_let,
@@ -302,8 +301,9 @@ impl Planner<'_> {
                 compound_operator,
                 ..
             } => {
-                let plan = self.build_assignment_plan(target, value, compound_operator.as_ref());
-                self.directed_at(expression, LoweredStatement::Assign(plan))
+                let statement =
+                    self.build_assignment_plan(target, value, compound_operator.as_ref());
+                self.directed_at(expression, statement)
             }
             Expression::IfLet {
                 pattern,
@@ -315,17 +315,11 @@ impl Planner<'_> {
             } => {
                 let arms = if_let_match_arms(pattern, consequence, alternative, *span);
                 let body = self.lower_match_to_block(scrutinee, &arms, &PlacePlan::Statement);
-                self.directed_at(
-                    expression,
-                    LoweredStatement::Match(MatchStatementPlan { body }),
-                )
+                self.directed_at(expression, LoweredStatement::Body(body))
             }
             Expression::Match { subject, arms, .. } => {
                 let body = self.lower_match_to_block(subject, arms, &PlacePlan::Statement);
-                self.directed_at(
-                    expression,
-                    LoweredStatement::Match(MatchStatementPlan { body }),
-                )
+                self.directed_at(expression, LoweredStatement::Body(body))
             }
             Expression::Select { arms, .. } => {
                 let plan = self.lower_select(arms, &PlacePlan::Statement);
@@ -370,32 +364,25 @@ impl Planner<'_> {
     fn lower_expression_statement(&mut self, expression: &Expression) -> LoweredStatement {
         let unwrapped = expression.unwrap_parens();
         let directive = self.maybe_line_directive(&expression.get_span());
-        let form = if matches!(
+        let statement = if matches!(
             unwrapped,
             Expression::Task { .. } | Expression::Defer { .. }
         ) {
             let value = self.plan_operand(unwrapped, ExpressionContext::value());
-            ExpressionStatementForm::Async { value }
+            LoweredStatement::Expression(ExpressionStatementForm::Async { value })
         } else if let Expression::Propagate {
             expression: inner, ..
         } = unwrapped
         {
-            ExpressionStatementForm::Propagate {
-                body: LoweredBlock {
-                    statements: self.lower_propagate_statement(inner),
-                },
-            }
+            LoweredStatement::Body(LoweredBlock {
+                statements: self.lower_propagate_statement(inner),
+            })
         } else {
-            ExpressionStatementForm::Discard {
-                body: LoweredBlock {
-                    statements: self.lower_discard_value(unwrapped),
-                },
-            }
+            LoweredStatement::Body(LoweredBlock {
+                statements: self.lower_discard_value(unwrapped),
+            })
         };
-        directed(
-            directive,
-            LoweredStatement::Expression(ExpressionStatementPlan { form }),
-        )
+        directed(directive, statement)
     }
 
     pub(crate) fn lower_assert_statement(&mut self, expression: &Expression) -> LoweredStatement {
@@ -737,7 +724,7 @@ impl Planner<'_> {
         };
         let directive = self.maybe_line_directive(&expression.get_span());
         let body = self.with_loop("_", |this| this.lower_while_let(pattern, scrutinee, body));
-        directed(directive, LoweredStatement::WhileLet(WhileLetPlan { body }))
+        directed(directive, LoweredStatement::WhileLet(body))
     }
 
     fn lower_infinite_loop(&mut self, body: &Expression) -> LoopPlan {

@@ -9,9 +9,7 @@ use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::abi::transition::emit_lisette_callback_wrapper;
 use crate::context::expression::ExpressionContext;
 use crate::is_order_sensitive;
-use crate::plan::bodies::{
-    ExpressionStatementForm, ExpressionStatementPlan, LoweredBlock, LoweredStatement,
-};
+use crate::plan::bodies::{ExpressionStatementForm, LoweredBlock, LoweredStatement};
 use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::plan::values::{
     CaptureBoundary, EvaluationEffect, GoExpression, OperandForm, ValuePlan,
@@ -444,11 +442,11 @@ impl Planner<'_> {
             return staged.map_rendered_as_observable_computed(
                 |setup, staged_value, _contains_deferred_evaluation| {
                     if !staged_value.is_empty() {
-                        setup.push(LoweredStatement::Expression(ExpressionStatementPlan {
-                            form: ExpressionStatementForm::Async {
+                        setup.push(LoweredStatement::Expression(
+                            ExpressionStatementForm::Async {
                                 value: ValuePlan::opaque(staged_value),
                             },
-                        }));
+                        ));
                     }
                     let tmp = self.hoist_tmp_value_statement(setup, "ref", "struct{}{}");
                     GoExpression::opaque(format!("&{}", tmp))
@@ -592,12 +590,12 @@ impl Planner<'_> {
         if let Expression::Block { .. } = expression {
             let body =
                 self.with_isolated_function(|planner| planner.lower_block_as_body(expression));
-            let setup = vec![LoweredStatement::Expression(ExpressionStatementPlan {
-                form: ExpressionStatementForm::AsyncBlock {
+            let setup = vec![LoweredStatement::Expression(
+                ExpressionStatementForm::AsyncBlock {
                     keyword: keyword.to_string(),
                     body,
                 },
-            })];
+            )];
             return ValuePlan::computed(
                 setup,
                 GoExpression::opaque(String::new()),
@@ -639,12 +637,12 @@ impl Planner<'_> {
             let body = LoweredBlock {
                 statements: body_statements,
             };
-            setup.push(LoweredStatement::Expression(ExpressionStatementPlan {
-                form: ExpressionStatementForm::AsyncBlock {
+            setup.push(LoweredStatement::Expression(
+                ExpressionStatementForm::AsyncBlock {
                     keyword: keyword.to_string(),
                     body,
                 },
-            }));
+            ));
             return ValuePlan::computed(
                 setup,
                 GoExpression::opaque(String::new()),

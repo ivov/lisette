@@ -6,6 +6,7 @@ use crate::control_flow::fallible;
 use crate::definitions::enum_layout::{EnumLayout, FieldTypeInfo, FieldTypeMap};
 use crate::definitions::structs::is_raw_function_type;
 use crate::names::go_name;
+use crate::names::packages::PackageRequirements;
 use syntax::ast::{Generic, Pattern, RestPattern, StructFields};
 use syntax::containment::enum_payload_pointer_wrapped;
 use syntax::go_names;
@@ -258,7 +259,7 @@ impl Planner<'_> {
         }
 
         let mut field_types = FieldTypeMap::default();
-        let mut requirements = crate::names::packages::PackageRequirements::default();
+        let mut requirements = PackageRequirements::default();
         for (vi, variant) in variants.iter().enumerate() {
             for (fi, field) in variant.fields.iter().enumerate() {
                 let rendered_type = self.go_type(&field.ty);

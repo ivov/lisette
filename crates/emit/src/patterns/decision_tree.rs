@@ -608,18 +608,14 @@ fn validate_switch_arms(
     Some(())
 }
 
-struct BranchGroup {
-    arms: Vec<ArmInfo>,
-}
-
 struct GroupedBranches {
     order: Vec<String>,
-    by_label: HashMap<String, BranchGroup>,
+    by_label: HashMap<String, Vec<ArmInfo>>,
     fallback: Vec<ArmInfo>,
 }
 
 fn group_switch_branches(arms: &[ArmInfo], kind: &SwitchKind) -> GroupedBranches {
-    let mut by_label: HashMap<String, BranchGroup> = HashMap::default();
+    let mut by_label: HashMap<String, Vec<ArmInfo>> = HashMap::default();
     let mut order: Vec<String> = Vec::new();
     let mut fallback = Vec::new();
 
@@ -653,12 +649,10 @@ fn group_switch_branches(arms: &[ArmInfo], kind: &SwitchKind) -> GroupedBranches
 
         by_label
             .entry(case_label.clone())
-            .and_modify(|group| group.arms.push(inner_arm.clone()))
+            .and_modify(|arms| arms.push(inner_arm.clone()))
             .or_insert_with(|| {
                 order.push(case_label);
-                BranchGroup {
-                    arms: vec![inner_arm],
-                }
+                vec![inner_arm]
             });
     }
 
@@ -673,13 +667,13 @@ fn group_switch_branches(arms: &[ArmInfo], kind: &SwitchKind) -> GroupedBranches
 /// fall through to `default`, so a failed inner check has nowhere else to go.
 fn build_switch_branches(
     order: Vec<String>,
-    mut by_label: HashMap<String, BranchGroup>,
+    mut by_label: HashMap<String, Vec<ArmInfo>>,
     fallback_arms: &[ArmInfo],
 ) -> Vec<SwitchBranch> {
     order
         .into_iter()
         .map(|label| {
-            let BranchGroup { arms: inner_arms } = by_label.remove(&label).unwrap();
+            let inner_arms = by_label.remove(&label).unwrap();
             let any_inner_can_fail = inner_arms
                 .iter()
                 .any(|a| a.has_guard || !a.checks.is_empty());

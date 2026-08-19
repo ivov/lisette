@@ -4,7 +4,7 @@ use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::context::expression::ExpressionContext;
 use crate::is_order_sensitive;
 use crate::names::go_name;
-use crate::plan::bodies::{AssignForm, AssignPlan, CompoundKind, LoweredBlock, LoweredStatement};
+use crate::plan::bodies::{AssignForm, CompoundKind, LoweredBlock, LoweredStatement};
 use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
 use crate::state::bindings::BindingValue;
 use syntax::ast::Literal;
@@ -13,34 +13,24 @@ use syntax::parse::TUPLE_FIELDS;
 use syntax::types::Type;
 
 impl Planner<'_> {
-    /// Build an `AssignPlan`, dispatching on shape: never-typed, compound,
-    /// discard, or simple `target = value`.
     pub(crate) fn build_assignment_plan(
         &mut self,
         target: &Expression,
         value: &Expression,
         compound_operator: Option<&BinaryOperator>,
-    ) -> AssignPlan {
+    ) -> LoweredStatement {
         let raw_body = |statements: Vec<LoweredStatement>| LoweredBlock { statements };
 
         if value.get_type().is_never() {
-            return AssignPlan {
-                form: AssignForm::NeverTyped {
-                    body: raw_body(vec![self.lower_statement(value)]),
-                },
-            };
+            return LoweredStatement::Body(raw_body(vec![self.lower_statement(value)]));
         }
 
         if let Some((op, rhs)) = detect_compound_assignment(target, value, compound_operator) {
-            return self.build_compound_assignment_plan(target, op, rhs);
+            return LoweredStatement::Assign(self.build_compound_assignment_plan(target, op, rhs));
         }
 
         if self.target_binds_to_discard(target) {
-            return AssignPlan {
-                form: AssignForm::Discard {
-                    body: raw_body(self.lower_discard_value(value)),
-                },
-            };
+            return LoweredStatement::Body(raw_body(self.lower_discard_value(value)));
         }
 
         let go_field_slot: Option<(Type, ValueLayout)> = match target {
@@ -80,13 +70,11 @@ impl Planner<'_> {
                 )
             },
         );
-        AssignPlan {
-            form: AssignForm::Simple {
-                target_capture,
-                target_str,
-                value,
-            },
-        }
+        LoweredStatement::Assign(AssignForm::Simple {
+            target_capture,
+            target_str,
+            value,
+        })
     }
 
     /// Build a compound assignment plan (`+=`, `-=`, `++`, etc.), staging the
@@ -96,7 +84,7 @@ impl Planner<'_> {
         target: &Expression,
         op: &BinaryOperator,
         rhs: &Expression,
-    ) -> AssignPlan {
+    ) -> AssignForm {
         let is_inc_dec = is_literal_one(rhs)
             && matches!(op, BinaryOperator::Addition | BinaryOperator::Subtraction);
         if is_inc_dec {
@@ -106,12 +94,10 @@ impl Planner<'_> {
                 CompoundKind::Decrement
             };
             let (target_capture, target_str) = self.capture_assignment_target(target, None);
-            return AssignPlan {
-                form: AssignForm::Compound {
-                    target_capture,
-                    target_str,
-                    kind,
-                },
+            return AssignForm::Compound {
+                target_capture,
+                target_str,
+                kind,
             };
         }
 
@@ -155,12 +141,10 @@ impl Planner<'_> {
             rhs: right_hand_side,
             pinned_left,
         };
-        AssignPlan {
-            form: AssignForm::Compound {
-                target_capture,
-                target_str,
-                kind,
-            },
+        AssignForm::Compound {
+            target_capture,
+            target_str,
+            kind,
         }
     }
 
