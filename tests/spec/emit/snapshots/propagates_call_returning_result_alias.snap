@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  type MyRes = Result<int, error>
+  
+  fn source() -> MyRes {
+    Ok(5)
+  }
+  
+  fn consume() -> Result<int, error> {
+    let n = source()?
+    Ok(n + 1)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type MyRes = lisette.Result[int, error]
+
+func source() (int, error) {
+	return 5, nil
+}
+
+func consume() (int, error) {
+	ret_1, ret_2 := source()
+	if ret_2 != nil {
+		return 0, ret_2
+	}
+	n := ret_1
+	return n + 1, nil
+}

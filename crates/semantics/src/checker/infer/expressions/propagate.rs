@@ -27,7 +27,7 @@ impl InferCtx<'_> {
 
         let tried_ty = self.new_type_var();
         let new_expression = self.infer_expression(*expression, &tried_ty);
-        let resolved_tried_ty = new_expression.get_type().resolve_in(&self.env);
+        let resolved_tried_ty = self.resolve_carrier(&new_expression.get_type());
 
         if resolved_tried_ty.is_partial() {
             self.sink
@@ -170,12 +170,12 @@ impl InferCtx<'_> {
             ok_ty
         } else if tried_ty.is_option() {
             let some_ty = tried_ty.ok_type();
-            let resolved_fn_return = fn_return_ty.resolve_in(&self.env);
+            let resolved_fn_return = self.resolve_carrier(&fn_return_ty);
 
             if resolved_fn_return.is_option() {
                 let new_some = self.new_type_var();
                 let expected_return = self.type_option(store, new_some);
-                self.unify(&expected_return, &fn_return_ty, &span);
+                self.unify(&expected_return, &resolved_fn_return, &span);
             } else {
                 self.sink.push(diagnostics::infer::try_return_type_mismatch(
                     "Option<T>",

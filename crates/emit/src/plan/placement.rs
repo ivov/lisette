@@ -456,9 +456,9 @@ impl Planner<'_> {
         expression: &Expression,
     ) -> Vec<LoweredStatement> {
         let ty = target_ty
+            .map(|t| self.facts.peel_alias(t))
             .filter(|t| t.is_option() || t.is_result())
-            .cloned()
-            .unwrap_or_else(|| expression.get_type());
+            .unwrap_or_else(|| self.facts.peel_alias(&expression.get_type()));
         let Some(fallible) = Fallible::from_type(&ty) else {
             return self.lower_plain_assign(target_var, expression);
         };

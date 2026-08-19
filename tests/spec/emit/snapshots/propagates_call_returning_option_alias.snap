@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  type MyOpt = Option<int>
+  
+  fn source() -> MyOpt {
+    Some(5)
+  }
+  
+  fn consume() -> Option<int> {
+    let n = source()?
+    Some(n + 1)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type MyOpt = lisette.Option[int]
+
+func source() (int, bool) {
+	return 5, true
+}
+
+func consume() (int, bool) {
+	ret_1, ret_2 := source()
+	if !ret_2 {
+		return 0, false
+	}
+	n := ret_1
+	return n + 1, true
+}

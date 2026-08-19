@@ -1,0 +1,40 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct Point {
+    pub x: int,
+  }
+  
+  type MaybePoint = Option<Ref<Point>>
+  
+  fn source(p: Ref<Point>) -> MaybePoint {
+    Some(p)
+  }
+  
+  fn main() {
+    let point = Point { x: 1 }
+    let a = source(&point)
+    let _ = a
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Point struct {
+	X int
+}
+
+type MaybePoint = lisette.Option[*Point]
+
+func source(p *Point) *Point {
+	return p
+}
+
+func main() {
+	point := Point{X: 1}
+	raw_1 := source(&point)
+	a := lisette.OptionFromNilable[*Point](raw_1, raw_1 == nil)
+	_ = a
+}

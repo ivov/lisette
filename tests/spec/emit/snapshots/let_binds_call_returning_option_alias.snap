@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  type MyOpt = Option<int>
+  
+  fn source() -> MyOpt {
+    Some(3)
+  }
+  
+  fn main() {
+    let a = source()
+    let _ = a
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type MyOpt = lisette.Option[int]
+
+func source() (int, bool) {
+	return 3, true
+}
+
+func main() {
+	a := lisette.OptionFromCommaOk[int](source())
+	_ = a
+}

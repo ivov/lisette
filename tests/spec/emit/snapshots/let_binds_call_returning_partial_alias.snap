@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  type MyPartial = Partial<int, error>
+  
+  fn source() -> MyPartial {
+    Partial.Ok(3)
+  }
+  
+  fn main() {
+    let a = source()
+    let _ = a
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type MyPartial = lisette.Partial[int, error]
+
+func source() (int, error) {
+	return 3, nil
+}
+
+func main() {
+	ret_1, ret_2 := source()
+	var a lisette.Partial[int, error]
+	if ret_2 != nil {
+		a = lisette.MakePartialBoth[int, error](ret_1, ret_2)
+	} else {
+		a = lisette.MakePartialOk[int, error](ret_1)
+	}
+	_ = a
+}

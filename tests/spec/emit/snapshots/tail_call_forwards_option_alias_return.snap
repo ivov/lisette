@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  type MyOpt = Option<int>
+  
+  fn source() -> MyOpt {
+    Some(3)
+  }
+  
+  fn forward() -> MyOpt {
+    source()
+  }
+  
+  fn main() {
+    let _ = forward()
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type MyOpt = lisette.Option[int]
+
+func source() (int, bool) {
+	return 3, true
+}
+
+func forward() (int, bool) {
+	return source()
+}
+
+func main() {
+	forward()
+}

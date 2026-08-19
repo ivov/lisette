@@ -18,7 +18,8 @@ impl Planner<'_> {
         self.require_stdlib();
 
         let return_ctx = self.return_ctx();
-        let effective_ty = resolve_fallible_block_type(items, ty, Some(&return_ctx));
+        let ty = self.facts.peel_alias(ty);
+        let effective_ty = resolve_fallible_block_type(items, &ty, Some(&return_ctx));
         let fallible = Fallible::from_type(&effective_ty)
             .expect("`try` block must have Result or Option type");
 
@@ -177,7 +178,8 @@ impl Planner<'_> {
         self.require_stdlib();
 
         let return_ctx = self.return_ctx();
-        let effective_ty = resolve_fallible_block_type(items, ty, Some(&return_ctx));
+        let ty = self.facts.peel_alias(ty);
+        let effective_ty = resolve_fallible_block_type(items, &ty, Some(&return_ctx));
         let fallible = Fallible::from_type(&effective_ty)
             .expect("recover block type must be Result<T, PanicValue>");
 

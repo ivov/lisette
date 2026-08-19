@@ -272,6 +272,7 @@ impl Planner<'_> {
 
 impl<'a> Planner<'a> {
     fn return_context_for_type(&self, return_ty: Type) -> ReturnContext {
+        let return_ty = self.facts.peel_alias(&return_ty);
         match self.classify_direct_emission(&return_ty) {
             Some(shape) => ReturnContext::Lowered { return_ty, shape },
             None => ReturnContext::Tagged(return_ty),
