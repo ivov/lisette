@@ -21,7 +21,7 @@ impl Planner<'_> {
         self.require_stdlib();
         let mut statements = Vec::new();
         let raw = self.hoist_tmp_value_statement(&mut statements, "ret", call_str);
-        let inner_ty_str = self.go_type_string(&option_ty.ok_type());
+        let inner_ty_str = self.use_go_type(&option_ty.ok_type());
         let value_expr = format!(
             "lisette.OptionFromCommaOk[{}]({}, {} != {})",
             inner_ty_str, raw, raw, sentinel
@@ -54,7 +54,7 @@ impl Planner<'_> {
             || (layout.is_flattened() && inner_tuple_arity.is_some());
 
         if !needs_complex {
-            let inner_ty_str = self.go_type_string(&inner_ty);
+            let inner_ty_str = self.use_go_type(&inner_ty);
             let value_expr = format!("lisette.OptionFromCommaOk[{}]({})", inner_ty_str, call_str);
             let outcome =
                 self.push_simple_wrapper_value(&mut statements, target, "option", &value_expr);
@@ -146,7 +146,7 @@ impl Planner<'_> {
         self.require_stdlib();
         let mut statements = Vec::new();
         let inner_ty = option_ty.ok_type();
-        let inner_ty_str = self.go_type_string(&inner_ty);
+        let inner_ty_str = self.use_go_type(&inner_ty);
         let is_nil_check = if self.is_interface_option(option_ty) {
             format!("lisette.IsNilInterface({})", raw_value)
         } else {
@@ -203,7 +203,7 @@ impl Planner<'_> {
         option_ty: &Type,
     ) -> String {
         self.require_stdlib();
-        let inner_ty_str = self.go_type_string(&option_ty.ok_type());
+        let inner_ty_str = self.use_go_type(&option_ty.ok_type());
         let value_expr = format!("lisette.OptionFromPointer[{}]({})", inner_ty_str, ptr_value);
         self.hoist_tmp_value_statement(statements, "option", &value_expr)
     }
@@ -237,6 +237,7 @@ impl Planner<'_> {
             } => {
                 if payload.is_identity() {
                     let slot_type = target_payload.go_type(self);
+                    let slot_type = self.use_rendered_go_type(slot_type);
                     self.plan_option_projection(statements, value, "unwrap", &slot_type, false)
                 } else {
                     self.plan_option_projection_with_bridge(
@@ -254,7 +255,8 @@ impl Planner<'_> {
                 ..
             } => {
                 if payload.is_identity() {
-                    let slot_type = format!("*{}", target_payload.go_type(self));
+                    let slot_type = target_payload.go_type(self);
+                    let slot_type = format!("*{}", self.use_rendered_go_type(slot_type));
                     self.plan_option_projection(statements, value, "ptr", &slot_type, true)
                 } else {
                     self.plan_option_projection_with_bridge(
@@ -318,6 +320,7 @@ impl Planner<'_> {
     ) -> String {
         let option = self.stable_source(statements, "opt", option_value);
         let target_type = target_payload.go_type(self);
+        let target_type = self.use_rendered_go_type(target_type);
         let slot_type = if address {
             format!("*{target_type}")
         } else {
@@ -445,6 +448,7 @@ impl Planner<'_> {
             BridgeDirection::FromGo => "wrapped",
         };
         let target_type = target_layout.go_type(self);
+        let target_type = self.use_rendered_go_type(target_type);
         let output = if matches!(target_layout, ValueLayout::Array { .. }) {
             let output = self.fresh_var(Some(output_hint));
             self.declare(&output);

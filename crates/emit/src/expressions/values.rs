@@ -9,9 +9,7 @@ use crate::abi::layout::{SlotOrigin, ValueLayout};
 use crate::abi::transition::emit_lisette_callback_wrapper;
 use crate::context::expression::ExpressionContext;
 use crate::is_order_sensitive;
-use crate::plan::bodies::{
-    ExpressionStatementForm, ExpressionStatementPlan, LoweredBlock, LoweredStatement,
-};
+use crate::plan::bodies::{ExpressionStatementForm, LoweredBlock, LoweredStatement};
 use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::plan::values::{
     CaptureBoundary, EvaluationEffect, GoExpression, OperandForm, ValuePlan,
@@ -335,7 +333,7 @@ impl Planner<'_> {
         }
         let rendered: Vec<String> = slot_types
             .iter()
-            .map(|slot| self.go_type_string(slot))
+            .map(|slot| self.use_go_type(slot))
             .collect();
         format!("lisette.MakeTuple{}[{}]", arity, rendered.join(", "))
     }
@@ -412,7 +410,7 @@ impl Planner<'_> {
             return converted;
         }
 
-        let go_type = self.go_type_string(ty);
+        let go_type = self.use_go_type(ty);
 
         if let Some(source_go_type) = self.shift_pin_go_type(expression, ty) {
             return inner.conversion(source_go_type).conversion(go_type);
@@ -421,7 +419,7 @@ impl Planner<'_> {
         inner.conversion(go_type)
     }
 
-    fn shift_pin_go_type(&self, expression: &Expression, target_ty: &Type) -> Option<String> {
+    fn shift_pin_go_type(&mut self, expression: &Expression, target_ty: &Type) -> Option<String> {
         let target_is_float = self
             .facts
             .underlying_simple_kind(target_ty)
@@ -433,7 +431,7 @@ impl Planner<'_> {
         self.facts
             .underlying_simple_kind(&source_ty)
             .is_some_and(|kind| kind.integer_range().is_some())
-            .then(|| self.go_type_string(&source_ty))
+            .then(|| self.use_go_type(&source_ty))
     }
 
     /// Plan a `&inner` reference, hoisting to a temp when the inner is
@@ -444,11 +442,11 @@ impl Planner<'_> {
             return staged.map_rendered_as_observable_computed(
                 |setup, staged_value, _contains_deferred_evaluation| {
                     if !staged_value.is_empty() {
-                        setup.push(LoweredStatement::Expression(ExpressionStatementPlan {
-                            form: ExpressionStatementForm::Async {
+                        setup.push(LoweredStatement::Expression(
+                            ExpressionStatementForm::Async {
                                 value: ValuePlan::opaque(staged_value),
                             },
-                        }));
+                        ));
                     }
                     let tmp = self.hoist_tmp_value_statement(setup, "ref", "struct{}{}");
                     GoExpression::opaque(format!("&{}", tmp))
@@ -542,7 +540,7 @@ impl Planner<'_> {
         _inclusive: bool,
         ty: &Type,
     ) -> ValuePlan {
-        let type_string = self.go_type_string(ty);
+        let type_string = self.use_go_type(ty);
 
         let mut stages: Vec<ValuePlan> = Vec::new();
         let has_start = start.is_some();
@@ -583,13 +581,6 @@ impl Planner<'_> {
         )
     }
 
-    pub(crate) fn with_fresh_scope<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
-        let frame = self.scope.enter_isolated_function();
-        let result = f(self);
-        self.scope.exit_isolated_function(frame);
-        result
-    }
-
     /// Plan a `Task`/`Defer` operand.
     pub(crate) fn plan_async_wrapper(
         &mut self,
@@ -597,13 +588,14 @@ impl Planner<'_> {
         expression: &Expression,
     ) -> ValuePlan {
         if let Expression::Block { .. } = expression {
-            let body = self.with_fresh_scope(|planner| planner.lower_block_as_body(expression));
-            let setup = vec![LoweredStatement::Expression(ExpressionStatementPlan {
-                form: ExpressionStatementForm::AsyncBlock {
+            let body =
+                self.with_isolated_function(|planner| planner.lower_block_as_body(expression));
+            let setup = vec![LoweredStatement::Expression(
+                ExpressionStatementForm::AsyncBlock {
                     keyword: keyword.to_string(),
                     body,
                 },
-            })];
+            )];
             return ValuePlan::computed(
                 setup,
                 GoExpression::opaque(String::new()),
@@ -645,12 +637,12 @@ impl Planner<'_> {
             let body = LoweredBlock {
                 statements: body_statements,
             };
-            setup.push(LoweredStatement::Expression(ExpressionStatementPlan {
-                form: ExpressionStatementForm::AsyncBlock {
+            setup.push(LoweredStatement::Expression(
+                ExpressionStatementForm::AsyncBlock {
                     keyword: keyword.to_string(),
                     body,
                 },
-            }));
+            ));
             return ValuePlan::computed(
                 setup,
                 GoExpression::opaque(String::new()),

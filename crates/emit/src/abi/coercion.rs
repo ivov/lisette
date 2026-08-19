@@ -138,7 +138,7 @@ impl CoercionPlan {
                 format!("{}{{inner: {}}}", adapter_name, value)
             }
             Self::WrapNewtype { ty } => {
-                let type_name = planner.go_type_string(&ty);
+                let type_name = planner.use_go_type(&ty);
                 format!("{}({})", type_name, value)
             }
             Self::Layout(bridge) => planner.plan_layout_bridge(&mut statements, &value, &bridge),
@@ -180,7 +180,7 @@ impl Planner<'_> {
         element: CoercionPlan,
     ) -> String {
         let source = self.stable_source(statements, "src", value);
-        let go_type = self.go_type_string(array_type);
+        let go_type = self.use_go_type(array_type);
         let output = self.fresh_var(Some("boxed"));
         self.declare(&output);
         statements.push(LoweredStatement::VarDecl {

@@ -5,7 +5,7 @@ use syntax::ast::{Expression, MatchArm, Pattern, Span};
 use syntax::types::Type;
 
 use crate::Planner;
-use crate::calls::comma_ok::CommaOkValueSlot;
+use crate::calls::comma_ok::{CommaOkValueSlot, LoweredPair};
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name::{self, prelude_qualifier, testkit_qualifier};
 use crate::patterns::binding_decls::pattern_binds_name;
@@ -101,6 +101,15 @@ struct LetElseAlternatives<'s> {
 }
 
 impl Planner<'_> {
+    pub(crate) fn can_reuse_subject_identifier(&self, value: &str, binds_name: bool) -> bool {
+        !binds_name
+            && !value.contains('.')
+            && !matches!(
+                self.scope.resolve_identifier_binding(value),
+                Some(BindingValue::InlineExpr(_))
+            )
+    }
+
     fn resolve_pattern_subject(
         &mut self,
         setup: &mut Vec<LoweredStatement>,
@@ -114,12 +123,7 @@ impl Planner<'_> {
                 temp_hint,
             } => {
                 if let Expression::Identifier { value, .. } = scrutinee
-                    && !value.contains('.')
-                    && !pattern_binds_name(pattern, value)
-                    && !matches!(
-                        self.scope.resolve_identifier_binding(value),
-                        Some(BindingValue::InlineExpr(_))
-                    )
+                    && self.can_reuse_subject_identifier(value, pattern_binds_name(pattern, value))
                 {
                     let var = self.reference_go_name(value);
                     return ResolvedSubject::Existing { var };
@@ -263,35 +267,13 @@ impl Planner<'_> {
             return None;
         }
 
-        let binding = self.go_name_for_binding(field).map(|name| {
-            let escaped = go_name::escape_reserved(&name).into_owned();
-            let go_name = if self.is_declared(&escaped) {
-                self.fresh_var(Some(&name))
-            } else {
-                escaped
-            };
-            self.declare(&go_name);
-            (name, go_name)
-        });
+        let binding = self.declare_fused_binding(field);
         let slot = match &binding {
             Some((_, go_name)) => CommaOkValueSlot::Named(go_name.clone()),
             None => CommaOkValueSlot::Unused,
         };
         let bound = fuse.bind(self, slot);
-        let mut statements = bound.setup;
-
-        // The else block sees the enclosing scope, so it lowers before the binding installs.
-        let fail_body = self.lower_block_as_body(else_block);
-        statements.push(LoweredStatement::If(IfPlan {
-            condition_setup: Vec::new(),
-            condition: bound.err_condition,
-            then_body: fail_body,
-            else_arm: ElseArm::None,
-        }));
-        if let Some((name, go_name)) = binding {
-            self.scope.bind(name, go_name);
-        }
-        Some(statements)
+        Some(self.finish_fused_let_else(bound, binding, else_block))
     }
 
     /// Fuse `let Some(x) = <comma-ok source> else { ... }` into a direct pair test.
@@ -304,23 +286,22 @@ impl Planner<'_> {
         let source = self.comma_ok_source(scrutinee)?;
         let field = some_pattern_field(pattern)?;
 
-        let binding = self.go_name_for_binding(field).map(|name| {
-            let escaped = go_name::escape_reserved(&name).into_owned();
-            let go_name = if self.is_declared(&escaped) {
-                self.fresh_var(Some(&name))
-            } else {
-                escaped
-            };
-            self.declare(&go_name);
-            (name, go_name)
-        });
+        let binding = self.declare_fused_binding(field);
         let slot = match &binding {
             Some((_, go_name)) => CommaOkValueSlot::Named(go_name.clone()),
             None => CommaOkValueSlot::Unused,
         };
         let pair = self.bind_comma_ok_pair(scrutinee, source, slot);
+        Some(self.finish_fused_let_else(pair, binding, else_block))
+    }
 
-        let fail_condition = self.comma_ok_none_condition(&pair);
+    fn finish_fused_let_else(
+        &mut self,
+        pair: LoweredPair,
+        binding: Option<(String, String)>,
+        else_block: &Expression,
+    ) -> Vec<LoweredStatement> {
+        let fail_condition = self.pair_failure_condition(&pair);
         // The else block sees the enclosing scope, so it lowers before the binding installs.
         let fail_body = self.lower_block_as_body(else_block);
         let mut statements = pair.statements;
@@ -333,7 +314,20 @@ impl Planner<'_> {
         if let Some((name, go_name)) = binding {
             self.scope.bind(name, go_name);
         }
-        Some(statements)
+        statements
+    }
+
+    fn declare_fused_binding(&mut self, pattern: &Pattern) -> Option<(String, String)> {
+        self.go_name_for_binding(pattern).map(|name| {
+            let escaped = go_name::escape_reserved(&name).into_owned();
+            let go_name = if self.is_declared(&escaped) {
+                self.fresh_var(Some(&name))
+            } else {
+                escaped
+            };
+            self.declare(&go_name);
+            (name, go_name)
+        })
     }
 
     /// Resolve a while-let scrutinee to its loop-subject var, returning any
@@ -345,11 +339,7 @@ impl Planner<'_> {
     ) -> (String, Vec<LoweredStatement>) {
         if let Expression::Identifier { value, .. } = scrutinee {
             let has_collision = pattern_binds_name(pattern, value);
-            let bound_to_inline = matches!(
-                self.scope.resolve_identifier_binding(value),
-                Some(BindingValue::InlineExpr(_))
-            );
-            if !has_collision && !value.contains('.') && !bound_to_inline {
+            if self.can_reuse_subject_identifier(value, has_collision) {
                 return (self.reference_go_name(value), Vec::new());
             }
         }
@@ -474,7 +464,7 @@ impl Planner<'_> {
         };
         let pair = self.bind_comma_ok_pair(scrutinee, source, slot);
 
-        let condition = self.comma_ok_none_condition(&pair);
+        let condition = self.pair_failure_condition(&pair);
         let mut loop_body = pair.statements;
         loop_body.push(LoweredStatement::If(IfPlan {
             condition_setup: Vec::new(),
@@ -908,15 +898,20 @@ pub(crate) fn lower_none_arm_body(
 /// the outer is not `Some(_)`.
 pub(crate) fn unwrap_some_pattern(pattern: &Pattern) -> &Pattern {
     let pattern = peel_as_binding(pattern);
-    if let Pattern::EnumVariant {
+    some_payload_pattern(pattern).unwrap_or(pattern)
+}
+
+pub(crate) fn some_payload_pattern(pattern: &Pattern) -> Option<&Pattern> {
+    let Pattern::EnumVariant {
         identifier, fields, ..
     } = pattern
-        && go_name::unqualified_name(identifier) == "Some"
-        && fields.len() == 1
-    {
-        return &fields[0];
+    else {
+        return None;
+    };
+    match (go_name::unqualified_name(identifier), fields.as_slice()) {
+        ("Some", [payload]) => Some(payload),
+        _ => None,
     }
-    pattern
 }
 
 fn peel_as_binding(pattern: &Pattern) -> &Pattern {

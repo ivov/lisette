@@ -5,9 +5,6 @@ use crate::names::go_name;
 use crate::names::packages::{PackageRequirements, PackageUse};
 use crate::types::native::NativeGoType;
 use crate::types::prelude::PreludeType;
-use fmt::Formatter;
-use std::fmt;
-use std::fmt::Display;
 use syntax::ast::ResolvedCallTypeArguments;
 use syntax::program::DefinitionBody;
 use syntax::types::{CompoundKind, FunctionParameter, SimpleKind, Type};
@@ -44,6 +41,15 @@ impl GoType {
         self.requirements.extend(&other.requirements);
     }
 
+    pub(crate) fn with_dependencies<'a>(
+        code: impl Into<String>,
+        dependencies: impl IntoIterator<Item = &'a GoType>,
+    ) -> Self {
+        let mut result = Self::new(code);
+        result.merge_all(dependencies);
+        result
+    }
+
     fn merge_all<'a>(&mut self, others: impl IntoIterator<Item = &'a GoType>) {
         for other in others {
             self.merge(other);
@@ -52,12 +58,6 @@ impl GoType {
 
     pub(crate) fn requirements(&self) -> &PackageRequirements {
         &self.requirements
-    }
-}
-
-impl Display for GoType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.code)
     }
 }
 
@@ -128,13 +128,6 @@ impl Planner<'_> {
         build_param_typed(format!("{}[{}]", kind.leaf_name(), type_args), &param_types)
     }
 
-    /// Render a type to Go text, recording its package requirements.
-    pub(crate) fn go_type_string(&self, ty: &Type) -> String {
-        let result = self.go_type(ty);
-        self.note_go_type(&result);
-        result.code
-    }
-
     pub(crate) fn format_type_args(&mut self, params: &[Type]) -> String {
         self.format_type_arg_iter(params)
     }
@@ -149,7 +142,7 @@ impl Planner<'_> {
     fn format_type_arg_iter<'t>(&mut self, params: impl IntoIterator<Item = &'t Type>) -> String {
         let args: Vec<String> = params
             .into_iter()
-            .map(|param| self.go_type_string(param))
+            .map(|param| self.use_go_type(param))
             .collect();
         if args.is_empty() {
             return String::new();
@@ -179,7 +172,7 @@ impl Planner<'_> {
             .and_then(|s| s.strip_suffix('>'))
         {
             let ty = mapping.get(elem.trim())?;
-            return Some(format!("[]{}", self.go_type_string(ty)));
+            return Some(format!("[]{}", self.use_go_type(ty)));
         }
         if let Some(inner) = entry.strip_prefix("Map<").and_then(|s| s.strip_suffix('>')) {
             let (key, value) = inner.split_once(',')?;
@@ -187,8 +180,8 @@ impl Planner<'_> {
             let value_ty = mapping.get(value.trim())?;
             return Some(format!(
                 "map[{}]{}",
-                self.go_type_string(key_ty),
-                self.go_type_string(value_ty)
+                self.use_go_type(key_ty),
+                self.use_go_type(value_ty)
             ));
         }
         if let Some(inner) = entry
@@ -197,13 +190,9 @@ impl Planner<'_> {
         {
             let (elem, length) = inner.rsplit_once(',')?;
             let elem_ty = mapping.get(elem.trim())?;
-            return Some(format!(
-                "[{}]{}",
-                length.trim(),
-                self.go_type_string(elem_ty)
-            ));
+            return Some(format!("[{}]{}", length.trim(), self.use_go_type(elem_ty)));
         }
-        Some(self.go_type_string(mapping.get(entry)?))
+        Some(self.use_go_type(mapping.get(entry)?))
     }
 
     fn emit_tuple_type(&self, elements: &[Type]) -> GoType {
@@ -394,11 +383,11 @@ impl Planner<'_> {
         if let Some(params) = receiver_ty.get_type_params() {
             let params = params.to_vec();
             for param in &params {
-                go_type_strs.push(self.go_type_string(param));
+                go_type_strs.push(self.use_go_type(param));
             }
         }
         for ta in type_args.iter() {
-            go_type_strs.push(self.go_type_string(ta));
+            go_type_strs.push(self.use_go_type(ta));
         }
         if go_type_strs.is_empty() {
             String::new()

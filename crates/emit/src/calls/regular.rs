@@ -69,16 +69,47 @@ fn is_errors_new_callee(function: &Expression) -> bool {
     member == "New" && expression.get_type().as_import_namespace() == Some("go:errors")
 }
 
-fn lowers_to_bare_sprintf(expression: &Expression) -> bool {
+enum FmtArgument {
+    Sprintf,
+    Sprint,
+}
+
+fn classify_fmt_argument(expression: &Expression) -> Option<FmtArgument> {
     match expression.unwrap_parens() {
         Expression::Literal {
             literal: Literal::FormatString(_),
             ..
-        } => true,
+        } => Some(FmtArgument::Sprintf),
         Expression::Call {
-            expression: callee, ..
-        } => callee.unwrap_parens().as_dotted_path().as_deref() == Some("fmt.Sprintf"),
-        _ => false,
+            expression: callee,
+            args,
+            spread,
+            ..
+        } => match (
+            callee.unwrap_parens().as_dotted_path().as_deref(),
+            args.as_slice(),
+            spread,
+        ) {
+            (Some("fmt.Sprintf"), _, _) => Some(FmtArgument::Sprintf),
+            (Some("fmt.Sprint"), [_], None) => Some(FmtArgument::Sprint),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+enum FmtPrint {
+    Print,
+    Println,
+}
+
+impl FmtPrint {
+    fn from_callee(callee: &str) -> Option<Self> {
+        match callee {
+            "fmt.Print" => Some(Self::Print),
+            "fmt.Println" => Some(Self::Println),
+            _ => None,
+        }
     }
 }
 
@@ -91,54 +122,44 @@ fn collapse_fmt_print(
     args_strings: &[String],
     call_str: String,
 ) -> String {
-    if function_string != "fmt.Print" && function_string != "fmt.Println" {
+    let Some(print) = FmtPrint::from_callee(function_string) else {
         return call_str;
-    }
-    if args_strings.len() != 1 {
+    };
+    let ([arg_expression], [arg]) = (args, args_strings) else {
         return call_str;
-    }
-    let arg = &args_strings[0];
+    };
 
-    if let Some(arg_expression) = args.first()
-        && lowers_to_bare_sprintf(arg_expression)
-        && let Some(inner) = arg
-            .strip_prefix("fmt.Sprintf(")
-            .and_then(|s| s.strip_suffix(')'))
-    {
-        let suffix = if function_string == "fmt.Println" {
-            "\\n"
-        } else {
-            ""
-        };
-        if suffix.is_empty() {
-            return format!("fmt.Printf({})", inner);
+    match classify_fmt_argument(arg_expression) {
+        Some(FmtArgument::Sprintf) => {
+            let Some(inner) = arg
+                .strip_prefix("fmt.Sprintf(")
+                .and_then(|s| s.strip_suffix(')'))
+            else {
+                return call_str;
+            };
+            match print {
+                FmtPrint::Print => format!("fmt.Printf({})", inner),
+                FmtPrint::Println => {
+                    let Some(close_quote) = find_go_string_literal_close(inner) else {
+                        return call_str;
+                    };
+                    let format_open = &inner[..close_quote];
+                    let close_and_rest = &inner[close_quote..];
+                    format!("fmt.Printf({}\\n{})", format_open, close_and_rest)
+                }
+            }
         }
-        if let Some(close_quote) = find_go_string_literal_close(inner) {
-            let format_open = &inner[..close_quote];
-            let close_and_rest = &inner[close_quote..];
-            return format!("fmt.Printf({}{}{})", format_open, suffix, close_and_rest);
+        Some(FmtArgument::Sprint) => {
+            let Some(inner) = arg
+                .strip_prefix("fmt.Sprint(")
+                .and_then(|s| s.strip_suffix(')'))
+            else {
+                return call_str;
+            };
+            format!("{}({})", function_string, inner)
         }
-        return call_str;
+        None => call_str,
     }
-
-    if let Some(arg_expression) = args.first()
-        && let Expression::Call {
-            expression: inner_callee,
-            args: inner_args,
-            spread,
-            ..
-        } = arg_expression.unwrap_parens()
-        && spread.is_none()
-        && inner_args.len() == 1
-        && inner_callee.unwrap_parens().as_dotted_path().as_deref() == Some("fmt.Sprint")
-        && let Some(inner) = arg
-            .strip_prefix("fmt.Sprint(")
-            .and_then(|s| s.strip_suffix(')'))
-    {
-        return format!("{}({})", function_string, inner);
-    }
-
-    call_str
 }
 
 impl<'a> Planner<'a> {
@@ -319,15 +340,21 @@ impl<'a> Planner<'a> {
             .values
             .pop()
             .expect("sequenced exactly one argument");
-        let call = match value {
-            GoExpression::Call { callee, arguments } if callee.rendered() == "fmt.Sprintf" => {
-                GoExpression::call(GoExpression::opaque("fmt.Errorf".to_string()), arguments)
-            }
-            captured => {
+        let sprintf_arguments = value
+            .as_str()
+            .strip_prefix("fmt.Sprintf(")
+            .and_then(|value| value.strip_suffix(')'))
+            .map(str::to_string);
+        let call = match sprintf_arguments {
+            Some(arguments) => GoExpression::opaque_with_deferred_evaluation(
+                format!("fmt.Errorf({arguments})"),
+                true,
+            ),
+            None => {
                 let qualifier = self.require_package_import("go:errors");
                 GoExpression::call(
                     GoExpression::opaque(format!("{}.New", qualifier)),
-                    vec![captured],
+                    vec![value],
                 )
             }
         };
@@ -719,7 +746,7 @@ impl<'a> Planner<'a> {
         let arg_fn_params = arg_fn.get_function_params().unwrap_or(&[]);
         let param_type_strs: Vec<String> = arg_fn_params
             .iter()
-            .map(|param| self.go_type_string(&param.ty))
+            .map(|param| self.use_go_type(&param.ty))
             .collect();
         let target_element_ty = format!(
             "func({}) {}",

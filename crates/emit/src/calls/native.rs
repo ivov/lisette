@@ -49,13 +49,34 @@ pub(super) enum InlineImport {
 struct InlineRule {
     types: &'static [NativeGoType],
     method: &'static str,
-    arity: i8,
+    arity: RuleArity,
     template: &'static str,
     /// Direct Go form of the negated method. Set when the positive template
     /// emits a comparison, so `!method(...)` can flip the operator instead
     /// of prepending `!` (Go's `!` binds tighter than `==`).
     negated_template: Option<&'static str>,
     import: InlineImport,
+}
+
+#[derive(Clone, Copy)]
+enum RuleArity {
+    Exact(usize),
+    Variadic,
+}
+
+impl RuleArity {
+    fn accepts(self, actual: usize) -> bool {
+        match self {
+            Self::Exact(expected) => actual == expected,
+            Self::Variadic => true,
+        }
+    }
+}
+
+impl InlineRule {
+    fn matches(&self, native_type: NativeGoType, method: &str, arity: usize) -> bool {
+        self.method == method && self.types.contains(&native_type) && self.arity.accepts(arity)
+    }
 }
 
 type N = NativeGoType;
@@ -73,7 +94,7 @@ static INLINE_METHODS: &[InlineRule] = &[
             N::Array,
         ],
         method: "length",
-        arity: 0,
+        arity: RuleArity::Exact(0),
         template: "len({r})",
         negated_template: None,
         import: InlineImport::None,
@@ -81,7 +102,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::Slice, N::Channel, N::Sender, N::Receiver],
         method: "capacity",
-        arity: 0,
+        arity: RuleArity::Exact(0),
         template: "cap({r})",
         negated_template: None,
         import: InlineImport::None,
@@ -96,7 +117,7 @@ static INLINE_METHODS: &[InlineRule] = &[
             N::String,
         ],
         method: "is_empty",
-        arity: 0,
+        arity: RuleArity::Exact(0),
         template: "len({r}) == 0",
         negated_template: Some("len({r}) != 0"),
         import: InlineImport::None,
@@ -104,7 +125,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::Slice],
         method: "enumerate",
-        arity: 0,
+        arity: RuleArity::Exact(0),
         template: "{r}",
         negated_template: None,
         import: InlineImport::None,
@@ -112,7 +133,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::String],
         method: "bytes",
-        arity: 0,
+        arity: RuleArity::Exact(0),
         template: "[]byte({r})",
         negated_template: None,
         import: InlineImport::None,
@@ -120,7 +141,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::String],
         method: "runes",
-        arity: 0,
+        arity: RuleArity::Exact(0),
         template: "[]rune({r})",
         negated_template: None,
         import: InlineImport::None,
@@ -129,7 +150,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::Map],
         method: "delete",
-        arity: 1,
+        arity: RuleArity::Exact(1),
         template: "delete({r}, {0})",
         negated_template: None,
         import: InlineImport::None,
@@ -137,7 +158,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::Slice],
         method: "copy_from",
-        arity: 1,
+        arity: RuleArity::Exact(1),
         template: "copy({r}, {0})",
         negated_template: None,
         import: InlineImport::None,
@@ -145,7 +166,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::Slice],
         method: "contains",
-        arity: 1,
+        arity: RuleArity::Exact(1),
         template: "slices.Contains({r}, {0})",
         negated_template: None,
         import: InlineImport::Slices,
@@ -153,7 +174,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::String],
         method: "contains",
-        arity: 1,
+        arity: RuleArity::Exact(1),
         template: "strings.Contains({r}, {0})",
         negated_template: None,
         import: InlineImport::Strings,
@@ -161,7 +182,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::String],
         method: "split",
-        arity: 1,
+        arity: RuleArity::Exact(1),
         template: "strings.Split({r}, {0})",
         negated_template: None,
         import: InlineImport::Strings,
@@ -169,7 +190,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::String],
         method: "starts_with",
-        arity: 1,
+        arity: RuleArity::Exact(1),
         template: "strings.HasPrefix({r}, {0})",
         negated_template: None,
         import: InlineImport::Strings,
@@ -177,7 +198,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::String],
         method: "ends_with",
-        arity: 1,
+        arity: RuleArity::Exact(1),
         template: "strings.HasSuffix({r}, {0})",
         negated_template: None,
         import: InlineImport::Strings,
@@ -185,7 +206,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::String],
         method: "byte_at",
-        arity: 1,
+        arity: RuleArity::Exact(1),
         template: "{r}[{0}]",
         negated_template: None,
         import: InlineImport::None,
@@ -193,7 +214,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::String],
         method: "rune_at",
-        arity: 1,
+        arity: RuleArity::Exact(1),
         template: "lisette.RuneAt({r}, {0})",
         negated_template: None,
         import: InlineImport::Stdlib,
@@ -201,7 +222,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::Slice],
         method: "join",
-        arity: 1,
+        arity: RuleArity::Exact(1),
         template: "strings.Join({r}, {0})",
         negated_template: None,
         import: InlineImport::Strings,
@@ -209,7 +230,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::Slice],
         method: "any",
-        arity: 1,
+        arity: RuleArity::Exact(1),
         template: "slices.ContainsFunc({r}, {0})",
         negated_template: None,
         import: InlineImport::Slices,
@@ -217,7 +238,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::Slice],
         method: "reserve",
-        arity: 1,
+        arity: RuleArity::Exact(1),
         template: "slices.Grow({r}, {0})",
         negated_template: None,
         import: InlineImport::Slices,
@@ -226,7 +247,7 @@ static INLINE_METHODS: &[InlineRule] = &[
     InlineRule {
         types: &[N::Slice],
         method: "append",
-        arity: -1,
+        arity: RuleArity::Variadic,
         template: "append({r+args})",
         negated_template: None,
         import: InlineImport::None,
@@ -329,11 +350,9 @@ fn lookup_inline_rule(
     method: &str,
     arity: usize,
 ) -> Option<&'static InlineRule> {
-    INLINE_METHODS.iter().find(|s| {
-        s.method == method
-            && s.types.contains(native_type)
-            && (s.arity < 0 || s.arity as usize == arity)
-    })
+    INLINE_METHODS
+        .iter()
+        .find(|rule| rule.matches(*native_type, method, arity))
 }
 
 /// Try to inline a native-type method call. `negated` picks the rule's
@@ -390,7 +409,7 @@ fn has_inline_negation(native_type: &NativeGoType, method: &str, arity: usize) -
 /// Resolve the inline rule for a dot-access form, applying the static-receiver
 /// fallback when the standard receiver shape does not match.
 fn apply_inline_lookup(
-    planner: &Planner,
+    planner: &mut Planner,
     native_type: &NativeGoType,
     method: &str,
     receiver: &str,
@@ -413,89 +432,135 @@ fn apply_inline_lookup(
     None
 }
 
-/// Resolve the inline rule for an identifier-form call (args[0] is the receiver).
-fn apply_inline_identifier_lookup(
-    planner: &Planner,
-    ctx: &NativeCallContext,
-    emitted_args: &[String],
-    negated: bool,
-) -> Option<String> {
-    let (receiver, remaining) = emitted_args.split_first()?;
-    let (inlined, import) =
-        try_inline_native_method(ctx.native_type, ctx.method, receiver, remaining, negated)?;
-    apply_inline_import(planner, import);
-    Some(inlined)
+#[derive(Clone, Copy)]
+enum NativeMethodForm {
+    Dot,
+    Identifier,
+}
+
+struct StagedNativeMethod {
+    setup: Vec<LoweredStatement>,
+    receiver: String,
+    arguments: Vec<String>,
+    effect: EvaluationEffect,
+    contains_deferred_evaluation: bool,
+}
+
+impl StagedNativeMethod {
+    fn finish(self, value: String) -> NativeCallResult {
+        NativeCallResult::new(
+            self.setup,
+            value,
+            self.effect,
+            self.contains_deferred_evaluation,
+        )
+    }
 }
 
 impl Planner<'_> {
-    pub(super) fn lower_native_method_dot_access(
-        &mut self,
-        ctx: &NativeCallContext,
-    ) -> NativeCallResult {
-        let Expression::DotAccess { expression, .. } = ctx.function else {
-            unreachable!("expected DotAccess for native method call")
+    pub(super) fn lower_native_method(&mut self, ctx: &NativeCallContext) -> NativeCallResult {
+        let (form, receiver_expression, arguments) = match ctx.function {
+            Expression::DotAccess { expression, .. } => {
+                (NativeMethodForm::Dot, expression.as_ref(), ctx.args)
+            }
+            _ => {
+                let (receiver, arguments) = ctx
+                    .args
+                    .split_first()
+                    .expect("native method identifier has a receiver argument");
+                (NativeMethodForm::Identifier, receiver, arguments)
+            }
         };
 
-        if matches!(ctx.native_type, NativeGoType::String) && ctx.method == "substring" {
-            return self.lower_string_substring(expression, ctx.args, ctx.capture_boundary);
+        if matches!(ctx.native_type, NativeGoType::String)
+            && ctx.method == "substring"
+            && !arguments.is_empty()
+        {
+            return self.lower_string_substring(
+                receiver_expression,
+                arguments,
+                ctx.capture_boundary,
+            );
         }
 
         if ctx.method == "equals"
             && matches!(ctx.native_type, NativeGoType::Slice | NativeGoType::Map)
         {
-            let receiver_ty = self.facts.strip_and_peel(&expression.get_type());
+            let receiver_ty = self.facts.strip_and_peel(&receiver_expression.get_type());
             if receiver_ty.is_slice() || receiver_ty.is_map() {
-                let (setup, receiver, emitted_args, effect, contains_deferred_evaluation) =
-                    self.stage_native_dot_access_call(ctx);
-                let body = self.render_equality(&receiver, &emitted_args[0], &receiver_ty, &[]);
-                return NativeCallResult::new(setup, body, effect, contains_deferred_evaluation);
+                let staged = self.stage_native_method(ctx, form);
+                let body =
+                    self.render_equality(&staged.receiver, &staged.arguments[0], &receiver_ty, &[]);
+                return staged.finish(body);
             }
         }
 
         if matches!(ctx.native_type, NativeGoType::Array)
-            && let Some(result) = self.lower_native_array_method(ctx, expression)
+            && is_native_array_method(ctx.method)
+            && matches!(
+                self.facts.strip_and_peel(&receiver_expression.get_type()),
+                Type::Array { .. }
+            )
         {
-            return result;
+            let mut staged = self.stage_native_method(ctx, form);
+            let index = staged.arguments.first();
+            let body = self.lower_array_method_body(
+                ctx.method,
+                receiver_expression,
+                staged.receiver.clone(),
+                index,
+                &mut staged.setup,
+            );
+            return staged.finish(body);
         }
 
         if matches!(ctx.native_type, NativeGoType::Slice)
-            && let Some(result) = self.try_lower_slice_loop(ctx, expression, ctx.args)
+            && let Some(result) = self.try_lower_slice_loop(ctx, receiver_expression, arguments)
         {
             return result;
         }
 
         if ctx.method == "clone" {
-            let receiver_ty = self.facts.strip_and_peel(&expression.get_type());
+            let receiver_ty = self.facts.strip_and_peel(&receiver_expression.get_type());
             if is_cloneable_container(&receiver_ty) {
-                let (setup, receiver, _, effect, contains_deferred_evaluation) =
-                    self.stage_native_dot_access_call(ctx);
-                let body = self.render_clone(&receiver, &receiver_ty);
-                return NativeCallResult::new(setup, body, effect, contains_deferred_evaluation);
+                let staged = self.stage_native_method(ctx, form);
+                let body = self.render_clone(&staged.receiver, &receiver_ty);
+                return staged.finish(body);
             }
         }
 
-        let (setup, receiver, emitted_args, effect, contains_deferred_evaluation) =
-            self.stage_native_dot_access_call(ctx);
-
-        let receiver = if growth_clip_applies(ctx, expression) {
-            clip_shared_capacity(&receiver)
-        } else {
-            receiver
-        };
-
-        if let Some(inlined) = apply_inline_lookup(
-            self,
-            ctx.native_type,
-            ctx.method,
-            &receiver,
-            &emitted_args,
-            false,
-        ) {
-            return NativeCallResult::new(setup, inlined, effect, contains_deferred_evaluation);
+        let mut staged = self.stage_native_method(ctx, form);
+        if growth_clip_applies(ctx, receiver_expression) {
+            staged.receiver = clip_shared_capacity(&staged.receiver);
         }
 
-        let mut new_args = vec![receiver];
-        new_args.extend(emitted_args);
+        let inlined = match form {
+            NativeMethodForm::Dot => apply_inline_lookup(
+                self,
+                ctx.native_type,
+                ctx.method,
+                &staged.receiver,
+                &staged.arguments,
+                false,
+            ),
+            NativeMethodForm::Identifier => try_inline_native_method(
+                ctx.native_type,
+                ctx.method,
+                &staged.receiver,
+                &staged.arguments,
+                false,
+            )
+            .map(|(value, import)| {
+                apply_inline_import(self, import);
+                value
+            }),
+        };
+        if let Some(inlined) = inlined {
+            return staged.finish(inlined);
+        }
+
+        let mut emitted_args = vec![staged.receiver.clone()];
+        emitted_args.extend(staged.arguments.iter().cloned());
         self.require_stdlib();
         let fn_name = format!(
             "{}.{}{}",
@@ -503,44 +568,20 @@ impl Planner<'_> {
             ctx.native_type.method_prefix(),
             go_name::snake_to_camel(ctx.method)
         );
-        let type_args_string = if !ctx.resolved_type_args.is_empty() && ctx.call_ty.is_some() {
-            let receiver_ty = expression.get_type();
-            self.format_type_args_with_receiver(&receiver_ty, ctx.resolved_type_args)
-        } else {
-            self.format_resolved_type_args(ctx.resolved_type_args)
+        let type_args = match form {
+            NativeMethodForm::Dot
+                if !ctx.resolved_type_args.is_empty() && ctx.call_ty.is_some() =>
+            {
+                self.format_type_args_with_receiver(
+                    &receiver_expression.get_type(),
+                    ctx.resolved_type_args,
+                )
+            }
+            NativeMethodForm::Dot | NativeMethodForm::Identifier => {
+                self.format_resolved_type_args(ctx.resolved_type_args)
+            }
         };
-        NativeCallResult::new(
-            setup,
-            format!("{}{}({})", fn_name, type_args_string, new_args.join(", ")),
-            effect,
-            contains_deferred_evaluation,
-        )
-    }
-
-    fn lower_native_array_method(
-        &mut self,
-        ctx: &NativeCallContext,
-        expression: &Expression,
-    ) -> Option<NativeCallResult> {
-        if !is_native_array_method(ctx.method)
-            || !matches!(
-                self.facts.strip_and_peel(&expression.get_type()),
-                Type::Array { .. }
-            )
-        {
-            return None;
-        }
-        let (mut setup, receiver, emitted_args, effect, contains_deferred_evaluation) =
-            self.stage_native_dot_access_call(ctx);
-        let index = emitted_args.first();
-        let body =
-            self.lower_array_method_body(ctx.method, expression, receiver, index, &mut setup);
-        Some(NativeCallResult::new(
-            setup,
-            body,
-            effect,
-            contains_deferred_evaluation,
-        ))
+        staged.finish(format!("{fn_name}{type_args}({})", emitted_args.join(", ")))
     }
 
     fn lower_array_method_body(
@@ -625,27 +666,47 @@ impl Planner<'_> {
         }
     }
 
-    /// Negated counterpart for dot-access native method calls. Returns
-    /// `None` when the rule has no `negated_template`, so the unary-not
-    /// caller can fall back to `!expr` without having staged anything.
-    pub(super) fn try_emit_negated_native_method_dot_access(
+    /// Returns `None` when the rule has no direct negated form, without staging.
+    pub(super) fn try_emit_negated_native_method(
         &mut self,
         setup: &mut Vec<LoweredStatement>,
         ctx: &NativeCallContext,
     ) -> Option<String> {
-        if !has_inline_negation(ctx.native_type, ctx.method, ctx.args.len()) {
+        let (form, arity) = if matches!(ctx.function, Expression::DotAccess { .. }) {
+            (NativeMethodForm::Dot, ctx.args.len())
+        } else {
+            (
+                NativeMethodForm::Identifier,
+                ctx.args.len().saturating_sub(1),
+            )
+        };
+        if !has_inline_negation(ctx.native_type, ctx.method, arity) {
             return None;
         }
-        let (stage_setup, receiver, emitted_args, _, _) = self.stage_native_dot_access_call(ctx);
-        setup.extend(stage_setup);
-        apply_inline_lookup(
-            self,
-            ctx.native_type,
-            ctx.method,
-            &receiver,
-            &emitted_args,
-            true,
-        )
+        let staged = self.stage_native_method(ctx, form);
+        let (inlined, import) = match form {
+            NativeMethodForm::Dot => {
+                let value = apply_inline_lookup(
+                    self,
+                    ctx.native_type,
+                    ctx.method,
+                    &staged.receiver,
+                    &staged.arguments,
+                    true,
+                )?;
+                (value, InlineImport::None)
+            }
+            NativeMethodForm::Identifier => try_inline_native_method(
+                ctx.native_type,
+                ctx.method,
+                &staged.receiver,
+                &staged.arguments,
+                true,
+            )?,
+        };
+        setup.extend(staged.setup);
+        apply_inline_import(self, import);
+        Some(inlined)
     }
 
     /// Pin the receiver stage to a temp when it reads a mutable operand,
@@ -667,66 +728,63 @@ impl Planner<'_> {
         }
     }
 
-    fn stage_native_dot_access_call(
+    fn stage_native_method(
         &mut self,
         ctx: &NativeCallContext,
-    ) -> (
-        Vec<LoweredStatement>,
-        String,
-        Vec<String>,
-        EvaluationEffect,
-        bool,
-    ) {
-        let Expression::DotAccess { expression, .. } = ctx.function else {
-            unreachable!("expected DotAccess for native method call")
+        form: NativeMethodForm,
+    ) -> StagedNativeMethod {
+        let (receiver, mut stages) = match (form, ctx.function) {
+            (NativeMethodForm::Dot, Expression::DotAccess { expression, .. }) => {
+                let mut stages = vec![self.stage_operand(expression, ExpressionContext::value())];
+                stages.extend(self.stage_native_method_args(ctx.function, ctx.args));
+                (expression.as_ref(), stages)
+            }
+            (NativeMethodForm::Identifier, _) => (
+                &ctx.args[0],
+                self.stage_native_method_args(ctx.function, ctx.args),
+            ),
+            (NativeMethodForm::Dot, _) => unreachable!("dot form requires dot access"),
         };
-
-        let mut all_stages: Vec<ValuePlan> =
-            Vec::with_capacity(1 + ctx.args.len() + ctx.spread.is_some() as usize);
-        let mut receiver_stage = self.stage_operand(expression, ExpressionContext::value());
-        let argument_stages = self.stage_native_method_args(ctx.function, ctx.args);
         let spread_stage = ctx
             .spread
             .map(|spread| self.stage_operand(spread, ExpressionContext::value()));
-        let rest_has_call = argument_stages
+        let rest_has_call = stages[1..]
             .iter()
             .chain(spread_stage.iter())
             .any(|stage| stage.evaluation.effect.has_call());
-        self.pin_receiver_if_mutated(&mut receiver_stage, expression, rest_has_call);
-        if expression.get_type().is_ref() {
-            receiver_stage = receiver_stage.unary("*");
+        self.pin_receiver_if_mutated(&mut stages[0], receiver, rest_has_call);
+        if matches!(form, NativeMethodForm::Dot) && receiver.get_type().is_ref() {
+            let receiver = stages.remove(0).unary("*");
+            stages.insert(0, receiver);
         }
-        if growth_clip_applies(ctx, expression)
-            && !is_clip_safe_path(&receiver_stage.expression.rendered())
+        if growth_clip_applies(ctx, receiver)
+            && !is_clip_safe_path(&stages[0].expression.rendered())
         {
-            self.pin_staged(&mut receiver_stage, "recv");
+            self.pin_staged(&mut stages[0], "recv");
         }
-        all_stages.push(receiver_stage);
-        all_stages.extend(argument_stages);
         let spread_index = spread_stage.map(|stage| {
-            all_stages.push(stage);
-            all_stages.len() - 1
+            stages.push(stage);
+            stages.len() - 1
         });
 
-        let combine =
-            plan_variadic_spread(&self.facts, ctx.function, ctx.spread).map(|p| p.combine(1));
-        let mut sequenced = self.sequence_values(all_stages, ctx.capture_boundary, "arg");
+        let receiver_offset = matches!(form, NativeMethodForm::Dot) as usize;
+        let combine = plan_variadic_spread(&self.facts, ctx.function, ctx.spread)
+            .map(|plan| plan.combine(receiver_offset));
+        let mut sequenced = self.sequence_values(stages, ctx.capture_boundary, "arg");
         if let Some(spread_index) = spread_index {
             self.finalize_spread_stage(&mut sequenced.values, spread_index, false, combine);
         }
         let effect = sequenced.effect;
         let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
-        let (setup, all_values) = sequenced.into_rendered();
-
-        let receiver = all_values[0].clone();
-        let emitted_args: Vec<String> = all_values[1..].to_vec();
-        (
+        let (setup, mut values) = sequenced.into_rendered();
+        let receiver = values.remove(0);
+        StagedNativeMethod {
             setup,
             receiver,
-            emitted_args,
+            arguments: values,
             effect,
             contains_deferred_evaluation,
-        )
+        }
     }
 
     /// Lower `m.get(k)` to the native comma-ok index expression `m[k]`.
@@ -758,174 +816,12 @@ impl Planner<'_> {
             capture_boundary: CaptureBoundary::SiblingSequence,
             retired_receiver: None,
         };
-        let (setup, receiver, emitted_args, _, _) = self.stage_native_dot_access_call(&ctx);
-        let receiver = super::comma_ok::parenthesize_prefixed(receiver);
-        (setup, format!("{}[{}]", receiver, emitted_args[0]))
-    }
-
-    pub(super) fn lower_native_method_identifier(
-        &mut self,
-        ctx: &NativeCallContext,
-    ) -> NativeCallResult {
-        if matches!(ctx.native_type, NativeGoType::String)
-            && ctx.method == "substring"
-            && ctx.args.len() >= 2
-        {
-            return self.lower_string_substring(&ctx.args[0], &ctx.args[1..], ctx.capture_boundary);
-        }
-
-        if ctx.method == "equals"
-            && matches!(ctx.native_type, NativeGoType::Slice | NativeGoType::Map)
-            && let Some(receiver_expr) = ctx.args.first()
-        {
-            let receiver_ty = self.facts.strip_and_peel(&receiver_expr.get_type());
-            if receiver_ty.is_slice() || receiver_ty.is_map() {
-                let (setup, emitted_args, effect, contains_deferred_evaluation) =
-                    self.stage_native_identifier_args(ctx);
-                if emitted_args.len() >= 2 {
-                    let body =
-                        self.render_equality(&emitted_args[0], &emitted_args[1], &receiver_ty, &[]);
-                    return NativeCallResult::new(
-                        setup,
-                        body,
-                        effect,
-                        contains_deferred_evaluation,
-                    );
-                }
-            }
-        }
-
-        if matches!(ctx.native_type, NativeGoType::Slice)
-            && let Some((receiver, args)) = ctx.args.split_first()
-            && let Some(result) = self.try_lower_slice_loop(ctx, receiver, args)
-        {
-            return result;
-        }
-
-        if ctx.method == "clone"
-            && let Some(receiver_expr) = ctx.args.first()
-        {
-            let receiver_ty = self.facts.strip_and_peel(&receiver_expr.get_type());
-            if is_cloneable_container(&receiver_ty) {
-                let (setup, emitted_args, effect, contains_deferred_evaluation) =
-                    self.stage_native_identifier_args(ctx);
-                if let Some(receiver) = emitted_args.first() {
-                    let body = self.render_clone(receiver, &receiver_ty);
-                    return NativeCallResult::new(
-                        setup,
-                        body,
-                        effect,
-                        contains_deferred_evaluation,
-                    );
-                }
-            }
-        }
-
-        if is_native_array_method(ctx.method)
-            && let Some(receiver_expr) = ctx.args.first()
-            && matches!(
-                self.facts.strip_and_peel(&receiver_expr.get_type()),
-                Type::Array { .. }
-            )
-        {
-            let (mut setup, emitted_args, effect, contains_deferred_evaluation) =
-                self.stage_native_identifier_args(ctx);
-            let receiver = emitted_args[0].clone();
-            let index = emitted_args.get(1);
-            let body = self.lower_array_method_body(
-                ctx.method,
-                receiver_expr,
-                receiver,
-                index,
-                &mut setup,
-            );
-            return NativeCallResult::new(setup, body, effect, contains_deferred_evaluation);
-        }
-
-        let (setup, mut emitted_args, effect, contains_deferred_evaluation) =
-            self.stage_native_identifier_args(ctx);
-
-        if let Some(receiver_expr) = ctx.args.first()
-            && growth_clip_applies(ctx, receiver_expr)
-            && let Some(first) = emitted_args.first_mut()
-        {
-            *first = clip_shared_capacity(first);
-        }
-
-        if let Some(inlined) = apply_inline_identifier_lookup(self, ctx, &emitted_args, false) {
-            return NativeCallResult::new(setup, inlined, effect, contains_deferred_evaluation);
-        }
-
-        self.require_stdlib();
-        let fn_name = format!(
-            "{}.{}{}",
-            go_name::GO_STDLIB_PKG,
-            ctx.native_type.method_prefix(),
-            go_name::snake_to_camel(ctx.method)
-        );
-        let type_args_string = self.format_resolved_type_args(ctx.resolved_type_args);
-        NativeCallResult::new(
-            setup,
-            format!(
-                "{}{}({})",
-                fn_name,
-                type_args_string,
-                emitted_args.join(", ")
-            ),
-            effect,
-            contains_deferred_evaluation,
+        let staged = self.stage_native_method(&ctx, NativeMethodForm::Dot);
+        let receiver = super::comma_ok::parenthesize_prefixed(staged.receiver);
+        (
+            staged.setup,
+            format!("{}[{}]", receiver, staged.arguments[0]),
         )
-    }
-
-    /// Negated counterpart for identifier-form native method calls.
-    pub(super) fn try_emit_negated_native_method_identifier(
-        &mut self,
-        setup: &mut Vec<LoweredStatement>,
-        ctx: &NativeCallContext,
-    ) -> Option<String> {
-        let receiver_arity = ctx.args.len().saturating_sub(1);
-        if !has_inline_negation(ctx.native_type, ctx.method, receiver_arity) {
-            return None;
-        }
-        let (stage_setup, emitted_args, _, _) = self.stage_native_identifier_args(ctx);
-        setup.extend(stage_setup);
-        apply_inline_identifier_lookup(self, ctx, &emitted_args, true)
-    }
-
-    fn stage_native_identifier_args(
-        &mut self,
-        ctx: &NativeCallContext,
-    ) -> (Vec<LoweredStatement>, Vec<String>, EvaluationEffect, bool) {
-        let mut stages = self.stage_native_method_args(ctx.function, ctx.args);
-        let spread_stage = ctx
-            .spread
-            .map(|spread| self.stage_operand(spread, ExpressionContext::value()));
-        if let Some(receiver) = ctx.args.first() {
-            let rest_has_call = stages[1..]
-                .iter()
-                .chain(spread_stage.iter())
-                .any(|stage| stage.evaluation.effect.has_call());
-            self.pin_receiver_if_mutated(&mut stages[0], receiver, rest_has_call);
-            if growth_clip_applies(ctx, receiver)
-                && !is_clip_safe_path(&stages[0].expression.rendered())
-            {
-                self.pin_staged(&mut stages[0], "recv");
-            }
-        }
-        let spread_index = spread_stage.map(|stage| {
-            stages.push(stage);
-            stages.len() - 1
-        });
-        let combine =
-            plan_variadic_spread(&self.facts, ctx.function, ctx.spread).map(|p| p.combine(0));
-        let mut sequenced = self.sequence_values(stages, ctx.capture_boundary, "arg");
-        if let Some(spread_index) = spread_index {
-            self.finalize_spread_stage(&mut sequenced.values, spread_index, false, combine);
-        }
-        let effect = sequenced.effect;
-        let contains_deferred_evaluation = sequenced.contains_deferred_evaluation();
-        let (setup, values) = sequenced.into_rendered();
-        (setup, values, effect, contains_deferred_evaluation)
     }
 
     fn lower_string_substring(
@@ -1069,7 +965,7 @@ impl Planner<'_> {
     }
 
     fn equality_closure(&mut self, ty: &Type, generics: &[Generic]) -> String {
-        let go_ty = self.go_type_string(ty);
+        let go_ty = self.use_go_type(ty);
         let a = self.fresh_var(Some("a"));
         let b = self.fresh_var(Some("b"));
         let body = self.render_equality(&a, &b, ty, generics);
@@ -1106,7 +1002,7 @@ fn format_substring_call(receiver: &str, start: Option<&str>, end: Option<&str>)
     }
 }
 
-pub(super) fn apply_inline_import(planner: &Planner, import: InlineImport) {
+pub(super) fn apply_inline_import(planner: &mut Planner, import: InlineImport) {
     match import {
         InlineImport::Slices => planner.require_slices(),
         InlineImport::Strings => planner.require_strings(),

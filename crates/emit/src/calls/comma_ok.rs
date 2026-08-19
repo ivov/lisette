@@ -41,12 +41,35 @@ pub(crate) enum CommaOkValueSlot {
     Unused,
 }
 
-/// A bound comma-ok pair: setup statements ending in the `value, ok :=` line.
-pub(crate) struct LoweredCommaOk {
+#[derive(Clone, Copy)]
+enum PairSuccess {
+    Truthy,
+    Nil,
+}
+
+pub(crate) enum PairKind {
+    CommaOk {
+        nil_guard: Option<NilGuard>,
+    },
+    Error {
+        carries_value: bool,
+        nil_guard: Option<NilGuard>,
+    },
+}
+
+/// A bound two-result expression and the rule that distinguishes success.
+pub(crate) struct LoweredPair {
     pub(crate) statements: Vec<LoweredStatement>,
     pub(crate) value: Option<String>,
-    pub(crate) ok: String,
+    status: String,
+    success: PairSuccess,
     nil_guard: Option<NilGuard>,
+}
+
+impl LoweredPair {
+    pub(crate) fn status(&self) -> &str {
+        &self.status
+    }
 }
 
 impl Planner<'_> {
@@ -127,70 +150,96 @@ impl Planner<'_> {
         expression: &Expression,
         source: CommaOkSource,
         slot: CommaOkValueSlot,
-    ) -> LoweredCommaOk {
-        let value = match slot {
-            CommaOkValueSlot::Named(name) => Some(name),
-            CommaOkValueSlot::Temp => Some(self.fresh_comma_ok_value()),
-            CommaOkValueSlot::Unused => source
-                .nil_guard
-                .is_some()
-                .then(|| self.fresh_comma_ok_value()),
+    ) -> LoweredPair {
+        let (statements, pair) = self.lower_comma_ok_pair(expression, &source.pair);
+        self.bind_pair(
+            statements,
+            pair,
+            slot,
+            PairKind::CommaOk {
+                nil_guard: source.nil_guard,
+            },
+        )
+    }
+
+    pub(crate) fn bind_pair(
+        &mut self,
+        mut statements: Vec<LoweredStatement>,
+        expression: String,
+        slot: CommaOkValueSlot,
+        kind: PairKind,
+    ) -> LoweredPair {
+        let (carries_value, nil_guard, success, hint) = match kind {
+            PairKind::CommaOk { nil_guard } => (true, nil_guard, PairSuccess::Truthy, "ok"),
+            PairKind::Error {
+                carries_value,
+                nil_guard,
+            } => (carries_value, nil_guard, PairSuccess::Nil, "err"),
         };
-        let ok = self.fresh_var(Some("ok"));
-        self.declare(&ok);
-        let (mut statements, pair) = self.lower_comma_ok_pair(expression, &source.pair);
+        let value = carries_value
+            .then(|| match slot {
+                CommaOkValueSlot::Named(name) => Some(name),
+                CommaOkValueSlot::Temp => Some(self.fresh_pair_value()),
+                CommaOkValueSlot::Unused => nil_guard.map(|_| self.fresh_pair_value()),
+            })
+            .flatten();
+        let status = self.fresh_var(Some(hint));
+        self.declare(&status);
+        let binding = match (carries_value, value.as_deref()) {
+            (true, Some(value)) => format!("{value}, {status}"),
+            (true, None) => format!("_, {status}"),
+            (false, _) => status.clone(),
+        };
         statements.push(LoweredStatement::RawGo(format!(
-            "{}, {} := {}\n",
-            value.as_deref().unwrap_or("_"),
-            ok,
-            pair
+            "{binding} := {expression}\n"
         )));
-        LoweredCommaOk {
+        LoweredPair {
             statements,
             value,
-            ok,
-            nil_guard: source.nil_guard,
+            status,
+            success,
+            nil_guard,
         }
     }
 
-    fn fresh_comma_ok_value(&mut self) -> String {
+    fn fresh_pair_value(&mut self) -> String {
         let v = self.fresh_var(Some("ret"));
         self.declare(&v);
         v
     }
 
-    /// The Some-branch test: `ok` plus the wrap's nil guard.
-    pub(crate) fn comma_ok_some_condition(&mut self, pair: &LoweredCommaOk) -> String {
-        match pair.nil_guard {
-            Some(guard) => {
-                if guard.is_interface() {
-                    self.require_stdlib();
-                }
-                let value = pair
-                    .value
-                    .as_deref()
-                    .expect("nil guard requires the value var");
-                format!("{} && {}", pair.ok, guard.non_nil(value))
-            }
-            None => pair.ok.clone(),
-        }
+    pub(crate) fn pair_success_condition(&mut self, pair: &LoweredPair) -> String {
+        self.pair_condition(pair, true)
     }
 
-    /// The negated Some-branch test.
-    pub(crate) fn comma_ok_none_condition(&mut self, pair: &LoweredCommaOk) -> String {
-        match pair.nil_guard {
-            Some(guard) => {
-                if guard.is_interface() {
-                    self.require_stdlib();
-                }
-                let value = pair
-                    .value
-                    .as_deref()
-                    .expect("nil guard requires the value var");
-                format!("!{} || {}", pair.ok, guard.is_nil(value))
-            }
-            None => format!("!{}", pair.ok),
+    pub(crate) fn pair_failure_condition(&mut self, pair: &LoweredPair) -> String {
+        self.pair_condition(pair, false)
+    }
+
+    fn pair_condition(&mut self, pair: &LoweredPair, success: bool) -> String {
+        let status = match (pair.success, success) {
+            (PairSuccess::Truthy, true) => pair.status.clone(),
+            (PairSuccess::Truthy, false) => format!("!{}", pair.status),
+            (PairSuccess::Nil, true) => format!("{} == nil", pair.status),
+            (PairSuccess::Nil, false) => format!("{} != nil", pair.status),
+        };
+        let Some(guard) = pair.nil_guard else {
+            return status;
+        };
+        if guard.is_interface() {
+            self.require_stdlib();
         }
+        let value = pair
+            .value
+            .as_deref()
+            .expect("nil guard requires the value var");
+        let nil_condition = if success {
+            guard.non_nil(value)
+        } else {
+            guard.is_nil(value)
+        };
+        let operator = if success { "&&" } else { "||" };
+        format!("{status} {operator} {nil_condition}")
     }
 
     /// Lower the pair-producing Go expression.
@@ -213,7 +262,7 @@ impl Planner<'_> {
                     .into_parts();
                 let operand = parenthesize_prefixed(operand);
                 let target_ty = self.facts.peel_alias(&expression.get_type()).ok_type();
-                let target = self.go_type_string(&target_ty);
+                let target = self.use_go_type(&target_ty);
                 (setup, format!("{}.({})", operand, target))
             }
         }

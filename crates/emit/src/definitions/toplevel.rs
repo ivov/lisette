@@ -36,17 +36,7 @@ impl Planner<'_> {
             .as_ref()
             .or(declared_target.as_ref())
             .unwrap_or(ty);
-        let ty_string = self.go_type_string(underlying);
-
-        if let Type::Nominal { id, .. } = underlying
-            && let Some(package) = self.facts.package_for_qualified_name(id.as_str())
-            && !self.facts.is_current_package(package)
-            && package != go_name::PRELUDE_PACKAGE
-            && !go_name::is_go_import(package)
-        {
-            let package = package.to_string();
-            self.require_package_import(&package);
-        }
+        let ty_string = self.use_go_type(underlying);
 
         let generics_string = self.generics_to_string(generics);
 
@@ -81,11 +71,11 @@ impl Planner<'_> {
             self.try_declare(&fresh);
             fresh
         };
-        let ty_str = self.go_type_string(ty);
+        let ty_str = self.use_go_type(ty);
 
         // `is_go_constant_expression` admits only literals, identifiers, and
         // constexpr unary/binary, none of which carry setup statements.
-        let raw_value = self.plan_value(expression, ExpressionContext::value());
+        let raw_value = self.lower_value(expression, ExpressionContext::value());
         let value_text = raw_value.rendered();
         let value = if value_text.is_empty() {
             ValuePlan::opaque("struct{}{}".to_string())
@@ -93,11 +83,8 @@ impl Planner<'_> {
             ValuePlan::opaque(value_text)
         };
         let is_const = self.is_go_constant_expression(expression);
-        if is_const {
-            match scope {
-                ConstScope::Package => self.package.record_go_const_binding(identifier.to_string()),
-                ConstScope::Local => self.scope.mark_go_const(identifier),
-            }
+        if is_const && matches!(scope, ConstScope::Local) {
+            self.scope.mark_go_const(identifier);
         }
         ConstPlan {
             is_const,

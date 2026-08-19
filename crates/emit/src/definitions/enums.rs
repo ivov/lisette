@@ -1,6 +1,6 @@
 use crate::Planner;
 use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD, EnumLayout};
-use crate::definitions::structs::should_synthesize_stringer;
+use crate::definitions::structs::{StringFormat, should_synthesize_stringer};
 use crate::names::go_name::{self, prelude_qualifier};
 use crate::utils::{synthesized_local_name, synthesized_receiver_name};
 use syntax::ast::{Attribute, Generic};
@@ -21,22 +21,7 @@ impl Planner<'_> {
         let enum_id = self.facts.qualified_current(name);
 
         let layout = self.enum_layout(&enum_id)?;
-
-        let variant_field_types: Vec<Type> = if let Some(Definition {
-            body: DefinitionBody::Enum { variants, .. },
-            ..
-        }) = self.facts.definition(enum_id.as_str())
-        {
-            variants
-                .iter()
-                .flat_map(|v| v.fields.iter().map(|f| f.ty.clone()))
-                .collect()
-        } else {
-            Vec::new()
-        };
-        for ty in &variant_field_types {
-            let _ = self.go_type_string(ty);
-        }
+        self.require_packages(layout.requirements());
 
         let generics_string = self.generics_to_string(generics);
         let receiver_generics = self.receiver_generics_string(generics);
@@ -51,18 +36,22 @@ impl Planner<'_> {
         let mut result = layout.emit_definition(&generics_string);
         if emit_string {
             result.push_str("\n\n");
-            result.push_str(&layout.emit_stringer_method(
+            result.push_str(&layout.emit_format_method(
                 &receiver_generics,
-                ENUM_STRINGER_METHOD,
-                false,
+                StringFormat::Display {
+                    method: ENUM_STRINGER_METHOD,
+                    qualified: false,
+                },
             ));
         }
         if emit_go_string {
             result.push_str("\n\n");
-            result.push_str(&layout.emit_stringer_method(
+            result.push_str(&layout.emit_format_method(
                 &receiver_generics,
-                ENUM_GO_STRINGER_METHOD,
-                true,
+                StringFormat::Display {
+                    method: ENUM_GO_STRINGER_METHOD,
+                    qualified: true,
+                },
             ));
         }
         if has_json {
@@ -95,7 +84,7 @@ impl Planner<'_> {
     }
 
     fn append_enum_debug_method(
-        &self,
+        &mut self,
         out: &mut String,
         name: &str,
         receiver_generics: &str,
@@ -105,7 +94,12 @@ impl Planner<'_> {
             return;
         }
         out.push_str("\n\n");
-        out.push_str(&layout.emit_debug_method(receiver_generics, prelude_qualifier()));
+        out.push_str(&layout.emit_format_method(
+            receiver_generics,
+            StringFormat::Debug {
+                prelude: prelude_qualifier(),
+            },
+        ));
         self.require_fmt();
         if layout.debug_uses_prelude() {
             self.require_stdlib();
@@ -204,6 +198,7 @@ impl Planner<'_> {
         variant_name: &str,
     ) -> String {
         let layout = self.enum_layout(enum_id).expect("enum layout should exist");
+        self.require_packages(layout.requirements());
         let variant = layout
             .get_variant(variant_name)
             .expect("variant should exist in layout");
@@ -256,7 +251,7 @@ impl Planner<'_> {
                 .collect(),
         };
 
-        let return_type = self.go_type_string(&return_type);
+        let return_type = self.use_go_type(&return_type);
 
         format!(
             "func {} {} ({}) {} {{\n    return {} {} {{ Tag: {}, {} }}\n}}",

@@ -7,6 +7,43 @@ use syntax::ast::{Expression, Generic, Visibility};
 use syntax::program::File;
 
 impl Planner<'_> {
+    /// Derive package constants that Go can represent as `const` declarations.
+    /// This is package-wide because Go package declarations are not ordered:
+    /// a constant's eligibility must not depend on which file or item renders
+    /// first.
+    pub(crate) fn derive_package_go_consts(&mut self, files: &[&File]) {
+        let candidates: Vec<(&str, &Expression)> = files
+            .iter()
+            .flat_map(|file| &file.items)
+            .filter_map(|item| {
+                let Expression::Const {
+                    identifier,
+                    expression,
+                    ..
+                } = item
+                else {
+                    return None;
+                };
+                Some((identifier.as_str(), expression.value()?))
+            })
+            .collect();
+
+        loop {
+            let newly_eligible: Vec<String> = candidates
+                .iter()
+                .filter(|(name, expression)| {
+                    !self.package.is_go_const_binding(name)
+                        && self.is_go_constant_expression(expression)
+                })
+                .map(|(name, _)| (*name).to_string())
+                .collect();
+            if newly_eligible.is_empty() {
+                break;
+            }
+            self.package.extend_go_const_bindings(newly_eligible);
+        }
+    }
+
     /// Record the emitted Go names of top-level private functions and
     /// constants that differ from their source spelling. Colliding private
     /// functions freshen to `name_2`, `name_3`, etc. Constants never

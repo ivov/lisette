@@ -228,13 +228,14 @@ impl Planner<'_> {
         call_expression: &Expression,
     ) -> Option<String> {
         let plan = self.plan_call(call_expression)?;
-        if plan.resolved.abi.result.is_passthrough()
-            && (!matches!(plan.resolved.origin, CallableOrigin::GoInterop)
-                || self
-                    .go_result_layout_bridge(&plan.resolved.abi, &call_expression.get_type())
-                    .is_none())
-        {
-            return None;
+        if plan.resolved.abi.result.is_passthrough() {
+            match plan.resolved.origin {
+                CallableOrigin::GoInterop
+                    if self
+                        .go_result_layout_bridge(&plan.resolved.abi, &call_expression.get_type())
+                        .is_some() => {}
+                _ => return None,
+            }
         }
 
         let (call_setup, call_str) = self
@@ -277,7 +278,11 @@ impl Planner<'_> {
     }
 }
 
-pub(super) fn build_tuple_literal(planner: &Planner, vars: &[String], _tuple_ty: &Type) -> String {
+pub(super) fn build_tuple_literal(
+    planner: &mut Planner,
+    vars: &[String],
+    _tuple_ty: &Type,
+) -> String {
     planner.require_stdlib();
     format!("lisette.MakeTuple{}({})", vars.len(), vars.join(", "))
 }

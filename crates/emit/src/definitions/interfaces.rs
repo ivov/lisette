@@ -27,7 +27,7 @@ impl Planner<'_> {
         ));
 
         for parent in parents {
-            output.push(self.go_type_string(&parent.ty));
+            output.push(self.use_go_type(&parent.ty));
         }
 
         for item in items {
@@ -54,7 +54,7 @@ impl Planner<'_> {
 
         let args: Vec<String> = all_args
             .iter()
-            .map(|param| self.go_type_string(&param.ty))
+            .map(|param| self.use_go_type(&param.ty))
             .collect();
         let raw_return_ty = ty
             .get_function_ret()
@@ -66,7 +66,7 @@ impl Planner<'_> {
         let return_type = if return_abi.is_lowered() {
             self.render_lowered_return_ty(&return_abi, &raw_return_ty)
         } else {
-            self.go_type_string(&raw_return_ty)
+            self.use_go_type(&raw_return_ty)
         };
 
         let method_name = if is_public || self.method_needs_export(func.name) {

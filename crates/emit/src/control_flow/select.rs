@@ -1,6 +1,5 @@
 use crate::Planner;
 use crate::context::expression::ExpressionContext;
-use crate::names::go_name;
 use crate::patterns::sites::{
     self, AnnotatedPattern, PatternSubject, TypedSubject, unwrap_some_pattern,
 };
@@ -501,18 +500,7 @@ impl Planner<'_> {
         self.with_binding_frame(|this| {
             let (receiver_var_pattern, some_arm) = match_arms
                 .iter()
-                .find_map(|arm| {
-                    if let Pattern::EnumVariant {
-                        identifier, fields, ..
-                    } = &arm.pattern
-                        && go_name::unqualified_name(identifier) == "Some"
-                        && fields.len() == 1
-                    {
-                        Some((&fields[0], arm))
-                    } else {
-                        None
-                    }
-                })
+                .find_map(|arm| Some((sites::some_payload_pattern(&arm.pattern)?, arm)))
                 .expect("MatchReceive must have Some arm");
 
             let (case_var, needs_receiver_destructure) =

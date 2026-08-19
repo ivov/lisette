@@ -527,7 +527,7 @@ fn scale(level: int) -> float64 {
 }
 
 #[test]
-fn cast_shift_forward_alias_const_emitted_as_var_pins() {
+fn cast_shift_forward_alias_const_stays_const() {
     let input = r#"
 const SHIFT = LATER
 const LATER = 60 + 8

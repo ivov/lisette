@@ -1,6 +1,6 @@
 use crate::plan::bodies::{
-    AssignForm, BreakValuePlan, CompoundKind, ElseArm, ExpressionStatementForm, IfPlan, LetForm,
-    LoopId, LoopKind, LoopTransfer, LoweredBlock, LoweredStatement, ReturnForm,
+    AssignForm, BreakValuePlan, CompoundKind, ElseArm, ExpressionStatementForm, IfPlan, LoopId,
+    LoopKind, LoopTransfer, LoweredBlock, LoweredStatement, ReturnForm,
 };
 use crate::plan::values::ValuePlan;
 
@@ -90,6 +90,7 @@ impl Legalizer {
                 }
             }
             LoweredStatement::Block(body) => self.walk_block(body, interception),
+            LoweredStatement::Body(body) => self.walk_block(body, interception),
             LoweredStatement::Break(target) => {
                 self.resolve_transfer(target, interception.intercepts_break())
             }
@@ -97,16 +98,14 @@ impl Legalizer {
                 self.resolve_transfer(target, interception.intercepts_continue())
             }
             LoweredStatement::Const(plan) => self.walk_value(&mut plan.value, interception),
-            LoweredStatement::Return(plan) => match &mut plan.form {
+            LoweredStatement::Return(plan) => match plan {
                 ReturnForm::Plain { value } => self.walk_value(value, interception),
                 ReturnForm::Unit { side_effect } => {
                     if let Some(body) = side_effect {
                         self.walk_block(body, interception);
                     }
                 }
-                ReturnForm::LoweredAbi { body } | ReturnForm::Wrapped { body } => {
-                    self.walk_block(body, interception)
-                }
+                ReturnForm::Body { body } => self.walk_block(body, interception),
                 ReturnForm::Multi { .. } => {}
             },
             LoweredStatement::BreakValue(plan) => match plan {
@@ -117,16 +116,12 @@ impl Legalizer {
                 }
             },
             LoweredStatement::Let(plan) => {
-                if let LetForm::Never {
-                    declaration: Some(declaration),
-                    ..
-                } = &mut plan.form
-                {
+                if let Some(declaration) = &mut plan.declaration {
                     self.walk_statement(declaration, interception);
                 }
-                self.walk_block(plan.form.body_mut(), interception);
+                self.walk_block(&mut plan.body, interception);
             }
-            LoweredStatement::Assign(plan) => match &mut plan.form {
+            LoweredStatement::Assign(plan) => match plan {
                 AssignForm::Compound {
                     target_capture,
                     kind,
@@ -145,17 +140,11 @@ impl Legalizer {
                     self.walk_statements(target_capture, interception);
                     self.walk_value(value, interception);
                 }
-                AssignForm::Discard { body } | AssignForm::NeverTyped { body } => {
-                    self.walk_block(body, interception)
-                }
             },
-            LoweredStatement::Expression(plan) => match &mut plan.form {
+            LoweredStatement::Expression(plan) => match plan {
                 ExpressionStatementForm::Async { value } => self.walk_value(value, interception),
                 ExpressionStatementForm::AsyncBlock { .. } => {}
-                ExpressionStatementForm::Propagate { body }
-                | ExpressionStatementForm::Discard { body } => self.walk_block(body, interception),
             },
-            LoweredStatement::Match(plan) => self.walk_block(&mut plan.body, interception),
             LoweredStatement::Select(plan) => {
                 self.walk_statements(&mut plan.setup, interception);
                 let arm_interception = if plan.retry_loop {
@@ -178,7 +167,7 @@ impl Legalizer {
                 }
                 self.walk_statements(&mut plan.postlude, interception);
             }
-            LoweredStatement::WhileLet(plan) => self.walk_block(&mut plan.body, interception),
+            LoweredStatement::WhileLet(body) => self.walk_block(body, interception),
             LoweredStatement::Directed { inner, .. } => self.walk_statement(inner, interception),
             LoweredStatement::TempBind { .. }
             | LoweredStatement::VarDecl { .. }

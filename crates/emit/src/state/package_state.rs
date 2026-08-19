@@ -37,8 +37,8 @@ impl PackageState {
         self.generic_renames.get(source_name).map(String::as_str)
     }
 
-    pub(crate) fn record_go_const_binding(&mut self, lisette_name: String) {
-        self.go_const_bindings.insert(lisette_name);
+    pub(crate) fn extend_go_const_bindings(&mut self, names: impl IntoIterator<Item = String>) {
+        self.go_const_bindings.extend(names);
     }
 
     pub(crate) fn is_go_const_binding(&self, lisette_name: &str) -> bool {
@@ -64,6 +64,17 @@ impl FunctionEmissionContext {
 
     pub(crate) fn is_absorbed_ref_generic(&self, name: &str) -> bool {
         self.absorbed_ref_generics.contains(name)
+    }
+
+    pub(crate) fn absorbed_ref_inner(&self, ty: &Type) -> Option<Type> {
+        if !ty.is_ref() {
+            return None;
+        }
+        let inner = ty.inner()?;
+        let Type::Parameter(name) = &inner else {
+            return None;
+        };
+        self.is_absorbed_ref_generic(name).then_some(inner)
     }
 
     pub(crate) fn generic_context(&self) -> &[(EcoString, Vec<Type>)] {

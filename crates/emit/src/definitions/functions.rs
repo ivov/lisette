@@ -15,7 +15,7 @@ use syntax::EcoString;
 use syntax::ast::{
     Annotation, Binding, Expression, FunctionDefinitionView, Generic, Pattern, Span,
 };
-use syntax::types::{Type, build_substitution_map, substitute};
+use syntax::types::{SimpleKind, Type, build_substitution_map, substitute};
 
 /// Owned param-destructure record: temp var, pattern, param type.
 type DeferredParamDestructure = (String, Pattern, Type);
@@ -33,9 +33,18 @@ pub(crate) fn is_test_context_ty(ty: &Type) -> bool {
 type LambdaParamDestructure<'a> = (String, &'a Pattern, &'a Type);
 
 struct LambdaReturnInfo {
-    ty_string: String,
+    signature: Option<String>,
     ctx: ReturnContext,
-    has_return: bool,
+}
+
+impl LambdaReturnInfo {
+    fn should_return(&self) -> bool {
+        self.signature.is_some()
+    }
+
+    fn signature(&self) -> &str {
+        self.signature.as_deref().unwrap_or_default()
+    }
 }
 
 impl Planner<'_> {
@@ -68,7 +77,7 @@ impl Planner<'_> {
         ty: &Type,
         ctx: ExpressionContext<'_>,
     ) -> String {
-        self.with_fresh_scope(|this| {
+        self.with_isolated_function(|this| {
             let (mut param_pairs, destructure_bindings) = this.build_lambda_param_pairs(params);
 
             let handle = params
@@ -102,7 +111,7 @@ impl Planner<'_> {
                     body,
                     &destructure_bindings,
                     &return_info.ctx,
-                    return_info.has_return,
+                    return_info.should_return(),
                 )
             });
             if let Some(recover) = recover {
@@ -112,7 +121,7 @@ impl Planner<'_> {
             format!(
                 "func({}){} {{\n{}}}",
                 group_params(&param_pairs),
-                return_info.ty_string,
+                return_info.signature(),
                 body_string
             )
         })
@@ -141,7 +150,7 @@ impl Planner<'_> {
                     destructure_bindings.push((temp_name.clone(), &p.pattern, &p.ty));
                     temp_name
                 };
-                (name, self.go_type_string(&p.ty))
+                (name, self.use_go_type(&p.ty))
             })
             .collect();
         (param_pairs, destructure_bindings)
@@ -152,43 +161,42 @@ impl Planner<'_> {
     fn lambda_return_info(&mut self, ty: &Type, ctx: ExpressionContext<'_>) -> LambdaReturnInfo {
         let suppress_lowering = ctx.forces_tagged_go_function();
         let argument_flows_to_unknown = ctx.argument_flows_to_unknown();
-
-        let has_return = matches!(ty, Type::Function(f)
-            if !(f.return_type.is_unit()
-                || f.return_type.is_variable()
-                || f.return_type.is_placeholder()
-                || (argument_flows_to_unknown && f.return_type.is_never())));
-
-        let ctx = match ty {
-            Type::Function(f) => {
-                let return_ty = f.return_type.as_ref().clone();
-                if suppress_lowering {
-                    ReturnContext::Tagged(return_ty)
-                } else {
-                    self.return_context_for_type(return_ty)
-                }
-            }
-            _ => ReturnContext::None,
+        let Type::Function(function) = ty else {
+            return LambdaReturnInfo {
+                signature: None,
+                ctx: ReturnContext::None,
+            };
         };
 
-        let ty_string = if has_return {
-            match ty {
-                Type::Function(f) => match ctx.lowered_shape() {
-                    Some(shape) => {
-                        format!(" {}", self.render_lowered_return_ty(&shape, &f.return_type))
-                    }
-                    None => format!(" {}", self.go_type_string(&f.return_type)),
-                },
-                _ => String::new(),
+        let return_ty = function.return_type.as_ref();
+        let has_return = match return_ty {
+            Type::Simple(SimpleKind::Unit)
+            | Type::Var { .. }
+            | Type::Uninferred
+            | Type::Ignored => false,
+            Type::Never => !argument_flows_to_unknown,
+            _ => true,
+        };
+        let return_ctx = if suppress_lowering {
+            ReturnContext::Tagged(return_ty.clone())
+        } else {
+            self.return_context_for_type(return_ty.clone())
+        };
+        let signature = if has_return {
+            match return_ctx.lowered_shape() {
+                Some(shape) => Some(format!(
+                    " {}",
+                    self.render_lowered_return_ty(&shape, return_ty)
+                )),
+                None => Some(format!(" {}", self.use_go_type(return_ty))),
             }
         } else {
-            String::new()
+            None
         };
 
         LambdaReturnInfo {
-            ty_string,
-            ctx,
-            has_return,
+            signature,
+            ctx: return_ctx,
         }
     }
 
@@ -370,7 +378,7 @@ impl Planner<'_> {
         } else if let Some(shape) = return_shape {
             self.render_lowered_return_ty(shape, function_definition.return_type)
         } else {
-            self.go_type_string(function_definition.return_type)
+            self.use_go_type(function_definition.return_type)
         };
 
         (params_string, return_ty, deferred_patterns)
@@ -424,7 +432,7 @@ impl Planner<'_> {
             .collect();
 
         let actual_ty = receiver_override.unwrap_or(receiver_ty);
-        let ty_string = self.go_type_string(actual_ty);
+        let ty_string = self.use_go_type(actual_ty);
         let mut receiver_var = receiver_name(&ty_string);
 
         let taken =
@@ -577,20 +585,11 @@ impl Planner<'_> {
                 }
             };
 
-            let param_type = {
-                if param.ty.is_ref()
-                    && let Some(inner) = param.ty.inner()
-                    && let Type::Parameter(name) = &inner
-                    && self
-                        .current_function_context()
-                        .is_some_and(|context| context.is_absorbed_ref_generic(name.as_ref()))
-                {
-                    inner
-                } else {
-                    param.ty.clone()
-                }
-            };
-            params.push((name, self.go_type_string(&param_type)));
+            let param_type = self
+                .current_function_context()
+                .and_then(|context| context.absorbed_ref_inner(&param.ty))
+                .unwrap_or_else(|| param.ty.clone());
+            params.push((name, self.use_go_type(&param_type)));
         }
         (format!("({})", group_params(&params)), deferred_patterns)
     }
@@ -615,7 +614,7 @@ impl Planner<'_> {
         }
 
         let receiver_ty = &function_definition.params[0].ty;
-        let _ty_str = self.go_type_string(receiver_ty);
+        let _ty_str = self.use_go_type(receiver_ty);
 
         (&function_definition.params[1..], Some(receiver_ty.clone()))
     }

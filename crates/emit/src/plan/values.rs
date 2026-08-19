@@ -5,54 +5,39 @@ use crate::plan::bodies::LoweredStatement;
 use std::fmt::{self, Display, Formatter};
 use syntax::ast::Expression;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct GoIdentifier(String);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum OperandForm {
+    Literal,
+    Name,
+    Call,
+    Other,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum GoExpression {
-    Name(GoIdentifier),
-    Literal(String),
-    Call {
-        callee: Box<GoExpression>,
-        arguments: Vec<GoExpression>,
-    },
-    Receive(Box<GoExpression>),
-    Parenthesized(Box<GoExpression>),
-    Unary {
-        operator: &'static str,
-        inner: Box<GoExpression>,
-    },
-    Binary {
-        left: Box<GoExpression>,
-        operator: String,
-        right: Box<GoExpression>,
-        spaces_around_operator: bool,
-    },
-    Selector {
-        base: Box<GoExpression>,
-        field: GoIdentifier,
-    },
-    Index {
-        base: Box<GoExpression>,
-        index: Box<GoExpression>,
-    },
-    Conversion {
-        go_type: String,
-        value: Box<GoExpression>,
-    },
-    CompositeLiteral {
-        rendered: String,
-        contains_deferred_evaluation: bool,
-    },
-    OpaqueRaw {
-        rendered: String,
-        contains_deferred_evaluation: bool,
-    },
+pub(crate) struct GoExpression {
+    rendered: String,
+    contains_deferred_evaluation: bool,
+    composite_literal: bool,
+    syntax_form: OperandForm,
 }
 
 impl GoExpression {
+    fn new(
+        rendered: String,
+        contains_deferred_evaluation: bool,
+        composite_literal: bool,
+        syntax_form: OperandForm,
+    ) -> Self {
+        Self {
+            rendered,
+            contains_deferred_evaluation,
+            composite_literal,
+            syntax_form,
+        }
+    }
+
     pub(crate) fn name(value: String) -> Self {
-        Self::Name(GoIdentifier(value))
+        Self::new(value, false, false, OperandForm::Name)
     }
 
     pub(crate) fn opaque(rendered: String) -> Self {
@@ -63,25 +48,32 @@ impl GoExpression {
         rendered: String,
         contains_deferred_evaluation: bool,
     ) -> Self {
-        Self::OpaqueRaw {
+        Self::new(
             rendered,
             contains_deferred_evaluation,
-        }
+            false,
+            OperandForm::Other,
+        )
     }
 
     pub(crate) fn literal(rendered: String) -> Self {
-        Self::Literal(rendered)
+        Self::new(rendered, false, false, OperandForm::Literal)
     }
 
     pub(crate) fn call(callee: GoExpression, arguments: Vec<GoExpression>) -> Self {
-        Self::Call {
-            callee: Box::new(callee),
-            arguments,
+        let mut rendered = format!("{callee}(");
+        for (index, argument) in arguments.iter().enumerate() {
+            if index > 0 {
+                rendered.push_str(", ");
+            }
+            rendered.push_str(argument.as_str());
         }
+        rendered.push(')');
+        Self::new(rendered, true, false, OperandForm::Call)
     }
 
     pub(crate) fn receive(channel: GoExpression) -> Self {
-        Self::Receive(Box::new(channel))
+        Self::opaque_with_deferred_evaluation(format!("<-{channel}"), true)
     }
 
     pub(crate) fn binary(
@@ -89,12 +81,7 @@ impl GoExpression {
         operator: impl Into<String>,
         right: GoExpression,
     ) -> Self {
-        Self::Binary {
-            left: Box::new(left),
-            operator: operator.into(),
-            right: Box::new(right),
-            spaces_around_operator: true,
-        }
+        Self::render_binary(left, operator.into(), right, " ")
     }
 
     pub(crate) fn compact_binary(
@@ -102,26 +89,38 @@ impl GoExpression {
         operator: impl Into<String>,
         right: GoExpression,
     ) -> Self {
-        Self::Binary {
-            left: Box::new(left),
-            operator: operator.into(),
-            right: Box::new(right),
-            spaces_around_operator: false,
-        }
+        Self::render_binary(left, operator.into(), right, "")
+    }
+
+    fn render_binary(left: Self, operator: String, right: Self, separator: &str) -> Self {
+        let deferred = left.contains_deferred_evaluation() || right.contains_deferred_evaluation();
+        Self::opaque_with_deferred_evaluation(
+            format!("{left}{separator}{operator}{separator}{right}"),
+            deferred,
+        )
     }
 
     pub(crate) fn selector(base: GoExpression, field: String) -> Self {
-        Self::Selector {
-            base: Box::new(base),
-            field: GoIdentifier(field),
-        }
+        let deferred = base.contains_deferred_evaluation();
+        Self::opaque_with_deferred_evaluation(format!("{base}.{field}"), deferred)
     }
 
     pub(crate) fn index(base: GoExpression, index: GoExpression) -> Self {
-        Self::Index {
-            base: Box::new(base),
-            index: Box::new(index),
-        }
+        let deferred = base.contains_deferred_evaluation() || index.contains_deferred_evaluation();
+        Self::opaque_with_deferred_evaluation(format!("{base}[{index}]"), deferred)
+    }
+
+    pub(crate) fn conversion(go_type: String, value: GoExpression) -> Self {
+        Self::opaque_with_deferred_evaluation(format!("{go_type}({value})"), true)
+    }
+
+    fn parenthesized(value: GoExpression) -> Self {
+        Self::opaque_with_deferred_evaluation(format!("({value})"), true)
+    }
+
+    fn unary(operator: &str, value: GoExpression) -> Self {
+        let deferred = value.contains_deferred_evaluation();
+        Self::opaque_with_deferred_evaluation(render_unary(operator, &value.rendered()), deferred)
     }
 
     pub(crate) fn slice(
@@ -151,97 +150,47 @@ impl GoExpression {
     }
 
     pub(crate) fn composite_literal(rendered: String, contains_deferred_evaluation: bool) -> Self {
-        Self::CompositeLiteral {
+        Self::new(
             rendered,
             contains_deferred_evaluation,
-        }
+            true,
+            OperandForm::Literal,
+        )
     }
 
     pub(crate) fn rendered(&self) -> String {
-        self.to_string()
+        self.rendered.clone()
+    }
+
+    pub(crate) fn as_str(&self) -> &str {
+        &self.rendered
     }
 
     pub(crate) fn is_composite_literal(&self) -> bool {
-        matches!(self, Self::CompositeLiteral { .. })
+        self.composite_literal
+    }
+
+    pub(crate) fn is_literal(&self) -> bool {
+        matches!(self.syntax_form, OperandForm::Literal)
+    }
+
+    fn syntax_form(&self) -> OperandForm {
+        self.syntax_form
+    }
+
+    fn is_empty(&self) -> bool {
+        self.rendered.is_empty()
+    }
+
+    pub(crate) fn contains_deferred_evaluation(&self) -> bool {
+        self.contains_deferred_evaluation
     }
 }
 
 impl Display for GoExpression {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            GoExpression::Name(identifier) => formatter.write_str(&identifier.0),
-            GoExpression::Literal(rendered) => formatter.write_str(rendered),
-            GoExpression::Call { callee, arguments } => {
-                write!(formatter, "{callee}(")?;
-                for (index, argument) in arguments.iter().enumerate() {
-                    if index > 0 {
-                        formatter.write_str(", ")?;
-                    }
-                    write!(formatter, "{argument}")?;
-                }
-                formatter.write_str(")")
-            }
-            GoExpression::Receive(channel) => write!(formatter, "<-{channel}"),
-            GoExpression::Parenthesized(inner) => write!(formatter, "({inner})"),
-            GoExpression::Unary { operator, inner } => {
-                formatter.write_str(&render_unary(operator, &inner.to_string()))
-            }
-            GoExpression::Binary {
-                left,
-                operator,
-                right,
-                spaces_around_operator,
-            } => {
-                let separator = if *spaces_around_operator { " " } else { "" };
-                write!(formatter, "{left}{separator}{operator}{separator}{right}")
-            }
-            GoExpression::Selector { base, field } => {
-                write!(formatter, "{base}.{}", field.0)
-            }
-            GoExpression::Index { base, index } => {
-                write!(formatter, "{base}[{index}]")
-            }
-            GoExpression::CompositeLiteral { rendered, .. }
-            | GoExpression::OpaqueRaw { rendered, .. } => formatter.write_str(rendered),
-            GoExpression::Conversion { go_type, value } => {
-                write!(formatter, "{go_type}({value})")
-            }
-        }
+        formatter.write_str(&self.rendered)
     }
-}
-
-impl GoExpression {
-    pub(crate) fn contains_deferred_evaluation(&self) -> bool {
-        match self {
-            GoExpression::Name(_) | GoExpression::Literal(_) => false,
-            GoExpression::Call { .. } | GoExpression::Receive(_) => true,
-            GoExpression::Parenthesized(_) | GoExpression::Conversion { .. } => true,
-            GoExpression::Unary { inner, .. } => inner.contains_deferred_evaluation(),
-            GoExpression::Binary { left, right, .. } => {
-                left.contains_deferred_evaluation() || right.contains_deferred_evaluation()
-            }
-            GoExpression::Selector { base, .. } => base.contains_deferred_evaluation(),
-            GoExpression::Index { base, index } => {
-                base.contains_deferred_evaluation() || index.contains_deferred_evaluation()
-            }
-            GoExpression::CompositeLiteral {
-                contains_deferred_evaluation,
-                ..
-            }
-            | GoExpression::OpaqueRaw {
-                contains_deferred_evaluation,
-                ..
-            } => *contains_deferred_evaluation,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum OperandForm {
-    Literal,
-    Name,
-    Call,
-    Other,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -435,15 +384,13 @@ impl ValuePlan {
         expression: GoExpression,
         stability: Stability,
     ) -> Self {
-        let evaluation = match &expression {
-            GoExpression::Literal(_) | GoExpression::CompositeLiteral { .. } => {
-                EvaluationFacts::literal()
-            }
-            GoExpression::Call { .. } => EvaluationFacts::call(EvaluationEffect::PureCall),
-            GoExpression::Name(_) => {
+        let evaluation = match expression.syntax_form() {
+            OperandForm::Literal => EvaluationFacts::literal(),
+            OperandForm::Call => EvaluationFacts::call(EvaluationEffect::PureCall),
+            OperandForm::Name => {
                 EvaluationFacts::new(OperandForm::Name, stability, EvaluationEffect::Pure)
             }
-            _ => EvaluationFacts::value(EvaluationEffect::Pure).with_stability(
+            OperandForm::Other => EvaluationFacts::value(EvaluationEffect::Pure).with_stability(
                 if stability.is_observable() {
                     Stability::Observable
                 } else {
@@ -580,14 +527,12 @@ impl ValuePlan {
     }
 
     pub(crate) fn rests_in_fixed_name(&self) -> bool {
-        matches!(self.expression, GoExpression::Name(_)) && self.evaluation.stability.is_fixed()
+        matches!(self.expression.syntax_form(), OperandForm::Name)
+            && self.evaluation.stability.is_fixed()
     }
 
     pub(crate) fn is_empty(&self) -> bool {
-        match &self.expression {
-            GoExpression::OpaqueRaw { rendered, .. } => rendered.is_empty(),
-            _ => false,
-        }
+        self.expression.is_empty()
     }
 
     pub(crate) fn into_parts(self) -> (Vec<LoweredStatement>, String) {
@@ -602,15 +547,12 @@ impl ValuePlan {
             self.evaluation.stability = Stability::Observable;
         }
         self.evaluation.form = OperandForm::Other;
-        self.expression = GoExpression::Parenthesized(Box::new(self.expression));
+        self.expression = GoExpression::parenthesized(self.expression);
         self
     }
 
     pub(crate) fn conversion(mut self, go_type: String) -> Self {
-        self.expression = GoExpression::Conversion {
-            go_type,
-            value: Box::new(self.expression),
-        };
+        self.expression = GoExpression::conversion(go_type, self.expression);
         self.evaluation.form = OperandForm::Other;
         if !self.evaluation.stability.is_stable_across_calls() {
             self.evaluation.stability = Stability::Observable;
@@ -619,10 +561,7 @@ impl ValuePlan {
     }
 
     pub(crate) fn unary(mut self, operator: &'static str) -> Self {
-        self.expression = GoExpression::Unary {
-            operator,
-            inner: Box::new(self.expression),
-        };
+        self.expression = GoExpression::unary(operator, self.expression);
         self.evaluation.form = OperandForm::Other;
         self.evaluation.stability = Stability::Observable;
         self
@@ -630,14 +569,6 @@ impl ValuePlan {
 }
 
 impl Planner<'_> {
-    pub(crate) fn plan_value(
-        &mut self,
-        expression: &Expression,
-        ctx: ExpressionContext<'_>,
-    ) -> ValuePlan {
-        self.lower_value(expression, ctx)
-    }
-
     /// Plan a value-position expression into a structured `ValuePlan`. Leaf
     /// kinds route through `plan_operand_leaf`.
     pub(crate) fn plan_operand(

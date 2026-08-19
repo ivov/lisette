@@ -96,7 +96,7 @@ impl Planner<'_> {
                 self.require_cmp();
                 "cmp.Ordered".to_string()
             } else {
-                self.go_type_string(bound)
+                self.use_go_type(bound)
             };
             if !named_bounds.contains(&rendered) {
                 named_bounds.push(rendered);

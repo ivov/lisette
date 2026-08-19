@@ -6,7 +6,7 @@ use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::Fallible;
 use crate::escape_reserved;
 use crate::patterns::sites::{AnnotatedPattern, PatternSubject};
-use crate::plan::bodies::{LetForm, LetPlan, LoweredBlock, LoweredStatement};
+use crate::plan::bodies::{LetPlan, LoweredBlock, LoweredStatement};
 use crate::plan::calls::CallableOrigin;
 use crate::plan::placement::{
     collapse_boolean_branch_assign, collapse_declare_assign, expression_contains_binding,
@@ -172,7 +172,7 @@ impl Planner<'_> {
             self.facts.is_interface_or_unknown(binding_ty) && *binding_ty != value.get_type();
         let mut statements = Vec::new();
         if widens_to_interface {
-            let var_ty = self.go_type_string(binding_ty);
+            let var_ty = self.use_go_type(binding_ty);
             statements.push(LoweredStatement::VarDecl {
                 name: go_identifier.clone(),
                 go_type: var_ty,
@@ -254,7 +254,7 @@ impl Planner<'_> {
         };
 
         if needs_explicit_type_declaration(self, value, binding_ty) {
-            let var_ty = self.go_type_string(binding_ty);
+            let var_ty = self.use_go_type(binding_ty);
             statements.push(LoweredStatement::VarDecl {
                 name: go_identifier,
                 go_type: var_ty,
@@ -354,18 +354,18 @@ impl Planner<'_> {
 
         let var_ty = if has_contextual_ok_ty {
             if !needs_context(&peeled_binding) && !needs_context(&peeled_binding.ok_type()) {
-                self.go_type_string(binding_ty)
+                self.use_go_type(binding_ty)
             } else if let Some(ctx_ty) = return_ctx.ty().cloned() {
                 if Fallible::from_type(&ctx_ty).is_some() {
-                    self.go_type_string(&ctx_ty)
+                    self.use_go_type(&ctx_ty)
                 } else {
-                    self.go_type_string(&resolved_ty)
+                    self.use_go_type(&resolved_ty)
                 }
             } else {
-                self.go_type_string(&resolved_ty)
+                self.use_go_type(&resolved_ty)
             }
         } else {
-            self.go_type_string(&resolved_ty)
+            self.use_go_type(&resolved_ty)
         };
         Some(LoweredStatement::VarDecl {
             name: name.to_string(),
@@ -411,8 +411,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
         }
     }
 
-    /// Classify the binding and build the matching `LetForm`.
-    fn build_form(mut self) -> LetForm {
+    fn build(mut self) -> LetPlan {
         // Never-typed values diverge (break/continue/return). Declare the
         // binding so dead code can reference it, then emit the value as a
         // statement.
@@ -422,7 +421,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             {
                 let go_identifier = self.planner.scope.bind(identifier, &raw_go_name);
                 self.planner.try_declare(&go_identifier);
-                let var_ty = self.planner.go_type_string(&self.binding.ty);
+                let var_ty = self.planner.use_go_type(&self.binding.ty);
                 Some(Box::new(LoweredStatement::VarDecl {
                     name: go_identifier,
                     go_type: var_ty,
@@ -431,7 +430,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             } else {
                 None
             };
-            return LetForm::Never {
+            return LetPlan {
                 declaration,
                 body: LoweredBlock {
                     statements: vec![self.planner.lower_statement(self.value)],
@@ -439,7 +438,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             };
         }
 
-        match self.classify() {
+        let body = match self.classify() {
             LetKind::Refutable => {
                 let ap = AnnotatedPattern {
                     pattern: &self.binding.pattern,
@@ -463,19 +462,11 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                         else_block,
                     )
                 };
-                LetForm::Refutable {
-                    body: LoweredBlock { statements },
-                }
+                LoweredBlock { statements }
             }
-            LetKind::SimpleIdentifier => LetForm::SimpleIdentifier {
-                body: self.lower_simple_identifier(),
-            },
-            LetKind::Discard => LetForm::Discard {
-                body: self.lower_discard(),
-            },
-            LetKind::MultiValueCall => LetForm::MultiValueCall {
-                body: self.lower_multi_value_call(),
-            },
+            LetKind::SimpleIdentifier => self.lower_simple_identifier(),
+            LetKind::Discard => self.lower_discard(),
+            LetKind::MultiValueCall => self.lower_multi_value_call(),
             LetKind::ComplexPattern => {
                 let value_ty = self.value.get_type();
                 let statements = self.planner.lower_irrefutable_pattern_site(
@@ -483,10 +474,12 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
                     &self.binding.pattern,
                     &value_ty,
                 );
-                LetForm::ComplexPattern {
-                    body: LoweredBlock { statements },
-                }
+                LoweredBlock { statements }
             }
+        };
+        LetPlan {
+            declaration: None,
+            body,
         }
     }
 
@@ -653,7 +646,6 @@ fn extract_simple_tuple_vars(pattern: &Pattern) -> Option<Vec<String>> {
 }
 
 impl Planner<'_> {
-    /// Build a `LetPlan` by classifying the binding into a `LetForm`.
     pub(crate) fn build_let_plan(
         &mut self,
         binding: &Binding,
@@ -662,7 +654,6 @@ impl Planner<'_> {
         mutable: bool,
         assert: bool,
     ) -> LetPlan {
-        let form = LetPlanner::new(self, binding, value, else_block, mutable, assert).build_form();
-        LetPlan { form }
+        LetPlanner::new(self, binding, value, else_block, mutable, assert).build()
     }
 }

@@ -50,18 +50,19 @@ pub(crate) enum LoweredStatement {
     If(IfPlan),
     Loop(LoopPlan),
     Block(LoweredBlock),
+    /// A nested block rendered without adding braces.
+    Body(LoweredBlock),
     Break(LoopTransfer),
     Continue(LoopTransfer),
     Const(ConstPlan),
-    Return(ReturnStatementPlan),
+    Return(ReturnForm),
     BreakValue(BreakValuePlan),
     Let(LetPlan),
-    Assign(AssignPlan),
-    Expression(ExpressionStatementPlan),
-    Match(MatchStatementPlan),
+    Assign(AssignForm),
+    Expression(ExpressionStatementForm),
     Select(SelectStatementPlan),
     Switch(SwitchStatementPlan),
-    WhileLet(WhileLetPlan),
+    WhileLet(LoweredBlock),
     /// Eval-order temp capture: `name := value`.
     TempBind {
         name: String,
@@ -105,10 +106,6 @@ pub(crate) struct ConstPlan {
 }
 
 /// A source `return expr` statement, classified by `ReturnForm`.
-pub(crate) struct ReturnStatementPlan {
-    pub(crate) form: ReturnForm,
-}
-
 pub(crate) enum ReturnForm {
     Plain {
         value: ValuePlan,
@@ -122,13 +119,8 @@ pub(crate) enum ReturnForm {
     Multi {
         values: Vec<String>,
     },
-    /// `PartialTuple`/`Tuple` tail destructure: tag-check `IfPlan`s and
-    /// `Return` leaves built by `abi_transition`.
-    LoweredAbi {
-        body: LoweredBlock,
-    },
-    /// `Result`/`Option`-wrapped return through `FalliblePlanner`.
-    Wrapped {
+    /// An already-lowered return sequence.
+    Body {
         body: LoweredBlock,
     },
 }
@@ -160,68 +152,15 @@ pub(crate) enum BreakValueAction {
     Discard,
 }
 
-/// A `let` binding, classified by shape.
+/// A lowered `let` binding.
 pub(crate) struct LetPlan {
-    pub(crate) form: LetForm,
-}
-
-pub(crate) enum LetForm {
-    /// `!`-typed value. `declaration` is the optional `var X T` leaf so dead code
-    /// can still reference the binding.
-    Never {
-        declaration: Option<Box<LoweredStatement>>,
-        body: LoweredBlock,
-    },
-    /// `let x = value` (single identifier), including `let x = expr?`.
-    SimpleIdentifier {
-        body: LoweredBlock,
-    },
-    /// `let _ = value` or all-unused tuple destructure.
-    Discard {
-        body: LoweredBlock,
-    },
-    ComplexPattern {
-        body: LoweredBlock,
-    },
-    /// `let (a, b) = go_call()`.
-    MultiValueCall {
-        body: LoweredBlock,
-    },
-    /// `let ... else` or `let assert ...`.
-    Refutable {
-        body: LoweredBlock,
-    },
-}
-
-impl LetForm {
-    pub(crate) fn body(&self) -> &LoweredBlock {
-        match self {
-            LetForm::Never { body, .. }
-            | LetForm::SimpleIdentifier { body }
-            | LetForm::Discard { body }
-            | LetForm::ComplexPattern { body }
-            | LetForm::MultiValueCall { body }
-            | LetForm::Refutable { body } => body,
-        }
-    }
-
-    pub(crate) fn body_mut(&mut self) -> &mut LoweredBlock {
-        match self {
-            LetForm::Never { body, .. }
-            | LetForm::SimpleIdentifier { body }
-            | LetForm::Discard { body }
-            | LetForm::ComplexPattern { body }
-            | LetForm::MultiValueCall { body }
-            | LetForm::Refutable { body } => body,
-        }
-    }
+    /// Optional `var X T` emitted before a never-typed value so dead code can
+    /// still reference the binding.
+    pub(crate) declaration: Option<Box<LoweredStatement>>,
+    pub(crate) body: LoweredBlock,
 }
 
 /// An assignment statement, structured by shape.
-pub(crate) struct AssignPlan {
-    pub(crate) form: AssignForm,
-}
-
 pub(crate) enum AssignForm {
     /// `target++`, `target--`, or `target op= rhs`.
     Compound {
@@ -235,10 +174,6 @@ pub(crate) enum AssignForm {
         target_str: String,
         value: ValuePlan,
     },
-    /// `_ = expr` discard (drops lowered multi-return values).
-    Discard { body: LoweredBlock },
-    /// The RHS diverges (never-typed); emitted as a statement.
-    NeverTyped { body: LoweredBlock },
 }
 
 pub(crate) enum CompoundKind {
@@ -254,32 +189,12 @@ pub(crate) enum CompoundKind {
 }
 
 /// A bare expression statement.
-pub(crate) struct ExpressionStatementPlan {
-    pub(crate) form: ExpressionStatementForm,
-}
-
 pub(crate) enum ExpressionStatementForm {
     /// `go <value>` / `defer <value>` at statement position.
-    Async {
-        value: ValuePlan,
-    },
+    Async { value: ValuePlan },
     /// `<keyword> func() { <body> }()` IIFE wrapper for Task/Defer block
     /// forms and inner expressions requiring an IIFE (`needs_iife_for_async`).
-    AsyncBlock {
-        keyword: String,
-        body: LoweredBlock,
-    },
-    /// `expr?` in statement position (discards the ok value).
-    Propagate {
-        body: LoweredBlock,
-    },
-    Discard {
-        body: LoweredBlock,
-    },
-}
-
-pub(crate) struct MatchStatementPlan {
-    pub(crate) body: LoweredBlock,
+    AsyncBlock { keyword: String, body: LoweredBlock },
 }
 
 /// A `switch` statement (value or type switch). The renderer owns the
@@ -381,10 +296,6 @@ impl SelectArmPlan {
             | SelectArmPlan::Default { body } => body,
         }
     }
-}
-
-pub(crate) struct WhileLetPlan {
-    pub(crate) body: LoweredBlock,
 }
 
 /// A statement-position loop. `prologue` is pre-loop setup (a for-loop's
@@ -512,10 +423,9 @@ impl LoweredStatement {
             | LoweredStatement::VarDecl { .. }
             | LoweredStatement::ClosureBind { .. }
             | LoweredStatement::UnreachablePanic => true,
-            LoweredStatement::Return(plan) => match &plan.form {
-                ReturnForm::LoweredAbi { body } | ReturnForm::Wrapped { body } => {
-                    !body.renders_empty()
-                }
+            LoweredStatement::Body(body) => !body.renders_empty(),
+            LoweredStatement::Return(plan) => match plan {
+                ReturnForm::Body { body } => !body.renders_empty(),
                 ReturnForm::Plain { .. } | ReturnForm::Unit { .. } | ReturnForm::Multi { .. } => {
                     true
                 }
@@ -526,31 +436,17 @@ impl LoweredStatement {
                 }
                 BreakValuePlan::Transfer { .. } => true,
             },
-            LoweredStatement::Let(plan) => {
-                matches!(
-                    &plan.form,
-                    LetForm::Never {
-                        declaration: Some(_),
-                        ..
-                    }
-                ) || !plan.form.body().renders_empty()
-            }
-            LoweredStatement::Assign(plan) => match &plan.form {
+            LoweredStatement::Let(plan) => plan.declaration.is_some() || !plan.body.renders_empty(),
+            LoweredStatement::Assign(plan) => match plan {
                 AssignForm::Compound { .. } | AssignForm::Simple { .. } => true,
-                AssignForm::Discard { body } | AssignForm::NeverTyped { body } => {
-                    !body.renders_empty()
-                }
             },
-            LoweredStatement::Expression(plan) => match &plan.form {
+            LoweredStatement::Expression(plan) => match plan {
                 ExpressionStatementForm::Async { value } => {
                     !value.is_empty() || value.setup.iter().any(LoweredStatement::emits_output)
                 }
                 ExpressionStatementForm::AsyncBlock { .. } => true,
-                ExpressionStatementForm::Propagate { body }
-                | ExpressionStatementForm::Discard { body } => !body.renders_empty(),
             },
-            LoweredStatement::Match(plan) => !plan.body.renders_empty(),
-            LoweredStatement::WhileLet(plan) => !plan.body.renders_empty(),
+            LoweredStatement::WhileLet(body) => !body.renders_empty(),
             LoweredStatement::Directed { directive, inner } => {
                 !directive.is_empty() || inner.emits_output()
             }
@@ -566,26 +462,21 @@ impl LoweredStatement {
             LoweredStatement::Loop(_) | LoweredStatement::Block(_) | LoweredStatement::Const(_) => {
                 false
             }
+            LoweredStatement::Body(body) => body.ends_with_diverge(),
             LoweredStatement::Break(_) | LoweredStatement::Continue(_) => true,
             LoweredStatement::Return(_) => true,
             LoweredStatement::BreakValue(_) => true,
-            LoweredStatement::Let(plan) => plan.form.body().ends_with_diverge(),
-            LoweredStatement::Assign(plan) => match &plan.form {
+            LoweredStatement::Let(plan) => plan.body.ends_with_diverge(),
+            LoweredStatement::Assign(plan) => match plan {
                 AssignForm::Compound { .. } | AssignForm::Simple { .. } => false,
-                AssignForm::Discard { body } | AssignForm::NeverTyped { body } => {
-                    body.ends_with_diverge()
-                }
             },
-            LoweredStatement::Expression(plan) => match &plan.form {
+            LoweredStatement::Expression(plan) => match plan {
                 ExpressionStatementForm::Async { .. }
                 | ExpressionStatementForm::AsyncBlock { .. } => false,
-                ExpressionStatementForm::Propagate { body }
-                | ExpressionStatementForm::Discard { body } => body.ends_with_diverge(),
             },
-            LoweredStatement::Match(plan) => plan.body.ends_with_diverge(),
             LoweredStatement::Select(plan) => plan.ends_with_diverge(),
             LoweredStatement::Switch(plan) => plan.ends_with_diverge(),
-            LoweredStatement::WhileLet(plan) => plan.body.ends_with_diverge(),
+            LoweredStatement::WhileLet(body) => body.ends_with_diverge(),
             LoweredStatement::TempBind { .. }
             | LoweredStatement::VarDecl { .. }
             | LoweredStatement::ClosureBind { .. } => false,

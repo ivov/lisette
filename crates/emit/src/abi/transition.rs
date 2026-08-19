@@ -10,9 +10,7 @@ use crate::control_flow::fallible::{
     OPTION_SOME_TAG, PARTIAL_ERR_TAG, PARTIAL_OK_TAG, RESULT_OK_TAG,
 };
 use crate::control_flow::propagation::plain_return;
-use crate::plan::bodies::{
-    ElseArm, IfPlan, LoweredBlock, LoweredStatement, ReturnForm, ReturnStatementPlan,
-};
+use crate::plan::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement, ReturnForm};
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use crate::write_line;
 use syntax::ast::Expression;
@@ -20,9 +18,7 @@ use syntax::parse::TUPLE_FIELDS;
 
 /// A bare `return v0, v1, ...` statement leaf.
 pub(crate) fn multi_value_return(values: Vec<String>) -> LoweredStatement {
-    LoweredStatement::Return(ReturnStatementPlan {
-        form: ReturnForm::Multi { values },
-    })
+    LoweredStatement::Return(ReturnForm::Multi { values })
 }
 
 /// An `if <condition> { <setup...> return <then_values...> }` tag-check leaf (no else).
@@ -229,7 +225,7 @@ fn emit_lowered_tuple_return(
                 .get(i)
                 .filter(|t| planner.facts.is_nullable_option(t))
                 .map(|t| {
-                    let inner = planner.go_type_string(&t.ok_type());
+                    let inner = planner.use_go_type(&t.ok_type());
                     planner.plan_option_projection(&mut statements, &raw, "unwrap", &inner, false)
                 })
                 .unwrap_or(raw)
@@ -340,7 +336,7 @@ fn emit_result_return_adapter(
 ) -> (String, String) {
     let ok_ty = return_type.ok_type();
     let err_ty = return_type.err_type();
-    let err_ty_str = planner.go_type_string(&err_ty);
+    let err_ty_str = planner.use_go_type(&err_ty);
     let res = planner.fresh_var(Some("res"));
     planner.declare(&res);
 
@@ -353,7 +349,7 @@ fn emit_result_return_adapter(
         );
         return (err_ty_str, b);
     }
-    let ok_ty_str = planner.go_type_string(&ok_ty);
+    let ok_ty_str = planner.use_go_type(&ok_ty);
     let ok_zero = lowered_zero(planner, &ok_ty);
     write_line!(
         b,
@@ -371,8 +367,8 @@ fn emit_partial_return_adapter(
 ) -> (String, String) {
     let ok_ty = return_type.ok_type();
     let err_ty = return_type.err_type();
-    let ok_ty_str = planner.go_type_string(&ok_ty);
-    let err_ty_str = planner.go_type_string(&err_ty);
+    let ok_ty_str = planner.use_go_type(&ok_ty);
+    let err_ty_str = planner.use_go_type(&err_ty);
     let ok_zero = lowered_zero(planner, &ok_ty);
     let res = planner.fresh_var(Some("res"));
     planner.declare(&res);
@@ -401,7 +397,7 @@ fn emit_option_return_adapter(
 
     let is_nilable = planner.facts.is_nilable_go_type(&inner);
     if is_nilable {
-        let go_ret = planner.go_type_string(&inner);
+        let go_ret = planner.use_go_type(&inner);
         let b = format!(
             "{opt} := {inner_call}\n\
              if {opt}.Tag == {some_tag} {{\nreturn {opt}.SomeVal\n}}\n\
@@ -410,7 +406,7 @@ fn emit_option_return_adapter(
         return (go_ret, b);
     }
 
-    let inner_ty_str = planner.go_type_string(&inner);
+    let inner_ty_str = planner.use_go_type(&inner);
     let inner_zero = lowered_zero(planner, &inner);
     let b = format!(
         "{opt} := {inner_call}\n\
@@ -454,7 +450,7 @@ fn emit_tuple_return_adapter(
                 ret_types.push(inner_ret);
             }
             None => {
-                ret_types.push(planner.go_type_string(slot_ty));
+                ret_types.push(planner.use_go_type(slot_ty));
                 field_exprs.push(raw_field);
             }
         }
@@ -572,7 +568,7 @@ pub(crate) fn lower_arg_to_tagged(
 
     let (inner_param_strs, inner_arg_names) = planner.build_wrapper_params(inner_params);
     let inner_call = format!("{}({})", arg_name, inner_arg_names.join(", "));
-    let tagged_ret = planner.go_type_string(inner_ret);
+    let tagged_ret = planner.use_go_type(inner_ret);
 
     let wrap_statements = planner.lower_abi_to_tagged_return(&inner_call, &abi, inner_ret);
     let body = Renderer.render_setup(&wrap_statements);
@@ -761,7 +757,7 @@ fn lower_nullable_slot_value(
         );
     }
     let value = planner.lower_value(expression, ExpressionContext::value());
-    let inner = planner.go_type_string(&slot_ty.ok_type());
+    let inner = planner.use_go_type(&slot_ty.ok_type());
     value.map_rendered_as_computed(|setup, value, _contains_deferred_evaluation| {
         let projected = planner.plan_option_projection(setup, &value, "unwrap", &inner, false);
         GoExpression::opaque_with_deferred_evaluation(projected, true)

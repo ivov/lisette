@@ -80,10 +80,7 @@ pub(crate) fn is_plain_identifier(value: &str) -> bool {
 }
 
 pub(crate) fn sanitize_package_name(name: &str) -> Cow<'_, str> {
-    let has_bad_chars = name.chars().any(|c| !c.is_ascii_alphanumeric() && c != '_');
-    let starts_with_digit = name.starts_with(|c: char| c.is_ascii_digit());
-
-    if !has_bad_chars && !starts_with_digit && !is_reserved_package_name(name) {
+    if (name.is_empty() || is_plain_identifier(name)) && !is_reserved_package_name(name) {
         return Cow::Borrowed(name);
     }
 

@@ -4,11 +4,6 @@ use crate::Planner;
 use crate::types::native::NativeGoType;
 use syntax::types::SimpleKind;
 
-#[derive(Debug, Clone)]
-pub(crate) struct NativeShape {
-    pub(crate) kind: NativeGoType,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RangeShape {
     Range,
@@ -37,7 +32,7 @@ impl Planner<'_> {
     /// alias peeling. Stricter than `NativeTypeKind::from_type` because it
     /// only accepts `Type::Compound` shapes (not nominals whose leaf name
     /// happens to be `Slice`/`Map`/etc.) plus `SimpleKind::String`.
-    pub(crate) fn native_shape(&self, ty: &Type) -> Option<NativeShape> {
+    pub(crate) fn native_shape(&self, ty: &Type) -> Option<NativeGoType> {
         let resolved = self.emit_shape_ty(ty);
         match resolved {
             Type::Compound { kind, .. } => {
@@ -50,18 +45,16 @@ impl Planner<'_> {
                     CompoundKind::Receiver => NativeGoType::Receiver,
                     CompoundKind::Ref | CompoundKind::VarArgs => return None,
                 };
-                Some(NativeShape { kind: native })
+                Some(native)
             }
-            Type::Simple(SimpleKind::String) => Some(NativeShape {
-                kind: NativeGoType::String,
-            }),
+            Type::Simple(SimpleKind::String) => Some(NativeGoType::String),
             _ => None,
         }
     }
 
     /// True when `ty` resolves to the given native kind after alias peeling.
     pub(crate) fn is_native_shape(&self, ty: &Type, kind: NativeGoType) -> bool {
-        self.native_shape(ty).is_some_and(|s| s.kind == kind)
+        self.native_shape(ty).is_some_and(|shape| shape == kind)
     }
 
     /// Classify a type as one of the prelude range structs after alias

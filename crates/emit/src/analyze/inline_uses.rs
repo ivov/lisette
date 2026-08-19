@@ -33,37 +33,42 @@ where
 
 struct Walker<'a> {
     name: &'a str,
-    barriers_seen: u32,
-    uses: Vec<UseRecord>,
+    crossed_barrier: bool,
+    uses: Vec<InlineEligibility>,
     opaque_raw_go_in_region: bool,
 }
 
 #[derive(Clone, Copy, Default)]
 struct WalkContext {
-    inside_reference_operand: bool,
-    inside_assignment_target: bool,
-    inside_enclosure: bool,
+    eligibility: InlineEligibility,
     shadowed: bool,
+}
+
+#[derive(Clone, Copy, Default)]
+enum InlineEligibility {
+    #[default]
+    Eligible,
+    Blocked,
 }
 
 impl WalkContext {
     fn reference_operand(self) -> Self {
         Self {
-            inside_reference_operand: true,
+            eligibility: InlineEligibility::Blocked,
             ..self
         }
     }
 
     fn assignment_target(self) -> Self {
         Self {
-            inside_assignment_target: true,
+            eligibility: InlineEligibility::Blocked,
             ..self
         }
     }
 
     fn enclosure(self) -> Self {
         Self {
-            inside_enclosure: true,
+            eligibility: InlineEligibility::Blocked,
             ..self
         }
     }
@@ -76,19 +81,11 @@ impl WalkContext {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-struct UseRecord {
-    inside_reference_operand: bool,
-    inside_assignment_target: bool,
-    inside_enclosure: bool,
-    preceding_barriers: u32,
-}
-
 impl<'a> Walker<'a> {
     fn new(name: &'a str) -> Self {
         Self {
             name,
-            barriers_seen: 0,
+            crossed_barrier: false,
             uses: Vec::new(),
             opaque_raw_go_in_region: false,
         }
@@ -99,35 +96,18 @@ impl<'a> Walker<'a> {
     }
 
     fn decide(self) -> InlineDecision {
-        if self.uses.is_empty() {
-            if self.opaque_raw_go_in_region {
-                return InlineDecision::Keep;
-            }
-            return InlineDecision::Unused;
+        match (self.opaque_raw_go_in_region, self.uses.as_slice()) {
+            (false, []) => InlineDecision::Unused,
+            (false, [InlineEligibility::Eligible]) => InlineDecision::Inline,
+            _ => InlineDecision::Keep,
         }
-        if self.opaque_raw_go_in_region {
-            return InlineDecision::Keep;
-        }
-        if self.uses.len() > 1 {
-            return InlineDecision::Keep;
-        }
-        let occ = self.uses[0];
-        if occ.inside_reference_operand
-            || occ.inside_assignment_target
-            || occ.inside_enclosure
-            || occ.preceding_barriers > 0
-        {
-            return InlineDecision::Keep;
-        }
-        InlineDecision::Inline
     }
 
     fn record_use(&mut self, ctx: WalkContext) {
-        self.uses.push(UseRecord {
-            inside_reference_operand: ctx.inside_reference_operand,
-            inside_assignment_target: ctx.inside_assignment_target,
-            inside_enclosure: ctx.inside_enclosure,
-            preceding_barriers: self.barriers_seen,
+        self.uses.push(if self.crossed_barrier {
+            InlineEligibility::Blocked
+        } else {
+            ctx.eligibility
         });
     }
 
@@ -148,7 +128,7 @@ impl<'a> Walker<'a> {
                             self.walk(expression, ctx);
                         }
                     }
-                    self.barriers_seen += 1;
+                    self.crossed_barrier = true;
                 }
             }
             Expression::Unit { .. }
@@ -168,16 +148,16 @@ impl<'a> Walker<'a> {
                 if let Some(spread_arg) = spread.as_ref() {
                     self.walk(spread_arg, ctx);
                 }
-                self.barriers_seen += 1;
+                self.crossed_barrier = true;
             }
             Expression::Propagate { expression, .. } => {
                 self.walk(expression, ctx);
-                self.barriers_seen += 1;
+                self.crossed_barrier = true;
             }
             Expression::Assignment { target, value, .. } => {
                 self.walk(target, ctx.assignment_target());
                 self.walk(value, ctx);
-                self.barriers_seen += 1;
+                self.crossed_barrier = true;
             }
             Expression::Reference { expression, .. } => {
                 self.walk(expression, ctx.reference_operand());
@@ -327,7 +307,7 @@ impl<'a> Walker<'a> {
             }
             Expression::Task { expression, .. } | Expression::Defer { expression, .. } => {
                 self.walk(expression, ctx.enclosure());
-                self.barriers_seen += 1;
+                self.crossed_barrier = true;
             }
 
             Expression::Assert { expression, .. } => self.walk(expression, ctx),
@@ -335,18 +315,18 @@ impl<'a> Walker<'a> {
             Expression::Select { arms, .. } => {
                 // Mark the barrier before walking arms so uses inside any arm
                 // see the select wait as preceding.
-                self.barriers_seen += 1;
+                self.crossed_barrier = true;
                 for arm in arms {
                     self.walk_select_arm(arm, ctx);
                 }
             }
             Expression::TryBlock { items, .. } | Expression::RecoverBlock { items, .. } => {
                 self.walk_block(items, ctx);
-                self.barriers_seen += 1;
+                self.crossed_barrier = true;
             }
             Expression::RawGo { .. } => {
                 self.opaque_raw_go_in_region = true;
-                self.barriers_seen += 1;
+                self.crossed_barrier = true;
             }
 
             // Block-local `Const`/`Function` shadowing is applied in `walk_block`.

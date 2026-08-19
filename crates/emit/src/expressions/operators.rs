@@ -285,16 +285,10 @@ impl Planner<'_> {
             .next()
             .expect("numeric binary expression has a right operand");
         if let Some(ty) = &info.cast_left_to {
-            left = GoExpression::Conversion {
-                go_type: self.go_type_string(ty),
-                value: Box::new(left),
-            };
+            left = GoExpression::conversion(self.use_go_type(ty), left);
         }
         if let Some(ty) = &info.cast_right_to {
-            right = GoExpression::Conversion {
-                go_type: self.go_type_string(ty),
-                value: Box::new(right),
-            };
+            right = GoExpression::conversion(self.use_go_type(ty), right);
         }
         ValuePlan::computed(
             setup,
@@ -387,10 +381,12 @@ impl Planner<'_> {
     }
 
     fn imported_member_is_const(&self, package: &Expression, member: &str) -> bool {
-        let Expression::Identifier { value, .. } = package.unwrap_parens() else {
+        let package = package.unwrap_parens();
+        let Expression::Identifier { value, .. } = package else {
             return false;
         };
-        let package = self.canonical_package(value);
+        let package = package.get_type();
+        let package = package.as_import_namespace().unwrap_or(value);
         let qualified = format!("{package}.{member}");
         let body = self
             .facts
@@ -422,13 +418,15 @@ impl Planner<'_> {
                 right,
                 ..
             } => {
-                (matches!(
+                let is_untyped_shift = matches!(
                     operator,
                     BinaryOperator::ShiftLeft | BinaryOperator::ShiftRight
                 ) && self.is_go_constant_expression(left)
-                    && !self.is_go_constant_expression(right))
-                    || self.contains_untyped_constant_shift(left)
-                    || self.contains_untyped_constant_shift(right)
+                    && !self.is_go_constant_expression(right);
+                is_untyped_shift
+                    || [left, right]
+                        .into_iter()
+                        .any(|operand| self.contains_untyped_constant_shift(operand))
             }
             _ => false,
         }

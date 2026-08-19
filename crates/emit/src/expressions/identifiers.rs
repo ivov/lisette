@@ -150,18 +150,19 @@ impl Planner<'_> {
         ret_params: &[Type],
         ctx: ExpressionContext<'_>,
     ) -> String {
-        let needs_type_args = !ctx.is_callee()
-            || ret_params.len() > fn_params.len()
-            || !ret_params
+        let return_params_are_inferrable = ret_params.len() <= fn_params.len()
+            && ret_params
                 .iter()
-                .all(|rp| fn_params.iter().any(|fp| fp.ty.contains_type(rp)))
-            || fn_params
-                .iter()
-                .any(|param| self.needs_explicit_args_for_go_inference(&param.ty));
-        if needs_type_args {
-            self.format_type_args(ret_params)
-        } else {
+                .all(|ret| fn_params.iter().any(|param| param.ty.contains_type(ret)));
+        let parameters_support_go_inference = fn_params
+            .iter()
+            .all(|param| !self.needs_explicit_args_for_go_inference(&param.ty));
+        let inferred_at_call_site =
+            ctx.is_callee() && return_params_are_inferrable && parameters_support_go_inference;
+        if inferred_at_call_site {
             String::new()
+        } else {
+            self.format_type_args(ret_params)
         }
     }
 
@@ -177,6 +178,9 @@ impl Planner<'_> {
         let Type::Forall { vars, body } = definition_ty else {
             return None;
         };
+        if vars.is_empty() {
+            return None;
+        }
 
         let mut mapping = rustc_hash::FxHashMap::default();
         extract_type_mapping(body, instantiated_ty, &mut mapping);
@@ -189,14 +193,11 @@ impl Planner<'_> {
             .iter()
             .filter_map(|var| {
                 let concrete = mapping.get(var.as_str())?;
-                Some(self.go_type_string(concrete))
+                Some(self.use_go_type(concrete))
             })
             .collect();
 
-        if args.len() != vars.len()
-            || args.is_empty()
-            || args.iter().any(|a| a.contains("interface{}"))
-        {
+        if args.len() != vars.len() || args.iter().any(|a| a.contains("interface{}")) {
             return None;
         }
 

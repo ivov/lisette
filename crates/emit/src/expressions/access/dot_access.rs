@@ -210,9 +210,12 @@ impl Planner<'_> {
                 is_exported || self.method_needs_export(member)
             }
             _ => {
-                self.compute_is_exported_context(expression, expression_ty)
+                if self.compute_is_exported_context(expression, expression_ty)
                     || self.field_is_public(expression_ty, member)
-                    || (!self.has_field(expression_ty, member) && self.method_needs_export(member))
+                {
+                    return true;
+                }
+                !self.has_field(expression_ty, member) && self.method_needs_export(member)
             }
         }
     }
@@ -288,7 +291,7 @@ impl Planner<'_> {
             return None;
         };
         let field_ty = fields.first()?.ty.clone();
-        let go_type = self.go_type_string(&field_ty);
+        let go_type = self.use_go_type(&field_ty);
         let operand = if expression_ty.is_ref() {
             format!("*{}", expression_string)
         } else {
@@ -359,13 +362,9 @@ impl Planner<'_> {
     fn is_absorbed_ref_generic(&self, expression: &Expression) -> bool {
         let check_expression = expression.deref_inner().unwrap_or(expression);
         let expression_ty = check_expression.get_type();
-        expression_ty.is_ref()
-            && expression_ty.inner().is_some_and(|inner| {
-                matches!(inner, Type::Parameter(name)
-                    if self
-                        .current_function_context()
-                        .is_some_and(|context| context.is_absorbed_ref_generic(name.as_ref())))
-            })
+        self.current_function_context()
+            .and_then(|context| context.absorbed_ref_inner(&expression_ty))
+            .is_some()
     }
 
     pub(crate) fn try_emit_tuple_struct_field_access(
@@ -393,7 +392,7 @@ impl Planner<'_> {
         };
 
         if fields.len() == 1 && generics.is_empty() {
-            let underlying_ty = self.go_type_string(&fields[0].ty);
+            let underlying_ty = self.use_go_type(&fields[0].ty);
             let expression = if expression_ty.is_ref() {
                 format!("*{}", expression_string)
             } else {

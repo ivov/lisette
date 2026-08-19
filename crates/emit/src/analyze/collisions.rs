@@ -33,27 +33,22 @@ struct CollisionSinks<'a> {
     diagnostics: &'a mut Vec<LisetteDiagnostic>,
 }
 
+#[derive(Default)]
+struct CollectedNames {
+    package_block: SpanMap,
+    selectors: HashMap<String, SpanMap>,
+    interfaces: HashMap<String, SpanMap>,
+    diagnostics: Vec<LisetteDiagnostic>,
+}
+
 impl Planner<'_> {
     pub(crate) fn detect_name_collisions(&self, files: &[&File]) -> Vec<LisetteDiagnostic> {
-        let mut package_block: SpanMap = HashMap::default();
-        let mut selectors: HashMap<String, SpanMap> = HashMap::default();
-        let mut interfaces: HashMap<String, SpanMap> = HashMap::default();
-        let mut diagnostics = Vec::new();
-
-        for file in files {
-            for item in &file.items {
-                self.collect_item(
-                    item,
-                    &mut CollisionSinks {
-                        package_block: &mut package_block,
-                        selectors: &mut selectors,
-                        interfaces: &mut interfaces,
-                        diagnostics: &mut diagnostics,
-                    },
-                    CollectPayloadFields::Yes,
-                );
-            }
-        }
+        let CollectedNames {
+            mut package_block,
+            selectors,
+            interfaces,
+            mut diagnostics,
+        } = self.collect_names(files, CollectPayloadFields::Yes);
 
         self.collect_import_aliases(files, &mut package_block, &mut diagnostics);
 
@@ -69,31 +64,35 @@ impl Planner<'_> {
     }
 
     pub(crate) fn package_block_names(&self, files: &[&File]) -> HashSet<String> {
-        let mut package_block: SpanMap = HashMap::default();
-        let mut selectors: HashMap<String, SpanMap> = HashMap::default();
-        let mut interfaces: HashMap<String, SpanMap> = HashMap::default();
-        let mut diagnostics = Vec::new();
+        let collected = self.collect_names(files, CollectPayloadFields::No);
+        let mut names: HashSet<String> = collected.package_block.into_keys().collect();
+        self.for_each_import_qualifier(files, |qualifier, _span| {
+            names.insert(qualifier.to_string());
+        });
+        names
+    }
 
+    fn collect_names(
+        &self,
+        files: &[&File],
+        payload_fields: CollectPayloadFields,
+    ) -> CollectedNames {
+        let mut collected = CollectedNames::default();
         for file in files {
             for item in &file.items {
                 self.collect_item(
                     item,
                     &mut CollisionSinks {
-                        package_block: &mut package_block,
-                        selectors: &mut selectors,
-                        interfaces: &mut interfaces,
-                        diagnostics: &mut diagnostics,
+                        package_block: &mut collected.package_block,
+                        selectors: &mut collected.selectors,
+                        interfaces: &mut collected.interfaces,
+                        diagnostics: &mut collected.diagnostics,
                     },
-                    CollectPayloadFields::No,
+                    payload_fields,
                 );
             }
         }
-
-        let mut names: HashSet<String> = package_block.into_keys().collect();
-        self.for_each_import_qualifier(files, |qualifier, _span| {
-            names.insert(qualifier.to_string());
-        });
-        names
+        collected
     }
 
     fn collect_item(

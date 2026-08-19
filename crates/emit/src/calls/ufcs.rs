@@ -55,9 +55,9 @@ impl Planner<'_> {
             let mut go_type_strs = Vec::with_capacity(vars.len());
             for (index, var) in vars.iter().enumerate() {
                 let go_type = if index < impl_count {
-                    self.go_type_string(receiver_mapping.get(var.as_str())?)
+                    self.use_go_type(receiver_mapping.get(var.as_str())?)
                 } else {
-                    self.go_type_string(type_args.get(index - impl_count)?)
+                    self.use_go_type(type_args.get(index - impl_count)?)
                 };
                 go_type_strs.push(go_type);
             }
@@ -88,7 +88,7 @@ impl Planner<'_> {
             let resolved = receiver_mapping
                 .get(var.as_str())
                 .or_else(|| inferred_mapping.get(var.as_str()))?;
-            go_type_strs.push(self.go_type_string(resolved));
+            go_type_strs.push(self.use_go_type(resolved));
         }
         (!go_type_strs.is_empty()).then(|| format!("[{}]", go_type_strs.join(", ")))
     }
@@ -372,7 +372,7 @@ impl Planner<'_> {
 }
 
 fn try_inline_native_ufcs(
-    planner: &Planner,
+    planner: &mut Planner,
     receiver: &Expression,
     member: &str,
     receiver_arg: &str,

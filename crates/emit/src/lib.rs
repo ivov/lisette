@@ -22,7 +22,6 @@ pub(crate) use names::go_name;
 pub(crate) use names::go_name::escape_reserved;
 pub(crate) use output::OutputCollector;
 pub(crate) use render::Renderer;
-pub(crate) use state::bindings::Bindings;
 pub(crate) use types::prelude::PreludeType;
 pub(crate) use utils::is_order_sensitive;
 pub(crate) use utils::write_line;
@@ -33,7 +32,9 @@ pub use output::OutputFile;
 pub use output::imports;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use std::cell::{Ref, RefCell, RefMut};
+use std::cell::RefCell;
+use std::mem;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
@@ -82,14 +83,15 @@ impl GlobalEmitData {
         };
 
         for (key, definition) in definitions.iter() {
-            let is_go = go_name::is_go_import(key);
-            globals.register_exported_methods(key, definition, is_go);
+            globals.register_exported_methods(key, definition);
         }
 
         globals
     }
 
-    fn register_exported_methods(&mut self, key: &Symbol, definition: &Definition, is_go: bool) {
+    fn register_exported_methods(&mut self, key: &Symbol, definition: &Definition) {
+        let is_user_definition =
+            !go_name::is_go_import(key) && !key.starts_with(go_name::PRELUDE_PREFIX);
         match &definition.body {
             DefinitionBody::Interface {
                 definition: iface, ..
@@ -100,9 +102,8 @@ impl GlobalEmitData {
             }
             DefinitionBody::Value { .. }
                 if definition.visibility.is_public()
-                    && !is_go
-                    && !key.starts_with(go_name::PRELUDE_PREFIX)
-                    && key.chars().filter(|c| *c == '.').count() >= 2 =>
+                    && is_user_definition
+                    && key.split('.').nth(2).is_some() =>
             {
                 let method_name = go_name::unqualified_name(key);
                 self.exported_method_names.insert(method_name.to_string());
@@ -110,10 +111,7 @@ impl GlobalEmitData {
             _ => {}
         }
 
-        if !is_go
-            && !key.starts_with(go_name::PRELUDE_PREFIX)
-            && let Some(methods) = definition.methods()
-        {
+        if is_user_definition && let Some(methods) = definition.methods() {
             for method in methods
                 .values()
                 .filter(|method| method.visibility.is_public())
@@ -204,69 +202,68 @@ pub struct Planner<'a> {
     function_contexts: Vec<FunctionEmissionContext>,
     scope: ScopeState,
     adapter_registry: AdapterRegistry,
-    namespace: RefCell<FileNamespace>,
+    namespace: FileNamespace,
+    /// Keep this memo. Layout queries run per field access, and each recompute
+    /// renders every field type again (5.8x slower on a 40-variant enum).
+    enum_layouts: RefCell<HashMap<String, Rc<EnumLayout>>>,
 }
 
 impl Planner<'_> {
-    fn file_namespace(&self) -> Ref<'_, FileNamespace> {
-        self.namespace.borrow()
-    }
-
-    fn file_namespace_mut(&self) -> RefMut<'_, FileNamespace> {
-        self.namespace.borrow_mut()
-    }
-
-    fn require_stdlib(&self) {
+    fn require_stdlib(&mut self) {
         self.require_generated_package(GeneratedPackage::Prelude);
     }
 
-    fn require_fmt(&self) {
+    fn require_fmt(&mut self) {
         self.require_generated_package(GeneratedPackage::Fmt);
     }
 
-    fn require_errors(&self) {
+    fn require_errors(&mut self) {
         self.require_generated_package(GeneratedPackage::Errors);
     }
 
-    fn require_slices(&self) {
+    fn require_slices(&mut self) {
         self.require_generated_package(GeneratedPackage::Slices);
     }
 
-    fn require_strings(&self) {
+    fn require_strings(&mut self) {
         self.require_generated_package(GeneratedPackage::Strings);
     }
 
-    fn require_maps(&self) {
+    fn require_maps(&mut self) {
         self.require_generated_package(GeneratedPackage::Maps);
     }
 
-    fn require_json(&self) {
+    fn require_json(&mut self) {
         self.require_generated_package(GeneratedPackage::Json);
     }
 
-    fn require_cmp(&self) {
+    fn require_cmp(&mut self) {
         self.require_generated_package(GeneratedPackage::Cmp);
     }
 
-    fn require_testkit(&self) {
+    fn require_testkit(&mut self) {
         self.require_generated_package(GeneratedPackage::TestKit);
     }
 
-    fn require_testing(&self) {
+    fn require_testing(&mut self) {
         self.require_generated_package(GeneratedPackage::Testing);
     }
 
-    fn require_generated_package(&self, package: GeneratedPackage) {
-        self.file_namespace_mut()
-            .require(PackageUse::generated(package));
+    fn require_generated_package(&mut self, package: GeneratedPackage) {
+        self.namespace.require(PackageUse::generated(package));
     }
 
-    fn note_go_type(&self, go_type: &GoType) {
-        self.file_namespace_mut().absorb(go_type.requirements());
+    fn use_go_type(&mut self, ty: &Type) -> String {
+        self.use_rendered_go_type(self.go_type(ty))
     }
 
-    fn require_packages(&self, requirements: &PackageRequirements) {
-        self.file_namespace_mut().absorb(requirements);
+    fn use_rendered_go_type(&mut self, go_type: GoType) -> String {
+        self.namespace.absorb(go_type.requirements());
+        go_type.code
+    }
+
+    fn require_packages(&mut self, requirements: &PackageRequirements) {
+        self.namespace.absorb(requirements);
     }
 }
 
@@ -294,23 +291,23 @@ impl<'a> Planner<'a> {
         entry_package_name: &'a str,
         options: EmitOptions,
     ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
-        let line_indexes: Arc<HashMap<u32, LineIndex>> = Arc::new(if options.sourcemap {
-            analysis
-                .files
-                .iter()
-                .map(|(file_id, file)| {
-                    (
-                        *file_id,
-                        LineIndex::from_source(file.display_path.clone(), &file.source),
-                    )
-                })
-                .collect()
-        } else {
-            HashMap::default()
+        let line_indexes = options.sourcemap.then(|| {
+            Arc::new(
+                analysis
+                    .files
+                    .iter()
+                    .map(|(file_id, file)| {
+                        (
+                            *file_id,
+                            LineIndex::from_source(file.display_path.clone(), &file.source),
+                        )
+                    })
+                    .collect(),
+            )
         });
 
         let shared = SharedEmitContext {
-            options,
+            emit_tests: options.emit_tests,
             line_indexes,
             globals: Arc::new(GlobalEmitData::compute(&analysis.definitions)),
         };
@@ -374,16 +371,12 @@ impl<'a> Planner<'a> {
         source: Option<&str>,
         files: &[&File],
     ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
-        let (sourcemap, line_indexes) = match source {
-            Some(src) => (
-                true,
-                Arc::new(HashMap::from_iter([(
-                    0u32,
-                    LineIndex::from_source("src/test.lis".to_string(), src),
-                )])),
-            ),
-            None => (false, Arc::new(HashMap::default())),
-        };
+        let line_indexes = source.map(|src| {
+            Arc::new(HashMap::from_iter([(
+                0u32,
+                LineIndex::from_source("src/test.lis".to_string(), src),
+            )]))
+        });
         let globals = Arc::new(GlobalEmitData::compute(config.definitions));
         let facts = EmitFacts::new(EmitFactsConfig {
             definitions: config.definitions,
@@ -396,10 +389,7 @@ impl<'a> Planner<'a> {
             entry_package: config.package_id.to_string(),
             entry_package_name: "main",
             go_module: config.go_module.to_string(),
-            options: EmitOptions {
-                sourcemap,
-                emit_tests: false,
-            },
+            emit_tests: false,
             line_indexes,
             globals,
             current_package: config.package_id.to_string(),
@@ -420,7 +410,8 @@ impl<'a> Planner<'a> {
             function_contexts: Vec::new(),
             scope: ScopeState::new(),
             adapter_registry: AdapterRegistry::default(),
-            namespace: RefCell::new(namespace),
+            namespace,
+            enum_layouts: RefCell::default(),
         }
     }
 
@@ -470,9 +461,7 @@ impl<'a> Planner<'a> {
     /// collection). This is the single source of truth for return-context
     /// lowering.
     fn return_ctx(&self) -> ReturnContext {
-        self.scope
-            .current_return_ctx()
-            .unwrap_or(ReturnContext::None)
+        self.scope.current_return_ctx()
     }
 
     /// `true` if this is a new declaration in the current block (use `:=`),
@@ -565,6 +554,13 @@ impl<'a> Planner<'a> {
         result
     }
 
+    fn with_isolated_function<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        self.scope.enter_isolated_function();
+        let result = f(self);
+        self.scope.exit_isolated_function();
+        result
+    }
+
     fn with_assign_target<R>(&mut self, target: &str, f: impl FnOnce(&mut Self) -> R) -> R {
         let newly_active = self.scope.activate_assign_target(target);
         let result = f(self);
@@ -601,7 +597,7 @@ impl<'a> Planner<'a> {
     }
 
     fn maybe_line_directive(&self, span: &Span) -> String {
-        if !self.facts.sourcemap_enabled() || span.is_dummy() {
+        if span.is_dummy() {
             return String::new();
         }
 
@@ -642,10 +638,10 @@ impl<'a> Planner<'a> {
     ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
         let PackagePlan {
             package_name,
-            mut collision_diagnostics,
+            collision_diagnostics,
         } = plan;
         let mut output_files = Vec::new();
-        let mut all_diagnostics = Vec::new();
+        let mut all_diagnostics = collision_diagnostics;
 
         let (last_file, preceding_files) = files
             .split_last()
@@ -658,12 +654,11 @@ impl<'a> Planner<'a> {
                 self.facts.unused_imports_for_current_package(),
                 self.facts.go_package_names(),
             );
-            let namespace = self.namespace.replace(next_namespace);
+            // Layouts render Go types against the current file's import aliases.
+            self.enum_layouts.get_mut().clear();
+            let namespace = mem::replace(&mut self.namespace, next_namespace);
             let (imports, mut diagnostics) =
                 namespace.finish(self.facts.go_package_names(), self.facts.go_package_ids());
-            if i == 0 {
-                diagnostics.append(&mut collision_diagnostics);
-            }
             all_diagnostics.append(&mut diagnostics);
             output_files.push(OutputFile {
                 name: file.go_filename(),
@@ -678,12 +673,8 @@ impl<'a> Planner<'a> {
         let Planner {
             facts, namespace, ..
         } = self;
-        let (imports, mut diagnostics) = namespace
-            .into_inner()
-            .finish(facts.go_package_names(), facts.go_package_ids());
-        if preceding_files.is_empty() {
-            diagnostics.append(&mut collision_diagnostics);
-        }
+        let (imports, mut diagnostics) =
+            namespace.finish(facts.go_package_names(), facts.go_package_ids());
         all_diagnostics.append(&mut diagnostics);
         output_files.push(OutputFile {
             name: last_file.go_filename(),
@@ -732,8 +723,8 @@ impl<'a> Planner<'a> {
 
 /// Emit state built once in [`Planner::emit`] and shared by every package worker.
 struct SharedEmitContext {
-    options: EmitOptions,
-    line_indexes: Arc<HashMap<u32, LineIndex>>,
+    emit_tests: bool,
+    line_indexes: Option<Arc<HashMap<u32, LineIndex>>>,
     globals: Arc<GlobalEmitData>,
 }
 
@@ -756,7 +747,7 @@ fn emit_package<'a>(
         entry_package: analysis.entry_package_id.to_string(),
         entry_package_name,
         go_module: go_module.to_string(),
-        options: shared_emit_ctx.options.clone(),
+        emit_tests: shared_emit_ctx.emit_tests,
         line_indexes: shared_emit_ctx.line_indexes.clone(),
         globals: shared_emit_ctx.globals.clone(),
         current_package: package_id.to_string(),

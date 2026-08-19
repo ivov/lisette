@@ -261,7 +261,7 @@ impl Planner<'_> {
         let (generics_decl, generics_use) = self.adapter_generics(&plan);
         let adapter_type = format!("{}{}", base_name, generics_use);
 
-        let concrete_go_ty = self.go_type_string(&plan.concrete_ty);
+        let concrete_go_ty = self.use_go_type(&plan.concrete_ty);
 
         let mut declaration = String::new();
         write_line!(declaration, "type {}{} struct {{", base_name, generics_decl);
@@ -323,7 +323,7 @@ impl Planner<'_> {
             let params_str = param_names
                 .iter()
                 .zip(method.param_types.iter())
-                .map(|(n, t)| format!("{} {}", n, this.go_type_string(t)))
+                .map(|(n, t)| format!("{} {}", n, this.use_go_type(t)))
                 .collect::<Vec<_>>()
                 .join(", ");
 
@@ -390,7 +390,7 @@ impl Planner<'_> {
             if method.interface_returns_void {
                 return (String::new(), format!("{}\n", inner_call));
             }
-            let go_ret = self.go_type_string(return_type);
+            let go_ret = self.use_go_type(return_type);
             let (zero, packages) = self.zero_value(return_type);
             self.require_packages(&packages);
             return (go_ret, format!("{}\nreturn {}\n", inner_call, zero));

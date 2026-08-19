@@ -1,7 +1,5 @@
 pub(crate) mod bodies;
 pub(crate) mod calls;
-#[cfg(debug_assertions)]
-pub(crate) mod invariants;
 pub(crate) mod lower;
 pub(crate) mod placement;
 pub(crate) mod values;
@@ -13,8 +11,6 @@ use syntax::program::File;
 
 pub(crate) struct PackagePlan {
     pub(crate) package_name: String,
-    /// Package-block Go-name collisions detected before rendering. Attached to
-    /// the first file's diagnostics at the render boundary.
     pub(crate) collision_diagnostics: Vec<LisetteDiagnostic>,
 }
 
@@ -23,6 +19,7 @@ impl Planner<'_> {
     pub(crate) fn build_package_plan(&mut self, files: &[&File], package_id: &str) -> PackagePlan {
         debug_assert_eq!(self.facts.current_package(), package_id);
         self.collect_escape_remap(files);
+        self.derive_package_go_consts(files);
         self.collect_generic_renames(files);
         let collision_diagnostics = self.detect_name_collisions(files);
 
