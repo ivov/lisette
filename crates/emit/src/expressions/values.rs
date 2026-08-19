@@ -583,13 +583,6 @@ impl Planner<'_> {
         )
     }
 
-    pub(crate) fn with_fresh_scope<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
-        let frame = self.scope.enter_isolated_function();
-        let result = f(self);
-        self.scope.exit_isolated_function(frame);
-        result
-    }
-
     /// Plan a `Task`/`Defer` operand.
     pub(crate) fn plan_async_wrapper(
         &mut self,
@@ -597,7 +590,8 @@ impl Planner<'_> {
         expression: &Expression,
     ) -> ValuePlan {
         if let Expression::Block { .. } = expression {
-            let body = self.with_fresh_scope(|planner| planner.lower_block_as_body(expression));
+            let body =
+                self.with_isolated_function(|planner| planner.lower_block_as_body(expression));
             let setup = vec![LoweredStatement::Expression(ExpressionStatementPlan {
                 form: ExpressionStatementForm::AsyncBlock {
                     keyword: keyword.to_string(),

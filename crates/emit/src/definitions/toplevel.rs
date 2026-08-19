@@ -93,11 +93,8 @@ impl Planner<'_> {
             ValuePlan::opaque(value_text)
         };
         let is_const = self.is_go_constant_expression(expression);
-        if is_const {
-            match scope {
-                ConstScope::Package => self.package.record_go_const_binding(identifier.to_string()),
-                ConstScope::Local => self.scope.mark_go_const(identifier),
-            }
+        if is_const && matches!(scope, ConstScope::Local) {
+            self.scope.mark_go_const(identifier);
         }
         ConstPlan {
             is_const,

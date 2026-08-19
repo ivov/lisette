@@ -22,7 +22,6 @@ pub(crate) use names::go_name;
 pub(crate) use names::go_name::escape_reserved;
 pub(crate) use output::OutputCollector;
 pub(crate) use render::Renderer;
-pub(crate) use state::bindings::Bindings;
 pub(crate) use types::prelude::PreludeType;
 pub(crate) use utils::is_order_sensitive;
 pub(crate) use utils::write_line;
@@ -294,23 +293,23 @@ impl<'a> Planner<'a> {
         entry_package_name: &'a str,
         options: EmitOptions,
     ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
-        let line_indexes: Arc<HashMap<u32, LineIndex>> = Arc::new(if options.sourcemap {
-            analysis
-                .files
-                .iter()
-                .map(|(file_id, file)| {
-                    (
-                        *file_id,
-                        LineIndex::from_source(file.display_path.clone(), &file.source),
-                    )
-                })
-                .collect()
-        } else {
-            HashMap::default()
+        let line_indexes = options.sourcemap.then(|| {
+            Arc::new(
+                analysis
+                    .files
+                    .iter()
+                    .map(|(file_id, file)| {
+                        (
+                            *file_id,
+                            LineIndex::from_source(file.display_path.clone(), &file.source),
+                        )
+                    })
+                    .collect(),
+            )
         });
 
         let shared = SharedEmitContext {
-            options,
+            emit_tests: options.emit_tests,
             line_indexes,
             globals: Arc::new(GlobalEmitData::compute(&analysis.definitions)),
         };
@@ -374,16 +373,12 @@ impl<'a> Planner<'a> {
         source: Option<&str>,
         files: &[&File],
     ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
-        let (sourcemap, line_indexes) = match source {
-            Some(src) => (
-                true,
-                Arc::new(HashMap::from_iter([(
-                    0u32,
-                    LineIndex::from_source("src/test.lis".to_string(), src),
-                )])),
-            ),
-            None => (false, Arc::new(HashMap::default())),
-        };
+        let line_indexes = source.map(|src| {
+            Arc::new(HashMap::from_iter([(
+                0u32,
+                LineIndex::from_source("src/test.lis".to_string(), src),
+            )]))
+        });
         let globals = Arc::new(GlobalEmitData::compute(config.definitions));
         let facts = EmitFacts::new(EmitFactsConfig {
             definitions: config.definitions,
@@ -396,10 +391,7 @@ impl<'a> Planner<'a> {
             entry_package: config.package_id.to_string(),
             entry_package_name: "main",
             go_module: config.go_module.to_string(),
-            options: EmitOptions {
-                sourcemap,
-                emit_tests: false,
-            },
+            emit_tests: false,
             line_indexes,
             globals,
             current_package: config.package_id.to_string(),
@@ -470,9 +462,7 @@ impl<'a> Planner<'a> {
     /// collection). This is the single source of truth for return-context
     /// lowering.
     fn return_ctx(&self) -> ReturnContext {
-        self.scope
-            .current_return_ctx()
-            .unwrap_or(ReturnContext::None)
+        self.scope.current_return_ctx()
     }
 
     /// `true` if this is a new declaration in the current block (use `:=`),
@@ -565,6 +555,13 @@ impl<'a> Planner<'a> {
         result
     }
 
+    fn with_isolated_function<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        self.scope.enter_isolated_function();
+        let result = f(self);
+        self.scope.exit_isolated_function();
+        result
+    }
+
     fn with_assign_target<R>(&mut self, target: &str, f: impl FnOnce(&mut Self) -> R) -> R {
         let newly_active = self.scope.activate_assign_target(target);
         let result = f(self);
@@ -601,7 +598,7 @@ impl<'a> Planner<'a> {
     }
 
     fn maybe_line_directive(&self, span: &Span) -> String {
-        if !self.facts.sourcemap_enabled() || span.is_dummy() {
+        if span.is_dummy() {
             return String::new();
         }
 
@@ -642,10 +639,10 @@ impl<'a> Planner<'a> {
     ) -> Result<Vec<OutputFile>, Vec<LisetteDiagnostic>> {
         let PackagePlan {
             package_name,
-            mut collision_diagnostics,
+            collision_diagnostics,
         } = plan;
         let mut output_files = Vec::new();
-        let mut all_diagnostics = Vec::new();
+        let mut all_diagnostics = collision_diagnostics;
 
         let (last_file, preceding_files) = files
             .split_last()
@@ -661,9 +658,6 @@ impl<'a> Planner<'a> {
             let namespace = self.namespace.replace(next_namespace);
             let (imports, mut diagnostics) =
                 namespace.finish(self.facts.go_package_names(), self.facts.go_package_ids());
-            if i == 0 {
-                diagnostics.append(&mut collision_diagnostics);
-            }
             all_diagnostics.append(&mut diagnostics);
             output_files.push(OutputFile {
                 name: file.go_filename(),
@@ -681,9 +675,6 @@ impl<'a> Planner<'a> {
         let (imports, mut diagnostics) = namespace
             .into_inner()
             .finish(facts.go_package_names(), facts.go_package_ids());
-        if preceding_files.is_empty() {
-            diagnostics.append(&mut collision_diagnostics);
-        }
         all_diagnostics.append(&mut diagnostics);
         output_files.push(OutputFile {
             name: last_file.go_filename(),
@@ -732,8 +723,8 @@ impl<'a> Planner<'a> {
 
 /// Emit state built once in [`Planner::emit`] and shared by every package worker.
 struct SharedEmitContext {
-    options: EmitOptions,
-    line_indexes: Arc<HashMap<u32, LineIndex>>,
+    emit_tests: bool,
+    line_indexes: Option<Arc<HashMap<u32, LineIndex>>>,
     globals: Arc<GlobalEmitData>,
 }
 
@@ -756,7 +747,7 @@ fn emit_package<'a>(
         entry_package: analysis.entry_package_id.to_string(),
         entry_package_name,
         go_module: go_module.to_string(),
-        options: shared_emit_ctx.options.clone(),
+        emit_tests: shared_emit_ctx.emit_tests,
         line_indexes: shared_emit_ctx.line_indexes.clone(),
         globals: shared_emit_ctx.globals.clone(),
         current_package: package_id.to_string(),

@@ -387,10 +387,12 @@ impl Planner<'_> {
     }
 
     fn imported_member_is_const(&self, package: &Expression, member: &str) -> bool {
-        let Expression::Identifier { value, .. } = package.unwrap_parens() else {
+        let package = package.unwrap_parens();
+        let Expression::Identifier { value, .. } = package else {
             return false;
         };
-        let package = self.canonical_package(value);
+        let package = package.get_type();
+        let package = package.as_import_namespace().unwrap_or(value);
         let qualified = format!("{package}.{member}");
         let body = self
             .facts

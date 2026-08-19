@@ -58,31 +58,13 @@ impl Planner<'_> {
         prefix: &str,
         boundary: CaptureBoundary,
     ) -> String {
-        let loop_lifetime_reservation = if matches!(boundary, CaptureBoundary::LoopLifetime) {
-            let checkpoint = self.scope.fresh_go_name_checkpoint();
-            Some((checkpoint, self.fresh_var(Some(prefix))))
-        } else {
-            None
-        };
         let plan = self.lower_composite_value(expression, ExpressionContext::value());
         let requires_capture = boundary.requires_value_capture(plan.evaluation.stability);
         let (value_setup, expression_string) = plan.into_parts();
         setup.extend(value_setup);
         if requires_capture {
-            if let Some((_, reserved_name)) = loop_lifetime_reservation {
-                self.declare(&reserved_name);
-                setup.push(LoweredStatement::TempBind {
-                    name: reserved_name.clone(),
-                    value: expression_string,
-                });
-                reserved_name
-            } else {
-                self.hoist_tmp_value_statement(setup, prefix, &expression_string)
-            }
+            self.hoist_tmp_value_statement(setup, prefix, &expression_string)
         } else {
-            if let Some((checkpoint, _)) = loop_lifetime_reservation {
-                self.scope.restore_fresh_go_name_checkpoint(checkpoint);
-            }
             expression_string
         }
     }

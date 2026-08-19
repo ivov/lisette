@@ -13,12 +13,12 @@ use syntax::types;
 use syntax::types::SimpleKind;
 use syntax::types::{Symbol, Type};
 
+use crate::GlobalEmitData;
 use crate::abi::callable::CallableReturnAbi;
 use crate::abi::catalog::GoSlotDescriptor;
 use crate::classify_go_return_type;
 use crate::context::lowering::LineIndex;
 use crate::names::go_name;
-use crate::{EmitOptions, GlobalEmitData};
 
 pub(crate) struct EmitFactsConfig<'a> {
     pub(crate) definitions: &'a HashMap<Symbol, Definition>,
@@ -31,8 +31,8 @@ pub(crate) struct EmitFactsConfig<'a> {
     pub(crate) entry_package: PackageId,
     pub(crate) entry_package_name: &'a str,
     pub(crate) go_module: String,
-    pub(crate) options: EmitOptions,
-    pub(crate) line_indexes: Arc<HashMap<u32, LineIndex>>,
+    pub(crate) emit_tests: bool,
+    pub(crate) line_indexes: Option<Arc<HashMap<u32, LineIndex>>>,
     pub(crate) globals: Arc<GlobalEmitData>,
     pub(crate) current_package: PackageId,
 }
@@ -48,8 +48,8 @@ pub(crate) struct EmitFacts<'a> {
     entry_package: PackageId,
     entry_package_name: &'a str,
     go_module: String,
-    options: EmitOptions,
-    line_indexes: Arc<HashMap<u32, LineIndex>>,
+    emit_tests: bool,
+    line_indexes: Option<Arc<HashMap<u32, LineIndex>>>,
     globals: Arc<GlobalEmitData>,
     current_package: PackageId,
 }
@@ -67,7 +67,7 @@ impl<'a> EmitFacts<'a> {
             entry_package: config.entry_package,
             entry_package_name: config.entry_package_name,
             go_module: config.go_module,
-            options: config.options,
+            emit_tests: config.emit_tests,
             line_indexes: config.line_indexes,
             globals: config.globals,
             current_package: config.current_package,
@@ -324,16 +324,12 @@ impl<'a> EmitFacts<'a> {
         self.globals.go_abi_catalog.is_imported_type(qualified_name)
     }
 
-    pub(crate) fn sourcemap_enabled(&self) -> bool {
-        self.options.sourcemap
-    }
-
     pub(crate) fn emit_tests_enabled(&self) -> bool {
-        self.options.emit_tests
+        self.emit_tests
     }
 
     pub(crate) fn line_index(&self, file_id: u32) -> Option<&LineIndex> {
-        self.line_indexes.get(&file_id)
+        self.line_indexes.as_ref()?.get(&file_id)
     }
 }
 

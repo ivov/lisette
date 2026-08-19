@@ -33,9 +33,18 @@ pub(crate) fn is_test_context_ty(ty: &Type) -> bool {
 type LambdaParamDestructure<'a> = (String, &'a Pattern, &'a Type);
 
 struct LambdaReturnInfo {
-    ty_string: String,
+    signature: Option<String>,
     ctx: ReturnContext,
-    has_return: bool,
+}
+
+impl LambdaReturnInfo {
+    fn should_return(&self) -> bool {
+        self.signature.is_some()
+    }
+
+    fn signature(&self) -> &str {
+        self.signature.as_deref().unwrap_or_default()
+    }
 }
 
 impl Planner<'_> {
@@ -68,7 +77,7 @@ impl Planner<'_> {
         ty: &Type,
         ctx: ExpressionContext<'_>,
     ) -> String {
-        self.with_fresh_scope(|this| {
+        self.with_isolated_function(|this| {
             let (mut param_pairs, destructure_bindings) = this.build_lambda_param_pairs(params);
 
             let handle = params
@@ -102,7 +111,7 @@ impl Planner<'_> {
                     body,
                     &destructure_bindings,
                     &return_info.ctx,
-                    return_info.has_return,
+                    return_info.should_return(),
                 )
             });
             if let Some(recover) = recover {
@@ -112,7 +121,7 @@ impl Planner<'_> {
             format!(
                 "func({}){} {{\n{}}}",
                 group_params(&param_pairs),
-                return_info.ty_string,
+                return_info.signature(),
                 body_string
             )
         })
@@ -171,25 +180,22 @@ impl Planner<'_> {
             _ => ReturnContext::None,
         };
 
-        let ty_string = if has_return {
+        let signature = if has_return {
             match ty {
                 Type::Function(f) => match ctx.lowered_shape() {
-                    Some(shape) => {
-                        format!(" {}", self.render_lowered_return_ty(&shape, &f.return_type))
-                    }
-                    None => format!(" {}", self.go_type_string(&f.return_type)),
+                    Some(shape) => Some(format!(
+                        " {}",
+                        self.render_lowered_return_ty(&shape, &f.return_type)
+                    )),
+                    None => Some(format!(" {}", self.go_type_string(&f.return_type))),
                 },
-                _ => String::new(),
+                _ => None,
             }
         } else {
-            String::new()
+            None
         };
 
-        LambdaReturnInfo {
-            ty_string,
-            ctx,
-            has_return,
-        }
+        LambdaReturnInfo { signature, ctx }
     }
 
     fn emit_lambda_body_with_deferred(

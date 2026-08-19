@@ -37,8 +37,8 @@ impl PackageState {
         self.generic_renames.get(source_name).map(String::as_str)
     }
 
-    pub(crate) fn record_go_const_binding(&mut self, lisette_name: String) {
-        self.go_const_bindings.insert(lisette_name);
+    pub(crate) fn extend_go_const_bindings(&mut self, names: impl IntoIterator<Item = String>) {
+        self.go_const_bindings.extend(names);
     }
 
     pub(crate) fn is_go_const_binding(&self, lisette_name: &str) -> bool {

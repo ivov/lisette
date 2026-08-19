@@ -20,12 +20,12 @@ func g() lisette.Result[int, string] {
 
 func f() lisette.Result[int, string] {
 	s := 0
-	check_2 := g()
-	if check_2.Tag != lisette.ResultOk {
-		return lisette.MakeResultErr[int, string](check_2.ErrVal)
+	check_1 := g()
+	if check_1.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[int, string](check_1.ErrVal)
 	}
-	bound_1 := check_2.OkVal
-	for i := range bound_1 {
+	bound_2 := check_1.OkVal
+	for i := range bound_2 {
 		s += i
 	}
 	return lisette.MakeResultOk[int, string](s)

@@ -32,7 +32,7 @@ impl Planner<'_> {
 
         let body_ctx = ReturnContext::TaggedBlock(effective_ty);
         let body = self.with_return_context(body_ctx, |planner| {
-            planner.with_fresh_scope(|planner| planner.lower_try_body(items, &fallible))
+            planner.with_isolated_function(|planner| planner.lower_try_body(items, &fallible))
         });
 
         let setup = vec![LoweredStatement::ClosureBind {
@@ -189,7 +189,9 @@ impl Planner<'_> {
 
         let body_return_ctx = self.return_context_for_type(fallible.ok_ty().clone());
         let body = self.with_return_context(body_return_ctx, |planner| {
-            planner.with_fresh_scope(|planner| planner.lower_recover_body_block(items, &fallible))
+            planner.with_isolated_function(|planner| {
+                planner.lower_recover_body_block(items, &fallible)
+            })
         });
 
         let setup = vec![LoweredStatement::ClosureBind {

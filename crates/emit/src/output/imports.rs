@@ -9,12 +9,23 @@ use syntax::program::{File, FileImport, PackageId};
 use crate::names::packages::{PackageRequirements, PackageUse};
 use syntax::program;
 
-/// Source-derived imports resolved during the plan phase: path -> chosen
-/// alias, plus the aliases of imports dropped as unused (still needed so a
-/// later generated reference to the same package reuses the source alias).
+/// Source imports resolved once during the plan phase. Keeping each import as
+/// one record avoids synchronizing separate lookup and emission collections.
 pub(crate) struct ImportPlan {
-    imports: HashMap<String, String>,
-    dropped_aliases: HashMap<String, String>,
+    imports: Vec<PlannedImport>,
+}
+
+struct PlannedImport {
+    package: String,
+    source_alias: Option<String>,
+    path: String,
+    go_alias: String,
+    disposition: ImportDisposition,
+}
+
+enum ImportDisposition {
+    Emit,
+    DropUnused,
 }
 
 impl ImportPlan {
@@ -24,31 +35,67 @@ impl ImportPlan {
         unused_imports: &HashSet<EcoString>,
         go_package_names: &HashMap<String, String>,
     ) -> Self {
-        let mut imports = HashMap::default();
-        let mut dropped_aliases = HashMap::default();
+        let mut imports = Vec::new();
 
         for import in file.imports() {
             let is_blank = matches!(import.alias, Some(ImportAlias::Blank(_)));
-
-            if !is_blank
-                && let Some(ref alias) = import.effective_alias(go_package_names)
-                && unused_imports.contains(alias.as_str())
+            let source_alias = if is_blank {
+                None
+            } else {
+                import.effective_alias(go_package_names)
+            };
+            let disposition = if source_alias
+                .as_deref()
+                .is_some_and(|alias| unused_imports.contains(alias))
             {
-                let (path, go_alias) = resolve_import(&import, go_module, go_package_names);
-                if !go_alias.is_empty() {
-                    dropped_aliases.insert(path, go_alias);
+                ImportDisposition::DropUnused
+            } else {
+                ImportDisposition::Emit
+            };
+            let (path, go_alias) = resolve_import(&import, go_module, go_package_names);
+            imports.push(PlannedImport {
+                package: import.name.to_string(),
+                source_alias,
+                path,
+                go_alias,
+                disposition,
+            });
+        }
+
+        Self { imports }
+    }
+
+    pub(crate) fn package_alias(&self, package: &str) -> Option<&str> {
+        self.imports
+            .iter()
+            .rev()
+            .filter(|import| import.package == package)
+            .find_map(|import| import.source_alias.as_deref())
+    }
+
+    pub(crate) fn package_for_alias(&self, alias: &str) -> Option<&str> {
+        self.imports
+            .iter()
+            .rev()
+            .find(|import| import.source_alias.as_deref() == Some(alias))
+            .map(|import| import.package.as_str())
+    }
+
+    fn into_builder_state(self) -> (HashMap<String, String>, HashMap<String, String>) {
+        let mut imports = HashMap::default();
+        let mut dropped_aliases = HashMap::default();
+        for import in self.imports {
+            match import.disposition {
+                ImportDisposition::Emit => {
+                    imports.insert(import.path, import.go_alias);
                 }
-                continue;
+                ImportDisposition::DropUnused if !import.go_alias.is_empty() => {
+                    dropped_aliases.insert(import.path, import.go_alias);
+                }
+                ImportDisposition::DropUnused => {}
             }
-
-            let (path, alias) = resolve_import(&import, go_module, go_package_names);
-            imports.insert(path, alias);
         }
-
-        Self {
-            imports,
-            dropped_aliases,
-        }
+        (imports, dropped_aliases)
     }
 }
 
@@ -83,12 +130,13 @@ impl<'a> ImportBuilder<'a> {
         go_package_names: &'a HashMap<String, String>,
         go_package_ids: &'a HashSet<String>,
     ) -> Self {
+        let (imports, dropped_aliases) = plan.into_builder_state();
         Self {
             go_package_names,
             go_package_ids,
-            imports: plan.imports,
+            imports,
             duplicate_imports: Vec::new(),
-            dropped_aliases: plan.dropped_aliases,
+            dropped_aliases,
             used_packages: HashSet::default(),
         }
     }
