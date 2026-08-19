@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787165709337,
+  "lastUpdate": 1787171812751,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -25100,6 +25100,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 32425,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27591,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18613,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14651,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13507,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8251,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5992,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2902,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1851,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 714,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9328,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "cc95a9cbe8ae4cc12177cd969bfeffe06702815b",
+          "message": "refactor: consolidate duplicated emitter logic and state (#1296)",
+          "timestamp": "2026-08-19T22:36:29+02:00",
+          "tree_id": "5877b426b209e6dd9b59c94fa9660e4efce64bd5",
+          "url": "https://github.com/ivov/lisette/commit/cc95a9cbe8ae4cc12177cd969bfeffe06702815b"
+        },
+        "date": 1787171811242,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 136240,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 31924,
             "unit": "lines"
           },
           {
