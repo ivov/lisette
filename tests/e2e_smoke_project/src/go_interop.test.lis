@@ -2,6 +2,8 @@ import "go:bytes"
 import "go:math"
 import httpx "go:net/http"
 import "go:net/http/httptest"
+import "go:net/url"
+import "go:os"
 import "go:path"
 import "go:strconv"
 import "go:strings"
@@ -217,4 +219,101 @@ fn serve(h: httpx.Handler) -> int {
   let req = httptest.NewRequest("GET", "/", bytes.NewBufferString(""))
   h.ServeHTTP(rec, req)
   rec.Code
+}
+
+fn classify_path(path_name: string) -> string {
+  let Ok(info) = os.Stat(path_name) else {
+    return "missing"
+  }
+  if info.IsDir() { "dir" } else { "file" }
+}
+
+fn open_via_match(name: string) -> string {
+  let file = match os.Open(name) {
+    Ok(f) => f,
+    Err(e) => {
+      return "missing"
+    },
+  }
+  defer file.Close()
+  file.Name()
+}
+
+fn parse_scheme(text: string) -> string {
+  let Ok(parsed) = url.Parse(text) else {
+    return "bad"
+  }
+  parsed.Scheme
+}
+
+#[test]
+fn go_if_let_err_inverts_condition() {
+  let mut seen = "none"
+  if let Err(e) = strconv.Atoi("nope") {
+    seen = "err"
+  }
+  assert seen == "err"
+
+  let mut ok_seen = "none"
+  if let Err(e) = strconv.Atoi("42") {
+    ok_seen = "err"
+  }
+  assert ok_seen == "none"
+}
+
+#[test]
+fn go_if_let_err_inverts_nil_interface_guard() {
+  let mut missing = false
+  if let Err(e) = os.Stat("./__lisette_missing__") {
+    missing = true
+  }
+  assert missing
+
+  let mut here = false
+  if let Err(e) = os.Stat(".") {
+    here = true
+  }
+  assert !here
+}
+
+#[test]
+fn go_if_let_err_reads_payload() {
+  let mut message = ""
+  if let Err(e) = strconv.Atoi("nope") {
+    message = e.Error()
+  }
+  assert strings.Contains(message, "nope")
+}
+
+#[test]
+fn go_if_let_ok_binds_payload() {
+  let mut value = 0
+  if let Ok(parsed) = strconv.Atoi("42") {
+    value = parsed
+  }
+  assert value == 42
+
+  let mut missed = -1
+  if let Ok(parsed) = strconv.Atoi("nope") {
+    missed = parsed
+  }
+  assert missed == -1
+}
+
+#[test]
+fn go_let_else_result_pointer_return() {
+  assert parse_scheme("https://example.com/a") == "https"
+  assert parse_scheme("://missing-scheme") == "bad"
+}
+
+#[test]
+fn go_let_else_result_interface_return() {
+  assert classify_path(".") == "dir"
+  assert classify_path("./__lisette_missing__") == "missing"
+}
+
+#[test]
+fn go_let_match_result_binds_call_slot() {
+  assert open_via_match("./__lisette_missing__") == "missing"
+  assert strings.HasSuffix(open_via_match("."), ".")
 }

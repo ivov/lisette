@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:net/url"
+  
+  fn test(raw: string) -> string {
+    let Ok(parsed) = url.Parse(raw) else {
+      return "bad"
+    }
+    parsed.Scheme
+  }
+---
+package main
+
+import "net/url"
+
+func test(raw string) string {
+	parsed, err_1 := url.Parse(raw)
+	if err_1 != nil || parsed == nil {
+		return "bad"
+	}
+	return parsed.Scheme
+}

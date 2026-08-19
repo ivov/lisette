@@ -35,8 +35,8 @@ func (l Loader) Load(_ string) (int, error) {
 }
 
 func run(s svc.Alias) int {
-	ret_1, ret_2 := s.Load("k")
-	if ret_2 == nil {
+	ret_1, err_2 := s.Load("k")
+	if err_2 == nil {
 		n := ret_1
 		return n
 	} else {

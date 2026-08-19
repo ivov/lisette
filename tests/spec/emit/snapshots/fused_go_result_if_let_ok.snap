@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:os"
+  import "go:fmt"
+  
+  fn test(name: string) {
+    if let Ok(info) = os.Stat(name) {
+      fmt.Println(info.Name())
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"os"
+)
+
+func test(name string) {
+	ret_1, err_2 := os.Stat(name)
+	if err_2 == nil && !lisette.IsNilInterface(ret_1) {
+		info := ret_1
+		fmt.Println(info.Name())
+	}
+}

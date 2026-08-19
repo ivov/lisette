@@ -5,15 +5,15 @@ description: |
   import "go:os"
   import "go:fmt"
   
-  fn test() {
-    let file = match os.Create("f") {
+  fn test(name: string) {
+    let file = match os.Open(name) {
       Ok(f) => f,
       Err(e) => {
-        fmt.Println("error")
+        fmt.Println("cannot open")
         return
       },
     }
-    defer file.Close()
+    fmt.Println(file.Name())
   }
 ---
 package main
@@ -23,11 +23,11 @@ import (
 	"os"
 )
 
-func test() {
-	file, err_1 := os.Create("f")
+func test(name string) {
+	file, err_1 := os.Open(name)
 	if err_1 != nil || file == nil {
-		fmt.Println("error")
+		fmt.Println("cannot open")
 		return
 	}
-	defer file.Close()
+	fmt.Println(file.Name())
 }

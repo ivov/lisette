@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn test(text: string) {
+    match strconv.Atoi(text) {
+      Ok(_) => (),
+      Err(_) => (),
+    }
+  }
+---
+package main
+
+import "strconv"
+
+func test(text string) {
+	strconv.Atoi(text)
+}

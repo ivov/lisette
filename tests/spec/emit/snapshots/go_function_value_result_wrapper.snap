@@ -25,8 +25,8 @@ import (
 )
 
 func parseWith(f func(string) (int, error), s string) int {
-	ret_1, ret_2 := f(s)
-	if ret_2 == nil {
+	ret_1, err_2 := f(s)
+	if err_2 == nil {
 		n := ret_1
 		return n
 	} else {

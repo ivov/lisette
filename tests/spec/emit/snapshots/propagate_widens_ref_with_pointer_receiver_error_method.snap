@@ -52,11 +52,11 @@ func load() (int, error) {
 }
 
 func test() {
-	_, ret_1 := load()
-	if ret_1 == nil {
+	_, err_1 := load()
+	if err_1 == nil {
 		panic("expected error")
 	} else {
-		e := ret_1
+		e := err_1
 		if e.Error() != "cannot open a.txt" {
 			panic("wrong ref error")
 		}

@@ -14,7 +14,7 @@ use crate::patterns::binding_emit::{
     tree_assignment_statements, tree_binding_statements, with_tree_bindings,
 };
 use crate::patterns::decision_tree::{self, PatternInfo, SubjectRoot, render_condition};
-use crate::patterns::matching::{field_binding, some_pattern_field};
+use crate::patterns::matching::{field_binding, ok_pattern_field, some_pattern_field};
 use crate::plan::bodies::{
     ElseArm, IfPlan, LoopTransfer, LoweredBlock, LoweredStatement, PlacePlan,
 };
@@ -206,11 +206,17 @@ impl Planner<'_> {
         scrutinee: &Expression,
         fail: RefutableFail,
     ) -> Vec<LoweredStatement> {
-        if let RefutableFail::ElseBlock(else_block) = fail
-            && let Some(statements) =
+        if let RefutableFail::ElseBlock(else_block) = fail {
+            if let Some(statements) =
                 self.lower_fused_option_let_else(ap.pattern, scrutinee, else_block)
-        {
-            return statements;
+            {
+                return statements;
+            }
+            if let Some(statements) =
+                self.lower_fused_result_let_else(ap.pattern, scrutinee, else_block)
+            {
+                return statements;
+            }
         }
 
         let value_ty = scrutinee.get_type();
@@ -242,6 +248,50 @@ impl Planner<'_> {
         }
         statements.extend(body_block.statements);
         statements
+    }
+
+    /// Fuse `let Ok(x) = <Go (T, error) call> else { ... }` into a direct error test.
+    fn lower_fused_result_let_else(
+        &mut self,
+        pattern: &Pattern,
+        scrutinee: &Expression,
+        else_block: &Expression,
+    ) -> Option<Vec<LoweredStatement>> {
+        let field = ok_pattern_field(pattern)?;
+        let fuse = self.result_fuse_plan(scrutinee)?;
+        if !fuse.carries_payload() {
+            return None;
+        }
+
+        let binding = self.go_name_for_binding(field).map(|name| {
+            let escaped = go_name::escape_reserved(&name).into_owned();
+            let go_name = if self.is_declared(&escaped) {
+                self.fresh_var(Some(&name))
+            } else {
+                escaped
+            };
+            self.declare(&go_name);
+            (name, go_name)
+        });
+        let slot = match &binding {
+            Some((_, go_name)) => CommaOkValueSlot::Named(go_name.clone()),
+            None => CommaOkValueSlot::Unused,
+        };
+        let bound = fuse.bind(self, slot);
+        let mut statements = bound.setup;
+
+        // The else block sees the enclosing scope, so it lowers before the binding installs.
+        let fail_body = self.lower_block_as_body(else_block);
+        statements.push(LoweredStatement::If(IfPlan {
+            condition_setup: Vec::new(),
+            condition: bound.err_condition,
+            then_body: fail_body,
+            else_arm: ElseArm::None,
+        }));
+        if let Some((name, go_name)) = binding {
+            self.scope.bind(name, go_name);
+        }
+        Some(statements)
     }
 
     /// Fuse `let Some(x) = <comma-ok source> else { ... }` into a direct pair test.

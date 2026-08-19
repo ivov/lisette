@@ -1,0 +1,37 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:os"
+  import "go:fmt"
+  
+  fn test(name: string) {
+    let label = match os.Open(name) {
+      Ok(f) => f.Name(),
+      Err(e) => {
+        fmt.Println("cannot open")
+        return
+      },
+    }
+    fmt.Println(label)
+  }
+---
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func test(name string) {
+	var label string
+	ret_1, err_2 := os.Open(name)
+	if err_2 == nil && ret_1 != nil {
+		f := ret_1
+		label = f.Name()
+	} else {
+		fmt.Println("cannot open")
+		return
+	}
+	fmt.Println(label)
+}

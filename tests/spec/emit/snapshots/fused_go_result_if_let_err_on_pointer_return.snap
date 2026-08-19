@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:os"
+  
+  fn test(name: string) -> bool {
+    if let Err(e) = os.Open(name) {
+      return false
+    }
+    true
+  }
+---
+package main
+
+import "os"
+
+func test(name string) bool {
+	ret_1, err_2 := os.Open(name)
+	if err_2 != nil || ret_1 == nil {
+		return false
+	}
+	return true
+}
