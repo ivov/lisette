@@ -701,7 +701,7 @@ fn main() {
           (call_type_arguments
             (type_identifier)
             (function_type
-              (parameters
+              (parameter_types
                 (type_identifier)
                 (type_identifier))
               (type_identifier)))
@@ -723,7 +723,7 @@ fn make() -> fn() -> int {
     (identifier)
     (parameters)
     (function_type
-      (parameters)
+      (parameter_types)
       (type_identifier))
     (block
       (let_declaration

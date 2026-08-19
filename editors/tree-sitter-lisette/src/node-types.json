@@ -376,6 +376,10 @@
       {
         "type": "unit_type",
         "named": true
+      },
+      {
+        "type": "writable_type",
+        "named": true
       }
     ]
   },
@@ -1469,6 +1473,16 @@
           }
         ]
       }
+    },
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "mutable_specifier",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -1621,7 +1635,7 @@
         "required": true,
         "types": [
           {
-            "type": "parameters",
+            "type": "parameter_types",
             "named": true
           }
         ]
@@ -1837,6 +1851,10 @@
           },
           {
             "type": "type_identifier",
+            "named": true
+          },
+          {
+            "type": "writable_type",
             "named": true
           }
         ]
@@ -2255,13 +2273,18 @@
           }
         ]
       }
-    },
+    }
+  },
+  {
+    "type": "parameter_types",
+    "named": true,
+    "fields": {},
     "children": {
-      "multiple": false,
+      "multiple": true,
       "required": false,
       "types": [
         {
-          "type": "mutable_specifier",
+          "type": "_type",
           "named": true
         }
       ]
@@ -2275,10 +2298,6 @@
       "multiple": true,
       "required": false,
       "types": [
-        {
-          "type": "_type",
-          "named": true
-        },
         {
           "type": "attribute_item",
           "named": true
@@ -3219,6 +3238,33 @@
           }
         ]
       }
+    }
+  },
+  {
+    "type": "writable_type",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "generic_type",
+          "named": true
+        },
+        {
+          "type": "mutable_specifier",
+          "named": true
+        },
+        {
+          "type": "scoped_type_identifier",
+          "named": true
+        },
+        {
+          "type": "type_identifier",
+          "named": true
+        }
+      ]
     }
   },
   {

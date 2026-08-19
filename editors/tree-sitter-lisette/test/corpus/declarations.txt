@@ -494,3 +494,47 @@ fn main() {}
   (ERROR)
   (expression_statement
     (identifier)))
+
+================================================================================
+Parameter marker is not a permission
+================================================================================
+
+fn sort(mut items: Slice<int>) { }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_item
+    name: (identifier)
+    parameters: (parameters
+      (ERROR
+        (identifier))
+      (parameter
+        pattern: (identifier)
+        type: (generic_type
+          type: (type_identifier)
+          type_arguments: (type_arguments
+            (type_identifier)))))
+    body: (block)))
+
+================================================================================
+Receiver marker is not a permission
+================================================================================
+
+impl Counter {
+  fn bump(mut self) { }
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (impl_item
+    type: (type_identifier)
+    body: (declaration_list
+      (function_item
+        name: (identifier)
+        parameters: (parameters
+          (ERROR
+            (identifier))
+          (self_parameter))
+        body: (block)))))

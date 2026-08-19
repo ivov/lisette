@@ -232,6 +232,27 @@ for i in 0..10 { foo(i) }
             (identifier)))))))
 
 ================================================================================
+For with a writable binding
+================================================================================
+
+for mut row in rows { row[0] = 1 }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (for_expression
+      (mutable_specifier)
+      pattern: (identifier)
+      value: (identifier)
+      body: (block
+        (assignment_expression
+          left: (index_expression
+            (identifier)
+            (integer_literal))
+          right: (integer_literal))))))
+
+================================================================================
 Loop
 ================================================================================
 

@@ -99,11 +99,9 @@ module.exports = grammar({
   ],
 
   conflicts: $ => [
-    [$.unit_type, $.tuple_pattern],
     [$._type, $.scoped_type_identifier],
+    [$.writable_type, $.scoped_type_identifier],
     [$._expression_except_range, $._type_identifier],
-    [$._pattern, $._type_identifier],
-    [$._pattern, $._type],
   ],
 
   word: $ => $.identifier,
@@ -293,6 +291,7 @@ module.exports = grammar({
         $._type_identifier,
         $.scoped_type_identifier,
         $.generic_type,
+        $.writable_type,
       )),
       field('body', $.declaration_list),
     ),
@@ -337,14 +336,14 @@ module.exports = grammar({
         $.parameter,
         $.self_parameter,
         '_',
-        $._type,
       ),
     )),
+
+    parameter_types: $ => parenList(choice($._type, '_')),
 
     self_parameter: $ => 'self',
 
     parameter: $ => seq(
-      optional($.mutable_specifier),
       field('pattern', choice(
         $._pattern,
         'self',
@@ -382,6 +381,7 @@ module.exports = grammar({
     // Types
 
     _type: $ => choice(
+      $.writable_type,
       $.generic_type,
       $.scoped_type_identifier,
       $.tuple_type,
@@ -389,6 +389,15 @@ module.exports = grammar({
       $.function_type,
       $._type_identifier,
       $.never_type,
+    ),
+
+    writable_type: $ => seq(
+      $.mutable_specifier,
+      choice(
+        $.generic_type,
+        $.scoped_type_identifier,
+        $._type_identifier,
+      ),
     ),
 
     generic_type: $ => prec(1, seq(
@@ -421,7 +430,7 @@ module.exports = grammar({
 
     function_type: $ => seq(
       'fn',
-      field('parameters', $.parameters),
+      field('parameters', $.parameter_types),
       optional(seq('->', field('return_type', $._type))),
     ),
 
@@ -730,6 +739,7 @@ module.exports = grammar({
 
     for_expression: $ => seq(
       'for',
+      optional($.mutable_specifier),
       field('pattern', $._pattern),
       'in',
       field('value', $._expression),
