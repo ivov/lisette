@@ -48,8 +48,8 @@ func sumParsed(a, b string) (int, error) {
 }
 
 func main() {
-	ret_1, ret_2 := sumParsed("3", "4")
-	if ret_2 == nil {
+	ret_1, err_2 := sumParsed("3", "4")
+	if err_2 == nil {
 		n := ret_1
 		_ = n
 	}

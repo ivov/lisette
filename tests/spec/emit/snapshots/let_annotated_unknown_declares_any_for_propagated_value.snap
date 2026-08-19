@@ -58,8 +58,8 @@ func run() (string, error) {
 
 func test() {
 	var text_1 string
-	ret_2, ret_3 := run()
-	if ret_3 == nil {
+	ret_2, err_3 := run()
+	if err_3 == nil {
 		text := ret_2
 		text_1 = text
 	} else {

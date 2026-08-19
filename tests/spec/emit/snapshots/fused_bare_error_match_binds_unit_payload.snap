@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:os"
+  import "go:fmt"
+  
+  fn test() {
+    match os.Remove("f") {
+      Ok(x) => { fmt.Println(x) },
+      Err(e) => { fmt.Println(e) },
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func test() {
+	err_1 := os.Remove("f")
+	if err_1 == nil {
+		x := struct{}{}
+		fmt.Println(x)
+	} else {
+		e := err_1
+		fmt.Println(e)
+	}
+}

@@ -48,17 +48,17 @@ func bail(flag bool) (int, error) {
 }
 
 func test() {
-	_, ret_1 := bail(true)
-	if ret_1 == nil {
+	_, err_1 := bail(true)
+	if err_1 == nil {
 		panic("expected error")
 	} else {
-		e := ret_1
+		e := err_1
 		if e.Error() != "a failed" {
 			panic("wrong literal error")
 		}
 	}
-	ret_2, ret_3 := bail(false)
-	if ret_3 == nil {
+	ret_2, err_3 := bail(false)
+	if err_3 == nil {
 		v := ret_2
 		if v != 1 {
 			panic("wrong ok value")

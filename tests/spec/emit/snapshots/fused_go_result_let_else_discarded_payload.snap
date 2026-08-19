@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:os"
+  
+  fn test(name: string) -> bool {
+    let Ok(_) = os.Stat(name) else {
+      return false
+    }
+    true
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"os"
+)
+
+func test(name string) bool {
+	ret_1, err_2 := os.Stat(name)
+	if err_2 != nil || lisette.IsNilInterface(ret_1) {
+		return false
+	}
+	return true
+}

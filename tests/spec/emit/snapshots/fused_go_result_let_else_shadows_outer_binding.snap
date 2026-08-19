@@ -1,0 +1,32 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:strconv"
+  import "go:fmt"
+  
+  fn test(text: string) -> int {
+    let parsed = "outer"
+    fmt.Println(parsed)
+    let Ok(parsed) = strconv.Atoi(text) else {
+      return -1
+    }
+    parsed
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func test(text string) int {
+	parsed := "outer"
+	fmt.Println(parsed)
+	parsed_1, err_2 := strconv.Atoi(text)
+	if err_2 != nil {
+		return -1
+	}
+	return parsed_1
+}

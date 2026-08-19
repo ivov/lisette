@@ -775,6 +775,300 @@ fn test() {
 }
 
 #[test]
+fn fused_go_result_if_let_err() {
+    let input = r#"
+import "go:os"
+
+fn test(name: string) -> string {
+  if let Err(e) = os.Stat(name) {
+    return name
+  }
+  "found"
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_go_result_if_let_err_reads_payload() {
+    let input = r#"
+import "go:os"
+import "go:fmt"
+
+fn test(name: string) {
+  if let Err(e) = os.Stat(name) {
+    fmt.Println(e)
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_go_result_if_let_ok() {
+    let input = r#"
+import "go:os"
+import "go:fmt"
+
+fn test(name: string) {
+  if let Ok(info) = os.Stat(name) {
+    fmt.Println(info.Name())
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_go_result_if_let_ok_with_else() {
+    let input = r#"
+import "go:os"
+import "go:fmt"
+
+fn test(name: string) {
+  if let Ok(info) = os.Stat(name) {
+    fmt.Println(info.Name())
+  } else {
+    fmt.Println("missing")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_go_result_if_let_err_on_pointer_return() {
+    let input = r#"
+import "go:os"
+
+fn test(name: string) -> bool {
+  if let Err(e) = os.Open(name) {
+    return false
+  }
+  true
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_go_result_let_else_pointer_return() {
+    let input = r#"
+import "go:net/url"
+
+fn test(raw: string) -> string {
+  let Ok(parsed) = url.Parse(raw) else {
+    return "bad"
+  }
+  parsed.Scheme
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_go_result_let_else_interface_return() {
+    let input = r#"
+import "go:os"
+
+fn test(name: string) -> bool {
+  let Ok(info) = os.Stat(name) else {
+    return false
+  }
+  info.IsDir()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_go_result_let_else_discarded_payload() {
+    let input = r#"
+import "go:os"
+
+fn test(name: string) -> bool {
+  let Ok(_) = os.Stat(name) else {
+    return false
+  }
+  true
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_go_result_let_else_without_nil_guard() {
+    let input = r#"
+import "go:strconv"
+
+fn test(text: string) -> int {
+  let Ok(parsed) = strconv.Atoi(text) else {
+    return -1
+  }
+  parsed
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_go_result_let_else_shadows_outer_binding() {
+    let input = r#"
+import "go:strconv"
+import "go:fmt"
+
+fn test(text: string) -> int {
+  let parsed = "outer"
+  fmt.Println(parsed)
+  let Ok(parsed) = strconv.Atoi(text) else {
+    return -1
+  }
+  parsed
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_lisette_result_let_else() {
+    let input = r#"
+import "go:errors"
+
+fn fallible(ok: bool) -> Result<int, error> {
+  if ok { Ok(1) } else { Err(errors.New("nope")) }
+}
+
+fn test() -> int {
+  let Ok(x) = fallible(true) else {
+    return -1
+  }
+  x
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_else_on_result_value_is_not_fused() {
+    let input = r#"
+fn test(res: Result<int, string>) -> int {
+  let Ok(x) = res else {
+    return -1
+  }
+  x
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_go_result_match_both_arms_empty() {
+    let input = r#"
+import "go:strconv"
+
+fn test(text: string) {
+  match strconv.Atoi(text) {
+    Ok(_) => (),
+    Err(_) => (),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_bare_error_match_binds_unit_payload() {
+    let input = r#"
+import "go:os"
+import "go:fmt"
+
+fn test() {
+  match os.Remove("f") {
+    Ok(x) => { fmt.Println(x) },
+    Err(e) => { fmt.Println(e) },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_fused_go_result_match_binds_call_slot() {
+    let input = r#"
+import "go:os"
+import "go:fmt"
+
+fn test(name: string) {
+  let file = match os.Open(name) {
+    Ok(f) => f,
+    Err(e) => {
+      fmt.Println("cannot open")
+      return
+    },
+  }
+  fmt.Println(file.Name())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_fused_go_result_match_binds_interface_call_slot() {
+    let input = r#"
+import "go:net"
+import "go:fmt"
+
+fn test(addr: string) {
+  let conn = match net.Dial("tcp", addr) {
+    Ok(c) => c,
+    Err(e) => {
+      fmt.Println("cannot dial")
+      return
+    },
+  }
+  let _ = conn
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_match_with_non_diverging_err_arm_keeps_declaration() {
+    let input = r#"
+import "go:strconv"
+
+fn test(text: string) -> int {
+  let parsed = match strconv.Atoi(text) {
+    Ok(n) => n,
+    Err(e) => -1,
+  }
+  parsed
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_match_with_computed_ok_arm_keeps_declaration() {
+    let input = r#"
+import "go:os"
+import "go:fmt"
+
+fn test(name: string) {
+  let label = match os.Open(name) {
+    Ok(f) => f.Name(),
+    Err(e) => {
+      fmt.Println("cannot open")
+      return
+    },
+  }
+  fmt.Println(label)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn while_let_option_function_call() {
     let input = r#"
 import "go:fmt"

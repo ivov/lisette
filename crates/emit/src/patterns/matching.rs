@@ -14,9 +14,95 @@ use syntax::ast::{ConstructorPatternResolution, Expression, MatchArm, Pattern};
 use syntax::parse::TUPLE_FIELDS;
 use syntax::types::Type;
 
-struct FusedShape {
+pub(super) struct ResultFusePlan<'a> {
+    subject: &'a Expression,
     shape: CallableReturnAbi,
     nil_guard: Option<NilGuard>,
+}
+
+pub(super) struct BoundResultCall {
+    pub(super) setup: Vec<LoweredStatement>,
+    pub(super) value: Option<String>,
+    pub(super) error: String,
+    pub(super) ok_condition: String,
+    pub(super) err_condition: String,
+}
+
+impl ResultFusePlan<'_> {
+    pub(super) fn has_nil_guard(&self) -> bool {
+        self.nil_guard.is_some()
+    }
+
+    pub(super) fn shape(&self) -> &CallableReturnAbi {
+        &self.shape
+    }
+
+    pub(super) fn carries_payload(&self) -> bool {
+        matches!(self.shape, CallableReturnAbi::Result { .. })
+    }
+
+    pub(super) fn bind(self, planner: &mut Planner<'_>, slot: CommaOkValueSlot) -> BoundResultCall {
+        let temp = |planner: &mut Planner<'_>| {
+            let var = planner.fresh_var(Some("ret"));
+            planner.declare(&var);
+            var
+        };
+        let value = self
+            .carries_payload()
+            .then(|| match slot {
+                CommaOkValueSlot::Named(name) => Some(name),
+                CommaOkValueSlot::Temp => Some(temp(planner)),
+                CommaOkValueSlot::Unused => self.nil_guard.map(|_| temp(planner)),
+            })
+            .flatten();
+        let error = planner.fresh_var(Some("err"));
+        planner.declare(&error);
+
+        let (mut setup, call_str) = planner
+            .lower_call(self.subject, None, ExpressionContext::value())
+            .into_parts();
+        setup.push(LoweredStatement::RawGo(match &value {
+            Some(var) => format!("{}, {} := {}\n", var, error, call_str),
+            None => match self.shape {
+                CallableReturnAbi::Result { .. } => format!("_, {} := {}\n", error, call_str),
+                CallableReturnAbi::BareError => format!("{} := {}\n", error, call_str),
+                CallableReturnAbi::Tagged
+                | CallableReturnAbi::Direct
+                | CallableReturnAbi::Partial { .. }
+                | CallableReturnAbi::Option(_)
+                | CallableReturnAbi::Tuple { .. } => unreachable!("rejected by recognition"),
+            },
+        }));
+
+        let (ok_condition, err_condition) = match self.nil_guard {
+            Some(guard) => {
+                if guard.is_interface() {
+                    planner.require_stdlib();
+                }
+                let var = value.as_deref().expect("nil guard requires the value var");
+                (
+                    format!("{} == nil && {}", error, guard.non_nil(var)),
+                    format!("{} != nil || {}", error, guard.is_nil(var)),
+                )
+            }
+            None => (format!("{} == nil", error), format!("{} != nil", error)),
+        };
+
+        BoundResultCall {
+            setup,
+            value,
+            error,
+            ok_condition,
+            err_condition,
+        }
+    }
+}
+
+const UNIT_VALUE: &str = "struct{}{}";
+
+struct ResultArm<'a> {
+    arm: &'a MatchArm,
+    is_catch_all: bool,
 }
 
 /// How to render the subject declaration line, based on body usage.
@@ -47,7 +133,7 @@ impl Planner<'_> {
             return LoweredBlock { statements };
         }
 
-        if let Some(fused) = self.lower_fused_lowered_match(subject, arms, place) {
+        if let Some(fused) = self.lower_fused_lowered_match(subject, arms, place, None) {
             statements.extend(fused);
             return LoweredBlock { statements };
         }
@@ -168,19 +254,17 @@ impl Planner<'_> {
         tree_emitter.lower(place)
     }
 
-    /// The shape a match subject fuses against: lowered Lisette `Result` callees
-    /// and single-value Go `(T, error)` calls. `None` falls through to the
-    /// Partial and Option fuses or the lift-then-match path.
-    fn fusable_result_shape(
+    /// Recognize a Lisette `Result` function or a Go `(T, error)` one.
+    pub(super) fn result_fuse_plan<'a>(
         &self,
-        subject: &Expression,
-        plan: &CallPlan<'_>,
-    ) -> Option<FusedShape> {
+        subject: &'a Expression,
+    ) -> Option<ResultFusePlan<'a>> {
+        let plan = self.plan_call(subject)?;
         let shape = plan.resolved.abi.result.clone();
         let nil_guard = match &plan.resolved.origin {
             CallableOrigin::GoInterop
                 if matches!(
-                    plan.resolved.abi.result,
+                    shape,
                     CallableReturnAbi::BareError | CallableReturnAbi::Result { .. }
                 ) =>
             {
@@ -203,97 +287,165 @@ impl Planner<'_> {
             shape,
             CallableReturnAbi::BareError | CallableReturnAbi::Result { .. }
         )
-        .then_some(FusedShape { shape, nil_guard })
+        .then_some(ResultFusePlan {
+            subject,
+            shape,
+            nil_guard,
+        })
     }
 
-    /// Fuse the lift+match into one `if err == nil { ... } else { ... }`
-    /// when the scrutinee is a lowered call with simple `Ok`/`Err` arms.
+    /// Bind `let x = match ...` straight into `x`.
+    pub(crate) fn lower_fused_result_match_into(
+        &mut self,
+        value: &Expression,
+        go_name: &str,
+    ) -> Option<Vec<LoweredStatement>> {
+        let Expression::Match { subject, arms, .. } = value.unwrap_parens() else {
+            return None;
+        };
+        self.lower_fused_lowered_match(subject, arms, &PlacePlan::Statement, Some(go_name))
+    }
+
+    /// The payload name an arm binds, or `None` when the body never reads it.
+    fn arm_payload_name<'a>(&self, arm: &'a MatchArm) -> Option<&'a str> {
+        let Pattern::EnumVariant { fields, .. } = &arm.pattern else {
+            return None;
+        };
+        let [field] = fields.as_slice() else {
+            return None;
+        };
+        if self.facts.is_unused_binding(field) {
+            return None;
+        }
+        simple_payload_binding(arm).filter(|name| *name != "_")
+    }
+
+    /// Test a fallible call with one `if`, building no `Result`. A
+    /// `destination` makes the call write into that name, leaving only the
+    /// failure arm.
     fn lower_fused_lowered_match(
         &mut self,
         subject: &Expression,
         arms: &[MatchArm],
         place: &PlacePlan,
+        destination: Option<&str>,
     ) -> Option<Vec<LoweredStatement>> {
-        let plan = self.plan_call(subject)?;
-        let FusedShape { shape, nil_guard } = self.fusable_result_shape(subject, &plan)?;
-        let (ok_arm, err_arm) = classify_result_arms(arms)?;
+        let fuse = self.result_fuse_plan(subject)?;
+        let (ok, err) = classify_result_arms(arms)?;
 
         // Err always carries a payload; Ok may not under BareError.
-        let ok_binding = simple_payload_binding(ok_arm);
-        let err_binding = simple_payload_binding(err_arm);
-        err_binding?;
-        if ok_binding.is_none() && !ok_arm_payload_is_omitted(ok_arm, &shape) {
-            return None;
-        }
-        let ok_name = ok_binding.filter(|n| *n != "_");
-        let err_name = err_binding.filter(|n| *n != "_");
-
-        let need_val = matches!(shape, CallableReturnAbi::Result { .. })
-            && (ok_name.is_some() || nil_guard.is_some());
-        let val_var = need_val.then(|| {
-            let v = self.fresh_var(Some("ret"));
-            self.declare(&v);
-            v
-        });
-        let err_var = self.fresh_var(Some("ret"));
-        self.declare(&err_var);
-
-        let (mut statements, call_str) = self
-            .lower_call(subject, None, ExpressionContext::value())
-            .into_parts();
-        let bind_line = match &val_var {
-            Some(v) => format!("{}, {} := {}\n", v, err_var, call_str),
-            None => match shape {
-                CallableReturnAbi::Result { .. } => format!("_, {} := {}\n", err_var, call_str),
-                CallableReturnAbi::BareError => format!("{} := {}\n", err_var, call_str),
-                CallableReturnAbi::Tagged
-                | CallableReturnAbi::Direct
-                | CallableReturnAbi::Partial { .. }
-                | CallableReturnAbi::Option(_)
-                | CallableReturnAbi::Tuple { .. } => unreachable!("rejected above"),
-            },
-        };
-        statements.push(LoweredStatement::RawGo(bind_line));
-
-        let (then_body, _) = self.lower_fused_arm(
-            &[ok_name.zip(val_var.as_deref())],
-            &ok_arm.expression,
-            place,
-        );
-        let (mut else_body, err_used) = self.lower_fused_arm(
-            &[err_name.map(|n| (n, err_var.as_str()))],
-            &err_arm.expression,
-            place,
-        );
-
-        let condition = match nil_guard {
-            Some(guard) => {
-                let val = val_var
-                    .as_deref()
-                    .expect("nil guard requires the value var");
-                if guard.is_interface() {
-                    self.require_stdlib();
-                }
-                if err_used {
-                    self.require_errors();
-                    else_body.statements.insert(
-                        0,
-                        LoweredStatement::RawGo(format!(
-                            "if {err_var} == nil {{\n{err_var} = errors.New(\"unexpected nil\")\n}}\n"
-                        )),
-                    );
-                }
-                format!("{} == nil && {}", err_var, guard.non_nil(val))
+        let ok_name = if ok.is_catch_all {
+            None
+        } else {
+            if simple_payload_binding(ok.arm).is_none()
+                && !ok_arm_payload_is_omitted(ok.arm, fuse.shape())
+            {
+                return None;
             }
-            None => format!("{} == nil", err_var),
+            self.arm_payload_name(ok.arm)
+        };
+        let err_name = if err.is_catch_all {
+            None
+        } else {
+            simple_payload_binding(err.arm)?;
+            self.arm_payload_name(err.arm)
         };
 
-        statements.push(LoweredStatement::If(IfPlan {
-            condition_setup: Vec::new(),
-            condition,
-            then_body,
-            else_arm: ElseArm::from_body(else_body, false),
-        }));
+        if let Some(name) = destination {
+            // Safe only if the failure arm always leaves and the success arm
+            // returns the payload unchanged.
+            let payload = simple_payload_binding(ok.arm).filter(|name| *name != "_")?;
+            if !fuse.carries_payload()
+                || ok.is_catch_all
+                || err.is_catch_all
+                || !err.arm.expression.get_type().is_never()
+                || arm_body_is_identifier(&ok.arm.expression) != Some(payload)
+            {
+                return None;
+            }
+            self.declare(name);
+        } else if matches!(place, PlacePlan::Statement)
+            && ok_name.is_none()
+            && err_name.is_none()
+            && arm_body_is_noop(&ok.arm.expression)
+            && arm_body_is_noop(&err.arm.expression)
+        {
+            // Nothing reads the outcome, so keep the call and drop the test.
+            let (mut statements, call_str) = self
+                .lower_call(subject, None, ExpressionContext::value())
+                .into_parts();
+            statements.push(LoweredStatement::RawGo(format!("{call_str}\n")));
+            return Some(statements);
+        }
+
+        let has_nil_guard = fuse.has_nil_guard();
+        let carries_payload = fuse.carries_payload();
+        let slot = match destination {
+            Some(name) => CommaOkValueSlot::Named(name.to_string()),
+            None if ok_name.is_some() => CommaOkValueSlot::Temp,
+            None => CommaOkValueSlot::Unused,
+        };
+        let bound = fuse.bind(self, slot);
+        let mut statements = bound.setup;
+
+        let then_body = destination.is_none().then(|| {
+            // A call returning only `error` has no value, so `Ok(x)` takes unit.
+            let ok_value = if carries_payload {
+                bound.value.as_deref()
+            } else {
+                Some(UNIT_VALUE)
+            };
+            self.lower_fused_arm(&[ok_name.zip(ok_value)], &ok.arm.expression, place)
+                .0
+        });
+        let arm_place = if destination.is_some() {
+            &PlacePlan::Statement
+        } else {
+            place
+        };
+        let (mut else_body, err_used) = self.lower_fused_arm(
+            &[err_name.map(|n| (n, bound.error.as_str()))],
+            &err.arm.expression,
+            arm_place,
+        );
+
+        if has_nil_guard && err_used {
+            self.require_errors();
+            let error = &bound.error;
+            else_body.statements.insert(
+                0,
+                LoweredStatement::RawGo(format!(
+                    "if {error} == nil {{\n{error} = errors.New(\"unexpected nil\")\n}}\n"
+                )),
+            );
+        }
+
+        let Some(then_body) = then_body else {
+            statements.push(LoweredStatement::If(IfPlan {
+                condition_setup: Vec::new(),
+                condition: bound.err_condition,
+                then_body: else_body,
+                else_arm: ElseArm::None,
+            }));
+            return Some(statements);
+        };
+
+        let plan = if then_body.renders_empty() && !else_body.renders_empty() {
+            IfPlan {
+                condition_setup: Vec::new(),
+                condition: bound.err_condition,
+                then_body: else_body,
+                else_arm: ElseArm::None,
+            }
+        } else {
+            IfPlan {
+                condition_setup: Vec::new(),
+                condition: bound.ok_condition,
+                then_body,
+                else_arm: ElseArm::from_body(else_body, false),
+            }
+        };
+        statements.push(LoweredStatement::If(plan));
         Some(statements)
     }
 
@@ -465,15 +617,14 @@ impl Planner<'_> {
             let mut statements = Vec::new();
             let mut any_referenced = false;
             for (go_name, value) in bound.iter().flatten() {
+                if !used.contains(go_name) {
+                    continue;
+                }
                 statements.push(LoweredStatement::TempBind {
                     name: go_name.clone(),
                     value: value.clone(),
                 });
-                if used.contains(go_name) {
-                    any_referenced = true;
-                } else {
-                    statements.push(LoweredStatement::RawGo(format!("_ = {}\n", go_name)));
-                }
+                any_referenced = true;
             }
             statements.extend(body_block.statements);
             (LoweredBlock { statements }, any_referenced)
@@ -604,12 +755,17 @@ fn arm_tested_elements(planner: &Planner, pattern: &Pattern, arity: usize) -> Op
     }
 }
 
-/// Recognize `[Ok(<...>), Err(<...>)]` (in either order, no guards).
-fn classify_result_arms(arms: &[MatchArm]) -> Option<(&MatchArm, &MatchArm)> {
+/// `[Ok(..), Err(..)]` in either order, plus the shape `if let` desugars to.
+/// A wildcard fits only the second arm, since the checker rejects any arm
+/// after a catch-all.
+fn classify_result_arms(arms: &[MatchArm]) -> Option<(ResultArm<'_>, ResultArm<'_>)> {
     if arms.len() != 2 || arms.iter().any(|a| a.has_guard()) {
         return None;
     }
-    let kind = |arm: &MatchArm| -> Option<&str> {
+    let kind = |arm: &MatchArm| -> Option<&'static str> {
+        if matches!(arm.pattern, Pattern::WildCard { .. }) {
+            return Some("_");
+        }
         let Pattern::EnumVariant {
             identifier, rest, ..
         } = &arm.pattern
@@ -625,11 +781,19 @@ fn classify_result_arms(arms: &[MatchArm]) -> Option<(&MatchArm, &MatchArm)> {
             _ => None,
         }
     };
-    let a0 = kind(&arms[0])?;
-    let a1 = kind(&arms[1])?;
-    match (a0, a1) {
-        ("Ok", "Err") => Some((&arms[0], &arms[1])),
-        ("Err", "Ok") => Some((&arms[1], &arms[0])),
+    let explicit = |arm| ResultArm {
+        arm,
+        is_catch_all: false,
+    };
+    let catch_all = |arm| ResultArm {
+        arm,
+        is_catch_all: true,
+    };
+    match (kind(&arms[0])?, kind(&arms[1])?) {
+        ("Ok", "Err") => Some((explicit(&arms[0]), explicit(&arms[1]))),
+        ("Err", "Ok") => Some((explicit(&arms[1]), explicit(&arms[0]))),
+        ("Ok", "_") => Some((explicit(&arms[0]), catch_all(&arms[1]))),
+        ("Err", "_") => Some((catch_all(&arms[1]), explicit(&arms[0]))),
         _ => None,
     }
 }
@@ -729,6 +893,49 @@ fn classify_option_arms(arms: &[MatchArm]) -> Option<OptionArms<'_>> {
         }),
         _ => None,
     }
+}
+
+fn arm_body_is_noop(body: &Expression) -> bool {
+    match body.unwrap_parens() {
+        Expression::Unit { .. } => true,
+        Expression::Block { items, .. } => items.is_empty(),
+        _ => false,
+    }
+}
+
+/// The name an arm returns when its body is nothing but that name.
+fn arm_body_is_identifier(body: &Expression) -> Option<&str> {
+    let body = match body.unwrap_parens() {
+        Expression::Block { items, .. } => match items.as_slice() {
+            [single] => single.unwrap_parens(),
+            _ => return None,
+        },
+        other => other,
+    };
+    match body {
+        Expression::Identifier { value, .. } => Some(value.as_str()),
+        _ => None,
+    }
+}
+
+/// The single payload field of an `Ok(<identifier|_>)` pattern.
+pub(super) fn ok_pattern_field(pattern: &Pattern) -> Option<&Pattern> {
+    let Pattern::EnumVariant {
+        identifier,
+        fields,
+        rest,
+        ..
+    } = pattern
+    else {
+        return None;
+    };
+    if *rest || !matches!(identifier.as_str(), "Ok" | "Result.Ok") {
+        return None;
+    }
+    let [field] = fields.as_slice() else {
+        return None;
+    };
+    matches!(field, Pattern::Identifier { .. } | Pattern::WildCard { .. }).then_some(field)
 }
 
 /// The single payload field of a `Some(<identifier|_>)` pattern.

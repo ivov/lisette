@@ -1,0 +1,34 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:net"
+  import "go:fmt"
+  
+  fn test(addr: string) {
+    let conn = match net.Dial("tcp", addr) {
+      Ok(c) => c,
+      Err(e) => {
+        fmt.Println("cannot dial")
+        return
+      },
+    }
+    let _ = conn
+  }
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"net"
+)
+
+func test(addr string) {
+	conn, err_1 := net.Dial("tcp", addr)
+	if err_1 != nil || lisette.IsNilInterface(conn) {
+		fmt.Println("cannot dial")
+		return
+	}
+	_ = conn
+}

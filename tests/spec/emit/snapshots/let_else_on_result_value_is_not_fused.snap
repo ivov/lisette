@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  fn test(res: Result<int, string>) -> int {
+    let Ok(x) = res else {
+      return -1
+    }
+    x
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(res lisette.Result[int, string]) int {
+	if res.Tag != lisette.ResultOk {
+		return -1
+	}
+	x := res.OkVal
+	return x
+}

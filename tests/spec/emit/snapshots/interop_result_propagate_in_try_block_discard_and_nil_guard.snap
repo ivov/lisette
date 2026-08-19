@@ -60,8 +60,8 @@ func openAndCheck(path, n string) (int, error) {
 }
 
 func main() {
-	ret_1, ret_2 := openAndCheck("/tmp/x", "7")
-	if ret_2 == nil {
+	ret_1, err_2 := openAndCheck("/tmp/x", "7")
+	if err_2 == nil {
 		v := ret_1
 		_ = v
 	}

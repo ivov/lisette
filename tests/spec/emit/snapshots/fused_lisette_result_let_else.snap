@@ -8,11 +8,11 @@ description: |
     if ok { Ok(1) } else { Err(errors.New("nope")) }
   }
   
-  fn test() {
-    match fallible(true) {
-      Ok(_) => {},
-      Err(e) => { let _ = e },
+  fn test() -> int {
+    let Ok(x) = fallible(true) else {
+      return -1
     }
+    x
   }
 ---
 package main
@@ -26,10 +26,10 @@ func fallible(ok bool) (int, error) {
 	return 0, errors.New("nope")
 }
 
-func test() {
-	_, err_1 := fallible(true)
+func test() int {
+	x, err_1 := fallible(true)
 	if err_1 != nil {
-		e := err_1
-		_ = e
+		return -1
 	}
+	return x
 }

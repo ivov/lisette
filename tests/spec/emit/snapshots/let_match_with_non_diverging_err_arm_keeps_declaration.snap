@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: |
+  
+  import "go:strconv"
+  
+  fn test(text: string) -> int {
+    let parsed = match strconv.Atoi(text) {
+      Ok(n) => n,
+      Err(e) => -1,
+    }
+    parsed
+  }
+---
+package main
+
+import "strconv"
+
+func test(text string) int {
+	var parsed int
+	ret_1, err_2 := strconv.Atoi(text)
+	if err_2 == nil {
+		n := ret_1
+		parsed = n
+	} else {
+		parsed = -1
+	}
+	return parsed
+}
