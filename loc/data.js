@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787155980448,
+  "lastUpdate": 1787156885671,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -24566,6 +24566,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 32193,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27515,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18613,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14651,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13507,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8212,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5992,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2902,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1851,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 714,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9328,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "2073873290d6a52ad96598ae11ceaa7c8423f07c",
+          "message": "refactor: emit direct error checks for fallible Go calls (#1290)",
+          "timestamp": "2026-08-19T18:27:36+02:00",
+          "tree_id": "a4a4eec05e58cee2731b777ae9fe1711d2939bee",
+          "url": "https://github.com/ivov/lisette/commit/2073873290d6a52ad96598ae11ceaa7c8423f07c"
+        },
+        "date": 1787156884019,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 136626,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32425,
             "unit": "lines"
           },
           {
