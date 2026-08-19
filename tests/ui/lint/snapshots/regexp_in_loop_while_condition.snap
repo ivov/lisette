@@ -6,7 +6,7 @@ source: tests/ui/lint/mod.rs
  5 │   let s = "abc"
  6 │   while regexp.MatchString("[0-9]+", s).unwrap_or(false) {
    ·                            ────┬───
-   ·                                ╰── compiled each time through the loop
+   ·                                ╰── recompiled
  7 │     let _ = 1
    ╰────
-  help: Compile the pattern once outside the loop and reuse it: `regexp.MustCompile` for a known-valid pattern, or `regexp.Compile` to keep handling the error · code: [lint.regexp_in_loop]
+  help: Compile the pattern once outside the loop and reuse it: `regexp.MustCompile`, or `regexp.Compile` to keep the error · code: [lint.regexp_in_loop]

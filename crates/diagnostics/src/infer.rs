@@ -2190,8 +2190,8 @@ pub fn multiple_select_receives(first_span: Span, second_span: Span) -> LisetteD
 pub fn duplicate_map_keys(first_span: Span, duplicate_span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Duplicate map key")
         .with_infer_code("duplicate_map_keys")
-        .with_span_label(&first_span, "first entry for this key")
-        .with_span_label(&duplicate_span, "overwrites the earlier entry")
+        .with_span_label(&first_span, "key for first entry")
+        .with_span_label(&duplicate_span, "overwrites first")
         .with_help("`Map.from` keeps the last entry for a key, so the earlier entry never reaches the map. Remove one of the two entries")
 }
 
@@ -3322,7 +3322,7 @@ pub fn repeated_if_condition(span: &Span) -> LisetteDiagnostic {
         .with_infer_code("repeated_if_condition")
         .with_span_label(span, "same as prior condition")
         .with_help(
-            "This branch is unreachable, because its condition duplicates the preceding condition. Did you mean a different condition?",
+            "This branch is unreachable because its condition duplicates the preceding condition. Did you mean a different condition?",
         )
 }
 

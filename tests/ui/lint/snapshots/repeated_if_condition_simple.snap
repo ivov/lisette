@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                                    ╰── same as prior condition
  5 │ }
    ╰────
-  help: This branch is unreachable, because its condition duplicates the preceding condition. Did you mean a different condition? · code: [infer.repeated_if_condition]
+  help: This branch is unreachable because its condition duplicates the preceding condition. Did you mean a different condition? · code: [infer.repeated_if_condition]

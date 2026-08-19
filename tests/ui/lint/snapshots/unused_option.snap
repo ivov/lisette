@@ -1,12 +1,12 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  ▲ Unused Option
+  ▲ `Option` is silently discarded
    ╭─[test.lis:7:3]
  6 │ fn main() {
  7 │   get_option();
    ·   ──────┬─────
-   ·         ╰── this `Option` is discarded
+   ·         ╰── absence will go unnoticed
  8 │   ()
    ╰────
-  help: Handle this `Option`, or explicitly discard it with `let _ = ...` · code: [lint.unused_option]
+  help: Handle this `Option` with `?` or `match`, or explicitly discard it with `let _ = ...` · code: [lint.unused_option]

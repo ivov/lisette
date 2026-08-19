@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·       ╰── not all patterns covered
  4 │     [true, true] => 3,
    ╰────
-  help: Handle the missing case by adding `[false, false] => { ... }` · code: [infer.non_exhaustive]
+  help: Handle the missing case `[false, false]`, e.g. `[false, false] => { ... }` · code: [infer.non_exhaustive]
