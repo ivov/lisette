@@ -44,6 +44,16 @@ fn element_index(segments: &[PathSegment]) -> usize {
         .expect("a tuple-element subject only resolves tuple fields")
 }
 
+fn checked_tuple_element(path: &AccessPath, arity: usize) -> Option<usize> {
+    let PathSegment::Field(field) = path.segments.first()? else {
+        return None;
+    };
+    TUPLE_FIELDS
+        .iter()
+        .take(arity)
+        .position(|tuple_field| tuple_field == field)
+}
+
 /// One subject, or one name per element when the match never builds its tuple.
 #[derive(Clone, Copy)]
 pub(crate) enum SubjectRoot<'a> {
@@ -174,34 +184,49 @@ pub(crate) enum Check {
     },
 }
 
+#[derive(Clone, Copy)]
+enum CheckPolarity {
+    Positive,
+    Negative,
+}
+
 impl Check {
     pub(crate) fn render(&self, subject: SubjectRoot<'_>) -> String {
+        self.render_with_polarity(subject, CheckPolarity::Positive)
+    }
+
+    pub(crate) fn render_negated(&self, subject: SubjectRoot<'_>) -> String {
+        self.render_with_polarity(subject, CheckPolarity::Negative)
+    }
+
+    fn render_with_polarity(&self, subject: SubjectRoot<'_>, polarity: CheckPolarity) -> String {
+        let negative = matches!(polarity, CheckPolarity::Negative);
         match self {
-            Check::EnumTag {
-                path, tag_constant, ..
-            } => {
+            Check::EnumTag { path, tag_constant } => {
                 let rendered_path = path.render(subject);
-                format!("{}.Tag == {}", rendered_path, tag_constant)
+                let operator = if negative { "!=" } else { "==" };
+                format!("{rendered_path}.Tag {operator} {tag_constant}")
             }
-            Check::Literal {
-                path, go_literal, ..
-            } => {
+            Check::Literal { path, go_literal } => {
                 let rendered_path = path.render(subject);
-                match go_literal.as_str() {
-                    "true" => rendered_path,
-                    "false" => format!("!{}", rendered_path),
-                    _ => format!("{} == {}", rendered_path, go_literal),
+                match (go_literal.as_str(), negative) {
+                    ("true", false) | ("false", true) => rendered_path,
+                    ("true", true) | ("false", false) => format!("!{rendered_path}"),
+                    (_, false) => format!("{rendered_path} == {go_literal}"),
+                    (_, true) => format!("{rendered_path} != {go_literal}"),
                 }
             }
             Check::SliceLenEq { path, length } => {
                 let rendered_path = path.render(subject);
-                format!("len({}) == {}", rendered_path, length)
+                let operator = if negative { "!=" } else { "==" };
+                format!("len({rendered_path}) {operator} {length}")
             }
             Check::SliceLenGe { path, min_length } => {
                 let rendered_path = path.render(subject);
-                format!("len({}) >= {}", rendered_path, min_length)
+                let operator = if negative { "<" } else { ">=" };
+                format!("len({rendered_path}) {operator} {min_length}")
             }
-            Check::Or { alternatives } => {
+            Check::Or { alternatives } if !negative => {
                 let alt_strs: Vec<String> = alternatives
                     .iter()
                     .map(|checks| {
@@ -226,44 +251,16 @@ impl Check {
                     joined
                 }
             }
-            Check::TypeAssert { path, go_type } => format!(
+            Check::TypeAssert { path, go_type } if !negative => format!(
                 "func() bool {{ _, ok := {}.({}); return ok }}()",
                 path.render(subject),
                 go_type,
             ),
-        }
-    }
-
-    /// Comparison-shaped checks flip their operator; `Or`/`TypeAssert` wrap
-    /// in `!(...)`.
-    pub(crate) fn render_negated(&self, subject: SubjectRoot<'_>) -> String {
-        match self {
-            Check::EnumTag {
-                path, tag_constant, ..
-            } => {
-                let rendered_path = path.render(subject);
-                format!("{}.Tag != {}", rendered_path, tag_constant)
-            }
-            Check::Literal {
-                path, go_literal, ..
-            } => {
-                let rendered_path = path.render(subject);
-                match go_literal.as_str() {
-                    "true" => format!("!{}", rendered_path),
-                    "false" => rendered_path,
-                    _ => format!("{} != {}", rendered_path, go_literal),
-                }
-            }
-            Check::SliceLenEq { path, length } => {
-                let rendered_path = path.render(subject);
-                format!("len({}) != {}", rendered_path, length)
-            }
-            Check::SliceLenGe { path, min_length } => {
-                let rendered_path = path.render(subject);
-                format!("len({}) < {}", rendered_path, min_length)
-            }
             Check::Or { .. } | Check::TypeAssert { .. } => {
-                format!("!({})", self.render(subject))
+                format!(
+                    "!({})",
+                    self.render_with_polarity(subject, CheckPolarity::Positive)
+                )
             }
         }
     }
@@ -294,6 +291,30 @@ impl Check {
     }
 }
 
+pub(crate) fn tested_tuple_elements(checks: &[Check], arity: usize) -> Option<Vec<bool>> {
+    let mut tested = vec![false; arity];
+    for check in checks {
+        if let Some(path) = check.path() {
+            tested[checked_tuple_element(path, arity)?] = true;
+            continue;
+        }
+        let Check::Or { alternatives } = check else {
+            unreachable!("only Or checks lack a path")
+        };
+        let mut alternatives = alternatives
+            .iter()
+            .map(|checks| tested_tuple_elements(checks, arity));
+        let first = alternatives.next()??;
+        if !alternatives.all(|alternative| alternative.as_ref() == Some(&first)) {
+            return None;
+        }
+        for (tested, alternative) in tested.iter_mut().zip(first) {
+            *tested |= alternative;
+        }
+    }
+    Some(tested)
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct PatternBinding {
     pub lisette_name: String,
@@ -314,6 +335,7 @@ pub(crate) struct PatternInfo {
     pub checks: Vec<Check>,
     pub bindings: Vec<PatternBinding>,
     pub packages: PackageRequirements,
+    pub requires_materialized_subject: bool,
 }
 
 impl PatternInfo {
@@ -334,6 +356,7 @@ struct PatternCollector {
     checks: Vec<Check>,
     bindings: Vec<PatternBinding>,
     packages: PackageRequirements,
+    requires_materialized_subject: bool,
 }
 
 impl PatternCollector {
@@ -342,6 +365,7 @@ impl PatternCollector {
             checks: Vec::new(),
             bindings: Vec::new(),
             packages: PackageRequirements::default(),
+            requires_materialized_subject: false,
         }
     }
 }
@@ -796,11 +820,20 @@ fn collect_checks_and_bindings(
             });
         }
 
-        Pattern::EnumVariant { .. } => {
+        Pattern::EnumVariant { resolution, ty, .. } => {
+            let can_split_tuple =
+                matches!(
+                    resolution,
+                    ConstructorPatternResolution::Const { .. }
+                        | ConstructorPatternResolution::ConstValue { .. }
+                ) || matches!(resolution, ConstructorPatternResolution::EnumVariant { .. })
+                    && !planner.is_tuple_struct_type(ty);
+            collector.requires_materialized_subject |= !can_split_tuple;
             collect_enum_variant_checks(planner, path, pattern, path_ty, collector);
         }
 
         Pattern::Struct { .. } => {
+            collector.requires_materialized_subject = true;
             collect_struct_checks(planner, path, pattern, path_ty, collector);
         }
 
@@ -814,6 +847,7 @@ fn collect_checks_and_bindings(
             resolution,
             ..
         } => {
+            collector.requires_materialized_subject = true;
             collect_slice_checks(planner, path, prefix, rest, resolution, collector);
         }
 
@@ -1656,6 +1690,7 @@ pub(crate) fn collect_pattern_info(
         checks: collector.checks,
         bindings: collector.bindings,
         packages: collector.packages,
+        requires_materialized_subject: collector.requires_materialized_subject,
     }
 }
 

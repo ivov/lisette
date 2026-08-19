@@ -340,15 +340,21 @@ impl<'a> Planner<'a> {
             .values
             .pop()
             .expect("sequenced exactly one argument");
-        let call = match value {
-            GoExpression::Call { callee, arguments } if callee.rendered() == "fmt.Sprintf" => {
-                GoExpression::call(GoExpression::opaque("fmt.Errorf".to_string()), arguments)
-            }
-            captured => {
+        let sprintf_arguments = value
+            .as_str()
+            .strip_prefix("fmt.Sprintf(")
+            .and_then(|value| value.strip_suffix(')'))
+            .map(str::to_string);
+        let call = match sprintf_arguments {
+            Some(arguments) => GoExpression::opaque_with_deferred_evaluation(
+                format!("fmt.Errorf({arguments})"),
+                true,
+            ),
+            None => {
                 let qualifier = self.require_package_import("go:errors");
                 GoExpression::call(
                     GoExpression::opaque(format!("{}.New", qualifier)),
-                    vec![captured],
+                    vec![value],
                 )
             }
         };

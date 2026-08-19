@@ -1,15 +1,16 @@
 use crate::Planner;
 use crate::abi::callable::CallableReturnAbi;
-use crate::calls::comma_ok::CommaOkValueSlot;
+use crate::calls::comma_ok::{CommaOkValueSlot, LoweredPair, PairKind};
 use crate::calls::go_interop::NilGuard;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name::is_plain_identifier;
 use crate::patterns::binding_decls::pattern_binds_name;
+use crate::patterns::decision_tree;
 use crate::patterns::tree_emitter::{MatchSubject, TreePlanner};
 use crate::plan::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan};
 use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::plan::values::{CaptureBoundary, GoExpression, ValuePlan};
-use syntax::ast::{ConstructorPatternResolution, Expression, MatchArm, Pattern};
+use syntax::ast::{Expression, MatchArm, Pattern};
 use syntax::parse::TUPLE_FIELDS;
 use syntax::types::Type;
 
@@ -17,14 +18,6 @@ pub(super) struct ResultFusePlan<'a> {
     subject: &'a Expression,
     shape: CallableReturnAbi,
     nil_guard: Option<NilGuard>,
-}
-
-pub(super) struct BoundResultCall {
-    pub(super) setup: Vec<LoweredStatement>,
-    pub(super) value: Option<String>,
-    pub(super) error: String,
-    pub(super) ok_condition: String,
-    pub(super) err_condition: String,
 }
 
 impl ResultFusePlan<'_> {
@@ -40,60 +33,20 @@ impl ResultFusePlan<'_> {
         matches!(self.shape, CallableReturnAbi::Result { .. })
     }
 
-    pub(super) fn bind(self, planner: &mut Planner<'_>, slot: CommaOkValueSlot) -> BoundResultCall {
-        let temp = |planner: &mut Planner<'_>| {
-            let var = planner.fresh_var(Some("ret"));
-            planner.declare(&var);
-            var
-        };
-        let value = self
-            .carries_payload()
-            .then(|| match slot {
-                CommaOkValueSlot::Named(name) => Some(name),
-                CommaOkValueSlot::Temp => Some(temp(planner)),
-                CommaOkValueSlot::Unused => self.nil_guard.map(|_| temp(planner)),
-            })
-            .flatten();
-        let error = planner.fresh_var(Some("err"));
-        planner.declare(&error);
-
-        let (mut setup, call_str) = planner
+    pub(super) fn bind(self, planner: &mut Planner<'_>, slot: CommaOkValueSlot) -> LoweredPair {
+        let carries_value = self.carries_payload();
+        let (setup, call) = planner
             .lower_call(self.subject, None, ExpressionContext::value())
             .into_parts();
-        setup.push(LoweredStatement::RawGo(match &value {
-            Some(var) => format!("{}, {} := {}\n", var, error, call_str),
-            None => match self.shape {
-                CallableReturnAbi::Result { .. } => format!("_, {} := {}\n", error, call_str),
-                CallableReturnAbi::BareError => format!("{} := {}\n", error, call_str),
-                CallableReturnAbi::Tagged
-                | CallableReturnAbi::Direct
-                | CallableReturnAbi::Partial { .. }
-                | CallableReturnAbi::Option(_)
-                | CallableReturnAbi::Tuple { .. } => unreachable!("rejected by recognition"),
-            },
-        }));
-
-        let (ok_condition, err_condition) = match self.nil_guard {
-            Some(guard) => {
-                if guard.is_interface() {
-                    planner.require_stdlib();
-                }
-                let var = value.as_deref().expect("nil guard requires the value var");
-                (
-                    format!("{} == nil && {}", error, guard.non_nil(var)),
-                    format!("{} != nil || {}", error, guard.is_nil(var)),
-                )
-            }
-            None => (format!("{} == nil", error), format!("{} != nil", error)),
-        };
-
-        BoundResultCall {
+        planner.bind_pair(
             setup,
-            value,
-            error,
-            ok_condition,
-            err_condition,
-        }
+            call,
+            slot,
+            PairKind::Error {
+                carries_value,
+                nil_guard: self.nil_guard,
+            },
+        )
     }
 }
 
@@ -202,15 +155,22 @@ impl Planner<'_> {
         if elements.len() > TUPLE_FIELDS.len() || arms.iter().any(MatchArm::has_guard) {
             return None;
         }
+        let subject_ty = subject.get_type();
         let mut tested = vec![false; elements.len()];
         for arm in arms {
-            let arm_tested = arm_tested_elements(self, &arm.pattern, elements.len())?;
+            let info = decision_tree::collect_pattern_info(self, &arm.pattern, &subject_ty);
+            if info.root_assertion.is_some()
+                || !info.bindings.is_empty()
+                || info.requires_materialized_subject
+            {
+                return None;
+            }
+            let arm_tested = decision_tree::tested_tuple_elements(&info.checks, elements.len())?;
             for (element, arm_element) in tested.iter_mut().zip(arm_tested) {
                 *element |= arm_element;
             }
         }
 
-        let subject_ty = subject.get_type();
         let mut statements: Vec<LoweredStatement> = Vec::new();
         let mut stages: Vec<ValuePlan> = elements
             .iter()
@@ -385,7 +345,8 @@ impl Planner<'_> {
             None => CommaOkValueSlot::Unused,
         };
         let bound = fuse.bind(self, slot);
-        let mut statements = bound.setup;
+        let ok_condition = self.pair_success_condition(&bound);
+        let err_condition = self.pair_failure_condition(&bound);
 
         let then_body = destination.is_none().then(|| {
             // A call returning only `error` has no value, so `Ok(x)` takes unit.
@@ -403,14 +364,14 @@ impl Planner<'_> {
             place
         };
         let (mut else_body, err_used) = self.lower_fused_arm(
-            &[err_name.map(|n| (n, bound.error.as_str()))],
+            &[err_name.map(|n| (n, bound.status()))],
             &err.arm.expression,
             arm_place,
         );
 
         if has_nil_guard && err_used {
             self.require_errors();
-            let error = &bound.error;
+            let error = bound.status();
             else_body.statements.insert(
                 0,
                 LoweredStatement::RawGo(format!(
@@ -418,11 +379,12 @@ impl Planner<'_> {
                 )),
             );
         }
+        let mut statements = bound.statements;
 
         let Some(then_body) = then_body else {
             statements.push(LoweredStatement::If(IfPlan {
                 condition_setup: Vec::new(),
-                condition: bound.err_condition,
+                condition: err_condition,
                 then_body: else_body,
                 else_arm: ElseArm::None,
             }));
@@ -432,14 +394,14 @@ impl Planner<'_> {
         let plan = if then_body.renders_empty() && !else_body.renders_empty() {
             IfPlan {
                 condition_setup: Vec::new(),
-                condition: bound.err_condition,
+                condition: err_condition,
                 then_body: else_body,
                 else_arm: ElseArm::None,
             }
         } else {
             IfPlan {
                 condition_setup: Vec::new(),
-                condition: bound.ok_condition,
+                condition: ok_condition,
                 then_body,
                 else_arm: ElseArm::from_body(else_body, false),
             }
@@ -574,17 +536,23 @@ impl Planner<'_> {
         );
         let (else_body, _) = self.lower_fused_arm(&[], arms.none_body, place);
 
-        let plan = if then_body.renders_empty() && !else_body.renders_empty() {
+        let invert = then_body.renders_empty() && !else_body.renders_empty();
+        let condition = if invert {
+            self.pair_failure_condition(&pair)
+        } else {
+            self.pair_success_condition(&pair)
+        };
+        let plan = if invert {
             IfPlan {
                 condition_setup: Vec::new(),
-                condition: self.comma_ok_none_condition(&pair),
+                condition,
                 then_body: else_body,
                 else_arm: ElseArm::None,
             }
         } else {
             IfPlan {
                 condition_setup: Vec::new(),
-                condition: self.comma_ok_some_condition(&pair),
+                condition,
                 then_body,
                 else_arm: ElseArm::from_body(else_body, false),
             }
@@ -680,78 +648,7 @@ impl Planner<'_> {
 
 /// Whether reading the value again costs nothing and skipping it loses nothing.
 fn is_inert_value(element: &Expression, value: &GoExpression) -> bool {
-    match value {
-        GoExpression::Literal {
-            composite: false, ..
-        } => true,
-        GoExpression::Literal {
-            composite: true, ..
-        } => element.get_type().is_unit(),
-        _ => false,
-    }
-}
-
-/// Whether an element pattern tests its element, or `None` for a shape whose
-/// checks this lowering does not predict.
-fn element_pattern_tests(planner: &Planner, pattern: &Pattern) -> Option<bool> {
-    match pattern {
-        Pattern::WildCard { .. } | Pattern::Unit { .. } => Some(false),
-        Pattern::Literal { .. } => Some(true),
-        // A tuple struct or a newtype carries no tag, so its checks come from
-        // fields this grammar does not read.
-        Pattern::EnumVariant {
-            resolution,
-            ty,
-            fields,
-            ..
-        } => {
-            for field in fields {
-                element_pattern_tests(planner, field)?;
-            }
-            match resolution {
-                ConstructorPatternResolution::Const { .. }
-                | ConstructorPatternResolution::ConstValue { .. } => Some(true),
-                ConstructorPatternResolution::EnumVariant { .. }
-                    if !planner.is_tuple_struct_type(ty) =>
-                {
-                    Some(true)
-                }
-                _ => None,
-            }
-        }
-        Pattern::Tuple { elements, .. } => elements.iter().try_fold(false, |tests, element| {
-            element_pattern_tests(planner, element).map(|element| tests || element)
-        }),
-        // A catchall alternative leaves the whole pattern untested.
-        Pattern::Or { patterns, .. } => patterns.iter().try_fold(true, |tests, alternative| {
-            element_pattern_tests(planner, alternative).map(|alternative| tests && alternative)
-        }),
-        _ => None,
-    }
-}
-
-/// Which elements an arm tests, or `None` when its shape leaves that open.
-/// Or-pattern alternatives have to agree, since each becomes its own arm.
-fn arm_tested_elements(planner: &Planner, pattern: &Pattern, arity: usize) -> Option<Vec<bool>> {
-    match pattern {
-        Pattern::WildCard { .. } => Some(vec![false; arity]),
-        Pattern::Tuple { elements, .. } if elements.len() == arity => elements
-            .iter()
-            .map(|element| element_pattern_tests(planner, element))
-            .collect(),
-        Pattern::Or { patterns, .. } => {
-            let mut alternatives = Vec::with_capacity(patterns.len());
-            for alternative in patterns {
-                alternatives.push(arm_tested_elements(planner, alternative, arity)?);
-            }
-            let first = alternatives.first()?.clone();
-            alternatives
-                .iter()
-                .all(|alternative| *alternative == first)
-                .then_some(first)
-        }
-        _ => None,
-    }
+    value.is_literal() && (!value.is_composite_literal() || element.get_type().is_unit())
 }
 
 /// `[Ok(..), Err(..)]` in either order, plus the shape `if let` desugars to.
@@ -919,26 +816,15 @@ fn arm_body_is_identifier(body: &Expression) -> Option<&str> {
 
 /// The single payload field of an `Ok(<identifier|_>)` pattern.
 pub(super) fn ok_pattern_field(pattern: &Pattern) -> Option<&Pattern> {
-    let Pattern::EnumVariant {
-        identifier,
-        fields,
-        rest,
-        ..
-    } = pattern
-    else {
-        return None;
-    };
-    if *rest || !matches!(identifier.as_str(), "Ok" | "Result.Ok") {
-        return None;
-    }
-    let [field] = fields.as_slice() else {
-        return None;
-    };
-    matches!(field, Pattern::Identifier { .. } | Pattern::WildCard { .. }).then_some(field)
+    simple_variant_field(pattern, &["Ok", "Result.Ok"])
 }
 
 /// The single payload field of a `Some(<identifier|_>)` pattern.
 pub(super) fn some_pattern_field(pattern: &Pattern) -> Option<&Pattern> {
+    simple_variant_field(pattern, &["Some", "Option.Some"])
+}
+
+fn simple_variant_field<'a>(pattern: &'a Pattern, variants: &[&str]) -> Option<&'a Pattern> {
     let Pattern::EnumVariant {
         identifier,
         fields,
@@ -948,7 +834,7 @@ pub(super) fn some_pattern_field(pattern: &Pattern) -> Option<&Pattern> {
     else {
         return None;
     };
-    if *rest || !matches!(identifier.as_str(), "Some" | "Option.Some") {
+    if *rest || !variants.contains(&identifier.as_str()) {
         return None;
     }
     let [field] = fields.as_slice() else {

@@ -641,9 +641,10 @@ impl Planner<'_> {
             && !source.has_nil_guard()
         {
             let pair = self.bind_comma_ok_pair(expression, source, CommaOkValueSlot::Temp);
+            let ok = pair.status().to_string();
             let value = pair.value.expect("Temp slot always captures the value");
             let mut statements = pair.statements;
-            statements.push(transition::multi_value_return(vec![value, pair.ok]));
+            statements.push(transition::multi_value_return(vec![value, ok]));
             return statements;
         }
         if let Some(plan) = self.plan_call(expression)

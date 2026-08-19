@@ -426,15 +426,7 @@ impl Planner<'_> {
             capture_boundary: CaptureBoundary::SiblingSequence,
             retired_receiver: None,
         };
-        match call_kind {
-            CallKind::NativeMethod(_) => {
-                self.try_emit_negated_native_method_dot_access(setup, &native_ctx)
-            }
-            CallKind::NativeMethodIdentifier(_) => {
-                self.try_emit_negated_native_method_identifier(setup, &native_ctx)
-            }
-            _ => unreachable!(),
-        }
+        self.try_emit_negated_native_method(setup, &native_ctx)
     }
 
     /// Lower a call expression to typed setup plus the value text.
@@ -515,11 +507,7 @@ impl Planner<'_> {
         if let Some(result) = self.try_lower_native_constructor(ctx) {
             return result;
         }
-        let result = if let Expression::DotAccess { .. } = ctx.function {
-            self.lower_native_method_dot_access(ctx)
-        } else {
-            self.lower_native_method_identifier(ctx)
-        };
+        let result = self.lower_native_method(ctx);
         let effect = if matches!(origin, CallableOrigin::NativeConstructor(_)) {
             self.native_constructor_effect(ctx, result.argument_effect)
         } else if matches!(origin, CallableOrigin::NativeMethod(_))
