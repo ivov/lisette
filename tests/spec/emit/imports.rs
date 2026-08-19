@@ -177,6 +177,21 @@ fn main() {}
 }
 
 #[test]
+fn aliased_go_import_used_by_enum_layout() {
+    let input = r#"
+import t "go:time"
+
+enum Event {
+  At(t.Time),
+  After { delay: t.Duration },
+}
+
+fn main() {}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn go_opaque_type_struct_literal() {
     let input = r#"
 import "go:sync"

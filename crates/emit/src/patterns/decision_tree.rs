@@ -923,9 +923,11 @@ fn collect_slice_checks(
                     length: sub_length,
                     element: Box::new((*element_type).clone()),
                 };
+                let go_type = planner.go_type(&sub_ty);
+                collector.packages.extend(go_type.requirements());
                 PathSegment::ArraySliceFrom {
                     offset: prefix.len(),
-                    go_type: planner.go_type_string(&sub_ty),
+                    go_type: go_type.code,
                 }
             }
             None => PathSegment::SliceFrom(prefix.len()),

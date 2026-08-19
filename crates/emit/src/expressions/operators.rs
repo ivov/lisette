@@ -286,13 +286,13 @@ impl Planner<'_> {
             .expect("numeric binary expression has a right operand");
         if let Some(ty) = &info.cast_left_to {
             left = GoExpression::Conversion {
-                go_type: self.go_type_string(ty),
+                go_type: self.use_go_type(ty),
                 value: Box::new(left),
             };
         }
         if let Some(ty) = &info.cast_right_to {
             right = GoExpression::Conversion {
-                go_type: self.go_type_string(ty),
+                go_type: self.use_go_type(ty),
                 value: Box::new(right),
             };
         }

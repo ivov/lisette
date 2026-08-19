@@ -62,7 +62,7 @@ impl Planner<'_> {
         let result_var = self.fresh_var(None);
         let declaration = LoweredStatement::VarDecl {
             name: result_var.clone(),
-            go_type: self.go_type_string(ty),
+            go_type: self.use_go_type(ty),
             value: None,
         };
         self.declare(&result_var);
@@ -640,7 +640,7 @@ impl Planner<'_> {
         literals: LiteralInlining,
         names_inline: bool,
     ) -> Option<String> {
-        let go_type = self.go_type_string(&expression.get_type());
+        let go_type = self.use_go_type(&expression.get_type());
         let inlines = plan.setup.is_empty()
             && match plan.evaluation.form {
                 OperandForm::Name => names_inline,

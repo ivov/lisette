@@ -1,0 +1,39 @@
+---
+source: tests/spec/emit/imports.rs
+description: |
+  
+  import t "go:time"
+  
+  enum Event {
+    At(t.Time),
+    After { delay: t.Duration },
+  }
+  
+  fn main() {}
+---
+package main
+
+import t "time"
+
+func MakeEventAt(arg0 t.Time) Event {
+	return Event{Tag: EventAt, At: arg0}
+}
+
+func MakeEventAfter(arg0 t.Duration) Event {
+	return Event{Tag: EventAfter, Delay: arg0}
+}
+
+type EventTag int
+
+const (
+	EventAt EventTag = iota
+	EventAfter
+)
+
+type Event struct {
+	Tag   EventTag
+	At    t.Time
+	Delay t.Duration
+}
+
+func main() {}

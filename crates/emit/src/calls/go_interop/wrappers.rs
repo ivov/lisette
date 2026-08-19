@@ -94,7 +94,9 @@ impl Planner<'_> {
             source.parameters.iter().zip(&target.parameters).enumerate()
         {
             let name = format!("arg{index}");
-            parameters.push(format!("{name} {}", target.go_type(self)));
+            let target_type = target.go_type(self);
+            let target_type = self.use_rendered_go_type(target_type);
+            parameters.push(format!("{name} {target_type}"));
             let bridge = resolve_layout_bridge(self, target, source);
             let argument = self.plan_layout_bridge(&mut body, &name, &bridge);
             if source.logical_type().get_name() == Some("VarArgs") {
@@ -107,11 +109,12 @@ impl Planner<'_> {
         let call = format!("{function}({})", arguments.join(", "));
         self.plan_function_result_bridge(&mut body, &call, source, target);
         let body = Renderer.render_setup(&body);
-        let result = target.result_go_type(self);
-        let signature = if result.is_empty() {
-            format!("func({})", parameters.join(", "))
-        } else {
-            format!("func({}) {result}", parameters.join(", "))
+        let result = target
+            .result_go_type(self)
+            .map(|result| self.use_rendered_go_type(result));
+        let signature = match result {
+            Some(result) => format!("func({}) {result}", parameters.join(", ")),
+            None => format!("func({})", parameters.join(", ")),
         };
         format!("{signature} {{\n{body}}}")
     }
@@ -322,8 +325,8 @@ impl Planner<'_> {
     ) -> (Vec<LoweredStatement>, WrapperOutcome) {
         let ok_ty = partial_ty.ok_type();
         let err_ty = partial_ty.err_type();
-        let ok_ty_str = self.go_type_string(&ok_ty);
-        let err_ty_str = self.go_type_string(&err_ty);
+        let ok_ty_str = self.use_go_type(&ok_ty);
+        let err_ty_str = self.use_go_type(&err_ty);
         let pkg = go_name::GO_STDLIB_PKG;
 
         let mut statements = Vec::new();
@@ -627,7 +630,7 @@ impl Planner<'_> {
         let last_index = params.len().saturating_sub(1);
         for (i, param) in params.iter().enumerate() {
             let name = format!("arg{}", i);
-            let ty_str = self.go_type_string(&param.ty);
+            let ty_str = self.use_go_type(&param.ty);
             param_strs.push(format!("{} {}", name, ty_str));
             if i == last_index && param.ty.get_name() == Some("VarArgs") {
                 arg_names.push(format!("{}...", name));
@@ -666,7 +669,7 @@ impl Planner<'_> {
             .wrapper_call_parts(setup, expression)
             .expect("expected function type");
 
-        let ret_ty_str = self.go_type_string(&return_type);
+        let ret_ty_str = self.use_go_type(&return_type);
 
         let mut statements = Vec::new();
         let outcome = match &abi.result {
@@ -725,8 +728,8 @@ impl Planner<'_> {
         let err_ty = return_type.err_type();
         let ret_ty_str = format!(
             "({}, {})",
-            self.go_type_string(&ok_ty),
-            self.go_type_string(&err_ty)
+            self.use_go_type(&ok_ty),
+            self.use_go_type(&err_ty)
         );
         let arity = ok_ty.tuple_arity().expect("tuple ok type");
 
@@ -754,7 +757,7 @@ impl Planner<'_> {
             .wrapper_call_parts(setup, expression)
             .expect("expected function type");
 
-        let inner_ty_str = self.go_type_string(&return_type.ok_type());
+        let inner_ty_str = self.use_go_type(&return_type.ok_type());
         let ret_var = self.fresh_var(Some("ret"));
         self.declare(&ret_var);
 

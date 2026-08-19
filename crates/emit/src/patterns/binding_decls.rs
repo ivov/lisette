@@ -234,7 +234,7 @@ impl Planner<'_> {
         };
         let go_name = self.scope.bind(lisette_name, go_name);
         self.declare(&go_name);
-        let go_ty = self.go_type_string(resolved);
+        let go_ty = self.use_go_type(resolved);
         statements.push(LoweredStatement::VarDecl {
             name: go_name,
             go_type: go_ty,

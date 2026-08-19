@@ -104,7 +104,7 @@ impl Planner<'_> {
         call_ty: Option<&Type>,
     ) -> String {
         let element = self.resolve_element_lisette_type(function, type_args, call_ty);
-        self.go_type_string(&element)
+        self.use_go_type(&element)
     }
 
     fn resolve_element_lisette_type<'t>(
@@ -134,7 +134,7 @@ impl Planner<'_> {
         call_ty: Option<&Type>,
     ) -> (String, String) {
         let (key, value) = self.resolve_map_lisette_types(function, type_args, call_ty);
-        (self.go_type_string(&key), self.go_type_string(&value))
+        (self.use_go_type(&key), self.use_go_type(&value))
     }
 
     fn resolve_map_lisette_types(
@@ -236,7 +236,7 @@ impl Planner<'_> {
                     ctx.resolved_type_args,
                     ctx.call_ty,
                 );
-                let element = self.go_type_string(&element_ty);
+                let element = self.use_go_type(&element_ty);
                 let (setup, length, argument_effect) = self.stage_size_argument(ctx);
                 let value = if self.element_go_zero_ok(&element_ty) {
                     GoExpression::call(
@@ -305,8 +305,8 @@ impl Planner<'_> {
 
         let (key_ty, value_ty) =
             self.resolve_map_lisette_types(ctx.function, ctx.resolved_type_args, ctx.call_ty);
-        let key_go_ty = self.go_type_string(&key_ty);
-        let value_go_ty = self.go_type_string(&value_ty);
+        let key_go_ty = self.use_go_type(&key_ty);
+        let value_go_ty = self.use_go_type(&value_ty);
         let map_ty = format!("map[{}]{}", key_go_ty, value_go_ty);
 
         if pairs.is_empty() {
@@ -700,7 +700,7 @@ impl Planner<'_> {
                 .collect()
         };
 
-        let go_ty = self.go_type_string(&return_ty);
+        let go_ty = self.use_go_type(&return_ty);
         Some(TupleStructTarget { go_ty, field_tys })
     }
 
@@ -711,11 +711,11 @@ impl Planner<'_> {
         type_args: ResolvedCallTypeArguments<'_>,
     ) -> (Vec<LoweredStatement>, String) {
         let target_ty = if !type_args.is_empty() {
-            self.go_type_string(&type_args[0])
+            self.use_go_type(&type_args[0])
         } else {
             let param = extract_return_type_param(function)
                 .expect("AssertType must have constructor return type");
-            self.go_type_string(&param)
+            self.use_go_type(&param)
         };
         let (setup, arg_expression) = match args.first() {
             Some(a) => self

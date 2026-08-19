@@ -277,7 +277,11 @@ impl Planner<'_> {
     }
 }
 
-pub(super) fn build_tuple_literal(planner: &Planner, vars: &[String], _tuple_ty: &Type) -> String {
+pub(super) fn build_tuple_literal(
+    planner: &mut Planner,
+    vars: &[String],
+    _tuple_ty: &Type,
+) -> String {
     planner.require_stdlib();
     format!("lisette.MakeTuple{}({})", vars.len(), vars.join(", "))
 }

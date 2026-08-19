@@ -172,7 +172,7 @@ impl Planner<'_> {
             self.facts.is_interface_or_unknown(binding_ty) && *binding_ty != value.get_type();
         let mut statements = Vec::new();
         if widens_to_interface {
-            let var_ty = self.go_type_string(binding_ty);
+            let var_ty = self.use_go_type(binding_ty);
             statements.push(LoweredStatement::VarDecl {
                 name: go_identifier.clone(),
                 go_type: var_ty,
@@ -254,7 +254,7 @@ impl Planner<'_> {
         };
 
         if needs_explicit_type_declaration(self, value, binding_ty) {
-            let var_ty = self.go_type_string(binding_ty);
+            let var_ty = self.use_go_type(binding_ty);
             statements.push(LoweredStatement::VarDecl {
                 name: go_identifier,
                 go_type: var_ty,
@@ -354,18 +354,18 @@ impl Planner<'_> {
 
         let var_ty = if has_contextual_ok_ty {
             if !needs_context(&peeled_binding) && !needs_context(&peeled_binding.ok_type()) {
-                self.go_type_string(binding_ty)
+                self.use_go_type(binding_ty)
             } else if let Some(ctx_ty) = return_ctx.ty().cloned() {
                 if Fallible::from_type(&ctx_ty).is_some() {
-                    self.go_type_string(&ctx_ty)
+                    self.use_go_type(&ctx_ty)
                 } else {
-                    self.go_type_string(&resolved_ty)
+                    self.use_go_type(&resolved_ty)
                 }
             } else {
-                self.go_type_string(&resolved_ty)
+                self.use_go_type(&resolved_ty)
             }
         } else {
-            self.go_type_string(&resolved_ty)
+            self.use_go_type(&resolved_ty)
         };
         Some(LoweredStatement::VarDecl {
             name: name.to_string(),
@@ -422,7 +422,7 @@ impl<'a, 'e> LetPlanner<'a, 'e> {
             {
                 let go_identifier = self.planner.scope.bind(identifier, &raw_go_name);
                 self.planner.try_declare(&go_identifier);
-                let var_ty = self.planner.go_type_string(&self.binding.ty);
+                let var_ty = self.planner.use_go_type(&self.binding.ty);
                 Some(Box::new(LoweredStatement::VarDecl {
                     name: go_identifier,
                     go_type: var_ty,

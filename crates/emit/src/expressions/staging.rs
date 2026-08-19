@@ -275,7 +275,7 @@ impl Planner<'_> {
         }
         match combine {
             Some(c) if spread_index > c.fixed_count => {
-                let element_go = self.go_type_string(&c.element_ty);
+                let element_go = self.use_go_type(&c.element_ty);
                 let leading = values[c.fixed_count..spread_index]
                     .iter()
                     .map(GoExpression::rendered)

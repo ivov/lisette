@@ -1,8 +1,5 @@
-use std::rc::Rc;
-
 use rustc_hash::FxHashMap as HashMap;
 
-use crate::EnumLayout;
 use crate::names::packages::{PackageRequirements, PackageUse};
 use crate::output::imports::{ImportBuilder, ImportPlan};
 use diagnostics::LisetteDiagnostic;
@@ -10,7 +7,6 @@ use ecow::EcoString;
 use syntax::program::File;
 
 pub(crate) struct FileNamespace {
-    enum_layouts: HashMap<String, Rc<EnumLayout>>,
     imports: ImportPlan,
     requirements: PackageRequirements,
 }
@@ -23,18 +19,9 @@ impl FileNamespace {
         go_package_names: &HashMap<String, String>,
     ) -> Self {
         Self {
-            enum_layouts: HashMap::default(),
             imports: ImportPlan::build(file, go_module, unused_imports, go_package_names),
             requirements: PackageRequirements::default(),
         }
-    }
-
-    pub(crate) fn enum_layout(&self, enum_id: &str) -> Option<Rc<EnumLayout>> {
-        self.enum_layouts.get(enum_id).cloned()
-    }
-
-    pub(crate) fn record_enum_layout(&mut self, enum_id: String, layout: Rc<EnumLayout>) {
-        self.enum_layouts.insert(enum_id, layout);
     }
 
     pub(crate) fn package_alias(&self, package: &str) -> Option<&str> {

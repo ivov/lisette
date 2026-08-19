@@ -48,7 +48,7 @@ impl Planner<'_> {
             return None;
         }
         let peeled = self.facts.peel_alias(ty);
-        let go_ty = self.go_type_string(ty);
+        let go_ty = self.use_go_type(ty);
         match &peeled {
             Type::Tuple(elems) => {
                 let var = self.fresh_var(Some("e"));

@@ -1,6 +1,5 @@
-use std::rc::Rc;
-
 use rustc_hash::FxHashMap as HashMap;
+use std::rc::Rc;
 
 use crate::Planner;
 use crate::control_flow::fallible;
@@ -230,13 +229,15 @@ impl Planner<'_> {
 }
 
 impl Planner<'_> {
+    /// Memoized per file. See the note on `Planner::enum_layouts`.
     pub(crate) fn enum_layout(&self, enum_id: &str) -> Option<Rc<EnumLayout>> {
-        if let Some(layout) = self.file_namespace().enum_layout(enum_id) {
-            return Some(layout);
+        if let Some(layout) = self.enum_layouts.borrow().get(enum_id) {
+            return Some(layout.clone());
         }
         let layout = Rc::new(self.compute_enum_layout(enum_id)?);
-        self.file_namespace_mut()
-            .record_enum_layout(enum_id.to_string(), layout.clone());
+        self.enum_layouts
+            .borrow_mut()
+            .insert(enum_id.to_string(), layout.clone());
         Some(layout)
     }
 
@@ -257,9 +258,12 @@ impl Planner<'_> {
         }
 
         let mut field_types = FieldTypeMap::default();
+        let mut requirements = crate::names::packages::PackageRequirements::default();
         for (vi, variant) in variants.iter().enumerate() {
             for (fi, field) in variant.fields.iter().enumerate() {
-                let mut go_type = self.go_type(&field.ty).code;
+                let rendered_type = self.go_type(&field.ty);
+                requirements.extend(rendered_type.requirements());
+                let mut go_type = rendered_type.code;
                 let recursive = enum_payload_pointer_wrapped(enum_id, vi, fi, &field.ty, |id| {
                     self.facts.definition(id)
                 });
@@ -280,7 +284,13 @@ impl Planner<'_> {
             }
         }
 
-        Some(EnumLayout::new(enum_id, generics, variants, &field_types))
+        Some(EnumLayout::new(
+            enum_id,
+            generics,
+            variants,
+            &field_types,
+            requirements,
+        ))
     }
 
     pub(crate) fn enum_struct_field_name(

@@ -2,6 +2,7 @@ use syntax::types::{CompoundKind, Type};
 
 use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi};
+use crate::types::go_type::GoType;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SlotOrigin {
@@ -61,44 +62,56 @@ impl FunctionLayout {
         }
     }
 
-    fn go_type(&self, planner: &Planner<'_>) -> String {
-        let parameters = self
+    fn go_type(&self, planner: &Planner<'_>) -> GoType {
+        let parameters: Vec<GoType> = self
             .parameters
             .iter()
             .map(|parameter| parameter.go_type(planner))
+            .collect();
+        let result = self.result_go_type(planner);
+        let parameter_code = parameters
+            .iter()
+            .map(|parameter| parameter.code.as_str())
             .collect::<Vec<_>>()
             .join(", ");
-        let result = self.result_go_type(planner);
-        if result.is_empty() {
-            format!("func({parameters})")
+        let code = if let Some(result) = &result {
+            format!("func({parameter_code}) {}", result.code)
         } else {
-            format!("func({parameters}) {result}")
+            format!("func({parameter_code})")
+        };
+        let mut go_type = GoType::with_dependencies(code, &parameters);
+        if let Some(result) = &result {
+            go_type.merge(result);
         }
+        go_type
     }
 
-    pub(crate) fn result_go_type(&self, planner: &Planner<'_>) -> String {
+    pub(crate) fn result_go_type(&self, planner: &Planner<'_>) -> Option<GoType> {
         if self.result.logical_type().is_unit() {
-            return String::new();
+            return None;
         }
-        match &self.return_abi {
+        Some(match &self.return_abi {
             CallableReturnAbi::Tagged | CallableReturnAbi::Direct => self.result.go_type(planner),
-            CallableReturnAbi::BareError => {
-                planner.go_type_string(&self.result.logical_type().err_type())
-            }
+            CallableReturnAbi::BareError => planner.go_type(&self.result.logical_type().err_type()),
             CallableReturnAbi::Result { .. } | CallableReturnAbi::Partial { .. } => {
                 let payload = self
                     .payload
                     .as_deref()
                     .expect("fallible callable layout has a payload");
-                let error = planner.go_type_string(&self.result.logical_type().err_type());
-                format!("({}, {error})", payload.go_type(planner))
+                let payload = payload.go_type(planner);
+                let error = planner.go_type(&self.result.logical_type().err_type());
+                GoType::with_dependencies(
+                    format!("({}, {})", payload.code, error.code),
+                    [&payload, &error],
+                )
             }
             CallableReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
                 let payload = self
                     .payload
                     .as_deref()
                     .expect("option callable layout has a payload");
-                format!("({}, bool)", payload.go_type(planner))
+                let payload = payload.go_type(planner);
+                GoType::with_dependencies(format!("({}, bool)", payload.code), [&payload])
             }
             CallableReturnAbi::Option(OptionReturnAbi::Nullable) => self
                 .payload
@@ -112,18 +125,23 @@ impl FunctionLayout {
                 .go_type(planner),
             CallableReturnAbi::Tuple { .. } => {
                 let ValueLayout::Tuple { elements, .. } = self.result.as_ref() else {
-                    return self.result.go_type(planner);
+                    return Some(self.result.go_type(planner));
                 };
-                format!(
+                let elements: Vec<GoType> = elements
+                    .iter()
+                    .map(|element| element.go_type(planner))
+                    .collect();
+                let code = format!(
                     "({})",
                     elements
                         .iter()
-                        .map(|element| element.go_type(planner))
+                        .map(|element| element.code.as_str())
                         .collect::<Vec<_>>()
                         .join(", ")
-                )
+                );
+                GoType::with_dependencies(code, &elements)
             }
-        }
+        })
     }
 }
 
@@ -295,27 +313,36 @@ impl ValueLayout {
         }
     }
 
-    pub(crate) fn go_type(&self, planner: &Planner<'_>) -> String {
+    pub(crate) fn go_type(&self, planner: &Planner<'_>) -> GoType {
         match self {
             Self::NullableOption { payload, .. } => payload.go_type(planner),
-            Self::PointerOption { payload, .. } => format!("*{}", payload.go_type(planner)),
-            Self::Reference { pointee, .. } => format!("*{}", pointee.go_type(planner)),
-            Self::Slice { element, .. } => format!("[]{}", element.go_type(planner)),
+            Self::PointerOption { payload, .. } => derived_go_type("*", payload.go_type(planner)),
+            Self::Reference { pointee, .. } => derived_go_type("*", pointee.go_type(planner)),
+            Self::Slice { element, .. } => derived_go_type("[]", element.go_type(planner)),
             Self::Map { key, value, .. } => {
-                format!("map[{}]{}", key.go_type(planner), value.go_type(planner))
+                let key = key.go_type(planner);
+                let value = value.go_type(planner);
+                GoType::with_dependencies(
+                    format!("map[{}]{}", key.code, value.code),
+                    [&key, &value],
+                )
             }
             Self::Array {
                 length, element, ..
-            } => format!("[{length}]{}", element.go_type(planner)),
+            } => derived_go_type(&format!("[{length}]"), element.go_type(planner)),
             Self::Function { layout, .. } => layout.go_type(planner),
             Self::Plain(ty)
             | Self::TaggedOption {
                 option_type: ty, ..
             }
             | Self::Tuple { tuple_type: ty, .. }
-            | Self::Named { named_type: ty, .. } => planner.go_type_string(ty),
+            | Self::Named { named_type: ty, .. } => planner.go_type(ty),
         }
     }
+}
+
+fn derived_go_type(prefix: &str, inner: GoType) -> GoType {
+    GoType::with_dependencies(format!("{prefix}{}", inner.code), [&inner])
 }
 
 impl Planner<'_> {

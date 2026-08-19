@@ -390,7 +390,7 @@ fn has_inline_negation(native_type: &NativeGoType, method: &str, arity: usize) -
 /// Resolve the inline rule for a dot-access form, applying the static-receiver
 /// fallback when the standard receiver shape does not match.
 fn apply_inline_lookup(
-    planner: &Planner,
+    planner: &mut Planner,
     native_type: &NativeGoType,
     method: &str,
     receiver: &str,
@@ -415,7 +415,7 @@ fn apply_inline_lookup(
 
 /// Resolve the inline rule for an identifier-form call (args[0] is the receiver).
 fn apply_inline_identifier_lookup(
-    planner: &Planner,
+    planner: &mut Planner,
     ctx: &NativeCallContext,
     emitted_args: &[String],
     negated: bool,
@@ -1069,7 +1069,7 @@ impl Planner<'_> {
     }
 
     fn equality_closure(&mut self, ty: &Type, generics: &[Generic]) -> String {
-        let go_ty = self.go_type_string(ty);
+        let go_ty = self.use_go_type(ty);
         let a = self.fresh_var(Some("a"));
         let b = self.fresh_var(Some("b"));
         let body = self.render_equality(&a, &b, ty, generics);
@@ -1106,7 +1106,7 @@ fn format_substring_call(receiver: &str, start: Option<&str>, end: Option<&str>)
     }
 }
 
-pub(super) fn apply_inline_import(planner: &Planner, import: InlineImport) {
+pub(super) fn apply_inline_import(planner: &mut Planner, import: InlineImport) {
     match import {
         InlineImport::Slices => planner.require_slices(),
         InlineImport::Strings => planner.require_strings(),

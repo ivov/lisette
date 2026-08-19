@@ -81,44 +81,11 @@ impl Planner<'_> {
         shape: &CallableReturnAbi,
         return_ty: &Type,
     ) -> String {
-        let peeled = self.facts.peel_alias(return_ty);
-        match shape {
-            CallableReturnAbi::Tagged | CallableReturnAbi::Direct => self.go_type_string(&peeled),
-            CallableReturnAbi::BareError => self.go_type_string(&peeled.err_type()),
-            CallableReturnAbi::Result { .. } | CallableReturnAbi::Partial { .. } => {
-                let ok_str = self.go_type_string(&peeled.ok_type());
-                let err_str = self.go_type_string(&peeled.err_type());
-                format!("({}, {})", ok_str, err_str)
-            }
-            CallableReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
-                let inner_str = self.go_type_string(&peeled.ok_type());
-                format!("({}, bool)", inner_str)
-            }
-            CallableReturnAbi::Option(OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_)) => {
-                self.go_type_string(&peeled.ok_type())
-            }
-            CallableReturnAbi::Tuple { .. } => {
-                let parts: Vec<String> = tuple_element_types(&peeled)
-                    .iter()
-                    .map(|t| self.tuple_slot_lowered_ty_string(t))
-                    .collect();
-                format!("({})", parts.join(", "))
-            }
-        }
+        let go_type = self.lowered_return_go_type(shape, return_ty);
+        self.use_rendered_go_type(go_type)
     }
 
-    /// Render a tuple slot's Go type, lowering `Option<NilableT>` to bare
-    /// nilable `T` (the only arity-preserving slot recursion).
-    fn tuple_slot_lowered_ty_string(&mut self, slot_ty: &Type) -> String {
-        if self.facts.is_nullable_option(slot_ty) {
-            let inner = self.facts.peel_alias(slot_ty).ok_type();
-            return self.go_type_string(&inner);
-        }
-        self.go_type_string(slot_ty)
-    }
-
-    /// `&self` variant of `render_lowered_return_ty`, callable from the
-    /// `go_type` recursion which doesn't have `&mut self`.
+    /// Render a lowered return type together with its package requirements.
     pub(crate) fn lowered_return_go_type(
         &self,
         shape: &CallableReturnAbi,
@@ -131,16 +98,14 @@ impl Planner<'_> {
             CallableReturnAbi::Result { .. } | CallableReturnAbi::Partial { .. } => {
                 let ok_go = self.go_type(&peeled.ok_type());
                 let err_go = self.go_type(&peeled.err_type());
-                let mut result = GoType::new(format!("({}, {})", ok_go.code, err_go.code));
-                result.merge(&ok_go);
-                result.merge(&err_go);
-                result
+                GoType::with_dependencies(
+                    format!("({}, {})", ok_go.code, err_go.code),
+                    [&ok_go, &err_go],
+                )
             }
             CallableReturnAbi::Option(OptionReturnAbi::CommaOk { .. }) => {
                 let inner_go = self.go_type(&peeled.ok_type());
-                let mut result = GoType::new(format!("({}, bool)", inner_go.code));
-                result.merge(&inner_go);
-                result
+                GoType::with_dependencies(format!("({}, bool)", inner_go.code), [&inner_go])
             }
             CallableReturnAbi::Option(OptionReturnAbi::Nullable | OptionReturnAbi::Sentinel(_)) => {
                 self.go_type(&peeled.ok_type())
@@ -158,12 +123,15 @@ impl Planner<'_> {
                         }
                     })
                     .collect();
-                let parts: Vec<&str> = element_gos.iter().map(|t| t.code.as_str()).collect();
-                let mut result = GoType::new(format!("({})", parts.join(", ")));
-                for go in &element_gos {
-                    result.merge(go);
-                }
-                result
+                let code = format!(
+                    "({})",
+                    element_gos
+                        .iter()
+                        .map(|go| go.code.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+                GoType::with_dependencies(code, &element_gos)
             }
         }
     }

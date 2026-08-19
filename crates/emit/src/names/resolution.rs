@@ -125,13 +125,13 @@ impl Planner<'_> {
     }
 
     /// Record a package reference in the current file namespace.
-    pub(crate) fn require_package_import(&self, package: &str) -> String {
+    pub(crate) fn require_package_import(&mut self, package: &str) -> String {
         let package = self.package_use_for_package(package);
-        self.file_namespace_mut().reference(package)
+        self.namespace.reference(package)
     }
 
     pub(crate) fn canonical_package(&self, package: &str) -> String {
-        self.file_namespace()
+        self.namespace
             .package_for_alias(package)
             .unwrap_or(package)
             .to_string()
@@ -146,7 +146,7 @@ impl Planner<'_> {
             None => self.facts.go_import_path(package),
         };
         let qualifier = self
-            .file_namespace()
+            .namespace
             .package_alias(package)
             .map(str::to_string)
             .or_else(|| self.facts.go_package_name(package).map(str::to_string))

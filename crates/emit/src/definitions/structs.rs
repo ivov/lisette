@@ -81,7 +81,7 @@ impl Planner<'_> {
     }
 
     fn append_embedded_stringer_shadow(
-        &self,
+        &mut self,
         out: &mut String,
         name: &str,
         receiver_generics: &str,
@@ -189,7 +189,7 @@ impl Planner<'_> {
         }
         if let Some(stringer_name) = self.stringer_method_name(name, struct_attrs) {
             let is_type_alias = fields.len() == 1 && generics_string.is_empty();
-            let underlying_go_type = is_type_alias.then(|| self.go_type_string(&fields[0].ty));
+            let underlying_go_type = is_type_alias.then(|| self.use_go_type(&fields[0].ty));
             let string_method = emit_tuple_struct_stringer_method(
                 name,
                 &receiver_generics,
@@ -223,7 +223,7 @@ impl Planner<'_> {
         struct_attrs: &[Attribute],
     ) -> (String, StringerField) {
         if f.is_embedded() {
-            let field_with_doc = format!("{}{}", emit_doc(&f.doc), self.go_type_string(&f.ty));
+            let field_with_doc = format!("{}{}", emit_doc(&f.doc), self.use_go_type(&f.ty));
             let stringer_field = StringerField {
                 source_name: f.name.to_string(),
                 go_name: struct_field_go_name(f, struct_attrs),
@@ -239,9 +239,9 @@ impl Planner<'_> {
         let field_name = struct_field_go_name(f, struct_attrs);
 
         let field_definition = if let Some(tags) = tag_string {
-            format!("{} {} {}", field_name, self.go_type_string(&f.ty), tags)
+            format!("{} {} {}", field_name, self.use_go_type(&f.ty), tags)
         } else {
-            format!("{} {}", field_name, self.go_type_string(&f.ty))
+            format!("{} {}", field_name, self.use_go_type(&f.ty))
         };
 
         let field_with_doc = format!("{}{}", emit_doc(&f.doc), field_definition);
@@ -267,14 +267,14 @@ impl Planner<'_> {
         }
 
         if fields.len() == 1 && generics_string.is_empty() {
-            let underlying = self.go_type_string(&fields[0].ty);
+            let underlying = self.use_go_type(&fields[0].ty);
             return format!("type {} {}", go_type_name, underlying);
         }
 
         let field_strings: Vec<String> = fields
             .iter()
             .enumerate()
-            .map(|(i, f)| format!("F{} {}", i, self.go_type_string(&f.ty)))
+            .map(|(i, f)| format!("F{} {}", i, self.use_go_type(&f.ty)))
             .collect();
 
         format!(
@@ -331,7 +331,7 @@ impl Planner<'_> {
     }
 
     fn append_struct_debug_method(
-        &self,
+        &mut self,
         out: &mut String,
         name: &str,
         receiver_generics: &str,
@@ -367,7 +367,7 @@ impl Planner<'_> {
             return;
         }
         let is_type_alias = fields.len() == 1 && generics_string.is_empty();
-        let underlying = is_type_alias.then(|| self.go_type_string(&fields[0].ty));
+        let underlying = is_type_alias.then(|| self.use_go_type(&fields[0].ty));
         let field_is_function: Vec<bool> =
             fields.iter().map(|f| is_raw_function_type(&f.ty)).collect();
         let uses_prelude = if fields.is_empty() {

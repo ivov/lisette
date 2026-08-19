@@ -288,7 +288,7 @@ impl Planner<'_> {
             return None;
         };
         let field_ty = fields.first()?.ty.clone();
-        let go_type = self.go_type_string(&field_ty);
+        let go_type = self.use_go_type(&field_ty);
         let operand = if expression_ty.is_ref() {
             format!("*{}", expression_string)
         } else {
@@ -393,7 +393,7 @@ impl Planner<'_> {
         };
 
         if fields.len() == 1 && generics.is_empty() {
-            let underlying_ty = self.go_type_string(&fields[0].ty);
+            let underlying_ty = self.use_go_type(&fields[0].ty);
             let expression = if expression_ty.is_ref() {
                 format!("*{}", expression_string)
             } else {

@@ -719,7 +719,7 @@ impl<'a> Planner<'a> {
         let arg_fn_params = arg_fn.get_function_params().unwrap_or(&[]);
         let param_type_strs: Vec<String> = arg_fn_params
             .iter()
-            .map(|param| self.go_type_string(&param.ty))
+            .map(|param| self.use_go_type(&param.ty))
             .collect();
         let target_element_ty = format!(
             "func({}) {}",

@@ -59,7 +59,7 @@ impl Planner<'_> {
                 "[]".to_string(),
             ),
         };
-        let element_ty = self.go_type_string(&element_lisette_ty);
+        let element_ty = self.use_go_type(&element_lisette_ty);
 
         if elements.is_empty() {
             return ValuePlan::computed(

@@ -189,7 +189,7 @@ impl Planner<'_> {
             .iter()
             .filter_map(|var| {
                 let concrete = mapping.get(var.as_str())?;
-                Some(self.go_type_string(concrete))
+                Some(self.use_go_type(concrete))
             })
             .collect();
 

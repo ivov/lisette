@@ -2,6 +2,7 @@ use rustc_hash::FxHashMap as HashMap;
 
 use crate::definitions::structs::{debug_verb, stringer_verb};
 use crate::names::go_name;
+use crate::names::packages::PackageRequirements;
 use crate::utils::{synthesized_local_name, synthesized_receiver_name};
 use syntax::ast::{EnumVariant, Generic};
 
@@ -15,6 +16,7 @@ pub(crate) struct EnumLayout {
     tag_type: String,
     pub(crate) variants: Vec<VariantLayout>,
     pub(crate) generics: Vec<Generic>,
+    requirements: PackageRequirements,
 }
 
 #[derive(Debug, Clone)]
@@ -50,6 +52,7 @@ impl EnumLayout {
         generics: &[Generic],
         variants: &[EnumVariant],
         field_types: &FieldTypeMap,
+        requirements: PackageRequirements,
     ) -> Self {
         let enum_name = go_name::unqualified_name(enum_id).to_string();
         let tag_type = format!("{}Tag", enum_name);
@@ -66,7 +69,12 @@ impl EnumLayout {
             tag_type,
             variants,
             generics: generics.to_vec(),
+            requirements,
         }
+    }
+
+    pub(crate) fn requirements(&self) -> &PackageRequirements {
+        &self.requirements
     }
 
     fn compute_variant_layout(

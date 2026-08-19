@@ -32,7 +32,8 @@ pub use output::OutputFile;
 pub use output::imports;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use std::cell::{Ref, RefCell, RefMut};
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use abi::callable::{CallableReturnAbi, OptionReturnAbi, PayloadLayout};
@@ -203,69 +204,68 @@ pub struct Planner<'a> {
     function_contexts: Vec<FunctionEmissionContext>,
     scope: ScopeState,
     adapter_registry: AdapterRegistry,
-    namespace: RefCell<FileNamespace>,
+    namespace: FileNamespace,
+    /// Keep this memo. Layout queries run per field access, and each recompute
+    /// renders every field type again (5.8x slower on a 40-variant enum).
+    enum_layouts: RefCell<HashMap<String, Rc<EnumLayout>>>,
 }
 
 impl Planner<'_> {
-    fn file_namespace(&self) -> Ref<'_, FileNamespace> {
-        self.namespace.borrow()
-    }
-
-    fn file_namespace_mut(&self) -> RefMut<'_, FileNamespace> {
-        self.namespace.borrow_mut()
-    }
-
-    fn require_stdlib(&self) {
+    fn require_stdlib(&mut self) {
         self.require_generated_package(GeneratedPackage::Prelude);
     }
 
-    fn require_fmt(&self) {
+    fn require_fmt(&mut self) {
         self.require_generated_package(GeneratedPackage::Fmt);
     }
 
-    fn require_errors(&self) {
+    fn require_errors(&mut self) {
         self.require_generated_package(GeneratedPackage::Errors);
     }
 
-    fn require_slices(&self) {
+    fn require_slices(&mut self) {
         self.require_generated_package(GeneratedPackage::Slices);
     }
 
-    fn require_strings(&self) {
+    fn require_strings(&mut self) {
         self.require_generated_package(GeneratedPackage::Strings);
     }
 
-    fn require_maps(&self) {
+    fn require_maps(&mut self) {
         self.require_generated_package(GeneratedPackage::Maps);
     }
 
-    fn require_json(&self) {
+    fn require_json(&mut self) {
         self.require_generated_package(GeneratedPackage::Json);
     }
 
-    fn require_cmp(&self) {
+    fn require_cmp(&mut self) {
         self.require_generated_package(GeneratedPackage::Cmp);
     }
 
-    fn require_testkit(&self) {
+    fn require_testkit(&mut self) {
         self.require_generated_package(GeneratedPackage::TestKit);
     }
 
-    fn require_testing(&self) {
+    fn require_testing(&mut self) {
         self.require_generated_package(GeneratedPackage::Testing);
     }
 
-    fn require_generated_package(&self, package: GeneratedPackage) {
-        self.file_namespace_mut()
-            .require(PackageUse::generated(package));
+    fn require_generated_package(&mut self, package: GeneratedPackage) {
+        self.namespace.require(PackageUse::generated(package));
     }
 
-    fn note_go_type(&self, go_type: &GoType) {
-        self.file_namespace_mut().absorb(go_type.requirements());
+    fn use_go_type(&mut self, ty: &Type) -> String {
+        self.use_rendered_go_type(self.go_type(ty))
     }
 
-    fn require_packages(&self, requirements: &PackageRequirements) {
-        self.file_namespace_mut().absorb(requirements);
+    fn use_rendered_go_type(&mut self, go_type: GoType) -> String {
+        self.namespace.absorb(go_type.requirements());
+        go_type.code
+    }
+
+    fn require_packages(&mut self, requirements: &PackageRequirements) {
+        self.namespace.absorb(requirements);
     }
 }
 
@@ -412,7 +412,8 @@ impl<'a> Planner<'a> {
             function_contexts: Vec::new(),
             scope: ScopeState::new(),
             adapter_registry: AdapterRegistry::default(),
-            namespace: RefCell::new(namespace),
+            namespace,
+            enum_layouts: RefCell::default(),
         }
     }
 
@@ -655,7 +656,9 @@ impl<'a> Planner<'a> {
                 self.facts.unused_imports_for_current_package(),
                 self.facts.go_package_names(),
             );
-            let namespace = self.namespace.replace(next_namespace);
+            // Layouts render Go types against the current file's import aliases.
+            self.enum_layouts.get_mut().clear();
+            let namespace = std::mem::replace(&mut self.namespace, next_namespace);
             let (imports, mut diagnostics) =
                 namespace.finish(self.facts.go_package_names(), self.facts.go_package_ids());
             all_diagnostics.append(&mut diagnostics);
@@ -672,9 +675,8 @@ impl<'a> Planner<'a> {
         let Planner {
             facts, namespace, ..
         } = self;
-        let (imports, mut diagnostics) = namespace
-            .into_inner()
-            .finish(facts.go_package_names(), facts.go_package_ids());
+        let (imports, mut diagnostics) =
+            namespace.finish(facts.go_package_names(), facts.go_package_ids());
         all_diagnostics.append(&mut diagnostics);
         output_files.push(OutputFile {
             name: last_file.go_filename(),

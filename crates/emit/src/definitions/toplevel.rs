@@ -36,7 +36,7 @@ impl Planner<'_> {
             .as_ref()
             .or(declared_target.as_ref())
             .unwrap_or(ty);
-        let ty_string = self.go_type_string(underlying);
+        let ty_string = self.use_go_type(underlying);
 
         if let Type::Nominal { id, .. } = underlying
             && let Some(package) = self.facts.package_for_qualified_name(id.as_str())
@@ -81,7 +81,7 @@ impl Planner<'_> {
             self.try_declare(&fresh);
             fresh
         };
-        let ty_str = self.go_type_string(ty);
+        let ty_str = self.use_go_type(ty);
 
         // `is_go_constant_expression` admits only literals, identifiers, and
         // constexpr unary/binary, none of which carry setup statements.

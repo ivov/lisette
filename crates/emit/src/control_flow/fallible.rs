@@ -185,13 +185,11 @@ impl<'a, 'e> FalliblePlanner<'a, 'e> {
     }
 
     fn ok_type_string(&mut self) -> String {
-        self.planner.go_type_string(self.fallible.ok_ty())
+        self.planner.use_go_type(self.fallible.ok_ty())
     }
 
     fn err_type_string(&mut self) -> Option<String> {
-        self.fallible
-            .err_ty()
-            .map(|t| self.planner.go_type_string(t))
+        self.fallible.err_ty().map(|t| self.planner.use_go_type(t))
     }
 
     /// Ok type from the enclosing return context, with the fallible's own ok type as fallback.
@@ -199,7 +197,7 @@ impl<'a, 'e> FalliblePlanner<'a, 'e> {
         let return_ctx = self.planner.return_ctx();
         if let Some(ty) = return_ctx.ty() {
             let ok_ty = ty.ok_type();
-            self.planner.go_type_string(&ok_ty)
+            self.planner.use_go_type(&ok_ty)
         } else {
             self.ok_type_string()
         }
@@ -210,7 +208,7 @@ impl<'a, 'e> FalliblePlanner<'a, 'e> {
         let pkg = go_name::GO_STDLIB_PKG;
         let inner_ty = self.ok_type_string();
         if self.fallible.is_result() {
-            let err_ty = self.planner.go_type_string(
+            let err_ty = self.planner.use_go_type(
                 self.fallible
                     .err_ty()
                     .expect("Result type must have an error type"),
@@ -262,7 +260,7 @@ impl<'a, 'e> FalliblePlanner<'a, 'e> {
                 .planner
                 .contextual_err_ty(self.fallible)
                 .expect("Result must have error type");
-            let err_ty = self.planner.go_type_string(&err_ty);
+            let err_ty = self.planner.use_go_type(&err_ty);
             format!(
                 "{pkg}.MakeResultErr[{}, {}]({})",
                 inner_ty,

@@ -185,7 +185,7 @@ impl Planner<'_> {
 
         let result_var = self.fresh_var(Some("recoverResult"));
         self.declare(&result_var);
-        let inner_ty_str = self.go_type_string(fallible.ok_ty());
+        let inner_ty_str = self.use_go_type(fallible.ok_ty());
 
         let body_return_ctx = self.return_context_for_type(fallible.ok_ty().clone());
         let body = self.with_return_context(body_return_ctx, |planner| {

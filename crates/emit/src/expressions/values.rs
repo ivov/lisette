@@ -335,7 +335,7 @@ impl Planner<'_> {
         }
         let rendered: Vec<String> = slot_types
             .iter()
-            .map(|slot| self.go_type_string(slot))
+            .map(|slot| self.use_go_type(slot))
             .collect();
         format!("lisette.MakeTuple{}[{}]", arity, rendered.join(", "))
     }
@@ -412,7 +412,7 @@ impl Planner<'_> {
             return converted;
         }
 
-        let go_type = self.go_type_string(ty);
+        let go_type = self.use_go_type(ty);
 
         if let Some(source_go_type) = self.shift_pin_go_type(expression, ty) {
             return inner.conversion(source_go_type).conversion(go_type);
@@ -421,7 +421,7 @@ impl Planner<'_> {
         inner.conversion(go_type)
     }
 
-    fn shift_pin_go_type(&self, expression: &Expression, target_ty: &Type) -> Option<String> {
+    fn shift_pin_go_type(&mut self, expression: &Expression, target_ty: &Type) -> Option<String> {
         let target_is_float = self
             .facts
             .underlying_simple_kind(target_ty)
@@ -433,7 +433,7 @@ impl Planner<'_> {
         self.facts
             .underlying_simple_kind(&source_ty)
             .is_some_and(|kind| kind.integer_range().is_some())
-            .then(|| self.go_type_string(&source_ty))
+            .then(|| self.use_go_type(&source_ty))
     }
 
     /// Plan a `&inner` reference, hoisting to a temp when the inner is
@@ -542,7 +542,7 @@ impl Planner<'_> {
         _inclusive: bool,
         ty: &Type,
     ) -> ValuePlan {
-        let type_string = self.go_type_string(ty);
+        let type_string = self.use_go_type(ty);
 
         let mut stages: Vec<ValuePlan> = Vec::new();
         let has_start = start.is_some();

@@ -315,7 +315,7 @@ impl Planner<'_> {
             },
             SliceLoop::Find => {
                 self.require_stdlib();
-                let payload = self.go_type_string(element_ty);
+                let payload = self.use_go_type(element_ty);
                 LoweredBlock {
                     statements: vec![
                         LoweredStatement::RawGo(format!(
@@ -349,6 +349,6 @@ impl Planner<'_> {
         let argument = self
             .first_type_argument(ty)
             .expect("slice and option results carry a type argument");
-        self.go_type_string(&argument)
+        self.use_go_type(&argument)
     }
 }

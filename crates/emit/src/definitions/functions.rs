@@ -150,7 +150,7 @@ impl Planner<'_> {
                     destructure_bindings.push((temp_name.clone(), &p.pattern, &p.ty));
                     temp_name
                 };
-                (name, self.go_type_string(&p.ty))
+                (name, self.use_go_type(&p.ty))
             })
             .collect();
         (param_pairs, destructure_bindings)
@@ -187,7 +187,7 @@ impl Planner<'_> {
                         " {}",
                         self.render_lowered_return_ty(&shape, &f.return_type)
                     )),
-                    None => Some(format!(" {}", self.go_type_string(&f.return_type))),
+                    None => Some(format!(" {}", self.use_go_type(&f.return_type))),
                 },
                 _ => None,
             }
@@ -376,7 +376,7 @@ impl Planner<'_> {
         } else if let Some(shape) = return_shape {
             self.render_lowered_return_ty(shape, function_definition.return_type)
         } else {
-            self.go_type_string(function_definition.return_type)
+            self.use_go_type(function_definition.return_type)
         };
 
         (params_string, return_ty, deferred_patterns)
@@ -430,7 +430,7 @@ impl Planner<'_> {
             .collect();
 
         let actual_ty = receiver_override.unwrap_or(receiver_ty);
-        let ty_string = self.go_type_string(actual_ty);
+        let ty_string = self.use_go_type(actual_ty);
         let mut receiver_var = receiver_name(&ty_string);
 
         let taken =
@@ -596,7 +596,7 @@ impl Planner<'_> {
                     param.ty.clone()
                 }
             };
-            params.push((name, self.go_type_string(&param_type)));
+            params.push((name, self.use_go_type(&param_type)));
         }
         (format!("({})", group_params(&params)), deferred_patterns)
     }
@@ -621,7 +621,7 @@ impl Planner<'_> {
         }
 
         let receiver_ty = &function_definition.params[0].ty;
-        let _ty_str = self.go_type_string(receiver_ty);
+        let _ty_str = self.use_go_type(receiver_ty);
 
         (&function_definition.params[1..], Some(receiver_ty.clone()))
     }

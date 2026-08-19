@@ -221,7 +221,11 @@ impl Planner<'_> {
     /// Empty-map literal in the field's Go type, sound as empty needs no coercion.
     fn go_field_map_zero(&mut self, owner: &Type, field: &str, field_ty: &Type) -> Option<String> {
         let layout = self.field_slot_layout(owner, field, field_ty)?;
-        layout_is_map(&layout).then(|| format!("{}{{}}", layout.go_type(self)))
+        if !layout_is_map(&layout) {
+            return None;
+        }
+        let go_type = layout.go_type(self);
+        Some(format!("{}{{}}", self.use_rendered_go_type(go_type)))
     }
 
     /// Look up unspecified fields of a Lisette-defined struct or enum struct variant,
@@ -282,7 +286,7 @@ impl Planner<'_> {
         if self.facts.is_interface(ty) || self.facts.resolve_to_function_type(ty).is_some() {
             return "nil".to_string();
         }
-        let go_ty = self.go_type_string(ty);
+        let go_ty = self.use_go_type(ty);
         // A newtype over a scalar takes no composite literal; over a map it does.
         let is_newtype = self.facts.definition(id).is_some_and(|d| d.is_newtype());
         if is_newtype {
@@ -345,15 +349,24 @@ impl Planner<'_> {
                     ..
                 },
                 ValueLayout::Slice { element, .. },
-            ) => format!("([]{})(nil)", element.go_type(self)),
+            ) => {
+                let element = element.go_type(self);
+                format!("([]{})(nil)", self.use_rendered_go_type(element))
+            }
             (
                 Type::Compound {
                     kind: CompoundKind::Map,
                     ..
                 },
                 ValueLayout::Map { key, value, .. },
-            ) => format!("map[{}]{}{{}}", key.go_type(self), value.go_type(self)),
-            (Type::Compound { .. }, _) => format!("{}{{}}", self.go_type_string(ty)),
+            ) => {
+                let key = key.go_type(self);
+                let value = value.go_type(self);
+                let key = self.use_rendered_go_type(key);
+                let value = self.use_rendered_go_type(value);
+                format!("map[{key}]{value}{{}}")
+            }
+            (Type::Compound { .. }, _) => format!("{}{{}}", self.use_go_type(ty)),
             (Type::Nominal { id, params, .. }, _) => {
                 self.lisette_zero_nominal(ty, id.as_str(), params)
             }
@@ -376,7 +389,7 @@ impl Planner<'_> {
                     length, element, ..
                 },
             ) => self.array_zero(*length, element.logical_type()).rendered(),
-            _ => format!("{}{{}}", self.go_type_string(ty)),
+            _ => format!("{}{{}}", self.use_go_type(ty)),
         }
     }
 
@@ -384,7 +397,7 @@ impl Planner<'_> {
         if id == "prelude.Option" {
             let inner = params
                 .first()
-                .map(|a| self.go_type_string(a))
+                .map(|a| self.use_go_type(a))
                 .unwrap_or_else(|| "any".to_string());
             self.require_stdlib();
             return format!("{}.MakeOptionNone[{}]()", go_name::GO_STDLIB_PKG, inner);
@@ -393,12 +406,12 @@ impl Planner<'_> {
             return self.go_imported_zero(ty, id);
         }
         if let Some(underlying) = self.get_newtype_underlying(ty) {
-            let go_ty = self.go_type_string(ty);
+            let go_ty = self.use_go_type(ty);
             let inner = self.lisette_zero(&underlying);
             return format!("{}({})", go_ty, inner);
         }
         if let Some(fields) = self.lookup_unspecified_fields(ty, "", None, &HashSet::default()) {
-            let go_ty = self.go_type_string(ty);
+            let go_ty = self.use_go_type(ty);
             let is_tuple = self.is_tuple_struct_type(ty);
             let pairs: Vec<(String, String)> = fields
                 .into_iter()
@@ -422,13 +435,13 @@ impl Planner<'_> {
         if let Some(underlying) = self.facts.underlying_type(ty) {
             return self.lisette_zero(&underlying);
         }
-        format!("{}{{}}", self.go_type_string(ty))
+        format!("{}{{}}", self.use_go_type(ty))
     }
 
     /// Array zero value, filling per index with `lisette_zero` when Go's own
     /// `[N]E{}` zero differs from Lisette's (e.g. `Option<T>`).
     pub(crate) fn array_zero(&mut self, len: u64, elem: &Type) -> GoExpression {
-        let elem_go = self.go_type_string(elem);
+        let elem_go = self.use_go_type(elem);
         if len == 0 || self.element_go_zero_ok(elem) {
             return GoExpression::composite_literal(format!("[{}]{}{{}}", len, elem_go), false);
         }
@@ -507,8 +520,7 @@ impl Planner<'_> {
         if let Type::Nominal { id, .. } = ty
             && let Some(go) = self.anon_struct_go_type(id)
         {
-            self.note_go_type(&go);
-            return go.code;
+            return self.use_rendered_go_type(go);
         }
 
         // For cross-package struct calls (including type aliases), use the original name
@@ -530,7 +542,7 @@ impl Planner<'_> {
             }
         }
 
-        self.go_type_string(ty)
+        self.use_go_type(ty)
     }
 
     /// True when `type_name` (e.g., `StringFlag`) is a non-generic alias in the

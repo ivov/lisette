@@ -213,7 +213,7 @@ impl Planner<'_> {
                     .into_parts();
                 let operand = parenthesize_prefixed(operand);
                 let target_ty = self.facts.peel_alias(&expression.get_type()).ok_type();
-                let target = self.go_type_string(&target_ty);
+                let target = self.use_go_type(&target_ty);
                 (setup, format!("{}.({})", operand, target))
             }
         }

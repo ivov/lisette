@@ -104,7 +104,7 @@ impl Planner<'_> {
             statements.push(simple_assign(var_name.to_string(), zero));
         } else {
             // Declared so the dead-path binding stays in scope for later references.
-            let go_ty = self.go_type_string(inner_ty);
+            let go_ty = self.use_go_type(inner_ty);
             statements.push(LoweredStatement::VarDecl {
                 name: var_name.to_string(),
                 go_type: go_ty,
