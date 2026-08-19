@@ -123,6 +123,44 @@ fn main() {
 }
 
 #[test]
+fn unnecessary_mut_silent_on_writing_interface_argument() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        r#"
+import "go:io"
+import "go:strings"
+import "go:fmt"
+
+fn main() {
+    let mut reader = strings.NewReader("hello")
+    match io.ReadAll(reader) {
+        Partial.Ok(_) => fmt.Print("ok"),
+        Partial.Both(_, _) => fmt.Print("both"),
+        Partial.Err(_) => fmt.Print("err"),
+    }
+}
+"#,
+    );
+    let analysis = compile_check(fs);
+    assert!(
+        analysis
+            .diagnostics()
+            .iter()
+            .all(|d| !d.code_str().is_some_and(|c| c.starts_with("infer."))),
+        "a writable reference satisfies `io.Reader`, the program must check clean"
+    );
+    assert!(
+        analysis
+            .diagnostics()
+            .iter()
+            .all(|d| d.code_str() != Some("lint.unnecessary_mut")),
+        "`Reader.Read` writes through the receiver, so the interface argument uses the `mut`"
+    );
+}
+
+#[test]
 fn unnecessary_mut_silent_on_for_mut_element_write() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
@@ -647,7 +685,7 @@ import "go:strings"
 import "go:fmt"
 
 fn main() {
-  let reader = strings.NewReader("hello")
+  let mut reader = strings.NewReader("hello")
   match io.ReadAll(reader) {
     Partial.Ok(_) => fmt.Print("ok"),
     Partial.Both(_, _) => fmt.Print("both"),
@@ -4015,7 +4053,7 @@ import "go:strings"
 import "go:fmt"
 
 fn main() {
-  let body = strings.NewReader("hello")
+  let mut body = strings.NewReader("hello")
   let req = http.NewRequest("POST", "https://example.com", Some(body))
   let unwrap_2 = 7
   let _ = unwrap_2

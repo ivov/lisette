@@ -7,7 +7,7 @@ description: |
   import "go:fmt"
   
   fn main() {
-    let body = strings.NewReader("hello")
+    let mut body = strings.NewReader("hello")
     let req = http.NewRequest("POST", "https://example.com", Some(body))
     fmt.Println(req)
   }
