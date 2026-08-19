@@ -147,6 +147,7 @@ impl Planner<'_> {
         payload_bridge: Option<&LayoutBridge>,
         target: WrapperTarget<'_>,
     ) -> (Vec<LoweredStatement>, Option<String>) {
+        let result_ty = &self.facts.peel_alias(result_ty);
         match abi {
             CallableReturnAbi::Tagged
             | CallableReturnAbi::Direct
@@ -215,7 +216,7 @@ impl Planner<'_> {
         result_ty: &Type,
     ) -> Option<LayoutBridge> {
         let source = abi.return_payload_layout.as_ref()?;
-        let target_type = result_ty.ok_type();
+        let target_type = self.facts.peel_alias(result_ty).ok_type();
         let target = self.value_layout(&target_type, SlotOrigin::Lisette);
         let bridge = resolve_layout_bridge(self, source, &target);
         (!bridge.is_identity()).then_some(bridge)

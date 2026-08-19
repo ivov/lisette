@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  type Recovered = Result<int, PanicValue>
+  
+  fn main() {
+    let r: Recovered = recover {
+      42
+    }
+    let _ = r
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Recovered = lisette.Result[int, lisette.PanicValue]
+
+func main() {
+	r := lisette.RecoverBlock(func() int {
+		return 42
+	})
+	_ = r
+}

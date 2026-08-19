@@ -333,15 +333,17 @@ impl Planner<'_> {
         }
         let return_ctx = self.return_ctx();
         let resolved_ty = resolve_let_temp_declaration_ty(self, value, binding_ty);
+        let peeled_resolved = self.facts.peel_alias(&resolved_ty);
+        let peeled_binding = self.facts.peel_alias(binding_ty);
         let needs_context = |ty: &Type| ty.is_variable() || ty.is_placeholder();
         let has_contextual_ok_ty = matches!(
             value,
             Expression::TryBlock { .. } | Expression::RecoverBlock { .. }
-        ) && !needs_context(&resolved_ty)
-            && needs_context(&resolved_ty.ok_type());
+        ) && !needs_context(&peeled_resolved)
+            && needs_context(&peeled_resolved.ok_type());
 
         let var_ty = if has_contextual_ok_ty {
-            if !needs_context(binding_ty) && !needs_context(&binding_ty.ok_type()) {
+            if !needs_context(&peeled_binding) && !needs_context(&peeled_binding.ok_type()) {
                 self.go_type_string(binding_ty)
             } else if let Some(ctx_ty) = return_ctx.ty().cloned() {
                 if Fallible::from_type(&ctx_ty).is_some() {

@@ -48,7 +48,7 @@ impl Planner<'_> {
         expression: &Expression,
         result_var_name: Option<&str>,
     ) -> (Vec<LoweredStatement>, String) {
-        let expression_ty = expression.get_type();
+        let expression_ty = self.facts.peel_alias(&expression.get_type());
         let fallible = Fallible::from_type(&expression_ty)
             .expect("lower_propagate called on non-Result/Option type");
 
@@ -412,7 +412,7 @@ impl Planner<'_> {
         &mut self,
         expression: &Expression,
     ) -> Option<Vec<LoweredStatement>> {
-        let expression_ty = expression.get_type();
+        let expression_ty = self.facts.peel_alias(&expression.get_type());
         let return_ctx = self.return_ctx();
 
         let return_ty = return_ctx

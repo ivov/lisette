@@ -1145,6 +1145,63 @@ fn propagate_widens_into_aliased_result_return_type() {
 }
 
 #[test]
+fn propagate_accepts_aliased_result_operand() {
+    infer(
+        r#"
+    type Outcome = Result<int, error>
+
+    fn source() -> Outcome {
+      Ok(5)
+    }
+
+    fn load() -> Result<int, error> {
+      let n = source()?
+      Ok(n + 1)
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn propagate_accepts_aliased_option_operand() {
+    infer(
+        r#"
+    type Maybe = Option<int>
+
+    fn source() -> Maybe {
+      Some(5)
+    }
+
+    fn load() -> Option<int> {
+      let n = source()?
+      Some(n + 1)
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn propagate_on_aliased_partial_operand_is_rejected() {
+    infer(
+        r#"
+    type Outcome = Partial<int, error>
+
+    fn source() -> Outcome {
+      Partial.Ok(3)
+    }
+
+    fn load() -> Result<int, error> {
+      let n = source()?
+      Ok(n)
+    }
+        "#,
+    )
+    .assert_infer_code("propagate_on_partial");
+}
+
+#[test]
 fn aliased_try_block_annotation_seeds_the_error_slot() {
     infer(
         r#"

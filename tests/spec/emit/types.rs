@@ -2601,6 +2601,168 @@ fn test() -> Maybe<int> {
 }
 
 #[test]
+fn let_binds_call_returning_option_alias() {
+    let input = r#"
+type MyOpt = Option<int>
+
+fn source() -> MyOpt {
+  Some(3)
+}
+
+fn main() {
+  let a = source()
+  let _ = a
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_binds_call_returning_result_alias() {
+    let input = r#"
+type MyRes = Result<int, error>
+
+fn source() -> MyRes {
+  Ok(3)
+}
+
+fn main() {
+  let a = source()
+  let _ = a
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_binds_call_returning_partial_alias() {
+    let input = r#"
+type MyPartial = Partial<int, error>
+
+fn source() -> MyPartial {
+  Partial.Ok(3)
+}
+
+fn main() {
+  let a = source()
+  let _ = a
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn let_binds_call_returning_nullable_option_alias() {
+    let input = r#"
+struct Point {
+  pub x: int,
+}
+
+type MaybePoint = Option<Ref<Point>>
+
+fn source(p: Ref<Point>) -> MaybePoint {
+  Some(p)
+}
+
+fn main() {
+  let point = Point { x: 1 }
+  let a = source(&point)
+  let _ = a
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagates_call_returning_result_alias() {
+    let input = r#"
+type MyRes = Result<int, error>
+
+fn source() -> MyRes {
+  Ok(5)
+}
+
+fn consume() -> Result<int, error> {
+  let n = source()?
+  Ok(n + 1)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagates_call_returning_option_alias() {
+    let input = r#"
+type MyOpt = Option<int>
+
+fn source() -> MyOpt {
+  Some(5)
+}
+
+fn consume() -> Option<int> {
+  let n = source()?
+  Some(n + 1)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn try_block_annotated_with_result_alias() {
+    let input = r#"
+type MyRes = Result<int, error>
+
+fn source() -> MyRes {
+  Ok(5)
+}
+
+fn main() {
+  let r: MyRes = try {
+    let n = source()?
+    n + 1
+  }
+  let _ = r
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn recover_block_annotated_with_result_alias() {
+    let input = r#"
+type Recovered = Result<int, PanicValue>
+
+fn main() {
+  let r: Recovered = recover {
+    42
+  }
+  let _ = r
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tail_call_forwards_option_alias_return() {
+    let input = r#"
+type MyOpt = Option<int>
+
+fn source() -> MyOpt {
+  Some(3)
+}
+
+fn forward() -> MyOpt {
+  source()
+}
+
+fn main() {
+  let _ = forward()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn prelude_type_shadowing_struct_and_methods() {
     let input = r#"
 struct Span {
