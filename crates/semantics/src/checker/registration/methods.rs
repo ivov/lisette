@@ -207,6 +207,19 @@ impl TaskState {
         static_methods
     }
 
+    fn reject_writable_impl_target(&mut self, annotation: &Annotation) {
+        if let Annotation::Constructor {
+            name,
+            writable: true,
+            span,
+            ..
+        } = annotation
+        {
+            self.sink
+                .push(diagnostics::infer::mut_without_effect(name, *span));
+        }
+    }
+
     /// Resolve an `impl` block's receiver annotation to a type, or `None` if it should be skipped.
     fn resolve_impl_receiver(
         &mut self,
@@ -220,7 +233,10 @@ impl TaskState {
         let impl_bounds = resolved_generic_bounds(generics);
 
         self.check_undeclared_impl_type_params(annotation, generics);
-        let receiver_ty = self.convert_receiver_to_type(&*store, annotation, span);
+        self.reject_writable_impl_target(annotation);
+        let receiver_ty = self
+            .convert_receiver_to_type(&*store, annotation, span)
+            .shallow_demoted();
         let type_name = receiver_ty.get_name()?;
         // Prelude built-ins like `Array` have no qualified name to key methods by.
         let Some(receiver_qualified_name) = receiver_ty.get_qualified_name() else {
