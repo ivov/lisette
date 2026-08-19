@@ -85,7 +85,7 @@ let f: fn(int) -> int = add
   (let_declaration
     pattern: (identifier)
     type: (function_type
-      parameters: (parameters
+      parameters: (parameter_types
         (type_identifier))
       return_type: (type_identifier))
     value: (identifier)))
@@ -143,3 +143,193 @@ let x: io.Reader = r
       path: (type_identifier)
       name: (type_identifier))
     value: (identifier)))
+
+================================================================================
+Writable type
+================================================================================
+
+fn fill(items: mut Slice<int>) { }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_item
+    name: (identifier)
+    parameters: (parameters
+      (parameter
+        pattern: (identifier)
+        type: (writable_type
+          (mutable_specifier)
+          (generic_type
+            type: (type_identifier)
+            type_arguments: (type_arguments
+              (type_identifier))))))
+    body: (block)))
+
+================================================================================
+Writable type in a type argument
+================================================================================
+
+fn double_all(rows: mut Slice<mut Slice<int>>) { }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_item
+    name: (identifier)
+    parameters: (parameters
+      (parameter
+        pattern: (identifier)
+        type: (writable_type
+          (mutable_specifier)
+          (generic_type
+            type: (type_identifier)
+            type_arguments: (type_arguments
+              (writable_type
+                (mutable_specifier)
+                (generic_type
+                  type: (type_identifier)
+                  type_arguments: (type_arguments
+                    (type_identifier)))))))))
+    body: (block)))
+
+================================================================================
+Writable variadic
+================================================================================
+
+fn overwrite(xs: mut VarArgs<int>) { }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_item
+    name: (identifier)
+    parameters: (parameters
+      (parameter
+        pattern: (identifier)
+        type: (writable_type
+          (mutable_specifier)
+          (generic_type
+            type: (type_identifier)
+            type_arguments: (type_arguments
+              (type_identifier))))))
+    body: (block)))
+
+================================================================================
+Writable return type
+================================================================================
+
+fn words() -> mut Slice<string> { xs }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_item
+    name: (identifier)
+    parameters: (parameters)
+    return_type: (writable_type
+      (mutable_specifier)
+      (generic_type
+        type: (type_identifier)
+        type_arguments: (type_arguments
+          (type_identifier))))
+    body: (block
+      (identifier))))
+
+================================================================================
+Writable field
+================================================================================
+
+struct Index { counts: mut Map<string, int> }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (struct_item
+    name: (type_identifier)
+    body: (field_declaration_list
+      (field_declaration
+        name: (field_identifier)
+        type: (writable_type
+          (mutable_specifier)
+          (generic_type
+            type: (type_identifier)
+            type_arguments: (type_arguments
+              (type_identifier)
+              (type_identifier))))))))
+
+================================================================================
+Writable enum payload
+================================================================================
+
+enum Holder { Tags(mut Slice<string>) }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (enum_item
+    name: (type_identifier)
+    body: (enum_variant_list
+      (enum_variant
+        name: (identifier)
+        body: (ordered_field_declaration_list
+          type: (writable_type
+            (mutable_specifier)
+            (generic_type
+              type: (type_identifier)
+              type_arguments: (type_arguments
+                (type_identifier)))))))))
+
+================================================================================
+Writable receiver
+================================================================================
+
+impl Index {
+  fn add(self: mut Ref<Index>) { }
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (impl_item
+    type: (type_identifier)
+    body: (declaration_list
+      (function_item
+        name: (identifier)
+        parameters: (parameters
+          (parameter
+            type: (writable_type
+              (mutable_specifier)
+              (generic_type
+                type: (type_identifier)
+                type_arguments: (type_arguments
+                  (type_identifier))))))
+        body: (block)))))
+
+================================================================================
+Writable impl target
+================================================================================
+
+impl mut Index {
+  fn first(self) -> int { self.items[0] }
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (impl_item
+    type: (writable_type
+      (mutable_specifier)
+      (type_identifier))
+    body: (declaration_list
+      (function_item
+        name: (identifier)
+        parameters: (parameters
+          (self_parameter))
+        return_type: (type_identifier)
+        body: (block
+          (index_expression
+            (field_expression
+              value: (self)
+              field: (field_identifier))
+            (integer_literal)))))))
