@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787162345981,
+  "lastUpdate": 1787165709337,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -25036,6 +25036,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "diagnostics",
             "value": 8214,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5992,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2902,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1851,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 714,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9328,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b45e036cee022bc74b4d16cd15fcad72f1b9ad8c",
+          "message": "fix: carry write permission through interface satisfaction (#1295)",
+          "timestamp": "2026-08-19T20:54:42+02:00",
+          "tree_id": "aa2f1b0cfbe9e10bd40efb81c2d0cf9e5da8bae3",
+          "url": "https://github.com/ivov/lisette/commit/b45e036cee022bc74b4d16cd15fcad72f1b9ad8c"
+        },
+        "date": 1787165707050,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 136741,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32425,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27591,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18613,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14651,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13507,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8251,
             "unit": "lines"
           },
           {
