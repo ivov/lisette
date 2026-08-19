@@ -47,7 +47,10 @@
         },
         {
           "name": "string.interpolated.lisette",
-          "begin": "f\"",
+          "begin": "(f)\"",
+          "beginCaptures": {
+            "1": { "name": "storage.type.string.lisette" }
+          },
           "end": "\"",
           "patterns": [
             { "include": "#escape-sequences" },
@@ -120,6 +123,12 @@
           },
           "patterns": [
             {
+              "name": "string.quoted.other.raw.lisette",
+              "begin": "`",
+              "end": "`",
+              "patterns": []
+            },
+            {
               "name": "entity.name.tag.annotation.lisette",
               "match": "\\b\\w+\\b"
             },
@@ -187,6 +196,10 @@
           "match": "\\b(as)\\b"
         },
         {
+          "name": "variable.language.self.lisette",
+          "match": "\\b(self)\\b"
+        },
+        {
           "name": "variable.language.wildcard.lisette",
           "match": "\\b_\\b"
         }
@@ -231,6 +244,14 @@
           "match": "\\b([a-z_][a-zA-Z0-9_]*)\\s*(?=\\()",
           "captures": {
             "1": { "name": "entity.name.function.lisette" }
+          }
+        },
+        {
+          "comment": "Pipeline target without arguments: |> name",
+          "match": "(\\|>)\\s*([a-z_][a-zA-Z0-9_]*)",
+          "captures": {
+            "1": { "name": "keyword.operator.arrow.lisette" },
+            "2": { "name": "entity.name.function.lisette" }
           }
         }
       ]
