@@ -44,6 +44,28 @@ func TestPartitionByTargetDoesNotMutateCapturedHeaderStub(t *testing.T) {
 	}
 }
 
+func TestParseTargetReadsOneTargetAndTreatsEmptyAsHost(t *testing.T) {
+	target, err := ParseTarget("linux/amd64")
+	if err != nil {
+		t.Fatalf("ParseTarget failed: %v", err)
+	}
+	if target.goos != "linux" || target.goarch != "amd64" {
+		t.Fatalf("ParseTarget = %v, want linux/amd64", target)
+	}
+
+	host, err := ParseTarget("")
+	if err != nil {
+		t.Fatalf("ParseTarget(\"\") failed: %v", err)
+	}
+	if host != (Target{}) {
+		t.Fatalf("ParseTarget(\"\") = %v, want the zero target", host)
+	}
+
+	if _, err := ParseTarget("linux/amd64,darwin/arm64"); err == nil {
+		t.Fatal("ParseTarget accepted a list")
+	}
+}
+
 func TestParseTargetsRejectsInvalidAndDuplicateTargets(t *testing.T) {
 	invalid := []string{
 		"/amd64",

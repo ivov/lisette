@@ -11,8 +11,8 @@ import (
 )
 
 // GeneratePkg generates a `.d.lis` file for a Go package path.
-func GeneratePkg(pkgPath, lisetteVersion, goVersion string, cfg *config.Config) (GeneratePkgResult, error) {
-	pkg, err := extract.LoadPackage(pkgPath)
+func GeneratePkg(pkgPath, lisetteVersion, goVersion string, cfg *config.Config, target Target) (GeneratePkgResult, error) {
+	pkg, err := extract.LoadPackage(pkgPath, target.goos, target.goarch)
 	if err != nil {
 		return GeneratePkgResult{}, fmt.Errorf("failed to load package %s: %w", pkgPath, err)
 	}
