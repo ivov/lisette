@@ -20,7 +20,7 @@ pub fn test(path: Option<String>, go_flags: Vec<String>, selection: TestSelectio
     output::print_preview_notice("Test runner", false);
     let target = path.unwrap_or_else(|| ".".to_string());
     let root = project_root_for(Path::new(&target));
-    with_locked_project(&root, |prep| {
+    with_locked_project(&root, stdlib::Target::host(), |prep| {
         let outcome = match build_locked(prep, BuildPurpose::Test) {
             Ok(outcome) => outcome,
             Err(code) => return code,

@@ -222,7 +222,9 @@ mod tests {
     use tempfile::tempdir;
 
     fn check_diagnostics(project_dir: &Path) -> Vec<(bool, Option<String>)> {
-        let (_, locator) = TypedefLocator::from_project_with_manifest(project_dir).unwrap();
+        let (_, locator) =
+            TypedefLocator::from_project_with_manifest(project_dir, stdlib::Target::host())
+                .unwrap();
         let src_main = project_dir.join("src").join("main.lis");
         let source = stdfs::read_to_string(&src_main).unwrap();
         let config = CompileConfig {
@@ -276,7 +278,8 @@ mod tests {
         };
         stdfs::write(root.join("src").join(filename), source).unwrap();
 
-        let (_, locator) = TypedefLocator::from_project_with_manifest(root).unwrap();
+        let (_, locator) =
+            TypedefLocator::from_project_with_manifest(root, stdlib::Target::host()).unwrap();
         let source_path = root.join("src").join(filename);
         let config = CompileConfig {
             mode: match target_phase {
@@ -498,7 +501,9 @@ mod tests {
     }
 
     fn analyze_cache_state(project_dir: &Path) -> (Vec<String>, Vec<(bool, Option<String>)>) {
-        let (_, locator) = TypedefLocator::from_project_with_manifest(project_dir).unwrap();
+        let (_, locator) =
+            TypedefLocator::from_project_with_manifest(project_dir, stdlib::Target::host())
+                .unwrap();
         let src_main = project_dir.join("src").join("main.lis");
         let source = stdfs::read_to_string(&src_main).unwrap();
         let working_dir = src_main
@@ -596,7 +601,9 @@ mod tests {
     }
 
     fn test_index_names(project_dir: &Path) -> Vec<String> {
-        let (_, locator) = TypedefLocator::from_project_with_manifest(project_dir).unwrap();
+        let (_, locator) =
+            TypedefLocator::from_project_with_manifest(project_dir, stdlib::Target::host())
+                .unwrap();
         let src_main = project_dir.join("src").join("main.lis");
         let source = stdfs::read_to_string(&src_main).unwrap();
         let working_dir = src_main

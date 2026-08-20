@@ -1046,7 +1046,7 @@ impl BindgenSetup for WorkspaceBindgenSetup {
         project_root: &Path,
         target: stdlib::Target,
     ) -> Result<BindgenSession, String> {
-        let (manifest, _) = TypedefLocator::from_project_with_manifest(project_root)?;
+        let (manifest, _) = TypedefLocator::from_project_with_manifest(project_root, target)?;
 
         let target_dir = project_root.join("target");
         if target_dir.is_file() {

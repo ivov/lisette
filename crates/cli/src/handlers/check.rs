@@ -143,13 +143,14 @@ fn check_project(project_path: &Path, options: &CheckOptions) -> i32 {
         None => return 1,
     };
 
-    let (manifest, locator) = match TypedefLocator::from_project_with_manifest(project_path) {
-        Ok(pair) => pair,
-        Err(msg) => {
-            cli_error!("Failed to check project", msg, "Fix `lisette.toml`");
-            return 1;
-        }
-    };
+    let (manifest, locator) =
+        match TypedefLocator::from_project_with_manifest(project_path, stdlib::Target::host()) {
+            Ok(pair) => pair,
+            Err(msg) => {
+                cli_error!("Failed to check project", msg, "Fix `lisette.toml`");
+                return 1;
+            }
+        };
 
     let target_dir = project_path.join("target");
     if let Err(e) = fs::create_dir_all(&target_dir) {

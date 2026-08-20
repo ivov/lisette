@@ -60,7 +60,12 @@ pub(super) fn script_dir(file: &Path, heading: &str) -> Result<PathBuf, i32> {
 }
 
 pub(super) fn write_go_mod(dir: &Path, table: &ScriptTable, heading: &str) -> Result<(), i32> {
-    let locator = super::script_deps::locator(table.deps(), dir, super::script_deps::Mode::Offline);
+    let locator = super::script_deps::locator(
+        table.deps(),
+        dir,
+        super::script_deps::Mode::Offline,
+        stdlib::Target::host(),
+    );
     if let Err(message) = go_cli::write_go_mod(dir, super::script::GO_MODULE, &locator) {
         cli_error!(heading, message, "Check permissions on the temp dir");
         return Err(1);

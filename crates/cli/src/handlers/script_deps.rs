@@ -44,8 +44,8 @@ pub(crate) fn locator(
     deps: BTreeMap<String, GoDependency>,
     dir: &Path,
     mode: Mode,
+    target: Target,
 ) -> TypedefLocator {
-    let target = Target::host();
     let locator = TypedefLocator::new(deps, Some(dir.to_path_buf()), target);
     if mode == Mode::Offline || locator.deps().is_empty() {
         return locator;

@@ -269,21 +269,20 @@ impl TypedefLocator {
     }
 
     pub fn from_project(project_root: &Path) -> Result<Self, String> {
-        let (_, locator) = Self::from_project_with_manifest(project_root)?;
+        let (_, locator) = Self::from_project_with_manifest(project_root, Target::host())?;
         Ok(locator)
     }
 
-    pub fn from_project_with_manifest(project_root: &Path) -> Result<(Manifest, Self), String> {
+    pub fn from_project_with_manifest(
+        project_root: &Path,
+        target: Target,
+    ) -> Result<(Manifest, Self), String> {
         let manifest = parse_manifest(project_root)?;
 
         check_toolchain_version(&manifest)?;
         check_no_subpackage_deps(&manifest)?;
 
-        let locator = Self::new(
-            manifest.go_deps(),
-            Some(project_root.to_path_buf()),
-            Target::host(),
-        );
+        let locator = Self::new(manifest.go_deps(), Some(project_root.to_path_buf()), target);
 
         Ok((manifest, locator))
     }
