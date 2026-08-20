@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Missing comparable bound
+   ╭─[test.lis:5:3]
+ 4 │ fn compare<A, B>(x: Pair<A, B>, y: Pair<A, B>) -> bool {
+ 5 │   x == y
+   ·   ┬
+   ·   ╰── `Pair<A, B>` cannot be compared with `==`
+ 6 │ }
+   ╰────
+  help: Add the bound where they are declared: `<A: Comparable, B: Comparable>` · code: [infer.param_needs_comparable_bound]

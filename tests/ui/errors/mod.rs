@@ -9653,6 +9653,40 @@ fn compare<T>(a: Slice<T>, b: Slice<T>) -> bool {
 }
 
 #[test]
+fn infer_compare_unbounded_container_suggests_bound_then_equals() {
+    let input = r#"
+fn compare<T>(a: Slice<T>, b: Slice<T>) -> bool {
+  a == b
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_compare_names_every_unbounded_param() {
+    let input = r#"
+struct Pair<A, B> { pub a: A, pub b: B }
+
+fn compare<A, B>(x: Pair<A, B>, y: Pair<A, B>) -> bool {
+  x == y
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_compare_struct_with_function_field_suggests_no_bound() {
+    let input = r#"
+struct S<T> { pub f: fn() -> (), pub t: T }
+
+fn compare<T>(x: S<T>, y: S<T>) -> bool {
+  x == y
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_equals_rejects_map_function_value() {
     let input = r#"
 fn test(a: Map<string, fn() -> int>, b: Map<string, fn() -> int>) {
