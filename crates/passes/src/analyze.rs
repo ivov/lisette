@@ -10,7 +10,7 @@ use syntax::program::{EmitInput, MutationInfo, UnusedInfo, is_internal_package_i
 use semantics::AnalyzeInput;
 use semantics::cache::{EmitStamp, save_package_cache};
 use semantics::facts::{BindingFact, Usage};
-use semantics::store::ENTRY_PACKAGE_ID;
+use semantics::store::{ENTRY_FILE_ID, ENTRY_PACKAGE_ID};
 use semantics::{InferenceOutput, PARALLEL_THRESHOLD, run_inference};
 
 use crate::passes;
@@ -25,8 +25,6 @@ pub struct Analysis {
     bindings: HashMap<BindingId, BindingFact>,
     usages: HashSet<Usage>,
     diagnostics: Vec<LisetteDiagnostic>,
-    entry_parse_status: semantics::EntryParseStatus,
-    parse_statuses: HashMap<u32, FileParseStatus>,
 }
 
 impl Analysis {
@@ -70,18 +68,19 @@ impl Analysis {
     }
 
     pub fn has_parse_errors(&self) -> bool {
-        self.entry_parse_status != semantics::EntryParseStatus::Clean
+        self.parse_status(ENTRY_FILE_ID) != FileParseStatus::Clean
     }
 
     pub fn parse_status(&self, file_id: u32) -> FileParseStatus {
-        self.parse_statuses
+        self.emit_input
+            .files
             .get(&file_id)
-            .copied()
+            .map(|file| file.parse_status)
             .unwrap_or_default()
     }
 
     pub fn entry_parse_failed(&self) -> bool {
-        self.entry_parse_status == semantics::EntryParseStatus::Failed
+        self.parse_status(ENTRY_FILE_ID) == FileParseStatus::Failed
     }
 }
 
@@ -95,15 +94,17 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
         cached_packages,
         cache_root,
         unreachable_packages,
-        entry_parse,
+        entry_parse_errors,
     } = run_inference(input);
-    let lint_mode = if entry_parse.is_clean() {
+    let entry_parse_status = store
+        .get_file(ENTRY_FILE_ID)
+        .map(|file| file.parse_status)
+        .unwrap_or_default();
+    let lint_mode = if entry_parse_status == FileParseStatus::Clean {
         passes::LintMode::Run
     } else {
         passes::LintMode::Skip
     };
-    let entry_parse_status = entry_parse.status();
-    let entry_parse_errors = entry_parse.into_errors();
 
     let unused = if has_pre_check_errors {
         UnusedInfo::default()
@@ -186,7 +187,6 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
         }
     }
 
-    let parse_statuses = store.parse_statuses.clone();
     let mut files = HashMap::default();
     let mut definitions = HashMap::default();
 
@@ -236,8 +236,6 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
         bindings,
         usages,
         diagnostics: order_diagnostics_by_severity(all_diagnostics),
-        entry_parse_status,
-        parse_statuses,
     }
 }
 
@@ -310,5 +308,38 @@ mod tests {
                 .any(|usage| usage.definition_span == value_span),
             "value usage should link back to its retained binding"
         );
+    }
+
+    #[test]
+    fn analysis_derives_recovered_entry_status_from_the_file() {
+        let source = "fn valid() {}\nfn broken(";
+        let loader = MemoryLoader::new();
+        let locator = Default::default();
+
+        let analysis = analyze(AnalyzeInput {
+            load_siblings: false,
+            scope: AnalysisScope::Script {
+                inside_project: false,
+            },
+            loader: &loader,
+            entry: Some(EntryFile::recovering(
+                source.to_string(),
+                "main.lis".to_string(),
+                "main.lis".to_string(),
+            )),
+            compile_phase: CompilePhase::Check,
+            project_kind: ProjectKind::Binary,
+            locator: &locator,
+            go_module: "",
+            disable_cache: true,
+            recover_target: semantics::RecoverTarget::None,
+        });
+
+        assert_eq!(
+            analysis.parse_status(ENTRY_FILE_ID),
+            FileParseStatus::Recovered
+        );
+        assert!(analysis.has_parse_errors());
+        assert!(!analysis.entry_parse_failed());
     }
 }

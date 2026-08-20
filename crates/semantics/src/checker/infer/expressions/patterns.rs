@@ -622,7 +622,7 @@ impl InferCtx<'_> {
             self.facts.add_usage(span, definition_span);
         }
 
-        let resolution = match definition.const_value().cloned() {
+        let resolution = match definition.const_value().map(|value| value.to_literal()) {
             Some(value) => ConstructorPatternResolution::ConstValue {
                 qualified_name: qualified,
                 value,

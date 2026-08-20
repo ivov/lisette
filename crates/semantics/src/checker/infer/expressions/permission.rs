@@ -387,10 +387,14 @@ impl InferCtx<'_> {
 
     fn binding_context(&self, name: &str) -> Option<diagnostics::infer::WriteContext> {
         let binding_id = self.scopes.lookup_binding_id(name)?;
-        if let Some(collection) = self.loop_element_bindings.get(&binding_id) {
+        if let Some(inference) = self
+            .binding_inference
+            .get(&binding_id)
+            .and_then(|binding| binding.as_loop_element())
+        {
             return Some(diagnostics::infer::WriteContext::LoopElement {
                 binding: name.to_string(),
-                collection: collection.clone(),
+                collection: inference.collection.clone(),
             });
         }
         let kind = self
@@ -404,7 +408,13 @@ impl InferCtx<'_> {
                 name.to_string(),
             ));
         }
-        match self.value_sources.get(&binding_id)? {
+        match self
+            .binding_inference
+            .get(&binding_id)?
+            .as_let()?
+            .source
+            .as_ref()?
+        {
             ValueSource::Place(source) => Some(diagnostics::infer::WriteContext::AliasOf {
                 binding: name.to_string(),
                 source: source.clone(),
@@ -551,7 +561,13 @@ impl InferCtx<'_> {
     fn owner_origin(&self, owner: &Expression) -> Option<String> {
         let name = owner.unwrap_parens().get_var_name()?;
         let binding_id = self.scopes.lookup_binding_id(&name)?;
-        match self.value_sources.get(&binding_id)? {
+        match self
+            .binding_inference
+            .get(&binding_id)?
+            .as_let()?
+            .source
+            .as_ref()?
+        {
             ValueSource::Call(callee) => Some(callee.clone()),
             ValueSource::Place(_) => None,
         }

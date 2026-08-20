@@ -201,20 +201,16 @@ impl ScannedFile {
         program::is_test_file(&self.name)
     }
 
-    pub fn parse(
-        self,
-        package_id: &str,
-        recover: bool,
-    ) -> (File, Vec<syntax::ParseError>, syntax::FileParseStatus) {
+    pub fn parse(self, package_id: &str, recover: bool) -> (File, Vec<syntax::ParseError>) {
         let result = if recover {
             syntax::build_ast_recovering(&self.source, self.file_id)
         } else {
             syntax::build_ast(&self.source, self.file_id)
         };
-        let status = result.status;
         let file = File {
             id: self.file_id,
             package_id: package_id.to_string(),
+            parse_status: result.status,
             name: self.name,
             display_path: self.display_path,
             source_path: None,
@@ -222,7 +218,7 @@ impl ScannedFile {
             items: result.ast,
             file_comment: result.file_comment,
         };
-        (file, result.errors, status)
+        (file, result.errors)
     }
 }
 
@@ -492,7 +488,7 @@ struct ScanJob {
 /// Reads and scans every file of the given packages. The parse waits for the cache.
 fn batch_scan_packages(
     packages: &[PackageId],
-    store: &Store,
+    store: &mut Store,
     loader: Option<&dyn Loader>,
     sink: &LocalSink,
     include_tests: bool,

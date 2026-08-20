@@ -41,6 +41,7 @@ fn parsed_imports(source: &str) -> Option<Vec<FileImport>> {
         File {
             id: 0,
             package_id: "corpus".to_string(),
+            parse_status: result.status,
             name: "corpus.lis".to_string(),
             display_path: "corpus.lis".to_string(),
             source_path: None,

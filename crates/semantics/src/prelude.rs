@@ -21,6 +21,7 @@ pub fn parse_and_register_prelude(store: &mut Store, sink: &LocalSink) {
     store.store_file(File {
         id: PRELUDE_FILE_ID,
         package_id: PRELUDE_PACKAGE_ID.to_string(),
+        parse_status: result.status,
         name: "prelude.d.lis".to_string(),
         display_path: "prelude.d.lis".to_string(),
         source_path: deps::prelude_typedef_path(),
@@ -67,6 +68,7 @@ pub fn parse_and_register_test_prelude(store: &mut Store, sink: &LocalSink) {
     store.store_file(File {
         id: file_id,
         package_id: TEST_PRELUDE_PACKAGE_ID.to_string(),
+        parse_status: result.status,
         name: "test_prelude.d.lis".to_string(),
         display_path: "test_prelude.d.lis".to_string(),
         source_path: None,

@@ -6,6 +6,7 @@ use crate::loader;
 use crate::path::DisplayPathBase;
 use rayon::prelude::*;
 use rustc_hash::FxHashMap as HashMap;
+use syntax::ParseError;
 use syntax::program::UninferredExports;
 
 struct CacheCandidate {
@@ -23,7 +24,6 @@ struct UnparsedPackage {
 struct ParsedPackage {
     files: Vec<File>,
     errors: Vec<ParseError>,
-    statuses: Vec<(u32, FileParseStatus)>,
     pending: PendingPackage,
 }
 
@@ -39,13 +39,11 @@ impl UnparsedPackage {
         let recover = recover_target.covers(package_id);
         let mut files = Vec::with_capacity(scanned.len());
         let mut errors = Vec::new();
-        let mut statuses = Vec::new();
         for scanned_file in scanned {
-            let (mut file, file_errors, status) = scanned_file.parse(package_id, recover);
+            let (mut file, file_errors) = scanned_file.parse(package_id, recover);
             if rewrite_root_import {
                 file.rewrite_import(loader::ROOT_IMPORT, ENTRY_PACKAGE_ID);
             }
-            statuses.push((file.id, status));
             files.push(file);
             errors.extend(file_errors);
         }
@@ -53,7 +51,6 @@ impl UnparsedPackage {
         ParsedPackage {
             files,
             errors,
-            statuses,
             pending,
         }
     }
@@ -341,11 +338,11 @@ fn parse_and_store_packages(
 
     let mut has_parse_errors = false;
     for package in parsed {
-        has_parse_errors |= !package.errors.is_empty();
+        has_parse_errors |= package
+            .files
+            .iter()
+            .any(|file| file.parse_status != FileParseStatus::Clean);
         checker.sink.extend_parse_errors(package.errors);
-        for (file_id, status) in package.statuses {
-            store.record_parse_status(file_id, status);
-        }
         store.store_package(package.pending.package_id(), package.files);
         to_infer.push(package.pending);
     }
@@ -364,19 +361,14 @@ fn store_uninferred_packages(
         }
         let recover = recover_target.covers(&package_id);
         let mut files = Vec::with_capacity(scanned.len());
-        let mut parsed = true;
-        let mut statuses = Vec::with_capacity(files.capacity());
+        let mut all_files_clean = true;
         for scanned_file in scanned {
-            let (file, errors, status) = scanned_file.parse(&package_id, recover);
-            parsed &= errors.is_empty();
+            let (file, errors) = scanned_file.parse(&package_id, recover);
+            all_files_clean &= file.parse_status == FileParseStatus::Clean;
             checker.sink.extend_parse_errors(errors);
-            statuses.push((file.id, status));
             files.push(file);
         }
-        for (file_id, status) in statuses {
-            store.record_parse_status(file_id, status);
-        }
-        let exports = if parsed {
+        let exports = if all_files_clean {
             UninferredExports::Known(
                 files
                     .iter()

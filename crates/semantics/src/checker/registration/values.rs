@@ -1,38 +1,34 @@
 use super::*;
-use syntax::ast::Literal;
 use syntax::attributes;
-use syntax::program::ValueKind;
+use syntax::program::{ConstantValue, ValueKind};
 
-fn canonical_const_literal(expression: &Expression) -> Option<Literal> {
+fn canonical_const_value(expression: &Expression) -> Option<ConstantValue> {
     use syntax::ast::{Literal, UnaryOperator};
     match expression.unwrap_parens() {
         Expression::Literal { literal, .. } => match literal {
-            Literal::Integer { value, .. } => Some(Literal::Integer {
+            Literal::Integer { value, .. } => Some(ConstantValue::Integer {
                 value: *value,
                 text: None,
             }),
-            Literal::Float { value, .. } => Some(Literal::Float {
+            Literal::Float { value, .. } => Some(ConstantValue::Float {
                 value: *value,
                 text: None,
             }),
-            Literal::Boolean(b) => Some(Literal::Boolean(*b)),
-            Literal::String { value, .. } => Some(Literal::String {
-                value: value.clone(),
-                raw: false,
-            }),
-            Literal::Char(c) => Some(Literal::Char(c.clone())),
+            Literal::Boolean(value) => Some(ConstantValue::Boolean(*value)),
+            Literal::String { value, .. } => Some(ConstantValue::String(value.clone())),
+            Literal::Char(value) => Some(ConstantValue::Char(value.clone())),
             _ => None,
         },
         Expression::Unary {
             operator: UnaryOperator::Negative,
             expression,
             ..
-        } => match canonical_const_literal(expression)? {
-            Literal::Integer { value, .. } => Some(Literal::Integer {
+        } => match canonical_const_value(expression)? {
+            ConstantValue::Integer { value, .. } => Some(ConstantValue::Integer {
                 value: value.wrapping_neg(),
                 text: None,
             }),
-            Literal::Float { value, .. } => Some(Literal::Float {
+            ConstantValue::Float { value, .. } => Some(ConstantValue::Float {
                 value: -value,
                 text: None,
             }),
@@ -234,7 +230,7 @@ impl TaskState {
             ));
         }
 
-        let kind = match expression.value().and_then(canonical_const_literal) {
+        let kind = match expression.value().and_then(canonical_const_value) {
             Some(value) => ValueKind::Constant(value),
             None => ValueKind::ConstantDeclaration,
         };

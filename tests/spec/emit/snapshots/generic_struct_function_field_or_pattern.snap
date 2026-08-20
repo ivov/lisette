@@ -6,7 +6,7 @@ description: |
   enum E { A(Handler<string>), B(Handler<string>) }
   
   fn test(e: E) -> int {
-    let A(Handler { callback }) | B(Handler { callback }) = e else { return 0; };
+    let E.A(Handler { callback }) | E.B(Handler { callback }) = e else { return 0; };
     callback("test")
   }
 ---

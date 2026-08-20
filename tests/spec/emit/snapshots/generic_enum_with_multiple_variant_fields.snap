@@ -5,7 +5,7 @@ description: |
   enum Either<L, R> { Left(L), Right(R) }
   
   fn test() -> Either<int, string> {
-    Left(42)
+    Either.Left(42)
   }
 ---
 package main

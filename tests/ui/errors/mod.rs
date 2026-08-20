@@ -1655,7 +1655,7 @@ fn infer_enum_variant_not_found_in_pattern() {
 enum Status { Active, Inactive }
 
 fn test() {
-  let s: Status = Active;
+  let s: Status = Status.Active;
   match s {
     Nope => {}
   }
@@ -4440,7 +4440,7 @@ fn match_redundant_pattern() {
 enum Status { Active, Inactive }
 
 fn test() {
-  let s: Status = Active;
+  let s: Status = Status.Active;
   match s {
     Active => 1,
     Inactive => 2,
@@ -4457,7 +4457,7 @@ fn match_redundant_after_wildcard() {
 enum Status { Active, Inactive }
 
 fn test() {
-  let s: Status = Active;
+  let s: Status = Status.Active;
   match s {
     _ => 0,
     Active => 1,
@@ -4473,7 +4473,7 @@ fn match_redundant_or_pattern_duplicate() {
 enum Color { Red, Green, Blue }
 
 fn test() {
-  let c: Color = Red;
+  let c: Color = Color.Red;
   match c {
     Red | Red => 1,
     Green | Blue => 2,
@@ -6928,7 +6928,7 @@ enum MyResult<T, E> {
 }
 
 fn main() {
-  let x: MyResult<Never, int> = MyOk(1);
+  let x: MyResult<Never, int> = MyResult.MyOk(1);
 }
 "#;
     assert_infer_error_snapshot!(input);
@@ -6943,7 +6943,7 @@ enum Either<L, R> {
 }
 
 fn main() {
-  let x = Left("oops");
+  let x = Either.Left("oops");
   let _: Either<int, string> = x;
 }
 "#;

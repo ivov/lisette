@@ -48,6 +48,7 @@ impl TaskState {
         let file = File {
             id: file_id,
             package_id: package_id.to_string(),
+            parse_status: build_result.status,
             name: filename.clone(),
             display_path: filename,
             source_path: cache_path,

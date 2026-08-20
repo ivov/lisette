@@ -5,9 +5,8 @@ use crate::checker::infer::expressions::comparison::{
 };
 use std::mem;
 use syntax::EcoString;
-use syntax::ast::Literal;
 use syntax::ast::{Annotation, Generic, Span, VariantFields};
-use syntax::program::{AliasKind, DefinitionBody};
+use syntax::program::{AliasKind, ConstantValue, DefinitionBody};
 use syntax::types::{
     FunctionParameter, SimpleKind, Symbol, Type, build_named_substitution_map, substitute,
     unqualified_name,
@@ -543,7 +542,7 @@ impl TaskState {
                 .push(diagnostics::infer::array_size_computed_constant(name, span));
             return None;
         };
-        let Literal::Integer { value, .. } = literal else {
+        let ConstantValue::Integer { value, .. } = literal else {
             self.sink
                 .push(diagnostics::infer::array_size_not_integer_constant(
                     name, span,
@@ -582,7 +581,7 @@ impl TaskState {
             let Some(definition) = store.get_definition(&pending.qualified_name) else {
                 continue;
             };
-            let Some(Literal::Integer { value, .. }) = definition.const_value() else {
+            let Some(ConstantValue::Integer { value, .. }) = definition.const_value() else {
                 continue;
             };
             let outcome = store

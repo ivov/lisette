@@ -512,6 +512,7 @@ pub struct FunctionDefinitionView<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum VariantFields {
     Unit,
     Tuple(Vec<EnumFieldDefinition>),
@@ -559,6 +560,7 @@ impl<'a> IntoIterator for &'a VariantFields {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnumVariant {
     pub doc: Option<String>,
     pub name: EcoString,
@@ -567,6 +569,7 @@ pub struct EnumVariant {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnumFieldDefinition {
     pub name: EcoString,
     pub name_span: Span,
@@ -575,6 +578,7 @@ pub struct EnumFieldDefinition {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Attribute {
     pub name: String,
     pub args: Vec<AttributeArg>,
@@ -604,6 +608,7 @@ pub enum StructKind {
 /// The field collection carries the struct's shape so it cannot disagree with
 /// the fields it describes.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum StructFields {
     Record(Vec<StructFieldDefinition>),
     Tuple(Vec<StructFieldDefinition>),
@@ -661,6 +666,7 @@ impl<'a> IntoIterator for &'a mut StructFields {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct StructFieldDefinition {
     pub doc: Option<String>,
     pub name: EcoString,
@@ -672,6 +678,7 @@ pub struct StructFieldDefinition {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum StructFieldKind {
     Named { attributes: Vec<Attribute> },
     Embedded,
@@ -1006,6 +1013,7 @@ impl Annotation {
 }
 
 #[derive(Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Generic {
     pub name: EcoString,
     bounds: GenericBounds,
@@ -1031,12 +1039,14 @@ impl fmt::Debug for Generic {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 enum GenericBounds {
     Unresolved(Vec<Annotation>),
     Resolved(Vec<ResolvedGenericBound>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 struct ResolvedGenericBound {
     annotation: Annotation,
     ty: Type,
@@ -1111,6 +1121,17 @@ impl Generic {
             return None;
         };
         Some(bounds.iter().map(|bound| &bound.ty))
+    }
+
+    pub fn for_each_bound_annotation_mut(&mut self, mut visit: impl FnMut(&mut Annotation)) {
+        match &mut self.bounds {
+            GenericBounds::Unresolved(annotations) => annotations.iter_mut().for_each(visit),
+            GenericBounds::Resolved(bounds) => {
+                bounds
+                    .iter_mut()
+                    .for_each(|bound| visit(&mut bound.annotation));
+            }
+        }
     }
 
     pub fn resolve_bounds_with(&mut self, mut resolve: impl FnMut(&Annotation) -> Type) {

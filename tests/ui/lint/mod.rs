@@ -13086,7 +13086,7 @@ fn refutable_or_pattern_if_let_no_warning() {
 enum E { A, B, C }
 
 fn test(e: E) {
-  if let A | B = e {
+  if let E.A | E.B = e {
     ();
   }
 }

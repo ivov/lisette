@@ -8,7 +8,8 @@ use crate::types::{
     FunctionParameter, Symbol, Type, build_substitution_map, substitute, type_args_match_params,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Definition {
     pub visibility: Visibility,
     pub ty: Type,
@@ -36,14 +37,47 @@ pub enum TypeAttribute {
 
 pub type Attributes = HashSet<TypeAttribute>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ValueKind {
     Runtime,
     ConstantDeclaration,
-    Constant(Literal),
+    Constant(ConstantValue),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum ConstantValue {
+    Integer { value: u64, text: Option<String> },
+    Float { value: f64, text: Option<String> },
+    Boolean(bool),
+    String(String),
+    Char(String),
+}
+
+impl ConstantValue {
+    pub fn to_literal(&self) -> Literal {
+        match self {
+            Self::Integer { value, text } => Literal::Integer {
+                value: *value,
+                text: text.clone(),
+            },
+            Self::Float { value, text } => Literal::Float {
+                value: *value,
+                text: text.clone(),
+            },
+            Self::Boolean(value) => Literal::Boolean(*value),
+            Self::String(value) => Literal::String {
+                value: value.clone(),
+                raw: false,
+            },
+            Self::Char(value) => Literal::Char(value.clone()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum DefinitionBody {
     TypeAlias {
         generics: Vec<Generic>,
@@ -79,7 +113,8 @@ pub enum DefinitionBody {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum AliasKind {
     Opaque(Annotation),
     Transparent {
@@ -269,7 +304,7 @@ impl Definition {
         }
     }
 
-    pub fn const_value(&self) -> Option<&Literal> {
+    pub fn const_value(&self) -> Option<&ConstantValue> {
         match &self.body {
             DefinitionBody::Value {
                 kind: ValueKind::Constant(value),
@@ -684,6 +719,7 @@ impl Visibility {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Interface {
     pub generics: Vec<Generic>,
     pub parents: Vec<Type>,

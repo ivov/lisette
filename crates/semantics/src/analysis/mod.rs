@@ -12,7 +12,6 @@ use std::path::{Path, PathBuf};
 
 use diagnostics::LocalSink;
 use syntax::FileParseStatus;
-use syntax::ParseError;
 use syntax::program::{File, Package};
 
 use deps::TypedefLocator;
@@ -134,45 +133,6 @@ enum EntryParseMode {
     Recover,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum EntryParseStatus {
-    #[default]
-    Clean,
-    Recovered,
-    Failed,
-}
-
-pub enum EntryParseOutcome {
-    Clean,
-    Recovered(Vec<ParseError>),
-    Failed(Vec<ParseError>),
-}
-
-impl EntryParseOutcome {
-    pub fn is_clean(&self) -> bool {
-        matches!(self, Self::Clean)
-    }
-
-    pub fn is_failed(&self) -> bool {
-        matches!(self, Self::Failed(_))
-    }
-
-    pub fn status(&self) -> EntryParseStatus {
-        match self {
-            Self::Clean => EntryParseStatus::Clean,
-            Self::Recovered(_) => EntryParseStatus::Recovered,
-            Self::Failed(_) => EntryParseStatus::Failed,
-        }
-    }
-
-    pub fn into_errors(self) -> Vec<ParseError> {
-        match self {
-            Self::Clean => Vec::new(),
-            Self::Recovered(errors) | Self::Failed(errors) => errors,
-        }
-    }
-}
-
 pub struct AnalyzeInput<'a> {
     pub load_siblings: bool,
     pub scope: AnalysisScope,
@@ -254,7 +214,7 @@ pub struct InferenceOutput {
     pub cached_packages: HashSet<String>,
     pub cache_root: Option<PathBuf>,
     pub unreachable_packages: Vec<String>,
-    pub entry_parse: EntryParseOutcome,
+    pub entry_parse_errors: Vec<syntax::ParseError>,
 }
 
 #[derive(Clone, Copy)]
@@ -347,7 +307,10 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
 
     store.init_entry_package();
     let entry = register_entry_file(&mut store, &sink, input.entry, include_tests);
-    if entry.parse_failed() {
+    if store
+        .get_file(ENTRY_FILE_ID)
+        .is_some_and(|file| file.parse_status == FileParseStatus::Failed)
+    {
         let checker = TaskState::with_sink(sink, input.project_kind, input.scope.script_unit());
         return InferenceOutput {
             store,
@@ -358,7 +321,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
             cached_packages: HashSet::default(),
             cache_root: None,
             unreachable_packages: Vec::new(),
-            entry_parse: entry.into_parse(),
+            entry_parse_errors: entry.into_errors(),
         };
     }
     if input.load_siblings {
@@ -372,7 +335,7 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
         );
     }
 
-    let entry_package = store.entry_package_id().to_string();
+    let entry_package = ENTRY_PACKAGE_ID.to_string();
     let discovered = if input.scope.has_project_root() {
         input.loader.discover_packages()
     } else {
@@ -455,6 +418,6 @@ pub fn run_inference(input: AnalyzeInput) -> InferenceOutput {
         cached_packages: package_output.cached_packages,
         cache_root,
         unreachable_packages,
-        entry_parse: entry.into_parse(),
+        entry_parse_errors: entry.into_errors(),
     }
 }

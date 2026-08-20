@@ -2476,7 +2476,7 @@ fn never_in_generic_expected_position_rejects_inhabited() {
     }
 
     fn main() {
-      let x: MyResult<Never, int> = MyOk(1);
+      let x: MyResult<Never, int> = MyResult.MyOk(1);
     }
         "#,
     )
@@ -2497,7 +2497,7 @@ fn never_in_generic_actual_position_coerces() {
     }
 
     fn test() -> MyResult<int, int> {
-      MyOk(diverges())
+      MyResult.MyOk(diverges())
     }
         "#,
     )

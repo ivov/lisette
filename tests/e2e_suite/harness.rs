@@ -51,6 +51,7 @@ pub fn compile_e2e_suite_test(input: &str, package_name: &str) -> Result<Emitted
     let file = File {
         id: 0,
         package_id: result.package_id.clone(),
+        parse_status: syntax::FileParseStatus::Clean,
         name: "test.lis".to_string(),
         display_path: "test.lis".to_string(),
         source_path: None,

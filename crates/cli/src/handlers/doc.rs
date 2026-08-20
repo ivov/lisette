@@ -2,7 +2,6 @@ use crate::cli_error;
 use crate::output::{format_backticks, use_color};
 use diagnostics::infer::levenshtein_distance;
 use semantics::cache::go_stdlib::{GoPackageCache, try_load_go_stdlib_cache};
-use semantics::cache::types::CachedDefinitionBody;
 use std::mem;
 use stdlib::{
     Target, format_targets, get_go_stdlib_package_targets, get_go_stdlib_packages,
@@ -10,6 +9,7 @@ use stdlib::{
 };
 use syntax::ast::EnumVariant;
 use syntax::ast::{Annotation, Binding, Expression, Generic, Pattern, StructFields, VariantFields};
+use syntax::program::DefinitionBody;
 
 #[derive(Debug, Clone, Copy)]
 enum TypeKind {
@@ -1555,15 +1555,16 @@ fn doc_go_package(query: &str) -> i32 {
 
 fn has_go_package_matches(package_cache: &GoPackageCache, query_lower: &str) -> bool {
     for (def_name, def) in &package_cache.definitions {
-        if matches!(def.body, CachedDefinitionBody::Value { .. })
+        let body = &def.as_definition().body;
+        if matches!(body, DefinitionBody::Value { .. })
             && def_name.to_lowercase().contains(query_lower)
         {
             return true;
         }
-        match &def.body {
-            CachedDefinitionBody::TypeAlias { methods, .. }
-            | CachedDefinitionBody::Enum { methods, .. }
-            | CachedDefinitionBody::Struct { methods, .. } => {
+        match body {
+            DefinitionBody::TypeAlias { methods, .. }
+            | DefinitionBody::Enum { methods, .. }
+            | DefinitionBody::Struct { methods, .. } => {
                 if methods
                     .keys()
                     .any(|m| m.to_lowercase().contains(query_lower))
@@ -1571,7 +1572,7 @@ fn has_go_package_matches(package_cache: &GoPackageCache, query_lower: &str) -> 
                     return true;
                 }
             }
-            CachedDefinitionBody::Interface { definition, .. }
+            DefinitionBody::Interface { definition, .. }
                 if definition
                     .methods
                     .keys()

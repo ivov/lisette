@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use ecow::{EcoString, eco_format};
 
+use crate::FileParseStatus;
 use crate::ast::{Expression, ImportAlias, Span};
 use std::path::Path;
 
@@ -11,6 +12,7 @@ use std::path::Path;
 pub struct File {
     pub id: u32,
     pub package_id: String,
+    pub parse_status: FileParseStatus,
     /// Stable bare filename (e.g. `greet.lis`); identity key for caching and
     /// LSP path reconstruction.
     pub name: String,
@@ -93,6 +95,7 @@ impl File {
         Self {
             id,
             package_id: package_id.to_string(),
+            parse_status: FileParseStatus::Clean,
             name: name.to_string(),
             display_path: display_path.to_string(),
             source_path: None,

@@ -7,7 +7,7 @@ description: |
   }
   
   fn make_move() -> Message {
-    Move { x: 10, y: 20 }
+    Message.Move { x: 10, y: 20 }
   }
 ---
 package main

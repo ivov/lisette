@@ -1406,7 +1406,7 @@ fn let_else_or_pattern() {
 enum E { A(int), B(int), C }
 
 fn test(e: E) -> int {
-  let A(x) | B(x) = e else { return 0; };
+  let E.A(x) | E.B(x) = e else { return 0; };
   x
 }
 "#;
@@ -1838,7 +1838,7 @@ enum E { A(int), B(int) }
 fn test() -> int {
   let mut current: Option<E> = Some(E.A(5));
   let mut sum = 0;
-  while let Some(A(x)) | Some(B(x)) = current {
+  while let Some(E.A(x)) | Some(E.B(x)) = current {
     sum = sum + x;
     current = None;
   }

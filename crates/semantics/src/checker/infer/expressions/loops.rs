@@ -1,5 +1,5 @@
 use crate::checker::EnvResolve;
-use crate::checker::infer::context::LoopContext;
+use crate::checker::infer::context::{BindingInference, LoopContext, LoopElementInference};
 use syntax::ast::BindingKind;
 use syntax::ast::{Binding, Expression, Pattern, Span};
 use syntax::types::Type;
@@ -162,12 +162,15 @@ impl InferCtx<'_> {
             if let Some(name) = inferred_pattern.get_identifier()
                 && let Some(binding_id) = this.scopes.lookup_binding_id(&name)
             {
-                if demoted_from_writable {
-                    this.demoted_writable_loops.insert(binding_id);
-                }
                 let collection = super::aliasing::place_root_name(new_iterable.unwrap_parens())
                     .map(|root| root.to_string());
-                this.loop_element_bindings.insert(binding_id, collection);
+                this.binding_inference.insert(
+                    binding_id,
+                    BindingInference::LoopElement(LoopElementInference {
+                        collection,
+                        was_demoted: demoted_from_writable,
+                    }),
+                );
             }
 
             let new_binding = Binding {

@@ -5,7 +5,7 @@ description: |
   enum MyResult<T> { Success(T), Failure }
   
   fn test() -> MyResult<int> {
-    Success(42)
+    MyResult.Success(42)
   }
 ---
 package main

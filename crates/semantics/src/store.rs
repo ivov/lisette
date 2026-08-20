@@ -1,11 +1,9 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
-use syntax::FileParseStatus;
 use syntax::ast::StructKind;
-use syntax::ast::{EnumVariant, Expression, StructFieldDefinition, VariantFields};
+use syntax::ast::{EnumVariant, StructFieldDefinition, VariantFields};
 use syntax::program::{
     Definition, DefinitionBody, EqualityIndex, File, Interface, Method, Methods, Package,
     TestIndex, UninferredExports, methods_for_type,
@@ -15,10 +13,11 @@ use syntax::types::{CompoundKind, SimpleKind, Symbol, Type};
 
 pub use crate::closed_domain::{ClosedDomain, ClosedMember, DomainValue};
 pub use syntax::ENTRY_PACKAGE_ID;
-pub(crate) const ENTRY_FILE_ID: u32 = 0;
+pub const ENTRY_FILE_ID: u32 = 0;
 // A linear scan wins for small stores by avoiding a second hash lookup.
 const DIRECT_FILE_LOOKUP_PACKAGE_THRESHOLD: usize = 16;
 
+#[derive(Clone)]
 pub struct Store {
     /// `Arc` so registration workers share a read view; [`Arc::make_mut`]
     /// writes stay zero-copy while a package has a single owner.
@@ -28,25 +27,9 @@ pub struct Store {
     /// Go package ID -> package name from the typedef `// Package:` directive.
     pub go_package_names: HashMap<String, String>,
     /// File ID counter. Starts at 2 because 0 is reserved for entry, 1 for prelude.
-    next_file_id: AtomicU32,
+    next_file_id: u32,
     pub equality_index: EqualityIndex,
     pub test_index: TestIndex,
-    /// Files that parsed to less than their full contents. Absent means clean.
-    pub parse_statuses: HashMap<u32, FileParseStatus>,
-}
-
-impl Clone for Store {
-    fn clone(&self) -> Self {
-        Self {
-            packages: self.packages.clone(),
-            file_packages: self.file_packages.clone(),
-            go_package_names: self.go_package_names.clone(),
-            next_file_id: AtomicU32::new(self.next_file_id.load(Ordering::Relaxed)),
-            equality_index: self.equality_index.clone(),
-            test_index: self.test_index.clone(),
-            parse_statuses: self.parse_statuses.clone(),
-        }
-    }
 }
 
 impl Default for Store {
@@ -71,54 +54,27 @@ impl Store {
             packages,
             file_packages: None,
             go_package_names: Default::default(),
-            next_file_id: AtomicU32::new(2), // 0 = entrypoint, 1 = prelude
+            next_file_id: 2, // 0 = entrypoint, 1 = prelude
             equality_index: Default::default(),
             test_index: Default::default(),
-            parse_statuses: Default::default(),
         }
     }
 
-    pub fn record_parse_status(&mut self, file_id: u32, status: FileParseStatus) {
-        if status != FileParseStatus::Clean {
-            self.parse_statuses.insert(file_id, status);
-        }
+    pub fn new_file_id(&mut self) -> u32 {
+        let id = self.next_file_id;
+        self.next_file_id += 1;
+        id
     }
 
-    pub fn new_file_id(&self) -> u32 {
-        self.next_file_id.fetch_add(1, Ordering::Relaxed)
-    }
-
-    pub(crate) fn reserve_file_ids(&self, count: u32) -> u32 {
-        self.next_file_id.fetch_add(count, Ordering::Relaxed)
-    }
-
-    pub(crate) fn entry_package_id(&self) -> &'static str {
-        ENTRY_PACKAGE_ID
+    pub(crate) fn reserve_file_ids(&mut self, count: u32) -> u32 {
+        let first = self.next_file_id;
+        self.next_file_id += count;
+        first
     }
 
     /// Creates the entry package (empty for a library, whose root files load as siblings).
     pub(crate) fn init_entry_package(&mut self) {
         self.add_package(ENTRY_PACKAGE_ID);
-    }
-
-    pub(crate) fn store_entry_file(
-        &mut self,
-        filename: &str,
-        display_path: &str,
-        source: &str,
-        ast: Vec<Expression>,
-        file_comment: Option<String>,
-    ) {
-        self.store_file(File {
-            id: ENTRY_FILE_ID,
-            package_id: ENTRY_PACKAGE_ID.to_string(),
-            name: filename.to_string(),
-            display_path: display_path.to_string(),
-            source_path: None,
-            source: source.to_string(),
-            items: ast,
-            file_comment,
-        });
     }
 
     pub fn store_package(&mut self, package_id: &str, files: Vec<File>) {
@@ -271,10 +227,9 @@ impl Store {
             packages: self.packages.clone(),
             file_packages: self.file_packages.clone(),
             go_package_names: self.go_package_names.clone(),
-            next_file_id: AtomicU32::new(self.next_file_id.load(Ordering::Relaxed)),
+            next_file_id: self.next_file_id,
             equality_index: EqualityIndex::default(),
             test_index: TestIndex::default(),
-            parse_statuses: HashMap::default(),
         }
     }
 
@@ -747,8 +702,8 @@ mod clone_tests {
 
     #[test]
     fn clone_has_an_independent_file_id_counter() {
-        let store = Store::new();
-        let cloned = store.clone();
+        let mut store = Store::new();
+        let mut cloned = store.clone();
 
         assert_eq!(store.new_file_id(), cloned.new_file_id());
     }
@@ -765,7 +720,7 @@ mod clone_tests {
     }
 
     #[test]
-    fn prebuilt_package_files_are_added_to_the_lookup_index() {
+    fn prebuilt_package_files_are_available_by_id() {
         let mut store = Store::new();
         for index in 0..DIRECT_FILE_LOOKUP_PACKAGE_THRESHOLD - 3 {
             store.add_package(&format!("package{index}"));
@@ -784,7 +739,7 @@ mod clone_tests {
     }
 
     #[test]
-    fn stored_files_are_added_after_the_lookup_index_is_enabled() {
+    fn stored_files_are_indexed_after_the_threshold() {
         let mut store = Store::new();
         for index in 0..DIRECT_FILE_LOOKUP_PACKAGE_THRESHOLD - 3 {
             store.add_package(&format!("package{index}"));
@@ -805,10 +760,10 @@ mod closed_domain_tests {
     use super::*;
     use syntax::ast;
     use syntax::ast::{
-        Annotation, Generic, Literal, Span, StructFieldDefinition, StructFieldKind, StructFields,
+        Annotation, Generic, Span, StructFieldDefinition, StructFieldKind, StructFields,
     };
-    use syntax::program::ValueKind;
     use syntax::program::{AliasKind, Attributes, TypeAttribute, Visibility};
+    use syntax::program::{ConstantValue, ValueKind};
     use syntax::types::CompoundKind;
 
     fn nominal_int(id: &str) -> Type {
@@ -882,7 +837,7 @@ mod closed_domain_tests {
             name_span: None,
             doc: None,
             body: DefinitionBody::Value {
-                kind: ValueKind::Constant(Literal::Integer { value, text: None }),
+                kind: ValueKind::Constant(ConstantValue::Integer { value, text: None }),
                 allowed_lints: vec![],
                 go_hints: vec![],
                 go_name: None,

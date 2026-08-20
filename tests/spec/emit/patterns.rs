@@ -51,7 +51,7 @@ struct Handler<T> { callback: fn(T) -> int }
 enum E { A(Handler<string>), B(Handler<string>) }
 
 fn test(e: E) -> int {
-  let A(Handler { callback }) | B(Handler { callback }) = e else { return 0; };
+  let E.A(Handler { callback }) | E.B(Handler { callback }) = e else { return 0; };
   callback("test")
 }
 "#;
@@ -65,7 +65,7 @@ struct Pair<T> { coords: (T, T) }
 enum E { A(Pair<int>), B(Pair<int>) }
 
 fn test(e: E) -> int {
-  let A(Pair { coords: (x, y) }) | B(Pair { coords: (x, y) }) = e else { return 0; };
+  let E.A(Pair { coords: (x, y) }) | E.B(Pair { coords: (x, y) }) = e else { return 0; };
   x + y
 }
 "#;
@@ -78,7 +78,7 @@ fn slice_pattern_rest_or_pattern() {
 enum E { A(Slice<int>), B(Slice<int>) }
 
 fn test(e: E) -> int {
-  let A([first, ..rest]) | B([first, ..rest]) = e else { return 0; };
+  let E.A([first, ..rest]) | E.B([first, ..rest]) = e else { return 0; };
   first
 }
 "#;
@@ -140,7 +140,7 @@ enum Message {
 }
 
 fn make_move() -> Message {
-  Move { x: 10, y: 20 }
+  Message.Move { x: 10, y: 20 }
 }
 "#;
     assert_emit_snapshot!(input);
@@ -681,7 +681,7 @@ enum E { A(int), B(int), C }
 
 fn test(e: E) -> int {
   let x = 1
-  let A(x) | B(x) = e else { return 0; };
+  let E.A(x) | E.B(x) = e else { return 0; };
   x
 }
 "#;

@@ -5,7 +5,7 @@ description: |
   enum E { A(Slice<int>), B(Slice<int>) }
   
   fn test(e: E) -> int {
-    let A([first, ..rest]) | B([first, ..rest]) = e else { return 0; };
+    let E.A([first, ..rest]) | E.B([first, ..rest]) = e else { return 0; };
     first
   }
 ---
