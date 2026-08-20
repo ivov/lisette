@@ -3029,6 +3029,95 @@ fn if_branches_scalar_mismatch_errors() {
 }
 
 #[test]
+fn if_branches_scalar_mismatch_errors_at_unknown_use_site() {
+    infer(
+        r#"
+import "go:fmt"
+fn test() {
+  let x = if true { 1 } else { 2.0 }
+  fmt.Println(x)
+}
+"#,
+    )
+    .assert_type_mismatch();
+}
+
+#[test]
+fn if_branches_scalar_mismatch_errors_at_unknown_alias_use_site() {
+    infer(
+        r#"
+type Any = Unknown
+fn takes(value: Any) -> Any { value }
+fn test() {
+  let x = if true { 1 } else { 2.0 }
+  let _ = takes(x)
+}
+"#,
+    )
+    .assert_type_mismatch();
+}
+
+#[test]
+fn nested_if_branches_scalar_mismatch_errors_at_unknown_use_site() {
+    infer(
+        r#"
+import "go:fmt"
+fn test() {
+  let x = if true { if false { 1 } else { 2.0 } } else { 3 }
+  fmt.Println(x)
+}
+"#,
+    )
+    .assert_type_mismatch();
+}
+
+#[test]
+fn match_arms_scalar_mismatch_errors_at_unknown_use_site() {
+    infer(
+        r#"
+import "go:fmt"
+fn test() {
+  let x = match 1 {
+    1 => 1,
+    _ => "x",
+  }
+  fmt.Println(x)
+}
+"#,
+    )
+    .assert_type_mismatch();
+}
+
+#[test]
+fn if_branches_widen_to_written_unknown_ok() {
+    infer(
+        r#"
+import "go:fmt"
+fn test() {
+  let x: Unknown = if true { 1 } else { 2.0 }
+  fmt.Println(x)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn if_branches_widen_to_written_unknown_alias_ok() {
+    infer(
+        r#"
+type Any = Unknown
+fn takes(value: Any) -> Any { value }
+fn test() {
+  let x: Any = if true { 1 } else { 2.0 }
+  let _ = takes(x)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn match_value_ref_arm_with_diverging_arm_resolves_receiver() {
     infer(
         r#"
