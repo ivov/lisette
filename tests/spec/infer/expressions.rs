@@ -1819,7 +1819,7 @@ fn equality_on_unbounded_generic_rejected() {
     fn main() {}
         "#,
     )
-    .assert_infer_code("type_mismatch");
+    .assert_infer_code("param_needs_comparable_bound");
 }
 
 #[test]
@@ -1839,7 +1839,7 @@ fn not_equal_on_unbounded_generic_rejected() {
     fn main() {}
         "#,
     )
-    .assert_infer_code("type_mismatch");
+    .assert_infer_code("param_needs_comparable_bound");
 }
 
 #[test]

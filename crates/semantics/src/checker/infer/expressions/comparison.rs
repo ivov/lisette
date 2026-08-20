@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use rustc_hash::FxHashSet as HashSet;
 
 use crate::checker::EnvResolve;
@@ -12,6 +14,12 @@ use syntax::program::{DefinitionBody, Visibility, interface_instances, interface
 use syntax::types::{CompoundKind, Type, substitute};
 
 const RECURSIVE_TYPES: &str = "recursive types";
+
+fn dedup_sorted(mut names: Vec<String>) -> Vec<String> {
+    names.sort_unstable();
+    names.dedup();
+    names
+}
 
 fn nested_reason(inner: &'static str, wrapper: &'static str) -> &'static str {
     if inner == RECURSIVE_TYPES {
@@ -499,6 +507,46 @@ pub(crate) fn param_is_equatable(
 }
 
 impl InferCtx<'_> {
+    fn comparable_bound_would_fix(&self, ty: &Type) -> Vec<String> {
+        let mut missing = Vec::new();
+        let remaining =
+            check_not_comparable_with_bounds(&self.env, self.store, ty, &mut |parameter| {
+                self.record_unbounded(parameter, &mut missing);
+                true
+            });
+        if remaining.is_some() {
+            return Vec::new();
+        }
+        dedup_sorted(missing)
+    }
+
+    fn equatable_bound_would_fix(&self, ty: &Type) -> Vec<String> {
+        let missing = RefCell::new(Vec::new());
+        let collect = |parameter: &str| {
+            self.record_unbounded(parameter, &mut missing.borrow_mut());
+            true
+        };
+        let remaining = check_not_equatable(
+            &self.env,
+            self.store,
+            ty,
+            self.cursor.package_id(),
+            &collect,
+            &collect,
+        );
+        if remaining.is_some() {
+            return Vec::new();
+        }
+        dedup_sorted(missing.into_inner())
+    }
+
+    fn record_unbounded(&self, parameter: &str, missing: &mut Vec<String>) {
+        if !self.parameter_satisfies_bound(parameter, super::super::unify::BuiltinBound::Comparable)
+        {
+            missing.push(parameter.to_string());
+        }
+    }
+
     fn is_comparable_with_param_bounds(&self, ty: &Type) -> bool {
         let resolved = ty.resolve_in(&self.env);
         check_not_comparable_with_bounds(&self.env, self.store, &resolved, &mut |parameter| {
@@ -524,12 +572,21 @@ impl InferCtx<'_> {
         let Some(reason) = check_not_comparable(&self.env, store, &resolved) else {
             return true;
         };
+        let bound_fix = self.comparable_bound_would_fix(&resolved);
+        let equals_bound_fix = self.equatable_bound_would_fix(&resolved);
         if is_interface_or_unknown(store, &resolved) {
             self.sink.push(diagnostics::infer::not_comparable_interface(
                 &resolved, *span,
             ));
         } else if operands_match && let Some(element) = self.container_equals_element(&resolved) {
             match self.not_equatable_reason(&element) {
+                Some(_) if !equals_bound_fix.is_empty() => self.sink.push(
+                    diagnostics::infer::param_needs_comparable_bound_then_equals(
+                        &resolved,
+                        &equals_bound_fix,
+                        *span,
+                    ),
+                ),
                 Some(element_reason) => self.sink.push(
                     diagnostics::infer::not_comparable_no_equals(&resolved, element_reason, *span),
                 ),
@@ -539,6 +596,11 @@ impl InferCtx<'_> {
                         &resolved, reason, *span,
                     )),
             }
+        } else if !bound_fix.is_empty() {
+            self.sink
+                .push(diagnostics::infer::param_needs_comparable_bound(
+                    &resolved, &bound_fix, *span,
+                ));
         } else if operands_match
             && type_has_usable_equals(store, &resolved, self.cursor.package_id())
         {
@@ -647,8 +709,16 @@ impl InferCtx<'_> {
             return;
         }
         if let Some(reason) = self.not_equatable_reason(&receiver) {
-            self.sink
-                .push(diagnostics::infer::not_equatable(&receiver, reason, span));
+            let bound_fix = self.equatable_bound_would_fix(&receiver);
+            if bound_fix.is_empty() {
+                self.sink
+                    .push(diagnostics::infer::not_equatable(&receiver, reason, span));
+            } else {
+                self.sink
+                    .push(diagnostics::infer::param_needs_comparable_bound_for_equals(
+                        &receiver, &bound_fix, span,
+                    ));
+            }
         }
     }
 

@@ -1567,8 +1567,8 @@ pub fn param_needs_ordered_bound(param: &str, span: Span) -> LisetteDiagnostic {
         .with_infer_code("type_mismatch")
         .with_span_label(&span, format!("expected orderable, found `{}`", param))
         .with_help(format!(
-            "`{param}` is an unconstrained type parameter. Add a `cmp.Ordered` bound to compare it, \
-             e.g. `<{param}: cmp.Ordered>` and add `import \"go:cmp\"` at the top"
+            "`{param}` is an unconstrained type parameter. Add the bound where `{param}` is \
+             declared: `<{param}: Ordered>`"
         ))
 }
 
@@ -1613,6 +1613,68 @@ pub fn not_equatable(ty: &Type, reason: &str, span: Span) -> LisetteDiagnostic {
         .with_span_label(&span, "cannot be compared")
         .with_help(format!(
             "`{ty}` cannot be compared because {reason} cannot be compared"
+        ))
+}
+
+/// `<T: Comparable>` for one parameter, `<A: Comparable, B: Comparable>` for several.
+fn comparable_bound_list(parameters: &[String]) -> String {
+    let bounds = parameters
+        .iter()
+        .map(|parameter| format!("{parameter}: Comparable"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("<{bounds}>")
+}
+
+fn declared_where(parameters: &[String]) -> String {
+    match parameters {
+        [one] => format!("where `{one}` is declared"),
+        _ => "where they are declared".to_string(),
+    }
+}
+
+pub fn param_needs_comparable_bound(
+    ty: &Type,
+    parameters: &[String],
+    span: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Missing comparable bound")
+        .with_infer_code("param_needs_comparable_bound")
+        .with_span_label(&span, format!("`{ty}` cannot be compared with `==`"))
+        .with_help(format!(
+            "Add the bound {}: `{}`",
+            declared_where(parameters),
+            comparable_bound_list(parameters)
+        ))
+}
+
+pub fn param_needs_comparable_bound_for_equals(
+    ty: &Type,
+    parameters: &[String],
+    span: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Missing comparable bound")
+        .with_infer_code("param_needs_comparable_bound")
+        .with_span_label(&span, format!("`{ty}` cannot be compared"))
+        .with_help(format!(
+            "Add the bound {}: `{}`",
+            declared_where(parameters),
+            comparable_bound_list(parameters)
+        ))
+}
+
+pub fn param_needs_comparable_bound_then_equals(
+    ty: &Type,
+    parameters: &[String],
+    span: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Missing comparable bound")
+        .with_infer_code("param_needs_comparable_bound")
+        .with_span_label(&span, format!("`{ty}` cannot be compared with `==`"))
+        .with_help(format!(
+            "Add the bound {}: `{}`, then use `.equals()`",
+            declared_where(parameters),
+            comparable_bound_list(parameters)
         ))
 }
 

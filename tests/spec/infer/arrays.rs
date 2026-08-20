@@ -121,7 +121,7 @@ fn bounded_generic_array_equality_is_allowed() {
 #[test]
 fn unbounded_generic_array_equality_is_rejected() {
     infer("fn eq<T>(a: Array<T, 2>, b: Array<T, 2>) -> bool { a == b }")
-        .assert_infer_code("type_mismatch");
+        .assert_infer_code("param_needs_comparable_bound");
 }
 
 #[test]
