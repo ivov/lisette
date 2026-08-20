@@ -1,0 +1,66 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: |
+  
+  import "go:sync"
+  
+  struct Counter { mu: sync.Mutex, n: int }
+  
+  impl Counter {
+    fn bump(self: mut Ref<Counter>) {
+      self.mu.Lock()
+      defer self.mu.Unlock()
+      self.n += 1
+    }
+  
+    fn read(self: mut Ref<Counter>) -> int {
+      self.mu.Lock()
+      defer self.mu.Unlock()
+      self.n
+    }
+  }
+  
+  fn main() {
+    let mut c = Counter { mu: sync.Mutex{}, n: 0 }
+    c.bump()
+    let n = c.read()
+    if n != 1 {
+      panic(f"expected 1, got {n}")
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"sync"
+)
+
+type Counter struct {
+	mu sync.Mutex
+	n  int
+}
+
+func (c *Counter) bump() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.n++
+}
+
+func (c *Counter) read() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.n
+}
+
+func main() {
+	c := Counter{
+		mu: sync.Mutex{},
+		n:  0,
+	}
+	c.bump()
+	n := c.read()
+	if n != 1 {
+		panic(fmt.Sprintf("expected 1, got %d", n))
+	}
+}

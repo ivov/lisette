@@ -74,6 +74,39 @@ fn test() {
 }
 
 #[test]
+fn mutex_field_locked_through_ref_receiver() {
+    let input = r#"
+import "go:sync"
+
+struct Counter { mu: sync.Mutex, n: int }
+
+impl Counter {
+  fn bump(self: mut Ref<Counter>) {
+    self.mu.Lock()
+    defer self.mu.Unlock()
+    self.n += 1
+  }
+
+  fn read(self: mut Ref<Counter>) -> int {
+    self.mu.Lock()
+    defer self.mu.Unlock()
+    self.n
+  }
+}
+
+fn main() {
+  let mut c = Counter { mu: sync.Mutex{}, n: 0 }
+  c.bump()
+  let n = c.read()
+  if n != 1 {
+    panic(f"expected 1, got {n}")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn select_simple() {
     let input = r#"
 fn test() -> int {
