@@ -1,7 +1,7 @@
 use rustc_hash::FxHashSet as HashSet;
 
 use crate::checker::EnvResolve;
-use crate::zero::{NoZero, NoZeroReason};
+use crate::zero::{MapZero, NoZero, NoZeroReason};
 use ecow::EcoString;
 use syntax::ast::{Expression, Span, StructFieldAssignment, StructFields, StructSpread};
 use syntax::program::{Definition, DefinitionBody};
@@ -105,7 +105,10 @@ impl InferCtx<'_> {
             let (instantiated_ty, _) = self.instantiate(&alias_ty);
             self.unify(expected_ty, &instantiated_ty, &literal.span);
             let from_package = self.cursor.package_id().to_string();
-            if self.has_zero(&instantiated_ty, &from_package).is_err() {
+            if self
+                .has_zero(&instantiated_ty, &from_package, MapZero::Built)
+                .is_err()
+            {
                 self.sink.push(diagnostics::infer::hidden_state_no_zero(
                     &instantiated_ty,
                     literal.span,
@@ -756,7 +759,7 @@ impl InferCtx<'_> {
                 continue;
             }
             let resolved = substitute(ty, map).resolve_in(&self.env);
-            let Err(no_zero) = self.has_zero(&resolved, &from_package) else {
+            let Err(no_zero) = self.has_zero(&resolved, &from_package, MapZero::Built) else {
                 continue;
             };
             let chain: Vec<&str> = no_zero.chain.iter().map(EcoString::as_str).collect();
@@ -773,7 +776,9 @@ impl InferCtx<'_> {
                 NoZeroReason::HiddenGoState { go_type } => {
                     diagnostics::infer::FieldNoZeroCause::HiddenGoState { go_type }
                 }
-                NoZeroReason::NoZeroForType => diagnostics::infer::FieldNoZeroCause::Type,
+                NoZeroReason::NoZeroForType | NoZeroReason::NilMap => {
+                    diagnostics::infer::FieldNoZeroCause::Type
+                }
             };
             self.sink.push(diagnostics::infer::field_no_zero(
                 owner_name,
@@ -786,9 +791,14 @@ impl InferCtx<'_> {
         }
     }
 
-    pub(crate) fn has_zero(&self, ty: &Type, from_package: &str) -> Result<(), NoZero> {
+    pub(crate) fn has_zero(
+        &self,
+        ty: &Type,
+        from_package: &str,
+        map_zero: MapZero,
+    ) -> Result<(), NoZero> {
         let store = self.store;
-        zero::has_zero(store, ty, from_package)
+        zero::has_zero(store, ty, from_package, map_zero)
     }
 }
 

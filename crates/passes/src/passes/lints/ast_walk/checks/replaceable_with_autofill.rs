@@ -7,7 +7,7 @@ use syntax::types::{SubstitutionMap, Type, substitute, unqualified_name};
 use super::helpers::replacement_drops_comment;
 use crate::passes::walk::NodeCtx;
 use semantics::store::Store;
-use semantics::zero::has_zero;
+use semantics::zero::{MapZero, has_zero};
 
 const ZERO_FIELD_THRESHOLD: usize = 3;
 
@@ -121,9 +121,10 @@ fn rewrite_would_typecheck(
         return false;
     };
     let is_cross_package = struct_package(ty).is_some_and(|m| m.as_str() != from_package);
-    omitted
-        .iter()
-        .all(|f| (!is_cross_package || f.is_public) && has_zero(store, &f.ty, from_package).is_ok())
+    omitted.iter().all(|f| {
+        (!is_cross_package || f.is_public)
+            && has_zero(store, &f.ty, from_package, MapZero::Built).is_ok()
+    })
 }
 
 struct OmittedField {

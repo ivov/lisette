@@ -2410,10 +2410,9 @@ fn make_i() -> int {
 }
 
 fn main() {
-  let mut maps: mut Map<int, mut Map<string, Box>> = Map.new()
   let mut inner = Map.new<string, Box>()
   inner["k"] = Box { x: 0 }
-  maps[0] = inner
+  let mut maps: mut Slice<mut Map<string, Box>> = [inner]
   let i = make_i()
   let mut entry = maps[i]["k"]
   entry.x = 1

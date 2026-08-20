@@ -3063,6 +3063,158 @@ fn test(holders: Map<string, Holder>) {
 }
 
 #[test]
+fn infer_map_read_no_zero_for_map_value() {
+    let input = r#"
+fn test() {
+  let mut outer = Map.new<string, mut Map<string, int>>()
+  let mut inner = outer["missing"]
+  inner["k"] = 1
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_map_read_no_zero_for_map_value_through_alias() {
+    let input = r#"
+type Counts = Map<string, int>
+
+fn test(outer: Map<string, Counts>) {
+  let _c = outer["x"]
+}
+"#;
+    let result = infer(input);
+    assert!(
+        has_code(&result, "map_read_no_zero"),
+        "a bracket read yielding a map behind an alias must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_map_read_no_zero_for_chained_map_read() {
+    let input = r#"
+fn test(outer: Map<string, Map<string, int>>) {
+  let _n = outer["x"]["y"]
+}
+"#;
+    let result = infer(input);
+    assert!(
+        has_code(&result, "map_read_no_zero"),
+        "the outer read of a chained map read must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_map_read_no_zero_for_struct_with_map_field() {
+    let input = r#"
+struct Bag { pub items: mut Map<string, int> }
+
+fn test(outer: Map<string, Bag>) {
+  let _b = outer["x"]
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_map_read_no_zero_for_tuple_with_map_element() {
+    let input = r#"
+fn test(outer: Map<string, (mut Map<string, int>, int)>) {
+  let _p = outer["x"]
+}
+"#;
+    let result = infer(input);
+    assert!(
+        has_code(&result, "map_read_no_zero"),
+        "a bracket read yielding a tuple that holds a map must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_map_read_no_zero_for_array_of_maps() {
+    let input = r#"
+fn test(outer: Map<string, Array<mut Map<string, int>, 2>>) {
+  let _a = outer["x"]
+}
+"#;
+    let result = infer(input);
+    assert!(
+        has_code(&result, "map_read_no_zero"),
+        "a bracket read yielding an array of maps must be rejected, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_map_read_no_zero_allows_empty_array_of_maps() {
+    let input = r#"
+fn test(outer: Map<string, Array<mut Map<string, int>, 0>>) {
+  let _a = outer["x"]
+}
+"#;
+    let result = infer(input);
+    assert!(
+        !has_code(&result, "map_read_no_zero"),
+        "an empty array holds no map, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_map_read_no_zero_allows_struct_without_map_field() {
+    let input = r#"
+struct Bag { pub count: int, pub tags: Slice<string> }
+
+fn test(outer: Map<string, Bag>) {
+  let _b = outer["x"]
+}
+"#;
+    let result = infer(input);
+    assert!(
+        !has_code(&result, "map_read_no_zero"),
+        "a struct of int and slice fields has a usable zero, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_struct_autofill_allows_map_field() {
+    let input = r#"
+struct Bag { pub items: mut Map<string, int>, pub count: int }
+
+fn test() {
+  let _b = Bag { count: 1, .. }
+}
+"#;
+    let result = infer(input);
+    assert!(
+        !has_code(&result, "field_no_zero"),
+        "a struct literal builds an empty map for a map field, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_map_bracket_write_of_map_value_allowed() {
+    let input = r#"
+fn test() {
+  let inner = Map.new<string, int>()
+  let mut outer = Map.new<string, Map<string, int>>()
+  outer["k"] = inner
+}
+"#;
+    let result = infer(input);
+    assert!(
+        !has_code(&result, "map_read_no_zero"),
+        "storing a map under a key never reads the entry, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
 fn infer_no_make_constructor_map() {
     let input = r#"
 fn test() {

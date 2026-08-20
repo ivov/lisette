@@ -1303,9 +1303,39 @@ pub fn field_no_zero(
         .with_help(main)
 }
 
-pub fn map_read_no_zero(value_ty: &Type, receiver: &str, span: Span) -> LisetteDiagnostic {
-    let (label, help) = if matches!(value_ty, Type::Parameter(_)) {
-        (
+pub enum MapReadNoZeroCause<'a> {
+    NilMap,
+    ContainsNilMap(&'a Type),
+    NoZero,
+}
+
+pub fn map_read_no_zero(
+    value_ty: &Type,
+    receiver: &str,
+    cause: MapReadNoZeroCause<'_>,
+    span: Span,
+) -> LisetteDiagnostic {
+    let (title, label, help) = match cause {
+        MapReadNoZeroCause::NilMap => (
+            "Nil map for missing key",
+            format!("`{value_ty}` is nil when the key is missing"),
+            format!(
+                "Bracket reads return a zero value when the key is missing, and the zero value \
+                 of `{value_ty}` is a nil map, which panics on write, so this bracket read is \
+                 disallowed. Use `{receiver}.get(key)` instead"
+            ),
+        ),
+        MapReadNoZeroCause::ContainsNilMap(leaf_ty) => (
+            "Nil map for missing key",
+            format!("`{value_ty}` contains `{leaf_ty}`, which is nil when the key is missing"),
+            format!(
+                "Bracket reads return a zero value when the key is missing, and the zero value \
+                 of `{value_ty}` contains a nil `{leaf_ty}`, which panics on write, so this \
+                 bracket read is disallowed. Use `{receiver}.get(key)` instead"
+            ),
+        ),
+        MapReadNoZeroCause::NoZero if matches!(value_ty, Type::Parameter(_)) => (
+            "No zero value for missing key",
             format!("`{value_ty}` is not guaranteed to have a zero value"),
             format!(
                 "Bracket reads can return a zero value when the key is missing, but the type \
@@ -1313,18 +1343,18 @@ pub fn map_read_no_zero(value_ty: &Type, receiver: &str, span: Span) -> LisetteD
                  such as `Ref<T>`, so this bracket read is disallowed. Use \
                  `{receiver}.get(key)` instead"
             ),
-        )
-    } else {
-        (
+        ),
+        MapReadNoZeroCause::NoZero => (
+            "No zero value for missing key",
             format!("`{value_ty}` has no zero value"),
             format!(
                 "Bracket reads can return a zero value when the key is missing, but \
                  `{value_ty}` has no zero value, so this bracket read is disallowed. Use \
                  `{receiver}.get(key)` instead"
             ),
-        )
+        ),
     };
-    LisetteDiagnostic::error("No zero value for missing key")
+    LisetteDiagnostic::error(title)
         .with_infer_code("map_read_no_zero")
         .with_span_label(&span, label)
         .with_help(help)
