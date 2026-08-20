@@ -171,6 +171,7 @@ impl CompiledTest {
                     &checker.facts,
                     &checker.sink,
                     passes::LintMode::Skip,
+                    passes::UnusedItemReporting::Report,
                 );
             }
 

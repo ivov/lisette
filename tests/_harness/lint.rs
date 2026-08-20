@@ -17,7 +17,13 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     let InferredTestFile { store, checker } = infer_test_file(source, parse_result.ast, &[]);
     let inference_checkpoint = checker.sink.checkpoint();
 
-    passes::run(&store, &checker.facts, &checker.sink, passes::LintMode::Run);
+    passes::run(
+        &store,
+        &checker.facts,
+        &checker.sink,
+        passes::LintMode::Run,
+        passes::UnusedItemReporting::Report,
+    );
 
     // Deferred inference errors surface during passes::run, mixed in with
     // the error-severity lint diagnostics the tests assert on.

@@ -22,6 +22,12 @@ pub enum LintMode {
     Run,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnusedItemReporting {
+    Report,
+    Suppress,
+}
+
 pub(crate) const PARALLEL_THRESHOLD: usize = 4;
 
 pub(crate) fn source_file_work(store: &Store) -> Vec<(&Package, &File)> {
@@ -51,7 +57,13 @@ pub(crate) fn is_trivial_expression(expression: &Expression) -> bool {
     }
 }
 
-pub fn run(store: &Store, facts: &Facts, sink: &LocalSink, lint_mode: LintMode) -> UnusedInfo {
+pub fn run(
+    store: &Store,
+    facts: &Facts,
+    sink: &LocalSink,
+    lint_mode: LintMode,
+    unused_item_reporting: UnusedItemReporting,
+) -> UnusedInfo {
     let ((checks_diagnostics, pattern_lints), lint_outputs) = rayon::join(
         || checks::run_all(store, facts, lint_mode),
         || match lint_mode {
@@ -62,7 +74,7 @@ pub fn run(store: &Store, facts: &Facts, sink: &LocalSink, lint_mode: LintMode) 
                     || {
                         rayon::join(
                             || lints::ast_walk::run(store, facts),
-                            || lints::ref_graph::run(store, facts),
+                            || lints::ref_graph::run(store, facts, unused_item_reporting),
                         )
                     },
                 );

@@ -85,6 +85,11 @@ impl Analysis {
 }
 
 pub fn analyze(input: AnalyzeInput) -> Analysis {
+    let unused_item_reporting = if input.compile_phase.includes_tests() {
+        passes::UnusedItemReporting::Report
+    } else {
+        passes::UnusedItemReporting::Suppress
+    };
     let InferenceOutput {
         store,
         facts,
@@ -109,7 +114,7 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
     let unused = if has_pre_check_errors {
         UnusedInfo::default()
     } else {
-        passes::run(&store, &facts, &sink, lint_mode)
+        passes::run(&store, &facts, &sink, lint_mode, unused_item_reporting)
     };
     let mut mutations = MutationInfo::default();
     for (&binding_id, b) in facts.bindings.iter() {
