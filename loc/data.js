@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787252955385,
+  "lastUpdate": 1787253266027,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -25565,6 +25565,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "cli",
             "value": 13529,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8336,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5992,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2902,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1850,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 714,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9340,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "6e104aa0730aab9c552ad146307cb038ea83495f",
+          "message": "refactor: consolidate duplicated semantics logic and state (#1302)",
+          "timestamp": "2026-08-20T21:13:54+02:00",
+          "tree_id": "bb85b100e14077d33baa4aa89f5bafa1e7c50d24",
+          "url": "https://github.com/ivov/lisette/commit/6e104aa0730aab9c552ad146307cb038ea83495f"
+        },
+        "date": 1787253263500,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 136058,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 31924,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27230,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18613,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14708,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13530,
             "unit": "lines"
           },
           {
