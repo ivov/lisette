@@ -5,6 +5,7 @@ import (
 	"go/doc"
 	"go/types"
 	"os"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -47,9 +48,9 @@ func currentLoadConfig(targetGOOS, targetGOARCH string, cgo bool) *packages.Conf
 	}
 }
 
-// buildLoaderEnv cross-compiles when targetGOOS/targetGOARCH are set (empty = host
-// default). cgo is enabled only for host loads of third-party packages. Stdlib
-// generation keeps it off so the cross-target builds need no C cross-toolchains.
+// buildLoaderEnv cross-compiles when targetGOOS/targetGOARCH are set, and an
+// empty one keeps the ambient value. Stdlib generation keeps cgo off so the
+// cross-target builds need no C cross-toolchains.
 func buildLoaderEnv(targetGOOS, targetGOARCH string, cgo bool) []string {
 	env := os.Environ()
 	if targetGOOS != "" || targetGOARCH != "" {
@@ -77,8 +78,21 @@ func buildLoaderEnv(targetGOOS, targetGOARCH string, cgo bool) []string {
 	return append(env, cgoEnabled, "GOFLAGS=-mod=mod")
 }
 
-func LoadPackage(path string) (*packages.Package, error) {
-	pkgs, err := packages.Load(currentLoadConfig("", "", true), path)
+// A zero target means the host, never the ambient GOOS. A cross load keeps cgo
+// off, as `go build` does when it cross-compiles.
+func packageLoadConfig(targetGOOS, targetGOARCH string) *packages.Config {
+	if targetGOOS == "" {
+		targetGOOS = runtime.GOOS
+	}
+	if targetGOARCH == "" {
+		targetGOARCH = runtime.GOARCH
+	}
+	cgo := targetGOOS == runtime.GOOS && targetGOARCH == runtime.GOARCH
+	return currentLoadConfig(targetGOOS, targetGOARCH, cgo)
+}
+
+func LoadPackage(path, targetGOOS, targetGOARCH string) (*packages.Package, error) {
+	pkgs, err := packages.Load(packageLoadConfig(targetGOOS, targetGOARCH), path)
 	if err != nil {
 		return nil, err
 	}
@@ -139,8 +153,8 @@ func loadCheckedPackages(patterns []string, targetGOOS, targetGOARCH string, ski
 }
 
 // Like LoadPackages but keeps errored packages so the caller can classify them.
-func LoadPackagesAll(paths []string) ([]*packages.Package, error) {
-	return packages.Load(currentLoadConfig("", "", true), paths...)
+func LoadPackagesAll(paths []string, targetGOOS, targetGOARCH string) ([]*packages.Package, error) {
+	return packages.Load(packageLoadConfig(targetGOOS, targetGOARCH), paths...)
 }
 
 func ExtractExports(pkg *packages.Package, embedFaithful func(*types.Var) bool) []SymbolExport {

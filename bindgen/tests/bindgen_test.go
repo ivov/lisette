@@ -95,7 +95,7 @@ func runBindgen(t *testing.T, pkgPath string) []byte {
 		cfg = &loaded
 	}
 
-	result, err := cli.GeneratePkg("./"+pkgPath, "0.0.0", "0.0.0", cfg)
+	result, err := cli.GeneratePkg("./"+pkgPath, "0.0.0", "0.0.0", cfg, cli.Target{})
 	if err != nil {
 		t.Fatalf("bindgen failed: %v", err)
 	}
@@ -104,7 +104,7 @@ func runBindgen(t *testing.T, pkgPath string) []byte {
 }
 
 func TestGenerateError(t *testing.T) {
-	_, err := cli.GeneratePkg("/nonexistent/path/to/package", "0.0.0", "0.0.0", nil)
+	_, err := cli.GeneratePkg("/nonexistent/path/to/package", "0.0.0", "0.0.0", nil, cli.Target{})
 	if err == nil {
 		t.Error("expected error for nonexistent package, got nil")
 	}
@@ -149,7 +149,7 @@ func TestGeneratePkgs_FullEmit(t *testing.T) {
 		t.Skip("skipping in short mode")
 	}
 
-	manifest := cli.GeneratePkgs([]string{"fmt", "os"}, "0.0.0", "0.0.0", nil, false)
+	manifest := cli.GeneratePkgs([]string{"fmt", "os"}, "0.0.0", "0.0.0", nil, false, cli.Target{})
 
 	if len(manifest.Errors) != 0 {
 		t.Fatalf("expected no errors, got %v", manifest.Errors)
@@ -172,7 +172,7 @@ func TestGeneratePkgs_HardFail(t *testing.T) {
 		t.Skip("skipping in short mode")
 	}
 
-	manifest := cli.GeneratePkgs([]string{"definitely/nonexistent/foo"}, "0.0.0", "0.0.0", nil, false)
+	manifest := cli.GeneratePkgs([]string{"definitely/nonexistent/foo"}, "0.0.0", "0.0.0", nil, false, cli.Target{})
 
 	if len(manifest.Ok) != 0 {
 		t.Errorf("expected no ok entries, got %d", len(manifest.Ok))
@@ -192,7 +192,7 @@ func TestGeneratePkgs_MixedBatch(t *testing.T) {
 
 	manifest := cli.GeneratePkgs(
 		[]string{"fmt", "definitely/nonexistent/foo"},
-		"0.0.0", "0.0.0", nil, false,
+		"0.0.0", "0.0.0", nil, false, cli.Target{},
 	)
 
 	if len(manifest.Ok) != 1 {
@@ -204,7 +204,7 @@ func TestGeneratePkgs_MixedBatch(t *testing.T) {
 }
 
 func TestGeneratePkgs_Empty(t *testing.T) {
-	manifest := cli.GeneratePkgs(nil, "0.0.0", "0.0.0", nil, false)
+	manifest := cli.GeneratePkgs(nil, "0.0.0", "0.0.0", nil, false, cli.Target{})
 	if len(manifest.Ok) != 0 || len(manifest.Errors) != 0 {
 		t.Errorf("expected empty manifest, got %v", manifest)
 	}

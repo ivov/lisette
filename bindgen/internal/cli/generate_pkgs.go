@@ -51,8 +51,9 @@ func RunPkgs(args []string, defaultCfgJSON []byte) {
 	configPath := fs.String("config", "", "path to bindgen config file")
 	versionOverride := fs.String("version", "", "override Lisette version in generated headers")
 	transitive := fs.Bool("transitive", false, "also emit the requested packages' transitive re-exports")
+	targetFlag := fs.String("target", "", "GOOS/GOARCH to type-check against (default: host)")
 	fs.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: bindgen pkgs [-config <path>] [-version <ver>] [-transitive]\n\n")
+		fmt.Fprintf(os.Stderr, "Usage: bindgen pkgs [-config <path>] [-version <ver>] [-transitive] [-target <goos>/<goarch>]\n\n")
 		fmt.Fprintf(os.Stderr, "Generates .d.lis type definitions for many Go packages in one shared\n")
 		fmt.Fprintf(os.Stderr, "type-check pass. Reads package paths from stdin, one per line. Emits a\n")
 		fmt.Fprintf(os.Stderr, "JSON manifest on stdout with embedded content.\n")
@@ -77,7 +78,13 @@ func RunPkgs(args []string, defaultCfgJSON []byte) {
 		effectiveVersion = *versionOverride
 	}
 
-	manifest := GeneratePkgs(pkgPaths, effectiveVersion, goVersion, &cfg, *transitive)
+	target, err := ParseTarget(*targetFlag)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "bindgen: %v\n", err)
+		os.Exit(1)
+	}
+
+	manifest := GeneratePkgs(pkgPaths, effectiveVersion, goVersion, &cfg, *transitive, target)
 
 	if err := json.NewEncoder(os.Stdout).Encode(manifest); err != nil {
 		fmt.Fprintf(os.Stderr, "bindgen: failed to encode manifest: %v\n", err)
@@ -85,7 +92,7 @@ func RunPkgs(args []string, defaultCfgJSON []byte) {
 	}
 }
 
-func GeneratePkgs(pkgPaths []string, lisetteVersion, goVersion string, cfg *config.Config, transitive bool) Manifest {
+func GeneratePkgs(pkgPaths []string, lisetteVersion, goVersion string, cfg *config.Config, transitive bool, target Target) Manifest {
 	manifest := Manifest{
 		Ok:     make([]ManifestOk, 0, len(pkgPaths)),
 		Errors: make([]ManifestError, 0),
@@ -95,7 +102,7 @@ func GeneratePkgs(pkgPaths []string, lisetteVersion, goVersion string, cfg *conf
 		return manifest
 	}
 
-	pkgs, err := extract.LoadPackagesAll(pkgPaths)
+	pkgs, err := extract.LoadPackagesAll(pkgPaths, target.goos, target.goarch)
 	if err != nil {
 		for _, p := range pkgPaths {
 			manifest.Errors = append(manifest.Errors, ManifestError{

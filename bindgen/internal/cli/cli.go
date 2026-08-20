@@ -50,8 +50,9 @@ func PrintUsage() {
 func RunPkg(args []string, defaultCfgJSON []byte) {
 	fs := flag.NewFlagSet("pkg", flag.ExitOnError)
 	configPath := fs.String("config", "", "path to bindgen config file")
+	targetFlag := fs.String("target", "", "GOOS/GOARCH to type-check against (default: host)")
 	fs.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: bindgen pkg <package>\n\n")
+		fmt.Fprintf(os.Stderr, "Usage: bindgen pkg [-target <goos>/<goarch>] <package>\n\n")
 		fmt.Fprintf(os.Stderr, "Generates .d.lis type definitions for a Go package.\n\n")
 		fmt.Fprintf(os.Stderr, "Examples:\n")
 		fmt.Fprintf(os.Stderr, "  bindgen pkg fmt                            # Go stdlib\n")
@@ -76,7 +77,13 @@ func RunPkg(args []string, defaultCfgJSON []byte) {
 		os.Exit(1)
 	}
 
-	result, err := GeneratePkg(pkgPath, lisVersion, goVersion, &cfg)
+	target, err := ParseTarget(*targetFlag)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "bindgen: %v\n", err)
+		os.Exit(1)
+	}
+
+	result, err := GeneratePkg(pkgPath, lisVersion, goVersion, &cfg, target)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "bindgen: %v\n", err)
 		os.Exit(1)
@@ -148,6 +155,21 @@ func resolveTargets(flagValue string) ([]Target, error) {
 		return ParseTargets(envList)
 	}
 	return nil, fmt.Errorf("no targets specified: pass -targets or set BINDGEN_TARGETS (e.g. linux/amd64,darwin/arm64)")
+}
+
+// ParseTarget accepts one `GOOS/GOARCH`, the empty string meaning the host.
+func ParseTarget(s string) (Target, error) {
+	if s == "" {
+		return Target{}, nil
+	}
+	targets, err := ParseTargets(s)
+	if err != nil {
+		return Target{}, err
+	}
+	if len(targets) != 1 {
+		return Target{}, fmt.Errorf("target %q: expected one GOOS/GOARCH", s)
+	}
+	return targets[0], nil
 }
 
 func ParseTargets(s string) ([]Target, error) {

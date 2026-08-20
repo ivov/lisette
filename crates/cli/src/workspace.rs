@@ -248,6 +248,8 @@ impl<'a> GoWorkspace<'a> {
     /// Build a `Command` invoking the bindgen binary with the given subcommand.
     /// Dev builds use the local `bindgen/bin/bindgen`; release builds shell out to
     /// `go run` against the version-pinned module.
+    /// The tool runs here, so it is built for the host, and `-target` carries
+    /// the typedefs' target instead.
     fn bindgen_command(&self, sub: &str) -> Command {
         let mut cmd = if let Some(bin) = dev_bindgen_path() {
             let mut c = Command::new(bin);
@@ -255,10 +257,11 @@ impl<'a> GoWorkspace<'a> {
             c
         } else {
             let bindgen_at_version = format!("{}@v{}", BINDGEN_GO_MODULE, BINDGEN_VERSION);
-            let mut c = go_cli::go_command(self.target);
+            let mut c = go_cli::go_command(stdlib::Target::host());
             c.args(["run", &bindgen_at_version, sub]);
             c
         };
+        cmd.args(["-target", &self.target.to_string()]);
         cmd.current_dir(self.root);
         cmd
     }
