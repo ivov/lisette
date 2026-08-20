@@ -47,140 +47,263 @@ pub enum NoZeroReason {
     },
     /// A Go type curated as broken at its zero value, named for the diagnostic.
     HiddenGoState { go_type: EcoString },
+    /// The leaf type is a `Map`, whose Go zero is nil.
+    NilMap,
+}
+
+/// Who supplies the zero value of a `Map` reached while walking a type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MapZero {
+    /// The compiler builds an empty map.
+    Built,
+    /// Go leaves it nil, and a nil map panics on write.
+    Nil,
 }
 
 /// Predicate: does `ty` have a Lisette-side zero, constructible from `from_package`?
 /// Returns `Err(NoZero)` with a chain of field accesses to the offending leaf when
 /// no zero is available; `Ok(())` otherwise.
-pub fn has_zero(store: &Store, ty: &Type, from_package: &str) -> Result<(), NoZero> {
-    has_zero_seen(store, ty, from_package, &mut Vec::new())
-}
-
-fn has_zero_seen(
+pub fn has_zero(
     store: &Store,
     ty: &Type,
     from_package: &str,
-    visited: &mut Vec<Type>,
+    map_zero: MapZero,
 ) -> Result<(), NoZero> {
-    match ty {
-        Type::Simple(kind) => match kind {
-            SimpleKind::Bool
-            | SimpleKind::String
-            | SimpleKind::Int
-            | SimpleKind::Int8
-            | SimpleKind::Int16
-            | SimpleKind::Int32
-            | SimpleKind::Int64
-            | SimpleKind::Uint
-            | SimpleKind::Uint8
-            | SimpleKind::Uint16
-            | SimpleKind::Uint32
-            | SimpleKind::Uint64
-            | SimpleKind::Uintptr
-            | SimpleKind::Byte
-            | SimpleKind::Float32
-            | SimpleKind::Float64
-            | SimpleKind::Complex64
-            | SimpleKind::Complex128
-            | SimpleKind::Rune
-            | SimpleKind::Unit => Ok(()),
-        },
-        Type::Compound { kind, .. } => match kind {
-            // Slice<T>, Map<K,V> always have a zero (empty, non-nil).
-            CompoundKind::Slice | CompoundKind::Map | CompoundKind::EnumeratedSlice => Ok(()),
-            // Ref<T>, Channel<T>, Sender<T>, Receiver<T>, VarArgs<T> have no zero.
-            CompoundKind::Ref
-            | CompoundKind::Channel
-            | CompoundKind::Sender
-            | CompoundKind::Receiver
-            | CompoundKind::VarArgs => Err(NoZero {
+    ZeroWalk {
+        store,
+        from_package,
+        map_zero,
+        visited: Vec::new(),
+    }
+    .walk(ty)
+}
+
+struct ZeroWalk<'a> {
+    store: &'a Store,
+    from_package: &'a str,
+    map_zero: MapZero,
+    visited: Vec<Type>,
+}
+
+impl ZeroWalk<'_> {
+    const MAX_ZERO_DEPTH: usize = 256;
+
+    fn walk(&mut self, ty: &Type) -> Result<(), NoZero> {
+        match ty {
+            Type::Simple(kind) => match kind {
+                SimpleKind::Bool
+                | SimpleKind::String
+                | SimpleKind::Int
+                | SimpleKind::Int8
+                | SimpleKind::Int16
+                | SimpleKind::Int32
+                | SimpleKind::Int64
+                | SimpleKind::Uint
+                | SimpleKind::Uint8
+                | SimpleKind::Uint16
+                | SimpleKind::Uint32
+                | SimpleKind::Uint64
+                | SimpleKind::Uintptr
+                | SimpleKind::Byte
+                | SimpleKind::Float32
+                | SimpleKind::Float64
+                | SimpleKind::Complex64
+                | SimpleKind::Complex128
+                | SimpleKind::Rune
+                | SimpleKind::Unit => Ok(()),
+            },
+            Type::Compound { kind, .. } => match kind {
+                CompoundKind::Map => match self.map_zero {
+                    MapZero::Built => Ok(()),
+                    MapZero::Nil => Err(NoZero {
+                        chain: vec![],
+                        reason: NoZeroReason::NilMap,
+                        leaf_ty: Box::new(ty.clone()),
+                    }),
+                },
+                // A nil slice reads, lengths, and appends like an empty one.
+                CompoundKind::Slice | CompoundKind::EnumeratedSlice => Ok(()),
+                // Ref<T>, Channel<T>, Sender<T>, Receiver<T>, VarArgs<T> have no zero.
+                CompoundKind::Ref
+                | CompoundKind::Channel
+                | CompoundKind::Sender
+                | CompoundKind::Receiver
+                | CompoundKind::VarArgs => Err(NoZero {
+                    chain: vec![],
+                    reason: NoZeroReason::NoZeroForType,
+                    leaf_ty: Box::new(ty.clone()),
+                }),
+            },
+            Type::Tuple(elements) => {
+                for (i, e) in elements.iter().enumerate() {
+                    if let Err(mut nz) = self.walk(e) {
+                        let mut chain = vec![EcoString::from(i.to_string())];
+                        chain.append(&mut nz.chain);
+                        nz.chain = chain;
+                        return Err(nz);
+                    }
+                }
+                Ok(())
+            }
+            Type::Array { length, element } => {
+                if *length == 0 {
+                    Ok(())
+                } else {
+                    self.walk(element)
+                }
+            }
+            Type::Function(_) => Err(NoZero {
                 chain: vec![],
                 reason: NoZeroReason::NoZeroForType,
                 leaf_ty: Box::new(ty.clone()),
             }),
-        },
-        Type::Tuple(elements) => {
-            for (i, e) in elements.iter().enumerate() {
-                if let Err(mut nz) = has_zero_seen(store, e, from_package, visited) {
-                    let mut chain = vec![EcoString::from(i.to_string())];
-                    chain.append(&mut nz.chain);
-                    nz.chain = chain;
-                    return Err(nz);
+            Type::Nominal { id, params, .. } => {
+                if id.as_str() == "prelude.Option" {
+                    // Option<T>'s zero is None regardless of T. Stop recursion.
+                    return Ok(());
                 }
+                self.walk_nominal(id, params, ty)
             }
-            Ok(())
-        }
-        Type::Array { length, element } => {
-            if *length == 0 {
-                Ok(())
-            } else {
-                has_zero_seen(store, element, from_package, visited)
+            Type::Forall { body, .. } => self.walk(body),
+            Type::Var { .. }
+            | Type::Uninferred
+            | Type::Ignored
+            | Type::Parameter(_)
+            | Type::ReceiverPlaceholder => {
+                // Conservative: unresolved/abstract types have no known zero.
+                Err(NoZero {
+                    chain: vec![],
+                    reason: NoZeroReason::NoZeroForType,
+                    leaf_ty: Box::new(ty.clone()),
+                })
             }
-        }
-        Type::Function(_) => Err(NoZero {
-            chain: vec![],
-            reason: NoZeroReason::NoZeroForType,
-            leaf_ty: Box::new(ty.clone()),
-        }),
-        Type::Nominal { id, params, .. } => {
-            if id.as_str() == "prelude.Option" {
-                // Option<T>'s zero is None regardless of T. Stop recursion.
-                return Ok(());
-            }
-            has_zero_nominal(store, id, params, from_package, ty, visited)
-        }
-        Type::Forall { body, .. } => has_zero_seen(store, body, from_package, visited),
-        Type::Var { .. }
-        | Type::Uninferred
-        | Type::Ignored
-        | Type::Parameter(_)
-        | Type::ReceiverPlaceholder => {
-            // Conservative: unresolved/abstract types have no known zero.
-            Err(NoZero {
+            Type::Never | Type::Error | Type::ImportNamespace(_) => Err(NoZero {
                 chain: vec![],
                 reason: NoZeroReason::NoZeroForType,
                 leaf_ty: Box::new(ty.clone()),
-            })
+            }),
         }
-        Type::Never | Type::Error | Type::ImportNamespace(_) => Err(NoZero {
-            chain: vec![],
-            reason: NoZeroReason::NoZeroForType,
-            leaf_ty: Box::new(ty.clone()),
-        }),
     }
-}
 
-const MAX_ZERO_DEPTH: usize = 256;
-
-fn has_zero_nominal(
-    store: &Store,
-    id: &Symbol,
-    params: &[Type],
-    from_package: &str,
-    original_ty: &Type,
-    visited: &mut Vec<Type>,
-) -> Result<(), NoZero> {
-    let size = type_node_count(original_ty);
-    let is_recursion = visited.iter().any(|ancestor| match ancestor {
-        Type::Nominal {
-            id: ancestor_id, ..
-        } => ancestor_id.as_str() == id.as_str() && type_node_count(ancestor) <= size,
-        _ => false,
-    });
-    if is_recursion {
-        return Ok(());
-    }
-    if visited.len() >= MAX_ZERO_DEPTH {
-        return Err(NoZero {
-            chain: vec![],
-            reason: NoZeroReason::NoZeroForType,
-            leaf_ty: Box::new(original_ty.clone()),
+    fn walk_nominal(
+        &mut self,
+        id: &Symbol,
+        params: &[Type],
+        original_ty: &Type,
+    ) -> Result<(), NoZero> {
+        let size = type_node_count(original_ty);
+        let is_recursion = self.visited.iter().any(|ancestor| match ancestor {
+            Type::Nominal {
+                id: ancestor_id, ..
+            } => ancestor_id.as_str() == id.as_str() && type_node_count(ancestor) <= size,
+            _ => false,
         });
+        if is_recursion {
+            return Ok(());
+        }
+        if self.visited.len() >= Self::MAX_ZERO_DEPTH {
+            return Err(NoZero {
+                chain: vec![],
+                reason: NoZeroReason::NoZeroForType,
+                leaf_ty: Box::new(original_ty.clone()),
+            });
+        }
+        self.visited.push(original_ty.clone());
+        let result = self.walk_nominal_fields(id, params, original_ty);
+        self.visited.pop();
+        result
     }
-    visited.push(original_ty.clone());
-    let result = has_zero_nominal_fields(store, id, params, from_package, original_ty, visited);
-    visited.pop();
-    result
+
+    fn walk_nominal_fields(
+        &mut self,
+        id: &Symbol,
+        params: &[Type],
+        original_ty: &Type,
+    ) -> Result<(), NoZero> {
+        let Some(def) = self.store.get_definition(id.as_str()) else {
+            // Unknown nominal, conservatively reject.
+            return Err(NoZero {
+                chain: vec![],
+                reason: NoZeroReason::NoZeroForType,
+                leaf_ty: Box::new(original_ty.clone()),
+            });
+        };
+
+        match &def.body {
+            DefinitionBody::Struct { fields, .. } => {
+                let is_go_struct = id.as_str().starts_with("go:");
+                if is_go_struct && go_struct_denies_zero(def, fields) {
+                    return Err(NoZero {
+                        chain: vec![],
+                        reason: NoZeroReason::HiddenGoState {
+                            go_type: go_display_name(id),
+                        },
+                        leaf_ty: Box::new(original_ty.clone()),
+                    });
+                }
+                let def_ty = &def.ty;
+                let map = build_substitution(def_ty, params);
+                let struct_package = self
+                    .store
+                    .package_for_qualified_name(id.as_str())
+                    .unwrap_or(self.from_package);
+                let struct_is_foreign = struct_package != self.from_package;
+
+                let struct_name: EcoString = id.last_segment().into();
+                for f in fields {
+                    if is_go_struct && hidden_embed_field(f) {
+                        continue;
+                    }
+                    if struct_is_foreign && !f.visibility.is_public() && !is_go_struct {
+                        return Err(NoZero {
+                            chain: vec![f.name.clone()],
+                            reason: NoZeroReason::PrivateField {
+                                struct_name: struct_name.clone(),
+                                field: f.name.clone(),
+                                owning_package: EcoString::from(struct_package),
+                            },
+                            leaf_ty: Box::new(f.ty.clone()),
+                        });
+                    }
+                    let resolved = if map.is_empty() {
+                        f.ty.clone()
+                    } else {
+                        substitute(&f.ty, &map)
+                    };
+                    if let Err(mut nz) = self.walk(&resolved) {
+                        let mut chain = vec![f.name.clone()];
+                        chain.append(&mut nz.chain);
+                        nz.chain = chain;
+                        return Err(nz);
+                    }
+                }
+                Ok(())
+            }
+            DefinitionBody::TypeAlias { alias, .. } => {
+                if matches!(alias, AliasKind::Opaque(_)) {
+                    if def.is_zero_safe() {
+                        return Ok(());
+                    }
+                    return Err(NoZero {
+                        chain: vec![],
+                        reason: NoZeroReason::NoZeroForType,
+                        leaf_ty: Box::new(original_ty.clone()),
+                    });
+                }
+                let resolved = def
+                    .instantiate_alias_target(params, false)
+                    .expect("transparent alias has a target");
+                self.walk(&resolved)
+            }
+            // Enums and other definitions have no zero unless we add a designated
+            // default-variant mechanism later.
+            _ => Err(NoZero {
+                chain: vec![],
+                reason: NoZeroReason::NoZeroForType,
+                leaf_ty: Box::new(original_ty.clone()),
+            }),
+        }
+    }
 }
 
 fn type_node_count(ty: &Type) -> usize {
@@ -189,98 +312,6 @@ fn type_node_count(ty: &Type) -> usize {
         .iter()
         .map(|c| type_node_count(c))
         .sum::<usize>()
-}
-
-fn has_zero_nominal_fields(
-    store: &Store,
-    id: &Symbol,
-    params: &[Type],
-    from_package: &str,
-    original_ty: &Type,
-    visited: &mut Vec<Type>,
-) -> Result<(), NoZero> {
-    let Some(def) = store.get_definition(id.as_str()) else {
-        // Unknown nominal, conservatively reject.
-        return Err(NoZero {
-            chain: vec![],
-            reason: NoZeroReason::NoZeroForType,
-            leaf_ty: Box::new(original_ty.clone()),
-        });
-    };
-
-    match &def.body {
-        DefinitionBody::Struct { fields, .. } => {
-            let is_go_struct = id.as_str().starts_with("go:");
-            if is_go_struct && go_struct_denies_zero(def, fields) {
-                return Err(NoZero {
-                    chain: vec![],
-                    reason: NoZeroReason::HiddenGoState {
-                        go_type: go_display_name(id),
-                    },
-                    leaf_ty: Box::new(original_ty.clone()),
-                });
-            }
-            let def_ty = &def.ty;
-            let map = build_substitution(def_ty, params);
-            let struct_package = store
-                .package_for_qualified_name(id.as_str())
-                .unwrap_or(from_package);
-            let struct_is_foreign = struct_package != from_package;
-
-            let struct_name: EcoString = id.last_segment().into();
-            for f in fields {
-                if is_go_struct && hidden_embed_field(f) {
-                    continue;
-                }
-                if struct_is_foreign && !f.visibility.is_public() && !is_go_struct {
-                    return Err(NoZero {
-                        chain: vec![f.name.clone()],
-                        reason: NoZeroReason::PrivateField {
-                            struct_name: struct_name.clone(),
-                            field: f.name.clone(),
-                            owning_package: EcoString::from(struct_package),
-                        },
-                        leaf_ty: Box::new(f.ty.clone()),
-                    });
-                }
-                let resolved = if map.is_empty() {
-                    f.ty.clone()
-                } else {
-                    substitute(&f.ty, &map)
-                };
-                if let Err(mut nz) = has_zero_seen(store, &resolved, from_package, visited) {
-                    let mut chain = vec![f.name.clone()];
-                    chain.append(&mut nz.chain);
-                    nz.chain = chain;
-                    return Err(nz);
-                }
-            }
-            Ok(())
-        }
-        DefinitionBody::TypeAlias { alias, .. } => {
-            if matches!(alias, AliasKind::Opaque(_)) {
-                if def.is_zero_safe() {
-                    return Ok(());
-                }
-                return Err(NoZero {
-                    chain: vec![],
-                    reason: NoZeroReason::NoZeroForType,
-                    leaf_ty: Box::new(original_ty.clone()),
-                });
-            }
-            let resolved = def
-                .instantiate_alias_target(params, false)
-                .expect("transparent alias has a target");
-            has_zero_seen(store, &resolved, from_package, visited)
-        }
-        // Enums and other definitions have no zero unless we add a designated
-        // default-variant mechanism later.
-        _ => Err(NoZero {
-            chain: vec![],
-            reason: NoZeroReason::NoZeroForType,
-            leaf_ty: Box::new(original_ty.clone()),
-        }),
-    }
 }
 
 /// `go:archive/zip.File` as `archive/zip.File`, so diagnostics name the package.

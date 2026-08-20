@@ -16,6 +16,7 @@ use super::super::unify::Dispatched;
 use super::struct_call::same_nominal;
 use crate::checker::infer::InferCtx;
 use crate::checker::scopes::DeferredMapKeyCheck;
+use crate::zero::MapZero;
 
 struct TypeConversionCall {
     callee: Expression,
@@ -655,7 +656,7 @@ impl InferCtx<'_> {
             Some((elem, len)) => {
                 let array_ty = self.type_array(len, elem);
                 let from_package = self.cursor.package_id().to_string();
-                if let Err(no_zero) = self.has_zero(&array_ty, &from_package) {
+                if let Err(no_zero) = self.has_zero(&array_ty, &from_package, MapZero::Built) {
                     self.sink.push(diagnostics::infer::array_new_no_zero(
                         &no_zero.leaf_ty.stringify(),
                         span,

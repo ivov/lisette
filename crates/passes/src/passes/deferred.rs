@@ -5,6 +5,7 @@ use semantics::facts::{DeferredChecks, GenericBoundOrigin};
 use semantics::generics::bound_display_name;
 use semantics::store::Store;
 use semantics::zero;
+use semantics::zero::MapZero;
 use syntax::types::Type;
 use syntax::types::{CompoundKind, TypeVarId};
 
@@ -84,7 +85,7 @@ pub(crate) fn run(store: &Store, checks: &DeferredChecks, sink: &LocalSink) {
         if element_ty.is_error() || element_ty.is_variable() {
             continue;
         }
-        if let Err(no_zero) = zero::has_zero(store, element_ty, &check.package_id) {
+        if let Err(no_zero) = zero::has_zero(store, element_ty, &check.package_id, MapZero::Built) {
             sink.push(diagnostics::infer::slice_make_no_zero(
                 &no_zero.leaf_ty.stringify(),
                 no_zero.hidden_go_state(),

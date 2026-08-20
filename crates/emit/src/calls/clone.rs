@@ -35,8 +35,8 @@ impl Planner<'_> {
                     format!("{}.MapCloneFunc({value}, {clone})", go_name::GO_STDLIB_PKG)
                 }
                 None => {
-                    self.require_maps();
-                    format!("maps.Clone({value})")
+                    self.require_stdlib();
+                    format!("{}.MapClone({value})", go_name::GO_STDLIB_PKG)
                 }
             },
             _ => value.to_string(),

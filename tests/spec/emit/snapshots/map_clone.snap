@@ -8,8 +8,8 @@ description: |
 ---
 package main
 
-import "maps"
+import lisette "github.com/ivov/lisette/prelude"
 
 func test(m map[string]int) map[string]int {
-	return maps.Clone(m)
+	return lisette.MapClone(m)
 }

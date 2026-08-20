@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Nil map for missing key
+   ╭─[test.lis:5:12]
+ 4 │ fn test(outer: Map<string, Bag>) {
+ 5 │   let _b = outer["x"]
+   ·            ─────┬────
+   ·                 ╰── `Bag` contains `mut Map<string, int>`, which is nil when the key is missing
+ 6 │ }
+   ╰────
+  help: Bracket reads return a zero value when the key is missing, and the zero value of `Bag` contains a nil `mut Map<string, int>`, which panics on write, so this bracket read is disallowed. Use `outer.get(key)` instead · code: [infer.map_read_no_zero]
