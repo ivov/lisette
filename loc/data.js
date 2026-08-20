@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787253266027,
+  "lastUpdate": 1787255483208,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -25684,6 +25684,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "bindgen",
             "value": 9340,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4b230910bdc5c48685e84e44c306df63da75884d",
+          "message": "refactor: decouple bindgen's target from environment (#1303)",
+          "timestamp": "2026-08-20T21:50:57+02:00",
+          "tree_id": "0696e7cfe714508f4173de585e6bb88a17523b54",
+          "url": "https://github.com/ivov/lisette/commit/4b230910bdc5c48685e84e44c306df63da75884d"
+        },
+        "date": 1787255481542,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 136095,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 31924,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27230,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18613,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14708,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13531,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8336,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5992,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2902,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1850,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 714,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9376,
             "unit": "lines"
           },
           {
