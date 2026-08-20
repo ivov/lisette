@@ -156,6 +156,7 @@ pub fn infer_package(package_name: &str, fs: MockFileSystem) -> InferResult {
                 &checker.facts,
                 &checker.sink,
                 passes::LintMode::Skip,
+                passes::UnusedItemReporting::Report,
             );
         }
 

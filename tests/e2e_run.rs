@@ -1441,6 +1441,96 @@ fn single_file_check_ignores_unrelated_test_packages() {
 }
 
 #[test]
+fn build_does_not_report_items_used_only_by_tests() {
+    if !go_available() {
+        eprintln!("skipping build_does_not_report_items_used_only_by_tests: `go` not found");
+        return;
+    }
+
+    let scratch = tempfile::tempdir().expect("create temp dir");
+    let project = scratch.path().join("proj");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::write(
+        project.join("lisette.toml"),
+        "[project]\nname = \"testonly\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.lis"),
+        r#"import "go:fmt"
+import "go:strings"
+
+const GREETING = "hi"
+
+type Name = string
+
+struct Point { x: int, y: int }
+
+enum Color { Red, Blue }
+
+fn helper(n: int) -> int {
+  n + 1
+}
+
+fn joined() -> string {
+  strings.Join(["a", "b"], ",")
+}
+
+fn main() {
+  fmt.Println("Hello world!")
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        project.join("src/main.test.lis"),
+        r#"#[test]
+fn uses_everything() {
+  assert helper(1) == 2
+  assert joined() == "a,b"
+  assert GREETING == "hi"
+  let n: Name = "x"
+  assert n == "x"
+  let p = Point { x: 1, y: 2 }
+  assert p.x + p.y == 3
+  assert Color.Red == Color.Red
+}
+"#,
+    )
+    .unwrap();
+
+    let build = lis(&project, "build");
+    let build_out = format!(
+        "{}{}",
+        String::from_utf8_lossy(&build.stdout),
+        String::from_utf8_lossy(&build.stderr)
+    );
+    assert!(
+        build.status.success(),
+        "`lis build` must succeed:\n{build_out}"
+    );
+    assert!(
+        !build_out.contains("lint.unused_"),
+        "`lis build` must not report items that the test files use:\n{build_out}"
+    );
+
+    let check = lis(&project, "check");
+    let check_out = format!(
+        "{}{}",
+        String::from_utf8_lossy(&check.stdout),
+        String::from_utf8_lossy(&check.stderr)
+    );
+    assert!(
+        check.status.success(),
+        "`lis check` must succeed:\n{check_out}"
+    );
+    assert!(
+        check_out.contains("lint.unused_enum_variant"),
+        "`lis check` must still report a variant nothing uses:\n{check_out}"
+    );
+}
+
+#[test]
 fn loose_dir_check_does_not_duplicate_child_diagnostics() {
     let scratch = tempfile::tempdir().expect("create temp dir");
     let dir = scratch.path();

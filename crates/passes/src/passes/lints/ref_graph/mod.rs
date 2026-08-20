@@ -7,8 +7,8 @@ use rayon::prelude::*;
 use rustc_hash::FxHashSet as HashSet;
 use std::sync::Arc;
 
-use crate::passes::PARALLEL_THRESHOLD;
 use crate::passes::lints::span_edit::statement_deletion;
+use crate::passes::{PARALLEL_THRESHOLD, UnusedItemReporting};
 use diagnostics::LisetteDiagnostic;
 use diagnostics::LocalSink;
 use diagnostics::{Edit, Fix};
@@ -35,7 +35,11 @@ struct RefLintResult {
     unused_definition_spans: Vec<Span>,
 }
 
-pub(crate) fn run(store: &Store, facts: &Facts) -> (Vec<LisetteDiagnostic>, UnusedInfo) {
+pub(crate) fn run(
+    store: &Store,
+    facts: &Facts,
+    unused_item_reporting: UnusedItemReporting,
+) -> (Vec<LisetteDiagnostic>, UnusedInfo) {
     let mut packages: Vec<&Package> = store
         .packages
         .values()
@@ -49,7 +53,14 @@ pub(crate) fn run(store: &Store, facts: &Facts) -> (Vec<LisetteDiagnostic>, Unus
     if packages.len() < PARALLEL_THRESHOLD {
         let sink = LocalSink::new();
         for package in &packages {
-            apply_ref_lints(package, facts, store, &mut unused, &sink);
+            apply_ref_lints(
+                package,
+                facts,
+                store,
+                unused_item_reporting,
+                &mut unused,
+                &sink,
+            );
         }
         return (sink.into_diagnostics(), unused);
     }
@@ -60,7 +71,14 @@ pub(crate) fn run(store: &Store, facts: &Facts) -> (Vec<LisetteDiagnostic>, Unus
         .map(|package| {
             let local_sink = LocalSink::new();
             let mut local_unused = UnusedInfo::default();
-            apply_ref_lints(package, facts, store, &mut local_unused, &local_sink);
+            apply_ref_lints(
+                package,
+                facts,
+                store,
+                unused_item_reporting,
+                &mut local_unused,
+                &local_sink,
+            );
             (local_sink, local_unused)
         })
         .collect();
@@ -77,10 +95,11 @@ fn apply_ref_lints(
     package: &Package,
     facts: &Facts,
     store: &Store,
+    unused_item_reporting: UnusedItemReporting,
     unused: &mut UnusedInfo,
     sink: &LocalSink,
 ) {
-    let result = run_ref_lints(package, facts, store);
+    let result = run_ref_lints(package, facts, store, unused_item_reporting);
     if !result.unused_import_aliases.is_empty() {
         unused.imports_by_package.insert(
             package.id.clone().into(),
@@ -106,7 +125,13 @@ fn apply_ref_lints(
     sink.extend(diagnostics);
 }
 
-fn run_ref_lints(package: &Package, facts: &Facts, store: &Store) -> RefLintResult {
+fn run_ref_lints(
+    package: &Package,
+    facts: &Facts,
+    store: &Store,
+    unused_item_reporting: UnusedItemReporting,
+) -> RefLintResult {
+    let report_unused_items = unused_item_reporting == UnusedItemReporting::Report;
     let files = &package.files;
     let equality_index = &store.equality_index;
     let mut diagnostics = Vec::new();
@@ -148,6 +173,9 @@ fn run_ref_lints(package: &Package, facts: &Facts, store: &Store) -> RefLintResu
         if info.kind == ItemKind::Function {
             unused_definition_spans.push(info.span);
         }
+        if !report_unused_items {
+            continue;
+        }
         let mut diagnostic = create_unused_diagnostic(info.kind, &info.span);
         if let ItemKind::Import { statement_span } = info.kind
             && let Some(file) = files.get(&statement_span.file_id)
@@ -168,11 +196,13 @@ fn run_ref_lints(package: &Package, facts: &Facts, store: &Store) -> RefLintResu
 
     check_visibility_constraints(package, files, &mut diagnostics);
 
-    for (kind, span) in graph.unused_members() {
-        diagnostics.push(match kind {
-            MemberKind::StructField => diagnostics::lint::unused_field(span),
-            MemberKind::EnumVariant => diagnostics::lint::unused_variant(span),
-        });
+    if report_unused_items {
+        for (kind, span) in graph.unused_members() {
+            diagnostics.push(match kind {
+                MemberKind::StructField => diagnostics::lint::unused_field(span),
+                MemberKind::EnumVariant => diagnostics::lint::unused_variant(span),
+            });
+        }
     }
 
     RefLintResult {

@@ -43,7 +43,7 @@ pub enum CompilePhase {
 }
 
 impl CompilePhase {
-    fn includes_tests(self) -> bool {
+    pub fn includes_tests(self) -> bool {
         matches!(self, Self::Check | Self::Test)
     }
 
