@@ -1,0 +1,45 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn target(calls: mut Ref<int>) -> Slice<int> {
+    calls.* += 1
+    [9]
+  }
+  
+  fn main() {
+    let xs: Slice<Slice<int>> = [[1], [2], [3]]
+    let mut calls = 0
+    let found = xs.contains(target(&calls))
+    if found {
+      panic("9 is not in the slice")
+    }
+    if calls != 1 {
+      panic(f"expected 1 call, got {calls}")
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"slices"
+)
+
+func target(calls *int) []int {
+	*calls++
+	return []int{9}
+}
+
+func main() {
+	xs := [][]int{{1}, {2}, {3}}
+	calls := 0
+	want_1 := target(&calls)
+	found := slices.ContainsFunc(xs, func(e_2 []int) bool { return slices.Equal(e_2, want_1) })
+	if found {
+		panic("9 is not in the slice")
+	}
+	if calls != 1 {
+		panic(fmt.Sprintf("expected 1 call, got %d", calls))
+	}
+}

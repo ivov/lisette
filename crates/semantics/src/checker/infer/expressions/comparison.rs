@@ -731,12 +731,15 @@ impl InferCtx<'_> {
         }
     }
 
-    /// Gates `Slice.equals(a, b)`, which parses as one identifier (not a dot access) so `infer_dot_access` never sees it.
-    pub(super) fn check_native_equals_ufcs(&mut self, callee: &Expression, args: &[Expression]) {
+    /// Gates `Slice.equals(a, b)` and its siblings, which parse as one identifier (not a dot access) so `infer_dot_access` never sees them.
+    pub(super) fn check_native_equality_ufcs(&mut self, callee: &Expression, args: &[Expression]) {
         let Expression::Identifier { value, .. } = callee.unwrap_parens() else {
             return;
         };
-        if value.as_str() != "Slice.equals" && value.as_str() != "Map.equals" {
+        if !matches!(
+            value.as_str(),
+            "Slice.equals" | "Map.equals" | "Slice.contains"
+        ) {
             return;
         }
         let Some(receiver) = args.first() else {

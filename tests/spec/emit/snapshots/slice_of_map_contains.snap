@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn test(a: Slice<Map<string, int>>, value: Map<string, int>) -> bool {
+    a.contains(value)
+  }
+---
+package main
+
+import (
+	"maps"
+	"slices"
+)
+
+func test(a []map[string]int, value map[string]int) bool {
+	want_1 := value
+	return slices.ContainsFunc(a, func(e_2 map[string]int) bool { return maps.Equal(e_2, want_1) })
+}

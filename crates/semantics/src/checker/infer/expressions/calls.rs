@@ -300,7 +300,7 @@ impl InferCtx<'_> {
         }
 
         self.check_native_mutating_call(&callee_expression, &span);
-        self.check_native_equals_ufcs(&callee_expression, &new_args);
+        self.check_native_equality_ufcs(&callee_expression, &new_args);
 
         let return_check_recorded = self.is_generic_callee(&callee_expression)
             && type_args.is_empty()

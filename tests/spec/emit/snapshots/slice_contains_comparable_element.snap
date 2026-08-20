@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn test(a: Slice<int>, value: int) -> bool {
+    a.contains(value)
+  }
+---
+package main
+
+import "slices"
+
+func test(a []int, value int) bool {
+	return slices.Contains(a, value)
+}

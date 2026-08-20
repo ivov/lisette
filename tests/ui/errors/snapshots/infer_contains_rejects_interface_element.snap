@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Invalid comparison
+   ╭─[test.lis:7:16]
+ 6 │ fn test(a: Slice<Shape>, value: Shape) {
+ 7 │   let result = a.contains(value);
+   ·                ┬
+   ·                ╰── cannot be compared
+ 8 │ }
+   ╰────
+  help: `Slice<Shape>` cannot be compared because interface values cannot be compared · code: [infer.not_equatable]

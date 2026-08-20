@@ -1066,6 +1066,27 @@ fn test(a: Slice<Point>, b: Slice<Point>) -> bool {
 }
 
 #[test]
+fn slice_contains_keeps_user_equals_live() {
+    let input = r#"
+struct Point { x: int, y: int }
+
+impl Point {
+  fn equals(self, other: Point) -> bool {
+    self.x == other.x
+  }
+}
+
+fn main() {
+  let xs: Slice<Point> = [Point { x: 1, y: 0 }]
+  if !xs.contains(Point { x: 1, y: 9 }) {
+    panic("contains must use the user equals, not Go ==")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn map_equals_keeps_user_equals_live() {
     let input = r#"
 struct Point { x: int }

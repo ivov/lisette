@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Missing comparable bound
+   ╭─[test.lis:3:3]
+ 2 │ fn has<T>(a: Slice<T>, value: T) -> bool {
+ 3 │   a.contains(value)
+   ·   ┬
+   ·   ╰── `Slice<T>` cannot be compared
+ 4 │ }
+   ╰────
+  help: Add the bound where `T` is declared: `<T: Comparable>` · code: [infer.param_needs_comparable_bound]
