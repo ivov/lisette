@@ -760,10 +760,10 @@ mod closed_domain_tests {
     use super::*;
     use syntax::ast;
     use syntax::ast::{
-        Annotation, Generic, Literal, Span, StructFieldDefinition, StructFieldKind, StructFields,
+        Annotation, Generic, Span, StructFieldDefinition, StructFieldKind, StructFields,
     };
-    use syntax::program::ValueKind;
     use syntax::program::{AliasKind, Attributes, TypeAttribute, Visibility};
+    use syntax::program::{ConstantValue, ValueKind};
     use syntax::types::CompoundKind;
 
     fn nominal_int(id: &str) -> Type {
@@ -837,7 +837,7 @@ mod closed_domain_tests {
             name_span: None,
             doc: None,
             body: DefinitionBody::Value {
-                kind: ValueKind::Constant(Literal::Integer { value, text: None }),
+                kind: ValueKind::Constant(ConstantValue::Integer { value, text: None }),
                 allowed_lints: vec![],
                 go_hints: vec![],
                 go_name: None,

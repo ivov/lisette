@@ -431,7 +431,7 @@ mod tests {
     use super::*;
     use rustc_hash::FxHashSet as HashSet;
     use syntax::ast::{Annotation, Generic, Span, StructFields};
-    use syntax::program::{Attributes, Definition, DefinitionBody, Visibility};
+    use syntax::program::{Attributes, ConstantValue, Definition, DefinitionBody, Visibility};
     use syntax::types::{FunctionParameter, Symbol, Type};
 
     fn generic_struct_definition(visibility: Visibility, file_id: u32) -> Definition {
@@ -594,7 +594,6 @@ mod tests {
 
     #[test]
     fn build_cached_package_preserves_constant_kind() {
-        use syntax::ast::Literal;
         use syntax::program::{Definition, DefinitionBody, ValueKind, Visibility};
 
         let make_value = |kind| Definition {
@@ -616,7 +615,7 @@ mod tests {
         };
 
         let empty_files = HashMap::default();
-        let const_def = make_value(ValueKind::Constant(Literal::Integer {
+        let const_def = make_value(ValueKind::Constant(ConstantValue::Integer {
             value: 5,
             text: None,
         }));

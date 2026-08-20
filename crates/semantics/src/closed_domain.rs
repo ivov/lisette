@@ -112,16 +112,18 @@ impl Store {
             .definitions
             .iter()
             .filter_map(|(qualified_name, definition)| {
-                let literal = definition.const_value()?;
+                let value = definition.const_value()?;
                 let Type::Nominal { id, .. } = &definition.ty else {
                     return None;
                 };
-                if id != type_id || DomainValue::from_literal(literal, base).is_none() {
+                if id != type_id {
                     return None;
                 }
+                let literal = value.to_literal();
+                DomainValue::from_literal(&literal, base)?;
                 Some(ClosedMember {
                     display_name: domain_display_name(qualified_name.as_str()).into(),
-                    literal: literal.clone(),
+                    literal,
                 })
             })
             .collect();

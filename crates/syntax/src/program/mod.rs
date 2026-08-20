@@ -5,7 +5,7 @@ mod package;
 mod resolution;
 
 pub use definition::{
-    AliasKind, Attributes, Definition, DefinitionBody, Interface, InterfaceInstance,
+    AliasKind, Attributes, ConstantValue, Definition, DefinitionBody, Interface, InterfaceInstance,
     InterfaceRequirement, Method, MethodOrigin, Methods, TypeAttribute, ValueKind, Visibility,
     interface_instances, interface_requirements, methods_for_type,
 };
