@@ -811,6 +811,79 @@ fn test(a: Slice<int>, b: Slice<int>) -> bool {
 }
 
 #[test]
+fn slice_contains_comparable_element() {
+    let input = r#"
+fn test(a: Slice<int>, value: int) -> bool {
+  a.contains(value)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn nested_slice_contains() {
+    let input = r#"
+fn test(a: Slice<Slice<int>>, value: Slice<int>) -> bool {
+  a.contains(value)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_of_map_contains() {
+    let input = r#"
+fn test(a: Slice<Map<string, int>>, value: Map<string, int>) -> bool {
+  a.contains(value)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_contains_comparable_generic() {
+    let input = r#"
+fn test<T: Comparable>(a: Slice<T>, value: T) -> bool {
+  a.contains(value)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_contains_ufcs() {
+    let input = r#"
+fn test(a: Slice<Slice<int>>, value: Slice<int>) -> bool {
+  Slice.contains(a, value)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_contains_evaluates_its_target_once() {
+    let input = r#"
+fn target(calls: mut Ref<int>) -> Slice<int> {
+  calls.* += 1
+  [9]
+}
+
+fn main() {
+  let xs: Slice<Slice<int>> = [[1], [2], [3]]
+  let mut calls = 0
+  let found = xs.contains(target(&calls))
+  if found {
+    panic("9 is not in the slice")
+  }
+  if calls != 1 {
+    panic(f"expected 1 call, got {calls}")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn map_equals() {
     let input = r#"
 fn test(a: Map<string, int>, b: Map<string, int>) -> bool {

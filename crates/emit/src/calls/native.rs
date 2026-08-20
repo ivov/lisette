@@ -495,6 +495,22 @@ impl Planner<'_> {
             }
         }
 
+        if ctx.method == "contains" && matches!(ctx.native_type, NativeGoType::Slice) {
+            let receiver_ty = self.facts.strip_and_peel(&receiver_expression.get_type());
+            if receiver_ty.is_slice()
+                && let Some(element) = receiver_ty.inner()
+                && self.needs_custom_equality(&element, &[])
+            {
+                let mut staged = self.stage_native_method(ctx, form);
+                self.require_slices();
+                let searched = staged.arguments[0].clone();
+                let target = self.hoist_tmp_value_statement(&mut staged.setup, "want", &searched);
+                let predicate = self.contains_predicate(&element, &target, &[]);
+                let body = format!("slices.ContainsFunc({}, {predicate})", staged.receiver);
+                return staged.finish(body);
+            }
+        }
+
         if matches!(ctx.native_type, NativeGoType::Array)
             && is_native_array_method(ctx.method)
             && matches!(
@@ -970,6 +986,13 @@ impl Planner<'_> {
         let b = self.fresh_var(Some("b"));
         let body = self.render_equality(&a, &b, ty, generics);
         format!("func({a} {go_ty}, {b} {go_ty}) bool {{ return {body} }}")
+    }
+
+    fn contains_predicate(&mut self, ty: &Type, target: &str, generics: &[Generic]) -> String {
+        let go_ty = self.use_go_type(ty);
+        let element = self.fresh_var(Some("e"));
+        let body = self.render_equality(&element, target, ty, generics);
+        format!("func({element} {go_ty}) bool {{ return {body} }}")
     }
 
     fn needs_custom_equality(&self, ty: &Type, generics: &[Generic]) -> bool {

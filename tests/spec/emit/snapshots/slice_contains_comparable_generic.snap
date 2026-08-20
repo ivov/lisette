@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn test<T: Comparable>(a: Slice<T>, value: T) -> bool {
+    a.contains(value)
+  }
+---
+package main
+
+import "slices"
+
+func test[T comparable](a []T, value T) bool {
+	return slices.Contains(a, value)
+}

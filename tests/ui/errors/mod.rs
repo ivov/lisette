@@ -9859,6 +9859,64 @@ fn test(a: Slice<fn() -> int>, b: Slice<fn() -> int>) {
 }
 
 #[test]
+fn infer_contains_rejects_function_element() {
+    let input = r#"
+fn test(a: Slice<fn() -> int>, value: fn() -> int) {
+  let result = a.contains(value);
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_contains_rejects_noncomparable_struct_element() {
+    let input = r#"
+struct Holder {
+  items: Slice<int>,
+}
+
+fn test(a: Slice<Holder>, value: Holder) {
+  let result = a.contains(value);
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_contains_rejects_unbounded_generic_element() {
+    let input = r#"
+fn has<T>(a: Slice<T>, value: T) -> bool {
+  a.contains(value)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_contains_ufcs_rejects_function_element() {
+    let input = r#"
+fn test(a: Slice<fn() -> int>, value: fn() -> int) {
+  let result = Slice.contains(a, value);
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_contains_rejects_interface_element() {
+    let input = r#"
+interface Shape {
+  fn area() -> int
+}
+
+fn test(a: Slice<Shape>, value: Shape) {
+  let result = a.contains(value);
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_not_comparable_function() {
     let input = r#"
 fn test() {

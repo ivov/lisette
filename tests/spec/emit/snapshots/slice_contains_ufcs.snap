@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn test(a: Slice<Slice<int>>, value: Slice<int>) -> bool {
+    Slice.contains(a, value)
+  }
+---
+package main
+
+import "slices"
+
+func test(a [][]int, value []int) bool {
+	want_1 := value
+	return slices.ContainsFunc(a, func(e_2 []int) bool { return slices.Equal(e_2, want_1) })
+}

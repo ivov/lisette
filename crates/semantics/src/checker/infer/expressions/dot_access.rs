@@ -95,7 +95,7 @@ impl InferCtx<'_> {
                 self.sink
                     .push(diagnostics::infer::ref_slice_growth(&member, span));
             }
-            if member.as_str() == "equals" && self.is_callee_context() {
+            if matches!(member.as_str(), "equals" | "contains") && self.is_callee_context() {
                 self.gate_container_equals(&args.deref_ty, args.expression.get_span());
             }
             if !self.is_callee_context()

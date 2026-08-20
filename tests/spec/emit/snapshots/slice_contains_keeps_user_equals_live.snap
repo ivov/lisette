@@ -1,0 +1,45 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct Point { x: int, y: int }
+  
+  impl Point {
+    fn equals(self, other: Point) -> bool {
+      self.x == other.x
+    }
+  }
+  
+  fn main() {
+    let xs: Slice<Point> = [Point { x: 1, y: 0 }]
+    if !xs.contains(Point { x: 1, y: 9 }) {
+      panic("contains must use the user equals, not Go ==")
+    }
+  }
+---
+package main
+
+import "slices"
+
+type Point struct {
+	x int
+	y int
+}
+
+func (p Point) equals(other Point) bool {
+	return p.x == other.x
+}
+
+func main() {
+	xs := []Point{{
+		x: 1,
+		y: 0,
+	}}
+	want_1 := Point{
+		x: 1,
+		y: 9,
+	}
+	if !slices.ContainsFunc(xs, func(e_2 Point) bool { return e_2.equals(want_1) }) {
+		panic("contains must use the user equals, not Go ==")
+	}
+}
