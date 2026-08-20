@@ -13,6 +13,6 @@ pub mod store;
 pub mod zero;
 
 pub use analysis::{
-    AnalysisScope, AnalyzeInput, CompilePhase, EntryFile, EntryParseOutcome, EntryParseStatus,
-    InferenceOutput, PARALLEL_THRESHOLD, ProjectKind, RecoverTarget, run_inference,
+    AnalysisScope, AnalyzeInput, CompilePhase, EntryFile, InferenceOutput, PARALLEL_THRESHOLD,
+    ProjectKind, RecoverTarget, run_inference,
 };

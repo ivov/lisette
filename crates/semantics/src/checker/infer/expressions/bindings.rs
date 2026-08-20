@@ -5,6 +5,7 @@ use syntax::program::DefinitionBody;
 use syntax::types::{Symbol, Type};
 
 use crate::checker::infer::InferCtx;
+use crate::checker::infer::context::{BindingInference, LetInference, LetMutability};
 use crate::facts::EmptyCollectionCheck;
 use crate::loader;
 
@@ -201,21 +202,19 @@ impl InferCtx<'_> {
         if is_plain_identifier
             && let Some(name) = inferred_pattern.get_identifier()
             && let Some(binding_id) = self.scopes.lookup_binding_id(&name)
-            && let Some(source) = self.value_source(new_value.unwrap_parens(), &name)
         {
-            self.value_sources.insert(binding_id, source);
-        }
-
-        if !mutable
-            && is_plain_identifier
-            && !is_assert
-            && let Some(name) = inferred_pattern.get_identifier()
-            && let Some(binding_id) = self.scopes.lookup_binding_id(&name)
-        {
-            self.plain_lets.insert(binding_id);
-            if demoted_from_writable {
-                self.demoted_writable_lets.insert(binding_id);
-            }
+            let mutability = if mutable || is_assert {
+                LetMutability::NoFix
+            } else if demoted_from_writable {
+                LetMutability::RestoreWriteWithMut
+            } else {
+                LetMutability::AddMut
+            };
+            let source = self.value_source(new_value.unwrap_parens(), &name);
+            self.binding_inference.insert(
+                binding_id,
+                BindingInference::Let(LetInference { mutability, source }),
+            );
         }
 
         let new_binding = Binding {
@@ -224,15 +223,6 @@ impl InferCtx<'_> {
             ty: binding_ty,
             mut_span,
         };
-
-        if !mutable
-            && !is_assert
-            && new_binding.pattern.is_identifier()
-            && let Some(ref name) = binding_name
-            && let Some(binding_id) = self.scopes.lookup_binding_id(name)
-        {
-            self.plain_lets.insert(binding_id);
-        }
 
         if !has_annotation
             && new_value.is_empty_collection()

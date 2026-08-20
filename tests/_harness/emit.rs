@@ -36,6 +36,7 @@ fn emit_inner(
     let file = File {
         id: 0,
         package_id: result.package_id.clone(),
+        parse_status: syntax::FileParseStatus::Clean,
         name: "test.lis".to_string(),
         display_path: "src/test.lis".to_string(),
         source_path: None,

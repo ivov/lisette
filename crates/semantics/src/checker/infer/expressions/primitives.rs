@@ -221,12 +221,15 @@ impl InferCtx<'_> {
             {
                 self.facts.mark_alias_mutated(binding_id);
                 if ref_ty.is_writable()
-                    && let Some(collection) = self.loop_element_bindings.get(&binding_id).cloned()
+                    && let Some(inference) = self
+                        .binding_inference
+                        .get(&binding_id)
+                        .and_then(|binding| binding.as_loop_element())
                     && self.reported_immutable.insert(binding_id)
                 {
                     self.sink.push(diagnostics::infer::loop_copy_write(
                         &var_name,
-                        collection.as_deref(),
+                        inference.collection.as_deref(),
                         span,
                     ));
                 }
@@ -487,7 +490,9 @@ impl InferCtx<'_> {
                     if receiver_needs_mut {
                         self.report_disallowed_mutation(store, "self", span, false, None);
                     } else if root_binding
-                        .is_some_and(|id| self.demoted_writable_lets.contains(&id))
+                        .and_then(|id| self.binding_inference.get(&id))
+                        .and_then(|binding| binding.as_let())
+                        .is_some_and(|inference| inference.mutability.was_demoted())
                     {
                         self.report_disallowed_mutation(
                             store,
@@ -496,9 +501,12 @@ impl InferCtx<'_> {
                             false,
                             None,
                         );
-                    } else if let Some(id) =
-                        root_binding.filter(|id| self.demoted_writable_loops.contains(id))
-                    {
+                    } else if let Some(id) = root_binding.filter(|id| {
+                        self.binding_inference
+                            .get(id)
+                            .and_then(|binding| binding.as_loop_element())
+                            .is_some_and(|inference| inference.was_demoted)
+                    }) {
                         if self.reported_immutable.insert(id) {
                             self.sink.push(diagnostics::infer::loop_binding_read_only(
                                 &root.expect("rooted"),
@@ -522,12 +530,15 @@ impl InferCtx<'_> {
                     let rhs_is_ref = store.peel_alias(&value_ty.resolve_in(&self.env)).is_ref();
                     self.report_disallowed_mutation(store, &name, span, rhs_is_ref, None);
                 } else if let Some(id) = self.scopes.lookup_binding_id(&name)
-                    && let Some(collection) = self.loop_element_bindings.get(&id).cloned()
+                    && let Some(inference) = self
+                        .binding_inference
+                        .get(&id)
+                        .and_then(|binding| binding.as_loop_element())
                     && self.reported_immutable.insert(id)
                 {
                     self.sink.push(diagnostics::infer::loop_copy_write(
                         &name,
-                        collection.as_deref(),
+                        inference.collection.as_deref(),
                         span,
                     ));
                 }
@@ -597,11 +608,14 @@ impl InferCtx<'_> {
             return;
         }
         if let Some(id) = binding_id
-            && let Some(collection) = self.loop_element_bindings.get(&id).cloned()
+            && let Some(inference) = self
+                .binding_inference
+                .get(&id)
+                .and_then(|binding| binding.as_loop_element())
         {
             self.sink.push(diagnostics::infer::immutable_loop_binding(
                 var_name,
-                collection.as_deref(),
+                inference.collection.as_deref(),
                 span,
             ));
             return;
@@ -636,7 +650,11 @@ impl InferCtx<'_> {
         if !is_const
             && pointer_type.is_none()
             && let Some(id) = binding_id
-            && self.plain_lets.contains(&id)
+            && self
+                .binding_inference
+                .get(&id)
+                .and_then(|binding| binding.as_let())
+                .is_some_and(|inference| inference.mutability.can_add_mut())
             && let Some(declaration) = self.facts.bindings.get(&id).map(|b| b.span)
         {
             diagnostic = diagnostic.with_fix(diagnostics::Fix::new(

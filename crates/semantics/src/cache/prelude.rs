@@ -77,6 +77,7 @@ pub(crate) fn register_cached_prelude(store: &mut Store, cached: PreludeCache) {
     store.store_file(File {
         id: PRELUDE_FILE_ID,
         package_id: PRELUDE_PACKAGE_ID.to_string(),
+        parse_status: syntax::FileParseStatus::Clean,
         name: "prelude.d.lis".to_string(),
         display_path: "prelude.d.lis".to_string(),
         source_path: deps::prelude_typedef_path(),

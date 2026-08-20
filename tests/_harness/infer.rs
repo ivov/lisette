@@ -91,7 +91,7 @@ pub fn infer_package(package_name: &str, fs: MockFileSystem) -> InferResult {
             let files = files
                 .into_iter()
                 .map(|file| {
-                    let (file, errors, _) = file.parse(&package_id, false);
+                    let (file, errors) = file.parse(&package_id, false);
                     sink.extend_parse_errors(errors);
                     file
                 })

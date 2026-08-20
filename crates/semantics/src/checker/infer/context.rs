@@ -107,6 +107,54 @@ pub(super) enum ValueSource {
     Call(String),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum LetMutability {
+    NoFix,
+    AddMut,
+    RestoreWriteWithMut,
+}
+
+impl LetMutability {
+    pub(super) fn can_add_mut(self) -> bool {
+        !matches!(self, Self::NoFix)
+    }
+
+    pub(super) fn was_demoted(self) -> bool {
+        matches!(self, Self::RestoreWriteWithMut)
+    }
+}
+
+pub(super) struct LetInference {
+    pub(super) mutability: LetMutability,
+    pub(super) source: Option<ValueSource>,
+}
+
+pub(super) struct LoopElementInference {
+    pub(super) collection: Option<String>,
+    pub(super) was_demoted: bool,
+}
+
+pub(super) enum BindingInference {
+    Let(LetInference),
+    LoopElement(LoopElementInference),
+}
+
+impl BindingInference {
+    pub(super) fn as_let(&self) -> Option<&LetInference> {
+        match self {
+            Self::Let(inference) => Some(inference),
+            Self::LoopElement(_) => None,
+        }
+    }
+
+    pub(super) fn as_loop_element(&self) -> Option<&LoopElementInference> {
+        match self {
+            Self::LoopElement(inference) => Some(inference),
+            Self::Let(_) => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(super) struct Expectation {
     pub(super) role: ExpectationRole,
@@ -227,17 +275,8 @@ pub struct InferCtx<'a> {
     pub(super) file_checks: FileChecks,
     pub(crate) satisfying_stack: FxHashSet<(String, String)>,
     pub(super) reported_immutable: FxHashSet<BindingId>,
-    /// Identifier-pattern lets, the only bindings where inserting `mut` is valid.
-    pub(super) plain_lets: FxHashSet<BindingId>,
-    /// Plain lets whose initializer was writable, where inserting `mut` restores the write.
-    pub(super) demoted_writable_lets: FxHashSet<BindingId>,
-    /// Plain loop bindings over writable elements, where `for mut` restores the write.
-    pub(super) demoted_writable_loops: FxHashSet<BindingId>,
-    /// Loop element bindings, each with its collection's name: writes to the
-    /// binding itself stay on the loop copy.
-    pub(super) loop_element_bindings: FxHashMap<BindingId, Option<String>>,
+    pub(super) binding_inference: FxHashMap<BindingId, BindingInference>,
     pub(super) reported_read_only_writes: FxHashSet<(BindingId, String)>,
-    pub(super) value_sources: FxHashMap<BindingId, ValueSource>,
     traversal: TraversalContext,
 }
 
@@ -249,12 +288,8 @@ impl<'a> InferCtx<'a> {
             file_checks: FileChecks::default(),
             satisfying_stack: FxHashSet::default(),
             reported_immutable: FxHashSet::default(),
-            plain_lets: FxHashSet::default(),
-            demoted_writable_lets: FxHashSet::default(),
-            demoted_writable_loops: FxHashSet::default(),
-            loop_element_bindings: FxHashMap::default(),
+            binding_inference: FxHashMap::default(),
             reported_read_only_writes: FxHashSet::default(),
-            value_sources: FxHashMap::default(),
             traversal: TraversalContext::default(),
         }
     }
@@ -345,6 +380,19 @@ impl<'a> InferCtx<'a> {
 
     pub(super) fn with_value_context<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
         self.with_use_context(UseContext::Value, f)
+    }
+
+    pub(super) fn with_callee_context<T>(
+        &mut self,
+        f: impl FnOnce(&mut Self) -> T,
+    ) -> (T, Option<String>) {
+        debug_assert!(
+            self.traversal.pending_writable_receiver.is_none(),
+            "a writable receiver must be consumed by its enclosing call"
+        );
+        let result = self.with_use_context(UseContext::Callee, f);
+        let writable_receiver = self.traversal.pending_writable_receiver.take();
+        (result, writable_receiver)
     }
 
     pub(super) fn with_expectation<T>(
@@ -491,11 +539,11 @@ impl<'a> InferCtx<'a> {
     }
 
     pub(super) fn stash_writable_receiver(&mut self, place: String) {
+        debug_assert!(
+            self.traversal.pending_writable_receiver.is_none(),
+            "one callee cannot register multiple writable receivers"
+        );
         self.traversal.pending_writable_receiver = Some(place);
-    }
-
-    pub(super) fn take_writable_receiver(&mut self) -> Option<String> {
-        self.traversal.pending_writable_receiver.take()
     }
 
     pub(super) fn in_flipped_qualifier_variance<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {

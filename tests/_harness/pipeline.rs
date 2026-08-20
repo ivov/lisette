@@ -152,6 +152,7 @@ impl CompiledTest {
             store.store_file(File {
                 id: test_file_id,
                 package_id: TEST_PACKAGE_ID.to_string(),
+                parse_status: syntax::FileParseStatus::Clean,
                 name: "test.lis".to_string(),
                 display_path: "test.lis".to_string(),
                 source_path: None,
@@ -192,6 +193,7 @@ impl CompiledTest {
                 store.store_file(File {
                     id: test_file_id,
                     package_id: TEST_PACKAGE_ID.to_string(),
+                    parse_status: syntax::FileParseStatus::Clean,
                     name: "test.lis".to_string(),
                     display_path: "test.lis".to_string(),
                     source_path: None,

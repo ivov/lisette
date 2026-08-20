@@ -205,6 +205,7 @@ mod tests {
         File {
             id: 7,
             package_id: "m".into(),
+            parse_status: result.status,
             name: "m.lis".into(),
             display_path: "m.lis".into(),
             source_path: None,
