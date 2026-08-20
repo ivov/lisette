@@ -260,14 +260,34 @@ fn test() {
 }
 
 #[test]
-fn go_struct_autofill_writes_omitted_map_field() {
+fn go_struct_autofill_leaves_omitted_map_field_nil() {
     let input = r#"
 import "go:encoding/pem"
 
 fn test() -> string {
-  let mut b = pem.Block { Type: "X", .. }
-  b.Headers["key"] = "value"
-  b.Headers["key"]
+  let b = pem.Block { Type: "X", .. }
+  match b.Headers {
+    Some(headers) => headers["key"],
+    None => "",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn go_struct_map_field_written_through_some() {
+    let input = r#"
+import "go:encoding/pem"
+
+fn test() -> string {
+  let mut headers = Map.new<string, string>()
+  headers["key"] = "value"
+  let b = pem.Block { Type: "X", Headers: Some(headers), .. }
+  match b.Headers {
+    Some(h) => h["key"],
+    None => "",
+  }
 }
 "#;
     assert_emit_snapshot!(input);

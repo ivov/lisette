@@ -80,7 +80,7 @@ pub type Digest = Array<byte, 32>
 /// Grid holds nested containers to exercise per-hop field qualifiers.
 pub struct Grid {
   pub Rows: mut Slice<mut Slice<byte>>,
-  pub Lookup: mut Map<string, mut Slice<int>>,
+  pub Lookup: Option<mut Map<string, mut Slice<int>>>,
   pub Pointer: Option<mut Ref<IntList>>,
   pub Raw: Option<mut Ref<mut Ref<byte>>>,
 }

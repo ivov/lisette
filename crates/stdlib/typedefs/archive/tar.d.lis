@@ -102,8 +102,8 @@ pub struct Header {
   pub ChangeTime: mut time.Time,
   pub Devmajor: int64,
   pub Devminor: int64,
-  pub Xattrs: mut Map<string, string>,
-  pub PAXRecords: mut Map<string, string>,
+  pub Xattrs: Option<mut Map<string, string>>,
+  pub PAXRecords: Option<mut Map<string, string>>,
   pub Format: Format,
 }
 

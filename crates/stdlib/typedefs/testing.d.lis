@@ -137,7 +137,7 @@ pub struct BenchmarkResult {
   pub Bytes: int64,
   pub MemAllocs: uint64,
   pub MemBytes: uint64,
-  pub Extra: mut Map<string, float64>,
+  pub Extra: Option<mut Map<string, float64>>,
 }
 
 /// Cover records information about test coverage checking.
@@ -145,8 +145,8 @@ pub struct BenchmarkResult {
 /// It is not covered (yet) by the Go 1 compatibility guidelines.
 pub struct Cover {
   pub Mode: string,
-  pub Counters: mut Map<string, mut Slice<uint32>>,
-  pub Blocks: mut Map<string, mut Slice<CoverBlock>>,
+  pub Counters: Option<mut Map<string, mut Slice<uint32>>>,
+  pub Blocks: Option<mut Map<string, mut Slice<CoverBlock>>>,
   pub CoveredPackages: string,
 }
 

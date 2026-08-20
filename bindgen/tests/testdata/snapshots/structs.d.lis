@@ -85,7 +85,7 @@ pub struct Point {
 pub struct Project {
   pub Name: string,
   pub Modules: mut Slice<Option<mut Ref<Node>>>,
-  pub Lookup: mut Map<string, Option<mut Ref<Node>>>,
+  pub Lookup: Option<mut Map<string, Option<mut Ref<Node>>>>,
 }
 
 /// Interface embedding

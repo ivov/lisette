@@ -768,15 +768,15 @@ pub interface ImporterFrom {
 /// If the package has type errors, the collected information may
 /// be incomplete.
 pub struct Info {
-  pub Types: mut Map<ast.Expr, TypeAndValue>,
-  pub Instances: mut Map<mut Ref<ast.Ident>, mut Instance>,
-  pub Defs: mut Map<mut Ref<ast.Ident>, Option<Object>>,
-  pub Uses: mut Map<mut Ref<ast.Ident>, Option<Object>>,
-  pub Implicits: mut Map<ast.Node, Option<Object>>,
-  pub Selections: mut Map<mut Ref<ast.SelectorExpr>, Option<mut Ref<Selection>>>,
-  pub Scopes: mut Map<ast.Node, Option<mut Ref<Scope>>>,
+  pub Types: Option<mut Map<ast.Expr, TypeAndValue>>,
+  pub Instances: Option<mut Map<mut Ref<ast.Ident>, mut Instance>>,
+  pub Defs: Option<mut Map<mut Ref<ast.Ident>, Option<Object>>>,
+  pub Uses: Option<mut Map<mut Ref<ast.Ident>, Option<Object>>>,
+  pub Implicits: Option<mut Map<ast.Node, Option<Object>>>,
+  pub Selections: Option<mut Map<mut Ref<ast.SelectorExpr>, Option<mut Ref<Selection>>>>,
+  pub Scopes: Option<mut Map<ast.Node, Option<mut Ref<Scope>>>>,
   pub InitOrder: mut Slice<Option<mut Ref<Initializer>>>,
-  pub FileVersions: mut Map<mut Ref<ast.File>, string>,
+  pub FileVersions: Option<mut Map<mut Ref<ast.File>, string>>,
 }
 
 /// An Initializer describes a package-level variable, or a list of variables in case

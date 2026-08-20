@@ -82,8 +82,8 @@ pub fn TupleReturn() -> (AnonA, AnonB)
 /// anonymous element.
 pub struct Carriers {
   pub Slice: mut Slice<AnonX>,
-  pub MapKey: mut Map<AnonX, int>,
-  pub MapVal: mut Map<string, AnonX>,
+  pub MapKey: Option<mut Map<AnonX, int>>,
+  pub MapVal: Option<mut Map<string, AnonX>>,
   pub Ptr: Option<mut Ref<AnonX>>,
   pub Chan: Channel<AnonX>,
   pub Array: Array<AnonX, 4>,

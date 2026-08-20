@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/imports.rs
+description: |
+  
+  import "go:encoding/pem"
+  
+  fn test() -> string {
+    let b = pem.Block { Type: "X", .. }
+    match b.Headers {
+      Some(headers) => headers["key"],
+      None => "",
+    }
+  }
+---
+package main
+
+import (
+	"encoding/pem"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func test() string {
+	b := pem.Block{Type: "X"}
+	raw_1 := b.Headers
+	option_2 := lisette.OptionFromNilable[map[string]string](raw_1, raw_1 == nil)
+	if option_2.Tag == lisette.OptionSome {
+		return option_2.SomeVal["key"]
+	}
+	return ""
+}

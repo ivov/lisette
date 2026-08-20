@@ -115,17 +115,17 @@ pub struct Package {
   pub TestDirectives: mut Slice<Directive>,
   pub XTestDirectives: mut Slice<Directive>,
   pub Imports: mut Slice<string>,
-  pub ImportPos: mut Map<string, mut Slice<token.Position>>,
+  pub ImportPos: Option<mut Map<string, mut Slice<token.Position>>>,
   pub TestImports: mut Slice<string>,
-  pub TestImportPos: mut Map<string, mut Slice<token.Position>>,
+  pub TestImportPos: Option<mut Map<string, mut Slice<token.Position>>>,
   pub XTestImports: mut Slice<string>,
-  pub XTestImportPos: mut Map<string, mut Slice<token.Position>>,
+  pub XTestImportPos: Option<mut Map<string, mut Slice<token.Position>>>,
   pub EmbedPatterns: mut Slice<string>,
-  pub EmbedPatternPos: mut Map<string, mut Slice<token.Position>>,
+  pub EmbedPatternPos: Option<mut Map<string, mut Slice<token.Position>>>,
   pub TestEmbedPatterns: mut Slice<string>,
-  pub TestEmbedPatternPos: mut Map<string, mut Slice<token.Position>>,
+  pub TestEmbedPatternPos: Option<mut Map<string, mut Slice<token.Position>>>,
   pub XTestEmbedPatterns: mut Slice<string>,
-  pub XTestEmbedPatternPos: mut Map<string, mut Slice<token.Position>>,
+  pub XTestEmbedPatternPos: Option<mut Map<string, mut Slice<token.Position>>>,
 }
 
 pub const AllowBinary: ImportMode = 2

@@ -68,7 +68,7 @@ pub fn NewUnstartedServer(handler: http.Handler) -> mut Ref<Server>
 #[go(hidden_fields)]
 pub struct ResponseRecorder {
   pub Code: int,
-  pub HeaderMap: mut http.Header,
+  pub HeaderMap: Option<mut http.Header>,
   pub Body: Option<mut Ref<bytes.Buffer>>,
   pub Flushed: bool,
 }
