@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787247403334,
+  "lastUpdate": 1787249790710,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -25333,6 +25333,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "prelude",
             "value": 916,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "efc9a30ce4aacd6acead21af555010a40cb30312",
+          "message": "fix: reject map reads that yield a nil map (#1299)",
+          "timestamp": "2026-08-20T20:16:05+02:00",
+          "tree_id": "0d52415e1216a1eb3affab5294a036c687092e85",
+          "url": "https://github.com/ivov/lisette/commit/efc9a30ce4aacd6acead21af555010a40cb30312"
+        },
+        "date": 1787249788709,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 136350,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 31924,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27646,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18615,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14651,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13529,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8280,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5992,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2902,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1850,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 714,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9328,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
             "unit": "lines"
           }
         ]
