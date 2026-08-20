@@ -306,7 +306,7 @@ pub fn run_go_test(target_dir: &Path, timeout_per_pkg: &str) -> Result<String, S
 
 pub fn run_go_vet(target_dir: &Path) -> Result<String, String> {
     let output = Command::new("go")
-        .args(["vet", "-unreachable=false", "-copylocks=false", "./..."])
+        .args(["vet", "-unreachable=false", "./..."])
         .current_dir(target_dir)
         .env("NO_COLOR", "1")
         .output()
