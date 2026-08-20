@@ -85,7 +85,8 @@ fn run_project(
     sourcemap: bool,
     go_flags: &[String],
 ) -> i32 {
-    let project = match super::build::LockedProject::acquire(project_path) {
+    let target = stdlib::Target::host();
+    let project = match super::build::LockedProject::acquire(project_path, target) {
         Ok(project) => project,
         Err(code) => return code,
     };
@@ -103,7 +104,6 @@ fn run_project(
     }
 
     let heading = "Failed to run project";
-    let target = stdlib::Target::host();
 
     if let Err(code) =
         super::build::build_locked(&project, super::build::BuildPurpose::Run { sourcemap })
@@ -127,7 +127,13 @@ fn run_script(
     inside_project: bool,
 ) -> i32 {
     let heading = "Failed to run script";
-    let build = match super::script::prepare(Path::new(file), sourcemap, inside_project, heading) {
+    let build = match super::script::prepare(
+        Path::new(file),
+        sourcemap,
+        inside_project,
+        heading,
+        stdlib::Target::host(),
+    ) {
         Ok(build) => build,
         Err(code) => return code,
     };

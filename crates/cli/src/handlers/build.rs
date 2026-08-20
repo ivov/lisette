@@ -42,7 +42,7 @@ pub fn emit(path: Option<String>, sourcemap: bool, output: Option<String>) -> i3
             if reject_project_output(output.as_deref(), "writes Go to `target/`").is_err() {
                 return 1;
             }
-            with_locked_project(&root, |prep| {
+            with_locked_project(&root, stdlib::Target::host(), |prep| {
                 match build_locked(prep, BuildPurpose::Emit { sourcemap }) {
                     Ok(_) => 0,
                     Err(code) => code,
@@ -60,6 +60,7 @@ pub fn build(
 ) -> i32 {
     let target = path.unwrap_or_else(|| ".".to_string());
     let target_path = Path::new(&target);
+    let build_target = stdlib::Target::host();
 
     let root = match resolve_target(target_path, "Failed to build") {
         Err(code) => return code,
@@ -70,6 +71,7 @@ pub fn build(
                 &go_flags,
                 output.as_deref(),
                 inside_project,
+                build_target,
             );
         }
         Ok(BuildTarget::Project(root)) => root,
@@ -84,7 +86,7 @@ pub fn build(
         return 1;
     }
 
-    with_locked_project(&root, |prep| {
+    with_locked_project(&root, build_target, |prep| {
         if prep.kind == ProjectKind::Library {
             if go_flags.iter().any(|f| go_cli::is_go_output_flag(f)) {
                 cli_error!(
@@ -101,14 +103,12 @@ pub fn build(
             return code;
         }
 
-        let target = stdlib::Target::host();
-
         if prep.kind == ProjectKind::Library {
-            return build_library(prep, &go_flags, target);
+            return build_library(prep, &go_flags, build_target);
         }
 
         let output_path =
-            match link_project_binary(prep, &go_flags, target, "Failed to build project") {
+            match link_project_binary(prep, &go_flags, build_target, "Failed to build project") {
                 Ok(p) => p,
                 Err(code) => return code,
             };
@@ -211,8 +211,12 @@ pub(super) fn project_root_for(target: &Path) -> PathBuf {
     }
 }
 
-pub(super) fn with_locked_project(path: &Path, f: impl FnOnce(&LockedProject) -> i32) -> i32 {
-    let project = match LockedProject::acquire(path) {
+pub(super) fn with_locked_project(
+    path: &Path,
+    target: stdlib::Target,
+    f: impl FnOnce(&LockedProject) -> i32,
+) -> i32 {
+    let project = match LockedProject::acquire(path, target) {
         Ok(project) => project,
         Err(code) => return code,
     };
@@ -250,23 +254,24 @@ pub(super) fn link_project_binary(
     Ok(output_path)
 }
 
-fn prepare_project_build(project_path: &Path) -> Result<BuildPrep, i32> {
+fn prepare_project_build(project_path: &Path, target: stdlib::Target) -> Result<BuildPrep, i32> {
     let layout = match validate_project(project_path) {
         Some(layout) => layout,
         None => return Err(1),
     };
 
-    let (manifest, locator) = match deps::TypedefLocator::from_project_with_manifest(project_path) {
-        Ok(pair) => pair,
-        Err(msg) => {
-            cli_error!(
-                "Failed to compile Lisette project to Go",
-                msg,
-                "Run `lis new <name>` to create a project, or fix `lisette.toml`"
-            );
-            return Err(1);
-        }
-    };
+    let (manifest, locator) =
+        match deps::TypedefLocator::from_project_with_manifest(project_path, target) {
+            Ok(pair) => pair,
+            Err(msg) => {
+                cli_error!(
+                    "Failed to compile Lisette project to Go",
+                    msg,
+                    "Run `lis new <name>` to create a project, or fix `lisette.toml`"
+                );
+                return Err(1);
+            }
+        };
 
     let target_dir = project_path.join("target");
     if let Err(e) = fs::create_dir_all(&target_dir) {
@@ -305,8 +310,8 @@ pub(super) struct LockedProject {
 }
 
 impl LockedProject {
-    pub(super) fn acquire(project_path: &Path) -> Result<Self, i32> {
-        let prep = prepare_project_build(project_path)?;
+    pub(super) fn acquire(project_path: &Path, target: stdlib::Target) -> Result<Self, i32> {
+        let prep = prepare_project_build(project_path, target)?;
         let target_lock = acquire_target_lock(&prep.target_dir)?;
         Ok(Self {
             prep,

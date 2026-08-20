@@ -29,10 +29,11 @@ pub(super) fn prepare(
     sourcemap: bool,
     inside_project: bool,
     heading: &str,
+    target: stdlib::Target,
 ) -> Result<ScriptBuild, i32> {
     let dir = build_dir(file, heading)?;
     let source = read_source(file, heading)?;
-    let locator = resolve_locator(&source, &dir);
+    let locator = resolve_locator(&source, &dir, target);
     if let Err(e) = go_cli::write_go_mod(&dir, GO_MODULE, &locator) {
         cli_error!(heading, e, "Check file permissions");
         return Err(1);
@@ -40,7 +41,6 @@ pub(super) fn prepare(
 
     let (mut result, diagnostics_shown) =
         compile_file(file, &source, sourcemap, inside_project, &locator)?;
-    let target = locator.target();
 
     for file in &mut result.output {
         if let Some(staged) = stage_name(&file.name) {
@@ -103,7 +103,7 @@ pub(super) fn emit(
     let Ok(source) = read_source(file, heading) else {
         return 1;
     };
-    let locator = resolve_locator(&source, &dir);
+    let locator = resolve_locator(&source, &dir, stdlib::Target::host());
     if let Err(e) = go_cli::write_go_mod(&dir, GO_MODULE, &locator) {
         cli_error!(heading, e, "Check file permissions");
         return 1;
@@ -159,6 +159,7 @@ pub(super) fn build(
     go_flags: &[String],
     output: Option<&str>,
     inside_project: bool,
+    target: stdlib::Target,
 ) -> i32 {
     let heading = "Failed to build script";
     if let Some(flag) = go_flags.iter().find(|flag| go_cli::is_go_output_flag(flag)) {
@@ -173,7 +174,6 @@ pub(super) fn build(
         return 1;
     }
 
-    let target = stdlib::Target::host();
     let requested = match output {
         Some(path) => PathBuf::from(path),
         None => PathBuf::from(go_cli::binary_name(stem(file), target)),
@@ -183,7 +183,7 @@ pub(super) fn build(
         Err(code) => return code,
     };
 
-    let build = match prepare(file, sourcemap, inside_project, heading) {
+    let build = match prepare(file, sourcemap, inside_project, heading, target) {
         Ok(build) => build,
         Err(code) => return code,
     };
@@ -207,13 +207,16 @@ pub(crate) fn script_locator(
 
     if deps.is_empty() {
         return Ok((
-            super::script_deps::locator(Default::default(), &dir, mode),
+            super::script_deps::locator(Default::default(), &dir, mode, stdlib::Target::host()),
             None,
         ));
     }
 
     ensure_build_dir(&dir)?;
-    Ok((super::script_deps::locator(deps, &dir, mode), Some(dir)))
+    Ok((
+        super::script_deps::locator(deps, &dir, mode, stdlib::Target::host()),
+        Some(dir),
+    ))
 }
 
 fn report_module_needed(locator: &deps::TypedefLocator) {
@@ -239,11 +242,12 @@ fn read_source(file: &Path, heading: &str) -> Result<String, i32> {
     })
 }
 
-fn resolve_locator(source: &str, dir: &Path) -> deps::TypedefLocator {
+fn resolve_locator(source: &str, dir: &Path, target: stdlib::Target) -> deps::TypedefLocator {
     super::script_deps::locator(
         super::script_deps::script_deps(source),
         dir,
         super::script_deps::Mode::Online,
+        target,
     )
 }
 
