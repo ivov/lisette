@@ -1994,19 +1994,19 @@ import "go:go/ast"
 import "go:fmt"
 
 fn main() {
-  let obj = ast.Object {
+  let mut obj = ast.Object {
     Kind: ast.Bad,
     Name: "x",
     Decl: None,
     Data: None,
     Type: None,
   }
-  let mut objects = Map.new<string, Option<Ref<ast.Object>>>()
+  let mut objects = Map.new<string, Option<mut Ref<ast.Object>>>()
   objects["present"] = Some(&obj)
   objects["absent"] = None
   let scope = ast.Scope {
     Outer: None,
-    Objects: objects,
+    Objects: Some(objects),
   }
   fmt.Print(scope.Objects)
 }

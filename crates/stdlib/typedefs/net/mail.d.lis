@@ -39,7 +39,7 @@ pub struct Header(mut Map<string, mut Slice<string>>)
 
 /// A Message represents a parsed mail message.
 pub struct Message {
-  pub Header: mut Header,
+  pub Header: Option<mut Header>,
   pub Body: Option<io.Reader>,
 }
 

@@ -4,22 +4,22 @@ description: |
   
   import "go:go/ast"
   
-  type Objects = Map<string, Option<Ref<ast.Object>>>
+  type Objects = mut Map<string, Option<mut Ref<ast.Object>>>
   
   fn main() {
-    let obj = ast.Object {
+    let mut obj = ast.Object {
       Kind: ast.Bad,
       Name: "x",
       Decl: None,
       Data: None,
       Type: None,
     }
-    let mut objects: mut Objects = Map.new<string, Option<Ref<ast.Object>>>()
+    let mut objects: Objects = Map.new<string, Option<mut Ref<ast.Object>>>()
     objects["present"] = Some(&obj)
     objects["absent"] = None
     let scope = ast.Scope {
       Outer: None,
-      Objects: objects,
+      Objects: Some(objects),
     }
     let _ = scope
   }
@@ -49,17 +49,23 @@ func main() {
 	if opt_1.Tag == lisette.OptionSome {
 		unwrap_2 = opt_1.SomeVal
 	}
-	unwrapped_3 := make(map[string]*ast.Object, len(objects))
-	for i_4, v_5 := range objects {
-		if v_5.Tag == lisette.OptionSome {
-			unwrapped_3[i_4] = v_5.SomeVal
-		} else {
-			unwrapped_3[i_4] = nil
+	opt_3 := lisette.MakeOptionSome(objects)
+	var unwrap_4 map[string]*ast.Object
+	if opt_3.Tag == lisette.OptionSome {
+		src_5 := opt_3.SomeVal
+		unwrapped_6 := make(map[string]*ast.Object, len(src_5))
+		for i_7, v_8 := range src_5 {
+			if v_8.Tag == lisette.OptionSome {
+				unwrapped_6[i_7] = v_8.SomeVal
+			} else {
+				unwrapped_6[i_7] = nil
+			}
 		}
+		unwrap_4 = unwrapped_6
 	}
 	scope := ast.Scope{
 		Outer:   unwrap_2,
-		Objects: unwrapped_3,
+		Objects: unwrap_4,
 	}
 	_ = scope
 }

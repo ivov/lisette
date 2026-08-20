@@ -87,7 +87,7 @@ pub struct Sym {
 pub struct Table {
   pub Syms: mut Slice<mut Sym>,
   pub Funcs: mut Slice<mut Func>,
-  pub Files: mut Map<string, Option<mut Ref<Obj>>>,
+  pub Files: Option<mut Map<string, Option<mut Ref<Obj>>>>,
   pub Objs: mut Slice<mut Obj>,
 }
 

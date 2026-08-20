@@ -37,7 +37,7 @@ pub type Digest = Array<byte, 16>
 
 pub struct Holder {
   pub Data: Array<int, 3>,
-  pub Pairs: mut Map<string, Array<byte, 4>>,
+  pub Pairs: Option<mut Map<string, Array<byte, 4>>>,
 }
 
 impl Holder {

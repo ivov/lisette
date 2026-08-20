@@ -172,7 +172,7 @@ pub struct Package {
   pub ImportPath: string,
   pub Imports: mut Slice<string>,
   pub Filenames: mut Slice<string>,
-  pub Notes: mut Map<string, mut Slice<Option<mut Ref<Note>>>>,
+  pub Notes: Option<mut Map<string, mut Slice<Option<mut Ref<Note>>>>>,
   pub Bugs: mut Slice<string>,
   pub Consts: mut Slice<Option<mut Ref<Value>>>,
   pub Types: mut Slice<Option<mut Ref<Type>>>,

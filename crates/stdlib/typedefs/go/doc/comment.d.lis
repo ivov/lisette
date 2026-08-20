@@ -86,7 +86,7 @@ pub struct Paragraph {
 /// The fields in the struct can be filled in before calling [Parser.Parse]
 /// in order to customize the details of the parsing process.
 pub struct Parser {
-  pub Words: mut Map<string, string>,
+  pub Words: Option<mut Map<string, string>>,
   pub LookupPackage: Option<fn(string) -> Option<string>>,
   pub LookupSym: Option<fn(string, string) -> bool>,
 }

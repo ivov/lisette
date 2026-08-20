@@ -329,7 +329,7 @@ pub struct Config {
   pub Rand: Option<io.Reader>,
   pub Time: Option<fn() -> time.Time>,
   pub Certificates: mut Slice<mut Certificate>,
-  pub NameToCertificate: mut Map<string, Option<mut Ref<Certificate>>>,
+  pub NameToCertificate: Option<mut Map<string, Option<mut Ref<Certificate>>>>,
   pub GetCertificate: Option<fn(Ref<ClientHelloInfo>) -> Result<mut Ref<Certificate>, error>>,
   pub GetClientCertificate: Option<fn(Ref<CertificateRequestInfo>) -> Result<mut Ref<Certificate>, error>>,
   pub GetConfigForClient: Option<fn(Ref<ClientHelloInfo>) -> Result<mut Ref<Config>, error>>,

@@ -681,8 +681,8 @@ pub struct Object {
 pub struct Package {
   pub Name: string,
   pub Scope: Option<mut Ref<Scope>>,
-  pub Imports: mut Map<string, Option<mut Ref<Object>>>,
-  pub Files: mut Map<string, Option<mut Ref<File>>>,
+  pub Imports: Option<mut Map<string, Option<mut Ref<Object>>>>,
+  pub Files: Option<mut Map<string, Option<mut Ref<File>>>>,
 }
 
 /// A ParenExpr node represents a parenthesized expression.
@@ -717,7 +717,7 @@ pub struct ReturnStmt {
 /// Deprecated: use the type checker [go/types] instead; see [Object].
 pub struct Scope {
   pub Outer: Option<mut Ref<Scope>>,
-  pub Objects: mut Map<string, Option<mut Ref<Object>>>,
+  pub Objects: Option<mut Map<string, Option<mut Ref<Object>>>>,
 }
 
 /// A SelectStmt node represents a select statement.

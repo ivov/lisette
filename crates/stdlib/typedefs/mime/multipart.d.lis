@@ -37,7 +37,7 @@ pub interface File {
 #[go(hidden_fields)]
 pub struct FileHeader {
   pub Filename: string,
-  pub Header: mut textproto.MIMEHeader,
+  pub Header: Option<mut textproto.MIMEHeader>,
   pub Size: int64,
 }
 
@@ -47,15 +47,15 @@ pub struct FileHeader {
 /// Its Value parts are stored as strings.
 /// Both are keyed by field name.
 pub struct Form {
-  pub Value: mut Map<string, mut Slice<string>>,
-  pub File: mut Map<string, mut Slice<Option<mut Ref<FileHeader>>>>,
+  pub Value: Option<mut Map<string, mut Slice<string>>>,
+  pub File: Option<mut Map<string, mut Slice<Option<mut Ref<FileHeader>>>>>,
 }
 
 /// A Part represents a single part in a multipart body.
 #[go(hidden_fields)]
 #[go(zero_unsafe)]
 pub struct Part {
-  pub Header: mut textproto.MIMEHeader,
+  pub Header: Option<mut textproto.MIMEHeader>,
 }
 
 /// Reader is an iterator over parts in a MIME multipart body.

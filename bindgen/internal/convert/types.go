@@ -58,6 +58,12 @@ func isDemotableGoType(t types.Type) bool {
 	return false
 }
 
+// isNamedMap reports whether t is a named map type, such as url.Values.
+func isNamedMap(t *types.Named) bool {
+	_, ok := t.Underlying().(*types.Map)
+	return ok
+}
+
 // isNilableGoType reports whether t is a Go-nilable type (pointer or non-empty non-error interface).
 func isNilableGoType(t types.Type) bool {
 	t = types.Unalias(t)
@@ -451,7 +457,11 @@ func writableRecursive(t types.Type, seen map[types.Type]bool, conv *Converter, 
 		if val.SkipReason != nil {
 			return val
 		}
-		return TypeResult{LisetteType: "mut " + mapOf(key.LisetteType, val.LisetteType)}
+		rendered := "mut " + mapOf(key.LisetteType, val.LisetteType)
+		if nilable {
+			rendered = optionOf(rendered)
+		}
+		return TypeResult{LisetteType: rendered}
 
 	case *types.Array:
 		elem := writableRecursive(u.Elem(), seen, conv, substitutions, nilable)
@@ -462,11 +472,16 @@ func writableRecursive(t types.Type, seen map[types.Type]bool, conv *Converter, 
 
 	case *types.Named:
 		if goWritableCapability(u) {
-			rendered := writableBase(t, seen, conv, substitutions, nilable)
+			// Option goes outside `mut`: Option<mut url.Values>.
+			wrapNil := nilable && isNamedMap(u)
+			rendered := writableBase(t, seen, conv, substitutions, nilable && !wrapNil)
 			if rendered.SkipReason != nil {
 				return rendered
 			}
 			rendered.LisetteType = "mut " + rendered.LisetteType
+			if wrapNil {
+				rendered.LisetteType = optionOf(rendered.LisetteType)
+			}
 			return rendered
 		}
 		return writableBase(t, seen, conv, substitutions, nilable)
@@ -498,8 +513,9 @@ func writableRecursive(t types.Type, seen map[types.Type]bool, conv *Converter, 
 
 // toLisetteNilableRecursive converts a Go type to Lisette in a nilable context.
 // Pointers become Option<Ref<T>>, named non-error interfaces become Option<Name>,
-// and function types (including named func aliases) become Option<fn(...)> /
-// Option<Name> — Go func values are nilable, and zero-value (nil) is meaningful
+// function types (including named func aliases) become Option<fn(...)> /
+// Option<Name>, and maps (including named map types) become Option<Map<K,V>> /
+// Option<Name>. Those Go values are nilable, and zero-value (nil) is meaningful
 // in struct literals.
 // The nilable flag propagates into collection element types (Slice, Map values).
 func toLisetteNilableRecursive(t types.Type, seen map[types.Type]bool, conv *Converter, substitutions map[string]string) TypeResult {
@@ -523,7 +539,7 @@ func toLisetteNilableRecursive(t types.Type, seen map[types.Type]bool, conv *Con
 			if !u.Empty() && !isErrorInterface(u) {
 				return wrapOption(namedToLisette(t, seen, conv, substitutions))
 			}
-		case *types.Signature:
+		case *types.Signature, *types.Map:
 			return wrapOption(namedToLisette(t, seen, conv, substitutions))
 		}
 		return namedToLisette(t, seen, conv, substitutions)

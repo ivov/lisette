@@ -224,7 +224,7 @@ pub struct Comment(mut Slice<byte>)
 pub struct Decoder {
   pub Strict: bool,
   pub AutoClose: mut Slice<string>,
-  pub Entity: mut Map<string, string>,
+  pub Entity: Option<mut Map<string, string>>,
   pub CharsetReader: Option<fn(string, io.Reader) -> Result<io.Reader, error>>,
   pub DefaultSpace: string,
 }

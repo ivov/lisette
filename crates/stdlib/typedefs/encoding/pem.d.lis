@@ -33,6 +33,6 @@ pub fn EncodeToMemory(b: Ref<Block>) -> mut Slice<byte>
 /// where [Block.Headers] is a possibly empty sequence of Key: Value lines.
 pub struct Block {
   pub Type: string,
-  pub Headers: mut Map<string, string>,
+  pub Headers: Option<mut Map<string, string>>,
   pub Bytes: mut Slice<byte>,
 }
