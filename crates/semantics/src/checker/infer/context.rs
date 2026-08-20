@@ -247,9 +247,16 @@ pub(super) struct BranchArm {
     pub(super) span: Span,
 }
 
+#[derive(Clone, Copy)]
+pub(super) enum ArmAgreement {
+    NotCompared,
+    Conflicting,
+}
+
 pub(super) struct BranchSubsumption {
     pub(super) result_ty: Type,
     pub(super) arms: Vec<BranchArm>,
+    pub(super) arm_agreement: ArmAgreement,
 }
 
 pub(super) struct SelectExhaustivenessCheck {

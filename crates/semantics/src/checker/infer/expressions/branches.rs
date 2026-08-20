@@ -1,5 +1,7 @@
 use crate::checker::EnvResolve;
-use crate::checker::infer::context::{BranchArm, BranchSubsumption, Expectation, ExpectationRole};
+use crate::checker::infer::context::{
+    ArmAgreement, BranchArm, BranchSubsumption, Expectation, ExpectationRole,
+};
 use syntax::ast::BindingKind;
 use syntax::ast::{Expression, IfLetAlternative, MatchArm, Pattern, Span};
 use syntax::types::Type;
@@ -48,7 +50,7 @@ impl InferCtx<'_> {
             .iter()
             .any(|branch| self.contains_pending_branch_var(&branch.ty))
         {
-            self.record_branch_subsumption(result_ty, branches);
+            self.record_branch_subsumption(result_ty, branches, ArmAgreement::NotCompared);
             return;
         }
         match self.reconcile_branch_types(branches, span) {
@@ -59,17 +61,23 @@ impl InferCtx<'_> {
                 self.unify(result_ty, &ty, span);
             }
             BranchReconciliation::Failed => {
-                self.record_branch_subsumption(result_ty, branches);
+                self.record_branch_subsumption(result_ty, branches, ArmAgreement::Conflicting);
             }
         }
     }
 
-    fn record_branch_subsumption(&mut self, result_ty: &Type, branches: &[BranchArm]) {
+    fn record_branch_subsumption(
+        &mut self,
+        result_ty: &Type,
+        branches: &[BranchArm],
+        arm_agreement: ArmAgreement,
+    ) {
         self.file_checks
             .branch_subsumptions
             .push(BranchSubsumption {
                 result_ty: result_ty.clone(),
                 arms: branches.to_vec(),
+                arm_agreement,
             });
     }
 
@@ -85,16 +93,25 @@ impl InferCtx<'_> {
     pub fn resolve_branch_subsumptions(&mut self) {
         let obligations = mem::take(&mut self.file_checks.branch_subsumptions);
         for obligation in obligations.into_iter().rev() {
+            let result_ty = if matches!(obligation.arm_agreement, ArmAgreement::Conflicting)
+                && self
+                    .store
+                    .resolves_to_unknown(&obligation.result_ty.resolve_in(&self.env))
+            {
+                self.new_type_var()
+            } else {
+                obligation.result_ty
+            };
             for branch in &obligation.arms {
                 let arm = branch.ty.resolve_in(&self.env);
                 if arm.is_never() || arm.is_error() {
                     continue;
                 }
                 let (unification, reported) = self.tracking_diagnostics(|this| {
-                    this.try_unify(&obligation.result_ty, &branch.ty, &branch.span)
+                    this.try_unify(&result_ty, &branch.ty, &branch.span)
                 });
                 if unification.is_err() && !reported {
-                    let result = obligation.result_ty.resolve_in(&self.env);
+                    let result = result_ty.resolve_in(&self.env);
                     self.sink.push(diagnostics::infer::branch_type_mismatch(
                         &arm,
                         branch.span,
