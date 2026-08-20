@@ -443,14 +443,14 @@ fn slice_literal_adapts_negative_int8_elements() {
 }
 
 #[test]
-fn enum_variant_unqualified() {
+fn custom_enum_variant_constructor_must_be_qualified() {
     infer(
         r#"{
     enum Color { Red, Green, Blue }
     Red
     }"#,
     )
-    .assert_no_errors();
+    .assert_not_found();
 }
 
 #[test]
@@ -594,7 +594,7 @@ fn enum_unit_variant() {
     infer(
         r#"{
     enum Status { Running, Stopped }
-    let s = Running;
+    let s = Status.Running;
     match s {
       Running => "active",
       Stopped => "inactive",
@@ -609,7 +609,7 @@ fn enum_variant_in_let_binding() {
     infer(
         r#"{
     enum Color { Red, Green, Blue }
-    let c = Red;
+    let c = Color.Red;
     c
     }"#,
     )
@@ -662,7 +662,7 @@ fn enum_tuple_variant() {
     infer(
         r#"{
     enum IpAddress { V4(int, int, int, int), V6(string) }
-    V4(192, 168, 1, 1)
+    IpAddress.V4(192, 168, 1, 1)
     }"#,
     )
     .assert_no_errors();
@@ -705,7 +705,7 @@ fn enum_pattern_undefined_variant() {
     infer(
         r#"{
     enum Color { Red, Green }
-    let c = Red;
+    let c = Color.Red;
     match c {
       Red => 1,
       Blue => 2,
@@ -762,7 +762,7 @@ fn enum_with_numeric_like_variant() {
     infer(
         r#"{
     enum HttpStatus { Status200, Status404, Status500 }
-    Status200
+    HttpStatus.Status200
     }"#,
     )
     .assert_no_errors();

@@ -5,7 +5,7 @@ description: |
   enum E { A(int), B(int), C }
   
   fn test(e: E) -> int {
-    let A(x) | B(x) = e else { return 0; };
+    let E.A(x) | E.B(x) = e else { return 0; };
     x
   }
 ---

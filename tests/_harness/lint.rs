@@ -1,25 +1,10 @@
 use diagnostics::{Fix, LisetteDiagnostic, apply_fixes};
-use semantics::{checker::TaskState, checker::infer::InferCtx};
-use stdlib::{Target, get_go_stdlib_typedef};
-use syntax::{
-    ast::Expression,
-    lex::Lexer,
-    parse::Parser,
-    program::{File, FileImport, Visibility},
-};
+use syntax::{lex::Lexer, parse::Parser};
 
-use super::new_test_store;
-
-use super::TEST_PACKAGE_ID;
+use super::pipeline::{InferredTestFile, TEST_FILE_ID, infer_test_file};
 
 pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
-    let mut store = new_test_store();
-    store.add_package(TEST_PACKAGE_ID);
-
-    // Parser::new hardcodes file_id=0 in spans, so pin the test file to that id too.
-    let file_id = 0u32;
-
-    let lex_result = Lexer::new(source, file_id).lex();
+    let lex_result = Lexer::new(source, TEST_FILE_ID).lex();
     if lex_result.failed() {
         panic!("Lexing failed in lint test: {:?}", lex_result.errors);
     }
@@ -29,75 +14,7 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
         panic!("Parsing failed in lint test: {:?}", parse_result.errors);
     }
 
-    let mut ast = parse_result.ast;
-
-    let mut checker = TaskState::for_package(TEST_PACKAGE_ID);
-    checker.put_prelude_in_scope(&store);
-
-    let locator = deps::TypedefLocator::default();
-    let imports: Vec<FileImport> = ast
-        .iter()
-        .filter_map(|item| {
-            let Expression::PackageImport {
-                name,
-                name_span,
-                alias,
-                span,
-            } = item
-            else {
-                return None;
-            };
-            if let Some(go_pkg) = name.strip_prefix("go:")
-                && let Some(typedef) = get_go_stdlib_typedef(go_pkg, Target::host())
-            {
-                checker.parse_and_register_go_package(&mut store, name, typedef, None, &locator);
-            }
-            Some(FileImport {
-                name: name.clone(),
-                name_span: *name_span,
-                alias: alias.clone(),
-                span: *span,
-            })
-        })
-        .collect();
-    checker.put_imported_packages_in_scope(&store, &imports);
-
-    checker.register_types_and_values(&mut store, &mut ast, &Visibility::Private);
-    checker.finalize_registration(&mut store);
-
-    let mut typed_ast = vec![];
-    {
-        let mut ctx = InferCtx::new(&mut checker, &store);
-        for expression in ast {
-            let type_var = ctx.new_type_var();
-            let typed_expression = ctx.infer_root_expression(expression, &type_var);
-            typed_ast.push(typed_expression);
-        }
-
-        ctx.resolve_branch_subsumptions();
-        ctx.resolve_select_exhaustiveness();
-    }
-
-    {
-        let folder = semantics::checker::freeze::FreezeFolder::new(&checker.env, &store);
-        folder.freeze_facts(&mut checker.facts);
-    }
-    typed_ast =
-        semantics::checker::freeze::FreezeFolder::new(&checker.env, &store).freeze_items(typed_ast);
-
-    let typed_file = File {
-        id: file_id,
-        package_id: TEST_PACKAGE_ID.to_string(),
-        parse_status: syntax::FileParseStatus::Clean,
-        name: "test.lis".to_string(),
-        display_path: "test.lis".to_string(),
-        source_path: None,
-        source: source.to_string(),
-        items: typed_ast,
-        file_comment: None,
-    };
-
-    store.store_file(typed_file);
+    let InferredTestFile { store, checker } = infer_test_file(source, parse_result.ast, &[]);
     let inference_checkpoint = checker.sink.checkpoint();
 
     passes::run(&store, &checker.facts, &checker.sink, passes::LintMode::Run);
@@ -125,7 +42,7 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
 }
 
 pub fn apply_parse_fixes(source: &str) -> String {
-    let result = syntax::build_ast(source, 0);
+    let result = syntax::build_ast(source, TEST_FILE_ID);
     let errors_before = result.errors.len();
     let diagnostics: Vec<LisetteDiagnostic> = result.errors.into_iter().map(Into::into).collect();
     let fixes: Vec<&Fix> = diagnostics
@@ -134,7 +51,7 @@ pub fn apply_parse_fixes(source: &str) -> String {
         .collect();
     let fixed = apply_fixes(source, fixes).source;
 
-    let errors_after = syntax::build_ast(&fixed, 0).errors.len();
+    let errors_after = syntax::build_ast(&fixed, TEST_FILE_ID).errors.len();
     if errors_after >= errors_before {
         panic!("Applied fixes must reduce the parse error count:\n{fixed}");
     }
@@ -157,7 +74,7 @@ pub fn apply_lint_fixes(source: &str) -> String {
     let fixes: Vec<&Fix> = lints.iter().filter_map(LisetteDiagnostic::fix).collect();
     let fixed = apply_fixes(source, fixes).source;
 
-    let reparsed = syntax::build_ast(&fixed, 0);
+    let reparsed = syntax::build_ast(&fixed, TEST_FILE_ID);
     if !reparsed.errors.is_empty() {
         panic!(
             "Applied fix produced source that no longer parses:\n{fixed}\nerrors: {:?}",

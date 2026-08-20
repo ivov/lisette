@@ -5,7 +5,7 @@ description: |
   enum Color { Red, Green, Blue }
   
   fn test() -> Color {
-    Red
+    Color.Red
   }
 ---
 package main

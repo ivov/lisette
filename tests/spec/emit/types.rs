@@ -1200,7 +1200,7 @@ fn enum_variant_construction_simple() {
 enum Color { Red, Green, Blue }
 
 fn test() -> Color {
-  Red
+  Color.Red
 }
 "#;
     assert_emit_snapshot!(input);
@@ -1707,7 +1707,7 @@ fn generic_enum_with_variant_field() {
 enum MyResult<T> { Success(T), Failure }
 
 fn test() -> MyResult<int> {
-  Success(42)
+  MyResult.Success(42)
 }
 "#;
     assert_emit_snapshot!(input);
@@ -1719,7 +1719,7 @@ fn generic_enum_with_multiple_variant_fields() {
 enum Either<L, R> { Left(L), Right(R) }
 
 fn test() -> Either<int, string> {
-  Left(42)
+  Either.Left(42)
 }
 "#;
     assert_emit_snapshot!(input);
