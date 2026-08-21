@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/promoted"
+  
+  fn clear(client: mut Ref<promoted.Client>) {
+    client.Group = None
+  }
+---
+package main
+
+import (
+	"example.com/promoted"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func clear_(client *promoted.Client) {
+	opt_1 := lisette.MakeOptionNone[*promoted.Group]()
+	var unwrap_2 *promoted.Group
+	if opt_1.Tag == lisette.OptionSome {
+		unwrap_2 = opt_1.SomeVal
+	}
+	client.Group = unwrap_2
+}

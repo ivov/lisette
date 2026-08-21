@@ -117,6 +117,7 @@ pub enum DotAccessResolution {
     Unresolved,
     StructField {
         is_exported: bool,
+        declaring_type: Option<Symbol>,
     },
     TupleStructField {
         is_newtype: bool,
@@ -148,7 +149,7 @@ impl DotAccessResolution {
     pub fn kind(&self) -> Option<DotAccessKind> {
         Some(match self {
             Self::Unresolved => return None,
-            Self::StructField { is_exported } => DotAccessKind::StructField {
+            Self::StructField { is_exported, .. } => DotAccessKind::StructField {
                 is_exported: *is_exported,
             },
             Self::TupleStructField { is_newtype } => DotAccessKind::TupleStructField {
@@ -172,6 +173,13 @@ impl DotAccessResolution {
                 is_exported: *is_exported,
             },
         })
+    }
+
+    pub fn declaring_type(&self) -> Option<&Symbol> {
+        match self {
+            Self::StructField { declaring_type, .. } => declaring_type.as_ref(),
+            _ => None,
+        }
     }
 
     pub fn receiver_coercion(&self) -> Option<ReceiverCoercion> {

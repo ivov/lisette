@@ -1,4 +1,4 @@
-use syntax::types::{CompoundKind, Type};
+use syntax::types::{CompoundKind, Symbol, Type};
 
 use crate::Planner;
 use crate::abi::callable::{CallableReturnAbi, OptionReturnAbi};
@@ -343,11 +343,15 @@ impl Planner<'_> {
     pub(crate) fn field_slot_layout(
         &self,
         owner_type: &Type,
+        declaring_type: Option<&Symbol>,
         field: &str,
         value_type: &Type,
     ) -> Option<ValueLayout> {
-        let owner = self.resolve_nominal(owner_type)?;
-        let slot = self.facts.go_field(owner.id.as_str(), field)?;
+        let owner = match declaring_type {
+            Some(declaring) => declaring.clone(),
+            None => self.resolve_nominal(owner_type)?.id,
+        };
+        let slot = self.facts.go_field(owner.as_str(), field)?;
         Some(self.value_layout_with_declaration(value_type, slot.origin, &slot.declared_type))
     }
 

@@ -3,7 +3,7 @@ use syntax::parse;
 use syntax::program::{
     Definition, DefinitionBody, DotAccessKind as SemanticDotKind, ReceiverCoercion,
 };
-use syntax::types::Type;
+use syntax::types::{Symbol, Type};
 
 use crate::Planner;
 use crate::abi::coercion::CoercionPlan;
@@ -18,6 +18,7 @@ struct NullableFieldAccess<'a> {
     member: &'a str,
     field: &'a str,
     expression_ty: &'a Type,
+    declaring_type: Option<&'a Symbol>,
     result_ty: &'a Type,
 }
 
@@ -95,6 +96,7 @@ impl Planner<'_> {
                 member,
                 field: &field,
                 expression_ty: &expression_ty,
+                declaring_type: resolution.declaring_type(),
                 result_ty,
             },
         ) {
@@ -233,9 +235,11 @@ impl Planner<'_> {
             member,
             field,
             expression_ty,
+            declaring_type,
             result_ty,
         } = access;
-        let source_layout = self.field_slot_layout(expression_ty, member, result_ty)?;
+        let source_layout =
+            self.field_slot_layout(expression_ty, declaring_type, member, result_ty)?;
         let target_layout = self.value_layout(result_ty, SlotOrigin::Lisette);
         let coercion = CoercionPlan::bridge(self, &source_layout, &target_layout);
         if coercion.is_identity() {

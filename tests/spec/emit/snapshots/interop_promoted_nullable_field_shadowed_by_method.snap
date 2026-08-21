@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:example.com/promoted"
+  
+  fn group(client: Ref<promoted.Client>) -> Option<Ref<promoted.Group>> {
+    client.Group()
+  }
+---
+package main
+
+import "example.com/promoted"
+
+func group(client *promoted.Client) *promoted.Group {
+	return client.Group()
+}

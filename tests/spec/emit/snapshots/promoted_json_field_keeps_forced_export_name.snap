@@ -1,0 +1,43 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  #[json]
+  struct Base {
+    value: int,
+    other_name: string,
+  }
+  
+  struct Outer {
+    embed Base,
+  }
+  
+  fn main() {
+    let mut o = Outer { Base: Base { value: 1, other_name: "a" } }
+    o.value = 2
+    o.other_name = "b"
+    let _ = o.value
+    let _ = o.other_name
+  }
+---
+package main
+
+type Base struct {
+	Value     int    `json:"value"`
+	OtherName string `json:"other_name"`
+}
+
+type Outer struct {
+	Base
+}
+
+func main() {
+	o := Outer{Base: Base{
+		Value:     1,
+		OtherName: "a",
+	}}
+	o.Value = 2
+	o.OtherName = "b"
+	_ = o.Value
+	_ = o.OtherName
+}

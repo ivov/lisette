@@ -10,6 +10,7 @@ use crate::state::bindings::BindingValue;
 use syntax::ast::Literal;
 use syntax::ast::{BinaryOperator, Expression, IdentifierResolution, UnaryOperator};
 use syntax::parse::TUPLE_FIELDS;
+use syntax::program::DotAccessResolution;
 use syntax::types::Type;
 
 impl Planner<'_> {
@@ -38,9 +39,15 @@ impl Planner<'_> {
                 expression,
                 member,
                 ty,
+                resolution,
                 ..
             } => self
-                .field_slot_layout(&expression.get_type(), member, ty)
+                .field_slot_layout(
+                    &expression.get_type(),
+                    resolution.declaring_type(),
+                    member,
+                    ty,
+                )
                 .map(|layout| (ty.clone(), layout)),
             _ => None,
         };
@@ -188,12 +195,15 @@ impl Planner<'_> {
                 .unwrap_or(value)
                 .to_string(),
             Expression::DotAccess {
-                expression, member, ..
+                expression,
+                member,
+                resolution,
+                ..
             } => {
                 let base = expression.deref_inner().unwrap_or(expression);
                 let base_str = self.capture_operand_into(setup, base);
                 let expression_ty = expression.get_type();
-                self.format_dot_access_lvalue(&base_str, &expression_ty, member)
+                self.format_dot_access_lvalue(&base_str, &expression_ty, member, resolution)
             }
             Expression::IndexedAccess {
                 expression, index, ..
@@ -250,6 +260,7 @@ impl Planner<'_> {
         base_str: &str,
         expression_ty: &Type,
         member: &str,
+        resolution: &DotAccessResolution,
     ) -> String {
         if let Ok(index) = member.parse::<usize>() {
             let access = self.try_emit_tuple_struct_field_access(base_str, expression_ty, index);
@@ -259,7 +270,9 @@ impl Planner<'_> {
             let field = TUPLE_FIELDS.get(index).expect("oversize tuple arity");
             return format!("{}.{}", base_str, field);
         }
-        let field = if self.struct_field_is_exported(expression_ty, member) {
+        let field = if resolution_exports_field(resolution)
+            || self.struct_field_is_exported(expression_ty, member)
+        {
             go_name::make_exported(member)
         } else if self.field_is_embedded(expression_ty, member) {
             go_name::escape_keyword(member).into_owned()
@@ -301,6 +314,7 @@ impl Planner<'_> {
             Expression::DotAccess {
                 expression: base,
                 member,
+                resolution,
                 ..
             } => {
                 let base_str = if let Some(inner) = base.deref_inner() {
@@ -329,7 +343,7 @@ impl Planner<'_> {
                     self.emit_left_value(setup, base)
                 };
                 let expression_ty = base.get_type();
-                self.format_dot_access_lvalue(&base_str, &expression_ty, member)
+                self.format_dot_access_lvalue(&base_str, &expression_ty, member, resolution)
             }
             Expression::Unary {
                 operator: UnaryOperator::Deref,
@@ -406,6 +420,16 @@ fn assignment_has_setup(right_hand_side: Option<&ValuePlan>) -> bool {
 
 fn assignment_has_effectful_call(right_hand_side: Option<&ValuePlan>) -> bool {
     right_hand_side.is_some_and(|value| value.evaluation.effect.has_effectful_call())
+}
+
+fn resolution_exports_field(resolution: &DotAccessResolution) -> bool {
+    matches!(
+        resolution,
+        DotAccessResolution::StructField {
+            is_exported: true,
+            ..
+        }
+    )
 }
 
 fn assignment_requires_target_capture(right_hand_side: Option<&ValuePlan>) -> bool {

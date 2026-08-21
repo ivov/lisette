@@ -2802,3 +2802,169 @@ pub fn Lookup() -> Option<Index>
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/reg", typedef)]);
 }
+
+#[test]
+fn interop_promoted_nullable_field_wraps_option() {
+    let input = r#"
+import "go:errors"
+import "go:example.com/promoted"
+
+fn handler(client: Ref<promoted.Client>) -> Result<promoted.Handler, error> {
+  client.Handler.ok_or_else(|| errors.New("handler is unavailable"))
+}
+
+fn group(client: Ref<promoted.Client>) -> Result<Ref<promoted.Group>, error> {
+  client.Group.ok_or_else(|| errors.New("group is unavailable"))
+}
+"#;
+    let typedef = r#"
+pub type Handler = fn()
+
+pub struct Group {}
+
+pub struct API {
+  pub Handler: Option<Handler>,
+  pub Group: Option<Ref<Group>>,
+}
+
+pub struct Client {
+  embed mut Ref<API>,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/promoted", typedef)]);
+}
+
+#[test]
+fn interop_twice_promoted_nullable_field_wraps_option() {
+    let input = r#"
+import "go:errors"
+import "go:example.com/promoted"
+
+fn group(client: Ref<promoted.Client>) -> Result<Ref<promoted.Group>, error> {
+  client.Group.ok_or_else(|| errors.New("group is unavailable"))
+}
+"#;
+    let typedef = r#"
+pub struct Group {}
+
+pub struct API {
+  pub Group: Option<Ref<Group>>,
+}
+
+pub struct Base {
+  embed mut Ref<API>,
+}
+
+pub struct Client {
+  embed mut Base,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/promoted", typedef)]);
+}
+
+#[test]
+fn interop_promoted_nullable_field_write_unwraps_option() {
+    let input = r#"
+import "go:example.com/promoted"
+
+fn clear(client: mut Ref<promoted.Client>) {
+  client.Group = None
+}
+"#;
+    let typedef = r#"
+pub struct Group {}
+
+pub struct API {
+  pub Group: Option<mut Ref<Group>>,
+}
+
+pub struct Client {
+  embed mut Ref<API>,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/promoted", typedef)]);
+}
+
+#[test]
+fn interop_promoted_nullable_field_round_trip() {
+    let input = r#"
+import "go:errors"
+import "go:fmt"
+import "go:text/template"
+import "go:text/template/parse"
+
+fn root(t: mut Ref<template.Template>) -> Result<mut Ref<parse.ListNode>, error> {
+  t.Root.ok_or_else(|| errors.New("root is unavailable"))
+}
+
+fn main() {
+  let mut t = template.New("greeting")
+  match t.Parse("hello {{.}}") {
+    Ok(parsed) => {
+      match root(parsed) {
+        Ok(_) => fmt.Println("root is available"),
+        Err(e) => fmt.Println("error", e),
+      }
+      parsed.Root = None
+      match root(parsed) {
+        Ok(_) => fmt.Println("root is available"),
+        Err(e) => fmt.Println("error", e),
+      }
+    },
+    Err(e) => fmt.Println("parse failed", e),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_promoted_nullable_field_shadowed_by_direct_field() {
+    let input = r#"
+import "go:example.com/promoted"
+
+fn group(client: Ref<promoted.Client>) -> promoted.Group {
+  client.Group
+}
+"#;
+    let typedef = r#"
+pub struct Group {}
+
+pub struct API {
+  pub Group: Option<Ref<Group>>,
+}
+
+pub struct Client {
+  embed mut Ref<API>,
+  pub Group: Group,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/promoted", typedef)]);
+}
+
+#[test]
+fn interop_promoted_nullable_field_shadowed_by_method() {
+    let input = r#"
+import "go:example.com/promoted"
+
+fn group(client: Ref<promoted.Client>) -> Option<Ref<promoted.Group>> {
+  client.Group()
+}
+"#;
+    let typedef = r#"
+pub struct Group {}
+
+pub struct API {
+  pub Group: Option<Ref<Group>>,
+}
+
+pub struct Client {
+  embed mut Ref<API>,
+}
+
+impl Client {
+  fn Group(self: Ref<Client>) -> Option<Ref<Group>>
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/promoted", typedef)]);
+}
