@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ `defer` in `recover` block
+   ╭─[test.lis:7:7]
+ 6 │     let inner = recover {
+ 7 │       defer cleanup()
+   ·       ───────┬───────
+   ·              ╰── not inside a function
+ 8 │       1
+   ╰────
+  help: Move the `defer` outside the `recover` block, so it runs when the function returns · code: [infer.recover_block_defer]

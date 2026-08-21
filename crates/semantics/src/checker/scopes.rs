@@ -59,6 +59,12 @@ enum PropagationContext {
     Recover(RecoverBlockContext),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FallibleBlockKind {
+    Try,
+    Recover,
+}
+
 #[derive(Debug)]
 pub(crate) enum DeferredMapKeyCheck {
     Comparable { key: Type, span: Span },
@@ -429,6 +435,21 @@ impl Scopes {
         for scope in self.stack.iter().rev() {
             if let PropagationContext::Recover(context) = &scope.propagation_context {
                 return Some(context);
+            }
+            if scope.is_function_boundary() {
+                return None;
+            }
+        }
+        None
+    }
+
+    /// Look up the innermost `try` or `recover` block, stopping at function boundaries.
+    pub(crate) fn lookup_fallible_block_kind(&self) -> Option<FallibleBlockKind> {
+        for scope in self.stack.iter().rev() {
+            match &scope.propagation_context {
+                PropagationContext::Try(_) => return Some(FallibleBlockKind::Try),
+                PropagationContext::Recover(_) => return Some(FallibleBlockKind::Recover),
+                PropagationContext::None => {}
             }
             if scope.is_function_boundary() {
                 return None;
