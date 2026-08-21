@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787328716839,
+  "lastUpdate": 1787333927989,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -26282,6 +26282,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "diagnostics",
             "value": 8350,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5992,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2902,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1850,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 714,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9376,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "2ced85db598da4bc1a0c5ba15c3705e8573489fc",
+          "message": "fix: reject constant arithmetic Go would refuse (#1311)",
+          "timestamp": "2026-08-21T19:38:20+02:00",
+          "tree_id": "1a0a2ec948de1e223250171c2eeb78ace0f3471c",
+          "url": "https://github.com/ivov/lisette/commit/2ced85db598da4bc1a0c5ba15c3705e8573489fc"
+        },
+        "date": 1787333925436,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 136434,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 31980,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27307,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18681,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14803,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13531,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8379,
             "unit": "lines"
           },
           {
