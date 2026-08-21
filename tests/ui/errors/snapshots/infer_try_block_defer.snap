@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ `defer` in `try` block
+   ╭─[test.lis:6:5]
+ 5 │   let result = try {
+ 6 │     defer cleanup()
+   ·     ───────┬───────
+   ·            ╰── not inside a function
+ 7 │     Some(42)?
+   ╰────
+  help: Move the `defer` outside the `try` block, so it runs when the function returns · code: [infer.try_block_defer]

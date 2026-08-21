@@ -249,7 +249,7 @@ defer {
 }
 ```
 
-The compiler rejects `defer` in loops, `?` inside defer, and `return`, `break`, or `continue` inside defer.
+The compiler rejects `defer` in loops and in `try` or `recover` blocks, `?` inside defer, and `return`, `break`, or `continue` inside defer.
 
 ```
   ✕ `defer` inside loop

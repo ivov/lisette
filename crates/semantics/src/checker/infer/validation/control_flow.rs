@@ -2,6 +2,7 @@ use syntax::ast::{Expression, Span};
 use syntax::types::Type;
 
 use crate::checker::infer::InferCtx;
+use crate::checker::scopes::FallibleBlockKind;
 
 fn is_sync_lock_type(ty: &Type) -> bool {
     matches!(
@@ -48,6 +49,19 @@ impl InferCtx<'_> {
 
         self.sink
             .push(diagnostics::infer::deferred_lock(*span, locked, unlock));
+    }
+
+    pub(crate) fn check_defer_in_fallible_block(&mut self, span: Span) {
+        match self.scopes.lookup_fallible_block_kind() {
+            Some(FallibleBlockKind::Try) => {
+                self.sink.push(diagnostics::infer::defer_in_try_block(span));
+            }
+            Some(FallibleBlockKind::Recover) => {
+                self.sink
+                    .push(diagnostics::infer::defer_in_recover_block(span));
+            }
+            None => {}
+        }
     }
 
     pub(crate) fn check_return_in_try_block(&mut self, span: Span) {

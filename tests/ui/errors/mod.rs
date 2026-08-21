@@ -8094,6 +8094,72 @@ fn test() {
 }
 
 #[test]
+fn infer_try_block_defer() {
+    let input = r#"
+fn cleanup() {}
+
+fn test() {
+  let result = try {
+    defer cleanup()
+    Some(42)?
+  };
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_recover_block_defer() {
+    let input = r#"
+fn cleanup() {}
+
+fn test() {
+  let result = recover {
+    defer cleanup()
+    42
+  };
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_try_block_defer_inside_recover_names_the_inner_block() {
+    let input = r#"
+fn cleanup() {}
+
+fn test() {
+  let result = recover {
+    let inner = try {
+      defer cleanup()
+      Some(42)?
+    };
+    inner.unwrap_or(0)
+  };
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_recover_block_defer_inside_try_names_the_inner_block() {
+    let input = r#"
+fn cleanup() {}
+
+fn test() {
+  let result = try {
+    let inner = recover {
+      defer cleanup()
+      1
+    };
+    Some(42)? + inner.unwrap_or(0)
+  };
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_try_block_mixed_carriers() {
     let input = r#"
 fn get_result() -> Result<int, string> { Ok(1) }

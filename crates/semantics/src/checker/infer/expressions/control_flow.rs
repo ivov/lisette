@@ -90,6 +90,8 @@ impl InferCtx<'_> {
             self.sink.push(diagnostics::infer::defer_in_loop(span));
         }
 
+        self.check_defer_in_fallible_block(span);
+
         let unit_ty = self.type_unit();
         self.unify(expected_ty, &unit_ty, &span);
 
@@ -166,8 +168,17 @@ impl InferCtx<'_> {
 
         // task spawns a new goroutine, enclosing loop context doesn't apply
         let task_ty = self.new_type_var();
-        let new_expression =
-            self.without_enclosing_loop(|this| this.infer_expression(*expression, &task_ty));
+        let store = self.store;
+        let new_expression = self.without_enclosing_loop(|this| {
+            this.with_scope(|this| {
+                let task_unit = this.type_unit();
+                this.scopes.mark_lambda_scope();
+                this.scopes.set_fn_return_type(task_unit);
+                let new_expression = this.infer_expression(*expression, &task_ty);
+                this.check_deferred_map_key_bounds(store);
+                new_expression
+            })
+        });
 
         Expression::Task {
             expression: new_expression.into(),

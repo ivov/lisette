@@ -2139,6 +2139,13 @@ pub fn continue_in_try_block(span: Span) -> LisetteDiagnostic {
         .with_help("Use `continue` inside a loop, or use `Err(...)?` to exit the `try` block early")
 }
 
+pub fn defer_in_try_block(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`defer` in `try` block")
+        .with_infer_code("try_block_defer")
+        .with_span_label(&span, "not inside a function")
+        .with_help("Move the `defer` outside the `try` block, so it runs when the function returns")
+}
+
 pub fn recover_block_empty(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Empty `recover` block")
         .with_infer_code("recover_block_empty")
@@ -2174,6 +2181,15 @@ pub fn continue_in_recover_block(span: Span) -> LisetteDiagnostic {
         .with_infer_code("recover_block_continue")
         .with_span_label(&span, "not allowed inside `recover` block")
         .with_help("Remove the `continue`, or move it inside a loop within the `recover` block")
+}
+
+pub fn defer_in_recover_block(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`defer` in `recover` block")
+        .with_infer_code("recover_block_defer")
+        .with_span_label(&span, "not inside a function")
+        .with_help(
+            "Move the `defer` outside the `recover` block, so it runs when the function returns",
+        )
 }
 
 pub fn expected_channel_receive(ty: &Type, span: Span) -> LisetteDiagnostic {

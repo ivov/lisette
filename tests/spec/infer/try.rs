@@ -770,6 +770,254 @@ fn task_defer_as_statement_valid() {
 }
 
 #[test]
+fn defer_in_lambda_inside_try_block_valid() {
+    infer(
+        r#"
+    fn work() {}
+    fn run(f: fn() -> int) -> int { f() }
+    fn risky() -> Option<int> { Some(1) }
+    fn f() {
+      let result = try {
+        let base = risky()?
+        run(|| {
+          defer work()
+          base
+        })
+      }
+      let _ = result
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn defer_outside_try_block_valid() {
+    infer(
+        r#"
+    fn work() {}
+    fn risky() -> Option<int> { Some(1) }
+    fn f() {
+      defer work()
+      let result = try {
+        risky()?
+      }
+      let _ = result
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn defer_in_plain_block_valid() {
+    infer(
+        r#"
+    fn work() {}
+    fn f() {
+      {
+        defer work()
+      }
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn defer_in_if_expression_valid() {
+    infer(
+        r#"
+    fn work() {}
+    fn f() {
+      let n = if true {
+        defer work()
+        1
+      } else {
+        0
+      }
+      let _ = n
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn defer_in_task_inside_try_block_valid() {
+    infer(
+        r#"
+    fn work() {}
+    fn risky() -> Option<int> { Some(1) }
+    fn f() {
+      let result = try {
+        let base = risky()?
+        task {
+          defer work()
+        }
+        base
+      }
+      let _ = result
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn unbounded_map_key_in_task_rejected() {
+    infer(
+        r#"
+    fn f<T>() {
+      task {
+        let m = Map.new<T, int>()
+        let _ = m
+      }
+    }
+        "#,
+    )
+    .assert_infer_code("missing_map_key_bound");
+}
+
+#[test]
+fn bounded_map_key_in_task_valid() {
+    infer(
+        r#"
+    fn f<T: Comparable>() {
+      task {
+        let m = Map.new<T, int>()
+        let _ = m
+      }
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn bare_return_in_task_valid() {
+    infer(
+        r#"
+    fn f() -> int {
+      task {
+        return
+      }
+      1
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn value_return_in_task_rejected() {
+    infer(
+        r#"
+    fn f() -> int {
+      task {
+        return 5
+      }
+      1
+    }
+        "#,
+    )
+    .assert_type_mismatch();
+}
+
+#[test]
+fn propagate_in_task_rejected() {
+    infer(
+        r#"
+    fn risky() -> Option<int> { Some(1) }
+    fn f() -> Option<int> {
+      task {
+        let n = risky()?
+        let _ = n
+      }
+      Some(1)
+    }
+        "#,
+    )
+    .assert_infer_code("try_return_type_mismatch");
+}
+
+#[test]
+fn propagate_in_task_inside_try_block_rejected() {
+    infer(
+        r#"
+    fn risky() -> Option<int> { Some(1) }
+    fn f() {
+      let result = try {
+        let base = risky()?
+        task {
+          let n = risky()?
+          let _ = n
+        }
+        base
+      }
+      let _ = result
+    }
+        "#,
+    )
+    .assert_infer_code("try_return_type_mismatch");
+}
+
+#[test]
+fn defer_in_try_block_inside_task_rejected() {
+    infer(
+        r#"
+    fn work() {}
+    fn risky() -> Option<int> { Some(1) }
+    fn f() {
+      task {
+        let inner = try {
+          defer work()
+          risky()?
+        }
+        let _ = inner
+      }
+    }
+        "#,
+    )
+    .assert_infer_code("try_block_defer");
+}
+
+#[test]
+fn defer_in_try_block_rejected() {
+    infer(
+        r#"
+    fn work() {}
+    fn risky() -> Option<int> { Some(1) }
+    fn f() {
+      let result = try {
+        defer work()
+        risky()?
+      }
+      let _ = result
+    }
+        "#,
+    )
+    .assert_infer_code("try_block_defer");
+}
+
+#[test]
+fn defer_in_recover_block_rejected() {
+    infer(
+        r#"
+    fn work() {}
+    fn f() {
+      let result = recover {
+        defer work()
+        1
+      }
+      let _ = result
+    }
+        "#,
+    )
+    .assert_infer_code("recover_block_defer");
+}
+
+#[test]
 fn return_break_rejected() {
     infer(
         r#"
