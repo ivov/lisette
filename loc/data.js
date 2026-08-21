@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787333927989,
+  "lastUpdate": 1787337294532,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -26356,6 +26356,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "passes",
             "value": 18681,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14803,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13531,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8379,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 5992,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2902,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1850,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 714,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9376,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "33edb94a613d0fe9060973c77ebc01a1e6809130",
+          "message": "fix: drop unsafe autofixes (#1312)",
+          "timestamp": "2026-08-21T20:34:22+02:00",
+          "tree_id": "91fdf4a43eeaee90f913efadd8be747b551afaa1",
+          "url": "https://github.com/ivov/lisette/commit/33edb94a613d0fe9060973c77ebc01a1e6809130"
+        },
+        "date": 1787337291814,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 136401,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 31980,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27307,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18648,
             "unit": "lines"
           },
           {
