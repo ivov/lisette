@@ -1,0 +1,86 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:errors"
+  import "go:fmt"
+  import "go:text/template"
+  import "go:text/template/parse"
+  
+  fn root(t: mut Ref<template.Template>) -> Result<mut Ref<parse.ListNode>, error> {
+    t.Root.ok_or_else(|| errors.New("root is unavailable"))
+  }
+  
+  fn main() {
+    let mut t = template.New("greeting")
+    match t.Parse("hello {{.}}") {
+      Ok(parsed) => {
+        match root(parsed) {
+          Ok(_) => fmt.Println("root is available"),
+          Err(e) => fmt.Println("error", e),
+        }
+        parsed.Root = None
+        match root(parsed) {
+          Ok(_) => fmt.Println("root is available"),
+          Err(e) => fmt.Println("error", e),
+        }
+      },
+      Err(e) => fmt.Println("parse failed", e),
+    }
+  }
+---
+package main
+
+import (
+	"errors"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"text/template"
+	"text/template/parse"
+)
+
+func root(t *template.Template) (*parse.ListNode, error) {
+	raw_1 := t.Root
+	option_2 := lisette.OptionFromNilable[*parse.ListNode](raw_1, raw_1 == nil)
+	v_3 := lisette.OptionOkOrElse(option_2, func() error {
+		return errors.New("root is unavailable")
+	})
+	if v_3.Tag == lisette.ResultOk {
+		return v_3.OkVal, nil
+	}
+	return nil, v_3.ErrVal
+}
+
+func main() {
+	t := template.New("greeting")
+	ret_1, err_2 := t.Parse("hello {{.}}")
+	if err_2 == nil && ret_1 != nil {
+		parsed := ret_1
+		_, err_3 := root(parsed)
+		if err_3 == nil {
+			fmt.Println("root is available")
+		} else {
+			e := err_3
+			fmt.Println("error", e)
+		}
+		opt_4 := lisette.MakeOptionNone[*parse.ListNode]()
+		var unwrap_5 *parse.ListNode
+		if opt_4.Tag == lisette.OptionSome {
+			unwrap_5 = opt_4.SomeVal
+		}
+		parsed.Root = unwrap_5
+		_, err_6 := root(parsed)
+		if err_6 == nil {
+			fmt.Println("root is available")
+		} else {
+			e := err_6
+			fmt.Println("error", e)
+		}
+	} else {
+		if err_2 == nil {
+			err_2 = errors.New("unexpected nil")
+		}
+		e := err_2
+		fmt.Println("parse failed", e)
+	}
+}

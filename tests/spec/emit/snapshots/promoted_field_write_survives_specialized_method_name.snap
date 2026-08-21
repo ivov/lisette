@@ -1,0 +1,46 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  pub struct Base { pub id: int }
+  
+  struct Outer<T> {
+    embed Base,
+    pub value: T,
+  }
+  
+  impl Outer<int> {
+    fn id(self) -> int {
+      0
+    }
+  }
+  
+  fn main() {
+    let mut o: Outer<int> = Outer { Base: Base { id: 1 }, value: 5 }
+    o.id = 2
+    let _ = o.id
+  }
+---
+package main
+
+type Base struct {
+	Id int
+}
+
+type Outer[T any] struct {
+	Base
+	Value T
+}
+
+func Outer_id(_ Outer[int]) int {
+	return 0
+}
+
+func main() {
+	o := Outer[int]{
+		Base:  Base{Id: 1},
+		Value: 5,
+	}
+	o.Id = 2
+	_ = o.Id
+}

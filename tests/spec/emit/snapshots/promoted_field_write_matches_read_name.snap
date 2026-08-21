@@ -1,0 +1,39 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  pub struct Base { pub id: int, tag: string }
+  
+  struct Outer {
+    embed Base,
+  }
+  
+  fn main() {
+    let mut o = Outer { Base: Base { id: 1, tag: "a" } }
+    o.id = 2
+    o.tag = "b"
+    let _ = o.id
+    let _ = o.tag
+  }
+---
+package main
+
+type Base struct {
+	Id  int
+	tag string
+}
+
+type Outer struct {
+	Base
+}
+
+func main() {
+	o := Outer{Base: Base{
+		Id:  1,
+		tag: "a",
+	}}
+	o.Id = 2
+	o.tag = "b"
+	_ = o.Id
+	_ = o.tag
+}

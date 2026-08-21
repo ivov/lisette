@@ -1,6 +1,7 @@
 use crate::checker::EnvResolve;
 use ecow::EcoString;
 use syntax::ast::{Expression, IdentifierResolution, Span, StructFields, StructKind};
+use syntax::go_names;
 use syntax::program::{Definition, DefinitionBody, DotAccessResolution, NativeTypeKind};
 use syntax::types::{Symbol, Type, substitute};
 
@@ -332,7 +333,10 @@ impl InferCtx<'_> {
         let resolution = if struct_kind == StructKind::Tuple {
             DotAccessResolution::TupleStructField { is_newtype }
         } else {
-            DotAccessResolution::StructField { is_exported }
+            DotAccessResolution::StructField {
+                is_exported,
+                declaring_type: None,
+            }
         };
 
         Some(args.build_dot_access(field_ty, resolution))
@@ -365,12 +369,23 @@ impl InferCtx<'_> {
         self.mark_component_grant(args.expression, args.expression_ty, &field_ty);
         let field_ty = self.granted_component_type(&field_ty, args.expression_ty);
 
-        if let Some(field) = store
+        let declared_field = store
             .fields_of(member.declaring_type.as_str())
-            .and_then(|fields| fields.iter().find(|f| f.name == args.member_name))
-        {
+            .and_then(|fields| fields.iter().find(|f| f.name == args.member_name));
+        if let Some(field) = declared_field {
             self.facts.add_usage(*args.span, field.name_span);
         }
+
+        // Go names the field where it is declared, not at the receiver.
+        let emits_exported_name = match declared_field {
+            Some(field) => {
+                let forces_export = store
+                    .get_definition(&member.declaring_type)
+                    .is_some_and(Definition::is_serialized);
+                go_names::struct_field_is_exported(field, forces_export)
+            }
+            None => visibility.is_public(),
+        };
 
         let declaring_package = store
             .package_for_qualified_name(member.declaring_type.as_str())
@@ -390,7 +405,8 @@ impl InferCtx<'_> {
         Some(args.build_dot_access(
             field_ty,
             DotAccessResolution::StructField {
-                is_exported: visibility.is_public() || is_cross_package,
+                is_exported: emits_exported_name || is_cross_package,
+                declaring_type: Some(member.declaring_type),
             },
         ))
     }

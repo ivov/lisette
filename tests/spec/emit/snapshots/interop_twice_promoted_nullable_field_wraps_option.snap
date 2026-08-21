@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: |
+  
+  import "go:errors"
+  import "go:example.com/promoted"
+  
+  fn group(client: Ref<promoted.Client>) -> Result<Ref<promoted.Group>, error> {
+    client.Group.ok_or_else(|| errors.New("group is unavailable"))
+  }
+---
+package main
+
+import (
+	"errors"
+	"example.com/promoted"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func group(client *promoted.Client) (*promoted.Group, error) {
+	raw_1 := client.Group
+	option_2 := lisette.OptionFromNilable[*promoted.Group](raw_1, raw_1 == nil)
+	v_3 := lisette.OptionOkOrElse(option_2, func() error {
+		return errors.New("group is unavailable")
+	})
+	if v_3.Tag == lisette.ResultOk {
+		return v_3.OkVal, nil
+	}
+	return nil, v_3.ErrVal
+}

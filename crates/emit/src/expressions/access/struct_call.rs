@@ -87,7 +87,7 @@ impl Planner<'_> {
             let value_ty = f.value.get_type();
             let field_ty = self.lookup_struct_field_ty(ty, &f.name);
             let field_layout =
-                self.field_slot_layout(ty, &f.name, field_ty.as_ref().unwrap_or(&value_ty));
+                self.field_slot_layout(ty, None, &f.name, field_ty.as_ref().unwrap_or(&value_ty));
             value = self.coerce_struct_field(
                 &mut setup,
                 value,
@@ -220,7 +220,7 @@ impl Planner<'_> {
 
     /// Empty-map literal in the field's Go type, sound as empty needs no coercion.
     fn go_field_map_zero(&mut self, owner: &Type, field: &str, field_ty: &Type) -> Option<String> {
-        let layout = self.field_slot_layout(owner, field, field_ty)?;
+        let layout = self.field_slot_layout(owner, None, field, field_ty)?;
         if !layout_is_map(&layout) {
             return None;
         }

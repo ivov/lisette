@@ -510,9 +510,15 @@ impl Planner<'_> {
             expression: receiver,
             member,
             ty,
+            resolution,
             ..
         } = target
-            && let Some(target_layout) = self.field_slot_layout(&receiver.get_type(), member, ty)
+            && let Some(target_layout) = self.field_slot_layout(
+                &receiver.get_type(),
+                resolution.declaring_type(),
+                member,
+                ty,
+            )
         {
             let source_layout = self.value_layout(&value.get_type(), SlotOrigin::Lisette);
             let coercion = CoercionPlan::bridge(self, &source_layout, &target_layout);

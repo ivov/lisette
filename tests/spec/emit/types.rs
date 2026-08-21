@@ -27,6 +27,75 @@ fn make() -> Outer {
 }
 
 #[test]
+fn promoted_field_write_matches_read_name() {
+    let input = r#"
+pub struct Base { pub id: int, tag: string }
+
+struct Outer {
+  embed Base,
+}
+
+fn main() {
+  let mut o = Outer { Base: Base { id: 1, tag: "a" } }
+  o.id = 2
+  o.tag = "b"
+  let _ = o.id
+  let _ = o.tag
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn promoted_json_field_keeps_forced_export_name() {
+    let input = r#"
+#[json]
+struct Base {
+  value: int,
+  other_name: string,
+}
+
+struct Outer {
+  embed Base,
+}
+
+fn main() {
+  let mut o = Outer { Base: Base { value: 1, other_name: "a" } }
+  o.value = 2
+  o.other_name = "b"
+  let _ = o.value
+  let _ = o.other_name
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn promoted_field_write_survives_specialized_method_name() {
+    let input = r#"
+pub struct Base { pub id: int }
+
+struct Outer<T> {
+  embed Base,
+  pub value: T,
+}
+
+impl Outer<int> {
+  fn id(self) -> int {
+    0
+  }
+}
+
+fn main() {
+  let mut o: Outer<int> = Outer { Base: Base { id: 1 }, value: 5 }
+  o.id = 2
+  let _ = o.id
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn embedded_pointer_field_emits_star_type() {
     let input = r#"
 pub struct Base { pub id: int }
