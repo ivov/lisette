@@ -118,13 +118,7 @@ fn collect_unprefixed_fstrings(store: &Store, facts: &Facts, out: &mut Vec<Liset
     let produced: Vec<LisetteDiagnostic> = facts
         .unprefixed_fstrings
         .iter()
-        .map(|fact| {
-            let before = Span::new(fact.span.file_id, fact.span.byte_offset, 0);
-            diagnostics::lint::unprefixed_fstring(&fact.span, &fact.name).with_fix(Fix::new(
-                "Add the `f` prefix",
-                Edit::replacement(before, "f"),
-            ))
-        })
+        .map(|fact| diagnostics::lint::unprefixed_fstring(&fact.span, &fact.name))
         .collect();
     push_suppressible(store, produced, out);
 }

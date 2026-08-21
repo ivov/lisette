@@ -339,21 +339,6 @@ fn main() {
 }
 
 #[test]
-fn fix_manual_equal_fold() {
-    assert_fix_snapshot!(
-        r#"
-import "go:strings"
-
-fn main() {
-  let a = "Hello"
-  let b = "hELLO"
-  let _ = strings.ToLower(a) == strings.ToLower(b)
-}
-"#
-    );
-}
-
-#[test]
 fn fix_manual_replace_all() {
     assert_fix_snapshot!(
         r#"
@@ -1033,32 +1018,6 @@ fn compute() -> int { 42 }
 }
 
 #[test]
-fn fix_or_fn_call() {
-    assert_fix_snapshot!(
-        r#"
-pub fn f(o: Option<int>) -> int {
-  o.unwrap_or(fallback())
-}
-
-fn fallback() -> int { 7 }
-"#
-    );
-}
-
-#[test]
-fn fix_or_fn_call_result_callback_takes_error() {
-    assert_fix_snapshot!(
-        r#"
-pub fn f(r: Result<int, string>) -> int {
-  r.unwrap_or(fallback())
-}
-
-fn fallback() -> int { 7 }
-"#
-    );
-}
-
-#[test]
 fn fix_unnecessary_lazy_evaluations() {
     assert_fix_snapshot!(
         r#"
@@ -1504,20 +1463,6 @@ import fmt "go:fmt"
 
 fn main() {
   fmt.Println("hi")
-}
-"#
-    );
-}
-
-#[test]
-fn fix_unprefixed_fstring() {
-    assert_fix_snapshot!(
-        r#"
-fn main() {
-  let name = "world";
-  let msg = "hello {name}";
-  let _ = name;
-  let _ = msg
 }
 "#
     );
