@@ -15412,6 +15412,208 @@ fn main() {
 }
 
 #[test]
+fn constant_overflow_folded_addition() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = 9223372036854775807 + 1
+}
+"#
+    );
+}
+
+#[test]
+fn constant_overflow_folded_shift() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = 1 << 63
+}
+"#
+    );
+}
+
+#[test]
+fn constant_overflow_const_declaration() {
+    assert_lint_snapshot!(
+        r#"
+const BIG = 9223372036854775807 + 1
+
+fn main() {
+  let _ = 1
+}
+"#
+    );
+}
+
+#[test]
+fn constant_overflow_intermediate_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = (9223372036854775807 + 1) - 1
+  let _ = 1 << 63 >> 1
+  let _ = -(9223372036854775807 + 1)
+}
+"#
+    );
+}
+
+#[test]
+fn constant_overflow_in_range_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = 1 << 62
+  let _ = 9223372036854775806 + 1
+}
+"#
+    );
+}
+
+#[test]
+fn constant_overflow_variable_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x = 5
+  let _ = x + 9223372036854775807
+}
+"#
+    );
+}
+
+#[test]
+fn constant_overflow_cast_names_the_target_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = (1 << 63) as uint64
+}
+"#
+    );
+}
+
+#[test]
+fn constant_overflow_wide_intermediate_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = (9223372036854775807 * 9223372036854775807 * 4) / (9223372036854775807 * 9223372036854775807)
+}
+"#
+    );
+}
+
+#[test]
+fn constant_overflow_wide_comparison_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = (1 << 100) < 5
+  let _ = (9223372036854775807 * 2) > 5
+}
+"#
+    );
+}
+
+#[test]
+fn shift_amount_past_uint() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 1
+  let _ = x << (18446744073709551615 + 1)
+}
+"#
+    );
+}
+
+#[test]
+fn shift_amount_at_uint_boundary_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x = 1
+  let _ = x << (9223372036854775807 * 2 + 1)
+}
+"#
+    );
+}
+
+#[test]
+fn constant_overflow_shift_count_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x = 1
+  let _ = x << (1 << 63)
+  let _ = x >> (9223372036854775807 + 1)
+}
+"#
+    );
+}
+
+#[test]
+fn constant_cast_overflow_folded_operand_reports_once() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = (9223372036854775807 + 1) as int64
+}
+"#
+    );
+}
+
+#[test]
+fn negative_shift_literal() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 1
+  let _ = x << -1
+}
+"#
+    );
+}
+
+#[test]
+fn negative_shift_folded_amount() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 1
+  let _ = x << (1 - 2)
+}
+"#
+    );
+}
+
+#[test]
+fn negative_shift_positive_folded_amount_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x = 1
+  let _ = x << (1 + 1)
+}
+"#
+    );
+}
+
+#[test]
+fn oversized_shift_folded_amount() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x: byte = 1
+  let _ = x << (4 + 4)
+}
+"#
+    );
+}
+
+#[test]
 fn empty_infinite_loop_fires() {
     assert_lint_snapshot!(
         r#"

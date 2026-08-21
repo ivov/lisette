@@ -1,6 +1,6 @@
 use crate::checker::EnvResolve;
 use crate::store::Store;
-use syntax::ast::{BinaryOperator, Expression, Literal, Span, UnaryOperator};
+use syntax::ast::{BinaryOperator, Constant, Expression, Literal, Span, UnaryOperator};
 use syntax::types::{SimpleKind, Type};
 
 use BinaryOperator::*;
@@ -271,7 +271,7 @@ impl InferCtx<'_> {
         expected_ty: &Type,
         span: Span,
     ) -> InferredOperand {
-        if matches!(operator, Division | Remainder) && is_zero_literal(&right.expression) {
+        if matches!(operator, Division | Remainder) && is_zero_constant(&right.expression) {
             self.report_zero_divisor(operator, &right.ty, span);
         }
         if matches!(operator, And | Or)
@@ -831,18 +831,15 @@ impl InferCtx<'_> {
     }
 }
 
-fn is_zero_literal(expression: &Expression) -> bool {
-    match expression.unwrap_parens() {
-        Expression::Literal {
-            literal: Literal::Integer { value: 0, .. },
-            ..
-        } => true,
-        Expression::Literal {
-            literal: Literal::Float { value, .. },
-            ..
-        } => *value == 0.0,
-        _ => false,
+fn is_zero_constant(expression: &Expression) -> bool {
+    if let Expression::Literal {
+        literal: Literal::Float { value, .. },
+        ..
+    } = expression.unwrap_parens()
+    {
+        return *value == 0.0;
     }
+    matches!(expression.fold_constant(), Some(Constant::Integer(0)))
 }
 
 fn is_float_literal(expression: &Expression) -> bool {

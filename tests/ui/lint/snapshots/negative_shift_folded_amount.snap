@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ✕ Negative shift amount
+   ╭─[test.lis:4:11]
+ 3 │   let x = 1
+ 4 │   let _ = x << (1 - 2)
+   ·           ──────┬─────
+   ·                 ╰── shifts by -1
+ 5 │ }
+   ╰────
+  help: A shift amount must be zero or greater. Shift the other way instead · code: [infer.negative_shift]

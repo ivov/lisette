@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ✕ Constant overflow
+   ╭─[test.lis:3:11]
+ 2 │ fn main() {
+ 3 │   let _ = 9223372036854775807 + 1
+   ·           ───────────┬───────────
+   ·                      ╰── constant `9223372036854775808` overflows `int`
+ 4 │ }
+   ╰────
+  help: This expression always evaluates to `9223372036854775808`, and `int` must be in range `-9223372036854775808` to `9223372036854775807` · code: [infer.constant_overflow]

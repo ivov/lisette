@@ -19,6 +19,7 @@ pub(crate) struct NodeCtx<'a> {
 pub(crate) enum ClaimKind {
     AlwaysTrueDisjunction,
     CollapsibleMatch,
+    ConstantOverflow,
     ImpossibleComparison,
     MapKey,
     MinMax,

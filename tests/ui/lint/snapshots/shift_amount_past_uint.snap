@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ✕ Shift amount too large
+   ╭─[test.lis:4:11]
+ 3 │   let x = 1
+ 4 │   let _ = x << (18446744073709551615 + 1)
+   ·           ───────────────┬───────────────
+   ·                          ╰── shifts by 18446744073709551616
+ 5 │ }
+   ╰────
+  help: A shift amount must fit `uint`, so it cannot be more than 18446744073709551615 · code: [infer.shift_amount_too_large]
