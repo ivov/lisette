@@ -8237,6 +8237,17 @@ fn main() {
 }
 
 #[test]
+fn infer_division_by_folded_zero() {
+    let input = r#"
+fn main() {
+  let x = 10 / (2 - 2);
+  x
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_remainder_by_zero() {
     let input = r#"
 fn main() {

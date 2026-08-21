@@ -1885,6 +1885,42 @@ fn int_modulo_still_works() {
 }
 
 #[test]
+fn folded_division_by_zero_rejected() {
+    infer(
+        r#"
+    fn main() {
+      let _ = 1 / (2 - 2);
+    }
+        "#,
+    )
+    .assert_infer_code("division_by_zero");
+}
+
+#[test]
+fn folded_remainder_by_zero_rejected() {
+    infer(
+        r#"
+    fn main() {
+      let _ = 1 % (2 - 2);
+    }
+        "#,
+    )
+    .assert_infer_code("division_by_zero");
+}
+
+#[test]
+fn folded_nonzero_divisor_valid() {
+    infer(
+        r#"
+    fn main() {
+      let _ = 1 / (2 - 1);
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn constant_float_division_by_zero_rejected() {
     infer(
         r#"

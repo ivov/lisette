@@ -3501,13 +3501,30 @@ pub fn oversized_shift(
     span: &Span,
     type_name: &str,
     bit_width: u32,
-    shift_amount: u64,
+    shift_amount: i128,
 ) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Shift amount exceeds integer width")
         .with_infer_code("oversized_shift")
         .with_span_label(span, "shift exceeds width")
         .with_help(format!(
             "`{type_name}` is {bit_width} bits wide, so shifting by {shift_amount} discards every bit of the value."
+        ))
+}
+
+pub fn negative_shift(span: &Span, shift_amount: i128) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Negative shift amount")
+        .with_infer_code("negative_shift")
+        .with_span_label(span, format!("shifts by {shift_amount}"))
+        .with_help("A shift amount must be zero or greater. Shift the other way instead")
+}
+
+pub fn shift_amount_too_large(span: &Span, shift_amount: i128) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Shift amount too large")
+        .with_infer_code("shift_amount_too_large")
+        .with_span_label(span, format!("shifts by {shift_amount}"))
+        .with_help(format!(
+            "A shift amount must fit `uint`, so it cannot be more than {}",
+            u64::MAX
         ))
 }
 
@@ -3706,6 +3723,21 @@ pub fn constant_cast_overflow(
         .with_span_label(span, format!("constant `{value}` overflows `{target_ty}`"))
         .with_help(format!(
             "This expression always evaluates to `{value}`, and `{target_ty}` must be in range `{min}` to `{max}`"
+        ))
+}
+
+pub fn constant_overflow(
+    span: &Span,
+    ty: &str,
+    value: i128,
+    min: i128,
+    max: i128,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Constant overflow")
+        .with_infer_code("constant_overflow")
+        .with_span_label(span, format!("constant `{value}` overflows `{ty}`"))
+        .with_help(format!(
+            "This expression always evaluates to `{value}`, and `{ty}` must be in range `{min}` to `{max}`"
         ))
 }
 
