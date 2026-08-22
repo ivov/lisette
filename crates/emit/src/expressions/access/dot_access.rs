@@ -467,7 +467,7 @@ fn go_field_name(
     if is_prelude_type {
         go_name::snake_to_camel(member)
     } else {
-        go_name::make_exported(member)
+        go_name::exported_member(expression_ty, member)
     }
 }
 

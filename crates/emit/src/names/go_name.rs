@@ -53,6 +53,15 @@ pub(crate) fn make_exported(name: &str) -> String {
     escape_keyword(&snake_to_camel(name)).into_owned()
 }
 
+pub(crate) fn exported_member(owner: &Type, member: &str) -> String {
+    let owner = owner.strip_refs();
+    if owner.get_qualified_id().is_some_and(is_go_import) && member.starts_with(char::is_uppercase)
+    {
+        return member.to_string();
+    }
+    make_exported(member)
+}
+
 pub fn go_test_function_name(fn_name: &str) -> String {
     format!("Test{}", snake_to_camel(fn_name))
 }
