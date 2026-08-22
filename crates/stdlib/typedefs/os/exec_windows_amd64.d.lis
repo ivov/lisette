@@ -42,7 +42,11 @@ pub fn Command(name: string, arg: VarArgs<string>) -> mut Ref<Cmd>
 /// CommandContext sets the command's Cancel function to invoke the Kill method
 /// on its Process, and leaves its WaitDelay unset. The caller may change the
 /// cancellation behavior by modifying those fields before starting the command.
-pub fn CommandContext(ctx: context.Context, name: string, arg: VarArgs<string>) -> mut Ref<Cmd>
+pub fn CommandContext(
+  ctx: context.Context,
+  name: string,
+  arg: VarArgs<string>,
+) -> mut Ref<Cmd>
 
 /// LookPath searches for an executable named file in the
 /// directories named by the PATH environment variable.

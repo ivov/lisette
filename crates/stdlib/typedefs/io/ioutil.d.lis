@@ -84,7 +84,11 @@ pub fn TempFile(dir: string, pattern: string) -> Result<mut Ref<os.File>, error>
 /// (before umask); otherwise WriteFile truncates it before writing, without changing permissions.
 /// 
 /// Deprecated: As of Go 1.16, this function simply calls [os.WriteFile].
-pub fn WriteFile(filename: string, data: Slice<byte>, perm: fs.FileMode) -> Result<(), error>
+pub fn WriteFile(
+  filename: string,
+  data: Slice<byte>,
+  perm: fs.FileMode,
+) -> Result<(), error>
 
 /// Discard is an io.Writer on which all Write calls succeed
 /// without doing anything.

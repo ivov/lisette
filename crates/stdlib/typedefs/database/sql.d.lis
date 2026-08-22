@@ -61,7 +61,10 @@ pub fn Named(name: string, value: Unknown) -> NamedArg
 /// and maintains its own pool of idle connections. Thus, the Open
 /// function should be called just once. It is rarely necessary to
 /// close a [DB].
-pub fn Open(driverName: string, dataSourceName: string) -> Result<mut Ref<DB>, error>
+pub fn Open(
+  driverName: string,
+  dataSourceName: string,
+) -> Result<mut Ref<DB>, error>
 
 /// OpenDB opens a database using a [driver.Connector], allowing drivers to
 /// bypass a string based data source name.
@@ -354,7 +357,11 @@ impl Conn {
   /// The provided [TxOptions] is optional and may be nil if defaults should be used.
   /// If a non-default isolation level is used that the driver doesn't support,
   /// an error will be returned.
-  fn BeginTx(self: mut Ref<Conn>, ctx: context.Context, opts: Ref<TxOptions>) -> Result<mut Ref<Tx>, error>
+  fn BeginTx(
+    self: mut Ref<Conn>,
+    ctx: context.Context,
+    opts: Ref<TxOptions>,
+  ) -> Result<mut Ref<Tx>, error>
 
   /// Close returns the connection to the connection pool.
   /// All operations after a Close will return with [ErrConnDone].
@@ -384,7 +391,11 @@ impl Conn {
   /// 
   /// The provided context is used for the preparation of the statement, not for the
   /// execution of the statement.
-  fn PrepareContext(self: mut Ref<Conn>, ctx: context.Context, query: string) -> Result<mut Ref<Stmt>, error>
+  fn PrepareContext(
+    self: mut Ref<Conn>,
+    ctx: context.Context,
+    query: string,
+  ) -> Result<mut Ref<Stmt>, error>
 
   /// QueryContext executes a query that returns rows, typically a SELECT.
   /// The args are for any placeholder parameters in the query.
@@ -413,7 +424,10 @@ impl Conn {
   /// 
   /// Once f returns and err is not [driver.ErrBadConn], the [Conn] will continue to be usable
   /// until [Conn.Close] is called.
-  fn Raw(self: mut Ref<Conn>, f: fn(Unknown) -> Result<(), error>) -> Result<(), error>
+  fn Raw(
+    self: mut Ref<Conn>,
+    f: fn(Unknown) -> Result<(), error>,
+  ) -> Result<(), error>
 }
 
 impl DB {
@@ -434,7 +448,11 @@ impl DB {
   /// The provided [TxOptions] is optional and may be nil if defaults should be used.
   /// If a non-default isolation level is used that the driver doesn't support,
   /// an error will be returned.
-  fn BeginTx(self: mut Ref<DB>, ctx: context.Context, opts: Ref<TxOptions>) -> Result<mut Ref<Tx>, error>
+  fn BeginTx(
+    self: mut Ref<DB>,
+    ctx: context.Context,
+    opts: Ref<TxOptions>,
+  ) -> Result<mut Ref<Tx>, error>
 
   /// Close closes the database and prevents new queries from starting.
   /// Close then waits for all queries that have started processing on the server
@@ -452,7 +470,10 @@ impl DB {
   /// 
   /// Every Conn must be returned to the database pool after use by
   /// calling [Conn.Close].
-  fn Conn(self: mut Ref<DB>, ctx: context.Context) -> Result<mut Ref<Conn>, error>
+  fn Conn(
+    self: mut Ref<DB>,
+    ctx: context.Context,
+  ) -> Result<mut Ref<Conn>, error>
 
   /// Driver returns the database's underlying driver.
   fn Driver(self: Ref<DB>) -> Option<driver.Driver>
@@ -462,7 +483,11 @@ impl DB {
   /// 
   /// Exec uses [context.Background] internally; to specify the context, use
   /// [DB.ExecContext].
-  fn Exec(self: mut Ref<DB>, query: string, args: VarArgs<Unknown>) -> Result<Result, error>
+  fn Exec(
+    self: mut Ref<DB>,
+    query: string,
+    args: VarArgs<Unknown>,
+  ) -> Result<Result, error>
 
   /// ExecContext executes a query without returning any rows.
   /// The args are for any placeholder parameters in the query.
@@ -502,14 +527,22 @@ impl DB {
   /// 
   /// The provided context is used for the preparation of the statement, not for the
   /// execution of the statement.
-  fn PrepareContext(self: mut Ref<DB>, ctx: context.Context, query: string) -> Result<mut Ref<Stmt>, error>
+  fn PrepareContext(
+    self: mut Ref<DB>,
+    ctx: context.Context,
+    query: string,
+  ) -> Result<mut Ref<Stmt>, error>
 
   /// Query executes a query that returns rows, typically a SELECT.
   /// The args are for any placeholder parameters in the query.
   /// 
   /// Query uses [context.Background] internally; to specify the context, use
   /// [DB.QueryContext].
-  fn Query(self: mut Ref<DB>, query: string, args: VarArgs<Unknown>) -> Result<mut Ref<Rows>, error>
+  fn Query(
+    self: mut Ref<DB>,
+    query: string,
+    args: VarArgs<Unknown>,
+  ) -> Result<mut Ref<Rows>, error>
 
   /// QueryContext executes a query that returns rows, typically a SELECT.
   /// The args are for any placeholder parameters in the query.
@@ -529,7 +562,11 @@ impl DB {
   /// 
   /// QueryRow uses [context.Background] internally; to specify the context, use
   /// [DB.QueryRowContext].
-  fn QueryRow(self: mut Ref<DB>, query: string, args: VarArgs<Unknown>) -> mut Ref<Row>
+  fn QueryRow(
+    self: mut Ref<DB>,
+    query: string,
+    args: VarArgs<Unknown>,
+  ) -> mut Ref<Row>
 
   /// QueryRowContext executes a query that is expected to return at most one row.
   /// QueryRowContext always returns a non-nil value. Errors are deferred until
@@ -684,7 +721,9 @@ impl Rows {
 
   /// ColumnTypes returns column information such as column type, length,
   /// and nullable. Some information may not be available from some drivers.
-  fn ColumnTypes(self: Ref<Rows>) -> Result<mut Slice<mut Ref<ColumnType>>, error>
+  fn ColumnTypes(
+    self: Ref<Rows>,
+  ) -> Result<mut Slice<mut Ref<ColumnType>>, error>
 
   /// Columns returns the column names.
   /// Columns returns an error if the rows are closed.
@@ -800,7 +839,10 @@ impl Stmt {
   /// 
   /// Query uses [context.Background] internally; to specify the context, use
   /// [Stmt.QueryContext].
-  fn Query(self: mut Ref<Stmt>, args: VarArgs<Unknown>) -> Result<mut Ref<Rows>, error>
+  fn Query(
+    self: mut Ref<Stmt>,
+    args: VarArgs<Unknown>,
+  ) -> Result<mut Ref<Rows>, error>
 
   /// QueryContext executes a prepared query statement with the given arguments
   /// and returns the query results as a [*Rows].
@@ -848,7 +890,11 @@ impl Tx {
   /// 
   /// Exec uses [context.Background] internally; to specify the context, use
   /// [Tx.ExecContext].
-  fn Exec(self: Ref<Tx>, query: string, args: VarArgs<Unknown>) -> Result<Result, error>
+  fn Exec(
+    self: Ref<Tx>,
+    query: string,
+    args: VarArgs<Unknown>,
+  ) -> Result<Result, error>
 
   /// ExecContext executes a query that doesn't return rows.
   /// For example: an INSERT and UPDATE.
@@ -880,13 +926,21 @@ impl Tx {
   /// The provided context will be used for the preparation of the context, not
   /// for the execution of the returned statement. The returned statement
   /// will run in the transaction context.
-  fn PrepareContext(self: mut Ref<Tx>, ctx: context.Context, query: string) -> Result<mut Ref<Stmt>, error>
+  fn PrepareContext(
+    self: mut Ref<Tx>,
+    ctx: context.Context,
+    query: string,
+  ) -> Result<mut Ref<Stmt>, error>
 
   /// Query executes a query that returns rows, typically a SELECT.
   /// 
   /// Query uses [context.Background] internally; to specify the context, use
   /// [Tx.QueryContext].
-  fn Query(self: Ref<Tx>, query: string, args: VarArgs<Unknown>) -> Result<mut Ref<Rows>, error>
+  fn Query(
+    self: Ref<Tx>,
+    query: string,
+    args: VarArgs<Unknown>,
+  ) -> Result<mut Ref<Rows>, error>
 
   /// QueryContext executes a query that returns rows, typically a SELECT.
   fn QueryContext(
@@ -905,7 +959,11 @@ impl Tx {
   /// 
   /// QueryRow uses [context.Background] internally; to specify the context, use
   /// [Tx.QueryRowContext].
-  fn QueryRow(self: Ref<Tx>, query: string, args: VarArgs<Unknown>) -> mut Ref<Row>
+  fn QueryRow(
+    self: Ref<Tx>,
+    query: string,
+    args: VarArgs<Unknown>,
+  ) -> mut Ref<Row>
 
   /// QueryRowContext executes a query that is expected to return at most one row.
   /// QueryRowContext always returns a non-nil value. Errors are deferred until
@@ -958,5 +1016,9 @@ impl Tx {
   /// 
   /// The returned statement operates within the transaction and will be closed
   /// when the transaction has been committed or rolled back.
-  fn StmtContext(self: mut Ref<Tx>, ctx: context.Context, stmt: mut Ref<Stmt>) -> mut Ref<Stmt>
+  fn StmtContext(
+    self: mut Ref<Tx>,
+    ctx: context.Context,
+    stmt: mut Ref<Stmt>,
+  ) -> mut Ref<Stmt>
 }

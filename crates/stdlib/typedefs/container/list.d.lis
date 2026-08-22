@@ -39,12 +39,20 @@ impl List {
   /// InsertAfter inserts a new element e with value v immediately after mark and returns e.
   /// If mark is not an element of l, the list is not modified.
   /// The mark must not be nil.
-  fn InsertAfter(self: mut Ref<List>, v: Unknown, mark: Ref<Element>) -> Option<mut Ref<Element>>
+  fn InsertAfter(
+    self: mut Ref<List>,
+    v: Unknown,
+    mark: Ref<Element>,
+  ) -> Option<mut Ref<Element>>
 
   /// InsertBefore inserts a new element e with value v immediately before mark and returns e.
   /// If mark is not an element of l, the list is not modified.
   /// The mark must not be nil.
-  fn InsertBefore(self: mut Ref<List>, v: Unknown, mark: Ref<Element>) -> Option<mut Ref<Element>>
+  fn InsertBefore(
+    self: mut Ref<List>,
+    v: Unknown,
+    mark: Ref<Element>,
+  ) -> Option<mut Ref<Element>>
 
   /// Len returns the number of elements of list l.
   /// The complexity is O(1).

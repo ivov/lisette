@@ -1,4 +1,5 @@
 use crate::protocol::*;
+use semantics::checker::promotion::{self, MemberKind};
 use syntax::ast::{Expression, IdentifierResolution};
 use syntax::attributes::{AttributeInfo, AttributeTarget, attributes_for};
 use syntax::lex::{Lexer, Token, TokenKind as Tk};
@@ -215,8 +216,9 @@ pub(crate) fn detect_dot_context(
 pub(crate) fn get_instance_completions(
     type_id: &str,
     snapshot: &AnalysisSnapshot,
-    same_package: bool,
+    current_package: &str,
 ) -> Vec<CompletionItem> {
+    let same_package = id_is_in_package(type_id, current_package);
     let mut items = Vec::new();
     struct_field_completions(type_id, snapshot, same_package, &mut items);
 
@@ -240,7 +242,52 @@ pub(crate) fn get_instance_completions(
         }
     }
 
+    promoted_member_completions(&ty, snapshot, current_package, &mut items);
+
     items
+}
+
+/// The fields and methods an embed promotes onto `ty`. Visibility is judged
+/// per declaring type, so an embed cannot leak a foreign type's private
+/// members.
+fn promoted_member_completions(
+    ty: &Type,
+    snapshot: &AnalysisSnapshot,
+    current_package: &str,
+    items: &mut Vec<CompletionItem>,
+) {
+    for (name, member) in promotion::promoted_members(ty, |id| snapshot.definitions().get(id)) {
+        let is_public = match &member.kind {
+            MemberKind::Field { visibility, .. } => visibility.is_public(),
+            MemberKind::Method(method) => method.visibility.is_public(),
+        };
+        if !is_public && !id_is_in_package(member.declaring_type.as_str(), current_package) {
+            continue;
+        }
+        let item = match &member.kind {
+            MemberKind::Field { ty, .. } => CompletionItem {
+                label: name.to_string(),
+                kind: Some(CompletionItemKind::FIELD),
+                detail: Some(ty.to_string()),
+                ..Default::default()
+            },
+            MemberKind::Method(method) => CompletionItem {
+                label: method.source_name.to_string(),
+                kind: Some(CompletionItemKind::METHOD),
+                detail: Some(method.ty.to_string()),
+                ..Default::default()
+            },
+        };
+        // Own members never reach here, so a label already taken belongs to a
+        // UFCS method, which promotion skips and the checker resolves past.
+        match items
+            .iter_mut()
+            .find(|existing| existing.label == item.label)
+        {
+            Some(existing) => *existing = item,
+            None => items.push(item),
+        }
+    }
 }
 
 /// A struct's own field completions, honoring visibility. No methods.

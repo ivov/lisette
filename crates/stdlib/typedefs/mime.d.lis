@@ -40,7 +40,9 @@ pub fn FormatMediaType(t: string, param: Map<string, string>) -> string
 /// [ErrInvalidMediaParameter].
 /// The returned map, params, maps from the lowercase
 /// attribute to the attribute value with its case preserved.
-pub fn ParseMediaType(v: string) -> Partial<(string, mut Map<string, string>), error>
+pub fn ParseMediaType(
+  v: string,
+) -> Partial<(string, mut Map<string, string>), error>
 
 /// TypeByExtension returns the MIME type associated with the file extension ext.
 /// The extension ext should begin with a leading dot, as in ".html".
@@ -79,7 +81,10 @@ impl WordDecoder {
 
   /// DecodeHeader decodes all encoded-words of the given string. It returns an
   /// error if and only if [WordDecoder.CharsetReader] of d returns an error.
-  fn DecodeHeader(self: Ref<WordDecoder>, header: string) -> Result<string, error>
+  fn DecodeHeader(
+    self: Ref<WordDecoder>,
+    header: string,
+  ) -> Result<string, error>
 }
 
 impl WordEncoder {

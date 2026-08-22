@@ -11,7 +11,9 @@ import "go:io"
 /// 
 /// The output of this function is deterministic, and equivalent to reading
 /// [SeedSize] bytes from rand, and passing them to [NewKeyFromSeed].
-pub fn GenerateKey(rand: io.Reader) -> Result<(mut PublicKey, mut PrivateKey), error>
+pub fn GenerateKey(
+  rand: io.Reader,
+) -> Result<(mut PublicKey, mut PrivateKey), error>
 
 /// NewKeyFromSeed calculates a private key from a seed. It will panic if
 /// len(seed) is not [SeedSize]. This function is provided for interoperability
@@ -28,7 +30,11 @@ pub fn Sign(privateKey: PrivateKey, message: Slice<byte>) -> mut Slice<byte>
 /// 
 /// The inputs are not considered confidential, and may leak through timing side
 /// channels, or if an attacker has control of part of the inputs.
-pub fn Verify(publicKey: PublicKey, message: Slice<byte>, sig: Slice<byte>) -> bool
+pub fn Verify(
+  publicKey: PublicKey,
+  message: Slice<byte>,
+  sig: Slice<byte>,
+) -> bool
 
 /// VerifyWithOptions reports whether sig is a valid signature of message by
 /// publicKey. A valid signature is indicated by returning a nil error. It will
@@ -95,7 +101,12 @@ impl PrivateKey {
   /// 
   /// A value of type [Options] can be used as opts, or crypto.Hash(0) or
   /// crypto.SHA512 directly to select plain Ed25519 or Ed25519ph, respectively.
-  fn Sign(self, rand: io.Reader, message: Slice<byte>, opts: crypto.SignerOpts) -> Result<mut Slice<byte>, error>
+  fn Sign(
+    self,
+    rand: io.Reader,
+    message: Slice<byte>,
+    opts: crypto.SignerOpts,
+  ) -> Result<mut Slice<byte>, error>
 }
 
 impl PublicKey {

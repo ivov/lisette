@@ -46,7 +46,10 @@ pub fn New(name: string) -> mut Ref<Template>
 /// instead of the host operating system's file system.
 /// It accepts a list of glob patterns (see [path.Match]).
 /// (Note that most file names serve as glob patterns matching only themselves.)
-pub fn ParseFS(fsys: fs.FS, patterns: VarArgs<string>) -> Result<mut Ref<Template>, error>
+pub fn ParseFS(
+  fsys: fs.FS,
+  patterns: VarArgs<string>,
+) -> Result<mut Ref<Template>, error>
 
 /// ParseFiles creates a new [Template] and parses the template definitions from
 /// the named files. The returned template's name will have the base name and
@@ -57,7 +60,9 @@ pub fn ParseFS(fsys: fs.FS, patterns: VarArgs<string>) -> Result<mut Ref<Templat
 /// the last one mentioned will be the one that results.
 /// For instance, ParseFiles("a/foo", "b/foo") stores "b/foo" as the template
 /// named "foo", while "a/foo" is unavailable.
-pub fn ParseFiles(filenames: VarArgs<string>) -> Result<mut Ref<Template>, error>
+pub fn ParseFiles(
+  filenames: VarArgs<string>,
+) -> Result<mut Ref<Template>, error>
 
 /// ParseGlob creates a new [Template] and parses the template definitions from
 /// the files identified by the pattern. The files are matched according to the
@@ -122,7 +127,11 @@ impl Template {
   /// it the specified name. If the template has not been defined, this tree becomes
   /// its definition. If it has been defined and already has that name, the existing
   /// definition is replaced; otherwise a new template is created, defined, and returned.
-  fn AddParseTree(self: mut Ref<Template>, name: string, tree: Ref<parse.Tree>) -> Result<mut Ref<Template>, error>
+  fn AddParseTree(
+    self: mut Ref<Template>,
+    name: string,
+    tree: Ref<parse.Tree>,
+  ) -> Result<mut Ref<Template>, error>
 
   /// Clone returns a duplicate of the template, including all associated
   /// templates. The actual representation is not copied, but the name space of
@@ -144,7 +153,11 @@ impl Template {
   /// corresponding default: {{ or }}.
   /// The return value is the template, so calls can be chained.
   #[allow(unused_value)]
-  fn Delims(self: mut Ref<Template>, left: string, right: string) -> mut Ref<Template>
+  fn Delims(
+    self: mut Ref<Template>,
+    left: string,
+    right: string,
+  ) -> mut Ref<Template>
 
   /// Execute applies a parsed template to the specified data object,
   /// and writes the output to wr.
@@ -156,7 +169,11 @@ impl Template {
   /// 
   /// If data is a [reflect.Value], the template applies to the concrete
   /// value that the reflect.Value holds, as in [fmt.Print].
-  fn Execute(self: Ref<Template>, wr: io.Writer, data: Unknown) -> Result<(), error>
+  fn Execute(
+    self: Ref<Template>,
+    wr: io.Writer,
+    data: Unknown,
+  ) -> Result<(), error>
 
   /// ExecuteTemplate applies the template associated with t that has the given name
   /// to the specified data object and writes the output to wr.
@@ -228,13 +245,20 @@ impl Template {
   /// is considered empty and will not replace an existing template's body.
   /// This allows using Parse to add new named template definitions without
   /// overwriting the main template body.
-  fn Parse(self: mut Ref<Template>, text: string) -> Result<mut Ref<Template>, error>
+  fn Parse(
+    self: mut Ref<Template>,
+    text: string,
+  ) -> Result<mut Ref<Template>, error>
 
   /// ParseFS is like [Template.ParseFiles] or [Template.ParseGlob] but reads from the file system fsys
   /// instead of the host operating system's file system.
   /// It accepts a list of glob patterns (see [path.Match]).
   /// (Note that most file names serve as glob patterns matching only themselves.)
-  fn ParseFS(self: mut Ref<Template>, fsys: fs.FS, patterns: VarArgs<string>) -> Result<mut Ref<Template>, error>
+  fn ParseFS(
+    self: mut Ref<Template>,
+    fsys: fs.FS,
+    patterns: VarArgs<string>,
+  ) -> Result<mut Ref<Template>, error>
 
   /// ParseFiles parses the named files and associates the resulting templates with
   /// t. If an error occurs, parsing stops and the returned template is nil;
@@ -247,7 +271,10 @@ impl Template {
   /// 
   /// When parsing multiple files with the same name in different directories,
   /// the last one mentioned will be the one that results.
-  fn ParseFiles(self: mut Ref<Template>, filenames: VarArgs<string>) -> Result<mut Ref<Template>, error>
+  fn ParseFiles(
+    self: mut Ref<Template>,
+    filenames: VarArgs<string>,
+  ) -> Result<mut Ref<Template>, error>
 
   /// ParseGlob parses the template definitions in the files identified by the
   /// pattern and associates the resulting templates with t. The files are matched
@@ -257,7 +284,10 @@ impl Template {
   /// 
   /// When parsing multiple files with the same name in different directories,
   /// the last one mentioned will be the one that results.
-  fn ParseGlob(self: mut Ref<Template>, pattern: string) -> Result<mut Ref<Template>, error>
+  fn ParseGlob(
+    self: mut Ref<Template>,
+    pattern: string,
+  ) -> Result<mut Ref<Template>, error>
 
   /// Templates returns a slice of defined templates associated with t.
   fn Templates(self: Ref<Template>) -> Slice<Ref<Template>>

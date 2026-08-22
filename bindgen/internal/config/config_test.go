@@ -95,6 +95,9 @@ func TestNilConfigAccessorsDoNotPanic(t *testing.T) {
 	if _, ok := cfg.ViewOverrides("io", "Foo"); ok {
 		t.Error("ViewOverrides")
 	}
+	if cfg.HasWritableReturn("io", "Foo") {
+		t.Error("HasWritableReturn")
+	}
 }
 
 func TestViewOverridesDistinguishEmptyFromAbsent(t *testing.T) {

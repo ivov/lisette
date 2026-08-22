@@ -17,11 +17,18 @@ pub fn Dial(network: string, address: string) -> Result<mut Ref<Client>, error>
 
 /// DialHTTP connects to an HTTP RPC server at the specified network address
 /// listening on the default HTTP RPC path.
-pub fn DialHTTP(network: string, address: string) -> Result<mut Ref<Client>, error>
+pub fn DialHTTP(
+  network: string,
+  address: string,
+) -> Result<mut Ref<Client>, error>
 
 /// DialHTTPPath connects to an HTTP RPC server
 /// at the specified network address and path.
-pub fn DialHTTPPath(network: string, address: string, path: string) -> Result<mut Ref<Client>, error>
+pub fn DialHTTPPath(
+  network: string,
+  address: string,
+  path: string,
+) -> Result<mut Ref<Client>, error>
 
 /// HandleHTTP registers an HTTP handler for RPC messages to [DefaultServer]
 /// on [DefaultRPCPath] and a debugging handler on [DefaultDebugPath].
@@ -206,7 +213,11 @@ impl Server {
 
   /// RegisterName is like [Register] but uses the provided name for the type
   /// instead of the receiver's concrete type.
-  fn RegisterName(self: mut Ref<Server>, name: string, rcvr: Unknown) -> Result<(), error>
+  fn RegisterName(
+    self: mut Ref<Server>,
+    name: string,
+    rcvr: Unknown,
+  ) -> Result<(), error>
 
   /// ServeCodec is like [ServeConn] but uses the specified codec to
   /// decode requests and encode responses.
@@ -229,7 +240,10 @@ impl Server {
 
   /// ServeRequest is like [ServeCodec] but synchronously serves a single request.
   /// It does not close the codec upon completion.
-  fn ServeRequest(self: mut Ref<Server>, codec: ServerCodec) -> Result<(), error>
+  fn ServeRequest(
+    self: mut Ref<Server>,
+    codec: ServerCodec,
+  ) -> Result<(), error>
 }
 
 impl ServerError {

@@ -54,7 +54,11 @@ pub struct UnsupportedError(string)
 
 impl Encoder {
   /// Encode writes the Image m to w in PNG format.
-  fn Encode(self: Ref<Encoder>, w: io.Writer, m: image.Image) -> Result<(), error>
+  fn Encode(
+    self: Ref<Encoder>,
+    w: io.Writer,
+    m: image.Image,
+  ) -> Result<(), error>
 }
 
 impl FormatError {

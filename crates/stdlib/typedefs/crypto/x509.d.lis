@@ -259,7 +259,10 @@ pub fn CreateRevocationList(
 /// Deprecated: Legacy PEM encryption as specified in RFC 1423 is insecure by
 /// design. Since it does not authenticate the ciphertext, it is vulnerable to
 /// padding oracle attacks that can let an attacker recover the plaintext.
-pub fn DecryptPEMBlock(b: Ref<pem.Block>, password: Slice<byte>) -> Result<mut Slice<byte>, error>
+pub fn DecryptPEMBlock(
+  b: Ref<pem.Block>,
+  password: Slice<byte>,
+) -> Result<mut Slice<byte>, error>
 
 /// EncryptPEMBlock returns a PEM block of the specified type holding the
 /// given DER encoded data encrypted with the specified algorithm and
@@ -289,7 +292,9 @@ pub fn IsEncryptedPEMBlock(b: Ref<pem.Block>) -> bool
 /// This kind of key is commonly encoded in PEM blocks of type "EC PRIVATE KEY".
 /// For a more flexible key format which is not EC specific, use
 /// [MarshalPKCS8PrivateKey].
-pub fn MarshalECPrivateKey(key: Ref<ecdsa.PrivateKey>) -> Result<mut Slice<byte>, error>
+pub fn MarshalECPrivateKey(
+  key: Ref<ecdsa.PrivateKey>,
+) -> Result<mut Slice<byte>, error>
 
 /// MarshalPKCS1PrivateKey converts an [RSA] private key to PKCS #1, ASN.1 DER form.
 /// 
@@ -316,7 +321,9 @@ pub fn MarshalPKCS1PublicKey(key: Ref<rsa.PublicKey>) -> mut Slice<byte>
 /// This kind of key is commonly encoded in PEM blocks of type "PRIVATE KEY".
 /// 
 /// MarshalPKCS8PrivateKey runs [rsa.PrivateKey.Precompute] on RSA keys.
-pub fn MarshalPKCS8PrivateKey(key: mut Unknown) -> Result<mut Slice<byte>, error>
+pub fn MarshalPKCS8PrivateKey(
+  key: mut Unknown,
+) -> Result<mut Slice<byte>, error>
 
 /// MarshalPKIXPublicKey converts a public key to PKIX, ASN.1 DER form.
 /// The encoded public key is a SubjectPublicKeyInfo structure
@@ -341,7 +348,9 @@ pub fn OIDFromInts(oid: Slice<uint64>) -> Result<OID, error>
 /// garbage.
 /// 
 /// Deprecated: Use [ParseRevocationList] instead.
-pub fn ParseCRL(crlBytes: Slice<byte>) -> Result<mut Ref<pkix.CertificateList>, error>
+pub fn ParseCRL(
+  crlBytes: Slice<byte>,
+) -> Result<mut Ref<pkix.CertificateList>, error>
 
 /// ParseCertificate parses a single certificate from the given ASN.1 DER data.
 /// 
@@ -352,21 +361,29 @@ pub fn ParseCertificate(der: Slice<byte>) -> Result<mut Ref<Certificate>, error>
 
 /// ParseCertificateRequest parses a single certificate request from the
 /// given ASN.1 DER data.
-pub fn ParseCertificateRequest(asn1Data: Slice<byte>) -> Result<mut Ref<CertificateRequest>, error>
+pub fn ParseCertificateRequest(
+  asn1Data: Slice<byte>,
+) -> Result<mut Ref<CertificateRequest>, error>
 
 /// ParseCertificates parses one or more certificates from the given ASN.1 DER
 /// data. The certificates must be concatenated with no intermediate padding.
-pub fn ParseCertificates(der: Slice<byte>) -> Result<Slice<Ref<Certificate>>, error>
+pub fn ParseCertificates(
+  der: Slice<byte>,
+) -> Result<Slice<Ref<Certificate>>, error>
 
 /// ParseDERCRL parses a DER encoded CRL from the given bytes.
 /// 
 /// Deprecated: Use [ParseRevocationList] instead.
-pub fn ParseDERCRL(derBytes: Slice<byte>) -> Result<mut Ref<pkix.CertificateList>, error>
+pub fn ParseDERCRL(
+  derBytes: Slice<byte>,
+) -> Result<mut Ref<pkix.CertificateList>, error>
 
 /// ParseECPrivateKey parses an EC private key in SEC 1, ASN.1 DER form.
 /// 
 /// This kind of key is commonly encoded in PEM blocks of type "EC PRIVATE KEY".
-pub fn ParseECPrivateKey(der: Slice<byte>) -> Result<mut Ref<ecdsa.PrivateKey>, error>
+pub fn ParseECPrivateKey(
+  der: Slice<byte>,
+) -> Result<mut Ref<ecdsa.PrivateKey>, error>
 
 /// ParseOID parses a Object Identifier string, represented by ASCII numbers separated by dots.
 pub fn ParseOID(oid: string) -> Result<OID, error>
@@ -377,12 +394,16 @@ pub fn ParseOID(oid: string) -> Result<OID, error>
 /// 
 /// Before Go 1.24, the CRT parameters were ignored and recomputed. To restore
 /// the old behavior, use the GODEBUG=x509rsacrt=0 environment variable.
-pub fn ParsePKCS1PrivateKey(der: Slice<byte>) -> Result<mut Ref<rsa.PrivateKey>, error>
+pub fn ParsePKCS1PrivateKey(
+  der: Slice<byte>,
+) -> Result<mut Ref<rsa.PrivateKey>, error>
 
 /// ParsePKCS1PublicKey parses an [RSA] public key in PKCS #1, ASN.1 DER form.
 /// 
 /// This kind of key is commonly encoded in PEM blocks of type "RSA PUBLIC KEY".
-pub fn ParsePKCS1PublicKey(der: Slice<byte>) -> Result<mut Ref<rsa.PublicKey>, error>
+pub fn ParsePKCS1PublicKey(
+  der: Slice<byte>,
+) -> Result<mut Ref<rsa.PublicKey>, error>
 
 /// ParsePKCS8PrivateKey parses an unencrypted private key in PKCS #8, ASN.1 DER form.
 /// 
@@ -408,7 +429,9 @@ pub fn ParsePKIXPublicKey(derBytes: Slice<byte>) -> Result<Unknown, error>
 
 /// ParseRevocationList parses a X509 v2 [Certificate] Revocation List from the given
 /// ASN.1 DER data.
-pub fn ParseRevocationList(der: Slice<byte>) -> Result<mut Ref<RevocationList>, error>
+pub fn ParseRevocationList(
+  der: Slice<byte>,
+) -> Result<mut Ref<RevocationList>, error>
 
 /// SetFallbackRoots sets the roots to use during certificate verification, if no
 /// custom roots are specified and a platform verifier or a system certificate
@@ -679,7 +702,10 @@ impl Certificate {
   /// CheckCRLSignature checks that the signature in crl is from c.
   /// 
   /// Deprecated: Use [RevocationList.CheckSignatureFrom] instead.
-  fn CheckCRLSignature(self: Ref<Certificate>, crl: Ref<pkix.CertificateList>) -> Result<(), error>
+  fn CheckCRLSignature(
+    self: Ref<Certificate>,
+    crl: Ref<pkix.CertificateList>,
+  ) -> Result<(), error>
 
   /// CheckSignature verifies that signature is a valid signature over signed from
   /// c's public key.
@@ -699,7 +725,10 @@ impl Certificate {
   /// 
   /// This is a low-level API that performs very limited checks, and not a full
   /// path verifier. Most users should use [Certificate.Verify] instead.
-  fn CheckSignatureFrom(self: Ref<Certificate>, parent: Ref<Certificate>) -> Result<(), error>
+  fn CheckSignatureFrom(
+    self: Ref<Certificate>,
+    parent: Ref<Certificate>,
+  ) -> Result<(), error>
 
   /// CreateCRL returns a DER encoded CRL, signed by this Certificate, that
   /// contains the given list of revoked certificates.
@@ -749,7 +778,10 @@ impl Certificate {
   /// Certificates other than c in the returned chains should not be modified.
   /// 
   /// WARNING: this function doesn't do any revocation checking.
-  fn Verify(self: Ref<Certificate>, opts: VerifyOptions) -> Result<Slice<Slice<Ref<Certificate>>>, error>
+  fn Verify(
+    self: Ref<Certificate>,
+    opts: VerifyOptions,
+  ) -> Result<Slice<Slice<Ref<Certificate>>>, error>
 
   /// VerifyHostname returns nil if c is a valid certificate for the named host.
   /// Otherwise it returns an error describing the mismatch.
@@ -822,7 +854,10 @@ impl PublicKeyAlgorithm {
 impl RevocationList {
   /// CheckSignatureFrom verifies that the signature on rl is a valid signature
   /// from issuer.
-  fn CheckSignatureFrom(self: Ref<RevocationList>, parent: Ref<Certificate>) -> Result<(), error>
+  fn CheckSignatureFrom(
+    self: Ref<RevocationList>,
+    parent: Ref<Certificate>,
+  ) -> Result<(), error>
 }
 
 impl SignatureAlgorithm {

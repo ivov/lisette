@@ -90,7 +90,10 @@ pub fn FieldsFunc(s: Slice<byte>, f: fn(rune) -> bool) -> mut Slice<Slice<byte>>
 /// Unicode code points satisfying f(c).
 /// The iterator yields the same subslices that would be returned by [FieldsFunc](s),
 /// but without constructing a new slice containing the subslices.
-pub fn FieldsFuncSeq(s: Slice<byte>, f: fn(rune) -> bool) -> iter.Seq<Slice<byte>>
+pub fn FieldsFuncSeq(
+  s: Slice<byte>,
+  f: fn(rune) -> bool,
+) -> iter.Seq<Slice<byte>>
 
 /// FieldsSeq returns an iterator over subslices of s split around runs of
 /// whitespace characters, as defined by [unicode.IsSpace].
@@ -203,14 +206,23 @@ pub fn Repeat(b: Slice<byte>, count: int) -> Slice<byte>
 /// and after each UTF-8 sequence, yielding up to k+1 replacements
 /// for a k-rune slice.
 /// If n < 0, there is no limit on the number of replacements.
-pub fn Replace(s: Slice<byte>, old: Slice<byte>, new: Slice<byte>, n: int) -> mut Slice<byte>
+pub fn Replace(
+  s: Slice<byte>,
+  old: Slice<byte>,
+  new: Slice<byte>,
+  n: int,
+) -> mut Slice<byte>
 
 /// ReplaceAll returns a copy of the slice s with all
 /// non-overlapping instances of old replaced by new.
 /// If old is empty, it matches at the beginning of the slice
 /// and after each UTF-8 sequence, yielding up to k+1 replacements
 /// for a k-rune slice.
-pub fn ReplaceAll(s: Slice<byte>, old: Slice<byte>, new: Slice<byte>) -> mut Slice<byte>
+pub fn ReplaceAll(
+  s: Slice<byte>,
+  old: Slice<byte>,
+  new: Slice<byte>,
+) -> mut Slice<byte>
 
 /// Runes interprets s as a sequence of UTF-8-encoded code points.
 /// It returns a slice of runes (Unicode code points) equivalent to s.
@@ -237,7 +249,11 @@ pub fn SplitAfter(s: Slice<byte>, sep: Slice<byte>) -> mut Slice<Slice<byte>>
 ///   - n > 0: at most n subslices; the last subslice will be the unsplit remainder;
 ///   - n == 0: the result is nil (zero subslices);
 ///   - n < 0: all subslices.
-pub fn SplitAfterN(s: Slice<byte>, sep: Slice<byte>, n: int) -> mut Slice<Slice<byte>>
+pub fn SplitAfterN(
+  s: Slice<byte>,
+  sep: Slice<byte>,
+  n: int,
+) -> mut Slice<Slice<byte>>
 
 /// SplitAfterSeq returns an iterator over subslices of s split after each instance of sep.
 /// The iterator yields the same subslices that would be returned by [SplitAfter](s, sep),
@@ -254,7 +270,11 @@ pub fn SplitAfterSeq(s: Slice<byte>, sep: Slice<byte>) -> iter.Seq<Slice<byte>>
 ///   - n < 0: all subslices.
 /// 
 /// To split around the first instance of a separator, see [Cut].
-pub fn SplitN(s: Slice<byte>, sep: Slice<byte>, n: int) -> mut Slice<Slice<byte>>
+pub fn SplitN(
+  s: Slice<byte>,
+  sep: Slice<byte>,
+  n: int,
+) -> mut Slice<Slice<byte>>
 
 /// SplitSeq returns an iterator over all subslices of s separated by sep.
 /// The iterator yields the same subslices that would be returned by [Split](s, sep),
@@ -408,7 +428,10 @@ impl Buffer {
   /// it returns the data read before the error and the error itself (often [io.EOF]).
   /// ReadBytes returns err != nil if and only if the returned data does not end in
   /// delim.
-  fn ReadBytes(self: mut Ref<Buffer>, delim: byte) -> Partial<mut Slice<byte>, error>
+  fn ReadBytes(
+    self: mut Ref<Buffer>,
+    delim: byte,
+  ) -> Partial<mut Slice<byte>, error>
 
   /// ReadFrom reads data from r until EOF and appends it to the buffer, growing
   /// the buffer as needed. The return value n is the number of bytes read. Any
@@ -501,7 +524,11 @@ impl Reader {
   fn Read(self: mut Ref<Reader>, b: mut Slice<byte>) -> Partial<int, error>
 
   /// ReadAt implements the [io.ReaderAt] interface.
-  fn ReadAt(self: Ref<Reader>, b: mut Slice<byte>, off: int64) -> Partial<int, error>
+  fn ReadAt(
+    self: Ref<Reader>,
+    b: mut Slice<byte>,
+    off: int64,
+  ) -> Partial<int, error>
 
   /// ReadByte implements the [io.ByteReader] interface.
   fn ReadByte(self: mut Ref<Reader>) -> Result<byte, error>
@@ -513,7 +540,11 @@ impl Reader {
   fn Reset(self: mut Ref<Reader>, b: Slice<byte>)
 
   /// Seek implements the [io.Seeker] interface.
-  fn Seek(self: mut Ref<Reader>, offset: int64, whence: int) -> Result<int64, error>
+  fn Seek(
+    self: mut Ref<Reader>,
+    offset: int64,
+    whence: int,
+  ) -> Result<int64, error>
 
   /// Size returns the original length of the underlying byte slice.
   /// Size is the number of bytes available for reading via [Reader.ReadAt].

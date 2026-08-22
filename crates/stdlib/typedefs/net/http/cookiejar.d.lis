@@ -41,7 +41,10 @@ impl Jar {
   /// Cookies implements the Cookies method of the [http.CookieJar] interface.
   /// 
   /// It returns an empty slice if the URL's scheme is not HTTP or HTTPS.
-  fn Cookies(self: mut Ref<Jar>, u: Ref<url.URL>) -> mut Slice<mut Ref<http.Cookie>>
+  fn Cookies(
+    self: mut Ref<Jar>,
+    u: Ref<url.URL>,
+  ) -> mut Slice<mut Ref<http.Cookie>>
 
   /// SetCookies implements the SetCookies method of the [http.CookieJar] interface.
   /// 

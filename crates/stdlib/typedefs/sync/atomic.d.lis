@@ -65,20 +65,36 @@ pub fn CompareAndSwapInt64(addr: mut Ref<int64>, old: int64, new: int64) -> bool
 
 /// CompareAndSwapPointer executes the compare-and-swap operation for a unsafe.Pointer value.
 /// Consider using the more ergonomic and less error-prone [Pointer.CompareAndSwap] instead.
-pub fn CompareAndSwapPointer(addr: mut Ref<Unknown>, old: Unknown, new: Unknown) -> bool
+pub fn CompareAndSwapPointer(
+  addr: mut Ref<Unknown>,
+  old: Unknown,
+  new: Unknown,
+) -> bool
 
 /// CompareAndSwapUint32 executes the compare-and-swap operation for a uint32 value.
 /// Consider using the more ergonomic and less error-prone [Uint32.CompareAndSwap] instead.
-pub fn CompareAndSwapUint32(addr: mut Ref<uint32>, old: uint32, new: uint32) -> bool
+pub fn CompareAndSwapUint32(
+  addr: mut Ref<uint32>,
+  old: uint32,
+  new: uint32,
+) -> bool
 
 /// CompareAndSwapUint64 executes the compare-and-swap operation for a uint64 value.
 /// Consider using the more ergonomic and less error-prone [Uint64.CompareAndSwap] instead
 /// (particularly if you target 32-bit platforms; see the bugs section).
-pub fn CompareAndSwapUint64(addr: mut Ref<uint64>, old: uint64, new: uint64) -> bool
+pub fn CompareAndSwapUint64(
+  addr: mut Ref<uint64>,
+  old: uint64,
+  new: uint64,
+) -> bool
 
 /// CompareAndSwapUintptr executes the compare-and-swap operation for a uintptr value.
 /// Consider using the more ergonomic and less error-prone [Uintptr.CompareAndSwap] instead.
-pub fn CompareAndSwapUintptr(addr: mut Ref<uintptr>, old: uintptr, new: uintptr) -> bool
+pub fn CompareAndSwapUintptr(
+  addr: mut Ref<uintptr>,
+  old: uintptr,
+  new: uintptr,
+) -> bool
 
 /// LoadInt32 atomically loads *addr.
 /// Consider using the more ergonomic and less error-prone [Int32.Load] instead.

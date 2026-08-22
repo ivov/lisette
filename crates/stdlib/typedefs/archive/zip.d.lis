@@ -224,7 +224,10 @@ impl Writer {
   /// This returns a [Writer] to which the file contents should be written.
   /// The file's contents must be written to the io.Writer before the next
   /// call to [Writer.Create], [Writer.CreateHeader], [Writer.CreateRaw], or [Writer.Close].
-  fn CreateHeader(self: mut Ref<Writer>, fh: mut Ref<FileHeader>) -> Result<io.Writer, error>
+  fn CreateHeader(
+    self: mut Ref<Writer>,
+    fh: mut Ref<FileHeader>,
+  ) -> Result<io.Writer, error>
 
   /// CreateRaw adds a file to the zip archive using the provided [FileHeader] and
   /// returns a [Writer] to which the file contents should be written. The file's
@@ -236,7 +239,10 @@ impl Writer {
   /// CreateRaw's argument is stored in w. If the argument is a pointer to the embedded
   /// [FileHeader] in a [File] obtained from a [Reader] created from in-memory data,
   /// then w will refer to all of that memory.
-  fn CreateRaw(self: mut Ref<Writer>, fh: mut Ref<FileHeader>) -> Result<io.Writer, error>
+  fn CreateRaw(
+    self: mut Ref<Writer>,
+    fh: mut Ref<FileHeader>,
+  ) -> Result<io.Writer, error>
 
   /// Flush flushes any buffered data to the underlying writer.
   /// Calling Flush is not normally necessary; calling Close is sufficient.

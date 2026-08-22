@@ -104,7 +104,11 @@ pub interface Execer {
 /// 
 /// ExecContext must honor the context timeout and return when the context is canceled.
 pub interface ExecerContext {
-  fn ExecContext(ctx: context.Context, query: string, args: Slice<NamedValue>) -> Result<Result, error>
+  fn ExecContext(
+    ctx: context.Context,
+    query: string,
+    args: Slice<NamedValue>,
+  ) -> Result<Result, error>
 }
 
 /// IsolationLevel is the transaction isolation level stored in [TxOptions].
@@ -186,7 +190,11 @@ pub interface Queryer {
 /// 
 /// QueryContext must honor the context timeout and return when the context is canceled.
 pub interface QueryerContext {
-  fn QueryContext(ctx: context.Context, query: string, args: Slice<NamedValue>) -> Result<Rows, error>
+  fn QueryContext(
+    ctx: context.Context,
+    query: string,
+    args: Slice<NamedValue>,
+  ) -> Result<Rows, error>
 }
 
 /// Result is the result of a query execution.
@@ -307,12 +315,18 @@ pub interface Stmt {
 
 /// StmtExecContext enhances the [Stmt] interface by providing Exec with context.
 pub interface StmtExecContext {
-  fn ExecContext(ctx: context.Context, args: Slice<NamedValue>) -> Result<Result, error>
+  fn ExecContext(
+    ctx: context.Context,
+    args: Slice<NamedValue>,
+  ) -> Result<Result, error>
 }
 
 /// StmtQueryContext enhances the [Stmt] interface by providing Query with context.
 pub interface StmtQueryContext {
-  fn QueryContext(ctx: context.Context, args: Slice<NamedValue>) -> Result<Rows, error>
+  fn QueryContext(
+    ctx: context.Context,
+    args: Slice<NamedValue>,
+  ) -> Result<Rows, error>
 }
 
 /// Tx is a transaction.

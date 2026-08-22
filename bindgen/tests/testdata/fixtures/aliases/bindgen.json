@@ -13,6 +13,9 @@
         "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/aliases": {
           "Pick": ["0:rows"]
         }
+      },
+      "writable_return": {
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/aliases": ["Store.Items"]
       }
     }
   }

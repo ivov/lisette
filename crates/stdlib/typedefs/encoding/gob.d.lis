@@ -86,7 +86,10 @@ impl Decoder {
   /// a non-nil pointer to data or be an assignable reflect.Value (v.CanSet())
   /// If the input is at EOF, DecodeValue returns [io.EOF] and
   /// does not modify v.
-  fn DecodeValue(self: mut Ref<Decoder>, v: mut reflect.Value) -> Result<(), error>
+  fn DecodeValue(
+    self: mut Ref<Decoder>,
+    v: mut reflect.Value,
+  ) -> Result<(), error>
 }
 
 impl Encoder {
@@ -98,5 +101,8 @@ impl Encoder {
   /// EncodeValue transmits the data item represented by the reflection value,
   /// guaranteeing that all necessary type information has been transmitted first.
   /// Passing a nil pointer to EncodeValue will panic, as they cannot be transmitted by gob.
-  fn EncodeValue(self: mut Ref<Encoder>, value: reflect.Value) -> Result<(), error>
+  fn EncodeValue(
+    self: mut Ref<Encoder>,
+    value: reflect.Value,
+  ) -> Result<(), error>
 }

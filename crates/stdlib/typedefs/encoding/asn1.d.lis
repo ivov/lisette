@@ -19,7 +19,10 @@ pub fn Marshal(val: Unknown) -> Result<mut Slice<byte>, error>
 
 /// MarshalWithParams allows field parameters to be specified for the
 /// top-level element. The form of the params is the same as the field tags.
-pub fn MarshalWithParams(val: Unknown, params: string) -> Result<mut Slice<byte>, error>
+pub fn MarshalWithParams(
+  val: Unknown,
+  params: string,
+) -> Result<mut Slice<byte>, error>
 
 /// Unmarshal parses the DER-encoded ASN.1 data structure b
 /// and uses the reflect package to fill in an arbitrary value pointed at by val.
@@ -101,7 +104,11 @@ pub fn Unmarshal(b: Slice<byte>, val: Unknown) -> Result<Slice<byte>, error>
 
 /// UnmarshalWithParams allows field parameters to be specified for the
 /// top-level element. The form of the params is the same as the field tags.
-pub fn UnmarshalWithParams(b: Slice<byte>, val: Unknown, params: string) -> Result<Slice<byte>, error>
+pub fn UnmarshalWithParams(
+  b: Slice<byte>,
+  val: Unknown,
+  params: string,
+) -> Result<Slice<byte>, error>
 
 /// BitString is the structure to use when you want an ASN.1 BIT STRING type. A
 /// bit string is padded up to the nearest byte in memory and the number of

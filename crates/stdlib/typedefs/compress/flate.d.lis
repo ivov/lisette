@@ -44,7 +44,11 @@ pub fn NewWriter(w: io.Writer, level: int) -> Result<mut Ref<Writer>, error>
 /// any compressed output. The compressed data written to w
 /// can only be decompressed by a reader initialized with the
 /// same dictionary (see [NewReaderDict]).
-pub fn NewWriterDict(w: io.Writer, level: int, dict: Slice<byte>) -> Result<mut Ref<Writer>, error>
+pub fn NewWriterDict(
+  w: io.Writer,
+  level: int,
+  dict: Slice<byte>,
+) -> Result<mut Ref<Writer>, error>
 
 /// A CorruptInputError reports the presence of corrupt input at a given offset.
 pub struct CorruptInputError(int64)
