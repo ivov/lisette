@@ -9752,6 +9752,49 @@ fn main() {
 }
 
 #[test]
+fn unused_enum_variant_iterate_attr_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+#[iterate]
+#[display]
+enum Direction {
+  North,
+  East,
+  West,
+  South,
+}
+
+fn main() {
+  for d in Direction.variants() {
+    fmt.Println(d)
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn unused_enum_variant_display_attr_still_warns() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+#[display]
+enum Color {
+  Red,
+  Unused,
+}
+
+fn main() {
+  fmt.Println(Color.Red)
+}
+"#
+    );
+}
+
+#[test]
 fn public_enum_variants_not_unused() {
     assert_no_lint_warnings!(
         r#"
