@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787437084695,
+  "lastUpdate": 1787437262405,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -26880,6 +26880,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 31980,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27353,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18649,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14814,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13531,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8379,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6029,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2902,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1850,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 736,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9386,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "1fbbc77aff41543c6de9fb4176df52f2011922a3",
+          "message": "fix: emit a Go newtype autofill as its zero value (#1319)",
+          "timestamp": "2026-08-23T00:20:38+02:00",
+          "tree_id": "3558cf110b883cfa30184be27f1ad1eda3db0174",
+          "url": "https://github.com/ivov/lisette/commit/1fbbc77aff41543c6de9fb4176df52f2011922a3"
+        },
+        "date": 1787437261143,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 136557,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32009,
             "unit": "lines"
           },
           {
