@@ -451,6 +451,27 @@ fn test() -> Wrapper {
 }
 
 #[test]
+fn go_underscored_type_and_field_names_stay_verbatim() {
+    let input = r#"
+import "go:example.com/lib"
+
+fn test() -> int {
+  let mut s = lib.Stat_t{..}
+  s.Pad_cgo_0 = 1
+  let t = lib.Stat_t{ Pad_cgo_0: s.Pad_cgo_0, .. }
+  t.Pad_cgo_0
+}
+"#;
+    let typedef = r#"
+pub struct Stat_t {
+  pub Pad_cgo_0: int,
+  pub Size: int,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/lib", typedef)]);
+}
+
+#[test]
 fn third_party_go_import_path_emitted_in_full() {
     let input = r#"
 import "go:github.com/bwmarrin/discordgo"

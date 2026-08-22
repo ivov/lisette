@@ -352,7 +352,7 @@ impl Planner<'_> {
                     continue;
                 };
                 let go_field_name = if self.struct_field_is_exported(ty, &name) {
-                    go_name::make_exported(&name)
+                    go_name::exported_member(ty, &name)
                 } else if self.field_is_embedded(ty, &name) {
                     go_name::escape_keyword(&name).into_owned()
                 } else {
@@ -452,7 +452,7 @@ impl Planner<'_> {
                     let go_name = if is_tuple {
                         format!("F{}", index)
                     } else if self.struct_field_is_exported(ty, &name) {
-                        go_name::make_exported(&name)
+                        go_name::exported_member(ty, &name)
                     } else if self.field_is_embedded(ty, &name) {
                         go_name::escape_keyword(&name).into_owned()
                     } else {
@@ -575,13 +575,15 @@ impl Planner<'_> {
                 } else {
                     String::new()
                 };
-                let pkg = self.require_package_import(&self.canonical_package(package));
-                return format!(
-                    "{}.{}{}",
-                    pkg,
-                    go_name::snake_to_camel(type_name),
-                    type_args
-                );
+                let canonical = self.canonical_package(package);
+                // `snake_to_camel` would fold `Stat_t` to `StatT`.
+                let member = if go_name::is_go_import(&canonical) {
+                    type_name.to_string()
+                } else {
+                    go_name::snake_to_camel(type_name)
+                };
+                let pkg = self.require_package_import(&canonical);
+                return format!("{}.{}{}", pkg, member, type_args);
             }
         }
 
@@ -656,11 +658,11 @@ impl Planner<'_> {
     ) -> String {
         if let Some(ref enum_ctx) = ctx.enum_ctx {
             self.enum_struct_field_name(&enum_ctx.enum_id, &enum_ctx.variant_name, field_name)
-                .unwrap_or_else(|| go_name::make_exported(field_name))
+                .unwrap_or_else(|| go_name::exported_member(ctx.ty, field_name))
         } else if self.field_is_embedded(ctx.ty, field_name) {
             go_name::escape_keyword(field_name).into_owned()
         } else if self.struct_field_is_exported(ctx.ty, field_name) {
-            go_name::make_exported(field_name)
+            go_name::exported_member(ctx.ty, field_name)
         } else {
             go_name::unexported_method_go_name(field_name)
         }
