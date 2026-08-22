@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787429715395,
+  "lastUpdate": 1787434037947,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -26732,6 +26732,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "lsp",
             "value": 5992,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2902,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1850,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 714,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9386,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "storm.patrik@gmail.com",
+            "name": "Patrik Storm",
+            "username": "stormpat"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "fa6f4ef2eb8ff6b8999029f024efb3073727d7f6",
+          "message": "fix: lsp auto-complete on embedded structs (#1313)",
+          "timestamp": "2026-08-22T23:26:52+02:00",
+          "tree_id": "23c38bc7c104502b5b4954adbf60dfcedca92736",
+          "url": "https://github.com/ivov/lisette/commit/fa6f4ef2eb8ff6b8999029f024efb3073727d7f6"
+        },
+        "date": 1787434036840,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 136506,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 31980,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27353,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18649,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14814,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13531,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8379,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6029,
             "unit": "lines"
           },
           {
