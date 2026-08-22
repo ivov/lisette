@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Unused variant
+   ╭─[test.lis:7:3]
+ 6 │   Red,
+ 7 │   Unused,
+   ·   ───┬──
+   ·      ╰── never constructed or matched
+ 8 │ }
+   ╰────
+  help: Use or remove this enum variant · code: [lint.unused_enum_variant]
