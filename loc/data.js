@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787437262405,
+  "lastUpdate": 1787438342224,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -26969,6 +26969,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 32009,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27353,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18649,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14814,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13531,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8379,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6029,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2902,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1850,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 736,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9386,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "28bbb035c1c69d245a546687c1fcada82fcd6d28",
+          "message": "fix: emit Go-imported type and field names verbatim (#1320)",
+          "timestamp": "2026-08-23T00:38:38+02:00",
+          "tree_id": "5f8c25dab0af17e95c00648e6db97a96e960f777",
+          "url": "https://github.com/ivov/lisette/commit/28bbb035c1c69d245a546687c1fcada82fcd6d28"
+        },
+        "date": 1787438340748,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 136565,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32017,
             "unit": "lines"
           },
           {
