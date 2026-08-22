@@ -500,6 +500,28 @@ static GO_STDLIB_WINDOWS_AMD64: LazyLock<HashMap<&str, &str>> = LazyLock::new(||
     ])
 });
 
+static GO_STDLIB_WINDOWS_ARM64: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
+    HashMap::from([
+        ("os", include_str!("../typedefs/os_windows_amd64.d.lis")),
+        (
+            "os/exec",
+            include_str!("../typedefs/os/exec_windows_amd64.d.lis"),
+        ),
+        (
+            "path/filepath",
+            include_str!("../typedefs/path/filepath_windows_amd64.d.lis"),
+        ),
+        (
+            "runtime",
+            include_str!("../typedefs/runtime_windows_arm64.d.lis"),
+        ),
+        (
+            "syscall",
+            include_str!("../typedefs/syscall_windows_amd64.d.lis"),
+        ),
+    ])
+});
+
 static GO_STDLIB_PACKAGE_TARGETS: LazyLock<HashMap<&str, &[(&str, &str)]>> = LazyLock::new(|| {
     HashMap::from([(
         "log/syslog",
@@ -561,6 +583,7 @@ fn overlay_for(target: Target) -> Option<&'static HashMap<&'static str, &'static
         ("darwin", "amd64") => Some(&GO_STDLIB_DARWIN_AMD64),
         ("darwin", "arm64") => Some(&GO_STDLIB_DARWIN_ARM64),
         ("windows", "amd64") => Some(&GO_STDLIB_WINDOWS_AMD64),
+        ("windows", "arm64") => Some(&GO_STDLIB_WINDOWS_ARM64),
         _ => None,
     }
 }
