@@ -20,7 +20,11 @@ pub fn DecodeAll(r: io.Reader) -> Result<mut Ref<GIF>, error>
 pub fn DecodeConfig(r: io.Reader) -> Result<image.Config, error>
 
 /// Encode writes the Image m to w in GIF format.
-pub fn Encode(w: io.Writer, m: image.Image, o: Ref<Options>) -> Result<(), error>
+pub fn Encode(
+  w: io.Writer,
+  m: image.Image,
+  o: Ref<Options>,
+) -> Result<(), error>
 
 /// EncodeAll writes the images in g to w in GIF format with the
 /// given loop count and delay between frames.

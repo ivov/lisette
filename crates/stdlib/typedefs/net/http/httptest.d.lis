@@ -15,7 +15,11 @@ import "go:net/http"
 pub fn NewRecorder() -> mut Ref<ResponseRecorder>
 
 /// NewRequest wraps NewRequestWithContext using context.Background.
-pub fn NewRequest(method: string, target: string, body: io.Reader) -> mut Ref<http.Request>
+pub fn NewRequest(
+  method: string,
+  target: string,
+  body: io.Reader,
+) -> mut Ref<http.Request>
 
 /// NewRequestWithContext returns a new incoming server Request, suitable
 /// for passing to an [http.Handler] for testing.
@@ -119,14 +123,20 @@ impl ResponseRecorder {
 
   /// Write implements http.ResponseWriter. The data in buf is written to
   /// rw.Body, if not nil.
-  fn Write(self: mut Ref<ResponseRecorder>, buf: Slice<byte>) -> Partial<int, error>
+  fn Write(
+    self: mut Ref<ResponseRecorder>,
+    buf: Slice<byte>,
+  ) -> Partial<int, error>
 
   /// WriteHeader implements [http.ResponseWriter].
   fn WriteHeader(self: mut Ref<ResponseRecorder>, code: int)
 
   /// WriteString implements [io.StringWriter]. The data in str is written
   /// to rw.Body, if not nil.
-  fn WriteString(self: mut Ref<ResponseRecorder>, str: string) -> Partial<int, error>
+  fn WriteString(
+    self: mut Ref<ResponseRecorder>,
+    str: string,
+  ) -> Partial<int, error>
 }
 
 impl Server {

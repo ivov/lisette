@@ -15,7 +15,11 @@ pub fn DecodeConfig(r: io.Reader) -> Result<image.Config, error>
 
 /// Encode writes the Image m to w in JPEG 4:2:0 baseline format with the given
 /// options. Default parameters are used if a nil *[Options] is passed.
-pub fn Encode(w: io.Writer, m: image.Image, o: Ref<Options>) -> Result<(), error>
+pub fn Encode(
+  w: io.Writer,
+  m: image.Image,
+  o: Ref<Options>,
+) -> Result<(), error>
 
 /// A FormatError reports that the input is not a valid JPEG.
 pub struct FormatError(string)

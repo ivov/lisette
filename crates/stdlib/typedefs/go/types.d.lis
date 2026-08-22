@@ -362,7 +362,11 @@ pub fn LookupSelection(
 /// present in V have matching types (e.g., for a type assertion x.(T) where
 /// x is of interface type V).
 #[go(comma_ok)]
-pub fn MissingMethod(v: Type, t: mut Ref<Interface>, static: bool) -> Option<mut Ref<Func>>
+pub fn MissingMethod(
+  v: Type,
+  t: mut Ref<Interface>,
+  static: bool,
+) -> Option<mut Ref<Func>>
 
 /// NewAlias creates a new Alias type with the given type name and rhs.
 /// rhs must not be nil.
@@ -439,7 +443,11 @@ pub fn NewInterfaceType(
 ) -> mut Ref<Interface>
 
 /// NewLabel returns a new label.
-pub fn NewLabel(pos: token.Pos, pkg: Ref<Package>, name: string) -> mut Ref<Label>
+pub fn NewLabel(
+  pos: token.Pos,
+  pkg: Ref<Package>,
+  name: string,
+) -> mut Ref<Label>
 
 /// NewMap returns a new map for the given key and element types.
 pub fn NewMap(key: Type, elem: Type) -> mut Ref<Map>
@@ -465,7 +473,12 @@ pub fn NewPackage(path: string, name: string) -> mut Ref<Package>
 /// 
 /// The caller must subsequently call [Var.SetKind] if the desired Var
 /// is not of kind [ParamVar]: for example, [RecvVar] or [ResultVar].
-pub fn NewParam(pos: token.Pos, pkg: Ref<Package>, name: string, typ: Type) -> mut Ref<Var>
+pub fn NewParam(
+  pos: token.Pos,
+  pkg: Ref<Package>,
+  name: string,
+  typ: Type,
+) -> mut Ref<Var>
 
 /// NewPkgName returns a new PkgName object representing an imported package.
 /// The remaining arguments set the attributes found with all Objects.
@@ -527,7 +540,10 @@ pub fn NewSlice(elem: Type) -> mut Ref<Slice>
 /// If a field with index i has a tag, tags[i] must be that tag, but len(tags) may be
 /// only as long as required to hold the tag with the largest index i. Consequently,
 /// if no field has a tag, tags may be nil.
-pub fn NewStruct(fields: Slice<Ref<Var>>, tags: Slice<string>) -> mut Ref<Struct>
+pub fn NewStruct(
+  fields: Slice<Ref<Var>>,
+  tags: Slice<string>,
+) -> mut Ref<Struct>
 
 /// NewTerm returns a new union term.
 pub fn NewTerm(tilde: bool, typ: Type) -> mut Ref<Term>
@@ -542,7 +558,12 @@ pub fn NewTuple(x: VarArgs<Ref<Var>>) -> Option<mut Ref<Tuple>>
 /// It may also be nil such that the returned TypeName can be used as
 /// argument for NewNamed, which will set the TypeName's type as a side-
 /// effect.
-pub fn NewTypeName(pos: token.Pos, pkg: Ref<Package>, name: string, typ: Type) -> mut Ref<TypeName>
+pub fn NewTypeName(
+  pos: token.Pos,
+  pkg: Ref<Package>,
+  name: string,
+  typ: Type,
+) -> mut Ref<TypeName>
 
 /// NewTypeParam returns a new TypeParam. Type parameters may be set on a Named
 /// type by calling SetTypeParams. Setting a type parameter on more than one type
@@ -550,7 +571,10 @@ pub fn NewTypeName(pos: token.Pos, pkg: Ref<Package>, name: string, typ: Type) -
 /// 
 /// The constraint argument can be nil, and set later via SetConstraint. If the
 /// constraint is non-nil, it must be fully defined.
-pub fn NewTypeParam(obj: mut Ref<TypeName>, constraint: Type) -> mut Ref<TypeParam>
+pub fn NewTypeParam(
+  obj: mut Ref<TypeName>,
+  constraint: Type,
+) -> mut Ref<TypeParam>
 
 /// NewUnion returns a new [Union] type with the given terms.
 /// It is an error to create an empty union; they are syntactically not possible.
@@ -561,7 +585,12 @@ pub fn NewUnion(terms: Slice<Ref<Term>>) -> mut Ref<Union>
 /// 
 /// The caller must subsequently call [Var.SetKind]
 /// if the desired Var is not of kind [PackageVar].
-pub fn NewVar(pos: token.Pos, pkg: Ref<Package>, name: string, typ: Type) -> mut Ref<Var>
+pub fn NewVar(
+  pos: token.Pos,
+  pkg: Ref<Package>,
+  name: string,
+  typ: Type,
+) -> mut Ref<Var>
 
 /// ObjectString returns the string form of obj.
 /// The Qualifier controls the printing of
@@ -760,7 +789,11 @@ pub interface Importer {
 /// Use go/importer to obtain an ImporterFrom implementation.
 pub interface ImporterFrom {
   fn Import(path: string) -> Result<mut Ref<Package>, error>
-  fn ImportFrom(path: string, dir: string, mode: ImportMode) -> Result<mut Ref<Package>, error>
+  fn ImportFrom(
+    path: string,
+    dir: string,
+    mode: ImportMode,
+  ) -> Result<mut Ref<Package>, error>
 }
 
 /// Info holds result type information for a type-checked package.
@@ -1142,7 +1175,10 @@ impl Chan {
 
 impl Checker {
   /// Files checks the provided files as part of the checker's package.
-  fn Files(self: mut Ref<Checker>, files: Slice<Ref<ast.File>>) -> Result<(), error>
+  fn Files(
+    self: mut Ref<Checker>,
+    files: Slice<Ref<ast.File>>,
+  ) -> Result<(), error>
 }
 
 impl Config {
@@ -1226,7 +1262,10 @@ impl Info {
   /// For dot-imports, the package name is ".".
   /// 
   /// Precondition: the Defs and Implicts maps are populated.
-  fn PkgNameOf(self: Ref<Info>, imp: Ref<ast.ImportSpec>) -> Option<mut Ref<PkgName>>
+  fn PkgNameOf(
+    self: Ref<Info>,
+    imp: Ref<ast.ImportSpec>,
+  ) -> Option<mut Ref<PkgName>>
 
   /// TypeOf returns the type of expression e, or nil if not found.
   /// Precondition: the Types, Uses and Defs maps are populated.
@@ -1339,7 +1378,11 @@ impl MethodSet {
   fn Len(self: Ref<MethodSet>) -> int
 
   /// Lookup returns the method with matching package and name, or nil if not found.
-  fn Lookup(self: Ref<MethodSet>, pkg: Ref<Package>, name: string) -> Option<mut Ref<Selection>>
+  fn Lookup(
+    self: Ref<MethodSet>,
+    pkg: Ref<Package>,
+    name: string,
+  ) -> Option<mut Ref<Selection>>
 
   /// Methods returns a go1.23 iterator over the methods of a method set.
   /// 
@@ -1526,7 +1569,11 @@ impl Scope {
   /// object was inserted into the scope and already had a parent at that
   /// time (see Insert). This can only happen for dot-imported objects
   /// whose parent is the scope of the package that exported them.
-  fn LookupParent(self: Ref<Scope>, name: string, pos: token.Pos) -> (Option<mut Ref<Scope>>, Option<Object>)
+  fn LookupParent(
+    self: Ref<Scope>,
+    name: string,
+    pos: token.Pos,
+  ) -> (Option<mut Ref<Scope>>, Option<Object>)
 
   /// Names returns the scope's element names in sorted order.
   fn Names(self: Ref<Scope>) -> Slice<string>

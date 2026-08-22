@@ -295,7 +295,11 @@ impl Map {
   /// LoadOrStore returns the existing value for the key if present.
   /// Otherwise, it stores and returns the given value.
   /// The loaded result is true if the value was loaded, false if stored.
-  fn LoadOrStore(self: mut Ref<Map>, key: Unknown, value: Unknown) -> (Unknown, bool)
+  fn LoadOrStore(
+    self: mut Ref<Map>,
+    key: Unknown,
+    value: Unknown,
+  ) -> (Unknown, bool)
 
   /// Range calls f sequentially for each key and value present in the map.
   /// If f returns false, range stops the iteration.

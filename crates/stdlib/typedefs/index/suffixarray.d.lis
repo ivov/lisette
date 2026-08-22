@@ -24,7 +24,11 @@ impl Index {
   /// in successive order. Otherwise, at most n matches are returned and
   /// they may not be successive. The result is nil if there are no matches,
   /// or if n == 0.
-  fn FindAllIndex(self: Ref<Index>, r: Ref<regexp.Regexp>, n: int) -> mut Slice<mut Slice<int>>
+  fn FindAllIndex(
+    self: Ref<Index>,
+    r: Ref<regexp.Regexp>,
+    n: int,
+  ) -> mut Slice<mut Slice<int>>
 
   /// Lookup returns an unsorted list of at most n indices where the byte string s
   /// occurs in the indexed data. If n < 0, all occurrences are returned.

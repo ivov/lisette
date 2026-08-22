@@ -130,7 +130,11 @@ impl Conn {
   /// 		return nil, err
   /// 	}
   /// 	return c.ReadCodeLine(250)
-  fn Cmd(self: mut Ref<Conn>, format: string, args: VarArgs<Unknown>) -> Result<uint, error>
+  fn Cmd(
+    self: mut Ref<Conn>,
+    format: string,
+    args: VarArgs<Unknown>,
+  ) -> Result<uint, error>
 }
 
 impl Error {
@@ -229,7 +233,10 @@ impl Reader {
   /// If the response is multi-line, ReadCodeLine returns an error.
   /// 
   /// An expectCode <= 0 disables the check of the status code.
-  fn ReadCodeLine(self: Ref<Reader>, expectCode: int) -> Result<(int, string), error>
+  fn ReadCodeLine(
+    self: Ref<Reader>,
+    expectCode: int,
+  ) -> Result<(int, string), error>
 
   /// ReadContinuedLine reads a possibly continued line from r,
   /// eliding the final trailing ASCII white space.
@@ -253,7 +260,9 @@ impl Reader {
 
   /// ReadContinuedLineBytes is like [Reader.ReadContinuedLine] but
   /// returns a []byte instead of a string.
-  fn ReadContinuedLineBytes(self: mut Ref<Reader>) -> Result<mut Slice<byte>, error>
+  fn ReadContinuedLineBytes(
+    self: mut Ref<Reader>,
+  ) -> Result<mut Slice<byte>, error>
 
   /// ReadDotBytes reads a dot-encoding and returns the decoded data.
   /// 
@@ -320,7 +329,10 @@ impl Reader {
   /// the status is not in the range [310,319].
   /// 
   /// An expectCode <= 0 disables the check of the status code.
-  fn ReadResponse(self: Ref<Reader>, expectCode: int) -> Result<(int, string), error>
+  fn ReadResponse(
+    self: Ref<Reader>,
+    expectCode: int,
+  ) -> Result<(int, string), error>
 }
 
 impl Writer {
@@ -334,5 +346,9 @@ impl Writer {
   fn DotWriter(self: mut Ref<Writer>) -> io.WriteCloser
 
   /// PrintfLine writes the formatted output followed by \r\n.
-  fn PrintfLine(self: Ref<Writer>, format: string, args: VarArgs<Unknown>) -> Result<(), error>
+  fn PrintfLine(
+    self: Ref<Writer>,
+    format: string,
+    args: VarArgs<Unknown>,
+  ) -> Result<(), error>
 }

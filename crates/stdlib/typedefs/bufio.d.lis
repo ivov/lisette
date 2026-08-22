@@ -31,7 +31,10 @@ pub fn NewWriter(w: io.Writer) -> mut Ref<Writer>
 pub fn NewWriterSize(w: io.Writer, size: int) -> mut Ref<Writer>
 
 /// ScanBytes is a split function for a [Scanner] that returns each byte as a token.
-pub fn ScanBytes(data: Slice<byte>, atEOF: bool) -> Result<(int, Slice<byte>), error>
+pub fn ScanBytes(
+  data: Slice<byte>,
+  atEOF: bool,
+) -> Result<(int, Slice<byte>), error>
 
 /// ScanLines is a split function for a [Scanner] that returns each line of
 /// text, stripped of any trailing end-of-line marker. The returned line may
@@ -39,7 +42,10 @@ pub fn ScanBytes(data: Slice<byte>, atEOF: bool) -> Result<(int, Slice<byte>), e
 /// by one mandatory newline. In regular expression notation, it is `\r?\n`.
 /// The last non-empty line of input will be returned even if it has no
 /// newline.
-pub fn ScanLines(data: Slice<byte>, atEOF: bool) -> Result<(int, Slice<byte>), error>
+pub fn ScanLines(
+  data: Slice<byte>,
+  atEOF: bool,
+) -> Result<(int, Slice<byte>), error>
 
 /// ScanRunes is a split function for a [Scanner] that returns each
 /// UTF-8-encoded rune as a token. The sequence of runes returned is
@@ -47,13 +53,19 @@ pub fn ScanLines(data: Slice<byte>, atEOF: bool) -> Result<(int, Slice<byte>), e
 /// means that erroneous UTF-8 encodings translate to U+FFFD = "\xef\xbf\xbd".
 /// Because of the Scan interface, this makes it impossible for the client to
 /// distinguish correctly encoded replacement runes from encoding errors.
-pub fn ScanRunes(data: Slice<byte>, atEOF: bool) -> Result<(int, Slice<byte>), error>
+pub fn ScanRunes(
+  data: Slice<byte>,
+  atEOF: bool,
+) -> Result<(int, Slice<byte>), error>
 
 /// ScanWords is a split function for a [Scanner] that returns each
 /// space-separated word of text, with surrounding spaces deleted. It will
 /// never return an empty string. The definition of space is set by
 /// unicode.IsSpace.
-pub fn ScanWords(data: Slice<byte>, atEOF: bool) -> Result<(int, Slice<byte>), error>
+pub fn ScanWords(
+  data: Slice<byte>,
+  atEOF: bool,
+) -> Result<(int, Slice<byte>), error>
 
 /// ReadWriter stores pointers to a [Reader] and a [Writer].
 /// It implements [io.ReadWriter].
@@ -194,7 +206,10 @@ impl Reader {
   /// ReadBytes returns err != nil if and only if the returned data does not end in
   /// delim.
   /// For simple uses, a Scanner may be more convenient.
-  fn ReadBytes(self: mut Ref<Reader>, delim: byte) -> Partial<mut Slice<byte>, error>
+  fn ReadBytes(
+    self: mut Ref<Reader>,
+    delim: byte,
+  ) -> Partial<mut Slice<byte>, error>
 
   /// ReadLine is a low-level line-reading primitive. Most callers should use
   /// [Reader.ReadBytes]('\n') or [Reader.ReadString]('\n') instead or use a [Scanner].
@@ -229,7 +244,10 @@ impl Reader {
   /// by the next I/O operation, most clients should use
   /// [Reader.ReadBytes] or ReadString instead.
   /// ReadSlice returns err != nil if and only if line does not end in delim.
-  fn ReadSlice(self: mut Ref<Reader>, delim: byte) -> Partial<mut Slice<byte>, error>
+  fn ReadSlice(
+    self: mut Ref<Reader>,
+    delim: byte,
+  ) -> Partial<mut Slice<byte>, error>
 
   /// ReadString reads until the first occurrence of delim in the input,
   /// returning a string containing the data up to and including the delimiter.

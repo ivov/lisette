@@ -11,7 +11,11 @@ import "go:io"
 /// It calls [Config.Fprint] with default settings.
 /// Note that gofmt uses tabs for indentation but spaces for alignment;
 /// use format.Node (package go/format) for output that matches gofmt.
-pub fn Fprint(output: io.Writer, fset: Ref<token.FileSet>, node: Unknown) -> Result<(), error>
+pub fn Fprint(
+  output: io.Writer,
+  fset: Ref<token.FileSet>,
+  node: Unknown,
+) -> Result<(), error>
 
 /// A CommentedNode bundles an AST node and corresponding comments.
 /// It may be provided as argument to any of the [Fprint] functions.

@@ -34,7 +34,10 @@ pub fn find(items: Slice<models.Task>, id: int) -> Option<models.Task> {
 }
 
 /// Marks a task as done. Returns an error if the task doesn't exist.
-pub fn complete(items: Slice<models.Task>, id: int) -> Result<Slice<models.Task>, error> {
+pub fn complete(
+  items: Slice<models.Task>,
+  id: int,
+) -> Result<Slice<models.Task>, error> {
   let Some(_) = find(items, id) else {
     return Err(errors.New(f"task #{id} not found"))
   }
@@ -46,7 +49,11 @@ pub fn complete(items: Slice<models.Task>, id: int) -> Result<Slice<models.Task>
 }
 
 /// Cancels a task with a reason. Returns an error if the task doesn't exist.
-pub fn cancel(items: Slice<models.Task>, id: int, reason: string) -> Result<Slice<models.Task>, error> {
+pub fn cancel(
+  items: Slice<models.Task>,
+  id: int,
+  reason: string,
+) -> Result<Slice<models.Task>, error> {
   let Some(_) = find(items, id) else {
     return Err(errors.New(f"task #{id} not found"))
   }

@@ -11,7 +11,9 @@ import "go:time"
 pub fn ParseAddress(address: string) -> Result<mut Ref<Address>, error>
 
 /// ParseAddressList parses the given string as a list of addresses.
-pub fn ParseAddressList(list: string) -> Result<mut Slice<mut Ref<Address>>, error>
+pub fn ParseAddressList(
+  list: string,
+) -> Result<mut Slice<mut Ref<Address>>, error>
 
 /// ParseDate parses an RFC 5322 date string.
 pub fn ParseDate(date: string) -> Result<time.Time, error>
@@ -55,16 +57,25 @@ impl Address {
 impl AddressParser {
   /// Parse parses a single RFC 5322 address of the
   /// form "Gogh Fir <gf@example.com>" or "foo@example.com".
-  fn Parse(self: Ref<AddressParser>, address: string) -> Result<mut Ref<Address>, error>
+  fn Parse(
+    self: Ref<AddressParser>,
+    address: string,
+  ) -> Result<mut Ref<Address>, error>
 
   /// ParseList parses the given string as a list of comma-separated addresses
   /// of the form "Gogh Fir <gf@example.com>" or "foo@example.com".
-  fn ParseList(self: Ref<AddressParser>, list: string) -> Result<mut Slice<mut Ref<Address>>, error>
+  fn ParseList(
+    self: Ref<AddressParser>,
+    list: string,
+  ) -> Result<mut Slice<mut Ref<Address>>, error>
 }
 
 impl Header {
   /// AddressList parses the named header field as a list of addresses.
-  fn AddressList(self, key: string) -> Result<mut Slice<mut Ref<Address>>, error>
+  fn AddressList(
+    self,
+    key: string,
+  ) -> Result<mut Slice<mut Ref<Address>>, error>
 
   /// Date parses the Date header field.
   fn Date(self) -> Result<time.Time, error>

@@ -210,7 +210,10 @@ pub fn LoadLocation(name: string) -> Result<mut Ref<Location>, error>
 /// initialized from the IANA Time Zone database-formatted data.
 /// The data should be in the format of a standard IANA time zone file
 /// (for example, the content of /etc/localtime on Unix systems).
-pub fn LoadLocationFromTZData(name: string, data: Slice<byte>) -> Result<mut Ref<Location>, error>
+pub fn LoadLocationFromTZData(
+  name: string,
+  data: Slice<byte>,
+) -> Result<mut Ref<Location>, error>
 
 /// NewTicker returns a new [Ticker] containing a channel that will send
 /// the current time on the channel after each tick. The period of the
@@ -313,7 +316,11 @@ pub fn ParseDuration(s: string) -> Result<Duration, error>
 /// ParseInLocation interprets the time as in the given location.
 /// Second, when given a zone offset or abbreviation, Parse tries to match it
 /// against the Local location; ParseInLocation uses the given location.
-pub fn ParseInLocation(layout: string, value: string, loc: Ref<Location>) -> Result<Time, error>
+pub fn ParseInLocation(
+  layout: string,
+  value: string,
+  loc: Ref<Location>,
+) -> Result<Time, error>
 
 /// Since returns the time elapsed since t.
 /// It is shorthand for time.Now().Sub(t).
@@ -2582,7 +2589,10 @@ impl Time {
   fn UnixNano(self) -> int64
 
   /// UnmarshalBinary implements the [encoding.BinaryUnmarshaler] interface.
-  fn UnmarshalBinary(self: mut Ref<Time>, data: Slice<byte>) -> Result<(), error>
+  fn UnmarshalBinary(
+    self: mut Ref<Time>,
+    data: Slice<byte>,
+  ) -> Result<(), error>
 
   /// UnmarshalJSON implements the [encoding/json.Unmarshaler] interface.
   /// The time must be a quoted string in the RFC 3339 format.

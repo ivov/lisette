@@ -292,7 +292,10 @@ pub fn LockOSThread()
 /// Most clients should use the runtime/pprof package or
 /// the testing package's -test.memprofile flag instead
 /// of calling MemProfile directly.
-pub fn MemProfile(p: mut Slice<MemProfileRecord>, inuseZero: bool) -> Option<int>
+pub fn MemProfile(
+  p: mut Slice<MemProfileRecord>,
+  inuseZero: bool,
+) -> Option<int>
 
 /// MutexProfile returns n, the number of records in the current mutex profile.
 /// If len(p) >= n, MutexProfile copies the profile into p and returns n, true.
