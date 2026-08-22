@@ -122,6 +122,11 @@ pub type Processor = fn(Slice<byte>) -> Slice<byte>
 /// RefList exercises the plain newtype shape with per-hop qualifiers.
 pub struct RefList(mut Slice<mut Ref<IntList>>)
 
+/// Store exercises the curated writable return on a body-less interface method.
+pub interface Store {
+  fn Items() -> mut IntList
+}
+
 /// Type definition over map
 pub struct StringMap(mut Map<string, int>)
 

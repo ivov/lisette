@@ -549,7 +549,13 @@
         },
         "net": {
           "Interfaces": []
+        },
+        "net/http/httptest": {
+          "ResponseRecorder.Header": ["0:recv"]
         }
+      },
+      "writable_return": {
+        "net/http": ["ResponseWriter.Header"]
       },
       "non_nilable_return": {
         "compress/gzip": ["NewWriter"],

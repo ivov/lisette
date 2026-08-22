@@ -141,6 +141,11 @@ func Pick(f func([]string) []string, rows []string) []string {
 	return f(rows)
 }
 
+// Store exercises the curated writable return on a body-less interface method.
+type Store interface {
+	Items() IntList
+}
+
 // Counter exercises the curated receiver override.
 type Counter struct {
 	Total int
