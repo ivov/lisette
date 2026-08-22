@@ -8,7 +8,12 @@ pub struct Task {
 }
 
 impl Task {
-  pub fn new(id: int, title: string, priority: Priority, tags: Slice<string>) -> Task {
+  pub fn new(
+    id: int,
+    title: string,
+    priority: Priority,
+    tags: Slice<string>,
+  ) -> Task {
     Task { id, title, priority, status: Status.Pending, tags }
   }
 

@@ -139,7 +139,10 @@ impl Client {
 
   /// StartTLS sends the STARTTLS command and encrypts all further communication.
   /// Only servers that advertise the STARTTLS extension support this function.
-  fn StartTLS(self: mut Ref<Client>, config: Ref<tls.Config>) -> Result<(), error>
+  fn StartTLS(
+    self: mut Ref<Client>,
+    config: Ref<tls.Config>,
+  ) -> Result<(), error>
 
   /// TLSConnectionState returns the client's TLS connection state.
   /// The return values are their zero values if [Client.StartTLS] did

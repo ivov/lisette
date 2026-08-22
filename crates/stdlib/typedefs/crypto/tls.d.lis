@@ -154,7 +154,11 @@ pub fn Client(conn: net.Conn, config: Ref<Config>) -> mut Ref<Conn>
 /// Dial interprets a nil configuration as equivalent to
 /// the zero configuration; see the documentation of Config
 /// for the defaults.
-pub fn Dial(network: string, addr: string, config: Ref<Config>) -> Result<mut Ref<Conn>, error>
+pub fn Dial(
+  network: string,
+  addr: string,
+  config: Ref<Config>,
+) -> Result<mut Ref<Conn>, error>
 
 /// DialWithDialer connects to the given network address using dialer.Dial and
 /// then initiates a TLS handshake, returning the resulting TLS connection. Any
@@ -184,7 +188,11 @@ pub fn InsecureCipherSuites() -> Slice<Ref<CipherSuite>>
 /// given network address using net.Listen.
 /// The configuration config must be non-nil and must include
 /// at least one certificate or else set GetCertificate.
-pub fn Listen(network: string, laddr: string, config: Ref<Config>) -> Result<net.Listener, error>
+pub fn Listen(
+  network: string,
+  laddr: string,
+  config: Ref<Config>,
+) -> Result<net.Listener, error>
 
 /// LoadX509KeyPair reads and parses a public/private key pair from a pair of
 /// files. The files must contain PEM encoded data. The certificate file may
@@ -194,7 +202,10 @@ pub fn Listen(network: string, laddr: string, config: Ref<Config>) -> Result<net
 /// Before Go 1.23 Certificate.Leaf was left nil, and the parsed certificate was
 /// discarded. This behavior can be re-enabled by setting "x509keypairleaf=0"
 /// in the GODEBUG environment variable.
-pub fn LoadX509KeyPair(certFile: string, keyFile: string) -> Result<Certificate, error>
+pub fn LoadX509KeyPair(
+  certFile: string,
+  keyFile: string,
+) -> Result<Certificate, error>
 
 /// NewLRUClientSessionCache returns a [ClientSessionCache] with the given
 /// capacity that uses an LRU strategy. If capacity is < 1, a default capacity
@@ -212,10 +223,15 @@ pub fn NewListener(inner: net.Listener, config: Ref<Config>) -> net.Listener
 /// 
 /// state needs to be returned by [ParseSessionState], and the ticket and session
 /// state must have been returned by [ClientSessionState.ResumptionState].
-pub fn NewResumptionState(ticket: Slice<byte>, state: mut Ref<SessionState>) -> Result<mut Ref<ClientSessionState>, error>
+pub fn NewResumptionState(
+  ticket: Slice<byte>,
+  state: mut Ref<SessionState>,
+) -> Result<mut Ref<ClientSessionState>, error>
 
 /// ParseSessionState parses a [SessionState] encoded by [SessionState.Bytes].
-pub fn ParseSessionState(data: Slice<byte>) -> Result<mut Ref<SessionState>, error>
+pub fn ParseSessionState(
+  data: Slice<byte>,
+) -> Result<mut Ref<SessionState>, error>
 
 /// QUICClient returns a new TLS client side connection using QUICTransport as the
 /// underlying transport. The config cannot be nil.
@@ -246,7 +262,10 @@ pub fn VersionName(version: uint16) -> string
 /// Before Go 1.23 Certificate.Leaf was left nil, and the parsed certificate was
 /// discarded. This behavior can be re-enabled by setting "x509keypairleaf=0"
 /// in the GODEBUG environment variable.
-pub fn X509KeyPair(certPEMBlock: Slice<byte>, keyPEMBlock: Slice<byte>) -> Result<Certificate, error>
+pub fn X509KeyPair(
+  certPEMBlock: Slice<byte>,
+  keyPEMBlock: Slice<byte>,
+) -> Result<Certificate, error>
 
 /// An AlertError is a TLS alert.
 /// 
@@ -642,7 +661,10 @@ impl CertificateRequestInfo {
   /// SupportsCertificate returns nil if the provided certificate is supported by
   /// the server that sent the CertificateRequest. Otherwise, it returns an error
   /// describing the reason for the incompatibility.
-  fn SupportsCertificate(self: Ref<CertificateRequestInfo>, c: Ref<Certificate>) -> Result<(), error>
+  fn SupportsCertificate(
+    self: Ref<CertificateRequestInfo>,
+    c: Ref<Certificate>,
+  ) -> Result<(), error>
 }
 
 impl CertificateVerificationError {
@@ -672,7 +694,10 @@ impl ClientHelloInfo {
   /// 
   /// This function will call x509.ParseCertificate unless c.Leaf is set, which can
   /// incur a significant performance cost.
-  fn SupportsCertificate(self: Ref<ClientHelloInfo>, c: Ref<Certificate>) -> Result<(), error>
+  fn SupportsCertificate(
+    self: Ref<ClientHelloInfo>,
+    c: Ref<Certificate>,
+  ) -> Result<(), error>
 }
 
 impl ClientSessionState {
@@ -681,7 +706,9 @@ impl ClientSessionState {
   /// 
   /// It can be called by [ClientSessionCache.Put] to serialize (with
   /// [SessionState.Bytes]) and store the session.
-  fn ResumptionState(self: Ref<ClientSessionState>) -> Result<(Slice<byte>, Option<mut Ref<SessionState>>), error>
+  fn ResumptionState(
+    self: Ref<ClientSessionState>,
+  ) -> Result<(Slice<byte>, Option<mut Ref<SessionState>>), error>
 }
 
 impl Config {
@@ -778,7 +805,10 @@ impl Conn {
   /// 
   /// Most uses of this package need not call HandshakeContext explicitly: the
   /// first [Conn.Read] or [Conn.Write] will call it automatically.
-  fn HandshakeContext(self: mut Ref<Conn>, ctx: context.Context) -> Result<(), error>
+  fn HandshakeContext(
+    self: mut Ref<Conn>,
+    ctx: context.Context,
+  ) -> Result<(), error>
 
   /// LocalAddr returns the local network address.
   fn LocalAddr(self: Ref<Conn>) -> Option<net.Addr>
@@ -862,7 +892,11 @@ impl Dialer {
   /// 
   /// Dial uses context.Background internally; to specify the context,
   /// use [Dialer.DialContext].
-  fn Dial(self: Ref<Dialer>, network: string, addr: string) -> Result<net.Conn, error>
+  fn Dial(
+    self: Ref<Dialer>,
+    network: string,
+    addr: string,
+  ) -> Result<net.Conn, error>
 
   /// DialContext connects to the given network address and initiates a TLS
   /// handshake, returning the resulting TLS connection.
@@ -908,7 +942,10 @@ impl QUICConn {
   /// SendSessionTicket sends a session ticket to the client.
   /// It produces connection events, which may be read with [QUICConn.NextEvent].
   /// Currently, it can only be called once.
-  fn SendSessionTicket(self: mut Ref<QUICConn>, opts: QUICSessionTicketOptions) -> Result<(), error>
+  fn SendSessionTicket(
+    self: mut Ref<QUICConn>,
+    opts: QUICSessionTicketOptions,
+  ) -> Result<(), error>
 
   /// SetTransportParameters sets the transport parameters to send to the peer.
   /// 
@@ -926,7 +963,10 @@ impl QUICConn {
   /// in the ClientSessionCache.
   /// The application may process additional events or modify the SessionState
   /// before storing the session.
-  fn StoreSession(self: Ref<QUICConn>, session: Ref<SessionState>) -> Result<(), error>
+  fn StoreSession(
+    self: Ref<QUICConn>,
+    session: Ref<SessionState>,
+  ) -> Result<(), error>
 }
 
 impl QUICEncryptionLevel {

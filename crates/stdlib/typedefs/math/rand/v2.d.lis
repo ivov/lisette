@@ -66,7 +66,12 @@ pub fn NewPCG(seed1: uint64, seed2: uint64) -> mut Ref<PCG>
 /// The generator generates values k ∈ [0, imax]
 /// such that P(k) is proportional to (v + k) ** (-s).
 /// Requirements: s > 1 and v >= 1.
-pub fn NewZipf(r: Ref<Rand>, s: float64, v: float64, imax: uint64) -> Option<mut Ref<Zipf>>
+pub fn NewZipf(
+  r: Ref<Rand>,
+  s: float64,
+  v: float64,
+  imax: uint64,
+) -> Option<mut Ref<Zipf>>
 
 /// NormFloat64 returns a normally distributed float64 in the range
 /// [-math.MaxFloat64, +math.MaxFloat64] with
@@ -138,7 +143,10 @@ pub type Zipf
 
 impl ChaCha8 {
   /// AppendBinary implements the [encoding.BinaryAppender] interface.
-  fn AppendBinary(self: Ref<ChaCha8>, b: mut Slice<byte>) -> Result<mut Slice<byte>, error>
+  fn AppendBinary(
+    self: Ref<ChaCha8>,
+    b: mut Slice<byte>,
+  ) -> Result<mut Slice<byte>, error>
 
   /// MarshalBinary implements the [encoding.BinaryMarshaler] interface.
   fn MarshalBinary(self: Ref<ChaCha8>) -> Result<mut Slice<byte>, error>
@@ -158,12 +166,18 @@ impl ChaCha8 {
   fn Uint64(self: mut Ref<ChaCha8>) -> uint64
 
   /// UnmarshalBinary implements the [encoding.BinaryUnmarshaler] interface.
-  fn UnmarshalBinary(self: mut Ref<ChaCha8>, data: Slice<byte>) -> Result<(), error>
+  fn UnmarshalBinary(
+    self: mut Ref<ChaCha8>,
+    data: Slice<byte>,
+  ) -> Result<(), error>
 }
 
 impl PCG {
   /// AppendBinary implements the [encoding.BinaryAppender] interface.
-  fn AppendBinary(self: Ref<PCG>, b: mut Slice<byte>) -> Result<mut Slice<byte>, error>
+  fn AppendBinary(
+    self: Ref<PCG>,
+    b: mut Slice<byte>,
+  ) -> Result<mut Slice<byte>, error>
 
   /// MarshalBinary implements the [encoding.BinaryMarshaler] interface.
   fn MarshalBinary(self: Ref<PCG>) -> Result<mut Slice<byte>, error>

@@ -11,7 +11,11 @@ pub fn Append(b: mut Slice<byte>, a: VarArgs<Unknown>) -> mut Slice<byte>
 
 /// Appendf formats according to a format specifier, appends the result to the byte
 /// slice, and returns the updated slice.
-pub fn Appendf(b: mut Slice<byte>, format: string, a: VarArgs<Unknown>) -> mut Slice<byte>
+pub fn Appendf(
+  b: mut Slice<byte>,
+  format: string,
+  a: VarArgs<Unknown>,
+) -> mut Slice<byte>
 
 /// Appendln formats using the default formats for its operands, appends the result
 /// to the byte slice, and returns the updated slice. Spaces are always added
@@ -47,7 +51,11 @@ pub fn Fprint(w: io.Writer, a: VarArgs<Unknown>) -> Result<int, error>
 /// Fprintf formats according to a format specifier and writes to w.
 /// It returns the number of bytes written and any write error encountered.
 #[allow(unused_result)]
-pub fn Fprintf(w: io.Writer, format: string, a: VarArgs<Unknown>) -> Result<int, error>
+pub fn Fprintf(
+  w: io.Writer,
+  format: string,
+  a: VarArgs<Unknown>,
+) -> Result<int, error>
 
 /// Fprintln formats using the default formats for its operands and writes to w.
 /// Spaces are always added between operands and a newline is appended.
@@ -65,7 +73,11 @@ pub fn Fscan(r: io.Reader, a: VarArgs<Unknown>) -> Result<int, error>
 /// values into successive arguments as determined by the format. It
 /// returns the number of items successfully parsed.
 /// Newlines in the input must match newlines in the format.
-pub fn Fscanf(r: io.Reader, format: string, a: VarArgs<Unknown>) -> Result<int, error>
+pub fn Fscanf(
+  r: io.Reader,
+  format: string,
+  a: VarArgs<Unknown>,
+) -> Result<int, error>
 
 /// Fscanln is similar to [Fscan], but stops scanning at a newline and
 /// after the final item there must be a newline or EOF.
@@ -128,7 +140,11 @@ pub fn Sscan(str: string, a: VarArgs<Unknown>) -> Result<int, error>
 /// values into successive arguments as determined by the format. It
 /// returns the number of items successfully parsed.
 /// Newlines in the input must match newlines in the format.
-pub fn Sscanf(str: string, format: string, a: VarArgs<Unknown>) -> Result<int, error>
+pub fn Sscanf(
+  str: string,
+  format: string,
+  a: VarArgs<Unknown>,
+) -> Result<int, error>
 
 /// Sscanln is similar to [Sscan], but stops scanning at a newline and
 /// after the final item there must be a newline or EOF.

@@ -60,7 +60,12 @@ pub fn NewSource(seed: int64) -> Source
 /// The generator generates values k ∈ [0, imax]
 /// such that P(k) is proportional to (v + k) ** (-s).
 /// Requirements: s > 1 and v >= 1.
-pub fn NewZipf(r: Ref<Rand>, s: float64, v: float64, imax: uint64) -> Option<mut Ref<Zipf>>
+pub fn NewZipf(
+  r: Ref<Rand>,
+  s: float64,
+  v: float64,
+  imax: uint64,
+) -> Option<mut Ref<Zipf>>
 
 /// NormFloat64 returns a normally distributed float64 in the range
 /// [-[math.MaxFloat64], +[math.MaxFloat64]] with

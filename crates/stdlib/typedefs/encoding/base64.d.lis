@@ -63,11 +63,19 @@ impl Encoding {
   /// and returns the extended buffer.
   /// If the input is malformed, it returns the partially decoded src and an error.
   /// New line characters (\r and \n) are ignored.
-  fn AppendDecode(self: Ref<Encoding>, dst: mut Slice<byte>, src: Slice<byte>) -> Partial<mut Slice<byte>, error>
+  fn AppendDecode(
+    self: Ref<Encoding>,
+    dst: mut Slice<byte>,
+    src: Slice<byte>,
+  ) -> Partial<mut Slice<byte>, error>
 
   /// AppendEncode appends the base64 encoded src to dst
   /// and returns the extended buffer.
-  fn AppendEncode(self: Ref<Encoding>, dst: mut Slice<byte>, src: Slice<byte>) -> mut Slice<byte>
+  fn AppendEncode(
+    self: Ref<Encoding>,
+    dst: mut Slice<byte>,
+    src: Slice<byte>,
+  ) -> mut Slice<byte>
 
   /// Decode decodes src using the encoding enc. It writes at most
   /// [Encoding.DecodedLen](len(src)) bytes to dst and returns the number of bytes
@@ -75,7 +83,11 @@ impl Encoding {
   /// the decoded data. If src contains invalid base64 data, it will return the
   /// number of bytes successfully written and [CorruptInputError].
   /// New line characters (\r and \n) are ignored.
-  fn Decode(self: Ref<Encoding>, dst: mut Slice<byte>, src: Slice<byte>) -> Partial<int, error>
+  fn Decode(
+    self: Ref<Encoding>,
+    dst: mut Slice<byte>,
+    src: Slice<byte>,
+  ) -> Partial<int, error>
 
   /// DecodeString returns the bytes represented by the base64 string s.
   /// If the input is malformed, it returns the partially decoded data and

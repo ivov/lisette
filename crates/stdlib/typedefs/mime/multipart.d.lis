@@ -121,7 +121,10 @@ impl Reader {
   /// disk in temporary files.
   /// It returns [ErrMessageTooLarge] if all non-file parts can't be stored in
   /// memory.
-  fn ReadForm(self: mut Ref<Reader>, maxMemory: int64) -> Result<mut Ref<Form>, error>
+  fn ReadForm(
+    self: mut Ref<Reader>,
+    maxMemory: int64,
+  ) -> Result<mut Ref<Form>, error>
 }
 
 impl Writer {
@@ -135,17 +138,27 @@ impl Writer {
 
   /// CreateFormField calls [Writer.CreatePart] with a header using the
   /// given field name.
-  fn CreateFormField(self: mut Ref<Writer>, fieldname: string) -> Result<io.Writer, error>
+  fn CreateFormField(
+    self: mut Ref<Writer>,
+    fieldname: string,
+  ) -> Result<io.Writer, error>
 
   /// CreateFormFile is a convenience wrapper around [Writer.CreatePart]. It creates
   /// a new form-data header with the provided field name and file name.
-  fn CreateFormFile(self: mut Ref<Writer>, fieldname: string, filename: string) -> Result<io.Writer, error>
+  fn CreateFormFile(
+    self: mut Ref<Writer>,
+    fieldname: string,
+    filename: string,
+  ) -> Result<io.Writer, error>
 
   /// CreatePart creates a new multipart section with the provided
   /// header. The body of the part should be written to the returned
   /// [Writer]. After calling CreatePart, any previous part may no longer
   /// be written to.
-  fn CreatePart(self: mut Ref<Writer>, header: textproto.MIMEHeader) -> Result<io.Writer, error>
+  fn CreatePart(
+    self: mut Ref<Writer>,
+    header: textproto.MIMEHeader,
+  ) -> Result<io.Writer, error>
 
   /// FormDataContentType returns the Content-Type for an HTTP
   /// multipart/form-data with this [Writer]'s Boundary.
@@ -160,5 +173,9 @@ impl Writer {
   fn SetBoundary(self: mut Ref<Writer>, boundary: string) -> Result<(), error>
 
   /// WriteField calls [Writer.CreateFormField] and then writes the given value.
-  fn WriteField(self: mut Ref<Writer>, fieldname: string, value: string) -> Result<(), error>
+  fn WriteField(
+    self: mut Ref<Writer>,
+    fieldname: string,
+    value: string,
+  ) -> Result<(), error>
 }

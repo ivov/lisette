@@ -71,7 +71,6 @@ impl<'a> Formatter<'a> {
             .nest(INDENT_WIDTH)
             .append(strict_break(",", ""))
             .append(")")
-            .group()
     }
 
     pub(super) fn struct_definition(
@@ -428,7 +427,8 @@ impl<'a> Formatter<'a> {
                     .append(Document::string(name.to_string()))
                     .append(generics_doc)
                     .append(params_doc)
-                    .append(return_doc);
+                    .append(return_doc)
+                    .group();
                 match between_attrs_and_keyword {
                     Some(c) => attrs_doc
                         .append(c.force_break())

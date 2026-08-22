@@ -9,7 +9,10 @@ import "go:reflect"
 
 /// Compact appends to dst the JSON-encoded src with
 /// insignificant space characters elided.
-pub fn Compact(dst: mut Ref<bytes.Buffer>, src: Slice<byte>) -> Result<(), error>
+pub fn Compact(
+  dst: mut Ref<bytes.Buffer>,
+  src: Slice<byte>,
+) -> Result<(), error>
 
 /// HTMLEscape appends to dst the JSON-encoded src with <, >, &, U+2028 and U+2029
 /// characters inside string literals changed to \u003c, \u003e, \u0026, \u2028, \u2029
@@ -182,7 +185,11 @@ pub fn Marshal(v: Unknown) -> Result<mut Slice<byte>, error>
 /// MarshalIndent is like [Marshal] but applies [Indent] to format the output.
 /// Each JSON element in the output will begin on a new line beginning with prefix
 /// followed by one or more copies of indent according to the indentation nesting.
-pub fn MarshalIndent(v: Unknown, prefix: string, indent: string) -> Result<Slice<byte>, error>
+pub fn MarshalIndent(
+  v: Unknown,
+  prefix: string,
+  indent: string,
+) -> Result<Slice<byte>, error>
 
 /// NewDecoder returns a new decoder that reads from r.
 /// 
@@ -485,7 +492,10 @@ impl RawMessage {
   fn MarshalJSON(self) -> Result<Slice<byte>, error>
 
   /// UnmarshalJSON sets *m to a copy of data.
-  fn UnmarshalJSON(self: mut Ref<RawMessage>, data: Slice<byte>) -> Result<(), error>
+  fn UnmarshalJSON(
+    self: mut Ref<RawMessage>,
+    data: Slice<byte>,
+  ) -> Result<(), error>
 }
 
 impl SyntaxError {

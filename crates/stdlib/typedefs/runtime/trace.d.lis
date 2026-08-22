@@ -50,7 +50,10 @@ pub fn NewFlightRecorder(cfg: FlightRecorderConfig) -> mut Ref<FlightRecorder>
 /// 	    defer task.End()
 /// 	    trace.WithRegion(ctx, "remainingWork", remainingWork)
 /// 	}()
-pub fn NewTask(pctx: context.Context, taskType: string) -> (context.Context, mut Ref<Task>)
+pub fn NewTask(
+  pctx: context.Context,
+  taskType: string,
+) -> (context.Context, mut Ref<Task>)
 
 /// Start enables tracing for the current program.
 /// While tracing, the trace will be buffered and written to w.

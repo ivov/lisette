@@ -113,7 +113,9 @@ impl Reader {
   /// A successful call returns err == nil, not err == [io.EOF]. Because ReadAll is
   /// defined to read until EOF, it does not treat end of file as an error to be
   /// reported.
-  fn ReadAll(self: mut Ref<Reader>) -> Result<mut Slice<mut Slice<string>>, error>
+  fn ReadAll(
+    self: mut Ref<Reader>,
+  ) -> Result<mut Slice<mut Slice<string>>, error>
 }
 
 impl Writer {
@@ -133,5 +135,8 @@ impl Writer {
 
   /// WriteAll writes multiple CSV records to w using [Writer.Write] and
   /// then calls [Writer.Flush], returning any error from the Flush.
-  fn WriteAll(self: Ref<Writer>, records: Slice<Slice<string>>) -> Result<(), error>
+  fn WriteAll(
+    self: Ref<Writer>,
+    records: Slice<Slice<string>>,
+  ) -> Result<(), error>
 }

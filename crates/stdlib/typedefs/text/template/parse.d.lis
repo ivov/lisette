@@ -513,7 +513,10 @@ impl IdentifierNode {
   /// Chained for convenience.
   /// TODO: fix one day?
   #[allow(unused_value)]
-  fn SetTree(self: mut Ref<IdentifierNode>, t: Ref<Tree>) -> mut Ref<IdentifierNode>
+  fn SetTree(
+    self: mut Ref<IdentifierNode>,
+    t: Ref<Tree>,
+  ) -> mut Ref<IdentifierNode>
 
   fn String(self: Ref<IdentifierNode>) -> string
 

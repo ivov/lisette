@@ -136,7 +136,10 @@ pub fn EncryptPKCS1v15(
 /// and may change between calls and/or between versions.
 /// 
 /// [Minimum key size]: https://pkg.go.dev/crypto/rsa#hdr-Minimum_key_size
-pub fn GenerateKey(random: io.Reader, bits: int) -> Result<mut Ref<PrivateKey>, error>
+pub fn GenerateKey(
+  random: io.Reader,
+  bits: int,
+) -> Result<mut Ref<PrivateKey>, error>
 
 /// GenerateMultiPrimeKey generates a multi-prime RSA keypair of the given bit
 /// size and the given random source.
@@ -157,7 +160,11 @@ pub fn GenerateKey(random: io.Reader, bits: int) -> Result<mut Ref<PrivateKey>, 
 /// reasons. Use [GenerateKey] instead.
 /// 
 /// [On the Security of Multi-prime RSA]: http://www.cacr.math.uwaterloo.ca/techreports/2006/cacr2006-16.pdf
-pub fn GenerateMultiPrimeKey(random: io.Reader, nprimes: int, bits: int) -> Result<mut Ref<PrivateKey>, error>
+pub fn GenerateMultiPrimeKey(
+  random: io.Reader,
+  nprimes: int,
+  bits: int,
+) -> Result<mut Ref<PrivateKey>, error>
 
 /// SignPKCS1v15 calculates the signature of hashed using
 /// RSASSA-PKCS1-V1_5-SIGN from RSA PKCS #1 v1.5.  Note that hashed must

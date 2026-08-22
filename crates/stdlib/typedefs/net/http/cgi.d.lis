@@ -15,7 +15,9 @@ pub fn Request() -> Result<mut Ref<http.Request>, error>
 
 /// RequestFromMap creates an [http.Request] from CGI variables.
 /// The returned Request's Body field is not populated.
-pub fn RequestFromMap(params: Map<string, string>) -> Result<mut Ref<http.Request>, error>
+pub fn RequestFromMap(
+  params: Map<string, string>,
+) -> Result<mut Ref<http.Request>, error>
 
 /// Serve executes the provided [Handler] on the currently active CGI
 /// request, if any. If there's no current CGI environment

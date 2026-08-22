@@ -24,7 +24,11 @@ pub fn Copy(dst: Writer, src: Reader) -> Partial<int64, error>
 /// 
 /// If either src implements [WriterTo] or dst implements [ReaderFrom],
 /// buf will not be used to perform the copy.
-pub fn CopyBuffer(dst: Writer, src: Reader, buf: mut Slice<byte>) -> Partial<int64, error>
+pub fn CopyBuffer(
+  dst: Writer,
+  src: Reader,
+  buf: mut Slice<byte>,
+) -> Partial<int64, error>
 
 /// CopyN copies n bytes (or until an error) from src to dst.
 /// It returns the number of bytes copied and the earliest
@@ -59,7 +63,11 @@ pub fn NewOffsetWriter(w: WriterAt, off: int64) -> mut Ref<OffsetWriter>
 
 /// NewSectionReader returns a [SectionReader] that reads from r
 /// starting at offset off and stops with EOF after n bytes.
-pub fn NewSectionReader(r: ReaderAt, off: int64, n: int64) -> mut Ref<SectionReader>
+pub fn NewSectionReader(
+  r: ReaderAt,
+  off: int64,
+  n: int64,
+) -> mut Ref<SectionReader>
 
 /// NopCloser returns a [ReadCloser] with a no-op Close method wrapping
 /// the provided [Reader] r.
@@ -98,7 +106,11 @@ pub fn ReadAll(r: Reader) -> Partial<mut Slice<byte>, error>
 /// If min is greater than the length of buf, ReadAtLeast returns [ErrShortBuffer].
 /// On return, n >= min if and only if err == nil.
 /// If r returns an error having read at least min bytes, the error is dropped.
-pub fn ReadAtLeast(r: Reader, buf: mut Slice<byte>, min: int) -> Partial<int, error>
+pub fn ReadAtLeast(
+  r: Reader,
+  buf: mut Slice<byte>,
+  min: int,
+) -> Partial<int, error>
 
 /// ReadFull reads exactly len(buf) bytes from r into buf.
 /// It returns the number of bytes copied and an error if fewer bytes were read.
@@ -450,15 +462,26 @@ pub var ErrShortWrite: error
 pub var ErrUnexpectedEOF: error
 
 impl LimitedReader {
-  fn Read(self: mut Ref<LimitedReader>, p: mut Slice<byte>) -> Partial<int, error>
+  fn Read(
+    self: mut Ref<LimitedReader>,
+    p: mut Slice<byte>,
+  ) -> Partial<int, error>
 }
 
 impl OffsetWriter {
-  fn Seek(self: mut Ref<OffsetWriter>, offset: int64, whence: int) -> Result<int64, error>
+  fn Seek(
+    self: mut Ref<OffsetWriter>,
+    offset: int64,
+    whence: int,
+  ) -> Result<int64, error>
 
   fn Write(self: mut Ref<OffsetWriter>, p: Slice<byte>) -> Partial<int, error>
 
-  fn WriteAt(self: Ref<OffsetWriter>, p: Slice<byte>, off: int64) -> Partial<int, error>
+  fn WriteAt(
+    self: Ref<OffsetWriter>,
+    p: Slice<byte>,
+    off: int64,
+  ) -> Partial<int, error>
 }
 
 impl PipeReader {
@@ -511,11 +534,22 @@ impl SectionReader {
   /// when the [SectionReader] was created.
   fn Outer(self: Ref<SectionReader>) -> (ReaderAt, int64, int64)
 
-  fn Read(self: mut Ref<SectionReader>, p: mut Slice<byte>) -> Partial<int, error>
+  fn Read(
+    self: mut Ref<SectionReader>,
+    p: mut Slice<byte>,
+  ) -> Partial<int, error>
 
-  fn ReadAt(self: Ref<SectionReader>, p: mut Slice<byte>, off: int64) -> Partial<int, error>
+  fn ReadAt(
+    self: Ref<SectionReader>,
+    p: mut Slice<byte>,
+    off: int64,
+  ) -> Partial<int, error>
 
-  fn Seek(self: mut Ref<SectionReader>, offset: int64, whence: int) -> Result<int64, error>
+  fn Seek(
+    self: mut Ref<SectionReader>,
+    offset: int64,
+    whence: int,
+  ) -> Result<int64, error>
 
   /// Size returns the size of the section in bytes.
   fn Size(self: Ref<SectionReader>) -> int64

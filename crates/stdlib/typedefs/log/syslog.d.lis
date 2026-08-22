@@ -74,7 +74,12 @@ pub const LOG_WARNING: Priority = 4
 /// If network is empty, Dial will connect to the local syslog server.
 /// Otherwise, see the documentation for net.Dial for valid values
 /// of network and raddr.
-pub fn Dial(network: string, raddr: string, priority: Priority, tag: string) -> Result<mut Ref<Writer>, error>
+pub fn Dial(
+  network: string,
+  raddr: string,
+  priority: Priority,
+  tag: string,
+) -> Result<mut Ref<Writer>, error>
 
 /// New establishes a new connection to the system log daemon. Each
 /// write to the returned writer sends a log message with the given
@@ -86,7 +91,10 @@ pub fn New(priority: Priority, tag: string) -> Result<mut Ref<Writer>, error>
 /// system log service with the specified priority, a combination of
 /// the syslog facility and severity. The logFlag argument is the flag
 /// set passed through to [log.New] to create the Logger.
-pub fn NewLogger(p: Priority, logFlag: int) -> Result<mut Ref<log.Logger>, error>
+pub fn NewLogger(
+  p: Priority,
+  logFlag: int,
+) -> Result<mut Ref<log.Logger>, error>
 
 /// A Writer is a connection to a syslog server.
 pub type Writer

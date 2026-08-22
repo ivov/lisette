@@ -18,7 +18,10 @@ pub fn ContextClientTrace(ctx: context.Context) -> Option<mut Ref<ClientTrace>>
 /// the provided trace hooks, in addition to any previous hooks
 /// registered with ctx. Any hooks defined in the provided trace will
 /// be called first.
-pub fn WithClientTrace(ctx: context.Context, trace: Ref<ClientTrace>) -> context.Context
+pub fn WithClientTrace(
+  ctx: context.Context,
+  trace: Ref<ClientTrace>,
+) -> context.Context
 
 /// ClientTrace is a set of hooks to run at various stages of an outgoing
 /// HTTP request. Any particular hook may be nil. Functions may be

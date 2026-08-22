@@ -80,7 +80,11 @@ pub fn WithDeadline(parent: Context, d: time.Time) -> (Context, CancelFunc)
 /// WithDeadlineCause behaves like [WithDeadline] but also sets the cause of the
 /// returned Context when the deadline is exceeded. The returned [CancelFunc] does
 /// not set the cause.
-pub fn WithDeadlineCause(parent: Context, d: time.Time, cause: error) -> (Context, CancelFunc)
+pub fn WithDeadlineCause(
+  parent: Context,
+  d: time.Time,
+  cause: error,
+) -> (Context, CancelFunc)
 
 /// WithTimeout returns WithDeadline(parent, time.Now().Add(timeout)).
 /// 
@@ -92,12 +96,19 @@ pub fn WithDeadlineCause(parent: Context, d: time.Time, cause: error) -> (Contex
 /// 		defer cancel()  // releases resources if slowOperation completes before timeout elapses
 /// 		return slowOperation(ctx)
 /// 	}
-pub fn WithTimeout(parent: Context, timeout: time.Duration) -> (Context, CancelFunc)
+pub fn WithTimeout(
+  parent: Context,
+  timeout: time.Duration,
+) -> (Context, CancelFunc)
 
 /// WithTimeoutCause behaves like [WithTimeout] but also sets the cause of the
 /// returned Context when the timeout expires. The returned [CancelFunc] does
 /// not set the cause.
-pub fn WithTimeoutCause(parent: Context, timeout: time.Duration, cause: error) -> (Context, CancelFunc)
+pub fn WithTimeoutCause(
+  parent: Context,
+  timeout: time.Duration,
+  cause: error,
+) -> (Context, CancelFunc)
 
 /// WithValue returns a derived context that points to the parent Context.
 /// In the derived context, the value associated with key is val.

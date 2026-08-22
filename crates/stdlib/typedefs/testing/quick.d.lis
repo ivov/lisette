@@ -27,7 +27,11 @@ pub fn Check(f: Unknown, config: Ref<Config>) -> Result<(), error>
 /// It calls f and g repeatedly with arbitrary values for each argument.
 /// If f and g return different answers, CheckEqual returns a *[CheckEqualError]
 /// describing the input and the outputs.
-pub fn CheckEqual(f: Unknown, g: Unknown, config: Ref<Config>) -> Result<(), error>
+pub fn CheckEqual(
+  f: Unknown,
+  g: Unknown,
+  config: Ref<Config>,
+) -> Result<(), error>
 
 /// Value returns an arbitrary value of the given type.
 /// If the type implements the [Generator] interface, that will be used.

@@ -44,7 +44,11 @@ pub fn BoolVar(p: mut Ref<bool>, name: string, value: bool, usage: string)
 /// Duration defines a time.Duration flag with specified name, default value, and usage string.
 /// The return value is the address of a time.Duration variable that stores the value of the flag.
 /// The flag accepts a value acceptable to time.ParseDuration.
-pub fn Duration(name: string, value: time.Duration, usage: string) -> mut Ref<time.Duration>
+pub fn Duration(
+  name: string,
+  value: time.Duration,
+  usage: string,
+) -> mut Ref<time.Duration>
 
 /// DurationVar defines a time.Duration flag with specified name, default value, and usage string.
 /// The argument p points to a time.Duration variable in which to store the value of the flag.
@@ -103,7 +107,10 @@ pub fn NFlag() -> int
 /// NewFlagSet returns a new, empty flag set with the specified name and
 /// error handling property. If the name is not empty, it will be printed
 /// in the default usage message and in error messages.
-pub fn NewFlagSet(name: string, errorHandling: ErrorHandling) -> mut Ref<FlagSet>
+pub fn NewFlagSet(
+  name: string,
+  errorHandling: ErrorHandling,
+) -> mut Ref<FlagSet>
 
 /// Parse parses the command-line flags from [os.Args][1:]. Must be called
 /// after all flags are defined and before flags are accessed by the program.
@@ -273,7 +280,12 @@ impl FlagSet {
 
   /// Bool defines a bool flag with specified name, default value, and usage string.
   /// The return value is the address of a bool variable that stores the value of the flag.
-  fn Bool(self: mut Ref<FlagSet>, name: string, value: bool, usage: string) -> mut Ref<bool>
+  fn Bool(
+    self: mut Ref<FlagSet>,
+    name: string,
+    value: bool,
+    usage: string,
+  ) -> mut Ref<bool>
 
   /// BoolFunc defines a flag with the specified name and usage string without requiring values.
   /// Each time the flag is seen, fn is called with the value of the flag.
@@ -355,11 +367,21 @@ impl FlagSet {
 
   /// Int defines an int flag with specified name, default value, and usage string.
   /// The return value is the address of an int variable that stores the value of the flag.
-  fn Int(self: mut Ref<FlagSet>, name: string, value: int, usage: string) -> mut Ref<int>
+  fn Int(
+    self: mut Ref<FlagSet>,
+    name: string,
+    value: int,
+    usage: string,
+  ) -> mut Ref<int>
 
   /// Int64 defines an int64 flag with specified name, default value, and usage string.
   /// The return value is the address of an int64 variable that stores the value of the flag.
-  fn Int64(self: mut Ref<FlagSet>, name: string, value: int64, usage: string) -> mut Ref<int64>
+  fn Int64(
+    self: mut Ref<FlagSet>,
+    name: string,
+    value: int64,
+    usage: string,
+  ) -> mut Ref<int64>
 
   /// Int64Var defines an int64 flag with specified name, default value, and usage string.
   /// The argument p points to an int64 variable in which to store the value of the flag.
@@ -401,7 +423,10 @@ impl FlagSet {
   /// include the command name. Must be called after all flags in the [FlagSet]
   /// are defined and before flags are accessed by the program.
   /// The return value will be [ErrHelp] if -help or -h were set but not defined.
-  fn Parse(self: mut Ref<FlagSet>, arguments: Slice<string>) -> Result<(), error>
+  fn Parse(
+    self: mut Ref<FlagSet>,
+    arguments: Slice<string>,
+  ) -> Result<(), error>
 
   /// Parsed reports whether f.Parse has been called.
   fn Parsed(self: Ref<FlagSet>) -> bool
@@ -412,7 +437,11 @@ impl FlagSet {
   fn PrintDefaults(self: Ref<FlagSet>)
 
   /// Set sets the value of the named flag.
-  fn Set(self: mut Ref<FlagSet>, name: string, value: string) -> Result<(), error>
+  fn Set(
+    self: mut Ref<FlagSet>,
+    name: string,
+    value: string,
+  ) -> Result<(), error>
 
   /// SetOutput sets the destination for usage and error messages.
   /// If output is nil, [os.Stderr] is used.
@@ -420,7 +449,12 @@ impl FlagSet {
 
   /// String defines a string flag with specified name, default value, and usage string.
   /// The return value is the address of a string variable that stores the value of the flag.
-  fn String(self: mut Ref<FlagSet>, name: string, value: string, usage: string) -> mut Ref<string>
+  fn String(
+    self: mut Ref<FlagSet>,
+    name: string,
+    value: string,
+    usage: string,
+  ) -> mut Ref<string>
 
   /// StringVar defines a string flag with specified name, default value, and usage string.
   /// The argument p points to a string variable in which to store the value of the flag.
@@ -447,11 +481,21 @@ impl FlagSet {
 
   /// Uint defines a uint flag with specified name, default value, and usage string.
   /// The return value is the address of a uint variable that stores the value of the flag.
-  fn Uint(self: mut Ref<FlagSet>, name: string, value: uint, usage: string) -> mut Ref<uint>
+  fn Uint(
+    self: mut Ref<FlagSet>,
+    name: string,
+    value: uint,
+    usage: string,
+  ) -> mut Ref<uint>
 
   /// Uint64 defines a uint64 flag with specified name, default value, and usage string.
   /// The return value is the address of a uint64 variable that stores the value of the flag.
-  fn Uint64(self: mut Ref<FlagSet>, name: string, value: uint64, usage: string) -> mut Ref<uint64>
+  fn Uint64(
+    self: mut Ref<FlagSet>,
+    name: string,
+    value: uint64,
+    usage: string,
+  ) -> mut Ref<uint64>
 
   /// Uint64Var defines a uint64 flag with specified name, default value, and usage string.
   /// The argument p points to a uint64 variable in which to store the value of the flag.

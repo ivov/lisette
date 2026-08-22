@@ -65,7 +65,10 @@ pub type SHAKE
 
 impl SHA3 {
   /// AppendBinary implements [encoding.BinaryAppender].
-  fn AppendBinary(self: Ref<SHA3>, p: mut Slice<byte>) -> Result<mut Slice<byte>, error>
+  fn AppendBinary(
+    self: Ref<SHA3>,
+    p: mut Slice<byte>,
+  ) -> Result<mut Slice<byte>, error>
 
   /// BlockSize returns the hash's rate.
   fn BlockSize(self: Ref<SHA3>) -> int
@@ -86,7 +89,10 @@ impl SHA3 {
   fn Sum(self: Ref<SHA3>, b: mut Slice<byte>) -> Slice<byte>
 
   /// UnmarshalBinary implements [encoding.BinaryUnmarshaler].
-  fn UnmarshalBinary(self: mut Ref<SHA3>, data: Slice<byte>) -> Result<(), error>
+  fn UnmarshalBinary(
+    self: mut Ref<SHA3>,
+    data: Slice<byte>,
+  ) -> Result<(), error>
 
   /// Write absorbs more data into the hash's state.
   fn Write(self: mut Ref<SHA3>, p: Slice<byte>) -> Partial<int, error>
@@ -94,7 +100,10 @@ impl SHA3 {
 
 impl SHAKE {
   /// AppendBinary implements [encoding.BinaryAppender].
-  fn AppendBinary(self: Ref<SHAKE>, p: mut Slice<byte>) -> Result<mut Slice<byte>, error>
+  fn AppendBinary(
+    self: Ref<SHAKE>,
+    p: mut Slice<byte>,
+  ) -> Result<mut Slice<byte>, error>
 
   /// BlockSize returns the rate of the XOF.
   fn BlockSize(self: Ref<SHAKE>) -> int
@@ -111,7 +120,10 @@ impl SHAKE {
   fn Reset(self: mut Ref<SHAKE>)
 
   /// UnmarshalBinary implements [encoding.BinaryUnmarshaler].
-  fn UnmarshalBinary(self: mut Ref<SHAKE>, data: Slice<byte>) -> Result<(), error>
+  fn UnmarshalBinary(
+    self: mut Ref<SHAKE>,
+    data: Slice<byte>,
+  ) -> Result<(), error>
 
   /// Write absorbs more data into the XOF's state.
   /// 

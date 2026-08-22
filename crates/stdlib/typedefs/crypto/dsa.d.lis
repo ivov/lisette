@@ -20,7 +20,10 @@ pub const L3072N256: ParameterSizes = 3
 
 /// GenerateKey generates a public&private key pair. The Parameters of the
 /// [PrivateKey] must already be valid (see [GenerateParameters]).
-pub fn GenerateKey(priv: mut Ref<PrivateKey>, rand: io.Reader) -> Result<(), error>
+pub fn GenerateKey(
+  priv: mut Ref<PrivateKey>,
+  rand: io.Reader,
+) -> Result<(), error>
 
 /// GenerateParameters puts a random, valid set of DSA parameters into params.
 /// This function can take many seconds, even on fast machines.
@@ -41,7 +44,11 @@ pub fn GenerateParameters(
 /// 
 /// Be aware that calling Sign with an attacker-controlled [PrivateKey] may
 /// require an arbitrary amount of CPU.
-pub fn Sign(rand: io.Reader, priv: Ref<PrivateKey>, hash: Slice<byte>) -> Result<(mut Ref<big.Int>, mut Ref<big.Int>), error>
+pub fn Sign(
+  rand: io.Reader,
+  priv: Ref<PrivateKey>,
+  hash: Slice<byte>,
+) -> Result<(mut Ref<big.Int>, mut Ref<big.Int>), error>
 
 /// Verify verifies the signature in r, s of hash using the public key, pub. It
 /// reports whether the signature is valid.
