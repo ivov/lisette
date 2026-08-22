@@ -1090,8 +1090,7 @@ fn dot_context_completions(
     let ctx = detect_dot_context(file, offset, snapshot)?;
     Some(match ctx {
         DotContext::Instance(type_id) => {
-            let same_package = id_is_in_package(&type_id, &file.package_id);
-            get_instance_completions(&type_id, snapshot, same_package)
+            get_instance_completions(&type_id, snapshot, &file.package_id)
         }
         DotContext::TypeLevel(type_id) => {
             get_type_completions(&type_id, snapshot, &file.package_id)
@@ -1112,7 +1111,7 @@ fn package_prefix_completions(
     if prefix == "self" {
         if let Some(impl_type) = traversal::find_enclosing_impl_type(&file.items, offset) {
             let type_id = format!("{}.{}", file.package_id, impl_type);
-            return get_instance_completions(&type_id, snapshot, true);
+            return get_instance_completions(&type_id, snapshot, &file.package_id);
         }
         return Vec::new();
     }
@@ -1138,8 +1137,7 @@ fn package_prefix_completions(
 
     let indexed = offset as usize >= 2 && file.source.as_bytes()[offset as usize - 2] == b']';
     if let Some(type_id) = resolve_variable_type(prefix, file, offset, snapshot, indexed) {
-        let same_package = id_is_in_package(&type_id, &file.package_id);
-        return get_instance_completions(&type_id, snapshot, same_package);
+        return get_instance_completions(&type_id, snapshot, &file.package_id);
     }
 
     let packages = snapshot.importable_packages();
