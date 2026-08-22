@@ -1175,7 +1175,7 @@ net/http/httptest.NewRequestWithContext (opaque r0): r0<-body r0<-ctx
 net/http/httptest.NewServer: r0<-[handler]
 net/http/httptest.NewTLSServer: r0<-[handler]
 net/http/httptest.NewUnstartedServer: r0<-[handler]
-net/http/httptest.ResponseRecorder.Header (opaque r0): r0<-recv
+net/http/httptest.ResponseRecorder.Header: r0<-recv
 net/http/httptest.ResponseRecorder.Result (opaque r0): r0<-recv
 net/http/httptest.Server.Certificate: r0<-recv
 net/http/httptest.Server.Client: r0<-recv

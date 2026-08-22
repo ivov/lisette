@@ -919,7 +919,7 @@ pub type ResponseController
 /// 
 /// A ResponseWriter may not be used after [Handler.ServeHTTP] has returned.
 pub interface ResponseWriter {
-  fn Header() -> Header
+  fn Header() -> mut Header
   fn Write(b: Slice<byte>) -> Partial<int, error>
   fn WriteHeader(statusCode: int)
 }

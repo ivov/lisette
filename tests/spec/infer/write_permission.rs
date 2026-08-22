@@ -492,6 +492,32 @@ fn element_view_write_refused() {
     .assert_infer_code("write_through_read_only");
 }
 
+#[test]
+fn response_header_write_accepted() {
+    infer(
+        r#"import "go:net/http"
+fn handler(w: http.ResponseWriter, _r: Ref<http.Request>) {
+  w.Header().Set("Content-Type", "application/json")
+}
+fn main() {
+  http.HandleFunc("/", handler)
+}"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn recorder_header_write_accepted() {
+    infer(
+        r#"import "go:net/http/httptest"
+fn main() {
+  let mut recorder = httptest.NewRecorder()
+  recorder.Header().Set("Content-Type", "application/json")
+}"#,
+    )
+    .assert_no_errors();
+}
+
 // Taking `&` of a read-only place must not produce a writable pointer.
 
 #[test]

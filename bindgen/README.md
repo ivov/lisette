@@ -244,6 +244,13 @@ Bindgen accepts a config file with per-package overrides:
         },
       },
 
+      // Mark a result as one callers write, where no aliasing fact can be
+      // stated. Prefer `returns_view_of` when the aliasing fact is known.
+      // e.g. `w.Header().Set(...)` needs `mut net/http.Header`
+      "writable_return": {
+        "net/http": ["ResponseWriter.Header"],
+      },
+
       // Force `Ref<T>` parameter to `Option<Ref<T>>` when inference did not
       // e.g. `rp` in `mongo.Client.Ping(ctx, rp)` accepts nil
       "nilable_param": {
