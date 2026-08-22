@@ -112,7 +112,7 @@ fuzz-infer duration="300":
 fuzz-scan-imports duration="300":
     cargo +nightly fuzz run --sanitizer address scan_imports fuzz/corpus/scan_imports fuzz/seed_corpus -- -max_total_time={{duration}} -rss_limit_mb=2048 -dict=fuzz/lisette.dict
 
-_supported-targets := "linux/amd64,linux/arm64,darwin/amd64,darwin/arm64,windows/amd64"
+_supported-targets := "linux/amd64,linux/arm64,darwin/amd64,darwin/arm64,windows/amd64,windows/arm64"
 
 generate-stdlib-typedefs version targets=_supported-targets:
     cd bindgen && just build
