@@ -284,10 +284,7 @@ impl Store {
     }
 
     pub(crate) fn fields_of(&self, qualified_name: &str) -> Option<&[StructFieldDefinition]> {
-        match &self.get_definition(qualified_name)?.body {
-            DefinitionBody::Struct { fields, .. } => Some(fields.as_slice()),
-            _ => None,
-        }
+        self.get_definition(qualified_name)?.fields()
     }
 
     pub fn struct_kind(&self, qualified_name: &str) -> Option<StructKind> {
