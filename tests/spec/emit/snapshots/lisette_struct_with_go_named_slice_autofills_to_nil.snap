@@ -2,9 +2,9 @@
 source: tests/spec/emit/imports.rs
 description: |
   
-  import "go:time"
+  import "go:sort"
   
-  struct Wrapper { d: time.Duration }
+  struct Wrapper { s: mut sort.StringSlice }
   
   fn test() -> Wrapper {
     Wrapper { .. }
@@ -12,12 +12,12 @@ description: |
 ---
 package main
 
-import "time"
+import "sort"
 
 type Wrapper struct {
-	d time.Duration
+	s sort.StringSlice
 }
 
 func test() Wrapper {
-	return Wrapper{d: time.Duration(0)}
+	return Wrapper{s: sort.StringSlice(nil)}
 }
