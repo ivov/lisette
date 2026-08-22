@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/imports.rs
+description: |
+  
+  import "go:time"
+  
+  fn test() -> string {
+    time.Duration{..}.String()
+  }
+---
+package main
+
+import "time"
+
+func test() string {
+	return time.Duration(0).String()
+}

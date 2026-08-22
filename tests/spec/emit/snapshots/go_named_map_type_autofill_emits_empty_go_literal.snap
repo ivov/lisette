@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/imports.rs
+description: |
+  
+  import "go:net/url"
+  
+  fn test() -> string {
+    let mut v = url.Values{..}
+    v.Add("key", "value")
+    v.Get("key")
+  }
+---
+package main
+
+import "net/url"
+
+func test() string {
+	v := url.Values{}
+	v.Add("key", "value")
+	return v.Get("key")
+}
