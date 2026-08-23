@@ -845,10 +845,10 @@ pub fn disallowed_mutation(
         } else if let Some(MutationHint::WritingCallee(callee)) = hint {
             format!(
                 "{callee} writes to `{variable_name}`. \
-                 Declare using `let mut {variable_name}` to make the variable mutable"
+                 Declare using `let mut {variable_name}` to mark the variable mutable"
             )
         } else {
-            format!("Declare using `let mut {variable_name}` to make the variable mutable")
+            format!("Declare using `let mut {variable_name}` to mark the variable mutable")
         };
         LisetteDiagnostic::error("Immutable variable")
             .with_infer_code("immutable")
