@@ -725,6 +725,14 @@ pub(super) struct ProjectLayout {
     pub test_sources: Vec<PathBuf>,
 }
 
+fn is_package_identifier(element: &str) -> bool {
+    let mut characters = element.chars();
+    characters
+        .next()
+        .is_some_and(|first| first.is_alphabetic() || first == '_')
+        && characters.all(|character| character.is_alphanumeric() || character == '_')
+}
+
 pub(super) fn resolve_project_layout(project_path: &Path) -> Option<ProjectLayout> {
     if project_path.join("main.lis").exists() {
         cli_error!(
@@ -787,6 +795,26 @@ pub(super) fn resolve_project_layout(project_path: &Path) -> Option<ProjectLayou
                 rel.display()
             ),
             "Rename the package"
+        );
+        return None;
+    }
+
+    if let Some((rel, element)) = sources.iter().find_map(|path| {
+        let rel = path.strip_prefix(&src).ok()?;
+        let bad = rel
+            .parent()?
+            .components()
+            .filter_map(|component| component.as_os_str().to_str())
+            .find(|element| !is_package_identifier(element))?;
+        Some((rel.to_path_buf(), bad.to_string()))
+    }) {
+        cli_error!(
+            "Invalid package directory",
+            format!(
+                "`src/{}` sits under `{element}/`, and a package directory names the package, so it must read as an identifier",
+                rel.display()
+            ),
+            "Rename the directory using letters, digits and `_`, starting with a letter or `_`"
         );
         return None;
     }

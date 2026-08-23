@@ -503,6 +503,27 @@ fn src_root_directory_is_reserved() {
 }
 
 #[test]
+fn hyphenated_package_directory_is_rejected() {
+    let (_dir, project) = scaffold("example.com/acme/geo");
+    fs::write(project.join("src/geo.lis"), "pub fn x() -> int { 1 }\n").unwrap();
+    fs::create_dir_all(project.join("src/my-pkg")).unwrap();
+    fs::write(
+        project.join("src/my-pkg/p.lis"),
+        "pub fn y() -> int { 2 }\n",
+    )
+    .unwrap();
+
+    let check = lis(&project, &["check"]);
+    let out = combined(&check);
+    assert!(!check.status.success(), "expected failure: {out}");
+    assert!(out.contains("Invalid package directory"), "got: {out}");
+    assert!(
+        out.contains("my-pkg"),
+        "the offending directory must be named: {out}"
+    );
+}
+
+#[test]
 fn src_entry_directory_is_reserved() {
     let (_dir, project) = scaffold("example.com/acme/geo");
     fs::write(project.join("src/geo.lis"), "pub fn x() -> int { 1 }\n").unwrap();
