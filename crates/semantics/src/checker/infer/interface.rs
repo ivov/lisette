@@ -4,7 +4,10 @@ use crate::checker::sealing::is_unexported_key;
 use crate::store::Store;
 use diagnostics::infer::{InterfaceMethodViolation, InterfaceViolation, MissingMethod};
 use syntax::ast::Span;
-use syntax::program::{DefinitionBody, InterfaceRequirement, Methods, interface_requirements};
+use syntax::program::{
+    DefinitionBody, InterfaceRequirement, Methods, interface_declares_any_method,
+    interface_requirements,
+};
 use syntax::types::{GO_IMPORT_PREFIX, Symbol, Type, unqualified_name};
 
 use crate::checker::infer::InferCtx;
@@ -367,8 +370,7 @@ impl InferCtx<'_> {
         let id = resolved.get_qualified_id()?;
         if self.store.get_interface(id).is_some() {
             self.store
-                .get_all_methods(resolved, &Default::default())
-                .get(method)?;
+                .get_method_for_type(resolved, &Default::default(), method)?;
         } else {
             self.store.get_method(id, method)?;
         }
@@ -416,8 +418,7 @@ impl InferCtx<'_> {
             let interface_ty = self.store.deep_resolve_alias(bound);
             interface_ty.get_qualified_id()?;
             self.store
-                .get_all_methods(&interface_ty, &Default::default())
-                .get(method)?;
+                .get_method_for_type(&interface_ty, &Default::default(), method)?;
             Some(ConformanceCandidate::Resolved {
                 depth: 0,
                 owner: qualified.as_eco().clone(),
@@ -814,7 +815,7 @@ pub(crate) fn interface_requires_methods(store: &Store, id: &str) -> bool {
         params: vec![],
         writable: false,
     };
-    !interface_requirements(&interface_ty, |id| store.get_definition(id)).is_empty()
+    interface_declares_any_method(&interface_ty, |id| store.get_definition(id))
 }
 
 /// Lift impl return T to Option<T> when the interface is Go-imported, the

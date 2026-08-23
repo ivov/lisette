@@ -650,6 +650,10 @@ impl TaskState {
             }
         }
 
+        if interface.parents.is_empty() {
+            return;
+        }
+
         let mut seen: rustc_hash::FxHashMap<String, (Type, String)> =
             rustc_hash::FxHashMap::default();
         let interface_ty = store

@@ -707,6 +707,140 @@ where
     collect(ty, trait_bounds, lookup, &mut HashSet::default())
 }
 
+/// Whether an interface or any of its parents declares a method.
+pub fn interface_declares_any_method<'d, F>(interface_ty: &Type, lookup: F) -> bool
+where
+    F: Copy + Fn(&str) -> Option<&'d Definition>,
+{
+    interface_instances(interface_ty, lookup)
+        .into_iter()
+        .any(|instance| {
+            let Type::Nominal { id, .. } = instance.ty else {
+                return false;
+            };
+            matches!(
+                lookup(&id),
+                Some(Definition {
+                    body: DefinitionBody::Interface { definition },
+                    ..
+                }) if !definition.methods.is_empty()
+            )
+        })
+}
+
+pub fn method_for_type<'d, F>(
+    ty: &Type,
+    trait_bounds: &HashMap<Symbol, Vec<Type>>,
+    lookup: F,
+    wanted: &str,
+) -> Option<Method>
+where
+    F: Copy + Fn(&str) -> Option<&'d Definition>,
+{
+    fn collect<'d, F>(
+        ty: &Type,
+        trait_bounds: &HashMap<Symbol, Vec<Type>>,
+        lookup: F,
+        visited: &mut HashSet<Symbol>,
+        wanted: &str,
+    ) -> Option<Method>
+    where
+        F: Copy + Fn(&str) -> Option<&'d Definition>,
+    {
+        let stripped = ty.strip_refs();
+        let qualified_name = method_lookup_key(&stripped)?;
+
+        if !visited.insert(qualified_name.clone()) {
+            return None;
+        }
+
+        if lookup(&qualified_name)
+            .is_some_and(|definition| matches!(definition.body, DefinitionBody::Interface { .. }))
+        {
+            return interface_requirements(&stripped, lookup)
+                .into_iter()
+                .rfind(|requirement| requirement.name == wanted)
+                .map(|requirement| {
+                    requirement
+                        .method
+                        .with_type(requirement.ty)
+                        .with_receiver_placeholder()
+                });
+        }
+
+        // The shared visited set makes bound order matter.
+        if let Some(bounds) = trait_bounds.get(&qualified_name) {
+            let mut found = None;
+            for bound in bounds {
+                if let Some(method) = collect(bound, trait_bounds, lookup, visited, wanted) {
+                    found = Some(method);
+                }
+            }
+            return found;
+        }
+
+        let own = lookup(&qualified_name)
+            .and_then(Definition::methods)
+            .and_then(|methods| methods.get(wanted))
+            .cloned();
+
+        if lookup(&qualified_name).is_some_and(Definition::is_transparent_type_alias) {
+            let underlying = types::peel_alias(&stripped, lookup);
+            if underlying != stripped {
+                let inherited = collect(&underlying, trait_bounds, lookup, visited, wanted);
+                return own.or(inherited);
+            }
+        }
+
+        own
+    }
+
+    collect(ty, trait_bounds, lookup, &mut HashSet::default(), wanted)
+}
+
+pub fn type_has_any_method<'d, F>(ty: &Type, lookup: F) -> bool
+where
+    F: Copy + Fn(&str) -> Option<&'d Definition>,
+{
+    fn collect<'d, F>(ty: &Type, lookup: F, visited: &mut HashSet<Symbol>) -> bool
+    where
+        F: Copy + Fn(&str) -> Option<&'d Definition>,
+    {
+        let stripped = ty.strip_refs();
+        let Some(qualified_name) = method_lookup_key(&stripped) else {
+            return false;
+        };
+
+        if !visited.insert(qualified_name.clone()) {
+            return false;
+        }
+
+        if lookup(&qualified_name)
+            .is_some_and(|definition| matches!(definition.body, DefinitionBody::Interface { .. }))
+        {
+            return interface_declares_any_method(&stripped, lookup);
+        }
+
+        if lookup(&qualified_name)
+            .and_then(Definition::methods)
+            .is_some_and(|methods| !methods.is_empty())
+        {
+            return true;
+        }
+
+        if lookup(&qualified_name).is_some_and(Definition::is_transparent_type_alias) {
+            let underlying = types::peel_alias(&stripped, lookup);
+            if underlying != stripped {
+                return collect(&underlying, lookup, visited);
+            }
+        }
+
+        false
+    }
+
+    collect(ty, lookup, &mut HashSet::default())
+}
+
 fn method_lookup_key(ty: &Type) -> Option<Symbol> {
     match ty {
         Type::Nominal { id, .. } => Some(id.clone()),
@@ -817,5 +951,309 @@ mod tests {
         let definition = definition(method(&["T"], receiver(vec![Type::int()])));
 
         assert!(definition.is_ufcs_method("map"));
+    }
+
+    fn nominal(id: &str) -> Type {
+        Type::Nominal {
+            id: Symbol::from_raw(id),
+            params: vec![],
+            writable: false,
+        }
+    }
+
+    fn named_method(name: &str, return_type: Type) -> (EcoString, Method) {
+        let ty = Type::function(
+            vec![FunctionParameter::new(nominal("m.Receiver"))],
+            Default::default(),
+            Box::new(return_type),
+        );
+        (
+            name.into(),
+            Method {
+                source_name: name.into(),
+                ty,
+                visibility: Visibility::Public,
+                origin: MethodOrigin::Declared,
+                name_span: None,
+                doc: None,
+                allowed_lints: vec![],
+                go_hints: vec![],
+            },
+        )
+    }
+
+    fn struct_definition(id: &str, methods: Methods) -> Definition {
+        Definition {
+            visibility: Visibility::Public,
+            ty: nominal(id),
+            name_span: None,
+            doc: None,
+            body: DefinitionBody::Struct {
+                generics: vec![],
+                fields: StructFields::Record(vec![]),
+                methods,
+                attributes: Attributes::default(),
+            },
+        }
+    }
+
+    fn interface_definition(id: &str, parents: Vec<Type>, methods: Methods) -> Definition {
+        Definition {
+            visibility: Visibility::Public,
+            ty: nominal(id),
+            name_span: None,
+            doc: None,
+            body: DefinitionBody::Interface {
+                definition: Interface {
+                    generics: vec![],
+                    parents,
+                    methods,
+                },
+            },
+        }
+    }
+
+    fn alias_definition(id: &str, target: Type, methods: Methods) -> Definition {
+        Definition {
+            visibility: Visibility::Public,
+            ty: nominal(id),
+            name_span: None,
+            doc: None,
+            body: DefinitionBody::TypeAlias {
+                generics: vec![],
+                alias: AliasKind::Transparent {
+                    annotation: Annotation::Unknown,
+                    target,
+                },
+                methods,
+                attributes: Attributes::default(),
+            },
+        }
+    }
+
+    fn table(entries: Vec<(&str, Definition)>) -> HashMap<String, Definition> {
+        entries
+            .into_iter()
+            .map(|(id, definition)| (id.to_string(), definition))
+            .collect()
+    }
+
+    /// The narrow lookup must answer exactly what the whole method set holds.
+    fn assert_narrow_matches_broad(
+        table: &HashMap<String, Definition>,
+        trait_bounds: &HashMap<Symbol, Vec<Type>>,
+        ty: &Type,
+        name: &str,
+    ) {
+        let lookup = |id: &str| table.get(id);
+        let broad = methods_for_type(ty, trait_bounds, lookup)
+            .get(name)
+            .cloned();
+        let narrow = method_for_type(ty, trait_bounds, lookup, name);
+
+        assert_eq!(narrow, broad);
+    }
+
+    #[test]
+    fn a_parent_interface_method_shadows_the_child_declaration() {
+        let table = table(vec![
+            (
+                "m.Child",
+                interface_definition(
+                    "m.Child",
+                    vec![nominal("m.Parent")],
+                    HashMap::from_iter([named_method("run", Type::int())]),
+                ),
+            ),
+            (
+                "m.Parent",
+                interface_definition(
+                    "m.Parent",
+                    vec![],
+                    HashMap::from_iter([named_method("run", Type::string())]),
+                ),
+            ),
+        ]);
+
+        assert_narrow_matches_broad(&table, &HashMap::default(), &nominal("m.Child"), "run");
+    }
+
+    #[test]
+    fn the_last_bound_that_declares_a_method_wins() {
+        let table = table(vec![
+            (
+                "m.First",
+                interface_definition(
+                    "m.First",
+                    vec![],
+                    HashMap::from_iter([named_method("run", Type::int())]),
+                ),
+            ),
+            (
+                "m.Second",
+                interface_definition(
+                    "m.Second",
+                    vec![],
+                    HashMap::from_iter([named_method("run", Type::string())]),
+                ),
+            ),
+        ]);
+        let trait_bounds = HashMap::from_iter([(
+            Symbol::from_raw("m.T"),
+            vec![nominal("m.First"), nominal("m.Second")],
+        )]);
+
+        assert_narrow_matches_broad(&table, &trait_bounds, &nominal("m.T"), "run");
+    }
+
+    fn generic_interface_definition(id: &str, methods: Methods) -> Definition {
+        Definition {
+            visibility: Visibility::Public,
+            ty: nominal(id),
+            name_span: None,
+            doc: None,
+            body: DefinitionBody::Interface {
+                definition: Interface {
+                    generics: vec![generic("T")],
+                    parents: vec![],
+                    methods,
+                },
+            },
+        }
+    }
+
+    fn instantiated(id: &str, argument: Type) -> Type {
+        Type::Nominal {
+            id: Symbol::from_raw(id),
+            params: vec![argument],
+            writable: false,
+        }
+    }
+
+    #[test]
+    fn bounds_that_share_a_nominal_key_agree_with_the_whole_method_set() {
+        let table = table(vec![(
+            "m.Boxed",
+            generic_interface_definition(
+                "m.Boxed",
+                HashMap::from_iter([named_method("run", Type::Parameter("T".into()))]),
+            ),
+        )]);
+        let trait_bounds = HashMap::from_iter([(
+            Symbol::from_raw("m.T"),
+            vec![
+                instantiated("m.Boxed", Type::int()),
+                instantiated("m.Boxed", Type::string()),
+            ],
+        )]);
+
+        assert_narrow_matches_broad(&table, &trait_bounds, &nominal("m.T"), "run");
+    }
+
+    #[test]
+    fn a_self_referential_bound_terminates() {
+        let table = table(vec![]);
+        let trait_bounds = HashMap::from_iter([(Symbol::from_raw("m.T"), vec![nominal("m.T")])]);
+
+        assert_narrow_matches_broad(&table, &trait_bounds, &nominal("m.T"), "run");
+    }
+
+    #[test]
+    fn an_alias_method_shadows_the_underlying_type_method() {
+        let table = table(vec![
+            (
+                "m.Alias",
+                alias_definition(
+                    "m.Alias",
+                    nominal("m.Target"),
+                    HashMap::from_iter([named_method("run", Type::int())]),
+                ),
+            ),
+            (
+                "m.Target",
+                struct_definition(
+                    "m.Target",
+                    HashMap::from_iter([named_method("run", Type::string())]),
+                ),
+            ),
+        ]);
+
+        assert_narrow_matches_broad(&table, &HashMap::default(), &nominal("m.Alias"), "run");
+    }
+
+    #[test]
+    fn an_alias_inherits_the_underlying_type_methods() {
+        let table = table(vec![
+            (
+                "m.Alias",
+                alias_definition("m.Alias", nominal("m.Target"), Methods::default()),
+            ),
+            (
+                "m.Target",
+                struct_definition(
+                    "m.Target",
+                    HashMap::from_iter([named_method("run", Type::string())]),
+                ),
+            ),
+        ]);
+
+        assert_narrow_matches_broad(&table, &HashMap::default(), &nominal("m.Alias"), "run");
+        assert!(type_has_any_method(&nominal("m.Alias"), |id| table.get(id)));
+    }
+
+    #[test]
+    fn an_alias_to_a_type_without_methods_has_no_method() {
+        let table = table(vec![
+            (
+                "m.Alias",
+                alias_definition("m.Alias", nominal("m.Target"), Methods::default()),
+            ),
+            (
+                "m.Target",
+                struct_definition("m.Target", Methods::default()),
+            ),
+        ]);
+
+        assert!(!type_has_any_method(&nominal("m.Alias"), |id| table.get(id)));
+    }
+
+    #[test]
+    fn an_interface_declares_a_method_through_its_parent() {
+        let table = table(vec![
+            (
+                "m.Child",
+                interface_definition("m.Child", vec![nominal("m.Parent")], Methods::default()),
+            ),
+            (
+                "m.Parent",
+                interface_definition(
+                    "m.Parent",
+                    vec![],
+                    HashMap::from_iter([named_method("run", Type::int())]),
+                ),
+            ),
+        ]);
+        let lookup = |id: &str| table.get(id);
+
+        assert!(interface_declares_any_method(&nominal("m.Child"), lookup));
+        assert!(type_has_any_method(&nominal("m.Child"), lookup));
+    }
+
+    #[test]
+    fn an_interface_without_any_declared_method_is_reported_empty() {
+        let table = table(vec![
+            (
+                "m.Child",
+                interface_definition("m.Child", vec![nominal("m.Parent")], Methods::default()),
+            ),
+            (
+                "m.Parent",
+                interface_definition("m.Parent", vec![], Methods::default()),
+            ),
+        ]);
+        let lookup = |id: &str| table.get(id);
+
+        assert!(!interface_declares_any_method(&nominal("m.Child"), lookup));
+        assert!(!type_has_any_method(&nominal("m.Child"), lookup));
     }
 }

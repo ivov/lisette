@@ -6,7 +6,7 @@ use syntax::ast::StructKind;
 use syntax::ast::{EnumVariant, StructFieldDefinition, VariantFields};
 use syntax::program::{
     Definition, DefinitionBody, EqualityIndex, File, Interface, Method, Methods, Package,
-    TestIndex, UninferredExports, methods_for_type,
+    TestIndex, UninferredExports, method_for_type, methods_for_type, type_has_any_method,
 };
 use syntax::types;
 use syntax::types::{CompoundKind, SimpleKind, Symbol, Type};
@@ -676,6 +676,32 @@ impl Store {
         trait_bounds: &HashMap<Symbol, Vec<Type>>,
     ) -> Methods {
         methods_for_type(ty, trait_bounds, |id| self.get_definition(id))
+    }
+
+    pub(crate) fn get_method_for_type(
+        &self,
+        ty: &Type,
+        trait_bounds: &HashMap<Symbol, Vec<Type>>,
+        name: &str,
+    ) -> Option<Method> {
+        method_for_type(ty, trait_bounds, |id| self.get_definition(id), name)
+    }
+
+    pub(crate) fn type_has_any_method(&self, ty: &Type) -> bool {
+        type_has_any_method(ty, |id| self.get_definition(id))
+    }
+
+    pub(crate) fn get_method_from_bounds(
+        &self,
+        qualified_name: &str,
+        trait_bounds: &HashMap<Symbol, Vec<Type>>,
+        name: &str,
+    ) -> Option<Method> {
+        trait_bounds
+            .get(qualified_name)?
+            .iter()
+            .filter_map(|interface_ty| self.get_method_for_type(interface_ty, trait_bounds, name))
+            .next_back()
     }
 
     pub(crate) fn get_methods_from_bounds(

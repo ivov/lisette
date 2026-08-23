@@ -205,14 +205,14 @@ pub(crate) fn normalize_registered_component_types(store: &mut Store, package_id
     };
     let mut changed: Vec<(Symbol, Definition)> = Vec::new();
     for (name, definition) in &package.definitions {
+        if !any_component_type(&definition.body, |ty| {
+            store.normalized_annotation_type(ty) != *ty
+        }) {
+            continue;
+        }
         let mut updated = definition.clone();
-        let mut any = false;
-        let mut normalize = |ty: &mut Type| {
-            let normalized = store.normalized_annotation_type(ty);
-            if normalized != *ty {
-                *ty = normalized;
-                any = true;
-            }
+        let normalize = |ty: &mut Type| {
+            *ty = store.normalized_annotation_type(ty);
         };
         match &mut updated.body {
             DefinitionBody::Struct { fields, .. } => {
@@ -241,9 +241,7 @@ pub(crate) fn normalize_registered_component_types(store: &mut Store, package_id
             }
             _ => {}
         }
-        if any {
-            changed.push((name.clone(), updated));
-        }
+        changed.push((name.clone(), updated));
     }
     if changed.is_empty() {
         return;
@@ -253,5 +251,27 @@ pub(crate) fn normalize_registered_component_types(store: &mut Store, package_id
     };
     for (name, definition) in changed {
         package.definitions.insert(name, definition);
+    }
+}
+
+/// Whether any type written in a definition's components satisfies `predicate`.
+fn any_component_type(body: &DefinitionBody, mut predicate: impl FnMut(&Type) -> bool) -> bool {
+    match body {
+        DefinitionBody::Struct { fields, .. } => {
+            let (StructFields::Record(fields) | StructFields::Tuple(fields)) = fields;
+            fields.iter().any(|field| predicate(&field.ty))
+        }
+        DefinitionBody::Enum { variants, .. } => variants
+            .iter()
+            .flat_map(|variant| match &variant.fields {
+                VariantFields::Unit => [].as_slice(),
+                VariantFields::Tuple(fields) | VariantFields::Struct(fields) => fields,
+            })
+            .any(|field| predicate(&field.ty)),
+        DefinitionBody::TypeAlias {
+            alias: AliasKind::Transparent { target, .. },
+            ..
+        } => predicate(target),
+        _ => false,
     }
 }

@@ -20,7 +20,7 @@ use registration::derived_attributes::EqualityAttributes;
 use scopes::Scopes;
 use syntax::ast::{Annotation, Expression, Generic, ImportAlias, Span};
 use syntax::program::{
-    Definition, DefinitionBody, FileImport, Methods, NativeTypeKind, Package,
+    Definition, DefinitionBody, FileImport, Method, Methods, NativeTypeKind, Package,
     go_import_default_name,
 };
 use syntax::types::{Bound, SubstitutionMap, Symbol, Type, substitute};
