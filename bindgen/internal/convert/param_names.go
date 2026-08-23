@@ -17,6 +17,23 @@ func collectNamedParams(params *types.Tuple) map[string]int {
 	return used
 }
 
+// paramNames returns the name every parameter carries in the emitted typedef.
+func paramNames(sig *types.Signature) []string {
+	params := sig.Params()
+	used := collectNamedParams(params)
+	names := make([]string, params.Len())
+	for i := 0; i < params.Len(); i++ {
+		param := params.At(i)
+		if goName := param.Name(); goName != "" {
+			names[i] = sanitizeParamName(goName)
+			continue
+		}
+		isVariadicTail := sig.Variadic() && i == params.Len()-1
+		names[i] = deriveParamName(param.Type(), i, isVariadicTail, used)
+	}
+	return names
+}
+
 // deriveParamName synthesizes a parameter name from the Go type when the
 // original signature has none.
 func deriveParamName(t types.Type, index int, variadic bool, used map[string]int) string {

@@ -3390,6 +3390,84 @@ fn interface_satisfied_by_receiver_method() {
 }
 
 #[test]
+fn interface_satisfied_when_method_names_a_later_struct() {
+    infer(
+        r#"
+    interface Handler {
+      fn serve(r: mut Ref<Request>)
+    }
+
+    struct Request { pub tags: mut Slice<string> }
+
+    struct Mux {}
+
+    impl Mux {
+      fn serve(self: Ref<Mux>, r: mut Ref<Request>) {
+        r.tags = Slice.make<string>(0)
+      }
+    }
+
+    fn take(h: Handler) -> Handler { h }
+
+    fn main() {
+      let mux = Mux {}
+      let _ = take(&mux)
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mut_without_effect_demotes_a_later_struct_the_same_way() {
+    infer(
+        r#"
+    struct C0 {}
+
+    impl C0 {
+      fn m0(self: Ref<C0>, r: mut Ref<mut S0>) {}
+    }
+
+    interface I0 {
+      fn m0(r: mut Ref<mut S0>)
+    }
+
+    struct S0 {
+      pub f0: Slice<string>,
+    }
+
+    fn take0(h: I0) -> I0 { h }
+
+    fn use0() {
+      let c = C0 {}
+      let _ = take0(&c)
+    }
+
+    fn main() {}
+        "#,
+    )
+    .assert_infer_code_count("mut_without_effect", 2)
+    .assert_infer_code_count("interface_not_implemented", 0);
+}
+
+#[test]
+fn go_servemux_satisfies_go_handler() {
+    infer(
+        r#"
+    import "go:net/http"
+
+    fn take(h: http.Handler) -> http.Handler { h }
+
+    fn main() {
+      let mux = http.NewServeMux()
+      let _ = take(mux)
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn generic_static_method_infers_type_param_from_int() {
     infer(
         r#"
@@ -5558,6 +5636,27 @@ fn interface_mutual_cycle_rejected() {
 }
 
 #[test]
+fn interface_cycle_suppresses_conflicts_on_every_member() {
+    infer(
+        r#"
+    interface P {
+      embed Q
+      fn shared() -> string
+    }
+
+    interface Q {
+      embed P
+      fn shared() -> int
+    }
+
+    fn main() {}
+        "#,
+    )
+    .assert_infer_code_once("interface_cycle")
+    .assert_infer_code_count("interface_method_conflict", 0);
+}
+
+#[test]
 fn interface_three_way_cycle_rejected() {
     infer(
         r#"
@@ -5788,6 +5887,143 @@ fn interface_method_conflict_rejected() {
     interface Both {
       embed HasName
       embed HasNameInt
+    }
+
+    fn main() {}
+        "#,
+    )
+    .assert_infer_code("interface_method_conflict");
+}
+
+#[test]
+fn interface_embedding_no_conflict_across_a_struct_declaration() {
+    infer(
+        r#"
+    interface Early {
+      fn serve(r: mut Ref<Request>)
+    }
+
+    struct Request { pub tags: mut Slice<string> }
+
+    interface Late {
+      fn serve(r: mut Ref<Request>)
+    }
+
+    interface Merged {
+      embed Early
+      embed Late
+    }
+
+    fn take(m: Merged) -> Merged { m }
+
+    fn main() {
+      let _ = take
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn interface_embedding_no_conflict_when_the_struct_comes_last() {
+    infer(
+        r#"
+    interface Early {
+      fn serve(r: mut Ref<Request>)
+    }
+
+    interface Late {
+      fn serve(r: mut Ref<mut Request>)
+    }
+
+    interface Merged {
+      embed Early
+      embed Late
+    }
+
+    struct Request { pub tags: mut Slice<string> }
+
+    fn take(m: Merged) -> Merged { m }
+
+    fn main() {
+      let _ = take
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn interface_embedding_no_conflict_from_a_generic_parent() {
+    infer(
+        r#"
+    struct Request { pub tags: mut Slice<string> }
+
+    interface Holder<T> {
+      fn take(r: mut Ref<T>)
+    }
+
+    interface Direct {
+      fn take(r: mut Ref<Request>)
+    }
+
+    interface Merged {
+      embed Holder<Request>
+      embed Direct
+    }
+
+    fn use_it(m: Merged) -> Merged { m }
+
+    fn main() {
+      let _ = use_it
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn interface_conflict_inside_a_go_typedef_is_reported() {
+    let typedef = r#"
+pub interface HasName {
+  fn name() -> string
+}
+
+pub interface HasNameInt {
+  fn name() -> int
+}
+
+pub interface Merged {
+  embed HasName
+  embed HasNameInt
+}
+"#;
+    let input = r#"
+import "go:example.com/names"
+
+fn main() {}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/names", typedef)])
+        .assert_infer_code("interface_method_conflict");
+}
+
+#[test]
+fn interface_embedding_conflict_across_a_struct_declaration() {
+    infer(
+        r#"
+    interface Early {
+      fn serve(r: mut Ref<Request>)
+    }
+
+    struct Request { pub tags: mut Slice<string> }
+
+    interface Late {
+      fn serve(r: Ref<Request>)
+    }
+
+    interface Merged {
+      embed Early
+      embed Late
     }
 
     fn main() {}

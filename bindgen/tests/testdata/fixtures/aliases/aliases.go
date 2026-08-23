@@ -156,9 +156,24 @@ func (c *Counter) Bump(f func(*int)) {
 	f(&c.Total)
 }
 
-// FillVia exercises curated permission on a reserved parameter name.
+// FillVia exercises curated permission on a sanitized parameter name.
 func FillVia(f func([]int), self []int) {
 	f(self)
+}
+
+// Rewriter exercises curated permission on a derived parameter name.
+type Rewriter interface {
+	Rewrite(*Counter)
+}
+
+// Dst is named so an unnamed parameter of its type derives "dst".
+type Dst struct {
+	Total int
+}
+
+// Inspector exercises a derived name that must not trip the heuristic.
+type Inspector interface {
+	Inspect(*Dst)
 }
 
 // PairOfRows exercises per-hop qualifiers on a writable array return.

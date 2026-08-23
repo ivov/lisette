@@ -3,7 +3,8 @@
     "types": {
       "mutates_param": {
         "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/aliases": {
-          "FillVia": ["self"]
+          "FillVia": ["self_"],
+          "Rewriter.Rewrite": ["counter"]
         }
       },
       "mutates_receiver": {

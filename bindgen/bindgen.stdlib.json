@@ -356,7 +356,8 @@
           "UnixConn.ReadMsgUnix": ["b", "oob"]
         },
         "net/http": {
-          "File.Read": ["p"]
+          "File.Read": ["p"],
+          "Handler.ServeHTTP": ["request"]
         },
         "net/netip": {
           "Addr.AppendBinary": ["b"],

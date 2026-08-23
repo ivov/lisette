@@ -457,6 +457,14 @@ impl Store {
         }
     }
 
+    /// The conversion path demotes a refused qualifier once the body exists.
+    fn nominal_refuses_write_permission(&self, id: &str) -> bool {
+        matches!(
+            self.get_definition(id).map(|definition| &definition.body),
+            Some(DefinitionBody::Struct { .. } | DefinitionBody::Enum { .. })
+        ) && !self.nominal_declares_writable_components(id)
+    }
+
     /// Canonical form for a type built from an annotation.
     pub fn normalized_annotation_type(&self, ty: &Type) -> Type {
         match ty {
@@ -502,7 +510,7 @@ impl Store {
                     .iter()
                     .map(|param| self.normalized_annotation_type(param))
                     .collect(),
-                writable: *writable,
+                writable: *writable && !self.nominal_refuses_write_permission(id.as_str()),
             },
             Type::Tuple(elements) => Type::Tuple(
                 elements

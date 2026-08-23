@@ -166,18 +166,12 @@ func (c *Converter) convertParams(sig *types.Signature, obj types.Object, lookup
 	declaring, _ := obj.(*types.Func)
 
 	params := sig.Params()
-	usedNames := collectNamedParams(params)
+	names := paramNames(sig)
 	var out []FunctionParameter
 	for i := 0; i < params.Len(); i++ {
 		param := params.At(i)
 		isVariadicTail := sig.Variadic() && i == params.Len()-1
-		goName := param.Name()
-		name := goName
-		if name == "" {
-			name = deriveParamName(param.Type(), i, isVariadicTail, usedNames)
-		} else {
-			name = sanitizeParamName(name)
-		}
+		name := names[i]
 
 		var paramType TypeResult
 		directHandled := false
@@ -194,8 +188,9 @@ func (c *Converter) convertParams(sig *types.Signature, obj types.Object, lookup
 		}
 
 		typeStr := paramType.LisetteType
+		naming := paramNaming{emitted: name, goName: param.Name()}
 		if !directHandled && !isVariadicTail &&
-			isMutableParam(mutation.Mutates(i), mutParams, goName, param.Type(), methodName) {
+			isMutableParam(mutation.Mutates(i), mutParams, naming, param.Type(), methodName) {
 			writable := writableParamType(param.Type(), optional, c, substitutions)
 			if writable.SkipReason != nil {
 				return nil, writable.SkipReason
@@ -1226,13 +1221,18 @@ func describeConstraint(constraint *types.Interface) string {
 	return "complex"
 }
 
+type paramNaming struct {
+	emitted string
+	goName  string
+}
+
 // isMutableParam combines the three signals additively rather than ranking them:
 // a missing `mut` corrupts caller data, a spurious one only asks for a `let mut`.
 // The writable renderer neutralizes a signal on a type Go cannot write through.
-func isMutableParam(derivedMutates bool, mutParams []string, name string, t types.Type, funcName string) bool {
-	return slices.Contains(mutParams, name) ||
+func isMutableParam(derivedMutates bool, mutParams []string, names paramNaming, t types.Type, funcName string) bool {
+	return slices.Contains(mutParams, names.emitted) ||
 		derivedMutates ||
-		looksLikeMutableParam(name, t, funcName)
+		looksLikeMutableParam(names.goName, t, funcName)
 }
 
 // looksLikeMutableParam returns true if the parameter is likely written into.

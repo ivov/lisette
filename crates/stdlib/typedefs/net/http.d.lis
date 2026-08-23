@@ -789,7 +789,7 @@ pub struct HTTP2Config {
 /// the client sees an interrupted response but the server doesn't log
 /// an error, panic with the value [ErrAbortHandler].
 pub interface Handler {
-  fn ServeHTTP(responseWriter: ResponseWriter, request: Ref<Request>)
+  fn ServeHTTP(responseWriter: ResponseWriter, request: mut Ref<Request>)
 }
 
 /// The HandlerFunc type is an adapter to allow the use of
