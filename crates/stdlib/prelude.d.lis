@@ -60,6 +60,12 @@ type complex64
 type complex128
 
 /// A boolean value: `true` or `false`.
+///
+/// Example:
+///   let ready = true
+///   if ready && count > 0 {
+///     process()
+///   }
 type bool
 
 /// A UTF-8 encoded string.
@@ -67,36 +73,82 @@ type string
 
 impl string {
   /// Returns the number of bytes in the string.
+  ///
+  /// Example:
+  ///   // !callout-right `5`, since `é` takes two bytes
+  ///   let bytes = "café".length()
   fn length(self) -> int
 
   /// Returns `true` if the string has length zero.
+  ///
+  /// Example:
+  ///   // !callout-right `true`
+  ///   let blank = "".is_empty()
   fn is_empty(self) -> bool
 
   /// Returns `true` if the string contains the given substring.
+  ///
+  /// Example:
+  ///   // !callout-right `true`
+  ///   let found = "hello world".contains("world")
   fn contains(self, substr: string) -> bool
 
   /// Splits the string around each occurrence of `sep` and returns the substrings.
+  ///
+  /// Example:
+  ///   // !callout-right `["alice", "30", "berlin"]`
+  ///   let fields = "alice,30,berlin".split(",")
   fn split(self, sep: string) -> mut Slice<string>
 
   /// Returns `true` if the string starts with `prefix`.
+  ///
+  /// Example:
+  ///   // !callout-right `true`
+  ///   let is_go = "go:fmt".starts_with("go:")
   fn starts_with(self, prefix: string) -> bool
 
   /// Returns `true` if the string ends with `suffix`.
+  ///
+  /// Example:
+  ///   // !callout-right `true`
+  ///   let is_lisette = "main.lis".ends_with(".lis")
   fn ends_with(self, suffix: string) -> bool
 
   /// Returns the byte at index `i`.
+  ///
+  /// Example:
+  ///   // !callout-right `104`, the byte value of `h`
+  ///   let first = "hello".byte_at(0)
   fn byte_at(self, i: int) -> byte
 
   /// Returns the rune at index `i`.
+  ///
+  /// Example:
+  ///   // !callout-right `233`, the code point of `é`
+  ///   let accented = "café".rune_at(3)
   fn rune_at(self, i: int) -> rune
 
   /// Returns the bytes of the string as a `Slice<byte>`.
+  ///
+  /// Example:
+  ///   // !callout-right `[104, 105]`, one byte per char
+  ///   let raw = "hi".bytes()
   fn bytes(self) -> mut Slice<byte>
 
   /// Returns the runes of the string as a `Slice<rune>`.
+  ///
+  /// Example:
+  ///   // !callout-right `[99, 97, 102, 233]`, one code point per char
+  ///   let points = "café".runes()
+  ///   // !callout-right `4`, one fewer than `length()`
+  ///   let count = points.length()
   fn runes(self) -> mut Slice<rune>
 
   /// Returns the substring at the given rune-indexed range.
+  ///
+  /// Example:
+  ///   // !callout-right `"hello"`
+  ///   let word = "hello world".substring(0..5)
   fn substring(self, r: Range<int>) -> string
 }
 
@@ -104,135 +156,266 @@ impl string {
 //     Composite types
 // -----------------------
 
-/// A value that may or may not be present.
-///
-/// Example:
-///   let maybe_name = Some("alice")
-///   let fallback = maybe_name.unwrap_or("unknown")
-///   let mapped = maybe_name.map(|s| s.length())
+/// A value that may or may not be present. Equivalent to Go's `(T, bool)`.
 enum Option<T> {
   Some(T),
   None,
 }
 
 impl<T> Option<T> {
-  /// Returns `true` if the option contains a value.
+  /// Returns `true` if `Option` wraps a value.
+  ///
+  /// Example:
+  ///   // !callout[/is_some\(\)/] `true` if `id` was found
+  ///   let found = users.get(id).is_some()
   fn is_some(self) -> bool
 
-  /// Returns `true` if the option is `None`.
+  /// Returns `true` if `Option` is `None`.
+  ///
+  /// Example:
+  ///   // !callout[/is_none\(\)/] `false` if `id` was found
+  ///   let missing = users.get(id).is_none()
   fn is_none(self) -> bool
 
-  /// Returns the contained value, or `default` if `None`.
+  /// Returns the wrapped value, or `default` if `None`.
+  ///
+  /// Example:
+  ///   // !callout[/unwrap_or/] `"alice"` if `id` was found, else `"stranger"`
+  ///   let name = users.get(id).unwrap_or("stranger")
   fn unwrap_or(self, default: T) -> T
 
-  /// Returns the contained value, or computes it from `f` if `None`.
+  /// Returns the wrapped value, or computes it from `f` if `None`.
+  ///
+  /// Example:
+  ///   // !callout[/unwrap_or_else/] runs `f` only if `id` was absent
+  ///   let name = users.get(id).unwrap_or_else(|| default_name())
   fn unwrap_or_else(self, f: fn() -> T) -> T
 
-  /// Transforms the contained value by applying `f`,
-  /// or returns `None` if `None`.
+  /// Applies `f` to the wrapped value, or returns `None` if `None`.
+  ///
+  /// Example:
+  ///   // !callout[/map/] `Some(5)` for `"alice"`
+  ///   let length = users.get(id).map(|name| name.length())
   fn map<U>(self, f: fn(T) -> U) -> Option<U>
 
-  /// Returns `default` if the option is `None`, otherwise applies
-  /// `f` to the contained value.
+  /// Applies `f` to the wrapped value, or returns `default` if `None`.
+  ///
+  /// Example:
+  ///   // !callout[/map_or/] `5` for `"alice"`, `0` when absent
+  ///   let length = users.get(id).map_or(0, |name| name.length())
   fn map_or<U>(self, default: U, f: fn(T) -> U) -> U
 
-  /// Computes a default using `default` if `None`, or applies `f`
-  /// to the contained value.
+  /// Applies `f` to the wrapped value, or computes a default from
+  /// `default` if `None`.
+  ///
+  /// Example:
+  ///   // !callout[/map_or_else/] runs `default` only if `id` was absent
+  ///   let length = users.get(id).map_or_else(
+  ///     || 0,
+  ///     |name| name.length(),
+  ///   )
   fn map_or_else<U>(self, default: fn() -> U, f: fn(T) -> U) -> U
 
-  /// Returns `None` if the option is `None`, otherwise calls `f`
-  /// with the contained value and returns the result.
+  /// Calls `f` with the wrapped value and returns its own `Option`,
+  /// or returns `None` if `None`.
+  ///
+  /// Example:
+  ///   // !callout[/and_then/] `Some(30)`, chaining one lookup into the next
+  ///   let age = users.get(id).and_then(|name| ages.get(name))
   fn and_then<U>(self, f: fn(T) -> Option<U>) -> Option<U>
 
-  /// Returns the option if it is `Some`, otherwise calls `f`.
+  /// Returns `Option` if it is `Some`, otherwise calls `f`.
+  ///
+  /// Example:
+  ///   // !callout[/or_else/] runs `f` only if `id` was absent
+  ///   let name = users.get(id).or_else(|| Some("stranger"))
   fn or_else(self, f: fn() -> Option<T>) -> Option<T>
 
-  /// Returns `Some(value)` if `pred` returns `true`, or `None` otherwise.
-  fn filter(self, pred: fn(T) -> bool) -> Option<T>
+  /// Returns `Option` if `f` returns `true`, or `None` otherwise.
+  ///
+  /// Example:
+  ///   // !callout[/filter/] drops an empty name
+  ///   let named = users.get(id).filter(|name| !name.is_empty())
+  fn filter(self, f: fn(T) -> bool) -> Option<T>
 
-  /// Takes the value out of the option, leaving `None` in its place.
+  /// Takes the value out of `Option`, leaving `None` in its place.
+  ///
+  /// Example:
+  ///   let mut slot = users.get(id)
+  ///   // !callout[/take\(\)/] `Some("alice")`
+  ///   let taken = slot.take()
+  ///   // !callout[/is_none\(\)/] `true`, the slot is now `None`
+  ///   let emptied = slot.is_none()
   fn take(self: mut Ref<Option<T>>) -> Option<T>
 
   /// Transforms `Option<T>` into `Result<T, E>`, mapping `Some(v)`
   /// to `Ok(v)` and `None` to `Err(err)`.
+  ///
+  /// Example:
+  ///   // !callout[/ok_or/] `Ok("alice")` if `id` was found
+  ///   let result = users.get(id).ok_or("no such user")
   fn ok_or<E>(self, err: E) -> Result<T, E>
 
   /// Transforms `Option<T>` into `Result<T, E>`, mapping `Some(v)`
   /// to `Ok(v)` and `None` to `Err(f())`.
+  ///
+  /// Example:
+  ///   // !callout[/ok_or_else/] runs `f` only if `id` was absent
+  ///   let result = users.get(id).ok_or_else(|| missing_user(id))
   fn ok_or_else<E>(self, f: fn() -> E) -> Result<T, E>
 
-  /// Zips two options into an option of a tuple.
+  /// Pairs two of `Option` into one `Option` of a tuple.
   /// Returns `Some((a, b))` if both are `Some`, otherwise `None`.
+  ///
+  /// Example:
+  ///   // !callout[/zip/] `Some(("alice", 30))` when both were found
+  ///   let pair = users.get(id).zip(age)
   fn zip<U>(self, other: Option<U>) -> Option<(T, U)>
 }
 
 impl<U> Option<Option<U>> {
   /// Converts `Option<Option<U>>` into `Option<U>`.
+  ///
+  /// Example:
+  ///   let nested = users.get(id).map(|name| ages.get(name))
+  ///   // !callout[/flatten/] `Some(30)`, one `Option` instead of two
+  ///   let age = nested.flatten()
   fn flatten(self) -> Option<U>
 }
 
-/// A result that is either a success (`Ok`) or a failure (`Err`).
-///
-/// Example:
-///   let res = Ok(42)
-///   let value = res.unwrap_or(0)
-///   let doubled = res.map(|x| x * 2)
+/// A result that either succeeded or failed. Equivalent to Go's `(T, error)`, or to a
+/// bare `error` when there is no value to carry.
 enum Result<T, E> {
   Ok(T),
   Err(E),
 }
 
 impl<T, E> Result<T, E> {
-  /// Returns `true` if the result is `Ok`.
+  /// Returns `true` if `Result` is `Ok`.
+  ///
+  /// Example:
+  ///   let raw = "8080"
+  ///   // !callout[/is_ok\(\)/] `true` if `raw` parsed
+  ///   let succeeded = strconv.Atoi(raw).is_ok()
   fn is_ok(self) -> bool
 
-  /// Returns `true` if the result is `Err`.
+  /// Returns `true` if `Result` is `Err`.
+  ///
+  /// Example:
+  ///   let raw = "8080"
+  ///   // !callout[/is_err\(\)/] `false` if `raw` parsed
+  ///   let failed = strconv.Atoi(raw).is_err()
   fn is_err(self) -> bool
 
   /// Converts to `Option<T>`, discarding the error if any.
+  ///
+  /// Example:
+  ///   let raw = "8080"
+  ///   // !callout[/ok\(\)/] `Some(8080)` if `raw` parsed
+  ///   let maybe_port = strconv.Atoi(raw).ok()
   fn ok(self) -> Option<T>
 
   /// Converts to `Option<E>`, discarding the success value if any.
+  ///
+  /// Example:
+  ///   let raw = "8080"
+  ///   // !callout[/err\(\)/] `None` if `raw` parsed
+  ///   let maybe_failure = strconv.Atoi(raw).err()
   fn err(self) -> Option<E>
 
-  /// Returns the contained `Ok` value, or `default` if `Err`.
+  /// Returns the wrapped `Ok` value, or `default` if `Err`.
+  ///
+  /// Example:
+  ///   let raw = "8080"
+  ///   // !callout[/unwrap_or/] `8080` if `raw` parsed, else `80`
+  ///   let port = strconv.Atoi(raw).unwrap_or(80)
   fn unwrap_or(self, default: T) -> T
 
-  /// Returns the contained `Ok` value, or computes it by calling `f` with the `Err` value.
+  /// Returns the wrapped `Ok` value, or computes it by calling `f` with the `Err` value.
+  ///
+  /// Example:
+  ///   let raw = "8080"
+  ///   // !callout[/unwrap_or_else/] runs `f` only if `raw` failed to parse
+  ///   let port = strconv.Atoi(raw).unwrap_or_else(|failure| {
+  ///     fmt.Println(failure.Error())
+  ///     80
+  ///   })
   fn unwrap_or_else(self, f: fn(E) -> T) -> T
 
   /// Transforms the `Ok` value by applying `f`, leaving `Err` unchanged.
+  ///
+  /// Example:
+  ///   let raw = "8080"
+  ///   // !callout[/map/] `Ok(16160)` if `raw` parsed
+  ///   let doubled = strconv.Atoi(raw).map(|n| n * 2)
   fn map<U>(self, f: fn(T) -> U) -> Result<U, E>
 
   /// Transforms the `Err` value by applying `f`, leaving `Ok` unchanged.
+  ///
+  /// Example:
+  ///   let raw = "8080"
+  ///   // !callout[/map_err/] leaves `Ok(8080)` untouched
+  ///   let described = strconv.Atoi(raw).map_err(|failure| failure.Error())
   fn map_err<F>(self, f: fn(E) -> F) -> Result<T, F>
 
   /// Returns `default` if `Err`, otherwise applies `f` to the `Ok` value.
+  ///
+  /// Example:
+  ///   let raw = "8080"
+  ///   // !callout[/map_or/] `16160` if `raw` parsed, else `0`
+  ///   let doubled = strconv.Atoi(raw).map_or(0, |n| n * 2)
   fn map_or<U>(self, default: U, f: fn(T) -> U) -> U
 
   /// Applies `default` to the `Err` value, or `f` to the `Ok` value.
+  ///
+  /// Example:
+  ///   let raw = "8080"
+  ///   // !callout[/map_or_else/] port, or parse error
+  ///   let shown = strconv.Atoi(raw).map_or_else(
+  ///     |failure| failure.Error(),
+  ///     strconv.Itoa,
+  ///   )
   fn map_or_else<U>(self, default: fn(E) -> U, f: fn(T) -> U) -> U
 
   /// Calls `f` with the `Ok` value and returns the result,
   /// leaving `Err` unchanged.
+  ///
+  /// Example:
+  ///   let raw = "8080"
+  ///   // !callout[/and_then/] a second check, run only if `raw` parsed
+  ///   let port = strconv.Atoi(raw).and_then(|n| {
+  ///     if n <= 65535 { Ok(n) } else { Err(errors.New("port out of range")) }
+  ///   })
   fn and_then<U>(self, f: fn(T) -> Result<U, E>) -> Result<U, E>
 
   /// Calls `f` with the `Err` value and returns the result,
   /// leaving `Ok` unchanged.
+  ///
+  /// Example:
+  ///   let raw = "8080"
+  ///   // !callout[/or_else/] runs `f` only if `raw` failed to parse
+  ///   let port = strconv.Atoi(raw).or_else(|_| strconv.Atoi("80"))
   fn or_else<F>(self, f: fn(E) -> Result<T, F>) -> Result<T, F>
 }
 
 impl<T> Result<T, error> {
   /// Wraps the `Err` value with `msg` and the original error, leaving `Ok` unchanged.
+  ///
+  /// Example:
+  ///   // !callout[/wrap_err/] `Err("read port: ...")`, keeping the original
+  ///   let port = strconv.Atoi(raw).wrap_err("read port")
   fn wrap_err(self, msg: string) -> Result<T, error>
 }
 
-/// A result from an operation where both a value and an error may be
-/// simultaneously meaningful. Used for Go functions like `io.Reader.Read`
-/// where `(n > 0, io.EOF)` means "n bytes were read and the stream ended."
+/// A result where _both_ a value and an error may be meaningful. Equivalent to Go's
+/// `(T, error)`, where the two are not exclusive.
 ///
-/// Unlike `Result`, the `?` operator is not supported on `Partial`.
-/// Use `match` to handle all three cases explicitly.
+/// A common use case is `io.Reader.Read`, where `(n > 0, io.EOF)` means that
+/// `n` bytes arrived and the stream ended.
+///
+/// `Err` arises only where the Go call can return no value at all, such as a nil
+/// slice or a nil pointer. `io.Reader.Read` returns an `int`, which always carries
+/// a value, so it yields `Ok` or `Both` and never `Err`.
 enum Partial<T, E> {
   Ok(T),
   Err(E),
@@ -240,130 +423,284 @@ enum Partial<T, E> {
 }
 
 impl<T, E> Partial<T, E> {
-  /// Returns `true` if this is `Ok`.
+  /// Returns `true` if `Partial` is `Ok`.
+  ///
+  /// Example:
+  ///   // !callout[/is_ok\(\)/] `true`, the read filled without ending
+  ///   let complete = outcome.is_ok()
   fn is_ok(self) -> bool
 
-  /// Returns `true` if this is `Err`.
+  /// Returns `true` if `Partial` is `Err`.
+  ///
+  /// Example:
+  ///   // !callout[/is_err\(\)/] `true` only when the call returned no value at all
+  ///   let failed = outcome.is_err()
   fn is_err(self) -> bool
 
-  /// Returns `true` if this is `Both`.
+  /// Returns `true` if `Partial` is `Both`.
+  ///
+  /// Example:
+  ///   // !callout[/is_both\(\)/] `true` when bytes arrived and the stream ended
+  ///   let stopped_early = outcome.is_both()
   fn is_both(self) -> bool
 
   /// Returns `Some(value)` if `Ok` or `Both`, otherwise `None`.
+  ///
+  /// Example:
+  ///   // !callout[/ok\(\)/] `Some(5)`, the byte count
+  ///   let maybe_count = outcome.ok()
   fn ok(self) -> Option<T>
 
   /// Returns `Some(error)` if `Err` or `Both`, otherwise `None`.
+  ///
+  /// Example:
+  ///   // !callout[/err\(\)/] `None` when the read carried no error
+  ///   let maybe_reason = outcome.err()
   fn err(self) -> Option<E>
 
-  /// Returns the value if `Ok` or `Both`, otherwise `default`.
+  /// Returns the wrapped value if `Ok` or `Both`, otherwise `default`.
+  ///
+  /// Example:
+  ///   // !callout[/unwrap_or/] `5`, or `0` when the read failed outright
+  ///   let count = outcome.unwrap_or(0)
   fn unwrap_or(self, default: T) -> T
 
-  /// Returns the value if `Ok` or `Both`, otherwise `f(error)`.
+  /// Returns the wrapped value if `Ok` or `Both`, or computes it by calling `f`
+  /// with the error.
+  ///
+  /// Example:
+  ///   // !callout[/unwrap_or_else/] runs `f` only when the read failed outright
+  ///   let count = outcome.unwrap_or_else(|failure| failure.Error().length())
   fn unwrap_or_else(self, f: fn(E) -> T) -> T
 
-  /// Transforms the value. `Ok(v)` becomes `Ok(f(v))`,
-  /// `Both(v, e)` becomes `Both(f(v), e)`, `Err(e)` is unchanged.
+  /// Applies `f` to the wrapped value of an `Ok` or a `Both`, leaving `Err`
+  /// unchanged.
+  ///
+  /// Example:
+  ///   // !callout[/map/] `Ok(3)`, the room left in the buffer
+  ///   let remaining = outcome.map(|count| buffer.length() - count)
   fn map<U>(self, f: fn(T) -> U) -> Partial<U, E>
 
-  /// Transforms the error. `Err(e)` becomes `Err(f(e))`,
-  /// `Both(v, e)` becomes `Both(v, f(e))`, `Ok(v)` is unchanged.
+  /// Applies `f` to the error of an `Err` or a `Both`, leaving `Ok` unchanged.
+  ///
+  /// Example:
+  ///   // !callout[/map_err/] leaves `Ok(5)` untouched
+  ///   let described = outcome.map_err(|failure| failure.Error())
   fn map_err<F>(self, f: fn(E) -> F) -> Partial<T, F>
 }
 
 /// A fixed-size, indexable sequence of elements. Equivalent to Go's `[N]T`.
 ///
+/// The size is part of the type, so `Array<byte, 2>` and `Array<byte, 4>` are distinct types.
+///
+/// A list literal is a `Slice` by default, so an `Array` needs the annotation.
+///
 /// Example:
-///   let xs: Array<int, 3> = [1, 2, 3]
-///   let ys = Array.new<int, 256>()
-///   let n = xs.length()
-///   let copy = xs.to_slice()
+///   // !callout-right `Array<int, 3>`
+///   let rgb: Array<int, 3> = [255, 128, 0]
+///   // !callout-right `Slice<int>`
+///   let growable = [255, 128, 0]
 type Array<T>
 
 impl<T> Array<T> {
-  /// Returns the size of the array.
+  /// Returns the size of the `Array`.
+  ///
+  /// Example:
+  ///   let rgb: Array<int, 3> = [255, 128, 0]
+  ///   // !callout-right `3`
+  ///   let size = rgb.length()
   fn length(self) -> int
 
   /// Returns the element at `index`, or `None` if out of bounds.
+  ///
+  /// Example:
+  ///   let rgb: Array<int, 3> = [255, 128, 0]
+  ///   // !callout[/get/] `Some(128)`, or `None` when out of bounds
+  ///   let green = rgb.get(1)
   fn get(self, index: int) -> Option<T>
 
-  /// Copies the elements into a new slice.
+  /// Copies the elements of the `Array` into a new `Slice`.
+  ///
+  /// Example:
+  ///   let parts: Array<string, 3> = ["a", "b", "c"]
+  ///   // !callout[/to_slice\(\)/] `strings.Join` takes a `Slice`, not an `Array`
+  ///   let path = strings.Join(parts.to_slice(), "-")
   fn to_slice(self) -> mut Slice<T>
 }
 
 /// A growable, indexable sequence of elements. Equivalent to Go's `[]T`.
 ///
 /// Example:
-///   let items = [1, 2, 3]
-///   let first = items[0]
-///   let middle = items[1..3]
-///   let more = items.append(4, 5)
-///   let value = items.get(0).unwrap_or(0)
-///   for item in items {
-///     fmt.Println(item)
+///   let scores = [90, 75, 88]
+///   // !callout-right `90`
+///   let first = scores[0]
+///   // !callout-right `[75, 88]`
+///   let rest = scores[1..3]
+///   for score in scores {
+///     // !callout-right `90`, then `75`, then `88`
+///     fmt.Println(score)
 ///   }
 type Slice<T>
 
 impl<T> Slice<T> {
-  /// Creates a new empty slice.
+  /// Creates an empty `Slice`.
+  ///
+  /// Example:
+  ///   // !callout-right `[]`
+  ///   let scores = Slice.new<int>()
   fn new() -> mut Slice<T>
 
-  /// Creates a slice of `length` elements, each set to its zero value.
-  /// The capacity equals the length.
+  /// Creates a `Slice` of `length` elements, each set to its zero value, if any.
+  /// The `Slice` starts with no spare capacity.
+  ///
+  /// Example:
+  ///   // !callout-right `[0, 0, 0]`
+  ///   let scores = Slice.make<int>(3)
   fn make(length: int) -> mut Slice<T>
 
-  /// Returns the number of elements in the slice.
+  /// Returns the number of elements in the `Slice`.
+  ///
+  /// Example:
+  ///   let scores = [90, 75, 88]
+  ///   // !callout-right `3`
+  ///   let count = scores.length()
   fn length(self) -> int
 
-  /// Returns `true` if the slice contains no elements.
+  /// Returns `true` if the `Slice` holds no elements.
+  ///
+  /// Example:
+  ///   let scores = Slice.new<int>()
+  ///   // !callout-right `true`
+  ///   let blank = scores.is_empty()
   fn is_empty(self) -> bool
 
-  /// Returns the number of elements the slice can hold before reallocating.
+  /// Returns the number of elements the `Slice` can hold before reallocating.
+  ///
+  /// Example:
+  ///   let scores = [90, 75, 88]
+  ///   // !callout-right `3`
+  ///   let room = scores.capacity()
   fn capacity(self) -> int
 
-  /// Returns a slice with capacity for at least `additional` more elements.
+  /// Returns a `Slice` with capacity for at least `additional` more elements.
+  ///
+  /// Example:
+  ///   let mut scores = [90, 75, 88]
+  ///   // !callout[/reserve/] room for `100` more, length still `3`
+  ///   scores = scores.reserve(100)
   fn reserve(self, additional: int) -> mut Slice<T>
 
-  /// Returns the element at `index`, or `None` if out of bounds.
+  /// Returns the element at `index`, or `None` if out of bounds. An index out of
+  /// range panics, so use `get()` for an unchecked index.
+  ///
+  /// Example:
+  ///   let scores = [90, 75, 88]
+  ///   // !callout[/get/] `Some(75)`, or `None` when out of bounds
+  ///   let second = scores.get(1)
   fn get(self, index: int) -> Option<T>
 
-  /// Returns a new slice with the given elements appended. Spread an input slice
-  /// to concatenate: `items.append(xs...)`. Does not modify the original slice.
-  /// Reassign the output to grow in place: `items = items.append(x)`.
+  /// Returns a new `Slice` with the given elements appended. Does not modify the
+  /// original `Slice`, so reassign the output to grow in place.
+  ///
+  /// Example:
+  ///   let digits = [1, 2]
+  ///   // !callout-right `[1, 2, 3]`
+  ///   let extended = digits.append(3)
+  ///   let more = [4, 5]
+  ///   // !callout-right `[1, 2, 3, 4, 5]`
+  ///   let joined = extended.append(more...)
   fn append(self, elements: VarArgs<T>) -> mut Slice<T>
 
-  /// Overwrites the elements of this slice in place with elements from `src`,
+  /// Overwrites the elements of this `Slice` in place with elements from `src`,
   /// up to the shorter of the two lengths. Returns the number of elements copied.
+  ///
+  /// Example:
+  ///   let scores = [90, 75, 88]
+  ///   let mut head = Slice.make<int>(2)
+  ///   // !callout[/copy_from/] `2`, the shorter length, leaving `[90, 75]`
+  ///   let copied = head.copy_from(scores)
   fn copy_from(self: mut Slice<T>, src: Slice<T>) -> int
 
-  /// Returns a new slice containing only elements for which `f` returns `true`.
+  /// Returns a new `Slice` containing only elements for which `f` returns `true`.
+  ///
+  /// Example:
+  ///   let scores = [90, 75, 88]
+  ///   // !callout-right `[90, 88]`
+  ///   let passing = scores.filter(|score| score >= 80)
   fn filter(self, f: fn(T) -> bool) -> mut Slice<T>
 
-  /// Returns a new slice with `f` applied to each element.
+  /// Returns a new `Slice` with `f` applied to each element.
+  ///
+  /// Example:
+  ///   let scores = [90, 75, 88]
+  ///   // !callout-right `[95, 80, 93]`
+  ///   let curved = scores.map(|score| score + 5)
   fn map<U>(self, f: fn(T) -> U) -> mut Slice<U>
 
-  /// Returns `true` if the slice contains `value`.
+  /// Returns `true` if the `Slice` contains `value`.
+  ///
+  /// Example:
+  ///   let scores = [90, 75, 88]
+  ///   // !callout-right `true`
+  ///   let present = scores.contains(75)
   fn contains(self, value: T) -> bool
 
-  /// Returns `true` if this slice is element-wise equal to `other`.
+  /// Returns `true` if this `Slice` is equal to `other`, when comparing element
+  /// by element.
+  ///
+  /// Example:
+  ///   let scores = [90, 75, 88]
+  ///   // !callout-right `true`
+  ///   let same = scores.equals([90, 75, 88])
   fn equals(self, other: Slice<T>) -> bool
 
-  /// Reduces the slice to a single value by applying `f` to each element
-  /// with an accumulator, starting from `accumulator`.
-  fn fold<U>(self, accumulator: U, f: fn(U, T) -> U) -> U
+  /// Reduces the `Slice` to a single value by applying `f` to each element
+  /// with an accumulator, starting from `a`.
+  ///
+  /// Example:
+  ///   let scores = [90, 75, 88]
+  ///   // !callout-right `253`
+  ///   let total = scores.fold(0, |sum, score| sum + score)
+  fn fold<U>(self, a: U, f: fn(U, T) -> U) -> U
 
-  /// Returns the first element for which `predicate` returns `true`, or `None`.
-  fn find(self, predicate: fn(T) -> bool) -> Option<T>
+  /// Returns the first element for which `f` returns `true`, or `None`.
+  ///
+  /// Example:
+  ///   let scores = [90, 75, 88]
+  ///   // !callout-right `Some(75)`
+  ///   let failing = scores.find(|score| score < 80)
+  fn find(self, f: fn(T) -> bool) -> Option<T>
 
   /// Returns `true` if any element satisfies `f`.
+  ///
+  /// Example:
+  ///   let scores = [90, 75, 88]
+  ///   // !callout-right `true`
+  ///   let has_failing = scores.any(|score| score < 80)
   fn any(self, f: fn(T) -> bool) -> bool
 
   /// Returns `true` if all elements satisfy `f`.
+  ///
+  /// Example:
+  ///   let scores = [90, 75, 88]
+  ///   // !callout-right `true`
+  ///   let none_failing = scores.all(|score| score >= 60)
   fn all(self, f: fn(T) -> bool) -> bool
 
-  /// Returns an enumerated slice for indexed iteration.
+  /// Returns an `EnumeratedSlice` for indexed iteration.
+  ///
+  /// Example:
+  ///   let scores = [90, 75, 88]
+  ///   for (index, score) in scores.enumerate() {
+  ///     fmt.Println(index, score)
+  ///   }
   fn enumerate(self) -> EnumeratedSlice<T>
 
-  /// Returns a copy, including any nested slices, maps, and tuples.
+  /// Returns a copy of the `Slice`, including any nested slices, maps, and tuples.
+  ///
+  /// Example:
+  ///   let rounds = [[90, 75], [88]]
+  ///   let copy = rounds.clone()
   fn clone(self) -> mut Slice<T>
 }
 
@@ -373,162 +710,338 @@ type EnumeratedSlice<T>
 
 impl<T> EnumeratedSlice<T> {
   /// Returns the `(index, element)` pairs for which `f` returns `true`.
+  ///
+  /// Example:
+  ///   let names = ["alice", "bob", "charles"]
+  ///   let even_positions = names
+  ///     .enumerate()
+  ///     .filter(|(index, _)| index % 2 == 0)
   fn filter(self, f: fn((int, T)) -> bool) -> mut Slice<(int, T)>
 
   /// Returns a new slice with `f` applied to each `(index, element)` pair.
+  ///
+  /// Example:
+  ///   let names = ["alice", "bob"]
+  ///   let numbered = names
+  ///     .enumerate()
+  ///     .map(|(index, name)| fmt.Sprintf("%d: %s", index, name))
   fn map<U>(self, f: fn((int, T)) -> U) -> mut Slice<U>
 
   /// Reduces the `(index, element)` pairs to a single value by applying `f`
-  /// to each pair with an accumulator, starting from `accumulator`.
-  fn fold<U>(self, accumulator: U, f: fn(U, (int, T)) -> U) -> U
+  /// to each pair with an accumulator, starting from `a`.
+  ///
+  /// Example:
+  ///   let names = ["alice", "bob"]
+  ///   let characters = names
+  ///     .enumerate()
+  ///     .fold(0, |sum, (_, name)| sum + name.length())
+  fn fold<U>(self, a: U, f: fn(U, (int, T)) -> U) -> U
 
   /// Returns the first `(index, element)` pair for which `f` returns `true`,
   /// or `None`.
+  ///
+  /// Example:
+  ///   let names = ["alice", "bob"]
+  ///   let found = names.enumerate().find(|(_, name)| name == "bob")
   fn find(self, f: fn((int, T)) -> bool) -> Option<(int, T)>
 
   /// Returns a copy, including any nested slices, maps, and tuples.
+  ///
+  /// Example:
+  ///   let pairs = [[1], [2]].enumerate()
+  ///   let copy = pairs.clone()
   fn clone(self) -> mut EnumeratedSlice<T>
 }
 
 impl Slice<string> {
   /// Joins the elements with `sep` between each pair.
+  ///
+  /// Example:
+  ///   let names = ["alice", "bob", "charles"]
+  ///   // !callout-right `"alice, bob, charles"`
+  ///   let line = names.join(", ")
   fn join(self, sep: string) -> string
 }
 
-/// A map from keys to values. Equivalent to Go's `map[K]V`.
+/// An unordered collection of key-value pairs. Equivalent to Go's `map[K]V`.
+/// Keys must be [comparable](/docs/prelude/constraints/#comparable).
 ///
 /// Example:
 ///   let mut ages = Map.new<string, int>()
+///
+///   // !callout-right set value at key
 ///   ages["alice"] = 30
-///   let alice_age = ages.get("alice").unwrap_or(0)
+///   // !callout-right access value at key
+///   let alice_age = ages["alice"]
+///
+///   // !callout[/in ages/] order changes between runs
 ///   for (name, age) in ages {
 ///     fmt.Println(name, age)
 ///   }
 type Map<K: Comparable, V>
 
 impl<K, V> Map<K, V> {
-  /// Creates a new empty map.
+  /// Creates an empty `Map`.
+  ///
+  /// Example:
+  ///   let mut ages = Map.new<string, int>()
+  ///   ages["alice"] = 30
   fn new() -> mut Map<K, V>
 
-  /// Returns the number of entries in the map.
-  fn length(self) -> int
-
-  /// Returns `true` if the map contains no entries.
-  fn is_empty(self) -> bool
-
-  /// Returns the value for `key`, or `None` if not present.
-  fn get(self, key: K) -> Option<V>
-
-  /// Removes the entry for `key`.
-  fn delete(self: mut Map<K, V>, key: K)
-
-  /// Creates a map from a slice of key-value pairs.
+  /// Creates a `Map` from a `Slice` of key-value pairs.
+  ///
+  /// Example:
+  ///   let ages = Map.from([("alice", 30), ("bob", 25)])
   fn from(pairs: Slice<(K, V)>) -> mut Map<K, V>
 
-  /// Returns a copy, including any nested slices, maps, and tuples.
+  /// Returns the number of entries in the `Map`.
+  ///
+  /// Example:
+  ///   let ages = Map.from([("alice", 30), ("bob", 25)])
+  ///   // !callout-right `2`
+  ///   let entries = ages.length()
+  fn length(self) -> int
+
+  /// Returns `true` if the `Map` holds no entries.
+  ///
+  /// Example:
+  ///   let ages = Map.new<string, int>()
+  ///   // !callout-right `true`
+  ///   let blank = ages.is_empty()
+  fn is_empty(self) -> bool
+
+  /// Returns the value for `key`, or `None` if not present. Reading a missing key
+  /// with `[]` gives the value type's zero value, so use `get()` to tell a miss
+  /// from a stored zero.
+  ///
+  /// Example:
+  ///   let ages = Map.from([("alice", 30)])
+  ///   // !callout-right `Some(30)`
+  ///   let age = ages.get("alice")
+  ///   // !callout-right `None`, while `ages["bob"]` gives `0`
+  ///   let missing = ages.get("bob")
+  fn get(self, key: K) -> Option<V>
+
+  /// Removes the entry for `key` from the `Map`.
+  ///
+  /// Example:
+  ///   let mut ages = Map.from([("alice", 30), ("bob", 25)])
+  ///   // !callout[/delete/] leaves `bob` as the only entry
+  ///   ages.delete("alice")
+  fn delete(self: mut Map<K, V>, key: K)
+
+  /// Returns a copy of the `Map`, including any nested slices, maps, and tuples.
+  ///
+  /// Example:
+  ///   let ages = Map.from([("alice", 30)])
+  ///   let copy = ages.clone()
   fn clone(self) -> mut Map<K, V>
 
-  /// Returns `true` if this map has the same keys and values as `other`.
+  /// Returns `true` if this `Map` has the same keys and values as `other`.
+  ///
+  /// Example:
+  ///   let first = Map.from([("alice", 30)])
+  ///   let second = Map.from([("alice", 30)])
+  ///   // !callout-right `true`
+  ///   first.equals(second)
   fn equals(self, other: Map<K, V>) -> bool
 }
 
-/// A reference (pointer) to a value of type `T`. Equivalent to Go's `*T`.
-/// Create with `&x`, dereference with `x.*`.
-/// Methods with `Ref<T>` receivers automatically take a reference at call sites.
+/// A reference to a value of type `T`, equivalent to Go's `*T` but never nil.
 ///
 /// Example:
-///   let x = 42
-///   let r = &x
-///   let value = r.*
+///   let mut count = 1
+///   // !callout-right `mut Ref<int>`, since `count` allows writes
+///   let mut count_ref = &count
+///   // !callout-right `count` is now `2`
+///   count_ref.* += 1
 type Ref<T>
 
 /// A channel for sending and receiving values between tasks. Equivalent to Go's `chan T`.
 ///
 /// Example:
-///   let ch = Channel.new<int>()
-///   task { ch.send(42) }
-///   let value = ch.receive().unwrap_or(0)
+///   let jobs = Channel.new<int>()
+///   task jobs.send(7)
+///   // !callout-right `Some(7)`, once the `task` sends
+///   let first = jobs.receive()
 type Channel<T>
 
 impl<T> Channel<T> {
-  /// Creates a new unbuffered channel.
+  /// Creates an unbuffered `Channel`.
+  ///
+  /// Example:
+  ///   // !callout-right capacity `0`, so every send waits for a receive
+  ///   let jobs = Channel.new<int>()
   fn new() -> Channel<T>
 
-  /// Creates a new buffered channel with the given capacity.
+  /// Creates a `Channel` with room for `capacity` values.
+  ///
+  /// Example:
+  ///   // !callout-right room for `4` values before a send waits
+  ///   let jobs = Channel.buffered<int>(4)
   fn buffered(capacity: int) -> Channel<T>
 
-  /// Sends a value. Returns `true` if sent, `false` if the channel was closed.
+  /// Sends a value into the `Channel`. Returns `true` if the value was sent, `false`
+  /// if the `Channel` was closed.
+  ///
+  /// Example:
+  ///   let jobs = Channel.buffered<int>(1)
+  ///   let sent = jobs.send(7)
   fn send(self, value: T) -> bool
 
-  /// Receives a value from the channel, or `None` if closed.
+  /// Receives a value from the `Channel`, or `None` once it is closed and drained.
+  ///
+  /// Example:
+  ///   let jobs = Channel.buffered<int>(1)
+  ///   jobs.send(7)
+  ///   // !callout-right `Some(7)`
+  ///   let job = jobs.receive()
   fn receive(self) -> Option<T>
 
-  /// Splits the channel into a sender and receiver pair.
+  /// Splits the `Channel` into a `Sender` and a `Receiver`.
+  ///
+  /// Example:
+  ///   let (sender, receiver) = Channel.buffered<int>(1).split()
+  ///   sender.send(7)
+  ///   // !callout-right `Some(7)`
+  ///   let job = receiver.receive()
   fn split(self) -> (Sender<T>, Receiver<T>)
 
-  /// Returns the number of elements currently in the channel buffer.
+  /// Returns the number of values waiting in the `Channel` buffer.
+  ///
+  /// Example:
+  ///   let jobs = Channel.buffered<int>(4)
+  ///   jobs.send(7)
+  ///   // !callout-right `1`
+  ///   let queued = jobs.length()
   fn length(self) -> int
 
-  /// Returns `true` if the channel buffer is empty.
+  /// Returns `true` if the `Channel` buffer holds no values.
+  ///
+  /// Example:
+  ///   let jobs = Channel.buffered<int>(4)
+  ///   // !callout-right `true`
+  ///   let idle = jobs.is_empty()
   fn is_empty(self) -> bool
 
-  /// Returns the capacity of the channel buffer.
+  /// Returns how many values the `Channel` buffer can hold.
+  ///
+  /// Example:
+  ///   let jobs = Channel.buffered<int>(4)
+  ///   // !callout-right `4`
+  ///   let room = jobs.capacity()
   fn capacity(self) -> int
 
-  /// Closes the channel. Safe to call multiple times.
+  /// Closes the `Channel`. Safe to call more than once.
+  ///
+  /// Example:
+  ///   let jobs = Channel.buffered<int>(1)
+  ///   jobs.send(7)
+  ///   jobs.close()
   fn close(self)
 }
 
-/// The sending half of a channel. Equivalent to Go's `chan<- T`.
+/// The sending half of a `Channel`. Equivalent to Go's `chan<- T`.
 ///
 /// Example:
-///   let (tx, rx) = Channel.new<int>().split()
-///   tx.send(42)
-///   tx.close()
+///   let (sender, _) = Channel.buffered<int>(1).split()
+///   sender.send(7)
+///   sender.close()
 type Sender<T>
 
 impl<T> Sender<T> {
-  /// Sends a value. Returns `true` if sent, `false` if the channel was closed.
+  /// Sends a value into the `Channel`. Returns `true` if the value was sent, `false`
+  /// if the `Channel` was closed.
+  ///
+  /// Example:
+  ///   let (sender, _) = Channel.buffered<int>(1).split()
+  ///   let sent = sender.send(7)
   fn send(self, value: T) -> bool
 
-  /// Returns the number of elements currently in the channel buffer.
+  /// Returns the number of values waiting in the `Channel` buffer.
+  ///
+  /// Example:
+  ///   let (sender, _) = Channel.buffered<int>(4).split()
+  ///   sender.send(7)
+  ///   // !callout-right `1`
+  ///   let queued = sender.length()
   fn length(self) -> int
 
-  /// Returns `true` if the channel buffer is empty.
+  /// Returns `true` if the `Channel` buffer holds no values.
+  ///
+  /// Example:
+  ///   let (sender, _) = Channel.buffered<int>(4).split()
+  ///   // !callout-right `true`
+  ///   let idle = sender.is_empty()
   fn is_empty(self) -> bool
 
-  /// Returns the capacity of the channel buffer.
+  /// Returns how many values the `Channel` buffer can hold.
+  ///
+  /// Example:
+  ///   let (sender, _) = Channel.buffered<int>(4).split()
+  ///   // !callout-right `4`
+  ///   let room = sender.capacity()
   fn capacity(self) -> int
 
-  /// Closes the channel. Safe to call multiple times.
+  /// Closes the `Channel`. Safe to call more than once.
+  ///
+  /// Example:
+  ///   let (sender, _) = Channel.buffered<int>(1).split()
+  ///   sender.send(7)
+  ///   sender.close()
   fn close(self)
 }
 
-/// The receiving half of a channel. Equivalent to Go's `<-chan T`.
+/// The receiving half of a `Channel`. Equivalent to Go's `<-chan T`.
 ///
 /// Example:
-///   let (tx, rx) = Channel.new<int>().split()
-///   let value = rx.receive().unwrap_or(0)
+///   let (sender, receiver) = Channel.new<int>().split()
+///   task sender.send(7)
+///   // !callout-right `Some(7)`, once the `task` sends
+///   let job = receiver.receive()
 type Receiver<T>
 
 impl<T> Receiver<T> {
-  /// Receives a value from the channel, or `None` if closed.
+  /// Receives a value from the `Channel`, or `None` once it is closed and drained.
+  ///
+  /// Example:
+  ///   let (sender, receiver) = Channel.buffered<int>(1).split()
+  ///   sender.send(7)
+  ///   // !callout-right `Some(7)`
+  ///   let job = receiver.receive()
   fn receive(self) -> Option<T>
 
-  /// Returns the number of elements currently in the channel buffer.
+  /// Returns the number of values waiting in the `Channel` buffer.
+  ///
+  /// Example:
+  ///   let (sender, receiver) = Channel.buffered<int>(4).split()
+  ///   sender.send(7)
+  ///   // !callout-right `1`
+  ///   let queued = receiver.length()
   fn length(self) -> int
 
-  /// Returns the capacity of the channel buffer.
-  fn capacity(self) -> int
-
-  /// Returns `true` if the channel buffer is empty.
+  /// Returns `true` if the `Channel` buffer holds no values.
+  ///
+  /// Example:
+  ///   let (_, receiver) = Channel.buffered<int>(4).split()
+  ///   // !callout-right `true`
+  ///   let idle = receiver.is_empty()
   fn is_empty(self) -> bool
+
+  /// Returns how many values the `Channel` buffer can hold.
+  ///
+  /// Example:
+  ///   let (_, receiver) = Channel.buffered<int>(4).split()
+  ///   // !callout-right `4`
+  ///   let room = receiver.capacity()
+  fn capacity(self) -> int
 }
 
-/// A half-open range from `start` to `end` (exclusive).
+/// A `Range` covers `start` to `end`, excluding `end`.
 ///
 /// Example:
 ///   for i in 0..5 {
+///     // !callout-right `0` through `4`, excluding `5`
 ///     fmt.Println(i)
 ///   }
 pub struct Range<T> {
@@ -536,10 +1049,11 @@ pub struct Range<T> {
   pub end: T,
 }
 
-/// A closed range from `start` to `end` (inclusive).
+/// A `RangeInclusive` covers `start` to `end`, including `end`.
 ///
 /// Example:
 ///   for i in 0..=5 {
+///     // !callout-right `0` through `5`, including `5`
 ///     fmt.Println(i)
 ///   }
 pub struct RangeInclusive<T> {
@@ -547,28 +1061,34 @@ pub struct RangeInclusive<T> {
   pub end: T,
 }
 
-/// A range from `start` with no upper bound.
+/// A `RangeFrom` starts at `start` and has no upper bound.
 ///
 /// Example:
 ///   for i in 0.. {
-///     if i >= 10 { break }
+///     // !callout-right no upper bound, so the loop sets one
+///     if i >= 3 { break }
+///     fmt.Println(i)
 ///   }
 pub struct RangeFrom<T> {
   pub start: T,
 }
 
-/// A range from the beginning up to `end` (exclusive).
+/// A `RangeTo` covers up to `end`, excluding `end`.
 ///
 /// Example:
-///   let first_three = items[..3]
+///   let letters = ["a", "b", "c", "d"]
+///   // !callout-right `["a", "b"]`
+///   let first_two = letters[..2]
 pub struct RangeTo<T> {
   pub end: T,
 }
 
-/// A range from the beginning up to `end` (inclusive).
+/// A `RangeToInclusive` covers up to `end`, including `end`.
 ///
 /// Example:
-///   let up_to_three = items[..=3]
+///   let letters = ["a", "b", "c", "d"]
+///   // !callout-right `["a", "b", "c"]`
+///   let first_three = letters[..=2]
 pub struct RangeToInclusive<T> {
   pub end: T,
 }
@@ -577,38 +1097,83 @@ pub struct RangeToInclusive<T> {
 //     Special types
 // -----------------------
 
-/// Represents Go's `any` type. Values typed `any` in Go APIs arrive as
-/// `Unknown`. Use `assert_type` to narrow an `Unknown` value to a concrete type.
+/// Equivalent to Go's `any`.
 ///
 /// Example:
-///   let value: Unknown = get_any_value()
-///   let n = assert_type<int>(value)?
+///   let mut fields: Map<string, Unknown> = Map.new()
+///   let _ = json.Unmarshal("{\"name\": \"alice\"}".bytes(), &fields)
+///
+///   match fields.get("name") {
+///     Some(value) => {
+///       // !callout[/name/] `Some("alice")`
+///       let name = assert_type<string>(value)
+///       fmt.Println(name)
+///     },
+///     None => fmt.Println("missing"),
+///   }
 type Unknown
 
-/// Indicates a function never returns. Used for functions that panic or loop forever.
+/// The type returned when there is no meaningful value.
+///
+/// Example:
+///   fn save(path: string) -> Result<(), error> {
+///     os.WriteFile(path, "data".bytes(), 0o644)
+///   }
+///
+///   match save("out.txt") {
+///     // !callout[/\(\)/] `Unit`
+///     Ok(()) => fmt.Println("saved"),
+///     Err(err) => fmt.Println(err.Error()),
+///   }
+type Unit
+
+/// Indicates a function never returns, e.g. functions that panic or loop forever.
 ///
 /// Example:
 ///   fn fail(msg: string) -> Never {
 ///     panic(msg)
 ///   }
+///
+///   fn serve() -> Never {
+///     loop {
+///       handle(accept())
+///     }
+///   }
 type Never
 
-/// Marker for Go's `comparable` constraint. A type satisfies `Comparable`
-/// when it admits `==` and `!=` (everything except slices, maps, functions,
-/// and aggregates that contain them). Only usable as a type-parameter bound.
+/// Equivalent to Go's `comparable`. Satisfied by every type that admits
+/// `==` and `!=`.
+///
+/// Example:
+///   fn unique<T: Comparable>(items: Slice<T>) -> Map<T, bool> {
+///     let mut seen = Map.new<T, bool>()
+///     for item in items {
+///       seen[item] = true
+///     }
+///     seen
+///   }
+///
+///   // !callout-right `3`
+///   let numbers = unique([1, 2, 2, 3]).length()
+///   // !callout-right `2`
+///   let words = unique(["a", "b", "a"]).length()
 type Comparable
 
-/// Marker for Go's `cmp.Ordered` constraint. A type satisfies `Ordered` when
-/// it admits `<`, `<=`, `>=`, `>` (signed/unsigned ints, floats, and `string`).
-/// Only usable as a type-parameter bound.
+/// Equivalent to Go's `cmp.Ordered`. Satisfied by every type that admits
+/// `<`, `<=`, `>=` and `>`.
+///
+/// Example:
+///   fn descending<T: Ordered>(a: T, b: T) -> (T, T) {
+///     if a > b { (a, b) } else { (b, a) }
+///   }
+///
+///   // !callout-right `(7, 3)`
+///   let numbers = descending(3, 7)
+///   // !callout-right `("pear", "apple")`
+///   let words = descending("pear", "apple")
 type Ordered
 
-/// Zero or more arguments of type `T`. Only valid as the last parameter
-/// of a function. Corresponds to Go's `...T` syntax.
-///
-/// Inside the function body the parameter is a `Slice<T>`, as in Go. A spread
-/// call shares the caller's slice, so mutating through a `mut` parameter is
-/// visible to the caller.
+/// Equivalent to Go's `...T`.
 ///
 /// Example:
 ///   fn sum(numbers: VarArgs<int>) -> int {
@@ -616,34 +1181,80 @@ type Ordered
 ///     for n in numbers { total += n }
 ///     total
 ///   }
+///
+///   let total = sum(1, 2, 3)
 type VarArgs<T>
 
 /// A value captured from a `recover` block after a panic.
 ///
 /// Example:
-///   let result = recover { panicking_function() }
+///   fn will_panic() -> int {
+///     panic("boom")
+///   }
+///
+///   // !callout[/result/] `Result<int, PanicValue>`
+///   let result = recover { will_panic() }
+///
 ///   match result {
 ///     Ok(value) => fmt.Println(value),
-///     Err(pv) => fmt.Println(pv.message()),
+///     // !callout[/pv/] `PanicValue`
+///     Err(pv) => fmt.Println("recovered from a panic"),
 ///   }
 struct PanicValue {}
 
 impl PanicValue {
-  /// Returns the panic message string.
+  /// Returns the message string in the `PanicValue`.
+  ///
+  /// Example:
+  ///   let digits = [1, 2, 3]
+  ///   // !callout[/result/] `Result<int, PanicValue>`
+  ///   let result = recover { digits[10] }
+  ///
+  ///   match result {
+  ///     Ok(value) => fmt.Println(value),
+  ///     // !callout[/message\(\)/] `"index out of range [10] with length 3"`
+  ///     Err(pv) => fmt.Println(pv.message()),
+  ///   }
   fn message(self) -> string
 
-  /// Returns the panic value as an `error`, if it implements the error interface.
+  /// Returns the `PanicValue` as an `error`, if it implements the `error` interface.
+  ///
+  /// Example:
+  ///   let digits = [1, 2, 3]
+  ///   // !callout[/result/] `Result<int, PanicValue>`
+  ///   let result = recover { digits[10] }
+  ///
+  ///   match result {
+  ///     Ok(value) => fmt.Println(value),
+  ///     Err(pv) => match pv.as_error() {
+  ///       // !callout[/Error\(\)/] `"index out of range [10] with length 3"`
+  ///       Some(err) => fmt.Println(err.Error()),
+  ///       None => fmt.Println(pv.message()),
+  ///     },
+  ///   }
   fn as_error(self) -> Option<error>
 
   /// Returns the stack trace at the point of the panic.
+  ///
+  /// Example:
+  ///   let digits = [1, 2, 3]
+  ///   // !callout[/result/] `Result<int, PanicValue>`
+  ///   let result = recover { digits[10] }
+  ///
+  ///   match result {
+  ///     Ok(value) => fmt.Println(value),
+  ///     // !callout[/stack_trace\(\)/] `"goroutine 1 [running]:\nruntime/debug.Stack()\nprelude.RecoverBlock[...].func1.1()\n..."`
+  ///     Err(pv) => fmt.Println(pv.stack_trace()),
+  ///   }
   fn stack_trace(self) -> string
 }
 
-/// The built-in error interface implemented by all error types.
+/// The interface every error type satisfies, by having an `Error()` method.
 ///
 /// Example:
-///   match fallible_call() {
-///     Ok(value) => fmt.Println(value),
+///   match os.ReadFile("missing.txt") {
+///     Ok(bytes) => fmt.Println(bytes.length()),
+///     // !callout[/Error\(\)/] `"open missing.txt: no such file or directory"`
 ///     Err(err) => fmt.Println(err.Error()),
 ///   }
 interface error {
@@ -654,22 +1265,36 @@ interface error {
 //       Functions
 // -----------------------
 
-/// Type assertion for Go interop. Equivalent to Go's `v, ok := x.(T)`.
-/// Narrows an `Unknown` value to a concrete type `T`.
-/// Returns `Some(value)` if the runtime type matches, `None` otherwise.
+/// Checks at runtime whether an `Unknown` value is type `T`. Equivalent to Go's
+/// `v, ok := x.(T)`.
 ///
 /// Example:
-///   let value: Unknown = get_any_value()
+///   let value: Unknown = get_unknown_value()
+///   // !callout-right `Some(n)` on a match, else `None`
 ///   let n = assert_type<int>(value)?
 fn assert_type<T>(value: Unknown) -> Option<T>
 
-/// Constructs a complex number from real and imaginary parts.
+/// Creates a complex number from real and imaginary parts.
+///
+/// Example:
+///   // !callout-right `(3+4i)`
+///   let z = complex(3.0, 4.0)
 fn complex(r: float64, i: float64) -> complex128
 
 /// Returns the real part of a complex number.
+///
+/// Example:
+///   let z = complex(3.0, 4.0)
+///   // !callout-right `3`
+///   let real_part = real(z)
 fn real(c: complex128) -> float64
 
 /// Returns the imaginary part of a complex number.
+///
+/// Example:
+///   let z = complex(3.0, 4.0)
+///   // !callout-right `4`
+///   let imaginary_part = imaginary(z)
 #[go("imag")]
 fn imaginary(c: complex128) -> float64
 
@@ -680,10 +1305,22 @@ fn imaginary(c: complex128) -> float64
 ///   panic(err)
 fn panic(msg: Unknown) -> Never
 
-/// Returns the smallest of its arguments. All arguments must be of the same
-/// `Ordered` type (signed/unsigned ints, floats, or `string`).
+/// Returns the smallest of its arguments, which must share one
+/// [`Ordered`](/docs/prelude/constraints/#ordered) type.
+///
+/// Example:
+///   // !callout-right `1`
+///   let smallest = min(3, 1, 2)
+///   // !callout-right `"apple"`, compared alphabetically
+///   let first_word = min("pear", "apple")
 fn min<T: Ordered>(x: T, rest: VarArgs<T>) -> T
 
-/// Returns the largest of its arguments. All arguments must be of the same
-/// `Ordered` type (signed/unsigned ints, floats, or `string`).
+/// Returns the largest of its arguments, which must share one
+/// [`Ordered`](/docs/prelude/constraints/#ordered) type.
+///
+/// Example:
+///   // !callout-right `3`
+///   let largest = max(3, 1, 2)
+///   // !callout-right `"pear"`, compared alphabetically
+///   let last_word = max("pear", "apple")
 fn max<T: Ordered>(x: T, rest: VarArgs<T>) -> T

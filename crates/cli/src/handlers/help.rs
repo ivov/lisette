@@ -74,8 +74,6 @@ Arguments:
             "`lis build` {[path]} {[--flags]:b}
 
 Compile a project to a binary at the `target/.lisette/bin/` dir.
-For a library, generate an importable Go package at the `target/` dir.
-For a script, compile it to a binary at the current dir.
 
 Arguments:
     {path:g} {(optional):d}                     Path to project dir or file (default: current dir)
@@ -97,7 +95,6 @@ Examples:
             "`lis emit` {[path]} {[--flags]:b}
 
 Generate Go code from a Lisette project at the `target/` dir.
-For a script, generate its Go file at the current dir.
 
 Arguments:
     {path:g} {(optional):d}             Path to project dir or file (default: current dir)
@@ -116,7 +113,6 @@ Examples:
             "`lis run` {[target]} {[--flags]:b}
 
 Compile a Lisette project to a binary at `target/bin/` and run the binary.
-For a script, compile it to a binary at `/tmp/lis-script-<hash>/` and run it.
 
 Arguments:
     {target:g} {(optional):d}                        Project dir or file (default: current dir)
