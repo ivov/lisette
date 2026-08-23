@@ -224,7 +224,7 @@ Examples:
         "sync" => print_help(
             "`lis sync` {[--flags]:b}
 
-Tidy `lisette.toml` against the `go:` imports in `src/`, similar to `go mod tidy`.
+Reconcile `lisette.toml` against the `go:` imports in `src/`, similar to `go mod tidy`.
 Will drop dependency entries no longer reached by any import, and generate
 typedefs for every imported package. Run this after removing imports, deleting
 source files, or pulling new code.

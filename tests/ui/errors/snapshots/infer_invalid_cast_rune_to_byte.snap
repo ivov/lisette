@@ -1,12 +1,12 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Invalid cast
+  ✕ Invalid conversion
    ╭─[test.lis:4:3]
  3 │   let r: rune = 'A';
  4 │   r as byte
    ·   ────┬────
-   ·       ╰── cannot cast `rune` to `byte`
+   ·       ╰── cannot convert `rune` to `byte`
  5 │ }
    ╰────
-  help: rune (int32) is wider than byte (uint8) and may not fit. Use an intermediate variable to cast via int first: `let n = r as int; n as byte` · code: [infer.invalid_cast]
+  help: rune (int32) is wider than byte (uint8) and may not fit. Use an intermediate variable to convert via int first: `let n = r as int; n as byte` · code: [infer.invalid_conversion]

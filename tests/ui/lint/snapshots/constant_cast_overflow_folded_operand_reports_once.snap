@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  ✕ Constant cast overflow
+  ✕ Constant conversion overflow
    ╭─[test.lis:3:11]
  2 │ fn main() {
  3 │   let _ = (9223372036854775807 + 1) as int64
@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                            ╰── constant `9223372036854775808` overflows `int64`
  4 │ }
    ╰────
-  help: This expression always evaluates to `9223372036854775808`, and `int64` must be in range `-9223372036854775808` to `9223372036854775807` · code: [infer.constant_cast_overflow]
+  help: This expression always evaluates to `9223372036854775808`, and `int64` must be in range `-9223372036854775808` to `9223372036854775807` · code: [infer.constant_conversion_overflow]

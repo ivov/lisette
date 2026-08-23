@@ -1,12 +1,12 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Invalid cast
+  ✕ Invalid conversion
    ╭─[test.lis:3:3]
  2 │ fn test() -> int {
  3 │   true as int
    ·   ─────┬─────
-   ·        ╰── cannot cast `bool` to `int`
+   ·        ╰── cannot convert `bool` to `int`
  4 │ }
    ╰────
-  help: Casts are supported between numeric types, between string and byte/rune slices, from rune to string, and from concrete types to interfaces · code: [infer.invalid_cast]
+  help: Conversions are supported between numeric types, between string and byte/rune slices, from rune to string, and from concrete types to interfaces · code: [infer.invalid_conversion]

@@ -1,12 +1,12 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  ✕ Invalid cast
+  ✕ Invalid conversion
    ╭─[test.lis:6:3]
  5 │   let b: MyByte = 65;
  6 │   b as string
    ·   ─────┬─────
-   ·        ╰── cannot cast `MyByte` to `string`
+   ·        ╰── cannot convert `MyByte` to `string`
  7 │ }
    ╰────
-  help: A byte has two readings as a string. Use `[b] as string` to preserve the byte (may be invalid UTF-8), or cast through a rune to encode as a codepoint: `let r = b as rune; r as string` · code: [infer.invalid_cast]
+  help: A byte has two readings as a string. Use `[b] as string` to preserve the byte (may be invalid UTF-8), or convert through a rune to encode as a codepoint: `let r = b as rune; r as string` · code: [infer.invalid_conversion]

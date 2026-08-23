@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  ✕ Cast of `NaN` to integer
+  ✕ Conversion of `NaN` to integer
    ╭─[test.lis:5:11]
  4 │ fn main() {
  5 │   let _ = math.NaN() as CountNew
@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                      ╰── `NaN` has no `CountNew` value
  6 │ }
    ╰────
-  help: In Go, casting `NaN` to an integer produces an arbitrary, implementation-specific value rather than a meaningful one. Guard with `math.IsNaN(...)` before casting, or keep the value as a float · code: [infer.cast_nan_to_int]
+  help: In Go, converting `NaN` to an integer produces an arbitrary, implementation-specific value rather than a meaningful one. Guard with `math.IsNaN(...)` before converting, or keep the value as a float · code: [infer.convert_nan_to_int]

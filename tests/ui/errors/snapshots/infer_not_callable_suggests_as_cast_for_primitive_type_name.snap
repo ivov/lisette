@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·              ╰── expected function, found `string`
  4 │ }
    ╰────
-  help: Use `contents as string` to cast between types · code: [infer.not_callable]
+  help: Use `contents as string` to convert between types · code: [infer.not_callable]

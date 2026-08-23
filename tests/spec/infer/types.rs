@@ -1729,7 +1729,7 @@ fn main() {
 "#,
     )
     .assert_infer_code_once("interface_not_implemented")
-    .assert_infer_code_count("invalid_cast", 0);
+    .assert_infer_code_count("invalid_conversion", 0);
 }
 
 #[test]
@@ -6831,7 +6831,7 @@ fn main() {
 }
 "#,
     )
-    .assert_infer_code("invalid_cast");
+    .assert_infer_code("invalid_conversion");
 }
 
 #[test]
