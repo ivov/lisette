@@ -12,7 +12,7 @@ use crate::calls::native::native_method_lowers_to_plain_call;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
-use crate::plan::calls::CallableOrigin;
+use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use crate::types::native::NativeGoType;
 use syntax::EcoString;
@@ -97,7 +97,7 @@ fn extract_return_type_param(function: &Expression) -> Option<Type> {
     params.first().cloned()
 }
 
-impl Planner<'_> {
+impl<'a> Planner<'a> {
     fn resolve_element_type(
         &mut self,
         function: &Expression,
@@ -436,6 +436,20 @@ impl Planner<'_> {
         call_ty: Option<&Type>,
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
+        let plan = self
+            .plan_call(call_expression)
+            .expect("plan_call yields Some for a Call expression");
+        self.lower_call_with_plan(call_expression, call_ty, ctx, plan)
+    }
+
+    /// Lower a call whose plan the caller already built.
+    pub(crate) fn lower_call_with_plan(
+        &mut self,
+        call_expression: &Expression,
+        call_ty: Option<&Type>,
+        ctx: ExpressionContext<'_>,
+        plan: CallPlan<'a>,
+    ) -> ValuePlan {
         let Expression::Call {
             expression: callee,
             args,
@@ -451,10 +465,6 @@ impl Planner<'_> {
         let resolved_type_args = type_arguments
             .resolved_types()
             .expect("emission requires checked call type arguments");
-
-        let plan = self
-            .plan_call(call_expression)
-            .expect("plan_call yields Some for a Call expression");
 
         match &plan.resolved.origin {
             CallableOrigin::TupleStructConstructor => {

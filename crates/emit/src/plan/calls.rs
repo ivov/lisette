@@ -474,8 +474,16 @@ impl<'a> Planner<'a> {
         self.facts.classify_go_return_type(return_ty, go_hints)
     }
 
-    fn is_go_callable(&self, expression: &Expression) -> bool {
+    pub(crate) fn is_go_callable(&self, expression: &Expression) -> bool {
         resolved_definition(expression).is_some_and(|definition| definition.starts_with("go:"))
+    }
+
+    pub(crate) fn call_target_is_go(&self, expression: &Expression) -> bool {
+        matches!(
+            expression,
+            Expression::Call { expression: callee, .. }
+                if self.is_go_callable(callee.unwrap_parens())
+        )
     }
 }
 

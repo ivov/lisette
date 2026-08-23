@@ -25,7 +25,8 @@ impl Planner<'_> {
         expression: &Expression,
         ctx: ExpressionContext<'_>,
     ) -> ValuePlan {
-        if let Some(callee) = self.resolve_callable_value(expression)
+        if self.is_go_callable(expression)
+            && let Some(callee) = self.resolve_callable_value(expression)
             && matches!(callee.origin, CallableOrigin::GoInterop)
         {
             let abi = &callee.abi.result;
@@ -109,11 +110,12 @@ impl Planner<'_> {
             .plan_call(expression)
             .expect("plan_call yields Some for a Call expression");
         let layout_bridge = self.call_result_layout_bridge(&plan, result_type);
+        let result_transition = plan.result_transition;
 
         if let Some(bridge) = layout_bridge {
             let call_type =
-                matches!(plan.result_transition, AbiTransition::Identity).then_some(result_type);
-            let call = self.lower_call(expression, call_type, context);
+                matches!(result_transition, AbiTransition::Identity).then_some(result_type);
+            let call = self.lower_call_with_plan(expression, call_type, context, plan);
             return call.map_rendered_as_observable_computed(
                 |setup, call_string, _contains_deferred_evaluation| {
                     let (bridge_setup, value) = bridge.lower(self, call_string);
@@ -123,8 +125,10 @@ impl Planner<'_> {
             );
         }
 
-        match plan.result_transition {
-            AbiTransition::Identity => self.lower_call(expression, Some(result_type), context),
+        match result_transition {
+            AbiTransition::Identity => {
+                self.lower_call_with_plan(expression, Some(result_type), context, plan)
+            }
             AbiTransition::WrapToTagged => {
                 self.lower_go_abi_wrapped_call(expression, &plan.resolved.abi, result_type)
             }
