@@ -252,7 +252,7 @@ impl InferCtx<'_> {
             return true;
         }
 
-        self.get_all_methods(store, &deref_ty).contains_key(member)
+        self.method_of_type(store, &deref_ty, member).is_some()
     }
 
     fn as_struct_field(&mut self, args: &DotAccessResolutionArgs) -> Option<Expression> {

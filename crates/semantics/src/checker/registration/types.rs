@@ -827,7 +827,7 @@ fn is_deferred_local_target(store: &Store, ty: &Type) -> bool {
 }
 
 fn has_selector_surface(store: &Store, ty: &Type) -> bool {
-    if !store.get_all_methods(ty, &FxHashMap::default()).is_empty() {
+    if store.type_has_any_method(ty) {
         return true;
     }
     let Type::Nominal { id, .. } = ty else {

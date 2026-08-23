@@ -24,9 +24,8 @@ impl InferCtx<'_> {
             &args.deref_ty
         {
             (
-                self.get_all_methods(store, &args.deref_ty)
-                    .get(args.member_name)
-                    .map(|method| method.ty.clone())?,
+                self.method_of_type(store, &args.deref_ty, args.member_name)
+                    .map(|method| method.ty)?,
                 true,
                 self.resolve_instance_method_definition(&args.deref_ty, args.member_name),
             )
@@ -38,10 +37,7 @@ impl InferCtx<'_> {
                 return None;
             }
 
-            let method_ty = self
-                .get_all_methods(store, &args.deref_ty)
-                .get(args.member_name)
-                .cloned()?;
+            let method_ty = self.method_of_type(store, &args.deref_ty, args.member_name)?;
 
             if self.is_type_level_receiver(args.expression)
                 && self.method_is_promoted(&args.deref_ty, args.member_name)
@@ -460,8 +456,8 @@ impl InferCtx<'_> {
         };
 
         if self
-            .get_all_methods(store, &args.deref_ty)
-            .contains_key(args.member_name)
+            .method_of_type(store, &args.deref_ty, args.member_name)
+            .is_some()
         {
             return None;
         }

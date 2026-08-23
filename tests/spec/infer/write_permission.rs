@@ -1804,6 +1804,22 @@ fn main() {
 }
 
 #[test]
+fn forward_referenced_alias_target_stays_writable() {
+    infer(
+        r#"type Handle = mut Ref<Node>
+struct Node { v: mut Slice<int> }
+fn poke(h: Handle) {
+  h.v[0] = 9
+}
+fn main() {
+  let mut node = Node { v: [1] }
+  poke(&node)
+}"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn generic_method_initializer_construction_accepted() {
     infer(
         r#"struct Holder { items: mut Slice<int> }

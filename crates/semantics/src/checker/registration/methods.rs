@@ -652,6 +652,10 @@ impl TaskState {
             }
         }
 
+        if interface.parents.is_empty() {
+            return;
+        }
+
         self.pending
             .interface_conflict_checks
             .push(PendingInterfaceConflictCheck {

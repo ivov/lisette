@@ -302,7 +302,9 @@ impl InferCtx<'_> {
         self.check_native_mutating_call(&callee_expression, &span);
         self.check_native_equality_ufcs(&callee_expression, &new_args);
 
-        let return_check_recorded = self.is_generic_callee(&callee_expression)
+        // Nothing below unifies, so one resolution answers both checks on the callee.
+        let declared_callee_ty = self.declared_callee_type(&callee_expression);
+        let return_check_recorded = matches!(declared_callee_ty, Type::Forall { .. })
             && type_args.is_empty()
             && !self.is_enum_type(store, &resolved_return);
         if return_check_recorded {
@@ -332,7 +334,7 @@ impl InferCtx<'_> {
             }
         }
 
-        if type_args.is_empty() && self.callee_has_phantom_type_param(&callee_expression) {
+        if type_args.is_empty() && !phantom_type_params(&declared_callee_ty).is_empty() {
             self.sink
                 .push(diagnostics::infer::cannot_infer_type_argument(span));
         }
@@ -709,12 +711,9 @@ impl InferCtx<'_> {
             } => {
                 let receiver_ty = receiver.get_type().resolve_in(&self.env);
 
-                if let Some(method_ty) = self
-                    .get_all_methods(store, &receiver_ty.strip_refs())
-                    .get(member)
-                    .cloned()
+                if let Some(method) = self.method_of_type(store, &receiver_ty.strip_refs(), member)
                 {
-                    return method_ty.ty;
+                    return method.ty;
                 }
 
                 let stripped = receiver_ty.strip_refs();
@@ -740,10 +739,6 @@ impl InferCtx<'_> {
 
     fn is_generic_callee(&mut self, expression: &Expression) -> bool {
         matches!(self.declared_callee_type(expression), Type::Forall { .. })
-    }
-
-    fn callee_has_phantom_type_param(&mut self, expression: &Expression) -> bool {
-        !phantom_type_params(&self.declared_callee_type(expression)).is_empty()
     }
 
     fn instantiate_callee_type(

@@ -388,6 +388,39 @@ impl TaskState {
         }
     }
 
+    pub(super) fn method_of_type(
+        &mut self,
+        store: &Store,
+        ty: &Type,
+        name: &str,
+    ) -> Option<Method> {
+        if let Type::Parameter(parameter) = ty {
+            let trait_bounds = self.scopes.collect_all_trait_bounds();
+            let qualified_name = self.qualify_name(parameter);
+            return store.get_method_from_bounds(&qualified_name, &trait_bounds, name);
+        }
+
+        let resolved = ty.strip_refs().resolve_in(&self.env);
+        match &resolved {
+            Type::Nominal { .. } | Type::Compound { .. } | Type::Simple(_) | Type::Array { .. } => {
+            }
+            _ => return None,
+        }
+
+        let peeled = store.peel_alias(&resolved);
+        if let Type::Nominal { id, .. } = &peeled
+            && store.get_interface(id).is_some()
+        {
+            let empty = HashMap::default();
+            store.get_method_for_type(&peeled, &empty, name)
+        } else if promotion::has_direct_embed(store, &resolved) {
+            promotion::promoted_method(store, &resolved, name)
+        } else {
+            let empty = HashMap::default();
+            store.get_method_for_type(&resolved, &empty, name)
+        }
+    }
+
     pub fn failed(&self) -> bool {
         self.sink.has_errors()
     }

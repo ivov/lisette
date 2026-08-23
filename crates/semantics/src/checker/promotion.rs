@@ -4,7 +4,9 @@ use std::collections::BTreeMap;
 
 use syntax::ast::{Generic, Visibility};
 use syntax::go_names;
-use syntax::program::{Definition, DefinitionBody, Method, Methods, methods_for_type};
+use syntax::program::{
+    Definition, DefinitionBody, Method, Methods, method_for_type, methods_for_type,
+};
 use syntax::types::{
     self, CompoundKind, Symbol, Type, build_named_substitution_map, build_substitution_map,
     substitute,
@@ -58,6 +60,17 @@ pub fn resolve_selector(store: &Store, outer: &Type, name: &str) -> Resolution {
     let lookup = |id: &str| store.get_definition(id);
     let entries = walk(outer, lookup);
     resolve_in_entries(&entries, outer, name, lookup)
+}
+
+/// One promoted or own method, without building the whole promoted set.
+pub(crate) fn promoted_method(store: &Store, outer: &Type, name: &str) -> Option<Method> {
+    match resolve_selector(store, outer, name) {
+        Resolution::Found(ResolvedMember {
+            kind: MemberKind::Method(method),
+            ..
+        }) => Some(method),
+        Resolution::Found(_) | Resolution::Ambiguous { .. } | Resolution::NotFound => None,
+    }
 }
 
 pub(crate) fn promoted_method_set(store: &Store, outer: &Type) -> Methods {
@@ -252,8 +265,7 @@ where
     let id = ty.get_qualified_id()?;
 
     if lookup(id).is_some_and(Definition::is_interface) {
-        let methods = methods_for_type(ty, &Default::default(), lookup);
-        let method = methods.get(name)?.clone();
+        let method = method_for_type(ty, &Default::default(), lookup, name)?;
         return Some(Candidate {
             declaring_type: Symbol::from_raw(id),
             kind: MemberKind::Method(method),
