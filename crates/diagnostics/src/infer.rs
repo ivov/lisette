@@ -515,7 +515,7 @@ pub fn cast_grants_permission(source: &str, target: &str, span: Span) -> Lisette
         .with_infer_code("needs_writable")
         .with_span_label(
             &span,
-            format!("cannot cast `{source}` to the more permissive `{target}`"),
+            format!("cannot convert `{source}` to the more permissive `{target}`"),
         )
         .with_help(
             "A cast may drop `mut`, never restore it. Keep the value writable \
@@ -1793,7 +1793,7 @@ pub fn incompatible_named_types(underlying_ty: &Type, span: Span) -> LisetteDiag
         .with_infer_code("incompatible_named_types")
         .with_span_label(&span, "cannot compute")
         .with_help(format!(
-            "Cast one to the other's type, or convert both to `{}`",
+            "Convert one to the other's type, or convert both to `{}`",
             underlying_ty
         ))
 }
@@ -1809,7 +1809,7 @@ pub fn named_primitive_needs_cast(
             &span,
             format!("cannot compute `{}` with `{}`", primitive_ty, named_ty),
         )
-        .with_help(format!("Cast with `as`, e.g. `value as {}`", named_ty))
+        .with_help(format!("Convert with `as`, e.g. `value as {}`", named_ty))
 }
 
 pub fn invalid_division_order(
@@ -2480,7 +2480,7 @@ pub fn not_callable(
     let help = if is_type_call && is_cast_target {
         let subject = arg_name.unwrap_or("value");
         format!(
-            "Use `{} as {}` to cast between types",
+            "Use `{} as {}` to convert between types",
             subject,
             type_name.unwrap()
         )
@@ -3558,11 +3558,11 @@ pub fn nan_comparison(span: &Span, always_true: bool) -> LisetteDiagnostic {
 }
 
 pub fn cast_nan_to_int(span: &Span, target: &str) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Cast of `NaN` to integer")
-        .with_infer_code("cast_nan_to_int")
+    LisetteDiagnostic::error("Conversion of `NaN` to integer")
+        .with_infer_code("convert_nan_to_int")
         .with_span_label(span, format!("`NaN` has no `{target}` value"))
         .with_help(
-            "In Go, casting `NaN` to an integer produces an arbitrary, implementation-specific value rather than a meaningful one. Guard with `math.IsNaN(...)` before casting, or keep the value as a float.",
+            "In Go, converting `NaN` to an integer produces an arbitrary, implementation-specific value rather than a meaningful one. Guard with `math.IsNaN(...)` before converting, or keep the value as a float.",
         )
 }
 
@@ -3652,38 +3652,41 @@ pub fn invalid_cast(
             target_ty,
         )
     } else if source_ty.is_string() {
-        "Strings cannot be cast to numbers and require explicit conversion. Use `strconv.Atoi()` to parse.".into()
+        "Strings cannot be converted to numbers and require explicit parsing. Use `strconv.Atoi()` to parse.".into()
     } else if kind == InvalidCastKind::Complex {
-        "Complex numbers cannot be cast directly. Use `real(c)` or `imaginary(c)` to extract components.".into()
+        "Complex numbers cannot be converted directly. Use `real(c)` or `imaginary(c)` to extract components.".into()
     } else if kind == InvalidCastKind::RuneToByte {
-        "rune (int32) is wider than byte (uint8) and may not fit. Use an intermediate variable to cast via int first: `let n = r as int; n as byte`".into()
+        "rune (int32) is wider than byte (uint8) and may not fit. Use an intermediate variable to convert via int first: `let n = r as int; n as byte`".into()
     } else if kind == InvalidCastKind::ByteToString {
-        "A byte has two readings as a string. Use `[b] as string` to preserve the byte (may be invalid UTF-8), or cast through a rune to encode as a codepoint: `let r = b as rune; r as string`".into()
+        "A byte has two readings as a string. Use `[b] as string` to preserve the byte (may be invalid UTF-8), or convert through a rune to encode as a codepoint: `let r = b as rune; r as string`".into()
     } else {
-        "Casts are supported between numeric types, between string and byte/rune slices, from rune to string, and from concrete types to interfaces.".into()
+        "Conversions are supported between numeric types, between string and byte/rune slices, from rune to string, and from concrete types to interfaces.".into()
     };
 
-    LisetteDiagnostic::error("Invalid cast")
-        .with_infer_code("invalid_cast")
+    LisetteDiagnostic::error("Invalid conversion")
+        .with_infer_code("invalid_conversion")
         .with_span_label(
             &span,
-            format!("cannot cast `{}` to `{}`", source_ty, target_ty),
+            format!("cannot convert `{}` to `{}`", source_ty, target_ty),
         )
         .with_help(help)
 }
 
 pub fn chained_cast(span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Invalid cast")
-        .with_infer_code("chained_cast")
-        .with_span_label(&span, "chained cast not allowed")
-        .with_help("Use an intermediate variable if you need to cast through multiple types")
+    LisetteDiagnostic::error("Invalid conversion")
+        .with_infer_code("chained_conversion")
+        .with_span_label(&span, "chained conversion not allowed")
+        .with_help("Use an intermediate variable if you need to convert through multiple types")
 }
 
 pub fn redundant_cast(ty: &Type, span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::info("Redundant cast")
-        .with_infer_code("redundant_cast")
-        .with_span_label(&span, format!("casting `{}` to itself has no effect", ty))
-        .with_help("Remove the unnecessary cast")
+    LisetteDiagnostic::info("Redundant conversion")
+        .with_infer_code("redundant_conversion")
+        .with_span_label(
+            &span,
+            format!("converting `{}` to itself has no effect", ty),
+        )
+        .with_help("Remove the unnecessary conversion")
 }
 
 pub fn redundant_assert_type(ty: &Type, span: Span) -> LisetteDiagnostic {
@@ -3718,8 +3721,8 @@ pub fn constant_cast_overflow(
     min: i128,
     max: i128,
 ) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Constant cast overflow")
-        .with_infer_code("constant_cast_overflow")
+    LisetteDiagnostic::error("Constant conversion overflow")
+        .with_infer_code("constant_conversion_overflow")
         .with_span_label(span, format!("constant `{value}` overflows `{target_ty}`"))
         .with_help(format!(
             "This expression always evaluates to `{value}`, and `{target_ty}` must be in range `{min}` to `{max}`"
@@ -4298,9 +4301,9 @@ pub fn private_method_expression(span: Span) -> LisetteDiagnostic {
 }
 
 pub fn float_literal_int_cast(span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Cannot cast float literal to integer directly")
-        .with_infer_code("float_literal_int_cast")
-        .with_span_label(&span, "unsupported cast")
+    LisetteDiagnostic::error("Cannot convert float literal to integer directly")
+        .with_infer_code("float_literal_int_conversion")
+        .with_span_label(&span, "unsupported conversion")
         .with_help("Bind to a variable first: `let f = 1.0; f as int`")
 }
 

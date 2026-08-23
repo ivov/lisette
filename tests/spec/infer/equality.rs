@@ -595,7 +595,7 @@ fn cast_literal_with_type_context_is_redundant() {
     }
         "#,
     )
-    .assert_infer_code("redundant_cast");
+    .assert_infer_code("redundant_conversion");
 }
 
 #[test]
@@ -608,7 +608,7 @@ fn cast_negative_literal_with_type_context_is_redundant() {
     }
         "#,
     )
-    .assert_infer_code("redundant_cast");
+    .assert_infer_code("redundant_conversion");
 }
 
 #[test]
@@ -621,7 +621,7 @@ fn cast_paren_negative_literal_with_type_context_is_redundant() {
     }
         "#,
     )
-    .assert_infer_code("redundant_cast");
+    .assert_infer_code("redundant_conversion");
 }
 
 #[test]
@@ -766,7 +766,7 @@ fn cast_invalid_string_to_int() {
     }
         "#,
     )
-    .assert_infer_code("invalid_cast");
+    .assert_infer_code("invalid_conversion");
 }
 
 #[test]
@@ -778,7 +778,7 @@ fn cast_invalid_bool_to_int() {
     }
         "#,
     )
-    .assert_infer_code("invalid_cast");
+    .assert_infer_code("invalid_conversion");
 }
 
 #[test]
@@ -792,7 +792,7 @@ fn cast_invalid_struct_to_int() {
     }
         "#,
     )
-    .assert_infer_code("invalid_cast");
+    .assert_infer_code("invalid_conversion");
 }
 
 #[test]
@@ -830,7 +830,7 @@ fn cast_chained_error() {
     }
         "#,
     )
-    .assert_infer_code("chained_cast");
+    .assert_infer_code("chained_conversion");
 }
 
 #[test]
@@ -842,7 +842,7 @@ fn cast_chained_with_parens_error() {
     }
         "#,
     )
-    .assert_infer_code("chained_cast");
+    .assert_infer_code("chained_conversion");
 }
 
 #[test]
