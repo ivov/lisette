@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787509199393,
+  "lastUpdate": 1787513566473,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -27701,6 +27701,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "cli",
             "value": 13557,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8382,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6029,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2902,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1850,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 736,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9402,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "814cf23f5ccefeabd614bf9c9e237f65c8e05854",
+          "message": "docs: rework prelude, doc groups and CLI help (#1328)",
+          "timestamp": "2026-08-23T21:32:19+02:00",
+          "tree_id": "f3ea1af67d9ed8fb045452c9a40f8e000f62b32d",
+          "url": "https://github.com/ivov/lisette/commit/814cf23f5ccefeabd614bf9c9e237f65c8e05854"
+        },
+        "date": 1787513564881,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 136880,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32040,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27482,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18649,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14923,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13566,
             "unit": "lines"
           },
           {
