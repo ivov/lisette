@@ -28,24 +28,20 @@ pub fn next_id(items: Slice<models.Task>) -> int {
   items.fold(0, |max, t| if t.id > max { t.id } else { max }) + 1
 }
 
-/// Finds a task by ID.
-pub fn find(items: Slice<models.Task>, id: int) -> Option<models.Task> {
-  items.find(|t| t.id == id)
-}
-
 /// Marks a task as done. Returns an error if the task doesn't exist.
 pub fn complete(
   items: Slice<models.Task>,
   id: int,
 ) -> Result<Slice<models.Task>, error> {
-  let Some(_) = find(items, id) else {
+  let Some(_) = items.find(|t| t.id == id) else {
     return Err(errors.New(f"task #{id} not found"))
   }
-  Ok(items.map(|t| if t.id == id {
+  let updated = items.map(|t| if t.id == id {
     models.Task { status: models.Status.Done, ..t }
   } else {
     t
-  }))
+  })
+  Ok(updated)
 }
 
 /// Cancels a task with a reason. Returns an error if the task doesn't exist.
@@ -54,12 +50,13 @@ pub fn cancel(
   id: int,
   reason: string,
 ) -> Result<Slice<models.Task>, error> {
-  let Some(_) = find(items, id) else {
+  let Some(_) = items.find(|t| t.id == id) else {
     return Err(errors.New(f"task #{id} not found"))
   }
-  Ok(items.map(|t| if t.id == id {
+  let updated = items.map(|t| if t.id == id {
     models.Task { status: models.Status.Cancelled(reason), ..t }
   } else {
     t
-  }))
+  })
+  Ok(updated)
 }
