@@ -2866,12 +2866,12 @@ fn match_value_arm_with_unit_alias_arm_errors() {
 }
 
 #[test]
-fn match_value_arm_with_unit_named_value_type_ok() {
+fn match_value_arm_with_alias_named_value_type_ok() {
     infer(
         r#"
-    type Unit = int
+    type Count = int
 
-    fn make() -> Unit { 7 }
+    fn make() -> Count { 7 }
 
     fn test() {
       let x = match 1 {

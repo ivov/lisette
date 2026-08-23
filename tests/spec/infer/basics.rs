@@ -1268,7 +1268,7 @@ fn reference_vs_value_unifies() {
 }
 
 #[test]
-fn user_defined_type_named_unit() {
+fn user_defined_type_named_unit_rejected() {
     infer(
         r#"{
     enum Unit { Value }
@@ -1276,7 +1276,7 @@ fn user_defined_type_named_unit() {
     x
     }"#,
     )
-    .assert_type(con_type("Unit", vec![]));
+    .assert_error_contains("Cannot shadow built-in type");
 }
 
 fn assert_main_package_clean(source: &str) {

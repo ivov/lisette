@@ -1027,12 +1027,14 @@ fn prelude_categories(index: &PreludeIndex) -> Vec<(&'static str, Vec<String>)> 
     .map(|s| s.to_string())
     .collect();
 
+    let mut extra_leaves = function_leaves;
+    extra_leaves.extend(special_leaves);
+    extra_leaves.extend(constraint_leaves);
+
     vec![
         ("primitives", primitive_leaves),
         ("composites", composite_leaves),
-        ("functions", function_leaves),
-        ("others", special_leaves),
-        ("constraints", constraint_leaves),
+        ("extras", extra_leaves),
     ]
     .into_iter()
     .filter(|(_, leaves)| !leaves.is_empty())
@@ -1192,6 +1194,19 @@ fn split_doc_and_example(doc: &str) -> (&str, Option<&str>) {
     }
 }
 
+fn is_callout_line(line: &str) -> bool {
+    line.trim_start()
+        .strip_prefix("//")
+        .is_some_and(|body| body.trim_start().starts_with("!callout"))
+}
+
+fn drop_callout_lines(text: &str) -> String {
+    text.lines()
+        .filter(|line| !is_callout_line(line))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 fn print_example(example: &str) {
     let min_indent = example
         .lines()
@@ -1229,7 +1244,8 @@ fn print_doc_line(indent: usize, line: &str) {
 }
 
 fn print_doc(doc: &str) {
-    let (description, example) = split_doc_and_example(doc);
+    let doc = drop_callout_lines(doc);
+    let (description, example) = split_doc_and_example(&doc);
     for line in description.lines() {
         print_doc_line(4, line);
     }
@@ -1262,7 +1278,7 @@ fn print_type(type_info: &TypeInfo) {
         println!();
         println!("    {}", colorize_code(&method.signature));
         if let Some(doc) = &method.doc {
-            for line in doc.lines() {
+            for line in drop_callout_lines(doc).lines() {
                 print_doc_line(6, line);
             }
         }
@@ -1274,7 +1290,7 @@ fn print_method(type_info: &TypeInfo, method: &MethodInfo) {
     println!();
     println!("    {}", colorize_code(&method.signature));
     if let Some(doc) = &method.doc {
-        for line in doc.lines() {
+        for line in drop_callout_lines(doc).lines() {
             print_doc_line(6, line);
         }
     }
