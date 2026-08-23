@@ -23,7 +23,7 @@ pub fn FillBag(b: mut Bag)
 /// FillIntList exercises the mutated-pointer-parameter qualifier.
 pub fn FillIntList(l: mut Ref<IntList>)
 
-/// FillVia exercises curated permission on a reserved parameter name.
+/// FillVia exercises curated permission on a sanitized parameter name.
 pub fn FillVia(f: fn(Slice<int>) -> (), self_: mut Slice<int>)
 
 /// Function returning alias
@@ -77,6 +77,11 @@ pub struct Counter {
 /// Alias-to-array peels to the array type.
 pub type Digest = Array<byte, 32>
 
+/// Dst is named so an unnamed parameter of its type derives "dst".
+pub struct Dst {
+  pub Total: int,
+}
+
 /// Grid holds nested containers to exercise per-hop field qualifiers.
 pub struct Grid {
   pub Rows: mut Slice<mut Slice<byte>>,
@@ -100,6 +105,11 @@ pub type Handler = fn(string) -> Result<string, error>
 
 pub struct ID(uint64)
 
+/// Inspector exercises a derived name that must not trip the heuristic.
+pub interface Inspector {
+  fn Inspect(dst: Ref<Dst>)
+}
+
 /// Type definition over slice - hits convertType default path
 pub struct IntList(mut Slice<int>)
 
@@ -121,6 +131,11 @@ pub type Processor = fn(Slice<byte>) -> Slice<byte>
 
 /// RefList exercises the plain newtype shape with per-hop qualifiers.
 pub struct RefList(mut Slice<mut Ref<IntList>>)
+
+/// Rewriter exercises curated permission on a derived parameter name.
+pub interface Rewriter {
+  fn Rewrite(counter: mut Ref<Counter>)
+}
 
 /// Type definition over map
 pub struct StringMap(mut Map<string, int>)

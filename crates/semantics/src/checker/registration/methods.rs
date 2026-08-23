@@ -12,8 +12,10 @@ use syntax::program::{
 use syntax::types::{Bound, Symbol, Type, type_args_match_params, unqualified_name};
 
 use super::{extract_attribute_flags, has_recursive_instantiation, wrap_with_impl_generics};
+use crate::checker::state::PendingInterfaceConflictCheck;
 use crate::checker::{TaskState, resolved_generic_bounds};
 use crate::store::Store;
+use std::mem;
 
 struct ImplReceiver<'a> {
     package_id: &'a str,
@@ -650,29 +652,63 @@ impl TaskState {
             }
         }
 
-        let mut seen: rustc_hash::FxHashMap<String, (Type, String)> =
-            rustc_hash::FxHashMap::default();
-        let interface_ty = store
-            .get_type(qualified_name)
-            .expect("registered interface must have a type");
-        for requirement in interface_requirements(interface_ty, |id| store.get_definition(id)) {
-            let source = unqualified_name(&requirement.declaring_interface);
-            if let Some((existing_ty, existing_source)) = seen.get(requirement.name.as_str()) {
-                if existing_ty != &requirement.ty {
-                    self.sink
-                        .push(diagnostics::infer::interface_method_conflict(
-                            interface_name,
-                            &requirement.name,
-                            existing_source,
-                            source,
-                            *span,
-                        ));
+        self.pending
+            .interface_conflict_checks
+            .push(PendingInterfaceConflictCheck {
+                qualified_name: qualified_name.to_string(),
+                name: interface_name.into(),
+                span: *span,
+            });
+    }
+
+    fn embeds_a_cycle(&self, store: &Store, qualified_name: &str) -> bool {
+        let Some(interface) = store.get_interface(qualified_name) else {
+            return false;
+        };
+        let mut visited = rustc_hash::FxHashSet::default();
+        let mut path = vec![qualified_name.to_string()];
+        visited.insert(qualified_name.to_string());
+
+        interface.parents.iter().any(|parent_ty| {
+            parent_ty.get_qualified_id().is_some_and(|parent_id| {
+                parent_id == qualified_name
+                    || self
+                        .detect_interface_cycle(store, parent_id, &mut visited, &mut path)
+                        .is_some()
+            })
+        })
+    }
+
+    /// Settles the embedded-method conflicts, which compare normalized types.
+    pub(super) fn check_pending_interface_conflicts(&mut self, store: &Store) {
+        for pending in mem::take(&mut self.pending.interface_conflict_checks) {
+            let Some(interface_ty) = store.get_type(&pending.qualified_name) else {
+                continue;
+            };
+            // A later declaration can close a cycle this interface passed cleanly.
+            if self.embeds_a_cycle(store, &pending.qualified_name) {
+                continue;
+            }
+            let mut seen: rustc_hash::FxHashMap<String, (Type, String)> =
+                rustc_hash::FxHashMap::default();
+            for requirement in interface_requirements(interface_ty, |id| store.get_definition(id)) {
+                let source = unqualified_name(&requirement.declaring_interface);
+                // Instantiating a generic parent can undo normalization.
+                let ty = store.normalized_annotation_type(&requirement.ty);
+                if let Some((existing_ty, existing_source)) = seen.get(requirement.name.as_str()) {
+                    if existing_ty != &ty {
+                        self.sink
+                            .push(diagnostics::infer::interface_method_conflict(
+                                &pending.name,
+                                &requirement.name,
+                                existing_source,
+                                source,
+                                pending.span,
+                            ));
+                    }
+                } else {
+                    seen.insert(requirement.name.to_string(), (ty, source.to_string()));
                 }
-            } else {
-                seen.insert(
-                    requirement.name.to_string(),
-                    (requirement.ty, source.to_string()),
-                );
             }
         }
     }

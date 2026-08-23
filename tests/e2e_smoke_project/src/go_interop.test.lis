@@ -216,7 +216,7 @@ fn get_duration_multiplier() -> int {
 
 fn serve(h: httpx.Handler) -> int {
   let mut rec = httptest.NewRecorder()
-  let req = httptest.NewRequest("GET", "/", bytes.NewBufferString(""))
+  let mut req = httptest.NewRequest("GET", "/", bytes.NewBufferString(""))
   h.ServeHTTP(rec, req)
   rec.Code
 }

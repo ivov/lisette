@@ -482,21 +482,24 @@ func TestIsMutableParamCombinesSignals(t *testing.T) {
 		name      string
 		derived   bool
 		curated   []string
-		paramName string
+		naming    paramNaming
 		paramType types.Type
 		funcName  string
 		want      bool
 	}{
-		{"derived only", true, nil, "s", intSlice, "Sort", true},
-		{"curated only", false, []string{"buf"}, "buf", byteSlice, "Buffer", true},
-		{"heuristic only", false, nil, "p", byteSlice, "Read", true},
-		{"curated omits, derived finds", true, []string{"other"}, "s", intSlice, "Sort", true},
-		{"no signal", false, nil, "s", intSlice, "Sort", false},
-		{"pointer with derived signal", true, nil, "m", pointer, "ReadMemStats", true},
+		{"derived only", true, nil, paramNaming{"s", "s"}, intSlice, "Sort", true},
+		{"curated only", false, []string{"buf"}, paramNaming{"buf", "buf"}, byteSlice, "Buffer", true},
+		{"heuristic only", false, nil, paramNaming{"p", "p"}, byteSlice, "Read", true},
+		{"curated omits, derived finds", true, []string{"other"}, paramNaming{"s", "s"}, intSlice, "Sort", true},
+		{"no signal", false, nil, paramNaming{"s", "s"}, intSlice, "Sort", false},
+		{"pointer with derived signal", true, nil, paramNaming{"m", "m"}, pointer, "ReadMemStats", true},
+		{"curated key reaches an unnamed param", false, []string{"request"}, paramNaming{"request", ""}, pointer, "ServeHTTP", true},
+		{"derived name does not trip the heuristic", false, nil, paramNaming{"dst", ""}, pointer, "Inspect", false},
+		{"go name still trips the heuristic", false, nil, paramNaming{"dst", "dst"}, pointer, "Inspect", true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := isMutableParam(c.derived, c.curated, c.paramName, c.paramType, c.funcName)
+			got := isMutableParam(c.derived, c.curated, c.naming, c.paramType, c.funcName)
 			if got != c.want {
 				t.Errorf("isMutableParam = %v, want %v", got, c.want)
 			}
