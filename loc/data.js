@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787507273676,
+  "lastUpdate": 1787509199393,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -27582,6 +27582,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/d1bae30543abb4da4d6288c570d3f442460e6e49"
         },
         "date": 1787507272614,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 136871,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32040,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27482,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18649,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14923,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13557,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8382,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6029,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2902,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1850,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 736,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9402,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c528ebbbae1c5188daa9ef299315b2efe1f511c2",
+          "message": "chore: reword the immutable variable help (#1327)",
+          "timestamp": "2026-08-23T20:19:35+02:00",
+          "tree_id": "9e64470d92f992ab0e3bb603a2ac0916eeb6a04b",
+          "url": "https://github.com/ivov/lisette/commit/c528ebbbae1c5188daa9ef299315b2efe1f511c2"
+        },
+        "date": 1787509197887,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
