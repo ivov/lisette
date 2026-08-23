@@ -121,9 +121,9 @@ pub fn Write(w: io.Writer, order: ByteOrder, data: Unknown) -> Result<(), error>
 /// 
 /// It is implemented by [LittleEndian], [BigEndian], and [NativeEndian].
 pub interface AppendByteOrder {
-  fn AppendUint16(b: Slice<byte>, n: uint16) -> Slice<byte>
-  fn AppendUint32(b: Slice<byte>, n: uint32) -> Slice<byte>
-  fn AppendUint64(b: Slice<byte>, n: uint64) -> Slice<byte>
+  fn AppendUint16(b: mut Slice<byte>, n: uint16) -> Slice<byte>
+  fn AppendUint32(b: mut Slice<byte>, n: uint32) -> Slice<byte>
+  fn AppendUint64(b: mut Slice<byte>, n: uint64) -> Slice<byte>
   fn String() -> string
 }
 
@@ -132,9 +132,9 @@ pub interface AppendByteOrder {
 /// 
 /// It is implemented by [LittleEndian], [BigEndian], and [NativeEndian].
 pub interface ByteOrder {
-  fn PutUint16(b: Slice<byte>, n: uint16)
-  fn PutUint32(b: Slice<byte>, n: uint32)
-  fn PutUint64(b: Slice<byte>, n: uint64)
+  fn PutUint16(b: mut Slice<byte>, n: uint16)
+  fn PutUint32(b: mut Slice<byte>, n: uint32)
+  fn PutUint64(b: mut Slice<byte>, n: uint64)
   fn String() -> string
   fn Uint16(b: Slice<byte>) -> uint16
   fn Uint32(b: Slice<byte>) -> uint32

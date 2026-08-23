@@ -63,6 +63,7 @@ impl TaskState {
         self.finalize_equality(store);
         self.check_pending_generic_bounds(store);
         self.check_pending_array_size_checks(store);
+        self.check_pending_interface_conflicts(store);
         self.finalize_tests(store);
     }
 
@@ -238,6 +239,11 @@ pub(crate) fn normalize_registered_component_types(store: &mut Store, package_id
                 ..
             } => {
                 normalize(target);
+            }
+            DefinitionBody::Interface { definition } => {
+                for method in definition.methods.values_mut() {
+                    normalize(&mut method.ty);
+                }
             }
             _ => {}
         }

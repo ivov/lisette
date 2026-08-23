@@ -71,10 +71,17 @@ pub(crate) struct PendingWork {
     pub(crate) post_inference_bound_checks: Vec<(Type, Type, Span)>,
     pub(crate) test_functions: Vec<TestFunction>,
     pub(crate) array_size_checks: Vec<PendingArraySizeCheck>,
+    pub(crate) interface_conflict_checks: Vec<PendingInterfaceConflictCheck>,
 }
 
 /// An array size whose constant was typed by a name that had not resolved yet.
 pub(crate) struct PendingArraySizeCheck {
+    pub(crate) qualified_name: String,
+    pub(crate) name: EcoString,
+    pub(crate) span: Span,
+}
+
+pub(crate) struct PendingInterfaceConflictCheck {
     pub(crate) qualified_name: String,
     pub(crate) name: EcoString,
     pub(crate) span: Span,
@@ -89,6 +96,8 @@ impl PendingWork {
             .extend(other.post_inference_bound_checks);
         self.test_functions.extend(other.test_functions);
         self.array_size_checks.extend(other.array_size_checks);
+        self.interface_conflict_checks
+            .extend(other.interface_conflict_checks);
     }
 }
 
