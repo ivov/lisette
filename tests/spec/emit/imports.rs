@@ -310,6 +310,77 @@ fn test() -> string {
 }
 
 #[test]
+fn go_named_map_type_autofill_emits_empty_go_literal() {
+    let input = r#"
+import "go:net/url"
+
+fn test() -> string {
+  let mut v = url.Values{..}
+  v.Add("key", "value")
+  v.Get("key")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn go_named_scalar_type_autofill_emits_conversion() {
+    let input = r#"
+import "go:time"
+
+fn test() -> string {
+  time.Duration{..}.String()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn go_named_slice_type_autofill_emits_nil_conversion() {
+    let input = r#"
+import "go:sort"
+
+fn test() -> int {
+  sort.StringSlice{..}.Len()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn go_chained_named_type_autofill_peels_to_its_go_underlying() {
+    let input = r#"
+import "go:example.com/lib"
+
+fn index() -> lib.Index {
+  lib.Index{..}
+}
+
+fn tally() -> lib.Tally {
+  lib.Tally{..}
+}
+
+fn roster() -> lib.Roster {
+  lib.Roster{..}
+}
+"#;
+    let typedef = r#"
+pub struct Table(mut Map<string, int>)
+
+pub struct Index(mut Table)
+
+pub struct Count(int64)
+
+pub struct Tally(Count)
+
+pub struct Names(mut Slice<string>)
+
+pub struct Roster(mut Names)
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/lib", typedef)]);
+}
+
+#[test]
 fn go_opaque_type_autofill_spread() {
     let input = r#"
 import "go:sync"
@@ -352,6 +423,20 @@ fn test() -> Wrapper {
 }
 
 #[test]
+fn lisette_struct_with_go_named_slice_autofills_to_nil() {
+    let input = r#"
+import "go:sort"
+
+struct Wrapper { s: mut sort.StringSlice }
+
+fn test() -> Wrapper {
+  Wrapper { .. }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn lisette_struct_with_go_interface_field_emits() {
     let input = r#"
 import "go:context"
@@ -363,6 +448,27 @@ fn test() -> Wrapper {
 }
 "#;
     assert_emit_snapshot!(input);
+}
+
+#[test]
+fn go_underscored_type_and_field_names_stay_verbatim() {
+    let input = r#"
+import "go:example.com/lib"
+
+fn test() -> int {
+  let mut s = lib.Stat_t{..}
+  s.Pad_cgo_0 = 1
+  let t = lib.Stat_t{ Pad_cgo_0: s.Pad_cgo_0, .. }
+  t.Pad_cgo_0
+}
+"#;
+    let typedef = r#"
+pub struct Stat_t {
+  pub Pad_cgo_0: int,
+  pub Size: int,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/lib", typedef)]);
 }
 
 #[test]

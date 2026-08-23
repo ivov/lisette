@@ -3453,10 +3453,14 @@ impl File {
   fn DynamicSymbols(self: mut Ref<File>) -> Result<mut Slice<Symbol>, error>
 
   /// DynamicVersionNeeds returns version dependencies for a dynamic object.
-  fn DynamicVersionNeeds(self: mut Ref<File>) -> Result<mut Slice<mut DynamicVersionNeed>, error>
+  fn DynamicVersionNeeds(
+    self: mut Ref<File>,
+  ) -> Result<mut Slice<mut DynamicVersionNeed>, error>
 
   /// DynamicVersions returns version information for a dynamic object.
-  fn DynamicVersions(self: mut Ref<File>) -> Result<mut Slice<mut DynamicVersion>, error>
+  fn DynamicVersions(
+    self: mut Ref<File>,
+  ) -> Result<mut Slice<mut DynamicVersion>, error>
 
   /// ImportedLibraries returns the names of all libraries
   /// referred to by the binary f that are expected to be
@@ -3467,7 +3471,9 @@ impl File {
   /// referred to by the binary f that are expected to be
   /// satisfied by other libraries at dynamic load time.
   /// It does not return weak symbols.
-  fn ImportedSymbols(self: mut Ref<File>) -> Result<mut Slice<ImportedSymbol>, error>
+  fn ImportedSymbols(
+    self: mut Ref<File>,
+  ) -> Result<mut Slice<ImportedSymbol>, error>
 
   /// Section returns a section with the given name, or nil if no such
   /// section exists.
@@ -3475,7 +3481,10 @@ impl File {
 
   /// SectionByType returns the first section in f with the
   /// given type, or nil if there is no such section.
-  fn SectionByType(self: Ref<File>, typ: SectionType) -> Option<mut Ref<Section>>
+  fn SectionByType(
+    self: Ref<File>,
+    typ: SectionType,
+  ) -> Option<mut Ref<Section>>
 
   /// Symbols returns the symbol table for f. The symbols will be listed in the order
   /// they appear in f.

@@ -1,8 +1,11 @@
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use std::process::Command;
 
 use serde::Deserialize;
 use std::env;
+use std::fs;
+use stdlib::Target;
+use toml_edit::de as toml_de;
 
 #[derive(Deserialize)]
 struct Metadata {
@@ -70,5 +73,80 @@ fn internal_crate_deps_are_exact_pinned() {
         violations.is_empty(),
         "internal crate dependencies must be exact-pinned to the workspace version:\n{}",
         violations.join("\n")
+    );
+}
+
+#[derive(Deserialize)]
+struct DistWorkspace {
+    dist: Dist,
+}
+
+#[derive(Deserialize)]
+struct Dist {
+    targets: Vec<String>,
+}
+
+fn go_target(triple: &str) -> Option<Target> {
+    let (architecture, platform) = triple.split_once('-')?;
+
+    let goarch = match architecture {
+        "x86_64" => "amd64",
+        "aarch64" => "arm64",
+        _ => return None,
+    };
+
+    let goos = if platform.contains("linux") {
+        "linux"
+    } else if platform.contains("darwin") {
+        "darwin"
+    } else if platform.contains("windows") {
+        "windows"
+    } else {
+        return None;
+    };
+
+    Some(Target::new(goos, goarch))
+}
+
+#[test]
+fn released_platforms_resolve_go_stdlib_packages() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../dist-workspace.toml");
+    let text = fs::read_to_string(path).expect("read dist-workspace.toml");
+    let workspace: DistWorkspace = toml_de::from_str(&text).expect("parse dist-workspace.toml");
+
+    assert!(
+        !workspace.dist.targets.is_empty(),
+        "dist-workspace.toml lists no release targets"
+    );
+
+    let mut failures = Vec::new();
+    let mut targets = Vec::new();
+    for triple in &workspace.dist.targets {
+        match go_target(triple) {
+            Some(target) => targets.push(target),
+            None => failures.push(format!("{}: no GOOS/GOARCH mapping", triple)),
+        }
+    }
+
+    let mut packages = BTreeSet::new();
+    for &target in &targets {
+        packages.extend(stdlib::get_go_stdlib_packages(target));
+    }
+
+    for &target in &targets {
+        for &package in &packages {
+            if stdlib::get_go_stdlib_package_targets(package).is_some() {
+                continue;
+            }
+            if stdlib::get_go_stdlib_typedef(package, target).is_none() {
+                failures.push(format!("{}: no typedef for `{}`", target, package));
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "every platform in dist-workspace.toml needs a GOOS/GOARCH mapping in `go_target` and Go stdlib typedefs. For a missing typedef, add the target to `_supported-targets` in the justfile, then run `just generate-stdlib-typedefs $(just _stdlib-typedef-version)`:\n{}",
+        failures.join("\n")
     );
 }

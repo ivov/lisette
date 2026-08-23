@@ -191,6 +191,87 @@ fn goto_definition_promoted_field() {
     client.shutdown();
 }
 
+#[test]
+fn completion_offers_promoted_members() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(&format!(
+        "{EMBED_SRC}\n\nfn use_dot(w: Wrapper) {{\n  w.~\n}}"
+    ));
+    client.open(TEST_URI, &source);
+
+    let labels = completion_labels(
+        &client
+            .completion(TEST_URI, line, character)
+            .expect("completions"),
+    );
+    for promoted in ["id", "describe"] {
+        assert!(
+            labels.iter().any(|l| l == promoted),
+            "expected `{promoted}` promoted from the embedded `Base`; got: {labels:?}"
+        );
+    }
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_offers_members_promoted_through_a_ref_embed_and_two_levels() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "struct A {\n  pub a: int,\n}\nimpl A {\n  pub fn am(self) -> int { self.a }\n}\nstruct B {\n  embed Ref<A>,\n  pub b: int,\n}\nstruct C {\n  embed B,\n}\nfn f(c: C) -> int {\n  c.~\n  0\n}",
+    );
+    client.open(TEST_URI, &source);
+
+    let labels = completion_labels(
+        &client
+            .completion(TEST_URI, line, character)
+            .expect("completions"),
+    );
+    for promoted in ["b", "a", "am"] {
+        assert!(
+            labels.iter().any(|l| l == promoted),
+            "expected `{promoted}` promoted onto `C`; got: {labels:?}"
+        );
+    }
+
+    client.shutdown();
+}
+
+/// `b.dup` resolves to the promoted field and is not callable, so the
+/// same-named UFCS method must not be offered beside it.
+#[test]
+fn completion_offers_one_entry_when_a_ufcs_method_collides_with_a_promoted_field() {
+    let mut client = TestClient::new();
+    client.initialize();
+    let (source, line, character) = cursor(
+        "struct A {\n  pub dup: int,\n}\nstruct B {\n  embed A,\n}\nimpl B {\n  pub fn dup<T>(self, x: T) -> T { x }\n}\nfn f(b: B) -> int {\n  b.~\n  0\n}",
+    );
+    client.open(TEST_URI, &source);
+
+    let response = client
+        .completion(TEST_URI, line, character)
+        .expect("completions");
+    let dups: Vec<_> = completion_items(&response)
+        .iter()
+        .filter(|item| item.label == "dup")
+        .collect();
+    assert_eq!(
+        dups.len(),
+        1,
+        "`dup` should be offered once; got: {:?}",
+        completion_labels(&response)
+    );
+    assert_eq!(
+        dups[0].kind,
+        Some(CompletionItemKind::FIELD),
+        "`b.dup` resolves to the promoted field, so the field is the entry to keep"
+    );
+
+    client.shutdown();
+}
+
 /// A body use is a `Slice<T>`, as `gopls` reports for Go's `...T`.
 #[test]
 fn hover_on_varargs_param_in_body_shows_a_slice() {
@@ -2506,6 +2587,56 @@ fn cross_package_goto_definition() {
         completion.is_some(),
         "server should still respond with cross-package code"
     );
+
+    client.shutdown();
+}
+
+#[test]
+fn completion_hides_promoted_members_private_to_the_embedded_type() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+
+    fs::write(root.join("lisette.toml"), "").unwrap();
+
+    let src = root.join("src");
+    fs::create_dir_all(&src).unwrap();
+
+    let utils_dir = src.join("utils");
+    fs::create_dir_all(&utils_dir).unwrap();
+    fs::write(
+        utils_dir.join("utils.lis"),
+        "pub struct Base {\n  pub id: int,\n  hidden: int,\n}\nimpl Base {\n  pub fn shown(self) -> int { self.id }\n  fn concealed(self) -> int { self.hidden }\n}",
+    )
+    .unwrap();
+
+    let (main_content, line, character) = cursor(
+        "import \"utils\"\n\nstruct Wrapper {\n  embed utils.Base,\n}\n\nfn f(w: Wrapper) -> int {\n  w.~\n  0\n}",
+    );
+    let main_path = src.join("main.lis");
+    fs::write(&main_path, &main_content).unwrap();
+
+    let mut client = TestClient::new();
+    client.initialize_with_root(root);
+    let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
+    client.open(&main_uri, &main_content);
+
+    let labels = completion_labels(
+        &client
+            .completion(&main_uri, line, character)
+            .expect("completions"),
+    );
+    for public in ["id", "shown"] {
+        assert!(
+            labels.iter().any(|l| l == public),
+            "expected the promoted public `{public}`; got: {labels:?}"
+        );
+    }
+    for private in ["hidden", "concealed"] {
+        assert!(
+            !labels.iter().any(|l| l == private),
+            "`{private}` is private to `utils.Base`, promotion must not leak it; got: {labels:?}"
+        );
+    }
 
     client.shutdown();
 }

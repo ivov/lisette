@@ -2,7 +2,9 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use ecow::EcoString;
 
-use crate::ast::{Annotation, EnumVariant, Generic, Literal, Span, StructFields};
+use crate::ast::{
+    Annotation, EnumVariant, Generic, Literal, Span, StructFieldDefinition, StructFields,
+};
 use crate::types;
 use crate::types::{
     FunctionParameter, Symbol, Type, build_substitution_map, substitute, type_args_match_params,
@@ -342,6 +344,17 @@ impl Definition {
             DefinitionBody::Interface { definition } => Some(&definition.methods),
             DefinitionBody::Value { .. } => None,
         }
+    }
+
+    pub fn fields(&self) -> Option<&[StructFieldDefinition]> {
+        match &self.body {
+            DefinitionBody::Struct { fields, .. } => Some(fields.as_slice()),
+            _ => None,
+        }
+    }
+
+    pub fn is_interface(&self) -> bool {
+        matches!(self.body, DefinitionBody::Interface { .. })
     }
 
     pub fn is_ufcs_method(&self, method: &str) -> bool {

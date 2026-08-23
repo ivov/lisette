@@ -20,6 +20,7 @@ insta.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tempfile = "3"
+toml_edit = { version = "0.22", features = ["serde"] }
 
 [[test]]
 name = "suite"

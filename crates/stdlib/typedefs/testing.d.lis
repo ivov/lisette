@@ -552,7 +552,11 @@ impl common {
   fn Fatal(self: mut Ref<common>, args: VarArgs<Unknown>) -> Never
 
   /// Fatalf is equivalent to Logf followed by FailNow.
-  fn Fatalf(self: mut Ref<common>, format: string, args: VarArgs<Unknown>) -> Never
+  fn Fatalf(
+    self: mut Ref<common>,
+    format: string,
+    args: VarArgs<Unknown>,
+  ) -> Never
 
   /// Helper marks the calling function as a test helper function.
   /// When printing file and line information, that function will be skipped.
@@ -611,7 +615,11 @@ impl common {
   fn SkipNow(self: mut Ref<common>) -> Never
 
   /// Skipf is equivalent to Logf followed by SkipNow.
-  fn Skipf(self: mut Ref<common>, format: string, args: VarArgs<Unknown>) -> Never
+  fn Skipf(
+    self: mut Ref<common>,
+    format: string,
+    args: VarArgs<Unknown>,
+  ) -> Never
 
   /// Skipped reports whether the test was skipped.
   fn Skipped(self: Ref<common>) -> bool

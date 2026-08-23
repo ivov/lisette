@@ -19,5 +19,5 @@ type Wrapper struct {
 }
 
 func test() Wrapper {
-	return Wrapper{d: *new(time.Duration)}
+	return Wrapper{d: time.Duration(0)}
 }

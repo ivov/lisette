@@ -56,7 +56,10 @@ pub fn NewNRGBA64(r: Rectangle) -> mut Ref<NRGBA64>
 
 /// NewNYCbCrA returns a new [NYCbCrA] image with the given bounds and subsample
 /// ratio.
-pub fn NewNYCbCrA(r: Rectangle, subsampleRatio: YCbCrSubsampleRatio) -> mut Ref<NYCbCrA>
+pub fn NewNYCbCrA(
+  r: Rectangle,
+  subsampleRatio: YCbCrSubsampleRatio,
+) -> mut Ref<NYCbCrA>
 
 /// NewPaletted returns a new [Paletted] image with the given width, height and
 /// palette.
@@ -73,7 +76,10 @@ pub fn NewUniform(c: color.Color) -> mut Ref<Uniform>
 
 /// NewYCbCr returns a new YCbCr image with the given bounds and subsample
 /// ratio.
-pub fn NewYCbCr(r: Rectangle, subsampleRatio: YCbCrSubsampleRatio) -> mut Ref<YCbCr>
+pub fn NewYCbCr(
+  r: Rectangle,
+  subsampleRatio: YCbCrSubsampleRatio,
+) -> mut Ref<YCbCr>
 
 /// Pt is shorthand for [Point]{X, Y}.
 pub fn Pt(x: int, y: int) -> Point

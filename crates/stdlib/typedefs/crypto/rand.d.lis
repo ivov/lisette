@@ -8,7 +8,10 @@ import "go:math/big"
 
 /// Int returns a uniform random value in [0, max). It panics if max <= 0, and
 /// returns an error if rand.Read returns one.
-pub fn Int(rand: io.Reader, max: Ref<big.Int>) -> Result<mut Ref<big.Int>, error>
+pub fn Int(
+  rand: io.Reader,
+  max: Ref<big.Int>,
+) -> Result<mut Ref<big.Int>, error>
 
 /// Prime returns a number of the given bit length that is prime with high probability.
 /// Prime will return error for any error returned by rand.Read or if bits < 2.

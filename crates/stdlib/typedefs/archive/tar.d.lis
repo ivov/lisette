@@ -18,7 +18,10 @@ import "go:time"
 /// If fi implements [FileInfoNames]
 /// Header.Gname and Header.Uname
 /// are provided by the methods of the interface.
-pub fn FileInfoHeader(fi: fs.FileInfo, link: string) -> Result<mut Ref<Header>, error>
+pub fn FileInfoHeader(
+  fi: fs.FileInfo,
+  link: string,
+) -> Result<mut Ref<Header>, error>
 
 /// NewReader creates a new [Reader] reading from r.
 pub fn NewReader(r: io.Reader) -> mut Ref<Reader>

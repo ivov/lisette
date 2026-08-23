@@ -32,7 +32,11 @@ pub fn IsPredeclared(s: string) -> bool
 /// New takes ownership of the AST pkg and may edit or overwrite it.
 /// To have the [Examples] fields populated, use [NewFromFiles] and include
 /// the package's _test.go files.
-pub fn New(pkg: Ref<ast.Package>, importPath: string, mode: Mode) -> mut Ref<Package>
+pub fn New(
+  pkg: Ref<ast.Package>,
+  importPath: string,
+  mode: Mode,
+) -> mut Ref<Package>
 
 /// NewFromFiles computes documentation for a package.
 /// 

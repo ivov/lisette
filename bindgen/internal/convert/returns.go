@@ -260,13 +260,17 @@ func permissionFor(depth ViewDepth) resultPermission {
 }
 
 // resultPermissionOf reports how much of one logical result is writable: a
-// pointer, or a container that is fresh or views only mutated storage.
+// pointer, a curated writable return, or a container that is fresh or views
+// only mutated storage.
 func (c *Converter) resultPermissionOf(obj types.Object, results *types.Tuple, index int, qualifiedName string) resultPermission {
 	t := concreteResultType(results.At(index).Type())
 	if !goWritableCapability(t) {
 		return resultReadOnly
 	}
 	if _, isPointer := t.Underlying().(*types.Pointer); isPointer {
+		return resultFullyWritable
+	}
+	if c != nil && c.cfg.HasWritableReturn(c.currentPkgPath, qualifiedName) {
 		return resultFullyWritable
 	}
 	if c == nil || c.mutation == nil || obj == nil {

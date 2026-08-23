@@ -267,10 +267,11 @@ fn collect_items(
                     graph.add_item(id, *name_span, ItemKind::Type, is_public);
 
                     let has_serialization_attr = has_serialization_attr(attributes);
+                    let has_iterate_attr = attributes.iter().any(|a| a.name == "iterate");
 
                     for enum_variant in variants {
                         let variant_id = EnumVariantId::new(name, &enum_variant.name);
-                        if !is_public && !has_serialization_attr {
+                        if !is_public && !has_serialization_attr && !has_iterate_attr {
                             graph.add_enum_variant(variant_id, enum_variant.name_span);
                         }
                     }

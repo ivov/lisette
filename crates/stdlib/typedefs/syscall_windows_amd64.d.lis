@@ -400,7 +400,10 @@ pub fn CertCreateCertificateContext(
   encodedLen: uint32,
 ) -> Result<mut Ref<CertContext>, error>
 
-pub fn CertEnumCertificatesInStore(store: Handle, prevContext: Ref<CertContext>) -> Result<mut Ref<CertContext>, error>
+pub fn CertEnumCertificatesInStore(
+  store: Handle,
+  prevContext: Ref<CertContext>,
+) -> Result<mut Ref<CertContext>, error>
 
 pub fn CertFreeCertificateChain(ctx: Ref<CertChainContext>)
 
@@ -425,7 +428,10 @@ pub fn CertOpenStore(
   para: uintptr,
 ) -> Result<Handle, error>
 
-pub fn CertOpenSystemStore(hprov: Handle, name: Ref<uint16>) -> Result<Handle, error>
+pub fn CertOpenSystemStore(
+  hprov: Handle,
+  name: Ref<uint16>,
+) -> Result<Handle, error>
 
 pub fn CertVerifyCertificateChainPolicy(
   policyOID: uintptr,
@@ -451,7 +457,10 @@ pub fn CloseOnExec(fd: Handle)
 
 pub fn Closesocket(s: Handle) -> Result<(), error>
 
-pub fn CommandLineToArgv(cmd: Ref<uint16>, argc: Ref<int32>) -> Result<mut Ref<Array<mut Ref<Array<uint16, 8192>>, 8192>>, error>
+pub fn CommandLineToArgv(
+  cmd: Ref<uint16>,
+  argc: Ref<int32>,
+) -> Result<mut Ref<Array<mut Ref<Array<uint16, 8192>>, 8192>>, error>
 
 pub fn ComputerName() -> Result<string, error>
 
@@ -466,13 +475,26 @@ pub fn ConnectEx(
   overlapped: Ref<Overlapped>,
 ) -> Result<(), error>
 
-pub fn ConvertSidToStringSid(sid: Ref<SID>, stringSid: Ref<Ref<uint16>>) -> Result<(), error>
+pub fn ConvertSidToStringSid(
+  sid: Ref<SID>,
+  stringSid: Ref<Ref<uint16>>,
+) -> Result<(), error>
 
-pub fn ConvertStringSidToSid(stringSid: Ref<uint16>, sid: Ref<Ref<SID>>) -> Result<(), error>
+pub fn ConvertStringSidToSid(
+  stringSid: Ref<uint16>,
+  sid: Ref<Ref<SID>>,
+) -> Result<(), error>
 
-pub fn CopySid(destSidLen: uint32, destSid: Ref<SID>, srcSid: Ref<SID>) -> Result<(), error>
+pub fn CopySid(
+  destSidLen: uint32,
+  destSid: Ref<SID>,
+  srcSid: Ref<SID>,
+) -> Result<(), error>
 
-pub fn CreateDirectory(path: Ref<uint16>, sa: Ref<SecurityAttributes>) -> Result<(), error>
+pub fn CreateDirectory(
+  path: Ref<uint16>,
+  sa: Ref<SecurityAttributes>,
+) -> Result<(), error>
 
 pub fn CreateFile(
   name: Ref<uint16>,
@@ -547,7 +569,10 @@ pub fn CreateSymbolicLink(
   flags: uint32,
 ) -> Result<(), error>
 
-pub fn CreateToolhelp32Snapshot(flags: uint32, processId: uint32) -> Result<Handle, error>
+pub fn CreateToolhelp32Snapshot(
+  flags: uint32,
+  processId: uint32,
+) -> Result<Handle, error>
 
 pub fn CryptAcquireContext(
   provhandle: Ref<Handle>,
@@ -557,9 +582,16 @@ pub fn CryptAcquireContext(
   flags: uint32,
 ) -> Result<(), error>
 
-pub fn CryptGenRandom(provhandle: Handle, buflen: uint32, buf: Ref<byte>) -> Result<(), error>
+pub fn CryptGenRandom(
+  provhandle: Handle,
+  buflen: uint32,
+  buf: Ref<byte>,
+) -> Result<(), error>
 
-pub fn CryptReleaseContext(provhandle: Handle, flags: uint32) -> Result<(), error>
+pub fn CryptReleaseContext(
+  provhandle: Handle,
+  flags: uint32,
+) -> Result<(), error>
 
 pub fn DeleteFile(path: Ref<uint16>) -> Result<(), error>
 
@@ -610,7 +642,11 @@ pub fn Environ() -> mut Slice<string>
 ///     but only if there is space or tab inside s.
 pub fn EscapeArg(s: string) -> string
 
-pub fn Exec(argv0: string, argv: Slice<string>, envv: Slice<string>) -> Result<(), error>
+pub fn Exec(
+  argv0: string,
+  argv: Slice<string>,
+  envv: Slice<string>,
+) -> Result<(), error>
 
 pub fn Exit(code: int) -> Never
 
@@ -624,9 +660,15 @@ pub fn Fchown(fd: Handle, uid: int, gid: int) -> Result<(), error>
 
 pub fn FindClose(handle: Handle) -> Result<(), error>
 
-pub fn FindFirstFile(name: Ref<uint16>, data: mut Ref<Win32finddata>) -> Result<Handle, error>
+pub fn FindFirstFile(
+  name: Ref<uint16>,
+  data: mut Ref<Win32finddata>,
+) -> Result<Handle, error>
 
-pub fn FindNextFile(handle: Handle, data: mut Ref<Win32finddata>) -> Result<(), error>
+pub fn FindNextFile(
+  handle: Handle,
+  data: mut Ref<Win32finddata>,
+) -> Result<(), error>
 
 pub fn FlushFileBuffers(handle: Handle) -> Result<(), error>
 
@@ -669,7 +711,10 @@ pub fn GetAcceptExSockaddrs(
   rrsalen: Ref<int32>,
 )
 
-pub fn GetAdaptersInfo(ai: Ref<IpAdapterInfo>, ol: Ref<uint32>) -> Result<(), error>
+pub fn GetAdaptersInfo(
+  ai: Ref<IpAdapterInfo>,
+  ol: Ref<uint32>,
+) -> Result<(), error>
 
 pub fn GetAddrInfoW(
   nodename: Ref<uint16>,
@@ -684,7 +729,10 @@ pub fn GetComputerName(buf: Ref<uint16>, n: Ref<uint32>) -> Result<(), error>
 
 pub fn GetConsoleMode(console: Handle, mode: Ref<uint32>) -> Result<(), error>
 
-pub fn GetCurrentDirectory(buflen: uint32, buf: Ref<uint16>) -> Result<uint32, error>
+pub fn GetCurrentDirectory(
+  buflen: uint32,
+  buf: Ref<uint16>,
+) -> Result<uint32, error>
 
 pub fn GetCurrentProcess() -> Result<Handle, error>
 
@@ -696,11 +744,18 @@ pub fn GetEnvironmentVariable(
   size: uint32,
 ) -> Result<uint32, error>
 
-pub fn GetExitCodeProcess(handle: Handle, exitcode: Ref<uint32>) -> Result<(), error>
+pub fn GetExitCodeProcess(
+  handle: Handle,
+  exitcode: Ref<uint32>,
+) -> Result<(), error>
 
 pub fn GetFileAttributes(name: Ref<uint16>) -> Result<uint32, error>
 
-pub fn GetFileAttributesEx(name: Ref<uint16>, level: uint32, info: Ref<byte>) -> Result<(), error>
+pub fn GetFileAttributesEx(
+  name: Ref<uint16>,
+  level: uint32,
+  info: Ref<byte>,
+) -> Result<(), error>
 
 pub fn GetFileInformationByHandle(
   handle: Handle,
@@ -724,9 +779,16 @@ pub fn GetLastError() -> Result<(), error>
 
 pub fn GetLengthSid(sid: Ref<SID>) -> uint32
 
-pub fn GetLongPathName(path: Ref<uint16>, buf: Ref<uint16>, buflen: uint32) -> Result<uint32, error>
+pub fn GetLongPathName(
+  path: Ref<uint16>,
+  buf: Ref<uint16>,
+  buflen: uint32,
+) -> Result<uint32, error>
 
-pub fn GetProcAddress(module: Handle, procname: string) -> Result<uintptr, error>
+pub fn GetProcAddress(
+  module: Handle,
+  procname: string,
+) -> Result<uintptr, error>
 
 pub fn GetProcessTimes(
   handle: Handle,
@@ -747,7 +809,10 @@ pub fn GetQueuedCompletionStatus(
   timeout: uint32,
 ) -> Result<(), error>
 
-pub fn GetServByName(name: string, proto: string) -> Result<mut Ref<Servent>, error>
+pub fn GetServByName(
+  name: string,
+  proto: string,
+) -> Result<mut Ref<Servent>, error>
 
 pub fn GetShortPathName(
   longpath: Ref<uint16>,
@@ -763,7 +828,9 @@ pub fn GetSystemTimeAsFileTime(time: Ref<Filetime>)
 
 pub fn GetTempPath(buflen: uint32, buf: Ref<uint16>) -> Result<uint32, error>
 
-pub fn GetTimeZoneInformation(tzi: Ref<Timezoneinformation>) -> Result<uint32, error>
+pub fn GetTimeZoneInformation(
+  tzi: Ref<Timezoneinformation>,
+) -> Result<uint32, error>
 
 pub fn GetTokenInformation(
   t: Token,
@@ -779,7 +846,11 @@ pub fn GetUserNameEx(
   nSize: Ref<uint32>,
 ) -> Result<(), error>
 
-pub fn GetUserProfileDirectory(t: Token, dir: Ref<uint16>, dirLen: Ref<uint32>) -> Result<(), error>
+pub fn GetUserProfileDirectory(
+  t: Token,
+  dir: Ref<uint16>,
+  dirLen: Ref<uint32>,
+) -> Result<(), error>
 
 pub fn GetVersion() -> Result<uint32, error>
 
@@ -873,7 +944,10 @@ pub fn LookupAccountSid(
 /// LookupSID retrieves a security identifier sid for the account
 /// and the name of the domain on which the account was found.
 /// System specify target computer to search.
-pub fn LookupSID(system: string, account: string) -> Result<(mut Ref<SID>, string, uint32), error>
+pub fn LookupSID(
+  system: string,
+  account: string,
+) -> Result<(mut Ref<SID>, string, uint32), error>
 
 pub fn MapViewOfFile(
   handle: Handle,
@@ -938,9 +1012,17 @@ pub fn Open(name: string, flag: int, perm: uint32) -> Result<Handle, error>
 /// associated with current process.
 pub fn OpenCurrentProcessToken() -> Result<Token, error>
 
-pub fn OpenProcess(da: uint32, inheritHandle: bool, pid: uint32) -> Result<Handle, error>
+pub fn OpenProcess(
+  da: uint32,
+  inheritHandle: bool,
+  pid: uint32,
+) -> Result<Handle, error>
 
-pub fn OpenProcessToken(h: Handle, access: uint32, token: Ref<Token>) -> Result<(), error>
+pub fn OpenProcessToken(
+  h: Handle,
+  access: uint32,
+  token: Ref<Token>,
+) -> Result<(), error>
 
 pub fn Pipe(p: mut Slice<Handle>) -> Result<(), error>
 
@@ -952,9 +1034,15 @@ pub fn PostQueuedCompletionStatus(
   overlapped: Ref<Overlapped>,
 ) -> Result<(), error>
 
-pub fn Process32First(snapshot: Handle, procEntry: Ref<ProcessEntry32>) -> Result<(), error>
+pub fn Process32First(
+  snapshot: Handle,
+  procEntry: Ref<ProcessEntry32>,
+) -> Result<(), error>
 
-pub fn Process32Next(snapshot: Handle, procEntry: Ref<ProcessEntry32>) -> Result<(), error>
+pub fn Process32Next(
+  snapshot: Handle,
+  procEntry: Ref<ProcessEntry32>,
+) -> Result<(), error>
 
 pub fn Read(fd: Handle, p: mut Slice<byte>) -> Result<int, error>
 
@@ -987,7 +1075,11 @@ pub fn ReadFile(
 /// Readlink returns the destination of the named symbolic link.
 pub fn Readlink(path: string, buf: mut Slice<byte>) -> Result<int, error>
 
-pub fn Recvfrom(fd: Handle, p: mut Slice<byte>, flags: int) -> Result<(int, Sockaddr), error>
+pub fn Recvfrom(
+  fd: Handle,
+  p: mut Slice<byte>,
+  flags: int,
+) -> Result<(int, Sockaddr), error>
 
 pub fn RegCloseKey(key: Handle) -> Result<(), error>
 
@@ -1066,17 +1158,28 @@ pub fn Rmdir(path: string) -> Result<(), error>
 
 pub fn Seek(fd: Handle, offset: int64, whence: int) -> Result<int64, error>
 
-pub fn Sendto(fd: Handle, p: Slice<byte>, flags: int, to: Sockaddr) -> Result<(), error>
+pub fn Sendto(
+  fd: Handle,
+  p: Slice<byte>,
+  flags: int,
+  to: Sockaddr,
+) -> Result<(), error>
 
 pub fn SetCurrentDirectory(path: Ref<uint16>) -> Result<(), error>
 
 pub fn SetEndOfFile(handle: Handle) -> Result<(), error>
 
-pub fn SetEnvironmentVariable(name: Ref<uint16>, value: Ref<uint16>) -> Result<(), error>
+pub fn SetEnvironmentVariable(
+  name: Ref<uint16>,
+  value: Ref<uint16>,
+) -> Result<(), error>
 
 pub fn SetFileAttributes(name: Ref<uint16>, attrs: uint32) -> Result<(), error>
 
-pub fn SetFileCompletionNotificationModes(handle: Handle, flags: uint8) -> Result<(), error>
+pub fn SetFileCompletionNotificationModes(
+  handle: Handle,
+  flags: uint8,
+) -> Result<(), error>
 
 pub fn SetFilePointer(
   handle: Handle,
@@ -1092,7 +1195,11 @@ pub fn SetFileTime(
   wtime: Ref<Filetime>,
 ) -> Result<(), error>
 
-pub fn SetHandleInformation(handle: Handle, mask: uint32, flags: uint32) -> Result<(), error>
+pub fn SetHandleInformation(
+  handle: Handle,
+  mask: uint32,
+  flags: uint32,
+) -> Result<(), error>
 
 pub fn SetNonblock(fd: Handle, nonblocking: bool) -> Result<(), error>
 
@@ -1106,9 +1213,19 @@ pub fn Setsockopt(
   optlen: int32,
 ) -> Result<(), error>
 
-pub fn SetsockoptIPMreq(fd: Handle, level: int, opt: int, mreq: Ref<IPMreq>) -> Result<(), error>
+pub fn SetsockoptIPMreq(
+  fd: Handle,
+  level: int,
+  opt: int,
+  mreq: Ref<IPMreq>,
+) -> Result<(), error>
 
-pub fn SetsockoptIPv6Mreq(fd: Handle, level: int, opt: int, mreq: Ref<IPv6Mreq>) -> Result<(), error>
+pub fn SetsockoptIPv6Mreq(
+  fd: Handle,
+  level: int,
+  opt: int,
+  mreq: Ref<IPv6Mreq>,
+) -> Result<(), error>
 
 pub fn SetsockoptInet4Addr(
   fd: Handle,
@@ -1117,17 +1234,36 @@ pub fn SetsockoptInet4Addr(
   value: Array<byte, 4>,
 ) -> Result<(), error>
 
-pub fn SetsockoptInt(fd: Handle, level: int, opt: int, value: int) -> Result<(), error>
+pub fn SetsockoptInt(
+  fd: Handle,
+  level: int,
+  opt: int,
+  value: int,
+) -> Result<(), error>
 
-pub fn SetsockoptLinger(fd: Handle, level: int, opt: int, l: Ref<Linger>) -> Result<(), error>
+pub fn SetsockoptLinger(
+  fd: Handle,
+  level: int,
+  opt: int,
+  l: Ref<Linger>,
+) -> Result<(), error>
 
-pub fn SetsockoptTimeval(fd: Handle, level: int, opt: int, tv: Ref<Timeval>) -> Result<(), error>
+pub fn SetsockoptTimeval(
+  fd: Handle,
+  level: int,
+  opt: int,
+  tv: Ref<Timeval>,
+) -> Result<(), error>
 
 pub fn Shutdown(fd: Handle, how: int) -> Result<(), error>
 
 pub fn Socket(domain: int, typ: int, proto: int) -> Result<Handle, error>
 
-pub fn StartProcess(argv0: string, argv: Slice<string>, attr: Ref<ProcAttr>) -> Result<(int, uintptr), error>
+pub fn StartProcess(
+  argv0: string,
+  argv: Slice<string>,
+  attr: Ref<ProcAttr>,
+) -> Result<(int, uintptr), error>
 
 /// StringBytePtr returns a pointer to a NUL-terminated array of bytes.
 /// If s contains a NUL byte this function panics instead of returning
@@ -1263,7 +1399,10 @@ pub fn Syscall9(
   a9: uintptr,
 ) -> (uintptr, uintptr, Errno)
 
-pub fn SyscallN(trap: uintptr, args: VarArgs<uintptr>) -> (uintptr, uintptr, Errno)
+pub fn SyscallN(
+  trap: uintptr,
+  args: VarArgs<uintptr>,
+) -> (uintptr, uintptr, Errno)
 
 pub fn TerminateProcess(handle: Handle, exitcode: uint32) -> Result<(), error>
 
@@ -1404,7 +1543,10 @@ pub fn WSASendto(
 
 pub fn WSAStartup(verreq: uint32, data: Ref<WSAData>) -> Result<(), error>
 
-pub fn WaitForSingleObject(handle: Handle, waitMilliseconds: uint32) -> Result<uint32, error>
+pub fn WaitForSingleObject(
+  handle: Handle,
+  waitMilliseconds: uint32,
+) -> Result<uint32, error>
 
 pub fn Write(fd: Handle, p: Slice<byte>) -> Result<int, error>
 
@@ -3146,7 +3288,10 @@ impl LazyProc {
 
   /// Call executes procedure p with arguments a. See the documentation of
   /// Proc.Call for more information.
-  fn Call(self: Ref<LazyProc>, a: VarArgs<uintptr>) -> Result<(uintptr, uintptr), error>
+  fn Call(
+    self: Ref<LazyProc>,
+    a: VarArgs<uintptr>,
+  ) -> Result<(uintptr, uintptr), error>
 
   /// Find searches [DLL] for procedure named p.Name. It returns
   /// an error if search fails. Find will not search procedure,
@@ -3173,7 +3318,10 @@ impl Proc {
   /// values are returned in r2. The return value for C type "float" is
   /// [math.Float32frombits](uint32(r2)). For C type "double", it is
   /// [math.Float64frombits](uint64(r2)).
-  fn Call(self: Ref<Proc>, a: VarArgs<uintptr>) -> Result<(uintptr, uintptr), error>
+  fn Call(
+    self: Ref<Proc>,
+    a: VarArgs<uintptr>,
+  ) -> Result<(uintptr, uintptr), error>
 }
 
 impl RawSockaddrAny {
@@ -3190,7 +3338,10 @@ impl SID {
   /// LookupAccount retrieves the name of the account for this sid
   /// and the name of the first domain on which this sid is found.
   /// System specify target computer to search for.
-  fn LookupAccount(self: Ref<SID>, system: string) -> Result<(string, string, uint32), error>
+  fn LookupAccount(
+    self: Ref<SID>,
+    system: string,
+  ) -> Result<(string, string, uint32), error>
 
   /// String converts sid to a string format
   /// suitable for display, storage, or transmission.

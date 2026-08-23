@@ -40,7 +40,11 @@ pub fn For(compiler: string, lookup: Lookup) -> Option<types.Importer>
 /// A lookup function must be provided for correct module-aware operation.
 /// Deprecated: If lookup is nil, for backwards-compatibility, the importer
 /// will attempt to resolve imports in the $GOPATH workspace.
-pub fn ForCompiler(fset: Ref<token.FileSet>, compiler: string, lookup: Lookup) -> Option<types.Importer>
+pub fn ForCompiler(
+  fset: Ref<token.FileSet>,
+  compiler: string,
+  lookup: Lookup,
+) -> Option<types.Importer>
 
 /// A Lookup function returns a reader to access package data for
 /// a given import path, or an error if no matching package is found.

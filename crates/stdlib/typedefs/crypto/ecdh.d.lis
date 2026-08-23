@@ -73,7 +73,10 @@ impl PrivateKey {
   /// 
   /// For [X25519], this performs ECDH as specified in RFC 7748, Section 6.1. If
   /// the result is the all-zero value, ECDH returns an error.
-  fn ECDH(self: Ref<PrivateKey>, remote: Ref<PublicKey>) -> Result<mut Slice<byte>, error>
+  fn ECDH(
+    self: Ref<PrivateKey>,
+    remote: Ref<PublicKey>,
+  ) -> Result<mut Slice<byte>, error>
 
   /// Equal returns whether x represents the same private key as k.
   /// 

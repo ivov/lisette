@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/imports.rs
+description: |
+  
+  import "go:example.com/lib"
+  
+  fn index() -> lib.Index {
+    lib.Index{..}
+  }
+  
+  fn tally() -> lib.Tally {
+    lib.Tally{..}
+  }
+  
+  fn roster() -> lib.Roster {
+    lib.Roster{..}
+  }
+---
+package main
+
+import "example.com/lib"
+
+func index() lib.Index {
+	return lib.Index{}
+}
+
+func tally() lib.Tally {
+	return lib.Tally(0)
+}
+
+func roster() lib.Roster {
+	return lib.Roster(nil)
+}

@@ -137,6 +137,11 @@ pub interface Rewriter {
   fn Rewrite(counter: mut Ref<Counter>)
 }
 
+/// Store exercises the curated writable return on a body-less interface method.
+pub interface Store {
+  fn Items() -> mut IntList
+}
+
 /// Type definition over map
 pub struct StringMap(mut Map<string, int>)
 

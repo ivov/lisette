@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/imports.rs
+description: |
+  
+  import "go:sort"
+  
+  fn test() -> int {
+    sort.StringSlice{..}.Len()
+  }
+---
+package main
+
+import "sort"
+
+func test() int {
+	return sort.StringSlice(nil).Len()
+}

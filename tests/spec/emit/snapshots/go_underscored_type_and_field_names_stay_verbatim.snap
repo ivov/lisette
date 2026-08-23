@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/imports.rs
+description: |
+  
+  import "go:example.com/lib"
+  
+  fn test() -> int {
+    let mut s = lib.Stat_t{..}
+    s.Pad_cgo_0 = 1
+    let t = lib.Stat_t{ Pad_cgo_0: s.Pad_cgo_0, .. }
+    t.Pad_cgo_0
+  }
+---
+package main
+
+import "example.com/lib"
+
+func test() int {
+	s := lib.Stat_t{}
+	s.Pad_cgo_0 = 1
+	t := lib.Stat_t{Pad_cgo_0: s.Pad_cgo_0}
+	return t.Pad_cgo_0
+}

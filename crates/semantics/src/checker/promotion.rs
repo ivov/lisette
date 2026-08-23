@@ -4,9 +4,10 @@ use std::collections::BTreeMap;
 
 use syntax::ast::{Generic, Visibility};
 use syntax::go_names;
-use syntax::program::{DefinitionBody, Method, Methods};
+use syntax::program::{Definition, DefinitionBody, Method, Methods, methods_for_type};
 use syntax::types::{
-    CompoundKind, Symbol, Type, build_named_substitution_map, build_substitution_map, substitute,
+    self, CompoundKind, Symbol, Type, build_named_substitution_map, build_substitution_map,
+    substitute,
 };
 
 use crate::store::Store;
@@ -37,46 +38,86 @@ pub enum Resolution {
 }
 
 pub fn has_direct_embed(store: &Store, ty: &Type) -> bool {
-    let Type::Nominal { id, .. } = store.deep_resolve_alias(&ty.strip_refs()) else {
+    has_embed(ty, |id| store.get_definition(id))
+}
+
+/// Whether `ty` embeds anything: the cheap precondition for `walk`.
+fn has_embed<'d, F>(ty: &Type, lookup: F) -> bool
+where
+    F: Copy + Fn(&str) -> Option<&'d Definition>,
+{
+    let Type::Nominal { id, .. } = types::peel_alias(&ty.strip_refs(), lookup) else {
         return false;
     };
-    store
-        .fields_of(id.as_str())
+    lookup(id.as_str())
+        .and_then(Definition::fields)
         .is_some_and(|fields| fields.iter().any(|field| field.is_embedded()))
 }
 
 pub fn resolve_selector(store: &Store, outer: &Type, name: &str) -> Resolution {
-    let entries = walk(store, outer);
-    resolve_in_entries(store, &entries, outer, name)
+    let lookup = |id: &str| store.get_definition(id);
+    let entries = walk(outer, lookup);
+    resolve_in_entries(&entries, outer, name, lookup)
 }
 
 pub(crate) fn promoted_method_set(store: &Store, outer: &Type) -> Methods {
-    let entries = walk(store, outer);
+    member_set(outer, |id| store.get_definition(id))
+        .into_iter()
+        .filter_map(|(name, member)| match member.kind {
+            MemberKind::Method(method) => Some((name, method)),
+            MemberKind::Field { .. } => None,
+        })
+        .collect()
+}
+
+/// The members `outer` gains from its embeds. Its own members are already
+/// reachable, and an ambiguous name is not a valid selector.
+pub fn promoted_members<'d, F>(outer: &Type, lookup: F) -> Vec<(EcoString, ResolvedMember)>
+where
+    F: Copy + Fn(&str) -> Option<&'d Definition>,
+{
+    if !has_embed(outer, lookup) {
+        return Vec::new();
+    }
+
+    member_set(outer, lookup)
+        .into_iter()
+        .filter(|(_, member)| member.depth > 0)
+        .collect()
+}
+
+/// Every selector `outer` resolves, own and promoted, one winner per name.
+fn member_set<'d, F>(outer: &Type, lookup: F) -> Vec<(EcoString, ResolvedMember)>
+where
+    F: Copy + Fn(&str) -> Option<&'d Definition>,
+{
+    let entries = walk(outer, lookup);
 
     let mut names: HashSet<EcoString> = HashSet::default();
     for entry in &entries {
-        collect_member_names(store, &entry.ty, &mut names);
+        collect_member_names(&entry.ty, lookup, &mut names);
     }
 
-    let mut result = Methods::default();
-    for name in names {
-        if let Resolution::Found(member) = resolve_in_entries(store, &entries, outer, &name)
-            && let MemberKind::Method(method) = member.kind
-        {
-            result.insert(name, method);
-        }
-    }
-    result
+    names
+        .into_iter()
+        .filter_map(
+            |name| match resolve_in_entries(&entries, outer, &name, lookup) {
+                Resolution::Found(member) => Some((name, member)),
+                Resolution::Ambiguous { .. } | Resolution::NotFound => None,
+            },
+        )
+        .collect()
 }
 
 /// Shallowest depth at which any field of `outer` emits `selector` as its Go name.
 pub(crate) fn field_selector_depth(store: &Store, outer: &Type, selector: &str) -> Option<usize> {
+    let lookup = |id: &str| store.get_definition(id);
     let mut min: Option<usize> = None;
-    for entry in walk(store, outer) {
+    for entry in walk(outer, lookup) {
         let Some(id) = entry.ty.get_qualified_id() else {
             continue;
         };
-        let Some(definition) = store.get_definition(id) else {
+        let Some(definition) = lookup(id) else {
             continue;
         };
         let DefinitionBody::Struct { fields, .. } = &definition.body else {
@@ -103,11 +144,14 @@ struct Entry {
     multiples: bool,
 }
 
-fn walk(store: &Store, outer: &Type) -> Vec<Entry> {
+fn walk<'d, F>(outer: &Type, lookup: F) -> Vec<Entry>
+where
+    F: Copy + Fn(&str) -> Option<&'d Definition>,
+{
     let mut visited: Vec<Entry> = Vec::new();
     let mut seen: HashSet<String> = HashSet::default();
 
-    let Some(root) = nominal_entry(store, outer.clone(), 0, false, false) else {
+    let Some(root) = nominal_entry(outer.clone(), 0, false, false, lookup) else {
         return visited;
     };
     let mut current = vec![root];
@@ -127,25 +171,25 @@ fn walk(store: &Store, outer: &Type) -> Vec<Entry> {
             let Some(id) = entry.ty.get_qualified_id() else {
                 continue;
             };
-            if store.get_interface(id).is_some() {
+            if lookup(id).is_some_and(Definition::is_interface) {
                 continue;
             }
-            let Some(fields) = store.fields_of(id) else {
+            let Some(fields) = lookup(id).and_then(Definition::fields) else {
                 continue;
             };
             for field in fields {
                 if !field.is_embedded() {
                     continue;
                 }
-                let field_ty = instantiate_field(store, &entry.ty, &field.ty);
-                let resolved_field = store.deep_resolve_alias(&field_ty);
+                let field_ty = instantiate_field(&entry.ty, &field.ty, lookup);
+                let resolved_field = types::peel_alias(&field_ty, lookup);
                 let (target, is_pointer) = deref_once(&resolved_field);
                 if let Some(child) = nominal_entry(
-                    store,
                     target,
                     depth + 1,
                     entry.indirect || is_pointer,
                     entry.multiples,
+                    lookup,
                 ) {
                     next.push(child);
                 }
@@ -161,10 +205,13 @@ fn walk(store: &Store, outer: &Type) -> Vec<Entry> {
 
 /// Resolve `name` to its shallowest candidate; a lone non-`multiples` hit wins,
 /// anything else is ambiguous.
-fn resolve_in_entries(store: &Store, entries: &[Entry], outer: &Type, name: &str) -> Resolution {
+fn resolve_in_entries<'d, F>(entries: &[Entry], outer: &Type, name: &str, lookup: F) -> Resolution
+where
+    F: Copy + Fn(&str) -> Option<&'d Definition>,
+{
     let mut by_depth: BTreeMap<usize, Vec<(&Entry, Candidate)>> = BTreeMap::new();
     for entry in entries {
-        if let Some(candidate) = entry_candidate(store, &entry.ty, name) {
+        if let Some(candidate) = entry_candidate(&entry.ty, name, lookup) {
             by_depth
                 .entry(entry.depth)
                 .or_default()
@@ -198,11 +245,14 @@ struct Candidate {
 
 /// The field or method a type declares under `name`. A method shadows a
 /// same-named field, as gc checks attached methods first.
-fn entry_candidate(store: &Store, ty: &Type, name: &str) -> Option<Candidate> {
+fn entry_candidate<'d, F>(ty: &Type, name: &str, lookup: F) -> Option<Candidate>
+where
+    F: Copy + Fn(&str) -> Option<&'d Definition>,
+{
     let id = ty.get_qualified_id()?;
 
-    if store.get_interface(id).is_some() {
-        let methods = store.get_all_methods(ty, &Default::default());
+    if lookup(id).is_some_and(Definition::is_interface) {
+        let methods = methods_for_type(ty, &Default::default(), lookup);
         let method = methods.get(name)?.clone();
         return Some(Candidate {
             declaring_type: Symbol::from_raw(id),
@@ -210,23 +260,25 @@ fn entry_candidate(store: &Store, ty: &Type, name: &str) -> Option<Candidate> {
         });
     }
 
-    if !store.is_ufcs_method(id, name)
-        && let Some(method) = store.get_own_methods(id).and_then(|m| m.get(name))
+    if !lookup(id).is_some_and(|d| d.is_ufcs_method(name))
+        && let Some(method) = lookup(id)
+            .and_then(Definition::methods)
+            .and_then(|m| m.get(name))
     {
         return Some(Candidate {
             declaring_type: Symbol::from_raw(id),
-            kind: MemberKind::Method(method.with_type(instantiate_method(store, ty, &method.ty))),
+            kind: MemberKind::Method(method.with_type(instantiate_method(ty, &method.ty, lookup))),
         });
     }
 
-    if let Some(field) = store
-        .fields_of(id)
+    if let Some(field) = lookup(id)
+        .and_then(Definition::fields)
         .and_then(|fields| fields.iter().find(|f| f.name == name))
     {
         return Some(Candidate {
             declaring_type: Symbol::from_raw(id),
             kind: MemberKind::Field {
-                ty: instantiate_field(store, ty, &field.ty),
+                ty: instantiate_field(ty, &field.ty, lookup),
                 visibility: field.visibility,
             },
         });
@@ -270,22 +322,25 @@ fn build_member(outer: &Type, entry: &Entry, candidate: &Candidate) -> ResolvedM
 }
 
 /// Every field and method name a type exposes.
-fn collect_member_names(store: &Store, ty: &Type, names: &mut HashSet<EcoString>) {
+fn collect_member_names<'d, F>(ty: &Type, lookup: F, names: &mut HashSet<EcoString>)
+where
+    F: Copy + Fn(&str) -> Option<&'d Definition>,
+{
     let Some(id) = ty.get_qualified_id() else {
         return;
     };
-    if store.get_interface(id).is_some() {
-        for key in store.get_all_methods(ty, &Default::default()).keys() {
+    if lookup(id).is_some_and(Definition::is_interface) {
+        for key in methods_for_type(ty, &Default::default(), lookup).keys() {
             names.insert(key.clone());
         }
         return;
     }
-    if let Some(methods) = store.get_own_methods(id) {
+    if let Some(methods) = lookup(id).and_then(Definition::methods) {
         for key in methods.keys() {
             names.insert(key.clone());
         }
     }
-    if let Some(fields) = store.fields_of(id) {
+    if let Some(fields) = lookup(id).and_then(Definition::fields) {
         for field in fields {
             names.insert(field.name.clone());
         }
@@ -293,14 +348,17 @@ fn collect_member_names(store: &Store, ty: &Type, names: &mut HashSet<EcoString>
 }
 
 /// Build an entry for `target` if it resolves (through aliases) to a nominal type.
-fn nominal_entry(
-    store: &Store,
+fn nominal_entry<'d, F>(
     target: Type,
     depth: usize,
     indirect: bool,
     multiples: bool,
-) -> Option<Entry> {
-    let resolved = store.deep_resolve_alias(&target);
+    lookup: F,
+) -> Option<Entry>
+where
+    F: Copy + Fn(&str) -> Option<&'d Definition>,
+{
+    let resolved = types::peel_alias(&target, lookup);
     if !matches!(resolved, Type::Nominal { .. }) {
         return None;
     }
@@ -369,8 +427,11 @@ fn ref_of(ty: &Type) -> Type {
     Type::compound(CompoundKind::Ref, vec![ty.clone()])
 }
 
-fn declaring_generics<'a>(store: &'a Store, id: &str) -> &'a [Generic] {
-    match store.get_definition(id).map(|d| &d.body) {
+fn declaring_generics<'d, F>(id: &str, lookup: F) -> &'d [Generic]
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
+    match lookup(id).map(|d| &d.body) {
         Some(
             DefinitionBody::Struct { generics, .. }
             | DefinitionBody::Enum { generics, .. }
@@ -381,7 +442,10 @@ fn declaring_generics<'a>(store: &'a Store, id: &str) -> &'a [Generic] {
     }
 }
 
-fn instantiate_field(store: &Store, container: &Type, member_ty: &Type) -> Type {
+fn instantiate_field<'d, F>(container: &Type, member_ty: &Type, lookup: F) -> Type
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
     let Some(id) = container.get_qualified_id() else {
         return member_ty.clone();
     };
@@ -391,15 +455,18 @@ fn instantiate_field(store: &Store, container: &Type, member_ty: &Type) -> Type 
     }
     substitute(
         member_ty,
-        &build_substitution_map(declaring_generics(store, id), args),
+        &build_substitution_map(declaring_generics(id, lookup), args),
     )
 }
 
-fn instantiate_method(store: &Store, container: &Type, method_ty: &Type) -> Type {
+fn instantiate_method<'d, F>(container: &Type, method_ty: &Type, lookup: F) -> Type
+where
+    F: Fn(&str) -> Option<&'d Definition>,
+{
     let Some(id) = container.get_qualified_id() else {
         return method_ty.clone();
     };
-    let arity = declaring_generics(store, id).len();
+    let arity = declaring_generics(id, lookup).len();
     let args = container.get_type_params().unwrap_or_default();
     if args.is_empty() || arity == 0 {
         return method_ty.clone();

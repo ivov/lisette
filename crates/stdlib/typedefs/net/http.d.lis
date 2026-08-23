@@ -203,7 +203,11 @@ pub fn MaxBytesHandler(h: Handler, n: int64) -> Handler
 /// sending a large request and wasting server resources. If possible,
 /// it tells the [ResponseWriter] to close the connection after the limit
 /// has been reached.
-pub fn MaxBytesReader(w: ResponseWriter, r: io.ReadCloser, n: int64) -> io.ReadCloser
+pub fn MaxBytesReader(
+  w: ResponseWriter,
+  r: io.ReadCloser,
+  n: int64,
+) -> io.ReadCloser
 
 /// NewCrossOriginProtection returns a new [CrossOriginProtection] value.
 pub fn NewCrossOriginProtection() -> mut Ref<CrossOriginProtection>
@@ -240,7 +244,11 @@ pub fn NewFileTransport(fs: FileSystem) -> RoundTripper
 pub fn NewFileTransportFS(fsys: fs.FS) -> RoundTripper
 
 /// NewRequest wraps [NewRequestWithContext] using [context.Background].
-pub fn NewRequest(method: string, url: string, body: io.Reader) -> Result<mut Ref<Request>, error>
+pub fn NewRequest(
+  method: string,
+  url: string,
+  body: io.Reader,
+) -> Result<mut Ref<Request>, error>
 
 /// NewRequestWithContext returns a new [Request] given a method, URL, and
 /// optional body.
@@ -336,7 +344,11 @@ pub fn ParseTime(text: string) -> Result<time.Time, error>
 /// 
 /// To make a request with a specified context.Context, use [NewRequestWithContext]
 /// and DefaultClient.Do.
-pub fn Post(url: string, contentType: string, body: io.Reader) -> Result<mut Ref<Response>, error>
+pub fn Post(
+  url: string,
+  contentType: string,
+  body: io.Reader,
+) -> Result<mut Ref<Response>, error>
 
 /// PostForm issues a POST to the specified URL, with data's keys and
 /// values URL-encoded as the request body.
@@ -354,7 +366,10 @@ pub fn Post(url: string, contentType: string, body: io.Reader) -> Result<mut Ref
 /// 
 /// To make a request with a specified [context.Context], use [NewRequestWithContext]
 /// and DefaultClient.Do.
-pub fn PostForm(url: string, data: url.Values) -> Result<mut Ref<Response>, error>
+pub fn PostForm(
+  url: string,
+  data: url.Values,
+) -> Result<mut Ref<Response>, error>
 
 /// ProxyFromEnvironment returns the URL of the proxy to use for a
 /// given request, as indicated by the environment variables
@@ -372,11 +387,15 @@ pub fn PostForm(url: string, data: url.Values) -> Result<mut Ref<Response>, erro
 /// 
 /// As a special case, if req.URL.Host is "localhost" (with or without
 /// a port number), then a nil URL and nil error will be returned.
-pub fn ProxyFromEnvironment(req: Ref<Request>) -> Result<mut Ref<url.URL>, error>
+pub fn ProxyFromEnvironment(
+  req: Ref<Request>,
+) -> Result<mut Ref<url.URL>, error>
 
 /// ProxyURL returns a proxy function (for use in a [Transport])
 /// that always returns the same URL.
-pub fn ProxyURL(fixedURL: Ref<url.URL>) -> Option<fn(Ref<Request>) -> Result<mut Ref<url.URL>, error>>
+pub fn ProxyURL(
+  fixedURL: Ref<url.URL>,
+) -> Option<fn(Ref<Request>) -> Result<mut Ref<url.URL>, error>>
 
 /// ReadRequest reads and parses an incoming request from b.
 /// 
@@ -392,7 +411,10 @@ pub fn ReadRequest(b: Ref<bufio.Reader>) -> Result<mut Ref<Request>, error>
 /// Clients must call resp.Body.Close when finished reading resp.Body.
 /// After that call, clients can inspect resp.Trailer to find key/value
 /// pairs included in the response trailer.
-pub fn ReadResponse(r: Ref<bufio.Reader>, req: Ref<Request>) -> Result<mut Ref<Response>, error>
+pub fn ReadResponse(
+  r: Ref<bufio.Reader>,
+  req: Ref<Request>,
+) -> Result<mut Ref<Response>, error>
 
 /// Redirect replies to the request with a redirect to url,
 /// which may be a path relative to the request path.
@@ -897,7 +919,7 @@ pub type ResponseController
 /// 
 /// A ResponseWriter may not be used after [Handler.ServeHTTP] has returned.
 pub interface ResponseWriter {
-  fn Header() -> Header
+  fn Header() -> mut Header
   fn Write(b: Slice<byte>) -> Partial<int, error>
   fn WriteHeader(statusCode: int)
 }
@@ -1582,7 +1604,10 @@ impl Client {
   /// 
   /// Any returned error will be of type [*url.Error]. The url.Error
   /// value's Timeout method will report true if the request timed out.
-  fn Do(self: Ref<Client>, req: mut Ref<Request>) -> Result<mut Ref<Response>, error>
+  fn Do(
+    self: Ref<Client>,
+    req: mut Ref<Request>,
+  ) -> Result<mut Ref<Response>, error>
 
   /// Get issues a GET to the specified URL. If the response is one of the
   /// following redirect codes, Get follows the redirect after calling the
@@ -1637,7 +1662,12 @@ impl Client {
   /// 
   /// See the [Client.Do] method documentation for details on how redirects
   /// are handled.
-  fn Post(self: Ref<Client>, url: string, contentType: string, body: io.Reader) -> Result<mut Ref<Response>, error>
+  fn Post(
+    self: Ref<Client>,
+    url: string,
+    contentType: string,
+    body: io.Reader,
+  ) -> Result<mut Ref<Response>, error>
 
   /// PostForm issues a POST to the specified URL,
   /// with data's keys and values URL-encoded as the request body.
@@ -1653,7 +1683,11 @@ impl Client {
   /// 
   /// To make a request with a specified context.Context, use [NewRequestWithContext]
   /// and Client.Do.
-  fn PostForm(self: Ref<Client>, url: string, data: url.Values) -> Result<mut Ref<Response>, error>
+  fn PostForm(
+    self: Ref<Client>,
+    url: string,
+    data: url.Values,
+  ) -> Result<mut Ref<Response>, error>
 }
 
 impl ConnState {
@@ -1692,11 +1726,17 @@ impl CrossOriginProtection {
   /// or request handling, and applies to future requests.
   /// 
   /// [Origin]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Origin
-  fn AddTrustedOrigin(self: mut Ref<CrossOriginProtection>, origin: string) -> Result<(), error>
+  fn AddTrustedOrigin(
+    self: mut Ref<CrossOriginProtection>,
+    origin: string,
+  ) -> Result<(), error>
 
   /// Check applies cross-origin checks to a request.
   /// It returns an error if the request should be rejected.
-  fn Check(self: Ref<CrossOriginProtection>, req: Ref<Request>) -> Result<(), error>
+  fn Check(
+    self: Ref<CrossOriginProtection>,
+    req: Ref<Request>,
+  ) -> Result<(), error>
 
   /// Handler returns a handler that applies cross-origin checks
   /// before invoking the handler h.
@@ -1773,7 +1813,11 @@ impl Header {
   /// WriteSubset writes a header in wire format.
   /// If exclude is not nil, keys where exclude[key] == true are not written.
   /// Keys are not canonicalized before checking the exclude map.
-  fn WriteSubset(self, w: io.Writer, exclude: Map<string, bool>) -> Result<(), error>
+  fn WriteSubset(
+    self,
+    w: io.Writer,
+    exclude: Map<string, bool>,
+  ) -> Result<(), error>
 }
 
 impl MaxBytesError {
@@ -1857,11 +1901,17 @@ impl Request {
 
   /// CookiesNamed parses and returns the named HTTP cookies sent with the request
   /// or an empty slice if none matched.
-  fn CookiesNamed(self: Ref<Request>, name: string) -> mut Slice<mut Ref<Cookie>>
+  fn CookiesNamed(
+    self: Ref<Request>,
+    name: string,
+  ) -> mut Slice<mut Ref<Cookie>>
 
   /// FormFile returns the first file for the provided form key.
   /// FormFile calls [Request.ParseMultipartForm] and [Request.ParseForm] if necessary.
-  fn FormFile(self: mut Ref<Request>, key: string) -> Result<(multipart.File, mut Ref<multipart.FileHeader>), error>
+  fn FormFile(
+    self: mut Ref<Request>,
+    key: string,
+  ) -> Result<(multipart.File, mut Ref<multipart.FileHeader>), error>
 
   /// FormValue returns the first value for the named component of the query.
   /// The precedence order:
@@ -1880,7 +1930,9 @@ impl Request {
   /// multipart/form-data or a multipart/mixed POST request, else returns nil and an error.
   /// Use this function instead of [Request.ParseMultipartForm] to
   /// process the request body as a stream.
-  fn MultipartReader(self: mut Ref<Request>) -> Result<mut Ref<multipart.Reader>, error>
+  fn MultipartReader(
+    self: mut Ref<Request>,
+  ) -> Result<mut Ref<multipart.Reader>, error>
 
   /// ParseForm populates r.Form and r.PostForm.
   /// 
@@ -1910,7 +1962,10 @@ impl Request {
   /// If ParseForm returns an error, ParseMultipartForm returns it but also
   /// continues parsing the request body.
   /// After one call to ParseMultipartForm, subsequent calls have no effect.
-  fn ParseMultipartForm(self: mut Ref<Request>, maxMemory: int64) -> Result<(), error>
+  fn ParseMultipartForm(
+    self: mut Ref<Request>,
+    maxMemory: int64,
+  ) -> Result<(), error>
 
   /// PathValue returns the value for the named path wildcard in the [ServeMux] pattern
   /// that matched the request.
@@ -2047,14 +2102,19 @@ impl ResponseController {
 
   /// Hijack lets the caller take over the connection.
   /// See the [Hijacker] interface for details.
-  fn Hijack(self: Ref<ResponseController>) -> Result<(net.Conn, mut Ref<bufio.ReadWriter>), error>
+  fn Hijack(
+    self: Ref<ResponseController>,
+  ) -> Result<(net.Conn, mut Ref<bufio.ReadWriter>), error>
 
   /// SetReadDeadline sets the deadline for reading the entire request, including the body.
   /// Reads from the request body after the deadline has been exceeded will return an error.
   /// A zero value means no deadline.
   /// 
   /// Setting the read deadline after it has been exceeded will not extend it.
-  fn SetReadDeadline(self: Ref<ResponseController>, deadline: time.Time) -> Result<(), error>
+  fn SetReadDeadline(
+    self: Ref<ResponseController>,
+    deadline: time.Time,
+  ) -> Result<(), error>
 
   /// SetWriteDeadline sets the deadline for writing the response.
   /// Writes to the response body after the deadline has been exceeded will not block,
@@ -2062,7 +2122,10 @@ impl ResponseController {
   /// A zero value means no deadline.
   /// 
   /// Setting the write deadline after it has been exceeded will not extend it.
-  fn SetWriteDeadline(self: Ref<ResponseController>, deadline: time.Time) -> Result<(), error>
+  fn SetWriteDeadline(
+    self: Ref<ResponseController>,
+    deadline: time.Time,
+  ) -> Result<(), error>
 }
 
 impl ServeMux {
@@ -2145,7 +2208,11 @@ impl Server {
   /// 
   /// ListenAndServeTLS always returns a non-nil error. After [Server.Shutdown] or
   /// [Server.Close], the returned error is [ErrServerClosed].
-  fn ListenAndServeTLS(self: mut Ref<Server>, certFile: string, keyFile: string) -> Result<(), error>
+  fn ListenAndServeTLS(
+    self: mut Ref<Server>,
+    certFile: string,
+    keyFile: string,
+  ) -> Result<(), error>
 
   /// RegisterOnShutdown registers a function to call on [Server.Shutdown].
   /// This can be used to gracefully shutdown connections that have
@@ -2253,5 +2320,8 @@ impl Transport {
   /// 
   /// Like the RoundTripper interface, the error types returned
   /// by RoundTrip are unspecified.
-  fn RoundTrip(self: mut Ref<Transport>, req: Ref<Request>) -> Result<mut Ref<Response>, error>
+  fn RoundTrip(
+    self: mut Ref<Transport>,
+    req: Ref<Request>,
+  ) -> Result<mut Ref<Response>, error>
 }

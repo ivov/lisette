@@ -403,7 +403,12 @@ impl FileSet {
   /// with offs in the range [0, size] and thus p in the range [base, base+size].
   /// For convenience, [File.Pos] may be used to create file-specific position
   /// values from a file offset.
-  fn AddFile(self: mut Ref<FileSet>, filename: string, base: int, size: int) -> mut Ref<File>
+  fn AddFile(
+    self: mut Ref<FileSet>,
+    filename: string,
+    base: int,
+    size: int,
+  ) -> mut Ref<File>
 
   /// Base returns the minimum base offset that must be provided to
   /// [FileSet.AddFile] when adding the next file.
@@ -429,7 +434,10 @@ impl FileSet {
   fn PositionFor(self: Ref<FileSet>, p: Pos, adjusted: bool) -> Position
 
   /// Read calls decode to deserialize a file set into s; s must not be nil.
-  fn Read(self: mut Ref<FileSet>, decode: fn(Unknown) -> Result<(), error>) -> Result<(), error>
+  fn Read(
+    self: mut Ref<FileSet>,
+    decode: fn(Unknown) -> Result<(), error>,
+  ) -> Result<(), error>
 
   /// RemoveFile removes a file from the [FileSet] so that subsequent
   /// queries for its [Pos] interval yield a negative result.
@@ -440,7 +448,10 @@ impl FileSet {
   fn RemoveFile(self: mut Ref<FileSet>, file: Ref<File>)
 
   /// Write calls encode to serialize the file set s.
-  fn Write(self: Ref<FileSet>, encode: fn(Unknown) -> Result<(), error>) -> Result<(), error>
+  fn Write(
+    self: Ref<FileSet>,
+    encode: fn(Unknown) -> Result<(), error>,
+  ) -> Result<(), error>
 }
 
 impl Pos {

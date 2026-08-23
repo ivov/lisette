@@ -143,13 +143,16 @@ impl Planner<'_> {
                     value
                 }
             }
-            StructSpread::Autofill { .. } => {
-                self.append_autofills(&mut field_pairs, field_assignments, &ctx, is_go_struct);
-                GoExpression::composite_literal(
-                    emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx),
-                    fields_contain_deferred_evaluation,
-                )
-            }
+            StructSpread::Autofill { .. } => match self.go_imported_newtype_zero(ty) {
+                Some(zero) => GoExpression::opaque(zero),
+                None => {
+                    self.append_autofills(&mut field_pairs, field_assignments, &ctx, is_go_struct);
+                    GoExpression::composite_literal(
+                        emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx),
+                        fields_contain_deferred_evaluation,
+                    )
+                }
+            },
             StructSpread::None => GoExpression::composite_literal(
                 emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx),
                 fields_contain_deferred_evaluation,
@@ -282,19 +285,47 @@ impl Planner<'_> {
             &map,
         ))
     }
+
+    /// Zero for `T{..}` on a Go-imported newtype, a named non-struct with
+    /// no fields for the autofill to name.
+    fn go_imported_newtype_zero(&mut self, ty: &Type) -> Option<String> {
+        let Type::Nominal { id, .. } = ty else {
+            return None;
+        };
+        if !go_name::is_go_import(id.as_str()) {
+            return None;
+        }
+        let underlying = self.get_newtype_underlying(ty)?;
+        let go_ty = self.use_go_type(ty);
+        self.go_newtype_zero(&go_ty, &underlying)
+    }
+
+    /// Zero for a Go named non-struct, in a form Go takes as an operand.
+    fn go_newtype_zero(&mut self, go_ty: &str, underlying: &Type) -> Option<String> {
+        let underlying = self.facts.peel_underlying(underlying);
+        if underlying.is_map() || matches!(underlying, Type::Array { .. }) {
+            return Some(format!("{}{{}}", go_ty));
+        }
+        if underlying.is_slice() {
+            return Some(format!("{}(nil)", go_ty));
+        }
+        matches!(underlying, Type::Simple(_)).then(|| {
+            let inner = self.lisette_zero(&underlying);
+            format!("{}({})", go_ty, inner)
+        })
+    }
+
     fn go_imported_zero(&mut self, ty: &Type, id: &str) -> String {
         if self.facts.is_interface(ty) || self.facts.resolve_to_function_type(ty).is_some() {
             return "nil".to_string();
         }
         let go_ty = self.use_go_type(ty);
-        // A newtype over a scalar takes no composite literal; over a map it does.
         let is_newtype = self.facts.definition(id).is_some_and(|d| d.is_newtype());
         if is_newtype {
-            if self
-                .get_newtype_underlying(ty)
-                .is_some_and(|underlying| underlying.is_map())
+            if let Some(underlying) = self.get_newtype_underlying(ty)
+                && let Some(zero) = self.go_newtype_zero(&go_ty, &underlying)
             {
-                return format!("{}{{}}", go_ty);
+                return zero;
             }
             return format!("*new({})", go_ty);
         }
@@ -321,7 +352,7 @@ impl Planner<'_> {
                     continue;
                 };
                 let go_field_name = if self.struct_field_is_exported(ty, &name) {
-                    go_name::make_exported(&name)
+                    go_name::exported_member(ty, &name)
                 } else if self.field_is_embedded(ty, &name) {
                     go_name::escape_keyword(&name).into_owned()
                 } else {
@@ -421,7 +452,7 @@ impl Planner<'_> {
                     let go_name = if is_tuple {
                         format!("F{}", index)
                     } else if self.struct_field_is_exported(ty, &name) {
-                        go_name::make_exported(&name)
+                        go_name::exported_member(ty, &name)
                     } else if self.field_is_embedded(ty, &name) {
                         go_name::escape_keyword(&name).into_owned()
                     } else {
@@ -544,13 +575,15 @@ impl Planner<'_> {
                 } else {
                     String::new()
                 };
-                let pkg = self.require_package_import(&self.canonical_package(package));
-                return format!(
-                    "{}.{}{}",
-                    pkg,
-                    go_name::snake_to_camel(type_name),
-                    type_args
-                );
+                let canonical = self.canonical_package(package);
+                // `snake_to_camel` would fold `Stat_t` to `StatT`.
+                let member = if go_name::is_go_import(&canonical) {
+                    type_name.to_string()
+                } else {
+                    go_name::snake_to_camel(type_name)
+                };
+                let pkg = self.require_package_import(&canonical);
+                return format!("{}.{}{}", pkg, member, type_args);
             }
         }
 
@@ -625,11 +658,11 @@ impl Planner<'_> {
     ) -> String {
         if let Some(ref enum_ctx) = ctx.enum_ctx {
             self.enum_struct_field_name(&enum_ctx.enum_id, &enum_ctx.variant_name, field_name)
-                .unwrap_or_else(|| go_name::make_exported(field_name))
+                .unwrap_or_else(|| go_name::exported_member(ctx.ty, field_name))
         } else if self.field_is_embedded(ctx.ty, field_name) {
             go_name::escape_keyword(field_name).into_owned()
         } else if self.struct_field_is_exported(ctx.ty, field_name) {
-            go_name::make_exported(field_name)
+            go_name::exported_member(ctx.ty, field_name)
         } else {
             go_name::unexported_method_go_name(field_name)
         }

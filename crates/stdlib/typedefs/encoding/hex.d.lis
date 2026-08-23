@@ -8,7 +8,10 @@ import "go:io"
 /// AppendDecode appends the hexadecimally decoded src to dst
 /// and returns the extended buffer.
 /// If the input is malformed, it returns the partially decoded src and an error.
-pub fn AppendDecode(dst: mut Slice<byte>, src: Slice<byte>) -> Partial<mut Slice<byte>, error>
+pub fn AppendDecode(
+  dst: mut Slice<byte>,
+  src: Slice<byte>,
+) -> Partial<mut Slice<byte>, error>
 
 /// AppendEncode appends the hexadecimally encoded src to dst
 /// and returns the extended buffer.

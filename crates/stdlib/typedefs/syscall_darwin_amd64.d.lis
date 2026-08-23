@@ -520,10 +520,18 @@ pub fn Dup2(from: int, to: int) -> Result<(), error>
 
 pub fn Environ() -> mut Slice<string>
 
-pub fn Exchangedata(path1: string, path2: string, options: int) -> Result<(), error>
+pub fn Exchangedata(
+  path1: string,
+  path2: string,
+  options: int,
+) -> Result<(), error>
 
 /// Exec invokes the execve(2) system call.
-pub fn Exec(argv0: string, argv: Slice<string>, envv: Slice<string>) -> Result<(), error>
+pub fn Exec(
+  argv0: string,
+  argv: Slice<string>,
+  envv: Slice<string>,
+) -> Result<(), error>
 
 pub fn Exit(code: int) -> Never
 
@@ -544,7 +552,11 @@ pub fn Flock(fd: int, how: int) -> Result<(), error>
 pub fn FlushBpf(fd: int) -> Result<(), error>
 
 /// Combination of fork and exec, careful to be thread safe.
-pub fn ForkExec(argv0: string, argv: Slice<string>, attr: Ref<ProcAttr>) -> Result<int, error>
+pub fn ForkExec(
+  argv0: string,
+  argv: Slice<string>,
+  attr: Ref<ProcAttr>,
+) -> Result<int, error>
 
 pub fn Fpathconf(fd: int, name: int) -> Result<int, error>
 
@@ -558,7 +570,11 @@ pub fn Ftruncate(fd: int, length: int64) -> Result<(), error>
 
 pub fn Futimes(fd: int, tv: Slice<Timeval>) -> Result<(), error>
 
-pub fn Getdirentries(fd: int, buf: mut Slice<byte>, basep: Ref<uintptr>) -> Result<int, error>
+pub fn Getdirentries(
+  fd: int,
+  buf: mut Slice<byte>,
+  basep: Ref<uintptr>,
+) -> Result<int, error>
 
 pub fn Getdtablesize() -> int
 
@@ -598,15 +614,35 @@ pub fn Getsockname(fd: int) -> Result<Sockaddr, error>
 
 pub fn GetsockoptByte(fd: int, level: int, opt: int) -> Result<byte, error>
 
-pub fn GetsockoptICMPv6Filter(fd: int, level: int, opt: int) -> Result<mut Ref<ICMPv6Filter>, error>
+pub fn GetsockoptICMPv6Filter(
+  fd: int,
+  level: int,
+  opt: int,
+) -> Result<mut Ref<ICMPv6Filter>, error>
 
-pub fn GetsockoptIPMreq(fd: int, level: int, opt: int) -> Result<mut Ref<IPMreq>, error>
+pub fn GetsockoptIPMreq(
+  fd: int,
+  level: int,
+  opt: int,
+) -> Result<mut Ref<IPMreq>, error>
 
-pub fn GetsockoptIPv6MTUInfo(fd: int, level: int, opt: int) -> Result<mut Ref<IPv6MTUInfo>, error>
+pub fn GetsockoptIPv6MTUInfo(
+  fd: int,
+  level: int,
+  opt: int,
+) -> Result<mut Ref<IPv6MTUInfo>, error>
 
-pub fn GetsockoptIPv6Mreq(fd: int, level: int, opt: int) -> Result<mut Ref<IPv6Mreq>, error>
+pub fn GetsockoptIPv6Mreq(
+  fd: int,
+  level: int,
+  opt: int,
+) -> Result<mut Ref<IPv6Mreq>, error>
 
-pub fn GetsockoptInet4Addr(fd: int, level: int, opt: int) -> Result<Array<byte, 4>, error>
+pub fn GetsockoptInet4Addr(
+  fd: int,
+  level: int,
+  opt: int,
+) -> Result<Array<byte, 4>, error>
 
 pub fn GetsockoptInt(fd: int, level: int, opt: int) -> Result<int, error>
 
@@ -647,7 +683,13 @@ pub fn Mlock(b: Slice<byte>) -> Result<(), error>
 
 pub fn Mlockall(flags: int) -> Result<(), error>
 
-pub fn Mmap(fd: int, offset: int64, length: int, prot: int, flags: int) -> Result<Slice<byte>, error>
+pub fn Mmap(
+  fd: int,
+  offset: int64,
+  length: int,
+  prot: int,
+  flags: int,
+) -> Result<Slice<byte>, error>
 
 pub fn Mprotect(b: Slice<byte>, prot: int) -> Result<(), error>
 
@@ -669,27 +711,39 @@ pub fn Open(path: string, mode: int, perm: uint32) -> Result<int, error>
 /// appending the names to names. It returns the number of
 /// bytes consumed from buf, the number of entries added
 /// to names, and the new names slice.
-pub fn ParseDirent(buf: Slice<byte>, max: int, names: mut Slice<string>) -> (int, int, mut Slice<string>)
+pub fn ParseDirent(
+  buf: Slice<byte>,
+  max: int,
+  names: mut Slice<string>,
+) -> (int, int, mut Slice<string>)
 
 /// ParseRoutingMessage parses b as routing messages and returns the
 /// slice containing the [RoutingMessage] interfaces.
 /// 
 /// Deprecated: Use golang.org/x/net/route instead.
-pub fn ParseRoutingMessage(b: Slice<byte>) -> Result<mut Slice<RoutingMessage>, error>
+pub fn ParseRoutingMessage(
+  b: Slice<byte>,
+) -> Result<mut Slice<RoutingMessage>, error>
 
 /// ParseRoutingSockaddr parses msg's payload as raw sockaddrs and
 /// returns the slice containing the [Sockaddr] interfaces.
 /// 
 /// Deprecated: Use golang.org/x/net/route instead.
-pub fn ParseRoutingSockaddr(msg: RoutingMessage) -> Result<mut Slice<Sockaddr>, error>
+pub fn ParseRoutingSockaddr(
+  msg: RoutingMessage,
+) -> Result<mut Slice<Sockaddr>, error>
 
 /// ParseSocketControlMessage parses b as an array of socket control
 /// messages.
-pub fn ParseSocketControlMessage(b: Slice<byte>) -> Result<mut Slice<SocketControlMessage>, error>
+pub fn ParseSocketControlMessage(
+  b: Slice<byte>,
+) -> Result<mut Slice<SocketControlMessage>, error>
 
 /// ParseUnixRights decodes a socket control message that contains an
 /// integer array of open file descriptors from another process.
-pub fn ParseUnixRights(m: Ref<SocketControlMessage>) -> Result<mut Slice<int>, error>
+pub fn ParseUnixRights(
+  m: Ref<SocketControlMessage>,
+) -> Result<mut Slice<int>, error>
 
 pub fn Pathconf(path: string, name: int) -> Result<int, error>
 
@@ -703,7 +757,12 @@ pub fn PtraceDetach(pid: int) -> Result<(), error>
 
 pub fn Pwrite(fd: int, p: Slice<byte>, offset: int64) -> Result<int, error>
 
-pub fn RawSyscall(trap: uintptr, a1: uintptr, a2: uintptr, a3: uintptr) -> (uintptr, uintptr, Errno)
+pub fn RawSyscall(
+  trap: uintptr,
+  a1: uintptr,
+  a2: uintptr,
+  a3: uintptr,
+) -> (uintptr, uintptr, Errno)
 
 pub fn RawSyscall6(
   trap: uintptr,
@@ -721,9 +780,18 @@ pub fn ReadDirent(fd: int, buf: mut Slice<byte>) -> Result<int, error>
 
 pub fn Readlink(path: string, buf: mut Slice<byte>) -> Result<int, error>
 
-pub fn Recvfrom(fd: int, p: mut Slice<byte>, flags: int) -> Result<(int, Sockaddr), error>
+pub fn Recvfrom(
+  fd: int,
+  p: mut Slice<byte>,
+  flags: int,
+) -> Result<(int, Sockaddr), error>
 
-pub fn Recvmsg(fd: int, p: mut Slice<byte>, oob: mut Slice<byte>, flags: int) -> Result<(int, int, int, Sockaddr), error>
+pub fn Recvmsg(
+  fd: int,
+  p: mut Slice<byte>,
+  oob: mut Slice<byte>,
+  flags: int,
+) -> Result<(int, int, int, Sockaddr), error>
 
 pub fn Rename(from: string, to: string) -> Result<(), error>
 
@@ -748,7 +816,12 @@ pub fn Select(
   timeout: Ref<Timeval>,
 ) -> Result<(), error>
 
-pub fn Sendfile(outfd: int, infd: int, offset: Ref<int64>, count: int) -> Result<int, error>
+pub fn Sendfile(
+  outfd: int,
+  infd: int,
+  offset: Ref<int64>,
+  count: int,
+) -> Result<int, error>
 
 pub fn Sendmsg(
   fd: int,
@@ -766,7 +839,12 @@ pub fn SendmsgN(
   flags: int,
 ) -> Result<int, error>
 
-pub fn Sendto(fd: int, p: Slice<byte>, flags: int, to: Sockaddr) -> Result<(), error>
+pub fn Sendto(
+  fd: int,
+  p: Slice<byte>,
+  flags: int,
+  to: Sockaddr,
+) -> Result<(), error>
 
 /// Deprecated: Use golang.org/x/net/bpf instead.
 pub fn SetBpf(fd: int, i: Slice<BpfInsn>) -> Result<(), error>
@@ -822,7 +900,12 @@ pub fn Setrlimit(resource: int, rlim: Ref<Rlimit>) -> Result<(), error>
 
 pub fn Setsid() -> Result<int, error>
 
-pub fn SetsockoptByte(fd: int, level: int, opt: int, value: byte) -> Result<(), error>
+pub fn SetsockoptByte(
+  fd: int,
+  level: int,
+  opt: int,
+  value: byte,
+) -> Result<(), error>
 
 pub fn SetsockoptICMPv6Filter(
   fd: int,
@@ -831,19 +914,54 @@ pub fn SetsockoptICMPv6Filter(
   filter: Ref<ICMPv6Filter>,
 ) -> Result<(), error>
 
-pub fn SetsockoptIPMreq(fd: int, level: int, opt: int, mreq: Ref<IPMreq>) -> Result<(), error>
+pub fn SetsockoptIPMreq(
+  fd: int,
+  level: int,
+  opt: int,
+  mreq: Ref<IPMreq>,
+) -> Result<(), error>
 
-pub fn SetsockoptIPv6Mreq(fd: int, level: int, opt: int, mreq: Ref<IPv6Mreq>) -> Result<(), error>
+pub fn SetsockoptIPv6Mreq(
+  fd: int,
+  level: int,
+  opt: int,
+  mreq: Ref<IPv6Mreq>,
+) -> Result<(), error>
 
-pub fn SetsockoptInet4Addr(fd: int, level: int, opt: int, value: Array<byte, 4>) -> Result<(), error>
+pub fn SetsockoptInet4Addr(
+  fd: int,
+  level: int,
+  opt: int,
+  value: Array<byte, 4>,
+) -> Result<(), error>
 
-pub fn SetsockoptInt(fd: int, level: int, opt: int, value: int) -> Result<(), error>
+pub fn SetsockoptInt(
+  fd: int,
+  level: int,
+  opt: int,
+  value: int,
+) -> Result<(), error>
 
-pub fn SetsockoptLinger(fd: int, level: int, opt: int, l: Ref<Linger>) -> Result<(), error>
+pub fn SetsockoptLinger(
+  fd: int,
+  level: int,
+  opt: int,
+  l: Ref<Linger>,
+) -> Result<(), error>
 
-pub fn SetsockoptString(fd: int, level: int, opt: int, s: string) -> Result<(), error>
+pub fn SetsockoptString(
+  fd: int,
+  level: int,
+  opt: int,
+  s: string,
+) -> Result<(), error>
 
-pub fn SetsockoptTimeval(fd: int, level: int, opt: int, tv: Ref<Timeval>) -> Result<(), error>
+pub fn SetsockoptTimeval(
+  fd: int,
+  level: int,
+  opt: int,
+  tv: Ref<Timeval>,
+) -> Result<(), error>
 
 pub fn Settimeofday(tp: Ref<Timeval>) -> Result<(), error>
 
@@ -854,14 +972,24 @@ pub fn Shutdown(s: int, how: int) -> Result<(), error>
 /// SlicePtrFromStrings converts a slice of strings to a slice of
 /// pointers to NUL-terminated byte arrays. If any string contains
 /// a NUL byte, it returns (nil, [EINVAL]).
-pub fn SlicePtrFromStrings(ss: Slice<string>) -> Result<mut Slice<mut Ref<byte>>, error>
+pub fn SlicePtrFromStrings(
+  ss: Slice<string>,
+) -> Result<mut Slice<mut Ref<byte>>, error>
 
 pub fn Socket(domain: int, typ: int, proto: int) -> Result<int, error>
 
-pub fn Socketpair(domain: int, typ: int, proto: int) -> Result<Array<int, 2>, error>
+pub fn Socketpair(
+  domain: int,
+  typ: int,
+  proto: int,
+) -> Result<Array<int, 2>, error>
 
 /// StartProcess wraps [ForkExec] for package os.
-pub fn StartProcess(argv0: string, argv: Slice<string>, attr: Ref<ProcAttr>) -> Result<(int, uintptr), error>
+pub fn StartProcess(
+  argv0: string,
+  argv: Slice<string>,
+  attr: Ref<ProcAttr>,
+) -> Result<(int, uintptr), error>
 
 pub fn Stat(path: string, stat: Ref<Stat_t>) -> Result<(), error>
 
@@ -892,7 +1020,12 @@ pub fn Symlink(path: string, link: string) -> Result<(), error>
 
 pub fn Sync() -> Result<(), error>
 
-pub fn Syscall(trap: uintptr, a1: uintptr, a2: uintptr, a3: uintptr) -> (uintptr, uintptr, Errno)
+pub fn Syscall(
+  trap: uintptr,
+  a1: uintptr,
+  a2: uintptr,
+  a3: uintptr,
+) -> (uintptr, uintptr, Errno)
 
 pub fn Syscall6(
   trap: uintptr,

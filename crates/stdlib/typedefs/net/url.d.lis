@@ -156,7 +156,10 @@ impl InvalidHostError {
 }
 
 impl URL {
-  fn AppendBinary(self: Ref<URL>, b: mut Slice<byte>) -> Result<mut Slice<byte>, error>
+  fn AppendBinary(
+    self: Ref<URL>,
+    b: mut Slice<byte>,
+  ) -> Result<mut Slice<byte>, error>
 
   /// EscapedFragment returns the escaped form of u.Fragment.
   /// In general there are multiple possible escaped forms of any fragment.

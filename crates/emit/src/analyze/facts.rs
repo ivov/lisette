@@ -110,6 +110,10 @@ impl<'a> EmitFacts<'a> {
         types::underlying_type(ty, |id| self.definition(id))
     }
 
+    pub(crate) fn peel_underlying(&self, ty: &Type) -> Type {
+        types::peel_underlying(ty, |id| self.definition(id))
+    }
+
     pub(crate) fn underlying_simple_kind(&self, ty: &Type) -> Option<SimpleKind> {
         types::underlying_simple_kind(ty, |id| self.definition(id))
     }

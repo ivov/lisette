@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/imports.rs
+description: |
+  
+  import "go:sort"
+  
+  struct Wrapper { s: mut sort.StringSlice }
+  
+  fn test() -> Wrapper {
+    Wrapper { .. }
+  }
+---
+package main
+
+import "sort"
+
+type Wrapper struct {
+	s sort.StringSlice
+}
+
+func test() Wrapper {
+	return Wrapper{s: sort.StringSlice(nil)}
+}

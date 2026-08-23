@@ -79,7 +79,11 @@ pub fn Marshal(v: Unknown) -> Result<mut Slice<byte>, error>
 /// MarshalIndent works like [Marshal], but each XML element begins on a new
 /// indented line that starts with prefix and is followed by one or more
 /// copies of indent according to the nesting depth.
-pub fn MarshalIndent(v: Unknown, prefix: string, indent: string) -> Result<mut Slice<byte>, error>
+pub fn MarshalIndent(
+  v: Unknown,
+  prefix: string,
+  indent: string,
+) -> Result<mut Slice<byte>, error>
 
 /// NewDecoder creates a new XML parser reading from r.
 /// If r does not implement [io.ByteReader], NewDecoder will
@@ -492,7 +496,11 @@ impl Encoder {
   /// of Go values to XML.
   /// 
   /// EncodeElement calls [Encoder.Flush] before returning.
-  fn EncodeElement(self: mut Ref<Encoder>, v: Unknown, start: StartElement) -> Result<(), error>
+  fn EncodeElement(
+    self: mut Ref<Encoder>,
+    v: Unknown,
+    start: StartElement,
+  ) -> Result<(), error>
 
   /// EncodeToken writes the given XML token to the stream.
   /// It returns an error if [StartElement] and [EndElement] tokens are not properly matched.

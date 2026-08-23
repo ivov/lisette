@@ -273,7 +273,7 @@ impl Planner<'_> {
         let field = if resolution_exports_field(resolution)
             || self.struct_field_is_exported(expression_ty, member)
         {
-            go_name::make_exported(member)
+            go_name::exported_member(expression_ty, member)
         } else if self.field_is_embedded(expression_ty, member) {
             go_name::escape_keyword(member).into_owned()
         } else {
