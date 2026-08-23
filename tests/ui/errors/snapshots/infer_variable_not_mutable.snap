@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·      ╰── `x` was declared without `mut`
  5 │ }
    ╰────
-  help: Declare using `let mut x` to make the variable mutable · code: [infer.immutable]
+  help: Declare using `let mut x` to mark the variable mutable · code: [infer.immutable]
