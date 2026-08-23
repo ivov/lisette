@@ -944,11 +944,14 @@ impl<'a> Planner<'a> {
     }
 
     fn go_physical_expression_layout(&self, expression: &Expression) -> Option<ValueLayout> {
-        if let Some(plan) = self.plan_call(expression)
-            && matches!(plan.resolved.origin, CallableOrigin::GoInterop)
+        if self.call_target_is_go(expression)
+            && let Some(plan) = self.plan_call(expression)
             && matches!(plan.resolved.abi.result, CallableReturnAbi::Direct)
         {
             return Some(plan.resolved.abi.return_layout.clone());
+        }
+        if !self.is_go_callable(expression) {
+            return None;
         }
         let callable = self.resolve_callable_value(expression)?;
         matches!(callable.origin, CallableOrigin::GoInterop).then(|| ValueLayout::Function {
