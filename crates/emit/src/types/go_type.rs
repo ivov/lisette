@@ -9,6 +9,11 @@ use syntax::ast::ResolvedCallTypeArguments;
 use syntax::program::DefinitionBody;
 use syntax::types::{CompoundKind, FunctionParameter, SimpleKind, Type};
 
+/// Whether a conversion to this Go type misparses without parentheses.
+pub(crate) fn conversion_needs_parens(go_type: &str) -> bool {
+    go_type.starts_with('*') || go_type.starts_with("<-") || go_type.starts_with("func")
+}
+
 #[derive(Debug, Clone, Default)]
 pub(crate) struct GoType {
     pub(crate) code: String,

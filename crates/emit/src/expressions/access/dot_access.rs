@@ -12,6 +12,7 @@ use crate::context::expression::ExpressionContext;
 use crate::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::values::{EvaluationEffect, GoExpression, ValuePlan};
+use crate::types::go_type::conversion_needs_parens;
 
 struct NullableFieldAccess<'a> {
     expression_string: &'a str,
@@ -301,7 +302,7 @@ impl Planner<'_> {
         } else {
             expression_string.to_string()
         };
-        Some(if go_type.starts_with('*') {
+        Some(if conversion_needs_parens(&go_type) {
             format!("({})({})", go_type, operand)
         } else {
             format!("{}({})", go_type, operand)
@@ -372,7 +373,7 @@ impl Planner<'_> {
     }
 
     pub(crate) fn try_emit_tuple_struct_field_access(
-        &mut self,
+        &self,
         expression_string: &str,
         expression_ty: &Type,
         index: usize,
@@ -385,8 +386,7 @@ impl Planner<'_> {
         let Some(Definition {
             body:
                 DefinitionBody::Struct {
-                    fields: StructFields::Tuple(fields),
-                    generics,
+                    fields: StructFields::Tuple(_),
                     ..
                 },
             ..
@@ -394,16 +394,6 @@ impl Planner<'_> {
         else {
             return None;
         };
-
-        if fields.len() == 1 && generics.is_empty() {
-            let underlying_ty = self.use_go_type(&fields[0].ty);
-            let expression = if expression_ty.is_ref() {
-                format!("*{}", expression_string)
-            } else {
-                expression_string.to_string()
-            };
-            return Some(format!("{}({})", underlying_ty, expression));
-        }
 
         Some(format!("{}.F{}", expression_string, index))
     }

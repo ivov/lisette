@@ -13,6 +13,7 @@ use crate::Planner;
 use crate::names::packages::PackageRequirements;
 use crate::names::{generics, go_name};
 use crate::patterns::binding_decls::emit_pattern_literal;
+use crate::types::go_type::conversion_needs_parens;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum PathSegment {
@@ -116,7 +117,7 @@ impl AccessPath {
                     }
                 }
                 PathSegment::NewtypeCast(ty) => {
-                    result = if ty.starts_with('*') {
+                    result = if conversion_needs_parens(ty) {
                         format!("({})({})", ty, result)
                     } else {
                         format!("{}({})", ty, result)

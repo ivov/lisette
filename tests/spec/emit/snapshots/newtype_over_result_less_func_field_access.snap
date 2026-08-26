@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct Cb(fn(int) -> ())
+  
+  fn test(cb: Cb) {
+    cb.0(1)
+  }
+---
+package main
+
+type Cb func(int)
+
+func test(cb Cb) {
+	(func(int))(cb)(1)
+}
