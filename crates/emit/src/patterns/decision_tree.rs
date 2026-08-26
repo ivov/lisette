@@ -29,7 +29,10 @@ pub(crate) enum PathSegment {
     /// `(*expression)`: auto-pointer deref for recursive enum fields.
     Deref,
     /// `GoType(expression)`: newtype cast to underlying Go type.
-    NewtypeCast(String),
+    NewtypeCast {
+        go_type: String,
+        needs_parens: bool,
+    },
     /// `expression.(GoType)`: Go interface type assertion, inserted when a
     /// concrete pattern targets a Go interface at a non-root path.
     AssertedAs(String),
@@ -116,11 +119,14 @@ impl AccessPath {
                         result = format!("(*{})", result);
                     }
                 }
-                PathSegment::NewtypeCast(ty) => {
-                    result = if conversion_needs_parens(ty) {
-                        format!("({})({})", ty, result)
+                PathSegment::NewtypeCast {
+                    go_type,
+                    needs_parens,
+                } => {
+                    result = if *needs_parens {
+                        format!("({})({})", go_type, result)
                     } else {
-                        format!("{}({})", ty, result)
+                        format!("{}({})", go_type, result)
                     }
                 }
                 PathSegment::AssertedAs(ty) => {
@@ -148,7 +154,7 @@ impl AccessPath {
                 segment,
                 PathSegment::ArraySliceFrom { .. }
                     | PathSegment::Deref
-                    | PathSegment::NewtypeCast(_)
+                    | PathSegment::NewtypeCast { .. }
                     | PathSegment::AssertedAs(_)
             )
         })
@@ -1246,7 +1252,11 @@ fn collect_newtype_checks(
     };
     let go_underlying = planner.go_type(&underlying_ty);
     collector.packages.extend(go_underlying.requirements());
-    let field_path = path.push(PathSegment::NewtypeCast(go_underlying.code));
+    let needs_parens = conversion_needs_parens(&go_underlying.code, &underlying_ty);
+    let field_path = path.push(PathSegment::NewtypeCast {
+        go_type: go_underlying.code,
+        needs_parens,
+    });
     if let Some(field) = variant.fields.first() {
         collect_checks_and_bindings(
             planner,

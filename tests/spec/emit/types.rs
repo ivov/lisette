@@ -2288,6 +2288,19 @@ fn test(t: Ticks) -> Receiver<int> {
 }
 
 #[test]
+fn newtype_over_type_named_like_func_keyword() {
+    let input = r#"
+struct funcRegistry { pub n: int }
+struct Holder(funcRegistry)
+
+fn test(h: Holder) -> int {
+  h.0.n
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn newtype_field_autofill_casts() {
     let input = r#"
 struct GameModeParam(string)

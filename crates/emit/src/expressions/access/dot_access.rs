@@ -302,7 +302,7 @@ impl Planner<'_> {
         } else {
             expression_string.to_string()
         };
-        Some(if conversion_needs_parens(&go_type) {
+        Some(if conversion_needs_parens(&go_type, &field_ty) {
             format!("({})({})", go_type, operand)
         } else {
             format!("{}({})", go_type, operand)

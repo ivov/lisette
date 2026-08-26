@@ -10,8 +10,13 @@ use syntax::program::DefinitionBody;
 use syntax::types::{CompoundKind, FunctionParameter, SimpleKind, Type};
 
 /// Whether a conversion to this Go type misparses without parentheses.
-pub(crate) fn conversion_needs_parens(go_type: &str) -> bool {
-    go_type.starts_with('*') || go_type.starts_with("<-") || go_type.starts_with("func")
+pub(crate) fn conversion_needs_parens(go_type: &str, underlying: &Type) -> bool {
+    go_type.starts_with('*') || go_type.starts_with("<-") || is_function_type(underlying)
+}
+
+fn is_function_type(ty: &Type) -> bool {
+    matches!(ty, Type::Function(_))
+        || matches!(ty, Type::Forall { body, .. } if matches!(body.as_ref(), Type::Function(_)))
 }
 
 #[derive(Debug, Clone, Default)]
