@@ -43,6 +43,18 @@ impl InferCtx<'_> {
         if peeled.is_ref() { peeled } else { ty }
     }
 
+    pub(super) fn unify_member_expectation(
+        &mut self,
+        args: &DotAccessResolutionArgs<'_>,
+        method_ty: &Type,
+    ) {
+        if !self.is_callee_context() && NativeTypeKind::from_type(args.expression_ty).is_some() {
+            self.unify(args.expected_ty, &Type::Error, args.span);
+        } else {
+            self.unify(args.expected_ty, method_ty, args.span);
+        }
+    }
+
     pub(super) fn infer_dot_access(
         &mut self,
         expression: Box<Expression>,
@@ -111,6 +123,10 @@ impl InferCtx<'_> {
                     diagnostics::infer::NativeMethodForm::Instance,
                     span,
                 ));
+                if let Type::Var { id, .. } = expected_ty {
+                    self.env.bind(*id, Type::Error);
+                }
+                return args.build_dot_access(Type::Error, DotAccessResolution::Unresolved);
             }
             return expression;
         }

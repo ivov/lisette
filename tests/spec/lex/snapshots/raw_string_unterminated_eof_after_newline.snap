@@ -37,7 +37,6 @@ LexResult {
             ),
             note: None,
             code: "lex.unterminated_raw_string",
-            fix: None,
         },
     ],
     blank_lines: [],

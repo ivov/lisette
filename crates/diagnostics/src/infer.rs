@@ -343,6 +343,7 @@ pub fn name_not_found(
     span: Span,
     available_names: &[String],
     expected_ty: Option<&Type>,
+    qualified: Option<&str>,
     test_fn_name: Option<&str>,
 ) -> LisetteDiagnostic {
     if matches!(variable_name, "nil" | "null" | "Nil" | "undefined") {
@@ -358,6 +359,13 @@ pub fn name_not_found(
             .with_resolve_code("name_not_found")
             .with_span_label(&span, "not a Lisette builtin")
             .with_help(hint);
+    }
+
+    if let Some(qualified) = qualified {
+        return LisetteDiagnostic::error("Name not found")
+            .with_resolve_code("name_not_found")
+            .with_span_label(&span, "not declared or imported")
+            .with_help(format!("Did you mean `{qualified}`?"));
     }
 
     let suggestion = available_names
@@ -453,13 +461,14 @@ pub fn receiver_type_mismatch(
         .with_span_label(
             &span,
             format!(
-                "expected `{}` or `Ref<{}>`, found `{}`",
-                impl_type, impl_type, receiver_type
+                "expected `{}`, `Ref<{}>`, or `mut Ref<{}>`, found `{}`",
+                impl_type, impl_type, impl_type, receiver_type
             ),
         )
         .with_help(format!(
-            "Change the receiver type to `{}` or `Ref<{}>`",
-            impl_type, impl_type
+            "Change the receiver type to `{}` for a copy, `Ref<{}>` to point at it, \
+             or `mut Ref<{}>` to write through it",
+            impl_type, impl_type, impl_type
         ))
 }
 
