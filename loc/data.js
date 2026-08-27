@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787861561546,
+  "lastUpdate": 1787865556109,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -27874,6 +27874,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "syntax",
             "value": 14918,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13566,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8380,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6029,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2902,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1850,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 736,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9402,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c69dd6420b514193024deade705e50ca184e6b5d",
+          "message": "chore: enforce max nesting depth lint (#1336)",
+          "timestamp": "2026-08-27T23:18:46+02:00",
+          "tree_id": "ed2b979a293d182647cbc9f3f6041cd045063b1d",
+          "url": "https://github.com/ivov/lisette/commit/c69dd6420b514193024deade705e50ca184e6b5d"
+        },
+        "date": 1787865554750,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 136864,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32043,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27561,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18644,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14832,
             "unit": "lines"
           },
           {
