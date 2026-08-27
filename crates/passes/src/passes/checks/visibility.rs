@@ -57,19 +57,17 @@ pub(crate) fn run_package(package_id: &str, store: &Store, sink: &LocalSink) {
             let name = key.last_segment();
             for method_name in methods.keys() {
                 for (interface_name, interface_methods) in &non_pub_interfaces {
-                    if interface_methods.contains(method_name.as_str()) {
-                        let method_is_pub = methods
+                    if interface_methods.contains(method_name.as_str())
+                        && methods
                             .get(method_name)
-                            .is_some_and(|method| method.visibility.is_public());
-
-                        if method_is_pub {
-                            sink.push(diagnostics::infer::non_pub_interface_with_pub_impl(
-                                interface_name,
-                                name,
-                                *name_span,
-                            ));
-                            return;
-                        }
+                            .is_some_and(|method| method.visibility.is_public())
+                    {
+                        sink.push(diagnostics::infer::non_pub_interface_with_pub_impl(
+                            interface_name,
+                            name,
+                            *name_span,
+                        ));
+                        return;
                     }
                 }
             }

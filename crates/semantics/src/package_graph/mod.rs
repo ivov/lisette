@@ -376,31 +376,7 @@ impl<'a> GraphBuilder<'a> {
 
                 if !package_exists {
                     if let Some(span) = self.import_spans.get(package_id) {
-                        let is_go_stdlib =
-                            stdlib::get_go_stdlib_typedef(package_id, self.locator.target())
-                                .is_some();
-
-                        let src_prefix_hint = package_id
-                            .strip_prefix("src/")
-                            .filter(|stripped| {
-                                self.loader
-                                    .is_some_and(|fs| !fs.scan_folder(stripped).is_empty())
-                            })
-                            .map(String::from);
-
-                        let reason = if let Some(stripped) = src_prefix_hint {
-                            diagnostics::package_graph::MissingPackageReason::UnnecessarySrcPrefix(
-                                stripped,
-                            )
-                        } else if is_go_stdlib {
-                            diagnostics::package_graph::MissingPackageReason::GoStandardLibrary
-                        } else if let Some(unit) = self.scope.script_unit() {
-                            diagnostics::package_graph::MissingPackageReason::Script {
-                                inside_project: unit.inside_project,
-                            }
-                        } else {
-                            diagnostics::package_graph::MissingPackageReason::NotFound
-                        };
+                        let reason = self.missing_package_reason(package_id);
                         self.sink
                             .push(diagnostics::package_graph::package_not_found(
                                 package_id, *span, reason,
@@ -422,6 +398,34 @@ impl<'a> GraphBuilder<'a> {
 
                 self.dependencies.insert(package_id.clone(), imports);
             }
+        }
+    }
+
+    fn missing_package_reason(
+        &self,
+        package_id: &PackageId,
+    ) -> diagnostics::package_graph::MissingPackageReason {
+        let is_go_stdlib =
+            stdlib::get_go_stdlib_typedef(package_id, self.locator.target()).is_some();
+
+        let src_prefix_hint = package_id
+            .strip_prefix("src/")
+            .filter(|stripped| {
+                self.loader
+                    .is_some_and(|fs| !fs.scan_folder(stripped).is_empty())
+            })
+            .map(String::from);
+
+        if let Some(stripped) = src_prefix_hint {
+            diagnostics::package_graph::MissingPackageReason::UnnecessarySrcPrefix(stripped)
+        } else if is_go_stdlib {
+            diagnostics::package_graph::MissingPackageReason::GoStandardLibrary
+        } else if let Some(unit) = self.scope.script_unit() {
+            diagnostics::package_graph::MissingPackageReason::Script {
+                inside_project: unit.inside_project,
+            }
+        } else {
+            diagnostics::package_graph::MissingPackageReason::NotFound
         }
     }
 

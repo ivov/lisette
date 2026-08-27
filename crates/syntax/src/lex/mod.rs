@@ -919,18 +919,9 @@ impl<'source> Lexer<'source> {
                     if self.current_offset >= end || self.current_byte() == b'\n' {
                         break;
                     }
-                    if self.current_byte() == b'"' {
-                        let mut closer_matches = true;
-                        for i in 1..=hash_count {
-                            if self.peek_byte_at(i) != b'#' {
-                                closer_matches = false;
-                                break;
-                            }
-                        }
-                        if closer_matches {
-                            self.skip(1 + hash_count);
-                            break;
-                        }
+                    if self.at_hash_delimited_terminator(hash_count) {
+                        self.skip(1 + hash_count);
+                        break;
                     }
                     self.next();
                 }
@@ -941,6 +932,25 @@ impl<'source> Lexer<'source> {
         }
 
         false
+    }
+
+    fn at_hash_delimited_terminator(&self, hash_count: usize) -> bool {
+        self.current_byte() == b'"' && (1..=hash_count).all(|i| self.peek_byte_at(i) == b'#')
+    }
+
+    fn skip_past_quoted_string(&mut self) {
+        while !self.at_eof() && self.current_byte() != b'"' {
+            if self.current_byte() == b'\\' {
+                self.next();
+                if self.at_eof() {
+                    break;
+                }
+            }
+            self.next();
+        }
+        if !self.at_eof() {
+            self.next();
+        }
     }
 
     fn push_format_string_text_if_needed(
@@ -1121,18 +1131,7 @@ impl<'source> Lexer<'source> {
                 }
                 b'"' => {
                     self.next();
-                    while !self.at_eof() && self.current_byte() != b'"' {
-                        if self.current_byte() == b'\\' {
-                            self.next();
-                            if self.at_eof() {
-                                break;
-                            }
-                        }
-                        self.next();
-                    }
-                    if !self.at_eof() {
-                        self.next();
-                    }
+                    self.skip_past_quoted_string();
                 }
                 b'{' => {
                     depth += 1;

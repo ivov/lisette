@@ -2020,9 +2020,7 @@ impl Expression {
                         } => {
                             c.push(receive_expression.as_ref());
                             for ma in match_arms {
-                                if let Some(guard) = &ma.guard {
-                                    c.push(guard);
-                                }
+                                c.extend(ma.guard.as_deref());
                                 c.push(&ma.expression);
                             }
                         }

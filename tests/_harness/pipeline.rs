@@ -184,14 +184,7 @@ impl CompiledTest {
                 if has_hoisted {
                     typed_ast = typed_ast
                         .into_iter()
-                        .filter_map(|expr| {
-                            if let Expression::Function { ref name, .. } = expr
-                                && name == TEST_WRAPPER_NAME
-                            {
-                                return unwrap_test_wrapper(expr);
-                            }
-                            None
-                        })
+                        .filter_map(unwrap_hoisted_test_wrapper)
                         .collect();
                 } else {
                     typed_ast = typed_ast
@@ -266,6 +259,15 @@ pub struct InferenceResult {
     pub equality_index: EqualityIndex,
     pub go_package_names: HashMap<String, String>,
     pub go_package_ids: HashSet<String>,
+}
+
+fn unwrap_hoisted_test_wrapper(expression: Expression) -> Option<Expression> {
+    if let Expression::Function { ref name, .. } = expression
+        && name == TEST_WRAPPER_NAME
+    {
+        return unwrap_test_wrapper(expression);
+    }
+    None
 }
 
 fn unwrap_test_wrapper(expression: Expression) -> Option<Expression> {
