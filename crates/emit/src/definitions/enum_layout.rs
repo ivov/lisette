@@ -156,11 +156,7 @@ impl EnumLayout {
             for (i, variant) in self.variants.iter().enumerate() {
                 if let Some(doc) = &variant.doc {
                     for line in doc.lines() {
-                        if line.is_empty() {
-                            output.push("//".to_string());
-                        } else {
-                            output.push(format!("// {}", line));
-                        }
+                        output.push(comment_line(line));
                     }
                 }
 
@@ -513,6 +509,14 @@ impl UnmarshalNames {
             v: fresh("v"),
             arr: fresh("arr"),
         }
+    }
+}
+
+fn comment_line(line: &str) -> String {
+    if line.is_empty() {
+        "//".to_string()
+    } else {
+        format!("// {}", line)
     }
 }
 

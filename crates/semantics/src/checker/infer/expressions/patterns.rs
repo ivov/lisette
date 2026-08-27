@@ -873,19 +873,12 @@ impl InferCtx<'_> {
                         let missing_in_first: Vec<&str> =
                             alt_names.difference(&first_names).copied().collect();
 
-                        let error_span = if let Some(name) = missing_in_alt.first() {
-                            first_bindings
-                                .iter()
-                                .find(|(n, _)| n == *name)
-                                .map(|(_, s)| *s)
-                        } else if let Some(name) = missing_in_first.first() {
-                            alt_bindings
-                                .iter()
-                                .find(|(n, _)| n == *name)
-                                .map(|(_, s)| *s)
-                        } else {
-                            None
-                        };
+                        let error_span = or_pattern_error_span(
+                            &first_bindings,
+                            &alt_bindings,
+                            &missing_in_alt,
+                            &missing_in_first,
+                        );
 
                         this.sink
                             .push(diagnostics::infer::or_pattern_binding_mismatch(
@@ -895,21 +888,7 @@ impl InferCtx<'_> {
                             ));
                         this.facts.or_pattern_error_spans.insert(span);
                     } else {
-                        for (name, alt_span) in &alt_bindings {
-                            if let Some(first_ty) = first_binding_types.get(name)
-                                && let Some(alt_ty) = this.scopes.lookup_value(name)
-                            {
-                                let first_resolved = first_ty.resolve_in(&this.env);
-                                let alt_resolved = alt_ty.resolve_in(&this.env);
-                                if first_resolved != alt_resolved {
-                                    this.sink.push(diagnostics::infer::or_pattern_type_mismatch(
-                                        *alt_span,
-                                        &first_resolved.to_string(),
-                                        &alt_resolved.to_string(),
-                                    ));
-                                }
-                            }
-                        }
+                        this.check_or_pattern_binding_types(&alt_bindings, &first_binding_types);
                     }
                     alt
                 })
@@ -920,6 +899,28 @@ impl InferCtx<'_> {
         Pattern::Or {
             patterns: inferred,
             span,
+        }
+    }
+
+    fn check_or_pattern_binding_types(
+        &mut self,
+        alt_bindings: &[(String, Span)],
+        first_binding_types: &HashMap<String, Type>,
+    ) {
+        for (name, alt_span) in alt_bindings {
+            if let Some(first_ty) = first_binding_types.get(name)
+                && let Some(alt_ty) = self.scopes.lookup_value(name)
+            {
+                let first_resolved = first_ty.resolve_in(&self.env);
+                let alt_resolved = alt_ty.resolve_in(&self.env);
+                if first_resolved != alt_resolved {
+                    self.sink.push(diagnostics::infer::or_pattern_type_mismatch(
+                        *alt_span,
+                        &first_resolved.to_string(),
+                        &alt_resolved.to_string(),
+                    ));
+                }
+            }
         }
     }
 
@@ -1156,6 +1157,27 @@ impl InferCtx<'_> {
             ty: pattern_ty,
             span: *span,
         })
+    }
+}
+
+fn or_pattern_error_span(
+    first_bindings: &[(String, Span)],
+    alt_bindings: &[(String, Span)],
+    missing_in_alt: &[&str],
+    missing_in_first: &[&str],
+) -> Option<Span> {
+    if let Some(name) = missing_in_alt.first() {
+        first_bindings
+            .iter()
+            .find(|(n, _)| n == *name)
+            .map(|(_, s)| *s)
+    } else if let Some(name) = missing_in_first.first() {
+        alt_bindings
+            .iter()
+            .find(|(n, _)| n == *name)
+            .map(|(_, s)| *s)
+    } else {
+        None
     }
 }
 

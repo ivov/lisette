@@ -427,13 +427,10 @@ fn check_redundancy_with_guards(
                     "This alternative is unreachable because it is already covered by an earlier alternative in the same arm"
                         .to_string()
                 } else {
-                    let covering = unguarded_previous.iter().find_map(|(orig_idx, prev)| {
-                        if !is_useful(slice::from_ref(prev), current_row, unions) {
-                            Some((*orig_idx, prev))
-                        } else {
-                            None
-                        }
-                    });
+                    let covering = unguarded_previous
+                        .iter()
+                        .find(|(_, prev)| !is_useful(slice::from_ref(prev), current_row, unions))
+                        .map(|(orig_idx, prev)| (*orig_idx, prev));
 
                     if let Some((covering_index, covering_row)) = covering {
                         let covering_pattern = covering_row

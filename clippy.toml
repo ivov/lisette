@@ -1,3 +1,4 @@
 too-many-arguments-threshold = 6
+excessive-nesting-threshold = 6
 absolute-paths-max-segments = 2
 absolute-paths-allowed-crates = ["diagnostics"]
