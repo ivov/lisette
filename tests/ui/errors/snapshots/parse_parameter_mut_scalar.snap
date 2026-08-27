@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Syntax error
+   ╭─[test.lis:2:11]
+ 1 │ 
+ 2 │ fn shrink(mut n: int) -> int {
+   ·           ─┬─
+   ·            ╰── parameters are immutable
+ 3 │   n
+   ╰────
+  help: Rebind with `let mut` inside the body to mutate a local copy · code: [parse.syntax_error]

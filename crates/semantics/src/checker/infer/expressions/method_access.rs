@@ -90,7 +90,7 @@ impl InferCtx<'_> {
             args.span,
         );
 
-        self.unify(args.expected_ty, &method_ty, args.span);
+        self.unify_member_expectation(args, &method_ty);
 
         Some(args.build_dot_access(
             method_ty,
@@ -137,7 +137,7 @@ impl InferCtx<'_> {
                 .push(diagnostics::infer::private_method_expression(*args.span));
         }
 
-        self.unify(args.expected_ty, &method_ty, args.span);
+        self.unify_member_expectation(args, &method_ty);
         Some(args.build_dot_access(
             method_ty,
             DotAccessResolution::InstanceMethodValue {
@@ -289,7 +289,7 @@ impl InferCtx<'_> {
         let expression_stripped = args.expression_ty.resolve_in(&self.env).strip_refs();
         self.unify(&receiver_stripped, &expression_stripped, args.span);
 
-        self.unify(args.expected_ty, method_ty, args.span);
+        self.unify_member_expectation(args, method_ty);
 
         let is_pointer_receiver = matches!(method_ty, Type::Function(f) if !f.params.is_empty() && f.params[0].ty.resolve_in(&self.env).is_ref());
         Some(args.build_dot_access(
@@ -514,7 +514,7 @@ impl InferCtx<'_> {
 
         let (method_ty, _) = self.instantiate(&method_ty);
 
-        self.unify(args.expected_ty, &method_ty, args.span);
+        self.unify_member_expectation(args, &method_ty);
 
         let type_package = store.package_for_qualified_name(&id).unwrap_or(&id);
         let is_cross_package = type_package != self.cursor.package_id();

@@ -812,13 +812,59 @@ impl InferCtx<'_> {
             None
         };
 
+        let qualified = self.qualified_name_suggestion(variable_name, expected_ty);
         let test_fn_name = self.scopes.test_fn_name().map(str::to_string);
         self.sink.push(diagnostics::infer::name_not_found(
             variable_name,
             span,
             &available_names,
             hint_ty.as_ref(),
+            qualified.as_deref(),
             test_fn_name.as_deref(),
         ));
+    }
+
+    fn qualified_name_suggestion(&self, name: &str, expected_ty: &Type) -> Option<String> {
+        self.expected_enum_variant(name, expected_ty)
+            .or_else(|| self.receiver_field(name))
+    }
+
+    fn expected_enum_variant(&self, name: &str, expected_ty: &Type) -> Option<String> {
+        let declared = expected_ty.resolve_in(&self.env);
+        let peeled = self.store.peel_alias(&declared);
+        self.store.variant_of(peeled.get_qualified_id()?, name)?;
+        self.qualified_variant(&declared, name)
+            .or_else(|| self.qualified_variant(&peeled, name))
+    }
+
+    fn qualified_variant(&self, ty: &Type, name: &str) -> Option<String> {
+        let id = ty.get_qualified_id()?;
+        if matches!(
+            self.store.get_definition(id).map(|definition| &definition.body),
+            Some(DefinitionBody::TypeAlias { generics, .. }) if !generics.is_empty()
+        ) {
+            return None;
+        }
+        let local = ty.get_name()?;
+        let package = self.store.package_for_qualified_name(id)?;
+        if package == self.cursor.package_id() || self.imports.unprefixed_imports.contains(package)
+        {
+            return Some(format!("{local}.{name}"));
+        }
+        let (prefix, _) = self
+            .imports
+            .packages()
+            .find(|(_, package_id)| *package_id == package)?;
+        Some(format!("{prefix}.{local}.{name}"))
+    }
+
+    fn receiver_field(&self, name: &str) -> Option<String> {
+        let receiver = self.scopes.lookup_value("self")?.resolve_in(&self.env);
+        let receiver = self.store.peel_alias(&receiver.strip_refs());
+        let fields = self.store.fields_of(receiver.get_qualified_id()?)?;
+        fields
+            .iter()
+            .any(|field| field.name == name)
+            .then(|| format!("self.{name}"))
     }
 }

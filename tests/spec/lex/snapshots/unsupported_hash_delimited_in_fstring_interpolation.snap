@@ -53,7 +53,6 @@ LexResult {
             ),
             note: None,
             code: "lex.unsupported_hash_delimited_raw_string",
-            fix: None,
         },
     ],
     blank_lines: [],

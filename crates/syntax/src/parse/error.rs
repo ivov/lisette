@@ -1,19 +1,12 @@
 use crate::ast::Span;
 
 #[derive(Debug, Clone)]
-pub struct ParseFix {
-    pub message: String,
-    pub edits: Vec<(Span, String)>,
-}
-
-#[derive(Debug, Clone)]
 pub struct ParseError {
     pub message: String,
     pub labels: Vec<(Span, String)>,
     pub help: Option<String>,
     pub note: Option<String>,
     pub code: String,
-    pub fix: Option<ParseFix>,
 }
 
 impl ParseError {
@@ -24,13 +17,7 @@ impl ParseError {
             help: None,
             note: None,
             code: String::new(),
-            fix: None,
         }
-    }
-
-    pub(crate) fn with_fix(mut self, fix: ParseFix) -> Self {
-        self.fix = Some(fix);
-        self
     }
 
     pub(crate) fn with_span_label(mut self, span: Span, label: impl Into<String>) -> Self {

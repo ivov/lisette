@@ -47,23 +47,6 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     diagnostics
 }
 
-pub fn apply_parse_fixes(source: &str) -> String {
-    let result = syntax::build_ast(source, TEST_FILE_ID);
-    let errors_before = result.errors.len();
-    let diagnostics: Vec<LisetteDiagnostic> = result.errors.into_iter().map(Into::into).collect();
-    let fixes: Vec<&Fix> = diagnostics
-        .iter()
-        .filter_map(LisetteDiagnostic::fix)
-        .collect();
-    let fixed = apply_fixes(source, fixes).source;
-
-    let errors_after = syntax::build_ast(&fixed, TEST_FILE_ID).errors.len();
-    if errors_after >= errors_before {
-        panic!("Applied fixes must reduce the parse error count:\n{fixed}");
-    }
-    fixed
-}
-
 pub fn apply_infer_fixes(source: &str) -> String {
     let result = super::infer::infer(source);
     let fixes: Vec<&Fix> = result

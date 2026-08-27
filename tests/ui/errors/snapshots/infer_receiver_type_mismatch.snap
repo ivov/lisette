@@ -6,7 +6,7 @@ source: tests/ui/errors/mod.rs
  5 │ impl Counter {
  6 │   fn wrong(self: Point) -> int {
    ·                  ──┬──
-   ·                    ╰── expected `Counter` or `Ref<Counter>`, found `Point`
+   ·                    ╰── expected `Counter`, `Ref<Counter>`, or `mut Ref<Counter>`, found `Point`
  7 │     0
    ╰────
-  help: Change the receiver type to `Counter` or `Ref<Counter>` · code: [infer.receiver_type_mismatch]
+  help: Change the receiver type to `Counter` for a copy, `Ref<Counter>` to point at it, or `mut Ref<Counter>` to write through it · code: [infer.receiver_type_mismatch]

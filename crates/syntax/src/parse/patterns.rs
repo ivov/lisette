@@ -1,6 +1,5 @@
 use ecow::EcoString;
 
-use super::error::ParseFix;
 use super::strings::cook_string_contents;
 use super::{MAX_TUPLE_ARITY, ParamMode, ParseError, Parser};
 use crate::ast::{
@@ -9,7 +8,7 @@ use crate::ast::{
 };
 use crate::lex::Token;
 use crate::lex::TokenKind::*;
-use crate::types::Type;
+use crate::types::{CompoundKind, SimpleKind, Type};
 use std::string;
 
 impl<'source> Parser<'source> {
@@ -679,7 +678,7 @@ impl<'source> Parser<'source> {
             && identifier == "self"
             && self.is_not(Colon)
         {
-            self.reject_parameter_marker(marker_span, None);
+            self.reject_self_marker(marker_span);
             return Binding {
                 pattern,
                 annotation: None,
@@ -725,31 +724,39 @@ impl<'source> Parser<'source> {
         annotation: Option<&Annotation>,
     ) {
         let Some(span) = marker_span else { return };
-        let mut error = ParseError::new("Syntax error", span, "`mut` goes on the parameter's type")
+        let refuses_permission = match annotation {
+            Some(Annotation::Constructor { name, .. }) => match CompoundKind::from_name(name) {
+                Some(kind) => !kind.accepts_write_qualifier(),
+                None => SimpleKind::from_name(name).is_some() || name == "Array",
+            },
+            Some(Annotation::Tuple { .. } | Annotation::Function { .. }) => true,
+            _ => false,
+        };
+        let error = if refuses_permission {
+            ParseError::new("Syntax error", span, "parameters are immutable")
+                .with_parse_code("syntax_error")
+                .with_help("Rebind with `let mut` inside the body to mutate a local copy.")
+        } else {
+            ParseError::new("Syntax error", span, "`mut` goes on the parameter's type")
+                .with_parse_code("syntax_error")
+                .with_help(
+                    "Place the permission right before the type, as in `items: mut Slice<int>`, \
+                     or rebind with `let mut` inside the body for a local copy.",
+                )
+        };
+        if !self.too_many_errors() {
+            self.errors.push(error);
+        }
+    }
+
+    fn reject_self_marker(&mut self, marker_span: Option<Span>) {
+        let Some(span) = marker_span else { return };
+        let error = ParseError::new("Syntax error", span, "`mut` goes on the receiver's type")
             .with_parse_code("syntax_error")
             .with_help(
-                "Place the permission right before the type, as in `items: mut Slice<int>`, \
-                 or rebind with `let mut` inside the body for a local copy.",
+                "A writable receiver is `self: mut Ref<T>`, where `T` is the type \
+                 this `impl` targets.",
             );
-        if let Some(Annotation::Constructor {
-            name,
-            span: type_span,
-            writable: false,
-            ..
-        }) = annotation
-            && matches!(name.as_str(), "Slice" | "Map" | "Ref")
-        {
-            error = error.with_fix(ParseFix {
-                message: "Move `mut` into the type".to_string(),
-                edits: vec![
-                    (span, string::String::new()),
-                    (
-                        Span::new(self.file_id, type_span.byte_offset, 0),
-                        "mut ".to_string(),
-                    ),
-                ],
-            });
-        }
         if !self.too_many_errors() {
             self.errors.push(error);
         }

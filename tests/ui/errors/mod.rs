@@ -4,7 +4,6 @@ use crate::_harness::formatting::{
     format_diagnostic_for_snapshot, format_project_diagnostic_for_snapshot,
 };
 use crate::_harness::infer::{InferResult, checker_errors, infer, infer_package};
-use crate::_harness::lint::apply_parse_fixes;
 use crate::{
     assert_infer_error_snapshot, assert_lex_error_snapshot,
     assert_multipackage_infer_error_snapshot, assert_parse_error_snapshot,
@@ -945,18 +944,34 @@ fn sort(mut items: Slice<int>) {
 }
 
 #[test]
-fn parse_parameter_mut_fix_moves_marker_into_the_type() {
-    let fixed = apply_parse_fixes(
-        r#"
-fn sort(mut items: Slice<int>, keys: Slice<string>, m: Map<string, int>) {
-  items[0] = 1
+fn parse_parameter_mut_scalar() {
+    let input = r#"
+fn shrink(mut n: int) -> int {
+  n
 }
-"#,
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_parameter_mut_on_a_type_that_refuses_permission() {
+    let result = syntax::build_ast(
+        "fn a(mut value: Array<int, 3>) -> int { value[0] }\n\
+         fn b(mut c: Channel<int>) -> int { 1 }\n\
+         fn c(mut pair: (int, int)) -> int { pair.0 }\n\
+         fn d(mut callback: fn()) -> int { 1 }",
+        0,
     );
-    assert!(
-        fixed.contains("fn sort( items: mut Slice<int>, keys: Slice<string>, m: Map<string, int>)"),
-        "fix must move the marker into the type, leaving its whitespace behind: {fixed}"
-    );
+    let diagnostics: Vec<diagnostics::LisetteDiagnostic> =
+        result.errors.into_iter().map(Into::into).collect();
+    assert_eq!(diagnostics.len(), 4, "each marker must report once");
+    for diagnostic in &diagnostics {
+        let help = diagnostic.plain_help().unwrap_or_default();
+        assert!(
+            help.starts_with("Rebind with"),
+            "a type that refuses permission must not be told to move `mut`, got: {help:?}"
+        );
+    }
 }
 
 #[test]
@@ -971,46 +986,6 @@ impl Counter {
 }
 "#;
     assert_parse_error_snapshot!(input);
-}
-
-#[test]
-fn parse_parameter_mut_fix_preserves_trivia() {
-    let fixed = apply_parse_fixes("fn sort(mut\n  items: Slice<int>) {\n  items[0] = 1\n}");
-    assert!(
-        fixed.contains("fn sort(\n  items: mut Slice<int>)"),
-        "the fix must delete exactly the marker, leaving trivia intact: {fixed}"
-    );
-}
-
-#[test]
-fn parse_parameter_mut_fix_applies_next_to_an_unfixable_marker() {
-    let fixed = apply_parse_fixes(
-        r#"
-fn a(mut xs: Slice<int>) {
-  xs[0] = 0
-}
-
-fn b(mut y: int) -> int {
-  y
-}
-"#,
-    );
-    assert!(
-        fixed.contains("fn a( xs: mut Slice<int>)") && fixed.contains("fn b(mut y: int)"),
-        "the container fix must apply while the scalar keeps its error: {fixed}"
-    );
-}
-
-#[test]
-fn parse_parameter_mut_scalar_gets_no_fix() {
-    let result = syntax::build_ast("fn shrink(mut n: int) -> int {\n  n\n}", 0);
-    let diagnostics: Vec<diagnostics::LisetteDiagnostic> =
-        result.errors.into_iter().map(Into::into).collect();
-    assert!(!diagnostics.is_empty(), "the marker must still error");
-    assert!(
-        diagnostics.iter().all(|d| d.fix().is_none()),
-        "a scalar parameter must not be offered the type-position fix"
-    );
 }
 
 #[test]
@@ -6337,6 +6312,119 @@ fn undeclared_t_outside_a_test_keeps_the_generic_hint() {
 }
 
 #[test]
+fn infer_name_not_found_suggests_the_expected_enum_variant() {
+    let input = r#"
+enum TokenType {
+  EOF, Whitespace
+}
+
+fn next(chr: int) -> TokenType {
+  if chr < 0 {
+    return EOF
+  }
+  TokenType.Whitespace
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_name_not_found_qualifies_an_imported_enum_variant() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("events", "mod.lis", "pub enum Event {\n  Click, Scroll\n}");
+    fs.add_file(
+        "main",
+        "main.lis",
+        "import \"events\"\n\nfn pick(n: int) -> events.Event {\n  if n < 0 {\n    return Click\n  }\n  events.Event.Scroll\n}",
+    );
+    let result = infer_package("main", fs);
+    let diagnostic = result
+        .errors
+        .iter()
+        .find(|d| d.code_str() == Some("resolve.name_not_found"))
+        .expect("expected a name_not_found for `Click`");
+    let help = diagnostic.plain_help().unwrap_or_default();
+    assert!(
+        help.contains("`events.Event.Click`"),
+        "an imported enum must be suggested with its prefix, got: {help:?}"
+    );
+}
+
+#[test]
+fn infer_name_not_found_qualifies_an_aliased_enum_variant() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("events", "mod.lis", "pub enum Event {\n  Click, Scroll\n}");
+    fs.add_file(
+        "api",
+        "mod.lis",
+        "import \"events\"\n\npub type UIEvent = events.Event",
+    );
+    fs.add_file(
+        "main",
+        "main.lis",
+        "import \"api\"\n\nfn pick(n: int) -> api.UIEvent {\n  if n < 0 {\n    return Click\n  }\n  api.UIEvent.Scroll\n}",
+    );
+    let result = infer_package("main", fs);
+    let diagnostic = result
+        .errors
+        .iter()
+        .find(|d| d.code_str() == Some("resolve.name_not_found"))
+        .expect("expected a name_not_found for `Click`");
+    let help = diagnostic.plain_help().unwrap_or_default();
+    assert!(
+        help.contains("`api.UIEvent.Click`"),
+        "the alias the caller can name must be suggested, got: {help:?}"
+    );
+}
+
+#[test]
+fn infer_name_not_found_skips_a_generic_alias_qualifier() {
+    let result = infer(
+        r#"
+enum Event {
+  Click, Scroll
+}
+
+type Wrapped<T> = Event
+
+fn pick(n: int) -> Wrapped<int> {
+  if n < 0 {
+    return Click
+  }
+  Event.Scroll
+}
+"#,
+    );
+    let diagnostic = result
+        .errors
+        .iter()
+        .find(|d| d.code_str() == Some("resolve.name_not_found"))
+        .expect("expected a name_not_found for `Click`");
+    let help = diagnostic.plain_help().unwrap_or_default();
+    assert!(
+        help.contains("`Event.Click`"),
+        "a generic alias is not a legal qualifier, got: {help:?}"
+    );
+}
+
+#[test]
+fn infer_name_not_found_suggests_the_receiver_field() {
+    let input = r#"
+struct Location {
+  line: int,
+  column: int
+}
+
+impl Location {
+  fn describe(self) -> int {
+    line + column
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn undeclared_handle_in_subtest_suppresses_tail_cascade() {
     let fs = test_attribute_fs(
         "pub fn add(a: int, b: int) -> int { a + b }",
@@ -11446,6 +11534,32 @@ fn main() {
 }
 "#;
     assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_native_method_value_reports_once_per_use() {
+    let result = infer(
+        r#"
+fn take(n: int) -> int { n }
+
+fn main() {
+  let a = 1 + "hi".length
+  let b = take("hi".length)
+  let c = if "hi".length == 1 { 1 } else { 2 }
+  let _ = (a, b, c)
+}
+"#,
+    );
+    let codes: Vec<&str> = result.errors.iter().filter_map(|d| d.code_str()).collect();
+    assert_eq!(
+        codes,
+        vec![
+            "infer.native_method_value",
+            "infer.native_method_value",
+            "infer.native_method_value"
+        ],
+        "each use must report once, got: {codes:?}"
+    );
 }
 
 #[test]
