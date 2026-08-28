@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct Ticks(Receiver<int>)
+  
+  fn test(t: Ticks) -> Receiver<int> {
+    t.0
+  }
+---
+package main
+
+type Ticks <-chan int
+
+func test(t Ticks) <-chan int {
+	return (<-chan int)(t)
+}

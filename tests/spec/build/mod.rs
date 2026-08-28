@@ -8785,6 +8785,32 @@ fn assert_lowers_to_decomposed_failure_call() {
     );
 }
 
+#[test]
+fn debug_newtype_over_func_leaves_prelude_unimported() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.lis",
+        "struct Cb(fn(int) -> ())\n\nfn main() {\n  let _ = Cb(|n| { let _ = n })\n}",
+    );
+    fs.add_file(
+        ENTRY_PACKAGE_ID,
+        "main.test.lis",
+        "#[test]\nfn covers() {\n  let n = 1\n  assert n == 1\n}",
+    );
+
+    let go = compile_project_files_with_tests(fs, "github.com/user/p", false, true)
+        .iter()
+        .find(|f| f.name.ends_with("main.go"))
+        .expect("expected a main.go output")
+        .to_go();
+
+    assert!(
+        !go.contains("lisette"),
+        "a func newtype debug method must leave the prelude unimported, got:\n{go}"
+    );
+}
+
 fn compile_test_source(source: &str) -> String {
     let mut fs = MockFileSystem::new();
     fs.add_file(

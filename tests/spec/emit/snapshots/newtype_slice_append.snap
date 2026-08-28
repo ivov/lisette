@@ -15,5 +15,5 @@ type Wrap []int
 
 func main() {
 	w := Wrap([]int{1})
-	w = Wrap(append([]int(w), 2))
+	w = Wrap(append(([]int)(w), 2))
 }

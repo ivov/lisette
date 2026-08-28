@@ -13,6 +13,7 @@ use crate::Planner;
 use crate::names::packages::PackageRequirements;
 use crate::names::{generics, go_name};
 use crate::patterns::binding_decls::emit_pattern_literal;
+use crate::types::go_type::render_conversion;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum PathSegment {
@@ -106,7 +107,7 @@ impl AccessPath {
                 PathSegment::Index(index) => result = format!("{}[{}]", result, index),
                 PathSegment::SliceFrom(offset) => result = format!("{}[{}:]", result, offset),
                 PathSegment::ArraySliceFrom { offset, go_type } => {
-                    result = format!("{}({}[{}:])", go_type, result, offset)
+                    result = render_conversion(go_type, &format!("{}[{}:]", result, offset))
                 }
                 PathSegment::Deref => {
                     if i == last {
@@ -115,13 +116,7 @@ impl AccessPath {
                         result = format!("(*{})", result);
                     }
                 }
-                PathSegment::NewtypeCast(ty) => {
-                    result = if ty.starts_with('*') {
-                        format!("({})({})", ty, result)
-                    } else {
-                        format!("{}({})", ty, result)
-                    }
-                }
+                PathSegment::NewtypeCast(go_type) => result = render_conversion(go_type, &result),
                 PathSegment::AssertedAs(ty) => {
                     result = format!("{}.({})", result, ty);
                 }

@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct funcRegistry { pub n: int }
+  struct Holder(funcRegistry)
+  
+  fn test(h: Holder) -> int {
+    h.0.n
+  }
+---
+package main
+
+type funcRegistry struct {
+	N int
+}
+
+type Holder funcRegistry
+
+func test(h Holder) int {
+	return funcRegistry(h).N
+}

@@ -9,5 +9,5 @@ description: |
 package main
 
 func test() []byte {
-	return []byte("hello")
+	return ([]byte)("hello")
 }

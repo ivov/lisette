@@ -10,6 +10,6 @@ description: |
 package main
 
 func f(arr [3]int) [2]int {
-	rest := [2]int(arr[1:])
+	rest := ([2]int)(arr[1:])
 	return rest
 }

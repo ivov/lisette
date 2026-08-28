@@ -3,6 +3,7 @@ use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_MET
 use crate::definitions::tags::{format_tag_string, interpret_field_attributes};
 use crate::expressions::top_items::emit_doc;
 use crate::names::go_name::{self, prelude_qualifier};
+use crate::types::go_type::render_conversion;
 use crate::utils::{synthesized_local_name, synthesized_receiver_name};
 use rustc_hash::FxHashSet;
 use syntax::ast::{Attribute, Generic, StructFieldDefinition, StructFields};
@@ -376,13 +377,7 @@ impl Planner<'_> {
         if !self.synthesizes_debug_string(name) {
             return;
         }
-        let uses_prelude = if field_is_function.is_empty() {
-            false
-        } else if underlying.is_some() {
-            true
-        } else {
-            field_is_function.iter().any(|is_function| !is_function)
-        };
+        let uses_prelude = field_is_function.iter().any(|is_function| !is_function);
         if !field_is_function.is_empty() {
             self.require_fmt();
         }
@@ -576,13 +571,6 @@ impl<'a> StringFormat<'a> {
         }
     }
 
-    fn tuple_verb(self, is_function: bool) -> &'static str {
-        match self {
-            StringFormat::Display { .. } => "%v",
-            StringFormat::Debug { .. } => self.verb(is_function),
-        }
-    }
-
     pub(crate) fn argument(self, value: String, is_function: bool) -> String {
         match (self, is_function) {
             (StringFormat::Display { .. }, _) | (StringFormat::Debug { .. }, true) => value,
@@ -706,15 +694,16 @@ fn emit_tuple_struct_format_method(
         );
     }
     if let Some(underlying) = underlying_go_type {
-        let value = format.argument(format!("{underlying}({receiver})"), false);
+        let is_function = field_is_function[0];
+        let value = format.argument(render_conversion(underlying, &receiver), is_function);
         return format!(
             "func ({receiver} {receiver_type}) {method}() string {{\nreturn fmt.Sprintf(\"{name}({})\", {value})\n}}",
-            format.tuple_verb(false)
+            format.verb(is_function)
         );
     }
     let placeholders: Vec<&str> = field_is_function
         .iter()
-        .map(|is_function| format.tuple_verb(*is_function))
+        .map(|is_function| format.verb(*is_function))
         .collect();
     let args: Vec<String> = field_is_function
         .iter()

@@ -9,6 +9,17 @@ use syntax::ast::ResolvedCallTypeArguments;
 use syntax::program::DefinitionBody;
 use syntax::types::{CompoundKind, FunctionParameter, SimpleKind, Type};
 
+pub(crate) fn render_conversion(go_type: &str, value: &str) -> String {
+    let is_plain_name = go_type
+        .chars()
+        .all(|character| character.is_alphanumeric() || character == '_' || character == '.');
+    if is_plain_name {
+        format!("{}({})", go_type, value)
+    } else {
+        format!("({})({})", go_type, value)
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub(crate) struct GoType {
     pub(crate) code: String,

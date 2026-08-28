@@ -2,6 +2,7 @@ use crate::Planner;
 use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
+use crate::types::go_type::render_conversion;
 use std::fmt::{self, Display, Formatter};
 use syntax::ast::Expression;
 
@@ -111,7 +112,7 @@ impl GoExpression {
     }
 
     pub(crate) fn conversion(go_type: String, value: GoExpression) -> Self {
-        Self::opaque_with_deferred_evaluation(format!("{go_type}({value})"), true)
+        Self::opaque_with_deferred_evaluation(render_conversion(&go_type, value.as_str()), true)
     }
 
     fn parenthesized(value: GoExpression) -> Self {

@@ -553,6 +553,34 @@ fn test(w: Wrap) -> int {
 }
 
 #[test]
+fn newtype_over_result_less_func_pattern_match() {
+    let input = r#"
+struct Cb(fn(int) -> ())
+
+fn test(c: Cb) {
+  match c {
+    Cb(f) => f(1),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn newtype_over_receive_only_channel_pattern_match() {
+    let input = r#"
+struct Ticks(Receiver<int>)
+
+fn test(t: Ticks) -> Receiver<int> {
+  match t {
+    Ticks(r) => r,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn pattern_unicode_escape_conversion() {
     let input = r#"
 fn test(s: string) -> int {

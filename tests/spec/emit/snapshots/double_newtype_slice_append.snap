@@ -18,5 +18,5 @@ type B A
 
 func main() {
 	w := B(A([]int{}))
-	w = B(A(append([]int(A(w)), 1)))
+	w = B(A(append(([]int)(A(w)), 1)))
 }

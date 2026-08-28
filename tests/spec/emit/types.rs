@@ -2252,6 +2252,64 @@ fn test(id: UserId) -> int {
 }
 
 #[test]
+fn newtype_over_result_less_func_field_access() {
+    let input = r#"
+struct Cb(fn(int) -> ())
+
+fn test(cb: Cb) {
+  cb.0(1)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn newtype_over_func_with_result_field_access() {
+    let input = r#"
+struct Mapper(fn(int) -> int)
+
+fn test(m: Mapper) -> int {
+  m.0(21)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn newtype_over_receive_only_channel_field_access() {
+    let input = r#"
+struct Ticks(Receiver<int>)
+
+fn test(t: Ticks) -> Receiver<int> {
+  t.0
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn display_newtype_over_func_parenthesizes() {
+    let input = r#"
+#[display]
+struct Cb(fn(int) -> ())
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn newtype_over_type_named_like_func_keyword() {
+    let input = r#"
+struct funcRegistry { pub n: int }
+struct Holder(funcRegistry)
+
+fn test(h: Holder) -> int {
+  h.0.n
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn newtype_field_autofill_casts() {
     let input = r#"
 struct GameModeParam(string)

@@ -7,6 +7,7 @@ use crate::Renderer;
 use crate::definitions::interface_adapter::AdapterPlan;
 use crate::names::go_name;
 use crate::plan::bodies::{LoopKind, LoopPlan, LoweredBlock, LoweredStatement};
+use crate::types::go_type::render_conversion;
 
 use super::callable::AbiTransition;
 use super::layout::{FunctionLayout, ValueLayout};
@@ -139,7 +140,7 @@ impl CoercionPlan {
             }
             Self::WrapNewtype { ty } => {
                 let type_name = planner.use_go_type(&ty);
-                format!("{}({})", type_name, value)
+                render_conversion(&type_name, &value)
             }
             Self::Layout(bridge) => planner.plan_layout_bridge(&mut statements, &value, &bridge),
             Self::RebuildArray {

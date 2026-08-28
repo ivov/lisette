@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  #[display]
+  struct Cb(fn(int) -> ())
+---
+package main
+
+import "fmt"
+
+type Cb func(int)
+
+func (c Cb) String() string {
+	return fmt.Sprintf("Cb(%p)", (func(int))(c))
+}
+
+func (c Cb) toString() string {
+	return c.String()
+}

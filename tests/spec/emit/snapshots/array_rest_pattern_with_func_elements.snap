@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/arrays.rs
+description: |
+  
+  fn f(arr: Array<fn(int) -> (), 3>) -> Array<fn(int) -> (), 2> {
+    let [_first, ..rest] = arr
+    rest
+  }
+---
+package main
+
+func f(arr [3]func(int)) [2]func(int) {
+	rest := ([2]func(int))(arr[1:])
+	return rest
+}

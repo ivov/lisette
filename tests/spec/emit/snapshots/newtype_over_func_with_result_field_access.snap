@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  struct Mapper(fn(int) -> int)
+  
+  fn test(m: Mapper) -> int {
+    m.0(21)
+  }
+---
+package main
+
+type Mapper func(int) int
+
+func test(m Mapper) int {
+	return (func(int) int)(m)(21)
+}

@@ -10,6 +10,6 @@ description: |
 package main
 
 func test() string {
-	bytes := []byte("hello")
+	bytes := ([]byte)("hello")
 	return string(bytes)
 }
