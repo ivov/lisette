@@ -124,7 +124,7 @@ pub fn test(path: Option<String>, go_flags: Vec<String>, selection: TestSelectio
             cli_error!(
                 "Tests could not run",
                 build_error.to_string(),
-                "The generated Go failed to build; run `lis check`"
+                "Review the Go compiler output above"
             );
         } else if !matches!(selection, TestSelection::Filter(_)) && !nothing_executed(&report.rows)
         {

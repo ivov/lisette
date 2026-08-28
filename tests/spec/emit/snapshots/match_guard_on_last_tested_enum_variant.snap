@@ -1,0 +1,57 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  enum Shape { Circle(int), Square(int), Tri(int) }
+  
+  fn test(s: Shape) -> int {
+    match s {
+      Circle(r) => r,
+      Square(w) => w,
+      Tri(h) if h > 10 => h * 2,
+      Tri(h) => h,
+    }
+  }
+---
+package main
+
+func MakeShapeCircle(arg0 int) Shape {
+	return Shape{Tag: ShapeCircle, Circle: arg0}
+}
+
+func MakeShapeSquare(arg0 int) Shape {
+	return Shape{Tag: ShapeSquare, Square: arg0}
+}
+
+func MakeShapeTri(arg0 int) Shape {
+	return Shape{Tag: ShapeTri, Tri: arg0}
+}
+
+type ShapeTag int
+
+const (
+	ShapeCircle ShapeTag = iota
+	ShapeSquare
+	ShapeTri
+)
+
+type Shape struct {
+	Tag    ShapeTag
+	Circle int
+	Square int
+	Tri    int
+}
+
+func test(s Shape) int {
+	if s.Tag == ShapeCircle {
+		return s.Circle
+	}
+	if s.Tag == ShapeSquare {
+		return s.Square
+	}
+	h := s.Tri
+	if h > 10 {
+		return h * 2
+	}
+	return h
+}

@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  fn test(r: Result<int, string>, flag: bool) -> int {
+    match r {
+      Ok(_) => 1,
+      Err(_) if flag => 2,
+      Err(_) => 3,
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(r lisette.Result[int, string], flag bool) int {
+	if r.Tag == lisette.ResultOk {
+		return 1
+	}
+	if flag {
+		return 2
+	}
+	return 3
+}
