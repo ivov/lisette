@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Immutable receiver
+   ╭─[test.lis:6:5]
+ 5 │   fn set(self, v: T) {
+ 6 │     self.value = v;
+   ·     ───────┬──────
+   ·            ╰── receiver is immutable
+ 7 │   }
+   ╰────
+  help: Use `self: mut Ref<Box<T>>` to make the receiver mutable · code: [infer.value_receiver_immutable]

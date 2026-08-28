@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                    ╰── invalid syntax
  6 │     self.count = n;
    ╰────
-  help: Lisette methods receive `self` by reference. Use `self` instead · code: [parse.syntax_error]
+  help: A writable receiver is `self: mut Ref<T>`, where `T` is the type this `impl` targets · code: [parse.syntax_error]

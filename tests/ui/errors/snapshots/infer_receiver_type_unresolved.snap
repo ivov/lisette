@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Type not found
+   ╭─[test.lis:5:17]
+ 4 │ impl Counter {
+ 5 │   fn bump(self: Nope) -> int {
+   ·                 ──┬─
+   ·                   ╰── not declared or imported
+ 6 │     0
+   ╰────
+  help: Define or import this type · code: [resolve.type_not_found]

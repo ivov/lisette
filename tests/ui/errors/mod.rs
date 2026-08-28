@@ -4103,6 +4103,20 @@ impl Counter {
 }
 
 #[test]
+fn infer_value_receiver_not_mutable_generic() {
+    let input = r#"
+struct Box<T> { value: T }
+
+impl<T> Box<T> {
+  fn set(self, v: T) {
+    self.value = v;
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_receiver_not_named_self() {
     let input = r#"
 struct Counter { count: int }
@@ -4138,6 +4152,34 @@ struct Point { x: int, y: int }
 
 impl Counter {
   fn wrong(self: Point) -> int {
+    0
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_receiver_type_mismatch_generic() {
+    let input = r#"
+struct Box<T> { value: T }
+
+impl<T> Box<T> {
+  fn get(self: T) -> int {
+    0
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_receiver_type_unresolved() {
+    let input = r#"
+struct Counter { count: int }
+
+impl Counter {
+  fn bump(self: Nope) -> int {
     0
   }
 }

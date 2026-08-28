@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Type mismatch
+   ╭─[test.lis:5:16]
+ 4 │ impl<T> Box<T> {
+ 5 │   fn get(self: T) -> int {
+   ·                ┬
+   ·                ╰── expected `Box<T>`, `Ref<Box<T>>`, or `mut Ref<Box<T>>`, found `T`
+ 6 │     0
+   ╰────
+  help: Change the receiver type to `Box<T>` for a copy, `Ref<Box<T>>` to point at it, or `mut Ref<Box<T>>` to write through it · code: [infer.receiver_type_mismatch]
