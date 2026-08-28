@@ -83,8 +83,8 @@ impl<'source> Scanner<'source> {
         }
     }
 
-    fn skip_horizontal_whitespace(&mut self) {
-        while matches!(self.byte(), Some(b' ' | b'\t')) {
+    fn skip_whitespace_within_line(&mut self) {
+        while matches!(self.byte(), Some(byte) if byte.is_ascii_whitespace() && byte != b'\n') {
             self.offset += 1;
         }
     }
@@ -113,7 +113,7 @@ impl<'source> Scanner<'source> {
             None
         } else {
             let (text, span) = self.scan_identifier()?;
-            self.skip_horizontal_whitespace();
+            self.skip_whitespace_within_line();
             Some(match text {
                 "_" => ImportAlias::Blank(span),
                 _ => ImportAlias::Named(text.into(), span),
@@ -235,6 +235,10 @@ mod tests {
             "import _ \"go:fmt\"\nfn f() {}",
             "import alias \"go:fmt\"\nfn f() {}",
             "import alias\"go:fmt\"\nfn f() {}",
+            "import alias\t\"go:fmt\"\nfn f() {}",
+            "import alias\u{c}\"go:fmt\"\nfn f() {}",
+            "import alias\r\"go:fmt\"\nfn f() {}",
+            "import _\u{c}\"go:fmt\"\nfn f() {}",
             "import_alias \"go:fmt\"",
             "//! header\n//! more\n\nimport \"go:fmt\"\nfn f() {}",
             "// note\nimport \"go:fmt\"\n// between\nimport \"go:os\"\n\n/// docs\nfn f() {}",
@@ -286,6 +290,7 @@ mod tests {
             "import",
             "import alias",
             "import alias\n\"go:fmt\"",
+            "import alias\r\n\"go:fmt\"",
             "import \"unterminated",
             "import r\"go:fmt\"",
             "import f\"go:fmt\"",
