@@ -656,11 +656,14 @@ impl<'source> Parser<'source> {
                     next.byte_offset + next.byte_length - amp_token.byte_offset
                 };
                 let span = Span::new(self.file_id, amp_token.byte_offset, span_len);
-                self.track_error_at(
-                    span,
-                    "invalid syntax",
-                    "Lisette methods receive `self` by reference. Use `self` instead",
-                );
+                let help = if is_mut_self {
+                    "A writable receiver is `self: mut Ref<T>`, where `T` is the type \
+                     this `impl` targets."
+                } else {
+                    "A read-only receiver is `self: Ref<T>`, where `T` is the type \
+                     this `impl` targets. For a copy, use `self`."
+                };
+                self.track_error_at(span, "invalid syntax", help);
                 self.next();
                 if is_mut_self {
                     self.next();

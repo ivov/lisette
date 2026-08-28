@@ -41,17 +41,16 @@ fn check_method_receiver(method: &Expression, impl_ty: &Type, sink: &LocalSink) 
         ));
     }
 
-    if !types_match && identifier == "self" {
+    if !types_match && identifier == "self" && !receiver_ty.contains_error() {
         let annotation_span = first_param
             .annotation
             .as_ref()
             .map(|a| a.get_span())
             .unwrap_or(*span);
-        let impl_type_name = impl_ty.get_name().unwrap_or_default();
-        let receiver_type_name = receiver_ty.get_name().unwrap_or_default();
+        // `stringify` keeps the type arguments, which `get_name` drops.
         sink.push(diagnostics::infer::receiver_type_mismatch(
-            impl_type_name,
-            receiver_type_name,
+            &impl_ty.stringify(),
+            &receiver_ty.stringify(),
             annotation_span,
         ));
     }

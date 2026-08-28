@@ -830,7 +830,10 @@ pub fn disallowed_mutation(
             LisetteDiagnostic::error("Immutable receiver")
                 .with_infer_code("value_receiver_immutable")
                 .with_span_label(&span, "receiver is immutable")
-                .with_help("Use `self: mut Ref<Self>` to make the receiver mutable")
+                .with_help(
+                    "Use `self: mut Ref<T>` to make the receiver mutable, \
+                     where `T` is the type this `impl` targets",
+                )
         }
     } else if is_const_binding {
         LisetteDiagnostic::error("Cannot mutate `const`")

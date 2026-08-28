@@ -621,8 +621,11 @@ impl InferCtx<'_> {
             return;
         }
         let self_type_name = if var_name == "self" {
-            self.lookup_type(store, "self")
-                .and_then(|t| t.get_name().map(str::to_owned))
+            let target = self.scopes.impl_receiver_type().map(Type::stringify);
+            target.or_else(|| {
+                self.lookup_type(store, "self")
+                    .and_then(|t| t.get_name().map(str::to_owned))
+            })
         } else {
             None
         };
