@@ -18,6 +18,6 @@ func main() {
 	m := make(map[string]Wrap)
 	m["a"] = Wrap([]int{})
 	base_2 := m
-	recv_1 := []int(m["a"])
+	recv_1 := ([]int)(m["a"])
 	base_2["a"] = Wrap(append(recv_1[:len(recv_1):len(recv_1)], 1))
 }

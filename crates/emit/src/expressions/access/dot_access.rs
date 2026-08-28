@@ -12,7 +12,7 @@ use crate::context::expression::ExpressionContext;
 use crate::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::values::{EvaluationEffect, GoExpression, ValuePlan};
-use crate::types::go_type::conversion_needs_parens;
+use crate::types::go_type::render_conversion;
 
 struct NullableFieldAccess<'a> {
     expression_string: &'a str,
@@ -302,11 +302,7 @@ impl Planner<'_> {
         } else {
             expression_string.to_string()
         };
-        Some(if conversion_needs_parens(&go_type, &field_ty) {
-            format!("({})({})", go_type, operand)
-        } else {
-            format!("{}({})", go_type, operand)
-        })
+        Some(render_conversion(&go_type, &operand))
     }
 
     /// Compute whether a dot access context requires exported (capitalized) Go names.

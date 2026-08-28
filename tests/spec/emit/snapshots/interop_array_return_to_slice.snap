@@ -18,7 +18,7 @@ import (
 )
 
 func main() {
-	data := []byte("hi")
+	data := ([]byte)("hi")
 	arr_1 := sha256.Sum256(data)
 	bytes := slices.Clone(arr_1[:])
 	_ = bytes

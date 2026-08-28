@@ -3960,6 +3960,18 @@ fn main() {
 }
 
 #[test]
+fn cast_to_func_type_parenthesizes() {
+    let input = r#"
+type Handler = fn(int) -> ()
+
+fn test(h: Handler) -> fn(int) -> () {
+  h as fn(int) -> ()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn newtype_over_ref_pointer_cast() {
     let input = r#"
 struct Wrap(Ref<int>)

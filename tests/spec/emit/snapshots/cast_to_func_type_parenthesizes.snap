@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/expressions.rs
+description: |
+  
+  type Handler = fn(int) -> ()
+  
+  fn test(h: Handler) -> fn(int) -> () {
+    h as fn(int) -> ()
+  }
+---
+package main
+
+type Handler func(int)
+
+func test(h Handler) func(int) {
+	return (func(int))(h)
+}

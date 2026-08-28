@@ -14,7 +14,7 @@ type Widget struct {
 }
 
 func (w Widget) MarshalJSON() ([]uint8, error) {
-	return []uint8("\"custom\""), nil
+	return ([]uint8)("\"custom\""), nil
 }
 
 func main() {

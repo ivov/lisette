@@ -13,6 +13,6 @@ func f(arr [3]int) [2]int {
 	if arr[0] != 0 {
 		return [2]int{9, 9}
 	}
-	rest := [2]int(arr[1:])
+	rest := ([2]int)(arr[1:])
 	return rest
 }

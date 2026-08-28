@@ -9,14 +9,15 @@ use syntax::ast::ResolvedCallTypeArguments;
 use syntax::program::DefinitionBody;
 use syntax::types::{CompoundKind, FunctionParameter, SimpleKind, Type};
 
-/// Whether a conversion to this Go type misparses without parentheses.
-pub(crate) fn conversion_needs_parens(go_type: &str, underlying: &Type) -> bool {
-    go_type.starts_with('*') || go_type.starts_with("<-") || is_function_type(underlying)
-}
-
-fn is_function_type(ty: &Type) -> bool {
-    matches!(ty, Type::Function(_))
-        || matches!(ty, Type::Forall { body, .. } if matches!(body.as_ref(), Type::Function(_)))
+pub(crate) fn render_conversion(go_type: &str, value: &str) -> String {
+    let is_plain_name = go_type
+        .chars()
+        .all(|character| character.is_alphanumeric() || character == '_' || character == '.');
+    if is_plain_name {
+        format!("{}({})", go_type, value)
+    } else {
+        format!("({})({})", go_type, value)
+    }
 }
 
 #[derive(Debug, Clone, Default)]

@@ -26,7 +26,7 @@ func main() {
 		return
 	}
 	ref_3 := r
-	recv_2 := []int(*r)
+	recv_2 := ([]int)(*r)
 	*ref_3 = Wrap(append(recv_2[:len(recv_2):len(recv_2)], 2))
 	_ = w
 }

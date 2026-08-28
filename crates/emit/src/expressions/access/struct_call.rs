@@ -13,6 +13,7 @@ use crate::definitions::enum_layout;
 use crate::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
+use crate::types::go_type::render_conversion;
 use crate::utils::is_order_sensitive;
 use syntax::program::AliasKind;
 use syntax::types;
@@ -307,11 +308,11 @@ impl Planner<'_> {
             return Some(format!("{}{{}}", go_ty));
         }
         if underlying.is_slice() {
-            return Some(format!("{}(nil)", go_ty));
+            return Some(render_conversion(go_ty, "nil"));
         }
         matches!(underlying, Type::Simple(_)).then(|| {
             let inner = self.lisette_zero(&underlying);
-            format!("{}({})", go_ty, inner)
+            render_conversion(go_ty, &inner)
         })
     }
 
@@ -382,7 +383,8 @@ impl Planner<'_> {
                 ValueLayout::Slice { element, .. },
             ) => {
                 let element = element.go_type(self);
-                format!("([]{})(nil)", self.use_rendered_go_type(element))
+                let go_type = format!("[]{}", self.use_rendered_go_type(element));
+                render_conversion(&go_type, "nil")
             }
             (
                 Type::Compound {
@@ -439,7 +441,7 @@ impl Planner<'_> {
         if let Some(underlying) = self.get_newtype_underlying(ty) {
             let go_ty = self.use_go_type(ty);
             let inner = self.lisette_zero(&underlying);
-            return format!("{}({})", go_ty, inner);
+            return render_conversion(&go_ty, &inner);
         }
         if let Some(fields) = self.lookup_unspecified_fields(ty, "", None, &HashSet::default()) {
             let go_ty = self.use_go_type(ty);

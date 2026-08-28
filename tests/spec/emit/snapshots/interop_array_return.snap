@@ -15,7 +15,7 @@ package main
 import "crypto/sha256"
 
 func main() {
-	data := []byte("hi")
+	data := ([]byte)("hi")
 	hash := sha256.Sum256(data)
 	_ = hash
 }

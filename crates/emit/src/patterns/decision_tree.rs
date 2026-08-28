@@ -13,7 +13,7 @@ use crate::Planner;
 use crate::names::packages::PackageRequirements;
 use crate::names::{generics, go_name};
 use crate::patterns::binding_decls::emit_pattern_literal;
-use crate::types::go_type::conversion_needs_parens;
+use crate::types::go_type::render_conversion;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum PathSegment {
@@ -29,10 +29,7 @@ pub(crate) enum PathSegment {
     /// `(*expression)`: auto-pointer deref for recursive enum fields.
     Deref,
     /// `GoType(expression)`: newtype cast to underlying Go type.
-    NewtypeCast {
-        go_type: String,
-        needs_parens: bool,
-    },
+    NewtypeCast(String),
     /// `expression.(GoType)`: Go interface type assertion, inserted when a
     /// concrete pattern targets a Go interface at a non-root path.
     AssertedAs(String),
@@ -110,7 +107,7 @@ impl AccessPath {
                 PathSegment::Index(index) => result = format!("{}[{}]", result, index),
                 PathSegment::SliceFrom(offset) => result = format!("{}[{}:]", result, offset),
                 PathSegment::ArraySliceFrom { offset, go_type } => {
-                    result = format!("{}({}[{}:])", go_type, result, offset)
+                    result = render_conversion(go_type, &format!("{}[{}:]", result, offset))
                 }
                 PathSegment::Deref => {
                     if i == last {
@@ -119,16 +116,7 @@ impl AccessPath {
                         result = format!("(*{})", result);
                     }
                 }
-                PathSegment::NewtypeCast {
-                    go_type,
-                    needs_parens,
-                } => {
-                    result = if *needs_parens {
-                        format!("({})({})", go_type, result)
-                    } else {
-                        format!("{}({})", go_type, result)
-                    }
-                }
+                PathSegment::NewtypeCast(go_type) => result = render_conversion(go_type, &result),
                 PathSegment::AssertedAs(ty) => {
                     result = format!("{}.({})", result, ty);
                 }
@@ -154,7 +142,7 @@ impl AccessPath {
                 segment,
                 PathSegment::ArraySliceFrom { .. }
                     | PathSegment::Deref
-                    | PathSegment::NewtypeCast { .. }
+                    | PathSegment::NewtypeCast(_)
                     | PathSegment::AssertedAs(_)
             )
         })
@@ -1252,11 +1240,7 @@ fn collect_newtype_checks(
     };
     let go_underlying = planner.go_type(&underlying_ty);
     collector.packages.extend(go_underlying.requirements());
-    let needs_parens = conversion_needs_parens(&go_underlying.code, &underlying_ty);
-    let field_path = path.push(PathSegment::NewtypeCast {
-        go_type: go_underlying.code,
-        needs_parens,
-    });
+    let field_path = path.push(PathSegment::NewtypeCast(go_underlying.code));
     if let Some(field) = variant.fields.first() {
         collect_checks_and_bindings(
             planner,

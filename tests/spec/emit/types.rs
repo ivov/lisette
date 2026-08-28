@@ -2288,6 +2288,15 @@ fn test(t: Ticks) -> Receiver<int> {
 }
 
 #[test]
+fn display_newtype_over_func_parenthesizes() {
+    let input = r#"
+#[display]
+struct Cb(fn(int) -> ())
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn newtype_over_type_named_like_func_keyword() {
     let input = r#"
 struct funcRegistry { pub n: int }

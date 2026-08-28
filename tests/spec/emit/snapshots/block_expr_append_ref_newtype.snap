@@ -25,7 +25,7 @@ func get() *Wrap {
 
 func main() {
 	var x []int
-	recv_1 := []int(*get())
+	recv_1 := ([]int)(*get())
 	x = append(recv_1[:len(recv_1):len(recv_1)], 2)
 	_ = x[0]
 }

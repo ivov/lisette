@@ -572,3 +572,14 @@ fn build() -> Holder {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn array_rest_pattern_with_func_elements() {
+    let input = r#"
+fn f(arr: Array<fn(int) -> (), 3>) -> Array<fn(int) -> (), 2> {
+  let [_first, ..rest] = arr
+  rest
+}
+"#;
+    assert_emit_snapshot!(input);
+}
