@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1787865559183,
+  "lastUpdate": 1787937753645,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -28027,6 +28027,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/c69dd6420b514193024deade705e50ca184e6b5d"
         },
         "date": 1787865554956,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 136864,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32043,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27561,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18644,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14832,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13566,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8380,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6029,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2902,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1850,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 736,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9402,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c36488da250a2f3cb402833665c9b606e5245125",
+          "message": "fix: align import scanner whitespace with the lexer (#1338)",
+          "timestamp": "2026-08-28T19:22:08+02:00",
+          "tree_id": "b4e647fca0bf9ef75ac0c7373277c0e2841791ae",
+          "url": "https://github.com/ivov/lisette/commit/c36488da250a2f3cb402833665c9b606e5245125"
+        },
+        "date": 1787937751336,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
