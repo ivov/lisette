@@ -1,0 +1,80 @@
+---
+import { Icon } from "@astrojs/starlight/components";
+
+const { dir, pagination, sidebar } = Astro.locals.starlightRoute;
+const isRtl = dir === "rtl";
+
+/**
+ * `starlight-sidebar-topics` ends each topic's chain by comparing a sidebar `href` against
+ * a route `id`, which cannot match once a `base` puts the base path in one and not the
+ * other. The sidebar holds the current topic alone, so an unlisted target is another's.
+ */
+const topicHrefs = new Set<string>();
+const collectHrefs = (entries: typeof sidebar) => {
+  for (const entry of entries) {
+    if (entry.type === "link") topicHrefs.add(entry.href);
+    else collectHrefs(entry.entries);
+  }
+};
+collectHrefs(sidebar);
+
+const prev = pagination.prev && topicHrefs.has(pagination.prev.href) ? pagination.prev : undefined;
+const next = pagination.next && topicHrefs.has(pagination.next.href) ? pagination.next : undefined;
+---
+
+{
+  (prev || next) && (
+    <div class="pagination-links print:hidden" dir={dir}>
+      {prev && (
+        <a href={prev.href} rel="prev">
+          <Icon name={isRtl ? "right-arrow" : "left-arrow"} />
+          <span class="sr-only">{Astro.locals.t("page.previousLink")}</span>
+          {prev.label}
+        </a>
+      )}
+      {next && (
+        <a href={next.href} rel="next">
+          <span class="sr-only">{Astro.locals.t("page.nextLink")}</span>
+          {next.label}
+          <Icon name={isRtl ? "left-arrow" : "right-arrow"} />
+        </a>
+      )}
+    </div>
+  )
+}
+
+<style>
+  .pagination-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    border-top: 1px solid var(--sl-color-hairline-light);
+    padding-top: 1.5rem;
+    /* Reaches the panel's edges, which the clip on `.content-panel` then cuts to. */
+    margin-inline: -50vw;
+    padding-inline: 50vw;
+  }
+
+  a {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--sl-color-gray-2);
+    font-size: var(--sl-text-base);
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  [rel="next"] {
+    margin-inline-start: auto;
+  }
+
+  a:hover {
+    color: var(--sl-color-white);
+  }
+
+  a :global(svg) {
+    width: 18px;
+    height: 18px;
+  }
+</style>

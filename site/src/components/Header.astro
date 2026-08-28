@@ -1,0 +1,94 @@
+---
+/**
+ * Starlight's header with the topic list added as a band beneath it. The band sits inside
+ * Starlight's fixed header, so `custom.css` grows `--sl-nav-height` to make room.
+ */
+import Default from "@astrojs/starlight/components/Header.astro";
+import { Icon } from "@astrojs/starlight/components";
+
+const { topics } = Astro.locals.starlightSidebarTopics;
+---
+
+{/* A plain block: a flex container here would break Starlight's own header grid. */}
+<div class="header-row">
+  <Default><slot /></Default>
+</div>
+
+{
+  topics.length > 0 && (
+    <nav class="topics" aria-label="Sections">
+      <ul>
+        {topics.map((topic) => (
+          <li>
+            <a
+              href={topic.link}
+              aria-current={topic.isCurrent ? "true" : undefined}
+              class:list={[{ current: topic.isCurrent }]}
+            >
+              {topic.icon && <Icon name={topic.icon} size="0.875em" />}
+              {topic.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  )
+}
+
+<style>
+  .header-row {
+    height: 100%;
+  }
+
+  .topics {
+    height: var(--sl-topics-height);
+    margin-inline: calc(-1 * var(--sl-nav-pad-x));
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .topics::-webkit-scrollbar {
+    display: none;
+  }
+
+  ul {
+    display: flex;
+    align-items: stretch;
+    height: 100%;
+    gap: 1rem;
+    list-style: none;
+    padding-inline-start: calc(var(--sl-nav-pad-x) + 0.4rem);
+    padding-inline-end: calc(var(--sl-nav-pad-x) - 0.6rem);
+    margin: 0;
+    min-width: max-content;
+  }
+
+  li {
+    display: flex;
+  }
+
+  a {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding-inline: 0.6rem;
+    color: var(--sl-color-gray-2);
+    font-size: var(--sl-text-sm);
+    font-weight: 600;
+    line-height: 1;
+    text-decoration: none;
+    white-space: nowrap;
+    /* Reserved on every tab, so nothing shifts when one becomes current. */
+    border-block-end: 2px solid transparent;
+  }
+
+  a:hover,
+  a:focus-visible {
+    color: var(--sl-color-white);
+  }
+
+  a.current {
+    color: var(--sl-color-text-accent);
+    border-block-end-color: var(--sl-color-text-accent);
+  }
+</style>

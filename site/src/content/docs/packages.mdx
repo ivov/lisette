@@ -1,0 +1,178 @@
+---
+title: "Packages"
+description: "Packages, imports, visibility, binary and library projects"
+---
+
+import { FileTree } from "@astrojs/starlight/components";
+
+A Lisette project is made up of packages. A package is a directory, and its name is the namespace for all `.lis` files inside. In the example below, `user.lis` and `post.lis` belong to the `models` package.
+
+<FileTree>
+
+- my-app/
+  - lisette.toml project manifest
+  - src/
+    - main.lis entry point
+    - models/ `models` package
+      - user.lis
+      - post.lis
+    - routes/ `routes` package
+      - api.lis
+      - admin/ `routes/admin` package
+        - panel.lis
+
+</FileTree>
+
+## Imports
+
+To import a package from your project:
+
+```lisette
+// !callout-right package path, relative to project root
+import "models"
+// !callout-right nested package path
+import "routes/admin"
+```
+
+Imported packages are namespaces:
+
+```lisette
+import "models"
+
+fn main() {
+  let user = models.User { name: "Alice" }
+  models.save(user)
+}
+```
+
+To alias an imported package:
+
+```lisette
+import m "models"
+
+fn main() {
+  let user = m.User { name: "Alice" }
+  m.save(user)
+}
+```
+
+Circular imports are disallowed.
+
+## Visibility
+
+Definitions are visible to all other files in the same package. Use `pub` to expose them to other packages.
+
+```lisette file="models/user.lis"
+// !callout-above[/save/] public
+pub fn save(user: User) -> Result<(), error> {
+  if !validate(user) {
+    return Err(errors.New("email is required"))
+  }
+  Ok(())
+}
+
+// !callout-above[/validate/] private
+fn validate(user: User) -> bool {
+  !user.email.is_empty()
+}
+```
+
+A struct and its fields can be marked `pub` independently, and so can a method in an `impl` block:
+
+```lisette file="models/user.lis"
+pub struct User {
+  // !callout-right public
+  pub name: string,
+  // !callout-right private
+  email: string,
+}
+
+impl User {
+  // !callout-above[/greet/] public
+  pub fn greet(self) -> string {
+    "hi " + self.name
+  }
+
+  // !callout-above[/label/] private
+  fn label(self) -> string {
+    f"{self.name} <{self.email}>"
+  }
+}
+```
+
+Reaching a private field or method from another package is an error:
+
+```lisette file="main.lis"
+import "models"
+
+fn handle(user: models.User) {
+  // !callout-ok-right ok, public field
+  let name = user.name
+  // !callout-ok-right ok, public method
+  let greeting = user.greet()
+  // !callout-error-right error, private to `models`
+  let email = user.email
+  // !callout-error-right error, private to `models`
+  let label = user.label()
+}
+```
+
+## Layout
+
+A **binary project** produces an executable. A project is a binary if it contains a `main.lis`. In a binary project, `lis build` compiles all `.lis` files under `src/` and writes the executable to `target/.lisette/bin/`.
+
+<FileTree>
+
+- app/
+  - lisette.toml
+  - src/
+    - main.lis entry point present
+    - models/
+      - user.lis
+  - target/
+    - .lisette/
+      - bin/
+        - app executable
+
+</FileTree>
+
+A **library project** produces Go source code for Go users to import. A project is a library if it contains no `main.lis`. `lis build` mirrors `src/` into `target/`, where each dir becomes a Go package and the files at the top become the lib's root package.
+
+<FileTree>
+
+- geo/
+  - lisette.toml
+  - src/ entry point absent
+    - geo.lis
+    - shapes/
+      - shapes.lis
+  - target/
+    - go.mod
+    - geo.go package `geo`
+    - shapes/
+      - shapes.go package `shapes`
+
+</FileTree>
+
+Set `name` in `lisette.toml` to the Go module path Go users will import.
+
+```toml file="lisette.toml"
+[project]
+name = "github.com/you/geo"
+version = "0.1.0"
+```
+
+A Go user then imports it like any other module:
+
+```go file="main.go"
+import (
+	"fmt"
+
+	"github.com/you/geo"
+	"github.com/you/geo/shapes"
+)
+
+func main() {
+	fmt.Println(geo.Area(), shapes.Perimeter())
+}
+```

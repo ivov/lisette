@@ -1,0 +1,10 @@
+{
+  "name": "lisette-run",
+  "main": "worker.js",
+  "compatibility_date": "2026-08-24",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "404-page"
+  }
+}

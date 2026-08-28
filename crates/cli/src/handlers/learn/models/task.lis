@@ -19,24 +19,27 @@ impl Task {
 
   pub fn display(self) -> string {
     let icon = match self.status {
-      Status.Pending => "○",
-      Status.Done => "●",
-      Status.Cancelled(_) => "✗",
+      Pending => "○",
+      Done => "●",
+      Cancelled(_) => "✕",
     }
-    let prio = match self.priority {
-      Priority.High => " !!",
-      Priority.Medium => " !",
-      Priority.Low => "",
+
+    let priority = match self.priority {
+      High => " !!",
+      Medium => " !",
+      Low => "",
     }
-    let tag_str = if self.tags.is_empty() {
-      ""
-    } else {
-      f" [{self.tags.join(", ")}]"
+
+    let tags = match self.tags {
+      [] => "",
+      _ => f" [{self.tags.join(", ")}]",
     }
-    let status_str = match self.status {
-      Status.Cancelled(_) => f" ({self.status.label()})",
+
+    let note = match self.status {
+      Cancelled(_) => f" ({self.status.label()})",
       _ => "",
     }
-    f"  {icon} #{self.id} {self.title}{prio}{tag_str}{status_str}"
+
+    f"  {icon} #{self.id} {self.title}{priority}{tags}{note}"
   }
 }

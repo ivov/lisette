@@ -1,0 +1,13 @@
+---
+/**
+ * The topic list restored above Starlight's sidebar, for narrow viewports. `Header.astro`
+ * draws it as a band above 50rem, and `custom.css` hides this copy there.
+ */
+import Default from "@astrojs/starlight/components/Sidebar.astro";
+import Topics from "starlight-sidebar-topics/components/Sidebar.astro";
+---
+
+<div class="topics-in-sidebar">
+  <Topics />
+</div>
+<Default><slot /></Default>

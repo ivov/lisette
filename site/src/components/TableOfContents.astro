@@ -1,0 +1,68 @@
+---
+import { headingSegments } from "../lib/heading-segments.mjs";
+import TableOfContentsList from "./TableOfContentsList.astro";
+
+const { toc, entry } = Astro.locals.starlightRoute;
+const segments = headingSegments(entry.body);
+---
+
+{
+  toc && (
+    <starlight-toc data-min-h={toc.minHeadingLevel} data-max-h={toc.maxHeadingLevel}>
+      <nav aria-labelledby="starlight__on-this-page">
+        <h2 id="starlight__on-this-page">{Astro.locals.t("tableOfContents.onThisPage")}</h2>
+        <TableOfContentsList toc={toc.items} segments={segments} />
+      </nav>
+    </starlight-toc>
+  )
+}
+
+{/* Reached by path because the package does not export it. */}
+<script src="../../node_modules/@astrojs/starlight/components-internals/TableOfContents/starlight-toc.ts"
+></script>
+
+{/* The scroll-spy marks a heading current once it crosses a band near the top, which a short last section never reaches. At the page bottom the last entry is the right answer, so it is set directly. The delayed repeat catches an observer callback landing after the final scroll. */}
+<script>
+  const CURRENT = "aria-current";
+
+  for (const toc of document.querySelectorAll("starlight-toc, mobile-starlight-toc")) {
+    const links = [...toc.querySelectorAll("a")];
+    const last = links.at(-1);
+    if (!last) continue;
+
+    let displaced: HTMLAnchorElement | null = null;
+    const label = toc.querySelector(".display-current");
+    const show = (link: HTMLAnchorElement) => {
+      if (label) label.textContent = link.textContent;
+    };
+
+    const sync = () => {
+      const atBottom =
+        window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+      if (atBottom) {
+        if (!displaced) {
+          displaced = links.find((link) => link.getAttribute(CURRENT) === "true") ?? null;
+        }
+        for (const link of links) {
+          if (link !== last) link.removeAttribute(CURRENT);
+        }
+        last.setAttribute(CURRENT, "true");
+        show(last);
+      } else if (displaced) {
+        last.removeAttribute(CURRENT);
+        displaced.setAttribute(CURRENT, "true");
+        show(displaced);
+        displaced = null;
+      }
+    };
+
+    const schedule = () => {
+      sync();
+      setTimeout(sync, 150);
+    };
+
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    schedule();
+  }
+</script>

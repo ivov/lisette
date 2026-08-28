@@ -1,0 +1,798 @@
+    <section class="hero">
+      <div class="hero-inner">
+        <div class="hero-text">
+          <h1>
+            <span class="accent hero-name">Lisette</span><br />A love letter
+            to <span class="brand-go">Go</span><br />written in
+            <span class="brand-rust">Rust</span>
+          </h1>
+          <p class="hero-sub">
+            Lisette is a little language inspired by Rust that compiles to Go, combining
+            compile-time safety, expressive syntax and Go's ecosystem.
+          </p>
+          <ul class="hero-chips">
+            <li>algebraic data types</li>
+            <li>pattern matching</li>
+            <li>no nil</li>
+            <li>immutability</li>
+            <li>readable Go</li>
+            <li>extensive tooling</li>
+          </ul>
+          <div class="hero-cta">
+            <a class="quickstart-link" href="/docs/intro/quickstart/">Quickstart <span aria-hidden="true">→</span></a>
+            <a
+              href="https://github.com/ivov/lisette"
+              target="_blank"
+              rel="noopener"
+              class="github-link"
+              aria-label="GitHub"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 64 64"
+                width="30"
+                height="30"
+              >
+                <path
+                  d="M32 6C17.641 6 6 17.641 6 32c0 12.277 8.512 22.56 19.955 25.286-.592-.141-1.179-.299-1.755-.479V50.85c0 0-.975.325-2.275.325-3.637 0-5.148-3.245-5.525-4.875-.229-.993-.827-1.934-1.469-2.509-.767-.684-1.126-.686-1.131-.92-.01-.491.658-.471.975-.471 1.625 0 2.857 1.729 3.429 2.623 1.417 2.207 2.938 2.577 3.721 2.577.975 0 1.817-.146 2.397-.426.268-1.888 1.108-3.57 2.478-4.774-6.097-1.219-10.4-4.716-10.4-10.4 0-2.928 1.175-5.619 3.133-7.792C19.333 23.641 19 22.494 19 20.625c0-1.235.086-2.751.65-4.225 0 0 3.708.026 7.205 3.338C28.469 19.268 30.196 19 32 19s3.531.268 5.145.738c3.497-3.312 7.205-3.338 7.205-3.338.567 1.474.65 2.99.65 4.225 0 2.015-.268 3.19-.432 3.697C46.466 26.475 47.6 29.124 47.6 32c0 5.684-4.303 9.181-10.4 10.4 1.628 1.43 2.6 3.513 2.6 5.85v8.557c-.576.181-1.162.338-1.755.479C49.488 54.56 58 44.277 58 32 58 17.641 46.359 6 32 6z"
+                  fill="currentColor"
+                />
+              </svg>
+            </a>
+          </div>
+        </div>
+
+        <div class="code-window">
+          <pre><span class="kw">import</span> <span class="str">"go:encoding/json"</span>
+<span class="kw">import</span> <span class="str">"go:fmt"</span>
+<span class="kw">import</span> <span class="str">"go:os"</span>
+
+<span class="kw">fn</span> <span class="fn">load_config</span><span class="pn">(</span><span class="pl">path</span><span class="pn">:</span> <span class="ty">string</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">Result</span><span class="pn">&lt;</span><span class="ty">Cfg</span><span class="pn">,</span> <span class="ty">error</span><span class="pn">&gt;</span> <span class="pn">{</span>
+  <span class="kw">let</span> <span class="pl">data</span> <span class="kw">=</span> <span class="pl">os</span><span class="pn">.</span><span class="ty">ReadFile</span><span class="pn">(</span><span class="pl">path</span><span class="pn">)</span><span class="op">?</span>
+  <span class="kw">let</span> <span class="kw">mut</span> <span class="pl">config</span> <span class="kw">=</span> <span class="ty">Cfg</span> <span class="pn">{</span> <span class="pl">port</span><span class="pn">:</span> <span class="num">8080</span><span class="pn">,</span> <span class="pl">tls</span><span class="pn">:</span> <span class="lit hero-lit">true</span> <span class="pn">}</span>
+  <span class="pl">json</span><span class="pn">.</span><span class="ty">Unmarshal</span><span class="pn">(</span><span class="pl">data</span><span class="pn">,</span> <span class="kw">&amp;</span><span class="pl">config</span><span class="pn">)</span><span class="op">?</span>
+  <span class="ty">Ok</span><span class="pn">(</span><span class="pl">config</span><span class="pn">)</span>
+<span class="pn">}</span>
+
+<span class="kw">fn</span> <span class="fn">main</span><span class="pn">()</span> <span class="pn">{</span>
+  <span class="kw">match</span> <span class="fn">load_config</span><span class="pn">(</span><span class="str">"app.json"</span><span class="pn">)</span> <span class="pn">{</span>
+    <span class="ty">Ok</span><span class="pn">(</span><span class="pl">config</span><span class="pn">)</span> <span class="op">=&gt;</span> <span class="fn">start</span><span class="pn">(</span><span class="pl">config</span><span class="pn">),</span>
+    <span class="ty">Err</span><span class="pn">(</span><span class="pl">e</span><span class="pn">)</span> <span class="op">=&gt;</span> <span class="pl">fmt</span><span class="pn">.</span><span class="ty">Println</span><span class="pn">(</span><span class="str">"error:"</span><span class="pn">,</span> <span class="pl">e</span><span class="pn">),</span>
+  <span class="pn">}</span>
+<span class="pn">}</span></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="examples" id="expressive">
+      <div class="examples-header">
+        <h2>Expressive</h2>
+        <p>Syntactically similar to Rust, conceptually simpler</p>
+      </div>
+
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" aria-selected="true" data-panel="0">enums and structs</button>
+        <button type="button" role="tab" aria-selected="false" data-panel="1">pattern-oriented</button>
+        <button type="button" role="tab" aria-selected="false" data-panel="2">expression blocks and lambdas</button>
+        <span class="row-break"></span>
+        <button type="button" role="tab" aria-selected="false" data-panel="3">interfaces and generics</button>
+        <button type="button" role="tab" aria-selected="false" data-panel="4">failure propagation and try blocks</button>
+        <button type="button" role="tab" aria-selected="false" data-panel="5">concurrency</button>
+      </div>
+
+      <div class="example-row" data-panel="0">
+        <div class="example-block">
+          <pre><span class="kw">enum</span> <span class="ty">Message</span> <span class="pn">{</span>
+  <span class="ty">Ready</span><span class="pn">,</span>
+  <span class="ty">Write</span><span class="pn">(</span><span class="ty">string</span><span class="pn">),</span>
+  <span class="ty">Move</span> <span class="pn">{</span> <span class="pl">x</span><span class="pn">:</span> <span class="ty">int</span><span class="pn">,</span> <span class="pl">y</span><span class="pn">:</span> <span class="ty">int</span> <span class="pn">},</span>
+<span class="pn">}</span>
+
+<span class="kw">fn</span> <span class="fn">handle</span><span class="pn">(</span><span class="pl">msg</span><span class="pn">:</span> <span class="ty">Message</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">string</span> <span class="pn">{</span>
+  <span class="kw">match</span> <span class="pl">msg</span> <span class="pn">{</span>
+    <span class="ty">Ready</span> <span class="op">=&gt;</span> <span class="str">"ready"</span><span class="pn">,</span>
+    <span class="ty">Write</span><span class="pn">(</span><span class="pl">text</span><span class="pn">)</span> <span class="op">=&gt;</span> <span class="pl">f</span><span class="str">"wrote: </span><span class="lit">{</span><span class="pl">text</span><span class="lit">}</span><span class="str">"</span><span class="pn">,</span>
+    <span class="ty">Move</span> <span class="pn">{</span> <span class="pl">x</span><span class="pn">,</span> <span class="pl">y</span> <span class="pn">}</span> <span class="op">=&gt;</span> <span class="pl">f</span><span class="str">"move to (</span><span class="lit">{</span><span class="pl">x</span><span class="lit">}</span><span class="str">, </span><span class="lit">{</span><span class="pl">y</span><span class="lit">}</span><span class="str">)"</span><span class="pn">,</span>
+  <span class="pn">}</span>
+<span class="pn">}</span></pre>
+        </div>
+
+        <div class="example-block">
+          <pre><span class="kw">import</span> <span class="str">"go:math"</span>
+
+<span class="kw">struct</span> <span class="ty">Point</span> <span class="pn">{</span>
+  <span class="pl">x</span><span class="pn">:</span> <span class="ty">float64</span><span class="pn">,</span>
+  <span class="pl">y</span><span class="pn">:</span> <span class="ty">float64</span><span class="pn">,</span>
+<span class="pn">}</span>
+
+<span class="kw">impl</span> <span class="ty">Point</span> <span class="pn">{</span>
+  <span class="kw">fn</span> <span class="fn">distance</span><span class="pn">(</span><span class="kw">self</span><span class="pn">,</span> <span class="pl">other</span><span class="pn">:</span> <span class="ty">Point</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">float64</span> <span class="pn">{</span>
+    <span class="kw">let</span> <span class="pn">(</span><span class="pl">dx</span><span class="pn">,</span> <span class="pl">dy</span><span class="pn">)</span> <span class="kw">=</span> <span class="pn">(</span><span class="kw">self</span><span class="pn">.</span><span class="pl">x</span> <span class="kw">-</span> <span class="pl">other</span><span class="pn">.</span><span class="pl">x</span><span class="pn">,</span> <span class="kw">self</span><span class="pn">.</span><span class="pl">y</span> <span class="kw">-</span> <span class="pl">other</span><span class="pn">.</span><span class="pl">y</span><span class="pn">)</span>
+    <span class="pl">math</span><span class="pn">.</span><span class="ty">Sqrt</span><span class="pn">(</span><span class="pl">dx</span><span class="kw">*</span><span class="pl">dx</span> <span class="kw">+</span> <span class="pl">dy</span><span class="kw">*</span><span class="pl">dy</span><span class="pn">)</span>
+  <span class="pn">}</span>
+<span class="pn">}</span></pre>
+        </div>
+      </div>
+
+      <div class="example-row" data-panel="1" hidden>
+        <div class="example-block">
+          <pre><span class="kw">fn</span> <span class="fn">shift</span><span class="pn">(</span><span class="pl">p</span><span class="pn">:</span> <span class="ty">Point</span><span class="pn">,</span> <span class="pl">by</span><span class="pn">:</span> <span class="ty">int</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">Point</span> <span class="pn">{</span>
+  <span class="kw">let</span> <span class="ty">Point</span> <span class="pn">{</span> <span class="pl">x</span><span class="pn">,</span> <span class="pl">y</span> <span class="pn">}</span> <span class="kw">=</span> <span class="pl">p</span>
+  <span class="ty">Point</span> <span class="pn">{</span> <span class="pl">x</span><span class="pn">:</span> <span class="pl">x</span> <span class="kw">+</span> <span class="pl">by</span><span class="pn">,</span> <span class="pl">y</span> <span class="pn">}</span>
+<span class="pn">}</span>
+
+<span class="kw">fn</span> <span class="fn">bounds</span><span class="pn">(</span><span class="pl">items</span><span class="pn">:</span> <span class="ty">Slice</span><span class="pn">&lt;</span><span class="ty">int</span><span class="pn">&gt;</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">string</span> <span class="pn">{</span>
+  <span class="kw">let</span> <span class="pn">[</span><span class="pl">first</span><span class="pn">,</span> <span class="op">..</span><span class="pl">rest</span><span class="pn">]</span> <span class="kw">=</span> <span class="pl">items</span> <span class="kw">else</span> <span class="pn">{</span> <span class="kw">return</span> <span class="str">"empty"</span> <span class="pn">}</span>
+  <span class="pl">f</span><span class="str">"</span><span class="lit">{</span><span class="pl">first</span><span class="lit">}</span><span class="str">, then </span><span class="lit">{</span><span class="pl">rest</span><span class="pn">.</span><span class="fn">length</span><span class="pn">()</span><span class="lit">}</span><span class="str"> more"</span>
+<span class="pn">}</span>
+
+<span class="kw">fn</span> <span class="fn">print_rows</span><span class="pn">(</span><span class="pl">rows</span><span class="pn">:</span> <span class="ty">Map</span><span class="pn">&lt;</span><span class="ty">string</span><span class="pn">,</span> <span class="ty">int</span><span class="pn">&gt;</span><span class="pn">)</span> <span class="pn">{</span>
+  <span class="kw">for</span> <span class="pn">(</span><span class="pl">name</span><span class="pn">,</span> <span class="pl">count</span><span class="pn">)</span> <span class="kw">in</span> <span class="pl">rows</span> <span class="pn">{</span>
+    <span class="pl">fmt</span><span class="pn">.</span><span class="ty">Println</span><span class="pn">(</span><span class="pl">name</span><span class="pn">,</span> <span class="pl">count</span><span class="pn">)</span>
+  <span class="pn">}</span>
+<span class="pn">}</span></pre>
+        </div>
+
+        <div class="example-block">
+          <pre><span class="kw">type</span> <span class="ty">Headers</span> <span class="kw">=</span> <span class="ty">Map</span><span class="pn">&lt;</span><span class="ty">string</span><span class="pn">,</span> <span class="ty">string</span><span class="pn">&gt;</span>
+
+<span class="kw">fn</span> <span class="fn">handle_headers</span><span class="pn">(</span><span class="pl">h</span><span class="pn">:</span> <span class="ty">Headers</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">Result</span><span class="pn">&lt;</span><span class="pn">(),</span> <span class="ty">string</span><span class="pn">&gt;</span> <span class="pn">{</span>
+  <span class="kw">if</span> <span class="kw">let</span> <span class="ty">Some</span><span class="pn">(</span><span class="pl">token</span><span class="pn">)</span> <span class="kw">=</span> <span class="pl">h</span><span class="pn">.</span><span class="fn">get</span><span class="pn">(</span><span class="str">"Authorization"</span><span class="pn">)</span> <span class="pn">{</span>
+    <span class="kw">let</span> <span class="pl">user</span> <span class="kw">=</span> <span class="fn">authenticate</span><span class="pn">(</span><span class="pl">token</span><span class="pn">)</span><span class="op">?</span>
+    <span class="fn">authorize</span><span class="pn">(</span><span class="pl">user</span><span class="pn">)</span><span class="op">?</span>
+  <span class="pn">}</span> <span class="kw">else</span> <span class="pn">{</span>
+    <span class="kw">return</span> <span class="ty">Err</span><span class="pn">(</span><span class="str">"missing credentials"</span><span class="pn">)</span>
+  <span class="pn">}</span>
+
+  <span class="kw">let</span> <span class="ty">Some</span><span class="pn">(</span><span class="pl">id</span><span class="pn">)</span> <span class="kw">=</span> <span class="pl">h</span><span class="pn">.</span><span class="fn">get</span><span class="pn">(</span><span class="str">"X-Request-ID"</span><span class="pn">)</span> <span class="kw">else</span> <span class="pn">{</span>
+    <span class="kw">return</span> <span class="ty">Err</span><span class="pn">(</span><span class="str">"missing request ID"</span><span class="pn">)</span>
+  <span class="pn">}</span>
+
+  <span class="fn">process</span><span class="pn">(</span><span class="pl">id</span><span class="pn">)</span>
+<span class="pn">}</span></pre>
+        </div>
+      </div>
+
+      <div class="example-row" data-panel="2" hidden>
+        <div class="example-block">
+          <pre><span class="kw">fn</span> <span class="fn">describe</span><span class="pn">(</span><span class="pl">score</span><span class="pn">:</span> <span class="ty">int</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">string</span> <span class="pn">{</span>
+  <span class="kw">let</span> <span class="pl">grade</span> <span class="kw">=</span> <span class="kw">if</span> <span class="pl">score</span> <span class="pn">&gt;=</span> <span class="num">90</span> <span class="pn">{</span>
+    <span class="str">"A"</span>
+  <span class="pn">}</span> <span class="kw">else</span> <span class="kw">if</span> <span class="pl">score</span> <span class="pn">&gt;=</span> <span class="num">70</span> <span class="pn">{</span>
+    <span class="str">"B"</span>
+  <span class="pn">}</span> <span class="kw">else</span> <span class="kw">if</span> <span class="pl">score</span> <span class="pn">&gt;=</span> <span class="num">50</span> <span class="pn">{</span>
+    <span class="str">"C"</span>
+  <span class="pn">}</span> <span class="kw">else</span> <span class="pn">{</span>
+    <span class="str">"D"</span>
+  <span class="pn">}</span>
+
+  <span class="kw">let</span> <span class="pl">stars</span> <span class="kw">=</span> <span class="pn">{</span>
+    <span class="kw">let</span> <span class="pl">count</span> <span class="kw">=</span> <span class="pl">score</span> <span class="kw">/</span> <span class="num">20</span>
+    <span class="pl">strings</span><span class="pn">.</span><span class="ty">Repeat</span><span class="pn">(</span><span class="str">"*"</span><span class="pn">,</span> <span class="pl">count</span><span class="pn">)</span>
+  <span class="pn">}</span>
+
+  <span class="pl">f</span><span class="str">"</span><span class="lit">{</span><span class="pl">grade</span><span class="lit">}</span><span class="str"> </span><span class="lit">{</span><span class="pl">stars</span><span class="lit">}</span><span class="str">"</span>
+<span class="pn">}</span></pre>
+        </div>
+
+        <div class="example-block">
+          <pre><span class="kw">fn</span> <span class="fn">revenue</span><span class="pn">(</span><span class="pl">sales</span><span class="pn">:</span> <span class="ty">Slice</span><span class="pn">&lt;</span><span class="ty">Sale</span><span class="pn">&gt;</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">int</span> <span class="pn">{</span>
+  <span class="pl">sales</span>
+    <span class="pn">.</span><span class="fn">filter</span><span class="pn">(</span><span class="kw">|</span><span class="pl">s</span><span class="kw">|</span> <span class="pl">s</span><span class="pn">.</span><span class="pl">paid</span><span class="pn">)</span>
+    <span class="pn">.</span><span class="fn">map</span><span class="pn">(</span><span class="kw">|</span><span class="pl">s</span><span class="kw">|</span> <span class="pn">{</span>
+      <span class="kw">let</span> <span class="pl">net</span> <span class="kw">=</span> <span class="pl">s</span><span class="pn">.</span><span class="pl">total</span> <span class="kw">-</span> <span class="pl">s</span><span class="pn">.</span><span class="pl">refund</span>
+      <span class="pl">net</span> <span class="kw">*</span> <span class="pl">s</span><span class="pn">.</span><span class="pl">qty</span>
+    <span class="pn">})</span>
+    <span class="pn">.</span><span class="fn">fold</span><span class="pn">(</span><span class="num">0</span><span class="pn">,</span> <span class="kw">|</span><span class="pl">a</span><span class="pn">,</span> <span class="pl">b</span><span class="kw">|</span> <span class="pl">a</span> <span class="kw">+</span> <span class="pl">b</span><span class="pn">)</span>
+<span class="pn">}</span>
+
+<span class="kw">fn</span> <span class="fn">discounted</span><span class="pn">(</span><span class="pl">total</span><span class="pn">:</span> <span class="ty">int</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">int</span> <span class="pn">{</span> <span class="pl">total</span> <span class="kw">*</span> <span class="num">90</span> <span class="kw">/</span> <span class="num">100</span> <span class="pn">}</span>
+<span class="kw">fn</span> <span class="fn">taxed</span><span class="pn">(</span><span class="pl">total</span><span class="pn">:</span> <span class="ty">int</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">int</span> <span class="pn">{</span> <span class="pl">total</span> <span class="kw">*</span> <span class="num">121</span> <span class="kw">/</span> <span class="num">100</span> <span class="pn">}</span>
+
+<span class="kw">fn</span> <span class="fn">payable</span><span class="pn">(</span><span class="pl">sale</span><span class="pn">:</span> <span class="ty">Sale</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">int</span> <span class="pn">{</span>
+  <span class="pl">sale</span><span class="pn">.</span><span class="pl">total</span>
+    <span class="op">|&gt;</span> <span class="fn">discounted</span>
+    <span class="op">|&gt;</span> <span class="fn">taxed</span>
+<span class="pn">}</span></pre>
+        </div>
+      </div>
+
+      <div class="example-row" data-panel="3" hidden>
+        <div class="example-block">
+          <pre><span class="kw">interface</span> <span class="ty">Metric</span> <span class="pn">{</span>
+  <span class="kw">fn</span> <span class="fn">label</span><span class="pn">()</span> <span class="op">-&gt;</span> <span class="ty">string</span>
+  <span class="kw">fn</span> <span class="fn">value</span><span class="pn">()</span> <span class="op">-&gt;</span> <span class="ty">float64</span>
+<span class="pn">}</span>
+
+<span class="kw">struct</span> <span class="ty">Latency</span> <span class="pn">{</span> <span class="pl">ms</span><span class="pn">:</span> <span class="ty">float64</span> <span class="pn">}</span>
+
+<span class="kw">impl</span> <span class="ty">Latency</span> <span class="pn">{</span>
+  <span class="kw">fn</span> <span class="fn">label</span><span class="pn">(</span><span class="kw">self</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">string</span> <span class="pn">{</span> <span class="str">"latency"</span> <span class="pn">}</span>
+  <span class="kw">fn</span> <span class="fn">value</span><span class="pn">(</span><span class="kw">self</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">float64</span> <span class="pn">{</span> <span class="kw">self</span><span class="pn">.</span><span class="pl">ms</span> <span class="pn">}</span>
+<span class="pn">}</span>
+
+<span class="cm">/// Finds the metric with the highest value.</span>
+<span class="kw">fn</span> <span class="fn">highest</span><span class="pn">&lt;</span><span class="ty">T</span><span class="pn">:</span> <span class="ty">Metric</span><span class="pn">&gt;</span><span class="pn">(</span><span class="pl">metrics</span><span class="pn">:</span> <span class="ty">Slice</span><span class="pn">&lt;</span><span class="ty">T</span><span class="pn">&gt;</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">T</span> <span class="pn">{</span>
+  <span class="pl">metrics</span><span class="pn">.</span><span class="fn">fold</span><span class="pn">(</span><span class="pl">metrics</span><span class="pn">[</span><span class="num">0</span><span class="pn">],</span> <span class="kw">|</span><span class="pl">a</span><span class="pn">,</span> <span class="pl">b</span><span class="kw">|</span>
+    <span class="kw">if</span> <span class="pl">a</span><span class="pn">.</span><span class="fn">value</span><span class="pn">()</span> <span class="pn">&gt;</span> <span class="pl">b</span><span class="pn">.</span><span class="fn">value</span><span class="pn">()</span> <span class="pn">{</span> <span class="pl">a</span> <span class="pn">}</span> <span class="kw">else</span> <span class="pn">{</span> <span class="pl">b</span> <span class="pn">}</span>
+  <span class="pn">)</span>
+<span class="pn">}</span></pre>
+        </div>
+
+        <div class="example-block">
+          <pre><span class="kw">interface</span> <span class="ty">Reader</span> <span class="pn">{</span>
+  <span class="kw">fn</span> <span class="fn">read</span><span class="pn">(</span><span class="pl">buf</span><span class="pn">:</span> <span class="kw">mut</span> <span class="ty">Slice</span><span class="pn">&lt;</span><span class="ty">byte</span><span class="pn">&gt;</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">Result</span><span class="pn">&lt;</span><span class="ty">int</span><span class="pn">,</span> <span class="ty">error</span><span class="pn">&gt;</span>
+<span class="pn">}</span>
+
+<span class="kw">interface</span> <span class="ty">Writer</span> <span class="pn">{</span>
+  <span class="kw">fn</span> <span class="fn">write</span><span class="pn">(</span><span class="pl">buf</span><span class="pn">:</span> <span class="ty">Slice</span><span class="pn">&lt;</span><span class="ty">byte</span><span class="pn">&gt;</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">Result</span><span class="pn">&lt;</span><span class="ty">int</span><span class="pn">,</span> <span class="ty">error</span><span class="pn">&gt;</span>
+<span class="pn">}</span>
+
+<span class="kw">interface</span> <span class="ty">ReadWriter</span> <span class="pn">{</span>
+  <span class="kw">embed</span> <span class="ty">Reader</span>
+  <span class="kw">embed</span> <span class="ty">Writer</span>
+<span class="pn">}</span>
+
+<span class="kw">fn</span> <span class="fn">echo</span><span class="pn">(</span><span class="pl">rw</span><span class="pn">:</span> <span class="ty">ReadWriter</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">Result</span><span class="pn">&lt;</span><span class="ty">int</span><span class="pn">,</span> <span class="ty">error</span><span class="pn">&gt;</span> <span class="pn">{</span>
+  <span class="kw">let</span> <span class="kw">mut</span> <span class="pl">buf</span> <span class="kw">=</span> <span class="ty">Slice</span><span class="pn">.</span><span class="pl">make</span><span class="pn">&lt;</span><span class="ty">byte</span><span class="pn">&gt;</span><span class="pn">(</span><span class="num">64</span><span class="pn">)</span>
+  <span class="pl">rw</span><span class="pn">.</span><span class="fn">read</span><span class="pn">(</span><span class="pl">buf</span><span class="pn">)</span><span class="op">?</span>
+  <span class="pl">rw</span><span class="pn">.</span><span class="fn">write</span><span class="pn">(</span><span class="pl">buf</span><span class="pn">)</span>
+<span class="pn">}</span></pre>
+        </div>
+      </div>
+
+      <div class="example-row" data-panel="4" hidden>
+        <div class="example-block">
+          <pre><span class="kw">fn</span> <span class="fn">read_config</span><span class="pn">(</span><span class="pl">path</span><span class="pn">:</span> <span class="ty">string</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">Result</span><span class="pn">&lt;</span><span class="ty">Config</span><span class="pn">,</span> <span class="ty">error</span><span class="pn">&gt;</span> <span class="pn">{</span>
+  <span class="kw">let</span> <span class="pl">bytes</span> <span class="kw">=</span> <span class="pl">os</span><span class="pn">.</span><span class="ty">ReadFile</span><span class="pn">(</span><span class="pl">path</span><span class="pn">).</span><span class="fn">wrap_err</span><span class="pn">(</span><span class="str">"config"</span><span class="pn">)</span><span class="op">?</span>
+  <span class="fn">parse_config</span><span class="pn">(</span><span class="pl">bytes</span><span class="pn">)</span>
+<span class="pn">}</span>
+
+<span class="kw">fn</span> <span class="fn">primary_email</span><span class="pn">(</span><span class="pl">users</span><span class="pn">:</span> <span class="ty">Slice</span><span class="pn">&lt;</span><span class="ty">User</span><span class="pn">&gt;</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">Option</span><span class="pn">&lt;</span><span class="ty">string</span><span class="pn">&gt;</span> <span class="pn">{</span>
+  <span class="kw">let</span> <span class="pl">user</span> <span class="kw">=</span> <span class="pl">users</span><span class="pn">.</span><span class="fn">get</span><span class="pn">(</span><span class="num">0</span><span class="pn">)</span><span class="op">?</span>
+  <span class="kw">let</span> <span class="pl">email</span> <span class="kw">=</span> <span class="pl">user</span><span class="pn">.</span><span class="pl">email</span><span class="op">?</span>
+  <span class="ty">Some</span><span class="pn">(</span><span class="pl">email</span><span class="pn">)</span>
+<span class="pn">}</span></pre>
+        </div>
+
+        <div class="example-block">
+          <pre><span class="kw">fn</span> <span class="fn">load_config</span><span class="pn">()</span> <span class="op">-&gt;</span> <span class="ty">Config</span> <span class="pn">{</span>
+  <span class="kw">let</span> <span class="pl">result</span> <span class="kw">=</span> <span class="kw">try</span> <span class="pn">{</span>
+    <span class="kw">let</span> <span class="pl">data</span> <span class="kw">=</span> <span class="pl">os</span><span class="pn">.</span><span class="ty">ReadFile</span><span class="pn">(</span><span class="str">"app.toml"</span><span class="pn">)</span><span class="op">?</span>
+    <span class="fn">parse_toml</span><span class="pn">(</span><span class="pl">data</span><span class="pn">)</span><span class="op">?</span>
+  <span class="pn">}</span>
+  <span class="kw">match</span> <span class="pl">result</span> <span class="pn">{</span>
+    <span class="ty">Ok</span><span class="pn">(</span><span class="pl">config</span><span class="pn">)</span> <span class="op">=&gt;</span> <span class="pl">config</span><span class="pn">,</span>
+    <span class="ty">Err</span><span class="pn">(</span><span class="op">_</span><span class="pn">)</span> <span class="op">=&gt;</span> <span class="ty">Config</span><span class="pn">.</span><span class="fn">default</span><span class="pn">(),</span>
+  <span class="pn">}</span>
+<span class="pn">}</span></pre>
+        </div>
+      </div>
+
+      <div class="example-row" data-panel="5" hidden>
+        <div class="example-block">
+          <pre><span class="kw">fn</span> <span class="fn">sum</span><span class="pn">(</span><span class="pl">numbers</span><span class="pn">:</span> <span class="ty">Slice</span><span class="pn">&lt;</span><span class="ty">int</span><span class="pn">&gt;</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">int</span> <span class="pn">{</span>
+  <span class="pl">numbers</span><span class="pn">.</span><span class="fn">fold</span><span class="pn">(</span><span class="num">0</span><span class="pn">,</span> <span class="kw">|</span><span class="pl">a</span><span class="pn">,</span> <span class="pl">b</span><span class="kw">|</span> <span class="pl">a</span> <span class="kw">+</span> <span class="pl">b</span><span class="pn">)</span>
+<span class="pn">}</span>
+
+<span class="kw">fn</span> <span class="fn">totals</span><span class="pn">()</span> <span class="pn">{</span>
+  <span class="kw">let</span> <span class="pl">ch</span> <span class="kw">=</span> <span class="ty">Channel</span><span class="pn">.</span><span class="pl">buffered</span><span class="pn">&lt;</span><span class="ty">int</span><span class="pn">&gt;</span><span class="pn">(</span><span class="num">2</span><span class="pn">)</span>
+  <span class="kw">let</span> <span class="pn">(</span><span class="pl">tx</span><span class="pn">,</span> <span class="pl">rx</span><span class="pn">)</span> <span class="kw">=</span> <span class="pl">ch</span><span class="pn">.</span><span class="fn">split</span><span class="pn">()</span>
+
+  <span class="kw">task</span> <span class="pn">{</span>
+    <span class="pl">tx</span><span class="pn">.</span><span class="fn">send</span><span class="pn">(</span><span class="fn">sum</span><span class="pn">([</span><span class="num">1</span><span class="pn">,</span> <span class="num">2</span><span class="pn">,</span> <span class="num">3</span><span class="pn">]))</span>
+    <span class="pl">tx</span><span class="pn">.</span><span class="fn">send</span><span class="pn">(</span><span class="fn">sum</span><span class="pn">([</span><span class="num">4</span><span class="pn">,</span> <span class="num">5</span><span class="pn">]))</span>
+    <span class="pl">tx</span><span class="pn">.</span><span class="fn">close</span><span class="pn">()</span>
+  <span class="pn">}</span>
+
+  <span class="kw">for</span> <span class="pl">total</span> <span class="kw">in</span> <span class="pl">rx</span> <span class="pn">{</span>
+    <span class="pl">fmt</span><span class="pn">.</span><span class="ty">Println</span><span class="pn">(</span><span class="pl">total</span><span class="pn">)</span>
+  <span class="pn">}</span>
+<span class="pn">}</span></pre>
+        </div>
+
+        <div class="example-block">
+          <pre><span class="kw">fn</span> <span class="fn">quickest</span><span class="pn">()</span> <span class="op">-&gt;</span> <span class="ty">string</span> <span class="pn">{</span>
+  <span class="kw">let</span> <span class="pl">primary</span> <span class="kw">=</span> <span class="ty">Channel</span><span class="pn">.</span><span class="pl">new</span><span class="pn">&lt;</span><span class="ty">string</span><span class="pn">&gt;</span><span class="pn">()</span>
+  <span class="kw">let</span> <span class="pl">replica</span> <span class="kw">=</span> <span class="ty">Channel</span><span class="pn">.</span><span class="pl">new</span><span class="pn">&lt;</span><span class="ty">string</span><span class="pn">&gt;</span><span class="pn">()</span>
+
+  <span class="kw">task</span> <span class="pl">primary</span><span class="pn">.</span><span class="fn">send</span><span class="pn">(</span><span class="fn">fetch_primary</span><span class="pn">())</span>
+  <span class="kw">task</span> <span class="pl">replica</span><span class="pn">.</span><span class="fn">send</span><span class="pn">(</span><span class="fn">fetch_replica</span><span class="pn">())</span>
+
+  <span class="kw">select</span> <span class="pn">{</span>
+    <span class="kw">match</span> <span class="pl">primary</span><span class="pn">.</span><span class="fn">receive</span><span class="pn">()</span> <span class="pn">{</span>
+      <span class="ty">Some</span><span class="pn">(</span><span class="pl">body</span><span class="pn">)</span> <span class="op">=&gt;</span> <span class="pl">body</span><span class="pn">,</span>
+      <span class="ty">None</span> <span class="op">=&gt;</span> <span class="str">"closed"</span><span class="pn">,</span>
+    <span class="pn">},</span>
+    <span class="kw">match</span> <span class="pl">replica</span><span class="pn">.</span><span class="fn">receive</span><span class="pn">()</span> <span class="pn">{</span>
+      <span class="ty">Some</span><span class="pn">(</span><span class="pl">body</span><span class="pn">)</span> <span class="op">=&gt;</span> <span class="pl">body</span><span class="pn">,</span>
+      <span class="ty">None</span> <span class="op">=&gt;</span> <span class="str">"closed"</span><span class="pn">,</span>
+    <span class="pn">},</span>
+  <span class="pn">}</span>
+<span class="pn">}</span></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="examples band" id="safe">
+      <div class="examples-header">
+        <h2>Safe</h2>
+        <p>Go runtime failures, caught at compile time</p>
+      </div>
+
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" aria-selected="true" data-panel="0">unhandled cases</button>
+        <button type="button" role="tab" aria-selected="false" data-panel="1">side effects, leaks and races</button>
+        <span class="row-break"></span>
+        <button type="button" role="tab" aria-selected="false" data-panel="2">silent misbehavior</button>
+        <button type="button" role="tab" aria-selected="false" data-panel="3">impossible logic</button>
+        <button type="button" role="tab" aria-selected="false" data-panel="4">advisories</button>
+      </div>
+
+      <div class="diagnostics-grid" data-panel="0">
+        <div class="diag-block">
+          <pre>  <span class="diag-err">✕ <span class="diag-accent">match</span> is not exhaustive</span>
+   ╭─[example.lis:5:3]
+ <span class="diag-dim">4</span> │ fn should_alert(s: Severity) -> bool {
+ <span class="diag-dim">5</span> │   <span class="diag-ptr">match s</span> {
+   · <span class="diag-ptr">  ───┬───</span>
+   ·      <span class="diag-ptr">╰── not all patterns covered</span>
+ <span class="diag-dim">6</span> │     Severity.Low => false,
+ <span class="diag-dim">7</span> │     Severity.High => true,
+ <span class="diag-dim">8</span> │   }
+ <span class="diag-dim">9</span> │ }
+   ╰────
+  <span class="diag-dim">help: Handle the missing case <span class="diag-accent">Severity.Critical</span>,
+        e.g. <span class="diag-accent">Severity.Critical => { ... }</span></span></pre>
+        </div>
+        <div class="diag-block">
+          <pre><span class="diag-err">✕ <span class="diag-accent">nil</span> is not supported</span>
+   ╭─[users.lis:5:12]
+ <span class="diag-dim">3</span> │ fn find(name: string) -&gt; Option&lt;User&gt; {
+ <span class="diag-dim">4</span> │   if name.is_empty() {
+ <span class="diag-dim">5</span> │     return <span class="diag-ptr">nil</span>
+   · <span class="diag-ptr">           ─┬─</span>
+   ·             <span class="diag-ptr">╰── does not exist</span>
+ <span class="diag-dim">6</span> │   }
+ <span class="diag-dim">7</span> │   lookup(name)
+ <span class="diag-dim">8</span> │ }
+   ╰────
+<span class="diag-dim">  help: Absence is encoded with <span class="diag-accent">Option&lt;T&gt;</span> in Lisette. Use
+        <span class="diag-accent">None</span> to represent absent values</span></pre>
+        </div>
+        <div class="diag-block">
+          <pre><span class="diag-warn">▲ <span class="diag-accent">Result</span> is silently discarded</span>
+    ╭─[files.lis:9:3]
+ <span class="diag-dim"> 8</span> │ fn shutdown() {
+ <span class="diag-dim"> 9</span> │   <span class="diag-ptr-warn">cleanup()</span>
+    · <span class="diag-ptr-warn">  ────┬────</span>
+    ·       <span class="diag-ptr-warn">╰── failure will go unnoticed</span>
+ <span class="diag-dim">10</span> │   fmt.Println("done")
+ <span class="diag-dim">11</span> │ }
+    ╰────
+<span class="diag-dim">  help: Handle this <span class="diag-accent">Result</span> with <span class="diag-accent">?</span> or <span class="diag-accent">match</span>, or explicitly
+        discard it with <span class="diag-accent">let</span> <span class="diag-accent">_</span> <span class="diag-accent">=</span> <span class="diag-accent">...</span></span></pre>
+        </div>
+        <div class="diag-block">
+          <pre><span class="diag-warn">▲ <span class="diag-accent">Option</span> is silently discarded</span>
+    ╭─[cache.lis:10:3]
+ <span class="diag-dim"> 9</span> │ fn warm(c: Cache) {
+ <span class="diag-dim">10</span> │   <span class="diag-ptr-warn">hit_count(c, "home")</span>
+    · <span class="diag-ptr-warn">  ──────────┬─────────</span>
+    ·             <span class="diag-ptr-warn">╰── absence will go unnoticed</span>
+ <span class="diag-dim">11</span> │   fmt.Println("warmed")
+ <span class="diag-dim">12</span> │ }
+    ╰────
+<span class="diag-dim">  help: Handle this <span class="diag-accent">Option</span> with <span class="diag-accent">?</span> or <span class="diag-accent">match</span>, or explicitly
+        discard it with <span class="diag-accent">let</span> <span class="diag-accent">_</span> <span class="diag-accent">=</span> <span class="diag-accent">...</span></span></pre>
+        </div>
+      </div>
+
+      <div class="diagnostics-grid" data-panel="1" hidden>
+        <div class="diag-block">
+          <pre><span class="diag-err">✕ Immutable variable</span>
+   ╭─[sorting.lis:7:8]
+ <span class="diag-dim">5</span> │ fn run_sort() {
+ <span class="diag-dim">6</span> │   let nums = [3, 1, 2]
+ <span class="diag-dim">7</span> │   sort(<span class="diag-ptr">nums</span>)
+   · <span class="diag-ptr">       ──┬─</span>
+   ·          <span class="diag-ptr">╰── <span class="diag-accent">nums</span> was declared without <span class="diag-accent">mut</span></span>
+ <span class="diag-dim">8</span> │ }
+   ╰────
+<span class="diag-dim">  help: <span class="diag-accent">sort()</span> writes to <span class="diag-accent">nums</span>. Declare using
+        <span class="diag-accent">let</span> <span class="diag-accent">mut</span> <span class="diag-accent">nums</span> to make the variable mutable</span></pre>
+        </div>
+        <div class="diag-block">
+          <pre><span class="diag-warn">▲ <span class="diag-accent">os.Exit</span> skips <span class="diag-accent">defer</span></span>
+    ╭─[exit.lis:10:3]
+ <span class="diag-dim"> 9</span> │   defer flush()
+ <span class="diag-dim">10</span> │   <span class="diag-ptr-warn">os.Exit(code)</span>
+    · <span class="diag-ptr-warn">  ──────┬──────</span>
+    ·         <span class="diag-ptr-warn">╰── exits before </span><span class="diag-accent">defer</span><span class="diag-ptr-warn"> can run</span>
+ <span class="diag-dim">11</span> │ }
+    ╰────
+<span class="diag-dim">  help: <span class="diag-accent">os.Exit</span> will terminate the process without running
+        deferred calls. Run the cleanup before exiting
+        instead of deferring it</span></pre>
+        </div>
+        <div class="diag-block">
+          <pre><span class="diag-warn">▲ Context leaking</span>
+   ╭─[work.lis:4:13]
+ <span class="diag-dim">3</span> │ fn serve(p: context.Context) {
+ <span class="diag-dim">4</span> │   let (ctx, <span class="diag-ptr-warn">stop</span>) = context.WithCancel(p)
+   · <span class="diag-ptr-warn">            ──┬─</span>
+   ·               <span class="diag-ptr-warn">╰── never called</span>
+ <span class="diag-dim">5</span> │   handle(ctx)
+ <span class="diag-dim">6</span> │ }
+   ╰────
+<span class="diag-dim">  help: Call this cancel function (usually <span class="diag-accent">defer</span> <span class="diag-accent">cancel()</span>)
+        to release the context, or it leaks until the
+        parent is canceled</span></pre>
+        </div>
+        <div class="diag-block">
+          <pre><span class="diag-warn">▲ <span class="diag-accent">WaitGroup.Add</span> inside a <span class="diag-accent">task</span></span>
+    ╭─[pool.lis:8:7]
+ <span class="diag-dim"> 7</span> │     task {
+ <span class="diag-dim"> 8</span> │       <span class="diag-ptr-warn">wg.Add(1)</span>
+    · <span class="diag-ptr-warn">      ────┬────</span>
+    ·           <span class="diag-ptr-warn">╰── may run after </span><span class="diag-accent">Wait</span>
+ <span class="diag-dim"> 9</span> │       defer wg.Done()
+ <span class="diag-dim">10</span> │     }
+    ╰────
+<span class="diag-dim">  help: Prefer <span class="diag-accent">wg.Go(||</span> <span class="diag-accent">...)</span>, which counts the task and
+        starts it in one step and runs <span class="diag-accent">Done</span> for you, or
+        move <span class="diag-accent">Add</span> before the <span class="diag-accent">task</span></span></pre>
+        </div>
+      </div>
+
+      <div class="diagnostics-grid" data-panel="2" hidden>
+        <div class="diag-block">
+          <pre><span class="diag-warn">▲ Lost query mutation</span>
+   ╭─[link.lis:4:3]
+ <span class="diag-dim">3</span> │ fn tag(u: Ref&lt;url.URL&gt;, value: string) {
+ <span class="diag-dim">4</span> │   <span class="diag-ptr-warn">u.Query().Set("tag", value)</span>
+   · <span class="diag-ptr-warn">  ─────────────┬─────────────</span>
+   ·                <span class="diag-ptr-warn">╰── mutates a discarded copy</span>
+ <span class="diag-dim">5</span> │ }
+   ╰────
+<span class="diag-dim">  help: <span class="diag-accent">URL.Query</span> returns a fresh copy, so this <span class="diag-accent">Set</span> has no
+        effect. Bind it, mutate it, then assign
+        <span class="diag-accent">values.Encode()</span> to <span class="diag-accent">RawQuery</span></span></pre>
+        </div>
+        <div class="diag-block">
+          <pre><span class="diag-err">✕ File permission written in decimal</span>
+   ╭─[perms.lis:4:24]
+ <span class="diag-dim">3</span> │ fn lock() -&gt; Result&lt;(), error&gt; {
+ <span class="diag-dim">4</span> │   os.Chmod("app.conf", <span class="diag-ptr">600</span>)
+   · <span class="diag-ptr">                       ─┬─</span>
+   ·                         <span class="diag-ptr">╰── decimal <span class="diag-accent">600</span> is octal <span class="diag-accent">0o1130</span></span>
+ <span class="diag-dim">5</span> │ }
+   ╰────
+<span class="diag-dim">  help: File permissions are conventionally written in
+        octal. Use a <span class="diag-accent">0o</span> prefix (for example <span class="diag-accent">0o644</span>) so the
+        bits line up with the rwx triples</span></pre>
+        </div>
+        <div class="diag-block">
+          <pre><span class="diag-warn">▲ Appending to a zero-filled slice</span>
+   ╭─[buffer.lis:2:13]
+ <span class="diag-dim">1</span> │ fn ids() -&gt; Slice&lt;int&gt; {
+ <span class="diag-dim">2</span> │   let out = <span class="diag-ptr-warn">Slice.make&lt;int&gt;(3)</span>
+   · <span class="diag-ptr-warn">            ─────────┬────────</span>
+   ·                      <span class="diag-ptr-warn">╰── already all zeros</span>
+ <span class="diag-dim">3</span> │   <span class="diag-ptr-warn">out.append(7)</span>
+   · <span class="diag-ptr-warn">  ──────┬──────</span>
+   ·         <span class="diag-ptr-warn">╰── </span><span class="diag-accent">append</span><span class="diag-ptr-warn"> adds element <span class="diag-accent">4</span> here</span>
+ <span class="diag-dim">4</span> │ }
+   ╰────
+<span class="diag-dim">  help: For an empty slice with room for 3, use
+        <span class="diag-accent">Slice.new&lt;int&gt;().reserve(3)</span></span></pre>
+        </div>
+        <div class="diag-block">
+          <pre><span class="diag-err">✕ Duplicate map key</span>
+   ╭─[flags.lis:3:14]
+ <span class="diag-dim">1</span> │ /// Feature flags and their default values.
+ <span class="diag-dim">2</span> │ fn defaults() -&gt; Map&lt;string, int&gt; {
+ <span class="diag-dim">3</span> │   Map.from([(<span class="diag-ptr">"debug"</span>, 1), (<span class="diag-ptr">"debug"</span>, 0)])
+   · <span class="diag-ptr">             ───┬───       ───┬───</span>
+   ·                 <span class="diag-ptr">│</span>             <span class="diag-ptr">╰── overwrites first</span>
+   ·                 <span class="diag-ptr">╰── key for first entry</span>
+ <span class="diag-dim">4</span> │ }
+   ╰────
+<span class="diag-dim">  help: <span class="diag-accent">Map.from</span> keeps the last entry for a key, so the
+        earlier entry never reaches the map. Remove one of
+        the two entries</span></pre>
+        </div>
+      </div>
+
+      <div class="diagnostics-grid" data-panel="3" hidden>
+        <div class="diag-block">
+          <pre><span class="diag-err">✕ <span class="diag-accent">if</span> condition repeated in <span class="diag-accent">else if</span></span>
+   ╭─[logic.lis:4:13]
+ <span class="diag-dim">2</span> │   if score &gt; 90 {
+ <span class="diag-dim">3</span> │     "gold"
+ <span class="diag-dim">4</span> │   } else if <span class="diag-ptr">score &gt; 90</span> {
+   · <span class="diag-ptr">            ─────┬────</span>
+   ·                  <span class="diag-ptr">╰── same as prior condition</span>
+ <span class="diag-dim">5</span> │     "silver"
+   ╰────
+<span class="diag-dim">  help: This branch is unreachable because its condition
+        duplicates the preceding condition. Did you mean a
+        different condition?</span></pre>
+        </div>
+        <div class="diag-block">
+          <pre><span class="diag-warn">▲ Variables are not swapped</span>
+    ╭─[logic.lis:12:3]
+ <span class="diag-dim">11</span> │     let mut b = second
+ <span class="diag-dim">12</span> │ <span class="diag-ptr-warn">╭─▶</span>   <span class="diag-ptr-warn">a = b</span>
+ <span class="diag-dim">13</span> │ <span class="diag-ptr-warn">├─▶</span> <span class="diag-ptr-warn">  b = a</span>
+    · <span class="diag-ptr-warn">╰────</span> <span class="diag-ptr-warn">does not swap values</span>
+ <span class="diag-dim">14</span> │       a + b
+ <span class="diag-dim">15</span> │     }
+    ╰────
+<span class="diag-dim">  help: <span class="diag-accent">a</span> <span class="diag-accent">=</span> <span class="diag-accent">b</span> overwrites <span class="diag-accent">a</span>, so <span class="diag-accent">b</span> <span class="diag-accent">=</span> <span class="diag-accent">a</span> writes <span class="diag-accent">b</span>'s own value
+        back and the original <span class="diag-accent">a</span> is lost. Save one value in
+        a temporary variable first</span></pre>
+        </div>
+        <div class="diag-block">
+          <pre><span class="diag-warn">▲ Comparison is always <span class="diag-accent">true</span></span>
+    ╭─[logic.lis:18:3]
+ <span class="diag-dim">17</span> │ fn in_range(n: uint) -&gt; bool {
+ <span class="diag-dim">18</span> │   <span class="diag-ptr-warn">n &gt;= 0</span>
+    · <span class="diag-ptr-warn">  ───┬──</span>
+    ·      <span class="diag-ptr-warn">╰── an unsigned integer is never negative</span>
+ <span class="diag-dim">19</span> │ }
+    ╰────
+<span class="diag-dim">  help: An unsigned integer is never negative, so this
+        comparison always has the same result. Did you
+        mean to compare to a different value?</span></pre>
+        </div>
+        <div class="diag-block">
+          <pre><span class="diag-warn">▲ Exact float comparison</span>
+    ╭─[logic.lis:22:3]
+ <span class="diag-dim">21</span> │ fn is_paid(paid: float64, due: float64) -&gt; bool {
+ <span class="diag-dim">22</span> │   <span class="diag-ptr-warn">paid == due</span>
+    · <span class="diag-ptr-warn">  ─────┬─────</span>
+    ·        <span class="diag-ptr-warn">╰── floats compared with </span><span class="diag-accent">==</span>
+ <span class="diag-dim">23</span> │ }
+    ╰────
+<span class="diag-dim">  help: Floating-point results are rarely bit-exact, so <span class="diag-accent">==</span>
+        and <span class="diag-accent">!=</span> may not behave as intended. Compare within
+        a tolerance instead, e.g. <span class="diag-accent">math.Abs(a</span> <span class="diag-accent">-</span> <span class="diag-accent">b)</span> <span class="diag-accent">&lt;</span> <span class="diag-accent">c</span></span></pre>
+        </div>
+      </div>
+
+      <div class="diagnostics-grid" data-panel="4" hidden>
+        <div class="diag-block advisory">
+          <pre><span class="diag-info">● Regexp recompiled on every iteration</span>
+   ╭─[scan.lis:7:34]
+ <span class="diag-dim">6</span> │   for l in lines {
+ <span class="diag-dim">7</span> │     let hit = regexp.MatchString(<span class="diag-ptr-info">"^lis"</span>, l)?
+   · <span class="diag-ptr-info">                                 ───┬──</span>
+   ·                                     <span class="diag-ptr-info">╰── recompiled</span>
+ <span class="diag-dim">8</span> │     if hit {
+   ╰────
+<span class="diag-dim">  help: Compile the pattern once outside the loop and
+        reuse it: <span class="diag-accent">regexp.MustCompile</span>, or <span class="diag-accent">regexp.Compile</span> to
+        keep the error</span></pre>
+        </div>
+        <div class="diag-block advisory">
+          <pre><span class="diag-info">● Unnecessary eager evaluation</span>
+    ╭─[scan.lis:16:30]
+ <span class="diag-dim">15</span> │ fn caption(name: Option&lt;string&gt;) -&gt; string {
+ <span class="diag-dim">16</span> │   let shown = name.unwrap_or(<span class="diag-ptr-info">fallback()</span>)
+    · <span class="diag-ptr-info">                             ─────┬────</span>
+    ·                                   <span class="diag-ptr-info">╰── always evaluated</span>
+ <span class="diag-dim">17</span> │   strings.TrimSpace(shown)
+ <span class="diag-dim">18</span> │ }
+    ╰────
+<span class="diag-dim">  help: Replace <span class="diag-accent">.unwrap_or(...)</span> with <span class="diag-accent">.unwrap_or_else(...)</span>
+        so the fallback runs only when needed</span></pre>
+        </div>
+        <div class="diag-block advisory">
+          <pre><span class="diag-info">● Filtered slice thrown away</span>
+   ╭─[jobs.lis:4:3]
+ <span class="diag-dim">3</span> │ fn pending(jobs: Slice&lt;Job&gt;) -&gt; Option&lt;Job&gt; {
+ <span class="diag-dim">4</span> │   <span class="diag-ptr-info">jobs.filter(|j| j.state == "pending").get(0)</span>
+   · <span class="diag-ptr-info">  ──────────────────────┬─────────────────────</span>
+   ·                         <span class="diag-ptr-info">╰── can use </span><span class="diag-accent">find</span>
+ <span class="diag-dim">5</span> │ }
+   ╰────
+<span class="diag-dim">  help: <span class="diag-accent">filter(...).get(0)</span> builds the whole filtered
+        slice. Use <span class="diag-accent">jobs.find(|j|</span> <span class="diag-accent">j.state</span> <span class="diag-accent">==</span> <span class="diag-accent">"pending")</span> to
+        return the first match directly</span></pre>
+        </div>
+        <div class="diag-block advisory">
+          <pre><span class="diag-info">● Inefficient string comparison</span>
+    ╭─[scan.lis:27:3]
+ <span class="diag-dim">25</span> │   let left = strings.TrimSpace(a)
+ <span class="diag-dim">26</span> │   let right = strings.TrimSpace(b)
+ <span class="diag-dim">27</span> │   <span class="diag-ptr-info">strings.ToLower(left) == strings.ToLower(right)</span>
+    · <span class="diag-ptr-info">  ───────────────────────┬───────────────────────</span>
+    ·                          <span class="diag-ptr-info">╰── can use </span><span class="diag-accent">strings.EqualFold</span>
+ <span class="diag-dim">28</span> │ }
+    ╰────
+<span class="diag-dim">  help: Use <span class="diag-accent">strings.EqualFold(left,</span> <span class="diag-accent">right)</span> to compare
+        case-insensitively in one call</span></pre>
+        </div>
+      </div>
+      <div class="editor-icons">
+        <span class="editor-icons-label">LSP support for:</span>
+        <span class="editor-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24"><path d="M23.15 2.587L18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.261A1 1 0 0 0 .326 8.74L3.899 12 .326 15.26a1 1 0 0 0 .001 1.479L1.65 17.94a.999.999 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.942-2.377A1.5 1.5 0 0 0 24 20.06V3.939a1.5 1.5 0 0 0-.85-1.352zm-5.146 14.861L10.826 12l7.178-5.448v10.896z"/></svg>
+          VSCode
+        </span>
+        <span class="editor-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24"><path d="M2.214 4.954v13.615L7.655 24V10.314L3.312 3.845 3.312 3.845 2.214 4.954zm4.999 17.98l-4.557-4.548V5.136l.59-.596 3.967 5.908v12.485zm14.573-4.457l-.862.937-4.24-6.376V0l5.068 5.092.034 13.385zM7.431.001l12.998 19.835-3.637 3.637L3.787 3.683 7.43 0"/></svg>
+          Neovim
+        </span>
+        <span class="editor-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24"><path d="M2.25 1.5a.75.75 0 0 0-.75.75v16.5H0V2.25A2.25 2.25 0 0 1 2.25 0h20.095c1.002 0 1.504 1.212.795 1.92L10.764 14.298h3.486V12.75h1.5v1.922a1.125 1.125 0 0 1-1.125 1.125H9.264l-2.578 2.578h11.689V9h1.5v9.375a1.5 1.5 0 0 1-1.5 1.5H5.185L2.562 22.5H21.75a.75.75 0 0 0 .75-.75V5.25H24v16.5A2.25 2.25 0 0 1 21.75 24H1.655C.653 24 .151 22.788.86 22.08L13.19 9.75H9.75v1.5h-1.5V9.375A1.125 1.125 0 0 1 9.375 8.25h5.314l2.625-2.625H5.625V15h-1.5V5.625a1.5 1.5 0 0 1 1.5-1.5h13.19L21.438 1.5"/></svg>
+          Zed
+        </span>
+        <span class="editor-icon">
+          <svg viewBox="0 0 16 24" width="14" height="20"><path d="m0 0 14.645 8.456a1.27 1.27 0 0 1 .633 1.096v2.813c0 .226-.06.444-.169.633L.627 4.637A1.25 1.25 0 0 1 0 3.55zM14.651 19.362a1.25 1.25 0 0 1 .627 1.087v3.55L.633 15.544A1.27 1.27 0 0 1 0 14.448v-2.813c0-.226.06-.444.169-.633z"/><path d="M1.41 14.365a.93.93 0 0 0-.343.343.944.944 0 0 0 .332 1.278l-.765-.442A1.27 1.27 0 0 1 0 14.448v-2.813c0-.452.241-.87.633-1.096L13.869 2.898l.006-.004a.93.93 0 0 0 .336-.339.94.94 0 0 0-.332-1.278l.765.442a1.27 1.27 0 0 1 .633 1.096v2.813c0 .452-.241.87-.633 1.096l-.787.455.011-.007zm0 6.737a.93.93 0 0 0-.343.343.944.944 0 0 0 .332 1.278l-.765-.442A1.27 1.27 0 0 1 0 21.185v-2.813c0-.452.241-.87.633-1.096L13.869 9.635l.006-.004a.94.94 0 0 0 .336-.339.94.94 0 0 0-.332-1.278l.765.442a1.27 1.27 0 0 1 .633 1.096v2.813c0 .452-.241.87-.633 1.096l-.787.454.011-.006z"/></svg>
+          Helix
+        </span>
+        <span class="editor-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24"><path d="M0 0v24h24V0Zm6.764 3a5.448 5.448 0 0 1 3.892 1.356L9.284 6.012A3.652 3.652 0 0 0 6.696 5c-1.6 0-2.844 1.4-2.844 3.08v.028c0 1.812 1.244 3.14 3 3.14a3.468 3.468 0 0 0 2.048-.596V9.228H6.708v-1.88H11v4.296a6.428 6.428 0 0 1-4.228 1.572c-3.076 0-5.196-2.164-5.196-5.092v-.028A5.08 5.08 0 0 1 6.764 3Zm10.432 0c3.052 0 5.244 2.276 5.244 5.088v.028a5.116 5.116 0 0 1-5.272 5.12c-3.056-.02-5.248-2.296-5.248-5.112v-.028A5.116 5.116 0 0 1 17.196 3Zm-.028 2A2.96 2.96 0 0 0 14.2 8.068v.028a3.008 3.008 0 0 0 3 3.112 2.96 2.96 0 0 0 2.964-3.084v-.028A3.004 3.004 0 0 0 17.168 5ZM2.252 19.5h9V21h-9z"/></svg>
+          GoLand
+        </span>
+      </div>
+    </section>
+
+    <section class="examples" id="interoperable">
+      <div class="examples-header">
+        <h2>Interoperable</h2>
+        <p>Import Go packages, stay on Go's runtime</p>
+      </div>
+
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" aria-selected="true" data-panel="0">Go stdlib</button>
+        <button type="button" role="tab" aria-selected="false" data-panel="1">third-party Go modules</button>
+        <button type="button" role="tab" aria-selected="false" data-panel="2">struct tags</button>
+        <button type="button" role="tab" aria-selected="false" data-panel="3">strongly typed Go values</button>
+      </div>
+
+      <div class="example-row" data-panel="0">
+        <div class="example-block">
+          <pre><span class="kw">import</span> <span class="str">"go:os"</span>
+
+<span class="kw">fn</span> <span class="fn">server_url</span><span class="pn">()</span> <span class="op">-&gt;</span> <span class="ty">string</span> <span class="pn">{</span>
+  <span class="kw">let</span> <span class="pl">scheme</span> <span class="kw">=</span> <span class="pl">os</span><span class="pn">.</span><span class="ty">LookupEnv</span><span class="pn">(</span><span class="str">"HTTPS"</span><span class="pn">)</span>
+    <span class="pn">.</span><span class="fn">filter</span><span class="pn">(</span><span class="kw">|</span><span class="pl">s</span><span class="kw">|</span> <span class="pl">s</span> <span class="pn">==</span> <span class="str">"1"</span><span class="pn">)</span>
+    <span class="pn">.</span><span class="fn">map</span><span class="pn">(</span><span class="kw">|</span><span class="op">_</span><span class="kw">|</span> <span class="str">"https"</span><span class="pn">)</span>
+    <span class="pn">.</span><span class="fn">unwrap_or</span><span class="pn">(</span><span class="str">"http"</span><span class="pn">)</span>
+
+  <span class="kw">let</span> <span class="pl">host</span> <span class="kw">=</span> <span class="pl">os</span><span class="pn">.</span><span class="ty">LookupEnv</span><span class="pn">(</span><span class="str">"HOST"</span><span class="pn">)</span>
+    <span class="pn">.</span><span class="fn">unwrap_or</span><span class="pn">(</span><span class="str">"localhost"</span><span class="pn">)</span>
+
+  <span class="kw">let</span> <span class="pl">port</span> <span class="kw">=</span> <span class="pl">os</span><span class="pn">.</span><span class="ty">LookupEnv</span><span class="pn">(</span><span class="str">"PORT"</span><span class="pn">)</span>
+    <span class="pn">.</span><span class="fn">unwrap_or</span><span class="pn">(</span><span class="str">"8080"</span><span class="pn">)</span>
+
+  <span class="pl">scheme</span> <span class="kw">+</span> <span class="str">"://"</span> <span class="kw">+</span> <span class="pl">host</span> <span class="kw">+</span> <span class="str">":"</span> <span class="kw">+</span> <span class="pl">port</span>
+<span class="pn">}</span></pre>
+        </div>
+
+        <div class="example-block aux-block">
+          <div class="file-name"><svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="M9.5 1.5H4.5a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V4.5Z"/><path d="M9.5 1.5v3h3"/></svg>os.d.lis</div>
+          <pre><span class="cm">// func Getenv(key string) string</span>
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="fn">Getenv</span><span class="pn">(</span><span class="pl">key</span><span class="pn">:</span> <span class="ty">string</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">string</span>
+
+<span class="cm">// func LookupEnv(key string) (string, bool)</span>
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="fn">LookupEnv</span><span class="pn">(</span><span class="pl">key</span><span class="pn">:</span> <span class="ty">string</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">Option</span><span class="pn">&lt;</span><span class="ty">string</span><span class="pn">&gt;</span>
+
+<span class="cm">// func Open(name string) (*File, error)</span>
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="fn">Open</span><span class="pn">(</span><span class="pl">name</span><span class="pn">:</span> <span class="ty">string</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">Result</span><span class="pn">&lt;</span><span class="ty">Ref</span><span class="pn">&lt;</span><span class="ty">File</span><span class="pn">&gt;</span><span class="pn">,</span> <span class="ty">error</span><span class="pn">&gt;</span>
+
+<span class="cm">// func Remove(name string) error</span>
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="fn">Remove</span><span class="pn">(</span><span class="pl">name</span><span class="pn">:</span> <span class="ty">string</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">Result</span><span class="pn">&lt;</span><span class="pn">(),</span> <span class="ty">error</span><span class="pn">&gt;</span>
+
+<span class="cm">// func Hostname() (string, error)</span>
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="fn">Hostname</span><span class="pn">()</span> <span class="op">-&gt;</span> <span class="ty">Result</span><span class="pn">&lt;</span><span class="ty">string</span><span class="pn">,</span> <span class="ty">error</span><span class="pn">&gt;</span></pre>
+        </div>
+      </div>
+
+      <div class="example-row" data-panel="1" hidden>
+        <div class="stack">
+          <div class="example-block aux-block">
+          <pre><span class="cm">$</span> <span class="pl">lis add google/uuid</span>
+
+<span class="cm">· Fetching github.com/google/uuid@latest</span>
+<span class="str">✓ Added github.com/google/uuid v1.6.0</span></pre>
+        </div>
+
+          <div class="example-block aux-block">
+          <div class="file-name"><svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="M9.5 1.5H4.5a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V4.5Z"/><path d="M9.5 1.5v3h3"/></svg>lisette.toml</div>
+          <pre><span class="pn">[</span><span class="pl">project</span><span class="pn">]</span>
+<span class="pl">name</span> <span class="kw">=</span> <span class="str">"checkout"</span>
+<span class="pl">version</span> <span class="kw">=</span> <span class="str">"0.1.0"</span>
+
+<span class="pn">[</span><span class="pl">dependencies</span><span class="pn">.</span><span class="pl">go</span><span class="pn">]</span>
+<span class="str">"github.com/google/uuid"</span> <span class="kw">=</span> <span class="str">"v1.6.0"</span></pre>
+        </div>
+        </div>
+
+        <div class="example-block">
+          <pre><span class="kw">import</span> <span class="str">"go:github.com/google/uuid"</span>
+
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ty">Order</span> <span class="pn">{</span>
+  <span class="kw">pub</span> <span class="pl">id</span><span class="pn">:</span> <span class="ty">string</span><span class="pn">,</span>
+  <span class="kw">pub</span> <span class="pl">sku</span><span class="pn">:</span> <span class="ty">string</span><span class="pn">,</span>
+  <span class="kw">pub</span> <span class="pl">qty</span><span class="pn">:</span> <span class="ty">int</span><span class="pn">,</span>
+<span class="pn">}</span>
+
+<span class="kw">impl</span> <span class="ty">Order</span> <span class="pn">{</span>
+  <span class="cm">/// An order with a freshly generated ID.</span>
+  <span class="kw">pub</span> <span class="kw">fn</span> <span class="fn">new</span><span class="pn">(</span><span class="pl">sku</span><span class="pn">:</span> <span class="ty">string</span><span class="pn">,</span> <span class="pl">qty</span><span class="pn">:</span> <span class="ty">int</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">Order</span> <span class="pn">{</span>
+    <span class="ty">Order</span> <span class="pn">{</span> <span class="pl">id</span><span class="pn">:</span> <span class="pl">uuid</span><span class="pn">.</span><span class="ty">New</span><span class="pn">().</span><span class="ty">String</span><span class="pn">(),</span> <span class="pl">sku</span><span class="pn">,</span> <span class="pl">qty</span> <span class="pn">}</span>
+  <span class="pn">}</span>
+<span class="pn">}</span></pre>
+        </div>
+      </div>
+
+      <div class="example-row" data-panel="2" hidden>
+        <div class="example-block">
+          <pre><span class="at">#[json(camel_case)]</span>
+<span class="kw">struct</span> <span class="ty">UserProfile</span> <span class="pn">{</span>
+  <span class="pl">user_name</span><span class="pn">:</span> <span class="ty">string</span><span class="pn">,</span>
+
+  <span class="at">#[json(</span><span class="str">"userID"</span><span class="at">)]</span>
+  <span class="pl">account_id</span><span class="pn">:</span> <span class="ty">int</span><span class="pn">,</span>
+
+  <span class="at">#[json(omitempty)]</span>
+  <span class="pl">bio</span><span class="pn">:</span> <span class="ty">Option</span><span class="pn">&lt;</span><span class="ty">string</span><span class="pn">&gt;</span><span class="pn">,</span>
+
+  <span class="at">#[json(skip)]</span>
+  <span class="pl">internal_id</span><span class="pn">:</span> <span class="ty">int</span><span class="pn">,</span>
+<span class="pn">}</span></pre>
+        </div>
+
+        <div class="example-block aux-block">
+          <div class="file-name"><svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="M9.5 1.5H4.5a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V4.5Z"/><path d="M9.5 1.5v3h3"/></svg>user_profile.go</div>
+          <pre><span class="kw">package</span> <span class="pl">main</span>
+
+<span class="kw">import</span> <span class="pl">lis</span> <span class="str">"github.com/ivov/lisette/prelude"</span>
+
+<span class="kw">type</span> <span class="ty">UserProfile</span> <span class="kw">struct</span> <span class="pn">{</span>
+	<span class="ty">UserName</span>   <span class="ty">string</span>             <span class="str">`json:"userName"`</span>
+	<span class="ty">AccountId</span>  <span class="ty">int</span>                <span class="str">`json:"userID"`</span>
+	<span class="ty">Bio</span>        <span class="pl">lis</span><span class="pn">.</span><span class="ty">Option</span><span class="pn">[</span><span class="ty">string</span><span class="pn">]</span> <span class="str">`json:"bio,omitzero"`</span>
+	<span class="ty">InternalId</span> <span class="ty">int</span>                <span class="str">`json:"-"`</span>
+<span class="pn">}</span></pre>
+        </div>
+      </div>
+
+      <div class="example-row" data-panel="3" hidden>
+        <div class="example-block">
+          <pre><span class="kw">import</span> <span class="str">"go:errors"</span>
+<span class="kw">import</span> <span class="str">"go:io"</span>
+
+<span class="kw">fn</span> <span class="fn">drain</span><span class="pn">(</span><span class="pl">r</span><span class="pn">:</span> <span class="pl">io</span><span class="pn">.</span><span class="ty">Reader</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">Result</span><span class="pn">&lt;</span><span class="ty">int</span><span class="pn">,</span> <span class="ty">error</span><span class="pn">&gt;</span> <span class="pn">{</span>
+  <span class="kw">let</span> <span class="kw">mut</span> <span class="pl">buf</span> <span class="kw">=</span> <span class="ty">Slice</span><span class="pn">.</span><span class="pl">make</span><span class="pn">&lt;</span><span class="ty">byte</span><span class="pn">&gt;</span><span class="pn">(</span><span class="num">1024</span><span class="pn">)</span>
+
+  <span class="kw">match</span> <span class="pl">r</span><span class="pn">.</span><span class="ty">Read</span><span class="pn">(</span><span class="pl">buf</span><span class="pn">)</span> <span class="pn">{</span>
+    <span class="ty">Ok</span><span class="pn">(</span><span class="pl">n</span><span class="pn">)</span> <span class="op">=&gt;</span> <span class="ty">Ok</span><span class="pn">(</span><span class="pl">n</span><span class="pn">),</span>
+    <span class="ty">Both</span><span class="pn">(</span><span class="pl">n</span><span class="pn">,</span> <span class="pl">err</span><span class="pn">)</span> <span class="kw">if</span> <span class="pl">errors</span><span class="pn">.</span><span class="ty">Is</span><span class="pn">(</span><span class="pl">err</span><span class="pn">,</span> <span class="pl">io</span><span class="pn">.</span><span class="ty">EOF</span><span class="pn">)</span> <span class="op">=&gt;</span> <span class="ty">Ok</span><span class="pn">(</span><span class="pl">n</span><span class="pn">),</span>
+    <span class="ty">Both</span><span class="pn">(</span><span class="op">_</span><span class="pn">,</span> <span class="pl">err</span><span class="pn">)</span> <span class="op">=&gt;</span> <span class="ty">Err</span><span class="pn">(</span><span class="pl">err</span><span class="pn">),</span>
+    <span class="ty">Err</span><span class="pn">(</span><span class="pl">err</span><span class="pn">)</span> <span class="op">=&gt;</span> <span class="ty">Err</span><span class="pn">(</span><span class="pl">err</span><span class="pn">),</span>
+  <span class="pn">}</span>
+<span class="pn">}</span></pre>
+        </div>
+
+        <div class="example-block">
+          <pre><span class="kw">import</span> <span class="str">"go:context"</span>
+
+<span class="kw">fn</span> <span class="fn">request_id</span><span class="pn">(</span><span class="pl">ctx</span><span class="pn">:</span> <span class="pl">context</span><span class="pn">.</span><span class="ty">Context</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">Option</span><span class="pn">&lt;</span><span class="ty">string</span><span class="pn">&gt;</span> <span class="pn">{</span>
+  <span class="kw">let</span> <span class="pl">value</span> <span class="kw">=</span> <span class="pl">ctx</span><span class="pn">.</span><span class="ty">Value</span><span class="pn">(</span><span class="str">"request_id"</span><span class="pn">)</span>
+  <span class="fn">assert_type</span><span class="pn">&lt;</span><span class="ty">string</span><span class="pn">&gt;</span><span class="pn">(</span><span class="pl">value</span><span class="pn">)</span>
+<span class="pn">}</span>
+
+<span class="kw">fn</span> <span class="fn">log_prefix</span><span class="pn">(</span><span class="pl">ctx</span><span class="pn">:</span> <span class="pl">context</span><span class="pn">.</span><span class="ty">Context</span><span class="pn">)</span> <span class="op">-&gt;</span> <span class="ty">string</span> <span class="pn">{</span>
+  <span class="kw">match</span> <span class="fn">request_id</span><span class="pn">(</span><span class="pl">ctx</span><span class="pn">)</span> <span class="pn">{</span>
+    <span class="ty">Some</span><span class="pn">(</span><span class="pl">id</span><span class="pn">)</span> <span class="op">=&gt;</span> <span class="pl">f</span><span class="str">"[</span><span class="lit">{</span><span class="pl">id</span><span class="lit">}</span><span class="str">]"</span><span class="pn">,</span>
+    <span class="ty">None</span> <span class="op">=&gt;</span> <span class="str">"[anonymous]"</span><span class="pn">,</span>
+  <span class="pn">}</span>
+<span class="pn">}</span></pre>
+        </div>
+      </div>
+    </section>

@@ -75,7 +75,7 @@ impl string {
   /// Returns the number of bytes in the string.
   ///
   /// Example:
-  ///   // !callout-right `5`, since `é` takes two bytes
+  ///   // !callout-right `5`, since `é` is two bytes
   ///   let bytes = "café".length()
   fn length(self) -> int
 
@@ -1270,7 +1270,7 @@ interface error {
 ///
 /// Example:
 ///   let value: Unknown = get_unknown_value()
-///   // !callout-right `Some(n)` on a match, else `None`
+///   // !callout-right `Some(n)` if the expected type, else `None`
 ///   let n = assert_type<int>(value)?
 fn assert_type<T>(value: Unknown) -> Option<T>
 

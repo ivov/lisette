@@ -1,0 +1,108 @@
+---
+/**
+ * The source of `public/og.png`. Every colour, face and phrase below is the hero's own.
+ *
+ * To reissue the card, serve this page and screenshot it with Chrome:
+ * `--headless --hide-scrollbars --force-device-scale-factor=2 --window-size=1200,630`.
+ * That yields 2400x1260 and overwrites `public/og.png`.
+ */
+import "@fontsource-variable/inter";
+import "@fontsource/lexend/latin-600.css";
+import "../../styles/landing.css";
+
+// A rest route with no paths emits no page, which is how the card stays out of the build.
+export const getStaticPaths = () =>
+  import.meta.env.DEV ? [{ params: { rest: undefined } }] : [];
+---
+
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="robots" content="noindex" />
+    <title>og.png source</title>
+    {/* Global, not scoped: Astro injects the toolbar outside this component, so a scoped rule never matches it. */}
+    <style is:global>
+      astro-dev-toolbar {
+        display: none;
+      }
+    </style>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: var(--bg);
+      }
+
+      .card {
+        position: relative;
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+        box-sizing: border-box;
+        padding: 76px 88px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        background: radial-gradient(
+          ellipse at 15% 30%,
+          var(--hero-grad-a) 0%,
+          var(--hero-grad-b) 55%
+        );
+      }
+
+      .crop {
+        position: absolute;
+        bottom: 0;
+        right: 0;
+        width: 352px;
+        height: 352px;
+        border-radius: 50%;
+        background: var(--accent);
+        transform: translate(50%, 50%);
+      }
+      .card > *:not(.crop) {
+        position: relative;
+        z-index: 1;
+      }
+
+      h1 {
+        font-family: var(--font-display);
+        font-weight: 600;
+        font-size: 88px;
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+        color: var(--text);
+        margin: 0 0 26px;
+      }
+      .name {
+        font-size: 1.15em;
+        color: var(--accent);
+        display: inline-block;
+        margin-block-end: 0.25em;
+      }
+      .sub {
+        font-family: var(--font-sans);
+        font-size: 32px;
+        color: var(--text-sub);
+        line-height: 1.6;
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="crop"></div>
+      <h1>
+        <span class="name">Lisette</span><br />A love letter to <span class="brand-go"
+          >Go</span
+        ><br />written in <span class="brand-rust">Rust</span>
+      </h1>
+      {/* Non-breaking spaces, since HTML collapses a run of plain ones. */}
+      <p class="sub">
+        Safety&nbsp;&nbsp;·&nbsp;&nbsp;Expressiveness&nbsp;&nbsp;·&nbsp;&nbsp;Go's ecosystem
+      </p>
+    </div>
+  </body>
+</html>

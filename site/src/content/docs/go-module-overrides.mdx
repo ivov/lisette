@@ -1,0 +1,71 @@
+---
+title: "Go module overrides"
+description: "Sourcing a Go module from a fork, a mirror, or a local directory"
+---
+
+import { FileTree } from "@astrojs/starlight/components";
+
+## Go module replacement
+
+The `--replace` flag keeps a dependency's name and takes its code from elsewhere, e.g. to source a dependency from a fork, or to pin a version another dependency pulls in.
+
+```sh
+# !callout-above[/gorilla\/mux/] the name you import
+# !callout[/you\/mux/] where the code comes from
+lis add gorilla/mux --replace you/mux
+```
+
+The replacement is recorded in the manifest:
+
+```toml
+[dependencies.go]
+"github.com/gorilla/mux" = { replacement = "github.com/you/mux@v1.9.0" }
+```
+
+The replacement is transparent to your code:
+
+```lisette
+import "go:github.com/gorilla/mux"
+```
+
+To undo the replacement, re-add the dependency without `--replace`.
+
+## Go module on disk
+
+A Lisette project can depend on a Go module located on disk, for local development:
+
+<FileTree>
+
+- my-lis-app/
+  - lisette.toml
+  - src/
+    - main.lis
+- my-go-app/
+  - go.mod module `example.com/example/my-go-app`
+  - main.go
+
+</FileTree>
+
+Pass the Go module's root dir to the `--path` flag:
+
+```sh
+cd my-lis-app
+lis add --path ../my-go-app
+```
+
+The local Go module is recorded in the manifest:
+
+```toml
+[dependencies.go]
+"example.com/example/my-go-app" = { path = "../my-go-app" }
+```
+
+Import it using the module path in its `go.mod`:
+
+```lisette
+import "go:example.com/example/my-go-app"
+```
+
+As you edit the local Go module, run `lis check` in your Lisette project to regenerate the Go module's [typedefs](/docs/typedefs/).
+
+Once the Go module is published, use `lis add` to depend on the published module. Its import path stays the same, so no source changes.

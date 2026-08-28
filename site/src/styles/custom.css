@@ -1,0 +1,560 @@
+/* Unlayered on purpose: a cascade layer here lands before Starlight sets its layer order. */
+
+:root {
+  --sl-font: "Inter Variable";
+}
+
+h1#_top {
+  font-family: "Lexend", var(--__sl-font);
+  letter-spacing: -0.02em;
+}
+
+:root,
+[data-theme="dark"] {
+  --sl-color-accent-high: #b294f0;
+  --sl-color-accent: hsl(from #b294f0 h s 60%);
+  --sl-color-accent-low: hsl(from #b294f0 h s 22%);
+}
+
+:root:has(.topics) {
+  --sl-topics-height: 0rem;
+  --sl-nav-height: calc(3.5rem + var(--sl-topics-height));
+}
+
+@media (min-width: 50em) {
+  :root:has(.topics) {
+    --sl-topics-height: 2.75rem;
+    --sl-nav-height: calc(4rem + var(--sl-topics-height));
+  }
+}
+
+header:has(.topics) {
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 50rem) {
+  header:has(.topics) {
+    padding-block-end: 0;
+  }
+}
+
+header:has(.topics) > .header-row {
+  flex: 1;
+}
+
+@media (min-width: 50rem) {
+  .header {
+    grid-template-columns: 1fr auto auto;
+    column-gap: 0.75rem;
+  }
+
+  button[data-open-modal] {
+    width: 12rem;
+    height: 2.25rem;
+  }
+}
+
+#starlight__search .pagefind-ui__result-link:focus-visible {
+  outline: none;
+}
+
+[data-theme="light"] #starlight__search .pagefind-ui__result-title:not(:where(.pagefind-ui__result-nested *)):focus-within,
+[data-theme="light"] #starlight__search .pagefind-ui__result-nested:focus-within {
+  background-color: color-mix(in srgb, var(--sl-color-accent) 18%, white);
+}
+
+@media (min-width: 50rem) {
+  site-search dialog {
+    min-height: 0;
+  }
+}
+
+.meta {
+  margin-top: 2rem;
+}
+
+.content-panel {
+  overflow-x: clip;
+}
+
+:root {
+  --sl-main-pad: 0;
+}
+
+/* Attribute set in `astro.config.mjs`. Hide the wrapper, not the entry, or its gap doubles. */
+.sidebar-content > sl-sidebar-state-persist:has(a[data-sole-entry]) {
+  display: none;
+}
+
+.sidebar-pane {
+  scrollbar-width: none;
+  scrollbar-gutter: auto;
+}
+
+.sidebar-pane::-webkit-scrollbar {
+  display: none;
+}
+
+.sl-steps > li:last-child::after {
+  display: none;
+}
+
+.expressive-code,
+starlight-file-tree {
+  --ec-brdRad: 12px;
+  --ec-frm-frameBoxShdCssVal: none;
+}
+
+.expressive-code .frame.is-terminal:not(.has-title) .header {
+  display: none;
+}
+
+.expressive-code .frame.is-terminal:not(.has-title) .copy {
+  inset-block-start: calc(var(--ec-brdWd) + 0.4rem);
+}
+
+.expressive-code .frame.is-terminal:not(.has-title):not(:has(.ec-line ~ .ec-line)) .copy {
+  inset-block: 0;
+}
+
+.expressive-code
+  .frame.is-terminal:not(.has-title):not(:has(.ec-line ~ .ec-line))
+  .copy
+  button {
+  align-self: center;
+}
+
+.expressive-code .frame.is-terminal:not(.has-title) pre {
+  border-top: var(--ec-brdWd) solid var(--ec-brdCol);
+  border-start-start-radius: var(--ec-brdRad);
+  border-start-end-radius: var(--ec-brdRad);
+}
+
+.expressive-code pre[data-language="go"] {
+  --code-background: #0a2538;
+}
+
+[data-theme="light"] .expressive-code pre[data-language="go"] {
+  --code-background: color-mix(in srgb, #0a2538 8%, var(--sl-color-gray-6));
+}
+
+.expressive-code pre[data-language="rust"] {
+  --code-background: #401705;
+  --ec-brdCol: #602106;
+}
+
+[data-theme="light"] .expressive-code pre[data-language="rust"] {
+  --code-background: color-mix(in srgb, #401705 8%, var(--sl-color-gray-6));
+  --ec-brdCol: color-mix(in srgb, #401705 16%, var(--sl-color-gray-6));
+}
+
+/* Expressive Code prefixes plugin rules with `.expressive-code`, so theme-scoped rules belong here, not in the plugin. */
+[data-theme="light"] .expressive-code .callout {
+  --callout-fill: var(--code-background);
+}
+
+[data-theme="light"] .expressive-code .callout code {
+  color: var(--sl-color-accent);
+}
+
+[data-theme="light"] .expressive-code .callout code.callout-string {
+  color: color-mix(in srgb, #34d399 55%, black);
+}
+
+[data-theme="light"] .expressive-code .callout code.callout-type {
+  color: color-mix(in srgb, #c5e478 45%, black);
+}
+
+[data-theme="light"] .expressive-code .callout code.callout-value {
+  color: color-mix(in srgb, #f78c6c 65%, black);
+}
+
+[data-theme="light"] .expressive-code .callout code.callout-keyword {
+  color: color-mix(in srgb, #c792ea 60%, black);
+}
+
+[data-theme="light"] .expressive-code .callout code.callout-attribute {
+  color: color-mix(in srgb, #8b9ba8 60%, black);
+}
+
+[data-theme="light"] {
+  --sl-color-bg-nav: var(--sl-color-gray-6);
+  --sl-color-bg-sidebar: var(--sl-color-gray-6);
+}
+
+.sl-markdown-content h2 a {
+  text-decoration: none;
+}
+
+.sl-markdown-content:has(.release-date) h3 {
+  font-size: var(--sl-text-h5);
+}
+
+.sl-markdown-content:has(.release-date) .sl-heading-wrapper.level-h3 {
+  margin-block-start: 1.5rem;
+}
+
+.sl-markdown-content:has(.release-date) .sl-heading-wrapper.level-h3 {
+  font-size: var(--sl-text-h5);
+}
+
+.sl-markdown-content:has(.release-date)
+  .sl-heading-wrapper.level-h2
+  ~ .sl-heading-wrapper.level-h2 {
+  border-top: 1px solid var(--sl-color-hairline-light);
+  margin-block-start: 2.5rem;
+  padding-block-start: 2.5rem;
+  margin-inline: -50vw;
+  padding-inline: 50vw;
+}
+
+.release-date {
+  color: var(--sl-color-gray-3);
+  opacity: 0.75;
+  font-size: 0.8em;
+  font-weight: 400;
+}
+
+.social-icons::after {
+  content: none;
+}
+
+.right-group,
+.social-icons {
+  gap: 0.25rem;
+}
+
+:root {
+  --lis-code-chip: color-mix(in srgb, var(--sl-color-accent) 55%, var(--sl-color-black));
+}
+
+[data-theme="light"] {
+  --lis-code-chip: color-mix(in srgb, var(--sl-color-accent) 80%, var(--sl-color-black));
+  --lis-code-ink: var(--sl-color-text-invert);
+}
+
+.sl-markdown-content {
+  --sl-color-bg-inline-code: var(--lis-code-chip);
+}
+
+[data-theme="light"] .sl-markdown-content code:not(:where(.not-content *)) {
+  color: var(--lis-code-ink);
+}
+
+.sl-markdown-content code:not(:where(.not-content *)) {
+  border-radius: 0.375rem;
+  padding: 0.125rem 0.3rem;
+}
+
+body:has(a[aria-current="page"][href*="/prelude/"])
+  .sl-markdown-content
+  .sl-heading-wrapper.level-h2:has(> h2 > code:only-child) {
+  --sl-text-h2: var(--sl-text-xl);
+  margin-top: 2.75em;
+}
+
+body:has(a[aria-current="page"][href*="/prelude/"])
+  .sl-markdown-content
+  .sl-heading-wrapper.level-h3:has(> h3 > code:only-child) {
+  --sl-text-h3: var(--sl-text-lg);
+  margin-top: 2.75em;
+}
+
+body:has(a[aria-current="page"][href*="/prelude/"])
+  .sl-markdown-content
+  .sl-heading-wrapper.level-h2:has(> h2 > code:only-child):first-child,
+body:has(a[aria-current="page"][href*="/prelude/"])
+  .sl-markdown-content
+  .sl-heading-wrapper.level-h3:has(> h3 > code:only-child):first-child {
+  margin-top: 0;
+}
+
+body:has(a[aria-current="page"]:is([href*="/prelude/"], [href*="/typedefs"], [href*="/intro/safety"]))
+  .sl-markdown-content
+  .expressive-code
+  + .expressive-code {
+  margin-top: 0;
+}
+
+body:has(a[aria-current="page"]:is([href*="/prelude/"], [href*="/typedefs"], [href*="/intro/safety"]))
+  .sl-markdown-content
+  .expressive-code:has(+ .expressive-code)
+  pre {
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
+}
+
+body:has(a[aria-current="page"]:is([href*="/prelude/"], [href*="/typedefs"], [href*="/intro/safety"]))
+  .sl-markdown-content
+  .expressive-code
+  + .expressive-code
+  pre {
+  border-start-start-radius: 0;
+  border-start-end-radius: 0;
+  border-top-width: 0;
+}
+
+body:has(a[aria-current="page"][href*="/typedefs"]) .sl-markdown-content table {
+  display: table;
+  table-layout: fixed;
+  width: 100%;
+}
+
+body:has(a[aria-current="page"][href*="/typedefs"]) .sl-markdown-content th:first-child {
+  width: 45%;
+}
+
+body:has(a[aria-current="page"][href*="/typedefs"]) .sl-markdown-content table + p {
+  margin-block-start: 2rem;
+}
+
+.sl-markdown-content starlight-file-tree + p:has(strong) {
+  margin-block-start: 2rem;
+}
+
+.sl-markdown-content .see-icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.15em;
+  margin-inline-end: 0.4em;
+  color: var(--sl-color-text-accent);
+}
+
+starlight-file-tree {
+  background-color: var(--ec-frm-edBg);
+  border: var(--ec-brdWd) solid var(--ec-brdCol);
+  border-radius: var(--ec-brdRad);
+}
+
+starlight-file-tree .directory > details > summary:hover ~ ul {
+  border-color: var(--sl-color-gray-5);
+}
+
+starlight-file-tree .directory > details > summary {
+  list-style: none;
+}
+
+starlight-file-tree .file {
+  margin-inline-start: 0.625rem;
+}
+
+starlight-file-tree .directory > details > summary::-webkit-details-marker {
+  display: none;
+}
+
+starlight-file-tree {
+  /* The summary's own inline padding, plus 2px so the guide reads as flush. */
+  --icon-start: calc(0.625rem + 2px);
+}
+
+starlight-file-tree details > ul {
+  margin-inline-start: calc(var(--icon-start) - var(--x-space));
+  padding-inline-start: calc(0.5rem + 0.125rem + var(--x-space) - var(--icon-start));
+}
+
+starlight-file-tree .directory > details > summary .tree-icon {
+  color: #dba26a;
+  fill: currentColor;
+}
+
+/* Starlight has no `.lis` icon, so this matches the generic document glyph by the start of its path data. */
+starlight-file-tree .tree-icon:has(path[d^="M1.082"]) path {
+  fill: transparent;
+}
+
+starlight-file-tree .tree-icon:has(path[d^="M1.082"]) {
+  /* 84% of the closest side is a diameter of `r="42"` in the source's 100-unit viewBox. */
+  background: radial-gradient(circle closest-side at 50% 50%, #b294f0 0 84%, transparent 84%);
+}
+
+starlight-file-tree {
+  position: relative;
+}
+
+/* Outside a code block the Expressive Code frame variables resolve to the base theme, not the flavour. */
+[data-theme="light"] starlight-file-tree {
+  background-color: var(--sl-color-gray-6);
+  border-color: var(--sl-color-gray-5);
+}
+
+[data-theme="light"] starlight-file-tree .comment {
+  --callout-fill: var(--sl-color-gray-6);
+}
+
+starlight-file-tree .comment {
+  --callout-line: var(--sl-color-accent);
+  --callout-fill: var(--sl-color-black);
+  --callout-height: 18px;
+  --callout-arrow: 7px;
+  position: absolute;
+  inset-inline-start: min(20rem, 100% - 7rem);
+  display: inline-flex;
+  align-items: center;
+  height: var(--callout-height);
+  padding: 0 0.6rem;
+  border: 1px solid var(--callout-line);
+  border-inline-start: none;
+  border-radius: 0.2rem;
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+  background: var(--callout-fill);
+  color: var(--sl-color-white);
+  min-width: 0;
+  white-space: pre;
+}
+
+starlight-file-tree .comment code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 1em;
+  color: var(--sl-color-accent-high);
+}
+
+body:has(a[aria-current="page"][href*="/go-module-overrides"]) starlight-file-tree .comment {
+  inset-inline-start: min(11rem, 100% - 7rem);
+}
+
+starlight-file-tree .comment::before,
+starlight-file-tree .comment::after {
+  content: "";
+  position: absolute;
+  width: 0;
+  height: 0;
+  inset-block-start: -1px;
+  inset-inline-start: calc(var(--callout-arrow) * -1);
+  border: 0 solid transparent;
+  border-block-width: calc(var(--callout-height) / 2);
+  border-inline-end: var(--callout-arrow) solid var(--callout-line);
+}
+
+starlight-file-tree .comment::after {
+  inset-inline-start: calc(var(--callout-arrow) * -1 + 1.27px);
+  border-inline-end-color: var(--callout-fill);
+}
+
+.view-script {
+  display: block;
+  width: fit-content;
+  margin-block-start: 0.4rem;
+  margin-inline-start: auto;
+  padding-inline-end: 1rem;
+  font-size: var(--sl-text-xs);
+  color: var(--sl-color-gray-3);
+  opacity: 0.75;
+  text-decoration: none;
+}
+
+.view-script::after {
+  content: " \2197";
+}
+
+.view-script:hover {
+  color: var(--sl-color-white);
+  opacity: 1;
+}
+
+.sl-steps > li::before {
+  background: var(--sl-color-gray-5);
+}
+
+.sl-steps > li::after {
+  top: 28px;
+  bottom: 0;
+}
+
+/* Expressive Code's `align-self` needs the pill to be a flex child of `.copy`, and it is not. */
+.expressive-code .copy > [aria-live] {
+  display: flex;
+  align-items: center;
+}
+
+starlight-tabs [role="tab"][aria-selected="true"],
+file-browser [role="tab"][aria-selected="true"],
+file-browser .tab [role="tab"][aria-selected="true"] ~ .close {
+  box-shadow: 0 2px 0 color-mix(in oklab, var(--sl-color-text-accent) 65%, var(--sl-color-gray-5));
+}
+
+/* The topic list shows in one place at a time: the band in `Header.astro` above 50rem, the sidebar below. */
+@media (min-width: 50rem) {
+  .topics-in-sidebar {
+    display: none;
+  }
+}
+
+@media (max-width: 49.999rem) {
+  nav.topics {
+    display: none;
+  }
+
+  /* A diagnostic's carets align under their token, so wrapping breaks it. */
+  .expressive-code pre.wrap .ec-line .code {
+    white-space: pre;
+    overflow-wrap: normal;
+    min-width: 0;
+  }
+
+  #starlight__on-this-page--mobile {
+    border-bottom-color: var(--sl-color-hairline-light);
+  }
+
+  #starlight__on-this-page--mobile .toggle {
+    gap: 0.65rem;
+    padding-block: 6px;
+    padding-inline-start: 10px;
+  }
+
+  .tablist-wrapper {
+    scrollbar-width: none;
+  }
+
+  .tablist-wrapper::-webkit-scrollbar {
+    display: none;
+  }
+
+  starlight-tabs[data-sync-key="editor"] {
+    display: none;
+  }
+
+  .expressive-code .copy {
+    display: none;
+  }
+
+  .mobile-preferences {
+    align-items: center;
+  }
+
+  .mobile-preferences .social-icons {
+    padding-block: 0;
+  }
+
+  #starlight__mobile-toc a[aria-current="true"]::after {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    align-self: center;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}
+
+body:has(a[aria-current="page"][href*="/intro/quickstart"]) .pagination-links {
+  display: none;
+}
+
+/* `quickstart.mdx` writes the install command twice, one line and one continued pair. */
+.cmd-narrow {
+  display: none;
+}
+
+@media (max-width: 49.999rem) {
+  .cmd-wide {
+    display: none;
+  }
+
+  .cmd-narrow {
+    display: block;
+  }
+}

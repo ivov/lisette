@@ -1,0 +1,369 @@
+---
+title: "CLI"
+description: "Every lis command, with its arguments, flags, and examples"
+---
+
+import { FileTree } from "@astrojs/starlight/components";
+
+`lis` is the Lisette compiler toolchain, which provides every command below.
+
+## Commands
+
+### `lis new`
+
+```sh
+lis new <project-name>
+```
+
+Create a new Lisette project in the current directory.
+
+<FileTree>
+
+- hello-world/
+  - src/
+    - main.lis
+  - lisette.toml
+  - README.md
+  - AGENTS.md
+  - .gitignore
+
+</FileTree>
+
+| Argument | Does |
+| --- | --- |
+| `project-name` (required) | Name of the project, e.g. `hello-world` |
+
+📚 See [Packages](/docs/packages/)
+
+### `lis run`
+
+```sh
+lis run [target] [--flags]
+```
+
+Compile a Lisette project to a binary at `target/bin/` and run the binary.
+
+| Argument | Does |
+| --- | --- |
+| `target` (optional) | Project dir or file (default: current dir) |
+
+| Flag | Does |
+| --- | --- |
+| `--sourcemap` | Include `//line` in Go code for stack traces |
+| `--go-flags "<flags>"` | Pass flags through to `go build` |
+
+| Example | Does |
+| --- | --- |
+| `lis run` | Run project in current dir |
+| `lis run ~/projects/demo` | Run project in specific dir |
+| `lis run calculate.lis` | Run a script |
+| `lis run greet.lis john` | Pass argument to script |
+| `lis run --go-flags "-ldflags='-s -w'"` | Pass linker flags to `go build` |
+
+📚 See [Scripts](/docs/scripts/)
+
+### `lis build`
+
+```sh
+lis build [path] [--flags]
+```
+
+Compile a project to a binary at the `target/.lisette/bin/` dir.
+
+| Argument | Does |
+| --- | --- |
+| `path` (optional) | Path to project dir or file (default: current dir) |
+
+| Flag | Does |
+| --- | --- |
+| `--sourcemap` | Include `//line` in Go code for stack traces |
+| `--go-flags "<flags>"` | Pass flags through to `go build` |
+| `-o, --output <path>` | Write the binary for a script at this path |
+
+| Example | Does |
+| --- | --- |
+| `lis build` | Build project in current dir |
+| `lis build ~/projects/demo` | Build project in specific dir |
+| `lis build greet.lis` | Build a script to `./greet` |
+| `lis build greet.lis -o bin/greet` | Build a script to a chosen path |
+| `lis build --go-flags "-trimpath"` | Strip file paths from the binary |
+
+### `lis emit`
+
+```sh
+lis emit [path] [--flags]
+```
+
+Generate Go code from a Lisette project at the `target/` dir.
+
+| Argument | Does |
+| --- | --- |
+| `path` (optional) | Path to project dir or file (default: current dir) |
+
+| Flag | Does |
+| --- | --- |
+| `--sourcemap` | Include `//line` in Go code for stack traces |
+| `-o, --output <path>` | Write the Go file for a script at this path |
+
+| Example | Does |
+| --- | --- |
+| `lis emit` | Emit Go for project in current dir |
+| `lis emit ~/projects/demo` | Emit Go for project in specific dir |
+| `lis emit greet.lis` | Emit a script to `./greet.go` |
+
+### `lis check`
+
+```sh
+lis check [path] [--flags]
+```
+
+Lint and typecheck a Lisette project.
+
+| Argument | Does |
+| --- | --- |
+| `path` (optional) | Path to dir (default: current dir) |
+
+| Flag | Does |
+| --- | --- |
+| `--errors-only` | Show only errors |
+| `--warnings-only` | Show only warnings |
+| `--deny warnings` | Fail check if warnings found |
+| `--fix` | Apply lint fixes in place |
+| `--output unix` | Machine-readable output |
+
+| Example | Does |
+| --- | --- |
+| `lis check` | Check project in current dir |
+| `lis check ~/projects/demo` | Check project in specific dir |
+| `lis check script.lis` | Check single file |
+| `lis check --fix` | Fix all lints in the project |
+| `lis check --output unix` | One diagnostic per line |
+
+### `lis format`
+
+```sh
+lis format [path] [--flags]
+```
+
+Format source files in a Lisette project.
+
+| Argument | Does |
+| --- | --- |
+| `path` (optional) | Path to file or dir (default: current dir) |
+
+| Flag | Does |
+| --- | --- |
+| `--check` | Verify formatting without modifying files |
+
+| Example | Does |
+| --- | --- |
+| `lis format` | Format project in current dir |
+| `lis format ~/projects/demo` | Format project in specific dir |
+| `lis format src/main.lis` | Format a single file |
+| `lis format --check` | Verify formatting in current dir |
+
+### `lis test`
+
+```sh
+lis test [path] [--flags]
+```
+
+Run tests in a Lisette project.
+
+| Argument | Does |
+| --- | --- |
+| `path` (optional) | Path to dir (default: current dir) |
+
+| Flag | Does |
+| --- | --- |
+| `-f, --filter <pattern>` | Run only tests whose name contains pattern |
+| `--failed` | Rerun the tests that failed last time |
+| `--go-flags "<flags>"` | Pass flags through to `go test` |
+
+| Example | Does |
+| --- | --- |
+| `lis test` | Run all tests in current dir |
+| `lis test ~/projects/demo` | Run tests in specific dir |
+| `lis test -f parse` | Only tests whose name contains "parse" |
+| `lis test --go-flags "-failfast"` | Stop at the first failing test |
+
+📚 See [Tests](/docs/tests/)
+
+### `lis add`
+
+```sh
+lis add <dependency>[@version] [--flags]
+```
+
+Add a third-party Go module as a dependency to your project or script.
+
+| Argument | Does |
+| --- | --- |
+| `dependency` (required) | Go module name |
+
+| Flag | Does |
+| --- | --- |
+| `--replace <module>` | Redirect to another module |
+| `--path <dir>` | Add a local Go module |
+| `--script <file>` | Add to this script |
+
+| Example | Does |
+| --- | --- |
+| `lis add google/uuid` | Latest version |
+| `lis add google/uuid@v1.6.0` | Exact version |
+| `lis add google/uuid@2d3c2a9` | Exact commit hash or branch |
+| `lis add go.uber.org/zap` | Full path for non-GitHub host |
+| `lis add --path ../auth` | Use the Go module at `../auth` |
+| `lis add gorilla/mux --replace you/mux` | Use your own fork of `gorilla/mux` |
+| `lis add --script tool.lis google/uuid` | Add `google/uuid` to a script |
+
+📚 See [Third-party Go modules](/docs/third-party-go-modules/) and [Go module overrides](/docs/go-module-overrides/)
+
+### `lis sync`
+
+```sh
+lis sync [--flags]
+```
+
+Reconcile `lisette.toml` against the `go:` imports in `src/`, similar to `go mod tidy`. This drops dependency entries no longer reached by any import, and generates typedefs for every imported package. Run this after removing imports, deleting source files, or pulling new code.
+
+| Flag | Does |
+| --- | --- |
+| `--script <file>` | Tidy this script's dependencies |
+
+| Example | Does |
+| --- | --- |
+| `lis sync` | Tidy the project in the current dir |
+| `lis sync --script tool.lis` | Tidy a script's dependencies |
+
+📚 See [Third-party Go modules](/docs/third-party-go-modules/)
+
+## Extras
+
+### `lis version`
+
+```sh
+lis version
+```
+
+Print compiler version (Lisette and Go toolchain).
+
+### `lis upgrade`
+
+```sh
+lis upgrade
+```
+
+Upgrade the compiler, or show the upgrade command for the tool that installed it.
+
+### `lis help`
+
+```sh
+lis help <command>
+```
+
+Show help for a command.
+
+| Argument | Does |
+| --- | --- |
+| `command` (required) | Command to get help for (e.g. `run`, `build`) |
+
+### `lis doc`
+
+```sh
+lis doc [symbol] [--flags]
+```
+
+Browse documentation on a symbol from the prelude or from the Go stdlib.
+
+| Argument | Does |
+| --- | --- |
+| `symbol` (optional) | Symbol to look up (omit to list all) |
+
+| Flag | Does |
+| --- | --- |
+| `-s, --search <term>` | Search docs for term |
+
+| Example | Does |
+| --- | --- |
+| `lis doc` | List prelude symbols and Go packages |
+| `lis doc Slice` | Docs on Lisette's `Slice` type |
+| `lis doc Slice.map` | Docs on `map` method on Lisette's `Slice` type |
+| `lis doc prelude` | List all Lisette prelude symbols |
+| `lis doc test` | How to write and run tests |
+| `lis doc go:` | List all Go stdlib packages |
+| `lis doc go:os` | Docs on Go stdlib `os` package contents |
+| `lis doc go:os.File` | Docs on `File` type in Go stdlib `os` package |
+| `lis doc -s append` | Search docs for `append` |
+
+📚 See [Prelude](/docs/prelude/)
+
+### `lis learn`
+
+```sh
+lis learn
+```
+
+Create a sample Lisette project in the current directory.
+
+<FileTree>
+
+- learn-lisette/
+  - src/
+    - main.lis
+    - models/
+      - props.lis
+      - task.lis
+    - store/
+      - store.lis
+    - commands/
+      - commands.lis
+    - display/
+      - display.lis
+  - lisette.toml
+  - README.md
+  - AGENTS.md
+  - .gitignore
+
+</FileTree>
+
+The sample is a CLI task manager that demonstrates enums, structs, pattern matching, error handling, closures, Go interop, and concurrency.
+
+### `lis complete`
+
+```sh
+lis complete <shell>
+```
+
+Generate shell completion scripts.
+
+| Argument | Does |
+| --- | --- |
+| `shell` (required) | Shell to generate completions for (bash, zsh, or fish) |
+
+```sh
+lis complete bash > ~/.local/share/bash-completion/completions/lis
+lis complete fish > ~/.config/fish/completions/lis.fish
+```
+
+For zsh, add to `~/.zshrc` (before `compinit`):
+
+```sh
+fpath=(~/.zfunc $fpath)
+```
+
+Then generate:
+
+```sh
+mkdir -p ~/.zfunc && lis complete zsh > ~/.zfunc/_lis
+```
+
+### `lis lsp`
+
+```sh
+lis lsp
+```
+
+Start the Lisette language server over stdio, for use by editor extensions.
+
+📚 See [LSP](/docs/lsp/)

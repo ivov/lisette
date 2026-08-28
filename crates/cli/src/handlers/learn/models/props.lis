@@ -9,9 +9,9 @@ pub enum Priority {
 impl Priority {
   pub fn label(self) -> string {
     match self {
-      Priority.Low => "low",
-      Priority.Medium => "medium",
-      Priority.High => "high",
+      Low => "low",
+      Medium => "medium",
+      High => "high",
     }
   }
 }
@@ -36,16 +36,16 @@ pub enum Status {
 impl Status {
   pub fn is_cancelled(self) -> bool {
     match self {
-      Status.Cancelled(_) => true,
+      Cancelled(_) => true,
       _ => false,
     }
   }
 
   pub fn label(self) -> string {
     match self {
-      Status.Pending => "pending",
-      Status.Done => "done",
-      Status.Cancelled(reason) => f"cancelled: {reason}",
+      Pending => "pending",
+      Done => "done",
+      Cancelled(reason) => f"cancelled: {reason}",
     }
   }
 }

@@ -1,0 +1,127 @@
+---
+title: "Quickstart"
+description: "Install Go, the Lisette compiler, and the IDE extension"
+---
+
+import { CardGrid, LinkCard, Steps, TabItem, Tabs } from "@astrojs/starlight/components";
+
+<Steps>
+
+1. Install Go 1.25+
+
+2. Install the Lisette compiler
+
+   <Tabs syncKey="install">
+     <TabItem label="curl">
+       {/* One command, twice: the single line for a wide viewport, and a continued pair for
+           a narrow one, where the single line runs past the block's edge. `custom.css`
+           shows one and hides the other at 50rem. */}
+       <div class="cmd-wide">
+       ```sh
+       curl -fsSL https://lisette.run/install.sh | sh
+       ```
+       </div>
+
+       <div class="cmd-narrow">
+       ```sh
+       curl -fsSL \
+         https://lisette.run/install.sh \
+         | sh
+       ```
+       </div>
+
+       <a class="view-script" href="https://lisette.run/install.sh" target="_blank" rel="noopener noreferrer">View install script</a>
+     </TabItem>
+     <TabItem label="homebrew">
+       ```sh
+       brew install lisette
+       ```
+     </TabItem>
+     <TabItem label="mise">
+       ```sh
+       mise use -g lisette
+       ```
+     </TabItem>
+     <TabItem label="cargo">
+       ```sh
+       cargo install lisette
+       ```
+     </TabItem>
+   </Tabs>
+
+3. Install the Lisette IDE extension
+
+   <Tabs syncKey="editor">
+     <TabItem label="VSCode  ·  Zed  ·  JetBrains">
+       Search for `Lisette` in the editor's extension marketplace
+     </TabItem>
+     <TabItem label="Neovim">
+       Add to your `lazy.nvim` config:
+
+       ```lua
+       {
+         "ivov/lisette",
+         event = "VeryLazy",
+         config = function(plugin)
+           vim.opt.rtp:prepend(plugin.dir .. "/editors/nvim")
+           dofile(plugin.dir .. "/editors/nvim/ftdetect/lisette.lua")
+           dofile(plugin.dir .. "/editors/nvim/plugin/lisette.lua")
+         end,
+       }
+       ```
+     </TabItem>
+     <TabItem label="Helix">
+       Add to your `languages.toml` config:
+
+       ```toml
+       [language-server.lisette-lsp]
+       command = "lis"
+       args = ["lsp"]
+
+       [[language]]
+       name = "lisette"
+       scope = "source.lisette"
+       injection-regex = "lis|lisette"
+       file-types = ["lis"]
+       roots = ["lisette.toml"]
+       auto-format = true
+       comment-tokens = ["//", "///", "//!"]
+       language-servers = ["lisette-lsp"]
+       indent = { tab-width = 2, unit = "  " }
+
+       [[grammar]]
+       name = "lisette"
+       source = { git = "https://github.com/ivov/lisette", rev = "dd62a38f70bbde085d4f23557305d455299f4774", subpath = "editors/tree-sitter-lisette" }
+       ```
+     </TabItem>
+     <TabItem label="Others">
+       Point the IDE's LSP client at `lis lsp` for `*.lis` files.
+     </TabItem>
+   </Tabs>
+
+</Steps>
+
+## Next steps
+
+<CardGrid>
+  <LinkCard
+    title="Coming from Go"
+    href="/docs/intro/coming-from-go/"
+    description="Tour for Go developers: Go patterns and Lis equivalents"
+  />
+  <LinkCard
+    title="Coming from Rust"
+    href="/docs/intro/coming-from-rust/"
+    description="Similarities and differences in syntax and semantics"
+  />
+  <LinkCard
+    title="Safety guardrails"
+    href="/docs/intro/safety/"
+    description="Safeguards against Go runtime errors at compile time"
+  />
+  <LinkCard
+    title="Language reference"
+    href="/docs/lexemes/"
+    description="Every Lis construct, from keywords to concurrency"
+  />
+</CardGrid>

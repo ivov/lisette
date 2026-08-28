@@ -5,58 +5,43 @@ import "go:os"
 
 import "models"
 
-/// Loads tasks from the JSON file. Returns an empty list if the file doesn't exist.
+const FILE = "tasks.json"
+
+/// A missing file yields an empty list, not an error.
 pub fn load() -> Result<Slice<models.Task>, error> {
-  let Ok(bytes) = os.ReadFile("tasks.json") else {
-    return Ok([])
+  let bytes = match os.ReadFile(FILE) {
+    Ok(bytes) => bytes,
+    Err(err) => {
+      if errors.Is(err, fs.ErrNotExist) { return Ok([]) }
+      return Err(err).wrap_err(f"reading {FILE}")
+    },
   }
   let mut items: Slice<models.Task> = []
-  json.Unmarshal(bytes, &items).wrap_err("parsing tasks.json")?
+  json.Unmarshal(bytes, &items).wrap_err(f"parsing {FILE}")?
   Ok(items)
 }
 
-/// Saves tasks to the JSON file.
 pub fn save(items: Slice<models.Task>) -> Result<(), error> {
   let data = json.MarshalIndent(items, "", "  ").wrap_err("encoding tasks")?
   let permissions = 0o644 as fs.FileMode
-  os.WriteFile("tasks.json", data, permissions).wrap_err("writing tasks.json")?
+  os.WriteFile(FILE, data, permissions).wrap_err(f"writing {FILE}")?
   Ok(())
 }
 
-/// Returns the next available ID (max existing ID + 1).
 pub fn next_id(items: Slice<models.Task>) -> int {
   items.fold(0, |max, t| if t.id > max { t.id } else { max }) + 1
 }
 
-/// Marks a task as done. Returns an error if the task doesn't exist.
-pub fn complete(
+pub fn set_status(
   items: Slice<models.Task>,
   id: int,
+  status: models.Status,
 ) -> Result<Slice<models.Task>, error> {
   let Some(_) = items.find(|t| t.id == id) else {
     return Err(errors.New(f"task #{id} not found"))
   }
-  let updated = items.map(|t| if t.id == id {
-    models.Task { status: models.Status.Done, ..t }
-  } else {
-    t
-  })
-  Ok(updated)
-}
-
-/// Cancels a task with a reason. Returns an error if the task doesn't exist.
-pub fn cancel(
-  items: Slice<models.Task>,
-  id: int,
-  reason: string,
-) -> Result<Slice<models.Task>, error> {
-  let Some(_) = items.find(|t| t.id == id) else {
-    return Err(errors.New(f"task #{id} not found"))
-  }
-  let updated = items.map(|t| if t.id == id {
-    models.Task { status: models.Status.Cancelled(reason), ..t }
-  } else {
-    t
+  let updated = items.map(|t| {
+    if t.id == id { models.Task { status, ..t } } else { t }
   })
   Ok(updated)
 }

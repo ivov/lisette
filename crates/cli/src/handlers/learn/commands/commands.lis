@@ -50,13 +50,13 @@ pub fn add(args: Slice<string>) -> Result<(), error> {
 }
 
 pub fn done(args: Slice<string>) -> Result<(), error> {
-  let Some(id_str) = args.get(2) else {
+  let Some(raw) = args.get(2) else {
     return Err(errors.New("usage: done <id>"))
   }
-  let id = parse_id(id_str)?
+  let id = parse_id(raw)?
 
   let items = store.load()?
-  let items = store.complete(items, id)?
+  let items = store.set_status(items, id, models.Status.Done)?
   store.save(items)?
 
   fmt.Println(f"Completed task #{id}")
@@ -64,16 +64,16 @@ pub fn done(args: Slice<string>) -> Result<(), error> {
 }
 
 pub fn cancel(args: Slice<string>) -> Result<(), error> {
-  let Some(id_str) = args.get(2) else {
+  let Some(raw) = args.get(2) else {
     return Err(errors.New("usage: cancel <id> <reason>"))
   }
   let Some(reason) = args.get(3) else {
     return Err(errors.New("usage: cancel <id> <reason>"))
   }
-  let id = parse_id(id_str)?
+  let id = parse_id(raw)?
 
   let items = store.load()?
-  let items = store.cancel(items, id, reason)?
+  let items = store.set_status(items, id, models.Status.Cancelled(reason))?
   store.save(items)?
 
   fmt.Println(f"Cancelled task #{id}")

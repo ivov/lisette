@@ -7,6 +7,7 @@ use std::time::Instant;
 
 use crate::go_cli;
 use crate::output;
+use crate::reference;
 use deps::TypedefLocator;
 use diagnostics::render::{self, Filter, OutputFormat};
 use diagnostics::{Fix, apply_fixes};
@@ -166,6 +167,8 @@ fn check_project(project_path: &Path, options: &CheckOptions) -> i32 {
         Ok(f) => f,
         Err(code) => return code,
     };
+
+    let _ = reference::write_to(project_path);
 
     if let Err(e) = go_cli::write_go_mod(&target_dir, &manifest.project.name, &locator) {
         cli_error!(

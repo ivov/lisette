@@ -29,7 +29,7 @@ npm run build:wasm   # requires Rust + wasm-pack
 
 ### Production build
 
-From the repo root, the `just rebuild-playground` recipe runs `npm install`, `npm run build:wasm`, and `npm run build`. The output is written to `docs/play/` (configured in `vite.config.ts`), which is committed and served by GitHub Pages at `lisette.run/play`.
+From the repo root, the `just rebuild-playground` recipe runs `npm install`, `npm run build:wasm`, and `npm run build`. The output is written to `site/public/play/` (configured in `vite.config.ts`), which is committed and which Astro copies to the root of its own output, so the host serves it at `lisette.run/play`.
 
 ## Project structure
 
@@ -69,10 +69,10 @@ Lisette source
 
 ## Deploying
 
-Deployment is content-based: GitHub Pages serves whatever is in `docs/play/` on `main`. To deploy a new version:
+Deployment is content-based: the host serves whatever is in `site/public/play/` on `main`. To deploy a new version:
 
 1. Run `just rebuild-playground` from the repo root
-2. Commit the regenerated `docs/play/` tree
+2. Commit the regenerated `site/public/play/` tree
 3. Merge to `main`
 
 ## Rebuilding the WASM compiler

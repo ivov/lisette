@@ -5,6 +5,7 @@ use crate::agents_md;
 use crate::cli_error;
 use crate::go_cli;
 use crate::output;
+use crate::reference;
 use std::process::Command;
 
 pub fn new_project(name: &str) -> i32 {
@@ -117,6 +118,15 @@ lis run
         cli_error!(
             "Failed to create project",
             format!("Failed to write `AGENTS.md`: {}", e),
+            "Check file permissions"
+        );
+        return 1;
+    }
+
+    if let Err(e) = reference::write_to(project_dir) {
+        cli_error!(
+            "Failed to create project",
+            format!("Failed to write `.lisette/docs`: {}", e),
             "Check file permissions"
         );
         return 1;
