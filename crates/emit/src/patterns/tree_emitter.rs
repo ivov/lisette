@@ -1068,7 +1068,7 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
 
         for (g, (_condition, indices)) in groups.iter().enumerate() {
             let is_last_group = g == group_count - 1;
-            let collapse_as_catchall = is_last_group && last_is_catchall && indices.len() == 1;
+            let collapse_as_catchall = is_last_group && last_is_catchall;
             self.emit_chain_group(
                 statements,
                 ChainGroup {
@@ -1099,17 +1099,13 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
             conditions,
         } = group;
         if collapse_as_catchall {
-            self.walk(statements, &tests[indices[0]].decision, ctx);
+            self.emit_chain_group_tests(statements, indices, tests, ctx);
             return;
         }
 
         let body = self.with_scope(|this| {
             let mut body: Vec<LoweredStatement> = Vec::new();
-            if bindings_are_hoistable(tests, indices) {
-                this.emit_chain_group_hoisted(&mut body, indices, tests, ctx);
-            } else {
-                this.emit_chain_group_per_test(&mut body, indices, tests, ctx);
-            }
+            this.emit_chain_group_tests(&mut body, indices, tests, ctx);
             body
         });
 
@@ -1126,6 +1122,20 @@ impl<'a, 'e> TreePlanner<'a, 'e> {
                 else_arm: ElseArm::None,
             })),
             None => statements.push(LoweredStatement::Block(body)),
+        }
+    }
+
+    fn emit_chain_group_tests(
+        &mut self,
+        statements: &mut Vec<LoweredStatement>,
+        indices: &[usize],
+        tests: &[ChainTest],
+        ctx: &WalkCtx,
+    ) {
+        if bindings_are_hoistable(tests, indices) {
+            self.emit_chain_group_hoisted(statements, indices, tests, ctx);
+        } else {
+            self.emit_chain_group_per_test(statements, indices, tests, ctx);
         }
     }
 

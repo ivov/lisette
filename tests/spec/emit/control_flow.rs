@@ -1716,6 +1716,98 @@ fn test() -> int {
 }
 
 #[test]
+fn match_guard_on_last_tested_result_variant() {
+    let input = r#"
+fn test(r: Result<int, string>, flag: bool) -> int {
+  match r {
+    Ok(_) => 1,
+    Err(_) if flag => 2,
+    Err(_) => 3,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn match_guard_on_last_tested_option_variant() {
+    let input = r#"
+fn test(o: Option<int>, flag: bool) -> int {
+  match o {
+    Some(_) => 1,
+    None if flag => 2,
+    None => 3,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn match_guard_on_last_tested_enum_variant() {
+    let input = r#"
+enum Shape { Circle(int), Square(int), Tri(int) }
+
+fn test(s: Shape) -> int {
+  match s {
+    Circle(r) => r,
+    Square(w) => w,
+    Tri(h) if h > 10 => h * 2,
+    Tri(h) => h,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn match_guard_on_last_tested_variant_with_binding() {
+    let input = r#"
+fn test(r: Result<int, string>) -> string {
+  match r {
+    Ok(_) => "ok",
+    Err(e) if e == "boom" => "boom",
+    Err(e) => e,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn match_guard_on_the_only_variant() {
+    let input = r#"
+enum One { Only(int) }
+
+fn test(o: One) -> int {
+  match o {
+    Only(n) if n > 0 => n,
+    Only(n) => -n,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn match_guard_on_last_tested_variant_in_statement_position() {
+    let input = r#"
+fn check(n: int) -> Result<bool, string> { Ok(n > 0) }
+
+fn test(o: Option<int>) -> Result<int, string> {
+  let mut out = 0
+  match o {
+    Some(_) => { out = 1 },
+    None if check(0)? => { out = 2 },
+    None => { out = 3 },
+  }
+  Ok(out)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn or_pattern_literals() {
     let input = r#"
 fn test(x: int) -> string {

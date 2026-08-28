@@ -1,0 +1,37 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  enum One { Only(int) }
+  
+  fn test(o: One) -> int {
+    match o {
+      Only(n) if n > 0 => n,
+      Only(n) => -n,
+    }
+  }
+---
+package main
+
+func MakeOneOnly(arg0 int) One {
+	return One{Tag: OneOnly, Only: arg0}
+}
+
+type OneTag int
+
+const (
+	OneOnly OneTag = iota
+)
+
+type One struct {
+	Tag  OneTag
+	Only int
+}
+
+func test(o One) int {
+	n := o.Only
+	if n > 0 {
+		return n
+	}
+	return -n
+}

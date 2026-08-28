@@ -1,0 +1,45 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  fn check(n: int) -> Result<bool, string> { Ok(n > 0) }
+  
+  fn test(o: Option<int>) -> Result<int, string> {
+    let mut out = 0
+    match o {
+      Some(_) => { out = 1 },
+      None if check(0)? => { out = 2 },
+      None => { out = 3 },
+    }
+    Ok(out)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func check(n int) lisette.Result[bool, string] {
+	return lisette.MakeResultOk[bool, string](n > 0)
+}
+
+func test(o lisette.Option[int]) lisette.Result[int, string] {
+	out := 0
+match_1:
+	for {
+		if o.Tag == lisette.OptionSome {
+			out = 1
+			break match_1
+		}
+		check_2 := check(0)
+		if check_2.Tag != lisette.ResultOk {
+			return lisette.MakeResultErr[int, string](check_2.ErrVal)
+		}
+		if check_2.OkVal {
+			out = 2
+			break match_1
+		}
+		out = 3
+		break match_1
+	}
+	return lisette.MakeResultOk[int, string](out)
+}

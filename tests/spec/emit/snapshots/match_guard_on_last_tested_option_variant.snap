@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  fn test(o: Option<int>, flag: bool) -> int {
+    match o {
+      Some(_) => 1,
+      None if flag => 2,
+      None => 3,
+    }
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(o lisette.Option[int], flag bool) int {
+	if o.Tag == lisette.OptionSome {
+		return 1
+	}
+	if flag {
+		return 2
+	}
+	return 3
+}
