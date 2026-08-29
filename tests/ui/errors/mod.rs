@@ -12421,6 +12421,46 @@ fn main() {
 }
 
 #[test]
+fn infer_shadowed_imports_suggest_aliases() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("lib", "mod.lis", "pub fn hello() -> int { 7 }");
+    let source = r#"
+import "go:image/color"
+import "lib"
+
+fn to_gray(color: color.Color) -> uint8 {
+  let (r, g, b, _) = color.RGBA()
+  ((r/256 + g/256 + b/256) / 3) as uint8
+}
+
+fn lib() {}
+"#;
+    fs.add_file(ENTRY_PACKAGE_ID, "main.lis", source);
+    let result = compile_check(fs);
+    let shadowed: Vec<_> = result
+        .errors()
+        .iter()
+        .filter(|error| error.code_str() == Some("resolve.name_shadows_import"))
+        .collect();
+    assert_eq!(shadowed.len(), 2, "got: {:?}", result.errors());
+
+    let mut output = String::new();
+    for (index, error) in shadowed.iter().enumerate() {
+        if index > 0 {
+            output.push_str("\n---\n\n");
+        }
+        output.push_str(&format_project_diagnostic_for_snapshot(&result, error));
+    }
+
+    insta::with_settings!({
+        prepend_module_to_snapshot => false,
+        omit_expression => true,
+    }, {
+        insta::assert_snapshot!(output);
+    });
+}
+
+#[test]
 fn infer_builtin_as_value() {
     let input = r#"
 fn main() {
