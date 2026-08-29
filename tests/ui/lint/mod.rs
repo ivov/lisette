@@ -2963,6 +2963,141 @@ fn main() {
 }
 
 #[test]
+fn eager_split_in_loop() {
+    assert_lint_snapshot!(
+        r#"
+import "go:strings"
+
+pub fn count(s: string) -> int {
+  let mut n = 0
+  for part in strings.Split(s, ",") {
+    n += part.length()
+  }
+  n
+}
+"#
+    );
+}
+
+#[test]
+fn eager_split_in_loop_other_forms() {
+    assert_lint_snapshot!(
+        r#"
+import "go:strings"
+
+pub fn after(s: string) -> int {
+  let mut n = 0
+  for part in strings.SplitAfter(s, ",") {
+    n += part.length()
+  }
+  n
+}
+
+pub fn fields(s: string) -> int {
+  let mut n = 0
+  for part in strings.Fields(s) {
+    n += part.length()
+  }
+  n
+}
+"#
+    );
+}
+
+#[test]
+fn eager_split_in_loop_aliased_import() {
+    assert_lint_snapshot!(
+        r#"
+import mystr "go:strings"
+
+pub fn count(s: string) -> int {
+  let mut n = 0
+  for part in mystr.Split(s, ",") {
+    n += part.length()
+  }
+  n
+}
+"#
+    );
+}
+
+#[test]
+fn eager_split_in_loop_bytes_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:bytes"
+
+pub fn count(s: Slice<byte>) -> int {
+  let mut n = 0
+  for part in bytes.Split(s, ",".bytes()) {
+    n += part.length()
+  }
+  n
+}
+"#
+    );
+}
+
+#[test]
+fn eager_split_in_loop_bound_first_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+pub fn count(s: string) -> int {
+  let parts = strings.Split(s, ",")
+  let mut n = 0
+  for part in parts {
+    n += part.length()
+  }
+  n
+}
+"#
+    );
+}
+
+#[test]
+fn eager_split_in_loop_spread_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+pub fn count(s: string, rest: Slice<string>) -> int {
+  let mut n = 0
+  for part in strings.Split(s, ",", rest...) {
+    n += part.length()
+  }
+  n
+}
+"#
+    );
+}
+
+#[test]
+fn eager_split_in_loop_user_type_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Splitter {}
+
+impl Splitter {
+  fn Split(self, s: string, sep: string) -> Slice<string> {
+    s.split(sep)
+  }
+}
+
+pub fn count(s: string) -> int {
+  let sp = Splitter {}
+  let mut n = 0
+  for part in sp.Split(s, ",") {
+    n += part.length()
+  }
+  n
+}
+"#
+    );
+}
+
+#[test]
 fn manual_rotate() {
     assert_lint_snapshot!(
         r#"

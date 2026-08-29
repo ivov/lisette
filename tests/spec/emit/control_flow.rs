@@ -607,6 +607,27 @@ fn main() {
 }
 
 #[test]
+fn for_loop_strings_split_seq() {
+    let input = r#"
+import "go:strings"
+import "go:fmt"
+
+fn main() {
+  for part in strings.SplitSeq("a,b,c", ",") {
+    fmt.Println(part)
+  }
+  for part in strings.SplitAfterSeq("a,b,c", ",") {
+    fmt.Println(part)
+  }
+  for part in strings.FieldsSeq("a b c") {
+    fmt.Println(part)
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn for_loop_map_both_wildcards() {
     let input = r#"
 fn test(m: Map<string, int>) -> int {
