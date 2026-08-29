@@ -19,3 +19,6 @@ create-release = false
 github-attestations = true
 install-updater = false
 features = ["self-upgrade"]
+
+[dist.github-custom-runners]
+x86_64-apple-darwin = "macos-14"
