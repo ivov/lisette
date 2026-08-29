@@ -1,0 +1,23 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Name shadows import
+   ╭─[main.lis:5:12]
+ 4 │ 
+ 5 │ fn to_gray(color: color.Color) -> uint8 {
+   ·            ──┬──
+   ·              ╰── conflicts with `go:image/color`
+ 6 │   let (r, g, b, _) = color.RGBA()
+   ╰────
+  help: `color` shadows the package alias `go:image/color`. Rename `color` or re-alias the package, e.g. `import image_color "go:image/color"` · code: [resolve.name_shadows_import]
+
+---
+
+  ✕ Name shadows import
+    ╭─[main.lis:10:4]
+  9 │ 
+ 10 │ fn lib() {}
+    ·    ─┬─
+    ·     ╰── conflicts with `lib`
+    ╰────
+  help: `lib` shadows the package alias `lib`. Rename `lib` or re-alias the package, e.g. `import lib_pkg "lib"` · code: [resolve.name_shadows_import]

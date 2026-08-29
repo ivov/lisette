@@ -96,15 +96,38 @@ pub fn duplicate_import_path(path: &str, name_span: Span) -> LisetteDiagnostic {
 pub fn name_shadows_import(name: &str, import_path: &str, name_span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Name shadows import")
         .with_resolve_code("name_shadows_import")
-        .with_span_label(
-            &name_span,
-            format!("conflicts with imported package `{}`", import_path),
-        )
+        .with_span_label(&name_span, format!("conflicts with `{}`", import_path))
         .with_help(format!(
-            "`{}` is already used as a package alias for `{}`. \
-             Rename it or use a different import alias.",
-            name, import_path
+            "`{}` shadows the package alias `{}`. \
+             Rename `{}` or re-alias the package, e.g. `import {} \"{}\"`.",
+            name,
+            import_path,
+            name,
+            suggested_import_alias(import_path, name),
+            import_path
         ))
+}
+
+fn suggested_import_alias(import_path: &str, name: &str) -> String {
+    let path = import_path.strip_prefix("go:").unwrap_or(import_path);
+    let mut alias = match path.rsplit_once('/') {
+        Some((head, last)) => {
+            let parent = head.rsplit_once('/').map_or(head, |(_, parent)| parent);
+            format!("{}_{}", alias_segment(parent), alias_segment(last))
+        }
+        None => format!("{}_pkg", alias_segment(path)),
+    };
+    if alias == name {
+        alias.push_str("_pkg");
+    }
+    alias
+}
+
+fn alias_segment(segment: &str) -> String {
+    segment
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect()
 }
 
 pub fn statement_as_tail(span: Span, expected: &Type) -> LisetteDiagnostic {
