@@ -167,12 +167,14 @@ pub fn Grow<E>(s: Slice<E>, n: int) -> Slice<E>
 /// Index returns the index of the first occurrence of v in s,
 /// or -1 if not present.
 #[go(collapsed_type_params, "Slice<E>, E")]
-pub fn Index<E: Comparable>(s: Slice<E>, v: E) -> int
+#[go(sentinel_minus_one)]
+pub fn Index<E: Comparable>(s: Slice<E>, v: E) -> Option<int>
 
 /// IndexFunc returns the first index i satisfying f(s[i]),
 /// or -1 if none do.
 #[go(collapsed_type_params, "Slice<E>, E")]
-pub fn IndexFunc<E>(s: Slice<E>, f: fn(E) -> bool) -> int
+#[go(sentinel_minus_one)]
+pub fn IndexFunc<E>(s: Slice<E>, f: fn(E) -> bool) -> Option<int>
 
 /// Insert inserts the values v... into s at index i,
 /// returning the modified slice.

@@ -89,6 +89,7 @@
           "Index", "IndexAny", "IndexByte", "IndexRune",
           "LastIndex", "LastIndexAny", "LastIndexByte"
         ],
+        "slices": ["Index", "IndexFunc"],
         "strings": [
           "Index", "IndexAny", "IndexByte", "IndexFunc", "IndexRune",
           "LastIndex", "LastIndexAny", "LastIndexByte", "LastIndexFunc"
