@@ -143,16 +143,6 @@ impl DefinitionBody {
             Self::Value { .. } => None,
         }
     }
-
-    pub fn generics_mut(&mut self) -> Option<&mut [Generic]> {
-        match self {
-            Self::TypeAlias { generics, .. }
-            | Self::Enum { generics, .. }
-            | Self::Struct { generics, .. } => Some(generics),
-            Self::Interface { definition } => Some(&mut definition.generics),
-            Self::Value { .. } => None,
-        }
-    }
 }
 
 impl Definition {

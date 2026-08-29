@@ -1,37 +1,14 @@
-use super::helpers::{is_one_literal, span_text};
+use super::helpers::{is_one_literal, method_call, span_text};
 use crate::passes::walk::NodeCtx;
 use diagnostics::{Edit, Fix};
 use syntax::ast::{Expression, UnaryOperator};
 
 pub fn check_manual_replace_all(expression: &Expression, ctx: &NodeCtx) {
-    let Expression::Call {
-        expression: callee,
-        args,
-        span,
-        ..
-    } = expression
-    else {
-        return;
-    };
-
-    let [s, old, new, count] = args.as_slice() else {
+    let Some((namespace, [s, old, new, count], span)) = method_call(expression, "Replace") else {
         return;
     };
 
     if !is_negative_one(count.unwrap_parens()) {
-        return;
-    }
-
-    let Expression::DotAccess {
-        expression: namespace,
-        member,
-        ..
-    } = callee.unwrap_parens()
-    else {
-        return;
-    };
-
-    if member.as_str() != "Replace" {
         return;
     }
 

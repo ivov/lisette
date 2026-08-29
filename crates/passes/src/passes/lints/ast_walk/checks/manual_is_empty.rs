@@ -3,7 +3,7 @@ use diagnostics::{Edit, Fix};
 use syntax::ast::{BinaryOperator, Expression};
 use syntax::types::{CompoundKind, Type};
 
-use super::helpers::{flip_comparison, is_zero_literal};
+use super::helpers::{flip_comparison, is_zero_literal, method_call};
 
 pub fn check_manual_is_empty(expression: &Expression, ctx: &NodeCtx) {
     let Expression::Binary {
@@ -59,29 +59,8 @@ pub fn check_manual_is_empty(expression: &Expression, ctx: &NodeCtx) {
 }
 
 fn length_call_receiver(expression: &Expression) -> Option<&Expression> {
-    let Expression::Call {
-        expression: callee,
-        args,
-        ..
-    } = expression
-    else {
-        return None;
-    };
-
-    if !args.is_empty() {
-        return None;
-    }
-
-    let Expression::DotAccess {
-        expression: receiver,
-        member,
-        ..
-    } = callee.unwrap_parens()
-    else {
-        return None;
-    };
-
-    (member == "length").then_some(receiver.as_ref())
+    let (receiver, args, _) = method_call(expression, "length")?;
+    args.is_empty().then_some(receiver)
 }
 
 fn type_has_is_empty(ty: &Type) -> bool {

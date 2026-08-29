@@ -29,6 +29,7 @@ use semantics::store::ENTRY_PACKAGE_ID;
 use std::io;
 use std::io::ErrorKind;
 use std::ops::Deref;
+use syntax::go_platform::{GO_ARCHITECTURE_NAMES, GO_OPERATING_SYSTEM_NAMES};
 
 pub fn emit(path: Option<String>, sourcemap: bool, output: Option<String>) -> i32 {
     let target = path.unwrap_or_else(|| ".".to_string());
@@ -896,54 +897,6 @@ pub(super) fn resolve_project_layout(project_path: &Path) -> Option<ProjectLayou
     })
 }
 
-const GO_OS_NAMES: &[&str] = &[
-    "aix",
-    "android",
-    "darwin",
-    "dragonfly",
-    "freebsd",
-    "hurd",
-    "illumos",
-    "ios",
-    "js",
-    "linux",
-    "nacl",
-    "netbsd",
-    "openbsd",
-    "plan9",
-    "solaris",
-    "wasip1",
-    "windows",
-    "zos",
-];
-
-const GO_ARCH_NAMES: &[&str] = &[
-    "386",
-    "amd64",
-    "amd64p32",
-    "arm",
-    "armbe",
-    "arm64",
-    "arm64be",
-    "loong64",
-    "mips",
-    "mipsle",
-    "mips64",
-    "mips64le",
-    "mips64p32",
-    "mips64p32le",
-    "ppc",
-    "ppc64",
-    "ppc64le",
-    "riscv",
-    "riscv64",
-    "s390",
-    "s390x",
-    "sparc",
-    "sparc64",
-    "wasm",
-];
-
 fn go_platform_suffix(go_filename: &str) -> Option<String> {
     let name = go_filename.split('.').next()?;
     let first_underscore = name.find('_')?;
@@ -954,12 +907,12 @@ fn go_platform_suffix(go_filename: &str) -> Option<String> {
 
     let last = *parts.last()?;
     if let Some(&preceding) = parts.iter().nth_back(1)
-        && GO_OS_NAMES.contains(&preceding)
-        && GO_ARCH_NAMES.contains(&last)
+        && GO_OPERATING_SYSTEM_NAMES.contains(&preceding)
+        && GO_ARCHITECTURE_NAMES.contains(&last)
     {
         return Some(format!("{preceding}_{last}"));
     }
-    if GO_OS_NAMES.contains(&last) || GO_ARCH_NAMES.contains(&last) {
+    if GO_OPERATING_SYSTEM_NAMES.contains(&last) || GO_ARCHITECTURE_NAMES.contains(&last) {
         return Some(last.to_string());
     }
     None

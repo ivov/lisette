@@ -1,59 +1,7 @@
 use crate::passes::walk::NodeCtx;
 use syntax::ast::{BinaryOperator, Expression, Literal};
+use syntax::go_platform::{GO_ARCHITECTURE_NAMES, GO_OPERATING_SYSTEM_NAMES};
 use syntax::types::Type;
-
-/// Go's `internal/syslist` known operating systems. Deliberately broad (it
-/// keeps obsolete and experimental targets such as `nacl` and `hurd`) so the
-/// lint fires only on values that are never a valid `GOOS`.
-const KNOWN_OS: &[&str] = &[
-    "aix",
-    "android",
-    "darwin",
-    "dragonfly",
-    "freebsd",
-    "hurd",
-    "illumos",
-    "ios",
-    "js",
-    "linux",
-    "nacl",
-    "netbsd",
-    "openbsd",
-    "plan9",
-    "solaris",
-    "wasip1",
-    "windows",
-    "zos",
-];
-
-/// Go's `internal/syslist` known architectures, broad for the same reason as
-/// [`KNOWN_OS`].
-const KNOWN_ARCH: &[&str] = &[
-    "386",
-    "amd64",
-    "amd64p32",
-    "arm",
-    "armbe",
-    "arm64",
-    "arm64be",
-    "loong64",
-    "mips",
-    "mipsle",
-    "mips64",
-    "mips64le",
-    "mips64p32",
-    "mips64p32le",
-    "ppc",
-    "ppc64",
-    "ppc64le",
-    "riscv",
-    "riscv64",
-    "s390",
-    "s390x",
-    "sparc",
-    "sparc64",
-    "wasm",
-];
 
 enum RuntimeConst {
     Goos,
@@ -75,8 +23,8 @@ impl RuntimeConst {
 
     fn is_known(&self, value: &str) -> bool {
         match self {
-            RuntimeConst::Goos => KNOWN_OS.contains(&value),
-            RuntimeConst::Goarch => KNOWN_ARCH.contains(&value),
+            RuntimeConst::Goos => GO_OPERATING_SYSTEM_NAMES.contains(&value),
+            RuntimeConst::Goarch => GO_ARCHITECTURE_NAMES.contains(&value),
         }
     }
 }

@@ -1,5 +1,6 @@
 use super::helpers::{
-    as_tight_operand, expression_is_pure, is_zero_literal, reads_as_method_call, span_text,
+    as_tight_operand, expression_is_pure, is_zero_literal, method_call, reads_as_method_call,
+    span_text,
 };
 use crate::passes::walk::NodeCtx;
 use diagnostics::{Edit, Fix};
@@ -52,11 +53,7 @@ fn native_slice_method<'a>(
     name: &str,
 ) -> Option<(&'a Span, &'a Expression, &'a Expression)> {
     let Expression::Call {
-        expression: callee,
-        args,
-        call_kind,
-        span,
-        ..
+        call_kind, span, ..
     } = expression
     else {
         return None;
@@ -66,20 +63,10 @@ fn native_slice_method<'a>(
         return None;
     }
 
-    let [arg] = args.as_slice() else {
+    let Some((receiver, [arg], _)) = method_call(expression, name) else {
         return None;
     };
-
-    let Expression::DotAccess {
-        expression: receiver,
-        member,
-        ..
-    } = callee.unwrap_parens()
-    else {
-        return None;
-    };
-
-    (member.as_str() == name).then_some((span, receiver.as_ref(), arg))
+    Some((span, receiver, arg))
 }
 
 // `filter` evaluates the predicate on every element but `find` short-circuits, so
