@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  #[json]
+  struct User {
+    #[json(omitempty, omitzero)]
+    name: string,
+  }
+---
+package main
+
+type User struct {
+	Name string `json:"name,omitempty,omitzero"`
+}
