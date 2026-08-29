@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788009097645,
+  "lastUpdate": 1788009719883,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -29006,6 +29006,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/3d4a0cb1cf46d4fd92b91a716acd2077467d47c9"
         },
         "date": 1788009096170,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 136956,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32038,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27564,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18642,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14835,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13635,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8404,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6029,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2902,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1850,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 736,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9402,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5ee940b0c4f5fec25705cf8cce1d351b90e7c6fb",
+          "message": "ci: build Intel Mac binary on Apple Silicon runner (#1349)",
+          "timestamp": "2026-08-29T15:21:30+02:00",
+          "tree_id": "72f0f23fee22dbc65fd7d830aae1ff50d7a1c471",
+          "url": "https://github.com/ivov/lisette/commit/5ee940b0c4f5fec25705cf8cce1d351b90e7c6fb"
+        },
+        "date": 1788009718611,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
