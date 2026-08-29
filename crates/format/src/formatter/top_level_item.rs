@@ -539,10 +539,15 @@ impl<'a> Formatter<'a> {
                 ..
             } => {
                 let param_docs: Vec<_> = params.iter().map(Self::annotation).collect();
+                let return_doc = if return_type.is_unknown() {
+                    Document::Sequence(vec![])
+                } else {
+                    Document::str(" -> ").append(Self::annotation(return_type))
+                };
                 Document::str("fn(")
                     .append(join(param_docs, Document::str(", ")))
-                    .append(") -> ")
-                    .append(Self::annotation(return_type))
+                    .append(")")
+                    .append(return_doc)
             }
             Annotation::Unknown => Document::str("_"),
             Annotation::Tuple { elements, .. } => {
