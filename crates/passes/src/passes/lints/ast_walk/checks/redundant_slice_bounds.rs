@@ -1,4 +1,6 @@
-use super::helpers::{expressions_equivalent, is_side_effect_free, is_zero_literal, span_text};
+use super::helpers::{
+    expressions_equivalent, is_side_effect_free, is_zero_literal, method_call, span_text,
+};
 use crate::passes::walk::NodeCtx;
 use diagnostics::{Edit, Fix};
 use syntax::ast::Expression;
@@ -85,24 +87,8 @@ pub fn check_redundant_slice_bounds(expression: &Expression, ctx: &NodeCtx) {
 }
 
 fn is_length_call_on(expression: &Expression, slice_receiver: &Expression) -> bool {
-    let Expression::Call {
-        expression: callee,
-        args,
-        ..
-    } = expression.unwrap_parens()
-    else {
+    let Some((length_receiver, [], _)) = method_call(expression.unwrap_parens(), "length") else {
         return false;
     };
-    if !args.is_empty() {
-        return false;
-    }
-    let Expression::DotAccess {
-        expression: length_receiver,
-        member,
-        ..
-    } = callee.unwrap_parens()
-    else {
-        return false;
-    };
-    member == "length" && expressions_equivalent(length_receiver, slice_receiver)
+    expressions_equivalent(length_receiver, slice_receiver)
 }

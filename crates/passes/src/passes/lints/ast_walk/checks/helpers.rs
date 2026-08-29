@@ -351,6 +351,12 @@ pub(super) fn method_call<'a>(
     (member.as_str() == name).then_some((receiver.as_ref(), args.as_slice(), span))
 }
 
+pub(super) fn time_now_namespace(expression: &Expression) -> Option<&Expression> {
+    let (namespace, args, _) = method_call(expression.unwrap_parens(), "Now")?;
+    (args.is_empty() && namespace.get_type().as_import_namespace() == Some("go:time"))
+        .then_some(namespace)
+}
+
 pub(super) fn unary_lambda(expression: &Expression) -> Option<(&str, &Expression)> {
     let Expression::Lambda { params, body, .. } = expression.unwrap_parens() else {
         return None;

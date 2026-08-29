@@ -4,6 +4,7 @@ pub mod containment;
 pub mod dependency_block;
 mod display;
 pub mod go_names;
+pub mod go_platform;
 pub mod imports;
 pub mod lex;
 pub mod parse;
