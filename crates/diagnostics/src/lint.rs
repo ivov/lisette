@@ -505,7 +505,7 @@ pub fn unnecessary_min_or_max(span: &Span, op: &str) -> LisetteDiagnostic {
 }
 
 pub fn manual_min_max(span: &Span, op: &str, extreme: &str) -> LisetteDiagnostic {
-    LisetteDiagnostic::info(format!("Manual `{op}`"))
+    LisetteDiagnostic::info(format!("Manual `{op}()`"))
         .with_lint_code("manual_min_max")
         .with_span_label(span, format!("can use `{op}()`"))
         .with_help(format!(

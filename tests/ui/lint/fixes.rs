@@ -474,23 +474,6 @@ pub fn count(s: string) -> int {
 }
 
 #[test]
-fn fix_eager_split_in_loop_keeps_type_argument() {
-    assert_fix_snapshot!(
-        r#"
-import "go:strings"
-
-pub fn count(s: string) -> int {
-  let mut n = 0
-  for part in strings.Split<int>(s, ",") {
-    n += part.length()
-  }
-  n
-}
-"#
-    );
-}
-
-#[test]
 fn fix_unnecessary_reference() {
     assert_fix_snapshot!(
         r#"

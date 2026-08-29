@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  ● Manual `min`
+  ● Manual `min()`
    ╭─[test.lis:3:3]
  2 │ pub fn f(a: string, b: string) -> string {
  3 │   if a < b { a } else { b }

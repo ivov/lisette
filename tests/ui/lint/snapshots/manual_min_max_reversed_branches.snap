@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  ● Manual `max`
+  ● Manual `max()`
    ╭─[test.lis:3:3]
  2 │ pub fn f(a: int, b: int) -> int {
  3 │   if a < b { b } else { a }
