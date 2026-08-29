@@ -1,6 +1,6 @@
 use crate::abi::is_tagged_shape_fn_value;
 use crate::calls::dispatch::{
-    CallArgShape, all_type_params_inferrable, is_prelude_variant_constructor,
+    CallArgShape, all_type_params_inferrable, callee_is_go_builtin, is_prelude_variant_constructor,
 };
 use syntax::types::FunctionParameter;
 
@@ -236,7 +236,7 @@ impl<'a> Planner<'a> {
             function_string = format!("({})", function_string);
         }
 
-        let type_args_string = self.resolve_call_type_args(CallTypeArgsRequest {
+        let mut type_args_string = self.resolve_call_type_args(CallTypeArgsRequest {
             function,
             callee: &call_plan.resolved,
             type_args: resolved_type_args,
@@ -247,6 +247,14 @@ impl<'a> Planner<'a> {
             },
             ctx: expression_ctx,
         });
+        // A Go builtin takes no type argument, so the instantiated type it would
+        // have pinned becomes a conversion around the call instead.
+        let builtin_conversion = callee_is_go_builtin(function)
+            .then(|| go_builtin_conversion(&type_args_string))
+            .flatten();
+        if builtin_conversion.is_some() {
+            type_args_string = String::new();
+        }
         if !type_args_string.is_empty()
             && let Some(bracket_start) = function_string.find('[')
         {
@@ -286,6 +294,10 @@ impl<'a> Planner<'a> {
             args_strings.join(", ")
         );
         let call_str = collapse_fmt_print(&function_string, args, &args_strings, call_str);
+        let call_str = match &builtin_conversion {
+            Some(go_type) => format!("{go_type}({call_str})"),
+            None => call_str,
+        };
 
         setup.extend(args_setup);
 
@@ -994,6 +1006,13 @@ impl<'a> Planner<'a> {
             GoExpression::opaque_with_deferred_evaluation(coerced, true)
         }))
     }
+}
+
+/// The single Go type inside a rendered `[T]` list, which becomes a conversion
+/// around a builtin call. `None` for an empty or multi-parameter list.
+fn go_builtin_conversion(type_args: &str) -> Option<String> {
+    let inner = type_args.strip_prefix('[')?.strip_suffix(']')?;
+    (!inner.is_empty() && !inner.contains(',')).then(|| inner.to_string())
 }
 
 fn callee_curries_receiver(callee: &ResolvedCallee<'_>) -> bool {

@@ -17,7 +17,7 @@ use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, Value
 use crate::types::native::NativeGoType;
 use syntax::EcoString;
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments, StructFields};
-use syntax::program::{CallKind, Definition, DefinitionBody};
+use syntax::program::{CallKind, Definition, DefinitionBody, resolved_definition};
 use syntax::types::{
     CompoundKind, FunctionParameter, SimpleKind, Type, build_substitution_map, substitute,
 };
@@ -792,6 +792,10 @@ fn extract_receiver_ufcs_method(function: &Expression) -> String {
         return value[last_dot + 1..].to_string();
     }
     String::new()
+}
+
+pub(super) fn callee_is_go_builtin(callee: &Expression) -> bool {
+    resolved_definition(callee).is_some_and(go_name::is_prelude_go_builtin)
 }
 
 pub(super) fn is_prelude_variant_constructor(callee: &Expression) -> bool {

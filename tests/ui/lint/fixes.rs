@@ -18,7 +18,7 @@ fn fix_discarded_unit_binding_call() {
     assert_fix_snapshot!(
         r#"
 struct Options { port: string }
-fn configure(o: Ref<Options>) { o.*.port = "8080" }
+fn configure(o: mut Ref<Options>) { o.*.port = "8080" }
 fn main() {
   let mut o = Options{ port: "" }
   let _ = configure(&o)
@@ -465,23 +465,6 @@ import "go:strings"
 pub fn count(s: string) -> int {
   let mut n = 0
   for part in strings.Split(s, ",") {
-    n += part.length()
-  }
-  n
-}
-"#
-    );
-}
-
-#[test]
-fn fix_eager_split_in_loop_keeps_type_argument() {
-    assert_fix_snapshot!(
-        r#"
-import "go:strings"
-
-pub fn count(s: string) -> int {
-  let mut n = 0
-  for part in strings.Split<int>(s, ",") {
     n += part.length()
   }
   n

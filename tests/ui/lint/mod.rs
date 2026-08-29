@@ -22768,6 +22768,169 @@ fn main() {
 }
 
 #[test]
+fn manual_min_max_less_than() {
+    assert_lint_snapshot!(
+        r#"
+pub fn f(a: int, b: int) -> int {
+  if a < b { a } else { b }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_min_max_greater_than() {
+    assert_lint_snapshot!(
+        r#"
+pub fn f(a: int, b: int) -> int {
+  if a > b { a } else { b }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_min_max_reversed_branches() {
+    assert_lint_snapshot!(
+        r#"
+pub fn f(a: int, b: int) -> int {
+  if a < b { b } else { a }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_min_max_less_than_or_equal() {
+    assert_lint_snapshot!(
+        r#"
+pub fn f(a: int, b: int) -> int {
+  if a <= b { a } else { b }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_min_max_greater_than_or_equal_reversed() {
+    assert_lint_snapshot!(
+        r#"
+pub fn f(a: int, b: int) -> int {
+  if a >= b { b } else { a }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_min_max_strings() {
+    assert_lint_snapshot!(
+        r#"
+pub fn f(a: string, b: string) -> string {
+  if a < b { a } else { b }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_min_max_field_operands() {
+    assert_lint_snapshot!(
+        r#"
+pub struct Point { pub x: int, pub y: int }
+
+pub fn f(p: Point, q: Point) -> int {
+  if p.x > q.y { p.x } else { q.y }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_min_max_newtype_operands() {
+    assert_lint_snapshot!(
+        r#"
+pub struct Meters(int)
+
+pub fn f(a: Meters, b: Meters) -> Meters {
+  if a < b { a } else { b }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_min_max_float_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn f(a: float64, b: float64) -> float64 {
+  if a < b { a } else { b }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_min_max_side_effect_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn roll(x: int) -> int { x * 2 }
+
+pub fn f(a: int, b: int) -> int {
+  if roll(a) < roll(b) { roll(a) } else { roll(b) }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_min_max_else_if_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn f(a: int, b: int, c: int) -> int {
+  if a < b { a } else if a < c { c } else { b }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_min_max_extra_statement_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn f(a: int, b: int) -> int {
+  if a < b {
+    let doubled = a * 2
+    doubled - a
+  } else { b }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_min_max_unrelated_branches_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn f(a: int, b: int, c: int, d: int) -> int {
+  if a < b { c } else { d }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_min_max_equality_condition_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn f(a: int, b: int) -> int {
+  if a == b { a } else { b }
+}
+"#
+    );
+}
+
+#[test]
 fn manual_filter_option() {
     assert_lint_snapshot!(
         r#"

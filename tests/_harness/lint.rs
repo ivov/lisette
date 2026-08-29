@@ -70,5 +70,21 @@ pub fn apply_lint_fixes(source: &str) -> String {
             reparsed.errors
         );
     }
+
+    let checked = super::infer::infer(source);
+    if !checked.errors.is_empty() {
+        panic!(
+            "Fix test input does not check:\n{source}\nerrors: {:?}",
+            checked.errors
+        );
+    }
+
+    let rechecked = super::infer::infer(&fixed);
+    if !rechecked.errors.is_empty() {
+        panic!(
+            "Applied fix produced source that no longer checks:\n{fixed}\nerrors: {:?}",
+            rechecked.errors
+        );
+    }
     fixed
 }
