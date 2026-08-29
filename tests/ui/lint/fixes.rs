@@ -18,7 +18,7 @@ fn fix_discarded_unit_binding_call() {
     assert_fix_snapshot!(
         r#"
 struct Options { port: string }
-fn configure(o: Ref<Options>) { o.*.port = "8080" }
+fn configure(o: mut Ref<Options>) { o.*.port = "8080" }
 fn main() {
   let mut o = Options{ port: "" }
   let _ = configure(&o)

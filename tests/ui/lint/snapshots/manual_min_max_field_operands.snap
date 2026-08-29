@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ● Manual `max`
+   ╭─[test.lis:5:3]
+ 4 │ pub fn f(p: Point, q: Point) -> int {
+ 5 │   if p.x > q.y { p.x } else { q.y }
+   ·   ────────────────┬────────────────
+   ·                   ╰── can use `max()`
+ 6 │ }
+   ╰────
+  help: This `if` returns the larger of its two operands, same as `max()` · code: [lint.manual_min_max]

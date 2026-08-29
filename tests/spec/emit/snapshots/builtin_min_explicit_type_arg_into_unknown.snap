@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn test() -> Unknown {
+    min<byte>(1, 2)
+  }
+---
+package main
+
+func test() any {
+	return byte(min(1, 2))
+}

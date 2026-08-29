@@ -1381,6 +1381,39 @@ fn test() -> string {
 }
 
 #[test]
+fn builtin_min_max_sized_integers() {
+    let input = r#"
+fn test(a: byte, b: byte, c: rune, d: rune) -> rune {
+  let _ = min(a, b)
+  max(c, d)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn builtin_min_named_go_type() {
+    let input = r#"
+import "go:time"
+
+fn test(a: time.Duration, b: time.Duration) -> time.Duration {
+  min(a, b)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn builtin_min_explicit_type_arg_into_unknown() {
+    let input = r#"
+fn test() -> Unknown {
+  min<byte>(1, 2)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn string_is_empty_negated() {
     let input = r#"
 fn test(s: string) -> bool {

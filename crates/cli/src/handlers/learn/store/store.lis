@@ -29,7 +29,7 @@ pub fn save(items: Slice<models.Task>) -> Result<(), error> {
 }
 
 pub fn next_id(items: Slice<models.Task>) -> int {
-  items.fold(0, |max, t| if t.id > max { t.id } else { max }) + 1
+  items.fold(0, |highest, t| max(highest, t.id)) + 1
 }
 
 pub fn set_status(

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ● Manual `min`
+   ╭─[test.lis:3:3]
+ 2 │ pub fn f(a: string, b: string) -> string {
+ 3 │   if a < b { a } else { b }
+   ·   ────────────┬────────────
+   ·               ╰── can use `min()`
+ 4 │ }
+   ╰────
+  help: This `if` returns the smaller of its two operands, same as `min()` · code: [lint.manual_min_max]

@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/prelude.rs
+description: |
+  
+  fn test(a: byte, b: byte, c: rune, d: rune) -> rune {
+    let _ = min(a, b)
+    max(c, d)
+  }
+---
+package main
+
+func test(a, b byte, c, d rune) rune {
+	_ = byte(min(a, b))
+	return rune(max(c, d))
+}

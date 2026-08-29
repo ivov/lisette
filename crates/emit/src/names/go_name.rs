@@ -211,6 +211,12 @@ pub(crate) fn enum_make_function(enum_name: &str, variant_name: &str) -> String 
 /// identifiers with these names, so the emitter need not escape them.
 const PRELUDE_BUILTIN_NAMES: &[&str] = &["complex", "max", "min", "panic", "real"];
 
+pub(crate) fn is_prelude_go_builtin(qualified_name: &str) -> bool {
+    qualified_name
+        .strip_prefix("prelude.")
+        .is_some_and(|name| PRELUDE_BUILTIN_NAMES.contains(&name))
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum GeneratedPackage {
     Prelude,

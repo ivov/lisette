@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ● Manual `max`
+   ╭─[test.lis:3:3]
+ 2 │ pub fn f(a: int, b: int) -> int {
+ 3 │   if a < b { b } else { a }
+   ·   ────────────┬────────────
+   ·               ╰── can use `max()`
+ 4 │ }
+   ╰────
+  help: This `if` returns the larger of its two operands, same as `max()` · code: [lint.manual_min_max]

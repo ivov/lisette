@@ -70,5 +70,15 @@ pub fn apply_lint_fixes(source: &str) -> String {
             reparsed.errors
         );
     }
+
+    // A fix that names a shadowed identifier still parses, so reparsing alone
+    // cannot catch it.
+    let rechecked = super::infer::infer(&fixed);
+    if !rechecked.errors.is_empty() {
+        panic!(
+            "Applied fix produced source that no longer checks:\n{fixed}\nerrors: {:?}",
+            rechecked.errors
+        );
+    }
     fixed
 }
