@@ -56,7 +56,7 @@ use checks::{
     check_unnecessary_min_or_max, check_unnecessary_range_loop,
     check_unnecessary_raw_string_expression, check_unnecessary_raw_string_pattern,
     check_unnecessary_return, check_unsigned_comparison, check_verbose_failure_propagation,
-    check_waitgroup_add_in_task, check_while_let_loop, check_wildcard_in_or_patterns,
+    check_waitgroup, check_while_let_loop, check_wildcard_in_or_patterns,
 };
 
 fn run_expression_checks(expression: &Expression, ctx: &mut NodeCtx<'_>, role: FunctionRole<'_>) {
@@ -157,7 +157,7 @@ fn run_expression_checks(expression: &Expression, ctx: &mut NodeCtx<'_>, role: F
         (check_dup_arg, &[Call]),
         (check_printf_verb_mismatch, &[Call]),
         (check_duplicate_cutset, &[Call]),
-        (check_waitgroup_add_in_task, &[Function, Lambda]),
+        (check_waitgroup, &[Function, Lambda]),
         (check_exit_after_defer, &[Function, Lambda]),
         (check_struct_attributes, &[Struct]),
         (check_attributes, &[Function]),

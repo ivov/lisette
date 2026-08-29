@@ -17056,7 +17056,308 @@ fn main() {
 }
 
 #[test]
-fn waitgroup_add_before_task_no_warning() {
+fn manual_waitgroup_go() {
+    assert_lint_snapshot!(
+        r#"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  wg.Add(1)
+  task {
+    wg.Done()
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_cedes_to_add_in_task() {
+    assert_lint_snapshot!(
+        r#"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  task {
+    wg.Add(1)
+    task {
+      wg.Done()
+    }
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_deferred_done() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  wg.Add(1)
+  task {
+    defer wg.Done()
+    fmt.Println("working")
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_without_wait() {
+    assert_lint_snapshot!(
+        r#"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  wg.Add(1)
+  task {
+    wg.Done()
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_non_unit_delta_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  wg.Add(2)
+  task {
+    wg.Done()
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_early_return_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  let flag = true
+  wg.Add(1)
+  task {
+    if flag { return }
+    wg.Done()
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_exit_before_defer_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  let flag = true
+  wg.Add(1)
+  task {
+    if flag { return }
+    defer wg.Done()
+    fmt.Println("work")
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_exit_after_defer() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  let flag = true
+  wg.Add(1)
+  task {
+    defer wg.Done()
+    if flag { return }
+    fmt.Println("work")
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_defer_before_deferred_done_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  wg.Add(1)
+  task {
+    defer fmt.Println("other")
+    defer wg.Done()
+    fmt.Println("work")
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_defer_before_trailing_done_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  wg.Add(1)
+  task {
+    defer fmt.Println("other")
+    fmt.Println("work")
+    wg.Done()
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_defer_after_deferred_done() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  wg.Add(1)
+  task {
+    defer wg.Done()
+    defer fmt.Println("other")
+    fmt.Println("work")
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_done_before_work_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  wg.Add(1)
+  task {
+    wg.Done()
+    fmt.Println("after")
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_conditional_done_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  let flag = true
+  wg.Add(1)
+  task {
+    if flag {
+      wg.Done()
+    }
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_add_not_adjacent_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  wg.Add(1)
+  fmt.Println("between")
+  task {
+    wg.Done()
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_distinct_groups_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:sync"
+
+fn main() {
+  let first = sync.WaitGroup {}
+  let second = sync.WaitGroup {}
+  first.Add(1)
+  task {
+    second.Done()
+  }
+  first.Wait()
+  second.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_group_also_captured_no_warning() {
     assert_no_lint_warnings!(
         r#"
 import "go:sync"
@@ -17065,6 +17366,8 @@ fn main() {
   let wg = sync.WaitGroup {}
   wg.Add(1)
   task {
+    let finish = || { wg.Done() }
+    finish()
     wg.Done()
   }
   wg.Wait()
@@ -17146,8 +17449,8 @@ fn main() {
 }
 
 #[test]
-fn waitgroup_add_in_nested_task_covered_by_prior_add_no_warning() {
-    assert_no_lint_warnings!(
+fn waitgroup_add_in_nested_task_covered_by_prior_add() {
+    assert_lint_snapshot!(
         r#"
 import "go:sync"
 

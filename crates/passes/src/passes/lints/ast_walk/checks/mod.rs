@@ -110,7 +110,7 @@ mod unnecessary_raw_string;
 mod unnecessary_return;
 mod unsigned_comparison;
 mod verbose_failure_propagation;
-mod waitgroup_add_in_task;
+mod waitgroup;
 mod while_let_loop;
 mod wildcard_in_or_patterns;
 
@@ -229,6 +229,6 @@ pub use unnecessary_raw_string::{
 pub use unnecessary_return::check_unnecessary_return;
 pub use unsigned_comparison::check_unsigned_comparison;
 pub use verbose_failure_propagation::check_verbose_failure_propagation;
-pub use waitgroup_add_in_task::check_waitgroup_add_in_task;
+pub use waitgroup::check_waitgroup;
 pub use while_let_loop::check_while_let_loop;
 pub use wildcard_in_or_patterns::check_wildcard_in_or_patterns;
