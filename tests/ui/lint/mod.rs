@@ -2963,6 +2963,141 @@ fn main() {
 }
 
 #[test]
+fn eager_split_in_loop() {
+    assert_lint_snapshot!(
+        r#"
+import "go:strings"
+
+pub fn count(s: string) -> int {
+  let mut n = 0
+  for part in strings.Split(s, ",") {
+    n += part.length()
+  }
+  n
+}
+"#
+    );
+}
+
+#[test]
+fn eager_split_in_loop_other_forms() {
+    assert_lint_snapshot!(
+        r#"
+import "go:strings"
+
+pub fn after(s: string) -> int {
+  let mut n = 0
+  for part in strings.SplitAfter(s, ",") {
+    n += part.length()
+  }
+  n
+}
+
+pub fn fields(s: string) -> int {
+  let mut n = 0
+  for part in strings.Fields(s) {
+    n += part.length()
+  }
+  n
+}
+"#
+    );
+}
+
+#[test]
+fn eager_split_in_loop_aliased_import() {
+    assert_lint_snapshot!(
+        r#"
+import mystr "go:strings"
+
+pub fn count(s: string) -> int {
+  let mut n = 0
+  for part in mystr.Split(s, ",") {
+    n += part.length()
+  }
+  n
+}
+"#
+    );
+}
+
+#[test]
+fn eager_split_in_loop_bytes_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:bytes"
+
+pub fn count(s: Slice<byte>) -> int {
+  let mut n = 0
+  for part in bytes.Split(s, ",".bytes()) {
+    n += part.length()
+  }
+  n
+}
+"#
+    );
+}
+
+#[test]
+fn eager_split_in_loop_bound_first_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+pub fn count(s: string) -> int {
+  let parts = strings.Split(s, ",")
+  let mut n = 0
+  for part in parts {
+    n += part.length()
+  }
+  n
+}
+"#
+    );
+}
+
+#[test]
+fn eager_split_in_loop_spread_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+pub fn count(s: string, rest: Slice<string>) -> int {
+  let mut n = 0
+  for part in strings.Split(s, ",", rest...) {
+    n += part.length()
+  }
+  n
+}
+"#
+    );
+}
+
+#[test]
+fn eager_split_in_loop_user_type_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Splitter {}
+
+impl Splitter {
+  fn Split(self, s: string, sep: string) -> Slice<string> {
+    s.split(sep)
+  }
+}
+
+pub fn count(s: string) -> int {
+  let sp = Splitter {}
+  let mut n = 0
+  for part in sp.Split(s, ",") {
+    n += part.length()
+  }
+  n
+}
+"#
+    );
+}
+
+#[test]
 fn manual_rotate() {
     assert_lint_snapshot!(
         r#"
@@ -13416,6 +13551,474 @@ pub struct User {
 }
 
 #[test]
+fn known_omitzero_tag_option_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+#[json(omitzero)]
+pub struct User {
+  #[json(!omitzero)]
+  name: string,
+  age: int,
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_omitempty_on_struct_field() {
+    assert_lint_snapshot!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json]
+pub struct User {
+  #[json(omitempty)]
+  pub address: Address,
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_omitempty_on_array_field() {
+    assert_lint_snapshot!(
+        r#"
+#[json]
+pub struct Reading {
+  #[json(omitempty)]
+  pub samples: Array<int, 3>,
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_omitempty_on_tuple_field() {
+    assert_lint_snapshot!(
+        r#"
+#[json]
+pub struct Point {
+  #[json(omitempty)]
+  pub at: (int, int),
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_omitempty_inherited_from_struct() {
+    assert_lint_snapshot!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json(omitempty)]
+pub struct User {
+  pub address: Address,
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_omitempty_inherited_by_renamed_field() {
+    assert_lint_snapshot!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json(omitempty)]
+pub struct User {
+  #[json("home")]
+  pub address: Address,
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_omitempty_through_alias() {
+    assert_lint_snapshot!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+pub type Home = Address
+
+#[json]
+pub struct User {
+  #[json(omitempty)]
+  pub home: Home,
+}
+"#
+    );
+}
+
+#[test]
+fn omitempty_on_emptiable_field_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json]
+pub struct User {
+  #[json(omitempty)]
+  pub name: string,
+  #[json(omitempty)]
+  pub tags: Slice<string>,
+  #[json(omitempty)]
+  pub home: Option<Address>,
+  #[json(omitempty)]
+  pub landlord: Ref<Address>,
+}
+"#
+    );
+}
+
+#[test]
+fn omitempty_beside_omitzero_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json]
+pub struct User {
+  #[json(omitempty, omitzero)]
+  pub address: Address,
+}
+"#
+    );
+}
+
+#[test]
+fn negated_omitempty_on_struct_field_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json(omitempty)]
+pub struct User {
+  #[json(!omitempty)]
+  pub address: Address,
+}
+"#
+    );
+}
+
+#[test]
+fn skipped_struct_field_no_omitempty_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json(omitempty)]
+pub struct User {
+  #[json(skip)]
+  pub address: Address,
+}
+"#
+    );
+}
+
+#[test]
+fn negated_skip_does_not_revive_omitempty_warning() {
+    let diagnostics = lint(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json]
+pub struct User {
+  #[json(omitempty, skip, !skip)]
+  pub address: Address,
+}
+"#,
+    );
+    let codes: Vec<&str> = diagnostics.iter().filter_map(|d| d.code_str()).collect();
+    assert!(
+        !codes.contains(&"lint.ineffective_omitempty"),
+        "emit ignores `!skip` and still writes `json:\"-\"`: {codes:?}"
+    );
+}
+
+#[test]
+fn struct_omitempty_cancelled_by_later_attribute_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json(omitempty)]
+#[json(!omitempty)]
+pub struct User {
+  pub address: Address,
+}
+"#
+    );
+}
+
+#[test]
+fn omitempty_on_opaque_go_type_not_flagged() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:time"
+
+#[json]
+pub struct Event {
+  #[json(omitempty)]
+  pub at: time.Time,
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_omitempty_through_newtype() {
+    assert_lint_snapshot!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+pub struct Home(Address)
+
+#[json]
+pub struct User {
+  #[json(omitempty)]
+  pub home: Home,
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_omitempty_on_enum_field() {
+    assert_lint_snapshot!(
+        r#"
+pub enum Colour {
+  Red,
+  Green,
+}
+
+#[json]
+pub struct Palette {
+  #[json(omitempty)]
+  pub colour: Colour,
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_omitempty_on_unit_field() {
+    assert_lint_snapshot!(
+        r#"
+#[json]
+pub struct Marker {
+  #[json(omitempty)]
+  pub seen: (),
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_omitempty_on_newtype_over_option() {
+    assert_lint_snapshot!(
+        r#"
+pub struct Maybe(Option<int>)
+
+#[json]
+pub struct Holder {
+  #[json(omitempty)]
+  pub wrapped: Maybe,
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_omitempty_on_option_with_negated_omitzero() {
+    assert_lint_snapshot!(
+        r#"
+#[json]
+pub struct Holder {
+  #[json(omitempty, !omitzero)]
+  pub kept: Option<int>,
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_omitempty_on_never_field() {
+    assert_lint_snapshot!(
+        r#"
+#[json]
+pub struct Holder {
+  #[json(omitempty)]
+  pub x: Never,
+}
+"#
+    );
+}
+
+#[test]
+fn omitempty_on_tuple_struct_field_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json(omitempty)]
+pub struct Wrapper(Address)
+
+#[json(omitempty)]
+pub struct Pair(Address, Address)
+"#
+    );
+}
+
+#[test]
+fn omitempty_on_embedded_field_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json(omitempty)]
+pub struct Embedder {
+  embed Address,
+  pub note: string,
+}
+"#
+    );
+}
+
+#[test]
+fn omitempty_on_scalar_newtype_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub struct Meters(int)
+
+#[json]
+pub struct Trip {
+  #[json(omitempty)]
+  pub distance: Meters,
+}
+"#
+    );
+}
+
+#[test]
+fn omitempty_on_zero_length_array_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+#[json]
+pub struct Reading {
+  #[json(omitempty)]
+  pub samples: Array<int, 0>,
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_omitempty_in_field_tag_attribute() {
+    let diagnostics = lint(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json]
+pub struct User {
+  #[tag("json", "home", omitempty)]
+  pub address: Address,
+}
+"#,
+    );
+    let codes: Vec<&str> = diagnostics.iter().filter_map(|d| d.code_str()).collect();
+    assert!(
+        codes.contains(&"lint.ineffective_omitempty"),
+        "a field `#[tag(\"json\", ...)]` carries its own `omitempty`: {codes:?}"
+    );
+}
+
+#[test]
+fn ineffective_omitempty_in_field_tag_with_raw_argument() {
+    let diagnostics = lint(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json]
+pub struct User {
+  #[tag("json", `ignored`, omitempty)]
+  pub address: Address,
+}
+"#,
+    );
+    let codes: Vec<&str> = diagnostics.iter().filter_map(|d| d.code_str()).collect();
+    assert!(
+        codes.contains(&"lint.ineffective_omitempty"),
+        "emit drops the raw argument and keeps `omitempty`: {codes:?}"
+    );
+}
+
+#[test]
+fn omitempty_beside_raw_json_value_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json]
+pub struct User {
+  #[json(omitempty, `json:"override"`)]
+  pub address: Address,
+}
+"#
+    );
+}
+
+#[test]
+fn field_tag_json_does_not_inherit_struct_omitempty() {
+    assert_lint_snapshot!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json(omitempty)]
+pub struct User {
+  #[tag("json", "home")]
+  pub address: Address,
+}
+"#
+    );
+}
+
+#[test]
 fn struct_fields_accessed_through_ref_not_unused() {
     assert_no_lint_warnings!(
         r#"
@@ -17056,7 +17659,308 @@ fn main() {
 }
 
 #[test]
-fn waitgroup_add_before_task_no_warning() {
+fn manual_waitgroup_go() {
+    assert_lint_snapshot!(
+        r#"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  wg.Add(1)
+  task {
+    wg.Done()
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_cedes_to_add_in_task() {
+    assert_lint_snapshot!(
+        r#"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  task {
+    wg.Add(1)
+    task {
+      wg.Done()
+    }
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_deferred_done() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  wg.Add(1)
+  task {
+    defer wg.Done()
+    fmt.Println("working")
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_without_wait() {
+    assert_lint_snapshot!(
+        r#"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  wg.Add(1)
+  task {
+    wg.Done()
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_non_unit_delta_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  wg.Add(2)
+  task {
+    wg.Done()
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_early_return_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  let flag = true
+  wg.Add(1)
+  task {
+    if flag { return }
+    wg.Done()
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_exit_before_defer_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  let flag = true
+  wg.Add(1)
+  task {
+    if flag { return }
+    defer wg.Done()
+    fmt.Println("work")
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_exit_after_defer() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  let flag = true
+  wg.Add(1)
+  task {
+    defer wg.Done()
+    if flag { return }
+    fmt.Println("work")
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_defer_before_deferred_done_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  wg.Add(1)
+  task {
+    defer fmt.Println("other")
+    defer wg.Done()
+    fmt.Println("work")
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_defer_before_trailing_done_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  wg.Add(1)
+  task {
+    defer fmt.Println("other")
+    fmt.Println("work")
+    wg.Done()
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_defer_after_deferred_done() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  wg.Add(1)
+  task {
+    defer wg.Done()
+    defer fmt.Println("other")
+    fmt.Println("work")
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_done_before_work_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  wg.Add(1)
+  task {
+    wg.Done()
+    fmt.Println("after")
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_conditional_done_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  let flag = true
+  wg.Add(1)
+  task {
+    if flag {
+      wg.Done()
+    }
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_add_not_adjacent_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+import "go:sync"
+
+fn main() {
+  let wg = sync.WaitGroup {}
+  wg.Add(1)
+  fmt.Println("between")
+  task {
+    wg.Done()
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_distinct_groups_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:sync"
+
+fn main() {
+  let first = sync.WaitGroup {}
+  let second = sync.WaitGroup {}
+  first.Add(1)
+  task {
+    second.Done()
+  }
+  first.Wait()
+  second.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn manual_waitgroup_go_group_also_captured_no_warning() {
     assert_no_lint_warnings!(
         r#"
 import "go:sync"
@@ -17065,6 +17969,8 @@ fn main() {
   let wg = sync.WaitGroup {}
   wg.Add(1)
   task {
+    let finish = || { wg.Done() }
+    finish()
     wg.Done()
   }
   wg.Wait()
@@ -17146,8 +18052,8 @@ fn main() {
 }
 
 #[test]
-fn waitgroup_add_in_nested_task_covered_by_prior_add_no_warning() {
-    assert_no_lint_warnings!(
+fn waitgroup_add_in_nested_task_covered_by_prior_add() {
+    assert_lint_snapshot!(
         r#"
 import "go:sync"
 

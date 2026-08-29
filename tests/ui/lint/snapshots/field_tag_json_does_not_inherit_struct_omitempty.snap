@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ● Prefer predefined tag alias
+   ╭─[test.lis:8:3]
+ 7 │ pub struct User {
+ 8 │   #[tag("json", "home")]
+   ·   ───────────┬──────────
+   ·              ╰── use alias instead
+ 9 │   pub address: Address,
+   ╰────
+  help: Use `#[json(...)]` instead of `#[tag(...)]` for better validation · code: [lint.tag_has_alias]

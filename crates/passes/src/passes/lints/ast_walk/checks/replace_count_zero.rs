@@ -1,36 +1,13 @@
-use super::helpers::{is_zero_literal, span_text};
+use super::helpers::{is_zero_literal, method_call, span_text};
 use crate::passes::walk::NodeCtx;
 use syntax::ast::Expression;
 
 pub fn check_replace_count_zero(expression: &Expression, ctx: &NodeCtx) {
-    let Expression::Call {
-        expression: callee,
-        args,
-        span,
-        ..
-    } = expression
-    else {
-        return;
-    };
-
-    let [s, old, new, count] = args.as_slice() else {
+    let Some((namespace, [s, old, new, count], span)) = method_call(expression, "Replace") else {
         return;
     };
 
     if !is_zero_literal(count.unwrap_parens()) {
-        return;
-    }
-
-    let Expression::DotAccess {
-        expression: namespace,
-        member,
-        ..
-    } = callee.unwrap_parens()
-    else {
-        return;
-    };
-
-    if member.as_str() != "Replace" {
         return;
     }
 

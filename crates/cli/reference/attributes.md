@@ -32,14 +32,18 @@ type User struct {
 
 Serialization attributes accept options:
 
-| Option       | Effect                           |
-| ------------ | -------------------------------- |
-| `omitempty`  | Omit field if empty              |
-| `!omitempty` | Include field if empty           |
-| `skip`       | Exclude field                    |
-| `snake_case` | Convert field name to snake_case |
-| `camel_case` | Convert field name to camelCase  |
-| `string`     | Encode numbers as strings        |
+| Option       | Effect                                 |
+| ------------ | -------------------------------------- |
+| `omitempty`  | Omit field if empty                    |
+| `!omitempty` | Include field if empty                 |
+| `omitzero`   | Omit field if it holds a zero value    |
+| `!omitzero`  | Include field if it holds a zero value |
+| `skip`       | Exclude field                          |
+| `snake_case` | Convert field name to snake_case       |
+| `camel_case` | Convert field name to camelCase        |
+| `string`     | Encode numbers as strings              |
+
+`omitempty` has no effect on a struct, enum, tuple, or `Array<T, N>` field with `N` greater than zero. None of them is one of Go's [empty values](https://pkg.go.dev/encoding/json#Marshal), so use `omitzero` for those.
 
 ```lisette
 #[json]

@@ -16,6 +16,7 @@ struct StructuredTag {
     name_override: Option<String>,
     case_transform: Option<CaseTransform>,
     omitempty: Option<bool>,
+    omitzero: Option<bool>,
     skip: bool,
     string_encoding: bool,
 }
@@ -63,6 +64,9 @@ impl TagConfig {
                 if other.omitempty.is_some() {
                     current.omitempty = other.omitempty;
                 }
+                if other.omitzero.is_some() {
+                    current.omitzero = other.omitzero;
+                }
                 current.skip |= other.skip;
                 current.string_encoding |= other.string_encoding;
                 if other.name_override.is_some() {
@@ -81,10 +85,14 @@ impl StructuredTag {
                 "snake_case" => self.case_transform = Some(CaseTransform::SnakeCase),
                 "camel_case" => self.case_transform = Some(CaseTransform::CamelCase),
                 "omitempty" => self.omitempty = Some(true),
+                "omitzero" => self.omitzero = Some(true),
                 _ => return false,
             },
             AttributeArg::NegatedFlag(flag) if flag == "omitempty" => {
                 self.omitempty = Some(false);
+            }
+            AttributeArg::NegatedFlag(flag) if flag == "omitzero" => {
+                self.omitzero = Some(false);
             }
             _ => return false,
         }
@@ -199,6 +207,7 @@ fn interpret_field_attribute(
         let settings = config.settings_mut().expect("structured tag config");
         settings.case_transform = default.case_transform;
         settings.omitempty = default.omitempty;
+        settings.omitzero = default.omitzero;
     }
 
     for arg in &attribute.args {
@@ -332,11 +341,11 @@ fn format_single_tag(field_name: &str, config: &TagConfig, is_option: bool) -> O
 
     let mut options = Vec::new();
     if settings.omitempty == Some(true) {
-        options.push(if is_option && config.key == "json" {
-            "omitzero"
-        } else {
-            "omitempty"
-        });
+        let as_omitzero = is_option && config.key == "json" && settings.omitzero != Some(false);
+        options.push(if as_omitzero { "omitzero" } else { "omitempty" });
+    }
+    if settings.omitzero == Some(true) && !options.contains(&"omitzero") {
+        options.push("omitzero");
     }
     if settings.string_encoding {
         options.push("string");

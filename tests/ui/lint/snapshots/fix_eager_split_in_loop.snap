@@ -1,0 +1,22 @@
+---
+source: tests/ui/lint/fixes.rs
+---
+import "go:strings"
+
+pub fn count(s: string) -> int {
+  let mut n = 0
+  for part in strings.Split(s, ",") {
+    n += part.length()
+  }
+  n
+}
+=== fixed ===
+import "go:strings"
+
+pub fn count(s: string) -> int {
+  let mut n = 0
+  for part in strings.SplitSeq(s, ",") {
+    n += part.length()
+  }
+  n
+}

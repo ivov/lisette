@@ -1312,9 +1312,57 @@ pub fn unknown_tag_option(span: &Span, option: &str) -> LisetteDiagnostic {
         .with_lint_code("unknown_tag_option")
         .with_span_label(span, "not recognized")
         .with_help(format!(
-            "`{}` is not a recognized tag option. Known options: `snake_case`, `camel_case`, `omitempty`, `!omitempty`, `skip`, `string`",
+            "`{}` is not a recognized tag option. Known options: `snake_case`, `camel_case`, `omitempty`, `!omitempty`, `omitzero`, `!omitzero`, `skip`, `string`",
             option
         ))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NeverEmptyType {
+    Struct,
+    Enum,
+    Tuple,
+    Array,
+}
+
+impl NeverEmptyType {
+    fn description(self) -> &'static str {
+        match self {
+            Self::Struct => "a struct",
+            Self::Enum => "an enum",
+            Self::Tuple => "a tuple",
+            Self::Array => "a fixed-size array",
+        }
+    }
+
+    fn advice(self) -> &'static str {
+        match self {
+            Self::Enum => {
+                "Remove `omitempty`, or use `omitzero` to omit the first variant when its fields are all zero"
+            }
+            _ => "Use `omitzero` to omit the zero value",
+        }
+    }
+}
+
+pub fn ineffective_omitempty(
+    span: &Span,
+    never_empty: NeverEmptyType,
+    set_by: Option<&Span>,
+) -> LisetteDiagnostic {
+    let diagnostic =
+        LisetteDiagnostic::warn("Ineffective `omitempty`").with_lint_code("ineffective_omitempty");
+    let diagnostic = match set_by {
+        None => diagnostic.with_span_label(span, "has no effect"),
+        Some(set_by) => diagnostic
+            .with_span_label(span, "always serialized")
+            .with_span_label(set_by, "`omitempty` set here"),
+    };
+    diagnostic.with_help(format!(
+        "Go omits an `omitempty` field only when it is empty, and {} never is. {}",
+        never_empty.description(),
+        never_empty.advice()
+    ))
 }
 
 pub fn trim_charset_misuse(span: &Span, function: &str) -> LisetteDiagnostic {
@@ -1531,6 +1579,15 @@ pub fn needless_splitn(
         ))
 }
 
+pub fn eager_split_in_loop(span: &Span, original: &str, replacement: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Needless slice")
+        .with_lint_code("eager_split_in_loop")
+        .with_span_label(span, "only this loop reads it")
+        .with_help(format!(
+            "`{original}` allocates a slice that only this loop reads. Use `{replacement}`, which returns the same parts one at a time"
+        ))
+}
+
 pub fn manual_rotate(span: &Span, width: u64) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Manual `bits.RotateLeft`")
         .with_lint_code("manual_rotate")
@@ -1573,6 +1630,15 @@ pub fn waitgroup_add_in_task(span: &Span) -> LisetteDiagnostic {
         .with_span_label(span, "may run after `Wait`")
         .with_help(
             "Prefer `wg.Go(|| ...)`, which counts the task and starts it in one step and runs `Done` for you, or move `Add` before the `task`",
+        )
+}
+
+pub fn manual_waitgroup_go(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Manual `WaitGroup.Go`")
+        .with_lint_code("manual_waitgroup_go")
+        .with_span_label(span, "counts the next `task`")
+        .with_help(
+            "Prefer `wg.Go(|| ...)`, which counts the task and starts it in one step and runs `Done` for you",
         )
 }
 

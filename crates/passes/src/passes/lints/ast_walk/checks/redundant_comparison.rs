@@ -1,6 +1,5 @@
 use crate::passes::comparison::{
-    Bound, flip_comparison, in_scope_comparison, is_side_effect_free, signed_integer_literal,
-    tighter,
+    Bound, in_scope_integer_literal_comparison, is_side_effect_free, tighter,
 };
 use crate::passes::walk::NodeCtx;
 use syntax::ast::{BinaryOperator, Expression};
@@ -67,28 +66,8 @@ struct Interval {
 /// The interval a `variable OP literal` comparison constrains its operand to,
 /// paired with that operand. `None` for anything that is not such a comparison.
 fn comparison_interval(expression: &Expression) -> Option<(&Expression, Interval)> {
-    let Expression::Binary {
-        operator,
-        left,
-        right,
-        ..
-    } = expression.unwrap_parens()
-    else {
-        return None;
-    };
-
     use BinaryOperator::*;
-    let left = left.unwrap_parens();
-    let right = right.unwrap_parens();
-    if !in_scope_comparison(left, right) {
-        return None;
-    }
-    let (operand, operator, bound) =
-        match (signed_integer_literal(left), signed_integer_literal(right)) {
-            (None, Some(bound)) => (left, *operator, bound),
-            (Some(bound), None) => (right, flip_comparison(*operator), bound),
-            _ => return None,
-        };
+    let (operand, operator, bound) = in_scope_integer_literal_comparison(expression)?;
 
     let interval = match operator {
         LessThan => Interval {
