@@ -1570,6 +1570,15 @@ pub fn needless_splitn(
         ))
 }
 
+pub fn eager_split_in_loop(span: &Span, original: &str, replacement: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Needless slice")
+        .with_lint_code("eager_split_in_loop")
+        .with_span_label(span, "only this loop reads it")
+        .with_help(format!(
+            "`{original}` allocates a slice that only this loop reads. Use `{replacement}`, which returns the same parts one at a time"
+        ))
+}
+
 pub fn manual_rotate(span: &Span, width: u64) -> LisetteDiagnostic {
     LisetteDiagnostic::info("Manual `bits.RotateLeft`")
         .with_lint_code("manual_rotate")

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ● Needless slice
+   ╭─[test.lis:6:15]
+ 5 │   let mut n = 0
+ 6 │   for part in strings.SplitAfter(s, ",") {
+   ·               ─────────────┬────────────
+   ·                            ╰── only this loop reads it
+ 7 │     n += part.length()
+   ╰────
+  help: `strings.SplitAfter(s, ",")` allocates a slice that only this loop reads. Use `strings.SplitAfterSeq(s, ",")`, which returns the same parts one at a time · code: [lint.eager_split_in_loop]

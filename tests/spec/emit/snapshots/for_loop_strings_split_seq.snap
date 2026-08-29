@@ -1,0 +1,37 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: |
+  
+  import "go:strings"
+  import "go:fmt"
+  
+  fn main() {
+    for part in strings.SplitSeq("a,b,c", ",") {
+      fmt.Println(part)
+    }
+    for part in strings.SplitAfterSeq("a,b,c", ",") {
+      fmt.Println(part)
+    }
+    for part in strings.FieldsSeq("a b c") {
+      fmt.Println(part)
+    }
+  }
+---
+package main
+
+import (
+	"fmt"
+	"strings"
+)
+
+func main() {
+	for part := range strings.SplitSeq("a,b,c", ",") {
+		fmt.Println(part)
+	}
+	for part := range strings.SplitAfterSeq("a,b,c", ",") {
+		fmt.Println(part)
+	}
+	for part := range strings.FieldsSeq("a b c") {
+		fmt.Println(part)
+	}
+}
