@@ -1,0 +1,5 @@
+---
+source: tests/spec/format/mod.rs
+description: "type Handler = fn(int, string)"
+---
+type Handler = fn(int, string)

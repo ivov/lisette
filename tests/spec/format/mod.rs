@@ -1402,6 +1402,21 @@ fn type_alias_function() {
 }
 
 #[test]
+fn type_alias_function_without_return() {
+    assert_format_snapshot!("type Handler = fn(int, string)");
+}
+
+#[test]
+fn function_type_param_without_return() {
+    assert_format_snapshot!("fn a(f: fn(int)) {}");
+}
+
+#[test]
+fn function_type_param_with_unit_return() {
+    assert_format_snapshot!("fn a(f: fn(int) -> ()) {}");
+}
+
+#[test]
 fn type_alias_opaque() {
     assert_format_snapshot!("type   Point");
 }
