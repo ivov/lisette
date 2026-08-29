@@ -1615,6 +1615,15 @@ pub fn waitgroup_add_in_task(span: &Span) -> LisetteDiagnostic {
         )
 }
 
+pub fn manual_waitgroup_go(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Manual `WaitGroup.Go`")
+        .with_lint_code("manual_waitgroup_go")
+        .with_span_label(span, "counts the next `task`")
+        .with_help(
+            "Prefer `wg.Go(|| ...)`, which counts the task and starts it in one step and runs `Done` for you",
+        )
+}
+
 pub fn deprecated_api(span: &Span, message: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Use of deprecated API")
         .with_lint_code("deprecated")

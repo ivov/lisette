@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ● Manual `WaitGroup.Go`
+   ╭─[test.lis:8:3]
+ 7 │   let flag = true
+ 8 │   wg.Add(1)
+   ·   ────┬────
+   ·       ╰── counts the next `task`
+ 9 │   task {
+   ╰────
+  help: Prefer `wg.Go(|| ...)`, which counts the task and starts it in one step and runs `Done` for you · code: [lint.manual_waitgroup_go]
