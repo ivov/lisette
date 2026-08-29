@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  #[json(omitzero)]
+  struct User {
+    id: int,
+    #[json(!omitzero)]
+    name: string,
+  }
+---
+package main
+
+type User struct {
+	Id   int    `json:"id,omitzero"`
+	Name string `json:"name"`
+}

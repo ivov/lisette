@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Ineffective `omitempty`
+    ╭─[test.lis:9:3]
+  8 │ pub struct Palette {
+  9 │   #[json(omitempty)]
+    ·   ─────────┬────────
+    ·            ╰── has no effect
+ 10 │   pub colour: Colour,
+    ╰────
+  help: Go omits an `omitempty` field only when it is empty, and an enum never is. Remove `omitempty`, or use `omitzero` to omit the first variant when its fields are all zero · code: [lint.ineffective_omitempty]

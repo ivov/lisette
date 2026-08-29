@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Ineffective `omitempty`
+   ╭─[test.lis:6:3]
+ 5 │ pub struct Holder {
+ 6 │   #[json(omitempty)]
+   ·   ─────────┬────────
+   ·            ╰── has no effect
+ 7 │   pub wrapped: Maybe,
+   ╰────
+  help: Go omits an `omitempty` field only when it is empty, and an enum never is. Remove `omitempty`, or use `omitzero` to omit the first variant when its fields are all zero · code: [lint.ineffective_omitempty]

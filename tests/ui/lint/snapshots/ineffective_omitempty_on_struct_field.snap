@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Ineffective `omitempty`
+   ╭─[test.lis:8:3]
+ 7 │ pub struct User {
+ 8 │   #[json(omitempty)]
+   ·   ─────────┬────────
+   ·            ╰── has no effect
+ 9 │   pub address: Address,
+   ╰────
+  help: Go omits an `omitempty` field only when it is empty, and a struct never is. Use `omitzero` to omit the zero value · code: [lint.ineffective_omitempty]

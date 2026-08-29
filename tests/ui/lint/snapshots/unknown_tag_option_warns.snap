@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·             ╰── not recognized
  5 │   name: string,
    ╰────
-  help: `unknown_flag` is not a recognized tag option. Known options: `snake_case`, `camel_case`, `omitempty`, `!omitempty`, `skip`, `string` · code: [lint.unknown_tag_option]
+  help: `unknown_flag` is not a recognized tag option. Known options: `snake_case`, `camel_case`, `omitempty`, `!omitempty`, `omitzero`, `!omitzero`, `skip`, `string` · code: [lint.unknown_tag_option]

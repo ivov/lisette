@@ -2697,6 +2697,55 @@ struct User {
 }
 
 #[test]
+fn struct_with_json_omitzero() {
+    let input = r#"
+#[json]
+struct User {
+  #[json(omitzero)]
+  created: Array<int, 2>,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn struct_with_json_omitempty_and_omitzero() {
+    let input = r#"
+#[json]
+struct User {
+  #[json(omitempty, omitzero)]
+  name: string,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn struct_level_omitzero_reaches_fields() {
+    let input = r#"
+#[json(omitzero)]
+struct User {
+  id: int,
+  #[json(!omitzero)]
+  name: string,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn negated_omitzero_keeps_option_omitempty() {
+    let input = r#"
+#[json]
+struct User {
+  #[json(omitempty, !omitzero)]
+  email: Option<string>,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn struct_with_yaml_option_omitempty() {
     let input = r#"
 #[yaml(omitempty)]
