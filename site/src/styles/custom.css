@@ -471,9 +471,7 @@ starlight-file-tree .comment::after {
   align-items: center;
 }
 
-starlight-tabs [role="tab"][aria-selected="true"],
-file-browser [role="tab"][aria-selected="true"],
-file-browser .tab [role="tab"][aria-selected="true"] ~ .close {
+starlight-tabs [role="tab"][aria-selected="true"] {
   box-shadow: 0 2px 0 color-mix(in oklab, var(--sl-color-text-accent) 65%, var(--sl-color-gray-5));
 }
 
