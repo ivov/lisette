@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788021657706,
+  "lastUpdate": 1788033385297,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -29397,6 +29397,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "diagnostics",
             "value": 8448,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6029,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2902,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1850,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 736,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9402,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "ca3f653e4eae9c89d4834bee6ba737d3ad0b371c",
+          "message": "feat: diagnostic for manual `WaitGroup.Go` (#1354)",
+          "timestamp": "2026-08-29T21:56:02+02:00",
+          "tree_id": "ecdba635ff26302980ac223844307b2e3419709a",
+          "url": "https://github.com/ivov/lisette/commit/ca3f653e4eae9c89d4834bee6ba737d3ad0b371c"
+        },
+        "date": 1788033383638,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 136939,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32047,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27564,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18571,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14873,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13590,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8456,
             "unit": "lines"
           },
           {
