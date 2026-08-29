@@ -19,21 +19,25 @@ fn next_id_is_one_past_the_max() {
 }
 
 #[test]
-fn complete_marks_a_task_done() {
-  let assert Ok(updated) = complete(sample(), 1)
+fn set_status_marks_a_task_done() {
+  let assert Ok(updated) = set_status(sample(), 1, models.Status.Done)
   let assert Some(item) = updated.find(|t| t.id == 1)
   assert item.status == models.Status.Done
 }
 
 #[test]
-fn complete_reports_a_missing_task() {
-  let assert Err(err) = complete(sample(), 99)
+fn set_status_reports_a_missing_task() {
+  let assert Err(err) = set_status(sample(), 99, models.Status.Done)
   assert err.Error().contains("not found")
 }
 
 #[test]
-fn cancel_records_the_reason() {
-  let assert Ok(updated) = cancel(sample(), 2, "obsolete")
+fn set_status_records_a_cancel_reason() {
+  let assert Ok(updated) = set_status(
+    sample(),
+    2,
+    models.Status.Cancelled("obsolete"),
+  )
   let assert Some(item) = updated.find(|t| t.id == 2)
   assert item.status.label() == "cancelled: obsolete"
 }

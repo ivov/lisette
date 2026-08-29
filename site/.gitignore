@@ -1,0 +1,30 @@
+node_modules/
+dist/
+.astro/
+.DS_Store
+
+# Generated from the repository's CHANGELOG.md by `npm run changelog`.
+src/content/docs/changelog.md
+
+# Generated from crates/stdlib/prelude.d.lis by `npm run prelude`.
+src/content/docs/prelude/
+
+# Generated from crates/cli/reference/ by `npm run chapters`.
+src/content/docs/attributes.md
+src/content/docs/bindings.md
+src/content/docs/concurrency.md
+src/content/docs/control-flow.md
+src/content/docs/enums.md
+src/content/docs/failures.md
+src/content/docs/functions.md
+src/content/docs/interfaces.md
+src/content/docs/lexemes.md
+src/content/docs/methods.md
+src/content/docs/operators.md
+src/content/docs/pattern-matching.md
+src/content/docs/references.md
+src/content/docs/structs.md
+src/content/docs/types.md
+
+# Local state from `wrangler dev`.
+.wrangler/

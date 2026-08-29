@@ -9,6 +9,7 @@ use crate::handlers::project::FileTarget;
 use crate::lock::acquire_target_lock;
 use crate::output;
 use crate::output::{format_elapsed, print_warning, use_color};
+use crate::reference;
 use crate::workspace::{GoWorkspace, WorkspaceBindgen, warm_typedefs};
 use diagnostics::render::{self, Filter};
 use lisette::fs::collect_lis_filepaths_recursive;
@@ -313,6 +314,9 @@ impl LockedProject {
     pub(super) fn acquire(project_path: &Path, target: stdlib::Target) -> Result<Self, i32> {
         let prep = prepare_project_build(project_path, target)?;
         let target_lock = acquire_target_lock(&prep.target_dir)?;
+
+        let _ = reference::write_to(project_path);
+
         Ok(Self {
             prep,
             _target_lock: target_lock,

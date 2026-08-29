@@ -1,0 +1,97 @@
+---
+/**
+ * The landing page. Its markup is a raw fragment, since the code panels are full of braces
+ * this file's template syntax would read as expressions. `<ProjectIde>` reads the sample
+ * project off disk, which a fragment cannot do, so the fragment stops above it.
+ */
+import body from "../landing.html?raw";
+import ProjectIde from "../components/ProjectIde.astro";
+// The package names the variable face `Inter Variable`, which is the name `landing.css` asks for.
+import "@fontsource-variable/inter";
+import "@fontsource/lexend/latin-600.css";
+// Imported for their built paths, so the preloads below carry the hashed names Astro emits.
+import interLatin from "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url";
+import lexendLatin from "@fontsource/lexend/files/lexend-latin-600-normal.woff2?url";
+import "../styles/landing.css";
+---
+
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Little language inspired by Rust that compiles to Go." />
+    <meta property="og:title" content="Lisette programming language" />
+    <meta property="og:description" content="Little language inspired by Rust that compiles to Go." />
+    <meta property="og:url" content="https://lisette.run/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Lisette" />
+    <meta property="og:locale" content="en" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta property="og:image" content="https://lisette.run/og.png" />
+    <meta property="og:image:width" content="2400" />
+    <meta property="og:image:height" content="1260" />
+    <meta property="og:image:alt" content="Lisette: a love letter to Go, written in Rust" />
+    <title>Lisette programming language</title>
+    <link rel="preload" as="font" type="font/woff2" href={interLatin} crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href={lexendLatin} crossorigin />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='50' fill='%23b294f0'/></svg>">
+  </head>
+  <body>
+    <Fragment set:html={body} />
+    <ProjectIde />
+    <footer>
+      <div class="footer-inner">
+        <p><a href="/docs/">Documentation</a><span class="sep">&middot;</span><a href="/play/">Playground</a><span class="sep">&middot;</span><a href="https://github.com/ivov/lisette" target="_blank" rel="noopener">Repository</a></p>
+        <p class="footer-note">&copy; 2026 <a href="https://github.com/ivov" target="_blank" rel="noopener">Iván Ovejero</a></p>
+      </div>
+    </footer>
+    <script is:inline>
+      // Storage is wrapped, because a browser that blocks it must not take the tabs down with it.
+      function readTab(key) {
+        try {
+          return localStorage.getItem(key);
+        } catch (error) {
+          return null;
+        }
+      }
+
+      function writeTab(key, value) {
+        try {
+          localStorage.setItem(key, value);
+        } catch (error) {}
+      }
+
+      document.querySelectorAll(".tabs").forEach(function (tabs) {
+        var section = tabs.closest("section");
+        var panels = section.querySelectorAll(".example-row[data-panel], .diagnostics-grid[data-panel]");
+        var key = "lisette:tab:" + section.id;
+
+        function select(index) {
+          var found = false;
+          tabs.querySelectorAll("button").forEach(function (button) {
+            var on = button.dataset.panel === index;
+            button.setAttribute("aria-selected", String(on));
+            found = found || on;
+          });
+          if (!found) return false;
+          panels.forEach(function (panel) {
+            panel.hidden = panel.dataset.panel !== index;
+          });
+          return true;
+        }
+
+        // A stored index can outlive the tab it named, so a miss leaves the markup's own first panel showing.
+        var stored = readTab(key);
+        if (stored !== null) select(stored);
+
+        tabs.addEventListener("click", function (event) {
+          var button = event.target.closest("button");
+          if (!button) return;
+          select(button.dataset.panel);
+          writeTab(key, button.dataset.panel);
+        });
+      });
+    </script>
+  </body>
+</html>

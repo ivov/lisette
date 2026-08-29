@@ -1,0 +1,9 @@
+{
+  "search.label": "Search…",
+  "pagefind.searching": "Searching for \"[SEARCH_TERM]\"…",
+  "pagefind.zero_results": "No results for \"[SEARCH_TERM]\"",
+  "pagefind.one_result": "[COUNT] result for \"[SEARCH_TERM]\"",
+  "pagefind.many_results": "[COUNT] results for \"[SEARCH_TERM]\"",
+  "pagefind.alt_search": "No results for \"[SEARCH_TERM]\". Showing results for \"[DIFFERENT_TERM]\" instead",
+  "pagefind.search_suggestion": "No results for \"[SEARCH_TERM]\". Try one of the following searches:"
+}

@@ -2,7 +2,7 @@ import "go:fmt"
 
 import "models"
 
-/// Prints a list of tasks with a title header.
+/// Prints nothing when the list is empty.
 pub fn print_tasks(title: string, items: Slice<models.Task>) {
   if items.is_empty() { return }
   fmt.Println(f"\n{title}:")
@@ -11,7 +11,6 @@ pub fn print_tasks(title: string, items: Slice<models.Task>) {
   }
 }
 
-/// Prints summary statistics.
 pub fn print_stats(items: Slice<models.Task>) {
   let total = items.length()
   let done = items.filter(|t| t.status == models.Status.Done).length()

@@ -221,7 +221,7 @@ Examples:
             "`lis sync` {[--flags]:b}
 
 Reconcile `lisette.toml` against the `go:` imports in `src/`, similar to `go mod tidy`.
-Will drop dependency entries no longer reached by any import, and generate
+This drops dependency entries no longer reached by any import, and generates
 typedefs for every imported package. Run this after removing imports, deleting
 source files, or pulling new code.
 

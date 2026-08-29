@@ -139,7 +139,7 @@ check-stdlib-drift:
     just format
     git diff --exit-code crates/stdlib/
 
-# Build the playground and write output to docs/play/ (served at lisette.run/play)
+# Build the playground and write output to site/public/play/ (served at lisette.run/play)
 rebuild-playground:
     cd playground && npm install && npm run build:wasm && npm run build
 

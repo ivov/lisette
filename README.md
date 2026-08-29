@@ -16,10 +16,10 @@ Safe and expressive:
 
 Quietly practical:
 
-- Interop with Go ecosystem (WIP)
-- Linter, formatter, 250+ diagnostics
+- Interop with Go's ecosystem
+- Linter, formatter, 500+ diagnostics
 - Fast incremental compiler, readable Go
-- LSP for VSCode, Neovim, Zed, Helix, GoLand
+- LSP for VSCode, Neovim, Zed, GoLand
 
 ## Quick tour
 
@@ -33,8 +33,8 @@ enum Shape {
 
 fn area(shape: Shape) -> float64 {
   match shape {
-    Shape.Circle(r) => 3.14 * r * r,
-    Shape.Rectangle { width, height } => width * height,
+    Circle(r) => 3.14 * r * r,
+    Rectangle { width, height } => width * height,
   }
 }
 ```
@@ -65,7 +65,7 @@ fn main() {
 
 ```rust
 match flag.Lookup("verbose") {
-  Some(f) => fmt.Println(f.Value),
+  Some(f) => fmt.Println(f.DefValue),
   None => fmt.Println("no such flag"),
 }
 
@@ -103,10 +103,9 @@ match rx.receive() {
 
 ## Learn more
 
-- 💡 [`quickstart.md`](docs/intro/quickstart.md) — Set up a Lisette project
-- 🧿 [`safety.md`](docs/intro/safety.md) — Go issues Lisette prevents
-- 📚 [`reference.md`](docs/reference/README.md) — Full language reference
-- 🌎 [`roadmap.md`](docs/intro/roadmap.md) — Status and planned work
+- 💡 [Quickstart](https://lisette.run/docs/intro/quickstart/) - Set up a Lisette project
+- 🧿 [Safety](https://lisette.run/docs/intro/safety/) - Go issues Lisette prevents
+- 📚 [Reference](https://lisette.run/docs/lexemes/) - Full language reference
 
 ## Author
 

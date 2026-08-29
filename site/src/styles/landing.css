@@ -1,0 +1,901 @@
+[data-theme="dark"] {
+  --bg: #181825;
+  --bg-band: #1e1e2e;
+  --bg-floor: #12121f;
+  --bg-panel: #181825;
+  --border: #313244;
+  --border-code: #313244;
+  --text: #cdd6f4;
+  --text-muted: #9399b2;
+  --text-sub: #a6adc8;
+  --accent: #b294f0;
+  --accent-hover: #cbb6f7;
+  --hero-grad-a: #24223d;
+  --hero-grad-b: var(--bg-band);
+  --closing-grad-a: #212036;
+  --code-shadow: 0 0 0 1px var(--border-code);
+
+  --syn-keyword: #c792ea;
+  --syn-string: #34d399;
+  --syn-type: #c5e478;
+  --syn-fn: #82aaff;
+  --syn-comment: #809191;
+  --syn-punct: #d6deeb;
+  --syn-plain: #d6deeb;
+  --syn-num: #f78c6c;
+  --syn-lit: #ff5874;
+  --syn-op: #7fdbca;
+  --syn-attr: #8b9ba8;
+
+  /* `Inter Variable` is the name the font file registers, not a family alias. */
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;
+  --font-display: "Lexend", var(--font-sans);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+code,
+pre {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+a:hover {
+  color: var(--accent-hover);
+}
+
+.hero {
+  background: radial-gradient(
+    ellipse at 15% 30%,
+    var(--hero-grad-a) 0%,
+    var(--hero-grad-b) 55%
+  );
+  padding: 100px 48px 80px;
+}
+
+.hero-inner {
+  max-width: 1080px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 48px;
+  align-items: center;
+}
+
+.hero-text {
+  text-align: left;
+}
+
+.hero h1 {
+  font-size: clamp(2.1rem, 3.9vw, 3.1rem);
+  line-height: 1.1;
+  margin-bottom: 20px;
+  color: var(--text);
+}
+
+.hero h1 .accent {
+  color: var(--accent);
+}
+
+.hero-name {
+  font-size: 1.15em;
+  display: inline-block;
+  margin-block-end: 0.25em;
+}
+
+.brand-rust {
+  color: #ce422b;
+}
+
+.brand-go {
+  color: #00add8;
+}
+
+.hero-sub {
+  font-family: var(--font-sans);
+  font-size: clamp(1rem, 1.3vw, 1.2rem);
+  color: var(--text-sub);
+  max-width: 460px;
+  margin: 0 0 24px;
+  line-height: 1.6;
+}
+
+.hero-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 500px;
+  margin: 0 0 40px;
+  padding: 0;
+  list-style: none;
+}
+
+.hero-chips li {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  line-height: 1.2;
+}
+
+.code-window {
+  max-width: 640px;
+  text-align: left;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--code-shadow);
+  background: var(--bg-panel);
+}
+
+.code-window pre {
+  padding: 20px 24px;
+  margin: 0;
+  overflow-x: auto;
+  line-height: 1.7;
+  tab-size: 2;
+}
+
+.kw {
+  color: var(--syn-keyword);
+}
+
+.str {
+  color: var(--syn-string);
+}
+
+.ty {
+  color: var(--syn-type);
+}
+
+.fn {
+  color: var(--syn-fn);
+}
+
+.cm {
+  color: var(--syn-comment);
+}
+
+.pn {
+  color: var(--syn-punct);
+}
+
+.pl {
+  color: var(--syn-plain);
+}
+
+.num {
+  color: var(--syn-num);
+}
+
+.lit {
+  color: var(--syn-lit);
+}
+
+.hero-lit {
+  color: var(--syn-keyword);
+}
+
+.op {
+  color: var(--syn-op);
+}
+
+.at {
+  color: var(--syn-attr);
+}
+
+.examples {
+  padding: 56px 24px;
+}
+
+.band {
+  background: var(--bg-band);
+}
+
+.examples-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.examples-header h2 {
+  font-size: 2.4rem;
+  margin-bottom: 12px;
+}
+
+.examples-header p {
+  font-family: var(--font-sans);
+  color: var(--text-sub);
+  font-size: clamp(1rem, 1.3vw, 1.2rem);
+}
+
+.examples-header p code {
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  color: var(--accent);
+  background: rgba(155, 126, 217, 0.18);
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.examples-header p a:hover code {
+  text-decoration: underline;
+}
+
+.example-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  max-width: 1080px;
+  margin: 0 auto 24px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.example-block {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--code-shadow);
+  background: var(--bg-band);
+}
+
+.file-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 20px;
+  background: rgba(0, 0, 0, 0.22);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.file-name svg {
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+
+.example-block pre {
+  padding: 20px 24px;
+  margin: 0;
+  overflow-x: auto;
+  line-height: 1.7;
+  tab-size: 2;
+}
+
+.example-block.aux-block {
+  background: #1A1C22;
+  border: 1px solid #2A2D35;
+  box-shadow: none;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: -16px;
+  margin-bottom: 32px;
+}
+
+.tabs .row-break {
+  flex-basis: 100%;
+  height: 0;
+}
+
+.tabs button {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.2;
+  color: var(--text-sub);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.tabs button:hover {
+  color: var(--text);
+}
+
+.tabs button[aria-selected="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* An author `display` beats the browser's rule for `hidden`. */
+.example-row[hidden],
+.diagnostics-grid[hidden] {
+  display: none;
+}
+
+.diagnostics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 528px));
+  gap: 20px;
+  justify-content: center;
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+.diag-block {
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg-panel);
+  box-shadow: var(--code-shadow);
+}
+
+.diag-block pre {
+  padding: 20px 24px;
+  margin: 0;
+  overflow-x: auto;
+  line-height: 1.65;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+
+.diag-err {
+  color: #f87171;
+  font-weight: 700;
+}
+
+.diag-warn {
+  color: #fbbf24;
+  font-weight: 700;
+}
+
+.diag-accent {
+  color: var(--accent);
+}
+
+.diag-dim {
+  color: #6b7280;
+}
+
+.diag-ptr {
+  color: #f87171;
+}
+
+.diag-info {
+  color: #60a5fa;
+  font-weight: 700;
+}
+
+.diag-ptr-info {
+  color: #60a5fa;
+}
+
+.diag-ptr-warn {
+  color: #fbbf24;
+}
+
+.editor-icons {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 36px;
+  padding: 40px 24px;
+}
+
+.editor-icons-label {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.editor-icon {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.editor-icon svg {
+  fill: var(--text-muted);
+}
+
+.quickstart-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 24px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.quickstart-link:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.hero-cta {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+#get-started {
+  background: radial-gradient(
+    ellipse at 50% 45%,
+    var(--closing-grad-a) 0%,
+    var(--bg-band) 60%
+  );
+  padding-top: 88px;
+  padding-bottom: 88px;
+}
+
+#get-started .examples-header {
+  margin-bottom: 24px;
+}
+
+.closing-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+}
+
+.closing-cta + .ide {
+  margin-top: 56px;
+}
+
+.github-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 999px;
+  color: var(--text-muted);
+  transition: background-color 150ms, color 150ms;
+}
+
+.github-link:hover,
+.github-link:focus-visible {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.ide {
+  max-width: 1080px;
+  margin: 0 auto;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--code-shadow);
+  background: var(--bg-panel);
+  text-align: left;
+}
+
+.ide-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: rgba(0, 0, 0, 0.22);
+  border-bottom: 1px solid var(--border);
+}
+
+.ide-dots {
+  display: flex;
+  gap: 7px;
+}
+
+.ide-dots i {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.ide-project {
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.ide-body {
+  display: grid;
+  grid-template-columns: 264px minmax(0, 1fr);
+  height: 560px;
+}
+
+.ide-tree {
+  border-right: 1px solid var(--border);
+  overflow: auto;
+  padding: 8px 0;
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+}
+
+.tree-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tree-list .tree-list {
+  padding-left: 14px;
+}
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+  color: var(--text-sub);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tree-row:hover {
+  background: var(--bg-band);
+  color: var(--text);
+}
+
+.tree-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.tree-row[aria-current] {
+  background: var(--border);
+  color: var(--text);
+}
+
+.tree-chevron {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--text-muted);
+  transform: rotate(90deg);
+  transition: transform 0.15s;
+}
+
+.tree-row[aria-expanded="false"] .tree-chevron {
+  transform: rotate(0deg);
+}
+
+.tree-row[aria-expanded="false"] + .tree-list {
+  display: none;
+}
+
+.tree-mark {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-inline: 2px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.ide-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ide-tab {
+  flex: none;
+  padding: 9px 20px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+/* The bar holds the scroller's coordinates, so it must sit beside the scroller, not inside it. */
+.ide-view {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+/* A percentage height resolves only against a parent whose own height is stated. */
+.ide-scroller {
+  position: absolute;
+  inset: 0;
+  overflow-y: scroll;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.ide-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.ide-track {
+  position: absolute;
+  inset-block: 8px;
+  inset-inline-end: 5px;
+  width: 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.ide-track[hidden] {
+  display: none;
+}
+
+.ide-thumb {
+  width: 100%;
+  border-radius: 999px;
+  background: var(--text-muted);
+  opacity: 0.25;
+  transition: opacity 0.15s;
+}
+
+.ide-view:hover .ide-thumb {
+  opacity: 0.4;
+}
+
+.ide-thumb:active {
+  opacity: 0.55;
+}
+
+.ide-code[hidden] {
+  display: none;
+}
+
+.ide-code pre {
+  /* Shiki paints the ground of every block it writes, and the window owns that here. */
+  background: none !important;
+  margin: 0;
+  padding: 16px 24px 16px 0;
+  /* In `em` rather than a bare number, which would re-resolve against each element's own size. */
+  line-height: 1.7em;
+  tab-size: 2;
+  counter-reset: line;
+}
+
+/* A counter rather than markup, so the digits stay out of a copied selection and the search index. */
+.ide-code .line::before {
+  counter-increment: line;
+  content: counter(line);
+  box-sizing: border-box;
+  display: inline-block;
+  width: 3.5rem;
+  padding: 0 1rem;
+  text-align: right;
+  font-size: 0.85em;
+  color: var(--syn-comment);
+  opacity: 0.55;
+  user-select: none;
+}
+
+footer {
+  padding: 48px 24px;
+  background: var(--bg-floor);
+  border-top: 1px solid var(--border);
+  color: var(--text-sub);
+  font-size: 0.95rem;
+}
+
+.footer-inner {
+  max-width: 1080px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.footer-inner .sep {
+  margin-inline: 0.6rem;
+  color: var(--text-muted);
+}
+
+.footer-inner p {
+  line-height: 1.2;
+}
+
+.footer-note {
+  margin-top: 40px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+footer a {
+  color: var(--text-sub);
+}
+
+footer a:hover {
+  color: var(--accent);
+}
+
+@media (max-width: 1024px) {
+  .hero-inner {
+    grid-template-columns: 1fr;
+    gap: 40px;
+  }
+
+  .hero-text {
+    text-align: center;
+  }
+
+  .hero-sub {
+    margin: 0 auto 40px;
+  }
+
+  /* Flex items ignore the `text-align: center` above, so the chips need both rules. */
+  .hero-chips {
+    justify-content: center;
+    margin-inline: auto;
+  }
+
+  .hero-cta {
+    justify-content: center;
+  }
+
+  .code-window {
+    margin: 0 auto;
+  }
+
+  .example-row {
+    grid-template-columns: 1fr;
+  }
+
+  .diagnostics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .example-block,
+  .diag-block {
+    max-width: 560px;
+    /* Needed beside the `max-width`: `margin: 0 auto` cancels a grid item's stretch, so without an explicit width the panel shrinks to its content. */
+    width: 560px;
+    margin: 0 auto;
+  }
+
+  .ide-body {
+    grid-template-columns: 216px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .hero {
+    padding: 60px 16px 50px;
+  }
+
+  .examples {
+    padding: 20px 12px 80px;
+  }
+
+  code,
+  pre {
+    font-size: 0.7rem;
+  }
+
+  .code-window pre,
+  .example-block pre,
+  .diag-block pre {
+    padding: 14px 12px 14px 16px;
+  }
+
+  .code-window,
+  .example-block,
+  .diag-block,
+  .ide {
+    border-radius: 0;
+    width: 100vw;
+    max-width: 100vw;
+    margin-left: calc(-50vw + 50%);
+    box-shadow: none;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .ide-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 190px minmax(0, 1fr);
+    height: 520px;
+  }
+
+  .ide-tree {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .ide-code .line::before {
+    width: 2.75rem;
+    padding: 0 0.7rem;
+  }
+
+  .editor-icons {
+    display: none;
+  }
+
+  .examples-header h2 {
+    font-size: 1.8rem;
+  }
+
+  .hero-sub {
+    max-width: 23rem;
+  }
+
+  .tabs {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tabs button {
+    font-size: 0.75rem;
+    padding: 13px 10px;
+  }
+
+  .ide {
+    display: none;
+  }
+
+  /* Terminal output is fixed-width art whose longest line is about 54 characters. */
+  .diag-block pre {
+    font-size: clamp(0.53rem, 2.6vw, 0.8rem);
+  }
+
+  /* The link row has no whitespace to break at, so a wrapping flex row breaks between items. */
+  .footer-inner p:first-child {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}

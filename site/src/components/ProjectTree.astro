@@ -1,0 +1,48 @@
+---
+/**
+ * Nested lists rather than `role="tree"`: the ARIA tree role promises arrow-key navigation
+ * between rows, and this tree offers Tab and Enter instead.
+ */
+interface Node {
+  name: string;
+  path: string;
+  children: Node[];
+}
+
+interface Props {
+  nodes: Node[];
+  opened: string;
+}
+
+const { nodes, opened } = Astro.props;
+---
+
+<ul class="tree-list">
+  {
+    nodes.map((node) =>
+      node.children.length > 0 ? (
+        <li class="tree-branch">
+          <button class="tree-row" type="button" aria-expanded="true" data-dir>
+            <svg class="tree-chevron" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M6 4l4 4-4 4" />
+            </svg>
+            <span>{node.name}</span>
+          </button>
+          <Astro.self nodes={node.children} opened={opened} />
+        </li>
+      ) : (
+        <li>
+          <button
+            class="tree-row"
+            type="button"
+            data-path={node.path}
+            aria-current={node.path === opened ? "true" : undefined}
+          >
+            <span class="tree-mark" aria-hidden="true" />
+            <span>{node.name}</span>
+          </button>
+        </li>
+      ),
+    )
+  }
+</ul>

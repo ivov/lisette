@@ -1,0 +1,277 @@
+---
+/**
+ * Wraps a `<FileTree>` in a tab strip, with file contents read at build time. Written here
+ * rather than using Starlight's `<Tabs>`, which moves between tabs by index over a list
+ * captured once and so cannot skip the tabs that are still closed.
+ */
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { Code } from "@astrojs/starlight/components";
+
+interface Props {
+  /* Relative to the repository root. */
+  dir: string;
+  extensions?: string[];
+  /* Inferred from the extension when omitted. */
+  lang?: string;
+  label?: string;
+}
+
+const { dir, extensions = [".lis"], lang, label = "Files" } = Astro.props;
+
+const LANGUAGES = { ".lis": "lisette", ".go": "go", ".mod": "ini", ".toml": "toml" };
+const languageFor = (name) =>
+  lang ?? LANGUAGES[Object.keys(LANGUAGES).find((extension) => name.endsWith(extension))] ?? "plaintext";
+
+/** @type {{ name: string; code: string }[]} */
+const files = [];
+
+const collect = (path) => {
+  for (const name of readdirSync(path).sort()) {
+    const entry = join(path, name);
+    if (statSync(entry).isDirectory()) collect(entry);
+    else if (extensions.some((extension) => name.endsWith(extension))) {
+      files.push({ name, code: readFileSync(entry, "utf8").trimEnd() });
+    }
+  }
+};
+
+// Resolved from the project root, not from this file: at build time `import.meta.url` points at the bundled chunk under `dist/`. Astro always runs with `site/` as the working directory.
+collect(join(process.cwd(), "..", dir));
+
+const slug = dir.replace(/[^a-z0-9]+/gi, "-");
+const tabId = (key) => `tab-${slug}-${key}`;
+const panelId = (key) => `panel-${slug}-${key}`;
+---
+
+<file-browser>
+  <div class="tablist-wrapper not-content">
+    <ul role="tablist" aria-label={label}>
+      <li role="presentation" class="tab">
+        <a
+          role="tab"
+          href={`#${panelId("tree")}`}
+          id={tabId("tree")}
+          aria-selected="true"
+          tabindex="0">{label}</a
+        >
+      </li>
+      {
+        files.map((file, index) => (
+          <li role="presentation" class="tab" hidden>
+            <a
+              role="tab"
+              href={`#${panelId(index)}`}
+              id={tabId(index)}
+              aria-selected="false"
+              tabindex="-1"
+            >
+              {file.name}
+            </a>
+            <button class="close" type="button" aria-label={`Close ${file.name}`} tabindex="-1">
+              <svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12">
+                <path
+                  d="M4 4l8 8M12 4l-8 8"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                />
+              </svg>
+            </button>
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+
+  <section role="tabpanel" id={panelId("tree")} aria-labelledby={tabId("tree")}>
+    <slot />
+  </section>
+
+  {
+    files.map((file, index) => (
+      <section role="tabpanel" id={panelId(index)} aria-labelledby={tabId(index)} hidden>
+        <Code code={file.code} lang={languageFor(file.name)} />
+      </section>
+    ))
+  }
+</file-browser>
+
+<script>
+  class FileBrowser extends HTMLElement {
+    connectedCallback() {
+      const items = [...this.querySelectorAll<HTMLLIElement>('[role="tablist"] > li')];
+      const tabs = items.map((item) => item.querySelector<HTMLAnchorElement>('[role="tab"]')!);
+      const panels = [...this.querySelectorAll<HTMLElement>(':scope > [role="tabpanel"]')];
+
+      const isOpen = (index: number) => !items[index]?.hidden;
+      const openIndexes = () => items.map((_, index) => index).filter(isOpen);
+
+      const select = (index: number, focus = true) => {
+        tabs.forEach((tab, i) => {
+          tab.setAttribute("aria-selected", String(i === index));
+          tab.tabIndex = i === index ? 0 : -1;
+        });
+        panels.forEach((panel, i) => {
+          panel.hidden = i !== index;
+        });
+        if (focus) tabs[index]?.focus();
+      };
+
+      const selected = () => tabs.findIndex((tab) => tab.getAttribute("aria-selected") === "true");
+
+      const close = (index: number) => {
+        if (index === 0) return;
+        const open = openIndexes();
+        const position = open.indexOf(index);
+        items[index]!.hidden = true;
+        if (selected() === index) select(open[position - 1] ?? 0);
+      };
+
+      const step = (index: number, delta: number) => {
+        const open = openIndexes();
+        const position = open.indexOf(index);
+        return open[(position + delta + open.length) % open.length]!;
+      };
+
+      items.forEach((item, index) => {
+        const tab = tabs[index]!;
+
+        tab.addEventListener("click", (event) => {
+          event.preventDefault();
+          select(index, false);
+        });
+
+        tab.addEventListener("keydown", (event) => {
+          if (event.key === "ArrowLeft") select(step(index, -1));
+          else if (event.key === "ArrowRight") select(step(index, 1));
+          else if (event.key === "Home") select(openIndexes()[0]!);
+          else if (event.key === "End") select(openIndexes().at(-1)!);
+          else if (event.key === "Delete" || event.key === "Backspace") close(index);
+          else return;
+          event.preventDefault();
+        });
+
+        item.querySelector<HTMLButtonElement>(".close")?.addEventListener("click", (event) => {
+          event.stopPropagation();
+          close(index);
+        });
+      });
+
+      const open = (name: string) => {
+        const index = tabs.findIndex((tab) => tab.textContent?.trim() === name);
+        if (index < 0) return;
+        items[index]!.hidden = false;
+        select(index, false);
+      };
+
+      for (const entry of this.querySelectorAll<HTMLElement>(".file .tree-entry")) {
+        const name = entry.firstElementChild?.textContent?.trim();
+        if (!name || !tabs.some((tab) => tab.textContent?.trim() === name)) continue;
+
+        entry.classList.add("is-openable");
+        entry.tabIndex = 0;
+        entry.setAttribute("role", "button");
+        entry.setAttribute("aria-label", `Open ${name}`);
+
+        entry.addEventListener("click", () => open(name));
+        entry.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          open(name);
+        });
+      }
+    }
+  }
+
+  customElements.define("file-browser", FileBrowser);
+</script>
+
+<style>
+  file-browser {
+    display: block;
+  }
+
+  .tablist-wrapper {
+    overflow-x: auto;
+  }
+
+  [role="tablist"] {
+    display: flex;
+    list-style: none;
+    border-bottom: 2px solid var(--sl-color-gray-5);
+    padding: 0;
+  }
+
+  .tab {
+    display: flex;
+    align-items: center;
+  }
+
+  .tab[hidden] {
+    display: none;
+  }
+
+  .tab > [role="tab"] {
+    --sl-tab-color-border: var(--sl-color-gray-5);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    line-height: var(--sl-line-height-headings);
+    padding: 0.275rem 1.25rem;
+    text-decoration: none;
+    box-shadow: 0 2px 0 var(--sl-tab-color-border);
+    color: var(--sl-color-gray-3);
+    outline-offset: var(--sl-outline-offset-inside);
+    overflow-wrap: initial;
+    cursor: pointer;
+  }
+
+  .tab [role="tab"][aria-selected="true"] {
+    --sl-tab-color-border: var(--sl-color-text-accent);
+    color: var(--sl-color-white);
+    font-weight: 600;
+  }
+
+  .tab > .close {
+    display: flex;
+    align-items: center;
+    align-self: stretch;
+    padding-inline: 0 0.5rem;
+    margin-inline-start: -0.75rem;
+    border: 0;
+    background: none;
+    box-shadow: 0 2px 0 var(--sl-color-gray-5);
+    color: var(--sl-color-gray-3);
+    cursor: pointer;
+  }
+
+  .tab [role="tab"][aria-selected="true"] ~ .close {
+    box-shadow: 0 2px 0 var(--sl-color-text-accent);
+    color: var(--sl-color-white);
+  }
+
+  .tab > .close:hover {
+    color: var(--sl-color-white);
+  }
+
+  .tablist-wrapper ~ [role="tabpanel"] {
+    margin-top: 1rem;
+  }
+
+  file-browser :global([role="tabpanel"] pre) {
+    max-height: 30rem;
+    overflow: auto;
+  }
+
+  file-browser :global(.tree-entry.is-openable) {
+    cursor: pointer;
+    border-radius: 0.125rem;
+  }
+
+  file-browser :global(.tree-entry.is-openable:hover),
+  file-browser :global(.tree-entry.is-openable:focus-visible) {
+    color: var(--sl-color-white);
+    background: var(--sl-color-gray-6);
+  }
+</style>

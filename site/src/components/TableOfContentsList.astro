@@ -1,0 +1,91 @@
+---
+/**
+ * Starlight's own list, with entry text as segments so `Option<T>` keeps its code styling.
+ * Forked because the default renders the text as a string, which Astro escapes.
+ */
+interface Props {
+  toc: any[];
+  segments: Map<string, { text: string; code: boolean }[]>;
+  depth?: number;
+}
+
+const { toc, segments, depth = 0 } = Astro.props;
+
+// A changelog entry arrives flattened as `v0.11.2 (2026-08-09)`, so the date is split back out.
+const RELEASE = /^(.*?) (\(\d{4}-\d{2}-\d{2}\))$/;
+---
+
+<ul>
+  {
+    toc.map((heading) => (
+      <li>
+        <a href={"#" + heading.slug}>
+          <span>
+            {RELEASE.test(heading.text) ? (
+              <>
+                {heading.text.match(RELEASE)[1]}{" "}
+                <span class="release-date">{heading.text.match(RELEASE)[2]}</span>
+              </>
+            ) : (
+              (segments.get(heading.text) ?? [{ text: heading.text, code: false }]).map((part) =>
+                part.code ? <code>{part.text}</code> : part.text,
+              )
+            )}
+          </span>
+        </a>
+        {heading.children.length > 0 && (
+          <Astro.self toc={heading.children} segments={segments} depth={depth + 1} />
+        )}
+      </li>
+    ))
+  }
+</ul>
+
+<style define:vars={{ depth }}>
+  ul {
+    padding: 0;
+    list-style: none;
+  }
+  a {
+    --pad-inline: 0.5rem;
+    --mark-size: 7px;
+    --mark-gap: 0.5rem;
+    position: relative;
+    display: block;
+    border-radius: 0.25rem;
+    padding-block: 0.25rem;
+    padding-inline: calc(1rem * var(--depth) + var(--pad-inline) + var(--mark-size) + var(--mark-gap))
+      var(--pad-inline);
+    line-height: 1.25;
+  }
+
+  a::before {
+    content: "";
+    position: absolute;
+    inset-inline-start: calc(1rem * var(--depth) + var(--pad-inline));
+    top: calc(0.25rem + 0.625em - var(--mark-size) / 2);
+    width: var(--mark-size);
+    height: var(--mark-size);
+    border-radius: 999px;
+  }
+
+  a[aria-current="true"] {
+    color: var(--sl-color-white);
+  }
+
+  a[aria-current="true"]::before {
+    background: var(--sl-color-text-accent);
+  }
+
+  a :global(.release-date) {
+    font-size: 0.9em;
+  }
+
+  a code {
+    border-radius: 0.375rem;
+    padding: 0 0.2rem;
+    background: var(--lis-code-chip);
+    color: var(--lis-code-ink, inherit);
+    font-size: 0.95em;
+  }
+</style>

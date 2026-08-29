@@ -5,6 +5,7 @@ mod handlers;
 mod lock;
 mod output;
 mod panic;
+mod reference;
 mod shell_words;
 mod typedef_regen;
 mod typedef_scan;

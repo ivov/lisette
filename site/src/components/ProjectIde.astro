@@ -1,0 +1,198 @@
+---
+/**
+ * The landing page's fourth band: the `lis learn` sample project, browsable in place.
+ *
+ * Files are read off disk at build time. `crates/cli/src/handlers/learn.rs` owns each
+ * destination path: everything under `handlers/learn` lands under `src/`, the rule this
+ * repeats. The manifest, README and dotfiles are literals in Rust, so they are absent.
+ */
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { createHighlighter } from "shiki";
+import ProjectTree from "./ProjectTree.astro";
+import { landingTheme } from "../lib/landing-theme.mjs";
+
+// Resolved from the project root, not from this file: at build time `import.meta.url` points at the bundled chunk under `dist/`. Astro always runs with `site/` as the working directory.
+const ROOT = join(process.cwd(), "..");
+const SAMPLE = join(ROOT, "crates/cli/src/handlers/learn");
+const GRAMMAR = join(ROOT, "editors/vscode/syntaxes/lisette.tmLanguage.json");
+
+/** @type {{ path: string; code: string }[]} */
+const files = [];
+
+const collect = (dir, prefix) => {
+  for (const name of readdirSync(dir).sort()) {
+    const entry = join(dir, name);
+    if (statSync(entry).isDirectory()) collect(entry, `${prefix}${name}/`);
+    else if (name.endsWith(".lis")) {
+      files.push({ path: `${prefix}${name}`, code: readFileSync(entry, "utf8").trimEnd() });
+    }
+  }
+};
+
+collect(SAMPLE, "src/");
+
+/* Grows the flat path list into the nested shape the tree renders from. A node with children is a directory, so nothing records which is which. */
+const nest = (paths) => {
+  const root = [];
+  for (const path of paths) {
+    const segments = path.split("/");
+    let level = root;
+    segments.forEach((name, index) => {
+      let node = level.find((candidate) => candidate.name === name);
+      if (!node) {
+        node = { name, path: segments.slice(0, index + 1).join("/"), children: [] };
+        level.push(node);
+      }
+      level = node.children;
+    });
+  }
+
+  const order = (nodes) => {
+    nodes.sort((left, right) => {
+      const branch = Number(right.children.length > 0) - Number(left.children.length > 0);
+      return branch || left.name.localeCompare(right.name);
+    });
+    for (const node of nodes) order(node.children);
+    return nodes;
+  };
+
+  return order(root);
+};
+
+const tree = nest(files.map((file) => file.path));
+
+const lisette = { ...JSON.parse(readFileSync(GRAMMAR, "utf8")), name: "lisette" };
+const highlighter = await createHighlighter({ themes: [landingTheme], langs: [lisette] });
+const panels = files.map((file) => ({
+  ...file,
+  html: highlighter.codeToHtml(file.code, { lang: "lisette", theme: landingTheme.name }),
+}));
+
+const OPENED = "src/main.lis";
+---
+
+<section class="examples band" id="get-started">
+  <div class="examples-header">
+    <h2>Get started</h2>
+    <p>Little to learn, and the rest is Go</p>
+  </div>
+
+  <div class="closing-cta">
+    <a class="quickstart-link" href="/docs/intro/quickstart/">Quickstart <span aria-hidden="true">→</span></a>
+  </div>
+
+  <div class="ide">
+    <div class="ide-bar">
+      <span class="ide-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="ide-project">learn-lisette</span>
+    </div>
+
+    <div class="ide-body">
+      <nav class="ide-tree" data-tree aria-label="Project files">
+        <ProjectTree nodes={tree} opened={OPENED} />
+      </nav>
+
+      <div class="ide-pane">
+        <div class="ide-tab" data-open-file aria-live="polite">{OPENED}</div>
+
+        <div class="ide-view">
+          <div class="ide-scroller" data-scroller>
+            {
+              panels.map((panel) => (
+                <div class="ide-code" data-path={panel.path} hidden={panel.path !== OPENED}>
+                  <Fragment set:html={panel.html} />
+                </div>
+              ))
+            }
+          </div>
+
+          <div class="ide-track" data-track aria-hidden="true" hidden>
+            <div class="ide-thumb" data-thumb></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  const section = document.querySelector<HTMLElement>("#get-started");
+  const tree = section?.querySelector<HTMLElement>("[data-tree]");
+  const tab = section?.querySelector<HTMLElement>("[data-open-file]");
+  const scroller = section?.querySelector<HTMLElement>("[data-scroller]");
+  const track = section?.querySelector<HTMLElement>("[data-track]");
+  const thumb = section?.querySelector<HTMLElement>("[data-thumb]");
+
+  if (section && tree && tab && scroller && track && thumb) {
+    const panels = [...section.querySelectorAll<HTMLElement>(".ide-code")];
+
+    const room = () => scroller.scrollHeight - scroller.clientHeight;
+
+    // The bar is drawn rather than asked for, because macOS draws an overlay bar that hides the moment a scroll ends.
+    const sync = () => {
+      const left = room();
+      track.hidden = left <= 1;
+      if (track.hidden) return;
+      const lane = track.clientHeight;
+      const height = Math.max(28, (scroller.clientHeight / scroller.scrollHeight) * lane);
+      thumb.style.height = `${height}px`;
+      thumb.style.transform = `translateY(${(lane - height) * (scroller.scrollTop / left)}px)`;
+    };
+
+    const open = (path: string) => {
+      const wanted = panels.find((panel) => panel.dataset.path === path);
+      if (!wanted) return;
+      for (const panel of panels) panel.hidden = panel !== wanted;
+      tab.textContent = path;
+      scroller.scrollTop = 0;
+      sync();
+    };
+
+    scroller.addEventListener("scroll", sync, { passive: true });
+    new ResizeObserver(sync).observe(scroller);
+    sync();
+
+    thumb.addEventListener("pointerdown", (event: PointerEvent) => {
+      event.preventDefault();
+      thumb.setPointerCapture(event.pointerId);
+      const originY = event.clientY;
+      const originTop = scroller.scrollTop;
+      const lane = track.clientHeight - thumb.offsetHeight;
+      const left = room();
+
+      const drag = (move: PointerEvent) => {
+        if (lane <= 0) return;
+        scroller.scrollTop = originTop + ((move.clientY - originY) / lane) * left;
+      };
+
+      const drop = () => {
+        thumb.removeEventListener("pointermove", drag);
+        thumb.removeEventListener("pointerup", drop);
+        thumb.removeEventListener("pointercancel", drop);
+      };
+
+      thumb.addEventListener("pointermove", drag);
+      thumb.addEventListener("pointerup", drop);
+      thumb.addEventListener("pointercancel", drop);
+    });
+
+    tree.addEventListener("click", (event) => {
+      const row = (event.target as HTMLElement).closest<HTMLElement>(".tree-row");
+      if (!row) return;
+
+      if (row.dataset.dir !== undefined) {
+        row.setAttribute("aria-expanded", String(row.getAttribute("aria-expanded") !== "true"));
+        return;
+      }
+
+      const path = row.dataset.path;
+      if (!path) return;
+      for (const other of tree.querySelectorAll("[aria-current]")) {
+        other.removeAttribute("aria-current");
+      }
+      row.setAttribute("aria-current", "true");
+      open(path);
+    });
+  }
+</script>
