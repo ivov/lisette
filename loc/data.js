@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788033599553,
+  "lastUpdate": 1788035101103,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -29585,6 +29585,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "format",
             "value": 2902,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1850,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 736,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9402,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0427c4aa2b65dd4cf8018aa53bda064b6851ec2a",
+          "message": "fix: preserve return-less function types when formatting (#1356)",
+          "timestamp": "2026-08-29T22:24:34+02:00",
+          "tree_id": "343dc5c94300977e04fe47eacc0ee2224b4826e7",
+          "url": "https://github.com/ivov/lisette/commit/0427c4aa2b65dd4cf8018aa53bda064b6851ec2a"
+        },
+        "date": 1788035098096,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 137021,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32047,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27564,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18640,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14873,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13590,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8464,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6029,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2907,
             "unit": "lines"
           },
           {
