@@ -1,6 +1,6 @@
 use crate::passes::comparison::{
-    Bound, expressions_equivalent, flip_comparison, in_scope_comparison, is_side_effect_free,
-    is_skippable_boolean, signed_integer_literal, tighter,
+    Bound, expressions_equivalent, in_scope_integer_literal_comparison, is_side_effect_free,
+    is_skippable_boolean, tighter,
 };
 use crate::passes::walk::{ClaimKind, NodeCtx};
 use syntax::ast::{BinaryOperator, Expression, Span};
@@ -94,28 +94,8 @@ enum Constraint {
 fn falsifying_constraint(
     expression: &Expression,
 ) -> Option<(&Expression, (i128, i128), Constraint)> {
-    let Expression::Binary {
-        operator,
-        left,
-        right,
-        ..
-    } = expression.unwrap_parens()
-    else {
-        return None;
-    };
-
     use BinaryOperator::*;
-    let left = left.unwrap_parens();
-    let right = right.unwrap_parens();
-    if !in_scope_comparison(left, right) {
-        return None;
-    }
-    let (operand, operator, bound) =
-        match (signed_integer_literal(left), signed_integer_literal(right)) {
-            (None, Some(bound)) => (left, *operator, bound),
-            (Some(bound), None) => (right, flip_comparison(*operator), bound),
-            _ => return None,
-        };
+    let (operand, operator, bound) = in_scope_integer_literal_comparison(expression)?;
     let range = operand
         .get_type()
         .as_simple()

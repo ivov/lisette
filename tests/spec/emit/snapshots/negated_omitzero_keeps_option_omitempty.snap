@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  #[json]
+  struct User {
+    #[json(omitempty, !omitzero)]
+    email: Option<string>,
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type User struct {
+	Email lisette.Option[string] `json:"email,omitempty"`
+}

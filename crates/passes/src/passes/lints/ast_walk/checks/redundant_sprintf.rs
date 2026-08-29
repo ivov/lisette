@@ -1,20 +1,10 @@
-use super::helpers::span_text;
+use super::helpers::{method_call, span_text};
 use crate::passes::walk::NodeCtx;
 use diagnostics::{Edit, Fix};
 use syntax::ast::{Expression, Literal};
 
 pub fn check_redundant_sprintf(expression: &Expression, ctx: &NodeCtx) {
-    let Expression::Call {
-        expression: callee,
-        args,
-        span,
-        ..
-    } = expression
-    else {
-        return;
-    };
-
-    let [format, value] = args.as_slice() else {
+    let Some((namespace, [format, value], span)) = method_call(expression, "Sprintf") else {
         return;
     };
 
@@ -30,19 +20,6 @@ pub fn check_redundant_sprintf(expression: &Expression, ctx: &NodeCtx) {
     };
 
     if format_value != "%s" {
-        return;
-    }
-
-    let Expression::DotAccess {
-        expression: namespace,
-        member,
-        ..
-    } = callee.unwrap_parens()
-    else {
-        return;
-    };
-
-    if member.as_str() != "Sprintf" {
         return;
     }
 

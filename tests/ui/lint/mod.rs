@@ -13551,6 +13551,474 @@ pub struct User {
 }
 
 #[test]
+fn known_omitzero_tag_option_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+#[json(omitzero)]
+pub struct User {
+  #[json(!omitzero)]
+  name: string,
+  age: int,
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_omitempty_on_struct_field() {
+    assert_lint_snapshot!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json]
+pub struct User {
+  #[json(omitempty)]
+  pub address: Address,
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_omitempty_on_array_field() {
+    assert_lint_snapshot!(
+        r#"
+#[json]
+pub struct Reading {
+  #[json(omitempty)]
+  pub samples: Array<int, 3>,
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_omitempty_on_tuple_field() {
+    assert_lint_snapshot!(
+        r#"
+#[json]
+pub struct Point {
+  #[json(omitempty)]
+  pub at: (int, int),
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_omitempty_inherited_from_struct() {
+    assert_lint_snapshot!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json(omitempty)]
+pub struct User {
+  pub address: Address,
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_omitempty_inherited_by_renamed_field() {
+    assert_lint_snapshot!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json(omitempty)]
+pub struct User {
+  #[json("home")]
+  pub address: Address,
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_omitempty_through_alias() {
+    assert_lint_snapshot!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+pub type Home = Address
+
+#[json]
+pub struct User {
+  #[json(omitempty)]
+  pub home: Home,
+}
+"#
+    );
+}
+
+#[test]
+fn omitempty_on_emptiable_field_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json]
+pub struct User {
+  #[json(omitempty)]
+  pub name: string,
+  #[json(omitempty)]
+  pub tags: Slice<string>,
+  #[json(omitempty)]
+  pub home: Option<Address>,
+  #[json(omitempty)]
+  pub landlord: Ref<Address>,
+}
+"#
+    );
+}
+
+#[test]
+fn omitempty_beside_omitzero_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json]
+pub struct User {
+  #[json(omitempty, omitzero)]
+  pub address: Address,
+}
+"#
+    );
+}
+
+#[test]
+fn negated_omitempty_on_struct_field_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json(omitempty)]
+pub struct User {
+  #[json(!omitempty)]
+  pub address: Address,
+}
+"#
+    );
+}
+
+#[test]
+fn skipped_struct_field_no_omitempty_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json(omitempty)]
+pub struct User {
+  #[json(skip)]
+  pub address: Address,
+}
+"#
+    );
+}
+
+#[test]
+fn negated_skip_does_not_revive_omitempty_warning() {
+    let diagnostics = lint(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json]
+pub struct User {
+  #[json(omitempty, skip, !skip)]
+  pub address: Address,
+}
+"#,
+    );
+    let codes: Vec<&str> = diagnostics.iter().filter_map(|d| d.code_str()).collect();
+    assert!(
+        !codes.contains(&"lint.ineffective_omitempty"),
+        "emit ignores `!skip` and still writes `json:\"-\"`: {codes:?}"
+    );
+}
+
+#[test]
+fn struct_omitempty_cancelled_by_later_attribute_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json(omitempty)]
+#[json(!omitempty)]
+pub struct User {
+  pub address: Address,
+}
+"#
+    );
+}
+
+#[test]
+fn omitempty_on_opaque_go_type_not_flagged() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:time"
+
+#[json]
+pub struct Event {
+  #[json(omitempty)]
+  pub at: time.Time,
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_omitempty_through_newtype() {
+    assert_lint_snapshot!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+pub struct Home(Address)
+
+#[json]
+pub struct User {
+  #[json(omitempty)]
+  pub home: Home,
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_omitempty_on_enum_field() {
+    assert_lint_snapshot!(
+        r#"
+pub enum Colour {
+  Red,
+  Green,
+}
+
+#[json]
+pub struct Palette {
+  #[json(omitempty)]
+  pub colour: Colour,
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_omitempty_on_unit_field() {
+    assert_lint_snapshot!(
+        r#"
+#[json]
+pub struct Marker {
+  #[json(omitempty)]
+  pub seen: (),
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_omitempty_on_newtype_over_option() {
+    assert_lint_snapshot!(
+        r#"
+pub struct Maybe(Option<int>)
+
+#[json]
+pub struct Holder {
+  #[json(omitempty)]
+  pub wrapped: Maybe,
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_omitempty_on_option_with_negated_omitzero() {
+    assert_lint_snapshot!(
+        r#"
+#[json]
+pub struct Holder {
+  #[json(omitempty, !omitzero)]
+  pub kept: Option<int>,
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_omitempty_on_never_field() {
+    assert_lint_snapshot!(
+        r#"
+#[json]
+pub struct Holder {
+  #[json(omitempty)]
+  pub x: Never,
+}
+"#
+    );
+}
+
+#[test]
+fn omitempty_on_tuple_struct_field_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json(omitempty)]
+pub struct Wrapper(Address)
+
+#[json(omitempty)]
+pub struct Pair(Address, Address)
+"#
+    );
+}
+
+#[test]
+fn omitempty_on_embedded_field_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json(omitempty)]
+pub struct Embedder {
+  embed Address,
+  pub note: string,
+}
+"#
+    );
+}
+
+#[test]
+fn omitempty_on_scalar_newtype_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub struct Meters(int)
+
+#[json]
+pub struct Trip {
+  #[json(omitempty)]
+  pub distance: Meters,
+}
+"#
+    );
+}
+
+#[test]
+fn omitempty_on_zero_length_array_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+#[json]
+pub struct Reading {
+  #[json(omitempty)]
+  pub samples: Array<int, 0>,
+}
+"#
+    );
+}
+
+#[test]
+fn ineffective_omitempty_in_field_tag_attribute() {
+    let diagnostics = lint(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json]
+pub struct User {
+  #[tag("json", "home", omitempty)]
+  pub address: Address,
+}
+"#,
+    );
+    let codes: Vec<&str> = diagnostics.iter().filter_map(|d| d.code_str()).collect();
+    assert!(
+        codes.contains(&"lint.ineffective_omitempty"),
+        "a field `#[tag(\"json\", ...)]` carries its own `omitempty`: {codes:?}"
+    );
+}
+
+#[test]
+fn ineffective_omitempty_in_field_tag_with_raw_argument() {
+    let diagnostics = lint(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json]
+pub struct User {
+  #[tag("json", `ignored`, omitempty)]
+  pub address: Address,
+}
+"#,
+    );
+    let codes: Vec<&str> = diagnostics.iter().filter_map(|d| d.code_str()).collect();
+    assert!(
+        codes.contains(&"lint.ineffective_omitempty"),
+        "emit drops the raw argument and keeps `omitempty`: {codes:?}"
+    );
+}
+
+#[test]
+fn omitempty_beside_raw_json_value_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json]
+pub struct User {
+  #[json(omitempty, `json:"override"`)]
+  pub address: Address,
+}
+"#
+    );
+}
+
+#[test]
+fn field_tag_json_does_not_inherit_struct_omitempty() {
+    assert_lint_snapshot!(
+        r#"
+pub struct Address {
+  pub city: string,
+}
+
+#[json(omitempty)]
+pub struct User {
+  #[tag("json", "home")]
+  pub address: Address,
+}
+"#
+    );
+}
+
+#[test]
 fn struct_fields_accessed_through_ref_not_unused() {
     assert_no_lint_warnings!(
         r#"

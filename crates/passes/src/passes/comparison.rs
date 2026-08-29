@@ -25,13 +25,7 @@ pub(crate) struct MaskComparison {
 /// A negative `m` is valid only for the equality reasoning.
 pub(crate) fn mask_comparison(expression: &Expression, store: &Store) -> Option<MaskComparison> {
     use BinaryOperator::*;
-    let Expression::Binary {
-        operator,
-        left,
-        right,
-        ..
-    } = expression
-    else {
+    let Expression::Binary { operator, .. } = expression else {
         return None;
     };
     if !matches!(
@@ -41,14 +35,7 @@ pub(crate) fn mask_comparison(expression: &Expression, store: &Store) -> Option<
         return None;
     }
 
-    let left = left.unwrap_parens();
-    let right = right.unwrap_parens();
-    let (mask_expr, operator, constant) =
-        match (signed_integer_literal(left), signed_integer_literal(right)) {
-            (None, Some(constant)) => (left, *operator, constant),
-            (Some(constant), None) => (right, flip_comparison(*operator), constant),
-            _ => return None,
-        };
+    let (mask_expr, operator, constant) = integer_literal_comparison(expression)?;
 
     let Expression::Binary {
         operator: bit_operator,
@@ -99,6 +86,34 @@ pub(crate) fn in_scope_comparison(a: &Expression, b: &Expression) -> bool {
         (None, None) => same_ordered_numeric(a, b),
         (Some(_), Some(_)) => false,
     }
+}
+
+fn integer_literal_comparison(
+    expression: &Expression,
+) -> Option<(&Expression, BinaryOperator, i128)> {
+    let Expression::Binary {
+        operator,
+        left,
+        right,
+        ..
+    } = expression.unwrap_parens()
+    else {
+        return None;
+    };
+    let left = left.unwrap_parens();
+    let right = right.unwrap_parens();
+    match (signed_integer_literal(left), signed_integer_literal(right)) {
+        (None, Some(bound)) => Some((left, *operator, bound)),
+        (Some(bound), None) => Some((right, flip_comparison(*operator), bound)),
+        _ => None,
+    }
+}
+
+pub(crate) fn in_scope_integer_literal_comparison(
+    expression: &Expression,
+) -> Option<(&Expression, BinaryOperator, i128)> {
+    let (operand, operator, bound) = integer_literal_comparison(expression)?;
+    integer_operand_fits(operand, bound).then_some((operand, operator, bound))
 }
 
 fn integer_operand_fits(operand: &Expression, value: i128) -> bool {

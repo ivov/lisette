@@ -134,7 +134,16 @@ fn extract_key_from_raw(raw: &str) -> Option<&str> {
     raw.split(':').next().filter(|k| !k.is_empty())
 }
 
-const KNOWN_TAG_OPTIONS: &[&str] = &["snake_case", "camel_case", "omitempty", "skip", "string"];
+const KNOWN_TAG_OPTIONS: &[&str] = &[
+    "snake_case",
+    "camel_case",
+    "omitempty",
+    "omitzero",
+    "skip",
+    "string",
+];
+
+const NEGATABLE_TAG_OPTIONS: &[&str] = &["omitempty", "omitzero"];
 
 fn check_unknown_tag_options(attribute: &Attribute, sink: &LocalSink) {
     // Only check serialization attributes (json, db, etc.) and structured #[tag("key", ...)]
@@ -165,8 +174,7 @@ fn check_unknown_tag_options(attribute: &Attribute, sink: &LocalSink) {
                     sink.push(diagnostics::lint::unknown_tag_option(&attribute.span, flag));
                 }
             }
-            // Only omitempty can be negated
-            AttributeArg::NegatedFlag(flag) if flag != "omitempty" => {
+            AttributeArg::NegatedFlag(flag) if !NEGATABLE_TAG_OPTIONS.contains(&flag.as_str()) => {
                 sink.push(diagnostics::lint::unknown_tag_option(
                     &attribute.span,
                     &format!("!{}", flag),

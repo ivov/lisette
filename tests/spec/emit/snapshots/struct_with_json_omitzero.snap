@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/types.rs
+description: |
+  
+  #[json]
+  struct User {
+    #[json(omitzero)]
+    created: Array<int, 2>,
+  }
+---
+package main
+
+type User struct {
+	Created [2]int `json:"created,omitzero"`
+}

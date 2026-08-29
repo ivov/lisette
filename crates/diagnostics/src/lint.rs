@@ -1303,9 +1303,57 @@ pub fn unknown_tag_option(span: &Span, option: &str) -> LisetteDiagnostic {
         .with_lint_code("unknown_tag_option")
         .with_span_label(span, "not recognized")
         .with_help(format!(
-            "`{}` is not a recognized tag option. Known options: `snake_case`, `camel_case`, `omitempty`, `!omitempty`, `skip`, `string`",
+            "`{}` is not a recognized tag option. Known options: `snake_case`, `camel_case`, `omitempty`, `!omitempty`, `omitzero`, `!omitzero`, `skip`, `string`",
             option
         ))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NeverEmptyType {
+    Struct,
+    Enum,
+    Tuple,
+    Array,
+}
+
+impl NeverEmptyType {
+    fn description(self) -> &'static str {
+        match self {
+            Self::Struct => "a struct",
+            Self::Enum => "an enum",
+            Self::Tuple => "a tuple",
+            Self::Array => "a fixed-size array",
+        }
+    }
+
+    fn advice(self) -> &'static str {
+        match self {
+            Self::Enum => {
+                "Remove `omitempty`, or use `omitzero` to omit the first variant when its fields are all zero"
+            }
+            _ => "Use `omitzero` to omit the zero value",
+        }
+    }
+}
+
+pub fn ineffective_omitempty(
+    span: &Span,
+    never_empty: NeverEmptyType,
+    set_by: Option<&Span>,
+) -> LisetteDiagnostic {
+    let diagnostic =
+        LisetteDiagnostic::warn("Ineffective `omitempty`").with_lint_code("ineffective_omitempty");
+    let diagnostic = match set_by {
+        None => diagnostic.with_span_label(span, "has no effect"),
+        Some(set_by) => diagnostic
+            .with_span_label(span, "always serialized")
+            .with_span_label(set_by, "`omitempty` set here"),
+    };
+    diagnostic.with_help(format!(
+        "Go omits an `omitempty` field only when it is empty, and {} never is. {}",
+        never_empty.description(),
+        never_empty.advice()
+    ))
 }
 
 pub fn trim_charset_misuse(span: &Span, function: &str) -> LisetteDiagnostic {
