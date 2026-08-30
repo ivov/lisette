@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788036475820,
+  "lastUpdate": 1788090980762,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -29718,6 +29718,95 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/ivov/lisette/commit/fce10d0cbb4fa20d3d42d30f4436a888dd5dc97f"
         },
         "date": 1788036474180,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 137136,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32069,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27564,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18725,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14873,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13590,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8472,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6029,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2907,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1850,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 736,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9402,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "8875ee4737adea20232e7192e06b5ffb47b1a634",
+          "message": "docs: tweak safety page prose (#1357)",
+          "timestamp": "2026-08-30T13:55:54+02:00",
+          "tree_id": "509a0547b92fea8aa66c670f094f2bcfc66aaae7",
+          "url": "https://github.com/ivov/lisette/commit/8875ee4737adea20232e7192e06b5ffb47b1a634"
+        },
+        "date": 1788090979080,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
