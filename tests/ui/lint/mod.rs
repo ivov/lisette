@@ -28096,3 +28096,256 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn json_skipped_field_on_marshal() {
+    assert_lint_snapshot!(
+        r#"
+import "go:encoding/json"
+
+struct Config {
+  pub host: string,
+  port: int,
+}
+
+fn main() {
+  let c = Config { host: "localhost", port: 8080 }
+  let _ = json.Marshal(c)
+  let _ = c.port
+}
+"#
+    );
+}
+
+#[test]
+fn json_skipped_field_on_unmarshal() {
+    assert_lint_snapshot!(
+        r#"
+import "go:encoding/json"
+
+struct Config {
+  pub host: string,
+  port: int,
+}
+
+fn main() {
+  let mut parsed = Config { .. }
+  let _ = json.Unmarshal("{}" as Slice<byte>, &parsed)
+  let _ = parsed.port
+}
+"#
+    );
+}
+
+#[test]
+fn json_skipped_field_on_marshal_indent() {
+    assert_lint_snapshot!(
+        r#"
+import "go:encoding/json"
+
+struct Config {
+  pub host: string,
+  port: int,
+  debug: bool,
+}
+
+fn main() {
+  let c = Config { host: "localhost", port: 8080, debug: true }
+  let _ = json.MarshalIndent(c, "", "  ")
+  let _ = c.port
+  let _ = c.debug
+}
+"#
+    );
+}
+
+#[test]
+fn marshaler_does_not_silence_json_skipped_field_on_unmarshal() {
+    assert_lint_snapshot!(
+        r#"
+import "go:encoding/json"
+
+struct Config {
+  pub host: string,
+  port: int,
+}
+
+impl Config {
+  pub fn MarshalJSON(self) -> Result<Slice<byte>, error> {
+    json.Marshal(self.host)
+  }
+}
+
+fn main() {
+  let mut parsed = Config { .. }
+  let _ = json.Unmarshal("{}" as Slice<byte>, &parsed)
+  let _ = parsed.port
+}
+"#
+    );
+}
+
+#[test]
+fn serialization_attribute_silences_json_skipped_field() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:encoding/json"
+
+#[json]
+struct Config {
+  pub host: string,
+  port: int,
+}
+
+fn main() {
+  let c = Config { host: "localhost", port: 8080 }
+  let _ = json.Marshal(c)
+  let _ = c.port
+}
+"#
+    );
+}
+
+#[test]
+fn foreign_serialization_attribute_silences_json_skipped_field() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:encoding/json"
+
+#[db]
+struct Config {
+  pub host: string,
+  port: int,
+}
+
+fn main() {
+  let c = Config { host: "localhost", port: 8080 }
+  let _ = json.Marshal(c)
+  let _ = c.port
+}
+"#
+    );
+}
+
+#[test]
+fn all_public_fields_silence_json_skipped_field() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:encoding/json"
+
+struct Config {
+  pub host: string,
+  pub port: int,
+}
+
+fn main() {
+  let c = Config { host: "localhost", port: 8080 }
+  let _ = json.Marshal(c)
+}
+"#
+    );
+}
+
+#[test]
+fn custom_marshaler_silences_json_skipped_field() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:encoding/json"
+
+struct Config {
+  pub host: string,
+  port: int,
+}
+
+impl Config {
+  pub fn MarshalJSON(self) -> Result<Slice<byte>, error> {
+    json.Marshal(self.port)
+  }
+}
+
+fn main() {
+  let c = Config { host: "localhost", port: 8080 }
+  let _ = json.Marshal(c)
+}
+"#
+    );
+}
+
+#[test]
+fn embedded_field_silences_json_skipped_field() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:encoding/json"
+
+struct Base {
+  pub id: int,
+}
+
+struct Config {
+  embed Base,
+  port: int,
+}
+
+fn main() {
+  let c = Config { Base: Base { id: 1 }, port: 8080 }
+  let _ = json.Marshal(c)
+  let _ = c.port
+}
+"#
+    );
+}
+
+#[test]
+fn allow_attribute_silences_json_skipped_field() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:encoding/json"
+
+struct Config {
+  pub host: string,
+  port: int,
+}
+
+#[allow(json_skipped_field)]
+fn main() {
+  let c = Config { host: "localhost", port: 8080 }
+  let _ = json.Marshal(c)
+  let _ = c.port
+}
+"#
+    );
+}
+
+#[test]
+fn go_struct_silences_json_skipped_field() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:time"
+import "go:encoding/json"
+
+fn main() {
+  let _ = json.Marshal(time.Now())
+}
+"#
+    );
+}
+
+#[test]
+fn json_skipped_field_is_limited_to_encoding_json() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:encoding/xml"
+
+struct Config {
+  pub host: string,
+  port: int,
+}
+
+fn main() {
+  let c = Config { host: "localhost", port: 8080 }
+  let _ = xml.Marshal(c)
+  let _ = c.port
+}
+"#
+    );
+}

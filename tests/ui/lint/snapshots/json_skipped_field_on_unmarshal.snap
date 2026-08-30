@@ -1,0 +1,19 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Field skipped by JSON
+   ╭─[test.lis:6:3]
+ 5 │   pub host: string,
+ 6 │   port: int,
+   ·   ──┬─
+   ·     ╰── declared without `pub`
+ 7 │ }
+   ╰────
+    ╭─[test.lis:11:47]
+ 10 │   let mut parsed = Config { .. }
+ 11 │   let _ = json.Unmarshal("{}" as Slice<byte>, &parsed)
+    ·                                               ───┬───
+    ·                                                  ╰── `port` will keep its current value
+ 12 │   let _ = parsed.port
+    ╰────
+  help: Only `pub` fields are filled from JSON. Add `#[json]` to `Config`, or mark `port` as `pub` · code: [lint.json_skipped_field]
