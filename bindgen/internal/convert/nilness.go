@@ -4,7 +4,6 @@ package convert
 import (
 	"fmt"
 	"go/types"
-	"os"
 	"sort"
 
 	"github.com/ivov/lisette/bindgen/internal/config"
@@ -49,9 +48,8 @@ type NilnessAnalysis struct {
 	params *ParameterNilability
 }
 
-// NewNilnessAnalysis returns nil when SSA construction fails, leaving
-// callers on heuristics only.
-func NewNilnessAnalysis(roots []*packages.Package, cfg *config.Config) (analysis *NilnessAnalysis) {
+// NewNilnessAnalysis returns (nil, nil) when no root package is well-typed.
+func NewNilnessAnalysis(roots []*packages.Package, cfg *config.Config) (analysis *NilnessAnalysis, err error) {
 	wellTyped := make([]*packages.Package, 0, len(roots))
 	for _, pkg := range roots {
 		if pkg != nil && pkg.Types != nil && len(pkg.Errors) == 0 {
@@ -59,15 +57,14 @@ func NewNilnessAnalysis(roots []*packages.Package, cfg *config.Config) (analysis
 		}
 	}
 	if len(wellTyped) == 0 {
-		return nil
+		return nil, nil
 	}
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Fprintf(os.Stderr, "bindgen: nilability analysis unavailable (SSA build failed: %v), falling back to heuristics\n", r)
-			analysis = nil
+			analysis, err = nil, fmt.Errorf("nilness analysis panicked: %v", r)
 		}
 	}()
-	program, _ := ssautil.AllPackages(wellTyped, ssa.InstantiateGenerics)
+	program, _ := ssautil.AllPackages(wellTyped, ssa.InstantiateGenerics|ssa.BuildSerially)
 	program.Build()
 
 	analysis = &NilnessAnalysis{
@@ -114,7 +111,7 @@ func NewNilnessAnalysis(roots []*packages.Package, cfg *config.Config) (analysis
 		analysis.record(fn)
 	}
 
-	return analysis
+	return analysis, nil
 }
 
 func (a *NilnessAnalysis) Params() *ParameterNilability {

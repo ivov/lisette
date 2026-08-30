@@ -2,6 +2,7 @@
 package convert
 
 import (
+	"fmt"
 	"go/types"
 	"sort"
 	"strings"
@@ -22,11 +23,16 @@ type DivergenceAnalysis struct {
 }
 
 // NewDivergenceAnalysis reuses the SSA program the nilability analysis built.
-func NewDivergenceAnalysis(nilness *NilnessAnalysis, roots []*packages.Package, cfg *config.Config) *DivergenceAnalysis {
+func NewDivergenceAnalysis(nilness *NilnessAnalysis, roots []*packages.Package, cfg *config.Config) (analysis *DivergenceAnalysis, err error) {
 	if nilness == nil || nilness.program == nil {
-		return nil
+		return nil, nil
 	}
-	analysis := &DivergenceAnalysis{
+	defer func() {
+		if r := recover(); r != nil {
+			analysis, err = nil, fmt.Errorf("divergence analysis panicked: %v", r)
+		}
+	}()
+	analysis = &DivergenceAnalysis{
 		program:    nilness.program,
 		cfg:        cfg,
 		verdicts:   make(map[*types.Func]bool),
@@ -72,7 +78,7 @@ func NewDivergenceAnalysis(nilness *NilnessAnalysis, roots []*packages.Package, 
 	for _, fn := range bound {
 		analysis.record(fn)
 	}
-	return analysis
+	return analysis, nil
 }
 
 // Function reports whether obj never returns normally, if derivable.

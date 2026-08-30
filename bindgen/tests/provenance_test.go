@@ -64,13 +64,13 @@ func deriveStdViews(t *testing.T) stdViews {
 	if err != nil {
 		t.Fatalf("failed to load stdlib config: %v", err)
 	}
-	nilness := convert.NewNilnessAnalysis(pkgs, &cfg)
-	if nilness == nil {
-		t.Fatal("SSA build failed")
+	nilness, err := convert.NewNilnessAnalysis(pkgs, &cfg)
+	if err != nil || nilness == nil {
+		t.Fatalf("SSA build failed: %v", err)
 	}
-	mutation := convert.NewMutationAnalysis(nilness, pkgs)
-	if mutation == nil {
-		t.Fatal("mutation analysis unavailable")
+	mutation, err := convert.NewMutationAnalysis(nilness, pkgs)
+	if err != nil || mutation == nil {
+		t.Fatalf("mutation analysis unavailable: %v", err)
 	}
 
 	views := stdViews{
