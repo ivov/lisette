@@ -48,7 +48,7 @@ fn scan(expression: &Expression, pending: bool, ctx: &NodeCtx) {
     }
 }
 
-fn is_os_exit(callee: &Expression) -> bool {
+pub(super) fn is_os_exit(callee: &Expression) -> bool {
     let Expression::DotAccess {
         expression: receiver,
         member,

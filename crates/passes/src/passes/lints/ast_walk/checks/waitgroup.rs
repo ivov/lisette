@@ -219,7 +219,7 @@ fn mentions(expression: &Expression, binding: BindingId) -> usize {
         .sum::<usize>()
 }
 
-fn waitgroup_method(callee: &Expression) -> Option<(&str, BindingId)> {
+pub(super) fn waitgroup_method(callee: &Expression) -> Option<(&str, BindingId)> {
     let Expression::DotAccess {
         expression: receiver,
         member,
