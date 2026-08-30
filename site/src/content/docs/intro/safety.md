@@ -304,7 +304,7 @@ Go does not signal that a function may mutate the caller's data.
 ```go file="sort.go"
 nums := []int{3, 1, 2}
 // !callout-error-right mutates `nums`
-sort.Ints(nums)
+slices.Sort(nums)
 ```
 
 Lisette makes write permission part of the type.
@@ -320,14 +320,14 @@ Lisette knows which Go functions write to their arguments.
 
 ```ansi wrap
   [31m✕[0m [1m[31mImmutable variable[39m[0m
-   ╭─[example.lis:5:13]
+   ╭─[example.lis:5:15]
  [2m4[0m │   let nums = [3, 1, 2]
- [2m5[0m │   sort.Ints([31mnums[0m)
-   · [31m            ──┬─[0m
-   ·               [31m╰── [31m[95mnums[39m[31m was declared without [39m[95mmut[39m[0m[0m
+ [2m5[0m │   slices.Sort([31mnums[0m)
+   · [31m              ──┬─[0m
+   ·                 [31m╰── [31m[95mnums[39m[31m was declared without [39m[95mmut[39m[0m[0m
  [2m6[0m │ }
    ╰────
-[2m  help: [0m[95msort.Ints()[39m[2m writes to [0m[95mnums[39m[2m. Declare using [0m[95mlet mut nums[39m[2m to mark the variable mutable[0m[2m · code: [0m[2m[infer.immutable][0m
+[2m  help: [0m[95mslices.Sort()[39m[2m writes to [0m[95mnums[39m[2m. Declare using [0m[95mlet mut nums[39m[2m to mark the variable mutable[0m[2m · code: [0m[2m[infer.immutable][0m
 ```
 
 📚 See [Write permission in parameters](/docs/functions/#write-permission-in-parameters)

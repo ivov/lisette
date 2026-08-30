@@ -43,6 +43,8 @@ type ConvertResult struct {
 	// rewrites the return type to Option<int> and emits the matching
 	// flag-name annotation (e.g. `#[go(sentinel_minus_one)]`).
 	SentinelInt *int
+	// The successor to a superseded symbol, as "pkg.Name".
+	SupersededBy string
 	// BuilderMethod suppresses unused_value on fluent-chain returns the caller typically discards.
 	BuilderMethod bool
 	// AnonStruct emits `#[go(anon_struct)]` so the compiler renders the type as

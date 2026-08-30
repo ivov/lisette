@@ -2,6 +2,7 @@ pub(crate) mod attributes;
 pub(crate) mod casing;
 mod checks;
 mod deprecation;
+mod superseded;
 
 use std::sync::Arc;
 
@@ -218,10 +219,27 @@ fn run_pattern_checks(pattern: &Pattern, ctx: &mut NodeCtx<'_>, role: PatternRol
     }
 }
 
+struct OlderApis<'a> {
+    deprecated: HashMap<Span, String>,
+    superseded: HashMap<Span, String>,
+    usages_by_file: HashMap<u32, Vec<&'a Usage>>,
+}
+
+impl OlderApis<'_> {
+    fn sweep_file(&self, file_id: u32, sink: &LocalSink) {
+        let Some(usages) = self.usages_by_file.get(&file_id) else {
+            return;
+        };
+        deprecation::sweep(usages, &self.deprecated, sink);
+        superseded::sweep(usages, &self.superseded, sink);
+    }
+}
+
 pub(crate) fn run(store: &Store, facts: &Facts) -> Vec<LisetteDiagnostic> {
     let deprecated = deprecation::build_index(store);
+    let superseded = superseded::build_index(store);
     let mut usages_by_file: HashMap<u32, Vec<&Usage>> = HashMap::default();
-    if !deprecated.is_empty() {
+    if !deprecated.is_empty() || !superseded.is_empty() {
         for usage in &facts.usages {
             usages_by_file
                 .entry(usage.usage_span.file_id)
@@ -229,6 +247,11 @@ pub(crate) fn run(store: &Store, facts: &Facts) -> Vec<LisetteDiagnostic> {
                 .push(usage);
         }
     }
+    let older = OlderApis {
+        deprecated,
+        superseded,
+        usages_by_file,
+    };
 
     let mut packages: Vec<&Package> = store
         .packages
@@ -241,7 +264,7 @@ pub(crate) fn run(store: &Store, facts: &Facts) -> Vec<LisetteDiagnostic> {
     if packages.len() < PARALLEL_THRESHOLD {
         let sink = LocalSink::new();
         for package in &packages {
-            run_package(package, store, facts, &sink, &deprecated, &usages_by_file);
+            run_package(package, store, facts, &sink, &older);
         }
         return sink.into_diagnostics();
     }
@@ -250,14 +273,7 @@ pub(crate) fn run(store: &Store, facts: &Facts) -> Vec<LisetteDiagnostic> {
         .par_iter()
         .map(|package| {
             let local_sink = LocalSink::new();
-            run_package(
-                package,
-                store,
-                facts,
-                &local_sink,
-                &deprecated,
-                &usages_by_file,
-            );
+            run_package(package, store, facts, &local_sink, &older);
             local_sink
         })
         .collect();
@@ -269,8 +285,7 @@ fn run_package(
     store: &Store,
     facts: &Facts,
     sink: &LocalSink,
-    deprecated: &HashMap<Span, String>,
-    usages_by_file: &HashMap<u32, Vec<&Usage>>,
+    older: &OlderApis<'_>,
 ) {
     for (file_id, file) in package.source_file_entries() {
         let file_sink = LocalSink::new();
@@ -282,9 +297,7 @@ fn run_package(
             run_pattern_checks,
         );
 
-        if let Some(usages) = usages_by_file.get(file_id) {
-            deprecation::sweep(usages, deprecated, &file_sink);
-        }
+        older.sweep_file(*file_id, &file_sink);
 
         let produced = file_sink.into_diagnostics();
         if produced.is_empty() {

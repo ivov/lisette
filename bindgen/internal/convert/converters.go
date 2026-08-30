@@ -108,6 +108,7 @@ func (c *Converter) convertFunction(result *ConvertResult, symbolExport extract.
 	if len(substitutions) > 0 {
 		result.CollapsedTypeParamRecipe = strings.Join(recipe, ", ")
 	}
+	c.applySupersededBy(result, result.Name)
 
 	liftedSpecs, paramOverrides := c.liftReflectionDecodeParams(signature, result.Name, result.TypeParams)
 	result.TypeParams = liftedSpecs
@@ -158,6 +159,12 @@ func (c *Converter) applySentinelInt(result *ConvertResult, qualifiedName string
 	}
 	result.ReturnType = "Option<int>"
 	result.SentinelInt = &value
+}
+
+func (c *Converter) applySupersededBy(result *ConvertResult, qualifiedName string) {
+	if successor, ok := c.cfg.SupersededBy(c.currentPkgPath, qualifiedName); ok {
+		result.SupersededBy = successor
+	}
 }
 
 func (c *Converter) convertParams(sig *types.Signature, obj types.Object, lookupName, methodName string, paramOverrides map[int]string, directEligible bool, substitutions map[string]string) ([]FunctionParameter, *SkipReason) {
@@ -386,6 +393,7 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 		result.Receiver.Mutable = true
 		result.Receiver.ProvenReadOnly = false
 	}
+	c.applySupersededBy(result, qualifiedName)
 
 	methodSpecs, _, _, skip := collectTypeParams(signature.TypeParams(), false, c)
 	if skip != nil {

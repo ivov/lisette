@@ -37,6 +37,21 @@
       "closed_domain": {
         "time": ["Weekday", "Month"]
       },
+      "superseded_by": {
+        "sort": {
+          "Float64s": "slices.Sort",
+          "Float64sAreSorted": "slices.IsSorted",
+          "Ints": "slices.Sort",
+          "IntsAreSorted": "slices.IsSorted",
+          "IsSorted": "slices.IsSortedFunc",
+          "Slice": "slices.SortFunc",
+          "SliceIsSorted": "slices.IsSortedFunc",
+          "SliceStable": "slices.SortStableFunc",
+          "Sort": "slices.SortFunc",
+          "Strings": "slices.Sort",
+          "StringsAreSorted": "slices.IsSorted"
+        }
+      },
       "zero_safe": {
         "bytes": ["Buffer", "Reader"],
         "container/list": ["List"],

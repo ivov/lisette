@@ -1640,6 +1640,13 @@ pub fn deprecated_api(span: &Span, message: &str) -> LisetteDiagnostic {
         .with_help(message)
 }
 
+pub fn superseded_api(span: &Span, successor: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::info("Superseded API")
+        .with_lint_code("superseded_api")
+        .with_span_label(span, "no longer modern Go")
+        .with_help(format!("Use `{successor}` instead"))
+}
+
 pub fn lost_cancel(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Context leaking")
         .with_lint_code("lost_cancel")

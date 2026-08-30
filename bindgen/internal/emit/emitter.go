@@ -397,6 +397,9 @@ func (e *Emitter) emitFunction(result convert.ConvertResult) {
 	if result.SentinelInt != nil {
 		e.buf.WriteString(sentinelFlag(*result.SentinelInt) + "\n")
 	}
+	if result.SupersededBy != "" {
+		fmt.Fprintf(&e.buf, "#[go(superseded_by, %q)]\n", result.SupersededBy)
+	}
 	if e.shouldAllowUnusedResult(result.Name, "", result) {
 		fmt.Fprintf(&e.buf, "#[allow(%s)]\n", allowDiscardLint(result.ReturnType))
 	}
@@ -471,6 +474,9 @@ func (e *Emitter) emitMethodInImpl(result convert.ConvertResult, recvName string
 	}
 	if result.SentinelInt != nil {
 		e.buf.WriteString("  " + sentinelFlag(*result.SentinelInt) + "\n")
+	}
+	if result.SupersededBy != "" {
+		fmt.Fprintf(&e.buf, "  #[go(superseded_by, %q)]\n", result.SupersededBy)
 	}
 	if result.Receiver != nil {
 		qualifiedName := result.Receiver.BaseTypeName + "." + result.Name

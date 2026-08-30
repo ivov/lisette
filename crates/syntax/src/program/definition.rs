@@ -112,6 +112,7 @@ pub enum DefinitionBody {
         /// `"Slice<E>, E"`). Lets emit rebuild Go's type arguments when the
         /// collapsed Lisette list cannot be projected onto Go's positionally.
         go_type_param_recipe: Option<String>,
+        superseded_by: Option<String>,
     },
 }
 
@@ -296,6 +297,13 @@ impl Definition {
         }
     }
 
+    pub fn superseded_by(&self) -> Option<&str> {
+        match &self.body {
+            DefinitionBody::Value { superseded_by, .. } => superseded_by.as_deref(),
+            _ => None,
+        }
+    }
+
     pub fn const_value(&self) -> Option<&ConstantValue> {
         match &self.body {
             DefinitionBody::Value {
@@ -474,6 +482,7 @@ pub struct Method {
     pub doc: Option<String>,
     pub allowed_lints: Vec<String>,
     pub go_hints: Vec<String>,
+    pub superseded_by: Option<String>,
 }
 
 impl Method {
@@ -491,6 +500,7 @@ impl Method {
             doc,
             allowed_lints,
             go_hints,
+            superseded_by,
         } = self;
         Self {
             source_name,
@@ -501,6 +511,7 @@ impl Method {
             doc,
             allowed_lints,
             go_hints,
+            superseded_by,
         }
     }
 }
@@ -912,6 +923,7 @@ mod tests {
                         doc: None,
                         allowed_lints: vec![],
                         go_hints: vec![],
+                        superseded_by: None,
                     },
                 )]),
                 attributes: Attributes::default(),
@@ -968,6 +980,7 @@ mod tests {
                 doc: None,
                 allowed_lints: vec![],
                 go_hints: vec![],
+                superseded_by: None,
             },
         )
     }

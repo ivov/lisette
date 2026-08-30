@@ -40,13 +40,13 @@ fn add(a: int, b: int) -> int {
 ## Lambdas
 
 ```go file="sort.go"
-sort.Slice(scores, func(i, j int) bool {
-    return scores[i] < scores[j]
+slices.SortFunc(scores, func(a, b int) int {
+    return cmp.Compare(b, a)
 })
 ```
 
 ```lisette file="sort.lis"
-sort.Slice(scores, |i, j| scores[i] < scores[j])
+slices.SortFunc(scores, |a, b| cmp.Compare(b, a))
 ```
 
 📚 See [Lambdas](/docs/functions/#lambdas)

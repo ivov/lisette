@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ● Superseded API
+   ╭─[test.lis:6:3]
+ 5 │   let mut xs = [3, 1, 2]
+ 6 │   sort.Slice(xs, |i, j| xs[i] < xs[j])
+   ·   ─────┬────
+   ·        ╰── no longer modern Go
+ 7 │ }
+   ╰────
+  help: Use `slices.SortFunc` instead · code: [lint.superseded_api]

@@ -64,6 +64,7 @@ fn register_test_builtins(store: &mut Store) {
                     go_hints: vec![],
                     go_name: None,
                     go_type_param_recipe: None,
+                    superseded_by: None,
                 },
             },
         );

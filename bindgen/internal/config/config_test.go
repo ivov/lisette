@@ -98,6 +98,42 @@ func TestNilConfigAccessorsDoNotPanic(t *testing.T) {
 	if cfg.HasWritableReturn("io", "Foo") {
 		t.Error("HasWritableReturn")
 	}
+	if _, ok := cfg.SupersededBy("io", "Foo"); ok {
+		t.Error("SupersededBy")
+	}
+}
+
+func TestSupersededBy(t *testing.T) {
+	cfg := &Config{
+		Overrides: Overrides{
+			Types: TypeOverrides{
+				SupersededBy: map[string]map[string]string{
+					"sort": {
+						"Ints":  "slices.Sort",
+						"Slice": "slices.SortFunc",
+					},
+				},
+			},
+		},
+	}
+
+	cases := []struct {
+		pkg  string
+		name string
+		want string
+		ok   bool
+	}{
+		{"sort", "Ints", "slices.Sort", true},
+		{"sort", "Slice", "slices.SortFunc", true},
+		{"sort", "Search", "", false}, // not listed
+		{"slices", "Ints", "", false}, // wrong package
+	}
+	for _, c := range cases {
+		got, ok := cfg.SupersededBy(c.pkg, c.name)
+		if got != c.want || ok != c.ok {
+			t.Errorf("SupersededBy(%q, %q) = %q, %v; want %q, %v", c.pkg, c.name, got, ok, c.want, c.ok)
+		}
+	}
 }
 
 func TestViewOverridesDistinguishEmptyFromAbsent(t *testing.T) {
