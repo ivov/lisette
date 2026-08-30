@@ -131,6 +131,27 @@ pub(crate) fn walk_nodes<'a, E, P>(
         &mut |pattern, role, ctx| {
             pattern_checks(pattern, ctx, role);
         },
+        &mut |_, _, _| {},
+    );
+}
+
+pub(crate) fn walk_nodes_with_exit<'a, C, E, P, X>(
+    ast: &'a [Expression],
+    ctx: &mut C,
+    mut expression_visitor: E,
+    mut pattern_visitor: P,
+    mut expression_exit_visitor: X,
+) where
+    E: FnMut(&'a Expression, FunctionRole<'a>, &mut C),
+    P: FnMut(&'a Pattern, PatternRole, &mut C),
+    X: FnMut(&'a Expression, FunctionRole<'a>, &mut C),
+{
+    visit_ast_with(
+        ast,
+        ctx,
+        &mut expression_visitor,
+        &mut pattern_visitor,
+        &mut expression_exit_visitor,
     );
 }
 
@@ -147,17 +168,20 @@ pub fn visit_ast<'a, E, P>(
         &mut (),
         &mut |expression, role, ()| expression_visitor(expression, role),
         &mut |pattern, role, ()| pattern_visitor(pattern, role),
+        &mut |_, _, _| {},
     );
 }
 
-fn visit_ast_with<'a, C, E, P>(
+fn visit_ast_with<'a, C, E, P, X>(
     ast: &'a [Expression],
     ctx: &mut C,
     expression_visitor: &mut E,
     pattern_visitor: &mut P,
+    expression_exit_visitor: &mut X,
 ) where
-    E: FnMut(&Expression, FunctionRole<'a>, &mut C),
-    P: FnMut(&Pattern, PatternRole, &mut C),
+    E: FnMut(&'a Expression, FunctionRole<'a>, &mut C),
+    P: FnMut(&'a Pattern, PatternRole, &mut C),
+    X: FnMut(&'a Expression, FunctionRole<'a>, &mut C),
 {
     for expression in ast {
         visit_node(
@@ -166,19 +190,22 @@ fn visit_ast_with<'a, C, E, P>(
             ctx,
             expression_visitor,
             pattern_visitor,
+            expression_exit_visitor,
         );
     }
 }
 
-fn visit_node<'a, C, E, P>(
+fn visit_node<'a, C, E, P, X>(
     expression: &'a Expression,
     role: FunctionRole<'a>,
     ctx: &mut C,
     expression_visitor: &mut E,
     pattern_visitor: &mut P,
+    expression_exit_visitor: &mut X,
 ) where
-    E: FnMut(&Expression, FunctionRole<'a>, &mut C),
-    P: FnMut(&Pattern, PatternRole, &mut C),
+    E: FnMut(&'a Expression, FunctionRole<'a>, &mut C),
+    P: FnMut(&'a Pattern, PatternRole, &mut C),
+    X: FnMut(&'a Expression, FunctionRole<'a>, &mut C),
 {
     expression_visitor(expression, role, ctx);
 
@@ -234,12 +261,20 @@ fn visit_node<'a, C, E, P>(
         _ => FunctionRole::Free,
     };
     for child in expression.children() {
-        visit_node(child, child_role, ctx, expression_visitor, pattern_visitor);
+        visit_node(
+            child,
+            child_role,
+            ctx,
+            expression_visitor,
+            pattern_visitor,
+            expression_exit_visitor,
+        );
     }
+    expression_exit_visitor(expression, role, ctx);
 }
 
-fn visit_pattern<C, F: FnMut(&Pattern, PatternRole, &mut C)>(
-    pattern: &Pattern,
+fn visit_pattern<'a, C, F: FnMut(&'a Pattern, PatternRole, &mut C)>(
+    pattern: &'a Pattern,
     role: PatternRole,
     ctx: &mut C,
     visitor: &mut F,

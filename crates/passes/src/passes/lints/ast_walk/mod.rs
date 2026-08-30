@@ -8,7 +8,8 @@ use std::sync::Arc;
 
 use crate::passes::PARALLEL_THRESHOLD;
 use crate::passes::walk::{
-    FunctionRole, NodeCtx, PatternRole, apply_expression_checks, apply_pattern_checks, walk_nodes,
+    FunctionRole, NodeCtx, PatternRole, apply_expression_checks, apply_pattern_checks,
+    walk_nodes_with_exit,
 };
 use diagnostics::{LisetteDiagnostic, LocalSink};
 use rayon::prelude::*;
@@ -20,14 +21,14 @@ use syntax::program::{Package, is_internal_package_id};
 
 use attributes::{check_attributes, check_enum_attributes, check_struct_attributes};
 use checks::{
-    check_almost_swapped, check_append_to_zero_filled, check_bad_bit_mask,
+    FunctionLintFeatures, check_almost_swapped, check_append_to_zero_filled, check_bad_bit_mask,
     check_bind_instead_of_map, check_bool_literal_comparison, check_collapsible_else_if,
     check_collapsible_if, check_collapsible_match, check_discarded_unit_binding,
     check_double_comparison, check_double_negation, check_dup_arg, check_duplicate_cutset,
     check_duplicate_logical_operand, check_eager_split_in_loop, check_empty_match_arm,
     check_enum_variant_names, check_equal_operands, check_equatable_if_let,
-    check_excess_parens_on_condition, check_exit_after_defer, check_expression_naming,
-    check_float_cmp, check_float_equality_without_abs, check_goos_goarch_comparison,
+    check_excess_parens_on_condition, check_expression_naming, check_float_cmp,
+    check_float_equality_without_abs, check_function_lints, check_goos_goarch_comparison,
     check_identical_if_branches, check_identical_match_arms, check_ineffective_bit_mask,
     check_ineffective_omitempty, check_infallible_assertion, check_integer_division_to_zero,
     check_invisible_in_string_expression, check_invisible_in_string_pattern,
@@ -52,13 +53,12 @@ use checks::{
     check_redundant_trim_guard, check_regexp_in_loop, check_replace_count_zero,
     check_replaceable_with_autofill, check_rest_only_pattern, check_self_assignment,
     check_self_comparison, check_self_named_constructors, check_single_arm_select,
-    check_single_element_loop, check_type_limit_comparison, check_unconditional_recursion,
-    check_uninterpolated_fstring, check_unnecessary_bool, check_unnecessary_first_then_check,
-    check_unnecessary_lazy_evaluations, check_unnecessary_map_on_constructor,
-    check_unnecessary_min_or_max, check_unnecessary_range_loop,
-    check_unnecessary_raw_string_expression, check_unnecessary_raw_string_pattern,
-    check_unnecessary_return, check_unsigned_comparison, check_verbose_failure_propagation,
-    check_waitgroup, check_while_let_loop, check_wildcard_in_or_patterns,
+    check_single_element_loop, check_type_limit_comparison, check_uninterpolated_fstring,
+    check_unnecessary_bool, check_unnecessary_first_then_check, check_unnecessary_lazy_evaluations,
+    check_unnecessary_map_on_constructor, check_unnecessary_min_or_max,
+    check_unnecessary_range_loop, check_unnecessary_raw_string_expression,
+    check_unnecessary_raw_string_pattern, check_unnecessary_return, check_unsigned_comparison,
+    check_verbose_failure_propagation, check_while_let_loop, check_wildcard_in_or_patterns,
 };
 
 fn run_expression_checks(expression: &Expression, ctx: &mut NodeCtx<'_>, role: FunctionRole<'_>) {
@@ -161,8 +161,6 @@ fn run_expression_checks(expression: &Expression, ctx: &mut NodeCtx<'_>, role: F
         (check_dup_arg, &[Call]),
         (check_printf_verb_mismatch, &[Call]),
         (check_duplicate_cutset, &[Call]),
-        (check_waitgroup, &[Function, Lambda]),
-        (check_exit_after_defer, &[Function, Lambda]),
         (check_struct_attributes, &[Struct]),
         (check_ineffective_omitempty, &[Struct]),
         (check_attributes, &[Function]),
@@ -180,9 +178,6 @@ fn run_expression_checks(expression: &Expression, ctx: &mut NodeCtx<'_>, role: F
             | Expression::ImplBlock { .. }
     ) {
         check_expression_naming(expression, ctx, role);
-    }
-    if matches!(expression, Expression::Function { .. }) {
-        check_unconditional_recursion(expression, ctx, role);
     }
     apply_expression_checks!(
         expression,
@@ -203,6 +198,52 @@ fn run_expression_checks(expression: &Expression, ctx: &mut NodeCtx<'_>, role: F
         (check_out_of_domain_value, &[Literal, Unary, Call]),
         (check_infallible_assertion, &[Function, Lambda]),
     );
+}
+
+struct LintWalkCtx<'a> {
+    node: NodeCtx<'a>,
+    functions: Vec<FunctionLintFeatures>,
+}
+
+fn enter_expression<'ast>(
+    expression: &'ast Expression,
+    role: FunctionRole<'ast>,
+    ctx: &mut LintWalkCtx<'_>,
+) {
+    if matches!(
+        expression,
+        Expression::Function { .. } | Expression::Lambda { .. }
+    ) {
+        ctx.functions
+            .push(FunctionLintFeatures::new(expression, &ctx.node, role));
+    } else if let Some(features) = ctx.functions.last_mut() {
+        features.observe(expression);
+    }
+    run_expression_checks(expression, &mut ctx.node, role);
+}
+
+fn exit_expression<'ast>(
+    expression: &'ast Expression,
+    role: FunctionRole<'ast>,
+    ctx: &mut LintWalkCtx<'_>,
+) {
+    if matches!(
+        expression,
+        Expression::Function { .. } | Expression::Lambda { .. }
+    ) {
+        debug_assert!(
+            !ctx.functions.is_empty(),
+            "function feature stack must match the AST walk"
+        );
+        let Some(features) = ctx.functions.pop() else {
+            return;
+        };
+        check_function_lints(expression, &ctx.node, role, features);
+    }
+}
+
+fn visit_pattern(pattern: &Pattern, role: PatternRole, ctx: &mut LintWalkCtx<'_>) {
+    run_pattern_checks(pattern, &mut ctx.node, role);
 }
 
 fn run_pattern_checks(pattern: &Pattern, ctx: &mut NodeCtx<'_>, role: PatternRole) {
@@ -292,12 +333,16 @@ fn run_package(
 ) {
     for (file_id, file) in package.source_file_entries() {
         let file_sink = LocalSink::new();
-        let mut ctx = NodeCtx::new(store, facts, package, file, &file_sink);
-        walk_nodes(
+        let mut ctx = LintWalkCtx {
+            node: NodeCtx::new(store, facts, package, file, &file_sink),
+            functions: Vec::new(),
+        };
+        walk_nodes_with_exit(
             &file.items,
             &mut ctx,
-            run_expression_checks,
-            run_pattern_checks,
+            enter_expression,
+            visit_pattern,
+            exit_expression,
         );
 
         older.sweep_file(*file_id, &file_sink);
