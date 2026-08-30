@@ -3,6 +3,7 @@ package cli
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -145,9 +146,19 @@ func GeneratePkgs(pkgPaths []string, lisetteVersion, goVersion string, cfg *conf
 			}
 		}
 	}
-	nilness := convert.NewNilnessAnalysis(analysisRoots, cfg)
-	mutation := convert.NewMutationAnalysis(nilness, analysisRoots)
-	divergence := convert.NewDivergenceAnalysis(nilness, analysisRoots, cfg)
+	nilness, nilnessErr := convert.NewNilnessAnalysis(analysisRoots, cfg)
+	mutation, mutationErr := convert.NewMutationAnalysis(nilness, analysisRoots)
+	divergence, divergenceErr := convert.NewDivergenceAnalysis(nilness, analysisRoots, cfg)
+	if analysisErr := errors.Join(nilnessErr, mutationErr, divergenceErr); analysisErr != nil {
+		for _, input := range pkgPaths {
+			manifest.Errors = append(manifest.Errors, ManifestError{
+				Package: input,
+				Kind:    KindUnknownError,
+				Message: fmt.Sprintf("analysis failed: %v", analysisErr),
+			})
+		}
+		return manifest
+	}
 
 	visited := make(map[string]bool)
 	frontier := make([]string, 0, len(pkgPaths))
@@ -174,6 +185,7 @@ func GeneratePkgs(pkgPaths []string, lisetteVersion, goVersion string, cfg *conf
 	for len(frontier) > 0 {
 		type waveResult struct {
 			ok      ManifestOk
+			failed  *ManifestError
 			imports []string
 		}
 		wave := make([]waveResult, len(frontier))
@@ -184,6 +196,16 @@ func GeneratePkgs(pkgPaths []string, lisetteVersion, goVersion string, cfg *conf
 			i, pkgPath := i, pkgPath
 			pkg := byPath[pkgPath]
 			g.Go(func() error {
+				defer func() {
+					if r := recover(); r != nil {
+						fmt.Fprintf(os.Stderr, "bindgen: panic generating %s: %v\n", pkgPath, r)
+						wave[i] = waveResult{failed: &ManifestError{
+							Package: pkgPath,
+							Kind:    KindUnknownError,
+							Message: fmt.Sprintf("bindgen panicked: %v", r),
+						}}
+					}
+				}()
 				if len(pkg.Errors) > 0 {
 					stub := generateUnloadableStub(pkgPath, pkg, lisetteVersion, goVersion)
 					wave[i] = waveResult{ok: ManifestOk{Package: pkgPath, Content: stub.Content, Stubbed: true}}
@@ -201,6 +223,10 @@ func GeneratePkgs(pkgPaths []string, lisetteVersion, goVersion string, cfg *conf
 
 		var next []string
 		for _, w := range wave {
+			if w.failed != nil {
+				manifest.Errors = append(manifest.Errors, *w.failed)
+				continue
+			}
 			manifest.Ok = append(manifest.Ok, w.ok)
 			if !transitive {
 				continue

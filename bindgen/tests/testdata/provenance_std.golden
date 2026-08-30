@@ -775,7 +775,7 @@ image/color.Palette.Convert: r0<-recv
 image/gif.Decode (opaque r0 r1) (shared r1): r0<-r r1<-r
 image/gif.DecodeAll (opaque r0 r1) (shared r1): r0<-r r1<-r
 image/gif.DecodeConfig (opaque r0 r1) (shared r1): r0<-r r1<-r
-image/gif.Encode (opaque r0): r0<-m r0<-o r0<-w
+image/gif.Encode (opaque r0) (shared r0): r0<-m r0<-o r0<-w
 image/gif.EncodeAll (opaque r0): r0<-g r0<-w
 image/jpeg.Decode (opaque r0) (shared r1): r0<-r
 image/jpeg.DecodeConfig (shared r0 r1): 

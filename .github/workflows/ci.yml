@@ -94,8 +94,8 @@ jobs:
       - run: just lint
       - run: just lint-satellites
 
-  golangci-lint:
-    name: Golangci-lint
+  go-checks:
+    name: Go checks
     needs: changes
     if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
@@ -115,6 +115,7 @@ jobs:
         run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.1
       - run: cd bindgen && golangci-lint run
       - run: cd prelude && golangci-lint run
+      - run: cd bindgen && go test ./...
 
   test-suite:
     name: Test suite
@@ -354,7 +355,7 @@ jobs:
       - format
       - snapshot-style
       - clippy
-      - golangci-lint
+      - go-checks
       - test-suite
       - test-unit
       - lsp-test

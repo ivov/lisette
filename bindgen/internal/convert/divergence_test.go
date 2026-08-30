@@ -55,13 +55,13 @@ func analyzeDivergenceFiles(t *testing.T, cfg *config.Config, files map[string]s
 		t.Fatal("root package \"probe\" not found")
 	}
 
-	nilness := NewNilnessAnalysis(pkgs, cfg)
-	if nilness == nil {
-		t.Fatal("SSA build failed")
+	nilness, err := NewNilnessAnalysis(pkgs, cfg)
+	if err != nil || nilness == nil {
+		t.Fatalf("SSA build failed: %v", err)
 	}
-	analysis := NewDivergenceAnalysis(nilness, pkgs, cfg)
-	if analysis == nil {
-		t.Fatal("divergence analysis unavailable")
+	analysis, err := NewDivergenceAnalysis(nilness, pkgs, cfg)
+	if err != nil || analysis == nil {
+		t.Fatalf("divergence analysis unavailable: %v", err)
 	}
 	return analysis, root
 }

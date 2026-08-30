@@ -59,9 +59,18 @@ func GenerateStd(ctx context.Context, outDir, lisetteVersion, goVersion string, 
 			}
 			fmt.Fprintf(os.Stderr, "[%s] loaded %d packages in %.1fs\n", target, len(pkgs), time.Since(loadStart).Seconds())
 
-			nilness := convert.NewNilnessAnalysis(pkgs, cfg)
-			mutation := convert.NewMutationAnalysis(nilness, pkgs)
-			divergence := convert.NewDivergenceAnalysis(nilness, pkgs, cfg)
+			nilness, err := convert.NewNilnessAnalysis(pkgs, cfg)
+			if err != nil {
+				return fmt.Errorf("target %s: %w", target, err)
+			}
+			mutation, err := convert.NewMutationAnalysis(nilness, pkgs)
+			if err != nil {
+				return fmt.Errorf("target %s: %w", target, err)
+			}
+			divergence, err := convert.NewDivergenceAnalysis(nilness, pkgs, cfg)
+			if err != nil {
+				return fmt.Errorf("target %s: %w", target, err)
+			}
 
 			var generated atomic.Int32
 			total := len(pkgs)
@@ -73,7 +82,12 @@ func GenerateStd(ctx context.Context, outDir, lisetteVersion, goVersion string, 
 			g.SetLimit(runtime.NumCPU())
 
 			for _, pkg := range pkgs {
-				g.Go(func() error {
+				g.Go(func() (err error) {
+					defer func() {
+						if r := recover(); r != nil {
+							err = fmt.Errorf("target %s: panic generating %s: %v", target, pkg.PkgPath, r)
+						}
+					}()
 					select {
 					case <-gctx.Done():
 						return gctx.Err()

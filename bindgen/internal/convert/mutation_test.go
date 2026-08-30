@@ -29,13 +29,13 @@ func analyzeSource(t *testing.T, source string) (*MutationAnalysis, *packages.Pa
 	if len(pkgs) != 1 || len(pkgs[0].Errors) > 0 {
 		t.Fatalf("load failed: %v", pkgs)
 	}
-	nilness := NewNilnessAnalysis(pkgs, nil)
-	if nilness == nil {
-		t.Fatal("SSA build failed")
+	nilness, err := NewNilnessAnalysis(pkgs, nil)
+	if err != nil || nilness == nil {
+		t.Fatalf("SSA build failed: %v", err)
 	}
-	analysis := NewMutationAnalysis(nilness, pkgs)
-	if analysis == nil {
-		t.Fatal("mutation analysis unavailable")
+	analysis, err := NewMutationAnalysis(nilness, pkgs)
+	if err != nil || analysis == nil {
+		t.Fatalf("mutation analysis unavailable: %v", err)
 	}
 	return analysis, pkgs[0]
 }

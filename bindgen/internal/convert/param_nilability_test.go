@@ -31,9 +31,9 @@ func nilabilitySource(t *testing.T, source string, bindgenConfig *config.Config)
 	if len(pkgs) != 1 || len(pkgs[0].Errors) > 0 {
 		t.Fatalf("load failed: %v", pkgs)
 	}
-	nilness := NewNilnessAnalysis(pkgs, bindgenConfig)
-	if nilness == nil {
-		t.Fatal("SSA build failed")
+	nilness, err := NewNilnessAnalysis(pkgs, bindgenConfig)
+	if err != nil || nilness == nil {
+		t.Fatalf("SSA build failed: %v", err)
 	}
 	return nilness, pkgs[0]
 }

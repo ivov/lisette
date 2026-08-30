@@ -3,6 +3,7 @@
 package convert
 
 import (
+	"fmt"
 	"go/constant"
 	"go/token"
 	"go/types"
@@ -330,11 +331,16 @@ func (m *mutationSummary) weight() int {
 }
 
 // NewMutationAnalysis reuses the SSA program the nilability analysis built.
-func NewMutationAnalysis(nilness *NilnessAnalysis, roots []*packages.Package) *MutationAnalysis {
+func NewMutationAnalysis(nilness *NilnessAnalysis, roots []*packages.Package) (analysis *MutationAnalysis, err error) {
 	if nilness == nil || nilness.program == nil {
-		return nil
+		return nil, nil
 	}
-	analysis := &MutationAnalysis{
+	defer func() {
+		if r := recover(); r != nil {
+			analysis, err = nil, fmt.Errorf("mutation analysis panicked: %v", r)
+		}
+	}()
+	analysis = &MutationAnalysis{
 		program:    nilness.program,
 		verdicts:   make(map[*types.Func]FunctionMutation),
 		views:      make(map[*types.Func]FunctionViews),
@@ -382,7 +388,7 @@ func NewMutationAnalysis(nilness *NilnessAnalysis, roots []*packages.Package) *M
 	for _, fn := range bound {
 		analysis.record(fn)
 	}
-	return analysis
+	return analysis, nil
 }
 
 func (a *MutationAnalysis) Function(obj types.Object) (FunctionMutation, bool) {

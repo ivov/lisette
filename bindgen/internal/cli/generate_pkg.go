@@ -24,9 +24,18 @@ func GeneratePkg(pkgPath, lisetteVersion, goVersion string, cfg *config.Config, 
 		return generateUnloadableStub(pkgPath, pkg, lisetteVersion, goVersion), nil
 	}
 
-	nilness := convert.NewNilnessAnalysis([]*packages.Package{pkg}, cfg)
-	mutation := convert.NewMutationAnalysis(nilness, []*packages.Package{pkg})
-	divergence := convert.NewDivergenceAnalysis(nilness, []*packages.Package{pkg}, cfg)
+	nilness, err := convert.NewNilnessAnalysis([]*packages.Package{pkg}, cfg)
+	if err != nil {
+		return GeneratePkgResult{}, fmt.Errorf("analysis of %s failed: %w", pkgPath, err)
+	}
+	mutation, err := convert.NewMutationAnalysis(nilness, []*packages.Package{pkg})
+	if err != nil {
+		return GeneratePkgResult{}, fmt.Errorf("analysis of %s failed: %w", pkgPath, err)
+	}
+	divergence, err := convert.NewDivergenceAnalysis(nilness, []*packages.Package{pkg}, cfg)
+	if err != nil {
+		return GeneratePkgResult{}, fmt.Errorf("analysis of %s failed: %w", pkgPath, err)
+	}
 	return generateFromPackage(pkg, pkgPath, lisetteVersion, goVersion, cfg, nilness, mutation, divergence), nil
 }
 
