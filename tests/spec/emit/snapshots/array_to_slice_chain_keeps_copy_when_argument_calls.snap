@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/arrays.rs
+description: |
+  
+  fn f() -> bool {
+    let mut arr: Array<int, 3> = [1, 2, 3]
+    let bump = || {
+      arr[0] = 99
+      return 99
+    }
+    arr.to_slice().contains(bump())
+  }
+---
+package main
+
+import "slices"
+
+func f() bool {
+	arr := [3]int{1, 2, 3}
+	bump := func() int {
+		arr[0] = 99
+		return 99
+	}
+	return slices.Contains(slices.Clone(arr[:]), bump())
+}

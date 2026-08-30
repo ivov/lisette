@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/arrays.rs
+description: |
+  
+  type Addr = Array<byte, 4>
+  
+  fn alias_receiver(a: Addr) -> bool {
+    a.to_slice().contains(2)
+  }
+  
+  fn ref_receiver(a: Ref<Array<int, 3>>) -> bool {
+    a.to_slice().contains(2)
+  }
+---
+package main
+
+import "slices"
+
+type Addr = [4]byte
+
+func aliasReceiver(a Addr) bool {
+	return slices.Contains(a[:], 2)
+}
+
+func refReceiver(a *[3]int) bool {
+	return slices.Contains((*a)[:], 2)
+}

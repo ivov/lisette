@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/arrays.rs
+description: |
+  
+  fn f() {
+    let mut arr: Array<int, 3> = [1, 2, 3]
+    defer arr.to_slice().contains(2)
+    task arr.to_slice().contains(3)
+    arr[0] = 99
+  }
+---
+package main
+
+import "slices"
+
+func f() {
+	arr := [3]int{1, 2, 3}
+	defer slices.Contains(slices.Clone(arr[:]), 2)
+	go slices.Contains(slices.Clone(arr[:]), 3)
+	arr[0] = 99
+}

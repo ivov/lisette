@@ -622,7 +622,10 @@ impl Planner<'_> {
             );
         }
 
-        let plan = self.lower_value(expression, ExpressionContext::value());
+        let plan = self.lower_value(
+            expression,
+            ExpressionContext::value().with_capture_boundary(CaptureBoundary::DirectDelayedCall),
+        );
         if needs_iife_for_async(expression, plan.evaluation.form) {
             let capture_boundary = if keyword == "defer" {
                 CaptureBoundary::DeferSite

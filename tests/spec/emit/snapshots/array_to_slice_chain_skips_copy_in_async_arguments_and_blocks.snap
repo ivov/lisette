@@ -1,0 +1,41 @@
+---
+source: tests/spec/emit/arrays.rs
+description: |
+  
+  fn consume(hit: bool) {
+    let _ = hit
+  }
+  
+  fn f() {
+    let mut arr: Array<int, 3> = [1, 2, 3]
+    defer consume(arr.to_slice().contains(2))
+    task consume(arr.to_slice().contains(3))
+    defer {
+      consume(arr.to_slice().contains(2))
+    }
+    task {
+      consume(arr.to_slice().contains(3))
+    }
+    arr[0] = 99
+  }
+---
+package main
+
+import "slices"
+
+func consume(hit bool) {
+	_ = hit
+}
+
+func f() {
+	arr := [3]int{1, 2, 3}
+	defer consume(slices.Contains(arr[:], 2))
+	go consume(slices.Contains(arr[:], 3))
+	defer func() {
+		consume(slices.Contains(arr[:], 2))
+	}()
+	go func() {
+		consume(slices.Contains(arr[:], 3))
+	}()
+	arr[0] = 99
+}

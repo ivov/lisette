@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/arrays.rs
+description: |
+  
+  fn f(arr: Array<int, 3>) -> bool {
+    Slice.contains(Array.to_slice(arr), 2)
+  }
+---
+package main
+
+import "slices"
+
+func f(arr [3]int) bool {
+	return slices.Contains(arr[:], 2)
+}

@@ -242,6 +242,7 @@ impl EvaluationEffect {
 pub(crate) enum CaptureBoundary {
     #[default]
     SiblingSequence,
+    DirectDelayedCall,
     DeferSite,
     TaskSite,
     LoopLifetime,
@@ -250,7 +251,10 @@ pub(crate) enum CaptureBoundary {
 
 impl CaptureBoundary {
     pub(crate) fn requires_value_capture(self, stability: Stability) -> bool {
-        !matches!(self, CaptureBoundary::SiblingSequence) && stability.is_observable()
+        !matches!(
+            self,
+            CaptureBoundary::SiblingSequence | CaptureBoundary::DirectDelayedCall
+        ) && stability.is_observable()
     }
 }
 

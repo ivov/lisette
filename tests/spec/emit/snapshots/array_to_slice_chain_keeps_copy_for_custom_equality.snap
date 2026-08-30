@@ -1,0 +1,43 @@
+---
+source: tests/spec/emit/arrays.rs
+description: |
+  
+  struct Point {
+    x: int,
+  }
+  
+  impl Point {
+    fn equals(self, other: Point) -> bool {
+      self.x == other.x
+    }
+  }
+  
+  fn user_equals(pts: Array<Point, 2>, want: Point) -> bool {
+    pts.to_slice().contains(want)
+  }
+  
+  fn nested_containers(rows: Array<Slice<int>, 2>, want: Slice<int>) -> bool {
+    rows.to_slice().contains(want)
+  }
+---
+package main
+
+import "slices"
+
+type Point struct {
+	x int
+}
+
+func (p Point) equals(other Point) bool {
+	return p.x == other.x
+}
+
+func userEquals(pts [2]Point, want Point) bool {
+	want_1 := want
+	return slices.ContainsFunc(slices.Clone(pts[:]), func(e_2 Point) bool { return e_2.equals(want_1) })
+}
+
+func nestedContainers(rows [2][]int, want []int) bool {
+	want_1 := want
+	return slices.ContainsFunc(slices.Clone(rows[:]), func(e_2 []int) bool { return slices.Equal(e_2, want_1) })
+}
