@@ -25,11 +25,11 @@ type GeneratePkgResult struct {
 
 var lisVersion = "dev"
 
-//go:embed metadata/go-version
-var goVersion string
+//go:embed metadata/go-toolchain
+var goToolchainVersion string
 
 func init() {
-	goVersion = strings.TrimSpace(goVersion)
+	goToolchainVersion = strings.TrimSpace(goToolchainVersion)
 
 	// When run via go run ...@vX.Y.Z, the module tag is authoritative.
 	if info, ok := debug.ReadBuildInfo(); ok {
@@ -83,7 +83,7 @@ func RunPkg(args []string, defaultCfgJSON []byte) {
 		os.Exit(1)
 	}
 
-	result, err := GeneratePkg(pkgPath, lisVersion, goVersion, &cfg, target)
+	result, err := GeneratePkg(pkgPath, lisVersion, goToolchainVersion, &cfg, target)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "bindgen: %v\n", err)
 		os.Exit(1)
@@ -137,7 +137,7 @@ func RunStd(args []string, defaultCfgJSON []byte) {
 
 	fmt.Fprintf(os.Stderr, "Generating stdlib bindings to %s...\n", *outDir)
 
-	result, err := GenerateStd(context.Background(), *outDir, effectiveVersion, goVersion, &cfg, targets)
+	result, err := GenerateStd(context.Background(), *outDir, effectiveVersion, goToolchainVersion, &cfg, targets)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "bindgen: %v\n", err)
 		os.Exit(1)
@@ -194,7 +194,7 @@ func ParseTargets(s string) ([]Target, error) {
 	return targets, nil
 }
 
-func generateFromPackage(pkg *packages.Package, displayPath, lisetteVersion, goVersion string, cfg *config.Config, nilness *convert.NilnessAnalysis, mutation *convert.MutationAnalysis, divergence *convert.DivergenceAnalysis) GeneratePkgResult {
+func generateFromPackage(pkg *packages.Package, displayPath, lisetteVersion, goToolchainVersion string, cfg *config.Config, nilness *convert.NilnessAnalysis, mutation *convert.MutationAnalysis, divergence *convert.DivergenceAnalysis) GeneratePkgResult {
 	converter := convert.NewConverter(pkg.PkgPath, pkg, cfg, nilness, mutation, divergence)
 	exports := extract.ExtractExports(pkg, converter.EmbedIsFaithful)
 	converted := converter.ConvertAll(exports)
@@ -207,7 +207,7 @@ func generateFromPackage(pkg *packages.Package, displayPath, lisetteVersion, goV
 	}
 
 	emitter := emit.NewEmitter(cfg, pkg.PkgPath, pkg.Name, converted.BitFlagSetTypeNames, closedDomainTypeNames)
-	emitter.EmitHeader(displayPath, pkg.Name, lisetteVersion, goVersion)
+	emitter.EmitHeader(displayPath, pkg.Name, lisetteVersion, goToolchainVersion)
 
 	emitter.EmitImports(converted.ExternalPkgs, converted.NeedsSelfQualification())
 

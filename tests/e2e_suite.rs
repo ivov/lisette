@@ -10,7 +10,7 @@ use rayon::prelude::*;
 
 use harness::{
     EmittedTest, HarvestedTest, compile_e2e_suite_test, harvest_snapshots, prelude_dir,
-    read_go_version, read_skip_list, run_go_test, run_go_vet, run_gofmt_simplify,
+    read_go_toolchain, read_skip_list, run_go_test, run_go_vet, run_gofmt_simplify,
     skip_reason_for_imports, snapshots_dir, target_dir, write_go_mod, write_subpackage,
 };
 
@@ -28,8 +28,8 @@ fn e2e_suite() {
     let _ = fs::remove_dir_all(&target);
     fs::create_dir_all(&target).expect("create target/e2e_suite");
 
-    let go_version = read_go_version().expect("read go-version");
-    write_go_mod(&target, &prelude, &go_version).expect("write go.mod");
+    let go_toolchain = read_go_toolchain().expect("read go-toolchain");
+    write_go_mod(&target, &prelude, &go_toolchain).expect("write go.mod");
 
     let harvested = harvest_snapshots(&snapshots);
     assert!(

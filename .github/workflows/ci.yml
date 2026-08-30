@@ -81,6 +81,15 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
       - run: ./scripts/check-snapshot-block-style.sh
 
+  go-versions-sync:
+    name: Go versions sync
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+      - run: ./scripts/check-go-versions.sh
+
   clippy:
     name: Clippy
     needs: changes
@@ -103,7 +112,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # ratchet:actions/setup-go@v6
         with:
-          go-version-file: go-version
+          go-version-file: go-toolchain
           cache: true
           cache-dependency-path: '**/go.sum'
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # ratchet:actions/cache@v4
@@ -165,13 +174,14 @@ jobs:
         id: go-build-cache
         with:
           path: ~/.cache/go-build
-          key: go-build-e2e-smoke-${{ runner.os }}-${{ hashFiles('go-version', 'Cargo.lock', 'crates/**', 'tests/**', 'prelude/**') }}
+          key: go-build-e2e-smoke-${{ runner.os }}-${{ hashFiles('go-toolchain', 'Cargo.lock', 'crates/**', 'tests/**', 'prelude/**') }}
           restore-keys: |
             go-build-e2e-smoke-${{ runner.os }}-
       - run: cargo build -p lisette --locked
       - run: cargo test -p tests --test e2e_smoke --locked -- --format terse
       - run: cargo test -p tests --test e2e_learn --locked -- --format terse
       - run: cargo test -p tests --test e2e_run --locked -- --format terse
+      - run: cargo test -p tests --test e2e_library --locked -- --format terse
       - if: github.ref == 'refs/heads/main' && steps.go-build-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # ratchet:actions/cache@v4
         with:
@@ -262,7 +272,7 @@ jobs:
         id: go-build-cache
         with:
           path: ~/.cache/go-build
-          key: go-build-e2e-suite-${{ runner.os }}-${{ hashFiles('go-version', 'Cargo.lock', 'crates/**', 'tests/**', 'prelude/**') }}
+          key: go-build-e2e-suite-${{ runner.os }}-${{ hashFiles('go-toolchain', 'Cargo.lock', 'crates/**', 'tests/**', 'prelude/**') }}
           restore-keys: |
             go-build-e2e-suite-${{ runner.os }}-
       - run: just test-e2e-suite
@@ -294,7 +304,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # ratchet:actions/setup-go@v6
         with:
-          go-version-file: go-version
+          go-version-file: go-toolchain
           cache: true
           cache-dependency-path: '**/go.sum'
       - run: cd prelude && go test ./...
@@ -354,6 +364,7 @@ jobs:
       - pr-title
       - format
       - snapshot-style
+      - go-versions-sync
       - clippy
       - go-checks
       - test-suite

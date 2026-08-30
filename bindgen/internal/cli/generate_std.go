@@ -36,7 +36,7 @@ func (t Target) Suffix() string {
 
 // GenerateStd generates per-target `.d.lis` files and deduplicates them
 // into a suffixless shared layer plus per-target overlays.
-func GenerateStd(ctx context.Context, outDir, lisetteVersion, goVersion string, cfg *config.Config, targets []Target) (GenerateStdResult, error) {
+func GenerateStd(ctx context.Context, outDir, lisetteVersion, goToolchainVersion string, cfg *config.Config, targets []Target) (GenerateStdResult, error) {
 	start := time.Now()
 
 	if len(targets) < 2 {
@@ -94,7 +94,7 @@ func GenerateStd(ctx context.Context, outDir, lisetteVersion, goVersion string, 
 					default:
 					}
 
-					result := generateFromPackage(pkg, pkg.PkgPath, lisetteVersion, goVersion, cfg, nilness, mutation, divergence)
+					result := generateFromPackage(pkg, pkg.PkgPath, lisetteVersion, goToolchainVersion, cfg, nilness, mutation, divergence)
 
 					resultsMu.Lock()
 					results[pkg.PkgPath] = result.Content
