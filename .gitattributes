@@ -1,6 +1,7 @@
 tests/** linguist-vendored=true
 bindgen/tests/** linguist-vendored=true
 editors/** linguist-vendored=true
+site/** linguist-vendored=true
+scripts/** linguist-vendored=true
 fuzz/** linguist-vendored=true
-playground/** linguist-vendored=true
 justfile linguist-vendored=true
