@@ -349,7 +349,7 @@ fn parse_new(mut arguments: impl Iterator<Item = String>) -> Result<Command, Par
         Some(name) => Ok(Command::New { name }),
         None => Err(ParseError::MissingArgument {
             command: "new",
-            argument: "name",
+            argument: "<name>",
         }),
     }
 }
@@ -684,7 +684,7 @@ fn parse_add(mut arguments: impl Iterator<Item = String>) -> Result<Command, Par
         }),
         (None, None) => Err(ParseError::MissingArgument {
             command: "add",
-            argument: "dependency",
+            argument: "<dependency>",
         }),
     }
 }
@@ -745,7 +745,7 @@ fn parse_doc(arguments: impl Iterator<Item = String>) -> Result<Command, ParseEr
             Some(q) => Ok(Command::DocSearch { query: q }),
             None => Err(ParseError::MissingArgument {
                 command: "doc",
-                argument: "search query",
+                argument: "<search query>",
             }),
         };
     }
@@ -800,7 +800,7 @@ fn bindgen_target(
     let Some(package) = positional.first() else {
         return Err(ParseError::MissingArgument {
             command: "bindgen",
-            argument: "package",
+            argument: "<package>",
         });
     };
     let extra = positional.get(1);
