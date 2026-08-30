@@ -15,7 +15,7 @@ var ages map[string]int
 ages["michael"] = 30
 ```
 
-Lisette has no nil and models absence in the type system.
+Lisette defines nil out of existence and encodes absence in the type system.
 
 ```ansi wrap
   [31m✕[0m [95mnil[39m[1m[31m is not supported[39m[0m
@@ -33,7 +33,7 @@ Lisette has no nil and models absence in the type system.
 
 ### Nil pointers
 
-Go's pointer type may or may not be nil. Lisette's pointer type is always non-nil, while a pointer that may be absent is typed as optional.
+Go's pointer type may or may not be nil. In Lisette, a pointer type is guaranteed non-nil, and a potentially absent one is typed as optional.
 
 ```go file="find.go"
 // func find(id int) *Person
@@ -57,7 +57,7 @@ match find(1) {
 
 ### Nil maps
 
-A Go map may be nil, which panics on write. Lisette reflects this in the incoming type.
+A Go map may be nil, which panics on write. Lisette reflects this optionality in the incoming type.
 
 ```lisette file="users.lis"
 // Go:  func (h Header) Clone() Header
@@ -108,7 +108,7 @@ match FindHandler("api") {
 
 ### Zero values
 
-Go zero-values an uninitialized variable, which blurs the difference between set and unset.
+Go zero-values an uninitialized variable. This blurs the difference between set and unset.
 
 ```go file="zero.go"
 // !callout-right `0`
@@ -179,7 +179,7 @@ let absent = scores.get("bob")
 
 ### Bad indexes
 
-An out-of-range index panics in Go. `Slice.get` and `Array.get` return an `Option` instead.
+An out-of-range index panics in Go. In Lisette, `Slice.get` and `Array.get` return an `Option` instead.
 
 ```lisette file="items.lis"
 match items.get(7) {
@@ -365,7 +365,7 @@ func (c Counter) Increment() {
 }
 ```
 
-In Lisette, a method that writes must declare `self` writable.
+In Lisette, a method that mutates must declare `self` writable with `mut`.
 
 ```lisette file="counter.lis"
 impl Counter {
@@ -458,7 +458,7 @@ if result > 0 {
 ```
 
 ```lisette file="let_mut.lis"
-// !callout-right declared
+// !callout-right declared, reassignable
 let mut result = step1()?
 if result > 0 {
   // !callout-right reassigned
