@@ -30,6 +30,7 @@ mod ineffective_omitempty;
 mod infallible_assertion;
 mod integer_division_to_zero;
 mod invisible_in_string;
+mod json_skipped_field;
 mod let_and_return;
 mod loop_runs_once;
 mod lost_cancel;
@@ -150,6 +151,7 @@ pub use integer_division_to_zero::check_integer_division_to_zero;
 pub use invisible_in_string::{
     check_invisible_in_string_expression, check_invisible_in_string_pattern,
 };
+pub use json_skipped_field::check_json_skipped_field;
 pub use let_and_return::check_let_and_return;
 pub use loop_runs_once::check_loop_runs_once;
 pub use lost_cancel::check_lost_cancel;

@@ -1624,6 +1624,61 @@ pub fn lost_query_mutation(span: &Span, method: &str) -> LisetteDiagnostic {
         ))
 }
 
+/// The direction of an `encoding/json` call.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JsonDirection {
+    /// `Marshal` and `MarshalIndent`.
+    Reads,
+    /// `Unmarshal`.
+    Fills,
+}
+
+/// `fields` pairs each skipped field's name with the span of its declaration.
+pub fn json_skipped_field(
+    span: &Span,
+    owner: &str,
+    fields: &[(&str, Span)],
+    direction: JsonDirection,
+) -> LisetteDiagnostic {
+    let names = quoted_names(fields);
+    let one = fields.len() == 1;
+    let title = if one {
+        "Field skipped by JSON"
+    } else {
+        "Fields skipped by JSON"
+    };
+    let label = match (direction, one) {
+        (JsonDirection::Reads, _) => format!("{names} will not be serialized"),
+        (JsonDirection::Fills, true) => format!("{names} will keep its current value"),
+        (JsonDirection::Fills, false) => format!("{names} will keep their current values"),
+    };
+    let rule = match direction {
+        JsonDirection::Reads => "Only `pub` fields are written to JSON",
+        JsonDirection::Fills => "Only `pub` fields are filled from JSON",
+    };
+    // The call anchors the diagnostic, so its label goes first.
+    let mut diagnostic = LisetteDiagnostic::warn(title)
+        .with_lint_code("json_skipped_field")
+        .with_span_label(span, label)
+        .with_help(format!(
+            "{rule}. Add `#[json]` to `{owner}`, or mark {names} as `pub`"
+        ));
+    for (_, declared_at) in fields {
+        diagnostic = diagnostic.with_span_label(declared_at, "declared without `pub`");
+    }
+    diagnostic
+}
+
+fn quoted_names(fields: &[(&str, Span)]) -> String {
+    let quoted: Vec<String> = fields.iter().map(|(name, _)| format!("`{name}`")).collect();
+    match quoted.as_slice() {
+        [only] => only.clone(),
+        [first, second] => format!("{first} and {second}"),
+        [rest @ .., last] => format!("{}, and {last}", rest.join(", ")),
+        [] => String::new(),
+    }
+}
+
 pub fn waitgroup_add_in_task(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("`WaitGroup.Add` inside a `task`")
         .with_lint_code("waitgroup_add_in_task")

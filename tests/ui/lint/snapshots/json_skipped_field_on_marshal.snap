@@ -1,0 +1,19 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Field skipped by JSON
+   ╭─[test.lis:6:3]
+ 5 │   pub host: string,
+ 6 │   port: int,
+   ·   ──┬─
+   ·     ╰── declared without `pub`
+ 7 │ }
+   ╰────
+    ╭─[test.lis:11:24]
+ 10 │   let c = Config { host: "localhost", port: 8080 }
+ 11 │   let _ = json.Marshal(c)
+    ·                        ┬
+    ·                        ╰── `port` will not be serialized
+ 12 │   let _ = c.port
+    ╰────
+  help: Only `pub` fields are written to JSON. Add `#[json]` to `Config`, or mark `port` as `pub` · code: [lint.json_skipped_field]
