@@ -33,28 +33,33 @@ pub fn Find(n: int, cmp: fn(int) -> int) -> Option<int>
 /// Not-a-number (NaN) values are ordered before other values.
 /// 
 /// Note: as of Go 1.22, this function simply calls [slices.Sort].
+#[go(superseded_by, "slices.Sort")]
 pub fn Float64s(x: mut Slice<float64>)
 
 /// Float64sAreSorted reports whether the slice x is sorted in increasing order,
 /// with not-a-number (NaN) values before any other values.
 /// 
 /// Note: as of Go 1.22, this function simply calls [slices.IsSorted].
+#[go(superseded_by, "slices.IsSorted")]
 pub fn Float64sAreSorted(x: Slice<float64>) -> bool
 
 /// Ints sorts a slice of ints in increasing order.
 /// 
 /// Note: as of Go 1.22, this function simply calls [slices.Sort].
+#[go(superseded_by, "slices.Sort")]
 pub fn Ints(x: mut Slice<int>)
 
 /// IntsAreSorted reports whether the slice x is sorted in increasing order.
 /// 
 /// Note: as of Go 1.22, this function simply calls [slices.IsSorted].
+#[go(superseded_by, "slices.IsSorted")]
 pub fn IntsAreSorted(x: Slice<int>) -> bool
 
 /// IsSorted reports whether data is sorted.
 /// 
 /// Note: in many situations, the newer [slices.IsSortedFunc] function is more
 /// ergonomic and runs faster.
+#[go(superseded_by, "slices.IsSortedFunc")]
 pub fn IsSorted(data: Interface) -> bool
 
 /// Reverse returns the reverse order for data.
@@ -141,6 +146,7 @@ pub fn SearchStrings(a: Slice<string>, x: string) -> int
 /// 
 /// Note: in many situations, the newer [slices.SortFunc] function is more
 /// ergonomic and runs faster.
+#[go(superseded_by, "slices.SortFunc")]
 pub fn Slice(x: mut Unknown, less: fn(int, int) -> bool)
 
 /// SliceIsSorted reports whether the slice x is sorted according to the provided less function.
@@ -148,6 +154,7 @@ pub fn Slice(x: mut Unknown, less: fn(int, int) -> bool)
 /// 
 /// Note: in many situations, the newer [slices.IsSortedFunc] function is more
 /// ergonomic and runs faster.
+#[go(superseded_by, "slices.IsSortedFunc")]
 pub fn SliceIsSorted(x: Unknown, less: fn(int, int) -> bool) -> bool
 
 /// SliceStable sorts the slice x using the provided less
@@ -159,6 +166,7 @@ pub fn SliceIsSorted(x: Unknown, less: fn(int, int) -> bool) -> bool
 /// 
 /// Note: in many situations, the newer [slices.SortStableFunc] function is more
 /// ergonomic and runs faster.
+#[go(superseded_by, "slices.SortStableFunc")]
 pub fn SliceStable(x: mut Unknown, less: fn(int, int) -> bool)
 
 /// Sort sorts data in ascending order as determined by the Less method.
@@ -167,6 +175,7 @@ pub fn SliceStable(x: mut Unknown, less: fn(int, int) -> bool)
 /// 
 /// Note: in many situations, the newer [slices.SortFunc] function is more
 /// ergonomic and runs faster.
+#[go(superseded_by, "slices.SortFunc")]
 pub fn Sort(data: Interface)
 
 /// Stable sorts data in ascending order as determined by the Less method,
@@ -182,11 +191,13 @@ pub fn Stable(data: Interface)
 /// Strings sorts a slice of strings in increasing order.
 /// 
 /// Note: as of Go 1.22, this function simply calls [slices.Sort].
+#[go(superseded_by, "slices.Sort")]
 pub fn Strings(x: mut Slice<string>)
 
 /// StringsAreSorted reports whether the slice x is sorted in increasing order.
 /// 
 /// Note: as of Go 1.22, this function simply calls [slices.IsSorted].
+#[go(superseded_by, "slices.IsSorted")]
 pub fn StringsAreSorted(x: Slice<string>) -> bool
 
 /// Float64Slice implements Interface for a []float64, sorting in increasing order,

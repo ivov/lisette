@@ -18247,6 +18247,77 @@ fn main() {
 }
 
 #[test]
+fn superseded_api_same_result() {
+    assert_lint_snapshot!(
+        r#"
+import "go:sort"
+
+fn main() {
+  let mut xs = [3, 1, 2]
+  sort.Ints(xs)
+}
+"#
+    );
+}
+
+#[test]
+fn superseded_api_newer_function() {
+    assert_lint_snapshot!(
+        r#"
+import "go:sort"
+
+fn main() {
+  let mut xs = [3, 1, 2]
+  sort.Slice(xs, |i, j| xs[i] < xs[j])
+}
+"#
+    );
+}
+
+#[test]
+fn superseded_api_replacement_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:slices"
+
+fn main() {
+  let mut xs = [3, 1, 2]
+  slices.Sort(xs)
+}
+"#
+    );
+}
+
+#[test]
+fn superseded_api_without_replacement_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:sort"
+
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = sort.SearchInts(xs, 2)
+}
+"#
+    );
+}
+
+#[test]
+fn superseded_api_allow_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:sort"
+
+#[allow(superseded_api)]
+fn main() {
+  let mut xs = [3, 1, 2]
+  sort.Ints(xs)
+}
+"#
+    );
+}
+
+#[test]
 fn lost_cancel_discarded() {
     assert_lint_snapshot!(
         r#"

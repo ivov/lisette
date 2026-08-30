@@ -68,6 +68,8 @@ type TypeOverrides struct {
 	// finite set, emitting #[go(closed_domain)]. Drives the out_of_domain_value lint.
 	// Curated, never auto-detected; mutually exclusive with bit_flag_set.
 	ClosedDomain map[string][]string `json:"closed_domain"`
+	// SupersededBy maps each superseded symbol to its successor as "pkg.Name". Curated, never derived.
+	SupersededBy map[string]map[string]string `json:"superseded_by"`
 	// Curated per type from Go's docs, never derived from field shape.
 	// ZeroSafe admits zero construction of types with no visible fields,
 	// which are refused by default. ZeroUnsafe denies it for structs with
@@ -343,6 +345,14 @@ func (c *Config) IsClosedDomain(pkg, typeName string) bool {
 		return false
 	}
 	return matchField(c.Overrides.Types.ClosedDomain, pkg, typeName, matchExact)
+}
+
+func (c *Config) SupersededBy(pkg, name string) (string, bool) {
+	if c == nil {
+		return "", false
+	}
+	successor, ok := c.Overrides.Types.SupersededBy[pkg][name]
+	return successor, ok
 }
 
 func (c *Config) IsCuratedZeroSafe(pkg, typeName string) bool {

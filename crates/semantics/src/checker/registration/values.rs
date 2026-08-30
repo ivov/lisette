@@ -167,6 +167,7 @@ impl TaskState {
                     go_hints: extract_attribute_flags(attributes, "go"),
                     go_name: extract_go_name(attributes),
                     go_type_param_recipe: extract_go_type_param_recipe(attributes),
+                    superseded_by: extract_go_superseded_by(attributes),
                 },
             },
         );
@@ -248,6 +249,7 @@ impl TaskState {
                     go_hints: vec![],
                     go_name: None,
                     go_type_param_recipe: None,
+                    superseded_by: None,
                 },
             },
         );
@@ -299,6 +301,7 @@ impl TaskState {
                     go_hints: vec![],
                     go_name: None,
                     go_type_param_recipe: None,
+                    superseded_by: None,
                 },
             },
         );

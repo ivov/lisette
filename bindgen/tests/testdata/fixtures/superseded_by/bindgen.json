@@ -1,0 +1,12 @@
+{
+  "overrides": {
+    "types": {
+      "superseded_by": {
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/superseded_by": {
+          "Ints": "slices.Sort",
+          "Sorter.Apply": "slices.SortFunc"
+        }
+      }
+    }
+  }
+}

@@ -10,6 +10,7 @@ const KNOWN_GO_HINTS: &[&str] = &[
     "hidden_embed",
     "hidden_fields",
     "sentinel_minus_one",
+    "superseded_by",
     "unexported",
     "value_method_set",
     "zero_safe",
@@ -47,6 +48,23 @@ pub(super) fn extract_go_type_param_recipe(attributes: &[Attribute]) -> Option<S
         .find_map(|a| {
             a.args.iter().find_map(|arg| match arg {
                 AttributeArg::String(recipe) => Some(recipe.clone()),
+                _ => None,
+            })
+        })
+}
+
+pub(super) fn extract_go_superseded_by(attributes: &[Attribute]) -> Option<String> {
+    attributes
+        .iter()
+        .filter(|a| a.name == "go")
+        .filter(|a| {
+            a.args
+                .iter()
+                .any(|arg| matches!(arg, AttributeArg::Flag(f) if f == "superseded_by"))
+        })
+        .find_map(|a| {
+            a.args.iter().find_map(|arg| match arg {
+                AttributeArg::String(successor) => Some(successor.clone()),
                 _ => None,
             })
         })

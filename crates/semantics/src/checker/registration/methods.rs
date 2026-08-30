@@ -11,7 +11,10 @@ use syntax::program::{
 };
 use syntax::types::{Bound, Symbol, Type, type_args_match_params, unqualified_name};
 
-use super::{extract_attribute_flags, has_recursive_instantiation, wrap_with_impl_generics};
+use super::{
+    extract_attribute_flags, extract_go_superseded_by, has_recursive_instantiation,
+    wrap_with_impl_generics,
+};
 use crate::checker::state::PendingInterfaceConflictCheck;
 use crate::checker::{TaskState, resolved_generic_bounds};
 use crate::store::Store;
@@ -419,6 +422,7 @@ impl TaskState {
                 doc: fn_doc.clone(),
                 allowed_lints: extract_attribute_flags(fn_attrs, "allow"),
                 go_hints: go_hints.clone(),
+                superseded_by: extract_go_superseded_by(fn_attrs),
             };
             if !self.try_register_instance_method(
                 store,
@@ -451,6 +455,7 @@ impl TaskState {
                         go_hints,
                         go_name: None,
                         go_type_param_recipe: None,
+                        superseded_by: extract_go_superseded_by(fn_attrs),
                     },
                 },
             );
@@ -572,6 +577,7 @@ impl TaskState {
                             doc: fn_doc,
                             allowed_lints: extract_attribute_flags(fn_attrs, "allow"),
                             go_hints,
+                            superseded_by: extract_go_superseded_by(fn_attrs),
                         },
                     )
                 })

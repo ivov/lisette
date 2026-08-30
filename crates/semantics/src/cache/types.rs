@@ -119,6 +119,7 @@ fn remap_definition_spans(definition: &mut Definition, remap: &mut impl FnMut(&m
             go_hints: _,
             go_name: _,
             go_type_param_recipe: _,
+            superseded_by: _,
         } => {}
     }
 }
@@ -179,6 +180,7 @@ fn remap_methods<'a>(
             doc: _,
             allowed_lints: _,
             go_hints: _,
+            superseded_by: _,
         } = method;
         if let Some(span) = name_span {
             remap(span);
@@ -266,6 +268,7 @@ mod tests {
                 go_hints: Vec::new(),
                 go_name: None,
                 go_type_param_recipe: None,
+                superseded_by: None,
             },
         };
 
@@ -301,6 +304,7 @@ mod tests {
                 doc: None,
                 allowed_lints: Vec::new(),
                 go_hints: Vec::new(),
+                superseded_by: None,
             },
         );
         let definition = Definition {

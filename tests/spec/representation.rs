@@ -505,6 +505,7 @@ fn value_definition(kind: ValueKind) -> Definition {
             go_hints: vec![],
             go_name: None,
             go_type_param_recipe: None,
+            superseded_by: None,
         },
     }
 }

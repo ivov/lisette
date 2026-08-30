@@ -473,6 +473,7 @@ mod tests {
             doc: None,
             allowed_lints: vec![],
             go_hints: vec![],
+            superseded_by: None,
         }
     }
 
