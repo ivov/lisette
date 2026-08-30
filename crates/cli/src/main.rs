@@ -26,7 +26,7 @@ fn main() {
         Err(command::ParseError::MissingArgument { command, argument }) => {
             cli_error!(
                 "Missing argument",
-                format!("`lis {}` requires `<{}>` argument", command, argument),
+                format!("`lis {}` requires `{}`", command, argument),
                 format!("Run `lis help {}` for usage", command)
             );
             process::exit(1);
