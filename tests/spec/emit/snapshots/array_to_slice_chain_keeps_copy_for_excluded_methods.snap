@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/arrays.rs
+description: |
+  
+  fn f(arr: Array<int, 3>) -> (Slice<int>, int, int, Slice<int>, Slice<int>) {
+    let doubled = arr.to_slice().map(|x| x * 2)
+    let stomped = arr.to_slice().copy_from([7, 8])
+    let room = arr.to_slice().capacity()
+    let grown = arr.to_slice().reserve(10)
+    let extended = arr.to_slice().append(4)
+    (doubled, stomped, room, grown, extended)
+  }
+---
+package main
+
+import "slices"
+
+func f(arr [3]int) ([]int, int, int, []int, []int) {
+	src_1 := slices.Clone(arr[:])
+	result_2 := make([]int, len(src_1))
+	for i_3, x := range src_1 {
+		result_2[i_3] = x * 2
+	}
+	doubled := result_2
+	stomped := copy(slices.Clone(arr[:]), []int{7, 8})
+	room := cap(slices.Clone(arr[:]))
+	grown := slices.Grow(slices.Clone(arr[:]), 10)
+	extended := append(slices.Clone(arr[:]), 4)
+	return doubled, stomped, room, grown, extended
+}

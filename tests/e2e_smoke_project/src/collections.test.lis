@@ -149,6 +149,29 @@ fn array_for_loop_and_to_slice() {
 }
 
 #[test]
+fn array_to_slice_chain_reads() {
+  let a: Array<int, 3> = [1, 2, 3]
+  assert a.to_slice().contains(2)
+  assert a.to_slice().equals([1, 2, 3])
+  assert a.to_slice().get(1).unwrap_or(-1) == 2
+  assert !a.to_slice().is_empty()
+  assert a.to_slice().clone().length() == 3
+  let names: Array<string, 2> = ["a", "b"]
+  assert names.to_slice().join("-") == "a-b"
+}
+
+#[test]
+fn array_to_slice_copies_before_arguments_run() {
+  let mut a: Array<int, 3> = [1, 2, 3]
+  let bump = || {
+    a[0] = 99
+    return 99
+  }
+  assert !a.to_slice().contains(bump())
+  assert a[0] == 99
+}
+
+#[test]
 fn array_direct_mutation() {
   let mut a: Array<int, 3> = [1, 2, 3]
   a[0] = 9

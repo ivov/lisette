@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/arrays.rs
+description: |
+  
+  fn f(arr: Array<int, 3>) -> bool {
+    !arr.to_slice().is_empty()
+  }
+---
+package main
+
+func f(arr [3]int) bool {
+	return len(arr[:]) != 0
+}

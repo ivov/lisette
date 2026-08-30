@@ -1,0 +1,41 @@
+---
+source: tests/spec/emit/arrays.rs
+description: |
+  
+  fn reads(arr: Array<int, 3>) -> (bool, bool, Option<int>, int, bool) {
+    let hit = arr.to_slice().contains(2)
+    let same = arr.to_slice().equals([1, 2, 3])
+    let second = arr.to_slice().get(1)
+    let n = arr.to_slice().length()
+    let blank = arr.to_slice().is_empty()
+    (hit, same, second, n, blank)
+  }
+  
+  fn copies(arr: Array<int, 3>, names: Array<string, 2>) -> (Slice<int>, string) {
+    let copy = arr.to_slice().clone()
+    let line = names.to_slice().join("-")
+    (copy, line)
+  }
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"slices"
+	"strings"
+)
+
+func reads(arr [3]int) (bool, bool, lisette.Option[int], int, bool) {
+	hit := slices.Contains(arr[:], 2)
+	same := slices.Equal(arr[:], []int{1, 2, 3})
+	second := lisette.SliceGet(arr[:], 1)
+	n := len(arr[:])
+	blank := len(arr[:]) == 0
+	return hit, same, second, n, blank
+}
+
+func copies(arr [3]int, names [2]string) ([]int, string) {
+	copy_ := slices.Clone(arr[:])
+	line := strings.Join(names[:], "-")
+	return copy_, line
+}

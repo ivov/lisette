@@ -264,9 +264,19 @@ impl Planner<'_> {
         function: &Expression,
         args: &[Expression],
     ) -> Vec<ValuePlan> {
+        self.stage_native_method_args_from(function, args, 0)
+    }
+
+    pub(crate) fn stage_native_method_args_from(
+        &mut self,
+        function: &Expression,
+        args: &[Expression],
+        start_index: usize,
+    ) -> Vec<ValuePlan> {
         let params = self.resolve_callable_params(function, args.len());
         args.iter()
             .enumerate()
+            .skip(start_index)
             .map(|(i, arg)| {
                 let param = params.get(i).or_else(|| {
                     params

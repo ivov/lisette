@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/arrays.rs
+description: |
+  
+  fn make_arr() -> Array<int, 3> {
+    [7, 8, 9]
+  }
+  
+  fn f() -> bool {
+    make_arr().to_slice().contains(8)
+  }
+---
+package main
+
+import "slices"
+
+func makeArr() [3]int {
+	return [3]int{7, 8, 9}
+}
+
+func f() bool {
+	arr_1 := makeArr()
+	return slices.Contains(arr_1[:], 8)
+}

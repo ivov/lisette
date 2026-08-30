@@ -6,7 +6,7 @@ use crate::expressions::access::index_access::range_var_bounds;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::plan_variadic_spread;
-use crate::plan::values::{CaptureBoundary, EvaluationEffect, ValuePlan};
+use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
 use crate::statements::assignments::lvalues_match;
 use crate::types::native::NativeGoType;
 use crate::utils::reads_mutable_operand;
@@ -308,6 +308,10 @@ fn is_fresh_slice_value(receiver: &Expression) -> bool {
                     _ => false,
                 }
             }
+            CallKind::NativeMethod(NativeTypeKind::Array)
+            | CallKind::NativeMethodIdentifier(NativeTypeKind::Array) => {
+                extract_native_method_name(callee.unwrap_parens()) == "to_slice"
+            }
             _ => false,
         },
         _ => false,
@@ -380,6 +384,56 @@ pub(super) fn try_inline_native_method(
 
 fn is_native_array_method(method: &str) -> bool {
     matches!(method, "to_slice" | "get")
+}
+
+/// Reads the receiver, runs no user code, and returns no view of it.
+fn slice_method_reads_elements_only(method: &str, arity: usize) -> bool {
+    matches!(
+        (method, arity),
+        ("length", 0)
+            | ("is_empty", 0)
+            | ("clone", 0)
+            | ("get", 1)
+            | ("contains", 1)
+            | ("equals", 1)
+            | ("join", 1)
+    )
+}
+
+fn contains_call_expression(expression: &Expression) -> bool {
+    matches!(
+        expression,
+        Expression::Call { .. } | Expression::Task { .. }
+    ) || expression
+        .children()
+        .into_iter()
+        .any(contains_call_expression)
+}
+
+fn array_to_slice_receiver(expression: &Expression) -> Option<&Expression> {
+    let Expression::Call {
+        expression: callee,
+        args,
+        spread,
+        call_kind,
+        ..
+    } = expression.unwrap_parens()
+    else {
+        return None;
+    };
+    if spread.is_some() || extract_native_method_name(callee.unwrap_parens()) != "to_slice" {
+        return None;
+    }
+    match call_kind {
+        CallKind::NativeMethod(NativeTypeKind::Array) if args.is_empty() => {
+            match callee.unwrap_parens() {
+                Expression::DotAccess { expression, .. } => Some(expression),
+                _ => None,
+            }
+        }
+        CallKind::NativeMethodIdentifier(NativeTypeKind::Array) if args.len() == 1 => args.first(),
+        _ => None,
+    }
 }
 
 pub(super) fn native_method_lowers_to_plain_call(
@@ -744,6 +798,65 @@ impl Planner<'_> {
         }
     }
 
+    /// Stage `to_slice()` as `arr[:]` when the consumer cannot observe the skipped clone.
+    fn try_stage_to_slice_view(
+        &mut self,
+        ctx: &NativeCallContext,
+        receiver_expression: &Expression,
+        arguments: &[Expression],
+    ) -> Option<ValuePlan> {
+        if !matches!(ctx.native_type, NativeGoType::Slice) {
+            return None;
+        }
+        if !matches!(
+            ctx.capture_boundary,
+            CaptureBoundary::SiblingSequence | CaptureBoundary::AssignmentRightHandSide
+        ) {
+            return None;
+        }
+        if ctx.spread.is_some()
+            || !slice_method_reads_elements_only(ctx.method, arguments.len())
+            || arguments.iter().any(contains_call_expression)
+        {
+            return None;
+        }
+        let array = array_to_slice_receiver(receiver_expression)?;
+        if !matches!(
+            self.facts.strip_and_peel(&array.get_type()),
+            Type::Array { .. }
+        ) {
+            return None;
+        }
+        if matches!(ctx.method, "contains" | "equals") {
+            let element = self
+                .facts
+                .strip_and_peel(&receiver_expression.get_type())
+                .inner()?;
+            if self.needs_custom_equality(&element, &[]) {
+                return None;
+            }
+        }
+        Some(self.stage_array_view(array))
+    }
+
+    fn stage_array_view(&mut self, array: &Expression) -> ValuePlan {
+        let mut staged = self.stage_operand(array, ExpressionContext::value());
+        if array.get_type().is_ref() {
+            staged = staged.unary("*");
+        }
+        if !self.receiver_is_addressable(array) {
+            self.pin_staged(&mut staged, "arr");
+        }
+        staged.map_rendered_as_observable_computed(|_setup, rendered, deferred| {
+            let base = if rendered.starts_with('*') {
+                format!("({rendered})")
+            } else {
+                rendered
+            };
+            GoExpression::opaque_with_deferred_evaluation(format!("{base}[:]"), deferred)
+        })
+    }
+
     fn stage_native_method(
         &mut self,
         ctx: &NativeCallContext,
@@ -751,14 +864,29 @@ impl Planner<'_> {
     ) -> StagedNativeMethod {
         let (receiver, mut stages) = match (form, ctx.function) {
             (NativeMethodForm::Dot, Expression::DotAccess { expression, .. }) => {
-                let mut stages = vec![self.stage_operand(expression, ExpressionContext::value())];
+                let receiver_stage = self
+                    .try_stage_to_slice_view(ctx, expression, ctx.args)
+                    .unwrap_or_else(|| self.stage_operand(expression, ExpressionContext::value()));
+                let mut stages = vec![receiver_stage];
                 stages.extend(self.stage_native_method_args(ctx.function, ctx.args));
                 (expression.as_ref(), stages)
             }
-            (NativeMethodForm::Identifier, _) => (
-                &ctx.args[0],
-                self.stage_native_method_args(ctx.function, ctx.args),
-            ),
+            (NativeMethodForm::Identifier, _) => {
+                let receiver = &ctx.args[0];
+                let stages = match self.try_stage_to_slice_view(ctx, receiver, &ctx.args[1..]) {
+                    Some(view) => {
+                        let mut stages = vec![view];
+                        stages.extend(self.stage_native_method_args_from(
+                            ctx.function,
+                            ctx.args,
+                            1,
+                        ));
+                        stages
+                    }
+                    None => self.stage_native_method_args(ctx.function, ctx.args),
+                };
+                (receiver, stages)
+            }
             (NativeMethodForm::Dot, _) => unreachable!("dot form requires dot access"),
         };
         let spread_stage = ctx

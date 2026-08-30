@@ -583,3 +583,164 @@ fn f(arr: Array<fn(int) -> (), 3>) -> Array<fn(int) -> (), 2> {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn array_to_slice_chain_skips_copy_for_reading_methods() {
+    let input = r#"
+fn reads(arr: Array<int, 3>) -> (bool, bool, Option<int>, int, bool) {
+  let hit = arr.to_slice().contains(2)
+  let same = arr.to_slice().equals([1, 2, 3])
+  let second = arr.to_slice().get(1)
+  let n = arr.to_slice().length()
+  let blank = arr.to_slice().is_empty()
+  (hit, same, second, n, blank)
+}
+
+fn copies(arr: Array<int, 3>, names: Array<string, 2>) -> (Slice<int>, string) {
+  let copy = arr.to_slice().clone()
+  let line = names.to_slice().join("-")
+  (copy, line)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn array_to_slice_chain_skip_identifier_form() {
+    let input = r#"
+fn f(arr: Array<int, 3>) -> bool {
+  Slice.contains(Array.to_slice(arr), 2)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn array_to_slice_chain_skip_negated_is_empty() {
+    let input = r#"
+fn f(arr: Array<int, 3>) -> bool {
+  !arr.to_slice().is_empty()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn array_to_slice_chain_skip_through_alias_and_ref() {
+    let input = r#"
+type Addr = Array<byte, 4>
+
+fn alias_receiver(a: Addr) -> bool {
+  a.to_slice().contains(2)
+}
+
+fn ref_receiver(a: Ref<Array<int, 3>>) -> bool {
+  a.to_slice().contains(2)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn array_to_slice_chain_skip_hoists_unaddressable_receiver() {
+    let input = r#"
+fn make_arr() -> Array<int, 3> {
+  [7, 8, 9]
+}
+
+fn f() -> bool {
+  make_arr().to_slice().contains(8)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn array_to_slice_chain_keeps_copy_when_argument_calls() {
+    let input = r#"
+fn f() -> bool {
+  let mut arr: Array<int, 3> = [1, 2, 3]
+  let bump = || {
+    arr[0] = 99
+    return 99
+  }
+  arr.to_slice().contains(bump())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn array_to_slice_chain_keeps_copy_for_custom_equality() {
+    let input = r#"
+struct Point {
+  x: int,
+}
+
+impl Point {
+  fn equals(self, other: Point) -> bool {
+    self.x == other.x
+  }
+}
+
+fn user_equals(pts: Array<Point, 2>, want: Point) -> bool {
+  pts.to_slice().contains(want)
+}
+
+fn nested_containers(rows: Array<Slice<int>, 2>, want: Slice<int>) -> bool {
+  rows.to_slice().contains(want)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn array_to_slice_chain_keeps_copy_for_excluded_methods() {
+    let input = r#"
+fn f(arr: Array<int, 3>) -> (Slice<int>, int, int, Slice<int>, Slice<int>) {
+  let doubled = arr.to_slice().map(|x| x * 2)
+  let stomped = arr.to_slice().copy_from([7, 8])
+  let room = arr.to_slice().capacity()
+  let grown = arr.to_slice().reserve(10)
+  let extended = arr.to_slice().append(4)
+  (doubled, stomped, room, grown, extended)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn array_to_slice_chain_keeps_copy_when_deferred_directly() {
+    let input = r#"
+fn f() {
+  let mut arr: Array<int, 3> = [1, 2, 3]
+  defer arr.to_slice().contains(2)
+  task arr.to_slice().contains(3)
+  arr[0] = 99
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn array_to_slice_chain_skips_copy_in_async_arguments_and_blocks() {
+    let input = r#"
+fn consume(hit: bool) {
+  let _ = hit
+}
+
+fn f() {
+  let mut arr: Array<int, 3> = [1, 2, 3]
+  defer consume(arr.to_slice().contains(2))
+  task consume(arr.to_slice().contains(3))
+  defer {
+    consume(arr.to_slice().contains(2))
+  }
+  task {
+    consume(arr.to_slice().contains(3))
+  }
+  arr[0] = 99
+}
+"#;
+    assert_emit_snapshot!(input);
+}
