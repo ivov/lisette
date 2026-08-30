@@ -50,7 +50,7 @@ pub fn is_go_present() -> bool {
 }
 
 pub fn go_mod_version() -> String {
-    let parts: Vec<&str> = GO_VERSION.split('.').collect();
+    let parts: Vec<&str> = GO_TOOLCHAIN_VERSION.split('.').collect();
     format!(
         "{}.{}",
         parts.first().unwrap_or(&"1"),
@@ -89,7 +89,7 @@ fn go_status() -> GoStatus {
     let major: u32 = major.parse().unwrap_or(0);
     let minor: u32 = minor.parse().unwrap_or(0);
 
-    let min_parts: Vec<&str> = GO_VERSION.split('.').collect();
+    let min_parts: Vec<&str> = GO_TOOLCHAIN_VERSION.split('.').collect();
     let min_major: u32 = min_parts.first().and_then(|s| s.parse().ok()).unwrap_or(1);
     let min_minor: u32 = min_parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);
 

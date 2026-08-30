@@ -256,8 +256,8 @@ fn go_run(dir: &GoDir) -> Result<String, String> {
 }
 
 fn write_go_mod(dir: &Path, module: &str, with_prelude: bool) -> Result<(), String> {
-    let go_version = go_version();
-    let mut content = format!("module {module}\n\ngo {go_version}\n");
+    let go_toolchain = go_toolchain();
+    let mut content = format!("module {module}\n\ngo {go_toolchain}\n");
     if with_prelude {
         let prelude = prelude_dir()
             .canonicalize()
@@ -281,8 +281,9 @@ fn prelude_dir() -> PathBuf {
     repo_root().join("prelude")
 }
 
-fn go_version() -> String {
-    let raw = fs::read_to_string(repo_root().join("go-version")).unwrap_or_else(|_| "1.25".into());
+fn go_toolchain() -> String {
+    let raw =
+        fs::read_to_string(repo_root().join("go-toolchain")).unwrap_or_else(|_| "1.25".into());
     let trimmed = raw.trim();
     let mut parts = trimmed.split('.');
     let major = parts.next().unwrap_or("1");

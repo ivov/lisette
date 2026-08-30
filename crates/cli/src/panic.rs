@@ -58,7 +58,7 @@ Include the following data, and add a minimal way to reproduce if you can.
   Backtrace:
 {red}{backtrace}{reset}
 
-Lisette {version} · Go {go_version} · {os}/{arch}"#,
+Lisette {version} · Go {go_toolchain} · {os}/{arch}"#,
         badge = badge,
         red = if use_color { "\x1b[31m" } else { "" },
         blue = if use_color { "\x1b[34m" } else { "" },
@@ -67,7 +67,7 @@ Lisette {version} · Go {go_version} · {os}/{arch}"#,
         location = location,
         backtrace = backtrace,
         version = env!("CARGO_PKG_VERSION"),
-        go_version = GO_VERSION,
+        go_toolchain = GO_TOOLCHAIN_VERSION,
         os = consts::OS,
         arch = consts::ARCH,
     );

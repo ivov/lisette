@@ -278,10 +278,10 @@ pub fn write_subpackage(
     Ok(())
 }
 
-pub fn write_go_mod(target_dir: &Path, prelude_path: &Path, go_version: &str) -> io::Result<()> {
+pub fn write_go_mod(target_dir: &Path, prelude_path: &Path, go_toolchain: &str) -> io::Result<()> {
     let abs = prelude_path.canonicalize()?;
     let content = format!(
-        "module {GO_MODULE}\n\ngo {go_version}\n\nrequire {PRELUDE_IMPORT_PATH} v0.0.0\n\nreplace {PRELUDE_IMPORT_PATH} => {}\n",
+        "module {GO_MODULE}\n\ngo {go_toolchain}\n\nrequire {PRELUDE_IMPORT_PATH} v0.0.0\n\nreplace {PRELUDE_IMPORT_PATH} => {}\n",
         abs.display()
     );
     fs::write(target_dir.join("go.mod"), content)
@@ -381,8 +381,8 @@ pub fn read_skip_list() -> HashSet<String> {
         .collect()
 }
 
-pub fn read_go_version() -> io::Result<String> {
-    let v = fs::read_to_string(repo_root().join("go-version"))?;
+pub fn read_go_toolchain() -> io::Result<String> {
+    let v = fs::read_to_string(repo_root().join("go-toolchain"))?;
     let trimmed = v.trim();
     let mut parts = trimmed.split('.');
     let major = parts.next().unwrap_or("1");

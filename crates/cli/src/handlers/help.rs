@@ -361,5 +361,5 @@ Upgrade the compiler, or show the upgrade command for the tool that installed it
 }
 
 pub fn print_version() {
-    println!("lis {} (go {})", VERSION, GO_VERSION);
+    println!("lis {} (go {})", VERSION, GO_TOOLCHAIN_VERSION);
 }

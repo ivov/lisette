@@ -85,7 +85,7 @@ func RunPkgs(args []string, defaultCfgJSON []byte) {
 		os.Exit(1)
 	}
 
-	manifest := GeneratePkgs(pkgPaths, effectiveVersion, goVersion, &cfg, *transitive, target)
+	manifest := GeneratePkgs(pkgPaths, effectiveVersion, goToolchainVersion, &cfg, *transitive, target)
 
 	if err := json.NewEncoder(os.Stdout).Encode(manifest); err != nil {
 		fmt.Fprintf(os.Stderr, "bindgen: failed to encode manifest: %v\n", err)
@@ -93,7 +93,7 @@ func RunPkgs(args []string, defaultCfgJSON []byte) {
 	}
 }
 
-func GeneratePkgs(pkgPaths []string, lisetteVersion, goVersion string, cfg *config.Config, transitive bool, target Target) Manifest {
+func GeneratePkgs(pkgPaths []string, lisetteVersion, goToolchainVersion string, cfg *config.Config, transitive bool, target Target) Manifest {
 	manifest := Manifest{
 		Ok:     make([]ManifestOk, 0, len(pkgPaths)),
 		Errors: make([]ManifestError, 0),
@@ -207,10 +207,10 @@ func GeneratePkgs(pkgPaths []string, lisetteVersion, goVersion string, cfg *conf
 					}
 				}()
 				if len(pkg.Errors) > 0 {
-					stub := generateUnloadableStub(pkgPath, pkg, lisetteVersion, goVersion)
+					stub := generateUnloadableStub(pkgPath, pkg, lisetteVersion, goToolchainVersion)
 					wave[i] = waveResult{ok: ManifestOk{Package: pkgPath, Content: stub.Content, Stubbed: true}}
 				} else {
-					result := generateFromPackage(pkg, pkgPath, lisetteVersion, goVersion, cfg, nilness, mutation, divergence)
+					result := generateFromPackage(pkg, pkgPath, lisetteVersion, goToolchainVersion, cfg, nilness, mutation, divergence)
 					wave[i] = waveResult{
 						ok:      ManifestOk{Package: pkgPath, Content: result.Content, Stubbed: false},
 						imports: result.ExternalImports,

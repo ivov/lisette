@@ -20,18 +20,9 @@ pre-commit:
     check-stdlib-drift:
       glob: "bindgen/**/*.go"
       run: just check-stdlib-drift
-    go-version-sync:
-      glob: "{go-version,prelude/go.mod,bindgen/go.mod,bindgen/internal/cli/metadata/go-version,crates/cli/go-version}"
-      run: |
-        EXPECTED=$(cat go-version | cut -d. -f1,2)
-        PRELUDE=$(grep '^go ' prelude/go.mod | awk '{print $2}')
-        BINDGEN=$(grep '^go ' bindgen/go.mod | awk '{print $2}' | cut -d. -f1,2)
-        EMBEDDED=$(cat bindgen/internal/cli/metadata/go-version | tr -d '[:space:]')
-        CLI=$(cat crates/cli/go-version | tr -d '[:space:]')
-        [ "$EXPECTED" = "$PRELUDE" ] || { echo "Go version mismatch: go-version has $EXPECTED but prelude/go.mod has $PRELUDE"; exit 1; }
-        [ "$EXPECTED" = "$BINDGEN" ] || { echo "Go version mismatch: go-version has $EXPECTED but bindgen/go.mod has $BINDGEN"; exit 1; }
-        [ "$(cat go-version | tr -d '[:space:]')" = "$EMBEDDED" ] || { echo "Go version mismatch: go-version has $(cat go-version) but bindgen metadata has $EMBEDDED"; exit 1; }
-        [ "$(cat go-version | tr -d '[:space:]')" = "$CLI" ] || { echo "Go version mismatch: go-version has $(cat go-version) but crates/cli/go-version has $CLI"; exit 1; }
+    go-versions-sync:
+      glob: "{go-toolchain,prelude/go.mod,bindgen/go.mod,bindgen/internal/cli/metadata/go-toolchain,crates/cli/go-toolchain}"
+      run: ./scripts/check-go-versions.sh
     tree-sitter-sync:
       glob: "editors/tree-sitter-lisette/{grammar.js,queries/**/*,src/**/*}"
       root: "editors/tree-sitter-lisette"
