@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788092755355,
+  "lastUpdate": 1788109944026,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -29995,6 +29995,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "emit",
             "value": 32069,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27597,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 18881,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14883,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13590,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8525,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6029,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2907,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1850,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 736,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9424,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "93b831001ef8b1696bdb6749c6f1033143e2c63f",
+          "message": "perf: skip intermediate copy in `Array.to_slice()` chains (#1361)",
+          "timestamp": "2026-08-30T19:11:56+02:00",
+          "tree_id": "a11d94c9d4e7a8eea4dbd9f2172a823e2957e680",
+          "url": "https://github.com/ivov/lisette/commit/93b831001ef8b1696bdb6749c6f1033143e2c63f"
+        },
+        "date": 1788109942438,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 137546,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32205,
             "unit": "lines"
           },
           {
