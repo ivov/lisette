@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/arrays.rs
+description: |
+  
+  fn make(xs: Slice<Option<int>>) -> Option<Array<Option<int>, 2>> {
+    Array.from(xs)
+  }
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func make_(xs []lisette.Option[int]) ([2]lisette.Option[int], bool) {
+	return func(s []lisette.Option[int]) ([2]lisette.Option[int], bool) {
+		if len(s) != 2 {
+			return [2]lisette.Option[int]{}, false
+		}
+		return ([2]lisette.Option[int])(s), true
+	}(xs)
+}

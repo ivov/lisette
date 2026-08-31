@@ -1,0 +1,39 @@
+---
+source: tests/spec/emit/arrays.rs
+description: |
+  
+  enum Colour { Red, Green }
+  
+  fn make(xs: Slice<Colour>) -> Option<Array<Colour, 2>> {
+    Array.from(xs)
+  }
+---
+package main
+
+func MakeColourRed() Colour {
+	return Colour{Tag: ColourRed}
+}
+
+func MakeColourGreen() Colour {
+	return Colour{Tag: ColourGreen}
+}
+
+type ColourTag int
+
+const (
+	ColourRed ColourTag = iota
+	ColourGreen
+)
+
+type Colour struct {
+	Tag ColourTag
+}
+
+func make_(xs []Colour) ([2]Colour, bool) {
+	return func(s []Colour) ([2]Colour, bool) {
+		if len(s) != 2 {
+			return [2]Colour{}, false
+		}
+		return ([2]Colour)(s), true
+	}(xs)
+}

@@ -247,6 +247,7 @@ impl NativeTypeKind {
             "Channel.new" | "Channel.buffered" => Some(Self::Channel),
             "Map.new" => Some(Self::Map),
             "Slice.new" | "Slice.make" => Some(Self::Slice),
+            "Array.new" | "Array.from" => Some(Self::Array),
             _ => None,
         }
     }

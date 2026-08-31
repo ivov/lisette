@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/arrays.rs
+description: |
+  
+  type Buffer = Slice<byte>
+  
+  fn head(b: Buffer) -> Option<Array<byte, 2>> {
+    Array.from(b[0..2])
+  }
+---
+package main
+
+type Buffer = []byte
+
+func head(b Buffer) ([2]byte, bool) {
+	return func(s []byte) ([2]byte, bool) {
+		if len(s) != 2 {
+			return [2]byte{}, false
+		}
+		return ([2]byte)(s), true
+	}(b[0:2:2])
+}

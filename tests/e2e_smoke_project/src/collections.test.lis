@@ -112,6 +112,8 @@ struct Mixer {
   pub lanes: Array<int, LANE_COUNT>
 }
 
+enum Colour { Red, Green }
+
 #[test]
 fn array_size_from_constant() {
   let mixer = Mixer { lanes: Array.new<int, LANE_COUNT>() }
@@ -190,6 +192,65 @@ fn array_mutation_through_ref() {
 fn array_new_fills_option_with_none() {
   let a = Array.new<Option<int>, 2>()
   assert a[0].unwrap_or(-99) == -99
+}
+
+#[test]
+fn array_from_matches_exact_length() {
+  let exact: Option<Array<int, 3>> = Array.from([1, 2, 3])
+  let head = if let Some(a) = exact { a[0] + a[2] } else { -1 }
+  assert head == 4
+  let short: Option<Array<int, 3>> = Array.from([1, 2])
+  assert short.is_none()
+  let long: Option<Array<int, 3>> = Array.from([1, 2, 3, 4])
+  assert long.is_none()
+}
+
+#[test]
+fn array_from_copies_the_source() {
+  let mut source = [1, 2, 3]
+  let copied = Array.from<int, 3>(source)
+  source[0] = 99
+  let first = if let Some(a) = copied { a[0] } else { -1 }
+  assert first == 1
+}
+
+#[test]
+fn array_from_builds_an_element_without_a_zero() {
+  let mut colours = Slice.new<Colour>()
+  colours = colours.append(Colour.Red)
+  colours = colours.append(Colour.Green)
+  let matched = if let Some(a) = Array.from<Colour, 2>(colours) {
+    a[0] == Colour.Red && a[1] == Colour.Green
+  } else {
+    false
+  }
+  assert matched
+}
+
+#[test]
+fn array_from_function_element() {
+  let fs: Slice<fn(int) -> int> = [|x| x + 1, |y| y * 2]
+  let called = if let Some(a) = Array.from<fn(int) -> int, 2>(fs) {
+    a[0](10) + a[1](10)
+  } else {
+    -1
+  }
+  assert called == 31
+}
+
+#[test]
+fn array_from_zero_length_accepts_only_an_empty_slice() {
+  let empty: Option<Array<int, 0>> = Array.from(Slice.new<int>())
+  assert empty.is_some()
+  let filled: Option<Array<int, 0>> = Array.from([1])
+  assert filled.is_none()
+}
+
+#[test]
+fn array_from_named_constant_size() {
+  let lanes: Option<Array<int, LANE_COUNT>> = Array.from([4, 5, 6])
+  let size = if let Some(a) = lanes { a.length() } else { -1 }
+  assert size == 3
 }
 
 #[test]

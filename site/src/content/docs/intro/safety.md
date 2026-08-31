@@ -295,6 +295,28 @@ fn get_request_id(ctx: context.Context) -> Option<string> {
 
 📚 See [Unknown](/docs/prelude/types/#unknown)
 
+### Panicking conversions
+
+Go converts a slice to a fixed-size array without a length check, and panics when the slice is too short.
+
+```go file="addr.go"
+func addr(b []byte) [4]byte {
+    // !callout-error-right panic: cannot convert slice with length 2 to array with length 4
+    return [4]byte(b)
+}
+```
+
+In Lisette, `Array.from` reports the length mismatch as `None`.
+
+```lisette file="addr.lis"
+fn addr(b: Slice<byte>) -> Option<Array<byte, 4>> {
+  // !callout[/from/] `Some([1, 2, 3, 4])`, or `None` unless `b` holds exactly 4
+  Array.from(b)
+}
+```
+
+📚 See [Array](/docs/prelude/array/)
+
 ## Unintended writes
 
 ### Silent mutation

@@ -1915,7 +1915,7 @@ fn main() {
 }
 
 #[test]
-fn completion_array_type_dot_offers_new() {
+fn completion_array_type_dot_offers_constructors() {
     let mut client = TestClient::new();
     client.initialize();
 
@@ -1932,6 +1932,10 @@ fn main() {
     assert!(
         labels.iter().any(|l| l == "new"),
         "Array type dot should offer 'new', got: {labels:?}"
+    );
+    assert!(
+        labels.iter().any(|l| l == "from"),
+        "Array type dot should offer 'from', got: {labels:?}"
     );
 
     client.shutdown();

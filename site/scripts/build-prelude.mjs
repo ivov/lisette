@@ -482,7 +482,37 @@ const checkCoverage = (items, pages) => {
   if (missing.length) throw new Error(`prelude: no page covers: ${missing.join(", ")}`);
 };
 
+const INLINE_ARRAY_CONSTRUCTORS = [
+  {
+    name: "new",
+    signature: "fn new() -> Array<T, N>",
+    doc: {
+      text: "Creates an array of `N` zero values.",
+      example: ["// !callout-right `[0, 0, 0]`", "let scores = Array.new<int, 3>()"].join("\n"),
+    },
+  },
+  {
+    name: "from",
+    signature: "fn from(slice: Slice<T>) -> Option<Array<T, N>>",
+    doc: {
+      text:
+        "Copies a `Slice` into a new `Array`, or returns `None` when the `Slice` does not hold " +
+        "exactly `N` elements.",
+      example: [
+        "let parts = [1, 2, 3]",
+        "// !callout[/from/] `Some([1, 2, 3])`, or `None` on a length mismatch",
+        "let fixed: Option<Array<int, 3>> = Array.from(parts)",
+      ].join("\n"),
+    },
+  },
+].map((member) => ({ ...member, implementation: "impl<T> Array<T>", availableOn: null }));
+
 const items = new Map(parse(readFileSync(SOURCE, "utf8")));
+
+const array = items.get("Array");
+if (!array) throw new Error("prelude: Array is missing, so its constructors have no owner");
+array.members.unshift(...INLINE_ARRAY_CONSTRUCTORS);
+
 checkCoverage(items, PAGES);
 
 // Removed wholesale, so a page dropped from PAGES leaves no orphan behind.

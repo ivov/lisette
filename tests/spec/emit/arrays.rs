@@ -744,3 +744,127 @@ fn f() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn array_from_turbofish() {
+    let input = r#"
+fn make(xs: Slice<int>) -> Option<Array<int, 3>> {
+  Array.from<int, 3>(xs)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn array_from_from_annotation() {
+    let input = r#"
+fn make(xs: Slice<int>) -> Option<Array<int, 3>> {
+  Array.from(xs)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn array_from_zero_length() {
+    let input = r#"
+fn make(xs: Slice<int>) -> Option<Array<int, 0>> {
+  Array.from(xs)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn array_from_element_without_zero() {
+    let input = r#"
+enum Colour { Red, Green }
+
+fn make(xs: Slice<Colour>) -> Option<Array<Colour, 2>> {
+  Array.from(xs)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn array_from_function_element_parenthesizes_the_conversion() {
+    let input = r#"
+fn make(xs: Slice<fn(int) -> int>) -> Option<Array<fn(int) -> int, 2>> {
+  Array.from(xs)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn array_from_option_element() {
+    let input = r#"
+fn make(xs: Slice<Option<int>>) -> Option<Array<Option<int>, 2>> {
+  Array.from(xs)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn array_from_in_match_binds_comma_ok_pair() {
+    let input = r#"
+fn first(xs: Slice<int>) -> int {
+  match Array.from<int, 3>(xs) {
+    Some(a) => a[0],
+    None => 0,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn array_from_propagates_with_question_mark() {
+    let input = r#"
+fn first(xs: Slice<int>) -> Option<int> {
+  let a = Array.from<int, 3>(xs)?
+  Some(a[0])
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn array_from_stages_an_effectful_argument() {
+    let input = r#"
+fn grow(seen: mut Slice<int>) -> Slice<int> {
+  seen.append(1)
+}
+
+fn f(seen: mut Slice<int>) -> Option<Array<int, 1>> {
+  Array.from(grow(seen))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn array_from_named_constant_size() {
+    let input = r#"
+const SIZE = 3
+
+fn make(xs: Slice<int>) -> Option<Array<int, SIZE>> {
+  Array.from(xs)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn array_from_slice_alias_argument() {
+    let input = r#"
+type Buffer = Slice<byte>
+
+fn head(b: Buffer) -> Option<Array<byte, 2>> {
+  Array.from(b[0..2])
+}
+"#;
+    assert_emit_snapshot!(input);
+}

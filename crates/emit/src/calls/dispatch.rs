@@ -14,6 +14,7 @@ use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::{CallPlan, CallableOrigin};
 use crate::plan::values::{CaptureBoundary, EvaluationEffect, GoExpression, ValuePlan};
+use crate::types::go_type::render_conversion;
 use crate::types::native::NativeGoType;
 use syntax::EcoString;
 use syntax::ast::{Expression, Literal, ResolvedCallTypeArguments, StructFields};
@@ -271,8 +272,46 @@ impl<'a> Planner<'a> {
                     None
                 }
             }
+            (NativeGoType::Array, "from") => self.try_lower_array_from(ctx),
             _ => None,
         }
+    }
+
+    /// Lower `Array.from<T, N>(slice)` to a length-guarded comma-ok pair.
+    fn try_lower_array_from(&mut self, ctx: &NativeCallContext) -> Option<ValuePlan> {
+        // A comma-ok context passes no `call_ty`, so fall back to the callee.
+        let callee_ty = ctx.function.get_type();
+        let returned = callee_ty
+            .as_function_type()
+            .map(|f| f.return_type.as_ref())
+            .or(ctx.call_ty)?;
+        let option_ty = self.facts.peel_alias(returned);
+        let inner = option_ty.get_type_params()?.first()?;
+        let Type::Array { length, element } = self.facts.peel_alias(inner) else {
+            return None;
+        };
+        let argument = ctx.args.first()?;
+
+        let element_go = self.use_go_type(&element);
+        let array_go = format!("[{length}]{element_go}");
+
+        let staged = self.stage_operand(argument, ExpressionContext::value());
+        let argument_effect = staged.evaluation.effect;
+        let (setup, source) = staged.into_parts();
+
+        // A function element makes `[N]func(...)(s)` parse as a type.
+        let conversion = render_conversion(&array_go, "s");
+        let value = GoExpression::opaque(format!(
+            "func(s []{element_go}) ({array_go}, bool) {{ \
+             if len(s) != {length} {{ return {array_go}{{}}, false }}; \
+             return {conversion}, true }}({source})"
+        ));
+
+        Some(ValuePlan::observable_call(
+            setup,
+            value,
+            self.native_constructor_effect(ctx, argument_effect),
+        ))
     }
 
     fn try_lower_map_from_pairs(&mut self, ctx: &NativeCallContext) -> Option<ValuePlan> {

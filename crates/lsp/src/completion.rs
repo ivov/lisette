@@ -413,14 +413,22 @@ pub(crate) fn get_type_completions(
     snapshot: &AnalysisSnapshot,
     current_package: &str,
 ) -> Vec<CompletionItem> {
-    // `Array.new` is an inline builtin constructor, not a prelude definition.
+    // Inline builtin constructors, not prelude definitions.
     if type_id == "prelude.Array" {
-        return vec![CompletionItem {
-            label: "new".to_string(),
-            kind: Some(CompletionItemKind::METHOD),
-            detail: Some("fn() -> Array<T, N>".to_string()),
-            ..Default::default()
-        }];
+        return vec![
+            CompletionItem {
+                label: "new".to_string(),
+                kind: Some(CompletionItemKind::METHOD),
+                detail: Some("fn() -> Array<T, N>".to_string()),
+                ..Default::default()
+            },
+            CompletionItem {
+                label: "from".to_string(),
+                kind: Some(CompletionItemKind::METHOD),
+                detail: Some("fn(Slice<T>) -> Option<Array<T, N>>".to_string()),
+                ..Default::default()
+            },
+        ];
     }
 
     let target = alias_target(type_id, snapshot);
