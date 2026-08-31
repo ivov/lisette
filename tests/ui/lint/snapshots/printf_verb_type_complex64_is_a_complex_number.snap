@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Format verb mismatch
+   ╭─[test.lis:5:22]
+ 4 │ pub fn show(c: complex64) {
+ 5 │   fmt.Printf("%d\n", c)
+   ·                      ┬
+   ·                      ╰── `complex64` argument for `%d`
+ 6 │ }
+   ╰────
+  help: `fmt.Printf` formats `%d`, which needs an integer, but the argument has type `complex64`. Use `%f`, or convert the argument · code: [lint.printf_verb_mismatch]

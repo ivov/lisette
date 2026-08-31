@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Format width mismatch
+   ╭─[test.lis:5:25]
+ 4 │ fn main() {
+ 5 │   fmt.Printf("[%*d]\n", "wide", 1)
+   ·                         ───┬──
+   ·                            ╰── `string` argument for the `*` width
+ 6 │ }
+   ╰────
+  help: `fmt.Printf` takes the `*` width from an argument of type `string`, but a width must be an integer. Use a fixed width, or convert the argument · code: [lint.printf_verb_mismatch]

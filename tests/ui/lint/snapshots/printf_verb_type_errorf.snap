@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Format verb mismatch
+   ╭─[test.lis:5:33]
+ 4 │ fn main() {
+ 5 │   let _ = fmt.Errorf("code %d", "boom")
+   ·                                 ───┬──
+   ·                                    ╰── `string` argument for `%d`
+ 6 │ }
+   ╰────
+  help: `fmt.Errorf` formats `%d`, which needs an integer, but the argument has type `string`. Use `%s`, or convert the argument · code: [lint.printf_verb_mismatch]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Format verb mismatch
+   ╭─[test.lis:5:22]
+ 4 │ fn main() {
+ 5 │   fmt.Printf("%t\n", 1)
+   ·                      ┬
+   ·                      ╰── `int` argument for `%t`
+ 6 │ }
+   ╰────
+  help: `fmt.Printf` formats `%t`, which needs a boolean, but the argument has type `int`. Use `%d`, or convert the argument · code: [lint.printf_verb_mismatch]

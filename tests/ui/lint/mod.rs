@@ -2081,9 +2081,10 @@ fn main() {
     );
 }
 
+/// Narrowed to one code because `printf_verb_mismatch` reports the `%s` too.
 #[test]
 fn redundant_sprintf_non_string_argument_no_warning() {
-    assert_no_lint_warnings!(
+    let diagnostics = lint(
         r#"
 import "go:fmt"
 
@@ -2091,7 +2092,13 @@ fn main() {
   let n = 42
   let _ = fmt.Sprintf("%s", n)
 }
-"#
+"#,
+    );
+    assert!(
+        !diagnostics
+            .iter()
+            .any(|d| d.code_str() == Some("lint.redundant_sprintf")),
+        "a non-string argument is not a redundant `Sprintf`: {diagnostics:?}"
     );
 }
 
@@ -17426,6 +17433,444 @@ fn main() {
             .any(|d| d.plain_message() == "Missing format arguments"),
         "the lint must not depend on a clean check: {:?}",
         result.lints()
+    );
+}
+
+#[test]
+fn printf_verb_type_integer_verb_with_string_argument() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let name = "alice"
+  fmt.Printf("%d\n", name)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_type_string_verb_with_float_argument() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let price = 3.14159
+  fmt.Printf("%s\n", price)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_type_bool_verb_with_integer_argument() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("%t\n", 1)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_type_rune_verb_with_bool_argument() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("%c\n", true)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_type_pointer_verb_with_integer_argument() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("%p\n", 1)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_type_star_width_with_string_argument() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("[%*d]\n", "wide", 1)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_type_star_precision_with_string_argument() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("[%.*f]\n", "fine", 1.5)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_type_errorf() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let _ = fmt.Errorf("code %d", "boom")
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_type_float_verb_names_complex() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("%f\n", "text")
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_type_uintptr_is_an_integer() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+import "go:os"
+
+fn main() {
+  fmt.Printf("%s\n", os.Stdout.Fd())
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_type_count_mismatch_wins() {
+    let source = r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Printf("%d %d\n", "a")
+}
+"#;
+    assert_diagnostic_count!(source, 1);
+    assert_lint_snapshot!(source);
+}
+
+/// Every verb and type pair that `go vet` accepts, one call per pair.
+#[test]
+fn printf_verb_type_accepted_pairs_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let v_int: int = 1
+  fmt.Printf("%v\n", v_int)
+  fmt.Printf("%q\n", v_int)
+  fmt.Printf("%d\n", v_int)
+  fmt.Printf("%b\n", v_int)
+  fmt.Printf("%o\n", v_int)
+  fmt.Printf("%O\n", v_int)
+  fmt.Printf("%x\n", v_int)
+  fmt.Printf("%X\n", v_int)
+  fmt.Printf("%c\n", v_int)
+  fmt.Printf("%U\n", v_int)
+  let v_int8: int8 = 1
+  fmt.Printf("%v\n", v_int8)
+  fmt.Printf("%q\n", v_int8)
+  fmt.Printf("%d\n", v_int8)
+  fmt.Printf("%b\n", v_int8)
+  fmt.Printf("%o\n", v_int8)
+  fmt.Printf("%O\n", v_int8)
+  fmt.Printf("%x\n", v_int8)
+  fmt.Printf("%X\n", v_int8)
+  fmt.Printf("%c\n", v_int8)
+  fmt.Printf("%U\n", v_int8)
+  let v_int64: int64 = 1
+  fmt.Printf("%v\n", v_int64)
+  fmt.Printf("%q\n", v_int64)
+  fmt.Printf("%d\n", v_int64)
+  fmt.Printf("%b\n", v_int64)
+  fmt.Printf("%o\n", v_int64)
+  fmt.Printf("%O\n", v_int64)
+  fmt.Printf("%x\n", v_int64)
+  fmt.Printf("%X\n", v_int64)
+  fmt.Printf("%c\n", v_int64)
+  fmt.Printf("%U\n", v_int64)
+  let v_uint: uint = 1
+  fmt.Printf("%v\n", v_uint)
+  fmt.Printf("%q\n", v_uint)
+  fmt.Printf("%d\n", v_uint)
+  fmt.Printf("%b\n", v_uint)
+  fmt.Printf("%o\n", v_uint)
+  fmt.Printf("%O\n", v_uint)
+  fmt.Printf("%x\n", v_uint)
+  fmt.Printf("%X\n", v_uint)
+  fmt.Printf("%c\n", v_uint)
+  fmt.Printf("%U\n", v_uint)
+  let v_byte: byte = 1
+  fmt.Printf("%v\n", v_byte)
+  fmt.Printf("%q\n", v_byte)
+  fmt.Printf("%d\n", v_byte)
+  fmt.Printf("%b\n", v_byte)
+  fmt.Printf("%o\n", v_byte)
+  fmt.Printf("%O\n", v_byte)
+  fmt.Printf("%x\n", v_byte)
+  fmt.Printf("%X\n", v_byte)
+  fmt.Printf("%c\n", v_byte)
+  fmt.Printf("%U\n", v_byte)
+  let v_rune: rune = 'x'
+  fmt.Printf("%v\n", v_rune)
+  fmt.Printf("%q\n", v_rune)
+  fmt.Printf("%d\n", v_rune)
+  fmt.Printf("%b\n", v_rune)
+  fmt.Printf("%o\n", v_rune)
+  fmt.Printf("%O\n", v_rune)
+  fmt.Printf("%x\n", v_rune)
+  fmt.Printf("%X\n", v_rune)
+  fmt.Printf("%c\n", v_rune)
+  fmt.Printf("%U\n", v_rune)
+  let v_float32: float32 = 1.5
+  fmt.Printf("%v\n", v_float32)
+  fmt.Printf("%b\n", v_float32)
+  fmt.Printf("%x\n", v_float32)
+  fmt.Printf("%X\n", v_float32)
+  fmt.Printf("%e\n", v_float32)
+  fmt.Printf("%E\n", v_float32)
+  fmt.Printf("%f\n", v_float32)
+  fmt.Printf("%F\n", v_float32)
+  fmt.Printf("%g\n", v_float32)
+  fmt.Printf("%G\n", v_float32)
+  let v_float64: float64 = 1.5
+  fmt.Printf("%v\n", v_float64)
+  fmt.Printf("%b\n", v_float64)
+  fmt.Printf("%x\n", v_float64)
+  fmt.Printf("%X\n", v_float64)
+  fmt.Printf("%e\n", v_float64)
+  fmt.Printf("%E\n", v_float64)
+  fmt.Printf("%f\n", v_float64)
+  fmt.Printf("%F\n", v_float64)
+  fmt.Printf("%g\n", v_float64)
+  fmt.Printf("%G\n", v_float64)
+  let v_complex128 = 1.0 + 2.0i
+  fmt.Printf("%v\n", v_complex128)
+  fmt.Printf("%b\n", v_complex128)
+  fmt.Printf("%x\n", v_complex128)
+  fmt.Printf("%X\n", v_complex128)
+  fmt.Printf("%e\n", v_complex128)
+  fmt.Printf("%E\n", v_complex128)
+  fmt.Printf("%f\n", v_complex128)
+  fmt.Printf("%F\n", v_complex128)
+  fmt.Printf("%g\n", v_complex128)
+  fmt.Printf("%G\n", v_complex128)
+  let v_bool: bool = true
+  fmt.Printf("%v\n", v_bool)
+  fmt.Printf("%t\n", v_bool)
+  let v_string: string = "s"
+  fmt.Printf("%v\n", v_string)
+  fmt.Printf("%s\n", v_string)
+  fmt.Printf("%q\n", v_string)
+  fmt.Printf("%x\n", v_string)
+  fmt.Printf("%X\n", v_string)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_type_uintptr_accepted_verb_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+import "go:os"
+
+fn main() {
+  fmt.Printf("%d\n", os.Stdout.Fd())
+}
+"#
+    );
+}
+
+/// A parameter type is the only route: no expression produces a `complex64`.
+#[test]
+fn printf_verb_type_complex64_is_a_complex_number() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+pub fn show(c: complex64) {
+  fmt.Printf("%d\n", c)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_type_complex64_accepted_verbs_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+pub fn show(c: complex64) {
+  fmt.Printf("%v\n", c)
+  fmt.Printf("%b\n", c)
+  fmt.Printf("%x\n", c)
+  fmt.Printf("%X\n", c)
+  fmt.Printf("%e\n", c)
+  fmt.Printf("%E\n", c)
+  fmt.Printf("%f\n", c)
+  fmt.Printf("%F\n", c)
+  fmt.Printf("%g\n", c)
+  fmt.Printf("%G\n", c)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_type_go_stringer_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+import "go:time"
+import "go:os"
+
+fn main() {
+  let d = time.Second
+  let m = os.FileMode(420)
+  fmt.Printf("%s\n", d)
+  fmt.Printf("%d\n", d)
+  fmt.Printf("%s\n", m)
+  fmt.Printf("%d\n", m)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_type_newtype_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+struct Plain(int)
+
+#[display]
+struct Shown(int)
+
+fn main() {
+  let plain = Plain(1)
+  let shown = Shown(1)
+  fmt.Printf("%d\n", plain)
+  fmt.Printf("%s\n", plain)
+  fmt.Printf("%d\n", shown)
+  fmt.Printf("%s\n", shown)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_type_alias_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+type Aliased = int
+
+fn main() {
+  let aliased: Aliased = 1
+  fmt.Printf("%d\n", aliased)
+  fmt.Printf("%s\n", aliased)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_type_error_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+import "go:errors"
+
+fn main() {
+  let err = errors.New("boom")
+  fmt.Printf("%s\n", err)
+  fmt.Printf("%d\n", err)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_type_generic_parameter_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn show<T>(x: T) {
+  fmt.Printf("%d\n", x)
+}
+
+fn main() {
+  show(1)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_type_byte_slice_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let bytes: Slice<byte> = [104, 105]
+  fmt.Printf("%s\n", bytes)
+  fmt.Printf("%d\n", bytes)
+}
+"#
+    );
+}
+
+#[test]
+fn printf_verb_type_unknown_verb_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let _ = fmt.Errorf("wrapped: %w", fmt.Errorf("inner"))
+}
+"#
     );
 }
 

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Format verb mismatch
+   ╭─[test.lis:6:22]
+ 5 │ fn main() {
+ 6 │   fmt.Printf("%s\n", os.Stdout.Fd())
+   ·                      ───────┬──────
+   ·                             ╰── `uintptr` argument for `%s`
+ 7 │ }
+   ╰────
+  help: `fmt.Printf` formats `%s`, which needs a string, but the argument has type `uintptr`. Use `%d`, or convert the argument · code: [lint.printf_verb_mismatch]

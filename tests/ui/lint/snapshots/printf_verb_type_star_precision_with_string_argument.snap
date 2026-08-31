@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Format precision mismatch
+   ╭─[test.lis:5:26]
+ 4 │ fn main() {
+ 5 │   fmt.Printf("[%.*f]\n", "fine", 1.5)
+   ·                          ───┬──
+   ·                             ╰── `string` argument for the `*` precision
+ 6 │ }
+   ╰────
+  help: `fmt.Printf` takes the `*` precision from an argument of type `string`, but a precision must be an integer. Use a fixed precision, or convert the argument · code: [lint.printf_verb_mismatch]

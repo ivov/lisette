@@ -1,8 +1,9 @@
 use crate::passes::walk::NodeCtx;
-use diagnostics::lint::PrintfOperand;
+use diagnostics::lint::{PrintfClass, PrintfOperand};
 use std::str;
 use syntax::ast::{Expression, Literal};
 use syntax::lex::string_bytes;
+use syntax::types::{SimpleKind, Type};
 
 /// (package_id, function_name, index of the format-string argument)
 const PRINTF_TARGETS: &[(&str, &str, usize)] = &[
@@ -70,12 +71,99 @@ pub fn check_printf_verb_mismatch(expression: &Expression, ctx: &NodeCtx) {
 
     let supplied = args.len() - format_index - 1;
     if operands.len() == supplied {
+        check_operand_types(
+            &operands,
+            &args[format_index + 1..],
+            package_id,
+            function,
+            ctx,
+        );
         return;
     }
 
     ctx.sink.push(diagnostics::lint::printf_verb_mismatch(
         span, package_id, function, &operands, supplied,
     ));
+}
+
+const VERB_CLASSES: &[(char, &[PrintfClass])] = {
+    use PrintfClass::{Boolean, Complex, Float, Integer, String};
+    &[
+        ('v', &[Integer, Float, Complex, Boolean, String]),
+        ('s', &[String]),
+        ('q', &[Integer, String]),
+        ('d', &[Integer]),
+        ('b', &[Integer, Float, Complex]),
+        ('o', &[Integer]),
+        ('O', &[Integer]),
+        ('x', &[Integer, Float, Complex, String]),
+        ('X', &[Integer, Float, Complex, String]),
+        ('c', &[Integer]),
+        ('U', &[Integer]),
+        ('e', &[Float, Complex]),
+        ('E', &[Float, Complex]),
+        ('f', &[Float, Complex]),
+        ('F', &[Float, Complex]),
+        ('g', &[Float, Complex]),
+        ('G', &[Float, Complex]),
+        ('t', &[Boolean]),
+        ('p', &[]),
+    ]
+};
+
+fn check_operand_types(
+    operands: &[PrintfOperand],
+    arguments: &[Expression],
+    package_id: &str,
+    function: &str,
+    ctx: &NodeCtx,
+) {
+    for (operand, argument) in operands.iter().zip(arguments) {
+        match operand {
+            PrintfOperand::Verb(verb) => {
+                let Some((_, accepted)) = VERB_CLASSES.iter().find(|(known, _)| known == verb)
+                else {
+                    continue;
+                };
+                let Some((kind, class)) = primitive_class(argument) else {
+                    continue;
+                };
+                if accepted.contains(&class) {
+                    continue;
+                }
+                ctx.sink.push(diagnostics::lint::printf_verb_type_mismatch(
+                    &argument.get_span(),
+                    package_id,
+                    function,
+                    *verb,
+                    accepted,
+                    kind,
+                ));
+            }
+            PrintfOperand::StarWidth | PrintfOperand::StarPrecision => {
+                let Some((kind, class)) = primitive_class(argument) else {
+                    continue;
+                };
+                if class == PrintfClass::Integer {
+                    continue;
+                }
+                ctx.sink.push(diagnostics::lint::printf_star_type_mismatch(
+                    &argument.get_span(),
+                    package_id,
+                    function,
+                    matches!(operand, PrintfOperand::StarPrecision),
+                    kind,
+                ));
+            }
+        }
+    }
+}
+
+fn primitive_class(argument: &Expression) -> Option<(SimpleKind, PrintfClass)> {
+    let Type::Simple(kind) = argument.get_type() else {
+        return None;
+    };
+    Some((kind, PrintfClass::of(kind)?))
 }
 
 /// The parts of `format` that consume an argument, or `None` for an explicit
