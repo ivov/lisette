@@ -240,9 +240,14 @@ pub(super) fn infer_all_packages(
     let go_cache_package_ids = input.cache.go_package_ids();
 
     let cache_load = match input.cache.package_root() {
-        Some(root) => {
-            load_cache_candidates(&mut checker, store, candidates, root, input.compile_phase)
-        }
+        Some(root) => load_cache_candidates(
+            &mut checker,
+            store,
+            candidates,
+            root,
+            input.compile_phase,
+            input.locator.target(),
+        ),
         None => {
             debug_assert!(candidates.is_empty());
             CacheLoad::default()
@@ -442,6 +447,7 @@ fn load_cache_candidates(
     candidates: Vec<CacheCandidate>,
     project_root: &Path,
     compile_phase: CompilePhase,
+    target: stdlib::Target,
 ) -> CacheLoad {
     let load = |c: &CacheCandidate| {
         let compiled = &c.pending.package;
@@ -452,6 +458,7 @@ fn load_cache_candidates(
             &compiled.dep_hashes,
             expected_artifact_hash,
             project_root,
+            target,
         )
     };
     let loaded: Vec<Option<PackageInterface>> = if candidates.len() < PARALLEL_THRESHOLD {

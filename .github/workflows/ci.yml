@@ -182,6 +182,7 @@ jobs:
       - run: cargo test -p tests --test e2e_learn --locked -- --format terse
       - run: cargo test -p tests --test e2e_run --locked -- --format terse
       - run: cargo test -p tests --test e2e_library --locked -- --format terse
+      - run: cargo test -p tests --test e2e_cross --locked -- --format terse
       - if: github.ref == 'refs/heads/main' && steps.go-build-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # ratchet:actions/cache@v4
         with:

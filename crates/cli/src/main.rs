@@ -68,12 +68,14 @@ fn main() {
             sourcemap,
             go_flags,
             output,
-        } => handlers::build(path, sourcemap, go_flags, output),
+            target,
+        } => handlers::build(path, sourcemap, go_flags, output, target),
         Command::Emit {
             path,
             sourcemap,
             output,
-        } => handlers::emit(path, sourcemap, output),
+            target,
+        } => handlers::emit(path, sourcemap, output, target),
         Command::Run {
             target,
             args,
@@ -86,7 +88,8 @@ fn main() {
             filter,
             action,
             format,
-        } => handlers::check(path, filter, action, format),
+            target,
+        } => handlers::check(path, filter, action, format, target),
         Command::Test {
             path,
             go_flags,

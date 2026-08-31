@@ -86,6 +86,7 @@ pub(super) fn emit(
     sourcemap: bool,
     output: Option<&str>,
     inside_project: bool,
+    target: stdlib::Target,
 ) -> i32 {
     let heading = "Failed to emit script";
     let requested = match output {
@@ -103,7 +104,7 @@ pub(super) fn emit(
     let Ok(source) = read_source(file, heading) else {
         return 1;
     };
-    let locator = resolve_locator(&source, &dir, stdlib::Target::host());
+    let locator = resolve_locator(&source, &dir, target);
     if let Err(e) = go_cli::write_go_mod(&dir, GO_MODULE, &locator) {
         cli_error!(heading, e, "Check file permissions");
         return 1;
@@ -176,7 +177,8 @@ pub(super) fn build(
 
     let requested = match output {
         Some(path) => PathBuf::from(path),
-        None => PathBuf::from(go_cli::binary_name(stem(file), target)),
+        None if target.is_host() => PathBuf::from(go_cli::binary_name(stem(file), target)),
+        None => PathBuf::from(go_cli::cross_binary_name(stem(file), target)),
     };
     let destination = match check_destination(file, &requested, heading) {
         Ok(destination) => destination,
@@ -201,20 +203,21 @@ pub(crate) fn script_locator(
     source: &str,
     file: &Path,
     mode: super::script_deps::Mode,
+    target: stdlib::Target,
 ) -> Result<(deps::TypedefLocator, Option<PathBuf>), String> {
     let dir = script_build_dir(file);
     let deps = super::script_deps::script_deps(source);
 
     if deps.is_empty() {
         return Ok((
-            super::script_deps::locator(Default::default(), &dir, mode, stdlib::Target::host()),
+            super::script_deps::locator(Default::default(), &dir, mode, target),
             None,
         ));
     }
 
     ensure_build_dir(&dir)?;
     Ok((
-        super::script_deps::locator(deps, &dir, mode, stdlib::Target::host()),
+        super::script_deps::locator(deps, &dir, mode, target),
         Some(dir),
     ))
 }

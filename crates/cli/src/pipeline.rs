@@ -218,8 +218,16 @@ mod tests {
     use crate::fs::LocalFileSystem;
     use semantics::PARALLEL_THRESHOLD;
     use std::fs as stdfs;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
     use tempfile::tempdir;
+
+    fn cache_file(root: &Path, package_id: &str) -> PathBuf {
+        root.join("target")
+            .join(".lisette")
+            .join("cache")
+            .join(stdlib::Target::host().cache_segment())
+            .join(format!("{package_id}.cache"))
+    }
 
     fn check_diagnostics(project_dir: &Path) -> Vec<(bool, Option<String>)> {
         let (_, locator) =
@@ -417,7 +425,7 @@ mod tests {
             "diagnostics diverge between cold and second warm build"
         );
         assert!(
-            !root.join("target/.lisette/cache/leaky.cache").exists(),
+            !cache_file(root, "leaky").exists(),
             "leaky has warnings; cache must not write it"
         );
     }
@@ -452,7 +460,7 @@ mod tests {
         let cold = check_diagnostics(root);
         assert!(cold.is_empty(), "fixture must be clean; got: {cold:?}");
         assert!(
-            root.join("target/.lisette/cache/top.cache").exists(),
+            cache_file(root, "top").exists(),
             "top must be cached for this test to be meaningful"
         );
 
@@ -583,8 +591,7 @@ mod tests {
         );
         for i in 0..N {
             assert!(
-                root.join(format!("target/.lisette/cache/m{i}.cache"))
-                    .exists(),
+                cache_file(root, &format!("m{i}")).exists(),
                 "m{i} must be cached after the cold run"
             );
         }
@@ -671,7 +678,7 @@ mod tests {
         );
 
         assert!(
-            root.join("target/.lisette/cache/math.cache").exists(),
+            cache_file(root, "math").exists(),
             "math must be cached after the cold run for this test to be meaningful"
         );
 

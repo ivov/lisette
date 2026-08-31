@@ -3,15 +3,15 @@ use crate::cli_error;
 pub fn completions(shell: Option<String>) -> i32 {
     match shell.as_deref() {
         Some("bash") => {
-            print!("{}", bash_completions());
+            print!("{}", with_targets(bash_completions()));
             0
         }
         Some("zsh") => {
-            print!("{}", zsh_completions());
+            print!("{}", with_targets(zsh_completions()));
             0
         }
         Some("fish") => {
-            print!("{}", fish_completions());
+            print!("{}", with_targets(fish_completions()));
             0
         }
         Some(other) => {
@@ -29,6 +29,15 @@ pub fn completions(shell: Option<String>) -> i32 {
     }
 }
 
+fn with_targets(script: &str) -> String {
+    let words = stdlib::SUPPORTED_TARGETS
+        .iter()
+        .map(stdlib::Target::to_string)
+        .collect::<Vec<_>>()
+        .join(" ");
+    script.replace("@TARGETS@", &words)
+}
+
 fn bash_completions() -> &'static str {
     r#"_lis() {
     local cur prev commands
@@ -44,11 +53,11 @@ fn bash_completions() -> &'static str {
             return 0
             ;;
         build)
-            COMPREPLY=( $(compgen -W "--sourcemap --go-flags -o --output" -- "$cur") )
+            COMPREPLY=( $(compgen -W "--sourcemap --go-flags -o --output --target" -- "$cur") )
             return 0
             ;;
         emit)
-            COMPREPLY=( $(compgen -W "--sourcemap -o --output" -- "$cur") )
+            COMPREPLY=( $(compgen -W "--sourcemap -o --output --target" -- "$cur") )
             return 0
             ;;
         run)
@@ -72,11 +81,15 @@ fn bash_completions() -> &'static str {
             return 0
             ;;
         check)
-            COMPREPLY=( $(compgen -W "--errors-only --warnings-only --deny --fix --output" -- "$cur") )
+            COMPREPLY=( $(compgen -W "--errors-only --warnings-only --deny --fix --output --target" -- "$cur") )
             return 0
             ;;
         --output)
             COMPREPLY=( $(compgen -W "unix" -- "$cur") )
+            return 0
+            ;;
+        --target)
+            COMPREPLY=( $(compgen -W "@TARGETS@" -- "$cur") )
             return 0
             ;;
         --deny)
@@ -140,12 +153,14 @@ _lis() {
                     _arguments \
                         '--sourcemap[Include line directives for stack traces]' \
                         '--go-flags[Flags passed through to go build]:flags' \
-                        {-o,--output}'[Write the binary for a script at this path]:path:_files'
+                        {-o,--output}'[Write the binary for a script at this path]:path:_files' \
+                        '--target[Compile for another platform]:target:(@TARGETS@)'
                     ;;
                 emit)
                     _arguments \
                         '--sourcemap[Include line directives for stack traces]' \
-                        {-o,--output}'[Write the Go file for a script at this path]:path:_files'
+                        {-o,--output}'[Write the Go file for a script at this path]:path:_files' \
+                        '--target[Emit for another platform]:target:(@TARGETS@)'
                     ;;
                 run)
                     _arguments \
@@ -176,7 +191,8 @@ _lis() {
                         '--warnings-only[Show only warnings]' \
                         '--deny[Fail check if warnings found]:group:(warnings)' \
                         '--fix[Apply lint fixes in place]' \
-                        '--output[Machine-readable output]:output:(unix)'
+                        '--output[Machine-readable output]:output:(unix)' \
+                        '--target[Check against another platform]:target:(@TARGETS@)'
                     ;;
                 doc)
                     _arguments {-s,--search}'[Search across prelude and Go stdlib]'
@@ -223,8 +239,10 @@ complete -c lis -n __fish_use_subcommand -a lsp -d 'Start the language server'
 complete -c lis -n '__fish_seen_subcommand_from build' -l sourcemap -d 'Include line directives for stack traces'
 complete -c lis -n '__fish_seen_subcommand_from build' -l go-flags -r -d 'Flags passed through to go build'
 complete -c lis -n '__fish_seen_subcommand_from build' -s o -l output -r -F -d 'Write the binary for a script at this path'
+complete -c lis -n '__fish_seen_subcommand_from build' -l target -r -a '@TARGETS@' -d 'Compile for another platform'
 complete -c lis -n '__fish_seen_subcommand_from emit' -l sourcemap -d 'Include line directives for stack traces'
 complete -c lis -n '__fish_seen_subcommand_from emit' -s o -l output -r -F -d 'Write the Go file for a script at this path'
+complete -c lis -n '__fish_seen_subcommand_from emit' -l target -r -a '@TARGETS@' -d 'Emit for another platform'
 complete -c lis -n '__fish_seen_subcommand_from run' -l sourcemap -d 'Include line directives for stack traces'
 complete -c lis -n '__fish_seen_subcommand_from run' -l go-flags -r -d 'Flags passed through to go build'
 complete -c lis -n '__fish_seen_subcommand_from test' -s f -l filter -r -d 'Run only tests whose name contains the pattern'
@@ -236,6 +254,7 @@ complete -c lis -n '__fish_seen_subcommand_from check' -l warnings-only -d 'Show
 complete -c lis -n '__fish_seen_subcommand_from check' -l deny -r -a warnings -d 'Fail check if warnings found'
 complete -c lis -n '__fish_seen_subcommand_from check' -l fix -d 'Apply lint fixes in place'
 complete -c lis -n '__fish_seen_subcommand_from check' -l output -r -a unix -d 'Machine-readable output'
+complete -c lis -n '__fish_seen_subcommand_from check' -l target -r -a '@TARGETS@' -d 'Check against another platform'
 complete -c lis -n '__fish_seen_subcommand_from sync' -l script -r -F -d 'Tidy the dependencies of this script'
 complete -c lis -n '__fish_seen_subcommand_from doc' -s s -l search -d 'Search across prelude and Go stdlib'
 complete -c lis -n '__fish_seen_subcommand_from complete' -a 'bash zsh fish' -d 'Shell type'

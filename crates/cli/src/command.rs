@@ -38,11 +38,13 @@ pub enum Command {
         sourcemap: bool,
         go_flags: Vec<String>,
         output: Option<String>,
+        target: stdlib::Target,
     },
     Emit {
         path: Option<String>,
         sourcemap: bool,
         output: Option<String>,
+        target: stdlib::Target,
     },
     Run {
         target: Option<String>,
@@ -59,6 +61,7 @@ pub enum Command {
         filter: Filter,
         action: CheckAction,
         format: OutputFormat,
+        target: stdlib::Target,
     },
     Test {
         path: Option<String>,
@@ -116,12 +119,15 @@ fn parse_emit(mut arguments: impl Iterator<Item = String>) -> Result<Command, Pa
     let mut path = None;
     let mut sourcemap = false;
     let mut output = None;
+    let mut target = stdlib::Target::host();
 
     while let Some(arg) = arguments.next() {
         if arg == "--sourcemap" {
             sourcemap = true;
         } else if let Some(value) = output_value(&arg, &mut arguments, "emit")? {
             output = Some(value);
+        } else if let Some(value) = target_flag_value(&arg, &mut arguments, "emit")? {
+            target = value;
         } else if arg.starts_with('-') {
             return Err(ParseError::UnknownFlag(arg));
         } else {
@@ -133,6 +139,7 @@ fn parse_emit(mut arguments: impl Iterator<Item = String>) -> Result<Command, Pa
         path,
         sourcemap,
         output,
+        target,
     })
 }
 
@@ -167,6 +174,55 @@ fn output_value(
     }
 
     Ok(Some(value))
+}
+
+fn target_flag_value(
+    arg: &str,
+    arguments: &mut impl Iterator<Item = String>,
+    command: &'static str,
+) -> Result<Option<stdlib::Target>, ParseError> {
+    let Some(value) = flag_value(
+        arg,
+        &["--target"],
+        arguments,
+        command,
+        "--target <goos/goarch>",
+    )?
+    else {
+        return Ok(None);
+    };
+
+    match stdlib::Target::parse(&value) {
+        Some(target) => Ok(Some(target)),
+        None => Err(ParseError::UnexpectedArgument {
+            message: format!("unexpected value `{}` for `--target`", value),
+            reason: format!("`--target` accepts {}", supported_target_list()),
+            hint: "Pass one of those targets".to_string(),
+        }),
+    }
+}
+
+fn supported_target_list() -> String {
+    stdlib::SUPPORTED_TARGETS
+        .iter()
+        .map(|target| format!("`{}`", target))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn target_flag_rejected(command: &'static str, artifact: &str) -> ParseError {
+    ParseError::UnexpectedArgument {
+        message: format!("`--target` cannot be passed to `lis {}`", command),
+        reason: format!(
+            "`lis {}` runs the {} it compiles, so it compiles for this machine",
+            command, artifact
+        ),
+        hint: "Use `lis build --target <goos/goarch>` to compile for another platform".to_string(),
+    }
+}
+
+fn is_target_flag(arg: &str) -> bool {
+    arg == "--target" || arg.starts_with("--target=")
 }
 
 fn set_target(
@@ -359,6 +415,7 @@ fn parse_build(mut arguments: impl Iterator<Item = String>) -> Result<Command, P
     let mut sourcemap = false;
     let mut go_flags = Vec::new();
     let mut output = None;
+    let mut target = stdlib::Target::host();
 
     while let Some(arg) = arguments.next() {
         if arg == "--sourcemap" {
@@ -373,6 +430,8 @@ fn parse_build(mut arguments: impl Iterator<Item = String>) -> Result<Command, P
             extend_go_flags(&mut go_flags, &value)?;
         } else if let Some(value) = output_value(&arg, &mut arguments, "build")? {
             output = Some(value);
+        } else if let Some(value) = target_flag_value(&arg, &mut arguments, "build")? {
+            target = value;
         } else if arg.starts_with('-') {
             return Err(ParseError::UnknownFlag(arg));
         } else {
@@ -385,6 +444,7 @@ fn parse_build(mut arguments: impl Iterator<Item = String>) -> Result<Command, P
         sourcemap,
         go_flags,
         output,
+        target,
     })
 }
 
@@ -413,6 +473,8 @@ fn parse_run(
             "--go-flags <flags>",
         )? {
             extend_go_flags(&mut go_flags, &value)?;
+        } else if is_target_flag(&arg) {
+            return Err(target_flag_rejected("run", "binary"));
         } else if arg.starts_with('-') {
             return Err(ParseError::UnknownFlag(arg));
         } else {
@@ -473,6 +535,7 @@ fn parse_check(mut arguments: impl Iterator<Item = String>) -> Result<Command, P
     let mut deny_warnings = false;
     let mut format = OutputFormat::Graphical;
     let mut fix = false;
+    let mut target = stdlib::Target::host();
 
     while let Some(arg) = arguments.next() {
         if arg == "--errors-only" {
@@ -499,6 +562,8 @@ fn parse_check(mut arguments: impl Iterator<Item = String>) -> Result<Command, P
             flag_value(&arg, &["--deny"], &mut arguments, "check", "--deny <value>")?
         {
             deny_warnings = parse_deny(&value)?;
+        } else if let Some(value) = target_flag_value(&arg, &mut arguments, "check")? {
+            target = value;
         } else if arg.starts_with('-') {
             return Err(ParseError::UnknownFlag(arg));
         } else {
@@ -545,6 +610,7 @@ fn parse_check(mut arguments: impl Iterator<Item = String>) -> Result<Command, P
             CheckAction::Inspect { deny_warnings }
         },
         format,
+        target,
     })
 }
 
@@ -572,6 +638,8 @@ fn parse_test(mut arguments: impl Iterator<Item = String>) -> Result<Command, Pa
             "--go-flags <flags>",
         )? {
             extend_go_flags(&mut go_flags, &value)?;
+        } else if is_target_flag(&arg) {
+            return Err(target_flag_rejected("test", "tests"));
         } else if arg.starts_with('-') {
             return Err(ParseError::UnknownFlag(arg));
         } else {
@@ -1404,6 +1472,49 @@ mod tests {
             parse(&["lis", "emit", "--bogus"]),
             Err(ParseError::UnknownFlag(_))
         ));
+    }
+
+    #[test]
+    fn target_flag_accepts_supported_target_for_build_emit_and_check() {
+        let target = stdlib::Target::new("linux", "amd64");
+
+        let Ok(Command::Build { target: build, .. }) =
+            parse(&["lis", "build", "--target", "linux/amd64"])
+        else {
+            panic!("expected Build command");
+        };
+        let Ok(Command::Emit { target: emit, .. }) =
+            parse(&["lis", "emit", "--target=linux/amd64"])
+        else {
+            panic!("expected Emit command");
+        };
+        let Ok(Command::Check { target: check, .. }) =
+            parse(&["lis", "check", "--target", "linux/amd64"])
+        else {
+            panic!("expected Check command");
+        };
+
+        assert_eq!((build, emit, check), (target, target, target));
+    }
+
+    #[test]
+    fn target_flag_rejects_unsupported_target() {
+        assert!(matches!(
+            parse(&["lis", "build", "--target", "freebsd/amd64"]),
+            Err(ParseError::UnexpectedArgument { .. })
+        ));
+    }
+
+    #[test]
+    fn run_and_test_reject_target_flag() {
+        for command in ["run", "test"] {
+            let Err(ParseError::UnexpectedArgument { hint, .. }) =
+                parse(&["lis", command, "--target", "linux/amd64"])
+            else {
+                panic!("expected {command} to reject --target");
+            };
+            assert!(hint.contains("lis build --target"), "{hint}");
+        }
     }
 
     #[test]

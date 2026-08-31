@@ -293,7 +293,7 @@ fn remove_dir_all_if_present(dir: &Path) -> io::Result<()> {
     }
 }
 
-/// Removes interface caches in `target/.lisette/cache/` for packages no longer in the graph.
+/// Removes interface caches, in every target dir, for packages no longer in the graph.
 fn prune_orphan_caches(target_dir: &Path, live_packages: &[String]) -> io::Result<()> {
     let cache_dir = target_dir.join(".lisette").join("cache");
     let live: HashSet<String> = live_packages
@@ -309,20 +309,44 @@ fn prune_orphan_caches(target_dir: &Path, live_packages: &[String]) -> io::Resul
     };
 
     for entry in entries.flatten() {
-        if !entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
+        let Ok(file_type) = entry.file_type() else {
             continue;
-        }
-        let name = entry.file_name();
-        if Path::new(&name)
-            .extension()
-            .is_some_and(|ext| ext == "cache")
-            && !live.contains(name.to_string_lossy().as_ref())
-        {
+        };
+        if file_type.is_dir() {
+            prune_orphan_caches_for_target(&entry.path(), &live)?;
+        } else if is_cache_file(&entry.file_name()) {
+            // Flat layout, from before the caches were split by target.
             remove_file(entry.path())?;
         }
     }
 
     Ok(())
+}
+
+fn prune_orphan_caches_for_target(dir: &Path, live: &HashSet<String>) -> io::Result<()> {
+    let entries = match read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e),
+    };
+
+    for entry in entries.flatten() {
+        if !entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
+            continue;
+        }
+        let name = entry.file_name();
+        if is_cache_file(&name) && !live.contains(name.to_string_lossy().as_ref()) {
+            remove_file(entry.path())?;
+        }
+    }
+
+    Ok(())
+}
+
+fn is_cache_file(name: &OsStr) -> bool {
+    Path::new(name)
+        .extension()
+        .is_some_and(|ext| ext == "cache")
 }
 
 /// Detects the Go-standard generated-code marker so codegen tool output
@@ -793,17 +817,23 @@ mod tests {
     }
 
     #[test]
-    fn prunes_orphan_cache_file() {
+    fn prunes_orphan_cache_file_in_every_target_dir() {
         let tmp = tempfile::tempdir().unwrap();
         let cache = tmp.path().join(".lisette").join("cache");
-        stdfs::create_dir_all(&cache).unwrap();
-        write_file(&cache, "greet.cache", "");
-        write_file(&cache, "kept.cache", "");
+        let host = cache.join("darwin_arm64");
+        let cross = cache.join("linux_amd64");
+        for dir in [&host, &cross] {
+            stdfs::create_dir_all(dir).unwrap();
+            write_file(dir, "greet.cache", "");
+            write_file(dir, "kept.cache", "");
+        }
 
         prune_orphan_go_files(tmp.path(), &["main.go"], &[], &["kept".to_string()]).unwrap();
 
-        assert!(!cache.join("greet.cache").exists());
-        assert!(cache.join("kept.cache").exists());
+        for dir in [&host, &cross] {
+            assert!(!dir.join("greet.cache").exists());
+            assert!(dir.join("kept.cache").exists());
+        }
     }
 
     #[test]

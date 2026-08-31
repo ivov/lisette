@@ -82,13 +82,15 @@ Flags:
     {--sourcemap:b}                         Include `//line` in Go code for stack traces
     {--go-flags:b} {\"<flags>\":g}                Pass flags through to `go build`
     {-o:b}{,:d} {--output:b} {<path>:g}                 Write the binary for a script at this path
+    {--target:b} {<goos/goarch>:g}              Compile for another platform
 
 Examples:
     `lis build`                           Build project in current dir
     `lis build` {~/projects/demo:g}           Build project in specific dir
     `lis build` {greet.lis:g}                 Build a script to `./greet`
     `lis build` {greet.lis:g} {-o:b} {bin/greet:g}    Build a script to a chosen path
-    `lis build` {--go-flags:b} {\"-trimpath\":g}    Strip file paths from the binary",
+    `lis build` {--go-flags:b} {\"-trimpath\":g}    Strip file paths from the binary
+    `lis build` {--target:b} {linux/amd64:g}      Compile for Linux on x86-64",
         ),
 
         "emit" | "e" => print_help(
@@ -97,16 +99,18 @@ Examples:
 Generate Go code from a Lisette project at the `target/` dir.
 
 Arguments:
-    {path:g} {(optional):d}             Path to project dir or file (default: current dir)
+    {path:g} {(optional):d}                  Path to project dir or file (default: current dir)
 
 Flags:
-    {--sourcemap:b}                 Include `//line` in Go code for stack traces
-    {-o:b}{,:d} {--output:b} {<path>:g}         Write the Go file for a script at this path
+    {--sourcemap:b}                      Include `//line` in Go code for stack traces
+    {-o:b}{,:d} {--output:b} {<path>:g}              Write the Go file for a script at this path
+    {--target:b} {<goos/goarch>:g}           Emit for another platform
 
 Examples:
-    `lis emit`                    Emit Go for project in current dir
-    `lis emit` {~/projects/demo:g}    Emit Go for project in specific dir
-    `lis emit` {greet.lis:g}          Emit a script to `./greet.go`",
+    `lis emit`                         Emit Go for project in current dir
+    `lis emit` {~/projects/demo:g}         Emit Go for project in specific dir
+    `lis emit` {greet.lis:g}               Emit a script to `./greet.go`
+    `lis emit` {--target:b} {linux/amd64:g}    Emit for Linux on x86-64",
         ),
 
         "run" | "r" => print_help(
@@ -153,21 +157,23 @@ Examples:
 Lint and typecheck a Lisette project.
 
 Arguments:
-    {path:g} {(optional):d}              Path to dir (default: current dir)
+    {path:g} {(optional):d}                   Path to dir (default: current dir)
 
 Flags:
-    {--errors-only:b}                Show only errors
-    {--warnings-only:b}              Show only warnings
-    {--deny:b} {warnings}              Fail check if warnings found
-    {--fix:b}                        Apply lint fixes in place
-    {--output:b} {unix}                Machine-readable output
+    {--errors-only:b}                     Show only errors
+    {--warnings-only:b}                   Show only warnings
+    {--deny:b} {warnings}                   Fail check if warnings found
+    {--fix:b}                             Apply lint fixes in place
+    {--output:b} {unix}                     Machine-readable output
+    {--target:b} {<goos/goarch>:g}            Typecheck for another platform
 
 Examples:
-    `lis check`                    Check project in current dir
-    `lis check` {~/projects/demo:g}    Check project in specific dir
-    `lis check` {script.lis:g}         Check single file
-    `lis check` {--fix:b}              Fix all lints in the project
-    `lis check` {--output:b} {unix}      One diagnostic per line",
+    `lis check`                         Check project in current dir
+    `lis check` {~/projects/demo:g}         Check project in specific dir
+    `lis check` {script.lis:g}              Check single file
+    `lis check` {--fix:b}                   Fix all lints in the project
+    `lis check` {--output:b} {unix}           One diagnostic per line
+    `lis check` {--target:b} {linux/amd64:g}    Typecheck for Linux on x86-64",
         ),
 
         "test" | "t" => print_help(

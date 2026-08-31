@@ -1,4 +1,5 @@
 use std::fs;
+use std::io;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -445,6 +446,32 @@ fn tidy_marker_path(dir: &Path) -> PathBuf {
     dir.join(".lisette").join("go.mod.tidy")
 }
 
+pub fn emit_target_path(dir: &Path) -> PathBuf {
+    dir.join(".lisette").join("emit.target")
+}
+
+pub fn read_emit_target(dir: &Path) -> Option<String> {
+    fs::read_to_string(emit_target_path(dir))
+        .ok()
+        .map(|text| text.trim().to_string())
+}
+
+pub fn write_emit_target(dir: &Path, target: Target) {
+    let path = emit_target_path(dir);
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let _ = fs::write(&path, format!("{}\n", target));
+}
+
+pub fn clear_emit_target(dir: &Path) -> io::Result<()> {
+    match fs::remove_file(emit_target_path(dir)) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
 pub fn read_tidy_marker(dir: &Path) -> Option<u64> {
     let s = fs::read_to_string(tidy_marker_path(dir)).ok()?;
     u64::from_str_radix(s.trim(), 16).ok()
@@ -498,8 +525,20 @@ fn go_mod_tidy(path: &Path, target: Target) -> Result<(), String> {
 }
 
 pub fn binary_name(go_module_name: &str, target: Target) -> String {
+    with_exe_suffix(binary_stem(go_module_name), target)
+}
+
+pub fn cross_binary_name(go_module_name: &str, target: Target) -> String {
+    let stem = binary_stem(go_module_name);
+    with_exe_suffix(
+        format!("{}_{}_{}", stem, target.goos, target.goarch),
+        target,
+    )
+}
+
+fn binary_stem(go_module_name: &str) -> String {
     let stem = go_module_name.rsplit('/').next().unwrap_or(go_module_name);
-    with_exe_suffix(sanitize_binary_stem(stem), target)
+    sanitize_binary_stem(stem)
 }
 
 pub fn run_binary_name(target: Target) -> String {
@@ -740,6 +779,19 @@ mod tests {
     fn binary_name_uses_last_module_segment() {
         assert_eq!(binary_name("myproj", linux()), "myproj");
         assert_eq!(binary_name("github.com/u/myproj", linux()), "myproj");
+    }
+
+    #[test]
+    fn cross_binary_name_carries_the_target_before_any_suffix() {
+        assert_eq!(cross_binary_name("greet", linux()), "greet_linux_amd64");
+        assert_eq!(
+            cross_binary_name("greet", windows()),
+            "greet_windows_amd64.exe"
+        );
+        assert_eq!(
+            cross_binary_name("weird name!", linux()),
+            "weird_name__linux_amd64"
+        );
     }
 
     fn locator_with(deps: Vec<(&str, deps::GoDependency)>) -> TypedefLocator {

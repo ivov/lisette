@@ -85,6 +85,7 @@ impl Analysis {
 }
 
 pub fn analyze(input: AnalyzeInput) -> Analysis {
+    let target = input.locator.target();
     let unused_item_reporting = if input.compile_phase.includes_tests() {
         passes::UnusedItemReporting::Report
     } else {
@@ -175,7 +176,7 @@ pub fn analyze(input: AnalyzeInput) -> Analysis {
                             .unwrap_or(true)
                 });
                 if !has_package_lints
-                    && let Err(e) = save_package_cache(compiled, &store, project_root)
+                    && let Err(e) = save_package_cache(compiled, &store, project_root, target)
                 {
                     eprintln!(
                         "warning: failed to write cache for {}: {e}",
