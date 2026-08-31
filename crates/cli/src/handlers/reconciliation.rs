@@ -219,7 +219,10 @@ pub(crate) fn reconcile_declared_replacements(
         Some(project_root.to_path_buf()),
         Target::host(),
     );
-    if let Err(msg) = go_cli::write_go_mod(target_dir, &manifest.project.name, &locator) {
+    let go_directive = go_cli::project_go_directive(project_root);
+    if let Err(msg) =
+        go_cli::write_go_mod(target_dir, &manifest.project.name, &locator, &go_directive)
+    {
         error!("failed to write target/go.mod", msg);
         return Err(1);
     }

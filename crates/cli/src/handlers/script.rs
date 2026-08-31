@@ -34,7 +34,8 @@ pub(super) fn prepare(
     let dir = build_dir(file, heading)?;
     let source = read_source(file, heading)?;
     let locator = resolve_locator(&source, &dir, target);
-    if let Err(e) = go_cli::write_go_mod(&dir, GO_MODULE, &locator) {
+    let go_directive = go_cli::toolchain_go_directive();
+    if let Err(e) = go_cli::write_go_mod(&dir, GO_MODULE, &locator, &go_directive) {
         cli_error!(heading, e, "Check file permissions");
         return Err(1);
     }
@@ -105,7 +106,8 @@ pub(super) fn emit(
         return 1;
     };
     let locator = resolve_locator(&source, &dir, target);
-    if let Err(e) = go_cli::write_go_mod(&dir, GO_MODULE, &locator) {
+    let go_directive = go_cli::toolchain_go_directive();
+    if let Err(e) = go_cli::write_go_mod(&dir, GO_MODULE, &locator, &go_directive) {
         cli_error!(heading, e, "Check file permissions");
         return 1;
     }
@@ -223,7 +225,8 @@ pub(crate) fn script_locator(
 }
 
 fn report_module_needed(locator: &deps::TypedefLocator) {
-    let Ok(content) = go_cli::go_mod_content(GO_MODULE, locator) else {
+    let go_directive = go_cli::toolchain_go_directive();
+    let Ok(content) = go_cli::go_mod_content(GO_MODULE, locator, &go_directive) else {
         return;
     };
 

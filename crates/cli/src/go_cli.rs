@@ -8,10 +8,11 @@ use serde::Deserialize;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 
-include!(concat!(env!("OUT_DIR"), "/go_version.rs"));
+include!(concat!(env!("OUT_DIR"), "/go_versions.rs"));
 
 use deps::TypedefLocator;
 use emit::{OutputFile, PRELUDE_IMPORT_PATH};
+use lisette::pipeline::ProjectKind;
 use stdlib::Target;
 
 pub fn go_command(target: Target) -> Command {
@@ -46,17 +47,57 @@ pub fn toolchain_failure_message() -> Option<String> {
     toolchain_failure().map(|failure| format!("{}. {}", failure.message, failure.hint))
 }
 
+/// [`toolchain_failure`], but only when the failed command's own output
+/// blames the Go version. Anything else keeps its real error: an unmet
+/// pin does not mean the version caused this particular failure.
+pub fn toolchain_failure_for(go_output: &str) -> Option<GoCliError> {
+    let version_refusal = go_output.contains("requires go")
+        || go_output.contains("toolchain not available")
+        || go_output.contains("cannot find \"go1");
+    if version_refusal {
+        toolchain_failure()
+    } else {
+        None
+    }
+}
+
 pub fn is_go_present() -> bool {
     !matches!(go_status(), GoStatus::Absent)
 }
 
-pub fn go_mod_version() -> String {
-    let parts: Vec<&str> = GO_TOOLCHAIN_VERSION.split('.').collect();
+fn major_minor(version: &str) -> String {
+    let parts: Vec<&str> = version.split('.').collect();
     format!(
         "{}.{}",
         parts.first().unwrap_or(&"1"),
         parts.get(1).unwrap_or(&"21")
     )
+}
+
+pub fn toolchain_go_directive() -> String {
+    major_minor(GO_TOOLCHAIN_VERSION)
+}
+
+pub fn language_go_directive() -> String {
+    major_minor(GO_LANGUAGE_VERSION)
+}
+
+pub fn go_directive_for(kind: ProjectKind) -> String {
+    match kind {
+        ProjectKind::Library => language_go_directive(),
+        ProjectKind::Binary => toolchain_go_directive(),
+    }
+}
+
+// The `src/main.lis` probe mirrors `resolve_project_layout`'s kind rule,
+// for callers without a resolved layout.
+pub fn project_go_directive(project_root: &Path) -> String {
+    let kind = if project_root.join("src/main.lis").exists() {
+        ProjectKind::Binary
+    } else {
+        ProjectKind::Library
+    };
+    go_directive_for(kind)
 }
 
 enum GoStatus {
@@ -95,13 +136,29 @@ fn go_status() -> GoStatus {
     let min_minor: u32 = min_parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);
 
     if major > min_major || (major == min_major && minor >= min_minor) {
-        GoStatus::Ready
-    } else {
-        GoStatus::Outdated {
-            found: version.to_string(),
-            required: format!("{}.{}", min_major, min_minor),
-        }
+        return GoStatus::Ready;
     }
+
+    // GOTOOLCHAIN auto/path (auto is the Go 1.21+ default) makes an older
+    // go command switch to the toolchain a `go` directive requires, so the
+    // installed version is not a reliable failure cause.
+    if toolchain_switch_enabled() {
+        return GoStatus::Ready;
+    }
+
+    GoStatus::Outdated {
+        found: version.to_string(),
+        required: toolchain_go_directive(),
+    }
+}
+
+fn toolchain_switch_enabled() -> bool {
+    let Ok(output) = Command::new("go").args(["env", "GOTOOLCHAIN"]).output() else {
+        return false;
+    };
+    let value = String::from_utf8_lossy(&output.stdout);
+    let value = value.trim();
+    value == "auto" || value == "path" || value.ends_with("+auto") || value.ends_with("+path")
 }
 
 pub fn go_fmt_paths(paths: &[PathBuf]) -> Result<(), String> {
@@ -125,12 +182,21 @@ pub fn go_fmt_paths(paths: &[PathBuf]) -> Result<(), String> {
     Ok(())
 }
 
-pub fn write_go_mod(dir: &Path, module_name: &str, locator: &TypedefLocator) -> Result<(), String> {
-    let content = go_mod_content(module_name, locator)?;
+pub fn write_go_mod(
+    dir: &Path,
+    module_name: &str,
+    locator: &TypedefLocator,
+    go_directive: &str,
+) -> Result<(), String> {
+    let content = go_mod_content(module_name, locator, go_directive)?;
     write_go_mod_content(dir, &content)
 }
 
-pub fn go_mod_content(module_name: &str, locator: &TypedefLocator) -> Result<String, String> {
+pub fn go_mod_content(
+    module_name: &str,
+    locator: &TypedefLocator,
+    go_directive: &str,
+) -> Result<String, String> {
     let prelude_version = env!("CARGO_PKG_VERSION");
 
     let mut requires = vec![format!("\t{} v{}", PRELUDE_IMPORT_PATH, prelude_version)];
@@ -169,7 +235,7 @@ pub fn go_mod_content(module_name: &str, locator: &TypedefLocator) -> Result<Str
     let mut content = format!(
         "module {}\n\ngo {}\n\nrequire (\n{}\n)\n",
         module_name,
-        go_mod_version(),
+        go_directive,
         requires.join("\n"),
     );
 
@@ -426,14 +492,14 @@ pub fn finalize_go_dir(
     import_set_hash: u64,
 ) -> Result<(), GoCliError> {
     if let Err(e) = go_fmt_paths(changed_paths) {
-        return Err(toolchain_failure().unwrap_or_else(|| GoCliError {
+        return Err(toolchain_failure_for(&e).unwrap_or_else(|| GoCliError {
             message: format!("Go format failed: {}", e),
             hint: "Check Go installation with `go version`",
         }));
     }
 
     if let Err(e) = ensure_go_sum(dir, target, import_set_hash) {
-        return Err(toolchain_failure().unwrap_or_else(|| GoCliError {
+        return Err(toolchain_failure_for(&e).unwrap_or_else(|| GoCliError {
             message: format!("Failed to resolve Go dependencies: {}", e),
             hint: "Check Go installation and network connectivity",
         }));
@@ -638,10 +704,10 @@ pub fn build_binary(
 
     match cmd.status() {
         Ok(status) if status.success() => Ok(()),
-        Ok(_) => Err(toolchain_failure().unwrap_or_else(|| GoCliError {
+        Ok(_) => Err(GoCliError {
             message: "`go build` failed".to_string(),
             hint: "Review the Go compiler output above",
-        })),
+        }),
         Err(e) => Err(toolchain_failure().unwrap_or_else(|| GoCliError {
             message: format!("Failed to execute `go build`: {}", e),
             hint: "Check Go installation with `go version`",
@@ -663,10 +729,10 @@ pub fn verify_go_packages(
 
     match cmd.status() {
         Ok(status) if status.success() => Ok(()),
-        Ok(_) => Err(toolchain_failure().unwrap_or_else(|| GoCliError {
+        Ok(_) => Err(GoCliError {
             message: "`go build ./...` failed".to_string(),
             hint: "Review the Go compiler output above",
-        })),
+        }),
         Err(e) => Err(toolchain_failure().unwrap_or_else(|| GoCliError {
             message: format!("Failed to execute `go build`: {}", e),
             hint: "Check Go installation with `go version`",
@@ -816,7 +882,8 @@ mod tests {
             },
         )]);
 
-        write_go_mod(dir.path(), "example.com/app", &locator).unwrap();
+        let go_directive = toolchain_go_directive();
+        write_go_mod(dir.path(), "example.com/app", &locator, &go_directive).unwrap();
         let content = fs::read_to_string(dir.path().join("go.mod")).unwrap();
 
         assert!(
@@ -847,7 +914,8 @@ mod tests {
             },
         )]);
 
-        write_go_mod(dir.path(), "example.com/app", &locator).unwrap();
+        let go_directive = toolchain_go_directive();
+        write_go_mod(dir.path(), "example.com/app", &locator, &go_directive).unwrap();
         let content = fs::read_to_string(dir.path().join("go.mod")).unwrap();
 
         assert!(
@@ -885,7 +953,8 @@ mod tests {
         let locator =
             TypedefLocator::new(go_deps, Some(project.path().to_path_buf()), Target::host());
 
-        write_go_mod(&target_dir, "example.com/app", &locator).unwrap();
+        let go_directive = toolchain_go_directive();
+        write_go_mod(&target_dir, "example.com/app", &locator, &go_directive).unwrap();
         let content = fs::read_to_string(target_dir.join("go.mod")).unwrap();
 
         assert!(
@@ -911,14 +980,26 @@ mod tests {
             Some(project.path().to_path_buf()),
             Target::host(),
         );
-        let error = write_go_mod(&target_dir, "example.com/app", &locator).unwrap_err();
+        let error = write_go_mod(
+            &target_dir,
+            "example.com/app",
+            &locator,
+            &toolchain_go_directive(),
+        )
+        .unwrap_err();
         assert!(error.contains("example.com/me/foo"), "{}", error);
         assert!(error.contains("does not exist"), "{}", error);
 
         fs::create_dir_all(project.path().join("foo")).unwrap();
         let locator =
             TypedefLocator::new(go_deps, Some(project.path().to_path_buf()), Target::host());
-        let error = write_go_mod(&target_dir, "example.com/app", &locator).unwrap_err();
+        let error = write_go_mod(
+            &target_dir,
+            "example.com/app",
+            &locator,
+            &toolchain_go_directive(),
+        )
+        .unwrap_err();
         assert!(error.contains("no `go.mod`"), "{}", error);
     }
 

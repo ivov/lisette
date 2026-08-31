@@ -98,8 +98,10 @@ impl<'a> GoWorkspace<'a> {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(go_cli::toolchain_failure_message()
-                .unwrap_or_else(|| translate_go_error(args, stderr.trim())));
+            let stderr = stderr.trim();
+            return Err(go_cli::toolchain_failure_for(stderr)
+                .map(|failure| format!("{}. {}", failure.message, failure.hint))
+                .unwrap_or_else(|| translate_go_error(args, stderr)));
         }
 
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
@@ -1065,7 +1067,13 @@ impl BindgenSetup for WorkspaceBindgenSetup {
 
         let manifest_locator =
             TypedefLocator::new(manifest.go_deps(), Some(project_root.to_path_buf()), target);
-        go_cli::write_go_mod(&target_dir, &manifest.project.name, &manifest_locator)?;
+        let go_directive = go_cli::project_go_directive(project_root);
+        go_cli::write_go_mod(
+            &target_dir,
+            &manifest.project.name,
+            &manifest_locator,
+            &go_directive,
+        )?;
 
         let typedef_cache_dir = deps::typedef_cache_dir(project_root);
         let bindgen: Arc<dyn Bindgen> =

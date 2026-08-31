@@ -636,9 +636,13 @@ fn write_target_go_mod_from(
     go_deps: BTreeMap<String, deps::GoDependency>,
 ) -> bool {
     let locator = deps::TypedefLocator::new(go_deps, Some(setup.root.clone()), Target::host());
-    if let Err(msg) =
-        go_cli::write_go_mod(&setup.target_dir, &setup.manifest.project.name, &locator)
-    {
+    let go_directive = go_cli::project_go_directive(&setup.root);
+    if let Err(msg) = go_cli::write_go_mod(
+        &setup.target_dir,
+        &setup.manifest.project.name,
+        &locator,
+        &go_directive,
+    ) {
         error!("failed to write target/go.mod", msg);
         return false;
     }
