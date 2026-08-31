@@ -1,6 +1,6 @@
 use ecow::EcoString;
 use syntax::ast::{Expression, IdentifierResolution, Span};
-use syntax::program::{DefinitionBody, DotAccessResolution};
+use syntax::program::{DefinitionBody, DotAccessResolution, NativeTypeKind};
 use syntax::types::{Type, unqualified_name};
 
 use crate::checker::infer::InferCtx;
@@ -58,6 +58,17 @@ impl InferCtx<'_> {
                     &member,
                     expression.get_span(),
                 ));
+            } else if let Some(native) = qualified_root
+                .strip_prefix("prelude.")
+                .filter(|name| NativeTypeKind::from_name(name).is_some())
+            {
+                let path = format!("{native}.{member}");
+                self.sink
+                    .push(if NativeTypeKind::from_constructor_path(&path).is_some() {
+                        diagnostics::infer::native_constructor_value(&path, span)
+                    } else {
+                        diagnostics::infer::unknown_native_static(native, &member, span)
+                    });
             } else {
                 let target = store.peel_alias(&def.ty);
                 let type_name = if let Type::Nominal { id, .. } = &target {

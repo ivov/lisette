@@ -919,6 +919,12 @@ impl InferCtx<'_> {
             );
         }
 
+        if slice_to_array_help_applies(expected, actual) {
+            return format!(
+                "Copy the elements with `Array.from(...)`, which yields `Option<{expected_name}>`, or change the receiving type to `{actual_name}`"
+            );
+        }
+
         if actual.wraps("Slice", expected) {
             return "Index into the slice, e.g. `items[0]`".to_string();
         }
@@ -1123,6 +1129,19 @@ fn array_to_slice_help_applies(expected: &Type, actual: &Type) -> bool {
         return false;
     };
     expected_element == element.as_ref()
+}
+
+fn slice_to_array_help_applies(expected: &Type, actual: &Type) -> bool {
+    let Type::Array { element, .. } = expected else {
+        return false;
+    };
+    if !actual.is_slice() {
+        return false;
+    }
+    actual
+        .get_type_params()
+        .and_then(|params| params.first())
+        .is_some_and(|actual_element| actual_element == element.as_ref())
 }
 
 fn are_go_type_aliases(a: &str, b: &str) -> bool {

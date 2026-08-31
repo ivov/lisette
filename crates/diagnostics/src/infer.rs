@@ -4422,6 +4422,19 @@ pub fn ref_qualifier(member: &str, span: Span) -> LisetteDiagnostic {
         .with_help("To take a reference, use `&value`")
 }
 
+pub fn unknown_native_static(type_name: &str, member: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!("`{type_name}` has no `{member}`"))
+        .with_infer_code("unknown_native_static")
+        .with_span_label(
+            &span,
+            format!("no static method `{member}` on `{type_name}`"),
+        )
+        .with_help(format!(
+            "A native type offers only its own constructors and methods. \
+             Run `lis doc {type_name}` to list them"
+        ))
+}
+
 pub fn control_flow_in_expression(keyword: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error(format!(
         "`{}` cannot be used in expression position",
@@ -4580,6 +4593,19 @@ pub fn array_new_cannot_infer_size(span: Span) -> LisetteDiagnostic {
         .with_help("Write the type arguments, e.g. `Array.new<int, 3>()`, or annotate the binding")
 }
 
+pub fn array_from_cannot_infer_size(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot infer the array element type and length")
+        .with_infer_code("array_from_cannot_infer_size")
+        .with_span_label(
+            &span,
+            "`Array.from` needs an element type and a length here",
+        )
+        .with_help(
+            "Write the type arguments, e.g. `Array.from<int, 3>(xs)`, or annotate the binding \
+             as `Option<Array<int, 3>>`",
+        )
+}
+
 pub fn array_new_no_zero(element: &dyn Display, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error(format!("`{element}` has no zero value"))
         .with_infer_code("array_new_no_zero")
@@ -4653,6 +4679,13 @@ pub fn array_new_takes_no_arguments(actual: usize, span: Span) -> LisetteDiagnos
         .with_infer_code("array_new_takes_no_arguments")
         .with_span_label(&span, format!("found {actual} argument(s)"))
         .with_help("The element type and length are type arguments: `Array.new<int, 3>()`")
+}
+
+pub fn array_from_takes_one_argument(actual: usize, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`Array.from` takes exactly one value argument")
+        .with_infer_code("array_from_takes_one_argument")
+        .with_span_label(&span, format!("found {actual} argument(s)"))
+        .with_help("Pass the source slice: `Array.from<int, 3>(xs)`")
 }
 
 pub fn spread_on_non_variadic(span: Span) -> LisetteDiagnostic {

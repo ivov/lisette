@@ -225,6 +225,112 @@ fn array_new_zero_length_zeroless_element_from_annotation_is_ok() {
 }
 
 #[test]
+fn array_from_with_turbofish() {
+    infer("Array.from<int, 3>([1, 2, 3])")
+        .assert_type_struct_generic("Option", vec![array_type(3, int_type())]);
+}
+
+#[test]
+fn array_from_infers_size_from_annotation() {
+    infer("let a: Option<Array<int, 3>> = Array.from([1, 2, 3]); a")
+        .assert_last_type(con_type("Option", vec![array_type(3, int_type())]));
+}
+
+#[test]
+fn array_from_without_size_errors() {
+    infer("Array.from([1, 2, 3])").assert_infer_code("array_from_cannot_infer_size");
+}
+
+#[test]
+fn array_from_bare_array_annotation_does_not_infer_size() {
+    infer("let a: Array<int, 3> = Array.from([1, 2, 3]); a")
+        .assert_infer_code("array_from_cannot_infer_size");
+}
+
+#[test]
+fn array_from_wrong_arity_errors() {
+    infer("Array.from<int>([1, 2, 3])").assert_infer_code("array_type_arity");
+}
+
+#[test]
+fn array_from_non_literal_size_errors() {
+    infer("Array.from<int, int>([1, 2, 3])").assert_infer_code("array_size_not_literal");
+}
+
+#[test]
+fn array_from_without_arguments_errors() {
+    infer("Array.from<int, 3>()").assert_infer_code("array_from_takes_one_argument");
+}
+
+#[test]
+fn array_from_with_extra_argument_errors() {
+    infer("Array.from<int, 3>([1, 2, 3], [4])").assert_infer_code("array_from_takes_one_argument");
+}
+
+#[test]
+fn array_from_rejects_spread() {
+    infer("Array.from<int, 3>([1, 2, 3]...)").assert_infer_code("spread_on_non_variadic");
+}
+
+#[test]
+fn array_from_spread_does_not_also_count_arguments() {
+    infer("Array.from<int, 3>([1, 2, 3]...)")
+        .assert_infer_code_count("array_from_takes_one_argument", 0);
+}
+
+#[test]
+fn array_from_still_resolves_names_inside_a_rejected_spread() {
+    infer("Array.from<int, 3>(missing...)").assert_resolve_code("name_not_found");
+}
+
+#[test]
+fn array_from_rejects_non_slice_argument() {
+    infer("Array.from<int, 3>(\"nope\")").assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn array_from_element_without_zero_is_allowed() {
+    infer("fn f(xs: Slice<Ref<int>>) -> Option<Array<Ref<int>, 2>> { Array.from(xs) }")
+        .assert_no_errors();
+}
+
+#[test]
+fn array_from_zero_length_is_ok() {
+    infer("fn f(xs: Slice<int>) -> Option<Array<int, 0>> { Array.from(xs) }").assert_no_errors();
+}
+
+#[test]
+fn array_from_named_constant_size() {
+    infer("const SIZE = 3\nfn f(xs: Slice<int>) -> Option<Array<int, SIZE>> { Array.from(xs) }")
+        .assert_no_errors();
+}
+
+#[test]
+fn slice_to_array_mismatch_suggests_array_from() {
+    infer("let _a: Array<int, 3> = [1, 2, 3][0..3]").assert_error_contains("`Array.from(...)`");
+}
+
+#[test]
+fn unknown_array_static_is_not_an_alias_error() {
+    infer("Array.zzz([1, 2, 3])").assert_infer_code("unknown_native_static");
+}
+
+#[test]
+fn unknown_slice_static_is_not_an_alias_error() {
+    infer("Slice.zzz([1, 2, 3])").assert_infer_code("unknown_native_static");
+}
+
+#[test]
+fn array_from_as_a_value_is_a_constructor_error() {
+    infer("let f = Array.from; f").assert_infer_code("native_constructor_value");
+}
+
+#[test]
+fn array_new_as_a_value_is_a_constructor_error() {
+    infer("let f = Array.new; f").assert_infer_code("native_constructor_value");
+}
+
+#[test]
 fn array_for_loop_binds_element_type() {
     // `_y: int = x` only type-checks if the loop variable is inferred as `int`.
     infer("let arr: Array<int, 3> = [1, 2, 3]; for x in arr { let _y: int = x }")

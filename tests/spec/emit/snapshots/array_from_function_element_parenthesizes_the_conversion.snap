@@ -1,0 +1,18 @@
+---
+source: tests/spec/emit/arrays.rs
+description: |
+  
+  fn make(xs: Slice<fn(int) -> int>) -> Option<Array<fn(int) -> int, 2>> {
+    Array.from(xs)
+  }
+---
+package main
+
+func make_(xs []func(int) int) ([2]func(int) int, bool) {
+	return func(s []func(int) int) ([2]func(int) int, bool) {
+		if len(s) != 2 {
+			return [2]func(int) int{}, false
+		}
+		return ([2]func(int) int)(s), true
+	}(xs)
+}

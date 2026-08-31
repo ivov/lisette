@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/arrays.rs
+description: |
+  
+  fn first(xs: Slice<int>) -> Option<int> {
+    let a = Array.from<int, 3>(xs)?
+    Some(a[0])
+  }
+---
+package main
+
+func first(xs []int) (int, bool) {
+	ret_1, ret_2 := func(s []int) ([3]int, bool) {
+		if len(s) != 3 {
+			return [3]int{}, false
+		}
+		return ([3]int)(s), true
+	}(xs)
+	if !ret_2 {
+		return 0, false
+	}
+	a := ret_1
+	return a[0], true
+}

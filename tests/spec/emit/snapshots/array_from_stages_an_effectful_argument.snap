@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/arrays.rs
+description: |
+  
+  fn grow(seen: mut Slice<int>) -> Slice<int> {
+    seen.append(1)
+  }
+  
+  fn f(seen: mut Slice<int>) -> Option<Array<int, 1>> {
+    Array.from(grow(seen))
+  }
+---
+package main
+
+func grow(seen []int) []int {
+	return append(seen[:len(seen):len(seen)], 1)
+}
+
+func f(seen []int) ([1]int, bool) {
+	return func(s []int) ([1]int, bool) {
+		if len(s) != 1 {
+			return [1]int{}, false
+		}
+		return ([1]int)(s), true
+	}(grow(seen))
+}

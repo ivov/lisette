@@ -597,13 +597,37 @@ fn build_prelude_index() -> PreludeIndex {
     if let Some(array) = index.types.iter_mut().find(|t| t.name == "Array") {
         array.generics.push("N".to_string());
         array.definition = "type Array<T, N>".to_string();
-        array.methods.insert(
-            0,
-            MethodInfo {
-                name: "new".to_string(),
-                signature: "fn new() -> Array<T, N>".to_string(),
-                doc: Some("Creates an array of `N` zero values.".to_string()),
-            },
+        // `site/scripts/build-prelude.mjs` mirrors these two. Update both.
+        array.methods.splice(
+            0..0,
+            [
+                MethodInfo {
+                    name: "new".to_string(),
+                    signature: "fn new() -> Array<T, N>".to_string(),
+                    doc: Some(
+                        "Creates an array of `N` zero values.\n\
+                         \n\
+                         Example:\n  \
+                         // !callout-right `[0, 0, 0]`\n  \
+                         let scores = Array.new<int, 3>()"
+                            .to_string(),
+                    ),
+                },
+                MethodInfo {
+                    name: "from".to_string(),
+                    signature: "fn from(slice: Slice<T>) -> Option<Array<T, N>>".to_string(),
+                    doc: Some(
+                        "Copies a `Slice` into a new `Array`, or returns `None` when the \
+                         `Slice` does not hold exactly `N` elements.\n\
+                         \n\
+                         Example:\n  \
+                         let parts = [1, 2, 3]\n  \
+                         // !callout[/from/] `Some([1, 2, 3])`, or `None` on a length mismatch\n  \
+                         let fixed: Option<Array<int, 3>> = Array.from(parts)"
+                            .to_string(),
+                    ),
+                },
+            ],
         );
     }
     index.types.push(TypeInfo {
@@ -2018,7 +2042,7 @@ mod tests {
     }
 
     #[test]
-    fn prelude_documents_array_new() {
+    fn prelude_documents_array_inline_constructors() {
         let index = build_prelude_index();
         let array = index
             .types
@@ -2030,6 +2054,14 @@ mod tests {
         assert_eq!(new.name, "new");
         assert_eq!(new.signature, "fn new() -> Array<T, N>");
         assert!(new.doc.is_some());
+
+        let from = array.methods.get(1).expect("`Array` has a second method");
+        assert_eq!(from.name, "from");
+        assert_eq!(
+            from.signature,
+            "fn from(slice: Slice<T>) -> Option<Array<T, N>>"
+        );
+        assert!(from.doc.is_some());
     }
 
     #[test]

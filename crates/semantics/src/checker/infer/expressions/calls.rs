@@ -28,6 +28,14 @@ struct TypeConversionCall {
     span: Span,
 }
 
+struct ArrayFromCall {
+    callee_span: Span,
+    args: Vec<Expression>,
+    spread: Option<Box<Expression>>,
+    type_args: Vec<Annotation>,
+    span: Span,
+}
+
 struct PseudoConstructorCall {
     expression: Box<Expression>,
     args: Vec<Expression>,
@@ -119,9 +127,22 @@ impl InferCtx<'_> {
         let type_args = type_arguments.into_annotations();
         let callee_path = expression.unwrap_parens().as_dotted_path();
 
-        // `Array.new` has no prelude signature (no const generics), so resolve inline.
+        // `Array.new` and `Array.from` have no prelude signature (no const
+        // generics), so resolve them inline.
         if callee_path.as_deref() == Some("Array.new") {
             return self.infer_array_new_call(&expression, args, type_args, span, expected_ty);
+        }
+        if callee_path.as_deref() == Some("Array.from") {
+            return self.infer_array_from_call(
+                ArrayFromCall {
+                    callee_span: expression.get_span(),
+                    args,
+                    spread,
+                    type_args,
+                    span,
+                },
+                expected_ty,
+            );
         }
 
         let pseudo_constructor_diagnostic = match callee_path.as_deref() {
@@ -684,6 +705,104 @@ impl InferCtx<'_> {
             ty: array_ty,
             span,
             call_kind: CallKind::NativeConstructor(NativeTypeKind::Array),
+        }
+    }
+
+    fn infer_array_from_call(&mut self, call: ArrayFromCall, expected_ty: &Type) -> Expression {
+        let ArrayFromCall {
+            callee_span,
+            args,
+            spread,
+            type_args,
+            span,
+        } = call;
+        let store = self.store;
+
+        let resolved = if type_args.is_empty() {
+            match self.expected_array_shape(expected_ty) {
+                Some(shape) => Some(shape),
+                None => {
+                    self.sink
+                        .push(diagnostics::infer::array_from_cannot_infer_size(span));
+                    None
+                }
+            }
+        } else if type_args.len() == 2 {
+            let elem = self.convert_to_type(store, &type_args[0], &span);
+            self.resolve_array_size(store, &type_args[1])
+                .map(|length| (elem, length))
+        } else {
+            self.sink
+                .push(diagnostics::infer::array_type_arity(type_args.len(), span));
+            None
+        };
+
+        if let Some(spread_expr) = spread {
+            self.sink.push(diagnostics::infer::spread_on_non_variadic(
+                spread_expr.get_span(),
+            ));
+            self.with_value_context(|s| s.infer_expression(*spread_expr, &Type::Error));
+        } else if args.len() != 1 {
+            self.sink
+                .push(diagnostics::infer::array_from_takes_one_argument(
+                    args.len(),
+                    span,
+                ));
+        }
+
+        let element_ty = resolved.as_ref().map(|(elem, _)| elem.clone());
+        let new_args: Vec<Expression> = args
+            .into_iter()
+            .enumerate()
+            .map(|(index, arg)| {
+                let want = match (index, &element_ty) {
+                    (0, Some(elem)) => self.type_slice(elem.clone()),
+                    _ => self.new_type_var(),
+                };
+                self.with_value_context(|s| s.infer_expression(arg, &want))
+            })
+            .collect();
+
+        let call_ty = match resolved {
+            Some((elem, len)) => {
+                let array_ty = self.type_array(len, elem);
+                self.type_option(store, array_ty)
+            }
+            None => Type::Error,
+        };
+
+        self.unify(expected_ty, &call_ty, &span);
+
+        let callee_ty = Type::function(Vec::new(), Vec::new(), Box::new(call_ty.clone()));
+        let callee_expression = Expression::Identifier {
+            value: "Array.from".into(),
+            ty: callee_ty,
+            span: callee_span,
+            resolution: IdentifierResolution::Unresolved,
+        };
+
+        Expression::Call {
+            expression: callee_expression.into(),
+            args: new_args,
+            spread: None,
+            type_arguments: CallTypeArguments::checked_without_types(type_args),
+            ty: call_ty,
+            span,
+            call_kind: CallKind::NativeConstructor(NativeTypeKind::Array),
+        }
+    }
+
+    /// The `(element, length)` an expected `Option<Array<T, N>>` asks for.
+    fn expected_array_shape(&self, expected_ty: &Type) -> Option<(Type, u64)> {
+        let store = self.store;
+        let peeled = store.peel_alias(&expected_ty.resolve_in(&self.env));
+        if !peeled.is_option() {
+            return None;
+        }
+        let inner = peeled.get_type_params()?.first()?;
+        match store.peel_alias(&inner.resolve_in(&self.env)) {
+            Type::Array { length, element } => Some((element.as_ref().clone(), length)),
+            _ => None,
         }
     }
 
