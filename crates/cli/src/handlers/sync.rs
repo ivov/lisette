@@ -76,7 +76,10 @@ pub fn sync(script: Option<&str>) -> i32 {
 
         let locator =
             deps::TypedefLocator::new(manifest.go_deps(), Some(project_root.clone()), target);
-        if let Err(msg) = go_cli::write_go_mod(target_dir, &manifest.project.name, &locator) {
+        let go_directive = go_cli::project_go_directive(project_root);
+        if let Err(msg) =
+            go_cli::write_go_mod(target_dir, &manifest.project.name, &locator, &go_directive)
+        {
             error!("failed to write target/go.mod", msg);
             return 1;
         }

@@ -5,7 +5,7 @@ use std::io::{IsTerminal, Write};
 use std::panic;
 use std::panic::PanicHookInfo;
 
-include!(concat!(env!("OUT_DIR"), "/go_version.rs"));
+use crate::go_cli::GO_TOOLCHAIN_VERSION;
 
 pub fn add_handler() {
     panic::set_hook(Box::new(|info: &PanicHookInfo<'_>| {

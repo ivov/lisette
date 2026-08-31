@@ -59,7 +59,7 @@ fn bindgen_pkg(target_pkg: &str, output: Option<String>, verbose: bool) -> i32 {
             0
         }
         Err(msg) => {
-            let (detail, hint) = match go_cli::toolchain_failure() {
+            let (detail, hint) = match go_cli::toolchain_failure_for(&msg) {
                 Some(failure) => (failure.message, failure.hint),
                 None => (msg, "Check Go installation with `go version`"),
             };

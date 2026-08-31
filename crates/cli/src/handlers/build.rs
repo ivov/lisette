@@ -485,9 +485,13 @@ fn reject_library_replace(prep: &BuildPrep, emit_tests: bool) -> Result<(), i32>
 }
 
 fn write_initial_go_mod(prep: &BuildPrep) -> Result<(), i32> {
-    if let Err(e) =
-        go_cli::write_go_mod(&prep.target_dir, &prep.manifest.project.name, &prep.locator)
-    {
+    let go_directive = go_cli::go_directive_for(prep.kind);
+    if let Err(e) = go_cli::write_go_mod(
+        &prep.target_dir,
+        &prep.manifest.project.name,
+        &prep.locator,
+        &go_directive,
+    ) {
         cli_error!(
             "Failed to compile Lisette project to Go",
             e,
@@ -655,8 +659,13 @@ fn reconcile_target_manifest(
         && prior != import_set_hash
     {
         go_cli::invalidate_go_mod_stamp(&prep.target_dir);
-        if let Err(e) = go_cli::write_go_mod(&prep.target_dir, &prep.manifest.project.name, locator)
-        {
+        let go_directive = go_cli::go_directive_for(prep.kind);
+        if let Err(e) = go_cli::write_go_mod(
+            &prep.target_dir,
+            &prep.manifest.project.name,
+            locator,
+            &go_directive,
+        ) {
             cli_error!(heading, e, "Check file permissions on `target/go.mod`");
             return Err(1);
         }
