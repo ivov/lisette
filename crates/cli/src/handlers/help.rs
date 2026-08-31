@@ -3,7 +3,7 @@ use crate::command::Command;
 use crate::output::{print_dimmed, print_help};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-include!(concat!(env!("OUT_DIR"), "/go_version.rs"));
+use crate::go_cli::GO_TOOLCHAIN_VERSION;
 
 pub fn print_main_help() {
     print_help(

@@ -66,7 +66,10 @@ pub(super) fn write_go_mod(dir: &Path, table: &ScriptTable, heading: &str) -> Re
         super::script_deps::Mode::Offline,
         stdlib::Target::host(),
     );
-    if let Err(message) = go_cli::write_go_mod(dir, super::script::GO_MODULE, &locator) {
+    let go_directive = go_cli::toolchain_go_directive();
+    if let Err(message) =
+        go_cli::write_go_mod(dir, super::script::GO_MODULE, &locator, &go_directive)
+    {
         cli_error!(heading, message, "Check permissions on the temp dir");
         return Err(1);
     }

@@ -84,7 +84,7 @@ jobs:
   go-versions-sync:
     name: Go versions sync
     needs: changes
-    if: ${{ needs.changes.outputs.code == 'true' }}
+    if: ${{ needs.changes.outputs.code == 'true' || needs.changes.outputs.site == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
@@ -174,7 +174,7 @@ jobs:
         id: go-build-cache
         with:
           path: ~/.cache/go-build
-          key: go-build-e2e-smoke-${{ runner.os }}-${{ hashFiles('go-toolchain', 'Cargo.lock', 'crates/**', 'tests/**', 'prelude/**') }}
+          key: go-build-e2e-smoke-${{ runner.os }}-${{ hashFiles('go-toolchain', 'go-language', 'Cargo.lock', 'crates/**', 'tests/**', 'prelude/**') }}
           restore-keys: |
             go-build-e2e-smoke-${{ runner.os }}-
       - run: cargo build -p lisette --locked
@@ -272,7 +272,7 @@ jobs:
         id: go-build-cache
         with:
           path: ~/.cache/go-build
-          key: go-build-e2e-suite-${{ runner.os }}-${{ hashFiles('go-toolchain', 'Cargo.lock', 'crates/**', 'tests/**', 'prelude/**') }}
+          key: go-build-e2e-suite-${{ runner.os }}-${{ hashFiles('go-toolchain', 'go-language', 'Cargo.lock', 'crates/**', 'tests/**', 'prelude/**') }}
           restore-keys: |
             go-build-e2e-suite-${{ runner.os }}-
       - run: just test-e2e-suite
@@ -308,6 +308,29 @@ jobs:
           cache: true
           cache-dependency-path: '**/go.sum'
       - run: cd prelude && go test ./...
+
+  minimum-go-tests:
+    name: Tests on minimum Go
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' }}
+    runs-on: ubuntu-latest
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+      - uses: ./.github/actions/setup-rust
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # ratchet:actions/setup-go@v6
+        with:
+          go-version-file: go-language
+          cache: true
+          cache-dependency-path: '**/go.sum'
+      - run: cd prelude && go test ./...
+      # The name filter can silently match nothing after a rename; the grep
+      # fails the job unless at least one test actually passed.
+      - run: |
+          set -o pipefail
+          cargo test -p tests --test e2e_library --locked external_go_program_imports_the_library -- --format terse 2>&1 | tee test-output.log
+          grep -qE 'test result: ok\. [1-9]' test-output.log
 
   shear:
     name: Shear
@@ -377,6 +400,7 @@ jobs:
       - e2e-suite
       - embed-diff
       - prelude-go
+      - minimum-go-tests
       - shear
       - deny
       - site

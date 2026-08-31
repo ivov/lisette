@@ -21,7 +21,7 @@ pre-commit:
       glob: "bindgen/**/*.go"
       run: just check-stdlib-drift
     go-versions-sync:
-      glob: "{go-toolchain,prelude/go.mod,bindgen/go.mod,bindgen/internal/cli/metadata/go-toolchain,crates/cli/go-toolchain}"
+      glob: "{go-toolchain,go-language,prelude/go.mod,bindgen/go.mod,bindgen/internal/cli/metadata/go-toolchain,crates/cli/go-toolchain,crates/cli/go-language,README.md,site/src/content/docs/intro/quickstart.mdx}"
       run: ./scripts/check-go-versions.sh
     tree-sitter-sync:
       glob: "editors/tree-sitter-lisette/{grammar.js,queries/**/*,src/**/*}"

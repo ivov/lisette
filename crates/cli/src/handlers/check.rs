@@ -170,7 +170,10 @@ fn check_project(project_path: &Path, options: &CheckOptions) -> i32 {
 
     let _ = reference::write_to(project_path);
 
-    if let Err(e) = go_cli::write_go_mod(&target_dir, &manifest.project.name, &locator) {
+    let go_directive = go_cli::go_directive_for(layout.kind);
+    if let Err(e) =
+        go_cli::write_go_mod(&target_dir, &manifest.project.name, &locator, &go_directive)
+    {
         cli_error!(
             "Failed to check project",
             e,
