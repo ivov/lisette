@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788131465122,
+  "lastUpdate": 1788198956223,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -30460,6 +30460,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "cli",
             "value": 13590,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8525,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6029,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2907,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1850,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 736,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9483,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "50ef125d2064a29e47c9544030b26e64c0bcb414",
+          "message": "refactor: split Go version into `go-toolchain` and `go-language` (#1367)",
+          "timestamp": "2026-08-31T19:55:31+02:00",
+          "tree_id": "d65413a1d6c82b1e411addf0298160f3782896b2",
+          "url": "https://github.com/ivov/lisette/commit/50ef125d2064a29e47c9544030b26e64c0bcb414"
+        },
+        "date": 1788198954482,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 137883,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32205,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27597,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19047,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14883,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13702,
             "unit": "lines"
           },
           {
