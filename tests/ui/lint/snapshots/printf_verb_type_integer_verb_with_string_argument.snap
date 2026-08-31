@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Format verb mismatch
+   ╭─[test.lis:6:22]
+ 5 │   let name = "alice"
+ 6 │   fmt.Printf("%d\n", name)
+   ·                      ──┬─
+   ·                        ╰── `string` argument for `%d`
+ 7 │ }
+   ╰────
+  help: `fmt.Printf` formats `%d`, which needs an integer, but the argument has type `string`. Use `%s`, or convert the argument · code: [lint.printf_verb_mismatch]

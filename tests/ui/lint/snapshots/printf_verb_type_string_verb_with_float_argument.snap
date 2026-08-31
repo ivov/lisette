@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Format verb mismatch
+   ╭─[test.lis:6:22]
+ 5 │   let price = 3.14159
+ 6 │   fmt.Printf("%s\n", price)
+   ·                      ──┬──
+   ·                        ╰── `float64` argument for `%s`
+ 7 │ }
+   ╰────
+  help: `fmt.Printf` formats `%s`, which needs a string, but the argument has type `float64`. Use `%f`, or convert the argument · code: [lint.printf_verb_mismatch]

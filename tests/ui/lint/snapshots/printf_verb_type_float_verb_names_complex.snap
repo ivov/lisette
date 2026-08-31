@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ▲ Format verb mismatch
+   ╭─[test.lis:5:22]
+ 4 │ fn main() {
+ 5 │   fmt.Printf("%f\n", "text")
+   ·                      ───┬──
+   ·                         ╰── `string` argument for `%f`
+ 6 │ }
+   ╰────
+  help: `fmt.Printf` formats `%f`, which needs a float or a complex number, but the argument has type `string`. Use `%s`, or convert the argument · code: [lint.printf_verb_mismatch]

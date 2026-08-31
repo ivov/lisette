@@ -1,5 +1,6 @@
 use crate::LisetteDiagnostic;
 use syntax::ast::{DeadCodeCause, Span};
+use syntax::types::SimpleKind;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IssueKind {
@@ -1430,6 +1431,111 @@ pub enum PrintfOperand {
     Verb(char),
     StarWidth,
     StarPrecision,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrintfClass {
+    Integer,
+    Float,
+    Complex,
+    Boolean,
+    String,
+}
+
+impl PrintfClass {
+    pub fn of(kind: SimpleKind) -> Option<PrintfClass> {
+        Some(match kind {
+            SimpleKind::Int
+            | SimpleKind::Int8
+            | SimpleKind::Int16
+            | SimpleKind::Int32
+            | SimpleKind::Int64
+            | SimpleKind::Uint
+            | SimpleKind::Uint8
+            | SimpleKind::Uint16
+            | SimpleKind::Uint32
+            | SimpleKind::Uint64
+            | SimpleKind::Uintptr
+            | SimpleKind::Byte
+            | SimpleKind::Rune => PrintfClass::Integer,
+            SimpleKind::Float32 | SimpleKind::Float64 => PrintfClass::Float,
+            SimpleKind::Complex64 | SimpleKind::Complex128 => PrintfClass::Complex,
+            SimpleKind::Bool => PrintfClass::Boolean,
+            SimpleKind::String => PrintfClass::String,
+            SimpleKind::Unit => return None,
+        })
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            PrintfClass::Integer => "an integer",
+            PrintfClass::Float => "a float",
+            PrintfClass::Complex => "a complex number",
+            PrintfClass::Boolean => "a boolean",
+            PrintfClass::String => "a string",
+        }
+    }
+
+    fn suggested_verb(self) -> char {
+        match self {
+            PrintfClass::Integer => 'd',
+            PrintfClass::Float | PrintfClass::Complex => 'f',
+            PrintfClass::Boolean => 't',
+            PrintfClass::String => 's',
+        }
+    }
+}
+
+fn printf_classes_phrase(accepted: &[PrintfClass]) -> String {
+    match accepted {
+        [] => "a pointer".to_string(),
+        [only] => only.name().to_string(),
+        [first, second] => format!("{} or {}", first.name(), second.name()),
+        [leading @ .., last] => {
+            let listed: Vec<&str> = leading.iter().map(|class| class.name()).collect();
+            format!("{}, or {}", listed.join(", "), last.name())
+        }
+    }
+}
+
+pub fn printf_verb_type_mismatch(
+    span: &Span,
+    package: &str,
+    function: &str,
+    verb: char,
+    accepted: &[PrintfClass],
+    argument: SimpleKind,
+) -> LisetteDiagnostic {
+    let display_package = package.strip_prefix("go:").unwrap_or(package);
+    let type_name = argument.leaf_name();
+    let needs = printf_classes_phrase(accepted);
+    let suggestion = PrintfClass::of(argument).map_or('v', PrintfClass::suggested_verb);
+
+    LisetteDiagnostic::warn("Format verb mismatch")
+        .with_lint_code("printf_verb_mismatch")
+        .with_span_label(span, format!("`{type_name}` argument for `%{verb}`"))
+        .with_help(format!(
+            "`{display_package}.{function}` formats `%{verb}`, which needs {needs}, but the argument has type `{type_name}`. Use `%{suggestion}`, or convert the argument"
+        ))
+}
+
+pub fn printf_star_type_mismatch(
+    span: &Span,
+    package: &str,
+    function: &str,
+    precision: bool,
+    argument: SimpleKind,
+) -> LisetteDiagnostic {
+    let display_package = package.strip_prefix("go:").unwrap_or(package);
+    let type_name = argument.leaf_name();
+    let part = if precision { "precision" } else { "width" };
+
+    LisetteDiagnostic::warn(format!("Format {part} mismatch"))
+        .with_lint_code("printf_verb_mismatch")
+        .with_span_label(span, format!("`{type_name}` argument for the `*` {part}"))
+        .with_help(format!(
+            "`{display_package}.{function}` takes the `*` {part} from an argument of type `{type_name}`, but a {part} must be an integer. Use a fixed {part}, or convert the argument"
+        ))
 }
 
 pub fn printf_verb_mismatch(
