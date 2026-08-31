@@ -500,8 +500,8 @@ const INLINE_ARRAY_CONSTRUCTORS = [
         "exactly `N` elements.",
       example: [
         "let parts = [1, 2, 3]",
-        "// !callout[/from/] `Some([1, 2, 3])`, or `None` on a length mismatch",
-        "let fixed: Option<Array<int, 3>> = Array.from(parts)",
+        "// !callout-right `Some([1, 2, 3])`",
+        "let fixed = Array.from<int, 3>(parts)",
       ].join("\n"),
     },
   },
