@@ -622,8 +622,8 @@ fn build_prelude_index() -> PreludeIndex {
                          \n\
                          Example:\n  \
                          let parts = [1, 2, 3]\n  \
-                         // !callout[/from/] `Some([1, 2, 3])`, or `None` on a length mismatch\n  \
-                         let fixed: Option<Array<int, 3>> = Array.from(parts)"
+                         // !callout-right `Some([1, 2, 3])`\n  \
+                         let fixed = Array.from<int, 3>(parts)"
                             .to_string(),
                     ),
                 },
