@@ -79,6 +79,7 @@ Compile a project to a binary at the `target/.lisette/bin/` dir.
 | `--sourcemap` | Include `//line` in Go code for stack traces |
 | `--go-flags "<flags>"` | Pass flags through to `go build` |
 | `-o, --output <path>` | Write the binary for a script at this path |
+| `--target <goos/goarch>` | Compile for another supported platform |
 
 | Example | Does |
 | --- | --- |
@@ -87,6 +88,7 @@ Compile a project to a binary at the `target/.lisette/bin/` dir.
 | `lis build greet.lis` | Build a script to `./greet` |
 | `lis build greet.lis -o bin/greet` | Build a script to a chosen path |
 | `lis build --go-flags "-trimpath"` | Strip file paths from the binary |
+| `lis build --target linux/amd64` | Compile for Linux on x86-64 |
 
 ### `lis emit`
 
@@ -104,12 +106,14 @@ Generate Go code from a Lisette project at the `target/` dir.
 | --- | --- |
 | `--sourcemap` | Include `//line` in Go code for stack traces |
 | `-o, --output <path>` | Write the Go file for a script at this path |
+| `--target <goos/goarch>` | Emit for another platform |
 
 | Example | Does |
 | --- | --- |
 | `lis emit` | Emit Go for project in current dir |
 | `lis emit ~/projects/demo` | Emit Go for project in specific dir |
 | `lis emit greet.lis` | Emit a script to `./greet.go` |
+| `lis emit --target linux/amd64` | Emit for Linux on x86-64 |
 
 ### `lis check`
 
@@ -130,6 +134,7 @@ Lint and typecheck a Lisette project.
 | `--deny warnings` | Fail check if warnings found |
 | `--fix` | Apply lint fixes in place |
 | `--output unix` | Machine-readable output |
+| `--target <goos/goarch>` | Typecheck for another platform |
 
 | Example | Does |
 | --- | --- |
@@ -138,6 +143,7 @@ Lint and typecheck a Lisette project.
 | `lis check script.lis` | Check single file |
 | `lis check --fix` | Fix all lints in the project |
 | `lis check --output unix` | One diagnostic per line |
+| `lis check --target linux/amd64` | Typecheck for Linux on x86-64 |
 
 ### `lis format`
 

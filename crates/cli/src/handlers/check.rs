@@ -33,6 +33,7 @@ struct CheckOptions {
     filter: Filter,
     format: OutputFormat,
     action: CheckAction,
+    target: stdlib::Target,
 }
 
 struct ScannedSources {
@@ -62,6 +63,7 @@ pub fn check(
     filter: Filter,
     action: CheckAction,
     format: OutputFormat,
+    build_target: stdlib::Target,
 ) -> i32 {
     let target = path.unwrap_or_else(|| ".".to_string());
     let target_path = Path::new(&target);
@@ -79,6 +81,7 @@ pub fn check(
         filter,
         format,
         action,
+        target: build_target,
     };
 
     if !target_path.is_dir() {
@@ -98,16 +101,17 @@ struct Snapshot {
 }
 
 impl Snapshot {
-    fn read(file: &Path) -> Self {
+    fn read(file: &Path, target: stdlib::Target) -> Self {
+        let bare = || TypedefLocator::new(Default::default(), None, target);
         let Ok(source) = fs::read_to_string(file) else {
             return Self {
                 source: None,
-                locator: TypedefLocator::default(),
+                locator: bare(),
             };
         };
         let locator =
-            super::script::script_locator(&source, file, super::script_deps::Mode::Offline)
-                .map_or_else(|_| TypedefLocator::default(), |(locator, _)| locator);
+            super::script::script_locator(&source, file, super::script_deps::Mode::Offline, target)
+                .map_or_else(|_| bare(), |(locator, _)| locator);
         Self {
             source: Some(source),
             locator,
@@ -131,7 +135,7 @@ fn check_file(file_path: &Path, options: &CheckOptions) -> i32 {
             file_path,
             options,
             CompileScope::Script { inside_project },
-            Snapshot::read(file_path),
+            Snapshot::read(file_path, options.target),
             "main",
             None,
         ),
@@ -145,7 +149,7 @@ fn check_project(project_path: &Path, options: &CheckOptions) -> i32 {
     };
 
     let (manifest, locator) =
-        match TypedefLocator::from_project_with_manifest(project_path, stdlib::Target::host()) {
+        match TypedefLocator::from_project_with_manifest(project_path, options.target) {
             Ok(pair) => pair,
             Err(msg) => {
                 cli_error!("Failed to check project", msg, "Fix `lisette.toml`");
@@ -446,7 +450,7 @@ fn check_loose_dir(dir: &Path, options: &CheckOptions) -> i32 {
         let Ok(compiled) = compile_single_file(
             file,
             CompileScope::Script { inside_project },
-            Snapshot::read(file),
+            Snapshot::read(file, options.target),
             "main",
             None,
         ) else {

@@ -35,6 +35,10 @@ name = "e2e_run"
 path = "e2e_run.rs"
 
 [[test]]
+name = "e2e_cross"
+path = "e2e_cross.rs"
+
+[[test]]
 name = "e2e_library"
 path = "e2e_library.rs"
 

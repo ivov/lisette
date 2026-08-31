@@ -1087,7 +1087,12 @@ impl BindgenSetup for WorkspaceBindgenSetup {
         source: &str,
         file: &Path,
     ) -> Result<(TypedefLocator, Option<deps::ScriptSession>), String> {
-        let (locator, dir) = handlers::script_locator(source, file, ScriptResolveMode::Offline)?;
+        let (locator, dir) = handlers::script_locator(
+            source,
+            file,
+            ScriptResolveMode::Offline,
+            stdlib::Target::host(),
+        )?;
         let session = dir
             .map(|dir| lock::acquire_target_lock_quiet(&dir))
             .transpose()?

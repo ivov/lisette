@@ -11,6 +11,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use stdlib::Target;
 use syntax::program::{File, Package, is_test_file};
 
 use crate::loader::is_external_test_package;
@@ -203,12 +204,16 @@ fn is_cache_valid(
         && cache.dependency_hashes == *current_dep_hashes
 }
 
-fn cache_path(project_root: &Path, package_id: &str) -> PathBuf {
+fn cache_dir(project_root: &Path, target: Target) -> PathBuf {
     project_root
         .join("target")
         .join(".lisette")
         .join("cache")
-        .join(cache_file_name(package_id))
+        .join(target.cache_segment())
+}
+
+fn cache_path(project_root: &Path, package_id: &str, target: Target) -> PathBuf {
+    cache_dir(project_root, target).join(cache_file_name(package_id))
 }
 
 pub fn cache_file_name(package_id: &str) -> String {
@@ -230,8 +235,9 @@ pub(crate) fn try_load_cache(
     expected_dep_hashes: &HashMap<String, u64>,
     expected_artifact_hash: Option<u64>,
     project_root: &Path,
+    target: Target,
 ) -> Option<PackageInterface> {
-    let path = cache_path(project_root, package_id);
+    let path = cache_path(project_root, package_id, target);
     let interface: PackageInterface = disk::read(&path).ok()?;
 
     if !is_cache_valid(&interface, expected_full_hash, expected_dep_hashes) {
@@ -281,6 +287,7 @@ pub fn save_package_cache(
     compiled: &CompiledPackage,
     store: &Store,
     project_root: &Path,
+    target: Target,
 ) -> io::Result<()> {
     let Some(package) = store.get_package(&compiled.package_id) else {
         return Err(io::Error::other("package not found in store"));
@@ -312,7 +319,7 @@ pub fn save_package_cache(
         emit_stamp: None,
     };
 
-    let path = cache_path(project_root, &compiled.package_id);
+    let path = cache_path(project_root, &compiled.package_id, target);
     disk::write(&path, &interface)
 }
 
@@ -399,9 +406,10 @@ fn cached_file_display_path(
 pub fn apply_emit_stamps(
     project_root: &Path,
     updates: &[(EmitStamp, Option<u64>)],
+    target: Target,
 ) -> io::Result<()> {
     for (stamp, value) in updates {
-        let path = cache_path(project_root, &stamp.package_id);
+        let path = cache_path(project_root, &stamp.package_id, target);
         let mut interface: PackageInterface = match disk::read(&path) {
             Ok(interface) => interface,
             Err(error)
@@ -415,6 +423,39 @@ pub fn apply_emit_stamps(
             Err(error) => return Err(error),
         };
         interface.emit_stamp = *value;
+        disk::write(&path, &interface)?;
+    }
+    Ok(())
+}
+
+pub fn clear_emit_stamps(project_root: &Path, target: Target) -> io::Result<()> {
+    let entries = match fs::read_dir(cache_dir(project_root, target)) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error),
+    };
+
+    for entry in entries {
+        let path = entry?.path();
+        if path.extension().is_none_or(|ext| ext != "cache") {
+            continue;
+        }
+        let mut interface: PackageInterface = match disk::read(&path) {
+            Ok(interface) => interface,
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::NotFound | io::ErrorKind::InvalidData
+                ) =>
+            {
+                continue;
+            }
+            Err(error) => return Err(error),
+        };
+        if interface.emit_stamp.is_none() {
+            continue;
+        }
+        interface.emit_stamp = None;
         disk::write(&path, &interface)?;
     }
     Ok(())
@@ -798,16 +839,33 @@ mod tests {
 
     #[test]
     fn test_cache_path_format() {
-        let path = cache_path(Path::new("/project"), "utils");
+        let target = Target::new("linux", "amd64");
+        let path = cache_path(Path::new("/project"), "utils", target);
         assert_eq!(
             path,
-            PathBuf::from("/project/target/.lisette/cache/utils.cache")
+            PathBuf::from("/project/target/.lisette/cache/linux_amd64/utils.cache")
         );
 
-        let path = cache_path(Path::new("/project"), "deep/nested/mod");
+        let path = cache_path(Path::new("/project"), "deep/nested/mod", target);
         assert_eq!(
             path,
-            PathBuf::from("/project/target/.lisette/cache/deep_snested_smod.cache")
+            PathBuf::from("/project/target/.lisette/cache/linux_amd64/deep_snested_smod.cache")
+        );
+    }
+
+    #[test]
+    fn cache_path_separates_targets() {
+        assert_ne!(
+            cache_path(
+                Path::new("/project"),
+                "utils",
+                Target::new("linux", "amd64")
+            ),
+            cache_path(
+                Path::new("/project"),
+                "utils",
+                Target::new("linux", "arm64")
+            ),
         );
     }
 
@@ -885,7 +943,7 @@ mod tests {
     fn apply_emit_stamps_round_trip() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        fs::create_dir_all(root.join("target").join(".lisette").join("cache")).unwrap();
+        let target = Target::host();
 
         let interface = PackageInterface {
             version: CACHE_FORMAT_VERSION,
@@ -897,19 +955,20 @@ mod tests {
             definitions: HashMap::default(),
             emit_stamp: None,
         };
-        let path = cache_path(root, "greet");
+        let path = cache_path(root, "greet", target);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, bincode::serialize(&interface).unwrap()).unwrap();
 
         let stamp = EmitStamp {
             package_id: "greet".to_string(),
             artifact_hash: 999,
         };
-        apply_emit_stamps(root, &[(stamp.clone(), Some(999))]).unwrap();
+        apply_emit_stamps(root, &[(stamp.clone(), Some(999))], target).unwrap();
         let reread: PackageInterface = bincode::deserialize(&fs::read(&path).unwrap()).unwrap();
         assert_eq!(reread.emit_stamp, Some(999));
         assert_eq!(reread.full_hash, 100);
 
-        apply_emit_stamps(root, &[(stamp, None)]).unwrap();
+        apply_emit_stamps(root, &[(stamp, None)], target).unwrap();
         let reread: PackageInterface = bincode::deserialize(&fs::read(&path).unwrap()).unwrap();
         assert_eq!(reread.emit_stamp, None);
     }
@@ -921,14 +980,14 @@ mod tests {
             package_id: "absent".to_string(),
             artifact_hash: 0,
         };
-        let result = apply_emit_stamps(tmp.path(), &[(stamp, None)]);
+        let result = apply_emit_stamps(tmp.path(), &[(stamp, None)], Target::host());
         assert!(result.is_ok());
     }
 
     #[test]
     fn apply_emit_stamps_removes_corrupt_cache() {
         let temp = tempfile::tempdir().unwrap();
-        let path = cache_path(temp.path(), "corrupt");
+        let path = cache_path(temp.path(), "corrupt", Target::host());
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, b"invalid").unwrap();
         let stamp = EmitStamp {
@@ -936,16 +995,54 @@ mod tests {
             artifact_hash: 0,
         };
 
-        let result = apply_emit_stamps(temp.path(), &[(stamp, None)]);
+        let result = apply_emit_stamps(temp.path(), &[(stamp, None)], Target::host());
 
         assert_eq!((result.is_ok(), path.exists()), (true, false));
+    }
+
+    #[test]
+    fn clear_emit_stamps_touches_one_target_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let host = Target::new("darwin", "arm64");
+        let cross = Target::new("linux", "amd64");
+
+        let stamped = |target| {
+            let interface = PackageInterface {
+                version: CACHE_FORMAT_VERSION,
+                compiler_version: COMPILER_VERSION_HASH,
+                stdlib_hash: STDLIB_HASH,
+                full_hash: 100,
+                dependency_hashes: HashMap::default(),
+                files: vec![],
+                definitions: HashMap::default(),
+                emit_stamp: Some(7),
+            };
+            let path = cache_path(root, "greet", target);
+            disk::write(&path, &interface).unwrap();
+            path
+        };
+        let host_path = stamped(host);
+        let cross_path = stamped(cross);
+
+        clear_emit_stamps(root, host).unwrap();
+
+        let reread = |path| disk::read::<PackageInterface>(path).unwrap();
+        assert_eq!(reread(&host_path).emit_stamp, None);
+        assert_eq!(reread(&cross_path).emit_stamp, Some(7));
+    }
+
+    #[test]
+    fn clear_emit_stamps_without_a_cache_dir_is_ok() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(clear_emit_stamps(tmp.path(), Target::host()).is_ok());
     }
 
     #[test]
     fn try_load_cache_rejects_unstamped_for_emit() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        fs::create_dir_all(root.join("target").join(".lisette").join("cache")).unwrap();
+        let target = Target::host();
         fs::create_dir_all(root.join("target").join("greet")).unwrap();
         fs::write(root.join("target").join("greet").join("greet.go"), "").unwrap();
 
@@ -962,10 +1059,11 @@ mod tests {
             definitions: HashMap::default(),
             emit_stamp: None,
         };
-        let path = cache_path(root, "greet");
+        let path = cache_path(root, "greet", target);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, bincode::serialize(&interface).unwrap()).unwrap();
 
-        let loaded = try_load_cache("greet", 100, &HashMap::default(), None, root);
+        let loaded = try_load_cache("greet", 100, &HashMap::default(), None, root, target);
         assert!(loaded.is_some(), "Check phase must accept unstamped cache");
 
         let loaded = try_load_cache(
@@ -974,6 +1072,7 @@ mod tests {
             &HashMap::default(),
             Some(compute_emit_artifact_hash(100, "github.com/test/x")),
             root,
+            target,
         );
         assert!(
             loaded.is_none(),
@@ -985,7 +1084,7 @@ mod tests {
     fn try_load_cache_rejects_after_sourcemap_invalidation() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        fs::create_dir_all(root.join("target").join(".lisette").join("cache")).unwrap();
+        let target = Target::host();
         fs::create_dir_all(root.join("target").join("greet")).unwrap();
         fs::write(root.join("target").join("greet").join("greet.go"), "").unwrap();
 
@@ -1004,21 +1103,38 @@ mod tests {
             definitions: HashMap::default(),
             emit_stamp: Some(artifact_hash),
         };
-        let path = cache_path(root, "greet");
+        let path = cache_path(root, "greet", target);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, bincode::serialize(&interface).unwrap()).unwrap();
 
         assert!(
-            try_load_cache("greet", 100, &HashMap::default(), Some(artifact_hash), root).is_some()
+            try_load_cache(
+                "greet",
+                100,
+                &HashMap::default(),
+                Some(artifact_hash),
+                root,
+                target,
+            )
+            .is_some()
         );
 
         let stamp = EmitStamp {
             package_id: "greet".to_string(),
             artifact_hash,
         };
-        apply_emit_stamps(root, &[(stamp, None)]).unwrap();
+        apply_emit_stamps(root, &[(stamp, None)], target).unwrap();
 
         assert!(
-            try_load_cache("greet", 100, &HashMap::default(), Some(artifact_hash), root).is_none()
+            try_load_cache(
+                "greet",
+                100,
+                &HashMap::default(),
+                Some(artifact_hash),
+                root,
+                target,
+            )
+            .is_none()
         );
     }
 }

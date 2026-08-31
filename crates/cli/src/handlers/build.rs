@@ -31,20 +31,29 @@ use std::io::ErrorKind;
 use std::ops::Deref;
 use syntax::go_platform::{GO_ARCHITECTURE_NAMES, GO_OPERATING_SYSTEM_NAMES};
 
-pub fn emit(path: Option<String>, sourcemap: bool, output: Option<String>) -> i32 {
+pub fn emit(
+    path: Option<String>,
+    sourcemap: bool,
+    output: Option<String>,
+    build_target: stdlib::Target,
+) -> i32 {
     let target = path.unwrap_or_else(|| ".".to_string());
     let target_path = Path::new(&target);
 
     match resolve_target(target_path, "Failed to emit") {
         Err(code) => code,
-        Ok(BuildTarget::Script { inside_project }) => {
-            super::script::emit(target_path, sourcemap, output.as_deref(), inside_project)
-        }
+        Ok(BuildTarget::Script { inside_project }) => super::script::emit(
+            target_path,
+            sourcemap,
+            output.as_deref(),
+            inside_project,
+            build_target,
+        ),
         Ok(BuildTarget::Project(root)) => {
             if reject_project_output(output.as_deref(), "writes Go to `target/`").is_err() {
                 return 1;
             }
-            with_locked_project(&root, stdlib::Target::host(), |prep| {
+            with_locked_project(&root, build_target, |prep| {
                 match build_locked(prep, BuildPurpose::Emit { sourcemap }) {
                     Ok(_) => 0,
                     Err(code) => code,
@@ -59,10 +68,10 @@ pub fn build(
     sourcemap: bool,
     go_flags: Vec<String>,
     output: Option<String>,
+    build_target: stdlib::Target,
 ) -> i32 {
     let target = path.unwrap_or_else(|| ".".to_string());
     let target_path = Path::new(&target);
-    let build_target = stdlib::Target::host();
 
     let root = match resolve_target(target_path, "Failed to build") {
         Err(code) => return code,
@@ -246,7 +255,7 @@ pub(super) fn link_project_binary(
     };
 
     let binary_name = go_cli::binary_name(&prep.manifest.project.name, target);
-    let output_path = build_dir.join(".lisette").join("bin").join(&binary_name);
+    let output_path = binary_dir(&build_dir, target).join(&binary_name);
 
     if let Err(e) = go_cli::build_binary(&build_dir, &output_path, target, go_flags) {
         cli_error!(heading, e.message, e.hint);
@@ -254,6 +263,15 @@ pub(super) fn link_project_binary(
     }
 
     Ok(output_path)
+}
+
+fn binary_dir(build_dir: &Path, target: stdlib::Target) -> PathBuf {
+    let bin = build_dir.join(".lisette").join("bin");
+    if target.is_host() {
+        bin
+    } else {
+        bin.join(target.cache_segment())
+    }
 }
 
 fn prepare_project_build(project_path: &Path, target: stdlib::Target) -> Result<BuildPrep, i32> {
@@ -392,6 +410,7 @@ pub(super) fn build_locked(
 
     reject_library_replace(prep, emit_tests)?;
     write_initial_go_mod(prep)?;
+    clear_stamps_from_another_target(prep)?;
     let locator = workspace_locator(prep);
     let entry = EntryPoint::resolve(prep)?;
 
@@ -401,6 +420,7 @@ pub(super) fn build_locked(
         return Err(1);
     }
 
+    clear_go_target_marker(prep)?;
     let mut emit = write_and_prune_outputs(prep, &result, sourcemap, emit_tests)?;
     reconcile_target_manifest(prep, &locator, &mut emit)?;
 
@@ -409,6 +429,7 @@ pub(super) fn build_locked(
     }
     // Committed only after gofmt + tidy succeed.
     go_cli::write_emit_manifest(&prep.target_dir, &emit.new_manifest);
+    go_cli::write_emit_target(&prep.target_dir, prep.locator.target());
 
     if let Some(label) = purpose.completion_label() {
         print_completion(label, prep, &counts, start);
@@ -580,6 +601,7 @@ fn write_and_prune_outputs(
                 .iter()
                 .map(|s| (s.clone(), None))
                 .collect::<Vec<_>>(),
+            prep.locator.target(),
         )
     {
         cli_error!(
@@ -693,6 +715,37 @@ fn reconcile_target_manifest(
     Ok(())
 }
 
+fn clear_go_target_marker(prep: &BuildPrep) -> Result<(), i32> {
+    if let Err(e) = go_cli::clear_emit_target(&prep.target_dir) {
+        let path = go_cli::emit_target_path(&prep.target_dir);
+        let shown = relative_to_cwd(&path).unwrap_or_else(|| path.display().to_string());
+        cli_error!(
+            "Failed to compile Lisette project to Go",
+            format!("Failed to remove `{shown}`, which records the target of the last emit: {e}"),
+            "Delete that path and retry"
+        );
+        return Err(1);
+    }
+    Ok(())
+}
+
+fn clear_stamps_from_another_target(prep: &BuildPrep) -> Result<(), i32> {
+    let target = prep.locator.target();
+    if go_cli::read_emit_target(&prep.target_dir) == Some(target.to_string()) {
+        return Ok(());
+    }
+
+    if let Err(e) = cache::clear_emit_stamps(&prep.project_path, target) {
+        cli_error!(
+            "Failed to compile Lisette project to Go",
+            format!("Failed to invalidate emit stamps after a target switch: {e}"),
+            "Check file permissions on `target/.lisette/cache/`, or delete the directory and retry"
+        );
+        return Err(1);
+    }
+    Ok(())
+}
+
 fn commit_emit_stamps(prep: &BuildPrep, result: &CompileResult) {
     if let Err(e) = cache::apply_emit_stamps(
         &prep.project_path,
@@ -701,6 +754,7 @@ fn commit_emit_stamps(prep: &BuildPrep, result: &CompileResult) {
             .iter()
             .map(|s| (s.clone(), Some(s.artifact_hash)))
             .collect::<Vec<_>>(),
+        prep.locator.target(),
     ) {
         eprintln!("warning: failed to write emit stamps: {e}");
     }
