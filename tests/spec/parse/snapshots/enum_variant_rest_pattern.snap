@@ -24,6 +24,7 @@ description: |
         variants: [
             EnumVariant {
                 doc: None,
+                attributes: [],
                 name: "Triangle",
                 name_span: Span {
                     file_id: 0,
@@ -97,6 +98,7 @@ description: |
             },
             EnumVariant {
                 doc: None,
+                attributes: [],
                 name: "Circle",
                 name_span: Span {
                     file_id: 0,

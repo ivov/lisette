@@ -514,9 +514,8 @@ pub(crate) fn attribute_completions(
 
     let mut items = match enclosing_context(before) {
         EnclosingContext::Struct => collect(attributes_for(AttributeTarget::StructField)),
-        EnclosingContext::Parenthesized | EnclosingContext::Enum | EnclosingContext::Function => {
-            Vec::new()
-        }
+        EnclosingContext::Enum => collect(attributes_for(AttributeTarget::EnumVariant)),
+        EnclosingContext::Parenthesized | EnclosingContext::Function => Vec::new(),
         EnclosingContext::Impl => match following_item(after).item {
             FollowingItem::Target(AttributeTarget::Function) | FollowingItem::Unknown => {
                 collect(attributes_for(AttributeTarget::Method))

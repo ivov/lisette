@@ -269,6 +269,7 @@ impl TaskState {
 
         EnumVariant {
             doc: enum_variant.doc.clone(),
+            attributes: enum_variant.attributes.clone(),
             name: enum_variant.name.clone(),
             name_span: enum_variant.name_span,
             fields: new_fields,

@@ -24,6 +24,7 @@ description: |
         variants: [
             EnumVariant {
                 doc: None,
+                attributes: [],
                 name: "Red",
                 name_span: Span {
                     file_id: 0,
@@ -34,6 +35,7 @@ description: |
             },
             EnumVariant {
                 doc: None,
+                attributes: [],
                 name: "Green",
                 name_span: Span {
                     file_id: 0,
@@ -44,6 +46,7 @@ description: |
             },
             EnumVariant {
                 doc: None,
+                attributes: [],
                 name: "Blue",
                 name_span: Span {
                     file_id: 0,

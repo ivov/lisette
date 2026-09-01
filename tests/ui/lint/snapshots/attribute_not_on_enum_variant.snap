@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ✕ `#[json]` not on an enum variant
+   ╭─[test.lis:3:3]
+ 2 │ enum WithJson {
+ 3 │   #[json("x")]
+   ·   ──────┬─────
+   ·         ╰── an enum variant does not accept this
+ 4 │   A,
+   ╰────
+  help: Move it to the declaration it describes, or remove it · code: [attribute.attribute_not_on_enum_variant]

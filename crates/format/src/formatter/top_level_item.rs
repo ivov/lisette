@@ -309,6 +309,11 @@ impl<'a> Formatter<'a> {
     }
 
     fn enum_variant_body(&mut self, variant: &'a EnumVariant) -> Document<'a> {
+        let attributes = self.field_attributes(&variant.attributes);
+        attributes.append(self.enum_variant_declaration(variant))
+    }
+
+    fn enum_variant_declaration(&mut self, variant: &'a EnumVariant) -> Document<'a> {
         let name = Document::string(variant.name.to_string());
         match &variant.fields {
             VariantFields::Unit => name.append(","),

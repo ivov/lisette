@@ -32,6 +32,7 @@ description: |
         variants: [
             EnumVariant {
                 doc: None,
+                attributes: [],
                 name: "Some",
                 name_span: Span {
                     file_id: 0,
@@ -65,6 +66,7 @@ description: |
             },
             EnumVariant {
                 doc: None,
+                attributes: [],
                 name: "None",
                 name_span: Span {
                     file_id: 0,

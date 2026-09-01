@@ -8,6 +8,7 @@ pub enum AttributeTarget {
     Struct,
     StructField,
     Enum,
+    EnumVariant,
     Function,
     Method,
     TypeAlias,
@@ -142,6 +143,10 @@ pub(crate) fn field_attribute_forces_export(attribute: &Attribute) -> bool {
 
 pub fn known_attribute_names() -> Vec<&'static str> {
     ATTRIBUTES.iter().map(|a| a.name).collect()
+}
+
+pub fn lookup(name: &str) -> Option<&'static AttributeInfo> {
+    ATTRIBUTES.iter().find(|a| a.name == name)
 }
 
 pub fn attributes_for(target: AttributeTarget) -> impl Iterator<Item = &'static AttributeInfo> {

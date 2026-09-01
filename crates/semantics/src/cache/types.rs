@@ -191,11 +191,15 @@ fn remap_methods<'a>(
 fn remap_variant(variant: &mut EnumVariant, remap: &mut impl FnMut(&mut Span)) {
     let EnumVariant {
         doc: _,
+        attributes,
         name: _,
         name_span,
         fields,
     } = variant;
     remap(name_span);
+    for attribute in attributes {
+        remap(&mut attribute.span);
+    }
     match fields {
         VariantFields::Unit => {}
         VariantFields::Tuple(fields) | VariantFields::Struct(fields) => {
