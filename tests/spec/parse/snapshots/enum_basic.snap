@@ -23,6 +23,7 @@ description: |
         variants: [
             EnumVariant {
                 doc: None,
+                attributes: [],
                 name: "Pending",
                 name_span: Span {
                     file_id: 0,
@@ -33,6 +34,7 @@ description: |
             },
             EnumVariant {
                 doc: None,
+                attributes: [],
                 name: "Processing",
                 name_span: Span {
                     file_id: 0,
@@ -43,6 +45,7 @@ description: |
             },
             EnumVariant {
                 doc: None,
+                attributes: [],
                 name: "Complete",
                 name_span: Span {
                     file_id: 0,
@@ -53,6 +56,7 @@ description: |
             },
             EnumVariant {
                 doc: None,
+                attributes: [],
                 name: "Failed",
                 name_span: Span {
                     file_id: 0,

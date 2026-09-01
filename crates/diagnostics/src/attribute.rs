@@ -49,6 +49,13 @@ pub fn iterate_non_unit_variant(attribute_span: &Span, variant_span: &Span) -> L
         .with_help("Remove the payload, or drop `#[iterate]`")
 }
 
+pub fn attribute_not_on_enum_variant(name: &str, attribute_span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!("`#[{name}]` not on an enum variant"))
+        .with_attribute_code("attribute_not_on_enum_variant")
+        .with_span_label(attribute_span, "an enum variant does not accept this")
+        .with_help("Move it to the declaration it describes, or remove it")
+}
+
 pub fn iterate_generic_enum(attribute_span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("`#[iterate]` on generic enum")
         .with_attribute_code("iterate_generic_enum")

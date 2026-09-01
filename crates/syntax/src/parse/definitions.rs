@@ -213,7 +213,9 @@ impl<'source> Parser<'source> {
             let start_position = self.stream.position;
 
             let variant_doc = self.collect_doc_comments().map(|(text, _)| text);
-            if let Some(variant) = self.parse_enum_variant_with_doc(variant_doc) {
+            let variant_attributes = self.parse_attributes();
+            if let Some(variant) = self.parse_enum_variant_with_doc(variant_doc, variant_attributes)
+            {
                 if let Some((_, first_span)) =
                     seen_variants.iter().find(|(n, _)| n == &variant.name)
                 {
@@ -253,7 +255,11 @@ impl<'source> Parser<'source> {
         }
     }
 
-    fn parse_enum_variant_with_doc(&mut self, doc: Option<string::String>) -> Option<EnumVariant> {
+    fn parse_enum_variant_with_doc(
+        &mut self,
+        doc: Option<string::String>,
+        attributes: Vec<Attribute>,
+    ) -> Option<EnumVariant> {
         if self.is_not(Identifier) {
             self.track_error(
                 "expected variant name",
@@ -287,6 +293,7 @@ impl<'source> Parser<'source> {
 
         Some(EnumVariant {
             doc,
+            attributes,
             name,
             name_span,
             fields,

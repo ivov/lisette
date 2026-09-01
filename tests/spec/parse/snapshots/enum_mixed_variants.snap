@@ -22,6 +22,7 @@ description: |
         variants: [
             EnumVariant {
                 doc: None,
+                attributes: [],
                 name: "Quit",
                 name_span: Span {
                     file_id: 0,
@@ -32,6 +33,7 @@ description: |
             },
             EnumVariant {
                 doc: None,
+                attributes: [],
                 name: "Move",
                 name_span: Span {
                     file_id: 0,
@@ -85,6 +87,7 @@ description: |
             },
             EnumVariant {
                 doc: None,
+                attributes: [],
                 name: "Write",
                 name_span: Span {
                     file_id: 0,

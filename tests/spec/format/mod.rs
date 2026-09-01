@@ -332,6 +332,11 @@ fn enum_empty() {
 }
 
 #[test]
+fn enum_variant_attribute_moves_to_its_own_line() {
+    assert_format_snapshot!("enum Colour { #[json(\"x\")] Red, Green }");
+}
+
+#[test]
 fn for_loop() {
     assert_format_snapshot!("fn test() { for item in items { process(item) } }");
 }

@@ -28794,3 +28794,29 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn attribute_not_on_enum_variant() {
+    assert_lint_snapshot!(
+        r#"
+enum WithJson {
+  #[json("x")]
+  A,
+  B,
+}
+"#
+    );
+}
+
+#[test]
+fn go_attribute_not_on_enum_variant() {
+    assert_lint_snapshot!(
+        r#"
+enum GoOnVariant {
+  #[go(hidden_embed)]
+  A,
+  B,
+}
+"#
+    );
+}

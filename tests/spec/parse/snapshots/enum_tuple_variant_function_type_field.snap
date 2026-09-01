@@ -20,6 +20,7 @@ description: |
         variants: [
             EnumVariant {
                 doc: None,
+                attributes: [],
                 name: "V",
                 name_span: Span {
                     file_id: 0,

@@ -17,12 +17,35 @@ pub fn check_attributes(expression: &Expression, ctx: &NodeCtx) {
 }
 
 pub fn check_enum_attributes(expression: &Expression, ctx: &NodeCtx) {
-    let Expression::Enum { attributes, .. } = expression else {
+    let Expression::Enum {
+        attributes,
+        variants,
+        ..
+    } = expression
+    else {
         return;
     };
 
     for attribute in attributes {
         check_unknown_attribute(attribute, ctx.sink);
+    }
+
+    for variant in variants {
+        for attribute in &variant.attributes {
+            check_unknown_attribute(attribute, ctx.sink);
+            check_variant_attribute_target(attribute, ctx.sink);
+        }
+    }
+}
+
+fn check_variant_attribute_target(attribute: &Attribute, sink: &LocalSink) {
+    let accepted = attributes::lookup(&attribute.name)
+        .is_some_and(|info| info.applies_to(attributes::AttributeTarget::EnumVariant));
+    if !accepted && attributes::is_known_attribute(&attribute.name) {
+        sink.push(diagnostics::attribute::attribute_not_on_enum_variant(
+            &attribute.name,
+            &attribute.span,
+        ));
     }
 }
 

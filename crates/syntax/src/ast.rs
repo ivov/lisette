@@ -564,6 +564,7 @@ impl<'a> IntoIterator for &'a VariantFields {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnumVariant {
     pub doc: Option<String>,
+    pub attributes: Vec<Attribute>,
     pub name: EcoString,
     pub name_span: Span,
     pub fields: VariantFields,
