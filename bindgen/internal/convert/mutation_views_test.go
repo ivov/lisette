@@ -139,6 +139,14 @@ func GrowShape(s []int, n int) []int {
 func FullAppend(s, xs []int) []int { return append(s[:cap(s)], xs...) }
 
 func AppendSpreadRows(src [][]byte) [][]byte { return append([][]byte(nil), src...) }
+
+func writeDigits(dst []byte) int { for i := range dst { dst[i] = '0' }; return 0 }
+
+func AppendHelperWritten(dst []byte) []byte {
+	var a [8]byte
+	j := writeDigits(a[:])
+	return append(dst, a[j:]...)
+}
 `)
 	views, sig := functionViews(t, analysis, pkg, "AppendOne")
 	assertResultView(t, views, sig, 0, "dst")
@@ -152,6 +160,9 @@ func AppendSpreadRows(src [][]byte) [][]byte { return append([][]byte(nil), src.
 	assertResultView(t, views, sig, 0, "s")
 	views, sig = functionViews(t, analysis, pkg, "AppendSpreadRows")
 	assertResultView(t, views, sig, 0, "[src]")
+	views, sig = functionViews(t, analysis, pkg, "AppendHelperWritten")
+	assertResultView(t, views, sig, 0, "dst")
+	assertOpaque(t, views, 0, false)
 }
 
 func TestViewsReportEachResult(t *testing.T) {
