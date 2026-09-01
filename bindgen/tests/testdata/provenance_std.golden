@@ -59,6 +59,7 @@ bufio.Writer.WriteString: r1<-recv
 bytes.Buffer.AvailableBuffer: r0<-recv
 bytes.Buffer.Bytes: r0<-recv
 bytes.Buffer.Next: r0<-recv
+bytes.Buffer.Peek (shared r1): r0<-recv
 bytes.Buffer.Read (shared r1): 
 bytes.Buffer.ReadByte (shared r1): 
 bytes.Buffer.ReadBytes (shared r1): 
@@ -168,7 +169,7 @@ crypto/cipher.NewOFB: r0<-[b]
 crypto/cipher.StreamWriter.Write (shared r1): 
 crypto/dsa.GenerateKey (shared r0): 
 crypto/dsa.GenerateParameters (shared r0): 
-crypto/dsa.Sign (opaque r0 r1) (shared r2): r0<-hash r0<-priv r0<-rand r1<-hash r1<-priv r1<-rand
+crypto/dsa.Sign (opaque r0 r1) (shared r2): r0<-hash r0<-priv r0<-random r1<-hash r1<-priv r1<-random
 crypto/ecdh.P256 (shared r0): 
 crypto/ecdh.P384 (shared r0): 
 crypto/ecdh.P521 (shared r0): 
@@ -176,14 +177,14 @@ crypto/ecdh.PrivateKey.Curve: r0<-recv
 crypto/ecdh.PrivateKey.Public: r0<-recv
 crypto/ecdh.PrivateKey.PublicKey: r0<-recv
 crypto/ecdh.PublicKey.Curve: r0<-recv
-crypto/ecdsa.GenerateKey (opaque r0) (shared r1): r0<-c r0<-rand
+crypto/ecdsa.GenerateKey (opaque r0) (shared r1): r0<-c r0<-r
 crypto/ecdsa.ParseRawPrivateKey (opaque r0): r0<-curve r0<-data
 crypto/ecdsa.ParseUncompressedPublicKey (opaque r0): r0<-curve r0<-data
 crypto/ecdsa.PrivateKey.Public: r0<-recv
-crypto/ecdsa.PrivateKey.Sign (opaque r0 r1) (shared r1): r0<-digest r0<-opts r0<-rand r0<-recv r1<-digest r1<-opts r1<-rand r1<-recv
+crypto/ecdsa.PrivateKey.Sign (opaque r0 r1) (shared r1): r0<-digest r0<-opts r0<-random r0<-recv r1<-digest r1<-opts r1<-random r1<-recv
 crypto/ecdsa.PublicKey.Bytes (opaque r0): r0<-recv
 crypto/ecdsa.Sign (opaque r0 r1 r2) (shared r2): r0<-hash r0<-priv r0<-rand r1<-hash r1<-priv r1<-rand r2<-hash r2<-priv r2<-rand
-crypto/ecdsa.SignASN1 (opaque r0 r1) (shared r1): r0<-hash r0<-priv r0<-rand r1<-hash r1<-priv r1<-rand
+crypto/ecdsa.SignASN1 (opaque r0 r1) (shared r1): r0<-hash r0<-priv r0<-r r1<-hash r1<-priv r1<-r
 crypto/ed25519.GenerateKey (shared r2): 
 crypto/elliptic.CurveParams.Add (opaque r0 r1): r0<-recv r0<-x1 r0<-x2 r0<-y1 r0<-y2 r1<-recv r1<-x1 r1<-x2 r1<-y1 r1<-y2
 crypto/elliptic.CurveParams.Double (opaque r0 r1): r0<-recv r0<-x1 r0<-y1 r1<-recv r1<-x1 r1<-y1
@@ -200,14 +201,38 @@ crypto/elliptic.P521 (shared r0):
 crypto/elliptic.Unmarshal (opaque r0 r1): r0<-curve r0<-data r1<-curve r1<-data
 crypto/elliptic.UnmarshalCompressed (opaque r0 r1): r0<-curve r0<-data r1<-curve r1<-data
 crypto/hmac.New (opaque r0): r0<-key
-crypto/mlkem.EncapsulationKey1024.Encapsulate (opaque r0): 
-crypto/mlkem.EncapsulationKey768.Encapsulate (opaque r0): 
+crypto/hpke.AES128GCM (shared r0): 
+crypto/hpke.AES256GCM (shared r0): 
+crypto/hpke.ChaCha20Poly1305 (shared r0): 
+crypto/hpke.DHKEM (shared r0): 
+crypto/hpke.HKDFSHA256 (shared r0): 
+crypto/hpke.HKDFSHA384 (shared r0): 
+crypto/hpke.HKDFSHA512 (shared r0): 
+crypto/hpke.MLKEM1024 (shared r0): 
+crypto/hpke.MLKEM1024P384 (shared r0): 
+crypto/hpke.MLKEM768 (shared r0): 
+crypto/hpke.MLKEM768P256 (shared r0): 
+crypto/hpke.MLKEM768X25519 (shared r0): 
+crypto/hpke.NewAEAD (shared r0): 
+crypto/hpke.NewDHKEMPrivateKey (shared r0): r0<-[priv]
+crypto/hpke.NewDHKEMPublicKey (shared r0): r0<-[pub]
+crypto/hpke.NewHybridPrivateKey (shared r0): r0<-[pq] r0<-[t]
+crypto/hpke.NewHybridPublicKey (shared r0): r0<-[pq] r0<-[t]
+crypto/hpke.NewKDF (shared r0): 
+crypto/hpke.NewKEM (shared r0): 
+crypto/hpke.NewMLKEMPrivateKey (shared r0): r0<-[priv]
+crypto/hpke.NewMLKEMPublicKey (shared r0): r0<-[pub]
+crypto/hpke.NewRecipient: r0<-[kdf]
+crypto/hpke.NewSender: r1<-[kdf]
+crypto/hpke.SHAKE128 (shared r0): 
+crypto/hpke.SHAKE256 (shared r0): 
 crypto/rand.Int (opaque r0) (shared r1): r0<-max r0<-rand
-crypto/rand.Prime (opaque r0) (shared r1): r0<-rand
+crypto/rand.Prime (opaque r0) (shared r1): r0<-r
 crypto/rsa.DecryptOAEP (shared r1): 
 crypto/rsa.DecryptPKCS1v15 (shared r1): 
 crypto/rsa.DecryptPKCS1v15SessionKey (shared r0): 
 crypto/rsa.EncryptOAEP (shared r1): 
+crypto/rsa.EncryptOAEPWithOptions (shared r1): 
 crypto/rsa.EncryptPKCS1v15 (shared r1): 
 crypto/rsa.GenerateKey (opaque r0) (shared r1): r0<-random
 crypto/rsa.GenerateMultiPrimeKey (opaque r0) (shared r1): r0<-random
@@ -221,7 +246,7 @@ crypto/rsa.VerifyPSS (shared r0):
 crypto/sha3.NewCSHAKE128 (opaque r0): r0<-N r0<-S
 crypto/sha3.NewCSHAKE256 (opaque r0): r0<-N r0<-S
 crypto/sha3.SHA3.AppendBinary: r0<-p
-crypto/sha3.SHA3.Sum (opaque r0): r0<-b
+crypto/sha3.SHA3.Sum: r0<-b
 crypto/sha3.SHAKE.AppendBinary: r0<-p
 crypto/sha3.SHAKE.MarshalBinary (opaque r0): r0<-recv
 crypto/tls.CertificateRequestInfo.Context: r0<-recv
@@ -273,19 +298,21 @@ crypto/x509.Certificate.CheckCRLSignature (shared r0): r0<-[recv]
 crypto/x509.Certificate.CheckSignature (shared r0): r0<-[recv]
 crypto/x509.Certificate.CheckSignatureFrom (shared r0): r0<-[parent]
 crypto/x509.Certificate.CreateCRL (shared r1): 
-crypto/x509.Certificate.Verify (opaque r0) (shared r1): r0<-opts r0<-recv r1<-[opts] r1<-[recv]
+crypto/x509.Certificate.Verify (opaque r0) (shared r0 r1): r0<-opts r0<-recv r1<-[opts] r1<-[recv]
 crypto/x509.Certificate.VerifyHostname: r0<-[recv]
 crypto/x509.CertificateRequest.CheckSignature (shared r0): r0<-[recv]
 crypto/x509.CreateCertificate (opaque r1) (shared r1): r1<-parent r1<-priv r1<-pub r1<-rand r1<-template
 crypto/x509.CreateCertificateRequest (shared r1): 
 crypto/x509.CreateRevocationList (shared r1): 
 crypto/x509.DecryptPEMBlock (shared r1): 
+crypto/x509.ExtKeyUsage.OID (opaque r0): 
 crypto/x509.MarshalPKCS8PrivateKey: r1<-[key]
 crypto/x509.MarshalPKIXPublicKey: r1<-[pub]
 crypto/x509.OID.AppendBinary: r0<-b
 crypto/x509.OID.AppendText: r0<-b
 crypto/x509.OID.UnmarshalBinary (shared r0): 
 crypto/x509.OID.UnmarshalText (shared r0): 
+crypto/x509.OIDFromASN1OID (opaque r0) (shared r1): r0<-asn1OID
 crypto/x509.OIDFromInts (opaque r0) (shared r1): r0<-oid
 crypto/x509.ParseCertificate (opaque r0 r1) (shared r0): r0<-der r1<-der
 crypto/x509.ParseCertificateRequest (opaque r0) (shared r0): r0<-asn1Data
@@ -508,6 +535,7 @@ encoding/xml.NewTokenDecoder: r0<-t
 encoding/xml.ProcInst.Copy: r0<-[recv]
 encoding/xml.StartElement.Copy: r0<-[recv]
 encoding/xml.Unmarshal (opaque r0) (shared r0): r0<-data r0<-v
+errors.AsType (opaque r0): r0<-err
 errors.Join: r0<-[errs]
 expvar.Handler (opaque r0): 
 expvar.Map.Init: r0<-recv
@@ -640,8 +668,8 @@ go/types.Named.Methods (opaque r0) (shared r0): r0<-recv
 go/types.Named.Obj (opaque r0): r0<-recv
 go/types.Named.Origin: r0<-recv
 go/types.Named.TypeArgs: r0<-recv
-go/types.Named.TypeParams: r0<-recv
-go/types.Named.Underlying (opaque r0): r0<-recv
+go/types.Named.TypeParams (opaque r0): r0<-recv
+go/types.Named.Underlying: r0<-recv
 go/types.NewAlias (opaque r0): r0<-obj r0<-rhs
 go/types.NewArray: r0<-[elem]
 go/types.NewChan: r0<-[elem]
@@ -707,7 +735,7 @@ go/types.TypeList.At: r0<-recv
 go/types.TypeList.Types: r0<-[recv]
 go/types.TypeParam.Constraint: r0<-recv
 go/types.TypeParam.Obj: r0<-recv
-go/types.TypeParam.Underlying (opaque r0) (shared r0): r0<-recv
+go/types.TypeParam.Underlying (shared r0): 
 go/types.TypeParamList.At: r0<-recv
 go/types.TypeParamList.TypeParams: r0<-[recv]
 go/types.Unalias (opaque r0): r0<-t
@@ -843,6 +871,7 @@ log/slog.Logger.WithGroup: r0<-recv
 log/slog.New: r0<-[h]
 log/slog.NewJSONHandler: r0<-[opts] r0<-[w]
 log/slog.NewLogLogger (opaque r0): r0<-h
+log/slog.NewMultiHandler: r0<-[handlers]
 log/slog.NewRecord: r0<-[t]
 log/slog.NewTextHandler: r0<-[opts] r0<-[w]
 log/slog.Record.Clone: r0<-[recv]
@@ -995,13 +1024,17 @@ net.Buffers.Read (shared r1):
 net.DNSConfigError.Unwrap: r0<-recv
 net.DNSError.Unwrap: r0<-recv
 net.Dial (opaque r0 r1) (shared r1): 
-net.DialIP (opaque r1) (shared r1): r1<-laddr r1<-raddr
-net.DialTCP (opaque r1) (shared r1): r1<-laddr r1<-raddr
+net.DialIP (shared r1): r1<-[laddr] r1<-[raddr]
+net.DialTCP (shared r1): r1<-[laddr] r1<-[raddr]
 net.DialTimeout (opaque r0 r1) (shared r1): 
-net.DialUDP (opaque r1) (shared r1): r1<-laddr r1<-raddr
-net.DialUnix (opaque r1) (shared r1): 
+net.DialUDP (shared r1): r1<-[laddr] r1<-[raddr]
+net.DialUnix (shared r1): 
 net.Dialer.Dial (opaque r0 r1) (shared r1): r0<-recv r1<-recv
 net.Dialer.DialContext (opaque r0 r1) (shared r1): r0<-ctx r0<-recv r1<-ctx r1<-recv
+net.Dialer.DialIP (shared r1): 
+net.Dialer.DialTCP (shared r1): 
+net.Dialer.DialUDP (shared r1): 
+net.Dialer.DialUnix (shared r1): 
 net.FileConn (shared r1): 
 net.FileListener (shared r1): 
 net.FilePacketConn (shared r1): 
@@ -1025,13 +1058,13 @@ net.Interfaces (shared r1):
 net.Listen (opaque r1) (shared r1): 
 net.ListenConfig.Listen (opaque r1) (shared r1): r1<-ctx
 net.ListenConfig.ListenPacket (opaque r1) (shared r1): r1<-ctx
-net.ListenIP (opaque r1) (shared r1): r1<-laddr
-net.ListenMulticastUDP (opaque r1) (shared r1): r1<-gaddr r1<-ifi
+net.ListenIP (shared r1): r1<-[laddr]
+net.ListenMulticastUDP (shared r1): r1<-[gaddr]
 net.ListenPacket (opaque r1) (shared r1): 
-net.ListenTCP (opaque r1) (shared r1): r1<-laddr
-net.ListenUDP (opaque r1) (shared r1): r1<-laddr
-net.ListenUnix (opaque r1) (shared r1): 
-net.ListenUnixgram (opaque r1) (shared r1): 
+net.ListenTCP (shared r1): r1<-[laddr]
+net.ListenUDP (shared r1): r1<-[laddr]
+net.ListenUnix (shared r1): 
+net.ListenUnixgram (shared r1): 
 net.LookupAddr (opaque r1) (shared r1): 
 net.LookupCNAME (opaque r1) (shared r1): 
 net.LookupHost (opaque r1) (shared r1): 
@@ -1164,6 +1197,7 @@ net/http.Server.ServeTLS (opaque r0) (shared r0): r0<-l r0<-recv
 net/http.StripPrefix (opaque r0): r0<-h
 net/http.TimeoutHandler: r0<-[h]
 net/http.Transport.Clone (opaque r0): r0<-recv
+net/http.Transport.NewClientConn (opaque r0 r1) (shared r1): r0<-ctx r0<-recv r1<-ctx r1<-recv
 net/http.Transport.RoundTrip (opaque r0 r1) (shared r1): r0<-recv r0<-req r1<-recv r1<-req
 net/http/cgi.Request (opaque r0): 
 net/http/cgi.RequestFromMap (opaque r0): r0<-params
@@ -1177,6 +1211,8 @@ net/http/httptest.NewTLSServer: r0<-[handler]
 net/http/httptest.NewUnstartedServer: r0<-[handler]
 net/http/httptest.ResponseRecorder.Header: r0<-recv
 net/http/httptest.ResponseRecorder.Result (opaque r0): r0<-recv
+net/http/httptest.ResponseRecorder.Write (shared r1): 
+net/http/httptest.ResponseRecorder.WriteString (shared r1): 
 net/http/httptest.Server.Certificate: r0<-recv
 net/http/httptest.Server.Client: r0<-recv
 net/http/httptrace.WithClientTrace: r0<-[ctx]
@@ -1303,6 +1339,7 @@ os.OpenInRoot (opaque r0) (shared r1):
 os.Pipe (opaque r0 r1) (shared r2): 
 os.Process.Kill (shared r0): 
 os.Process.Signal (shared r0): 
+os.Process.WithHandle (shared r0): 
 os.ReadDir (opaque r0) (shared r1): 
 os.ReadFile (shared r1): 
 os.RemoveAll (shared r0): 
@@ -1356,7 +1393,9 @@ path/filepath.Localize (shared r1):
 path/filepath.Match (shared r1): 
 reflect.MakeSlice: r0<-[typ]
 reflect.Swapper (opaque r0): r0<-slice
+reflect.TypeAssert (opaque r0): 
 reflect.Value.Bytes (opaque r0): 
+reflect.Value.Fields (opaque r0): 
 reflect.Value.Index (shared r0): 
 reflect.Value.Recv (opaque r0): 
 reflect.Value.Seq (opaque r0): 

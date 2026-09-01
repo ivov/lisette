@@ -830,13 +830,14 @@ func (a *MutationAnalysis) markSources(fn *ssa.Function, value ssa.Value, source
 			}
 			inside, remaining := insertLevel(level, pending)
 			for _, added := range common.Args[1:] {
+				if !spreadCarriesStorage(added.Type()) {
+					continue
+				}
 				root, _ := storagePath(added)
 				switch root.(type) {
 				case *ssa.Alloc, *ssa.MakeSlice, *ssa.MakeMap:
 				default:
-					if spreadCarriesStorage(added.Type()) {
-						a.markSources(fn, added, sources, inside, remaining, seen)
-					}
+					a.markSources(fn, added, sources, inside, remaining, seen)
 				}
 				values, helperWritten, sharesGlobal := a.containedValues(root)
 				if helperWritten {

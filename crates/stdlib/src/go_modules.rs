@@ -72,10 +72,15 @@ static GO_STDLIB_COMMON: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
         ),
         ("crypto/hkdf", include_str!("../typedefs/crypto/hkdf.d.lis")),
         ("crypto/hmac", include_str!("../typedefs/crypto/hmac.d.lis")),
+        ("crypto/hpke", include_str!("../typedefs/crypto/hpke.d.lis")),
         ("crypto/md5", include_str!("../typedefs/crypto/md5.d.lis")),
         (
             "crypto/mlkem",
             include_str!("../typedefs/crypto/mlkem.d.lis"),
+        ),
+        (
+            "crypto/mlkem/mlkemtest",
+            include_str!("../typedefs/crypto/mlkem/mlkemtest.d.lis"),
         ),
         (
             "crypto/pbkdf2",
@@ -295,6 +300,7 @@ static GO_STDLIB_COMMON: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
             include_str!("../typedefs/net/textproto.d.lis"),
         ),
         ("net/url", include_str!("../typedefs/net/url.d.lis")),
+        ("os/exec", include_str!("../typedefs/os/exec.d.lis")),
         ("os/signal", include_str!("../typedefs/os/signal.d.lis")),
         ("os/user", include_str!("../typedefs/os/user.d.lis")),
         ("path", include_str!("../typedefs/path.d.lis")),
@@ -337,6 +343,10 @@ static GO_STDLIB_COMMON: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
         ("sync", include_str!("../typedefs/sync.d.lis")),
         ("sync/atomic", include_str!("../typedefs/sync/atomic.d.lis")),
         ("testing", include_str!("../typedefs/testing.d.lis")),
+        (
+            "testing/cryptotest",
+            include_str!("../typedefs/testing/cryptotest.d.lis"),
+        ),
         (
             "testing/fstest",
             include_str!("../typedefs/testing/fstest.d.lis"),
@@ -394,10 +404,6 @@ static GO_STDLIB_LINUX_AMD64: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
     HashMap::from([
         ("os", include_str!("../typedefs/os_linux_amd64.d.lis")),
         (
-            "os/exec",
-            include_str!("../typedefs/os/exec_linux_amd64.d.lis"),
-        ),
-        (
             "path/filepath",
             include_str!("../typedefs/path/filepath_linux_amd64.d.lis"),
         ),
@@ -415,10 +421,6 @@ static GO_STDLIB_LINUX_AMD64: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
 static GO_STDLIB_LINUX_ARM64: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
     HashMap::from([
         ("os", include_str!("../typedefs/os_linux_amd64.d.lis")),
-        (
-            "os/exec",
-            include_str!("../typedefs/os/exec_linux_amd64.d.lis"),
-        ),
         (
             "path/filepath",
             include_str!("../typedefs/path/filepath_linux_amd64.d.lis"),
@@ -438,10 +440,6 @@ static GO_STDLIB_DARWIN_AMD64: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| 
     HashMap::from([
         ("os", include_str!("../typedefs/os_darwin_amd64.d.lis")),
         (
-            "os/exec",
-            include_str!("../typedefs/os/exec_linux_amd64.d.lis"),
-        ),
-        (
             "path/filepath",
             include_str!("../typedefs/path/filepath_linux_amd64.d.lis"),
         ),
@@ -459,10 +457,6 @@ static GO_STDLIB_DARWIN_AMD64: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| 
 static GO_STDLIB_DARWIN_ARM64: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
     HashMap::from([
         ("os", include_str!("../typedefs/os_darwin_amd64.d.lis")),
-        (
-            "os/exec",
-            include_str!("../typedefs/os/exec_linux_amd64.d.lis"),
-        ),
         (
             "path/filepath",
             include_str!("../typedefs/path/filepath_linux_amd64.d.lis"),
@@ -482,10 +476,6 @@ static GO_STDLIB_WINDOWS_AMD64: LazyLock<HashMap<&str, &str>> = LazyLock::new(||
     HashMap::from([
         ("os", include_str!("../typedefs/os_windows_amd64.d.lis")),
         (
-            "os/exec",
-            include_str!("../typedefs/os/exec_windows_amd64.d.lis"),
-        ),
-        (
             "path/filepath",
             include_str!("../typedefs/path/filepath_windows_amd64.d.lis"),
         ),
@@ -503,10 +493,6 @@ static GO_STDLIB_WINDOWS_AMD64: LazyLock<HashMap<&str, &str>> = LazyLock::new(||
 static GO_STDLIB_WINDOWS_ARM64: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
     HashMap::from([
         ("os", include_str!("../typedefs/os_windows_amd64.d.lis")),
-        (
-            "os/exec",
-            include_str!("../typedefs/os/exec_windows_amd64.d.lis"),
-        ),
         (
             "path/filepath",
             include_str!("../typedefs/path/filepath_windows_amd64.d.lis"),
