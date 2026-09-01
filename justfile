@@ -117,11 +117,12 @@ fuzz-scan-imports duration="300":
     cargo +nightly fuzz run --sanitizer address scan_imports fuzz/corpus/scan_imports fuzz/seed_corpus -- -max_total_time={{duration}} -rss_limit_mb=2048 -dict=fuzz/lisette.dict
 
 _supported-targets := "linux/amd64,linux/arm64,darwin/amd64,darwin/arm64,windows/amd64,windows/arm64"
+_pinned-go-toolchain := "go" + `cat go-toolchain`
 
 generate-stdlib-typedefs version targets=_supported-targets:
-    cd bindgen && just build
+    cd bindgen && GOTOOLCHAIN={{_pinned-go-toolchain}} just build
     just build # make binary to run bindgen
-    BINDGEN_TARGETS={{targets}} ./target/release/lis bindgen stdlib {{version}}
+    BINDGEN_TARGETS={{targets}} GOTOOLCHAIN={{_pinned-go-toolchain}} ./target/release/lis bindgen stdlib {{version}}
     ./target/release/lis format crates/stdlib/typedefs/
     just build # recompile compiler to embed updated typedefs
     ./target/release/lis check crates/stdlib/typedefs/
@@ -135,10 +136,10 @@ _stdlib-typedef-version:
     @grep '// Lisette:' crates/stdlib/typedefs/fmt.d.lis | awk '{print $3}'
 
 check-stdlib-drift:
-    cd bindgen && just build
+    cd bindgen && GOTOOLCHAIN={{_pinned-go-toolchain}} just build
     cargo build --profile bindgen
     ./target/bindgen/lis check crates/stdlib/typedefs/
-    BINDGEN_TARGETS={{_supported-targets}} ./target/bindgen/lis bindgen stdlib "$(just _stdlib-typedef-version)"
+    BINDGEN_TARGETS={{_supported-targets}} GOTOOLCHAIN={{_pinned-go-toolchain}} ./target/bindgen/lis bindgen stdlib "$(just _stdlib-typedef-version)"
     ./target/bindgen/lis format crates/stdlib/typedefs/
     just format
     git diff --exit-code crates/stdlib/
