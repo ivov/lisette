@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788370941060,
+  "lastUpdate": 1788371199970,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -31350,6 +31350,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "cli",
             "value": 13942,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8692,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6036,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2911,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1850,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 740,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9484,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4592b18265a8c4c4b95d3edc51675eb5619ffaa1",
+          "message": "perf: reuse source scan when reading package folders (#1377)",
+          "timestamp": "2026-09-02T19:46:11+02:00",
+          "tree_id": "5752b95e63dc7d666abee2cc57266fbe5cde918e",
+          "url": "https://github.com/ivov/lisette/commit/4592b18265a8c4c4b95d3edc51675eb5619ffaa1"
+        },
+        "date": 1788371197479,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 138804,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32274,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27838,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19187,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14901,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13972,
             "unit": "lines"
           },
           {
