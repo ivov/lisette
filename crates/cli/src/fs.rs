@@ -16,11 +16,25 @@ use semantics::store::ENTRY_PACKAGE_ID;
 
 pub use semantics::path::relative_to_cwd;
 
+/// Scanned `.lis` files grouped by directory, so a folder scan skips `read_dir`.
+type ScannedTree = HashMap<PathBuf, Vec<PathBuf>>;
+
+fn group_by_directory(paths: Vec<PathBuf>) -> ScannedTree {
+    let mut tree = ScannedTree::new();
+    for path in paths {
+        let Some(dir) = path.parent() else {
+            continue;
+        };
+        tree.entry(dir.to_path_buf()).or_default().push(path);
+    }
+    tree
+}
+
 pub struct LocalFileSystem {
     search_paths: Vec<(PathBuf, DisplayPathBase)>,
     project_root: Option<(PathBuf, DisplayPathBase)>,
-    scanned_sources: Option<Vec<PathBuf>>,
-    scanned_test_sources: Option<Vec<PathBuf>>,
+    scanned_sources: Option<ScannedTree>,
+    scanned_test_sources: Option<ScannedTree>,
 }
 
 impl LocalFileSystem {
@@ -58,8 +72,8 @@ impl LocalFileSystem {
         test_sources: Vec<PathBuf>,
     ) -> Self {
         let mut fs = Self::new(src_dir.to_str().unwrap_or("."), project_root);
-        fs.scanned_sources = Some(sources);
-        fs.scanned_test_sources = Some(test_sources);
+        fs.scanned_sources = Some(group_by_directory(sources));
+        fs.scanned_test_sources = Some(group_by_directory(test_sources));
         fs
     }
 
@@ -70,41 +84,53 @@ impl LocalFileSystem {
         let tests_root = project_root.join(loader::EXTERNAL_TESTS_DIR);
         let walked;
         let test_sources = match &self.scanned_test_sources {
-            Some(test_sources) => test_sources.as_slice(),
+            Some(test_sources) => test_sources,
             None => {
-                walked = collect_lis_filepaths_recursive(&tests_root);
+                walked = group_by_directory(collect_lis_filepaths_recursive(&tests_root));
                 &walked
             }
         };
-        let mut dirs: HashSet<PathBuf> = HashSet::default();
-        for path in test_sources {
-            if path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(|name| name.ends_with(".test.lis"))
-                && let Some(dir) = path.parent()
-            {
-                dirs.insert(dir.to_path_buf());
-            }
-        }
-        dirs.iter()
-            .filter_map(|dir| dir.strip_prefix(project_root).ok())
+        test_sources
+            .iter()
+            .filter(|(_, files)| {
+                files.iter().any(|path| {
+                    path.file_name()
+                        .and_then(|name| name.to_str())
+                        .is_some_and(|name| name.ends_with(".test.lis"))
+                })
+            })
+            .filter_map(|(dir, _)| dir.strip_prefix(project_root).ok())
             .map(package_id_from_rel)
             .collect()
     }
 
-    fn collect_files(&self, folder_path: &Path, fs_name: &str, base: &DisplayPathBase) -> Files {
-        let Ok(entries) = read_dir(folder_path) else {
-            return HashMap::default();
+    fn collect_files(
+        &self,
+        folder_path: &Path,
+        fs_name: &str,
+        base: &DisplayPathBase,
+        scanned: Option<&ScannedTree>,
+    ) -> Files {
+        let listed;
+        let paths: &[PathBuf] = match scanned {
+            Some(tree) => tree.get(folder_path).map(Vec::as_slice).unwrap_or_default(),
+            None => {
+                let Ok(entries) = read_dir(folder_path) else {
+                    return HashMap::default();
+                };
+                listed = entries
+                    .flatten()
+                    .map(|entry| entry.path())
+                    .filter(|path| path.extension().is_some_and(|e| e == "lis"))
+                    .collect::<Vec<PathBuf>>();
+                &listed
+            }
         };
 
         let mut files = HashMap::default();
 
-        for entry in entries.flatten() {
-            let path = entry.path();
-
-            if path.extension().is_some_and(|e| e == "lis")
-                && let Ok(source) = read_to_string(&path)
+        for path in paths {
+            if let Ok(source) = read_to_string(path)
                 && let Some(name) = path.file_name().and_then(|s| s.to_str())
             {
                 let display_path = base
@@ -434,17 +460,28 @@ impl Loader for LocalFileSystem {
         if loader::is_external_test_package(folder_name)
             && let Some((project_root, display_base)) = &self.project_root
         {
-            return self.collect_files(&project_root.join(folder_name), folder_name, display_base);
+            return self.collect_files(
+                &project_root.join(folder_name),
+                folder_name,
+                display_base,
+                self.scanned_test_sources.as_ref(),
+            );
         }
 
         let fs_name = to_fs_path(folder_name);
-        for (search_path, display_base) in &self.search_paths {
+        for (index, (search_path, display_base)) in self.search_paths.iter().enumerate() {
             let folder_path = if fs_name.is_empty() {
                 search_path.clone()
             } else {
                 search_path.join(fs_name)
             };
-            let files = self.collect_files(&folder_path, fs_name, display_base);
+            // The scan covers the first search path only.
+            let scanned = if index == 0 {
+                self.scanned_sources.as_ref()
+            } else {
+                None
+            };
+            let files = self.collect_files(&folder_path, fs_name, display_base, scanned);
 
             if !files.is_empty() {
                 return files;
@@ -465,38 +502,33 @@ impl Loader for LocalFileSystem {
             has_production: bool,
         }
 
-        let mut contents_by_dir: HashMap<PathBuf, Contents> = HashMap::new();
         let walked;
         let sources = match &self.scanned_sources {
-            Some(sources) => sources.as_slice(),
+            Some(sources) => sources,
             None => {
-                walked = collect_lis_filepaths_recursive(root);
+                walked = group_by_directory(collect_lis_filepaths_recursive(root));
                 &walked
             }
         };
-        for path in sources {
-            let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+        let mut discovered = DiscoveredPackages::default();
+        for (dir, files) in sources {
+            let Some(package_id) = dir.strip_prefix(root).ok().map(package_id_from_rel) else {
                 continue;
             };
-            let Some(dir) = path.parent() else {
-                continue;
-            };
-            let contents = contents_by_dir.entry(dir.to_path_buf()).or_default();
-            if name.ends_with(".test.lis") {
-                contents.has_test = true;
-            } else {
-                contents.has_test_root_file = true;
-                if loader::is_production_package_file(name) {
-                    contents.has_production = true;
+            let mut contents = Contents::default();
+            for path in files {
+                let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+                    continue;
+                };
+                if name.ends_with(".test.lis") {
+                    contents.has_test = true;
+                } else {
+                    contents.has_test_root_file = true;
+                    if loader::is_production_package_file(name) {
+                        contents.has_production = true;
+                    }
                 }
             }
-        }
-        let dir_to_id = |dir: &Path| dir.strip_prefix(root).ok().map(package_id_from_rel);
-        let mut discovered = DiscoveredPackages::default();
-        for (dir, contents) in contents_by_dir {
-            let Some(package_id) = dir_to_id(&dir) else {
-                continue;
-            };
             let has_internal_tests = contents.has_test && contents.has_test_root_file;
             if contents.has_production {
                 discovered.add_production(package_id, has_internal_tests);
@@ -952,6 +984,37 @@ mod tests {
             internal_test_roots,
             vec!["alpha/beta".to_string()],
             "a test root needs both a test file and a production file"
+        );
+    }
+
+    #[test]
+    fn scan_folder_reads_scanned_folders_from_the_scan() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let src = root.join("src");
+
+        let alpha = src.join("alpha");
+        stdfs::create_dir_all(&alpha).unwrap();
+        let listed = write_file(&alpha, "alpha.lis", "pub fn a() {}\n");
+        write_file(&alpha, "unlisted.lis", "pub fn u() {}\n");
+
+        let beta = src.join("beta");
+        stdfs::create_dir_all(&beta).unwrap();
+        write_file(&beta, "beta.lis", "pub fn b() {}\n");
+
+        let fs = LocalFileSystem::with_scanned_sources(&src, Some(root), vec![listed], Vec::new());
+
+        let alpha_files = fs.scan_folder("alpha");
+        assert_eq!(
+            alpha_files.keys().collect::<Vec<_>>(),
+            vec!["alpha.lis"],
+            "a scanned folder serves exactly the files the scan listed"
+        );
+        assert_eq!(alpha_files["alpha.lis"].source, "pub fn a() {}\n");
+
+        assert!(
+            fs.scan_folder("beta").is_empty(),
+            "a folder absent from the scan is empty, the directory is not listed again"
         );
     }
 
