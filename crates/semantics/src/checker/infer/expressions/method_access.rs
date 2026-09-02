@@ -349,7 +349,7 @@ impl InferCtx<'_> {
                 } else {
                     coercion = Some(ReceiverCoercion::AutoAddress);
                     if receiver_ty.is_writable() {
-                        self.check_auto_address_mutation(receiver_expression, method_name, span);
+                        self.check_auto_address_mutation(receiver_expression, span);
                     }
                 }
                 // Unify inner types: T with T (from Ref<T>)
@@ -379,28 +379,27 @@ impl InferCtx<'_> {
         coercion
     }
 
-    /// When auto-addressing a receiver (T → Ref<T>), verify the binding
-    /// is declared `let mut`, since the Ref<T> method may mutate it.
-    fn check_auto_address_mutation(
-        &mut self,
-        receiver_expression: &Expression,
-        _method_name: &str,
-        span: &Span,
-    ) {
+    /// An auto-addressed receiver of a writing method must permit the write.
+    fn check_auto_address_mutation(&mut self, receiver_expression: &Expression, span: &Span) {
         let store = self.store;
-        // Ref<T> methods can mutate, require `let mut` on the receiver binding,
-        // unless the receiver chain contains a deref (mutation goes through pointer).
-        let Some(var_name) = receiver_expression.get_var_name() else {
-            return;
-        };
-
-        if let Some(binding_id) = self.scopes.lookup_binding_id(&var_name) {
-            self.facts.mark_alias_mutated(binding_id);
+        if let Some(var_name) = receiver_expression.get_var_name() {
+            if let Some(binding_id) = self.scopes.lookup_binding_id(&var_name) {
+                self.facts.mark_alias_mutated(binding_id);
+            }
+            if self.imports.namespace(&var_name).is_some() {
+                return;
+            }
         }
-        if !self.place_permits_write(receiver_expression)
-            && self.imports.namespace(&var_name).is_none()
-        {
-            self.report_disallowed_mutation(store, &var_name, *span, false, None);
+        match self.classify_write_target(receiver_expression) {
+            super::permission::WriteTarget::Through { governing } if !governing.is_writable() => {
+                self.report_write_through_read_only(receiver_expression, &governing, *span);
+            }
+            super::permission::WriteTarget::Binding { name }
+                if !self.scopes.lookup_mutable(&name) =>
+            {
+                self.report_disallowed_mutation(store, &name, *span, false, None);
+            }
+            _ => {}
         }
     }
 
