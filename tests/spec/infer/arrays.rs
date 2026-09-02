@@ -855,3 +855,67 @@ fn array_size_rejects_a_test_only_constant_from_a_production_file() {
     );
     infer_package("main", fs).assert_infer_code("array_size_unknown_constant");
 }
+
+#[test]
+fn array_new_default_variant_enum_is_zeroable() {
+    infer("enum Colour { #[default] Red, Green }\nfn f() { let _ = Array.new<Colour, 3>() }")
+        .assert_no_errors();
+}
+
+#[test]
+fn array_new_enum_without_default_still_errors() {
+    infer("enum Colour { Red, Green }\nfn f() { let _ = Array.new<Colour, 3>() }")
+        .assert_infer_code("array_new_no_zero");
+}
+
+#[test]
+fn slice_make_default_variant_enum_is_zeroable() {
+    infer("enum Colour { #[default] Red, Green }\nfn f() { let _ = Slice.make<Colour>(3) }")
+        .assert_no_errors();
+}
+
+#[test]
+fn struct_spread_fills_default_variant_field() {
+    infer(
+        "enum Colour { #[default] Red, Green }\nstruct Paint { name: string, shade: Colour }\nfn f() { let _ = Paint { name: \"a\", .. } }",
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn map_read_of_default_variant_enum_is_allowed() {
+    infer(
+        "enum Colour { #[default] Red, Green }\nfn f(m: Map<string, Colour>) -> Colour { m[\"a\"] }",
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn default_variant_reaches_through_a_struct_field() {
+    infer(
+        "enum Colour { #[default] Red, Green }\nstruct Paint { shade: Colour }\nfn f() { let _ = Array.new<Paint, 2>() }",
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn generic_enum_may_mark_a_payload_less_variant() {
+    infer("enum Cached<T> { #[default] Miss, Hit(T) }\nfn f() { let _ = Array.new<Cached<int>, 2>() }")
+        .assert_no_errors();
+}
+
+#[test]
+fn default_variant_in_typedef_is_rejected() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "gen",
+        "gen.d.lis",
+        "pub enum Mode { #[default] Fast, Slow }\n",
+    );
+    fs.add_file(
+        "main",
+        "main.lis",
+        "import \"gen\"\nfn f() { let _ = gen.Mode.Fast }\n",
+    );
+    infer_package("main", fs).assert_error_contains("#[default]` in a typedef");
+}

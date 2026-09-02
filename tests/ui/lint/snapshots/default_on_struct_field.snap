@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  ✕ `#[default]` not on an enum variant
+   ╭─[test.lis:3:3]
+ 2 │ struct OnField {
+ 3 │   #[default]
+   ·   ─────┬────
+   ·        ╰── expected on a variant
+ 4 │   pub a: int,
+   ╰────
+  help: Place `#[default]` on the variant that is the enum's zero value · code: [attribute.default_not_on_enum_variant]

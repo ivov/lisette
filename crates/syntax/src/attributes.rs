@@ -113,6 +113,11 @@ pub const ATTRIBUTES: &[AttributeInfo] = &[
         detail: "mark a test function",
         targets: &[Function],
     },
+    AttributeInfo {
+        name: "default",
+        detail: "mark the variant that is the enum's zero value",
+        targets: &[EnumVariant],
+    },
 ];
 
 /// `go` is accepted but absent from [`ATTRIBUTES`] (the Go-interop rail).

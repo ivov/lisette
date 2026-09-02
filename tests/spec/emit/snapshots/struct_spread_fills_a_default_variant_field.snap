@@ -1,0 +1,51 @@
+---
+source: tests/spec/emit/arrays.rs
+description: |
+  
+  enum Colour {
+    Red,
+    #[default]
+    Green,
+  }
+  
+  struct Paint {
+    name: string,
+    shade: Colour,
+  }
+  
+  fn blank() -> Paint {
+    Paint { name: "a", .. }
+  }
+---
+package main
+
+func MakeColourRed() Colour {
+	return Colour{Tag: ColourRed}
+}
+
+func MakeColourGreen() Colour {
+	return Colour{Tag: ColourGreen}
+}
+
+type ColourTag int
+
+const (
+	ColourRed   ColourTag = 1
+	ColourGreen ColourTag = 0
+)
+
+type Colour struct {
+	Tag ColourTag
+}
+
+type Paint struct {
+	name  string
+	shade Colour
+}
+
+func blank() Paint {
+	return Paint{
+		name:  "a",
+		shade: Colour{},
+	}
+}

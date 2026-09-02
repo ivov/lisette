@@ -56,6 +56,45 @@ pub fn attribute_not_on_enum_variant(name: &str, attribute_span: &Span) -> Liset
         .with_help("Move it to the declaration it describes, or remove it")
 }
 
+pub fn default_not_on_enum_variant(attribute_span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`#[default]` not on an enum variant")
+        .with_attribute_code("default_not_on_enum_variant")
+        .with_span_label(attribute_span, "expected on a variant")
+        .with_help("Place `#[default]` on the variant that is the enum's zero value")
+}
+
+pub fn default_variant_in_typedef(attribute_span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`#[default]` in a typedef")
+        .with_attribute_code("default_variant_in_typedef")
+        .with_span_label(
+            attribute_span,
+            "a generated declaration cannot claim a zero",
+        )
+        .with_help("A Go type's zero value comes from Go, so Lisette does not choose one")
+}
+
+pub fn default_variant_with_payload(variant_span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`#[default]` on a variant with a payload")
+        .with_attribute_code("default_variant_with_payload")
+        .with_span_label(variant_span, "this variant has a payload")
+        .with_help("`#[default]` is allowed only on a payload-less variant")
+}
+
+pub fn duplicate_default_variant(attribute_span: &Span, first_span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Duplicate default variants")
+        .with_attribute_code("duplicate_default_variant")
+        .with_span_label(first_span, "first")
+        .with_span_label(attribute_span, "second")
+        .with_help("Mark a single variant with `#[default]`")
+}
+
+pub fn default_takes_no_arguments(attribute_span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`#[default]` takes no arguments")
+        .with_attribute_code("default_takes_no_arguments")
+        .with_span_label(attribute_span, "disallowed")
+        .with_help("Write `#[default]` without passing any arguments")
+}
+
 pub fn iterate_generic_enum(attribute_span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("`#[iterate]` on generic enum")
         .with_attribute_code("iterate_generic_enum")

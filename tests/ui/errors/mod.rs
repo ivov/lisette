@@ -15576,3 +15576,53 @@ fn main() {
 "#;
     assert_infer_error_snapshot!(input);
 }
+
+#[test]
+fn default_variant_with_payload() {
+    let input = r#"
+enum Payload {
+  #[default]
+  Full(int),
+  Empty,
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn duplicate_default_variant() {
+    let input = r#"
+enum Twice {
+  #[default]
+  A,
+  #[default]
+  B,
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn default_takes_no_arguments() {
+    let input = r#"
+enum Args {
+  #[default(extra)]
+  A,
+  B,
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn duplicate_default_on_one_variant() {
+    let input = r#"
+enum TwiceOnOne {
+  #[default]
+  #[default]
+  A,
+  B,
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}

@@ -92,6 +92,8 @@ pub enum DefinitionBody {
         variants: Vec<EnumVariant>,
         methods: Methods,
         attributes: Attributes,
+        /// Index into `variants`, if the enum marks one.
+        default_variant: Option<usize>,
     },
     Struct {
         generics: Vec<Generic>,

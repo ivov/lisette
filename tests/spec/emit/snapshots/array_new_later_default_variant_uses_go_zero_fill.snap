@@ -1,0 +1,38 @@
+---
+source: tests/spec/emit/arrays.rs
+description: |
+  
+  enum Colour {
+    Red,
+    #[default]
+    Green,
+  }
+  
+  fn swatch() -> Array<Colour, 3> {
+    Array.new<Colour, 3>()
+  }
+---
+package main
+
+func MakeColourRed() Colour {
+	return Colour{Tag: ColourRed}
+}
+
+func MakeColourGreen() Colour {
+	return Colour{Tag: ColourGreen}
+}
+
+type ColourTag int
+
+const (
+	ColourRed   ColourTag = 1
+	ColourGreen ColourTag = 0
+)
+
+type Colour struct {
+	Tag ColourTag
+}
+
+func swatch() [3]Colour {
+	return [3]Colour{}
+}

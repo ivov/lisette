@@ -337,6 +337,18 @@ fn enum_variant_attribute_moves_to_its_own_line() {
 }
 
 #[test]
+fn enum_default_variant_moves_to_its_own_line() {
+    assert_format_snapshot!("enum Colour { #[default] Red, Green }");
+}
+
+#[test]
+fn enum_default_variant_keeps_its_doc_comment() {
+    assert_format_snapshot!(
+        "enum Colour {\n  /// The zero value.\n  #[default]\n  Red,\n  Green,\n}"
+    );
+}
+
+#[test]
 fn for_loop() {
     assert_format_snapshot!("fn test() { for item in items { process(item) } }");
 }

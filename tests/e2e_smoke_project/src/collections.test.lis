@@ -253,6 +253,73 @@ fn array_from_named_constant_size() {
   assert size == 3
 }
 
+enum Shade {
+  #[default]
+  Pale,
+  Deep,
+}
+
+enum LaterDefault {
+  First,
+  #[default]
+  Second,
+}
+
+struct Wall {
+  pub name: string,
+  pub shade: Shade,
+}
+
+struct LaterBox {
+  pub mode: LaterDefault,
+}
+
+#[test]
+fn default_variant_zero_fills_an_array() {
+  let mut a = Array.new<Shade, 3>()
+  assert a[0] == Shade.Pale && a[2] == Shade.Pale
+  a[1] = Shade.Deep
+  assert a[1] == Shade.Deep
+}
+
+#[test]
+fn default_variant_zero_fills_a_slice() {
+  let s = Slice.make<Shade>(2)
+  assert s.length() == 2 && s[1] == Shade.Pale
+}
+
+#[test]
+fn default_variant_fills_a_struct_spread() {
+  let wall = Wall { name: "hall", .. }
+  assert wall.shade == Shade.Pale
+}
+
+#[test]
+fn default_variant_after_the_first_is_used() {
+  let mut a = Array.new<LaterDefault, 2>()
+  assert a[0] == LaterDefault.Second && a[1] == LaterDefault.Second
+  a[0] = LaterDefault.First
+  assert a[0] == LaterDefault.First
+}
+
+#[test]
+fn default_variant_answers_a_missing_map_key() {
+  let shades = Map.new<string, Shade>()
+  assert shades["absent"] == Shade.Pale
+}
+
+#[test]
+fn later_default_variant_answers_a_missing_map_key() {
+  let modes = Map.new<string, LaterDefault>()
+  assert modes["absent"] == LaterDefault.Second
+}
+
+#[test]
+fn later_default_variant_reaches_through_a_struct() {
+  let boxes = Map.new<string, LaterBox>()
+  assert boxes["absent"].mode == LaterDefault.Second
+}
+
 #[test]
 fn array_alias_at_use_sites() {
   let x: Vec3 = [1, 2, 3]

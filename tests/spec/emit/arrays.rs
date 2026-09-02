@@ -868,3 +868,91 @@ fn head(b: Buffer) -> Option<Array<byte, 2>> {
 "#;
     assert_emit_snapshot!(input);
 }
+
+// A `#[default]` variant takes Go tag `0`, so Go's own zero is that variant.
+
+#[test]
+fn array_new_default_variant_first_uses_go_zero_fill() {
+    let input = r#"
+enum Colour {
+  #[default]
+  Red,
+  Green,
+}
+
+fn swatch() -> Array<Colour, 3> {
+  Array.new<Colour, 3>()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn array_new_later_default_variant_uses_go_zero_fill() {
+    let input = r#"
+enum Colour {
+  Red,
+  #[default]
+  Green,
+}
+
+fn swatch() -> Array<Colour, 3> {
+  Array.new<Colour, 3>()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn struct_spread_fills_a_default_variant_field() {
+    let input = r#"
+enum Colour {
+  Red,
+  #[default]
+  Green,
+}
+
+struct Paint {
+  name: string,
+  shade: Colour,
+}
+
+fn blank() -> Paint {
+  Paint { name: "a", .. }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn later_default_variant_takes_tag_zero() {
+    let input = r#"
+enum Colour {
+  Red,
+  #[default]
+  Green,
+  Blue,
+}
+
+fn lookup(m: Map<string, Colour>) -> Colour {
+  m["a"]
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn first_default_variant_keeps_iota() {
+    let input = r#"
+enum Colour {
+  #[default]
+  Red,
+  Green,
+}
+
+fn lookup(m: Map<string, Colour>) -> Colour {
+  m["a"]
+}
+"#;
+    assert_emit_snapshot!(input);
+}

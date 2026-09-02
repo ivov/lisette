@@ -17,6 +17,8 @@ pub(crate) struct EnumLayout {
     pub(crate) variants: Vec<VariantLayout>,
     pub(crate) generics: Vec<Generic>,
     requirements: PackageRequirements,
+    /// Index of the `#[default]` variant, which takes tag `0`.
+    default_variant: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -53,6 +55,7 @@ impl EnumLayout {
         variants: &[EnumVariant],
         field_types: &FieldTypeMap,
         requirements: PackageRequirements,
+        default_variant: Option<usize>,
     ) -> Self {
         let enum_name = go_name::unqualified_name(enum_id).to_string();
         let tag_type = format!("{}Tag", enum_name);
@@ -70,7 +73,26 @@ impl EnumLayout {
             variants,
             generics: generics.to_vec(),
             requirements,
+            default_variant,
         }
+    }
+
+    /// Declaration order, except that the marked variant takes `0`.
+    fn tag_values(&self) -> Vec<usize> {
+        let Some(default_index) = self.default_variant.filter(|index| *index != 0) else {
+            return (0..self.variants.len()).collect();
+        };
+        let mut next = 1;
+        (0..self.variants.len())
+            .map(|index| {
+                if index == default_index {
+                    return 0;
+                }
+                let value = next;
+                next += 1;
+                value
+            })
+            .collect()
     }
 
     pub(crate) fn requirements(&self) -> &PackageRequirements {
@@ -153,6 +175,9 @@ impl EnumLayout {
         if !self.variants.is_empty() {
             output.push("const (".to_string());
 
+            let renumbered = self.default_variant.is_some_and(|index| index != 0);
+            let values = self.tag_values();
+
             for (i, variant) in self.variants.iter().enumerate() {
                 if let Some(doc) = &variant.doc {
                     for line in doc.lines() {
@@ -160,7 +185,12 @@ impl EnumLayout {
                     }
                 }
 
-                if i == 0 {
+                if renumbered {
+                    output.push(format!(
+                        "{} {} = {}",
+                        variant.tag_constant, self.tag_type, values[i]
+                    ));
+                } else if i == 0 {
                     output.push(format!("{} {} = iota", variant.tag_constant, self.tag_type));
                 } else {
                     output.push(variant.tag_constant.clone());

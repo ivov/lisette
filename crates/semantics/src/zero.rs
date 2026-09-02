@@ -295,8 +295,10 @@ impl ZeroWalk<'_> {
                     .expect("transparent alias has a target");
                 self.walk(&resolved)
             }
-            // Enums and other definitions have no zero unless we add a designated
-            // default-variant mechanism later.
+            DefinitionBody::Enum {
+                default_variant: Some(_),
+                ..
+            } => Ok(()),
             _ => Err(NoZero {
                 chain: vec![],
                 reason: NoZeroReason::NoZeroForType,

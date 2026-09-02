@@ -1,0 +1,9 @@
+---
+source: tests/spec/format/mod.rs
+description: "enum Colour { #[default] Red, Green }"
+---
+enum Colour {
+  #[default]
+  Red,
+  Green,
+}

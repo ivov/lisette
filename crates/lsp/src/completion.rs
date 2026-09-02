@@ -908,9 +908,9 @@ mod attribute_completion_tests {
     }
 
     #[test]
-    fn enum_variant_position_offers_nothing() {
+    fn enum_variant_position_offers_default() {
         let labels = labels_at("enum E {\n  #[|\n  A\n}", false).unwrap();
-        assert!(labels.is_empty());
+        assert_eq!(labels, vec!["default".to_string()]);
     }
 
     #[test]

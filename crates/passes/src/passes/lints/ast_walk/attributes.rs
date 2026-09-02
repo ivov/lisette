@@ -7,13 +7,16 @@ use syntax::attributes::is_serialization_key;
 
 pub fn check_attributes(expression: &Expression, ctx: &NodeCtx) {
     let attributes = match expression {
-        Expression::Function { attributes, .. } => attributes,
+        Expression::Function { attributes, .. } | Expression::TypeAlias { attributes, .. } => {
+            attributes
+        }
         _ => return,
     };
 
     for attribute in attributes {
         check_unknown_attribute(attribute, ctx.sink);
     }
+    check_misplaced_default(attributes, ctx.sink);
 }
 
 pub fn check_enum_attributes(expression: &Expression, ctx: &NodeCtx) {
@@ -29,6 +32,7 @@ pub fn check_enum_attributes(expression: &Expression, ctx: &NodeCtx) {
     for attribute in attributes {
         check_unknown_attribute(attribute, ctx.sink);
     }
+    check_misplaced_default(attributes, ctx.sink);
 
     for variant in variants {
         for attribute in &variant.attributes {
@@ -44,6 +48,14 @@ fn check_variant_attribute_target(attribute: &Attribute, sink: &LocalSink) {
     if !accepted && attributes::is_known_attribute(&attribute.name) {
         sink.push(diagnostics::attribute::attribute_not_on_enum_variant(
             &attribute.name,
+            &attribute.span,
+        ));
+    }
+}
+
+pub fn check_misplaced_default(attributes: &[Attribute], sink: &LocalSink) {
+    for attribute in attributes.iter().filter(|a| a.name == "default") {
+        sink.push(diagnostics::attribute::default_not_on_enum_variant(
             &attribute.span,
         ));
     }
@@ -65,6 +77,7 @@ pub fn check_struct_attributes(expression: &Expression, ctx: &NodeCtx) {
         check_unknown_tag_options(attribute, sink);
         check_conflicting_case_transforms(attribute, sink);
     }
+    check_misplaced_default(struct_attributes, sink);
 
     let struct_keys: HashSet<&str> = struct_attributes
         .iter()
@@ -132,6 +145,7 @@ fn check_field_attributes(
         // Check for raw tags that should use predefined aliases
         check_tag_with_alias(attribute, sink);
     }
+    check_misplaced_default(field.attributes(), sink);
 }
 
 /// Gets the effective key for an attribute (for deduplication).
