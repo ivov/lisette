@@ -533,6 +533,82 @@ fn ref_of_immutable_binding_write_refused() {
     .assert_infer_code("write_through_read_only");
 }
 
+#[test]
+fn ref_of_call_result_is_writable() {
+    infer(
+        r#"struct Foo { x: int }
+impl Foo {
+  fn new() -> Foo { Foo { x: 0 } }
+}
+fn bazzle(foo: mut Ref<Foo>) { foo.x = 1 }
+fn main() {
+  bazzle(&Foo.new())
+}"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn ref_of_primitive_call_result_is_writable() {
+    infer(
+        r#"fn make_int() -> int { 5 }
+fn bump(n: mut Ref<int>) { n.* += 1 }
+fn main() {
+  bump(&make_int())
+}"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn call_rooted_receiver_write_refused() {
+    infer(
+        r#"struct Foo { x: int }
+impl Foo {
+  fn bump(self: mut Ref<Foo>) { self.x += 1 }
+}
+fn make_slice() -> Slice<Foo> { [Foo { x: 0 }] }
+fn main() {
+  make_slice()[0].bump()
+}"#,
+    )
+    .assert_infer_code("write_through_read_only");
+}
+
+#[test]
+fn read_only_call_result_receiver_names_the_binding() {
+    infer(
+        r#"struct Foo { x: int }
+impl Foo {
+  fn bump(self: mut Ref<Foo>) { self.x += 1 }
+}
+fn make_slice() -> Slice<Foo> { [Foo { x: 0 }] }
+fn main() {
+  let mut s = make_slice()
+  s[0].bump()
+}"#,
+    )
+    .assert_infer_code("write_through_read_only")
+    .assert_error_contains("`s` is read-only");
+}
+
+#[test]
+fn receiver_on_call_result_accepted() {
+    infer(
+        r#"struct Foo { x: int }
+impl Foo {
+  fn new() -> Foo { Foo { x: 0 } }
+  fn bump(self: mut Ref<Foo>) { self.x += 1 }
+}
+fn make_slice() -> mut Slice<Foo> { [Foo { x: 0 }] }
+fn main() {
+  Foo.new().bump()
+  make_slice()[0].bump()
+}"#,
+    )
+    .assert_no_errors();
+}
+
 // Programs that must stay accepted: false positives the model removes.
 
 #[test]

@@ -192,9 +192,9 @@ impl InferCtx<'_> {
                 .add_overused_reference(span, new_expression.get_var_name());
             resolved_inner
         } else {
-            // The pointer is writable exactly when the place is, and a construction is a fresh cell.
+            // A construction or a call result is a fresh cell that no binding shares.
             let writable = match new_expression.unwrap_parens() {
-                Expression::StructCall { .. } => true,
+                Expression::StructCall { .. } | Expression::Call { .. } => true,
                 other => self.place_permits_write(other),
             };
             Type::qualified_compound(CompoundKind::Ref, vec![inner_ty.clone()], writable)
@@ -478,51 +478,7 @@ impl InferCtx<'_> {
         match self.classify_write_target(&new_target) {
             super::permission::WriteTarget::Through { governing } => {
                 if !governing.is_writable() {
-                    let root = super::aliasing::place_root_name(new_target.unwrap_parens());
-                    let root_binding = root
-                        .as_ref()
-                        .and_then(|root| self.scopes.lookup_binding_id(root));
-                    let receiver_needs_mut = root.as_deref() == Some("self")
-                        && !self
-                            .lookup_type(store, "self")
-                            .map(|ty| store.peel_alias(&ty.resolve_in(&self.env)))
-                            .is_some_and(|ty| ty.is_ref() && ty.is_writable());
-                    if receiver_needs_mut {
-                        self.report_disallowed_mutation(store, "self", span, false, None);
-                    } else if root_binding
-                        .and_then(|id| self.binding_inference.get(&id))
-                        .and_then(|binding| binding.as_let())
-                        .is_some_and(|inference| inference.mutability.was_demoted())
-                    {
-                        self.report_disallowed_mutation(
-                            store,
-                            &root.expect("rooted"),
-                            span,
-                            false,
-                            None,
-                        );
-                    } else if let Some(id) = root_binding.filter(|id| {
-                        self.binding_inference
-                            .get(id)
-                            .and_then(|binding| binding.as_loop_element())
-                            .is_some_and(|inference| inference.was_demoted)
-                    }) {
-                        if self.reported_immutable.insert(id) {
-                            self.sink.push(diagnostics::infer::loop_binding_read_only(
-                                &root.expect("rooted"),
-                                span,
-                            ));
-                        }
-                    } else if self.report_read_only_write(&new_target) {
-                        let context = self.write_context(&new_target);
-                        self.sink.push(diagnostics::infer::write_through_read_only(
-                            &super::aliasing::render_place(&new_target),
-                            &self.write_hop_place(&new_target),
-                            &governing.to_string(),
-                            span,
-                            context,
-                        ));
-                    }
+                    self.report_write_through_read_only(&new_target, &governing, span);
                 }
             }
             super::permission::WriteTarget::Binding { name } => {

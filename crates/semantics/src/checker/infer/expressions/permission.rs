@@ -555,6 +555,54 @@ impl InferCtx<'_> {
             None => true,
         }
     }
+
+    pub(super) fn report_write_through_read_only(
+        &mut self,
+        target: &Expression,
+        governing: &Type,
+        span: Span,
+    ) {
+        let store = self.store;
+        let root = super::aliasing::place_root_name(target.unwrap_parens());
+        let root_binding = root
+            .as_ref()
+            .and_then(|root| self.scopes.lookup_binding_id(root));
+        let receiver_needs_mut = root.as_deref() == Some("self")
+            && !self
+                .lookup_type(store, "self")
+                .map(|ty| store.peel_alias(&ty.resolve_in(&self.env)))
+                .is_some_and(|ty| ty.is_ref() && ty.is_writable());
+        if receiver_needs_mut {
+            self.report_disallowed_mutation(store, "self", span, false, None);
+        } else if root_binding
+            .and_then(|id| self.binding_inference.get(&id))
+            .and_then(|binding| binding.as_let())
+            .is_some_and(|inference| inference.mutability.was_demoted())
+        {
+            self.report_disallowed_mutation(store, &root.expect("rooted"), span, false, None);
+        } else if let Some(id) = root_binding.filter(|id| {
+            self.binding_inference
+                .get(id)
+                .and_then(|binding| binding.as_loop_element())
+                .is_some_and(|inference| inference.was_demoted)
+        }) {
+            if self.reported_immutable.insert(id) {
+                self.sink.push(diagnostics::infer::loop_binding_read_only(
+                    &root.expect("rooted"),
+                    span,
+                ));
+            }
+        } else if self.report_read_only_write(target) {
+            let context = self.write_context(target);
+            self.sink.push(diagnostics::infer::write_through_read_only(
+                &super::aliasing::render_place(target),
+                &self.write_hop_place(target),
+                &governing.to_string(),
+                span,
+                context,
+            ));
+        }
+    }
 }
 
 impl InferCtx<'_> {
