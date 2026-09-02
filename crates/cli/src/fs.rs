@@ -425,6 +425,9 @@ pub fn collect_lis_filepaths_recursive(dir: &Path) -> Vec<PathBuf> {
     let mut subdirs = Vec::new();
     for entry in entries.flatten() {
         let path = entry.path();
+        if is_target_dir(dir, &path) {
+            continue;
+        }
         if entry_is_dir(&entry, &path) {
             subdirs.push(path);
         } else if path.extension().is_some_and(|e| e == "lis") {
@@ -445,6 +448,10 @@ pub fn collect_lis_filepaths_recursive(dir: &Path) -> Vec<PathBuf> {
     };
     files.extend(nested);
     files
+}
+
+fn is_target_dir(parent: &Path, path: &Path) -> bool {
+    path.file_name().is_some_and(|name| name == "target") && parent.join("lisette.toml").is_file()
 }
 
 fn entry_is_dir(entry: &DirEntry, path: &Path) -> bool {
@@ -935,6 +942,32 @@ mod tests {
 
         let mut found = collect_lis_filepaths_recursive(root);
         found.sort();
+        expected.sort();
+        assert_eq!(found, expected);
+    }
+
+    #[test]
+    fn skips_the_target_dir_of_a_project_root_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_file(
+            root,
+            "lisette.toml",
+            "[project]\nname = \"demo\"\nversion = \"0.1.0\"\n",
+        );
+        let src = root.join("src");
+        stdfs::create_dir_all(&src).unwrap();
+        let main = write_file(&src, "main.lis", "fn main() {}\n");
+        let src_target = src.join("target");
+        stdfs::create_dir_all(&src_target).unwrap();
+        let package_named_target = write_file(&src_target, "target.lis", "pub fn x() {}\n");
+        let typedefs = root.join("target").join(".lisette").join("typedefs");
+        stdfs::create_dir_all(&typedefs).unwrap();
+        write_file(&typedefs, "cobra.d.lis", "stale syntax (((\n");
+
+        let mut found = collect_lis_filepaths_recursive(root);
+        found.sort();
+        let mut expected = vec![main, package_named_target];
         expected.sort();
         assert_eq!(found, expected);
     }
