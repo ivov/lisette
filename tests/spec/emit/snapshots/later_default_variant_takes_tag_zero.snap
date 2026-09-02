@@ -1,0 +1,44 @@
+---
+source: tests/spec/emit/arrays.rs
+description: |
+  
+  enum Colour {
+    Red,
+    #[default]
+    Green,
+    Blue,
+  }
+  
+  fn lookup(m: Map<string, Colour>) -> Colour {
+    m["a"]
+  }
+---
+package main
+
+func MakeColourRed() Colour {
+	return Colour{Tag: ColourRed}
+}
+
+func MakeColourGreen() Colour {
+	return Colour{Tag: ColourGreen}
+}
+
+func MakeColourBlue() Colour {
+	return Colour{Tag: ColourBlue}
+}
+
+type ColourTag int
+
+const (
+	ColourRed   ColourTag = 1
+	ColourGreen ColourTag = 0
+	ColourBlue  ColourTag = 2
+)
+
+type Colour struct {
+	Tag ColourTag
+}
+
+func lookup(m map[string]Colour) Colour {
+	return m["a"]
+}

@@ -1,7 +1,7 @@
 use diagnostics::{Edit, Fix};
 use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::{Expression, Literal, Span, StructFieldAssignment, StructSpread};
-use syntax::program::DefinitionBody;
+use syntax::program::{DefinitionBody, DotAccessResolution};
 use syntax::types::{SubstitutionMap, Type, substitute, unqualified_name};
 
 use super::helpers::replacement_drops_comment;
@@ -29,7 +29,7 @@ pub fn check_replaceable_with_autofill(expression: &Expression, ctx: &NodeCtx) {
 
     let zero_count = field_assignments
         .iter()
-        .filter(|f| is_obvious_zero(&f.value))
+        .filter(|f| is_obvious_zero(&f.value, ctx.store))
         .count();
     if zero_count < ZERO_FIELD_THRESHOLD {
         return;
@@ -45,7 +45,7 @@ pub fn check_replaceable_with_autofill(expression: &Expression, ctx: &NodeCtx) {
         return;
     }
 
-    let kept = render_kept_fields(ctx.source(), field_assignments);
+    let kept = render_kept_fields(ctx.source(), field_assignments, ctx.store);
     let owner_span = Span::new(span.file_id, span.byte_offset, name.len() as u32);
     let replacement = if kept.is_empty() {
         format!("{name} {{ .. }}")
@@ -62,10 +62,10 @@ pub fn check_replaceable_with_autofill(expression: &Expression, ctx: &NodeCtx) {
     ctx.sink.push(diagnostic);
 }
 
-fn render_kept_fields(source: &str, fields: &[StructFieldAssignment]) -> String {
+fn render_kept_fields(source: &str, fields: &[StructFieldAssignment], store: &Store) -> String {
     fields
         .iter()
-        .filter(|f| !is_obvious_zero(&f.value))
+        .filter(|f| !is_obvious_zero(&f.value, store))
         .map(|f| {
             let value_span = f.value.get_span();
             let start = f.name_span.byte_offset as usize;
@@ -79,7 +79,7 @@ fn render_kept_fields(source: &str, fields: &[StructFieldAssignment]) -> String 
         .join(", ")
 }
 
-fn is_obvious_zero(value: &Expression) -> bool {
+fn is_obvious_zero(value: &Expression, store: &Store) -> bool {
     match value {
         Expression::Literal { literal, .. } => match literal {
             Literal::Integer { value, .. } => *value == 0,
@@ -89,8 +89,29 @@ fn is_obvious_zero(value: &Expression) -> bool {
             _ => false,
         },
         Expression::Identifier { value, .. } => value.as_str() == "None",
+        Expression::DotAccess { resolution, .. } => is_default_variant(resolution, store),
         _ => false,
     }
+}
+
+fn is_default_variant(resolution: &DotAccessResolution, store: &Store) -> bool {
+    let DotAccessResolution::EnumVariant { definition } = resolution else {
+        return false;
+    };
+    let Some((enum_id, variant_name)) = definition.as_str().rsplit_once('.') else {
+        return false;
+    };
+    let Some(DefinitionBody::Enum {
+        variants,
+        default_variant: Some(index),
+        ..
+    }) = store.get_definition(enum_id).map(|d| &d.body)
+    else {
+        return false;
+    };
+    variants
+        .get(*index)
+        .is_some_and(|variant| variant.name == variant_name)
 }
 
 fn is_go_imported(ty: &Type) -> bool {
@@ -150,7 +171,7 @@ fn post_rewrite_unspecified_fields(
 ) -> Option<Vec<OmittedField>> {
     let kept: HashSet<&str> = field_assignments
         .iter()
-        .filter(|f| !is_obvious_zero(&f.value))
+        .filter(|f| !is_obvious_zero(&f.value, store))
         .map(|f| f.name.as_str())
         .collect();
     fields_filtered(store, ty, name, &kept)

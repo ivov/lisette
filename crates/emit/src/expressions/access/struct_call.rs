@@ -495,6 +495,13 @@ impl Planner<'_> {
             } => true,
             Type::Array { element, .. } => self.element_go_zero_ok(element),
             Type::Tuple(elements) => elements.iter().all(|e| self.element_go_zero_ok(e)),
+            Type::Nominal { id, .. } => matches!(
+                &self.facts.definition(id.as_str()).map(|d| &d.body),
+                Some(DefinitionBody::Enum {
+                    default_variant: Some(_),
+                    ..
+                })
+            ),
             _ => false,
         }
     }

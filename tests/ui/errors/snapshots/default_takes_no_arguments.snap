@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ `#[default]` takes no arguments
+   ╭─[test.lis:3:3]
+ 2 │ enum Args {
+ 3 │   #[default(extra)]
+   ·   ────────┬────────
+   ·           ╰── disallowed
+ 4 │   A,
+   ╰────
+  help: Write `#[default]` without passing any arguments · code: [attribute.default_takes_no_arguments]

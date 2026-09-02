@@ -163,7 +163,7 @@ fn run_expression_checks(expression: &Expression, ctx: &mut NodeCtx<'_>, role: F
         (check_duplicate_cutset, &[Call]),
         (check_struct_attributes, &[Struct]),
         (check_ineffective_omitempty, &[Struct]),
-        (check_attributes, &[Function]),
+        (check_attributes, &[Function, TypeAlias]),
         (check_enum_attributes, &[Enum]),
         (check_duplicate_logical_operand, &[Binary]),
         (check_negated_logical_operand, &[Binary]),

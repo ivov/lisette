@@ -1,6 +1,6 @@
 ---
 title: "Attributes"
-description: "Serialization and custom tags, iteration, display, equality, lint suppression"
+description: "Serialization and custom tags, iteration, display, equality, default variants, lint suppression"
 ---
 
 Attributes attach metadata or behavior to declarations.
@@ -332,6 +332,55 @@ let b = Batch { item: Order { id: 1, tags: ["a"] } }
 
 // !callout-right `true`
 a.equals(b)
+```
+
+## `#[default]`
+
+Out of the box, an enum has no zero value.
+
+```lisette
+enum Status {
+  Active,
+  Paused,
+  Stopped,
+}
+
+// !callout-error-right error: `Status` has no zero value
+let queue = Slice.make<Status>(2)
+// !callout-error-right error: `Status` has no zero value
+let slots = Array.new<Status, 3>()
+```
+
+Place `#[default]` on an enum variant to make it the zero value.
+
+```lisette
+enum Status {
+  Active,
+  Paused,
+  #[default]
+  Stopped,
+}
+
+// !callout-right `[Stopped, Stopped]`
+let queue = Slice.make<Status>(2)
+// !callout-right `[Stopped, Stopped, Stopped]`
+let slots = Array.new<Status, 3>()
+```
+
+An enum's default appears wherever a zero value is expected.
+
+```lisette
+struct Job {
+  pub name: string,
+  pub status: Status,
+}
+
+// !callout[/job/] `job.status` is `Status.Stopped`
+let job = Job { name: "build", .. }
+
+let by_name = Map.new<string, Status>()
+// !callout[/missing/] `Status.Stopped`
+let missing = by_name["absent"]
 ```
 
 ## `#[allow]`

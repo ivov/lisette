@@ -93,6 +93,7 @@ fn remap_definition_spans(definition: &mut Definition, remap: &mut impl FnMut(&m
             variants,
             methods,
             attributes: _,
+            default_variant: _,
         } => {
             remap_generics(generics, remap);
             for variant in variants {

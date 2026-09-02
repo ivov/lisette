@@ -1,0 +1,16 @@
+---
+source: tests/spec/format/mod.rs
+description: |-
+  enum Colour {
+    /// The zero value.
+    #[default]
+    Red,
+    Green,
+  }
+---
+enum Colour {
+  /// The zero value.
+  #[default]
+  Red,
+  Green,
+}

@@ -28796,6 +28796,19 @@ fn main() {
 }
 
 #[test]
+fn default_not_on_enum_variant() {
+    assert_lint_snapshot!(
+        r#"
+#[default]
+enum OnEnum {
+  A,
+  B,
+}
+"#
+    );
+}
+
+#[test]
 fn attribute_not_on_enum_variant() {
     assert_lint_snapshot!(
         r#"
@@ -28804,6 +28817,28 @@ enum WithJson {
   A,
   B,
 }
+"#
+    );
+}
+
+#[test]
+fn default_on_struct_field() {
+    assert_lint_snapshot!(
+        r#"
+struct OnField {
+  #[default]
+  pub a: int,
+}
+"#
+    );
+}
+
+#[test]
+fn default_on_type_alias() {
+    assert_lint_snapshot!(
+        r#"
+#[default]
+type Alias = int
 "#
     );
 }

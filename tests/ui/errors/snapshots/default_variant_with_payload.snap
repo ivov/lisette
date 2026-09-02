@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ `#[default]` on a variant with a payload
+   ╭─[test.lis:4:3]
+ 3 │   #[default]
+ 4 │   Full(int),
+   ·   ──┬─
+   ·     ╰── this variant has a payload
+ 5 │   Empty,
+   ╰────
+  help: `#[default]` is allowed only on a payload-less variant · code: [attribute.default_variant_with_payload]

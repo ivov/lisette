@@ -1,0 +1,16 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  ✕ Duplicate default variants
+   ╭─[test.lis:3:3]
+ 2 │ enum Twice {
+ 3 │   #[default]
+   ·   ─────┬────
+   ·        ╰── first
+ 4 │   A,
+ 5 │   #[default]
+   ·   ─────┬────
+   ·        ╰── second
+ 6 │   B,
+   ╰────
+  help: Mark a single variant with `#[default]` · code: [attribute.duplicate_default_variant]

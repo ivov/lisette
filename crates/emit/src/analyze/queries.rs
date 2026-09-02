@@ -244,9 +244,13 @@ impl Planner<'_> {
 
     fn compute_enum_layout(&self, enum_id: &str) -> Option<EnumLayout> {
         let Definition {
-            body: DefinitionBody::Enum {
-                generics, variants, ..
-            },
+            body:
+                DefinitionBody::Enum {
+                    generics,
+                    variants,
+                    default_variant,
+                    ..
+                },
             ..
         } = self.facts.definition(enum_id)?
         else {
@@ -291,6 +295,7 @@ impl Planner<'_> {
             variants,
             &field_types,
             requirements,
+            *default_variant,
         ))
     }
 

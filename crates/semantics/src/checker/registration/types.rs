@@ -53,6 +53,8 @@ impl TaskState {
 
         self.check_enum_field_slot_collisions(name, &new_variants);
 
+        let default_variant = self.resolve_default_variant(&*store, &new_variants);
+
         let visibility = self
             .current_package(&*store)
             .definitions
@@ -80,6 +82,7 @@ impl TaskState {
                     variants: new_variants,
                     methods: Methods::default(),
                     attributes,
+                    default_variant,
                 },
             },
         );
@@ -247,6 +250,53 @@ impl TaskState {
                 ));
             }
         }
+    }
+
+    fn resolve_default_variant(
+        &mut self,
+        store: &Store,
+        variants: &[EnumVariant],
+    ) -> Option<usize> {
+        let in_typedef = self.is_d_lis(store);
+        let mut marked: Option<(usize, Span)> = None;
+        for (index, variant) in variants.iter().enumerate() {
+            for attribute in variant
+                .attributes
+                .iter()
+                .filter(|attribute| attribute.name == "default")
+            {
+                if !attribute.args.is_empty() {
+                    self.sink
+                        .push(diagnostics::attribute::default_takes_no_arguments(
+                            &attribute.span,
+                        ));
+                }
+                if in_typedef {
+                    self.sink
+                        .push(diagnostics::attribute::default_variant_in_typedef(
+                            &attribute.span,
+                        ));
+                    continue;
+                }
+                if let Some((_, first_span)) = marked {
+                    self.sink
+                        .push(diagnostics::attribute::duplicate_default_variant(
+                            &attribute.span,
+                            &first_span,
+                        ));
+                    continue;
+                }
+                if !matches!(variant.fields, VariantFields::Unit) {
+                    self.sink
+                        .push(diagnostics::attribute::default_variant_with_payload(
+                            &variant.name_span,
+                        ));
+                    continue;
+                }
+                marked = Some((index, attribute.span));
+            }
+        }
+        marked.map(|(index, _)| index)
     }
 
     fn resolve_enum_variant_fields(
