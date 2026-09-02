@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788367866309,
+  "lastUpdate": 1788370941060,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -31266,6 +31266,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "diagnostics",
             "value": 8658,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6036,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2911,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1850,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 740,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9484,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "a0194532a0937efc6de2609e16a5725c62119d1e",
+          "message": "feat: `#[default]` for enum zero values (#1376)",
+          "timestamp": "2026-09-02T19:41:54+02:00",
+          "tree_id": "3cab46e31ffa61d3b9a541d895f9abb66a466b2c",
+          "url": "https://github.com/ivov/lisette/commit/a0194532a0937efc6de2609e16a5725c62119d1e"
+        },
+        "date": 1788370938733,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 138774,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32274,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27838,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19187,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14901,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13942,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8692,
             "unit": "lines"
           },
           {
