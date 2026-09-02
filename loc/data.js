@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1788371199970,
+  "lastUpdate": 1788377502651,
   "repoUrl": "https://github.com/ivov/lisette",
   "entries": {
     "production-loc": [
@@ -31439,6 +31439,95 @@ window.BENCHMARK_DATA = {
           {
             "name": "cli",
             "value": 13972,
+            "unit": "lines"
+          },
+          {
+            "name": "diagnostics",
+            "value": 8692,
+            "unit": "lines"
+          },
+          {
+            "name": "lsp",
+            "value": 6036,
+            "unit": "lines"
+          },
+          {
+            "name": "format",
+            "value": 2911,
+            "unit": "lines"
+          },
+          {
+            "name": "deps",
+            "value": 1850,
+            "unit": "lines"
+          },
+          {
+            "name": "stdlib",
+            "value": 740,
+            "unit": "lines"
+          },
+          {
+            "name": "bindgen",
+            "value": 9484,
+            "unit": "lines"
+          },
+          {
+            "name": "prelude",
+            "value": 919,
+            "unit": "lines"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ivov.src@gmail.com",
+            "name": "Iván Ovejero",
+            "username": "ivov"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f4feb82cf21f660f2c4f9af64efe968a0200e299",
+          "message": "fix: skip project `target` dir when formatting (#1379)",
+          "timestamp": "2026-09-02T21:31:13+02:00",
+          "tree_id": "30995a673ad41374f539fbf17d1f77c0ad623222",
+          "url": "https://github.com/ivov/lisette/commit/f4feb82cf21f660f2c4f9af64efe968a0200e299"
+        },
+        "date": 1788377501165,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "total",
+            "value": 138810,
+            "unit": "lines"
+          },
+          {
+            "name": "emit",
+            "value": 32274,
+            "unit": "lines"
+          },
+          {
+            "name": "semantics",
+            "value": 27838,
+            "unit": "lines"
+          },
+          {
+            "name": "passes",
+            "value": 19187,
+            "unit": "lines"
+          },
+          {
+            "name": "syntax",
+            "value": 14901,
+            "unit": "lines"
+          },
+          {
+            "name": "cli",
+            "value": 13978,
             "unit": "lines"
           },
           {
